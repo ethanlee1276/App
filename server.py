@@ -724,6 +724,43 @@ def _squad_or_empty(teamdex, conn, sport, team):
                 "error": "player logs unavailable"}
 
 
+#: Reading order for a roster: starters first, then by position the way
+#: a lineup card reads.
+#:
+#: A MODULE CONSTANT, NOT A CLASS ATTRIBUTE, and the distinction has
+#: already cost this file a whole page once: `_squad_or_empty` shipped as
+#: a `@staticmethod` called by bare name inside the handler, which is a
+#: GLOBAL lookup — NameError, swallowed by the handler's `except
+#: Exception`, 503, blank team page. Anything a handler method calls by
+#: its bare name lives out here.
+_FF_POS_AT = {"QB": 0, "RB": 1, "WR": 2, "TE": 3, "K": 4, "DEF": 5}
+
+
+def _ff_team_rows(rivals: dict, mine: list, my_label: str) -> list:
+    """``[{team, players, mine?}]`` — every roster in a fantasy league.
+
+    Ethan, 2026-09-10: "I wanna be able too link accounts and leagues and
+    see all the leagues and players and other peoples rosters on the
+    site." Both platform handlers already fetch every roster to build the
+    other side of the trade generator, and both then dropped them — so
+    this publishes a value the server had computed and thrown away, with
+    no extra call to Sleeper or ESPN.
+
+    Shared, because two league desks formatting one list two ways is how
+    the ESPN reader ends up with a subtly different page.
+    """
+    def order(rows):
+        return sorted(rows or (), key=lambda r: (
+            not r.get("starting"), _FF_POS_AT.get(r.get("position"), 9),
+            r.get("player", "")))
+    out = [{"team": name, "players": order(rows)}
+           for name, rows in sorted((rivals or {}).items())]
+    if mine:
+        out.insert(0, {"team": my_label or "My team", "mine": True,
+                       "players": order(mine)})
+    return out
+
+
 def _stats_or_empty(teamdex, conn, sport, team):
     """`teamdex.stat_tables`, guarded the same way and for the same
     reason — see `_squad_or_empty` above. A second section that draws
@@ -1298,6 +1335,19 @@ class Handler(BaseHTTPRequestHandler):
         out["trades"] = trades[:12]
         out["trade_summary"] = fantasy_trade.summary(trades)
 
+        # EVERY ROSTER IN THE LEAGUE, PUBLISHED. Ethan, 2026-09-10: "I
+        # wanna be able too link accounts and leagues and see all the
+        # leagues and players and other peoples rosters on the site."
+        #
+        # They were already here. `rivals` is built above out of the same
+        # fetch, handed to the trade generator, and then dropped on the
+        # floor — so the one thing he asked for was a value this function
+        # computed and did not return. No extra call to Sleeper: the
+        # rosters, the users and the player table are one read each and
+        # they were all made before the first trade was scored.
+        out["teams"] = _ff_team_rows(rivals, mine,
+                                     owner.get(str(user_id), "My team"))
+
         # THE TEAM YOU ARE ACTUALLY PLAYING (IDEAS #7). Everything above
         # answers against the field; a head-to-head league is one game
         # against one roster, and which start is right depends on the
@@ -1403,6 +1453,11 @@ class Handler(BaseHTTPRequestHandler):
             # response.
             "unmapped_scoring": lg.get("unmapped") or [],
         }
+        # THE SAME KEY THE SLEEPER DESK PUBLISHES, so the League teams
+        # list is one renderer rather than one per platform. `rosters`
+        # here is every team but his — `mine` was popped out of it above
+        # — which is exactly the shape Sleeper's `rivals` has.
+        out["teams"] = _ff_team_rows(rosters, mine, mine_label)
         self._send(200, json.dumps(out).encode(), ".json")
 
     # --- accounts: email and password, ours ---------------------------------

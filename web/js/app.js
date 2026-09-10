@@ -18307,8 +18307,24 @@ async function renderFantasy() {
      "every source we can read without a password, and where they argue",
      rankBoardHTML(d.ranks)],
     ["days", "Calendar",
-     "the best play for every game day — tap a day for the top five and why",
-     ffCalendarHTML(d)],
+     "your own roster day by day, then the best play in the league",
+     /* YOUR ROSTER FIRST, and this is the whole of Ethan's report on
+        2026-09-10: "I want to be able to sync my sleeper league, then
+        the calendar will show which players from MY league I should
+        [start] that day like I keep saying."
+
+        It was built on 2026-09-09 and it was not on this tab. The
+        roster calendar drew inside `renderLeagueDesk`, which mounts
+        into "Around the league" — under the camp report, the offseason
+        moves and the draft kit — so a reader who opened Fantasy →
+        Calendar got the LEAGUE-WIDE board and no sign his own existed.
+        Built, unreachable, asked for again: the same shape as the
+        touchdown doors this week.
+
+        The placeholder is filled by `renderLeagueDesk` (one copy, not
+        two), and carries its own sentence until then — a reader with no
+        league linked must be told what to do rather than shown a gap. */
+     `<div id="ffcal-mine">${ffCalMinePromptHTML()}</div>` + ffCalendarHTML(d)],
     ["mock", "Mock draft",
      "a snake draft against the room — same board the kit publishes",
      `<div id="mock-room">${mockDraftHTML()}</div>`],
@@ -22874,7 +22890,15 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      failed to load, and no league at all. One clear here beats a clear
      on each way out, which is how one of them gets missed. */
   _ffDesk = null;
-  if (!leagueId) { host.innerHTML = ""; return; }
+  /* AND THE CALENDAR CLEARS WITH IT, for the same reason: it is drawn
+     from this payload, so a calendar left over from the league selected
+     a moment ago would be somebody else's roster under this league's
+     name. Every way out of this function below either paints a real one
+     or leaves this sentence standing. */
+  paintMyCalendar(`<p class="rank-help">${icon("warn")} Your own start
+    calendar needs a league that answers — see the message on
+    <b>Around the league</b>.</p>`);
+  if (!leagueId) { host.innerHTML = ""; paintMyCalendar(ffCalMinePromptHTML()); return; }
   host.innerHTML = `<p class="loading">Reading your league\u2019s scoring and rosters\u2026</p>`;
   let d;
   try {
@@ -22892,6 +22916,11 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
     host.innerHTML = `<div class="warning">${icon("warn")} No roster in this
       league belongs to you, so there is no lineup to optimise. Pick the
       right league above.</div>`;
+    // The common case — the wrong league is selected — so the calendar
+    // says which fact is missing rather than pointing at another tab.
+    paintMyCalendar(`<p class="rank-help">${icon("warn")} No roster in the
+      selected league belongs to you, so there is nobody to build your own
+      calendar from. Pick your league under <b>Around the league</b>.</p>`);
     return;
   }
   /* KEPT, so the player panel can answer with it: the dossier's "this
@@ -22902,15 +22931,20 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      his. */
   _ffDesk = d;
   host.innerHTML = ffH2HHTML(d) + ffLineupHTML(d) + ffScoringGapsHTML(d)
-    /* HERE, NOT ON THE SLEEPER CARD, which is where it first shipped.
-       Ethan, 2026-09-09: "when they sync their ESPN league or their
-       Sleeper league or both." `renderLeagueDesk` is the one function
-       all three platforms come through, and its payload already carries
-       the whole roster — the best lineup plus the bench — so drawing
-       from here means an ESPN-only reader gets his calendar without a
-       second copy of the code deciding who his players are. */
-    + ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d))
-    + ffTradesHTML(d) + ffStandingsHTML(d);
+    + ffTradesHTML(d) + ffStandingsHTML(d) + ffTeamsHTML(d);
+  /* THE START CALENDAR GOES TO THE CALENDAR TAB, which is the only
+     place a reader looking for a calendar will look. It shipped inside
+     this desk on 2026-09-09 — under the camp report and the offseason
+     moves on "Around the league" — and Ethan asked for it again on
+     09-10 having never found it: "the calendar will show which players
+     from MY league I should [start] that day like I keep saying."
+
+     Still built HERE, because this is the one function all three
+     platforms come through and its payload already knows who his
+     players are (`ffDeskRoster` reads the best lineup plus the bench).
+     Only the destination moved, so there is still exactly one copy of
+     the code that decides whose roster it is. */
+  paintMyCalendar(ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d)));
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
 }
@@ -22994,6 +23028,54 @@ function ffH2HHTML(d) {
 /* The table, straight off the league. No model in it at all — which is
    why it sits at the bottom: it is the one panel here that would be
    identical on any site. */
+/* EVERY TEAM IN THE LEAGUE, AND WHO IS ON IT. Ethan, 2026-09-10: "I
+   wanna be able too link accounts and leagues and see all the leagues
+   and players and other peoples rosters on the site."
+
+   The rosters were already fetched — `/api/leaguedesk` reads all of
+   them to build the trade generator's other side, and then returned
+   none of them. So this is a list of players the server already had in
+   hand, not a new call to Sleeper.
+
+   Every name is the same door the rest of the page uses: the dossier,
+   which answers start-or-bench out of the league's OWN scoring. That
+   makes a rival's roster useful rather than decorative — it is how you
+   see what he is starting against you, and what he is sitting.
+
+   Collapsed by default with yours open, because twelve rosters is a
+   hundred and eighty names and the reader came for one of them. */
+let _ffTeamOpen = null;
+
+function ffTeamsHTML(d) {
+  const teams = (d || {}).teams || [];
+  if (!teams.length) return "";
+  const open = _ffTeamOpen != null ? _ffTeamOpen
+    : (teams.findIndex((t) => t.mine) + 1 || 1) - 1;
+  const row = (r) => `
+    <div class="drow ffrow-door ffteam-row" data-dossier="${escapeAttr(r.player)}"
+         role="button" tabindex="0">
+      <span class="ffteam-who">${playerAvatar(r.player, "",
+        { size: 22, map: nflMap() })}
+        <b>${escapeHtml(r.player)}</b>${injTag("nfl", r.player)}</span>
+      <span class="ffteam-pos">${escapeHtml(r.position || "")}</span>
+      <span class="ffteam-seat">${r.starting ? "starting" : "bench"}</span>
+    </div>`;
+  return `
+    <div class="section-title">League teams
+      <span class="sub">— every roster in this league. Tap a name for the
+      same dossier your own players open, scored by this league’s
+      settings.</span></div>
+    <div class="ffteams">${teams.map((t, i) => `
+      <details class="ffteam"${i === open ? " open" : ""}>
+        <summary>${escapeHtml(t.team || "Team")}${t.mine
+          ? ` <span class="chip up">yours</span>` : ""}
+          <span class="ffteam-n">${plural((t.players || []).length,
+            "player")}</span></summary>
+        ${(t.players || []).map(row).join("")
+          || `<p class="rank-help">No players on this roster.</p>`}
+      </details>`).join("")}</div>`;
+}
+
 function ffStandingsHTML(d) {
   const rows = d.standings || [];
   if (rows.length < 2) return "";
@@ -25724,6 +25806,40 @@ function ffDeskRoster(d) {
     out.push({ name, pos: r.position || "" });
   }
   return out;
+}
+
+/* The one place the roster calendar is written to. `renderLeagueDesk`
+   is asynchronous and the Calendar tab is usually not the visible one
+   when it answers, but every subtab panel is in the DOM (hidden), so
+   the target is always there to fill. A missing host is not an error —
+   the desk also runs on pages that have no calendar tab at all. */
+function paintMyCalendar(html) {
+  const host = document.getElementById("ffcal-mine");
+  if (host) host.innerHTML = html || "";
+}
+
+/* WHAT THE CALENDAR TAB SAYS BEFORE A LEAGUE IS LINKED. Not an empty
+   div and not a spinner: the reader is one form away from the thing he
+   came for, and the sentence that names the form is worth more than a
+   blank space where a calendar will be. Replaced by `renderLeagueDesk`
+   the moment a league answers. */
+function ffCalMinePromptHTML() {
+  const user = localStorage.getItem("ff_user");
+  const espn = localStorage.getItem("ff_espn_league");
+  if (user || espn) {
+    return `<p class="loading">Reading your roster…</p>`;
+  }
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div>
+      <div class="player">Your own start calendar</div>
+      <div class="subtitle">Link a fantasy league and this fills with the
+        same calendar scoped to YOUR players — which of them has the best
+        day, every day.</div></div>
+      <button class="btn" type="button"
+              onclick="switchView('account', true)">Link a league</button>
+    </div>
+    <p class="rank-help" style="margin-bottom:0">Sleeper takes a username.
+      ESPN takes a league id. Neither asks for a password.</p></div>`;
 }
 
 function ffRosterCalendarHTML(d, myRows) {
@@ -28944,6 +29060,23 @@ function renderSleeperPanel(d, ctx) {
     `<option value="${escapeHtml(l.league_id)}" ${l.league_id === ctx.leagueId ? "selected" : ""}>
        ${escapeHtml(l.name || l.league_id)}</option>`).join("");
 
+  /* ALL OF THEM, VISIBLE. Ethan, 2026-09-10: "see all the leagues".
+     A <select> answers "which one am I looking at" and hides "how many
+     do I have" — a manager in four leagues could not see that he was in
+     four without opening the menu. The chips say it at a glance and
+     switch on a tap; the select stays because it is the better control
+     once the list is long, and both write the same key. */
+  const leagueChips = ctx.leagues.length < 2 ? "" : `
+    <div class="ffleagues">${ctx.leagues.map((l) => `
+      <button class="ffleague${l.league_id === ctx.leagueId ? " on" : ""}"
+              type="button" data-league="${escapeAttr(l.league_id)}">
+        <span class="ffleague-n">${escapeHtml(l.name || l.league_id)}</span>
+        <span class="ffleague-m">${escapeHtml(String(
+          (l.settings || {}).num_teams || l.total_rosters || "?"))}-team${
+          l.scoring_settings && l.scoring_settings.rec
+            ? ` · ${l.scoring_settings.rec >= 1 ? "PPR" : "half-PPR"}` : ""}</span>
+      </button>`).join("")}</div>`;
+
   zone.innerHTML = `<div class="card" style="margin-bottom:16px;padding-bottom:6px">
     <div class="card-head">
       <div><div class="player">My league — ${escapeHtml(ctx.username)}</div>
@@ -28953,6 +29086,7 @@ function renderSleeperPanel(d, ctx) {
           border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-family:inherit">${leagueOpts}</select>
       </div>
     </div>
+    ${leagueChips}
     <div class="section-title">My roster
       <span class="sub">— usage trend (season → 4wk → last) and trade flags for YOUR players</span></div>
     ${(() => {
@@ -28977,12 +29111,21 @@ function renderSleeperPanel(d, ctx) {
       custom-scoring recompute lands with the in-season update.</p>
   </div>`;
 
-  const sel = document.getElementById("sleeper-league");
-  if (sel) sel.addEventListener("change", () => {
-    localStorage.setItem("ff_league", sel.value);
+  /* ONE SWITCH, TWO CONTROLS. The chips and the select both change
+     which league is being read, so both write the same key and take
+     the same path — a second copy of "remember it, touch the account,
+     re-render" is a second place for the three steps to fall out of
+     step. */
+  const pickLeague = (id) => {
+    if (!id) return;
+    localStorage.setItem("ff_league", id);
     acctTouch("fantasy");
     renderSleeperZone(d);
-  });
+  };
+  const sel = document.getElementById("sleeper-league");
+  if (sel) sel.addEventListener("change", () => pickLeague(sel.value));
+  zone.querySelectorAll("[data-league]").forEach((b) =>
+    b.addEventListener("click", () => pickLeague(b.dataset.league)));
   /* No Disconnect here on purpose — it is on the Account page with the
      form that made the link. WHICH of your leagues you are looking at is
      a viewing choice and stays: the list only exists once Sleeper has

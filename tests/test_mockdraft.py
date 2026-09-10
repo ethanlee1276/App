@@ -28,8 +28,12 @@ CSS = open(os.path.join(ROOT, "web", "css", "styles.css"),
 
 
 def test_the_fantasy_page_has_the_room():
-    i = APP.index('subtabbedHTML("fantasy"')
-    body = APP[i:i + 1200]
+    # The tab LIST, sliced to its own last entry rather than to a
+    # character count — see the note on the other two windows in this
+    # file, and tests/_windows for why the count expires.
+    from _windows import until
+    body = until(APP, 'subtabbedHTML("fantasy"',
+                 '["league", "Around the league"')
     assert '"mock", "Mock draft"' in body
     assert 'id="mock-room"' in body
 
@@ -416,16 +420,22 @@ def test_the_binding_survives_every_rerender():
     assert 'room.addEventListener("click"' in body
     # Anchored to the FANTASY page's assembly — bindSubtabs(host) appears
     # on every sub-tabbed page, and the first one is someone else's.
-    j = APP.index("host.innerHTML = _ffLead")
-    assert "_mockBind(host)" in APP[j:j + 2200]
+    # SLICED TO THE ASSEMBLY, not to 2200 characters. That count was a
+    # guess about how long the Fantasy page's tab list would stay, and
+    # the guess expired on 2026-09-10 when the Calendar entry grew a
+    # comment — `tests/_windows` exists for exactly this and says why.
+    from _windows import until
+    assert "_mockBind(host)" in until(APP, "host.innerHTML = _ffLead",
+                                      "initDraftKit(")
 
 
 def test_an_unfinished_draft_survives_a_data_refresh():
     """The fantasy page re-renders when its payload refreshes; the room
     re-emits from module state, so a draft in progress must not reset."""
     assert "let _mock = null;" in APP
-    i = APP.index('subtabbedHTML("fantasy"')
-    assert "${mockDraftHTML()}" in APP[i:i + 1200], \
+    from _windows import until
+    assert "${mockDraftHTML()}" in until(APP, 'subtabbedHTML("fantasy"',
+                                         '["league", "Around the league"'), \
         "the room must re-emit the LIVE draft, not a fresh setup panel"
 
 

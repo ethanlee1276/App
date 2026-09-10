@@ -10210,3 +10210,48 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .ft-row { padding: 12px; }
   .ft-jump { min-height: 38px; }
 }
+
+/* League teams — every roster in the league, collapsed but for yours. */
+.ffteams { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.ffteam {
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); background: var(--panel-2); overflow: hidden;
+}
+.ffteam > summary {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 11px 14px; font-weight: 700; color: var(--text);
+  font-size: var(--fs-sm);
+}
+.ffteam > summary::-webkit-details-marker { display: none; }
+.ffteam-n { margin-left: auto; font-weight: 600; color: var(--text-mute);
+  font-size: var(--fs-xs); }
+.ffteam-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  border-top: var(--hairline) solid var(--border-soft);
+  color: var(--text-dim); font-size: var(--fs-sm); cursor: pointer;
+}
+.ffteam-row:hover { background: var(--panel-3); color: var(--text); }
+.ffteam-row:focus-visible { outline: 2px solid var(--brand);
+  outline-offset: -2px; }
+.ffteam-who { display: flex; align-items: center; gap: 8px; flex: 1;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.ffteam-pos { flex: 0 0 34px; color: var(--text-mute);
+  font-size: var(--fs-xs); letter-spacing: .08em; }
+.ffteam-seat { flex: 0 0 62px; text-align: right; color: var(--text-mute);
+  font-size: var(--fs-xs); }
+
+/* All your leagues at once — a select says which, chips say how many. */
+.ffleagues { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 6px; }
+.ffleague {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  padding: 8px 12px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2);
+  color: var(--text-dim); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.ffleague:hover { border-color: var(--brand); }
+.ffleague.on { border-color: var(--brand); color: var(--text); }
+.ffleague-n { font-size: var(--fs-sm); font-weight: 700; }
+.ffleague-m { font-size: var(--fs-2xs); color: var(--text-mute);
+  letter-spacing: .06em; }
