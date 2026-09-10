@@ -32,6 +32,9 @@ os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 from engine import db as _db
 from engine import statlogs
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _windows                                             # noqa: E402
+
 
 def _fixture():
     """Adams's history: 49ers games across three seasons and two clubs,
@@ -266,6 +269,147 @@ def test_no_league_or_team_names_are_hardcoded_in_the_flow():
     code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
     for word in ("49ers", "Rams", "Adams", "Ohio State"):
         assert word not in code, f"{word} hardcoded in the head-to-head"
+
+
+# --- his line, read the way a box score is read -----------------------------
+def _app():
+    return open(os.path.join(ROOT, "web", "js", "app.js"),
+                encoding="utf-8").read()
+
+
+def _vs_stats(stats):
+    """Run the page's own `vsStatsHTML` over one game's stats.
+
+    THE REAL FUNCTION, lifted out of app.js and executed — not a Python
+    re-implementation of it, which would be a second copy of the rule
+    that could agree with the test while disagreeing with the page.
+    """
+    import json
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:                       # a box with no JS runtime
+        return None
+    app = _app()
+    i = app.index("const VS_PHASES = ")
+    j = app.index("\n}\n", app.index("function vsStatsHTML(")) + 2
+    src = ("const escapeHtml = (x) => String(x);\n" + app[i:j]
+           + "\nconsole.log(vsStatsHTML(" + json.dumps(stats) + "));\n")
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "vs.js")
+        open(f, "w", encoding="utf-8").write(src)
+        out = subprocess.run([node, f], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", out.stdout)).strip()
+
+
+def test_a_phase_he_never_took_part_in_is_not_drawn():
+    """Ethan, 2026-09-10, over a receiver's head-to-head: "all the words
+    are bunched and shit, it's kinda hard too read."
+
+    More than half of that row was a phase he was never going to have —
+    "0 rushing yards … 0 carries" on a wide receiver is not a light day,
+    it is a stat that does not apply to him."""
+    got = _vs_stats({"Rushing Yards": 0, "Receiving Yards": 139,
+                     "Receptions": 11, "Targets": 15, "Carries": 0,
+                     "Anytime TD": 0})
+    if got is None:
+        return
+    assert "Rush Yds" not in got and "Car" not in got, got
+    assert "139 Rec Yds" in got and "11 Rec" in got and "15 Tgts" in got, got
+
+
+def test_a_zero_with_the_opportunity_behind_it_is_kept():
+    """The rule this codebase settled the same day in
+    `sources.cfbstats.ZERO_WHEN`: a zero with opportunity behind it is
+    evidence. Nine carries for nothing is a bad day, not an absent one,
+    and it is exactly what somebody checking a head-to-head wants."""
+    got = _vs_stats({"Carries": 9, "Rushing Yards": 0, "Targets": 0,
+                     "Receptions": 0, "Receiving Yards": 0, "Anytime TD": 0})
+    if got is None:
+        return
+    assert "9 Car" in got and "0 Rush Yds" in got, got
+    assert "Rec" not in got, "a phase with no opportunity survived"
+
+
+def test_the_scoring_line_is_never_dropped_for_being_zero():
+    """Anytime TD sits outside the phases, which is what keeps it: a zero
+    there is the ANSWER to "did he score against them", not the absence
+    of one.
+
+    THE FIXTURE IS A BLANK RECEIVING DAY on purpose. Asserting it against
+    a game he caught passes in would pass even if Anytime TD were folded
+    into the receiving phase, because that phase would be drawn anyway —
+    which is how the first cut of this test let exactly that mutation
+    through."""
+    got = _vs_stats({"Targets": 0, "Receptions": 0, "Receiving Yards": 0,
+                     "Anytime TD": 0})
+    if got is None:
+        return
+    assert "0 Anytime TD" in got, got
+    assert "Rec" not in got, "the receiving phase was drawn on a blank day"
+    app = _app()
+    i = app.index("const VS_PHASES = ")
+    assert "Anytime TD" not in app[i:app.index("]];", i)], \
+        "the scoring line was folded into a phase that can drop it"
+
+
+def test_a_sport_with_no_phases_is_left_exactly_as_it_was():
+    """Grouping football phases over a baseball line would be nonsense,
+    and "0 hits" IS the read there — so a label this table has no phase
+    for is shown whatever its value."""
+    got = _vs_stats({"Total Bases": 0, "Hits": 0, "Home Runs": 0})
+    if got is None:
+        return
+    for want in ("0 Total Bases", "0 Hits", "0 Home Runs"):
+        assert want in got, (want, got)
+
+
+def test_a_game_with_nothing_on_it_says_so_rather_than_drawing_blank():
+    got = _vs_stats({})
+    if got is None:
+        return
+    assert "nothing recorded" in got, got
+
+
+def test_the_line_is_one_element_per_stat_and_not_a_joined_string():
+    """The other half of the report. The whole line used to be joined
+    with middots into a right-aligned `num` cell, so the browser wrapped
+    it wherever it ran out of room — a number ending one line and its
+    unit starting the next. A pill per stat can only break between
+    stats."""
+    app = _app()
+    i = app.index("function vsStatsHTML(")
+    fn = app[i:app.index("\n}\n", i)]
+    assert 'class="vs-stat"' in fn
+    assert '.join(" · ")' not in fn, "the middot blob is back"
+    # AND THE ROW IS A BLOCK, not a two-column table row that has to
+    # share a phone's width with the stats.
+    # THE LISTENER, sliced to its own end rather than to a character
+    # count. The first cut used `app[j:j + 2500]`, which ran past the
+    # listener into `_profileHead` — a function that joins a team, a
+    # position and an opponent with a middot perfectly legitimately — so
+    # the assertion below failed against correct code. `_windows.until`
+    # is the house answer to exactly that.
+    j = app.index('e.target.closest(".vs-select")')
+    row = _windows.until(app, 'e.target.closest(".vs-select")',
+                         "//: Shared head:")
+    assert 'class="vs-game"' in row and 'class="vs-when"' in row
+    assert "<td" not in row, "still a table row"
+    # AND THE ROW GOES THROUGH THE HELPER. Asserting only inside
+    # `vsStatsHTML` left the blob free to come back in the row builder,
+    # which is where it lived in the first place — the mutation sweep
+    # walked straight through that gap.
+    assert "vsStatsHTML(g.stats)" in row, "the row builds its own line again"
+    assert '.join(" · ")' not in row, "the middot blob is back in the row"
+
+
+def test_the_head_to_head_surfaces_have_their_styles():
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    for sel in (".vs-games", ".vs-game", ".vs-when", ".vs-club", ".vs-line",
+                ".vs-stat", ".vs-none"):
+        assert sel + " " in css or sel + "," in css or sel + "{" in css, sel
 
 
 if __name__ == "__main__":

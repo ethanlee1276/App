@@ -1233,6 +1233,37 @@ svg[data-scrub] { touch-action: pan-y; }
    the previous market's price table and sim lab beneath it. So it earns
    spacing and nothing else — every block inside already carries its own
    card styling from the prop page. */
+/* THE HEAD-TO-HEAD LINE, one game per block instead of one table row.
+
+   Ethan, 2026-09-10: "all the words are bunched and shit, it's kinda
+   hard too read." It was a two-column table on a phone: the game cell
+   wrapped "’25 Wk 18 vs Bears with Lions" onto three lines while the
+   stat cell wrapped a middot-joined string wherever it ran out of room,
+   so a number could end one line and its unit begin the next.
+
+   A block per game and a pill per stat wraps on the boundaries a reader
+   would choose, because those are the only places it CAN wrap. */
+.vs-games { display: flex; flex-direction: column; gap: 10px; }
+.vs-game {
+  display: flex; flex-direction: column; gap: 5px;
+  padding-bottom: 10px;
+  border-bottom: var(--hairline) solid var(--border-soft);
+}
+.vs-game:last-child { border-bottom: 0; padding-bottom: 0; }
+.vs-when { font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
+.vs-club { font-weight: 500; color: var(--text-mute); }
+.vs-line { display: flex; flex-wrap: wrap; gap: 5px 6px; }
+.vs-stat {
+  font-size: var(--fs-xs); color: var(--text-dim);
+  background: var(--fill-subtle);
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 3px 8px;
+  white-space: nowrap;
+}
+.vs-stat b { color: var(--text); font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+.vs-none { font-size: var(--fs-xs); color: var(--text-mute); font-style: italic; }
+
 .profile-deep { display: block; }
 .prof-depth { margin-top: 14px; }
 .prof-depth > .section-title:first-child { margin-top: 0; }

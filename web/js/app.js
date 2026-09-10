@@ -9995,6 +9995,77 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+/* HIS LINE THAT DAY, read the way a box score is read.
+
+   Ethan, 2026-09-10, a screenshot of a receiver's head-to-head: "Let's
+   also organize this too, all the words are bunched and shit, it's kinda
+   hard too read."
+
+   He is looking at one row that said, in a right-aligned numeric column,
+   wrapping across three lines:
+
+       0 rushing yards · 139 receiving yards · 11 receptions ·
+       15 targets · 0 carries · 0 anytime td
+
+   TWO THINGS ARE WRONG THERE. The whole line was one string joined with
+   middots and dropped into a `num` cell, so the browser wrapped it
+   wherever it ran out of room — mid-phrase, with the number of one stat
+   ending a line and its unit starting the next. And more than half of it
+   was zeros belonging to a phase the man never took part in: this is a
+   wide receiver, so "0 rushing yards" and "0 carries" are not a light
+   day, they are a stat he was never going to have.
+
+   THE PHASES ARE THE FIX FOR THE SECOND HALF, and the rule is one this
+   codebase settled the same day in `sources.cfbstats.ZERO_WHEN`: a zero
+   with the OPPORTUNITY behind it is evidence, a zero with none is noise.
+   Here the phase IS the opportunity. A rushing line of 7 yards on 2
+   carries is shown, because he ran; a rushing line of nothing on nothing
+   is dropped, because he did not. Anytime TD stands outside them and is
+   always shown — a zero there is the answer to the question, not the
+   absence of one.
+
+   ANY STAT THIS TABLE HAS NO PHASE FOR is shown exactly as before. That
+   is every baseball and basketball line, where "0 hits" IS the read and
+   grouping football phases over it would be nonsense. */
+const VS_PHASES = [["Passing Yards", "Passing TDs"],
+                   ["Carries", "Rushing Yards"],
+                   ["Targets", "Receptions", "Receiving Yards"]];
+
+//: Short enough to sit several to a line on a phone. A label with no
+//: entry keeps its full name, which is what every non-football stat does.
+const VS_SHORT = {
+  "Passing Yards": "Pass Yds", "Passing TDs": "Pass TD",
+  "Rushing Yards": "Rush Yds", "Receiving Yards": "Rec Yds",
+  "Receptions": "Rec", "Targets": "Tgts", "Carries": "Car",
+};
+
+function vsStatsHTML(stats) {
+  const s = stats || {};
+  const has = (k) => s[k] != null;
+  const pill = (k) => `<span class="vs-stat"><b>${escapeHtml(String(+s[k]))}</b> ${
+    escapeHtml(VS_SHORT[k] || k)}</span>`;
+  const out = [];
+  const known = new Set();
+  for (const phase of VS_PHASES) {
+    const live = phase.filter(has);
+    live.forEach((k) => known.add(k));
+    // HE TOOK PART IN IT, or the whole phase goes. Not "drop the zeros"
+    // — a 2-carry, 7-yard line keeps both of its numbers, because that
+    // is a day he ran the ball badly rather than a day he never ran.
+    if (live.some((k) => Number(s[k]))) live.forEach((k) => out.push(pill(k)));
+  }
+  // ANYTIME TD IS DELIBERATELY IN NO PHASE, and that is what keeps it —
+  // everything outside the phases is drawn whatever its value, so a zero
+  // there survives. It has to: "did he score against them" is answered
+  // by the nought, and a phase would take it away on the day a receiver
+  // caught nothing. A `VS_ALWAYS` list sat here for exactly one commit
+  // before the mutation sweep pointed out it could not change anything —
+  // this line already drew it.
+  Object.keys(s).forEach((k) => { if (!known.has(k)) out.push(pill(k)); });
+  return out.join("") ||
+    `<span class="vs-none">nothing recorded for him in this one</span>`;
+}
+
 document.addEventListener("change", async (e) => {
   const sel = e.target.closest && e.target.closest(".vs-select");
   if (!sel || !sel.value) return;
@@ -10020,17 +10091,16 @@ document.addEventListener("change", async (e) => {
     const when = g.week != null
       ? `’${escapeHtml(String(g.season).slice(2))} Wk ${g.week}`
       : escapeHtml(g.date ? formatGameDate(g.date) : String(g.season));
-    const line = Object.entries(g.stats || {})
-      .map(([k, v]) => `${+v} ${k.toLowerCase()}`).join(" · ");
     // His club that day, said per row: the history follows the man, so
     // Adams's games against the 49ers include his Raiders ones.
-    return `<tr><td>${when} ${g.home ? "vs" : "@"} ${escapeHtml(teamNameIn(sport, vs))}
-        <span class="mini" style="opacity:.6">with ${escapeHtml(teamNameIn(sport, g.team))}</span></td>
-      <td class="num">${escapeHtml(line) || "—"}</td></tr>`;
+    return `<div class="vs-game">
+      <div class="vs-when">${when} ${g.home ? "vs" : "@"} ${
+        escapeHtml(teamNameIn(sport, vs))}
+        <span class="vs-club">with ${escapeHtml(teamNameIn(sport, g.team))}</span></div>
+      <div class="vs-line">${vsStatsHTML(g.stats)}</div>
+    </div>`;
   }).join("");
-  out.innerHTML = `<table class="log-table">
-      <tr><th>Game</th><th style="text-align:right">His line</th></tr>
-      ${rows}</table>`;
+  out.innerHTML = `<div class="vs-games">${rows}</div>`;
 });
 
 //: Shared head: who this is, on the market's accent.
