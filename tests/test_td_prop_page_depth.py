@@ -38,7 +38,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.touchdowns import _td_form
+from engine.longshots import scorer_form as _td_form
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -70,7 +70,7 @@ def test_the_row_carries_the_game_log_not_just_the_spark():
 
 
 def test_the_row_carries_its_form_windows():
-    assert '"form": _td_form(' in _depth_helper()
+    assert '"form": scorer_form(' in _depth_helper()
 
 
 def test_the_row_carries_every_book_that_quoted_it():

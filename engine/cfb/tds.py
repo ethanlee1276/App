@@ -50,7 +50,8 @@ cannot be told from noise.
 from __future__ import annotations
 
 from ..longshots import (CFB_TD_ODDS, prob_at_least_one, in_odds_window,
-                         build_pick, select, YES_SIDE, YES_LINE)
+                         build_pick, select, YES_SIDE, YES_LINE,
+                         scorer_form)
 from ..sources.oddsapi import best_scorer_price
 from ..statmath import clamp
 
@@ -845,6 +846,92 @@ def game_fairs(player_quotes: dict, spread_home, total) -> dict:
     return board_fair(by_book, scorers)
 
 
+#: How many past games a college scorer's page shows. Twelve is what
+#: `pipeline._rec_to_dict` publishes for an ordinary prop and what the
+#: card's sparkline draws, so the two surfaces agree.
+TD_LOG_GAMES = 12
+
+#: How many seasons back the log query reaches. Two, because September
+#: is the month a college board is thinnest: a freshman has three games
+#: and a returning back has last November's. Ordered season DESC then
+#: period DESC, the trap `cfb.props.filed_usage` documents — a carried
+#: game from last November is OLDER than this September's opener, and a
+#: positional read that gets that backwards shows the wrong five.
+TD_LOG_SEASONS = 2
+
+
+def td_game_logs(conn, limit: int = TD_LOG_GAMES,
+                 seasons: int = TD_LOG_SEASONS) -> dict:
+    """``{(team, norm_name): [{week, season, opponent, value, home}, …]}``.
+
+    WHY THIS EXISTS. The college board built both its lists out of a
+    usage table — season means, not games — so a college scorer had no
+    game log anywhere, on any row, priced or watched. That is three
+    sections of his prop page blank (`logs`, `form`, and the chart drawn
+    from `recent_values`) and, worse, no DOOR at all: `propOpenable`
+    opens a card only when it can see three games, so `likelyDoor` fell
+    through to the player page. Ethan, 2026-09-10, on the NFL board
+    before the same fix landed there: "it pulls up the search page with
+    the player on there."
+
+    The numbers were on disk the whole time — `sources.cfbstats` writes
+    `anytime_td` per player-game alongside the yardage markets — and
+    nothing read them.
+
+    KEYED BY THE FILING TEAM, exactly as `merged_usage` is, so a transfer
+    resolves the same way in both: `resolve_side` decides who he plays
+    against tonight, `usage_team` decides where his production is stored.
+    Keying on the name alone would collide across 130-odd FBS rosters.
+    """
+    from ..sources.oddsapi import normalize_name
+    ss = [int(r["season"]) for r in conn.execute(
+        "SELECT DISTINCT season FROM player_game_logs WHERE sport='cfb' "
+        "AND market='anytime_td' ORDER BY season DESC LIMIT ?", (int(seasons),))]
+    if not ss:
+        return {}
+    out: dict = {}
+    q = ("SELECT season, period, player, team, opponent, home, value "
+         "FROM player_game_logs WHERE sport='cfb' AND market='anytime_td' "
+         "AND season IN (%s) ORDER BY season DESC, period DESC"
+         % ",".join("?" * len(ss)))
+    for r in conn.execute(q, ss):
+        key = (r["team"], normalize_name(r["player"]))
+        got = out.setdefault(key, [])
+        if len(got) >= limit:
+            continue
+        got.append({"week": str(r["period"] or ""), "season": int(r["season"]),
+                    "opponent": str(r["opponent"] or ""),
+                    "value": float(r["value"] or 0.0),
+                    "home": bool(r["home"])})
+    return out
+
+
+def scorer_depth(logs: list, quotes: list) -> dict:
+    """The four fields the prop page draws, for a college scorer.
+
+    Same keys and same spelling as `touchdowns.prop_depth` — the prop
+    page is one page and must not need a second shape to read. It is a
+    separate function only because college has no `Prop` object to read
+    them off: the logs come from `td_game_logs` and the quotes are the
+    per-book list already in hand.
+
+    EVERY QUOTE, including a sharp book's, which matches what the NFL
+    publishes (`parse_event_scorers` keeps the sharp reference and
+    `apply_odds_to_slate` turns the lot into `prop.lines`). The SHOP
+    refuses to name a sharp book as best — `best_scorer_price` — and
+    that is a different question from what the strip lists.
+    """
+    return {
+        "logs": list(logs or ()),
+        "form": scorer_form([g.get("value") for g in (logs or ())]),
+        "all_lines": [
+            {"book": q.get("book", ""), "line": YES_LINE,
+             "over_odds": q.get("yes_odds"), "under_odds": q.get("no_odds")}
+            for q in (quotes or ()) if q and q.get("book")],
+        "recent_values": [g.get("value") for g in (logs or ())][:TD_LOG_GAMES],
+    }
+
+
 def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                            season: int, limit: int = 6,
                            per_game: int = 2
@@ -886,6 +973,11 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
               "priced": 0, "transfers": 0, "usage_season": usage_season}
     picks = []
     watch_rows = []
+    # ONE READ FOR THE WHOLE BOARD. Every quoted college scorer on a
+    # Saturday slate, keyed the way `merged_usage` keys — see
+    # `td_game_logs`. A board with no logs on disk gets an empty map and
+    # each row shows exactly what it can prove.
+    logs_by_player = td_game_logs(conn)
     for gi, player_quotes in (quotes_by_game or {}).items():
         try:
             g = games[int(gi)]
@@ -1069,6 +1161,13 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "market": "anytime_td",
                         "market_label": "Anytime TD",
                         "side": YES_SIDE, "line": YES_LINE,
+                        # THE PAGE. Game log, form windows, shop strip
+                        # and the chart's numbers — the same four keys
+                        # `touchdowns.prop_depth` publishes for an NFL
+                        # scorer, which college had none of.
+                        **scorer_depth(
+                            logs_by_player.get((usage_team, norm)) or [],
+                            quotes),
                         "shop_refused": shop_refused,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),
@@ -1116,6 +1215,14 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             if pick:
                 pick.game_date = g.get("date", "")
                 pick.game_kickoff = g.get("kickoff", "")
+                # …and on the picks, for the same reason the NFL's got
+                # it: a recommended scorer with no game log is not a
+                # door, and `likelyDoor` sends the reader to the search
+                # page instead of his card.
+                for _k, _v in scorer_depth(
+                        logs_by_player.get((usage_team, norm)) or [],
+                        quotes).items():
+                    setattr(pick, _k, _v)
                 census["priced"] += 1
                 # Ethan, 2026-09-02: "1. No" to betting Group of Five at
                 # all. The pick is still built and explained — it lands

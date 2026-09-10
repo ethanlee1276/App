@@ -98,6 +98,33 @@ YES_SIDE = "OVER"
 YES_LINE = 0.5
 
 
+def scorer_form(vals) -> dict:
+    """The six windows `pipeline._rec_to_dict` publishes as `form`.
+
+    Restated rather than imported from `pipeline`, which imports the
+    touchdown chain; it lives HERE rather than in either football module
+    because both of them need it and college must not have to reach into
+    the NFL's file for six averages.
+
+    THE KEYS ARE WHAT MATTER — `propFormRows` reads them by name, so a
+    helpful rename is a blank section — and they are copied exactly.
+    `career` and `vs_opponent` are None: a scorer prop carries no career
+    anchor (`sources.nflverse` builds anytime-TD props with
+    `career_avg=0.0`, a placeholder) and no opponent split, and printing
+    0.00 in either box would be a claim that he has been held scoreless.
+
+    An empty log gives empty windows rather than zeroes, for the same
+    reason: a man with no games has no average.
+    """
+    def avg(xs):
+        xs = [float(v) for v in xs if v is not None]
+        return round(sum(xs) / len(xs), 3) if xs else None
+    vals = list(vals or ())
+    return {"last1": avg(vals[:1]), "last3": avg(vals[:3]),
+            "last5": avg(vals[:5]), "last10": avg(vals[:10]),
+            "season": avg(vals), "career": None, "vs_opponent": None}
+
+
 @dataclass
 class LongShot:
     """One long-shot recommendation, with the reasoning that produced it."""

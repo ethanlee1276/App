@@ -50,7 +50,7 @@ from .models import Game, Prop, Team, ANYTIME_TD, MARKET_LABELS
 from .longshots import (
     LongShot, NFL_TD_ODDS, NFL_AVG_TEAM_POINTS, NFL_AVG_TEAM_OFF_TDS,
     prob_at_least_one, in_odds_window, build_pick, select,
-    YES_SIDE, YES_LINE,
+    YES_SIDE, YES_LINE, scorer_form,
 )
 from .statmath import clamp
 
@@ -410,22 +410,6 @@ TD_WATCH_ODDS = (-400, 1500)
 TD_WATCH_LIMIT = 5
 
 
-def _td_form(vals: list) -> dict:
-    """The same six windows `pipeline._rec_to_dict` publishes as `form`.
-
-    Restated rather than imported because pipeline imports this module,
-    and a shared helper would have to live in a third place for the sake
-    of six averages. The KEYS are what matter — `propFormRows` reads
-    them by name — so they are copied exactly.
-    """
-    def avg(xs):
-        xs = [float(v) for v in xs if v is not None]
-        return round(sum(xs) / len(xs), 3) if xs else None
-    return {"last1": avg(vals[:1]), "last3": avg(vals[:3]),
-            "last5": avg(vals[:5]), "last10": avg(vals[:10]),
-            "season": avg(vals), "career": None, "vs_opponent": None}
-
-
 def prop_depth(prop) -> dict:
     """The four page fields a scorer row carries, off its own `Prop`.
 
@@ -451,7 +435,7 @@ def prop_depth(prop) -> dict:
     return {
         "logs": [{"week": g.week, "opponent": g.opponent,
                   "value": g.value, "home": g.home} for g in logs],
-        "form": _td_form(vals),
+        "form": scorer_form(vals),
         "all_lines": [
             {"book": ln.book, "line": ln.line,
              "over_odds": ln.over_odds, "under_odds": ln.under_odds}
