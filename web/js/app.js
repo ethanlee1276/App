@@ -25536,11 +25536,33 @@ function renderTeamPage() {
     ${d.vs_unknown ? `<div class="warning">${icon("warn")} No team here
       matched “${escapeHtml(d.vs_unknown)}” — the history below is
       ${escapeHtml(p.name)} on its own.</div>` : ""}
+    ${/* AGAINST WHOM, FIRST. Ethan, 2026-09-10, on the Rams page: "we
+          should add the versus feature so you can see past team
+          performance against other teams."
+
+          It was already there and had been since 2026-09-09 — the
+          server sends 31 opponents for that very team, checked. It drew
+          LAST: under the season table, under the leaders strip, under
+          three ten-row stat tables and under the entire squad by
+          position. On a phone that is several screens of reference
+          material before the one control on the page, so he scrolled,
+          did not reach it, and reported the feature as missing.
+
+          Built, unreachable, asked for as if new: the fifth this week,
+          and the same shape as the roster calendar two days ago. The
+          rule those cost us is that placement IS whether a feature
+          shipped, so the only interactive thing here now opens the page.
+          It is also the question a reader arrives with — they play the
+          49ers on Sunday, how has this gone — where everything below is
+          reference to be scrolled to on purpose.
+
+          Nothing else moved: stats still sit above the squad, which is
+          ESPN's order and what `test_team_stat_tables` pins. */""}
+    ${teamOppPickerHTML(d)}
+    ${teamH2HHTML(d.head_to_head, d.sport)}
     ${teamSeasonsHTML(p)}
     ${teamStatsHTML(d.stats, d.sport)}
     ${teamSquadHTML(d.squad, d.sport)}
-    ${teamOppPickerHTML(d)}
-    ${teamH2HHTML(d.head_to_head, d.sport)}
     <p class="rank-help">Built from the finished games this site has
       ingested${(p.seasons || []).length
         ? ` — ${p.seasons[p.seasons.length - 1].season} to ${p.seasons[0].season}`

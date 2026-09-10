@@ -81,6 +81,11 @@ _TEAMS = {
 }
 
 
+def _app():
+    return open(os.path.join(ROOT, "web", "js", "app.js"),
+                encoding="utf-8").read()
+
+
 def _run(script, fns, consts=()):
     src = (_STUBS + f"const TEAMS = {json.dumps(_TEAMS)};\n"
            + f"const state = {{ sport: 'nfl', search: '' }};\n"
@@ -320,6 +325,58 @@ def test_a_cold_search_tap_sends_a_real_sport():
       console.log(JSON.stringify(sent));""", [])
     assert got == ["nfl", "Los Angeles Rams", ""], got
     assert got[0], "the endpoint rejects an empty sport with 400 unknown sport"
+
+# --- placement is whether it shipped ----------------------------------------
+def test_the_opponent_picker_opens_the_page():
+    """Ethan, 2026-09-10, on the Rams page: "we should add the versus
+    feature so you can see past team performance against other teams."
+
+    It was already there. The server sends 31 opponents for that team —
+    checked against this box's own finals — and `teamOppPickerHTML`
+    renders every one. It drew LAST: below the season table, the leaders
+    strip, three ten-row stat tables and the whole squad by position, so
+    on a phone it was several screens of reference material past the one
+    control on the page. He scrolled, did not reach it, and reported the
+    feature as missing.
+
+    That is the fifth built-and-unreachable of the week, so this test
+    pins the POSITION as hard as the other tests pin the markup: a
+    feature nobody can find has not shipped."""
+    app = _app()
+    i = app.index("function renderTeamPage(")
+    body = app[i:]
+    picker = body.index("${teamOppPickerHTML(d)}")
+    h2h = body.index("${teamH2HHTML(d.head_to_head, d.sport)}")
+    for later in ("${teamSeasonsHTML(p)}", "${teamStatsHTML(d.stats, d.sport)}",
+                  "${teamSquadHTML(d.squad, d.sport)}"):
+        assert picker < body.index(later), f"the picker still draws under {later}"
+    assert h2h < body.index("${teamSeasonsHTML(p)}"), \
+        "the matchup table is below the season table again"
+    # THE TABLE FOLLOWS ITS OWN PICKER, which is the one ordering inside
+    # the block that matters: chips you press, then what they answered.
+    assert picker < h2h
+
+
+def test_the_stats_still_sit_above_the_squad():
+    """Moving the versus block must not shuffle the reference sections
+    under it. ESPN's order, and what a reader wants: who is good here,
+    then who plays here."""
+    app = _app()
+    i = app.index("function renderTeamPage(")
+    body = app[i:]
+    assert body.index("${teamStatsHTML(d.stats, d.sport)}") \
+        < body.index("${teamSquadHTML(d.squad, d.sport)}")
+
+
+def test_the_unmatched_opponent_warning_stays_with_the_picker():
+    """"No team here matched X" is about the versus lookup, so it has to
+    sit beside the control it is about rather than where the block used
+    to be."""
+    app = _app()
+    i = app.index("function renderTeamPage(")
+    body = app[i:]
+    assert body.index("d.vs_unknown") < body.index("${teamOppPickerHTML(d)}")
+
 
 if __name__ == "__main__":
     if not shutil.which("node"):
