@@ -6415,6 +6415,50 @@ function cardHTML(r) {
    graph, logs, form, game script, versus. A watch row with no prop
    behind it (a touchdown watch) opens the player page, which carries
    the versus block too. */
+/* WHICH PROP A LIKELIHOOD ROW OPENS, or null.
+
+   THE BUG THIS EXISTS FOR. Ethan, 2026-09-10: "When u click on props
+   from the edge board is pulls up a bunch of stats and sims to run and
+   all this data but when you click on props from the most likely, it
+   pulls up the search page with the player on there."
+
+   Both doors below asked `findProp(propId(r))` and fell back to the
+   player page when it missed. `propId` is `player|market|side|line`, and
+   since the ladders shipped (2026-09-07) a likelihood row's `line` is
+   often a RUNG'S line — the same stat at a lower number, bought
+   separately because that is where "most likely" is actually for sale.
+   No rung is on the props board, so the exact lookup could not match,
+   and the fallback did what it was built to do: opened the player page,
+   which is the search surface Ethan was landing on. The more the ladder
+   worked, the more of the board went through the wrong door.
+
+   The row already carries the bridge. `likely._row` stamps `rung` as
+   "main" or "alt" and keeps `main_line`/`main_side` beside the rung's
+   own, precisely so a reader can be told what the rung stands next to.
+
+   WHAT OPENS FOR AN ALT RUNG IS THE MAIN LINE'S PAGE, and that is the
+   honest answer rather than a compromise: the rung's own page does not
+   exist — nothing on the board carries that line — and the analysis the
+   page draws is per player and market, not per line. The bar graph, the
+   logs, the form, the game script and the versus block are the same
+   evaluation either way. */
+function likelyProp(r) {
+  if (!r || !r.player) return null;
+  const exact = findProp(propId(r));
+  if (exact) return exact;
+  if (r.rung !== "alt" || r.main_line == null) return null;
+  return findProp(propId({ player: r.player, market: r.market,
+                           side: r.main_side || r.side, line: r.main_line }));
+}
+/* ASKED OF THE PROP, NOT OF THE ROW. `propOpenable` tests whether there
+   is enough history to draw the page, and the page draws the PROP —
+   so the row it is asked about has to be the one that will be
+   rendered. Asking the likelihood row instead let its own field set
+   decide whether a page it does not render was worth opening. */
+function likelyOpenableProp(r) {
+  const t = likelyProp(r);
+  return t && propOpenable(t) ? t : null;
+}
 function likelyDoor(r) {
   if (!r) return "";
   // A GAME ROW opens the game-bet page by the same id the edge card
@@ -6423,9 +6467,9 @@ function likelyDoor(r) {
   // "we have no money lines or spreads or totals").
   if (r.kind === "game") return gameBetAttrs(r);
   if (!r.player) return "";
-  const id = propId(r);
-  if (propOpenable(r) && findProp(id)) {
-    return ` data-prop="${escapeAttr(id)}" tabindex="0" role="link"`;
+  const t = likelyOpenableProp(r);
+  if (t) {
+    return ` data-prop="${escapeAttr(propId(t))}" tabindex="0" role="link"`;
   }
   return ` data-player-page="${escapeAttr(slugify(r.player))}" tabindex="0" role="link"`;
 }
@@ -6436,9 +6480,9 @@ function likelyOpen(r) {
       ? ` data-open="prop:${escapeAttr(gameBetId(r))}"` : "";
   }
   if (!r.player) return "";
-  const id = propId(r);
-  return (propOpenable(r) && findProp(id))
-    ? ` data-open="prop:${escapeAttr(id)}"`
+  const t = likelyOpenableProp(r);
+  return t
+    ? ` data-open="prop:${escapeAttr(propId(t))}"`
     : ` data-open="player:${escapeAttr(slugify(r.player))}"`;
 }
 function openFrom(spec) {
