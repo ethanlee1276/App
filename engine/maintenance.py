@@ -723,6 +723,18 @@ def settle_open(log=print, state_path: Path | None = None,
                     f"that actually played them")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  league relabel skipped: {exc}")
+        # And the football half of the same problem: NFL stale-line flags
+        # journalled as baseball by a defaulted sport. Same placement and
+        # the same reason as the relabel above — a bet under the wrong
+        # league can never meet its results, and the ingest below picks
+        # which sports to fetch from the bets' own labels.
+        try:
+            refiled = ledger.repair_football_filed_as_baseball(lconn)
+            if refiled:
+                log(f"  re-filed {refiled} football bet(s) out of the "
+                    f"baseball book")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  football re-file skipped: {exc}")
         # Long-shot markets (home runs, anytime TDs) may NEVER sit in the
         # headline record — the journal gate refuses them at the door, and
         # this sweep re-files any stray that got in some other way, so the

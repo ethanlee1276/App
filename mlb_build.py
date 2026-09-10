@@ -833,7 +833,13 @@ def main() -> None:
                       f"the Long Shots record into the calibration bucket.")
             logged = ledger.log_recommendations(lconn, result)
             ls_logged = ledger.log_longshots(lconn, result)
-            st_logged = ledger.log_stale_flags(lconn, result)
+            # Stamped rather than left to a default. The default WAS
+            # "mlb", so this line was right by luck while the identical
+            # line in nfl_build filed every football flag as baseball;
+            # `log_stale_flags` now refuses a payload with no sport.
+            st_logged = ledger.log_stale_flags(
+                lconn, {"sport": "mlb", "date": result.get("date", ""),
+                        "market_scan": result.get("market_scan") or {}})
             # The likelihood board's paper book, same as NFL/CFB — the
             # board shipped for baseball on 2026-08-31 and a most-likely
             # pick that never journals is a claim the ledger can never

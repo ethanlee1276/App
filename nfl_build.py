@@ -1242,7 +1242,17 @@ def main() -> None:
                 print(f"Most likely: {ml_logged} row(s) journaled.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
-            st_logged = ledger.log_stale_flags(lconn, result)
+            #
+            # `sport` STAMPED, like the two calls above it. This passed
+            # the raw payload, which carries a date and no sport key, and
+            # `log_stale_flags` defaulted to "mlb" — so every NFL flag was
+            # journalled as a baseball bet and could never settle. 107 of
+            # them were open on the droplet when it was found
+            # (2026-09-10). The function now refuses a payload that does
+            # not name its league rather than guessing one.
+            st_logged = ledger.log_stale_flags(
+                lconn, {"sport": "nfl", "date": result.get("date", ""),
+                        "market_scan": result.get("market_scan") or {}})
             settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
             ledger.export_json(lconn, "web/data/record.json")
             if logged or st_logged or settled:

@@ -1399,7 +1399,35 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
     flagged the same day, only the larger gap (rows arrive gap-sorted)
     journals — fine for a measurement bucket.
     """
-    sport = result.get("sport", "mlb")
+    # THE SPORT IS NAMED OR NOTHING IS WRITTEN, and the default that used
+    # to sit here is the reason. It was `"mlb"`, and `nfl_build` called
+    # this with its raw slate payload — which carries a `date` and no
+    # `sport` key at all. So every NFL stale-line flag was journalled as a
+    # BASEBALL bet. Measured on the droplet 2026-09-10: 107 open rows with
+    # sport='mlb' and date='2026-W01' across pass_yds, rush_yds, rec_yds,
+    # receptions and anytime_td — which is `STALE_SETTLEABLE`'s football
+    # half exactly.
+    #
+    # They can never settle. `_hist_where` turns sport='mlb' + a week
+    # label into `sport='mlb' AND period='2026-W01'`, and no baseball row
+    # is ever filed under an NFL week, so the lookup comes back empty for
+    # ever and reads as the ordinary "results not in yet". Two further
+    # costs, both silent: the shadow book's per-sport verdict for the NFL
+    # was measuring an empty sample, and the MLB record's open count was
+    # carrying a hundred football bets.
+    #
+    # A DEFAULT CANNOT BE RIGHT HERE. Six leagues journal through this
+    # function and the sibling journal calls disagreed about the fallback
+    # — `log_longshots` guessed "mlb", `log_most_likely` guessed "nfl" —
+    # which is proof that neither guess was reasoned. Raising is what
+    # makes a mislabel impossible instead of invisible; every call site
+    # stamps the sport, and tests/test_stale_flag_sport.py holds them to
+    # it, so this can only fire on a caller nobody has written yet.
+    sport = result.get("sport") or ""
+    if not sport:
+        raise ValueError(
+            "log_stale_flags needs the sport in the payload — a default "
+            "here filed every NFL flag as a baseball bet (2026-09-10)")
     slate_date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     rows = ((result.get("market_scan") or {}).get("stale")) or []
@@ -2502,6 +2530,40 @@ def relabel_cross_league(conn, hist_conn) -> int:
                 moved += 1
     conn.commit()
     return moved
+
+
+def repair_football_filed_as_baseball(conn) -> int:
+    """Re-file open bets journalled as baseball under an NFL week label.
+
+    The companion to `relabel_cross_league`, which does the same job for
+    the two hoops leagues. `log_stale_flags` defaulted its sport to "mlb"
+    and `nfl_build` handed it a payload with no sport key, so every NFL
+    stale-line flag landed in the baseball book — 107 of them open on the
+    droplet when this was found (2026-09-10). The writer is fixed; this
+    repairs the rows it already wrote.
+
+    THE PREDICATE IS A PROOF, NOT A GUESS, which is the whole reason this
+    can run unattended where `relabel_cross_league` has to check a name
+    against two player pools. `bets.date` for baseball is an ISO day — it
+    is the slate label, and MLB slates are days. A WEEK label is the
+    NFL's format and only the NFL's: college football journals calendar
+    dates too (`cfb_build` passes `args.date`). So a row with sport='mlb'
+    and a date matching `_NFL_WEEK_DATE` cannot be a baseball bet under
+    any reading, and there is no second league it might belong to.
+
+    Open rows only. A settled row already has its verdict and its P&L in
+    a book somebody has read; moving it would rewrite two sports' history
+    to fix a label, which is worse than leaving one wrong label behind.
+    """
+    ids = [r[0] for r in conn.execute(
+        "SELECT id, date FROM bets WHERE sport='mlb' AND status='open' "
+        "AND date IS NOT NULL").fetchall()
+        if _NFL_WEEK_DATE.match(str(r[1] or ""))]
+    for bid in ids:
+        conn.execute("UPDATE bets SET sport='nfl' WHERE id=?", (bid,))
+    if ids:
+        conn.commit()
+    return len(ids)
 
 
 def _why_open_predmarket(b, date: str, today_d,
