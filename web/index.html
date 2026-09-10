@@ -297,43 +297,17 @@
     </div>
 
     <div class="sb-sec" id="sport-switch">
-      <div class="sb-label" data-head="sport">Leagues</div>
-      <div class="sb-group sb-chips" data-group="leagues">
-        <!-- The titles carry each league's model name — the old Models
-             group's three rows were these same chips wearing different
-             names, so the names moved here when the group dissolved
-             (2026-08-17, the navigation declutter). -->
-        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL — The NFL Book, the pro-bettor spec">NFL</button>
-        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football — attention is the axis">CFB</button>
-        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB — Scalpy 2.0, the model behind the board">MLB</button>
-        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — the Scalpy probability engine">NBA</button>
-        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — the Scalpy engine, on probation">WNBA</button>
-        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA, the fight model">UFC</button>
-      </div>
-
-      <!-- Ethan, 2026-08-12: "the Polly market page and fantasy page and
-           meme coin page up here" — the three markets ride the same chip
-           grid instead of hiding at the bottom of the menu. Their own
-           label, because a prediction market is not a league. -->
-      <div class="sb-label" data-head="markets">Markets</div>
-      <div class="sb-group sb-chips" data-group="markets">
-        <!-- Renamed from POLY 2026-08-18 — Ethan: "change the name of the
-             polly market page to 'prediction market'". The page reads two
-             venues, so naming it after one was always a squint. -->
-        <button class="sport-btn" data-sport="intel" data-kind="tool"
-                title="Prediction Market — Kalshi prices + Polymarket informed flow">PREDICT</button>
-        <button class="sport-btn" data-sport="fantasy" data-kind="tool"
-                title="Fantasy football — usage, scripts, buy-low">FNTSY</button>
-        <button class="sport-btn" data-sport="memes" data-kind="tool"
-                title="Rocket Radar — Solana meme-coin momentum and danger">MEMES</button>
-      </div>
-
-      <!-- Ethan's render pack, 2026-08-12: the grouped sidebar —
+      <!-- Ethan’s render pack, 2026-08-12: the grouped sidebar —
            Dashboard up top, then RESEARCH / MODELS / MY TOOLS. Every
            destination the old groups carried survives (preservation
            rule); the bet slip and the Upgrade card do not exist here
            because the site takes no money. Badges only when true:
-           the Live count is real, and nothing wears NEW as decoration. -->
+           the Live count is real, and nothing wears NEW as decoration.
+
+           The league and market chips used to sit ABOVE this group, in
+           two labelled sections of their own. They left on 2026-09-10 for
+           the strip at the top of `<main>` — see the comment there. What
+           is left in this column is one kind of thing: places you can go. -->
       <div class="sb-group" data-group="pages">
         <button class="nav-btn sb-item active" data-view="recommended" data-hint="tonight’s picks">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
@@ -547,6 +521,40 @@
   </aside>
 
   <main>
+  <!-- WHICH LEAGUE, OUT OF THE DRAWER.
+
+       Ethan, 2026-09-10: "there's no real organization to everything ...
+       it just needs to make sense how it's organized and not feel so
+       cluttered." Measured before moving anything: below 900px the
+       sidebar is `position: fixed; transform: translateX(-102%)` — a
+       drawer. So on every phone, picking a league was behind a hamburger
+       tap, and the league is the most-changed control on a site that
+       covers six of them.
+
+       IT ALSO WAS NOT A NAV ITEM. The sidebar put `NFL` and `Long Shots`
+       in one column at the same weight, and they answer different
+       questions: one changes what the page is ABOUT, the other changes
+       which page you are on. Scope belongs with the content it scopes.
+
+       WRAPS, NEVER SCROLLS. Nine chips do not fit 390px, and a scrolling
+       strip is the draggable bar Ethan caught on 2026-08-18 — it parks
+       wherever the finger leaves it with half a chip clipped. Two rows on
+       a phone, one on a laptop, nothing hidden at either size. -->
+  <div class="sportbar" id="sportbar">
+    <div class="sportbar-in" role="group" aria-label="League and market">
+      <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL — The NFL Book, the pro-bettor spec">NFL</button>
+      <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football — attention is the axis">CFB</button>
+      <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB — Scalpy 2.0, the model behind the board">MLB</button>
+      <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — the Scalpy probability engine">NBA</button>
+      <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — the Scalpy engine, on probation">WNBA</button>
+      <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA, the fight model">UFC</button>
+      <span class="sportbar-sep" aria-hidden="true"></span>
+      <button class="sport-btn" data-sport="intel" data-kind="tool" title="Prediction Market — Kalshi prices + Polymarket informed flow">PREDICT</button>
+      <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">FNTSY</button>
+      <button class="sport-btn" data-sport="memes" data-kind="tool" title="Rocket Radar — Solana meme-coin momentum and danger">MEMES</button>
+    </div>
+  </div>
+
     <!-- THE ONLY WAY BACK WHEN THE WALL IS UP.
          `body.walled` hides the sidebar, the topbar and the tab bar, and
          two pages stay reachable behind it on purpose: Record, because it

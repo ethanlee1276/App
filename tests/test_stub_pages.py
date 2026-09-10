@@ -210,7 +210,7 @@ def test_the_record_scopes_wear_the_same_purple_as_every_other_filter():
     assert "var(--grad-brand)" in seg, "the active scope is not brand-filled"
     assert "border-bottom-color" not in seg, "the underline treatment survived"
     # And it is the SAME fill the sidebar's sport chips use, not a new one.
-    j = CSS.index(".sb-chips .sport-btn.active")
+    j = CSS.index(".sportbar-in .sport-btn.active")
     assert "var(--grad-brand)" in CSS[j:j + 200]
 
 

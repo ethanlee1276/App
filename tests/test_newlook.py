@@ -66,16 +66,37 @@ def test_the_sidebar_is_the_drawer_not_a_second_menu():
     assert "max-width: 900px" in CSS[media:media + 40], "the drawer breakpoint moved"
     assert "body.menu-open .sidebar { transform: translateX(0)" in CSS
     # The bar's own nav hides on phones — the drawer carries everything.
-    i = CSS.index("@media (max-width: 760px) {", CSS.index("NEW LOOK — 2026-08-11"))
-    assert ".nav { display: none; }" in CSS[i:i + 900]
+    #
+    # Anchored on the RULE and walked back to its own media header, the
+    # way the drawer check three lines up already does. It used to take
+    # the first 760px block after the NEW LOOK banner and read 900 bytes
+    # of it, which meant any new phone block written above this one moved
+    # the window off the rule — the league strip's did, on 2026-09-10,
+    # and the assertion failed without `.nav` having changed at all.
+    i = CSS.index(".nav { display: none; }")
+    media = CSS.rindex("@media", 0, i)
+    assert "max-width: 760px" in CSS[media:media + 40], \
+        "the bar's nav is hidden at some other width"
 
 
 def test_every_destination_survived_the_redesign():
-    """Nothing Ethan could reach before is more than one sidebar tap away
-    now. Counted by the same data attributes the router binds."""
+    """Nothing Ethan could reach before is more than one tap away now.
+    Counted by the same data attributes the router binds.
+
+    Re-anchored 2026-09-10. The nine LEAGUE AND MARKET chips left the
+    sidebar for the strip at the top of `<main>` — below 900px the
+    sidebar is a fixed drawer, so a chip inside it cost a hamburger tap
+    first, and scope was never a destination anyway. The guarantee this
+    test exists for is unchanged and is the reason it did not simply
+    lose those nine names: every one of them is still one tap from the
+    chrome. What moved is WHICH piece of chrome, so the test now looks
+    in both and says which."""
     sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
+    bar = HTML[HTML.index('class="sportbar"'):HTML.index("</div>", HTML.index('class="sportbar-in"'))]
     for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "ufc", "intel",
-                  "fantasy", "memes", "record", "lab", "mybets", "why", "about"):
+                  "fantasy", "memes"):
+        assert f'data-sport="{sport}"' in bar, f"{sport} fell out of the league strip"
+    for sport in ("record", "lab", "mybets", "why", "about"):
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the sidebar"
     # "parlays" left this list 2026-08-11: the page became Parlay Mode
     # (the second sidebar toggle) — test_parlays.py owns that contract.

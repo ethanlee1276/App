@@ -128,7 +128,7 @@ def test_the_wiring_is_passive_owned_and_scoped_to_boards():
     assert "await load(true);" in seg and "tfToast(`Refreshed · ${tzTime(Date.now())}`);" in seg
     assert 'Math.abs(dx) > SWIPE_MAX_Y ? "idle" : ptrPhase(dy, true)' in seg, "a sideways drag is not a pull"
     owned = _fn("swipeOwned")
-    for sel in (".games-scroller", ".std-chips", ".sb-chips", "#pk-overlay", "#tour-overlay", "input, textarea"):
+    for sel in (".games-scroller", ".std-chips", ".sportbar-in", "#pk-overlay", "#tour-overlay", "input, textarea"):
         assert sel in owned, sel
     assert 'o === "auto" || o === "scroll"' in owned, "anything that scrolls sideways owns its swipes"
     views = _const("SWIPE_VIEWS")

@@ -5157,7 +5157,7 @@ async function renderTonightAll(host) {
       if (!door) return;
       e.stopPropagation();
       e.preventDefault();
-      const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
+      const chip = document.querySelector(`.sportbar-in .sport-btn[data-sport="${s}"]`);
       if (!chip) return;
       chip.click();
       const again = () => {
@@ -34078,7 +34078,7 @@ function initGamesControls() {
     });
     sportSel.value = state.sport;
     sportSel.addEventListener("change", () => {
-      const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${sportSel.value}"]`);
+      const chip = document.querySelector(`.sportbar-in .sport-btn[data-sport="${sportSel.value}"]`);
       if (chip) chip.click();
     });
   }
@@ -36062,7 +36062,7 @@ async function renderLiveBoard() {
       // own sport's slate.
       if (el.dataset.pbp) { openPbp(s, el.dataset.pbp); return; }
       if (s !== state.sport) {
-        const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
+        const chip = document.querySelector(`.sportbar-in .sport-btn[data-sport="${s}"]`);
         if (chip) chip.click();
         setTimeout(() => openGame(el.dataset.gid), 900);
       } else openGame(el.dataset.gid);
@@ -36265,7 +36265,7 @@ function swipeTarget(dx, dy, sports, current) {
    field, belongs to that thing. */
 function swipeOwned(el) {
   for (let n = el; n && n !== document.body; n = n.parentElement) {
-    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sb-chips, .lb-table, table")) return true;
+    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sportbar-in, .lb-table, table")) return true;
     if (n.scrollWidth > n.clientWidth + 4) {
       const o = getComputedStyle(n).overflowX;
       if (o === "auto" || o === "scroll") return true;
@@ -36275,7 +36275,7 @@ function swipeOwned(el) {
 }
 
 function visibleSports() {
-  return [...document.querySelectorAll(".sb-chips .sport-btn[data-sport]")]
+  return [...document.querySelectorAll(".sportbar-in .sport-btn[data-sport]")]
     .filter((b) => !b.hidden && SPORT_CODES.includes(b.dataset.sport))
     .map((b) => b.dataset.sport);
 }
@@ -36330,7 +36330,7 @@ document.addEventListener("touchend", async (e) => {
   if (s.owned || !t || !onBoard) return;
   const to = swipeTarget(t.clientX - s.x, t.clientY - s.y, visibleSports(), state.sport);
   if (!to) return;
-  const btn = document.querySelector(`.sb-chips .sport-btn[data-sport="${to}"]`);
+  const btn = document.querySelector(`.sportbar-in .sport-btn[data-sport="${to}"]`);
   if (btn) { btn.click(); buzz("tap"); }
 }, { passive: true });
 document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle"); }, { passive: true });

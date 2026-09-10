@@ -9,7 +9,7 @@ most-tapped controls were far too small to hit one-handed:
 
     .sb-fold          279 x 13     the drawer's collapsible group heads
     .sb-hcm-switch    271 x 22     the two rail switches
-    .sb-chips .sport-btn    27px   the league chips — how you change sport
+    .sportbar-in .sport-btn    27px   the league chips — how you change sport
     .sb-item                  ~38px drawer nav rows (Why Us / About live
                                     here since 2026-08-25)
     .tp-add                 31px   "+ My Bets" on a pick card
@@ -101,7 +101,7 @@ def test_the_rail_switches_take_the_full_target():
 def test_the_league_chips_take_the_full_target():
     """The most-tapped control on the site: three to a row, and the only
     way to change sport from a phone."""
-    r = _rule(PHONE, ".sb-chips .sport-btn {")
+    r = _rule(PHONE, ".sportbar-in .sport-btn {")
     assert "min-height: 44px" in r, r
 
 
@@ -168,7 +168,7 @@ def test_the_touch_rules_stay_inside_the_phone_block():
     # matching on the selector alone would call the base rule a leak.
     for sel in (".sb-fold { padding: 15px 0",
                 ".sb-hcm-switch { min-height: 44px",
-                ".sb-chips .sport-btn { min-height: 44px",
+                ".sportbar-in .sport-btn { min-height: 44px",
                 ".sb-item { min-height: 36px"):
         assert sel in PHONE, f"{sel!r} is not in the phone block"
         # and not also applied globally

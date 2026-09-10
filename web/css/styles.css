@@ -5814,6 +5814,69 @@ body.has-rail .shell {
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w); }
 .shell main { max-width: none; margin: 0; min-width: 0; }
 
+/* THE LEAGUE STRIP — scope, where the content it scopes can see it.
+
+   Measured before this moved: below 900px `.sidebar` is
+   `position: fixed; transform: translateX(-102%)` — a drawer — so on
+   every phone, picking a league cost a hamburger tap. It is the most
+   changed control on a site covering six leagues.
+
+   WRAPS, NEVER SCROLLS. Nine chips do not fit 390px. A scrolling strip
+   is the draggable bar Ethan caught on 2026-08-18 ("look how you can
+   move that bar, fix that so that cant happen") — it parks wherever the
+   finger leaves it, half a chip clipped at the edge. Two rows on a
+   phone, one on a laptop, and nothing hidden at either size.
+
+   STICKY UNDER THE TOPBAR, because the answer to "what am I looking at"
+   should not scroll away from the board it labels. */
+.sportbar {
+  position: sticky; top: var(--topbar-h); z-index: 30;
+  background: var(--bg); border-bottom: var(--hairline) solid var(--border-soft);
+  padding: 10px 0;
+}
+.sportbar-in {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  /* Aligned with `.view`, which is what sits under it. */
+  padding: 0 26px;
+}
+/* A hairline, not a heading: a prediction market is not a league, and the
+   old sidebar spent a whole labelled section saying so. */
+.sportbar-sep {
+  /* Drawn as a BORDER, not a 1px-wide painted box. `--hairline` is the
+     border token — it halves on a retina screen, and `tests/test_hairlines`
+     holds it to `border:` declarations on purpose, because a rule that
+     reaches the token through `width:` is a rule nobody can find later. */
+  width: 0; align-self: stretch; margin: 2px 6px;
+  border-left: var(--hairline) solid var(--border);
+}
+/* The chips themselves, carried over from the sidebar unchanged apart
+   from the box they sit in: same fill, same hairline, same brand-gradient
+   active state every other filter row on the site uses (`.rec-scope` was
+   matched to it on purpose, 2026-08-24). One rule did change — three to a
+   row was right for a 208px column and is wrong in a full-width strip, so
+   each chip is now as wide as its own word. */
+.sportbar-in .sport-btn { flex: 0 0 auto; border: var(--hairline) solid var(--border);
+  background: var(--panel); color: var(--text-mute); cursor: pointer; font: inherit;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+  padding: 8px 13px; border-radius: var(--radius-sm); text-align: center; text-transform: uppercase;
+  transition: all var(--dur-fast) var(--ease-out); }
+.sportbar-in .sport-btn:hover { color: var(--text); border-color: var(--brand-2); }
+.sportbar-in .sport-btn.active { background: var(--grad-brand); border-color: transparent;
+  color: var(--brand-ink); box-shadow: var(--glow); }
+
+@media (max-width: 760px) {
+  .sportbar { padding: 8px 0; }
+  /* `.view` drops to 12px here; the strip tracks it. */
+  .sportbar-in { padding: 0 12px; gap: 5px; }
+  /* THE HAIRLINE GOES WHERE THE ROW WRAPS. Measured at 390px: all six
+     leagues fit line one, so the separator became the last thing on that
+     line — a 1px tick floating against the right margin, dividing
+     nothing. The wrap itself already puts the markets on their own line,
+     which is a stronger separator than the rule was. At 760 and above
+     every chip fits one row and it does real work, so it stays there. */
+  .sportbar-sep { display: none; }
+}
+
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
   overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px;
@@ -5903,16 +5966,6 @@ body.has-rail .shell {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
   background: var(--bad); color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
 .sb-badge[hidden] { display: none; }
-
-.sb-chips { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
-.sb-chips .sport-btn { flex: 1 1 calc(33.3% - 6px); border: var(--hairline) solid var(--border);
-  background: var(--panel); color: var(--text-mute); cursor: pointer; font: inherit;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-  padding: 8px 2px; border-radius: var(--radius-sm); text-align: center; text-transform: uppercase;
-  transition: all var(--dur-fast) var(--ease-out); }
-.sb-chips .sport-btn:hover { color: var(--text); border-color: var(--brand-2); }
-.sb-chips .sport-btn.active { background: var(--grad-brand); border-color: transparent;
-  color: var(--brand-ink); box-shadow: var(--glow); }
 
 /* High Confidence — the render's toggle card, wired to a real filter. */
 .sb-hcm { margin-top: auto; display: flex; flex-direction: column; gap: 10px;
@@ -6254,7 +6307,7 @@ body.has-rail .shell {
      line rhythm of every paragraph on the site to fix something nobody
      mis-taps. The rule is "standalone control" versus "word in a
      sentence", not a number applied to every anchor. */
-  .sb-chips .sport-btn { min-height: 44px; }
+  .sportbar-in .sport-btn { min-height: 44px; }
 
   /* THE BAR SHRINKS FROM HERE, not from 760. Drawer mode starts at this
      width, which is the point at which the bar stops having room — and
@@ -8792,6 +8845,12 @@ button.rc-day b { font-size: var(--fs-sm); }
    them back. The layout, the rhythm and the three-tier shape are his. */
 body.walled .sidebar, body.walled .tabbar,
 body.walled .nav-btn { display: none !important; }
+/* AND THE LEAGUE STRIP, which used to be covered by the line above: the
+   chips lived inside `.sidebar` until 2026-09-10 and moved into `<main>`,
+   which the wall does not hide. The paragraph below already says why —
+   "a person who has never signed in has no use for … a sport switcher" —
+   it just named the topbar's copy of it. */
+body.walled .sportbar { display: none !important; }
 /* THE SITE MASTHEAD AND FOOTER GO TOO, and missing them was visible in a
    screenshot rather than in the markup: the wall draws its OWN lockup and
    its own legal block, so leaving the site's in place stacked two Qellys
