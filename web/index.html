@@ -342,8 +342,26 @@
                wearing model names — the names moved into the league
                chips' titles and the header taglines.
              * Research (11 flat rows) split into Betting and a foldable
-               Library; the daily surfaces ship open, reference ships
-               folded, and the choice is remembered (qb_sb_folds). -->
+               Library; the daily surfaces shipped open, reference
+               shipped folded, and the choice is remembered
+               (qb_sb_folds).
+
+           THAT LAST LINE WAS SUPERSEDED ON 2026-08-31 and outlived its
+           own decision by ten days, which is long enough to mislead
+           somebody — it did, on 2026-09-10, into proposing that Betting
+           be opened again. What actually happened: Ethan, "The site is
+           just feeling super confusing and hard to like navigate", then
+           "Go" on the two-tier drawer. The rows a bettor uses nightly
+           were PROMOTED OUT of these groups into the always-open tier
+           above; what is left in Betting and My Book is reference, so
+           all four groups now ship shut on purpose. Measured at 390x844:
+           27 rows and 1292px before, 21 rows and 1051px after.
+
+           tests/test_drawer_tiers.py states the rule this file has to
+           keep — "a fold that ships open is a tier-1 row wearing a
+           heading" — and opening Betting would also put the value board
+           back level with the two the measurements support, which the
+           2026-08-30 reorder below argues at length against. -->
       <button class="sb-label sb-fold" data-head="research" data-fold="research"
               type="button" aria-expanded="false">Betting
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
