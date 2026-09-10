@@ -93,9 +93,15 @@ def test_every_destination_survived_the_redesign():
     in both and says which."""
     sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
     bar = HTML[HTML.index('class="sportbar"'):HTML.index("</div>", HTML.index('class="sportbar-in"'))]
-    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "ufc", "intel",
-                  "fantasy", "memes"):
+    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "ufc"):
         assert f'data-sport="{sport}"' in bar, f"{sport} fell out of the league strip"
+    # Prediction Market, Fantasy and Rocket Radar spent one day in the
+    # strip and returned to the drawer on 2026-09-10: they are not
+    # leagues, and nine chips at 390px wrapped to two rows of 11.5px type
+    # (Ethan: "They're too small"). Still one tap from the chrome, which
+    # is the guarantee this test is actually about.
+    for sport in ("intel", "fantasy", "memes"):
+        assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the drawer"
     for sport in ("record", "lab", "mybets", "why", "about"):
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the sidebar"
     # "parlays" left this list 2026-08-11: the page became Parlay Mode
@@ -169,8 +175,12 @@ def test_the_library_folds_and_remembers():
     sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
     # Four since the 2026-08-25 menu reorganisation added Proof — the
     # trust pages as rows instead of footer chips (test_trust pins it).
-    assert sb.count('class="sb-label sb-fold"') == 4, \
-        "the foldable heads changed — Betting, Library, My Book, Proof"
+    # Five since 2026-09-10: "Beyond the book" took Prediction Market,
+    # Fantasy and Rocket Radar back out of the league strip, folded for
+    # the same reason Library is — visited deliberately, not nightly.
+    assert sb.count('class="sb-label sb-fold"') == 5, \
+        "the foldable heads changed — Betting, Library, My Book, " \
+        "Beyond the book, Proof"
     for fold in ('data-fold="library"', 'data-fold="proof"'):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="false"' in seg[:220], \

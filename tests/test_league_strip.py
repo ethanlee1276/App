@@ -91,12 +91,56 @@ def test_the_league_chips_are_out_of_the_drawer():
         "a league chip is back inside the sidebar"
 
 
-def test_the_strip_carries_every_chip_the_sidebar_had():
-    """The preservation rule: a reorganisation may move things and may
-    not lose them. Six leagues and three markets went in."""
+def test_the_strip_carries_every_league_and_only_leagues():
+    """It shipped with nine chips — the six leagues plus PREDICT, FNTSY
+    and MEMES — and nine do not fit 390px, so it wrapped to two rows of
+    11.5px type. Ethan, 2026-09-10: "They're too small and located."
+
+    The three passengers are not leagues, and they are what forced the
+    second row, the separator and the type size. They are drawer rows
+    now; the strip answers one question."""
     got = _sports(_strip())
-    for code in LEAGUES + MARKETS:
-        assert code in got, f"{code} did not survive the move"
+    assert got == LEAGUES, f"the strip is not the six leagues in order: {got}"
+    for code in MARKETS:
+        assert code not in got, f"{code} is back in the league strip"
+
+
+def test_the_three_that_are_not_leagues_kept_a_home():
+    """The preservation rule: a reorganisation may move things and may
+    not lose them. Every one of them is reachable from the drawer."""
+    bar = _sidebar()
+    for code in MARKETS:
+        assert f'data-sport="{code}"' in bar, \
+            f"{code} left the strip and landed nowhere"
+
+
+def test_they_are_folded_rather_than_promoted_into_the_open_tier():
+    """The two-tier drawer's rule (tests/test_drawer_tiers): the
+    always-open tier is what a bettor opens nightly, and these are
+    visited deliberately. Measured at 21 rows / 1051px on a 390x844
+    phone; three more open rows would have walked that back."""
+    body = _nocomments_html(HTML)
+    i = body.index('<div class="sb-group" data-group="beyond"')
+    grp = body[i:body.index("</div>", i)]
+    for code in MARKETS:
+        assert f'data-sport="{code}"' in grp, f"{code} is not in the fold"
+    assert "hidden" in body[i:i + 120], "the fold ships open"
+    head = body[:i]
+    assert 'data-fold="beyond"' in head, "the group has no heading to fold it"
+
+
+def test_the_moved_rows_switch_the_sport_rather_than_the_view():
+    """`sport-btn` + `data-kind="tool"`, the same handle My Bets and
+    Record use a tier above — these change `state.sport`, and a
+    `nav-btn` row would be wired to a router that has no view by that
+    name."""
+    body = _nocomments_html(HTML)
+    i = body.index('<div class="sb-group" data-group="beyond"')
+    grp = body[i:body.index("</div>", i)]
+    for code in MARKETS:
+        j = grp.index(f'data-sport="{code}"')
+        assert "sport-btn" in grp[max(0, j - 200):j]
+        assert 'data-kind="tool"' in grp[j:j + 120]
 
 
 def test_the_strip_sits_inside_main_above_the_content_it_scopes():
@@ -124,19 +168,27 @@ def test_the_strip_wraps_and_never_scrolls():
     assert "white-space: nowrap" not in r
 
 
-def test_the_group_hairline_is_not_drawn_where_the_row_wraps():
-    """Measured at 390px: the six leagues filled line one exactly, so the
-    separator became the last thing on that line — a 1px tick against the
-    right margin, dividing nothing. Below 760 the wrap does the grouping;
-    at 760 and up every chip fits one row and the hairline earns its
-    place."""
+def test_the_group_separator_left_with_the_group_it_separated():
+    """It divided the six leagues from the three markets. With the markets
+    in the drawer it has nothing on its far side, and a separator with
+    nothing beyond it is a tick mark against the margin — which is
+    exactly what it had already become at 390px."""
+    assert "sportbar-sep" not in _nocomments_html(HTML), \
+        "the strip still draws a separator"
     css = re.sub(r"/\*.*?\*/", " ", CSS, flags=re.S)
-    i = css.index("@media (max-width: 760px) {\n  .sportbar")
-    block = css[i:css.index("\n}", i)]
-    assert ".sportbar-sep { display: none; }" in block, \
-        "the hairline is drawn on a wrapped row"
-    assert ".sportbar-sep { display: none; }" not in css.replace(block, ""), \
-        "the hairline is gone at every width, including the one it works at"
+    assert ".sportbar-sep" not in css, \
+        "the stylesheet still styles a separator nothing renders"
+
+
+def test_the_label_is_big_enough_to_read_and_hit():
+    """The other half of "they're too small". Nine chips across a phone
+    forced `--fs-xs` (11.5px); six do not."""
+    r = _rule(CSS, ".sportbar-in .sport-btn")
+    m = re.search(r"font-size:\s*var\((--fs-[0-9a-z]+)\)", r)
+    assert m, "the chip label is off the type ramp — tests/test_type_ramp " \
+        "holds every absolute size to a token"
+    px = float(re.search(rf"{m.group(1)}: *([0-9.]+)px", CSS).group(1))
+    assert px >= 13, f"the strip label is back down to {px}px"
 
 
 def test_the_sidebar_kept_every_destination():

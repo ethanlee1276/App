@@ -189,7 +189,11 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     # 2026-08-18: "change the name of the polly market page to
     # 'prediction market'" — the page reads two venues, so the chip
     # stopped wearing one venue's name.
-    assert 'data-sport="intel"' in html and ">PREDICT</button>" in html
+    # It rode the league strip for one day (2026-09-09) and came back to
+    # the drawer on 2026-09-10 — a prediction market is not a league, and
+    # nine chips across a phone is what made the strip unreadable. The
+    # handle is unchanged; only which piece of chrome carries it.
+    assert 'data-sport="intel"' in html
     assert "Prediction Market" in html
     flat = " ".join(html.split())
     assert "Kalshi" in flat and "Polymarket" in flat

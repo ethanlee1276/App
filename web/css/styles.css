@@ -5876,16 +5876,12 @@ body.has-rail .shell {
   /* Aligned with `.view`, which is what sits under it. */
   padding: 0 26px;
 }
-/* A hairline, not a heading: a prediction market is not a league, and the
-   old sidebar spent a whole labelled section saying so. */
-.sportbar-sep {
-  /* Drawn as a BORDER, not a 1px-wide painted box. `--hairline` is the
-     border token — it halves on a retina screen, and `tests/test_hairlines`
-     holds it to `border:` declarations on purpose, because a rule that
-     reaches the token through `width:` is a rule nobody can find later. */
-  width: 0; align-self: stretch; margin: 2px 6px;
-  border-left: var(--hairline) solid var(--border);
-}
+/* `.sportbar-sep` lived here: a hairline dividing the six leagues from
+   PREDICT / FNTSY / MEMES, because a prediction market is not a league.
+   Both it and the three chips it separated left on 2026-09-10 — the
+   three are drawer rows now, and a separator with nothing on its far
+   side is a tick mark against the margin. Nothing left to divide, so
+   nothing draws it. */
 /* TABS, NOT PILLS — see the note on `.sportbar`. No fill, no box, no
    radius: the whole point is that this cannot be mistaken for the
    filled chips a page puts under it. The selected league is the gold
@@ -5897,10 +5893,28 @@ body.has-rail .shell {
    a wrapped second row underlines correctly too. It is a `border`, not
    a painted box — `tests/test_hairlines` cares, and so does anybody
    later trying to find where that line comes from. */
+/* SIZED FOR A THUMB, NOT FOR NINE WORDS ACROSS A PHONE. At `--fs-xs`
+   with nine chips this was 11.5px type in two cramped rows — Ethan,
+   2026-09-10: "They're too small". Six chips buy back the width, so the
+   label goes up to 14px and the letter-spacing comes down: tracking that
+   wide is what a 11.5px label needs to stay legible and what a 14px one
+   only needs to look sparse.
+
+   `--fs-md`, NOT A RAW 14px. The first cut typed the number and
+   `tests/test_type_ramp` caught it: "every absolute size goes through a
+   token, or the ramp is decoration and the next rule someone adds will
+   invent a 24th size." It was right. 13.5px is the ramp's step above
+   `--fs-sm` and two above where this label was.
+
+   Measured at 390px with 8px gutters and 10px of padding a side: six
+   uppercase labels at 13.5px/800 come to ~307px of the 374px available,
+   and still fit the 344px a 360px Android leaves. Narrower than that and
+   `flex-wrap` puts them on two rows, which is the safe failure — a
+   clipped chip is not. */
 .sportbar-in .sport-btn { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent;
   background: none; color: var(--text-mute); cursor: pointer; font: inherit;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-  padding: 11px 11px 9px; border-radius: 0; text-align: center; text-transform: uppercase;
+  font-size: var(--fs-md); font-weight: 800; letter-spacing: .05em;
+  padding: 13px 12px 11px; border-radius: 0; text-align: center; text-transform: uppercase;
   transition: color var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out); }
 .sportbar-in .sport-btn:hover { color: var(--text); }
@@ -5910,13 +5924,14 @@ body.has-rail .shell {
   .sportbar { padding: 0; }
   /* `.view` drops to 12px here; the strip tracks it. */
   .sportbar-in { padding: 0 8px; gap: 0; }
-  /* THE HAIRLINE GOES WHERE THE ROW WRAPS. Measured at 390px: all six
-     leagues fit line one, so the separator became the last thing on that
-     line — a 1px tick floating against the right margin, dividing
-     nothing. The wrap itself already puts the markets on their own line,
-     which is a stronger separator than the rule was. At 760 and above
-     every chip fits one row and it does real work, so it stays there. */
-  .sportbar-sep { display: none; }
+  /* THE SIX SHARE THE ROW EVENLY. `flex: 1 1 auto` with a floor rather
+     than `0 0 auto`: at 390px the labels are three and four characters,
+     so intrinsic widths leave NFL narrow and WNBA wide and the underline
+     lengths disagree down the row. Spreading them puts the taps on an
+     even pitch, which is what a thumb aims at. The floor is what keeps a
+     seventh league wrapping to a second line instead of squeezing six
+     into an unreadable one. */
+  .sportbar-in .sport-btn { flex: 1 1 auto; min-width: 48px; }
 }
 
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
@@ -6352,7 +6367,14 @@ body.has-rail .shell {
   /* A THUMB STILL HAS TO HIT IT. Losing the box does not license
      losing the target: 44px is the tap size, and with the fill gone it
      has to be asked for explicitly rather than falling out of the
-     padding. */
+     padding.
+
+     THIS RULE OWNS THE PHONE'S PADDING, and it is worth saying so where
+     somebody will look. The 760px block above sets `flex` and a floor
+     and deliberately sets no padding: it sits EARLIER in the file at the
+     same specificity, so a padding declared there would be overwritten
+     here and read as broken for no visible reason. One box model per
+     element, declared in the block that wins. */
   .sportbar-in .sport-btn { min-height: 44px; padding: 0 10px; }
 
   /* THE BAR SHRINKS FROM HERE, not from 760. Drawer mode starts at this

@@ -436,6 +436,45 @@
           Bankroll</button>
       </div>
 
+      <!-- THE THREE THAT ARE NOT LEAGUES, 2026-09-10.
+
+           They spent a day in the league strip at the top of the board,
+           which is where Ethan saw them and asked for them back: "We
+           should have these buttons maybe put back in the three bar
+           menu." They belong here for a reason older than the
+           complaint — the column above is a list of PLACES YOU CAN GO,
+           and each of these is a place, not a lens on the board. The
+           strip answers "which league am I looking at"; nothing on it
+           should answer a different question.
+
+           FOLDED, like Betting and Library and for the same rule
+           (tests/test_drawer_tiers): the always-open tier is what a
+           bettor opens nightly, and these are visited deliberately. The
+           two-tier drawer was measured at 21 rows / 1051px on a 390x844
+           phone; three more open rows would have walked that back.
+
+           `sport-btn` + `data-kind="tool"`, not `nav-btn`, because these
+           switch `state.sport` rather than the view — the same handle My
+           Bets and Record use in the tier above. -->
+      <button class="sb-label sb-fold" data-head="beyond" data-fold="beyond"
+              type="button" aria-expanded="false">Beyond the book
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="sb-group" data-group="beyond" hidden>
+        <button class="sport-btn sb-item" data-sport="intel" data-kind="tool"
+                title="Prediction Market — Kalshi prices + Polymarket informed flow">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l5-5 3.5 3.5L21 6"/><path d="M15 6h6v6"/></svg>
+          Prediction Market</button>
+        <button class="sport-btn sb-item" data-sport="fantasy" data-kind="tool"
+                title="Fantasy football — usage, scripts, buy-low">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 4h12v3a6 6 0 0 1-12 0z"/><path d="M6 6H4a3 3 0 0 0 3 4M18 6h2a3 3 0 0 1-3 4"/><path d="M9 20h6M12 13v7"/></svg>
+          Fantasy Football</button>
+        <button class="sport-btn sb-item" data-sport="memes" data-kind="tool"
+                title="Rocket Radar — Solana meme-coin momentum and danger">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15c-1 2-1 4-1 4s2 0 4-1"/><path d="M9 15l-3-3c1-6 5-9 11-9 0 6-3 10-9 11z"/><circle cx="14.5" cy="7.5" r="1.4"/></svg>
+          Rocket Radar</button>
+      </div>
+
       <!-- The menu's second reorganisation, 2026-08-25. Ethan: "make
            sure the whole menu is organized professionally and how it
            should be and would make sense." Before this, Why Us / Method
@@ -558,10 +597,33 @@
        questions: one changes what the page is ABOUT, the other changes
        which page you are on. Scope belongs with the content it scopes.
 
-       WRAPS, NEVER SCROLLS. Nine chips do not fit 390px, and a scrolling
-       strip is the draggable bar Ethan caught on 2026-08-18 — it parks
-       wherever the finger leaves it with half a chip clipped. Two rows on
-       a phone, one on a laptop, nothing hidden at either size. -->
+       ONE ROW, SIX LEAGUES, AND NOTHING THAT IS NOT A LEAGUE.
+
+       It shipped with nine chips: the six leagues plus PREDICT, FNTSY and
+       MEMES. Nine do not fit 390px, so the strip wrapped to two rows of
+       11.5px type — and that is what Ethan circled on 2026-09-10: "I
+       don't know what you did with the top menu buttons. They're too
+       small and located. We should have these buttons maybe put back in
+       the three bar menu or find a different idea with them."
+
+       Both halves of the complaint have the same cause. The three
+       passengers are not leagues — a prediction market, a fantasy room
+       and a crypto radar — and they are what forced the second row, the
+       separator that divided nothing, and the type small enough to fit
+       nine words across a phone. They are top-level DESTINATIONS, which
+       is what the drawer is a list of, so that is where they went (a
+       "Beyond the book" fold, below).
+
+       What is left is one kind of thing, six of them, on one line, at a
+       size a thumb can hit. Given the choice between the drawer and a
+       different idea, Ethan took this one.
+
+       STILL WRAPS RATHER THAN SCROLLS, and the rule survives its own
+       reason: a sideways-scrolling strip is the draggable bar Ethan
+       caught on 2026-08-18 — it parks wherever the finger leaves it with
+       half a chip clipped. Six fit one row at 390px, so nothing wraps
+       today; `flex-wrap` is what guarantees that a seventh league would
+       appear on a second line instead of disappearing off the edge. -->
   <div class="sportbar" id="sportbar">
     <div class="sportbar-in" role="group" aria-label="League and market">
       <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL — The NFL Book, the pro-bettor spec">NFL</button>
@@ -570,10 +632,9 @@
       <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — the Scalpy probability engine">NBA</button>
       <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — the Scalpy engine, on probation">WNBA</button>
       <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA, the fight model">UFC</button>
-      <span class="sportbar-sep" aria-hidden="true"></span>
-      <button class="sport-btn" data-sport="intel" data-kind="tool" title="Prediction Market — Kalshi prices + Polymarket informed flow">PREDICT</button>
-      <button class="sport-btn" data-sport="fantasy" data-kind="tool" title="Fantasy football — usage, scripts, buy-low">FNTSY</button>
-      <button class="sport-btn" data-sport="memes" data-kind="tool" title="Rocket Radar — Solana meme-coin momentum and danger">MEMES</button>
+      <!-- SIX, AND NOTHING ELSE. Prediction Market, Fantasy and Rocket
+           Radar rode here for one day and left on 2026-09-10 — see the
+           comment above. -->
     </div>
   </div>
 
