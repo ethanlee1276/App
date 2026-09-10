@@ -1264,6 +1264,16 @@ svg[data-scrub] { touch-action: pan-y; }
   font-variant-numeric: tabular-nums; }
 .vs-none { font-size: var(--fs-xs); color: var(--text-mute); font-style: italic; }
 
+/* A DOOR HAS TO LOOK LIKE ONE. Ethan, 2026-09-09, with people on the
+   site: "a lot of our buttons blending in with the text on the site so
+   you can't really tell their buttons or tabs." The pick block on a
+   profile card opens the bet's own page, so it takes the pointer and an
+   arrow — the same affordance the board's own cards carry. */
+.profile-pick[data-prop] { cursor: pointer; }
+.profile-pick[data-prop]:hover { background: var(--fill-hover); }
+.profile-pick .pp-go { color: var(--text-mute); font-weight: 700; }
+.profile-pick[data-prop]:hover .pp-go { color: var(--brand); }
+
 .profile-deep { display: block; }
 .prof-depth { margin-top: 14px; }
 .prof-depth > .section-title:first-child { margin-top: 0; }

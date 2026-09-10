@@ -8071,6 +8071,17 @@ function findProp(id) {
 }
 
 function openProp(id) {
+  /* THE PEEK CANNOT SURVIVE A NAVIGATION OUT OF ITSELF. The overlay
+     draws `pricedProfileHTML`, and that card became a door to this page
+     on 2026-09-10 — so without this line a tap inside the popup would
+     switch the view underneath it and leave the dialog sitting over the
+     prop page, with the body still scroll-locked behind it.
+
+     HERE RATHER THAN IN THE TWO HANDLERS: the click listener and the
+     keyboard listener both funnel through this function, and so does
+     every router path. One place cannot develop a gap. It is a no-op
+     when no peek is open. */
+  if (typeof closePeek === "function") closePeek();
   // Normalised to the shareable slug when the row is on the board, so
   // the address bar, Copy link and a pasted /pick/… URL are all one
   // string. A row that is not there keeps the id it was given — the
@@ -10159,13 +10170,40 @@ function pricedProfileHTML(r, chips, tail = "", deep = false) {
         <tr><th>${mlb ? "Game" : "Week"}</th><th>Opponent</th><th style="text-align:right">${escapeHtml(r.market_label)}</th></tr>
         ${rows}
       </table>
-      <div class="profile-pick">
+      ${/* THE CARD IS A DOOR TO THE BET'S OWN PAGE.
+
+            Ethan, 2026-09-10, over the CFB prop page: "when you search a
+            player, you should be able too click on them and it will pull
+            up this page with ALLLLL the information."
+
+            He could not. The search card has carried the prop page's
+            depth since this morning — shop the price, the tape, the
+            script, the checks, the sim — but it was never a DOOR, so the
+            one thing it could not reach was the page built for the bet:
+            the full `propAnalysis` chart with the line drawn through it
+            and the hit-rate, EV and confidence strip under it, which is
+            the block he screenshotted.
+
+            NOT THE WHOLE ARTICLE. A deep card runs several screens, and
+            a click target that tall swallows the chips, the versus
+            select and the sim lab inside it. The pick block IS the bet —
+            side, line, market, price, edge — so it is what opens it, the
+            same way `likelyDoor` puts the door on the row that names the
+            pick rather than on everything around it.
+
+            `propAttrs` is the site's one definition of an openable prop
+            (three logged games, or the page's centrepiece is missing),
+            so a row with nothing behind it simply is not clickable —
+            the affordance appears exactly where there is something to
+            open. */""}
+      <div class="profile-pick"${propAttrs(r)}>
         <div class="lbl">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
           <small>${escapeHtml(r.book)} ${american(r.odds)} · proj ${r.projection}
             · <span title="Probability the ${escapeHtml(r.side)} hits. Can side against the raw projection: baseball stats are right-skewed, so a few big games pull the AVERAGE above the line while MOST games still land under it.">${pct(shrinkArtefact(r) ? r.raw_prob : r.hit_prob)} to hit${
               shrinkArtefact(r) ? " (before the shrink)" : ""}</span>
             · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
+        ${propOpenable(r) ? `<span class="pp-go" aria-hidden="true">→</span>` : ""}
       </div>
       ${tail}
     </article>`;

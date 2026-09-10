@@ -42,6 +42,12 @@ APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
 
 
+def _rule(sel):
+    """One CSS rule's body, by selector."""
+    i = CSS.index(sel + " {")
+    return CSS[i:CSS.index("}", i)]
+
+
 def _fn(name):
     """The body of one JS function, by name."""
     i = APP.index(f"function {name}(")
@@ -178,6 +184,59 @@ def test_the_prop_page_no_longer_binds_one_by_hand():
     """One wiring, not two: the delegated listener covers the prop page
     too, and a leftover bind would double every run on it."""
     assert "bindSimLab" not in APP
+
+
+# --- and a door to the bet's own page ---------------------------------------
+def test_the_pick_block_opens_the_props_own_page():
+    """Ethan, 2026-09-10, over the CFB prop page: "when you search a
+    player, you should be able too click on them and it will pull up this
+    page with ALLLLL the information."
+
+    He could not. The card has carried the prop page's depth since this
+    morning, but it was never a DOOR — so the one block it could not
+    reach was the page built for the bet itself: the full `propAnalysis`
+    chart with the line through it and the hit-rate/EV/confidence strip,
+    which is what he screenshotted."""
+    fn = _fn("pricedProfileHTML")
+    assert '<div class="profile-pick"${propAttrs(r)}>' in fn, \
+        "the pick block is not a door"
+    # THE SITE'S ONE DEFINITION OF AN OPENABLE PROP, not a second copy of
+    # the rule — a row with fewer than three logged games opens a page
+    # whose centrepiece is missing, and `propAttrs` is what knows that.
+    assert "propOpenable(r)" in fn, "the arrow appears on rows with no page"
+
+
+def test_the_door_is_the_pick_and_not_the_whole_card():
+    """A deep card runs several screens and contains the market chips,
+    the versus select and the sim lab. A click target that tall swallows
+    all of them."""
+    # THE OPENING TAG, not the region before the pick block. Scanning the
+    # region swept up the comment that explains this very decision, which
+    # names `propAttrs` — the third time today an assertion has failed
+    # against its own note.
+    fn = _fn("pricedProfileHTML")
+    i = fn.index('<article class="profile"')
+    tag = fn[i:fn.index(">", i) + 1]
+    assert "data-prop" not in tag and "propAttrs" not in tag, \
+        f"the whole article became the door: {tag}"
+
+
+def test_a_door_inside_the_peek_closes_the_peek():
+    """The overlay draws this same card. Without this the tap would
+    switch the view UNDERNEATH the dialog and leave it sitting over the
+    prop page with the body still scroll-locked behind it."""
+    fn = _fn("openProp")
+    assert "closePeek()" in fn
+    # IN THE FUNNEL, not in the two listeners. Click and keyboard both
+    # come through here, and so does every router path.
+    assert fn.index("closePeek()") < fn.index("switchView(\"prop\")")
+
+
+def test_the_door_looks_like_one():
+    """Ethan, 2026-09-09: a lot of the buttons blend into the text, so
+    you cannot tell they are buttons."""
+    assert "cursor: pointer" in _rule(".profile-pick[data-prop]")
+    assert ".profile-pick .pp-go" in CSS
 
 
 # --- styles -----------------------------------------------------------------
