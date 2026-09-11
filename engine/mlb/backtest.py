@@ -1,0 +1,180 @@
+"""MLB walk-forward backtest.
+
+The scoring core (`engine.backtest.evaluate`) is sport-agnostic — it takes
+settled props with a projection, a hit probability and the actual result and
+reports calibration (reliability bins, Brier, ECE), projection error and
+betting ROI. This module produces those settled props for baseball by walking a
+player's game log forward: for each game, project it from *prior* games only,
+settle against what actually happened.
+
+Because it needs only game logs (no live game context), it runs fully offline —
+feed it logs from ``statslogs`` for a real backtest, or the sample slate's logs
+for a quick demo. Projections here use a neutral game (generic park, neutral
+weather), so this measures the **form model + probability calibration**;
+park/weather/matchup/Statcast angles are validated on top with live context.
+"""
+
+from __future__ import annotations
+
+from ..backtest import SettledProp, evaluate, BacktestReport
+from ..models import SportsbookLine
+from ..odds import pair_is_sane
+from ..rules import RuleConfig
+from .models import (
+    MLBGame, MLBProp, MLBGameLog, HOME_RUNS,
+)
+from .projection import build_mlb_projection
+from .betting import evaluate_mlb_prop
+from .rules import apply_mlb_rules
+
+
+def _neutral_game() -> MLBGame:
+    return MLBGame(home="HOME", away="AWAY", park="generic")
+
+
+def _round_half(x: float) -> float:
+    return round(x * 2) / 2.0
+
+
+def _naive_line(prior_recent: list[float], market: str) -> float:
+    """A naive market line the model is measured against: the trailing average
+    rounded to the nearest half, a touch under (books shade the over)."""
+    if market == HOME_RUNS:
+        return 0.5
+    base = sum(prior_recent) / len(prior_recent)
+    return max(0.5, _round_half(base) - 0.5)
+
+
+def _norm_name(name: str) -> str:
+    """Match the normalisation the odds feed uses, so harvested prices join to
+    game logs (odds store "aaron judge"; logs keep "Aaron Judge")."""
+    from ..sources.oddsapi import normalize_name
+    return normalize_name(name)
+
+
+def settled_props_from_logs(entries: list[dict], market: str,
+                            min_history: int = 8, limit: int = 40,
+                            config: RuleConfig | None = None, model=None,
+                            real_lines: dict | None = None,
+                            form_weights: dict | None = None,
+                            player_adjust=None, player_record=None,
+                            game_for_index=None
+                            ) -> tuple[list[SettledProp], int]:
+    """The walk-forward itself, returning the per-prop settled rows.
+
+    ``backtest_from_logs`` aggregates these into a report; the edge audit
+    reads them raw, because "what did each edge band actually return?" needs
+    every row, not a summary. Returns ``(settled, real_lines_used)``.
+
+    ``entries`` = [{"name", "values": [chronological per-game values],
+    "dates": [matching game dates]}].
+
+    Walk-forward: game i is projected from games [:i] (most recent ``limit``),
+    then settled against ``values[i]``.
+
+    ``real_lines`` maps ``(player, date)`` to a harvested book price. When a
+    game has one, the model is priced against **the number a bettor could
+    actually have taken** — which is the difference between "does this beat a
+    trailing average?" and "would this have beaten the book?". Games without a
+    harvested price fall back to the naive baseline.
+
+    ``game_for_index(entry, i)`` — optionally, the CONTEXT each historical
+    game was actually played in (an MLBGame; today that means the
+    ballpark, named by the log's own team/opponent/home columns). The
+    default stays the neutral stadium, which is the honest baseline:
+    weather is unknowable historically, and a context walk exists to be
+    COMPARED against neutral, not to replace it silently — see
+    rankfit.context_report for the A/B that decides.
+    """
+    config = config or RuleConfig()
+    game = _neutral_game()
+    settled: list[SettledProp] = []
+    real_lines = real_lines or {}
+    real_used = 0
+
+    for e in entries:
+        vals = e.get("values", [])
+        dates = e.get("dates", [])
+        spot = e.get("spot", 3)
+        for i in range(min_history, len(vals)):
+            prior = vals[:i][::-1][:limit]          # most-recent-first, capped
+            actual = float(vals[i])
+            logs = [MLBGameLog(game=len(prior) - j, opponent="", value=float(v))
+                    for j, v in enumerate(prior)]
+            career = sum(vals[:i]) / i
+
+            date = dates[i] if i < len(dates) else ""
+            quote = real_lines.get((_norm_name(e["name"]), date))
+            if quote:
+                line = float(quote["line"])
+                # Never fabricate a missing side. Defaulting an absent
+                # under to -110 invents a 52% price on the "no home run"
+                # side of a +850 prop, which is both unbettable and a
+                # phantom edge — 0 means "not offered", as the parser
+                # intends. A pair that fails the sanity floor is corrupt
+                # harvested data and its under is discarded too.
+                over_odds = int(quote.get("over_odds") or 0)
+                under_odds = int(quote.get("under_odds") or 0)
+                if under_odds and not pair_is_sane(over_odds, under_odds):
+                    under_odds = 0
+                if not over_odds:
+                    line = _naive_line(prior[:10], market)
+                    book_line = SportsbookLine("proxy", line, -110, -110)
+                    quote = None
+                else:
+                    book_line = SportsbookLine(quote.get("book", "book"), line,
+                                               over_odds, under_odds)
+                    real_used += 1
+            else:
+                line = _naive_line(prior[:10], market)
+                book_line = SportsbookLine("proxy", line, -110, -110)
+
+            prop = MLBProp(
+                player=e["name"], team="HOME", opponent="AWAY", position="",
+                market=market, logs=logs, career_avg=career, vs_pitcher_avg=None,
+                lines=[book_line], lineup_spot=spot,
+            )
+            # ``player_adjust`` supplies the per-player multiplier for the
+            # playerfit walk (an explicit 1.0 in the baseline pass keeps
+            # the store out of it, like form_weights above); ``player_record``
+            # accumulates the RAW blend's (projected, actual) sums — raw,
+            # or the correction would learn to correct itself.
+            mult = player_adjust(e["name"]) if player_adjust else None
+            g = game_for_index(e, i) if game_for_index else game
+            proj = build_mlb_projection(prop, g, model=model,
+                                        form_weights=form_weights,
+                                        player_mult=mult)
+            if player_record is not None:
+                player_record(e["name"], proj.mean / (mult or 1.0), actual)
+            # The naive line above IS the baseline we're measuring against, so
+            # the live "placeholder line" guard doesn't apply here.
+            rec = evaluate_mlb_prop(prop, proj, allow_synthetic_line=True)
+            decision = apply_mlb_rules(rec, prop, g, proj, config)
+            settled.append(SettledProp(
+                player=e["name"], market=market, line=line, odds=rec.odds,
+                hit_prob=rec.hit_prob, raw_prob=rec.raw_prob,
+                projection=rec.projection, actual=actual,
+                recommended=decision.recommend, stake_units=rec.stake_units,
+                side=rec.side, basis="book" if quote else "naive",
+                grade=rec.grade,
+            ))
+
+    return settled, real_used
+
+
+def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
+                       limit: int = 40, config: RuleConfig | None = None,
+                       model=None, real_lines: dict | None = None,
+                       form_weights: dict | None = None,
+                       player_adjust=None, player_record=None,
+                       game_for_index=None) -> BacktestReport:
+    """Walk forward and aggregate — see ``settled_props_from_logs``."""
+    settled, real_used = settled_props_from_logs(
+        entries, market, min_history=min_history, limit=limit,
+        config=config, model=model, real_lines=real_lines,
+        form_weights=form_weights, player_adjust=player_adjust,
+        player_record=player_record, game_for_index=game_for_index)
+    report = evaluate(settled)
+    report.used_real_lines = real_used
+    report.total_priced = len(settled)
+    return report

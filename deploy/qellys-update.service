@@ -1,0 +1,24 @@
+# Qellys auto-update — pull pushed code, restart the site on change.
+#
+# Fired by qellys-update.timer every 5 minutes. Runs AS ROOT and with
+# none of qellys.service's hardening, on purpose: updating the checkout
+# is exactly the thing the app's sandbox forbids (ProtectSystem=strict
+# makes /srv/qellys read-only to the app; the deploy key is in root's
+# home behind ProtectHome=true), and that is correct — a public web
+# process must not be able to rewrite its own code. Root already owns
+# the repo, the SSH deploy key, and the manual deploy; this is the same
+# actor doing the same pull on a clock. The blast radius is one oneshot
+# that runs git and systemctl for a few seconds, not a listening server.
+#
+# See deploy/autoupdate.py for the guards (--ff-only, dirty-tree skip)
+# and the state file --boards reads.
+
+[Unit]
+Description=Qellys auto-update (pull pushed code, restart on change)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/qellys
+ExecStart=/usr/bin/python3 /srv/qellys/deploy/autoupdate.py

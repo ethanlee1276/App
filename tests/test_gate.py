@@ -1,0 +1,1009 @@
+"""The paywall, and the bypass it exists to prevent.
+
+Ethan, 2026-08-16: *"now we need to introduce the paywall for the site"* —
+picks paid, the record free, $20 a month.
+
+THE TEST THAT MATTERS MOST IS THE ONE ABOUT CURL. Caddy serves
+`web/data/*.json` off disk, so the app never sees those requests and a
+paywall written in JavaScript would be decorative: `curl
+https://qellysbook.com/data/recommendations.json` would return the whole
+board. The design answer is not a better check, it is that the full board
+is never written to the public path at all — so the tests below are mostly
+about WHERE bytes end up rather than about who is allowed to read them.
+
+A gate that can be reasoned about beats one that has to be defended.
+"""
+
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine import gate                                      # noqa: E402
+
+ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _env(**kw):
+    """Set env vars and give back a restore callable."""
+    was = {k: os.environ.get(k) for k in kw}
+    for k, v in kw.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    def restore():
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return restore
+
+
+def _board() -> dict:
+    """A mixed board: free schedule and paid picks in one object, which is
+    the shape that ruled out gating whole files."""
+    return {
+        "date": "2026-08-16",
+        "sport": "nfl",
+        "games": [{"home": "DET", "away": "GB"}, {"home": "KC", "away": "BUF"}],
+        "playoff_picture": {"DET": 0.61},
+        "recommendations": [{"pick": "a"}, {"pick": "b"}, {"pick": "c"}],
+        "game_bets": [{"pick": "d"}],
+        "long_shots": [],
+        "market_scan": [{"arb": 1}],
+    }
+
+
+def test_the_free_half_of_a_mixed_board_survives_redaction():
+    """Gating the file would take tonight's slate down with the picks."""
+    red = gate.redact(_board(), "recommendations.json")
+    assert red["games"] == _board()["games"]
+    assert red["playoff_picture"] == {"DET": 0.61}
+    assert red["date"] == "2026-08-16"
+
+
+def test_every_paid_field_is_emptied_and_none_of_its_content_survives():
+    """The whole point. A field that is merely flagged rather than emptied
+    is still in the JSON, and the JSON is the product."""
+    red = gate.redact(_board(), "recommendations.json")
+    blob = json.dumps(red)
+    for leaked in ("\"a\"", "\"b\"", "\"c\"", "\"d\"", "arb"):
+        assert leaked not in blob, f"{leaked} survived redaction"
+    for key in ("recommendations", "game_bets", "market_scan"):
+        assert red[key] == [], f"{key} still carries rows"
+
+
+def test_a_locked_board_says_how_much_is_behind_it():
+    """"No picks tonight" when there are three is a lie, and an empty
+    board is a worse advertisement than a locked one."""
+    red = gate.redact(_board(), "recommendations.json")
+    assert red["locked"] == {"recommendations": 3, "game_bets": 1,
+                             "market_scan": 1}
+    assert red["locked_reason"] == "subscription"
+    # An EMPTY paid field is not "locked" — zero picks is a true statement
+    # about the slate, not a paywall, and claiming otherwise oversells.
+    assert "long_shots" not in red["locked"]
+
+
+def test_a_board_with_no_picks_at_all_is_not_advertised_as_locked():
+    quiet = {"date": "2026-08-16", "games": [], "recommendations": []}
+    red = gate.redact(quiet, "recommendations.json")
+    assert "locked" not in red and "locked_reason" not in red
+
+
+def test_the_record_is_never_redacted():
+    """It is the evidence the subscription is sold on. A proof nobody can
+    read persuades nobody."""
+    rec = {"overall": {"units": 12.4}, "recommendations": [{"x": 1}],
+           "curve": [1, 2, 3]}
+    assert gate.redact(rec, "record.json") == rec
+    assert gate.is_free("record.json")
+    # …even reached by a path rather than a bare name.
+    assert gate.is_free("web/data/record.json")
+
+
+def test_an_unknown_board_is_gated_rather_than_published():
+    """The failure directions are not symmetric. Wrongly gating a free
+    board is a visible annoyance somebody reports in an hour; wrongly
+    publishing a paid one gives the product away and nobody mentions it."""
+    assert not gate.is_free("something_new.json")
+    red = gate.redact({"recommendations": [1, 2]}, "something_new.json")
+    assert red["recommendations"] == []
+
+
+def test_redact_does_not_mutate_the_board_it_was_given():
+    """The caller keeps the full copy to write for subscribers. A function
+    that edited its argument would poison exactly that copy, and the
+    symptom would be subscribers seeing the free board."""
+    full = _board()
+    gate.redact(full, "recommendations.json")
+    assert len(full["recommendations"]) == 3, "the full board was emptied"
+
+
+def test_publish_writes_the_full_board_outside_the_web_root():
+    """The load-bearing fact. If the full copy is anywhere under web/,
+    Caddy serves it and everything else here is decoration."""
+    # WITH THE PAYWALL ON — the flag was added after this test and the
+    # behaviour it describes is the switched-on one. Off, the public file
+    # is deliberately the full board; that case has its own test below.
+    restore = _env(QB_PAYWALL="1")
+    with tempfile.TemporaryDirectory() as tmp:
+        pub = Path(tmp) / "web" / "data" / "recommendations.json"
+        was = gate.FULL_DIR
+        gate.FULL_DIR = Path(tmp) / "data" / "built"
+        try:
+            public, full = gate.publish(_board(), pub, "recommendations.json")
+            assert "web" not in Path(full).parts, \
+                "the full board was written inside the web root"
+            on_disk = json.loads(Path(public).read_text())
+            assert on_disk["recommendations"] == [], \
+                "the PUBLIC file has the picks in it — curl would get them"
+            assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
+        finally:
+            gate.FULL_DIR = was
+            restore()
+
+
+def test_no_built_board_directory_is_reachable_from_the_web_root():
+    """Belt and braces against the same mistake arriving by symlink or by
+    somebody moving FULL_DIR later."""
+    web = (ROOT / "web").resolve()
+    assert web not in gate.FULL_DIR.resolve().parents
+    assert gate.FULL_DIR.resolve() != web
+
+
+def test_a_board_name_from_a_url_cannot_climb_out_of_the_directory():
+    """`full_board` takes its argument from a request path. A name that
+    can traverse turns an entitlement check into an arbitrary file read,
+    and `secrets.local` is two directories up."""
+    for evil in ("../secrets.local", "../../etc/passwd", "/etc/passwd",
+                 "a/b.json", "..%2Frecord.json", ".hidden.json", "",
+                 "../data/accounts.db"):
+        assert gate.full_board(evil) is None, f"{evil!r} was not refused"
+
+
+def test_a_wholly_paid_board_still_parses_as_a_board():
+    """A page that cannot parse its own data shows a crash, not a
+    subscribe button."""
+    red = gate.redact({"generated_at": "x", "sport": "nfl",
+                       "futures": [1, 2, 3]}, "futures_nfl.json")
+    assert red["locked_reason"] == "subscription"
+    assert red["locked"]["whole_board"] >= 1
+    assert red["sport"] == "nfl", "the shell the page needs is gone"
+
+
+def test_the_paid_and_free_lists_do_not_overlap():
+    """A file in both lists resolves by whichever check runs first, which
+    is a coin toss decided by line order."""
+    assert not (set(gate.PAID_FILES) & set(gate.FREE_FILES))
+
+
+def test_every_board_the_site_can_build_has_been_classified():
+    """Read from the registry, NOT from web/data/*.json.
+
+    The glob version passed here and failed on the droplet: this container
+    had never built nfl_preseason.json or predmarkets.json, so the check
+    silently covered 28 boards instead of 30. A test whose coverage
+    depends on which files a machine happens to have is a test that is
+    strongest where it is least needed. Second time this session — the
+    other was a 42-view sweep that passed because the dev board had no
+    team_form to crash on.
+    """
+    classified = (set(gate.FREE_FILES) | set(gate.PAID_FILES)
+                  | set(gate.MIXED_FILES))
+    missing = sorted(set(gate.KNOWN_BOARDS) - classified)
+    assert not missing, f"unclassified boards: {missing}"
+    stray = sorted(classified - set(gate.KNOWN_BOARDS))
+    assert not stray, f"classified but not in KNOWN_BOARDS: {stray}"
+
+
+def test_a_board_this_machine_has_built_is_one_the_registry_knows():
+    """The other direction: a file on disk that the registry has never
+    heard of is a pipeline that grew a board without telling the gate."""
+    built = sorted(p.name for p in (ROOT / "web" / "data").glob("*.json"))
+    unknown = [n for n in built if n not in gate.KNOWN_BOARDS]
+    assert not unknown, f"built but unregistered: {unknown}"
+
+
+def test_the_preseason_board_is_deregistered_and_swept():
+    """It was FREE while it lived ("facts only — no price"); it RETIRED
+    2026-08-25 with the rest of the preseason surface. Deregistered
+    rather than left in FREE_FILES because an unknown board is treated
+    as gated — the safe direction if a stray copy ever reappears — and
+    on the retirement list so maintenance deletes the stale copy from
+    the public path instead of serving frozen scores forever."""
+    from engine.maintenance import RETIRED_BOARDS
+    assert "nfl_preseason.json" not in gate.KNOWN_BOARDS
+    assert "nfl_preseason.json" not in gate.FREE_FILES
+    assert not gate.is_free("nfl_preseason.json")
+    assert "nfl_preseason.json" in RETIRED_BOARDS
+
+
+# --- the switch, and why it is off ------------------------------------------
+
+def test_the_paywall_is_off_unless_somebody_turns_it_on():
+    """Wired live in one step, this would have gone dark the moment it
+    deployed — for everybody including Ethan, because there is no Paddle
+    account yet and so no account that CAN be entitled. Off by default is
+    what let it be built while the site is live and free."""
+    restore = _env(QB_PAYWALL=None)
+    try:
+        assert not gate.enabled()
+    finally:
+        restore()
+
+
+def test_with_the_paywall_off_the_public_file_is_unchanged():
+    """The safety property of the flag: nothing about the live site moves
+    until the day it is switched on."""
+    restore = _env(QB_PAYWALL=None)
+    with tempfile.TemporaryDirectory() as tmp:
+        was = gate.FULL_DIR
+        gate.FULL_DIR = Path(tmp) / "built"
+        try:
+            pub = Path(tmp) / "web" / "data" / "recommendations.json"
+            public, full = gate.publish(_board(), pub, "recommendations.json")
+            on_disk = json.loads(Path(public).read_text())
+            assert len(on_disk["recommendations"]) == 3, \
+                "the public board was redacted with the paywall off"
+            # …and the subscriber copy is written anyway, so switching the
+            # flag on needs no rebuild.
+            assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
+        finally:
+            gate.FULL_DIR = was
+            restore()
+
+
+def test_with_the_paywall_on_the_public_file_loses_the_picks():
+    restore = _env(QB_PAYWALL="1")
+    with tempfile.TemporaryDirectory() as tmp:
+        was = gate.FULL_DIR
+        gate.FULL_DIR = Path(tmp) / "built"
+        try:
+            pub = Path(tmp) / "web" / "data" / "recommendations.json"
+            public, full = gate.publish(_board(), pub, "recommendations.json")
+            assert json.loads(Path(public).read_text())["recommendations"] == []
+            assert len(json.loads(Path(full).read_text())["recommendations"]) == 3
+        finally:
+            gate.FULL_DIR = was
+            restore()
+
+
+def test_a_comp_list_exists_so_the_owner_is_not_locked_out():
+    """Without it the only route to an entitled account is a completed
+    Paddle checkout — which means Ethan cannot see his own board, cannot
+    comp a tester, and cannot honour a refund without going through the
+    processor and waiting. Read from the environment, never the database,
+    so nothing reachable from the web can grant it."""
+    restore = _env(QB_COMP_EMAILS=" Ethan@Example.com , tester@x.io ")
+    try:
+        assert gate.comped("ethan@example.com"), "case-folding is required"
+        assert gate.comped("  TESTER@X.IO  ")
+        assert not gate.comped("stranger@x.io")
+        assert not gate.comped("") and not gate.comped(None)
+    finally:
+        restore()
+    # An unset list grants nothing at all.
+    restore = _env(QB_COMP_EMAILS=None)
+    try:
+        assert not gate.comped("ethan@example.com")
+    finally:
+        restore()
+
+
+def test_an_empty_comp_list_does_not_entitle_everyone():
+    """`"".split(",")` is `[""]`, and a membership test against a set
+    holding the empty string would match an empty email. The filter that
+    prevents it is one `if e.strip()`."""
+    restore = _env(QB_COMP_EMAILS=",, ,")
+    try:
+        assert not gate.comped("anybody@example.com")
+        assert not gate.comped(" ")
+    finally:
+        restore()
+
+
+# --- the server half --------------------------------------------------------
+
+def _server() -> str:
+    return open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
+
+
+def test_the_board_endpoint_checks_entitlement_before_it_reads():
+    """THE ORDER, which is what the name has always claimed and what the
+    code did not do until 2026-08-22: it read and parsed the whole board
+    — a megabyte — and then asked who was calling. Nothing was ever sent
+    to the wrong person, but refusing a stranger was the most expensive
+    request on the site.
+
+    Asserted as positions rather than by naming the reader function: the
+    read went through `gate.full_board` and now goes through the byte
+    cache in server.py, and this test is about neither of those."""
+    src = _server()
+    assert '/api/board/' in src, "nothing routes to the subscriber boards"
+    body = src[src.index("def _api_board"):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "self._entitled(" in body, "the entitlement check is gone"
+    reads = min(i for i in (body.find("board_bytes("),
+                            body.find("gate.full_board(")) if i > 0)
+    assert body.index("self._entitled(") < reads, \
+        "the board is read from disk before the caller is identified"
+    assert body.index("self._entitled(") < body.index("self._send(200"), \
+        "the board is SENT before entitlement is decided"
+
+
+def test_the_page_s_own_board_endpoint_serves_a_subscriber_their_picks():
+    """THE BUG THIS FILE ALMOST MISSED, proved 2026-08-22 against a
+    running server with a signed-in comped account.
+
+    `gate.py` has said since it was written that "subscribers get the
+    full board from /api/board/<name>". Nothing in web/js/app.js has ever
+    called that endpoint — the page fetches SPORT_META.api, which is
+    /api/<sport>/recommendations, and that served `web/data/<board>.json`
+    to everybody. With the paywall on, that file IS the redacted copy.
+
+    So a paying subscriber's page fetched a board with
+    `recommendations: []` and drew "No qualifying plays at current
+    numbers" — which reads as the model finding nothing, not as the
+    paywall taking it away. `live_picks` is not a paid key, so their
+    riding bets still showed underneath, which is exactly the screenshot
+    that was being read as an empty slate.
+
+    Every test here checked the paid file could not LEAK. None checked it
+    still ARRIVED.
+    """
+    src = _server()
+    body = src[src.index("def _serve_board("):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "gate.enabled()" in body, "the flag decides nothing here"
+    assert "self._entitled(" in body, "no entitlement check on the page's board"
+    assert "board_bytes(" in body, "an entitled caller is not given the full copy"
+    # And the unentitled path must still be the redacted public file.
+    assert "file_bytes(public)" in body, \
+        "the redacted copy is no longer the fallback"
+    # The check must gate the FULL copy, not run after it.
+    assert body.index("self._entitled(") < body.index("board_bytes("), \
+        "the full board is read before the caller is identified"
+
+
+def test_the_live_endpoint_is_the_one_the_page_actually_calls():
+    """A fix on an endpoint nobody calls is the shape of the original
+    bug. SPORT_META.api is what load() fetches; that is what has to be
+    entitlement-aware."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("const tag = _boardTags[")
+    assert "meta.api" in app[i:i + 400], "load() no longer fetches meta.api"
+    src = _server()
+    live = src[src.index("def _api(self, query"):]
+    live = live[:live.index("\n    def ", 1)]
+    assert "_serve_board(" in live, \
+        "the endpoint the page calls went back to serving one file to all"
+
+
+def test_ufcs_picks_are_gated():
+    """LIVE ON 2026-08-22, with QB_PAYWALL=1 on the box.
+    engine/ufc/model.py returns its board under `picks`, `pass_list` and
+    `near_misses`. No entry in PAID_KEYS matched any of them, so
+    `curl /data/ufc.json` handed every fighter, price and stake to
+    anybody who asked — the paid product, on the open path, for as long
+    as the paywall had been on.
+
+    Nothing caught it. Every test in this file asked whether a NAMED key
+    survived redaction; none asked whether an unnamed one did."""
+    from engine import gate
+    mark = "UFC_PICK_MARK"
+    board = {"status": "card", "event_date": "2026-08-23",
+             "weighins": [{"fighter": "free fact"}],
+             "picks": [{"fighter": mark, "odds": -140, "stake_units": 0.6}],
+             "pass_list": [{"fighter": mark}],
+             "near_misses": [{"fighter": mark}]}
+    out = gate.redact(board, "ufc.json")
+    assert mark not in json.dumps(out), "the UFC card is public again"
+    # And the free half of that board must survive — the card, the date
+    # and the weigh-ins are facts, and sealing them would make the page
+    # useless to the visitor it is meant to attract.
+    assert out.get("event_date") == "2026-08-23"
+    assert out.get("weighins"), "the free facts went with the picks"
+
+
+def test_the_near_miss_and_priced_out_lists_are_gated():
+    """UFC's hole had siblings on the MLB board, found by looking for
+    them. `near_miss` rows carry player, side, line, book price, edge and
+    hit probability — a pick with a sentence about why it was not taken,
+    which is still the product. `priced_out` is filtered straight out of
+    `recommendations`, so its rows ARE recommendation rows.
+
+    Neither carried a stake, which is why the first version of the audit
+    walked past `near_miss`: a reader does not need our stake to use our
+    number."""
+    from engine import gate
+    mark = "NEAR_MISS_MARK"
+    board = {"date": "2026-08-22",
+             "near_miss": [{"player": mark, "line": 1.5, "odds": -115,
+                            "edge": 0.021, "hit_prob": 0.55}],
+             "priced_out": [{"player": mark, "odds": -115, "edge": 0.03}],
+             "gate_census": {"recommended": 1, "no_real_price": 110},
+             "games": [{"home": "TOR", "away": "NYY"}]}
+    out = gate.redact(board, "mlb_recommendations.json")
+    assert mark not in json.dumps(out), "the near-misses are public again"
+    # The funnel counts and the schedule are facts and stay free — they
+    # are what makes the page worth loading without an account.
+    assert out.get("gate_census"), "the census went with them"
+    assert out.get("games"), "the schedule went with them"
+
+
+def test_tonights_open_positions_are_gated():
+    """live_picks rows carry player, market, side, line, the price we
+    took and the stake. That is tonight's card with "already placed"
+    written on it, and worth the same to somebody who has not paid.
+
+    It costs a free visitor nothing — renderLivePicks only runs inside
+    the main board render, which is behind the wall already — so the only
+    reader losing them is a curl of the public file. The Record page,
+    which is settled picks in the past, is FREE and unaffected: that is
+    the evidence, not the product."""
+    from engine import gate
+    mark = "OPEN_POSITION_MARK"
+    board = {"live_picks": [{"player": mark, "odds": -138,
+                             "stake_units": 0.56, "status": "open"}]}
+    assert mark not in json.dumps(gate.redact(board, "mlb_recommendations.json"))
+    # And the free record is untouched by any of this.
+    assert gate.is_free("record.json")
+    assert mark in json.dumps(gate.redact(board, "record.json"))
+
+
+def test_a_staked_row_under_any_key_is_reported():
+    """The general form. Key-stripping only protects boards whose keys
+    somebody anticipated, and the next board will name its rows something
+    else again — so this asks a question that does not depend on the
+    name: does the list carry a STAKE?"""
+    from engine import gate
+    hole = {"whatever_we_call_it_next": [{"who": "x", "stake_units": 0.5}]}
+    assert gate.leaks(hole, "ufc.json") == ["whatever_we_call_it_next"]
+    # A gated key is not a leak, a free file is a decision, and a list
+    # with no stake on it is not a pick list.
+    assert gate.leaks({"recommendations": [{"stake_units": 1}]}, "ufc.json") == []
+    assert gate.leaks(hole, "record.json") == []
+    assert gate.leaks({"games": [{"home": "TOR"}]}, "ufc.json") == []
+    # And the widened form: our opinion with no stake on it is still ours.
+    assert gate.leaks({"whatever": [{"player": "x", "edge": 0.02}]},
+                      "ufc.json") == ["whatever"]
+    assert gate.leaks({"whatever": [{"player": "x", "hit_prob": 0.55}]},
+                      "ufc.json") == ["whatever"]
+
+
+def test_the_audit_is_runnable_on_the_box():
+    """A guard that only runs in CI does not protect a board added on the
+    server. `--paywall-audit` reads the real public path."""
+    src = _read("launch.py") if "_read" in dir() else open(
+        os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _paywall_audit_cli("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "gate.leaks(" in body or "_gate.leaks(" in body
+    assert '"web" / "data"' in body, "it audits somewhere other than the public path"
+
+
+def test_every_wholly_paid_file_has_an_entitled_path_to_it():
+    """THE SWEEP THE LAST BUG EARNED. `/api/<sport>/recommendations`
+    serving the redacted board to subscribers was found by asking whether
+    paid content ARRIVES, not whether it leaks — and the same question
+    has the same answer for every file in PAID_FILES.
+
+    Those are sealed in their entirety on the public path: Caddy hands
+    out a stub with `locked_reason` and no content. So a page fetching
+    one from `data/` gives a paying subscriber the same empty shell it
+    gives a stranger. That was live on the Record page's
+    prediction-market section, the Lab and the Kalshi board.
+
+    Checked against gate.PAID_FILES rather than a list here, so a file
+    added to that tuple cannot quietly skip this."""
+    import re
+    from engine import gate
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    code = re.sub(r"/\*.*?\*/", " ", app, flags=re.S)
+    offenders = []
+    for name in gate.PAID_FILES:
+        stem = name.split(".")[0]
+        # A template literal covers futures_${sport}.json.
+        for m in re.finditer(r"boardFetch\(\s*[`\"]data/([^`\"]+)", code):
+            got = m.group(1)
+            if stem.split("_")[0] in got:
+                offenders.append(f"{name} fetched directly as data/{got}")
+    assert not offenders, (
+        "a paid file is fetched from the public path, where it is sealed "
+        "for everyone including subscribers: " + "; ".join(offenders))
+
+
+def test_the_paid_fetch_helper_tries_the_entitled_endpoint_first():
+    """One helper, because there were four of these and a fifth will be
+    written by somebody who did not read the comment."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("async function paidFetch(")
+    fn = app[i:app.index("\n}", i) + 2]
+    assert '"/api/board/" + name' in fn, "it does not ask the entitled endpoint"
+    assert "data/${name}" in fn, "no static fallback for a signed-out reader"
+    assert fn.index("/api/board/") < fn.index("data/${name}"), \
+        "the sealed copy is tried first, so a subscriber never sees the real one"
+
+
+def test_the_prediction_market_record_asks_the_entitled_endpoint():
+    """predmarkets.json is in PAID_FILES, so the copy on the public path
+    is a locked stub with no `validation` key. The Record page read that
+    stub and drew nothing."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # The record page goes through the shared helper now — the entitled
+    # endpoint and the fallback both live there, which is what
+    # test_the_paid_fetch_helper_tries_the_entitled_endpoint_first pins.
+    i = app.index("async function renderRecord")
+    body = app[i:app.index("\nasync function ", i + 10)]
+    assert 'paidFetch("predmarkets.json")' in body, \
+        "the record page still reads the sealed public copy directly"
+
+
+def test_the_flag_is_checked_before_the_account_is():
+    """Ordering, not style. A site running without a processor must behave
+    exactly as it did before any of this was written — refusing everyone
+    because nobody has subscribed yet is the failure this avoids."""
+    src = _server()
+    body = src[src.index("def _entitled"):][:1400]
+    i, j = body.index("gate.enabled()"), body.index("if not who")
+    assert i < j, "the account is consulted before the switch"
+
+
+def test_a_signed_in_visitor_without_a_subscription_gets_402_not_403():
+    """"Pay and this works" and "you may never have this" are different
+    answers, and the page renders a different thing for each."""
+    src = _server()
+    body = src[src.index("def _api_board"):][:1800]
+    assert "402" in body and "401" in body
+
+
+def test_a_broken_billing_lookup_does_not_become_a_free_read():
+    """The failure everybody notices is a paying customer refused. The
+    failure nobody notices is the product given away.
+
+    ANCHORED ON THE BILLING CALL, not on the first `except` in the
+    function — the redemption-code lookup was added ahead of it on
+    2026-08-20 and has its own, deliberately different, handler. Anchoring
+    by position made this test about whichever guard happened to be first,
+    which is not the property it exists to defend.
+    """
+    src = _server()
+    body = src[src.index("def _entitled"):][:2200]
+    tail = body[body.index("BI.status_for"):]
+    tail = tail[tail.index("except Exception"):][:400]
+    assert "return False" in tail, "an exception falls through to entitled"
+
+
+def test_a_broken_code_lookup_costs_a_code_holder_not_a_subscriber():
+    """The redemption guard is deliberately NOT fail-closed, and the
+    asymmetry is the point. Codes are checked before the processor; if
+    that lookup throws and it returned False there, a paying subscriber
+    would lose their board over a failure in a feature they never used.
+    It falls through to the billing check instead, which still fails
+    closed — so the composite is closed and the blast radius of a broken
+    code table is code holders alone."""
+    src = _server()
+    body = src[src.index("def _entitled"):][:2200]
+    head = body[body.index("RD.init("):body.index("BI.status_for")]
+    guard = head[head.index("except Exception"):]
+    assert "return True" not in guard, \
+        "a broken code lookup grants access — that is fail-OPEN"
+    assert "pass" in guard, \
+        "it no longer falls through to the billing check"
+
+
+
+# --- the builds actually go through it --------------------------------------
+
+#: Every script that writes a board carrying picks. A gated module nothing
+#: calls is the most reassuring kind of dead code.
+GATED_BUILDS = ("nfl_build.py", "mlb_build.py", "nba_build.py",
+                "cfb_build.py", "ufc_build.py", "futures_build.py",
+                "generate.py", "generate_mlb.py", "pm_build.py",
+                # Added 2026-08-22 with the keys they write. Both wrote
+                # their whole board straight to web/data/ while this list
+                # — hand-kept, never re-derived — said the gate was
+                # covered. memes_build rebuilds every 20 seconds, so the
+                # scan went back on the open web a third of a minute
+                # after any --seal.
+                "memes_build.py", "fantasy_build.py")
+
+
+def test_every_build_that_writes_picks_publishes_through_the_gate():
+    """The wiring is the whole feature. redact() can be perfect while a
+    build writes the full board straight to web/data/ beside it, and the
+    symptom is nothing at all — the site looks right and the picks are
+    public."""
+    for name in GATED_BUILDS:
+        src = (ROOT / name).read_text(encoding="utf-8")
+        assert "gate.publish(" in src, f"{name} never calls gate.publish"
+
+
+def test_no_gated_build_still_writes_its_board_the_old_way():
+    """A leftover direct write is a second door. Checked as code rather
+    than as text so the comments explaining this may quote it."""
+    import re as _re
+    for name in GATED_BUILDS:
+        src = (ROOT / name).read_text(encoding="utf-8")
+        code = "\n".join(ln for ln in src.splitlines()
+                          if not ln.lstrip().startswith("#"))
+        # The two idioms this repo used before the gate existed.
+        for pattern in (r"out_path\.write_text\(json\.dumps\(result",
+                        r"\bp\.write_text\(json\.dumps\(out\b",
+                        r"json\.dump\(result, fh"):
+            assert not _re.search(pattern, code), \
+                f"{name} still writes its board directly ({pattern})"
+
+
+def test_the_polymarket_board_is_gated_under_both_of_its_names():
+    """pm_build's default --out is predmarkets.json; the file on disk is
+    kalshi.json. Same board, two names, and only one was listed. Its picks
+    live in `rows`, which no PAID_KEY matches — so the unlisted name would
+    have published whole. Key-stripping only protects boards whose keys
+    were anticipated; the named list is the net under that."""
+    for name in ("kalshi.json", "predmarkets.json"):
+        assert gate.is_wholly_paid(name), f"{name} is not gated"
+        red = gate.redact({"generated_at": "x", "rows": [1, 2, 3]}, name)
+        assert "rows" not in red, f"{name} still carries its picks"
+
+
+
+# --- what the shop promises vs what the gate hands out ----------------------
+
+#: The paywall page's feature list, mapped to the board that backs each
+#: line. Written by hand and on purpose: the list in app.js is sales
+#: copy, and no regex is going to tell you that "the meme-coin scanner"
+#: means memecoins.json. What this buys is that changing either side
+#: without the other is a failing test rather than a quiet giveaway.
+SOLD_AS_PAID = {
+    "The full fantasy suite": "fantasy.json",
+    "the meme-coin scanner": "memecoins.json",
+    "Prediction markets": "predmarkets.json",
+    "game scripts": "fantasy.json",
+}
+
+
+def test_nothing_the_paywall_page_sells_is_published_free():
+    """THE BUG THIS EXISTS FOR, and it was live. Ethan, 2026-08-22,
+    reading his own `--paywall-audit` output: *"remeber we talked about
+    there not being a free plan and only the 3 day trial with full
+    access. so why is it should free for all of that"*.
+
+    He was right. `fantasy.json` and `memecoins.json` sat in FREE_FILES
+    while PLAN_FEATURES sold "The full fantasy suite — draft kit, mock
+    draft, lineups, trades" and "Prediction markets and the meme-coin
+    scanner" as reasons to pay $25 a month. Nobody decided that; the
+    boards were classified before the sales copy was written and never
+    revisited.
+
+    Note what is NOT asserted here: that everything is paid. Rosters,
+    standings, injuries, schedules, live scores and both records stay
+    free, because they are facts and evidence rather than product, and
+    because the trial funnel needs a site worth looking at before you
+    hand over a card. The rule is only that the shop and the gate agree.
+    """
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    features = re.search(r"const PLAN_FEATURES = \[(.*?)\n\];", app, re.S)
+    assert features, "PLAN_FEATURES is not where this test thinks it is"
+    copy = features.group(1)
+    for phrase, board in SOLD_AS_PAID.items():
+        if phrase not in copy:
+            continue                      # line retired from the shop; fine
+        assert not gate.is_free(board), (
+            f"the paywall page sells {phrase!r} and {board} is published "
+            f"whole — an advertised feature given away by omission")
+
+
+def test_the_facts_inside_a_gated_board_stay_free():
+    """Gating fantasy.json outright would take the usage table, the
+    schedule and Sleeper's trending list down with the draft kit, and
+    those are ingested facts that cost a subscription nothing to show.
+    Same reason recommendations.json is key-stripped rather than sealed."""
+    board = {"season": 2026, "usage": [{"player": "x"}], "schedule": [1],
+             "rates": {"ppr": 1}, "trending": [2], "camp": {"risers": []},
+             "draft_kit": [{"player": "y"}], "ranks": {"rows": [1, 2]},
+             "buy_sell": {"buy": [1]}, "scripts": [{"game": "z"}]}
+    red = gate.redact(board, "fantasy.json")
+    for keep in ("season", "usage", "schedule", "rates", "trending", "camp"):
+        assert red.get(keep) == board[keep], f"redaction ate {keep}"
+    for gone in ("draft_kit", "ranks", "buy_sell", "scripts"):
+        assert not red.get(gone), f"{gone} survived on the public path"
+    assert red["locked_reason"] == "subscription"
+    assert set(red["locked"]) == {"draft_kit", "ranks", "buy_sell", "scripts"}
+
+
+def test_the_meme_scan_is_gated_and_its_counts_are_not():
+    """"18 of 42 behind the risk gate" is a disclosure, not a call. It is
+    what makes the locked board say something true instead of nothing."""
+    board = {"status": "live", "n": 42, "gated": 18, "risk_gate": 60,
+             "notes": ["source declined"],
+             "coins": [{"mint": "a", "momentum": 91, "risk": 40}],
+             "rocket": ["a"], "exits": ["b"]}
+    red = gate.redact(board, "memecoins.json")
+    for keep in ("status", "n", "gated", "risk_gate", "notes"):
+        assert red.get(keep) == board[keep], f"redaction ate {keep}"
+    for gone in ("coins", "rocket", "exits"):
+        assert not red.get(gone), f"{gone} survived on the public path"
+
+
+def test_both_records_are_free_because_they_are_the_evidence():
+    """record.json and memerecord.json are graded history — what was
+    called, and what it did afterwards. They are the only claim on this
+    site a stranger can check, and the paywall page's proof block reads
+    from one of them. A proof nobody can read persuades nobody."""
+    for name in ("record.json", "memerecord.json"):
+        assert gate.is_free(name), f"{name} is not free"
+        board = {"rows": [{"pick": "x", "edge": 0.06, "result": "win"}]}
+        assert gate.redact(board, name) == board, f"{name} was redacted"
+
+
+def test_every_gated_board_the_page_reads_has_an_entitled_route():
+    """The other half of every gating change, and the half that gets
+    forgotten: stripping a key without giving subscribers a path to the
+    full copy fixes the leak by breaking the page for the people paying
+    for it. Three shipped that way — the UFC card, the prediction-market
+    record, and the Lab.
+
+    Driven off gate's own tuples, so adding a board to MIXED_FILES or
+    PAID_FILES and fetching it from `data/` cannot pass. Line-by-line
+    rather than by a window into the source: a fixed-width slice around
+    a match is how several checks in this suite have quietly measured
+    the wrong thing.
+
+    SCOPED TO FETCH CALLS, and that is a real limit worth naming rather
+    than hiding. `LIVE_FEEDS` is a table of the same public paths, read
+    by the Live Now board — which wants `games`, a free key, off five
+    gated boards. That is correct and this test cannot tell it apart
+    from the bug, so it does not try: it checks the place all three
+    shipped bugs actually lived, which is a renderer calling fetch on a
+    board it needs the paid half of.
+    """
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    # Comments out first, both kinds. This module's docstring names
+    # `curl https://qellysbook.com/data/recommendations.json` while
+    # explaining the bypass, and a check that reads its own prose as
+    # evidence has caught seven imaginary bugs in this suite already.
+    code = re.sub(r"/\*.*?\*/", " ", app, flags=re.S)
+    lines = [ln for ln in code.splitlines()
+             if not ln.lstrip().startswith("//")]
+    offenders = []
+    for name in sorted(set(gate.MIXED_FILES) | set(gate.PAID_FILES)):
+        entitled = f'paidFetch("{name}")' in code
+        for ln in lines:
+            if f"data/{name}" not in ln or "fetch(" not in ln.lower():
+                continue
+            # `fallback:` is the sport boards' declared shape: an `api:`
+            # route beside a static path used only when there is no API.
+            if "fallback:" in ln or entitled:
+                continue
+            offenders.append(f"{name}: {ln.strip()[:70]}")
+    assert not offenders, (
+        "a gated board read straight off the public path, where the paid "
+        "keys are already gone — subscribers get the stranger's copy: "
+        + "; ".join(offenders))
+
+
+# --- the registry, checked without needing the machine to have built ---------
+
+def _py_sources():
+    """Every Python file in the project, excluding tests and caches."""
+    for path in sorted(Path(ROOT).rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if rel.parts[0] in ("tests", "__pycache__", ".git"):
+            continue
+        if "__pycache__" in rel.parts:
+            continue
+        yield rel, path.read_text(encoding="utf-8")
+
+
+def test_every_board_path_written_in_the_code_is_a_board_the_gate_knows():
+    """STATIC, so it works in a container that has built nothing.
+
+    `test_a_board_this_machine_has_built_is_one_the_registry_knows`
+    globs web/data/ — which means it is strongest on the droplet and
+    silent here, and heartbeat.json slipped past it for that exact
+    reason: the dev container never runs the refresh loop that writes
+    it, so the glob never saw the file it should have objected to.
+
+    This asks the source instead. It found four more the same day:
+    parlaycheck.py and standings_build.py between them named
+    cfb_recommendations.json, nba_recommendations.json,
+    wnba_recommendations.json and ufc_recommendations.json — four files
+    no builder has ever written, in two tools that fail soft when a
+    board will not open. Neither was leaking anything. Both were
+    silently checking nothing.
+    """
+    from engine.maintenance import RETIRED_BOARDS
+    pat = re.compile(r"web/data/([A-Za-z0-9_]+\.json)")
+    unknown = {}
+    for rel, src in _py_sources():
+        for name in set(pat.findall(src)):
+            # A RETIRED board's name may survive in its dormant tooling
+            # (nflpre.py, --prescan) — those readers print "nothing
+            # builds this" and stop, which is not a board the gate needs
+            # to know. The coupling is deliberate: the only way to be
+            # exempt here is to be on the list maintenance actively
+            # deletes from the public path.
+            if name not in gate.KNOWN_BOARDS and name not in RETIRED_BOARDS:
+                unknown.setdefault(name, []).append(str(rel))
+    assert not unknown, (
+        "board names the gate has never heard of — either a pipeline grew "
+        "a board without registering it, or a reader is opening a file "
+        "nothing writes: "
+        + "; ".join(f"{n} ({', '.join(w)})" for n, w in sorted(unknown.items())))
+
+
+def test_the_liveness_stamp_is_free():
+    """Every visitor's stale bar reads heartbeat.json, signed in or not.
+    Gating it would break the one line on the page that says whether the
+    numbers in front of you are current."""
+    assert gate.is_free("heartbeat.json")
+
+
+def test_a_tool_that_wants_a_boards_picks_reads_the_private_copy():
+    """The bug that was live in three places at once, and never raised in
+    any of them: `web/data/` is the copy with the picks REMOVED, so a
+    tool reading it with the paywall on finds an empty list and reports
+    honestly about nothing. §10.2's one-parlay-per-slate cap was not
+    being enforced at all; parlaycheck was passing four sports it had
+    never opened.
+
+    Checked as "there is one function that answers this", plus its two
+    known callers, rather than by trying to guess which reads want paid
+    keys — that judgement belongs at the call site."""
+    assert hasattr(gate, "board_source")
+    for rel in ("engine/parlays.py", "parlaycheck.py"):
+        src = (Path(ROOT) / rel).read_text(encoding="utf-8")
+        assert "board_source(" in src, f"{rel} still reads the public copy"
+
+
+def test_board_source_prefers_the_private_copy_and_falls_back():
+    with tempfile.TemporaryDirectory() as td:
+        web = Path(td) / "web" / "data"
+        web.mkdir(parents=True)
+        public = web / "nba.json"
+        public.write_text("{}")
+        # No private copy: the public path is all there is.
+        assert gate.board_source(public) == public
+        built = Path(td) / "data" / "built"
+        built.mkdir(parents=True)
+        (built / "nba.json").write_text("{}")
+        # RESOLVED INSIDE THE CALLER'S OWN TREE. The first cut of this
+        # read gate.FULL_DIR unconditionally, so a caller working in a
+        # temp root got this machine's real boards — which is how
+        # arbitrate_slate's own test failed, correctly.
+        assert gate.board_source(public) == built / "nba.json"
+
+
+def test_board_source_refuses_a_name_that_could_traverse():
+    """It ends up as a path join, same as full_board_file, and it is
+    reached from `SLATE_BOARDS`-shaped config."""
+    for evil in ("../secrets.local", "a/b.json", ".hidden.json"):
+        got = gate.board_source(Path("web/data") / evil)
+        assert "data/built" not in str(got), f"{evil!r} resolved into FULL_DIR"
+
+
+def test_the_slate_cap_covers_every_sport_that_can_publish_a_parlay():
+    """§10.2 says "across all sports" and UFC was not in the map, so a
+    Saturday with a card and a college slate could publish two parlays
+    against a rule that permits one. Checked against the ledger's own
+    board list, which is the map that was right."""
+    from engine.parlayledger import BOARD_FILES
+    from engine.parlays import SLATE_BOARDS
+    missing = sorted(set(BOARD_FILES) - set(SLATE_BOARDS))
+    assert not missing, f"sports that publish a parlay nothing arbitrates: {missing}"
+
+
+#: Files that name a gated board and write JSON, but are not publishing a
+#: board. Each entry is a reason, not a pass — an allow-list with no
+#: sentence beside it is how the last three bypasses stayed invisible.
+NOT_A_BOARD_WRITER = {
+    "engine/gate.py": "it IS the gate",
+    "engine/ledger.py": "names predmarkets.json in a comment about why "
+                        "prediction-market flags are NOT in this P&L",
+    "live_build.py": "names the model board in the comment explaining why "
+                     "it stopped reading scores out of it",
+    "livescore_build.py": "same reason one league over — it names the four "
+                          "model boards in the comment explaining why it "
+                          "stopped reading NFL/CFB/NBA/WNBA scores out of "
+                          "them. Its only writes are web/data/live_*.json, "
+                          "which carry scores and game state and nothing "
+                          "priced; tests/test_live_scores.py asserts that "
+                          "independently rather than taking this sentence "
+                          "on trust",
+    "server.py": "its only write is a user profile",
+    "standings_build.py": "reads cfb.json for conferences; writes only the "
+                          "free standings boards",
+    "launch.py": "passes board paths to subprocesses; the builders publish",
+    "engine/moments.py": "READS the board via gate.board_source; its only "
+                         "writes are its own state file — events reach the "
+                         "public path through feed.publish -> gate.publish",
+}
+
+
+def test_no_file_writes_a_gated_board_around_the_gate():
+    """DERIVED, because the hand-kept list did not hold.
+
+    `GATED_BUILDS` above is a tuple somebody has to remember to add to,
+    and twice in one day somebody did not: memes_build.py and
+    fantasy_build.py both wrote their whole board straight to web/data/
+    while that list said the gate was covered. engine/lab.py made three —
+    it is not a root-level build script at all, so no list shaped like
+    GATED_BUILDS would ever have looked at it.
+
+    So this asks the source instead: a file that names a gated board AND
+    writes JSON either calls gate.publish or is on NOT_A_BOARD_WRITER
+    with a reason. The two checks cover different halves — the builders
+    take their path from --out and never name a board, which is why
+    GATED_BUILDS still exists.
+    """
+    import re as _re
+    from engine import gate
+    boards = set(gate.PAID_FILES) | set(gate.MIXED_FILES)
+    offenders = []
+    for path in sorted(Path(ROOT).rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if rel.parts[0] in ("tests", "__pycache__") or "__pycache__" in rel.parts:
+            continue
+        src = path.read_text(encoding="utf-8")
+        if not any(b in src for b in boards):
+            continue
+        if not _re.search(r"\.write_text\(|json\.dump\(|os\.replace\(", src):
+            continue
+        if "gate.publish(" in src or str(rel) in NOT_A_BOARD_WRITER:
+            continue
+        offenders.append(str(rel))
+    assert not offenders, (
+        "writes a gated board without going through the gate — the paid "
+        "product returns to the public path on the next build, and no "
+        "private copy is written for the people paying for it: "
+        + ", ".join(offenders))
+
+
+def test_the_allow_list_has_not_gone_stale():
+    """An entry for a file that no longer exists, or that now publishes
+    properly, is an exemption nobody is watching."""
+    from engine import gate
+    boards = set(gate.PAID_FILES) | set(gate.MIXED_FILES)
+    stale = []
+    for rel, _why in NOT_A_BOARD_WRITER.items():
+        path = Path(ROOT) / rel
+        if not path.is_file():
+            stale.append(f"{rel} (gone)")
+            continue
+        src = path.read_text(encoding="utf-8")
+        if not any(b in src for b in boards):
+            stale.append(f"{rel} (no longer names a board)")
+    assert not stale, "exemptions that are no longer doing anything: " + \
+        ", ".join(stale)
+
+
+def test_the_parlay_journal_reads_the_board_that_still_has_its_tickets():
+    """`parlays` is a paid key and redact() leaves `{}` behind — still a
+    dict, so the isinstance guard in journal_built_boards let it through
+    and it journaled nothing. Every ticket published since the paywall
+    went on went ungraded, in the ledger the product is sold on."""
+    src = (Path(ROOT) / "engine" / "parlayledger.py").read_text(encoding="utf-8")
+    body = src[src.index("def journal_built_boards("):]
+    # It is the last function in the file, so there is no next `def` to
+    # stop at — a slice that assumed one raised rather than failing.
+    nxt = body.find("\ndef ")
+    body = body if nxt < 0 else body[:nxt]
+    assert "gate.board_source(" in body, (
+        "the journal reads the public board, where the tickets are gone")
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

@@ -1,0 +1,354 @@
+"""MLB betting model.
+
+Reuses the shared odds stack (best-line shopping, de-vig, EV, confidence,
+fractional-Kelly, grading) but prices each market with the right distribution:
+a normal model for total bases / hits / strikeouts, and a **Poisson** model
+for home runs — a 0.5 HR line is P(at least one homer), which a normal
+approximation gets badly wrong at λ ≈ 0.2.
+"""
+
+from __future__ import annotations
+
+import math
+
+from ..betting import (
+    IMPLAUSIBLE_EDGE_REASON, MISPOSTED_QUOTE_REASON,
+    NO_CREDIBLE_EDGE_REASON, Recommendation,
+    UNRELIABLE_CALIBRATION_REASON,
+    apply_selection, net_edge, favourite_surcharge,
+    pick_side, quote_prices_its_line, temper_edge, under_reason,
+)
+from ..calibrate import (apply_temperature, calibrated, correction_for,
+                        is_reliable)
+from ..losspatterns import veto as lp_veto
+from ..odds import consensus_fair, expected_value
+from ..statmath import prob_over, clamp
+from .models import MLBProp, HOME_RUNS, STRIKEOUTS, PITCHER_MARKETS
+from .projection import MLBProjection
+
+
+def empirical_prob_over(values: list, line: float, fallback: float,
+                        min_games: int = 8) -> float:
+    """P(stat > line) from how often the player has actually done it.
+
+    Baseball props are low-count discrete stats — a hitter records zero total
+    bases in roughly 40% of games — so a normal curve around the mean badly
+    overstates a 0.5 line (81% where reality is nearer 58%). That single
+    modelling error was inflating edges by 15-20 points across the board.
+
+    The distribution is also right-skewed: a handful of extra-base games pull
+    the *mean* well above the median, while prop lines sit near the mean. A
+    symmetric model therefore overstates the over badly — on a realistic total
+    bases distribution it says 56% where the truth is 30%. Backtesting exposed
+    this as the dominant source of error, so the player's own history — which
+    encodes the real shape, skew and all — carries most of the weight.
+
+    The parametric estimate still contributes, because it alone carries the
+    projection's matchup/park/weather adjustments that raw history cannot see.
+    Laplace smoothing keeps a short log off 0%/100%.
+    """
+    n = len(values)
+    if n < min_games:
+        return fallback
+    hits = sum(1 for v in values if v > line)
+    smoothed = (hits + 1.0) / (n + 2.0)
+    weight = clamp(n / 25.0, 0.0, 0.85)
+    return clamp(weight * smoothed + (1.0 - weight) * fallback, 1e-4, 0.999)
+
+
+def _poisson_over(line: float, lam: float) -> float:
+    """P(X > line) for X ~ Poisson(lam) with a half-point line."""
+    k_needed = math.floor(line) + 1          # over 0.5 → 1+, over 1.5 → 2+
+    # P(X >= k) = 1 - CDF(k-1)
+    cdf = 0.0
+    term = math.exp(-lam)
+    for i in range(k_needed):
+        if i > 0:
+            term *= lam / i
+        cdf += term
+    return max(0.0, 1.0 - cdf)
+
+
+def _pitcher_certainty(prop: MLBProp, proj: MLBProjection, game=None) -> float:
+    """§5: grade the pitcher first, always. For a pitcher's own prop this is
+    how well-sampled and steady his log is; for a hitter prop it is whether
+    tonight's opposing probable is even KNOWN — an unconfirmed starter makes
+    every opposing hitter number a guess about a matchup that may not exist."""
+    if prop.market in PITCHER_MARKETS:
+        sample_q = clamp(proj.form.sample_games / 8.0, 0.3, 1.0)
+        cv = (proj.form.std / proj.form.mean) if proj.form.mean > 0 else 1.0
+        var_q = clamp(0.28 / cv, 0.4, 1.0) if cv > 0 else 1.0
+        return sample_q * var_q
+    if game is not None and getattr(game, "pitchers", None):
+        if game.pitchers.get(prop.opponent):
+            return 0.9
+    return 0.55
+
+
+def _lineup_certainty(prop: MLBProp, game=None) -> float:
+    """§2.3: hitter props are conditional until the lineup is confirmed —
+    the #2 hitter gets ~0.7 more PAs than the #7 hitter, so slot IS the
+    projection. Pitcher props care less (the probable is the condition)."""
+    confirmed = bool(getattr(game, "lineups_confirmed", True)) if game is not None else True
+    if prop.market in PITCHER_MARKETS:
+        return 1.0 if confirmed else 0.85
+    if prop.lineup_spot and confirmed:
+        return 1.0
+    if prop.lineup_spot:
+        return 0.7                     # projected slot, lineup not posted
+    return 0.35                        # not in any posted/projected lineup
+
+
+def _velo_for(prop):
+    """§5's velocity change on his primary pitch, or None if unmeasured.
+
+    PITCHER MARKETS ONLY. For strikeouts and outs the prop's own player
+    IS the pitcher, so `person_id` is his. A hitter prop could be handed
+    the opposing starter's number — and that would be a different
+    quantity under one column name, which `losspatterns.velo_band` would
+    band together and the miner could never tell apart.
+
+    Memoised per pitcher per season inside `velocity.delta_for`, so a
+    slate prices all of one starter's markets off a single lookup. Never
+    raises: a pitcher whose logs will not load comes back None, banding
+    as UNMEASURED rather than as steady.
+    """
+    if prop.market not in PITCHER_MARKETS or not getattr(prop, "person_id", 0):
+        return None
+    import datetime as _dt
+    from .velocity import delta_for
+    return delta_for(prop.person_id, _dt.date.today().year)
+
+
+def _tto_for(prop):
+    """How deep he has been going, as a projection. None if unmeasured.
+
+    A PROJECTION, never tonight's depth. Times through the order is a
+    within-game quantity and the bet is placed before any of it exists —
+    journaling the actual figure would be journaling the future, and the
+    miner would convict on information the pick never had.
+    """
+    if prop.market not in PITCHER_MARKETS or not getattr(prop, "person_id", 0):
+        return None
+    import datetime as _dt
+    from .velocity import projected_tto
+    return projected_tto(prop.person_id, _dt.date.today().year)
+
+
+def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
+                      allow_synthetic_line: bool = False,
+                      game=None, hold_override=None) -> Recommendation:
+    """docs/MLB_MODEL.md §3 end to end: shop the ladder, devig, price with
+    the market's own distribution, haircut by tier, gate on the tier
+    minimum, grade 0–100 with baseball's weights, size with fractional
+    Kelly. ``game`` supplies lineup/probable/umpire context (None → neutral).
+
+    ``hold_override`` is the game's measured HR-board Devig (the
+    market-sum method, script §2.1) for one-sided home-run quotes. The
+    watchlist and the long-shot picks got it first and the edge board
+    did not — the same prop carrying two fair prices depending on the
+    page, the exact failure devig_two_way's own docstring records."""
+    from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
+                          mlb_volatility, mlb_quality_score, mlb_letter)
+    history = [g.value for g in prop.logs] if prop.logs else []
+    temp, bias = correction_for("mlb", prop.market)
+
+    def p_over_at(line: float) -> float:
+        if prop.market == HOME_RUNS:
+            # Home runs are already priced with a discrete (Poisson) model.
+            raw = _poisson_over(line, proj.mean)
+        else:
+            parametric = prob_over(line, proj.mean, proj.std)
+            raw = empirical_prob_over(history, line, parametric)
+        # Calibrate here, not after the side is chosen: an uncalibrated
+        # probability would still decide OVER vs UNDER, so a model known to be
+        # over-confident would keep picking the same side and the correction
+        # would only ever shave the edge it had already committed to.
+        #
+        # `calibrated` applies whichever correction this market carries —
+        # an isotonic curve when one beat the temperature out of sample,
+        # the temperature otherwise. `temp`/`bias` are still read above
+        # because the LEDGER journals them per row; the correction that
+        # was live has to be recoverable from the row itself.
+        return calibrated("mlb", prop.market, raw)
+
+    # Home runs are a yes-market: "to hit a home run" is the product,
+    # and 'Under 0.5 Home Runs' — a heavy-juice bet that a thing does
+    # NOT happen — is not a board-worthy bet even where some book quotes
+    # it. Ethan, 2026-09-01: "'under 0.5 homeruns' ... is not a real
+    # bet." The over is the only side this market sells.
+    side, best, hit_raw, fair, edge_raw = pick_side(
+        prop.lines, p_over_at, hold=hold_override,
+        allow_under=prop.market != HOME_RUNS)
+    hit, edge, credible = temper_edge(hit_raw, fair, best.book,
+                                      allow_synthetic_line,
+                                      shrink=mlb_tier_shrink(prop.market))
+    # The selection haircut, measured on our OWN settled bets. Applied
+    # here — after the side is chosen, so it can never flip one — and
+    # before edge/EV/net/stake, so every downstream number is the
+    # corrected one rather than the corrected one plus an old headline.
+    hit, edge = apply_selection(hit, edge, "mlb")
+    has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
+    # Separately: is the price one this LINE could carry? See
+    # `betting.IMPLAUSIBLE_QUOTE_GAP`, which this board is the reason for.
+    # Kept out of `has_market`, which stays "there is a real number on the
+    # screen" — this line IS on the screen, and its refusal sentence says
+    # otherwise. Skipped on a synthetic line, where pricing against a
+    # deliberately naive baseline is the exercise rather than a fault —
+    # and on a proxy, which is a placeholder at -110 and not a posted
+    # price at all (see `engine.betting`, the Blackburn card).
+    prices_line = (allow_synthetic_line
+                   or (best.book or "").lower() == "proxy"
+                   or quote_prices_its_line(side, best, p_over_at))
+    if not has_market:
+        # No real price to beat — don't report a number that reads as an edge.
+        edge = 0.0
+    ev = expected_value(hit, best.odds)
+    net = net_edge(hit, best.odds)
+
+    # Environment: park × weather for this market, times the umpire's zone
+    # (K-factor for strikeout props, run environment for hitter markets) —
+    # haircut-sized in the ABS era, but not zero.
+    env_mult = (proj.park.multipliers.get(prop.market, 1.0)
+                * proj.weather.multipliers.get(prop.market, 1.0))
+    if game is not None:
+        env_mult *= (getattr(game, "ump_k_factor", 1.0) if prop.market == STRIKEOUTS
+                     else getattr(game, "ump_run_factor", 1.0))
+
+    quality, quality_notes = mlb_quality_score(
+        edge=edge, market=prop.market, side=side,
+        pitcher_certainty=_pitcher_certainty(prop, proj, game),
+        lineup_certainty=_lineup_certainty(prop, game),
+        env_mult=env_mult, matchup_mult=proj.matchup.multiplier)
+    confidence = round(quality / 10.0, 1)
+
+    # The gates, in order of what they mean:
+    #  calibration — a market whose calibration fit ran to the edge of its
+    #    search range cannot be priced; the stored temperature is a cap,
+    #    not a correction. Bet nothing there until the model is fixed.
+    #  credible    — a >10% raw disagreement is bad data, not alpha (§2.5)
+    #  tier edge   — §3's minimum post-haircut edge for this market's tier
+    #  net         — the REAL price must still clear break-even (plus the
+    #                measured favourite surcharge). Not a second edge bar:
+    #                the old +0.010 requirement sat above the tier minimums
+    #                at standard juice and silently overrode them.
+    #  quality     — below MLB_QUALITY_FLOOR is no bet, not a lean (§10;
+    #                70 → 66 on 2026-08-10, the near-miss book's verdict —
+    #                the receipt lives on the constant in quality.py)
+    calibration_ok = is_reliable("mlb", prop.market)
+    # One level finer than the market gate above: the loss-pattern miner
+    # closes SLICES (a side, a price band) whose stated probabilities
+    # systematically missed, under false-discovery control. Same contract
+    # as a boundary temperature — the record itself refuses the bet.
+    from ..losspatterns import minutes_until
+    _env = {}
+    if game is not None:
+        # The same park/wind measurements the journal records — a closed
+        # "wind out hard" slice must be able to refuse the NEXT wind-out
+        # pick, not just explain the last one.
+        from .pipeline import _env_of
+        _env = _env_of(game)
+    if prop.market not in PITCHER_MARKETS:
+        _env["lineup_slot"] = int(prop.lineup_spot or 0)
+        _env["lineup_conf"] = bool(
+            getattr(game, "lineups_confirmed", True)) if game is not None \
+            else False
+    # Bullpen workload behind both sides — the same bands the board shows,
+    # so a convicted pocket refuses the NEXT matching pick. The backtest
+    # calls this with no game at all, which is an unmeasured pen rather
+    # than a fresh one.
+    _pen = (game.bullpen_fatigue or {}) if game is not None else {}
+    _velo, _tto = _velo_for(prop), _tto_for(prop)      # §5; see functions
+    pattern_block = lp_veto("mlb", prop.market, side=side, odds=best.odds,
+                            prob=hit, book=best.book, horizon_days=0,
+                            lead_min=minutes_until(
+                                getattr(game, "kickoff", None)),
+                            pen_own=_pen.get(prop.team),
+                            pen_opp=_pen.get(prop.opponent),
+                            velo_delta=_velo, tto_proj=_tto,
+                            **_env)
+    tier = mlb_tier(prop.market)
+    min_edge = mlb_tier_min_edge(prop.market)
+    gate_ok = (credible and prices_line and calibration_ok
+               and pattern_block is None
+               and has_market and edge >= min_edge
+               and net > favourite_surcharge(best.odds))
+    grade = mlb_letter(quality) if gate_ok else "Pass"
+    fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
+    if grade == "Pass":
+        stake, stake_basis = 0.0, "no bet — did not clear the gate"
+    else:
+        # Same call the generic engine makes, for the same reason: the
+        # stake has to be able to say which rule set it. MLB was still on
+        # the older helper that returns a bare number, so every MLB pick
+        # on the board carried an EMPTY basis and the site fell back to
+        # guessing the reason from the price.
+        from ..staking import kelly_fraction, units_with_reason
+        stake, stake_basis = units_with_reason(
+            kelly_fraction(hit, best.odds) * fraction, best.odds)
+
+    reasons = list(proj.reasons)
+    if pattern_block:
+        reasons.insert(0, pattern_block)
+    if not calibration_ok:
+        # SHARED WITH `engine.betting`, not copied. They were duplicated
+        # literals, so the two boards could drift apart in wording while
+        # both claimed to say the same thing — and the front end's
+        # refusal detector would then have to know about both.
+        reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
+    # Most specific cause first — a mis-posted quote also fails `credible`,
+    # and blaming the model for a gap the arithmetic pins on the price is
+    # the same wrong-cause mistake the two branches below exist to avoid.
+    if not prices_line:
+        reasons.insert(0, MISPOSTED_QUOTE_REASON)
+    elif not credible and not has_market:
+        reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
+    elif not credible:
+        # The NFL board got this split on 2026-09-02 (an Amon-Ra St. Brown
+        # card quoted at FanDuel -114 was told "line unavailable"); this
+        # file kept the one-branch version, so a Judge HR card with a real
+        # DraftKings price and a 12-point model disagreement was still
+        # told the book line did not exist. Same two causes, same two
+        # sentences as `engine.betting`.
+        reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)
+    elif side == "UNDER":
+        # Shared with the NFL/CFB engine — see `betting.under_reason`.
+        # This file had the two-branch version for six days while the
+        # other kept a single branch that claimed a projection it did
+        # not have; one copy is what stops that recurring.
+        reasons.insert(0, under_reason(proj.mean, best.line, 2))
+    if credible and calibration_ok and has_market and 0 < edge < min_edge:
+        reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
+                       f"({min_edge:.1%} post-haircut) — pass, not a lean")
+    reasons.extend(quality_notes)
+
+    # The field's opinion at pick time, captured beside the book we
+    # shopped to. Restricted to books quoting the SAME number, since
+    # a fair at 1.5 and a fair at 2.5 are opinions about different
+    # events. Evidence only — see Recommendation.fair_consensus.
+    _field = consensus_fair(prop.lines, best.line)
+
+    return Recommendation(
+        player=prop.player, team=prop.team, opponent=prop.opponent,
+        market=prop.market, side=side,
+        book=best.book, line=best.line, odds=best.odds,
+        projection=round(proj.mean, 2),
+        proj_low=round(max(0.0, proj.mean - proj.std), 2),
+        proj_high=round(proj.mean + proj.std, 2),
+        hit_prob=round(hit, 4), raw_prob=round(hit_raw, 6),
+        fair_prob=round(fair, 4),
+        fair_consensus=(round(_field[0], 4) if _field else None),
+        consensus_books=(_field[1] if _field else 0),
+        edge=round(edge, 4), ev_per_unit=round(ev, 4),
+        # `net` was computed above and then thrown away. Recommendation
+        # defaults net_edge to 0.0, so every MLB pick published a margin
+        # of EXACTLY ZERO over the price — a fabricated number, printed on
+        # the board as "+0.0% over the price you get" and read by
+        # `launch.py --stakes` as "Kelly asks for 0.00u" on all 26 picks.
+        # The value was always there; nobody passed it.
+        net_edge=round(net, 4), stake_basis=stake_basis,
+        confidence=confidence, stake_units=round(stake, 2), grade=grade,
+        reasons=reasons, trend=proj.form.trend,
+        has_market=has_market,
+        quality=quality, tier=tier, volatility=mlb_volatility(prop.market),
+    )

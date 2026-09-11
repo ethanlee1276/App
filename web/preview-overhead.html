@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>The Overhead — every form</title>
+<link rel="stylesheet" href="css/styles.css"/>
+</head><body>
+<header class="topbar"><div class="brand"><a class="brand-home" href="#"><span class="wordmark">The Overhead</span></a></div></header>
+<main style="padding:24px">
+  <div class="section-title">Every form of the Overhead
+    <span class="sub">— one asset, five drawings. Same canvas, same ink, same corners.</span></div>
+  <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;margin-top:18px"></div>
+</main>
+<script src="js/teams.js"></script>
+<script src="js/teams_mlb.js"></script>
+<script src="js/visuals.js"></script>
+<script>
+const cell = (label, svg) => `<figure style="margin:0">
+  <div class="card" style="padding:0;overflow:hidden">${svg}</div>
+  <figcaption style="color:var(--text-dim);font-size:var(--fs-sm);margin-top:6px;font-family:var(--font-mono)">${label}</figcaption></figure>`;
+
+const nflGame = { home:"KC", away:"BUF", roof:"", surface:"grass" };
+const mlbGame = { home:"COL", away:"NYY", roof:"open", surface:"grass",
+                  park_name:"Coors Field", altitude_ft:5280, factors:{hr:1.22} };
+const apex   = { venue:"UFC Apex", rounds:5, title_fight:false,
+                 environment:{ cage:{feet:25,small:true,known:true},
+                               altitude:{feet:2000,known:true,meaningful:false} } };
+const arena  = { venue:"T-Mobile Arena", rounds:5, title_fight:true,
+                 environment:{ cage:{feet:30,small:false,known:true},
+                               altitude:{feet:2000,known:true,meaningful:false} } };
+const denver = { venue:"Ball Arena", rounds:3,
+                 environment:{ cage:{feet:30,small:false,known:true},
+                               altitude:{feet:5280,known:true,meaningful:true} } };
+const mkts = [
+  { prob:0.62, model_p:0.71, volume_24h:184000 },
+  { prob:0.48, model_p:0.49, volume_24h:92000 },
+  { prob:0.31, model_p:0.18, volume_24h:41000 },
+  { prob:0.77, model_p:null, volume_24h:12000 },
+  { prob:0.55, model_p:0.58, volume_24h:8000 },
+  { prob:0.19, model_p:0.34, volume_24h:3000 },
+];
+window.ACTIVE_TEAMS = window.TEAMS;
+document.getElementById("grid").innerHTML = [
+  cell("stadium() — NFL / CFB / WNBA", stadium(nflGame)),
+  cell("ballpark() — MLB", (window.ACTIVE_SPORT="mlb", window.ACTIVE_TEAMS=window.MLB_TEAMS, ballpark(mlbGame))),
+  cell("octagon() — UFC · Apex, 25ft cage", octagon(apex)),
+  cell("octagon() — UFC · arena, 30ft, title", octagon(arena)),
+  cell("octagon() — UFC · Denver, altitude", octagon(denver)),
+  cell("marketRule() — Kalshi board", marketRule(mkts, {title:"KALSHI BOARD"})),
+].join("");
+</script>
+</body></html>

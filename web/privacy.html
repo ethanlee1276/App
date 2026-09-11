@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Qellys Book</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<!-- NO .shell WRAPPER. `.shell` is the app's two-column grid —
+     `240px minmax(0, 1fr)`, sized for the sidebar. These pages have
+     no sidebar, so <main> became the FIRST grid item and rendered
+     inside the 240px column: the whole Terms of Service in a strip
+     down the left of a 1900px screen, with the rest of the page
+     empty. Live and public that way until Ethan sent a screenshot,
+     2026-08-22. 404.html and maintenance.html never used it and are
+     the pattern here. -->
+<main class="legal-main">
+  <div class="legal">
+    
+
+    <h1>Privacy Policy</h1>
+    <p class="legal-date">Last updated 22 August 2026</p>
+
+    <h2>1. The short version</h2>
+    <ul>
+      <li>We collect your email address, a hash of your password, and
+        whatever you choose to put into the Service (a bet log, fantasy
+        settings).</li>
+      <li><b>We run no analytics, no advertising, no tracking pixels and
+        no third-party scripts.</b> There is nothing on this site that
+        follows you anywhere else.</li>
+      <li><b>We never see your card details.</b> Stripe takes the payment
+        on its own page; we hold a customer reference and a status.</li>
+      <li><b>We do not sell or share your personal information</b>, and we
+        never have. There is no advertising business here to sell it to.</li>
+      <li>You can delete your account and everything attached to it from
+        the account panel, yourself, at any time.</li>
+    </ul>
+
+    <h2>2. What we collect, and exactly where it lives</h2>
+    <p>This is the complete list. Each item names the table it is stored
+      in, so it can be checked against the code.</p>
+
+    <h3>2.1 Account</h3>
+    <ul>
+      <li><b>Email address</b> — your login, and how we reach you about
+        your subscription. (<code>users.email</code>)</li>
+      <li><b>A password verifier</b> — a scrypt hash. <b>We do not store
+        your password</b> and cannot recover it; we can only reset it.
+        (<code>users.verifier</code>)</li>
+      <li><b>Account created and last seen timestamps.</b>
+        (<code>users.created_at</code>, <code>users.last_seen</code>)</li>
+      <li><b>That you confirmed you are 21 or over, and when you accepted
+        the Terms.</b> (<code>users.age_confirmed</code>,
+        <code>users.terms_accepted_at</code>)</li>
+      <li><b>Session tokens, stored hashed</b>, with an expiry. The cookie
+        in your browser is the only copy of the raw token; a stolen
+        database does not yield a working session.
+        (<code>sessions.token_hash</code>)</li>
+    </ul>
+
+    <h3>2.2 What you put in</h3>
+    <ul>
+      <li><b>Your bet log</b> — the wagers you choose to record: sport,
+        market, price, stake, result. Entered by you, for your own
+        record-keeping. We do not place these bets and cannot see any
+        account you placed them on. (<code>user_data</code>)</li>
+      <li><b>Your settings</b> — bankroll size, unit size, fantasy league
+        preferences, alert choices. (<code>user_data</code>, sections
+        <code>bankroll</code> and <code>fantasy</code>)</li>
+      <li><b>Your search history on this site</b> — the player and team
+        searches you run here, kept so the search box can offer them back
+        to you. This is our own search box only; it has nothing to do with
+        anything you search anywhere else, and there is a button on the
+        account page to clear it.
+        (<code>user_data</code>, section <code>search</code>)</li>
+    </ul>
+    <p>Those four sections — <code>mybets</code>, <code>fantasy</code>,
+      <code>bankroll</code>, <code>search</code> — are the complete list of
+      what an account can hold. It is the same list the code enforces
+      (<code>accounts.SECTIONS</code>); nothing else can be written against
+      your account.</p>
+
+    <h3>2.3 Subscription</h3>
+    <ul>
+      <li><b>A Stripe customer id and subscription id, the status, the
+        paid-through date, and which plan.</b> That is the entire
+        payment-related record on our side.
+        (<code>subscriptions</code>)</li>
+      <li><b>Stripe event ids we have already processed</b>, so a repeated
+        webhook cannot grant twice. (<code>billing_events</code>)</li>
+      <li><b>Discount codes you redeemed, and failed attempts</b>, the
+        latter only to rate-limit guessing.
+        (<code>code_redemptions</code>, <code>code_attempts</code>)</li>
+    </ul>
+
+    <h3>2.4 Server logs</h3>
+    <p>Our web server keeps ordinary access logs — IP address, timestamp,
+      path requested, user agent — as every web server does. They are used
+      for security and debugging, are not joined to your account, and are
+      not used to build a profile of you. Your IP address is also read at
+      request time to enforce security rules (for example, refusing a
+      password over an unencrypted connection); <b>it is not written to
+      any database table.</b></p>
+
+    <h2>3. What we do NOT collect</h2>
+    <ul>
+      <li><b>Your sportsbook password</b>, or any betting-account
+        credential. We never ask for them and there is nowhere on this
+        Service to enter one. A
+        DraftKings or FanDuel login can move real money and cannot be
+        scoped or revoked by us, so we do not want it.</li>
+      <li><b>Card numbers, expiry dates or security codes.</b> These are
+        typed on Stripe’s page and never reach our servers.</li>
+      <li><b>Advertising or tracking cookies.</b> There are none. No
+        analytics tags, no pixels, no fingerprinting, no third-party
+        scripts of any kind.</li>
+      <li><b>Your location.</b> We do not request it, infer it, or store
+        it.</li>
+      <li><b>Your contacts, photos, files or device identifiers.</b></li>
+      <li><b>Anything about children.</b> See §9.</li>
+    </ul>
+
+    <h2>4. Why we use it (and the legal basis)</h2>
+    <table class="legal-table">
+      <tr><th>What</th><th>Why</th><th>Basis</th></tr>
+      <tr><td>Email, password hash, sessions</td>
+          <td>To create your account and keep you signed in</td>
+          <td>Performance of a contract</td></tr>
+      <tr><td>Subscription record</td>
+          <td>To know whether you have paid, and to bill you</td>
+          <td>Performance of a contract</td></tr>
+      <tr><td>Your bet log and settings</td>
+          <td>To show them back to you across your devices</td>
+          <td>Performance of a contract</td></tr>
+      <tr><td>Age and Terms acceptance</td>
+          <td>To evidence eligibility</td>
+          <td>Legal obligation / legitimate interest</td></tr>
+      <tr><td>Server logs, failed code attempts</td>
+          <td>Security, abuse prevention, debugging</td>
+          <td>Legitimate interest</td></tr>
+      <tr><td>Email about your subscription</td>
+          <td>Receipts, renewal notices, service notices</td>
+          <td>Performance of a contract</td></tr>
+    </table>
+    <p>We do not use your data to train models. The models here are built
+      from public sports statistics and market prices, not from
+      subscribers.</p>
+
+    <h2>5. Cookies</h2>
+    <p>We set <b>one</b> cookie: a session cookie that keeps you signed
+      in. It is <code>HttpOnly</code> (JavaScript cannot read it),
+      <code>SameSite</code>-restricted, and marked <code>Secure</code>
+      when served over HTTPS. It contains a random token and nothing
+      about you.</p>
+    <p>Some preferences (theme, bankroll display) are kept in your
+      browser’s local storage. That never leaves your device and we cannot
+      read it.</p>
+    <p><b>There are no advertising, analytics or third-party cookies</b>,
+      which is why this site has no cookie banner: there is nothing to
+      consent to.</p>
+
+    <h2>6. Who else sees it</h2>
+    <p>Each of these because they have to be involved, and each
+      receiving the minimum:</p>
+    <ul>
+      <li><b>Stripe, Inc.</b> — if you subscribe. They receive your email
+        address and payment details (entered on their page) so they can
+        take the payment and send you a receipt. They hold the card
+        details we deliberately never see. Stripe’s privacy policy governs
+        what they do with it.</li>
+      <li><b>DigitalOcean, LLC</b> — our hosting provider. The
+        Service runs on a virtual server they operate, so they hold the
+        disk the database sits on. They do not use it; they house it.
+        Their privacy policy governs what they do as a provider.</li>
+
+      <li><b>Cloudflare, Inc.</b> — every request to this site passes
+        through their network before it reaches our server. That is what
+        provides the HTTPS certificate, absorbs traffic floods and blocks
+        automated abuse. To do it they necessarily see the same things
+        our own logs see — your IP address, the page requested, your
+        browser’s user-agent string — and they terminate the encrypted
+        connection at their edge, which means they can see the contents
+        of requests in transit. We use their standard proxy and their
+        privacy policy governs what they do with it. We do not run any
+        Cloudflare analytics or tracking product.</li>
+
+      <li><b>Backblaze, Inc.</b> — encrypted backups of the database are
+        copied to their B2 storage service so that a failed disk is not
+        the end of your account. The backup contains the same data
+        described in §2 and nothing more. It is stored in a private
+        bucket that only we can read.</li>
+      <li><b>Discord</b> — only if you choose to join our server. We do
+        not pass them anything about you: you follow an invite and they
+        see whatever your own Discord account shows them. We can see who
+        is in the server and what is posted in it, the same as any other
+        member. Their privacy policy governs the platform.</li>
+      <li><b>Yahoo</b> — only if you choose to connect a Yahoo fantasy
+        league, and only to read that league. You approve it on Yahoo’s
+        own screen, we never see your Yahoo password, and you can revoke
+        it from your Yahoo account at any time.</li>
+    </ul>
+    <p><b>We do not sell your personal information, and we do not share
+      it for cross-context behavioural advertising</b>, as those terms are
+      used in US state privacy law. We have never done either.</p>
+    <p>We may disclose information if legally required to — a valid
+      subpoena, court order or comparable process. Where we are permitted
+      to tell you, we will.</p>
+
+    <h2>7. How long we keep it</h2>
+    <ul>
+      <li><b>Account data</b> — until you delete your account.</li>
+      <li><b>Your bet log and settings</b> — until you delete them, or
+        your account.</li>
+      <li><b>Subscription records</b> — deleted with your account, except
+        where a payment record must be retained for tax or accounting
+        purposes. Stripe keeps its own transaction records under its own
+        retention rules.</li>
+      <li><b>Sessions</b> — expire on their own, and are deleted when you
+        sign out or change your password.</li>
+      <li><b>Failed code attempts</b> — rolled off after one hour.</li>
+      <li><b>Processed webhook ids</b> — 60 days.</li>
+      <li><b>Server logs</b> — a short rolling window for security and
+        debugging.</li>
+    </ul>
+    <p><b>Backups outlive deletion, and we would rather say so.</b> The
+      account database is included in a weekly encrypted backup — it has
+      to be, or one failed disk erases the records of every user who did
+      <i>not</i> ask to be deleted. We keep <b>six weeks</b> of those
+      archives. So an account you delete disappears from the live site
+      immediately and can still exist in an archive for up to six weeks,
+      after which it is gone from those too. Backups are used only to
+      restore the service after a failure; they are never queried,
+      analysed or shared.</p>
+
+    <h2>8. Your rights, and how to use them</h2>
+    <p>Wherever you live, you can:</p>
+    <ul>
+      <li><b>See what we hold</b> — most of it is visible on your account
+        page; ask and we will send the rest;</li>
+      <li><b>Correct it</b> — change your email or password from the
+        account page;</li>
+      <li><b>Delete it</b> — the account panel deletes your account and
+        everything attached to it. <b>You do not have to ask us</b>, and
+        we do not put a retention flow in front of it;</li>
+      <li><b>Export it</b> — <b>Download my data</b> on the account page
+        gives you everything we hold, as JSON, immediately and without
+        asking us;</li>
+      <li><b>Clear your search history</b> — <b>Clear search history</b>
+        on the account page, separately from the rest;</li>
+      <li><b>Object or complain</b> — email us.</li>
+    </ul>
+    <p>The first three are buttons, not requests. <b>Delete my account</b>
+      on the account page removes your account and every section attached
+      to it. We do not put a retention offer, a phone call or a waiting
+      period in front of any of them.</p>
+    <p><b>California residents (CCPA/CPRA):</b> you have the rights above,
+      plus the right to know the categories of personal information
+      collected, disclosed and sold or shared. The categories we collect
+      are identifiers (email) and commercial information (subscription
+      status, your own bet log). <b>We sell and share none of it.</b> We
+      will not discriminate against you for exercising any of these
+      rights.</p>
+    <p><b>If you are in the EU or UK:</b> the Service is aimed at the US
+      and we do not target it at you, but if the GDPR applies to your use
+      of it you also have rights of access, rectification, erasure,
+      restriction, portability and objection, and the right to complain to
+      your local supervisory authority. Our legal bases are in §4.</p>
+    <p>We will respond to a request within 30 days. We may need to verify
+      that you control the account before acting on it.</p>
+
+    <h2>9. Children</h2>
+    <p>The Service is for adults aged 21 and over. We do not knowingly
+      collect information from anyone under 18. If you believe a child has
+      created an account, tell us and we will delete it.</p>
+
+    <h2>10. Security</h2>
+    <ul>
+      <li>Passwords are stored as <b>scrypt</b> hashes, never in plain
+        text, and never recoverable.</li>
+      <li>Session tokens are stored <b>hashed</b>; the raw token exists
+        only in your browser cookie.</li>
+      <li>The Service <b>refuses to accept a password over an
+        unencrypted connection</b> rather than accepting it and hoping.</li>
+      <li>Card data never touches our infrastructure, so a breach here
+        cannot expose it.</li>
+      <li>Payment webhooks are rejected unless they carry a valid
+        cryptographic signature.</li>
+    </ul>
+    <p>No system is perfectly secure. If we become aware of a breach
+      affecting your personal information, we will tell affected users
+      without undue delay, and comply with applicable breach-notification
+      law.</p>
+
+    <h2>11. Do Not Track, and Global Privacy Control</h2>
+    <p>We do not track you, so there is nothing for a Do Not Track signal
+      to switch off. We honour it by construction rather than by
+      policy.</p>
+    <p>The same goes for the <b>Global Privacy Control</b> signal. Under
+      California law a GPC signal is a request to opt out of the sale or
+      sharing of personal information. We do not sell or share personal
+      information and never have, so there is no sale to opt out of and
+      the signal changes nothing about how we treat you. We are saying
+      that plainly rather than staying silent, because silence on this
+      point is usually the tell.</p>
+
+    <h2>12. Where your data is, and where it travels</h2>
+    <p>The Service, its database and its backups are operated in the
+      <b>United States</b>. If you use the Service from outside the US,
+      your information is transferred to and processed in the US, where
+      privacy law differs from the law where you live. By using the
+      Service you understand that.</p>
+    <p><b>Requests reach us through a global network.</b> Cloudflare
+      operates data centres worldwide and routes each request through the
+      one nearest you, so the request itself — your IP address, the page
+      you asked for, your browser’s user-agent — may pass through a
+      Cloudflare facility outside the US before arriving at our server.
+      The stored data does not: the database and its backups stay in the
+      US.</p>
+    <p>We do not currently offer a region choice. If that changes, this
+      section changes with it.</p>
+
+    <h2>13. Changes to this policy</h2>
+    <p>If this policy changes in a way that materially affects you, we
+      will say so on the Service and email the address on your account
+      before it takes effect. We will not quietly change the date.</p>
+
+    <h2>14. Contact</h2>
+    <p>To ask what we hold, to get a copy, to correct it, or to have it
+      deleted — anything in §8 — write to us. We will not ask you why.</p>
+    <p><b>Privacy questions:</b>
+      <a href="mailto:privacy@qellysbook.com">privacy@qellysbook.com</a></p>
+    <p><b>Anything else:</b>
+      <a href="mailto:support@qellysbook.com">support@qellysbook.com</a></p>
+    <p><b>Who is responsible for your data:</b> Ethan Lee, sole
+      proprietor, trading as Qellys Book, operator of qellysbook.com.
+      <span class="legal-todo">[Postal address to be added.]</span></p>
+    <p>We answer email, and a request under §8 gets an answer within 30
+      days. If you are in the EU or UK you also have the right to complain
+      to your national data protection authority; we would rather you
+      came to us first.</p>
+
+    <p class="legal-back"><a href="index.html">← Back to Qellys Book</a></p>
+  </div>
+</main>
+</body>
+</html>

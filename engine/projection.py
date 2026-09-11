@@ -1,0 +1,343 @@
+"""Projection assembly.
+
+Combines the base form mean with the multiplicative adjustments from the
+matchup, weather and injury modules to produce a final projected mean and a
+standard deviation for the prop's market. Every contributing factor is kept so
+the explanation and the UI can show the full chain of reasoning.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .models import Prop, Game, Team
+from . import chain
+from .form import compute_form, FormResult, WINDOW_WEIGHTS
+from .weather import evaluate_weather, WeatherEffect
+from .injuries import evaluate_injuries, InjuryEffect
+from .matchup import evaluate_matchup, MatchupEffect
+from .statmath import clamp
+
+# Realistic game-to-game variance floors, expressed as a coefficient of
+# variation (std / mean) per market. Player game logs are often too smooth to
+# capture true prop variance, so we never let the estimated std fall below
+# these market-typical levels — this is what keeps hit probabilities honest.
+#: Coefficient-of-variation floor under the projection's own spread, per
+#: market: `std = max(form std, CV x mean)`.
+#:
+#: MEASURED, AND THE FLOOR IS NOT THE PROBLEM — `engine.yardagefit`,
+#: 2026-08-30. Two things came out of walking 9,177 rushing and 16,557
+#: receiving player-weeks forward with the shipped blend.
+#:
+#: First, this floor almost never binds: `form.std` is above it in every
+#: projection band of both markets, so the number below is close to
+#: decorative. Raising it would be the obvious fix and the wrong one.
+#:
+#: Second, and this is what actually shuts those two markets: the FAMILY
+#: is wrong. `statmath.prob_over` is a normal, and rushing yards are a
+#: spike at zero with a long right tail — 29.0% of outcomes are exactly
+#: zero (21.2% receiving, 12.4% receptions, 2.3% passing). The normal's
+#: negative tail stands in for that spike and misses in both directions:
+#:
+#:     projection    P(zero)   normal's mass below zero
+#:       1-8          61.9%          36.0%
+#:      15-30         11.9%          18.4%
+#:      30-50          3.5%           9.1%
+#:      50-75          0.9%           3.8%
+#:
+#: Mass wrongly placed below zero comes straight off the over, by an
+#: amount that changes sign across the board — which is what an AUC of
+#: 0.47 looks like from the inside, and why the fitted temperature for
+#: these markets ran to the edge of its grid. A monotone squeeze cannot
+#: move mass from one end of a distribution to the other.
+#:
+#: `engine.yardagefit` has the replacement measured, and it is
+#: deliberately NOT wired in here — ASKED AND ANSWERED, 2026-08-30.
+#: Against real closing prices, walked forward and split by week, the
+#: replacement halves the calibration miss in both markets big enough to
+#: score (rec_yds 0.1137 -> 0.0709, receptions 0.0610 -> 0.0285) and does
+#: not make money the normal was not already making (-6.9% -> -7.9% and
+#: +4.5% -> +4.2% ROI). It is a better PROBABILITY and not a better
+#: BOARD, and at 300-360 flat stakes the ROI column cannot separate them
+#: anyway — every one of those numbers carries about five points of
+#: standard error.
+#:
+#: So the shape error described above is real and this constant is still
+#: the wrong shape; what is NOT established is that fixing it changes a
+#: single bet. Read the module docstring before reopening it.
+CV_FLOOR = {
+    "pass_yds": 0.16,
+    "rush_yds": 0.42,
+    "rec_yds": 0.48,
+    "receptions": 0.34,
+}
+
+# Usage bridge: how many games of outcome logs it takes for observed form
+# to carry as much weight as the measured volume role. At zero logs the
+# measured role IS the baseline; by a full season, form outweighs it ~4:1.
+# (The game-script tilt lives in engine.matchup, which already owned the
+# spread and stands down when teamcontext measures pass rate for real.)
+USAGE_PRIOR_GAMES = 4
+
+
+@dataclass
+class Projection:
+    mean: float
+    std: float
+    form: FormResult
+    matchup: MatchupEffect
+    weather: WeatherEffect
+    injury: InjuryEffect
+    reasons: list[str] = field(default_factory=list)
+    #: The arithmetic that produced `mean`, kept rather than discarded —
+    #: base × a series of named multipliers. See engine/chain.py for why
+    #: this is a checkable structure and not another sentence.
+    chain: dict = field(default_factory=dict)
+
+
+def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
+                     context: dict | None = None, sport: str = "nfl",
+                     form_weights: dict | None = None,
+                     player_mult: float | None = None,
+                     usage: dict | None = None) -> Projection:
+    """``context`` (NFL Phase 2) carries measured team tendency:
+    ``{"profiles": {team: profile}, "league": {...}}`` from
+    engine.teamcontext. Absent = the model prices exactly as before, which
+    is what makes the whole layer A/B-testable against the backtest
+    baseline instead of shipped on faith.
+
+    ``sport`` keys the self-tuning stores. ``form_weights`` /
+    ``player_mult`` are the fitters' explicit candidates and always beat
+    the stores — a fitter must never read the store it is refitting
+    (see engine/mlb/projection.py, the same contract).
+
+    ``usage`` is this player's measured volume role for this market
+    (engine.nflusage.volume_roles): recent opportunities per game and
+    season per-opportunity efficiency. Live boards pass it; the backtest
+    never does, so the fitted temperatures keep meaning what they meant
+    and journalfit audits the live drift."""
+    if form_weights is None:
+        from .formfit import weights_for
+        form_weights = weights_for(sport, prop.market)
+    form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg,
+                        weights=form_weights)
+
+    matchup = evaluate_matchup(prop, opponent_team.defense, game,
+                               measured_context=bool(context))
+    weather = evaluate_weather(game.weather)
+    injury = evaluate_injuries(prop, game.injuries)
+
+    weather_mult = weather.multipliers.get(prop.market, 1.0)
+
+    # Hand-tuned total multiplier, bounded so no single factor runs away with
+    # the projection. Kept tight because sportsbook lines are efficient.
+    rule_mult = clamp(
+        matchup.multiplier * weather_mult * injury.multiplier,
+        0.85, 1.18,
+    )
+
+    # Measured team tendency — pace, pass rate, offensive efficiency. Kept
+    # OUTSIDE rule_mult's clamp on purpose: that clamp exists to stop the
+    # hand-tuned factors compounding, and this is a different kind of
+    # input with its own bound. Folding it in would make a fast, pass-heavy
+    # offence indistinguishable from a merely favourable matchup.
+    ctx_mult, ctx_reasons = 1.0, []
+    if context:
+        from .teamcontext import context_multiplier, drift_multiplier
+        team = prop.team
+        if context.get("mode") == "drift":
+            ctx_mult, ctx_reasons = drift_multiplier(
+                (context.get("profiles") or {}).get(team),
+                (context.get("baseline") or {}).get(team), prop.market)
+        else:
+            ctx_mult, ctx_reasons = context_multiplier(
+                (context.get("profiles") or {}).get(team),
+                context.get("league") or {}, prop.market)
+
+    reasons: list[str] = []
+
+    # Usage bridge: blend the form mean against "recent volume × season
+    # efficiency" by sample size — thin outcome logs lean on the measured
+    # role, a full season of outcomes speaks for itself. Absent usage
+    # (backtests, other sports, un-ingested players) leaves the baseline
+    # exactly form.mean.
+    mean_base = form.mean
+    usage_why = ""
+    if usage and usage.get("opp_per_game") and usage.get("eff"):
+        est = float(usage["opp_per_game"]) * float(usage["eff"])
+        if est > 0:
+            w = form.sample_games / (form.sample_games + USAGE_PRIOR_GAMES)
+            mean_base = w * form.mean + (1.0 - w) * est
+            if form.mean > 0 and abs(mean_base / form.mean - 1.0) >= 0.02:
+                per, unit = {
+                    "targets": ("targets/gm", "per target"),
+                    "carries": ("carries/gm", "per carry"),
+                    "pass_att": ("att/gm", "per attempt"),
+                }.get(usage.get("opp_market"), ("touches/gm", "per touch"))
+                usage_why = (
+                    f"{float(usage['opp_per_game']):.1f} {per} "
+                    f"× {float(usage['eff']):.2f} {unit} — measured role says "
+                    f"{est:.1f}, weighted {1.0 - w:.0%} against form")
+                reasons.append(f"Usage bridge: {usage_why}")
+
+    if model is not None and model.has(prop.market):
+        # Learned magnitude replaces the hand-tuned matchup/weather multipliers
+        # (including the matchup module's game-script tilt — the feature
+        # vector already carries the spread); injuries stay on top (they're a
+        # separate, sparse signal the model isn't trained on). The rule
+        # modules still supply the reasons below.
+        from .ml.features import extract_features, vectorize
+        feat = vectorize(extract_features(prop, game, opponent_team.defense))
+        learned = model.predict_multiplier(feat, prop.market)
+        raw_mult = learned * injury.multiplier
+        total_mult = clamp(raw_mult, 0.70, 1.40)
+        mult_steps = [
+            chain.step("learned", learned,
+                       "Magnitude learned from settled results, which "
+                       "replaces the hand-tuned matchup and weather dials."),
+            chain.step("injury", injury.multiplier,
+                       "; ".join(injury.reasons)),
+            chain.cap_step(raw_mult, total_mult, 0.70, 1.40),
+        ]
+        reasons.append(f"Learned model adjustment ×{learned:.2f} (trained on historical data)")
+    else:
+        total_mult = rule_mult
+        raw_mult = matchup.multiplier * weather_mult * injury.multiplier
+        mult_steps = [
+            chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
+            chain.step("weather", weather_mult, "; ".join(weather.reasons)),
+            chain.step("injury", injury.multiplier, "; ".join(injury.reasons)),
+            chain.cap_step(raw_mult, total_mult, 0.85, 1.18),
+        ]
+
+    # THE RECENCY SHADE IS OBSERVED AND NO LONGER APPLIED — MEASURED
+    # 2026-09-03, engine/formcheck, walked forward over 2021-2025.
+    #
+    # `form.trend_mult` shaded the projection toward recent form, bounded
+    # in form.py to [0.90, 1.0]: asymmetric on purpose, since books price
+    # hot streaks fast and chasing them is a bettor trap. Sound
+    # reasoning, never once checked — `formcheck.predictors` scored the
+    # blend WITHOUT the shade, so the one hand-set factor between the
+    # measured window curve and the number on the card had never been
+    # scored against an outcome in any configuration.
+    #
+    # Scored now, as its own candidate, on every eligible player-week:
+    #
+    #     market        rank form   rank shaded    weeks form wins
+    #     pass_yds        0.3261       0.3113            68%
+    #     receptions      0.5518       0.5460            83%
+    #     rush_yds        0.6491       0.6430            73%
+    #     rec_yds         0.5501       0.5456            73%
+    #
+    # It loses the ORDERING in all four, loses RMSE in all four, and the
+    # paired per-week margins run t = 2.7 to 6.4. MAE is the only place
+    # it ever wins and it wins there by hundredths — the exact signature
+    # `_mean_week_rank`'s docstring warns about: "a predictor that shades
+    # every player toward the league mean wins on average error while
+    # ordering nobody, and ordering is the whole job".
+    #
+    # On passing yards it is worse than that. The shaded blend ranks
+    # 0.3113 against a plain season average's 0.3114 — the shade spends
+    # the entire measured advantage of the fitted window curve.
+    #
+    # WHAT MADE IT VISIBLE was the live board of 2026-09-03: 152 of 277
+    # props shaded down and NONE up, the only asymmetric factor on the
+    # board, and passing yards 14.1 yards under the book on average. A
+    # mean shift moves P(over) in proportion to 1/std, and pass_yds has
+    # the tightest distribution here by a factor of three (CV_FLOOR 0.16
+    # against rec_yds' 0.48), so the same 4% shade that washes out in
+    # receiving yards showed up there as a systematic bias.
+    #
+    # The OBSERVATION is kept — `form.trend` still labels a player hot or
+    # cold, the card still says so, and `betting._trend_alignment` still
+    # earns a confidence bonus from it. What is retired is multiplying
+    # the projection by an unmeasured constant that lost every time it
+    # was finally asked.
+    #
+    # MLB IS UNTOUCHED. engine/mlb/projection.py applies its own
+    # `trend_mult` and this measurement is NFL logs only; baseball needs
+    # the same run against its own history before anyone moves it.
+    #
+    # Player memory (engine/playerfit.py): the record's earned correction
+    # for players the blend persistently misreads.
+    if player_mult is None:
+        from .playerfit import mult_for
+        player_mult = mult_for(sport, prop.market, prop.player)
+    mean = mean_base * total_mult * ctx_mult * player_mult
+
+    # Uncertainty: never below the market-typical variance floor, and it grows
+    # as we push further from the player's own baseline.
+    cv_floor = CV_FLOOR.get(prop.market, 0.35) * max(mean_base, 1.0)
+    base_std = max(form.std, cv_floor)
+    adj_std = base_std * (1.0 + 0.5 * abs(total_mult - 1.0)
+                          + 0.5 * abs(ctx_mult - 1.0))
+    if form.sample_games < 4:
+        adj_std *= 1.20
+
+    if abs(player_mult - 1.0) >= 0.02:
+        direction = "high" if player_mult < 1.0 else "low"
+        reasons.append(f"Player memory: the record shows the blend runs "
+                       f"{direction} on him — corrected ×{player_mult:.2f}")
+    reasons += ctx_reasons
+    reasons += matchup.reasons
+    reasons += weather.reasons
+    reasons += injury.reasons
+
+    # Recent-form narrative. Both directions read the same way now: a
+    # note about the player, not a claim about the number. The cool-off
+    # line used to end "(projection shaded -7%)" and that sentence would
+    # be a lie the moment the shade stopped being applied above.
+    if form.trend == "up":
+        reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form")
+    elif form.trend == "down":
+        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form")
+
+    # THE CHAIN, in the order the code multiplied it. The usage bridge is
+    # recorded as a step rather than folded into the base so the reader can
+    # see the form mean the player's own games earned before the measured
+    # role pulled on it.
+    steps = []
+    if form.mean > 0:
+        base_val, base_src = form.mean, "form"
+        if abs(mean_base / form.mean - 1.0) > 1e-9:
+            steps.append(chain.step("usage", mean_base / form.mean, usage_why))
+    else:
+        # A form mean of zero cannot be multiplied INTO anything, so the
+        # blended number becomes the base and says so. Rare, but a chain
+        # that silently starts from zero would claim the model projected
+        # nothing and then arrive somewhere else.
+        base_val = mean_base
+        base_src = "usage" if mean_base != form.mean else "form"
+    steps += mult_steps
+    steps += [
+        # KEPT AT 1.0, not deleted. A flat step is a real finding (see
+        # engine/chain's docstring) and this one says something the
+        # reader should see: the model looked at his recent form, and
+        # recent form does not move the projection because measuring it
+        # said it should not.
+        chain.step("trend", 1.0,
+                   f"Last 3 games {form.trend_delta:+.1f} against prior "
+                   f"form — noted, and not applied to the number: "
+                   f"shading for it measured worse at ordering players "
+                   f"in all four markets."
+                   if form.trend != "flat" else
+                   "Recent games sit where the longer sample does."),
+        chain.step("context", ctx_mult, "; ".join(ctx_reasons)),
+        chain.step("player", player_mult,
+                   "The record's own correction for players this blend "
+                   "persistently misreads." if abs(player_mult - 1.0) >= 0.005
+                   else "Nothing in the record says this blend misreads him."),
+    ]
+    return Projection(
+        mean=mean,
+        std=adj_std,
+        form=form,
+        matchup=matchup,
+        weather=weather,
+        injury=injury,
+        reasons=reasons,
+        chain=chain.build(base_val, base_src, steps, mean,
+                          weights=dict(form_weights or WINDOW_WEIGHTS),
+                          sample_games=form.sample_games,
+                          shrunk_to=form.shrunk_to),
+    )

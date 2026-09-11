@@ -1,0 +1,362 @@
+# Run these when you're home
+
+Ethan, 2026-09-09, from work: *"please save all the code you need me too
+run for when I'm home."*
+
+Short list, in order. Everything is copy-paste. **Block 1 is the only one
+that changes anything** — the rest are read-only and just tell me what
+the box is actually doing, which is the half I cannot see from here.
+
+Paste the output back with the block number and I can carry on.
+
+The long history of one-off checks lives in `DROPLET_CHECKS.md`; this
+file is only what is outstanding right now, and lines get deleted from it
+as they are done.
+
+---
+
+## 0. THE SITE IS DOWN — run this first, before anything else
+
+Ethan, 2026-09-09, with a photo: *"the site crashed. It won't load
+anything and won't show logos."*
+
+**What that screenshot actually says.** The page frame, the buttons and
+the nav all drew — that is the service worker serving the shell it
+cached. `/data/` and `/api/` are the only things it NEVER caches, on
+purpose, because a stale board is worse than an honest error. So "10
+boards failed to load" plus a working-looking page means one thing: **the
+app is not answering, and the browser is showing you a photograph of it.**
+The missing logos are the same fact — images are not cached either.
+
+**Bring it back first, ask why second.** The journal keeps the history, so
+restarting costs you no evidence:
+
+```bash
+sudo systemctl restart qellys && sleep 3 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/data/recommendations.json
+```
+
+`200` means it is back. Anything else, keep going.
+
+**Then paste me all of this at once** — it answers every likely cause in
+one go, and I cannot see any of it from here:
+
+```bash
+echo "=== service ==="; systemctl status qellys --no-pager -l | head -15
+echo "=== restarts ==="; systemctl show qellys -p NRestarts -p MemoryPeak -p MemoryCurrent
+echo "=== last 40 log lines ==="; journalctl -u qellys -n 40 --no-pager
+echo "=== was it OOM-killed? ==="; sudo dmesg -T 2>/dev/null | grep -iE "killed process|out of memory" | tail -5
+echo "=== disk ==="; df -h /srv /var | sed 1d
+echo "=== memory ==="; free -m
+echo "=== are the board files even there ==="; ls -la /srv/qellys/web/data/*.json 2>/dev/null | head -5
+echo "=== how old are they ==="; date; find /srv/qellys/web/data -name '*.json' -newermt '-2 hours' | wc -l
+echo "=== which commit is deployed ==="; cd /srv/qellys && git log --oneline -3
+```
+
+**The three things it can be, and what each looks like:**
+
+* **Out of memory.** `NRestarts` climbing, `dmesg` naming a killed
+  process. This box is 2GB with `MemoryMax=1600M` and it has done this
+  before (2026-09-02, the in-process Wednesday refit). Restarting works
+  and it comes back.
+* **Out of disk.** `df` at 100%. The builds write and the app cannot.
+  Clear the cache directory, not the data: the boards are the product.
+* **A bad deploy.** The auto-updater pulls every five minutes, so a
+  commit that will not import takes the service down within five minutes
+  of being pushed. `journalctl` shows a traceback on startup rather than
+  a request. If that is what it is:
+
+```bash
+cd /srv/qellys && git log --oneline -5          # find the last one that worked
+sudo systemctl stop qellys-update.timer         # stop the updater re-pulling it
+cd /srv/qellys && git checkout <that-commit> && sudo systemctl restart qellys
+```
+
+Tell me the commit and I will fix forward; do not leave the updater off
+longer than that, or the boards stop rebuilding.
+
+---
+
+## 1. The one thing that needs your hands (2 minutes)
+
+A `git pull` does not install a systemd unit. The auto-updater restarts
+the service; it does not re-copy the file. So the allocator setting that
+landed today is sitting in the repo doing nothing until you run this.
+
+What it is: glibc hands every thread its own malloc arena and never
+reuses a freed block across arenas. `hashlib.scrypt` — the password hash
+— asks for 16MB a call, so a burst of sign-ins used to leave one retained
+16MB block per thread that ever hashed, and memory followed the number of
+CALLERS rather than the number running at once. Measured here: 64
+concurrent sign-ins peaked at 963MB against your `MemoryMax=1600M`. With
+this set it is 219MB, and slightly faster.
+
+```bash
+cd /srv/qellys && git pull --ff-only
+sudo cp deploy/qellys.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart qellys
+```
+
+Then confirm it actually took — this reads the live process's own
+environment, so it cannot be fooled by an edit that did not get applied:
+
+```bash
+tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value qellys)/environ \
+  | grep -E 'MALLOC|TZ'
+```
+
+Expected: `MALLOC_ARENA_MAX=2` and `TZ=America/New_York`. If MALLOC is
+missing, the copy or the daemon-reload did not happen.
+
+---
+
+## 2. What the box is actually doing (read-only)
+
+This is the block I most want back. I have been reasoning about a 2GB
+droplet with a 1600M cap from what the unit file says; these say what is
+true.
+
+```bash
+free -m
+uptime
+systemctl status qellys --no-pager | head -20
+```
+
+Whether the memory cap has ever been approached or hit — the dangerous
+case is the kernel reclaiming rather than killing, which leaves no OOM
+line at all, so both counts matter:
+
+```bash
+journalctl -u qellys --since "7 days ago" | grep -ci oom
+journalctl -k --since "7 days ago" | grep -icE "out of memory|killed process"
+systemctl show qellys -p MemoryCurrent -p MemoryPeak -p MemoryMax
+```
+
+`MemoryPeak` is the one to read: if it is anywhere near 1600M, the cap is
+doing more than sitting there.
+
+---
+
+## 3. Are the four sign-ups actually working? (read-only)
+
+Accounts, sessions, and whether anyone has saved anything. No emails or
+verifiers are printed — counts and dates only.
+
+```bash
+cd /srv/qellys && python3 - <<'PY'
+import sqlite3, time
+c = sqlite3.connect("data/accounts.db")
+c.row_factory = sqlite3.Row
+n = lambda q: c.execute(q).fetchone()[0]
+print("users            ", n("SELECT COUNT(*) FROM users"))
+print("sessions live    ", n("SELECT COUNT(*) FROM sessions WHERE expires_at > %f" % time.time()))
+print("sessions expired ", n("SELECT COUNT(*) FROM sessions WHERE expires_at <= %f" % time.time()))
+print("saved sections   ", n("SELECT COUNT(*) FROM user_data"))
+print("\nsign-ups by day:")
+for r in c.execute("SELECT date(created_at,'unixepoch','localtime') d, COUNT(*) k"
+                   " FROM users GROUP BY d ORDER BY d DESC LIMIT 10"):
+    print("  %s  %d" % (r["d"], r["k"]))
+print("\nlast seen (most recent 10, no addresses):")
+for r in c.execute("SELECT id, datetime(last_seen,'unixepoch','localtime') s"
+                   " FROM users ORDER BY last_seen DESC NULLS LAST LIMIT 10"):
+    print("  user %-4s %s" % (r["id"], r["s"] or "never"))
+PY
+```
+
+---
+
+## 4. What the traffic looks like (read-only)
+
+Caddy's log is the only place the real request pattern exists. Requests
+per hour, the busiest paths, and whether anybody is being turned away.
+
+```bash
+sudo awk -F'"' '{print $0}' /var/log/caddy/qellys.log 2>/dev/null | tail -1 >/dev/null \
+  && echo "log readable" || echo "log NOT readable — try with sudo -i"
+
+# requests per hour today
+sudo python3 - <<'PY'
+import json, collections, glob, gzip, io
+c = collections.Counter(); status = collections.Counter(); paths = collections.Counter()
+for p in sorted(glob.glob("/var/log/caddy/qellys.log*")):
+    op = gzip.open if p.endswith(".gz") else open
+    try:
+        for line in op(p, "rt", errors="ignore"):
+            try: e = json.loads(line)
+            except Exception: continue
+            ts = e.get("ts")
+            if not ts: continue
+            import datetime
+            h = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:00")
+            c[h] += 1
+            status[e.get("status")] += 1
+            paths[(e.get("request") or {}).get("uri","")[:60]] += 1
+    except OSError:
+        pass
+print("requests per hour (last 12):")
+for h, k in sorted(c.items())[-12:]:
+    print("  %s  %5d" % (h, k))
+print("\nstatus codes:", dict(status.most_common(8)))
+print("\ntop paths:")
+for p, k in paths.most_common(12):
+    print("  %6d  %s" % (k, p))
+PY
+```
+
+Two numbers I care about in that output:
+
+* **`429`** — anybody hitting the rate limit. A real subscriber
+  refreshing hard should never see one. If they do, `RATE_READ_PER_MIN`
+  (server.py, currently 300/min per IP) is too tight for how the app
+  actually polls, and I will raise it.
+* **`503`** — the load shedder firing. Should be zero at this traffic.
+  Anything above zero means `MAX_INFLIGHT` is binding and I want to know.
+
+---
+
+## 4b. The code box is gone from the two paying screens — check the third
+
+Removed 2026-09-09 at your ask: the "Have a code?" box is off the PLANS
+page and off the CHECKOUT page, which are the two you circled.
+
+It is still on the ACCOUNT page, deliberately. That box never took a
+Stripe discount code and never could — those go in Stripe's own field on
+Stripe's page. It takes a COMP code, which writes free access here with
+no card at all. If I had deleted all three, any code you have already
+handed out would have stopped working with nothing to say so.
+
+I could not verify the account page from here because it needs a signed-in
+session. Two minutes on your phone, signed in:
+
+1. Open the account page. There should still be a **Have a code?** box.
+2. Type any nonsense and press Apply — it should say the code is not
+   valid, not throw or go blank.
+3. Plans page and checkout page: **no** code box anywhere. The FAQ entry
+   "I have a code." now says to use the account page, and says plainly
+   that a discount code for a paid plan is a different thing that goes in
+   on Stripe's page.
+
+If you would rather comp codes went away entirely, say so and I will take
+the account box out too — it is one line. I did not do it unasked because
+it is a working capability you did not mention, and losing it is the kind
+of thing you find out about from a friend who cannot get in.
+
+---
+
+## 4c. Backups — the one where the downside is unrecoverable
+
+Now that there is money and real accounts, this is the highest-stakes
+thing on the box. The script itself is good (it uses SQLite's backup API
+rather than `cp`, so a snapshot taken mid-write is still consistent), and
+I fixed a real hole in its verifier today — see the commit. What it
+cannot tell me from here is whether the nightly job is actually RUNNING
+and whether the offsite copy exists.
+
+```bash
+cd /srv/qellys && ./deploy/backup.sh --check
+```
+
+Read three things in that output:
+
+* **`ok: accounts (Nh old, ...)`** followed by a row count. It now prints
+  what is IN the backup — `5 users`, and so on. Until today it printed
+  "3 table(s)" and would have said `ok` for a backup holding NOTHING,
+  which I demonstrated: five accounts live, zero in the backup, verdict
+  ok. If you ever see **`EMPTY IN THE BACKUP`**, stop and tell me — that
+  message means the last good copy is a countdown away from rotating out.
+* **The age.** Over 48h and it says STALE, which means the 4am cron is
+  not running.
+* **`OFFSITE:`**. If it says `none`, every backup is on the same disk as
+  the database, which survives a mistake but not a dead droplet.
+
+If offsite is not set up, this proves a destination end to end before
+trusting it:
+
+```bash
+cd /srv/qellys && QB_BACKUP_REMOTE=b2:qellys-backups/db ./deploy/backup.sh --test-remote
+```
+
+And the cron line, if `--check` says the backups are stale:
+
+```bash
+crontab -l | grep -c backup.sh    # 0 means it was never installed
+```
+
+`docs/BACKUPS.md` has the full setup including the Backblaze/S3 route.
+
+---
+
+## 5. Board health, same as always (read-only)
+
+```bash
+cd /srv/qellys && python3 -c "import launch; launch.show_boards()"
+cd /srv/qellys && python3 launch.py --why-empty nfl | head -40
+```
+
+---
+
+## 5b. Which numbers we compute and nobody ever sees (read-only)
+
+You asked for *"every single piece of data we have"*. I checked every
+file in `web/data/` has a reader — that part came back clean. Checking
+every FIELD INSIDE those files is this, and it only works where real
+data lives, because half the fields are null on my machine and a null
+tells you nothing.
+
+```bash
+cd /srv/qellys && python3 -m engine.feedaudit
+```
+
+It prints every key the build publishes that no page names. Two kinds
+land in that list and they look identical from the outside:
+
+* something computed correctly every cycle that nobody can see — a
+  feature that is silently off; or
+* an internal the build needs and the front end was never meant to read,
+  which is fine.
+
+Read the marks, not just the names:
+
+* **no mark** — the field is carrying real values on the box and no page
+  shows them. This is the short list and the interesting one.
+* **`[always empty]`** — nobody reads it AND it is empty in the file. On
+  the droplet that is a stronger signal than on my machine, but still
+  check before deleting anything.
+* **`internal — <reason>`** — already classified, only shown with
+  `--all`. If a name in the report should be here instead, tell me the
+  name and I will write the reason down beside it.
+
+It never exits nonzero and it touches nothing. One feed at a time if the
+list is long:
+
+```bash
+cd /srv/qellys && python3 -m engine.feedaudit record.json
+```
+
+Paste me the output and I will turn each line into either a fix or a
+sentence in the allow-list. On my box the names carrying real values
+were `starting_bankroll`, `clv_coverage`, `curve_from`, `predmarket`,
+`staked_d` and `tax_by_book` — I expect that list to look different
+where the real numbers are.
+
+---
+
+## 6. If the site ever feels slow while you are on it
+
+Run this WHILE it feels slow, not after — it is a snapshot:
+
+```bash
+systemctl show qellys -p MemoryCurrent -p TasksCurrent
+uptime
+ps -o pid,rss,pcpu,etime,cmd -p $(systemctl show -p MainPID --value qellys)
+sudo tail -50 /var/log/caddy/qellys.log | python3 -c "
+import sys, json
+for l in sys.stdin:
+    try: e = json.loads(l)
+    except Exception: continue
+    print('%6.0fms  %3s  %s' % (1000*e.get('duration',0), e.get('status'),
+          (e.get('request') or {}).get('uri','')[:70]))
+"
+```
+
+The last one prints how long each recent request actually took. Anything
+over ~200ms on an `/api/` path is worth me seeing.
