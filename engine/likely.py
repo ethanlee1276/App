@@ -1048,7 +1048,19 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "reasons": row.get("reasons") or [],
         "game_script": row.get("game_script"),
         "recent_values": row.get("recent_values") or [],
-        "game_date": row.get("date", ""), "kickoff": row.get("kickoff", ""),
+        # THE GAME'S OWN DAY, READ FROM THE FIELD THAT HOLDS IT. This
+        # said `row.get("date")`, and a prop row has no `date` at all —
+        # `pipeline._rec_to_dict` writes the kickoff day to `game_date`
+        # (2026-09-13) and leaves `date` unset. So every prop-derived
+        # likelihood row carried an EMPTY game_date, and `ledger.
+        # game_day_for` then had nothing to stamp a calendar day from.
+        # Football settles on a week label, so the empty field was the
+        # difference between a row that can be graded and one that sits
+        # in a bucket called "2026-W01" forever (134 of them on
+        # 2026-09-11). Game rows were unaffected: a game bet's `date` IS
+        # its day, which is why this only ever bit the player rows.
+        "game_date": row.get("game_date") or row.get("date", ""),
+        "kickoff": row.get("kickoff", ""),
         "headshot": row.get("headshot", ""),
         "position": row.get("position", ""),
         "usage_role": row.get("usage_role", ""),

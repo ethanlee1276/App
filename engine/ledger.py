@@ -1000,11 +1000,25 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         row_date = date if sport == "nfl" \
             else str(r.get("game_date") or "").strip() or date
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
-            (now, sport, row_date, player, market,
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
+            # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
+            # Eleven inserts write this table and only three filled this
+            # column. `date` is the SETTLE KEY and for football it is a
+            # WEEK ("2026-W01"); `game_day` is what every window reads
+            # (`day_expr`), so a row without it can never be inside any
+            # calendar window `maintenance._open_bet_days` can build.
+            #
+            # Measured on the droplet 2026-09-11: 134 open NFL rows in a
+            # bucket called "2026-W01" — the Most Likely board, the stale
+            # flags and the long shots, every one of them journalled by an
+            # insert below this line. Ethan, that morning: "None of the nfl
+            # bets from the past 2 nights for the most likely or the edge
+            # bets have settled."
+            (game_day_for(r, date),
+             now, sport, row_date, player, market,
              side, line, r.get("book", ""), odds,
              r.get("projection"), r.get("model_prob"),
              # NOT an edge claim. This board is ranked on probability and
@@ -1076,13 +1090,15 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
             else str(r.get("game_date") or "").strip() or date
         from .losspatterns import minutes_until
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category, lead_min, "
             "park_hr, wind_out, roofed, lineup_slot, lineup_conf) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', "
             "?, ?, ?, ?, ?, ?, ?)",
-            (now, sport, row_date, r["player"], market, "OVER", 0.5,
+            # The calendar day — see the note in `log_most_likely`.
+            (game_day_for(r, date),
+             now, sport, row_date, r["player"], market, "OVER", 0.5,
              r.get("book", ""), odds, None, r.get("model_prob"),
              r.get("edge", r.get("ev_per_unit")), r.get("confidence"),
              r.get("grade", "Watch"), flat_stake, 0.0, category,
@@ -1156,11 +1172,13 @@ def log_priced_out(conn, result: dict, flat_stake: float = 0.1) -> int:
                 or r.get("has_market") is False):
             continue
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'pricedout')",
-            (now, sport, date, r["player"], r["market"],
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'pricedout')",
+            # The calendar day — see the note in `log_most_likely`.
+            (game_day_for(r, date),
+             now, sport, date, r["player"], r["market"],
              (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
              r.get("book", ""), odds, r.get("projection"), r.get("hit_prob"),
              r.get("edge"), r.get("confidence"), r.get("grade", "?"),
@@ -1200,11 +1218,13 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
         if not r.get("player") or not odds or (r.get("book") or "").lower() == "proxy":
             continue
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, move_delta, move_steam, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'loose')",
-            (now, sport, date, r["player"], r["market"],
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'loose')",
+            # The calendar day — see the note in `log_most_likely`.
+            (game_day_for(r, date),
+             now, sport, date, r["player"], r["market"],
              (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
              r.get("book", ""), odds, None, r.get("hit_prob"), r.get("edge"),
              None, r.get("grade", "Near miss"), flat_stake, 0.0,
@@ -1458,13 +1478,15 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
         except (TypeError, ValueError):
             continue
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'stale')",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'stale')",
             # Slate-level date first: it's the key settling maps to the
             # history DB (NFL journals '2025-W05', not the game's ISO day).
-            (now, sport, slate_date or r.get("date"), r["player"], market,
+            # …and the calendar day beside it — see `log_most_likely`.
+            (game_day_for(r, slate_date or ""),
+             now, sport, slate_date or r.get("date"), r["player"], market,
              (r.get("side") or "OVER").upper(), line, r.get("book", ""), odds,
              None,
              # hit_prob = the field's consensus implied — what the flag
@@ -1614,11 +1636,13 @@ def log_form_picks(conn, result: dict, team_form: dict,
         if not odds:
             continue                      # no real price — nothing to sample
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'form')",
-            (now, sport, slate_date or g.get("date"), hot, "moneyline",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'form')",
+            # The calendar day — see the note in `log_most_likely`.
+            (game_day_for(g, slate_date or ""),
+             now, sport, slate_date or g.get("date"), hot, "moneyline",
              "OVER", 0.5, "best", int(odds), None,
              # edge column carries the form gap being sampled.
              None, round(abs(sh - sa), 3), None, "Form", flat_stake, 0.0))
@@ -1664,11 +1688,15 @@ def log_ufc_picks(conn, result: dict) -> int:
         if not odds or not p.get("pick") or not date:
             continue
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'ufc')",
-            (now, "ufc", date, p["pick"], "moneyline", "OVER", 0.5,
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'ufc')",
+            # A no-op for a daily sport, whose `date` already IS the
+            # day — stamped anyway so the rule holds at every insert
+            # rather than at the ones somebody remembered.
+            (game_day_for(p, date),
+             now, "ufc", date, p["pick"], "moneyline", "OVER", 0.5,
              p.get("book", ""), int(odds), None, p.get("p_final"),
              p.get("edge"), None, "Pick",
              float(p.get("stake_units") or 0), 0.0))
