@@ -133,7 +133,10 @@ def test_the_gate_is_one_function_not_two_copies():
     # override the bar takes — see `likely.RESERVE_MIN_PROB`. Pinned with
     # the parameter named, so a second knob cannot be added quietly.
     assert "def admissible(row: dict, floor=None) -> str:" in src
-    at = src.index("    def keep(got, kind: str) -> bool:")
+    # `market_funnel` (2026-09-15) is a TALLY the gate writes into beside
+    # the kind's — the same verdict recorded per market — never a second
+    # knob on the bar: `admissible` still takes `floor` and nothing else.
+    at = src.index("    def keep(got, kind: str, market_funnel: dict | None = None) -> bool:")
     body = src[at:src.index("out.sort(", at)]
     # Every maker's loop goes through it — watch rows, prop rows and,
     # since 2026-09-02, the game cards (likely.from_game_bet). Since

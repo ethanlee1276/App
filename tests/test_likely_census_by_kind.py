@@ -110,7 +110,8 @@ def test_each_kind_counts_what_it_was_offered_kept_and_refused():
     # the page whether the shelf is thin or not.
     assert kinds["td"] == {"offered": 3, "kept": 1, "duplicate": 1, "shown": 1,
                            "refused": {FLOOR: 1}}, kinds["td"]
-    assert kinds["prop"] == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 1,
+    assert {k: v for k, v in kinds["prop"].items() if k != "markets"} \
+        == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 1,
                              "refused": {"no real book price": 1}}, kinds["prop"]
     assert kinds["game"] == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 2,
                              "refused": {FLOOR: 1}}, kinds["game"]
@@ -171,7 +172,8 @@ def test_nothing_offered_reads_as_nothing_offered():
     _board, flat, kinds = _build()
     assert flat == {}
     for kind in ("td", "prop", "game"):
-        assert kinds[kind] == {"offered": 0, "kept": 0, "duplicate": 0, "shown": 0,
+        assert {k: v for k, v in kinds[kind].items() if k != "markets"} \
+            == {"offered": 0, "kept": 0, "duplicate": 0, "shown": 0,
                                "refused": {}}, kinds[kind]
 
 

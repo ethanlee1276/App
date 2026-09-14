@@ -1516,13 +1516,21 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         # Passing the set in is how that is guaranteed.
         seen = set() if seen is None else seen
 
-        def keep(got, kind: str) -> bool:
-            """The one gate. Every row passes through here or does not ship."""
+        def keep(got, kind: str, market_funnel: dict | None = None) -> bool:
+            """The one gate. Every row passes through here or does not ship.
+
+            ``market_funnel`` is the prop row's own market's tally, kept
+            beside the kind's — the same verdict written twice, never a
+            second judgement."""
             why = admissible(got, floor=floor)
             if why:
                 _refuse(funnel[kind]["refused"], why)
+                if market_funnel is not None:
+                    _refuse(market_funnel["refused"], why)
                 return False
             funnel[kind]["kept"] += 1
+            if market_funnel is not None:
+                market_funnel["kept"] += 1
             return True
 
         funnel["td"]["offered"] = len(td_picks or []) + len(td_watch or [])
@@ -1537,9 +1545,26 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             seen.add(key)
             out.append(got)
         funnel["prop"]["offered"] = len(props or [])
+        # PER MARKET, because "the board is short" is not a question
+        # anyone asks. Ethan, 2026-09-15: "some days we'd be showing
+        # four or five passing props, and then the next day they'd all
+        # be gone ... I didn't see any passing yard props." A census by
+        # reason across the whole board cannot say which market lost its
+        # rows or to which bar; this can, and the page prints it.
+        markets_f = funnel["prop"].setdefault("markets", {})
         for row in props or []:
+            mk = str(row.get("market") or "")
+            mf = markets_f.setdefault(mk, {"offered": 0, "priced": 0, "kept": 0,
+                                           "shown": 0, "refused": {}})
+            mf["offered"] += 1
+            if row.get("has_market"):
+                mf["priced"] += 1
+            local: dict = {}
             got = from_prop(row, bettable, fits=fits, sport=sport,
-                            census=funnel["prop"]["refused"], floor=floor)
+                            census=local, floor=floor)
+            for why, n in local.items():
+                funnel["prop"]["refused"][why] = funnel["prop"]["refused"].get(why, 0) + n
+                mf["refused"][why] = mf["refused"].get(why, 0) + n
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides — but
@@ -1551,7 +1576,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             if key in seen:
                 funnel["prop"]["duplicate"] += 1
                 continue
-            if not keep(got, "prop"):
+            if not keep(got, "prop", mf):
                 continue
             seen.add(key)
             out.append(got)
@@ -1670,6 +1695,10 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # into the journal.
     for r in out:
         funnel[r.get("kind") or "prop"]["shown"] += 1
+        if (r.get("kind") or "prop") == "prop":
+            mf = funnel["prop"].setdefault("markets", {}).get(str(r.get("market") or ""))
+            if mf is not None:
+                mf["shown"] += 1
     refused: dict = {}
     for kind in KINDS:
         for why, n in funnel[kind]["refused"].items():

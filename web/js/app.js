@@ -6954,6 +6954,32 @@ function showableLikelyRow(r) {
    The engine already counts it and `engine/likely.build` already hands
    it back. This is the same sentence the empty state gets, in the place
    the question is actually asked. */
+/* THE FUNNEL, MARKET BY MARKET (Ethan, 2026-09-15: "some days we'd be
+   showing four or five passing props, and then the next day they'd all
+   be gone"). Offered is every prop the board built for the market;
+   priced, the ones a book had a number on; shown, the ones on this
+   page; and the bars that turned the rest away, largest first. A
+   market with nothing offered tonight is listed as that, not omitted. */
+function likelyMarketFunnel(kinds) {
+  const ms = ((kinds || {}).prop || {}).markets || {};
+  const keys = Object.keys(ms);
+  if (!keys.length) return "";
+  keys.sort((a, b) => (ms[b].offered || 0) - (ms[a].offered || 0));
+  const rows = keys.map((mk) => {
+    const m = ms[mk] || {};
+    const why = Object.entries(m.refused || {})
+      .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+      .slice(0, 2).map(([k, n]) => `${n} ${escapeHtml(k)}`).join(" · ");
+    return `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:3px 0">
+      <b style="min-width:120px">${escapeHtml(marketWord(mk))}</b>
+      <span style="font-variant-numeric:tabular-nums">${m.offered || 0} offered ·
+        ${m.priced || 0} priced · ${m.shown || 0} shown</span>
+      ${why ? `<span style="opacity:.7">${why}</span>` : ""}</div>`;
+  }).join("");
+  return `<div class="ls-note" style="opacity:.8"><b>Where each market’s props went.</b>
+    ${rows}</div>`;
+}
+
 function likelyRefusedNote(census, shown) {
   const c = census || {};
   const total = Object.values(c).reduce((n, v) => n + (Number(v) || 0), 0);
@@ -7088,7 +7114,8 @@ function renderLikely() {
     shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
     ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
     price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</div>
-    ${likelyRefusedNote(state.data.likely_census, rows.length)}`;
+    ${likelyRefusedNote(state.data.likely_census, rows.length)}
+    ${likelyMarketFunnel(state.data.likely_census_by_kind)}`;
   /* SHELVES, NOT ONE FLAT LIST. Ethan, 2026-08-30: "for someone betting
      nfl, they wanna find good props and td props, so lets lay it out that
      way." Every market used to be interleaved by probability, which is
