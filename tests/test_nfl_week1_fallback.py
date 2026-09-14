@@ -353,17 +353,18 @@ def test_the_board_does_not_claim_a_verdict_it_never_reached():
     # changed. What matters is that schedule-only is TESTED before the
     # default branch runs, so a board with nothing built is never told to
     # loosen sliders that have nothing to filter.
-    # Inside renderRecommended's empty branch only. "Loosen the sliders"
-    # also appears twice in the COMMENTS above it explaining why it is
-    # bad advice here, and the first of those sits before the guard — so
-    # a file-wide index() found the comment and called the code wrong.
+    # Inside renderRecommended's empty branch only. The default branch
+    # told a reader to loosen sliders until that panel was removed on
+    # 2026-09-14; it names the model's own bars now. Either way it is
+    # the wrong answer on a schedule-only build, where nothing was ever
+    # built to hold — so the ORDER is what this pins.
     i = app.index("function renderRecommended(")
     body = app[i:app.index("\n  // Group by market", i)]
     guard = body.index('=== "schedule-only"')
     cause = body.index("no prop has been built")
-    advice = body.index("msg = `Loosen the sliders")
+    advice = body.index('msgTitle = "Nothing cleared the model’s bars tonight"')
     assert guard < cause < advice, \
-        "schedule-only still falls through to \"loosen the sliders\""
+        "schedule-only still falls through to the default empty message"
 
 
 

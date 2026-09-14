@@ -467,14 +467,18 @@ def test_the_venue_block_stays_in_the_room_you_land_on():
     assert "gamebets" not in board and "rest-watch" not in board
 
 
-def test_the_sliders_travel_with_the_cards_they_filter():
-    """A Min-edge dial in a room containing no prop is a control that does
-    nothing to anything on screen."""
+def test_the_slider_panel_is_gone_and_the_cards_still_have_their_room():
+    """The panel travelled with the cards it filtered, which is why
+    `"rec-controls"` was in this list. Ethan had it removed on
+    2026-09-14 ("it seems like it's not working and also it's not
+    needed"), so the room is the cards alone and nothing places a block
+    that no longer exists — see tests/test_slider_panel_retired.py."""
     js = _js()
     i = js.index("const REC_ROOMS = [")
     board = js[i:js.index('["gamebets"', i)]
-    assert '"rec-controls"' in board and '"cards"' in board
-    assert 'id="rec-controls"' in _read("web", "index.html")
+    assert '"cards"' in board
+    assert '"rec-controls"' not in board, "the room still places a panel that is gone"
+    assert 'id="rec-controls"' not in _read("web", "index.html")
 
 
 def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
@@ -493,9 +497,12 @@ def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
     at = main.index("  groupRecommended();")
     for renderer in ("renderRecommended();", "renderLikelyTop();"):
         assert main.index(f"  {renderer}") < at, renderer
-    # The slider path re-renders the board and must re-group with it.
-    assert ("renderGameBets(); renderRecommended(); groupRecommended();"
-            in js)
+    # THE BANKROLL PATH re-renders the board and must re-group with it.
+    # The slider path did too, and was asserted here until 2026-09-14,
+    # when the panel that drove it was removed (tests/test_slider_panel_retired.py).
+    bank = _fn(js, "const onBankrollChange = ")
+    assert bank.index("renderRecommended();") < bank.index("groupRecommended();"), \
+        "entering a bankroll re-renders the board without re-judging the rooms"
     body = _fn(js, "function subtabbedDOM(")
     assert "const live = groups.filter" in body, "emptiness must be recomputed"
 

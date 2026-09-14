@@ -91,19 +91,19 @@ def test_the_note_is_actually_rendered():
     assert "host.innerHTML += elsewhereNote;" in body, body[-600:]
 
 
-def test_an_empty_grid_does_not_blame_the_sliders_for_a_display_rule():
-    """"No props clear your filters" is FALSE when every one of them did
-    and a display rule held them — and it sends a reader to a knob that
-    cannot change the answer, the same wrong advice the census branch
-    beside it exists to stop giving."""
+def test_an_empty_grid_does_not_blame_the_bars_for_a_display_rule():
+    """"Nothing cleared the model's bars" is FALSE when every one of them
+    did and a display rule held them — the same wrong answer the census
+    branch beside it exists to stop giving. (It read "No props clear
+    your filters" beside a slider panel until 2026-09-14.)"""
     body = _fn("renderRecommended")
     i = body.index("} else if (elsewhere.length) {")
     seg = body[i:i + 900]
     assert "home-run dart" in seg, seg[:200]
     assert "#longshots" in seg, seg[:200]
     assert "journaled" in seg, "it does not say they are still real bets"
-    # And the slider message is still there for the case it IS the answer.
-    assert "No props clear your filters" in body
+    # And the bars message is still there for the case it IS the answer.
+    assert "Nothing cleared the model’s bars tonight" in body
 
 
 def test_the_analyzed_note_no_longer_absorbs_them():

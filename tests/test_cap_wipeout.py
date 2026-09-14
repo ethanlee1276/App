@@ -77,16 +77,18 @@ def test_the_page_reads_the_field_the_build_actually_publishes():
 def test_the_wipeout_branch_is_read_before_every_other_empty_reason():
     """On a wipeout the picks DID clear the gate and DO carry real
     prices — they were zeroed one step later — so every downstream branch
-    reads the slate correctly and answers the wrong question. The sliders
-    branch is the one that used to catch it."""
+    reads the slate correctly and answers the wrong question. The last
+    branch is the one that used to catch it — "No props clear your
+    filters" until the slider panel was removed on 2026-09-14, and the
+    model's-own-bars sentence since."""
     body = _fn("renderRecommended")
     at = body.index("const capped = capWipeoutNote();")
     assert at < body.index("if (recs.length && !real.length)"), body[at:at + 80]
-    assert at < body.index("No props clear your filters")
+    assert at < body.index("Nothing cleared the model’s bars tonight")
     # And it is a branch, not a note appended beside the wrong advice.
     assert "if (capped) {" in body, body[at:at + 200]
     first = body.index("if (capped) {")
-    assert "Loosen the sliders" not in body[first:body.index("} else if", first)]
+    assert "came up short on price" not in body[first:body.index("} else if", first)]
 
 
 def test_the_note_is_escaped_before_it_reaches_the_page():

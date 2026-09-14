@@ -58,7 +58,7 @@ def test_the_best_bets_empty_card_no_longer_repeats_it():
     assert "${censusFunnelHTML()}" not in card, \
         "the Best Bets empty card is drawing the funnel again"
     # And it still explains itself in words.
-    assert "Loosening the\n           sliders shows what was held and why" in card
+    assert "The board below\n           names what was held and why" in card
 
 
 def test_the_board_keeps_it():

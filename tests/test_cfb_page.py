@@ -477,10 +477,16 @@ def test_a_conditional_is_not_counted_as_a_recommended_bet():
     assert "!r.conditional" in fn
 
 
-def test_a_conditional_is_still_visible_without_show_all():
-    """A bet you cannot see is not one you can go and confirm."""
+def test_a_conditional_is_still_visible_on_the_board():
+    """A bet you cannot see is not one you can go and confirm.
+
+    This read `state.showAll ? true : r._ok || r.conditional` while the
+    board carried a "show non-recommended" checkbox. The checkbox went
+    on 2026-09-14 with the rest of the slider panel, so the board draws
+    what cleared the bar plus the conditionals, and the clause that
+    keeps conditionals is the whole filter."""
     app = _read("web", "js", "app.js")
-    assert "state.showAll ? true : r._ok || r.conditional" in app
+    assert "bets.filter((r) => r._ok || r.conditional)" in app
 
 
 def test_a_withholding_reason_does_not_wear_a_green_check():

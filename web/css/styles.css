@@ -692,8 +692,6 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 .control { display: flex; flex-direction: column; gap: 7px; min-width: 210px; }
 .control label { font-size: var(--fs-sm); color: var(--text-dim); display: flex; justify-content: space-between; }
 .control label b { color: var(--text); }
-.control.toggle { justify-content: center; }
-.control.toggle label { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
 input[type=range] {
   -webkit-appearance: none; appearance: none; height: 6px; border-radius: 0;
   background: var(--panel-3); outline: none;

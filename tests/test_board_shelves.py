@@ -291,7 +291,6 @@ def test_it_sits_above_the_slider_filtered_edge_cards():
     at = src.index('["board", "Tonight')
     room = src[at:src.index('["gamebets"', at)]
     assert room.index('"likely-top"') < room.index('"cards"')
-    assert room.index('"likely-top"') < room.index('"rec-controls"')
 
 
 def test_the_stadiums_lead_then_the_likelihood_board_then_everything():

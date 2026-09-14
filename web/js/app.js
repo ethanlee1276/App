@@ -28,8 +28,30 @@ let _pbpShowAll = false;
 let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
 
+/* THE BARS A PROP CLEARS TO BE DRAWN, mirrored from the engine's own
+   gate (`server.py` defaults these same three on /api/recommendations,
+   and `engine.betting` applies them before a row is ever marked
+   recommended). They were three sliders and a checkbox on the board
+   until 2026-09-14, when Ethan asked for the panel to go: "it seems
+   like it's not working and also it's not needed."
+
+   He was right on both counts. Every default here IS the engine's own
+   number, so the only thing a dial could do was hide picks the model
+   had already approved — and the empty state it produced ("Loosen the
+   sliders") pointed at knobs that were never the reason a board was
+   empty. The funnel under the board answers that question honestly.
+
+   Constants now, not state: the readers below are unchanged, and the
+   default board is exactly the board that shipped. */
+const BARS = Object.freeze({ conf: 6.0, edge: 2.0, juice: -350 });
+
 const state = {
-  data: null, minConf: 6.0, minEdge: 2.0, maxJuice: -350, showAll: false,
+  data: null, minConf: BARS.conf, minEdge: BARS.edge, maxJuice: BARS.juice,
+  // Scoped to ONE GAME PAGE, and reversible there (#gp-showall reveals,
+  // #gp-hideall puts it back). It used to be the board's global
+  // checkbox; with that gone, a one-way flip would have left every
+  // board showing rows the model passed on and no way back.
+  gameShowAll: false,
   view: "recommended", search: "",
   // Every sport with its own board. This list is the reason ?sport=wnba
   // silently fell back to NFL — a new league has to be added here too, or
@@ -3200,8 +3222,8 @@ async function renderBestBets() {
         ? `The gate counts below ran against the last pull, not today’s prices — read them
            as stale, not as a verdict on today’s slate.`
         : `That sentence is the system working, not failing — every market tonight either
-           missed the tier’s edge bar, failed a gate, or graded below 70. Loosening the
-           sliders shows what was held and why.`}</p>
+           missed the tier’s edge bar, failed a gate, or graded below 70. The board below
+           names what was held and why.`}</p>
       ${/* THE FUNNEL IS NOT REPEATED HERE. Ethan, 2026-08-14: "we are
             showing 'where props died' twice."
 
@@ -3213,8 +3235,8 @@ async function renderBestBets() {
 
             It stays on the BOARD rather than here, and that is a
             deliberate choice rather than a coin flip: the funnel is an
-            answer to "why is this list blank", the list is down there,
-            and the sliders its copy tells you to loosen sit beside it.
+            answer to "why is this list blank", and the list is down
+            there.
             This card keeps its own sentence, which stands on its own.
 
             A first-come-wins flag would have been the other way to do it
@@ -4371,7 +4393,8 @@ function renderGameBets() {
   // Conditionals always show — a bet you can't see isn't one you can go and
   // confirm — but they render faded, amber and stake-less, because they are
   // not bets yet.
-  const visible = bets.filter((r) => (state.showAll ? true : r._ok || r.conditional));
+  // Conditionals always show; nothing else that missed the bar does.
+  const visible = bets.filter((r) => r._ok || r.conditional);
   const title = document.getElementById("gamebets-title");
   const host = document.getElementById("gamebets");
   if (!visible.length) {
@@ -5783,7 +5806,7 @@ function renderRecommended() {
   // Home runs are long shots by nature: this page features only the top
   // three (hr_featured, stamped by the pipeline) — the same three that lead
   // the Long Shots page, where the FULL home-run board lives.
-  const visible = recs.filter((r) => (state.showAll ? true : r._ok))
+  const visible = recs.filter((r) => r._ok)
     .filter((r) => !heldForLongShots(r));
   // RECOMMENDED, AND ON PURPOSE NOT DRAWN HERE. Counted separately so
   // the page can say where they went — the tile above this grid counts
@@ -5822,7 +5845,7 @@ function renderRecommended() {
         game that has already started — pre-game picks are never made against
         in-play lines. The other ${plural(recs.length - real.length, "prop")} are
         waiting on real book prices, which books post close to first pitch.
-        The board fills as tonight’s prices arrive; no slider changes that.`;
+        The board fills as tonight’s prices arrive.`;
     } else if (!recs.length && censusTotal() > 0) {
       /* Nothing reached the board AT ALL, which the old copy answered with
          "loosen the sliders" — advice that cannot work, because a slider
@@ -5852,9 +5875,8 @@ function renderRecommended() {
          totals would be worse than saying nothing. */
       msgTitle = "No player props yet";
       msg = `The games, lines and game bets above are real, but this season has no weekly player stats until its first
-        games have been played — so no prop has been built, and the sliders
-        have nothing to filter. Props appear on their own once the season
-        starts.`;
+        games have been played — so no prop has been built yet. Props appear
+        on their own once the season starts.`;
     } else if (elsewhere.length) {
       /* EVERY RECOMMENDED PICK IS A NON-FEATURED HOME RUN, so the grid
          is empty while the tile above it reads a real number. "No props
@@ -5870,8 +5892,17 @@ function renderRecommended() {
         board is on <a href="#longshots" data-view="longshots">Long
         Shots</a>, where they lead.`;
     } else {
-      msgTitle = "No props clear your filters";
-      msg = `Loosen the sliders, or enable “show non-recommended”.`;
+      /* THE LAST BRANCH, and until 2026-09-14 it read "No props clear
+         your filters — loosen the sliders, or enable show
+         non-recommended", beside a slider panel that could not change
+         the answer. Ethan saw exactly that on an empty Monday board and
+         asked for the panel to go. The bars here are the model's own
+         (see `BARS`), so the honest sentence names them and hands the
+         reader to the funnel printed directly below this message. */
+      msgTitle = "Nothing cleared the model’s bars tonight";
+      msg = `Every prop tonight came up short on price, edge or confidence
+        against the model’s own bars. The breakdown below says which bar
+        each one hit.`;
     }
     // The funnel goes under EVERY empty message, not just the ones that
     // mention it. "Why is this blank" is the same question in all cases.
@@ -5925,9 +5956,10 @@ function renderRecommended() {
   const hidden = recs.length - visible.length - elsewhere.length;
   if (hidden > 0) {
     host.innerHTML += `<p class="list-note" style="grid-column:1/-1;margin-top:14px">
-      ${plural(hidden, "more analyzed prop")} not shown — ${state.showAll
-        ? "held upstream of the sliders"
-        : "held (unconfirmed lineup, edge below the bar, or no real price yet). Toggle “show non-recommended” to browse everything"}.</p>`;
+      ${plural(hidden, "more analyzed prop")} not shown — held (unconfirmed
+      lineup, edge below the bar, or no real price yet). Open a game to see
+      everything it analyzed, and the funnel below says where tonight’s
+      props died.</p>`;
   }
   fillMeters(host);
   revealChildren(host);
@@ -9020,11 +9052,11 @@ function renderGamePage() {
   const props = (state.data.recommendations || [])
     .map((r) => ({ ...r, _ok: passesFilters(r) }))
     .filter((r) => propInGame(r, g));
-  const shown = props.filter((r) => (state.showAll ? true : r._ok));
+  const shown = props.filter((r) => (state.gameShowAll ? true : r._ok));
   const bets = (state.data.game_bets || [])
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b.home === g.home && b.away === g.away);
-  const betsShown = bets.filter((b) => (state.showAll ? true : b._ok));
+  const betsShown = bets.filter((b) => (state.gameShowAll ? true : b._ok));
   const shots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
   /* THE OTHER BOARD, WHICH THIS PAGE HAS NEVER DRAWN. Ethan, 2026-09-09,
      looking at the Week 1 opener: "when you click on a game on the
@@ -9311,7 +9343,16 @@ function renderGamePage() {
     ${props.length > shown.length ? `<p class="list-note" style="margin-top:14px">
       ${plural(props.length - shown.length, "more analyzed prop", "more analyzed props")}
       in this game ${props.length - shown.length === 1 ? "is" : "are"} held
-      (edge below the bar, no real price, or lineup unconfirmed).</p>` : ""}`;
+      (edge below the bar, no real price, or lineup unconfirmed).</p>` : ""}
+
+    ${/* THE WAY BACK. The reveal was a one-way flip while the board
+          carried a "show non-recommended" checkbox to undo it; that
+          checkbox went on 2026-09-14, so the page that turns the reveal
+          on is the page that has to turn it off. */""}
+    ${state.gameShowAll && props.length ? `<p class="list-note" style="margin-top:14px">
+      Showing every prop analyzed for this game, including the ones the model
+      passed on. <button class="btn ghost" id="gp-hideall" type="button"
+        >Show only the picks</button></p>` : ""}`;
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", () => switchView("recommended"));
@@ -9335,11 +9376,14 @@ function renderGamePage() {
   // markets' held-note. Both flip the same global toggle in place.
   host.querySelectorAll("#gp-showall, #gp-showbets").forEach((b) =>
     b.addEventListener("click", () => {
-      state.showAll = true;
-      const c = document.getElementById("show-all");
-      if (c) c.checked = true;
+      state.gameShowAll = true;
       renderGamePage();
     }));
+  const hideAll = host.querySelector("#gp-hideall");
+  if (hideAll) hideAll.addEventListener("click", () => {
+    state.gameShowAll = false;
+    renderGamePage();
+  });
   fillMeters(host);
   host.querySelectorAll(".cards").forEach(revealChildren);
   // The replay panel's gauge + histogram upgrade in place when the
@@ -13094,8 +13138,9 @@ function bindSubtabs(host) {
    against — so grouping is not licence to reorder. `games-title` and
    `games` open room one, exactly where they were.
 
-   The sliders travel with the cards they filter. Leaving `#rec-controls`
-   behind would put a Min-edge dial in a room containing no prop. */
+   THE SLIDER PANEL USED TO TRAVEL WITH THE CARDS IT FILTERED, and
+   `"rec-controls"` sat in this list for that reason. The panel was
+   removed on 2026-09-14 (see `BARS`), so the room is the cards alone. */
 const REC_ROOMS = [
   ["board", "Tonight’s board",
    "the venues, the designated picks, and every prop that cleared the bar",
@@ -13127,7 +13172,7 @@ const REC_ROOMS = [
    ["probation-note", "talent-note", "quick-tools",
     "games-head", "games-outer",
     "likely-top", "home-perf", "stats", "best-bets",
-    "parlay-mode", "empty-slate", "rec-controls", "cards"]],
+    "parlay-mode", "empty-slate", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
@@ -34479,27 +34524,6 @@ function bind() {
       load(document.body.classList.contains("menu-open"));
     }));
 
-  const conf = document.getElementById("min-conf"), edge = document.getElementById("min-edge");
-  conf.addEventListener("input", () => {
-    state.minConf = parseFloat(conf.value);
-    document.getElementById("conf-val").textContent = state.minConf.toFixed(1);
-    load();
-  });
-  edge.addEventListener("input", () => {
-    state.minEdge = parseFloat(edge.value);
-    document.getElementById("edge-val").textContent = `${state.minEdge}%`;
-    load();
-  });
-  const juice = document.getElementById("max-juice");
-  juice.addEventListener("input", () => {
-    state.maxJuice = parseInt(juice.value, 10);
-    document.getElementById("juice-val").textContent = state.maxJuice;
-    load();
-  });
-  document.getElementById("show-all").addEventListener("change", (e) => {
-    state.showAll = e.target.checked;
-    renderGameBets(); renderRecommended(); groupRecommended();
-  });
   let _searchT;
   document.getElementById("player-search").addEventListener("input", (e) => {
     // Typing is a search, not a player page: the address goes back to
@@ -34542,8 +34566,8 @@ function bind() {
     renderBestBets();
     renderGameBets();
     renderRecommended();
-    // Showing non-recommended props, or entering a bankroll, can empty a
-    // room or fill one — the rooms have to be re-judged with the content.
+    // Entering a bankroll can empty a room or fill one — the rooms have
+    // to be re-judged with the content.
     groupRecommended();
     renderPlayers();
   };

@@ -817,26 +817,17 @@
            can't sit silently under a pick. renderInjuryWatch(). -->
       <div id="injury-watch"></div>
 
-      <!-- id so the sub-tab grouping can move it with the board it
-           belongs to; the sliders filter `#cards` and are useless
-           sitting in a room where no card is. -->
-      <div class="controls" id="rec-controls" style="margin-top:20px">
-        <div class="control">
-          <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
-          <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />
-        </div>
-        <div class="control">
-          <label for="min-edge">Min edge <b id="edge-val">2%</b></label>
-          <input type="range" id="min-edge" min="0" max="15" step="0.5" value="2" />
-        </div>
-        <div class="control">
-          <label for="max-juice">Max juice <b id="juice-val">-350</b></label>
-          <input type="range" id="max-juice" min="-800" max="-100" step="25" value="-350" />
-        </div>
-        <div class="control toggle">
-          <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
-        </div>
-      </div>
+      <!-- THE SLIDERS ARE GONE (2026-09-14). Ethan, with the panel on
+           screen above an empty board: "Can you remove this circled
+           section as it seems like it's not working and also it's not
+           needed." Three dials and a checkbox that duplicated the
+           engine's own bars — the numbers they defaulted to ARE the
+           engine's gate — so moving one could only ever hide picks the
+           model had already approved, and the empty state they produced
+           sent a reader to loosen knobs that were not the reason the
+           board was empty. The bars live in the `BARS`
+           constant in the app script, and the page says what actually
+           held a prop in the funnel below the board. -->
 
       <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
     </section>
