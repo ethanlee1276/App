@@ -265,9 +265,9 @@ BASEBALL_SHELVES = (
      "it is ranked by likelihood instead of edge."),
     ("bats", "Hits & total bases", ("hits", "total_bases"),
      "Contact and extra bases — the volume side of a hitter's night."),
-    ("arms", "Strikeouts", ("strikeouts",),
-     "Pitcher swing-and-miss. A different engine from the bats above, "
-     "and shelved apart so its evidence reads apart."),
+    ("arms", "Strikeouts & outs", ("strikeouts", "outs"),
+     "Pitcher swing-and-miss, and how deep he goes. A different engine "
+     "from the bats above, and shelved apart so its evidence reads apart."),
     ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
      "Who wins, the run line, over or under — from the run ratings and "
      "the starters. Each market appears once the weekly measurement on "

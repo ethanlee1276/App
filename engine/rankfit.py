@@ -70,8 +70,15 @@ MIN_PAIRS = 2_000
 #: NFL is deliberately NOT here: its five markets are hand-measured
 #: constants in `likely.RANK_AUC`, and a store entry would silently
 #: override them. That is a separate decision from this one.
+#: OUTS RECORDED joined 2026-09-15. It has been bought, projected, priced
+#: and ingested since the pitcher stack shipped (tests/test_outs_market),
+#: and it was in every table but this one — so nothing ever measured it
+#: and the Most Likely board could never carry it. Ethan, the same day:
+#: "There is no money lines or pitchers props or game totals ... we need
+#: to scan ALL props available." Measured like the rest; the shelf opens
+#: only if the walk clears the floor on 2,000 pairs.
 MARKETS = {
-    "mlb": ("hits", "total_bases", "home_runs", "strikeouts"),
+    "mlb": ("hits", "total_bases", "home_runs", "strikeouts", "outs"),
     "nba": ("pts", "reb", "ast", "fg3m", "pra"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
     "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions"),

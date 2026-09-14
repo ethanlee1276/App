@@ -121,6 +121,19 @@ def test_the_pitcher_stack_the_doc_calls_the_best_in_the_system_now_builds():
     assert all(l["tier"] == 1 for l in t["legs"])
 
 
+def test_the_likelihood_board_measures_outs_and_shelves_it():
+    """The one table outs was missing from. `engine.rankfit.MARKETS` is
+    what the weekly pass measures, and a market absent from it is never
+    measured, so `likely.rankable` never answers yes and the Most Likely
+    board can never carry it — whatever every other layer says. Ethan,
+    2026-09-15: "There is no money lines or pitchers props or game
+    totals ... we need to scan ALL props available." """
+    from engine import rankfit, boards
+    assert M.OUTS in rankfit.MARKETS["mlb"]
+    arms = [s for s in boards.BASEBALL_SHELVES if s[0] == "arms"][0]
+    assert M.OUTS in arms[2] and M.STRIKEOUTS in arms[2], arms
+
+
 if __name__ == "__main__":
     import re as _re
     declared = _re.findall(r"^def (test_\w+)",
