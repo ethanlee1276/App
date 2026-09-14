@@ -45,6 +45,34 @@ def test_the_controls_are_gone_from_the_markup():
         assert dead not in HTML, dead
 
 
+def test_it_is_gone_for_every_sport_because_there_is_only_one_board():
+    """Ethan, 2026-09-14: "Make sure I remove that for every sports page
+    that has it."
+
+    It is one page. Every league — and the fight card — is drawn into a
+    single `#view-recommended` section by swapping the DATA, never the
+    markup, so the panel existed once and serves nobody now. This pins
+    that structure rather than trusting it: one board section, no input
+    of any kind inside it, and every sport the app knows about routed
+    through it. A league that ever grows its own board with its own
+    dials fails here."""
+    assert HTML.count('id="view-recommended"') == 1, "a second board section exists"
+    i = HTML.index('id="view-recommended"')
+    board = HTML[i:HTML.index('id="view-bankroll"', i)]
+    assert "<input" not in board, "the board section grew an input again"
+    assert "type=\"range\"" not in HTML and "type=\"range\"" not in APP, \
+        "a slider is back somewhere on the site"
+    # Every league in the switcher, named, so a new one cannot be added
+    # with a board of its own without this list moving.
+    meta = APP[APP.index("const SPORT_META = {"):]
+    meta = meta[:meta.index("\n};")]
+    sports = re.findall(r"^  (\w+): \{", meta, re.M)
+    assert set(sports) >= {"nfl", "mlb", "nba", "wnba", "cfb"}, sports
+    for sport in sports:
+        assert f'id="view-recommended-{sport}"' not in HTML, sport
+        assert f'"rec-controls-{sport}"' not in APP, sport
+
+
 def test_nothing_is_wired_to_a_control_that_does_not_exist():
     """A listener on a removed element throws on load and takes every
     later listener in the same function with it."""
