@@ -269,6 +269,26 @@ def test_the_injuries_page_is_indexed_by_player_not_active_only():
 
 
 def test_the_whole_payload_renders_and_the_cli_is_read_only():
+    """THE CLOCK IS PINNED, and it was not until 2026-09-14.
+
+    Every other check in this file reaches the linters directly and so
+    passes `now=None`, which switches STARTED off; the one test that
+    wants STARTED hands in its own `now` (see
+    test_rank_only_and_started_are_shown_not_hidden). `main` is the
+    exception — it builds `now` from the wall clock, because on the
+    droplet that is the right answer.
+
+    So this test, written 2026-09-03 against fixtures that kick off
+    2026-09-13T17:00Z, asserted counts that were only true while that
+    kickoff was still in the future. It passed for ten days and went
+    red at 17:00 UTC on the tenth, on a tree nobody had touched: the
+    nightly's first finding was a calendar, not a defect.
+
+    A failure that arrives by date rather than by commit is the worst
+    kind to read, because the diff that "caused" it is empty. Freezing
+    the clock at the payload's own `built_at` is what the fixtures
+    always meant: a board just built, nothing kicked off yet.
+    """
     payload = {"built_at": "2026-09-13T12:00:00Z",
                "most_likely": [_likely(), _likely(player="Held", injury_status="OUT")],
                "recommendations": [_prop()], "game_bets": [_gb()],
@@ -278,10 +298,22 @@ def test_the_whole_payload_renders_and_the_cli_is_read_only():
     with open(path, "w") as fh:
         json.dump(payload, fh)
     import contextlib
+    import datetime as dt
     import io
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        rc = L.main(["--file", path, "--injuries", os.path.join(d, "none.json")])
+    real = dt.datetime
+
+    class _At(real):
+        @classmethod
+        def now(cls, tz=None):
+            return real(2026, 9, 13, 12, 0, tzinfo=tz)
+
+    L._dt.datetime = _At
+    try:
+        with contextlib.redirect_stdout(buf):
+            rc = L.main(["--file", path, "--injuries", os.path.join(d, "none.json")])
+    finally:
+        L._dt.datetime = real
     out = buf.getvalue()
     assert rc == 0
     assert "MOST LIKELY: 2 rows, 1 flagged" in out
