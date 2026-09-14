@@ -194,6 +194,59 @@ def test_the_settle_loop_reads_the_box_score_after_the_finals():
     assert "except Exception as exc:" in tail
 
 
+# --- the rows the droplet actually holds -----------------------------------
+def test_a_finished_game_with_no_date_is_still_fetched():
+    """Ethan, 2026-09-14, 9pm: sixteen Sunday props still open and ZERO
+    `-box` rows on disk, a day after the same-night settle shipped. The
+    finals writer and the older ingests file `games.date` as NULL, and
+    the selection read `COALESCE(date, '') >= floor` — so every such
+    game was silently outside the lookback and never fetched. An NFL
+    row with no date is admitted on its week being open."""
+    L, H = _world()
+    _bet(L, "nfl", "2026-W02", "Amon-Ra St. Brown", game_day=YESTERDAY)
+    _game(H, "nfl", 2026, "002", "KC@DET", "DET", "KC", None)          # date NULL
+    calls, fr, fs = _fetchers(_nfl_summary(), rows=[
+        {"away": "KC", "home": "DET", "event_id": "401777"}])
+    res = B.ingest_for_open(L, H, "nfl", log=lambda *a: None, fetch_rows=fr, fetch_summary=fs)
+    assert res["games"] == 1 and res["rows"] > 0, res
+    assert calls["summary"] == [("nfl", "401777")]
+    assert ledger.settle_from_history(L, H) == 1
+
+
+def test_a_college_game_filed_on_the_utc_next_day_still_grades():
+    """A college game's period is its UTC date and the bet's date is the
+    Eastern game day: Hawaii-UNLV on 2026-09-05 ET is the games row
+    dated 09-06, and the three likely rows on it sat open for nine days.
+    A day either side matches."""
+    from engine.sources.cfbdata import _team_key
+    haw, unlv = _team("HAW", "62", "Hawaii Rainbow Warriors"), _team("UNLV", "2439", "UNLV Rebels")
+    home, away = _team_key(haw), _team_key(unlv)
+    L, H = _world()
+    _bet(L, "cfb", YESTERDAY, "Some Receiver", market="rec_yds", line=40.5, game_day=YESTERDAY)
+    _game(H, "cfb", 2026, TODAY.isoformat(), "401555", home, away, None,   # UTC next day, no date
+          extra={"espn_game_id": "401555"})
+    payload = {"boxscore": {"players": [
+        {"team": haw, "statistics": [
+            {"name": "receiving", "labels": ["REC", "YDS", "AVG", "TD", "LONG"],
+             "athletes": [{"athlete": {"displayName": "Some Receiver",
+                                       "position": {"abbreviation": "WR"}},
+                           "stats": ["5", "60", "12.0", "0", "20"]}]}]}]}}
+    calls, fr, fs = _fetchers(payload)
+    res = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=fr, fetch_summary=fs)
+    assert res["games"] == 1, res
+    assert calls["summary"] == [("cfb", "401555")]
+
+
+def test_an_undated_college_game_outside_the_lookback_stays_outside():
+    """Admitting undated rows must not admit the whole history: a college
+    row's period is its date, and the lookback is judged on it."""
+    L, H = _world()
+    old = (TODAY - dt.timedelta(days=20)).isoformat()
+    _bet(L, "cfb", old, "Some Receiver", market="rec_yds", line=40.5, game_day=old)
+    _game(H, "cfb", 2026, old, "401556", "HOME", "AWAY", None, extra={"espn_game_id": "401556"})
+    assert B.finished_games_with_open_props(L, H, "cfb") == []
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

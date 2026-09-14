@@ -81,11 +81,42 @@ def finished_games_with_open_props(lconn, hconn, league: str,
     wanted = _open_periods(lconn, league)
     if not wanted:
         return []
+    if league != "nfl":
+        # A COLLEGE GAME'S PERIOD IS ITS UTC DATE, and the bet's date is
+        # the Eastern game day, so a Saturday-night kickoff is filed one
+        # day later than the prop on it (Hawaii-UNLV, 2026-09-05 ET, is
+        # the games row dated 09-06). Match a day either side.
+        wide: dict = {}
+        for (_s, day), n in wanted.items():
+            try:
+                d = _dt.date.fromisoformat(day)
+            except ValueError:
+                wide[(None, day)] = n
+                continue
+            for off in (-1, 0, 1):
+                wide[(None, (d + _dt.timedelta(days=off)).isoformat())] = n
+        wanted = wide
     out = []
     for g in hconn.execute(
             "SELECT season, period, game_id, home, away, date, extra FROM games "
             "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-            "AND COALESCE(date, '') >= ? ORDER BY date", (league, floor)):
+            "ORDER BY COALESCE(date, period)", (league,)):
+        # THE LOOKBACK, JUDGED ON WHATEVER DATE THE ROW CARRIES. This
+        # read `COALESCE(date, '') >= floor` in SQL, and `games.date` is
+        # NULL on every row the finals writer and the older ingests
+        # filed — the whole college table on the droplet, and any NFL
+        # week the finals scored without a date. Every such game was
+        # silently outside the lookback, so the box score was never
+        # fetched, no provisional row was ever written, and Sunday's
+        # props waited for the official file the same-night settle exists
+        # to beat (Ethan, 2026-09-14: 16 Sunday rows still open at 9pm
+        # Monday, zero `-box` rows on disk). A dated row is judged on its
+        # date; a college row's period IS its date; an NFL row with
+        # neither is admitted on its week being open, which `wanted`
+        # already requires.
+        when = g["date"] or (str(g["period"]) if league != "nfl" else None)
+        if when and str(when) < floor:
+            continue
         key = ((int(g["season"]), str(g["period"])) if league == "nfl"
                else (None, str(g["period"])))
         if key in wanted:
