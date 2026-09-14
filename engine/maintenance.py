@@ -697,6 +697,28 @@ def settle_open(log=print, state_path: Path | None = None,
     try:
         from . import db, ingest, ledger
         lconn = ledger.connect()
+        hconn = db.connect()
+        # PLACE THE STRANDED ROWS FIRST, on every pass, before the window is
+        # built from them. `_open_bet_days` reads `game_day`, and a row
+        # without one sits under its week label outside every window — it
+        # is not merely ungraded, it stops this function from running the
+        # results ingest at all (see `_open_bet_days`). The stamping at the
+        # journal door was fixed on 2026-09-11, but 134 rows were already
+        # stranded on the droplet and the repair was a command a person
+        # had to run by hand: `--backfill-days --apply`. Ethan, 2026-09-14,
+        # from work: "None of the nfl edge or most likely bets settled" —
+        # he could not run it, and a repair that waits for a keyboard is
+        # not a repair. `backfill_game_days` only ever fills a NULL and
+        # never touches `date`, the settle key, so running it every cycle
+        # cannot unsettle anything; it scans `game_day IS NULL` and is
+        # cheap when there is nothing to do.
+        try:
+            bf = ledger.backfill_game_days(lconn, hconn)
+            if bf.get("filled"):
+                log(f"  placed {bf['filled']} journal row(s) on their game "
+                    f"day ({bf.get('unresolved', 0)} still on a week label)")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  game-day backfill skipped: {exc}")
         days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
         if not days:
             # Nothing to do — still stamp the clock so we don't re-check
@@ -704,7 +726,6 @@ def settle_open(log=print, state_path: Path | None = None,
             state["last_settle_ts"] = now
             _save_state(state_path, state)
             return 0
-        hconn = db.connect()
         # One ingest spanning the open days; it is idempotent, and games
         # still in progress simply aren't returned as finished yet.
         #
