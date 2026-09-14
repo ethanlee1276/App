@@ -207,9 +207,15 @@ def last_night(web: Path = WEB) -> dict | None:
     if not recaps:
         return None
     recaps.sort(key=lambda e: str(e.get("date") or ""))
-    e = recaps[-1]
-    return {"date": e.get("date"), "w": e.get("w", 0), "l": e.get("l", 0),
-            "p": e.get("p", 0), "net_u": e.get("net_u", 0)}
+    # The feed carries one recap PER SPORT since 2026-09-14; the email's
+    # one line is every league's night added up, on the newest night.
+    date = recaps[-1].get("date")
+    night = [e for e in recaps if e.get("date") == date]
+    return {"date": date,
+            "w": sum(int(e.get("w", 0) or 0) for e in night),
+            "l": sum(int(e.get("l", 0) or 0) for e in night),
+            "p": sum(int(e.get("p", 0) or 0) for e in night),
+            "net_u": round(sum(float(e.get("net_u", 0) or 0) for e in night), 2)}
 
 
 # --- the two messages --------------------------------------------------------

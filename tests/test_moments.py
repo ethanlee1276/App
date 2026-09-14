@@ -141,6 +141,66 @@ def test_last_night_reads_the_journal():
                  "net_u": -0.1, "open": 1}
 
 
+# --- one recap per sport ------------------------------------------------------
+def test_each_sport_recaps_its_own_night_by_its_own_game_day():
+    """Ethan, 2026-09-14, the NFL board's strip reading "LAST NIGHT 1-1
+    +1.53u": "It seems like it displays MLBs grade for the night no
+    matter what sport is selected." The recap summed the whole journal
+    by `date`, and football — journaled under a week label with the
+    calendar in game_day — had no night at all."""
+    conn = ledger.connect(":memory:")
+    def bet(sport, date, status, pnl, game_day=""):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,stake_units,stake_dollars,status,category,pnl_units,game_day) "
+            "VALUES ('t',?,?,?,'hits','OVER',0.5,'DK',-110,1,10,?,'main',?,?)",
+            (sport, date, f"{sport}{date}{status}{pnl}", status, pnl, game_day))
+    bet("mlb", "2026-08-23", "won", 0.9)
+    bet("mlb", "2026-08-23", "lost", -1.0)
+    bet("nfl", "2026-W01", "won", 1.5, game_day="2026-08-23")
+    bet("nfl", "2026-W01", "won", 0.8, game_day="2026-08-23")
+    bet("nfl", "2026-W01", "lost", -1.0, game_day="2026-08-16")   # a week ago
+    conn.commit()
+    got = moments.last_nights(conn, TODAY)
+    assert set(got) == {"mlb", "nfl"}, got
+    assert (got["mlb"]["w"], got["mlb"]["l"], got["mlb"]["net_u"]) == (1, 1, -0.1)
+    assert (got["nfl"]["w"], got["nfl"]["l"], got["nfl"]["net_u"]) == (2, 0, 2.3)
+    # The pooled line, for the digest's one subject, still adds up.
+    pooled = moments.last_night(conn, TODAY)
+    assert (pooled["w"], pooled["l"]) == (3, 1)
+
+
+def test_the_feed_carries_one_recap_per_sport_and_each_fires_once():
+    recaps = {"mlb": _recap(w=1, l=1), "nfl": _recap(w=2, l=0)}
+    evs, st = moments.derive({}, [], recaps, {}, TODAY, NOW)
+    got = sorted((e["sport"], e["w"], e["l"]) for e in evs if e["kind"] == "settle_recap")
+    assert got == [("mlb", 1, 1), ("nfl", 2, 0)], got
+    ids = {e["id"] for e in evs}
+    assert len(ids) == 2, "the two sports shared an event id"
+    assert st["recapped_by"] == {"mlb": "2026-08-23", "nfl": "2026-08-23"}
+    assert st["recapped"] == "2026-08-23"                 # the legacy marker
+    evs2, _ = moments.derive({}, [], recaps, st, TODAY, "2026-08-24T13:06:00")
+    assert not [e for e in evs2 if e["kind"] == "settle_recap"], "recapped twice"
+    # A journal marker from before sports existed still holds mlb back.
+    evs3, _ = moments.derive({}, [], {"mlb": _recap()}, {"recapped": "2026-08-23"},
+                             TODAY, NOW)
+    assert not [e for e in evs3 if e["kind"] == "settle_recap"]
+    # mlb's id is the one the feed already carries; nfl's is its own.
+    legacy, _ = moments.derive({}, [], _recap(), {}, TODAY, NOW)
+    assert [e["id"] for e in evs if e["sport"] == "mlb"] == [e["id"] for e in legacy if e["kind"] == "settle_recap"]
+
+
+def test_the_strip_shows_the_sport_on_screen_and_names_the_day():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("async function renderDayCard(")
+    body = app[i:i + 4000]
+    assert '(e.sport || "mlb") === state.sport' in body, \
+        "the strip does not pick the sport on screen"
+    assert "recapDayLabel(recap.date, y)" in body
+    k = app.index("function recapDayLabel(")
+    assert 'return "Last night"' in app[k:k + 600] and 'weekday: "long"' in app[k:k + 600]
+
+
 # --- the wire --------------------------------------------------------------
 
 def test_the_loop_runs_moments_in_the_sweep():

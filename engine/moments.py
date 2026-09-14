@@ -83,24 +83,45 @@ def derive(board: dict, live_games: list, recap: dict | None,
                  "autopsied": state.get("autopsied", "")}
     events: list = []
 
-    def emit(kind, key, **fields):
-        e = {"id": _eid(kind, key), "ts": now, "sport": "mlb",
+    def emit(kind, key, sport="mlb", **fields):
+        e = {"id": _eid(kind, key), "ts": now, "sport": sport,
              "kind": kind}
         e.update(fields)
         events.append(e)
 
-    # -- last night, fully graded ------------------------------------
-    # MONOTONIC, not just "different": the marker holds one date, and a
-    # plain != would re-announce an OLDER night the moment anything
-    # handed one in. Recapped nights only move forward (ISO dates sort).
-    if (recap and recap.get("date")
-            and recap["date"] > str(state.get("recapped") or "")
-            and (recap.get("w", 0) + recap.get("l", 0) + recap.get("p", 0)) > 0
-            and not recap.get("open", 0)):
-        emit("settle_recap", recap["date"], date=recap["date"],
-             w=recap.get("w", 0), l=recap.get("l", 0), p=recap.get("p", 0),
-             net_u=round(float(recap.get("net_u", 0.0)), 2))
-        state["recapped"] = recap["date"]
+    # -- last night, fully graded, ONE RECAP PER SPORT ---------------
+    # Ethan, 2026-09-14, the NFL board's morning strip reading "LAST
+    # NIGHT 1-1 +1.53u": "It seems like it displays MLBs grade for the
+    # night no matter what sport is selected." It did — the recap summed
+    # the whole journal and every moment was stamped mlb, so the
+    # football page wore baseball's line. `recap` is now a mapping of
+    # sport → line (a bare line still means mlb), each sport recapped
+    # once by its own marker, and the event carries the sport so the
+    # page can show its own.
+    #
+    # MONOTONIC, not just "different": a marker holds one date per
+    # sport, and a plain != would re-announce an OLDER night the moment
+    # anything handed one in. Recapped nights only move forward.
+    recaps = ({} if not recap else {"mlb": recap} if "date" in recap
+              else dict(recap))
+    by = dict(state.get("recapped_by") or {})
+    if state.get("recapped") and "mlb" not in by:
+        by["mlb"] = state["recapped"]              # the marker before sports
+    for sp, r in sorted(recaps.items()):
+        if not (r and r.get("date")):
+            continue
+        if (r["date"] > str(by.get(sp) or "")
+                and (r.get("w", 0) + r.get("l", 0) + r.get("p", 0)) > 0
+                and not r.get("open", 0)):
+            # mlb keeps its pre-sport event id so a deploy does not
+            # re-announce a night the feed already carries.
+            emit("settle_recap", r["date"] if sp == "mlb" else f"{sp}|{r['date']}",
+                 sport=sp, date=r["date"],
+                 w=r.get("w", 0), l=r.get("l", 0), p=r.get("p", 0),
+                 net_u=round(float(r.get("net_u", 0.0)), 2))
+            by[sp] = r["date"]
+    state["recapped_by"] = by
+    state["recapped"] = by.get("mlb", state.get("recapped", ""))
 
     # -- the autopsy -------------------------------------------------
     # The roadmap's late-night anchor and #6's celebration in one: when
@@ -159,19 +180,43 @@ def derive(board: dict, live_games: list, recap: dict | None,
     return events, state
 
 
-def last_night(conn, today: str) -> dict | None:
-    """Yesterday's line from the journal: {date, w, l, p, net_u, open}."""
+def last_night(conn, today: str, sport: str | None = None) -> dict | None:
+    """Yesterday's line from the journal: {date, w, l, p, net_u, open}.
+
+    By GAME DAY (`ledger.day_expr`), so football — journaled under a
+    week label with the calendar in `game_day` — has a night at all.
+    ``sport`` narrows it to one league; without it the line pools every
+    league, which is what the digest's subject wants and what the
+    board's strip must never show.
+    """
+    from .ledger import day_expr
     y = (_dt.date.fromisoformat(today) - _dt.timedelta(days=1)).isoformat()
-    row = conn.execute(
-        "SELECT SUM(status='won') w, SUM(status='lost') l, "
-        "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
-        "SUM(status='open') o FROM bets WHERE date=? "
-        "AND category IN ('main','longshot')", (y,)).fetchone()
+    q = ("SELECT SUM(status='won') w, SUM(status='lost') l, "
+         "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
+         f"SUM(status='open') o FROM bets WHERE {day_expr()}=? "
+         "AND category IN ('main','longshot')")
+    args: list = [y]
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    row = conn.execute(q, args).fetchone()
     if row is None:
         return None
     return {"date": y, "w": row["w"] or 0, "l": row["l"] or 0,
             "p": row["p"] or 0, "net_u": round(row["u"] or 0.0, 2),
             "open": row["o"] or 0}
+
+
+def last_nights(conn, today: str) -> dict:
+    """``{sport: line}`` for every tracked sport that had a bet
+    yesterday — the strip on each board shows its own."""
+    from .ledger import TRACKED_SPORTS
+    out: dict = {}
+    for sp in TRACKED_SPORTS:
+        r = last_night(conn, today, sport=sp)
+        if r and (r["w"] + r["l"] + r["p"] + r["open"]) > 0:
+            out[sp] = r
+    return out
 
 
 def run(quiet: bool = True, today: str | None = None,
@@ -195,7 +240,7 @@ def run(quiet: bool = True, today: str | None = None,
         live_games = []
     conn = ledger.connect()
     try:
-        recap = last_night(conn, today)
+        recap = last_nights(conn, today)
     finally:
         conn.close()
     # The newest nightly postmortem, straight from the prose store —

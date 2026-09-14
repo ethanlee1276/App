@@ -5706,6 +5706,16 @@ function welcomeBackHTML() {
   </div>`;
 }
 
+/* "Last night" when the recap is yesterday's; the weekday otherwise —
+   a football board on Tuesday is recapping Sunday, and calling Sunday
+   "last night" is the strip lying about the one thing it says. */
+function recapDayLabel(date, yesterday) {
+  if (!date || date === yesterday) return "Last night";
+  const d = new Date(`${date}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? "Last slate"
+    : d.toLocaleDateString(undefined, { weekday: "long" });
+}
+
 async function renderDayCard() {
   const host = document.getElementById("daycard-zone");
   if (!host) return;
@@ -5719,9 +5729,16 @@ async function renderDayCard() {
   const d = _feedCache || {};
   if (d.locked) { host.innerHTML = ""; return; }
   const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const recap = (d.events || []).find((e) =>
-    e.kind === "settle_recap" && (e.date === y
-      || e.date === new Date().toISOString().slice(0, 10)));
+  // THIS SPORT'S OWN LINE (Ethan, 2026-09-14: the NFL board wore
+  // baseball's "1-1 +1.53u"). The feed carries one recap per sport; a
+  // recap with no sport is the pre-sport shape and means mlb. The
+  // newest one within a week, because football's last slate is
+  // Sunday's on a Tuesday — and the label says which day it was.
+  const week = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const recap = (d.events || [])
+    .filter((e) => e.kind === "settle_recap" && (e.sport || "mlb") === state.sport
+      && String(e.date || "") >= week)
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0];
   // NO RECAP, NO STRIP. "Tonight: N picks" above a board that IS
   // tonight's N picks is the same fact twice, forty pixels above the
   // fold — and test_board_order measures that fold in pixels. The strip
@@ -5739,7 +5756,7 @@ async function renderDayCard() {
   const net = recap ? recap.net_u : null;
   host.innerHTML = banner + `<div class="daycard">
     ${recap ? `<span class="dc-half">
-        <span class="dc-k">Last night</span>
+        <span class="dc-k">${escapeHtml(recapDayLabel(recap.date, y))}</span>
         <b class="${net >= 0 ? "pos" : "neg"}">${recap.w}-${recap.l}${
           recap.p ? `-${recap.p}` : ""}</b>
         <b class="${net >= 0 ? "pos" : "neg"}">${net >= 0 ? "+" : ""}${net}u</b>
@@ -17083,7 +17100,7 @@ async function renderFeedZone() {
          events, in the same stream as the market's churn. */
       case "settle_recap": return {
         ic: "trophy", tone: (e.net_u || 0) >= 0 ? "good" : "bad",
-        title: `Last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
+        title: `${(e.sport || "mlb").toUpperCase()} last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
           e.net_u >= 0 ? "+" : ""}${e.net_u}u`,
         cond: `${e.date} fully graded — every pick is on the Results page`,
       };
