@@ -310,9 +310,48 @@ def headshot_map(season: int) -> dict[str, str]:
     for r in rows:
         name = _s(r, "full_name", "player_name", "football_name")
         url = _s(r, "headshot_url", "headshot")
+        # A ROSTER ROW WITH AN ESPN ID BUT NO PHOTO STILL HAS A FACE. The
+        # roster file ships `headshot_url` for most of the league and an
+        # `espn_id` for nearly all of it, and ESPN serves a headshot by
+        # that id at a stable path — the same path `facesfill.py` already
+        # uses for the hoops leagues. Ethan, 2026-09-14: "We are missing
+        # head shots for a lot of NFL players." Taken second, never over a
+        # real URL, so nothing that had a face changes.
+        if name and not url:
+            pid = _s(r, "espn_id")
+            if pid:
+                url = ESPN_HEADSHOT.format(pid=pid)
         if name and url:
             out.setdefault(name, url)
     return out
+
+
+#: ESPN's by-id headshot path for the NFL — `facesfill.ESPN_HEADSHOT` with
+#: the league filled in, kept here so the board and the backfill agree.
+ESPN_HEADSHOT = "https://a.espncdn.com/i/headshots/nfl/players/full/{pid}.png"
+
+
+def face_for(headshots: dict, player: str) -> str:
+    """The face for `player`, exact name first and a normalised match second.
+
+    The stats feed spells a man one way and the roster file another —
+    suffixes, accents, a middle initial — and an exact-key lookup drew the
+    initials avatar for every one of those with a real photograph sitting
+    in the map under a spelling one apostrophe away. Same normaliser the
+    settler uses to join a bet to its box score (`oddsapi.normalize_name`),
+    for the same reason.
+    """
+    if not player:
+        return ""
+    hit = headshots.get(player)
+    if hit:
+        return hit
+    from .oddsapi import normalize_name
+    want = normalize_name(player)
+    for name, url in headshots.items():
+        if url and normalize_name(name) == want:
+            return url
+    return ""
 
 
 def _regular_season(rows: list[dict]) -> list[dict]:
@@ -753,7 +792,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             vs_opponent_avg=None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
             usage_role=spec.usage_role,
-            headshot=headshots.get(spec.player, ""),
+            headshot=face_for(headshots, spec.player),
         ))
 
     # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
