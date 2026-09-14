@@ -161,7 +161,12 @@ def test_it_runs_once_a_week_and_can_be_forced():
     own.
     """
     p = os.path.join(tempfile.mkdtemp(), "backtest.json")
-    conn = _seeded(n_players=2, n_games=4)
+    # A history deep enough to REPLAY — two players and four games
+    # measured nothing, and since 2026-09-14 a page that measured
+    # nothing is not a run: the gate would (correctly) report the lab
+    # due again on the second call. The gate under test here is the
+    # weekly one, and it needs a page with answers on it to hold.
+    conn = _seeded()
     kw = {"hconn": conn, "log": _quiet, "path": p, "nfl": False}
     assert lab.run_if_due(**kw) == "ok"
     assert lab.run_if_due(**kw) == "already"
@@ -251,6 +256,66 @@ def test_the_maintenance_pass_runs_the_lab():
     assert "engine.lab" in inspect.getsource(_m._run_lab)
     assert '"--auto"' in inspect.getsource(_m._run_lab)
     assert "run_if_due(hconn=hconn, log=print)" in inspect.getsource(lab.main)
+
+
+# --- a page that measured nothing is not a run --------------------------------
+_EMPTY_PAGE = {"sports": {
+    "nfl": {"props": {"unavailable": "skipped"},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}},
+    "mlb": {"props": {"unavailable": "no ingested game logs deep enough "
+                                     "to replay yet"},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}}}}
+_FULL_PAGE = {"sports": {
+    "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}}}}
+
+
+def _page(doc, today):
+    return dict(doc, generated_at=f"{today.isoformat()}T10:45:52")
+
+
+def test_a_page_that_measured_nothing_is_due_again_whatever_its_date():
+    """Ethan, 2026-09-14: The Lab read "not replayed yet" for every sport
+    for four days, stamped 2026-09-10, on a box holding four NFL seasons.
+    The page was a seeded test fixture with a fresh stamp, and the weekly
+    gate honoured the stamp. A page with no measurement on it is not the
+    week's run; a page with one still is."""
+    from pathlib import Path
+    today = _dt.date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "web" / "data" / "backtest.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps(_page(_EMPTY_PAGE, today)))
+        assert lab._due(p, today), \
+            "a page that replayed nothing, stamped today, held the lab off"
+        assert lab.replayed_sports(_page(_EMPTY_PAGE, today)) == []
+        p.write_text(json.dumps(_page(_FULL_PAGE, today)))
+        assert not lab._due(p, today), "a real run today was re-run"
+        assert lab.replayed_sports(_FULL_PAGE) == ["mlb"]
+        later = today + _dt.timedelta(days=lab.LAB_EVERY_DAYS)
+        assert lab._due(p, later), "the weekly cadence itself is gone"
+
+
+def test_the_due_check_reads_the_private_page_not_the_sealed_stub():
+    """With the paywall on, the public backtest.json is a sealed stub with
+    no sports in it. Read THAT as "measured nothing" and the lab re-runs
+    every night on a box whose private page is full."""
+    from pathlib import Path
+    today = _dt.date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        public = Path(tmp) / "web" / "data" / "backtest.json"
+        public.parent.mkdir(parents=True)
+        private = Path(tmp) / "data" / "built" / "backtest.json"
+        private.parent.mkdir(parents=True)
+        stub = {"generated_at": f"{today.isoformat()}T10:45:52",
+                "locked_reason": "subscribe"}
+        public.write_text(json.dumps(stub))
+        private.write_text(json.dumps(_page(_FULL_PAGE, today)))
+        assert not lab._due(public, today), \
+            "the sealed stub was read as a page that measured nothing"
 
 
 if __name__ == "__main__":

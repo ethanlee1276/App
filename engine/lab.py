@@ -495,11 +495,53 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
             hconn.close()
 
 
+def replayed_sports(doc: dict) -> list[str]:
+    """The sports a published page actually measured — a props or a
+    game-lines section with markets in it. The rest of the page is
+    reasons."""
+    out = []
+    for sport, blob in (doc.get("sports") or {}).items():
+        if not isinstance(blob, dict):
+            continue
+        if ((blob.get("props") or {}).get("markets")
+                or (blob.get("game_lines") or {}).get("markets")):
+            out.append(sport)
+    return out
+
+
 def _due(path: Path, today: _dt.date) -> bool:
+    """Is a replay owed? Weekly — unless the page on disk measured
+    nothing, in which case the answer is yes regardless of its date.
+
+    A PAGE WITH NOTHING REPLAYED IS NOT A RUN. Ethan, 2026-09-14: The Lab
+    read "not replayed yet" for every sport — NFL "skipped", MLB "no
+    ingested game logs deep enough", every game-line market "no
+    harvested closing lines stored" — stamped 2026-09-10 10:45:52, over a
+    database that had four NFL seasons and seventeen thousand MLB closes.
+    The page was the test suite's four-game seeded fixture, filed into
+    the live data/built by a gate fallback (fixed in engine.gate), and
+    because it carried a fresh `generated_at` this function counted it as
+    the week's run and kept the real replay from starting for the seven
+    days that follow. The weekly cadence exists to save an hour of CPU
+    on a page that has answers; a page with none has nothing to save.
+    The daily chores still cap attempts at one per day (`lab_attempted`
+    in engine.maintenance), so a box whose data really is too thin
+    retries once a night, niced, and says so.
+
+    READ THROUGH `gate.board_source`, not the public path. With the
+    paywall on the public copy is a sealed stub — stamps and a locked
+    block, no sports — which this test would otherwise read as "measured
+    nothing" and re-run the lab every night on a box whose private page
+    is full.
+    """
+    from . import gate
     try:
-        prev = json.loads(path.read_text()).get("generated_at") or ""
+        doc = json.loads(Path(gate.board_source(path)).read_text())
+        prev = doc.get("generated_at") or ""
         last = _dt.date.fromisoformat(prev[:10])
     except (OSError, ValueError, AttributeError):
+        return True
+    if not replayed_sports(doc):
         return True
     return (today - last).days >= LAB_EVERY_DAYS
 
@@ -527,16 +569,10 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     # leaking. Third builder found doing this, after memes and fantasy.
     from . import gate
     gate.publish(out, p, p.name)
-    ran = sum(1 for s in out["sports"].values()
-              if (s["props"].get("markets")
-                  or s["game_lines"].get("markets")))
+    ran = len(replayed_sports(out))
     log(f"  lab: replayed {ran} sport(s) → {p}")
     return "ok"
 
-
-# --- the command line --------------------------------------------------------
-def _pct(x):
-    return "—" if x is None else f"{x:.1%}"
 
 
 def _print_market(m, indent="    ") -> None:
