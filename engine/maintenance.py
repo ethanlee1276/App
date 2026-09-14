@@ -1165,6 +1165,25 @@ def _run_lab(log) -> list[str]:
     return _spawn_module("engine.lab", log, args=("--auto",))
 
 
+def game_rank_boot_due(store: dict, state: dict, today: _dt.date,
+                       sport: str = "mlb") -> bool:
+    """Should this pass measure ``sport``'s GAME markets now, not Wednesday?
+
+    Yes when the rank store holds no game-market entry for the sport
+    (``kind == "game"`` — a prop entry does not count, the prop
+    bootstrap has its own test) and this box has not already tried
+    today. Once a day, not once a pass: `gamerank.measure` walks every
+    scored game the box holds, and a box whose closes cannot yet clear
+    `gamerank.MIN_GAMES` would otherwise walk them every forty-five
+    minutes for nothing. Pure, so it can be tested without a database.
+    """
+    for k, v in (store or {}).items():
+        if k.startswith(f"{sport}:") and isinstance(v, dict) and v.get("kind") == "game":
+            return False
+    tried = (state or {}).get("game_rank_boot") or {}
+    return tried.get(sport) != today.isoformat()
+
+
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
                state_path: Path | None = None, today: _dt.date | None = None) -> bool:
     """Run the daily chores if they haven't run yet today.
@@ -1639,8 +1658,18 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             from .rankfit import measure as _rank_measure
             _rkc = _rkdb.connect()
             try:
+                # ONE SPORT'S FAILURE IS ONE SPORT'S. Until 2026-09-15
+                # the four measurements, the park report and the game
+                # markets below shared one try: a walk that raised for
+                # any sport skipped every sport after it AND the game
+                # markets, and the log said "rank fit skipped" once. The
+                # MLB moneyline shelf depends on the last thing in this
+                # block running, so it has to run whatever came before.
                 for _sp in ("mlb", "wnba", "nba", "cfb"):
-                    _rank_measure(_rkc, _sp, log=log)
+                    try:
+                        _rank_measure(_rkc, _sp, log=log)
+                    except Exception as _rexc:  # noqa: BLE001
+                        log(f"  ⚠️  rank fit {_sp} skipped: {_rexc}")
                 # THE PARK A/B, ANSWERED WHERE THE LOGS ARE. The standing
                 # finding (2026-08-31): the walk replays history in a
                 # NEUTRAL stadium, so the venue layer the MLB handicapping
@@ -1649,7 +1678,10 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 # droplet, so the question sat unanswered — now the weekly
                 # log answers it by itself. It still WRITES NOTHING:
                 # adoption is a decision for whoever reads the deltas.
-                _rank_ctx(_rkc, "mlb", log=log)
+                try:
+                    _rank_ctx(_rkc, "mlb", log=log)
+                except Exception as _cexc:  # noqa: BLE001
+                    log(f"  ⚠️  park A/B report skipped: {_cexc}")
                 # GAME MARKETS, the same discipline. engine.gamerank
                 # replays each league's stored closes and writes the
                 # moneyline / spread / total ranking into the same
@@ -1737,6 +1769,39 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             _rbc.close()
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  rank bootstrap skipped: {exc}")
+
+    # THE GAME MARKETS BOOTSTRAP, same precedent. Ethan, 2026-09-15: "MLB
+    # most likely bets are only showing hits and total bases. There is
+    # no money lines ... or game totals or anything like that." An MLB
+    # moneyline reaches the board only once `gamerank` has written a
+    # figure into the rank store, and the only thing that wrote one was
+    # the Wednesday block above — so a box that missed a Wednesday, or
+    # whose Wednesday block raised before it got there, showed no game
+    # line for a week at a time. The prop shelves have bootstrapped since
+    # 2026-08-31; the game shelf did not, and this is it catching up.
+    # The marker is written BEFORE the work (the deep-refit rule) and
+    # once a day (`game_rank_boot_due`), so a box whose closes cannot yet
+    # clear the sample floor tries tomorrow rather than every pass.
+    try:
+        from . import db as _gbdb
+        from .gamerank import measure_and_store as _game_boot
+        from .rankfit import load as _grank_load
+        if game_rank_boot_due(_grank_load(), state, today):
+            _gbc = _gbdb.connect()
+            try:
+                have = _gbc.execute(
+                    "SELECT COUNT(*) FROM games WHERE sport='mlb' "
+                    "AND home_score IS NOT NULL").fetchone()[0]
+                if have:
+                    state.setdefault("game_rank_boot", {})["mlb"] = today.isoformat()
+                    _save_state(state_path, state)
+                    log(f"  rank store has no mlb game market and {have:,} "
+                        f"scored games exist — measuring now, not Wednesday")
+                    _game_boot(_gbc, "mlb", log=log)
+            finally:
+                _gbc.close()
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  game rank bootstrap skipped: {exc}")
 
     # Settle the one-sided quote journals against whatever stat rows the
     # ingests above just wrote, and refit each market's measured hold

@@ -137,7 +137,13 @@ cd /srv/qellys && python3 -m engine.gamerank --sport mlb --save   # into the sto
 
   The weekly maintenance pass runs `gamerank.measure_and_store` for
   MLB, NFL and CFB beside the prop rank fitter, so the shelf turns on
-  by itself once the run-rating model's moneyline clears the floor. A
+  by itself once the run-rating model's moneyline clears the floor.
+  Since 2026-09-15 a box whose rank store holds NO MLB game market
+  measures on the next maintenance pass rather than waiting for
+  Wednesday (`maintenance.game_rank_boot_due`, once a day, marker
+  written before the walk), and each sport's prop measurement runs in
+  its own try so one sport's failed walk can no longer skip the game
+  markets. A
   sub-floor number is stored too (it is what stops a shelf being
   claimed by prose); a market the box can no longer support retires its
   own entry; a market that could not be measured at all leaves the
