@@ -146,6 +146,22 @@ def write(sport: str, out_dir: Path = OUT_DIR, today: str | None = None) -> dict
             blob = payload_for(conn, sport, today)
         finally:
             conn.close()
+    # THE COLLEGE LOGOS NEED AN ID THE ROSTER PAGE DID NOT HAVE. ESPN keys
+    # its 134 schools numerically, so `logoUrl` draws a college mark only
+    # when the team record carries an `id` — and the front end reads
+    # college team records off the BOARD payload (`_cfbTeams`), which a
+    # reader who opens Rosters first has never loaded. Every college
+    # roster header therefore drew the monogram. Ethan, 2026-09-14: "We
+    # should be showing your team logos on the team roster." The same
+    # cached teams feed the board uses rides here, keyed by abbreviation,
+    # so the page can draw the mark from its own payload. Absent on a
+    # feed failure, and the page falls back to exactly what it drew before.
+    if sport == "cfb":
+        try:
+            from engine.sources import cfbdata
+            blob["team_meta"] = cfbdata.parse_teams(cfbdata.fetch_teams())
+        except Exception:                                     # noqa: BLE001
+            blob["team_meta"] = {}
     (out_dir / f"rosters_{sport}.json").write_text(json.dumps(blob, indent=2))
     return blob
 

@@ -23058,6 +23058,13 @@ async function renderRosters() {
   if (!host) return;
   const sport = state.sport || "nfl";
   const d = await loadRosters(sport);
+  // College team ids ride on the roster payload since 2026-09-14 — see
+  // rosters_build.write. Without them `teamMark` has no ESPN id for a
+  // school and every header drew the monogram instead of the logo.
+  if (sport === "cfb" && d && d.team_meta && Object.keys(d.team_meta).length) {
+    _cfbTeams = d.team_meta;
+    window.ACTIVE_TEAMS = teamsForSport(sport);
+  }
   // Only the NFL has a published depth chart. Everything else is built
   // from appearances, and the page must never let those read as the same
   // kind of claim.
