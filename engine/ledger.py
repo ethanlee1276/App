@@ -2965,17 +2965,30 @@ def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):
     # separates the case, and a match on date+1 keeps being refused —
     # nothing explains a bet dated BEFORE its own game, so grading one
     # would be inventing a reason.
-    d = (d0 - _dt.timedelta(days=1)).isoformat()
-    alt = list(wargs)
-    alt[-1] = d
-    rows = [c for c in hist_conn.execute(
-                f"SELECT player, value, team, game_id "
-                f"FROM player_game_logs WHERE {where} AND market=?",
-                (*alt, b["market"]))
-            if normalize_name(c["player"]) == target]
-    if not rows:
+    # BOTH SHAPES OF DRIFT, 2026-09-14. This reached back ONE day, which
+    # is baseball's: a 9pm first pitch labels the slate a day AHEAD of the
+    # box score. College is the other way round — a night game's box
+    # score is filed under the UTC date, one day AFTER the bet — and eight
+    # college props sat open for two days beside their own stat lines.
+    # College looks forward first, then back; everyone else keeps the
+    # single day-before read they had. Both college days answering is a
+    # coin flip, and the bet stays open rather than graded on one.
+    offsets = (1, -1) if b["sport"] == "cfb" else (-1,)
+    found = []
+    for off in offsets:
+        d = (d0 + _dt.timedelta(days=off)).isoformat()
+        alt = list(wargs)
+        alt[-1] = d
+        rows = [c for c in hist_conn.execute(
+                    f"SELECT player, value, team, game_id "
+                    f"FROM player_game_logs WHERE {where} AND market=?",
+                    (*alt, b["market"]))
+                if normalize_name(c["player"]) == target]
+        if rows:
+            found.append((rows, alt))
+    if len(found) != 1:
         return [], wargs
-    return rows, alt
+    return found[0]
 
 
 def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
@@ -3036,6 +3049,33 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
             and not _day_was_ingested(hist_conn, where, wargs)):
         return [], wargs
     return rows, alt
+
+
+def _neighbour_game_evidence(hist_conn, b, where, wargs):
+    """A college game row filed a day either side of the bet's date.
+
+    A college games row's period is its UTC date; the bet's date is the
+    Eastern game day. Three likely rows on Hawaii-UNLV (09-05 ET, filed
+    09-06) sat open nine days for this. Exactly one neighbour may answer
+    — both answering means two games and no way to pick — and NFL bets,
+    keyed by week, never come here."""
+    import datetime as _dt
+    if "period=?" not in where:
+        return [], None
+    try:
+        d0 = _dt.date.fromisoformat(b["date"] or "")
+    except ValueError:
+        return [], None
+    found = []
+    for off in (1, -1):
+        alt = list(wargs)
+        alt[-1] = (d0 + _dt.timedelta(days=off)).isoformat()
+        rows, fn = _game_bet_evidence(hist_conn, b, where, alt)
+        if rows:
+            found.append((rows, fn))
+    if len(found) != 1:
+        return [], None
+    return found[0]
 
 
 def _game_bet_evidence(hist_conn, b, where, wargs):
@@ -3135,6 +3175,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         where, wargs = _hist_where(b)
         if b["market"] in GAME_MARKETS:
             rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
+            if not rows and b["sport"] == "cfb":
+                # Hawaii-UNLV, 2026-09-05 Eastern, is the games row dated
+                # 09-06: the same UTC drift the props get, for the game
+                # markets — see `_neighbour_game_evidence`.
+                nrows, nfn = _neighbour_game_evidence(hist_conn, b, where, wargs)
+                if nrows:
+                    rows, actual_fn = nrows, nfn
             g, verdict = _pick_dh_game(rows, b, actual_fn)
             if verdict == "void":
                 conn.execute("UPDATE bets SET status='void', pnl_units=0, "
