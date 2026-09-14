@@ -1,5 +1,6 @@
 """Tests for the bet-tracking ledger + bankroll (in-memory SQLite)."""
 
+import datetime as dt
 import os
 import sys
 
@@ -1682,28 +1683,46 @@ def test_nfl_anytime_td_longshots_settle_from_td_rows():
 
 
 def test_nfl_no_show_voids_only_when_the_week_is_final():
-    """A projected player who never appeared in a FULLY final NFL week
-    voids, mapped through the same season+period keys."""
+    """A projected player who never appeared in a final NFL game voids,
+    mapped through the same season+period keys — but since 2026-09-14
+    the week being final is not enough on its own. `_absent_player_verdict`
+    owns the NFL: the game must be dated, the official file must cover
+    every team that played that day, and the week's snap file must be in.
+    Without the snap file the bet stays OPEN; with it, a player with no
+    snaps voids."""
     from engine import db as hist_db
-    conn = _conn()
-    r = _result(sport="nfl", date="2025-W05")
-    r["recommendations"][0].update({"player": "Scratched Guy",
-                                    "market": "rush_yds"})
-    ledger.log_recommendations(conn, r)
 
-    hist = hist_db.connect(":memory:")
-    hist_db.upsert_games(hist, [
-        {"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
-         "home": "B", "away": "A", "home_score": 24, "away_score": 20,
-         "spread": -3.0, "total": 44.0, "roof": "", "surface": "",
-         "temp": None, "wind": None, "extra": None}])
-    hist_db.upsert_player_logs(hist, [
-        {"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
-         "player": "Someone Else", "team": "B", "opponent": "A",
-         "position": "RB", "home": 1, "market": "rush_yds", "value": 80.0}])
-    ledger.settle_from_history(conn, hist, sport="nfl")
-    b = conn.execute("SELECT status FROM bets WHERE player='Scratched Guy'").fetchone()
-    assert b["status"] == "void"
+    def world(snaps):
+        conn = _conn()
+        r = _result(sport="nfl", date="2025-W05")
+        day = (dt.date.today() - dt.timedelta(days=8)).isoformat()
+        r["recommendations"][0].update({"player": "Scratched Guy",
+                                        "market": "rush_yds", "game_date": day})
+        ledger.log_recommendations(conn, r)
+        assert conn.execute("SELECT game_day FROM bets WHERE player='Scratched Guy'"
+                            ).fetchone()["game_day"] == day
+        hist = hist_db.connect(":memory:")
+        hist_db.upsert_games(hist, [
+            {"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
+             "home": "B", "away": "A", "home_score": 24, "away_score": 20,
+             "date": day, "spread": -3.0, "total": 44.0, "roof": "", "surface": "",
+             "temp": None, "wind": None, "extra": None}])
+        logs = [{"sport": "nfl", "season": 2025, "period": "005", "game_id": "A@B",
+                 "player": p, "team": t, "opponent": o, "position": "RB",
+                 "home": 1, "market": "rush_yds", "value": 80.0}
+                for p, t, o in (("Someone Else", "B", "A"), ("Other Guy", "A", "B"))]
+        if snaps:
+            logs.append({"sport": "nfl", "season": 2025, "period": "005",
+                         "game_id": "A@B", "player": "Someone Else", "team": "B",
+                         "opponent": "A", "position": "RB", "home": 1,
+                         "market": "snap_pct", "value": 0.8})
+        hist_db.upsert_player_logs(hist, logs)
+        ledger.settle_from_history(conn, hist, sport="nfl")
+        return conn.execute("SELECT status FROM bets WHERE player='Scratched Guy'"
+                            ).fetchone()["status"]
+
+    assert world(snaps=False) == "open", "no snap file: nothing is proven yet"
+    assert world(snaps=True) == "void"
 
 
 def test_spread_and_team_total_picks_journal_and_settle():

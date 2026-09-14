@@ -3051,6 +3051,112 @@ def _neighbour_day_rows(hist_conn, b, where: str, wargs: list):
     return rows, alt
 
 
+ABSENT_VOID_NOTE = ("Did not play: the game is final, the stat file covers every "
+                    "team that played, and this player has no snap on it — voided, "
+                    "the way a book voids a scratch.")
+ABSENT_ZERO_NOTE = ("Played, no line: the game is final and the stat file has snaps "
+                    "for this player but no stat in this market — graded at zero.")
+#: Sports whose absent players are graded by `_absent_player_verdict`
+#: inside the settle loop. The end-of-loop no-show sweep skips these: two
+#: rules for one question would let the looser one grade first, which is
+#: exactly what happened when the sweep voided a player off a stat file
+#: that had not finished landing.
+ABSENT_RULE_SPORTS = ("nfl", "cfb")
+
+
+def _absent_player_verdict(hist_conn, b):
+    """``"void"``, ``"zero"`` or ``None`` for a prop whose player has no
+    stat row on any day the settler looked.
+
+    THE RULE, Ethan's call on 2026-09-14, after sixteen Sunday NFL rows
+    and eight college rows stayed open beside complete stat files: a
+    player absent from a stat file is either a scratch or a player who
+    never touched the ball, and the book grades those differently — a
+    scratch is void, an active player is graded at zero. What separates
+    them is the snap count, which the usage ingest stores per player-week.
+
+    So, for the NFL: every game on the bet's calendar day must be final,
+    the official file must list every team that played that day (a file
+    that is still landing proves nothing), and the week's snap file must
+    be in. Then a player WITH snaps and no stat is zero; a player with
+    NO snaps is void. Any earlier link missing leaves the bet open — an
+    open bet is visible and honest, a wrong grade is neither.
+
+    College has no snap file. Its box score lists only players with a
+    stat, so absence from a final, ingested box cannot separate the two
+    cases, and the bet is voided — the conservative grade. The player's
+    team is read off his own earlier stat rows, since the journal keeps
+    no team on a bet.
+    """
+    from .sources.oddsapi import normalize_name
+    if b["market"] in GAME_MARKETS:
+        return None
+    if b["category"] in GRADED_ELSEWHERE:
+        return None          # a ticker or a fighter — see GRADED_ELSEWHERE
+    sport = b["sport"]
+    if sport not in ABSENT_RULE_SPORTS:
+        return None
+    target = normalize_name(b["player"] or "")
+    if sport == "nfl":
+        m = _NFL_WEEK_DATE.match(b["date"] or "")
+        day = b["game_day"] if "game_day" in b.keys() else None
+        if not m or not day:
+            return None
+        season, period = int(m.group(1)), f"{int(m.group(2)):03d}"
+        games = hist_conn.execute(
+            "SELECT home, away, home_score, away_score FROM games "
+            "WHERE sport='nfl' AND season=? AND period=? AND date=?",
+            (season, period, day)).fetchall()
+        if not games or any(g["home_score"] is None or g["away_score"] is None
+                            for g in games):
+            return None
+        played = {t for g in games for t in (g["home"], g["away"])}
+        filed = {r[0] for r in hist_conn.execute(
+            "SELECT DISTINCT team FROM player_game_logs WHERE sport='nfl' "
+            "AND season=? AND period=? AND game_id NOT LIKE '%-box'",
+            (season, period))}
+        if not played <= filed:
+            return None
+        snaps = hist_conn.execute(
+            "SELECT player, value FROM player_game_logs WHERE sport='nfl' "
+            "AND season=? AND period=? AND market='snap_pct'",
+            (season, period)).fetchall()
+        if not snaps:
+            return None
+        mine = [r for r in snaps if normalize_name(r["player"]) == target]
+        if any((r["value"] or 0) > 0 for r in mine):
+            return "zero"
+        return "void"
+    # College from here.
+    try:
+        d0 = datetime.date.fromisoformat(b["date"] or "")
+    except ValueError:
+        return None
+    since = (d0 - datetime.timedelta(days=45)).isoformat()
+    team = None
+    for r in hist_conn.execute(
+            "SELECT player, team, period FROM player_game_logs WHERE sport='cfb' "
+            "AND period BETWEEN ? AND ? AND team IS NOT NULL AND team != '' "
+            "ORDER BY period DESC", (since, d0.isoformat())):
+        if normalize_name(r["player"]) == target:
+            team = r["team"]
+            break
+    if not team:
+        return None
+    lo = (d0 - datetime.timedelta(days=1)).isoformat()
+    hi = (d0 + datetime.timedelta(days=1)).isoformat()
+    finals = hist_conn.execute(
+        "SELECT period FROM games WHERE sport='cfb' AND period BETWEEN ? AND ? "
+        "AND (home=? OR away=?) AND home_score IS NOT NULL AND away_score IS NOT NULL",
+        (lo, hi, team, team)).fetchall()
+    if len(finals) != 1:
+        return None
+    filed = hist_conn.execute(
+        "SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period=? AND team=? LIMIT 1",
+        (finals[0]["period"], team)).fetchone()
+    return "void" if filed else None
+
+
 def _neighbour_game_evidence(hist_conn, b, where, wargs):
     """A college game row filed a day either side of the bet's date.
 
@@ -3221,6 +3327,21 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # right one.
             rows, wargs = _neighbour_day_rows(hist_conn, b, where, wargs)
         if not rows:
+            # THE PLAYER IS NOT IN THE FILE. Until 2026-09-14 that left the
+            # bet open forever; sixteen Sunday rows and eight college rows
+            # sat that way beside complete stat files. `_absent_player_verdict`
+            # says which of two things it means — see it for the rule.
+            verdict = _absent_player_verdict(hist_conn, b)
+            if verdict == "void":
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                             "pnl_dollars=0, why_note=? WHERE id=?",
+                             (ABSENT_VOID_NOTE, b["id"]))
+                settled += 1
+            elif verdict == "zero":
+                _settle_one(conn, b, 0.0, None)
+                conn.execute("UPDATE bets SET why_note=? WHERE id=?",
+                             (ABSENT_ZERO_NOTE, b["id"]))
+                settled += 1
             continue
         # Confirm the game FINISHED — do not merely fail to prove it did not.
         # On today's slate that means positive proof; see _too_early_to_grade.
@@ -3365,6 +3486,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             continue
         if b["category"] in NEVER_NOSHOW:
             continue
+        if b["sport"] in ABSENT_RULE_SPORTS:
+            continue        # graded in the loop by _absent_player_verdict
         key = (b["sport"], b["date"])
         where, wargs = _hist_where(b)
         if key not in day_state:
