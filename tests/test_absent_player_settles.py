@@ -124,6 +124,22 @@ def test_a_zero_snap_row_is_still_a_scratch():
     assert _status(L, bid)[0] == "void"
 
 
+def test_a_snap_file_missing_a_team_that_played_proves_nothing():
+    """The snap file is a separate release from the stat file and can land
+    in part. Miami's snaps in, Las Vegas's not: a Raider with no stat row
+    is not yet a scratch, he is a player whose snap file has not landed."""
+    L, H = _world()
+    _sunday(H, snaps=False)
+    _log(H, "nfl", 2026, "001", "MIA-001", "Starter MIA", "MIA", "snap_pct", 0.9)
+    bid = _bet(L, "nfl", WEEK, "Brock Bowers", market="receptions", line=4.5,
+               side="UNDER", game_day=BET_DAY)
+    ledger.settle_from_history(L, H)
+    assert _status(L, bid)[0] == "open"
+    _log(H, "nfl", 2026, "001", "LV-001", "Starter LV", "LV", "snap_pct", 0.9)
+    ledger.settle_from_history(L, H)
+    assert _status(L, bid)[0] == "void"
+
+
 def test_no_snap_file_yet_proves_nothing():
     L, H = _world()
     _sunday(H, snaps=False)

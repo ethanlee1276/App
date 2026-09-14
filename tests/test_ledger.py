@@ -1711,11 +1711,12 @@ def test_nfl_no_show_voids_only_when_the_week_is_final():
                  "player": p, "team": t, "opponent": o, "position": "RB",
                  "home": 1, "market": "rush_yds", "value": 80.0}
                 for p, t, o in (("Someone Else", "B", "A"), ("Other Guy", "A", "B"))]
-        if snaps:
-            logs.append({"sport": "nfl", "season": 2025, "period": "005",
-                         "game_id": "A@B", "player": "Someone Else", "team": "B",
-                         "opponent": "A", "position": "RB", "home": 1,
-                         "market": "snap_pct", "value": 0.8})
+        if snaps:                      # the snap file covers both teams
+            logs += [{"sport": "nfl", "season": 2025, "period": "005",
+                      "game_id": "A@B", "player": p, "team": t, "opponent": o,
+                      "position": "RB", "home": 1, "market": "snap_pct",
+                      "value": 0.8}
+                     for p, t, o in (("Someone Else", "B", "A"), ("Other Guy", "A", "B"))]
         hist_db.upsert_player_logs(hist, logs)
         ledger.settle_from_history(conn, hist, sport="nfl")
         return conn.execute("SELECT status FROM bets WHERE player='Scratched Guy'"

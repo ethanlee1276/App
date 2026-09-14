@@ -3118,10 +3118,13 @@ def _absent_player_verdict(hist_conn, b):
         if not played <= filed:
             return None
         snaps = hist_conn.execute(
-            "SELECT player, value FROM player_game_logs WHERE sport='nfl' "
+            "SELECT player, team, value FROM player_game_logs WHERE sport='nfl' "
             "AND season=? AND period=? AND market='snap_pct'",
             (season, period)).fetchall()
-        if not snaps:
+        # The snap file lands separately from the stat file and can land
+        # in part: every team that played that day must be on it, or a
+        # whole team's starters would read as scratches.
+        if not played <= {r["team"] for r in snaps}:
             return None
         mine = [r for r in snaps if normalize_name(r["player"]) == target]
         if any((r["value"] or 0) > 0 for r in mine):
