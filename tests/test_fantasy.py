@@ -187,6 +187,51 @@ def test_both_boards_still_agree_with_the_fit_about_quarterbacks():
                 inspect.getsource(fantasy_draft._players)):
         assert '"QB"' in src, "a board stopped naming the position it skips"
 
+
+
+def test_the_first_weeks_of_a_season_read_what_they_have():
+    """Ethan, 2026-09-14, the Monday after Week 1: "the fantasy pages
+    including the calendar is completely empty." Four weeks is the
+    floor once four weeks exist; before that the floor is the season's
+    own age, and every row says how many weeks it stands on."""
+    from engine.fantasy import week_floor, weeks_ingested, _weekly
+    conn = db.connect(":memory:")
+    rows = []
+    for wk in (1,):
+        rows += [_row("Riser", "KC", "WR", wk, "targets", 6),
+                 _row("Riser", "KC", "WR", wk, "fp_ppr", 10),
+                 _row("Steady", "KC", "WR", wk, "targets", 12),
+                 _row("Steady", "KC", "WR", wk, "fp_ppr", 20)]
+    db.upsert_player_logs(conn, rows)
+    data = _weekly(conn, 2025)
+    assert weeks_ingested(data) == 1 and week_floor(data) == 1
+    board = usage_board(conn, 2025)
+    assert {b["player"] for b in board} == {"Riser", "Steady"}
+    assert all(b["weeks"] == 1 and b["l4"] is None and b["delta"] == 0.0 for b in board)
+    # The floor grows with the season and stops at four: with six weeks
+    # in, a two-week player is still cut.
+    conn2 = db.connect(":memory:")
+    _seed(conn2)                                       # seven weeks
+    db.upsert_player_logs(conn2, [_row("Late Add", "KC", "WR", 6, "targets", 4),
+                                  _row("Late Add", "KC", "WR", 7, "targets", 4)])
+    assert week_floor(_weekly(conn2, 2025)) == 4
+    assert "Late Add" not in {b["player"] for b in usage_board(conn2, 2025)}
+
+
+def test_buy_sell_reads_the_first_weeks_too():
+    conn = db.connect(":memory:")
+    rows = []
+    for wk in (1, 2):
+        rows += [_row("Bell Cow", "KC", "RB", wk, "carries", 15),
+                 _row("Bell Cow", "KC", "RB", wk, "fp_ppr", 15 * 0.9),
+                 _row("Backup", "KC", "RB", wk, "carries", 10),
+                 _row("Backup", "KC", "RB", wk, "fp_ppr", 10 * 0.9 - 4)]
+    db.upsert_player_logs(conn, rows)
+    bs = buy_sell_board(conn, 2025, min_fit_rows=2)
+    names = {r["player"] for rows in bs.values() if isinstance(rows, list) for r in rows}
+    assert "Backup" in names, bs
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

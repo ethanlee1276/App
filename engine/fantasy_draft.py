@@ -28,7 +28,7 @@ own news-reading beats any model built on stale volume.
 
 from __future__ import annotations
 
-from .fantasy import _weekly, _pbp_weekly, _short_key, league_rates, USAGE_MIN_WEEKS
+from .fantasy import _weekly, _pbp_weekly, _short_key, league_rates, week_floor
 
 # 12-team, 1QB / 2RB / 2WR / 1TE / 1FLEX. The flex is mostly RB/WR in
 # practice, so replacement rank = starters*teams plus a flex share.
@@ -58,6 +58,7 @@ def _players(conn, season: int) -> list[dict]:
     data = _weekly(conn, season)
     rates = league_rates(conn, season)
     pbp = _pbp_weekly(conn, season)
+    floor = week_floor(data)           # the season's own weeks, capped at four
     out = []
     for player, p in data["players"].items():
         pos = (p["position"] or "").upper()
@@ -65,7 +66,7 @@ def _players(conn, season: int) -> list[dict]:
             continue
         weeks = sorted(p["weeks"])
         n = len(weeks)
-        if n < USAGE_MIN_WEEKS:
+        if n < floor:
             continue
         ppg = sum(m.get("fp_ppr", 0.0) for m in p["weeks"].values()) / n
         tgt = sum(m.get("targets", 0.0) for m in p["weeks"].values()) / n
@@ -87,7 +88,7 @@ def _players(conn, season: int) -> list[dict]:
         # while a thin-sample rookie with no xFP rows "led" the position.
         # Passing production has no volume model here; for QBs the honest
         # projection is their scoring itself, labeled as such.
-        if pos != "QB" and len(xfp_vals) >= USAGE_MIN_WEEKS:
+        if pos != "QB" and len(xfp_vals) >= floor:
             xppg = sum(xfp_vals) / len(xfp_vals)
             basis = "xfp"
         elif pos != "QB" and rate and (tgt + car) > 0:

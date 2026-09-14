@@ -249,6 +249,9 @@ def main() -> None:
         out = {
             "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "season": season,
+            # How young the season is: the page says "one game of volume"
+            # instead of pretending a Week 1 share is a role.
+            "weeks_in": fantasy.weeks_ingested(fantasy._weekly(conn, season)),
             "camp": camp,
             "usage": usage,
             "rates": fantasy.league_rates(conn, season),

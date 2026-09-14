@@ -313,6 +313,19 @@ def test_the_page_gives_it_a_tab_of_its_own():
     assert "waiverPulseHTML(d.trending)" in src[i:i + 400]
 
 
+
+def test_a_young_season_lowers_the_waiver_floor_to_what_it_has():
+    """MIN_WEEKS is three; the Monday after Week 1 every row carries one,
+    and a floor of three emptied the board. The floor is the season's
+    own age until it reaches three."""
+    young = [_u("Backup Back", "KC", "RB", 0.28, 0.06, weeks=1),
+             _u("Slot Guy", "BUF", "WR", 0.14, 0.10, weeks=1)]
+    assert waivers.week_floor(young) == 1
+    assert {r["player"] for r in waivers.rising(young)} == {"Backup Back", "Slot Guy"}
+    assert waivers.week_floor(USAGE) == 3            # a mature season keeps its bar
+    assert waivers.week_floor([]) == 1
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

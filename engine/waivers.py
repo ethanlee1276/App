@@ -49,8 +49,17 @@ SKILL = {"QB", "RB", "WR", "TE"}
 #: a change early, big enough that noise does not fill the board.
 RISING_DELTA = 0.03
 
-#: A rising row needs a real denominator behind it.
+#: A rising row needs a real denominator behind it — or every week the
+#: season has played, when that is fewer (see `week_floor`; the Monday
+#: after Week 1 the whole room was empty for want of three weeks).
 MIN_WEEKS = 3
+
+
+def week_floor(usage: list) -> int:
+    """MIN_WEEKS, or the most weeks any usage row carries if the season
+    is younger than that; never below one."""
+    have = max((int(u.get("weeks") or 0) for u in usage or []), default=0)
+    return max(1, min(MIN_WEEKS, have))
 
 #: How many rows each section carries. A waiver board longer than this
 #: is a list to read rather than a shortlist to act on.
@@ -143,11 +152,12 @@ def rising(usage: list[dict], limit: int = LIMIT,
     game says quite a lot.
     """
     out = []
+    floor = week_floor(usage)
     for u in usage or []:
         delta = u.get("delta")
         if delta is None or delta < min_delta:
             continue
-        if int(u.get("weeks") or 0) < MIN_WEEKS:
+        if int(u.get("weeks") or 0) < floor:
             continue
         if str(u.get("position") or "").upper() not in SKILL:
             continue
@@ -309,6 +319,7 @@ def streamers(usage: list[dict], scripts: list[dict],
     """
     env = _next_scripts(scripts)
     out: dict = {}
+    floor = week_floor(usage)
     for u in usage or []:
         pos = str(u.get("position") or "").upper()
         if pos not in STREAM_POSITIONS:
@@ -318,7 +329,7 @@ def streamers(usage: list[dict], scripts: list[dict],
             share = u.get("season")
         if share is None or share < MIN_STREAM_SHARE:
             continue
-        if int(u.get("weeks") or 0) < MIN_WEEKS:
+        if int(u.get("weeks") or 0) < floor:
             continue
         spot = env.get(team_key(u.get("team")))
         if not spot or spot.get("implied") is None:

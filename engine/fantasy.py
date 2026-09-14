@@ -88,6 +88,29 @@ def _share(part: float, whole: float) -> float | None:
     return part / whole if whole > 0 else None
 
 
+def weeks_ingested(data: dict) -> int:
+    """How many distinct weeks of the season the usage rows cover."""
+    return len({wk for p in data["players"].values() for wk in p["weeks"]})
+
+
+def week_floor(data: dict, floor: int = USAGE_MIN_WEEKS) -> int:
+    """The weeks a player must have before a board reads him: the
+    stability floor, OR every week the season has played so far,
+    whichever is smaller.
+
+    Ethan, 2026-09-14, the Monday after Week 1: "the fantasy pages
+    including the calendar is completely empty." USAGE_MIN_WEEKS is
+    four, and every board applied it as an absolute — so from the first
+    Sunday to the fourth, no player in the league qualified for usage,
+    buy/sell, the draft kit or the calendar that reads it, and the
+    whole room sat on "No usage rows for this season yet" beside a
+    full Week 1 file. Four weeks is the right bar once four weeks
+    exist; before that the bar is what the season has, and every row
+    carries `weeks` so the page can say how thin it is.
+    """
+    return max(1, min(int(floor), weeks_ingested(data)))
+
+
 #: Generational suffixes, which are not surnames.
 #:
 #: `engine.backtest._norm` strips exactly this set and has since it was
@@ -165,10 +188,11 @@ def usage_board(conn, season: int, limit: int = BOARD_LIMIT) -> list[dict]:
     average vs season, sorted so the biggest movers surface first."""
     data = _weekly(conn, season)
     pbp = _pbp_weekly(conn, season)
+    floor = week_floor(data)
     out = []
     for player, p in data["players"].items():
         weeks = sorted(p["weeks"])
-        if len(weeks) < USAGE_MIN_WEEKS:
+        if len(weeks) < floor:
             continue
         share_key = "carries" if p["position"] == "RB" else "targets"
 
@@ -293,6 +317,7 @@ def buy_sell_board(conn, season: int, limit: int = 12,
     data = _weekly(conn, season)
     rates = league_rates(conn, season, min_rows=min_fit_rows)
     pbp = _pbp_weekly(conn, season)
+    floor = week_floor(data)
     rows = []
     for player, p in data["players"].items():
         # No QBs on this board, on purpose: their scoring is passing-driven
@@ -304,7 +329,7 @@ def buy_sell_board(conn, season: int, limit: int = 12,
             continue
         rate = rates.get(p["position"])
         weeks = sorted(p["weeks"])
-        if not rate or len(weeks) < USAGE_MIN_WEEKS:
+        if not rate or len(weeks) < floor:
             continue
         n = len(weeks)
         tgt = sum(m.get("targets", 0.0) for m in p["weeks"].values()) / n
@@ -317,7 +342,7 @@ def buy_sell_board(conn, season: int, limit: int = 12,
         # the flat volume fit otherwise.
         xfp_vals = [m["xfp"] for m in pbp.get(_short_key(player, p["team"]),
                                               {}).values() if "xfp" in m]
-        if len(xfp_vals) >= USAGE_MIN_WEEKS:
+        if len(xfp_vals) >= floor:
             expected = sum(xfp_vals) / len(xfp_vals)
             basis = "xfp"
         else:

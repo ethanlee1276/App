@@ -157,6 +157,17 @@ def test_kit_is_json_safe():
     assert kit["board"] and kit["notes"]
 
 
+
+def test_the_draft_kit_reads_a_one_week_season():
+    """The calendar reads the kit's board; an empty kit is an empty
+    calendar, which is what the Monday after Week 1 showed."""
+    from engine import db
+    from engine.fantasy_draft import _players
+    conn = db.connect(":memory:")
+    _seed(conn, n_weeks=1)
+    assert _players(conn, 2025), "one week in, the kit has no players"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

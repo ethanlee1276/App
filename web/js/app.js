@@ -18729,6 +18729,9 @@ async function renderFantasy() {
       The delta column is the money — a riser at 42% beats a flat 60%.</div>
     <div class="section-title">Usage movers
       <span class="sub">— season vs 4-week vs last week, biggest role changes first</span></div>
+    ${d.weeks_in && d.weeks_in < 4 ? `<div class="ls-note">${d.weeks_in === 1
+        ? "One week in: every share is one game’s volume, so nothing here is a role yet."
+        : `${d.weeks_in} weeks in: shares are ${d.weeks_in} games of volume; the four-week trend fills in from Week 4.`}</div>` : ""}
     <div class="card ff-table">
       <div class="ff-row ff-head">
         <span class="ff-who">Player</span><span class="ff-bar-h">Last week’s share</span>
