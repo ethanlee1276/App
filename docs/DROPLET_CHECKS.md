@@ -2297,6 +2297,19 @@ payload (`alt_fallback` in the attach result) until the next paid pull
 buys the ladders; the board keeps its main lines and game prices
 through the gap.
 
+GENERALISED 2026-09-14, after it bit again. The NFL request gained
+`player_pass_tds` that morning, which changed the base name too; every
+NFL event missed its cache on every cached rebuild, every prop fell to
+a proxy, and the Monday board showed one moneyline (Ethan: "we are now
+only showing a money line for the Chiefs game tonight"). A cached
+rebuild now serves the NEWEST payload on disk for the event under any
+name (`name_fallback` in the attach result, `oddsapi.newest_event_cache`),
+dated by that file's own age, so a change to the request never blanks
+a board; the markets the old payload lacks stay unpriced until the next
+paid pull. Confirm on the next cached NFL rebuild after a request
+change: the build log's attach line should show `name_fallback` events
+and no `cache_misses` for events the last paid pull reached.
+
 Confirm after the first PAID NFL pull on the new code (the decisions
 ledger says when one landed):
 

@@ -1079,6 +1079,45 @@ def event_cache_name(event_id: str, markets: list[str] | None = None,
     return f"odds_event_{sport}_{event_id}_{tag}.json"
 
 
+def newest_event_cache(event_id: str, sport: str = "nfl"):
+    """The newest cached payload for this event under ANY market list, as
+    ``(path, payload)``, or ``(None, None)``.
+
+    THE DEPLOY-DAY MISS, GENERALISED. The cache file is named by the
+    market list (`event_cache_name`), so the first cached rebuild after
+    the request changes finds nothing under the new name while the last
+    paid pull's payload sits beside it. The 09-07 fallback tried one
+    other name — the list without the ladders — which covered the day
+    the ladders shipped and nothing else. On 2026-09-14 the NFL request
+    gained `player_pass_tds`, both names changed at once, every NFL
+    event missed its cache, every prop fell to a proxy, and the Monday
+    board showed one moneyline. Ethan: "we are now only showing a money
+    line for the Chiefs game tonight ... there's no rushing props or
+    passing props receiving props or anything like that."
+
+    A payload bought with a different market list is still real prices
+    for the markets it carries. Serve the newest one; the markets it
+    lacks stay unpriced until the next paid pull, and the file's own
+    age dates it (see `apply_odds_to_slate`).
+    """
+    best = None
+    try:
+        candidates = list(CACHE_DIR.glob(f"odds_event_{sport}_{event_id}_*.json"))
+    except OSError:
+        candidates = []
+    for path in candidates:
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        if best is None or mtime > best[0]:
+            best = (mtime, path)
+    if best is None:
+        return None, None
+    payload = _read_cached_json(best[1])
+    return (best[1], payload) if payload is not None else (None, None)
+
+
 def sport_cache_age(sport: str = "nfl", cache_tag: str = "",
                     now: float | None = None) -> float | None:
     """Seconds since the whole-slate odds payload was written, or None.
@@ -1118,6 +1157,15 @@ def price_is_showable(age: float | None, now_max: float | None = None) -> bool:
         return True
     return float(age) <= (now_max if now_max is not None
                           else _max_game_price_show_age())
+
+
+def _path_age(path, now: float | None = None) -> float | None:
+    """Seconds since ``path`` was written, or None when it cannot be read."""
+    try:
+        return max(0.0, (now if now is not None else time.time())
+                   - path.stat().st_mtime)
+    except (OSError, AttributeError):
+        return None
 
 
 def event_cache_age(event_id: str, markets: list[str] | None = None,
@@ -1777,6 +1825,11 @@ class OddsAttachResult:
     # deploy-day case, see the fallback in `apply_odds_to_slate`.
     alt_matched: int = 0
     alt_fallback: int = 0
+    # Cached rebuilds served the newest payload on disk for the event
+    # because no file existed under today's name OR the base name — the
+    # request changed in some other way (a market joined it). See
+    # `newest_event_cache`.
+    name_fallback: int = 0
 
 
 def _team_key(name: str) -> str:
@@ -2437,6 +2490,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # construction — for a payload that may be days old. That is the
         # any-age hole opened back up in one corner.
         _age_markets = markets
+        _age_path = None
         try:
             payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
                                               books=books, ttl=ttl, sport=sport,
@@ -2462,6 +2516,14 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     _age_markets = base_markets
                 except OddsAPIError:
                     payload = None
+            if payload is None:
+                # ANY name, newest first — the request changed in a way
+                # the base name does not cover (2026-09-14: a market
+                # joined the list). See `newest_event_cache`.
+                _age_path, payload = newest_event_cache(ev["id"], sport)
+                if payload is not None:
+                    result.name_fallback += 1
+                    quota = Quota()
             if payload is None:
                 # Never paid for, so there is nothing on disk. Counted: a
                 # cached rebuild otherwise looks identical whether the
@@ -2489,7 +2551,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # player markets against MAX_PROP_PRICE_AGE, of the game markets
         # against MAX_GAME_PRICE_AGE. A cached payload is served at any
         # age (`_request`); these two questions are where "any" ends.
-        _age = event_cache_age(ev["id"], _age_markets, books, sport)
+        # Dated by the file actually served: a payload found under another
+        # name is as old as THAT file, never "nothing cached" under today's.
+        _age = (_path_age(_age_path) if _age_path is not None
+                else event_cache_age(ev["id"], _age_markets, books, sport))
         if props_ok and not price_is_showable(_age, _max_prop_price_show_age()):
             # NOTHING off this payload reaches a prop: not a main line,
             # not a rung, not a scorer quote, not a menu entry. A prop
