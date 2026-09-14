@@ -282,6 +282,14 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN game_day TEXT")
     except sqlite3.OperationalError:
         pass
+    # THE PLAYER'S TEAM, 2026-09-14. Five college rows sat open because
+    # the player had no earlier stat row to read a team off, and without
+    # a team the settler cannot find his game. Stamped by `_stamp_team`
+    # at every prop writer; NULL on rows written before it existed.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN team TEXT")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -590,6 +598,18 @@ def _lead_min(r: dict, kick: dict | None = None) -> float | None:
     return minutes_until(stamp)
 
 
+def _stamp_team(conn, cur, r) -> None:
+    """Write the row's team onto the bet just journaled, when it has one.
+
+    Separate from the INSERT so the prop writers' positional VALUES lists
+    stay as they are; `INSERT OR IGNORE` leaves rowcount 0 and lastrowid
+    stale on a duplicate, so only a fresh row is stamped.
+    """
+    team = str((r.get("team") if hasattr(r, "get") else "") or "").strip()
+    if cur.rowcount and team:
+        conn.execute("UPDATE bets SET team=? WHERE id=?", (team, cur.lastrowid))
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
@@ -695,6 +715,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("move_delta"), r.get("move_steam"),
              r.get("move_first_sharp"), r.get("velo_delta"),
              r.get("tto_proj"), r.get("opp_zone_rate")))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
     # forward results). Moneylines store player = the team picked, line 0.5,
@@ -1028,6 +1049,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              None if r.get("implied_prob") is None
              else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
              None, "Likely", flat_stake, 0.0))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()
     return n
@@ -1112,6 +1134,7 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
              r.get("lineup_slot"),
              1 if r.get("lineup_confirmed") else 0
              if r.get("lineup_confirmed") is not None else None))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount
     return n
 
@@ -1183,6 +1206,7 @@ def log_priced_out(conn, result: dict, flat_stake: float = 0.1) -> int:
              r.get("book", ""), odds, r.get("projection"), r.get("hit_prob"),
              r.get("edge"), r.get("confidence"), r.get("grade", "?"),
              flat_stake, 0.0))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
     return n
@@ -1234,6 +1258,7 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
              # that simply graded low. That is the whole population whose
              # outcomes say whether the veto earns its keep.
              r.get("move_delta"), r.get("move_steam")))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
     return n
@@ -1493,6 +1518,7 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
              # claims the true price is; edge = the gap being sampled.
              r.get("consensus"), (r.get("gap_pts") or 0) / 100.0,
              None, "Stale", flat_stake, 0.0))
+        _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
     return n
@@ -3135,28 +3161,41 @@ def _absent_player_verdict(hist_conn, b):
         d0 = datetime.date.fromisoformat(b["date"] or "")
     except ValueError:
         return None
-    since = (d0 - datetime.timedelta(days=45)).isoformat()
-    team = None
-    for r in hist_conn.execute(
-            "SELECT player, team, period FROM player_game_logs WHERE sport='cfb' "
-            "AND period BETWEEN ? AND ? AND team IS NOT NULL AND team != '' "
-            "ORDER BY period DESC", (since, d0.isoformat())):
-        if normalize_name(r["player"]) == target:
-            team = r["team"]
-            break
+    # The team: off the bet where the writer stamped it, else off the
+    # player's own earlier stat rows. Five 09-12 rows had neither — a
+    # first-appearance freshman has no history — which is why the bet
+    # now carries it.
+    team = (b["team"] if "team" in b.keys() else None) or None
+    if not team:
+        since = (d0 - datetime.timedelta(days=45)).isoformat()
+        for r in hist_conn.execute(
+                "SELECT player, team, period FROM player_game_logs WHERE sport='cfb' "
+                "AND period BETWEEN ? AND ? AND team IS NOT NULL AND team != '' "
+                "ORDER BY period DESC", (since, d0.isoformat())):
+            if normalize_name(r["player"]) == target:
+                team = r["team"]
+                break
     if not team:
         return None
     lo = (d0 - datetime.timedelta(days=1)).isoformat()
     hi = (d0 + datetime.timedelta(days=1)).isoformat()
+    # ONE FIXTURE, however many rows. The games table holds the same
+    # college game twice — once keyed AWAY@HOME, once by its ESPN id —
+    # and a night game's two rows can even sit a day apart (Hawaii-UNLV,
+    # 09-05 and 09-06). Three 09-12 rows with a team and a final game
+    # stayed open because "exactly one games row" counted two.
     finals = hist_conn.execute(
-        "SELECT period FROM games WHERE sport='cfb' AND period BETWEEN ? AND ? "
+        "SELECT period, home, away FROM games WHERE sport='cfb' AND period BETWEEN ? AND ? "
         "AND (home=? OR away=?) AND home_score IS NOT NULL AND away_score IS NOT NULL",
         (lo, hi, team, team)).fetchall()
-    if len(finals) != 1:
+    fixtures = {(g["home"], g["away"]) for g in finals}
+    if len(fixtures) != 1:
         return None
+    periods = sorted({g["period"] for g in finals})
+    marks = ",".join("?" * len(periods))
     filed = hist_conn.execute(
-        "SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period=? AND team=? LIMIT 1",
-        (finals[0]["period"], team)).fetchone()
+        f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
+        f"AND team=? LIMIT 1", (*periods, team)).fetchone()
     return "void" if filed else None
 
 

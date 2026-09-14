@@ -177,6 +177,82 @@ def test_a_college_player_absent_from_his_teams_final_box_is_voided():
     assert _status(L, bid)[0] == "void"
 
 
+def test_a_college_game_filed_twice_is_still_one_game():
+    """The games table holds the same college game twice — keyed
+    AWAY@HOME and by its ESPN id — and the two rows can sit a day apart.
+    Three 09-12 rows with a team and a final stayed open because
+    "exactly one games row" counted two. One fixture is one game."""
+    L, H = _world()
+    bid = _bet(L, "cfb", BET_DAY, "Garrett Oakley", line=19.5, category="likely")
+    _log(H, "cfb", 2026, D(-9), "401500", "Garrett Oakley", "KSU", "rec_yds", 40)
+    _game(H, "cfb", 2026, D(-2), "WSU@KSU", "KSU", "WSU")          # Eastern day
+    _game(H, "cfb", 2026, D(-1), "401856700", "KSU", "WSU")        # UTC day, ESPN id
+    _log(H, "cfb", 2026, D(-1), "401856700-box", "Some Wildcat", "KSU", "rec_yds", 40)
+    assert ledger.settle_from_history(L, H) == 1
+    assert _status(L, bid)[0] == "void"
+
+
+def test_two_different_college_games_in_the_window_stay_open():
+    """A team with a Friday game and a Saturday game a day apart (it
+    happens in a rescheduled week) is two fixtures, and a coin flip."""
+    L, H = _world()
+    bid = _bet(L, "cfb", BET_DAY, "Garrett Oakley", line=19.5)
+    _log(H, "cfb", 2026, D(-9), "401500", "Garrett Oakley", "KSU", "rec_yds", 40)
+    _game(H, "cfb", 2026, D(-3), "WSU@KSU", "KSU", "WSU")
+    _game(H, "cfb", 2026, D(-1), "KSU@ISU", "ISU", "KSU")
+    for gid in ("WSU@KSU", "KSU@ISU"):
+        _log(H, "cfb", 2026, D(-3) if gid == "WSU@KSU" else D(-1), f"{gid}-box",
+             "Some Wildcat", "KSU", "rec_yds", 40)
+    ledger.settle_from_history(L, H)
+    assert _status(L, bid)[0] == "open"
+
+
+def test_a_college_bet_that_carries_its_team_needs_no_history():
+    """Five 09-12 rows were first appearances — a freshman with no
+    earlier stat row to read a team off. The writers now stamp the team
+    on the bet, and the verdict reads it there first."""
+    L, H = _world()
+    bid = _bet(L, "cfb", BET_DAY, "DJ Miller", market="receptions", line=1.5,
+               category="likely")
+    L.execute("UPDATE bets SET team='CMU' WHERE id=?", (bid,)); L.commit()
+    _game(H, "cfb", 2026, D(-1), "COLG@CMU", "CMU", "COLG")
+    _log(H, "cfb", 2026, D(-1), "COLG@CMU-box", "Some Chippewa", "CMU", "rec_yds", 40)
+    assert ledger.settle_from_history(L, H) == 1
+    assert _status(L, bid)[0] == "void"
+
+
+def test_the_writers_stamp_the_team_on_every_prop_row():
+    """Every prop writer stamps `team`; a duplicate row (INSERT OR
+    IGNORE) is left alone; a row with no team stays NULL; game bets,
+    which store the team in the player column, are not stamped."""
+    L, H = _world()
+    day = BET_DAY
+    rec = {"player": "Garrett Oakley", "market": "rec_yds", "side": "OVER",
+           "line": 19.5, "book": "FanDuel", "odds": -110, "projection": 30,
+           "hit_prob": 0.6, "edge": 0.08, "confidence": 7.5, "grade": "Play",
+           "stake_units": 1.0, "recommended": True, "team": "KSU", "game_date": day}
+    ledger.log_recommendations(L, {"sport": "cfb", "date": day, "recommendations": [rec]})
+    ledger.log_most_likely(L, {"sport": "cfb", "date": day, "most_likely": [
+        {"player": "DJ Miller", "market": "receptions", "side": "OVER", "line": 1.5,
+         "prob": 0.7, "model_prob": 0.7, "odds": -200, "book": "DK", "team": "CMU",
+         "game_date": day}]})
+    ledger.log_stale_flags(L, {"sport": "cfb", "date": day, "market_scan": {"stale": [
+        {"player": "Derek Meadows", "market": "anytime_td", "side": "OVER",
+         "line": 0.5, "odds": 300, "book": "DK", "team": "ND", "date": day,
+         "consensus": 0.3, "gap_pts": 20}]}})
+    teams = {r["player"]: r["team"] for r in
+             L.execute("SELECT player, team FROM bets").fetchall()}
+    assert teams.get("Garrett Oakley") == "KSU", teams
+    assert teams.get("DJ Miller") == "CMU", teams
+    assert teams.get("Derek Meadows") == "ND", teams
+    # Journal the same pick again with another team: the duplicate is
+    # ignored and the stamp with it.
+    rec["team"] = "WRONG"
+    ledger.log_recommendations(L, {"sport": "cfb", "date": day, "recommendations": [rec]})
+    assert L.execute("SELECT team FROM bets WHERE player='Garrett Oakley'"
+                     ).fetchone()["team"] == "KSU"
+
+
 def test_a_college_team_whose_box_never_landed_stays_open():
     L, H = _world()
     bid = _bet(L, "cfb", BET_DAY, "Gabe Burkle", line=19.5)

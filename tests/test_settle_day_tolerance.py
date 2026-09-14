@@ -86,8 +86,10 @@ def test_a_college_prop_grades_off_the_next_days_box_row():
 def test_both_college_neighbours_answering_is_a_coin_flip_and_stays_open():
     L, H = _world()
     bid = _bet(L, "cfb", BET_DAY, "Twice Logged", line=19.5)
+    # Two different opponents: the same pair a day apart is one game
+    # filed twice (see test_absent_player_settles), not two games.
     _game(H, "cfb", 2026, D(-1), "401555", "HOME", "AWAY")
-    _game(H, "cfb", 2026, D(-3), "401554", "HOME", "AWAY")
+    _game(H, "cfb", 2026, D(-3), "401554", "HOME", "OTHER")
     _log(H, "cfb", 2026, D(-1), "401555-box", "Twice Logged", "HOME", "rec_yds", 44)
     _log(H, "cfb", 2026, D(-3), "401554-box", "Twice Logged", "HOME", "rec_yds", 10)
     ledger.settle_from_history(L, H)
