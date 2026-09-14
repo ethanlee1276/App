@@ -189,13 +189,20 @@ def last_night(conn, today: str, sport: str | None = None) -> dict | None:
     league, which is what the digest's subject wants and what the
     board's strip must never show.
     """
-    from .ledger import day_expr
+    from .ledger import day_expr, BOOK
     y = (_dt.date.fromisoformat(today) - _dt.timedelta(days=1)).isoformat()
+    # THE SAME BOOK THE RECORD PAGE COUNTS. Ethan, 2026-09-14, the NFL
+    # Record tab reading 26 graded while the board's strip read 18-39:
+    # since 2026-08-24 the strip had summed the edge book PLUS the
+    # anytime-touchdown longshot board — the measurement-only bucket the
+    # record never mixes in — and had left paper rows out. Forty-odd
+    # touchdown flags made a −2.2u Sunday read −3.07u on the board.
+    marks = ",".join("?" * len(BOOK))
     q = ("SELECT SUM(status='won') w, SUM(status='lost') l, "
          "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
          f"SUM(status='open') o FROM bets WHERE {day_expr()}=? "
-         "AND category IN ('main','longshot')")
-    args: list = [y]
+         f"AND category IN ({marks})")
+    args: list = [y, *BOOK]
     if sport:
         q += " AND sport=?"
         args.append(sport)

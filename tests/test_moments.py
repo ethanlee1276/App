@@ -141,6 +141,33 @@ def test_last_night_reads_the_journal():
                  "net_u": -0.1, "open": 1}
 
 
+def test_the_strip_counts_the_record_page_book_and_nothing_else():
+    """Ethan, 2026-09-14: "How is it the nfl page has 26 graded bets, but
+    then it show 18-39 at the top?" The strip summed the edge book plus
+    the anytime-touchdown longshot board and left paper rows out; the
+    Record page counts `ledger.BOOK`. One book, both places."""
+    conn = ledger.connect(":memory:")
+    n = [0]
+    def bet(cat, status, pnl):
+        n[0] += 1
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,stake_units,stake_dollars,status,category,pnl_units,game_day) "
+            "VALUES ('t','nfl','2026-W01',?,'anytime_td','OVER',0.5,'DK',-110,"
+            "1,10,?,?,?,'2026-08-23')", (f"Player {n[0]}", status, cat, pnl))
+    bet("main", "won", 0.9)
+    bet("paper", "lost", -1.0)            # paper is the same strategy: counted
+    for _ in range(40):
+        bet("longshot", "lost", -0.25)    # the TD board: never in the record
+    bet("longshot", "open", 0.0)          # nor may it hold the strip back
+    bet("likely", "won", 0.5)             # its own paper record, its own page
+    conn.commit()
+    r = moments.last_night(conn, TODAY, sport="nfl")
+    assert (r["w"], r["l"], r["p"], r["open"]) == (1, 1, 0, 0), r
+    assert r["net_u"] == -0.1
+    assert moments.last_graded_night(conn, TODAY, "nfl")["w"] == 1
+
+
 # --- one recap per sport ------------------------------------------------------
 def test_each_sport_recaps_its_own_night_by_its_own_game_day():
     """Ethan, 2026-09-14, the NFL board's strip reading "LAST NIGHT 1-1
