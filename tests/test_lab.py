@@ -318,6 +318,55 @@ def test_the_due_check_reads_the_private_page_not_the_sealed_stub():
             "the sealed stub was read as a page that measured nothing"
 
 
+def test_a_section_that_measured_nothing_keeps_the_last_one_that_did():
+    """`backtest_lab.py --no-nfl`, a locked database, an unstarted season:
+    each used to publish its reason over last week's numbers. The
+    measurement stays, dated; a present measurement is never displaced;
+    a previous reason never replaces a present one."""
+    prev = {"generated_at": "2026-09-03T02:10:00", "sports": {
+        "nfl": {"props": {"markets": [{"market": "rec_yds", "n": 900}],
+                          "season": 2025},
+                "game_lines": {"unavailable": "old reason"}},
+        "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
+                "game_lines": {"markets": [{"market": "total"}]}}}}
+    out = {"generated_at": "2026-09-14T13:04:01", "sports": {
+        "nfl": {"props": {"unavailable": "skipped"},
+                "game_lines": {"unavailable": "no harvested closing lines"}},
+        "mlb": {"props": {"markets": [{"market": "total_bases", "n": 41}]},
+                "game_lines": {"unavailable": "database is locked"}}}}
+    kept = lab.carry_forward(out, prev)
+    assert kept == ["nfl/props", "mlb/game_lines"], kept
+    nfl = out["sports"]["nfl"]["props"]
+    assert nfl["markets"][0]["n"] == 900 and nfl["season"] == 2025
+    assert nfl["carried_from"] == "2026-09-03", "the kept section is undated"
+    assert nfl["carry_reason"] == "skipped"
+    # A present measurement is never displaced by an older one.
+    assert out["sports"]["mlb"]["props"]["markets"][0]["n"] == 41
+    # A previous REASON never replaces a present one.
+    assert out["sports"]["nfl"]["game_lines"] == \
+        {"unavailable": "no harvested closing lines"}
+    # The date survives a second carry: it is the measurement's, not the
+    # last carry's.
+    again = {"generated_at": "2026-09-21T02:00:00",
+             "sports": {"nfl": {"props": {"unavailable": "skipped"},
+                                "game_lines": {}}}}
+    assert lab.carry_forward(again, dict(out, generated_at="2026-09-14T13:04:01")) \
+        == ["nfl/props"]
+    assert again["sports"]["nfl"]["props"]["carried_from"] == "2026-09-03"
+
+
+def test_the_page_says_a_kept_section_is_kept_and_when():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("function labCarried(")
+    j = app.index("function labGameTable(")
+    body = app[i:j]
+    assert "carried_from" in body and "carry_reason" in body
+    assert "Replayed ${escapeHtml(section.carried_from)}" in body
+    k = app.index("async function renderLab(")
+    assert app[k:k + 3000].count("labCarried(") == 2, \
+        "both the props and the game-lines section must say when they are kept"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

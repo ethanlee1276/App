@@ -13256,6 +13256,16 @@ function labPropCard(m, note) {
   </div>`;
 }
 
+/* A section the last run could not measure keeps the previous run's
+   numbers, and says so: the date they were replayed and why tonight's
+   run had nothing. A week-old number presented as tonight's would be
+   the quiet version of the empty page this replaces. */
+function labCarried(section) {
+  if (!section || !section.carried_from) return "";
+  return `<p class="mini" style="opacity:.75">Replayed ${escapeHtml(section.carried_from)} —
+    kept from that run${section.carry_reason ? ` (this week: ${escapeHtml(section.carry_reason)})` : ""}</p>`;
+}
+
 function labGameTable(games) {
   const rows = (games.markets || []).map((g) => `<tr>
     <td>${escapeHtml(g.market)}</td>
@@ -13300,9 +13310,11 @@ async function renderLab() {
     return `<div class="lab-sport">
       <div class="section-title">${sport.toUpperCase()}
         ${props.season ? `<span class="sub">— ${props.season} season</span>` : ""}</div>
+      ${labCarried(props)}
       ${cards || `<p class="mini">Player props — ${escapeHtml(props.unavailable || "nothing replayed")}</p>`}
       <div class="mini" style="margin-top:10px;opacity:.75">Game lines (spread &amp; total),
         graded against real closing numbers</div>
+      ${labCarried(games)}
       ${labGameTable(games)}
     </div>`;
   }).join("");

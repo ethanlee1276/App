@@ -568,11 +568,68 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     # subscriber: the Lab page only worked at all because the file was
     # leaking. Third builder found doing this, after memes and fantasy.
     from . import gate
+    kept = carry_forward(out, _previous_page(p))
     gate.publish(out, p, p.name)
     ran = len(replayed_sports(out))
-    log(f"  lab: replayed {ran} sport(s) → {p}")
+    log(f"  lab: replayed {ran} sport(s) → {p}"
+        + (f" (kept {', '.join(kept)} from the last run that measured "
+           f"them)" if kept else ""))
     return "ok"
 
+
+def _previous_page(public: Path) -> dict:
+    """The page this run is about to replace, read where the subscriber
+    reads it. `{}` when there is none or it will not parse."""
+    from . import gate
+    try:
+        return json.loads(Path(gate.board_source(public)).read_text())
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def carry_forward(out: dict, previous: dict) -> list[str]:
+    """A section that measured nothing keeps the last one that did.
+
+    In place, on ``out``; returns the ``sport/section`` labels it kept.
+    A run with the NFL replay switched off (`backtest_lab.py --no-nfl`),
+    a database locked at the moment a harness read it, a season that
+    has not started — each of these used to publish "skipped" or "no
+    ingested game logs" OVER a section that had numbers on it a week
+    ago, and the page then carried the reason where the measurement had
+    been. The measurement is the page. It is kept, and DATED: the
+    section carries ``carried_from``, the stamp of the run that made it,
+    so the page can say "replayed 2026-09-03" instead of passing a
+    week-old number off as tonight's. The stamp survives a second carry
+    — it is the measurement's date, not the last carry's.
+
+    Only a section WITH markets is kept; a previous reason never
+    replaces a present one, and a present measurement is never
+    displaced by an older one.
+    """
+    kept: list[str] = []
+    prev_sports = previous.get("sports") or {}
+    stamp = str(previous.get("generated_at") or "")[:10]
+    for sport, blob in (out.get("sports") or {}).items():
+        was = prev_sports.get(sport) or {}
+        for section in ("props", "game_lines"):
+            now_sec = blob.get(section) or {}
+            old_sec = was.get(section) or {}
+            if now_sec.get("markets") or not old_sec.get("markets"):
+                continue
+            carried = dict(old_sec)
+            carried["carried_from"] = old_sec.get("carried_from") or stamp
+            # The reason this run gave, kept beside the number it did
+            # not replace — so a reader can see WHY tonight measured
+            # nothing without losing what last week measured.
+            carried["carry_reason"] = now_sec.get("unavailable") or ""
+            blob[section] = carried
+            kept.append(f"{sport}/{section}")
+    return kept
+
+
+# --- the command line --------------------------------------------------------
+def _pct(x):
+    return "—" if x is None else f"{x:.1%}"
 
 
 def _print_market(m, indent="    ") -> None:
