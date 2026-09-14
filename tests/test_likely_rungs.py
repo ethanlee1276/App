@@ -186,6 +186,31 @@ def test_the_card_names_the_rungs_main_number():
     assert "priced from the sharp book" in body
 
 
+def test_a_passing_yards_rung_is_priced_by_the_model_when_no_mixture_fits():
+    """Ethan, 2026-09-15: "I didn't see any passing yard props." The
+    yardage fit declined passing yards, so `display_prob` has nothing for
+    it, and the ladder's only other source was a sharp book hanging the
+    same alternate number — almost never. The rung is priced the way the
+    main line was: the projection's own normal, held to every bar."""
+    row = _row(market="pass_yds", market_label="pass_yds", line=279.5,
+               projection=285.0, hit_prob=0.53, raw_prob=0.54,
+               recent_values=[301, 244, 312, 268])
+    row["proj_std"] = 45.0
+    row["alt_lines"] = [_ln("DK", 264.5, -180, 150), _ln("DK", 299.5, 150, -180)]
+    row["alt_sharp_lines"] = []
+    assert display_prob("pass_yds", 285.0, 264.5, row["recent_values"], fits=FITS) is None
+    rung = K._best_rung(row, "pass_yds", fits=FITS)
+    assert rung is not None, "the ladder could not price a passing-yards rung"
+    assert rung["line"] == 264.5 and rung["side"] == "over" and rung["source"] == "model"
+    assert 0.66 < rung["prob"] < 0.69, rung           # P(N(285, 45) > 264.5)
+    # And the full maker takes it, as a model-sourced row.
+    got = K.from_prop(row, _always, fits=FITS)
+    assert got is not None and got["line"] == 264.5 and got["prob_source"] == "model"
+    # No spread on the row: nothing to price, nothing invented.
+    row["proj_std"] = 0
+    assert K._best_rung(row, "pass_yds", fits=FITS) is None
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]

@@ -841,6 +841,24 @@ def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
                               row.get("recent_values"), fits=fits)
         source = "mixture"
         if p_over is None:
+            # NO MIXTURE FOR THIS MARKET — passing yards, which the
+            # yardage fit declined — so price the rung the way the main
+            # line was priced: the projection's own normal. Ethan,
+            # 2026-09-15: "I didn't see any passing yard props." A
+            # quarterback's ladder could only be priced where a sharp
+            # book happened to hang the same number, which is almost
+            # never, so the market that most needed the ladder was the
+            # one the ladder could not read. Same bars as every rung:
+            # the floor, the cap, the credibility of the number against
+            # the rung's own de-vigged price.
+            try:
+                mu, sd = float(row.get("projection")), float(row.get("proj_std") or 0)
+            except (TypeError, ValueError):
+                mu, sd = 0.0, 0.0
+            if sd > 0:
+                from .statmath import prob_over
+                p_over, source = prob_over(line, mu, sd), "model"
+        if p_over is None:
             pair = sharp.get(line)
             if pair is None:
                 continue

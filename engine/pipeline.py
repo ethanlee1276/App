@@ -74,6 +74,10 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         "projection": rec.projection,
         "proj_low": rec.proj_low,
         "proj_high": rec.proj_high,
+        # The projection's own spread, so a ladder rung on a market with
+        # no fitted mixture (passing yards) can be priced by the same
+        # normal model that priced the main line — see likely._best_rung.
+        "proj_std": round(float(getattr(proj, "std", 0.0) or 0.0), 3),
         "hit_prob": rec.hit_prob,
         # The claim BEFORE the shrink toward the market — what the fitter
         # learns on, never the shrunk number (see engine/backtest.py's
