@@ -70,7 +70,9 @@ CREDITS_PER_EVENT = 8
 #: `sources.oddsapi`. The rule the number follows is unchanged: one
 #: credit per market per region per event, so this counts what the
 #: request actually asks for and nothing it does not.
-EVENT_CREDITS = {"nfl": 12}
+#: Thirteen again since 2026-09-15: the key is back on the request,
+#: behind `oddsapi.fetch_event_odds`'s drop-and-retry guard.
+EVENT_CREDITS = {"nfl": 13}
 
 
 def credits_per_event(sport: str | None = None) -> int:

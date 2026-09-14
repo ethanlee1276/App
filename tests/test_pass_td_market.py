@@ -70,35 +70,33 @@ def test_the_stat_chip_and_the_priced_market_wear_one_label():
 
 
 # --- the quote and the prop -------------------------------------------------
-def test_the_market_is_modelled_and_shelved_but_not_bought():
+def test_the_market_is_bought_again_behind_the_guard():
     """THE INCIDENT, 2026-09-10. `player_pass_tds` went onto the NFL odds
-    request at 16:36 UTC and deployed at ~16:41. Ethan at 17:58: "all the
-    edge bets and most likely bets for nfl disappeared" — inside the last
-    thirty minutes, which is the first board rebuild after that deploy.
+    request at 16:36 UTC and by 17:58 both NFL boards were empty: every
+    market for an event goes in ONE `markets=` parameter, so a key the
+    API would not serve failed the whole event, every game. It was
+    rolled back the same afternoon with a note: put it back only behind
+    a request that tolerates one bad key.
 
-    `fetch_event_odds` joins this map's keys into ONE `markets=`
-    parameter per event, so a key the API will not serve does not cost
-    that one market, it costs the whole event — every market, every NFL
-    game. Both boards are built from those props, which is why both went
-    at once and why CFB, which was deliberately never given the key, was
-    untouched.
-
-    So the request is back to the four it was buying at 16:35. Everything
-    else stays: the market is still modelled, still ranked, still
-    shelved. What is rolled back is asking the book for it."""
+    2026-09-15, Ethan: "I didn't see any passing touchdown props." They
+    could not exist — no price had ever been bought. The guard is in
+    (`fetch_event_odds` drops a rejected key and retries, remembered in
+    REJECTED_MARKETS), and the key is back on the NFL request. College
+    still does not ask for it: measured under the ranking floor."""
     from engine.sources.oddsapi import (NFL_ODDS_TO_MARKET, ODDS_TO_MARKET,
-                                        PASS_TD_ODDS_KEY, SPORT_CONFIG)
+                                        PASS_TD_ODDS_KEY, SPORT_CONFIG,
+                                        REJECTED_MARKETS, UNPROVEN_MARKETS)
+    from engine.models import PASS_TD
     assert PASS_TD_ODDS_KEY == "player_pass_tds"
-    assert PASS_TD_ODDS_KEY not in SPORT_CONFIG["nfl"]["markets"], \
-        "the key is back on the request without the guard that makes it safe"
+    assert PASS_TD_ODDS_KEY in SPORT_CONFIG["nfl"]["markets"]
+    assert SPORT_CONFIG["nfl"]["markets"][PASS_TD_ODDS_KEY] == PASS_TD
     assert PASS_TD_ODDS_KEY not in SPORT_CONFIG["cfb"]["markets"]
-    assert NFL_ODDS_TO_MARKET == ODDS_TO_MARKET
-    # AND THE BUDGET COUNTS WHAT IS ACTUALLY ASKED FOR. It went to 13
-    # with the key and back to 12 without it; a budget that counts a
-    # market nobody requests plans with a number wrong in the direction
-    # that under-spends.
+    assert NFL_ODDS_TO_MARKET == {**ODDS_TO_MARKET, PASS_TD_ODDS_KEY: PASS_TD}
+    assert PASS_TD_ODDS_KEY in UNPROVEN_MARKETS       # what the guard drops first
+    assert isinstance(REJECTED_MARKETS, set)
+    # AND THE BUDGET COUNTS WHAT IS ACTUALLY ASKED FOR: thirteen again.
     from engine.oddsbudget import credits_per_event
-    assert credits_per_event("nfl") == 12
+    assert credits_per_event("nfl") == 13
 
 
 def test_one_unusable_market_must_not_be_able_to_empty_the_board():
@@ -110,8 +108,13 @@ def test_one_unusable_market_must_not_be_able_to_empty_the_board():
     src = open(os.path.join(ROOT, "engine", "sources", "oddsapi.py"),
                encoding="utf-8").read()
     i = src.index("def fetch_event_odds(")
-    assert '",".join(markets)' in src[i:i + 900], \
+    body = src[i:src.index("\ndef event_cache_name(")]
+    assert '",".join(markets)' in body, \
         "the request no longer joins its markets — re-read this note"
+    # The guard: a refused key is dropped, remembered, and the event
+    # retried without it. tests/test_tolerant_odds_request.py drives it.
+    assert "REJECTED_MARKETS.update(bad)" in body
+    assert "return fetch_event_odds(event_id, api_key, markets=kept" in body
     assert "TO PUT IT BACK" in src, "the re-enable conditions are gone"
 
 

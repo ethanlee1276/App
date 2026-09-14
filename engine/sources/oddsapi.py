@@ -96,6 +96,22 @@ NFL_ODDS_TO_MARKET = dict(ODDS_TO_MARKET)
 #: silently taking down every prop on the board is the defect worth
 #: fixing here, and it will outlive this market.
 PASS_TD_ODDS_KEY = "player_pass_tds"
+#: BACK ON THE REQUEST, 2026-09-15, behind the guard the incident note
+#: asked for. Ethan: "I didn't see any passing touchdown props." They
+#: could not exist: no book price for the market had ever entered the
+#: system. `fetch_event_odds` now drops a market the API rejects and
+#: retries the event without it — once per process, remembered in
+#: `REJECTED_MARKETS` — so a key the API will not serve costs one
+#: refused call, never the board. The key itself is still not proven
+#: against the API from here (this box has no route to it); that is
+#: exactly the case the guard exists for.
+NFL_ODDS_TO_MARKET[PASS_TD_ODDS_KEY] = PASS_TD
+#: Markets asked for on the strength of the API's documentation rather
+#: than a call that returned them. On the first rejection of a request
+#: that names no key, these are what gets dropped.
+UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY})
+#: Keys the API refused this process: dropped from every later request.
+REJECTED_MARKETS: set = set()
 
 #: MODELLED, GRADEABLE, NOT ON THE LIVE REQUEST. Two different questions
 #: wear the same table and this split is what separates them: "what does
@@ -110,7 +126,7 @@ PASS_TD_ODDS_KEY = "player_pass_tds"
 #: anybody remembering this: `oddshistory.parse_map` reads the REQUEST
 #: map, so `unreadable_markets` reports this key as one the parser would
 #: throw away and `_harvest_fix` declines to spend on it.
-MODELLED_NOT_REQUESTED = {PASS_TD_ODDS_KEY: PASS_TD}
+MODELLED_NOT_REQUESTED: dict = {}          # nothing, since the key went back on
 
 MARKET_TO_ODDS = {v: k for k, v in NFL_ODDS_TO_MARKET.items()}
 
@@ -942,7 +958,9 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
                      cache_only: bool = False) -> tuple[dict, Quota]:
     key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
-    markets = markets or list(cfg["markets"])
+    asked = list(markets or cfg["markets"])
+    # A key this process has already seen refused is not asked for again.
+    markets = [m for m in asked if m not in REJECTED_MARKETS] or asked
     books = books or DEFAULT_BOOKS
     params = {
         "apiKey": key,
@@ -974,8 +992,30 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     # A stable digest rather than the market list itself: the list is
     # long, the filename is not, and the request is what has to be
     # distinguished rather than described.
-    return _request(url, event_cache_name(event_id, markets, books, sport),
-                    ttl=ttl, cache_only=cache_only)
+    try:
+        return _request(url, event_cache_name(event_id, markets, books, sport),
+                        ttl=ttl, cache_only=cache_only)
+    except OddsAPIError as exc:
+        # ONE BAD KEY COSTS ONE CALL, NEVER THE EVENT. Every market goes
+        # in one `markets=` parameter, so a key the API will not serve
+        # used to fail the whole event — every market, every game — and
+        # on 2026-09-10 that emptied both NFL boards inside a rebuild.
+        # The keys the error names are dropped; an error that names none
+        # drops the unproven ones; the drop is remembered for the rest
+        # of the process so the next event never asks again.
+        if cache_only or len(markets) < 2:
+            raise
+        text = str(exc)
+        bad = [m for m in markets if m in text]
+        if not bad and ("422" in text or "INVALID_MARKET" in text.upper()
+                        or "market" in text.lower()):
+            bad = [m for m in markets if m in UNPROVEN_MARKETS]
+        if not bad or len(bad) >= len(markets):
+            raise
+        REJECTED_MARKETS.update(bad)
+        kept = [m for m in markets if m not in bad]
+        return fetch_event_odds(event_id, api_key, markets=kept, books=books,
+                                ttl=ttl, sport=sport, cache_only=cache_only)
 
 
 def event_cache_name(event_id: str, markets: list[str] | None = None,

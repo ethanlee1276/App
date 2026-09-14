@@ -176,12 +176,19 @@ def test_the_season_long_payload_does_not_collapse_onto_one_price_per_team():
 
     Here the same pair meets twice. The board's game is the September
     one, and the December leg must not be what it is measured against."""
-    week1 = _event(when="2026-09-14T17:00:00Z",
+    # RELATIVE DATES, because the doctor takes the soonest FUTURE
+    # kickoff: fixed to 2026-09-14 this test passed until that Sunday
+    # went by, then measured the board against December (calendar rot,
+    # the suite's own rule).
+    import datetime as _dt
+    soon = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
+    later = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=91)).strftime("%Y-%m-%d")
+    week1 = _event(when=f"{soon}T17:00:00Z",
                    books=(("fanduel", -125, 105), ("draftkings", -118, 100)))
-    week14 = _event(when="2026-12-14T17:00:00Z",
+    week14 = _event(when=f"{later}T17:00:00Z",
                     books=(("fanduel", -400, 320), ("draftkings", -390, 330)))
     out = _run([week1, week14], _board(home_ml=-118, away_ml=105))
-    assert "2026-09-14" in out, out
+    assert soon in out, out
     assert "every published moneyline" in out, out
     assert "SHORTER" not in out, out
 
