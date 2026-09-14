@@ -1047,6 +1047,7 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "rank_auc": rank_auc(sport, market),
         "reasons": row.get("reasons") or [],
         "game_script": row.get("game_script"),
+        "ripples": row.get("ripples") or [],
         "recent_values": row.get("recent_values") or [],
         # THE GAME'S OWN DAY, READ FROM THE FIELD THAT HOLDS IT. This
         # said `row.get("date")`, and a prop row has no `date` at all —
@@ -1092,6 +1093,7 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
         "rank_auc": rank_auc(sport, "anytime_td"),
         "reasons": row.get("reasons") or [],
         "game_script": row.get("game_script"),
+        "ripples": row.get("ripples") or [],
         "recent_values": row.get("recent_values") or [],
         "game_date": row.get("game_date", ""),
         "kickoff": row.get("kickoff", ""),

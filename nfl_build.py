@@ -899,8 +899,38 @@ def main() -> None:
         except Exception as exc:                              # noqa: BLE001
             # Bookkeeping must never be the thing that kills a build.
             print(f"  usage join audit skipped: {exc}")
+    # THE USAGE RIPPLE ON THE CARD. Ethan, 2026-09-14: "RB2 Isiah Pacheco
+    # is now out till October 11th so RB1 ... should be seeing a lot more
+    # usage". For every prop whose same-position teammate is ruled out,
+    # the card gets what the stats measured about him when that teammate
+    # sat — over last season and this one — or says the sample is too
+    # thin to say. Display only: nothing here moves a projection.
+    ripples: dict = {}
+    try:
+        from engine import redistribute as _ripple
+        from engine.sources.nflverse import load_weekly_stats as _weekly
+        _inj = [i for g in slate.games for i in g.injuries]
+        if _inj:
+            _cur, _prior = [], []
+            for _season, _sink in ((args.season, "cur"), (args.season - 1, "prior")):
+                try:
+                    rows_ = _weekly(_season)
+                except DataUnavailable:
+                    rows_ = []
+                if _sink == "cur":
+                    _cur = rows_
+                else:
+                    _prior = rows_
+            ripples = _ripple.ripples_for_props(slate.props, _inj, _cur, _prior,
+                                                args.season, args.week)
+            if ripples:
+                measured = sum(1 for v in ripples.values() for n in v if n["measured"])
+                print(f"\nUsage ripple: {len(ripples)} card(s) note a teammate "
+                      f"ruled out ({measured} with a measured share).")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  usage ripple skipped: {exc}")
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
-                       team_notes=qb_notes)
+                       team_notes=qb_notes, ripples=ripples)
     # Say on each card what the sample rule did — the reset that was
     # applied, or the stale sample that was too thin to reset.
     if reset_report:

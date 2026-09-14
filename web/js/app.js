@@ -1763,6 +1763,7 @@ const FEATURES = [
    [["Player search", "Search any player across every league we cover — typos forgiven, recent searches remembered — and click him to open everything below on the card itself.", "players"],
     ["Player page", "Per prop: the bar graph, the game logs, current form, the game script, the line’s movement since it opened, every book’s price and what the pick had to survive. A searched player’s card and the prop page are the same page, not two.", "prop"],
     ["Past stats against a specific team", "The versus block on a player’s prop page: what this player has actually done against tonight’s opponent, game by game, from the logs on disk — laid out a game to a block, with a stat pill for each phase he played in.", null],
+    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection is not moved for it: that is a pricing change, and it waits on a measurement against closing lines.", null],
     ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside his passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
     ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position.", "team"],
@@ -6358,6 +6359,37 @@ function propSpark(r, opts = {}) {
    archetype and the line; the prop page carries the whole read and what
    the projection did about it, so a pass-yards over on a touchdown
    favourite says out loud that the script is already priced in. */
+/* A TEAMMATE AT HIS POSITION RULED OUT, and what the stats measured
+   (Ethan, 2026-09-14: "Pacheco is now out ... Gibbs should be seeing a
+   lot more usage"). The chip is the short form; the card block below
+   carries the sentence. The number is a measured share delta over the
+   teammate's missed games, or the note says it could not be measured —
+   and either way the projection has NOT moved for it. */
+function rippleChip(r) {
+  const n = (r && r.ripples || [])[0];
+  if (!n) return "";
+  const who = String(n.out || "").split(" ").pop();
+  const what = n.measured
+    ? `${n.delta >= 0 ? "+" : ""}${Math.round(n.delta * 100)}% ${escapeHtml(n.kind || "")}`
+    : "usage likely up";
+  return `<span class="chip ${n.measured && n.delta >= 0.02 ? "up" : ""}" title="${escapeHtml(n.text || "")}">${
+    iconMark("people", 11)}${escapeHtml(who)} ${escapeHtml(String(n.status || "out").toLowerCase())} · ${what}</span>`;
+}
+function rippleCardHTML(r) {
+  const notes = (r && r.ripples) || [];
+  if (!notes.length) return "";
+  const items = notes.map((n) => `<li>${escapeHtml(n.text || "")}${
+    n.measured ? ` <span class="mini">(share ${(n.with * 100).toFixed(0)}% → ${(n.without * 100).toFixed(0)}% over ${n.n_without} game${n.n_without === 1 ? "" : "s"} without him)</span>` : ""}</li>`).join("");
+  return `<div class="section-title minor">Next man up
+      <span class="sub">— a teammate at his position is ruled out. Measured from
+      the weekly stats; the projection above has not been moved for it.</span></div>
+    <div class="card"><ul class="reasons">${items}</ul></div>`;
+}
+function rippleLine(r) {
+  const n = (r && r.ripples || [])[0];
+  if (!n) return "";
+  return `<div class="mini" style="margin-top:4px">${iconMark("people", 11)}${escapeHtml(n.text || "")}.</div>`;
+}
 function scriptChip(r) {
   const s = r && r.game_script;
   if (!s || !s.archetype) return "";
@@ -6420,7 +6452,7 @@ function cardHTML(r) {
       </div>
       ${confMeter(r)}
       ${propAnalysis(r)}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${booksStripHTML(r)}
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
@@ -6777,7 +6809,7 @@ function likelyCard(r) {
         <div class="v">${Number(r.projection).toFixed(1)}</div></div>`}
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
-    ${scriptLine}
+    ${scriptLine}${rippleLine(r)}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
     ${bet}${lean}${cal}${evTxt}
   </article>`;
@@ -8629,6 +8661,7 @@ function renderPropPage() {
     <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
 
     ${scriptCardHTML(r)}
+    ${rippleCardHTML(r)}
 
     ${(() => { const vs = vsBlockHTML(r.player, state.sport, r.opponent || "");
       return vs ? `<div class="section-title minor">Versus
@@ -10305,6 +10338,7 @@ function propDepthHTML(r) {
     ${booksTableHTML(r)}
     ${lineMoveHTML(r)}
     ${scriptCardHTML(r)}
+    ${rippleCardHTML(r)}
     ${reasons ? `<div class="section-title minor">Why this pick</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
     ${chainHTML(r)}

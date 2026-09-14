@@ -79,8 +79,24 @@ def _week(row):
         return None
 
 
+def _season(row) -> int:
+    try:
+        return int(float(row.get("season")))
+    except (TypeError, ValueError):
+        return 0
+
+
 def team_weeks(rows, team: str) -> dict:
-    """`{week: [row, ...]}` for one team's players, regular season only."""
+    """`{(season, week): [row, ...]}` for one team's players, regular
+    season only.
+
+    THE SEASON IS IN THE KEY. Keyed by week alone, last season's week 3
+    and this season's week 3 were one week, and a card that reads two
+    seasons of stats to find a teammate's absences — which is the only
+    way an early-season card has a sample at all — pooled the two games
+    into one share. Rows without a season (the single-season callers and
+    the tests that feed them) key on season 0 and behave as before.
+    """
     out: dict = {}
     for r in rows:
         if str(r.get("recent_team") or r.get("team") or "").upper() != team:
@@ -90,7 +106,7 @@ def team_weeks(rows, team: str) -> dict:
         w = _week(r)
         if w is None:
             continue
-        out.setdefault(w, []).append(r)
+        out.setdefault((_season(r), w), []).append(r)
     return out
 
 
@@ -184,3 +200,150 @@ def report(res: dict, limit: int = 6) -> str:
         "  docs/THE_INFORMATION_TEST.md.",
         ""]
     return "\n".join(lines)
+
+
+# --- the note on the beneficiary's card ----------------------------------------
+#: Whose absence moves which usage. A quarterback out is a different
+#: question (the backup's own passing line) and is not a ripple.
+KIND_OF_POSITION = {"RB": "carries", "FB": "carries",
+                    "WR": "targets", "TE": "targets"}
+#: The teammates who can absorb it — the same position group as the man
+#: out, which is what Ethan asked for and what the share measures.
+GROUP = {"carries": frozenset({"RB", "FB"}), "targets": frozenset({"WR", "TE"})}
+#: The markets on the beneficiary's card that the usage feeds.
+MARKETS_OF = {"carries": frozenset({"rush_yds"}),
+              "targets": frozenset({"rec_yds", "receptions"})}
+#: Below this the share "did not move": two points is one target over a
+#: 40-throw afternoon.
+MOVED = 0.02
+#: How many ripples one card carries at most.
+PER_CARD = 2
+
+
+def _key(name: str) -> str:
+    return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+
+
+def _first_week(rows, player_key: str, kind: str):
+    """The first week the player had any usage in these rows, or None."""
+    keys = USAGE[kind]
+    weeks = [_week(r) for r in rows
+             if _key(_name(r)) == player_key and _f(r, keys) > 0]
+    weeks = [w for w in weeks if w is not None]
+    return min(weeks) if weeks else None
+
+
+def absence_rows(stats, prior_stats, team: str, player: str, kind: str,
+                 season: int, week: int) -> list:
+    """The rows a redistribution may read for this absence.
+
+    FROM THE WEEK HE FIRST APPEARED, per season. `redistribution` reads
+    absence off the stats — a team week with no usage from him — and
+    that is right for a man who was on the roster and did not play, and
+    wrong for every week before he arrived: a mid-season signing, a
+    rookie, a player who changed teams would show "missed" every week
+    of the season before his first, and his teammates' ordinary shares
+    would be read as what they absorbed. This season runs to the week
+    before the one being built (that week's stats do not exist yet, or
+    exist for Thursday only); last season runs to its end.
+    """
+    pk = _key(player)
+    out: list = []
+    for rows, upto in ((prior_stats or [], None), (stats or [], week - 1)):
+        mine = [r for r in rows
+                if str(r.get("recent_team") or r.get("team") or "").upper() == team]
+        start = _first_week(mine, pk, kind)
+        if start is None:
+            continue
+        for r in mine:
+            w = _week(r)
+            if w is None or w < start or (upto is not None and w > upto):
+                continue
+            out.append(r)
+    return out
+
+
+def note_text(out_player: str, status: str, kind: str, res: dict,
+              beneficiary: str) -> dict:
+    """One ripple, as the card says it. The number is measured or the
+    note says it could not be — never a round guess dressed as one."""
+    b = (res.get("beneficiaries") or {}).get(beneficiary)
+    n_out = int(res.get("n_out") or 0)
+    word = "carries" if kind == "carries" else "targets"
+    games = f"{n_out} missed game{'' if n_out == 1 else 's'}"
+    who = out_player.split()[-1] if out_player else "teammate"
+    st = (status or "out").lower()
+    if res.get("enough") and b:
+        d = float(b["delta"])
+        if d >= MOVED:
+            text = (f"{out_player} {st} — over his {games}, "
+                    f"{beneficiary.split()[-1]} absorbed {d:+.0%} of the {word}")
+        else:
+            text = (f"{out_player} {st} — over his {games}, "
+                    f"{beneficiary.split()[-1]}'s share of the {word} did not "
+                    f"move ({d:+.1%})")
+        return {"out": out_player, "status": status, "kind": kind,
+                "n_out": n_out, "delta": round(d, 4), "measured": True,
+                "with": b["with"], "without": b["without"],
+                "n_without": b["n_without"], "text": text}
+    why = (f"{games} since last season" if n_out
+           else "he has not missed a game in the sample")
+    return {"out": out_player, "status": status, "kind": kind,
+            "n_out": n_out, "delta": None, "measured": False,
+            "text": f"{out_player} {st} — usage likely up; not enough games "
+                    f"to measure ({why})"}
+
+
+def ripples_for_props(props, injuries, stats, prior_stats,
+                      season: int, week: int) -> dict:
+    """``{(player, market): [ripple, ...]}`` for every prop whose teammate
+    at the same position is ruled out this week.
+
+    Ethan, 2026-09-14: "RB2 Isiah Pacheco is now out till October 11th so
+    RB1 ... should be seeing a lot more usage ... I wanna make sure we
+    are adjusting if needed and reading this data". This is the safe
+    half: the card SAYS what the stats measured about the beneficiary
+    when this teammate sat, and the projection does not move. Moving it
+    is a pricing change and waits on the information test
+    (engine.ripplefit).
+    """
+    from .injuries import RULED_OUT
+    out_by_team: dict = {}
+    for inj in injuries or []:
+        pos = str(getattr(inj, "position", "") or "").upper()
+        kind = KIND_OF_POSITION.get(pos)
+        if kind and str(getattr(inj, "status", "")).upper() in RULED_OUT:
+            out_by_team.setdefault((str(inj.team).upper(), kind), []).append(inj)
+    if not out_by_team:
+        return {}
+    cache: dict = {}
+    result: dict = {}
+    for prop in props:
+        pos = str(getattr(prop, "position", "") or "").upper()
+        team = str(getattr(prop, "team", "") or "").upper()
+        market = getattr(prop, "market", "")
+        notes = []
+        for kind, group in GROUP.items():
+            if pos not in group or market not in MARKETS_OF[kind]:
+                continue
+            for inj in out_by_team.get((team, kind), []):
+                if _key(inj.player) == _key(prop.player):
+                    continue                       # his own hold, not a ripple
+                ck = (team, _key(inj.player), kind)
+                if ck not in cache:
+                    rows = absence_rows(stats, prior_stats, team, inj.player,
+                                        kind, season, week)
+                    cache[ck] = (redistribution(rows, team, inj.player, kind)
+                                 if rows else None)
+                res = cache[ck]
+                if res is None:
+                    continue                       # never played here: nothing to absorb
+                # The beneficiary is looked up by the stats' spelling.
+                name = next((n for n in res["beneficiaries"]
+                             if _key(n) == _key(prop.player)), prop.player)
+                notes.append(note_text(inj.player, inj.status, kind, res, name))
+        if notes:
+            notes.sort(key=lambda n: (-(n["delta"] if n["measured"] else -1.0),
+                                      -n["n_out"]))
+            result[(prop.player, market)] = notes[:PER_CARD]
+    return result

@@ -890,7 +890,8 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
 def price_props(slate: Slate, config: RuleConfig | None = None,
                 model=None, allow_synthetic_line: bool = False,
                 nfl_usage: dict | None = None, team_context: dict | None = None,
-                team_notes: dict | None = None, sport: str = "nfl") -> list[dict]:
+                team_notes: dict | None = None, sport: str = "nfl",
+                ripples: dict | None = None) -> list[dict]:
     """Every prop on a slate, evaluated and serialised — the shared step.
 
     THIS IS THE SEAM COLLEGE FOOTBALL ARRIVED THROUGH (2026-09-03). It
@@ -957,6 +958,13 @@ def price_props(slate: Slate, config: RuleConfig | None = None,
             note = team_notes.get(prop.team)
             if note:
                 d["warnings"] = list(d["warnings"] or []) + [note]
+        # A TEAMMATE AT HIS POSITION RULED OUT, and what the stats
+        # measured about him when that teammate sat (engine.redistribute
+        # .ripples_for_props). Display only: the projection above has not
+        # moved for it, and the card says the number or says it could
+        # not be measured. Attached here, on the row every board copies
+        # from, so the Most Likely card carries it too.
+        d["ripples"] = list((ripples or {}).get((prop.player, prop.market)) or [])
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
@@ -1022,7 +1030,8 @@ def price_props(slate: Slate, config: RuleConfig | None = None,
 def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               model=None, allow_synthetic_line: bool = False,
               nfl_usage: dict | None = None, team_context: dict | None = None,
-              team_notes: dict | None = None) -> dict:
+              team_notes: dict | None = None,
+              ripples: dict | None = None) -> dict:
     """The NFL board: `price_props` plus the furniture around it — game
     bets, the long-shot board, the likelihood board and the shelves they
     sit on. Sports that build their own furniture (college football)
@@ -1033,7 +1042,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     results = price_props(slate, config, model=model,
                           allow_synthetic_line=allow_synthetic_line,
                           nfl_usage=nfl_usage, team_context=team_context,
-                          team_notes=team_notes, sport="nfl")
+                          team_notes=team_notes, sport="nfl",
+                          ripples=ripples)
 
     game_bets = _game_bets(slate.games, config)
 
