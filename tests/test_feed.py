@@ -146,6 +146,30 @@ def test_cold_start_is_silent():
         os.chdir(old_cwd)
 
 
+def test_an_event_handed_in_again_replaces_the_one_on_the_wire():
+    """An id names one moment. A recap whose line moved comes back under
+    its old id (engine/moments.py) and must REPLACE the stale figure —
+    the first cut dropped the newcomer as "already seen", so the strip
+    kept reading 18-39 after the record said 13-12."""
+    tmp = tempfile.mkdtemp()
+    old_state, old_cwd = feed.STATE_DIR, os.getcwd()
+    feed.STATE_DIR = __import__("pathlib").Path(tmp) / "feedstate"
+    os.chdir(tmp)
+    try:
+        e = {"id": "recap:nfl|2026-09-13", "ts": TS, "sport": "nfl",
+             "kind": "settle_recap", "w": 18, "l": 39}
+        assert feed.publish([e], now=TS) == 1
+        e2 = dict(e, ts="2026-08-24T15:00:00", w=13, l=12)
+        assert feed.publish([e2], now="2026-08-24T15:00:00") == 1, \
+            "the corrected recap sat beside the stale one, or was dropped"
+        doc = json.load(open(gate.board_source(feed.FEED_PUBLIC), encoding="utf-8"))
+        [got] = doc["events"]
+        assert (got["w"], got["l"]) == (13, 12), got
+    finally:
+        feed.STATE_DIR = old_state
+        os.chdir(old_cwd)
+
+
 def test_a_locked_stub_never_reaches_the_differ():
     """With the paywall on, the public copy is a locked stub; diffing it
     against a real digest would read as every pick dying at once."""

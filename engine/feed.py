@@ -324,9 +324,13 @@ def publish(new_events: list[dict], now: str | None = None) -> int:
     from . import gate
     ts = now or _dt.datetime.now().isoformat(timespec="seconds")
     prior = _load_json(gate.board_source(FEED_PUBLIC)) or {}
-    seen = {e.get("id") for e in prior.get("events") or []}
-    merged = (prior.get("events") or []) + [
-        e for e in new_events if e.get("id") not in seen]
+    # An event id names one moment; a moment handed in again is a
+    # correction (a recap whose line moved — engine/moments.py) and
+    # REPLACES the one on the wire rather than sitting beside it or
+    # being dropped for it.
+    fresh = {e.get("id") for e in new_events}
+    merged = [e for e in (prior.get("events") or [])
+              if e.get("id") not in fresh] + list(new_events)
     doc = {"generated_at": ts, "events": prune(merged, now=ts)}
     gate.publish(doc, FEED_PUBLIC, "feed.json")
     return len(doc["events"])

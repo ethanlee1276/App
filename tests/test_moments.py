@@ -239,13 +239,49 @@ def test_the_feed_carries_one_recap_per_sport_and_each_fires_once():
     assert st["recapped"] == "2026-08-23"                 # the legacy marker
     evs2, _ = moments.derive({}, [], recaps, st, TODAY, "2026-08-24T13:06:00")
     assert not [e for e in evs2 if e["kind"] == "settle_recap"], "recapped twice"
-    # A journal marker from before sports existed still holds mlb back.
-    evs3, _ = moments.derive({}, [], {"mlb": _recap()}, {"recapped": "2026-08-23"},
-                             TODAY, NOW)
-    assert not [e for e in evs3 if e["kind"] == "settle_recap"]
+    # A journal marker from before sports existed (no line beside it)
+    # re-announces the night ONCE, under the id the feed already carries
+    # — which replaces the event on the wire, never duplicates it (see
+    # test_feed) — and then holds mlb back like any other marker.
+    evs3, st3 = moments.derive({}, [], {"mlb": _recap()}, {"recapped": "2026-08-23"},
+                               TODAY, NOW)
+    assert [e["sport"] for e in evs3 if e["kind"] == "settle_recap"] == ["mlb"]
+    evs4, _ = moments.derive({}, [], {"mlb": _recap()}, st3, TODAY, NOW)
+    assert not [e for e in evs4 if e["kind"] == "settle_recap"]
     # mlb's id is the one the feed already carries; nfl's is its own.
     legacy, _ = moments.derive({}, [], _recap(), {}, TODAY, NOW)
     assert [e["id"] for e in evs if e["sport"] == "mlb"] == [e["id"] for e in legacy if e["kind"] == "settle_recap"]
+
+
+def test_a_night_whose_line_moved_is_announced_again_under_the_same_id():
+    """Ethan, 2026-09-14: the NFL strip still read 18-39 after the Record
+    page said 13-12. The recap had fired once for Sunday with the numbers
+    as they stood; sixteen rows then graded late and the strip's book was
+    corrected, and the feed kept the first figure. A night whose line
+    moved re-announces under the SAME id (the feed replaces it); an
+    unchanged line is silent; an older night never comes back."""
+    first = {"nfl": _recap(w=18, l=39)}
+    evs, st = moments.derive({}, [], first, {}, TODAY, NOW)
+    [e0] = [e for e in evs if e["kind"] == "settle_recap"]
+    assert (e0["w"], e0["l"]) == (18, 39)
+    # Same night, same line: silent.
+    evs, st = moments.derive({}, [], first, st, TODAY, "2026-08-24T13:06:00")
+    assert not [e for e in evs if e["kind"] == "settle_recap"]
+    # Same night, corrected line: once more, same id, new numbers.
+    fixed = {"nfl": _recap(w=13, l=12)}
+    evs, st = moments.derive({}, [], fixed, st, TODAY, "2026-08-24T13:07:00")
+    [e1] = [e for e in evs if e["kind"] == "settle_recap"]
+    assert e1["id"] == e0["id"] and (e1["w"], e1["l"]) == (13, 12)
+    evs, st = moments.derive({}, [], fixed, st, TODAY, "2026-08-24T13:08:00")
+    assert not [e for e in evs if e["kind"] == "settle_recap"], "re-announced twice"
+    # An older night with a different line never comes back.
+    older = {"nfl": _recap(w=5, l=5, date="2026-08-22")}
+    evs, _ = moments.derive({}, [], older, st, TODAY, "2026-08-24T13:09:00")
+    assert not [e for e in evs if e["kind"] == "settle_recap"]
+    # A half-graded correction waits, like a half-graded first recap.
+    half = {"nfl": _recap(w=13, l=11, open_=1)}
+    evs, _ = moments.derive({}, [], half, st, TODAY, "2026-08-24T13:10:00")
+    assert not [e for e in evs if e["kind"] == "settle_recap"]
 
 
 def test_the_strip_shows_the_sport_on_screen_and_names_the_day():

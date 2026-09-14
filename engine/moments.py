@@ -107,20 +107,36 @@ def derive(board: dict, live_games: list, recap: dict | None,
     by = dict(state.get("recapped_by") or {})
     if state.get("recapped") and "mlb" not in by:
         by["mlb"] = state["recapped"]              # the marker before sports
+    # THE LINE, BESIDE THE DATE. Ethan, 2026-09-14, the NFL strip still
+    # reading 18-39 after the Record page said 13-12: the recap had fired
+    # once for Sunday with Sunday's numbers as they stood, and a night
+    # only announces once. But a night's line CAN change after it is
+    # announced — sixteen rows graded two days late, and a strip that
+    # counted the wrong book was corrected — and the feed kept the first
+    # figure. So the same night re-announces when its line has moved,
+    # under the same event id, which replaces the old event in the feed
+    # rather than adding a second. Older nights still never come back.
+    lines = dict(state.get("recapped_line") or {})
     for sp, r in sorted(recaps.items()):
         if not (r and r.get("date")):
             continue
-        if (r["date"] > str(by.get(sp) or "")
+        line = [int(r.get("w", 0)), int(r.get("l", 0)), int(r.get("p", 0)),
+                round(float(r.get("net_u", 0.0)), 2)]
+        marker = str(by.get(sp) or "")
+        fresh = r["date"] > marker
+        moved = r["date"] == marker and list(lines.get(sp) or []) != line
+        if ((fresh or moved)
                 and (r.get("w", 0) + r.get("l", 0) + r.get("p", 0)) > 0
                 and not r.get("open", 0)):
             # mlb keeps its pre-sport event id so a deploy does not
             # re-announce a night the feed already carries.
             emit("settle_recap", r["date"] if sp == "mlb" else f"{sp}|{r['date']}",
                  sport=sp, date=r["date"],
-                 w=r.get("w", 0), l=r.get("l", 0), p=r.get("p", 0),
-                 net_u=round(float(r.get("net_u", 0.0)), 2))
+                 w=line[0], l=line[1], p=line[2], net_u=line[3])
             by[sp] = r["date"]
+            lines[sp] = line
     state["recapped_by"] = by
+    state["recapped_line"] = lines
     state["recapped"] = by.get("mlb", state.get("recapped", ""))
 
     # -- the autopsy -------------------------------------------------
