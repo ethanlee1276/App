@@ -737,12 +737,23 @@ def main() -> None:
         try:
             from engine.nba.pipeline import shared_recommendations
             lines_map = {}
+            # The ladders (2026-09-15), same shape, own maps — a rung is
+            # never a main line and `_best_rung` reads its own field.
+            alt_map, alt_sharp_map = {}, {}
             for pr in slate.props:
                 if pr.lines:
                     lines_map[(pr.player, pr.market)] = [
                         {"book": ln.book, "line": ln.line,
                          "over_odds": ln.over_odds, "under_odds": ln.under_odds}
                         for ln in pr.lines]
+                for attr, dest in (("alt_lines", alt_map),
+                                   ("alt_sharp_lines", alt_sharp_map)):
+                    rungs = getattr(pr, attr, None) or []
+                    if rungs:
+                        dest[(pr.player, pr.market)] = [
+                            {"book": ln.book, "line": ln.line,
+                             "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+                            for ln in rungs]
             dates_map = {name: h.get("dates", []) for name, h in hist.items()}
             # Photos come out of the same box scores that produced the stat
             # history — one table read, no second feed. A player we have
@@ -750,7 +761,9 @@ def main() -> None:
             from engine.db import player_assets
             recs = shared_recommendations(props, lines_map, dates_map,
                                           tune=tune,
-                                          assets=player_assets(conn, args.league))
+                                          assets=player_assets(conn, args.league),
+                                          alt_map=alt_map,
+                                          alt_sharp_map=alt_sharp_map)
             # Movement, EVIDENCE-ONLY (§4). The snapshot history has been
             # written for this league all along — apply_odds_to_slate
             # records every paid pull — while the doc said "no per-prop

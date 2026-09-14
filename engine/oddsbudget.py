@@ -74,7 +74,9 @@ CREDITS_PER_EVENT = 8
 #: behind `oddsapi.fetch_event_odds`'s drop-and-retry guard.
 #: Baseball: five player markets, three ladders (2026-09-15, see
 #: `oddsapi.MLB_ALT_ODDS_TO_MARKET`) and the three game markets.
-EVENT_CREDITS = {"nfl": 13, "mlb": 11}
+#: Hoops: five player markets, five ladders (`oddsapi.HOOPS_ALT_ODDS_TO_MARKET`)
+#: and the three game markets; both leagues buy the same request.
+EVENT_CREDITS = {"nfl": 13, "mlb": 11, "nba": 13, "wnba": 13}
 
 
 def credits_per_event(sport: str | None = None) -> int:

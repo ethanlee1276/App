@@ -416,16 +416,63 @@ def _face(assets, player: str) -> str:
     return url
 
 
+def rung_probs(stat: str, proj: float, alts: list, w: float,
+               tune: LeagueTuning = NBA) -> dict:
+    """``{"14.5": 0.71, ...}`` — the board's number at every distinct rung
+    of a prop's alternate ladder, priced EXACTLY as the main line is:
+    the model's curve at the rung (`p_over`, negative binomial for the
+    low-count stats), the market's live correction, then the humility
+    clamp toward the rung's own de-vigged price at the weight the main
+    line was clamped at. A rung quoted one-sided has no market number to
+    clamp toward and carries the model's; a rung the clamp KILLS (model
+    and market apart by more than CLAMP_KILL_DIFF) is left out, so
+    `likely._best_rung` cannot price it from a football curve instead.
+    Keyed the way `_best_rung` looks them up (``f"{line:g}"``).
+    """
+    from ..calibrate import calibrated
+    out: dict = {}
+    for ln in alts or []:
+        try:
+            line = float(ln.get("line") if isinstance(ln, dict) else ln.line)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        key = f"{line:g}"
+        if key in out:
+            continue
+        over = ln.get("over_odds") if isinstance(ln, dict) else getattr(ln, "over_odds", 0)
+        under = ln.get("under_odds") if isinstance(ln, dict) else getattr(ln, "under_odds", 0)
+        p_model = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
+        try:
+            over, under = int(over or 0), int(under or 0)
+        except (TypeError, ValueError):
+            over, under = 0, 0
+        if over and under:
+            mkt_over, _ = devig(over, under)
+            p_final, _note = humility_clamp(p_model, mkt_over, w)
+            if p_final is None:
+                continue
+            out[key] = round(float(p_final), 4)
+        else:
+            out[key] = round(float(p_model), 4)
+    return out
+
+
 def shared_recommendations(props: list[dict],
                            lines_map: dict | None = None,
                            dates_map: dict | None = None,
                            tune: LeagueTuning = NBA,
-                           assets: dict | None = None) -> list[dict]:
+                           assets: dict | None = None,
+                           alt_map: dict | None = None,
+                           alt_sharp_map: dict | None = None) -> list[dict]:
     """Every evaluable prop as a shared-schema recommendation dict.
 
     ``lines_map``: {(player, market): [line dicts]} — the multi-book quotes
     the Scanner needs (Scalpy itself only keeps the best two-way price).
     ``dates_map``: {player: [ISO dates, newest first]} for real log labels.
+
+    ``alt_map`` / ``alt_sharp_map``: {(player, market): [line dicts]} — the
+    alternate ladders (2026-09-15) and the sharp books' rungs, carried on
+    the row beside `rung_probs`, the board's number at each rung.
 
     ``assets``: {player: {espn_id, headshot}} from `db.player_assets`, so a
     prop can carry the player's photo. ESPN's box score ships the URL
@@ -498,6 +545,16 @@ def shared_recommendations(props: list[dict],
                         f"to break even at {r['odds']:+d}."),
             "reasons": reasons,
             "all_lines": (lines_map or {}).get((r["player"], r["market"]), []),
+            # THE ALTERNATE LADDER (2026-09-15), with the board's number at
+            # every rung — see `rung_probs`. Every hoops line is hung at
+            # the median, so without a ladder the Most Likely floor refused
+            # the whole slate on all five markets.
+            "alt_lines": (alt_map or {}).get((r["player"], r["market"]), []),
+            "alt_sharp_lines": (alt_sharp_map or {}).get((r["player"], r["market"]), []),
+            "rung_probs": rung_probs(
+                r["market"], float(r["projection"]),
+                (alt_map or {}).get((r["player"], r["market"]), []),
+                float(r.get("w", 0.0) or 0.0), tune),
             "logs": [{"week": i + 1,
                       "date": dates[i] if i < len(dates) else "",
                       "opponent": "", "value": v, "home": 1}

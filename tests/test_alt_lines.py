@@ -66,11 +66,13 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     assert all(k.endswith("_alternate") for k in oa.ALT_ODDS_TO_MARKET)
     for sport in ("nfl", "cfb"):
         assert oa.SPORT_CONFIG[sport]["alternates"] is oa.ALT_ODDS_TO_MARKET, sport
-    # Baseball bought its own three on 2026-09-15 (tests/test_mlb_ladder.py);
-    # hoops and MMA still buy none.
+    # Baseball bought its own three on 2026-09-15 (tests/test_mlb_ladder.py)
+    # and both hoops leagues their five (tests/test_hoops_ladder.py); MMA
+    # has no player markets to ladder.
     assert oa.SPORT_CONFIG["mlb"]["alternates"] is oa.MLB_ALT_ODDS_TO_MARKET
-    for sport in ("nba", "wnba", "ufc"):
-        assert not oa.SPORT_CONFIG[sport].get("alternates"), sport
+    for sport in ("nba", "wnba"):
+        assert oa.SPORT_CONFIG[sport]["alternates"] is oa.HOOPS_ALT_ODDS_TO_MARKET, sport
+    assert not oa.SPORT_CONFIG["ufc"].get("alternates")
     # 5 props + 1 scorer + 3 game markets + 4 ladders, per event per
     # region. Five since 2026-09-10, when the NFL added
     # `player_pass_tds` (engine/passtd.py); college stayed at four,
@@ -93,6 +95,10 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     mlb = oa.SPORT_CONFIG["mlb"]
     assert (len(mlb["markets"]) + len(mlb["alternates"]) + 3
             == B.credits_per_event("mlb") == B.EVENT_CREDITS["mlb"] == 11)
+    for sport in ("nba", "wnba"):
+        hoops = oa.SPORT_CONFIG[sport]
+        assert (len(hoops["markets"]) + len(hoops["alternates"]) + 3
+                == B.credits_per_event(sport) == B.EVENT_CREDITS[sport] == 13), sport
     assert B.CREDITS_PER_EVENT == 8        # the generic price, for leagues without an entry
     # The lines lane spends the SPORT'S money (`budget_sport`), so it
     # answers the sport's own event price — not a price of its own.

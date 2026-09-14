@@ -185,7 +185,24 @@ MLB_ALT_ODDS_TO_MARKET = {
     "batter_total_bases_alternate": "total_bases",
     "pitcher_strikeouts_alternate": "strikeouts",
 }
-UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
+
+#: BASKETBALL'S LADDERS, the same day, from the scan Ethan asked for
+#: after the baseball fix ("scan every sport and make sure this is not
+#: an issue"). Every hoops line is hung at the player's median — points,
+#: rebounds, assists, threes, PRA alike — so the main number sits near
+#: 50% on all five markets and the Most Likely board's floor refuses the
+#: whole slate; strikeouts had one such market, hoops has nothing but.
+#: Same remedy, same guard: unproven keys, dropped and retried if the
+#: API refuses one.
+HOOPS_ALT_ODDS_TO_MARKET = {
+    "player_points_alternate": "pts",
+    "player_rebounds_alternate": "reb",
+    "player_assists_alternate": "ast",
+    "player_threes_alternate": "fg3m",
+    "player_points_rebounds_assists_alternate": "pra",
+}
+UNPROVEN_MARKETS = (UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
+                    | frozenset(HOOPS_ALT_ODDS_TO_MARKET))
 
 # Default books to shop, matching the project vision. Keys are The Odds API's.
 # Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
@@ -426,12 +443,14 @@ SPORT_CONFIG = {
             # The three ladders — see MLB_ALT_ODDS_TO_MARKET.
             "alternates": MLB_ALT_ODDS_TO_MARKET},
     "nba": {"sport_key": "basketball_nba",
-            "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR},
+            "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR,
+            "alternates": HOOPS_ALT_ODDS_TO_MARKET},
     # Same markets and the same book keys; only the league and the team
     # names differ. The WNBA expanded twice in two years, so this map is
     # the 2026 field.
     "wnba": {"sport_key": "basketball_wnba",
-             "markets": NBA_ODDS_TO_MARKET, "teams": WNBA_TEAM_ABBR},
+             "markets": NBA_ODDS_TO_MARKET, "teams": WNBA_TEAM_ABBR,
+             "alternates": HOOPS_ALT_ODDS_TO_MARKET},
     # MMA events are one bout each; "teams" are fighter names, so the map is
     # identity (ufc_build reads the h2h payload directly).
     "ufc": {"sport_key": "mma_mixed_martial_arts", "markets": {}, "teams": {}},
