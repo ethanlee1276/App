@@ -207,14 +207,47 @@ def last_night(conn, today: str, sport: str | None = None) -> dict | None:
             "open": row["o"] or 0}
 
 
+#: How far back a sport's last graded slate may be and still be its
+#: strip. A football league plays once a week; Sunday's line is the
+#: right thing to show on Thursday.
+RECAP_LOOKBACK_DAYS = 7
+
+
+def last_graded_night(conn, today: str, sport: str,
+                      lookback: int = RECAP_LOOKBACK_DAYS) -> dict | None:
+    """The sport's NEWEST fully graded day inside the lookback.
+
+    Ethan, 2026-09-15: "now only mlb has the last nights bar, nothing
+    else does." `last_nights` asked each sport about YESTERDAY only,
+    and a recap fires only once a day is fully graded. Baseball plays
+    every night and grades by morning, so it always had one. Football
+    plays Saturday or Sunday and its props graded on Tuesday — by which
+    time Sunday was no longer yesterday, so its recap was never computed
+    and the strip stayed empty for the whole week. Walk back from
+    yesterday and take the first day that is graded through; a day with
+    a bet still open is skipped, not shown half-done.
+    """
+    day = _dt.date.fromisoformat(today)
+    for back in range(1, lookback + 1):
+        r = last_night(conn, (day - _dt.timedelta(days=back - 1)).isoformat(),
+                       sport=sport)
+        if not r:
+            continue
+        if r["open"]:
+            continue
+        if (r["w"] + r["l"] + r["p"]) > 0:
+            return r
+    return None
+
+
 def last_nights(conn, today: str) -> dict:
-    """``{sport: line}`` for every tracked sport that had a bet
-    yesterday — the strip on each board shows its own."""
+    """``{sport: line}`` — every tracked sport's newest fully graded day
+    inside the lookback. The strip on each board shows its own."""
     from .ledger import TRACKED_SPORTS
     out: dict = {}
     for sp in TRACKED_SPORTS:
-        r = last_night(conn, today, sport=sp)
-        if r and (r["w"] + r["l"] + r["p"] + r["open"]) > 0:
+        r = last_graded_night(conn, today, sp)
+        if r:
             out[sp] = r
     return out
 

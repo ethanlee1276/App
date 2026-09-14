@@ -170,6 +170,37 @@ def test_each_sport_recaps_its_own_night_by_its_own_game_day():
     assert (pooled["w"], pooled["l"]) == (3, 1)
 
 
+def test_a_football_slate_recaps_when_it_grades_not_only_when_it_is_yesterday():
+    """Ethan, 2026-09-15: "now only mlb has the last nights bar, nothing
+    else does." Sunday's props graded on Tuesday; by then Sunday was
+    not yesterday, and the recap was never computed."""
+    conn = ledger.connect(":memory:")
+    def bet(sport, game_day, status, pnl):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,stake_units,stake_dollars,status,category,pnl_units,game_day) "
+            "VALUES ('t',?,'2026-W02',?,'rec_yds','OVER',50.5,'DK',-110,1,10,?,'main',?,?)",
+            (sport, f"{sport}{game_day}{status}{pnl}", status, pnl, game_day))
+    today = "2026-09-15"                                   # Tuesday
+    bet("nfl", "2026-09-13", "won", 0.9)                   # Sunday, graded
+    bet("nfl", "2026-09-13", "lost", -1.0)
+    bet("nfl", "2026-09-14", "won", 0.5)                   # Monday night, one graded...
+    bet("nfl", "2026-09-14", "open", 0.0)                  # ...and one still open: not shown half-done
+    bet("cfb", "2026-09-12", "won", 1.2)                   # Saturday, graded
+    conn.commit()
+    got = moments.last_nights(conn, today)
+    assert got["nfl"]["date"] == "2026-09-13" and (got["nfl"]["w"], got["nfl"]["l"]) == (1, 1)
+    assert got["cfb"]["date"] == "2026-09-12" and got["cfb"]["w"] == 1
+    assert "mlb" not in got
+    # Monday grades: Monday's line takes over.
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.9 WHERE status='open'")
+    conn.commit()
+    monday = moments.last_nights(conn, today)["nfl"]
+    assert monday["date"] == "2026-09-14" and monday["w"] == 2
+    # Past the lookback, nothing.
+    assert moments.last_nights(conn, "2026-09-25") == {}
+
+
 def test_the_feed_carries_one_recap_per_sport_and_each_fires_once():
     recaps = {"mlb": _recap(w=1, l=1), "nfl": _recap(w=2, l=0)}
     evs, st = moments.derive({}, [], recaps, {}, TODAY, NOW)
