@@ -449,6 +449,21 @@ def game_lines(conn, sport: str, log=print) -> dict:
 
 
 # --- the whole lab -----------------------------------------------------------
+def ripple_section(hconn, log=print) -> dict:
+    """Does a same-position teammate's absence carry information the NFL
+    close does not? `engine.ripplefit` answers per market, stores the
+    verdict where a pricing hook would read it, and this puts the table
+    on the Lab page. Minutes, not hours: it joins logs to closes and
+    never rebuilds a slate. A failure is a reason on the page, never a
+    dead Lab."""
+    try:
+        from . import ripplefit
+        return ripplefit.run(hconn, log=log)
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  lab: usage ripple skipped — {exc}")
+        return {"unavailable": f"usage ripple not measured — {exc}"}
+
+
 def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
     """Run every harness this machine's data supports and return the page's
     JSON. Each sport reports what it HAS and, where it has nothing, why."""
@@ -467,7 +482,13 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
                          "game_lines": game_lines(hconn, "mlb", log=log)}
         sports["nfl"] = {"props": nfl_props(log=log, conn=hconn) if nfl else
                          {"unavailable": "skipped"},
-                         "game_lines": game_lines(hconn, "nfl", log=log)}
+                         "game_lines": game_lines(hconn, "nfl", log=log),
+                         # The usage ripple against the close — the
+                         # pricing half of Ethan's Pacheco question,
+                         # measured here weekly so the verdict lands on
+                         # the page without anyone running anything.
+                         "ripple": ripple_section(hconn, log=log) if nfl else
+                         {"unavailable": "skipped"}}
         sports["cfb"] = {"props": cfb_props(log=log, conn=hconn),
                          "game_lines": game_lines(hconn, "cfb", log=log)}
         for sp in ("nba", "wnba"):

@@ -13300,6 +13300,37 @@ function labCarried(section) {
     kept from that run${section.carry_reason ? ` (this week: ${escapeHtml(section.carry_reason)})` : ""}</p>`;
 }
 
+/* THE USAGE RIPPLE AGAINST THE CLOSE (Ethan, 2026-09-14, Pacheco): when
+   a same-position teammate sat, did the beneficiary beat the book's
+   number by more than the book allowed? Per market: the absence rows,
+   the residual over the close, and the verdict the pricing change waits
+   on. A residual near zero means the close already carried the absence
+   — and the card's note stays a note. */
+function labRippleHTML(rp) {
+  if (!rp) return "";
+  const head = `<div class="section-title minor">Usage ripple against the close
+      <span class="sub">— when a teammate at his position sat, did he beat the
+      book’s number by more than the book allowed? The card’s note prices
+      nothing until a market clears here.</span></div>`;
+  if (!rp.markets) return `${head}<p class="mini" style="padding:4px 0">${escapeHtml(rp.unavailable || "not measured")}</p>`;
+  const rows = Object.keys(rp.markets).map((mk) => {
+    const m = rp.markets[mk];
+    const resid = m.resid_mean != null
+      ? `${m.resid_mean >= 0 ? "+" : ""}${m.resid_mean.toFixed(1)}${m.resid_se != null ? ` ± ${m.resid_se.toFixed(1)}` : ""}` : "—";
+    const bets = m.bets != null ? `${m.bets}${m.roi != null ? ` · ${(m.roi >= 0 ? "+" : "")}${(m.roi * 100).toFixed(1)}%` : ""}` : "—";
+    const v = String(m.verdict || "");
+    return `<tr><td>${escapeHtml(mk)}</td><td class="num">${m.n || 0}</td>
+      <td class="num">${m.n_measured || 0}</td><td class="num">${resid}</td>
+      <td class="num">${bets}</td>
+      <td class="${v === "clears" ? "pos" : ""}"><b>${escapeHtml(v)}</b>${m.reason ? ` <span class="mini">— ${escapeHtml(m.reason)}</span>` : ""}</td></tr>`;
+  }).join("");
+  return `${head}<table class="agate"><thead><tr><th>Market</th>
+    <th class="num">Absence rows</th><th class="num">Measured</th>
+    <th class="num">Actual − close</th><th class="num">Bets · ROI (judged)</th><th>Verdict</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    ${rp.measured_at ? `<div class="mini" style="opacity:.7">Measured ${escapeHtml(String(rp.measured_at).slice(0, 10))}</div>` : ""}`;
+}
+
 function labGameTable(games) {
   const rows = (games.markets || []).map((g) => `<tr>
     <td>${escapeHtml(g.market)}</td>
@@ -13350,6 +13381,7 @@ async function renderLab() {
         graded against real closing numbers</div>
       ${labCarried(games)}
       ${labGameTable(games)}
+      ${labRippleHTML(s.ripple)}
     </div>`;
   }).join("");
   /* Sports with nothing replayed collapse into one honest table instead

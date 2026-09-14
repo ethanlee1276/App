@@ -367,6 +367,32 @@ def test_the_page_says_a_kept_section_is_kept_and_when():
         "both the props and the game-lines section must say when they are kept"
 
 
+# --- the usage ripple against the close, on the page weekly ------------------
+def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
+    """Ethan, 2026-09-14 (Pacheco): the pricing half waits on a
+    measurement against closes. It runs inside the weekly Lab so the
+    verdict lands on the page without anyone running anything."""
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    assert out["sports"]["nfl"]["ripple"] == {"unavailable": "skipped"}
+    import inspect
+    src = inspect.getsource(lab.build)
+    assert '"ripple": ripple_section(hconn, log=log) if nfl else' in src
+
+    class _Exploding:
+        def execute(self, *a, **k):
+            raise RuntimeError("db is on fire")
+    got = lab.ripple_section(_Exploding(), log=_quiet)
+    assert "unavailable" in got and "on fire" in got["unavailable"]
+
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "function labRippleHTML(" in app
+    k = app.index("async function renderLab(")
+    assert "${labRippleHTML(s.ripple)}" in app[k:k + 4000]
+    i = app.index("function labRippleHTML(")
+    assert "prices\n      nothing until a market clears" in app[i:i + 800] \
+        or "prices" in app[i:i + 800] and "clears here" in app[i:i + 800]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
