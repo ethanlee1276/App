@@ -11955,6 +11955,29 @@ function recProseSection(pz, sport) {
     </div>`;
 }
 
+/* WHERE EVERY SPORT STANDS IN THE LADDER, tuned or not (Ethan,
+   2026-09-14: "It's only showing mlb and nothing about nfl or CFB"). A
+   market under a floor is listed with the floor and the distance to it
+   — collecting N of 200 graded bets, or N of 400 book-priced pairs —
+   so an early sport reads as early, never as untreated. */
+function learningCoverageHTML(cov, sport) {
+  if (!cov) return "";
+  const sports = Object.keys(cov).filter((s) => !sport || s === sport);
+  const lines = [];
+  sports.forEach((s) => {
+    const c = cov[s] || {};
+    const pending = Object.entries(c.markets || {}).filter(([, m]) => m.state !== "tuned");
+    if (!pending.length && (c.tuned || 0) > 0) return;
+    const head = `${escapeHtml(s.toUpperCase())} — ${(c.settled || 0).toLocaleString()} graded ${pluralWord(c.settled || 0, "bet")} on the journal, ${c.tuned || 0} market${c.tuned === 1 ? "" : "s"} tuned`;
+    const body = pending.length
+      ? pending.map(([mk, m]) => `<div style="padding:2px 0 2px 12px">${escapeHtml(mk)} · ${escapeHtml(m.note || m.state || "")}</div>`).join("")
+      : `<div style="padding:2px 0 2px 12px">no graded bets with a stated probability yet — the ladder starts with its first settled pick</div>`;
+    lines.push(`<div style="padding:6px 14px;font-size:.85em;color:var(--text-mute);border-top:1px solid rgba(255,255,255,.05)"><div>${head}</div>${body}</div>`);
+  });
+  if (!lines.length) return "";
+  return `<div style="padding:4px 0 2px"><div class="mini" style="padding:6px 14px 2px;opacity:.75">Where each sport stands — the same floors for every league</div>${lines.join("")}</div>`;
+}
+
 function recSelfTuningSection(st, sport) {
   // `sport` scopes the section to one league's own learning — the ladder
   // fits every sport separately, so each sport's record page shows ITS
@@ -11979,7 +12002,7 @@ function recSelfTuningSection(st, sport) {
       Nothing tuned for ${escapeHtml(sport.toUpperCase())} yet. The fitters run
       on every settle pass, on this sport’s own settled bets only, and adopt
       a correction only when it beats the spec in a walk-forward test — so this
-      fills in as its journal deepens.</p></div>`;
+      fills in as its journal deepens.</p>${learningCoverageHTML(st.coverage, sport)}</div>`;
   }
   const tone = (m) => m.at_boundary ? "var(--bad)"
     : Math.abs(m.temperature - 1) > 0.05 ? "var(--warn)" : "var(--good)";
@@ -12125,7 +12148,7 @@ function recSelfTuningSection(st, sport) {
       })()}</div>
         <div class="tile-sub">markets whose calibration error is falling</div></div>
     </div>
-    <div class="card" style="padding:0">${rows}</div>
+    <div class="card" style="padding:0">${rows}${learningCoverageHTML(st.coverage, sport)}</div>
     ${weightsBlock}
     ${playersBlock}
     ${trendRows ? `<div class="section-title">Is it getting better?

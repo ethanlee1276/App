@@ -4814,6 +4814,90 @@ def _selection_haircut_block() -> dict:
         return {}
 
 
+def learning_coverage(conn, st: dict) -> dict:
+    """Every tracked sport's place in the learning ladder — including the
+    sports that have NO row in it, which is the whole point.
+
+    Ethan, 2026-09-14, reading "The model tunes itself": "It's only
+    showing mlb and nothing about nfl or CFB ... We need to make sure
+    nfl and CFB is getting the same treatment the mlb gets." The
+    treatment IS the same — the journal fitter needs `MIN_SAMPLES`
+    graded bets per market before it fits a temperature, and the NFL's
+    prop corrections must be fitted on book-priced pairs
+    (`engine.propcal`) or the market runs uncorrected — but the page
+    showed only the sports that had cleared those floors, so a sport
+    that had not looked untreated instead of early. This block says,
+    per sport and per market, which floor it is under and how far from
+    it, from the journal's own counts and the prop calibrator's stored
+    pairs. Never a bare absence.
+    """
+    from .journalfit import MIN_SAMPLES as JOURNAL_MIN
+    per: dict = {}
+    try:
+        for r in conn.execute(
+                "SELECT sport, market, COUNT(*) AS n FROM bets "
+                "WHERE status IN ('won','lost') AND hit_prob IS NOT NULL "
+                "GROUP BY sport, market"):
+            per[(str(r["sport"] or ""), str(r["market"] or ""))] = int(r["n"] or 0)
+    except Exception:                              # noqa: BLE001
+        per = {}
+    tuned = {(m.get("sport"), m.get("market")): m for m in (st.get("markets") or [])}
+    book: dict = {}
+    book_need = None
+    try:
+        from . import propcal
+        pairs = propcal.load_pairs()
+        book = {m: len(v) for m, v in (pairs.get("markets") or {}).items()}
+        book_need = int(propcal.MIN_BOOK_PAIRS)
+    except Exception:                              # noqa: BLE001
+        book, book_need = {}, None
+    out: dict = {}
+    for sp in TRACKED_SPORTS:
+        markets: dict = {}
+        names = {m for (s, m) in per if s == sp} | {m for (s, m) in tuned if s == sp}
+        if sp == "nfl":
+            names |= set(book)
+        for m in sorted(names):
+            n = per.get((sp, m), 0)
+            row: dict = {"journal_n": n, "need": int(JOURNAL_MIN)}
+            if (sp, m) in tuned:
+                row["state"] = "tuned"
+                row["note"] = tuned[(sp, m)].get("reading") or "tuned"
+            elif sp == "nfl" and book_need is not None and m in book:
+                row["book_pairs"], row["book_need"] = book[m], book_need
+                if book[m] < book_need:
+                    row["state"] = "uncorrected"
+                    row["note"] = (f"against the close: {book[m]} of {book_need} "
+                                   f"book-priced pairs — runs uncorrected until "
+                                   f"the harvest fills it")
+                else:
+                    row["state"] = "fit due"
+                    row["note"] = "book-priced pairs on file; the weekly refit fits it"
+            elif n < JOURNAL_MIN:
+                row["state"] = "collecting"
+                row["note"] = f"collecting: {n} of {JOURNAL_MIN} graded journal bets"
+            else:
+                row["state"] = "fit due"
+                row["note"] = f"{n} graded journal bets — the next settle pass fits it"
+            markets[m] = row
+        out[sp] = {
+            "settled": sum(n for (s, _m), n in per.items() if s == sp),
+            "tuned": sum(1 for r in markets.values() if r["state"] == "tuned"),
+            "collecting": sum(1 for r in markets.values() if r["state"] != "tuned"),
+            "markets": markets,
+        }
+    return out
+
+
+def _with_coverage(st: dict, conn) -> dict:
+    try:
+        st = dict(st or {})
+        st["coverage"] = learning_coverage(conn, st)
+    except Exception:                              # noqa: BLE001
+        pass
+    return st
+
+
 def _self_tuning_block() -> dict:
     """self_tuning_report with its own history connection, for export_json.
 
@@ -6130,7 +6214,7 @@ def export_json(conn, path) -> None:
         # markets, and the sweep trend. Own history connection, own guard —
         # a missing stats DB (CI, fresh clone) yields an empty block, never
         # a failed export.
-        "self_tuning": _self_tuning_block(),
+        "self_tuning": _with_coverage(_self_tuning_block(), conn),
         # The blind-spot miner: slices of the record whose stated
         # probabilities systematically missed, under false-discovery
         # control. Mined fresh from THIS journal so the page always shows

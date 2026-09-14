@@ -181,7 +181,9 @@ def test_history_still_shows_when_no_calibration_file_exists():
 def test_the_report_ships_in_the_record_export():
     src = open(os.path.join(ROOT, "engine", "ledger.py"),
                encoding="utf-8").read()
-    assert '"self_tuning": _self_tuning_block()' in src
+    # Wrapped since 2026-09-14 to add each tracked sport's place in the
+    # ladder from the journal's own counts — still store-read, no refit.
+    assert '"self_tuning": _with_coverage(_self_tuning_block(), conn)' in src
 
 
 def test_the_page_renders_the_loop_on_every_scope():
