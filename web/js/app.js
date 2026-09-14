@@ -12305,11 +12305,21 @@ function recHypothesisLab(hl, sport) {
   const watch = sport ? "" : (hl.watchlist || []).map((w) => `
     <div style="padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05);
         font-size:.85em;color:var(--text-mute)">· ${escapeHtml(w)}</div>`).join("");
+  // The sport's own record count and the floor a claim needs, so "no
+  // hypothesis yet" says how far the sport is from one (Ethan,
+  // 2026-09-14: "I also don't see anything about nfl in the hypothesis
+  // lab") instead of reading as a sport the lab skipped.
+  const onFile = ((hl.coverage || {})[sport] ?? null);
+  const floor = hl.min_n || 40;
+  const standing = onFile == null ? "" : ` It has ${onFile.toLocaleString()} graded
+      ${pluralWord(onFile, "bet")} on file; a claim about it is tested once ${floor}
+      matching bets exist, and the lab reads this record on the same weekly
+      pass as every other sport.`;
   const empty = (sport && (hl.hypotheses || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The lab
       reads every sport’s record — including this one — and proposes
-      wherever the evidence points.</p>` : `
+      wherever the evidence points.${standing}</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       The lab has nothing open right now. It reads the record’s own summary
       and proposes slice intersections the miner doesn’t test. Every proposal

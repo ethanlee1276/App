@@ -397,7 +397,9 @@ def test_the_free_retest_runs_on_every_settle_pass():
 def test_the_lab_ships_in_the_record_export_without_calling_any_api():
     src = open(os.path.join(ROOT, "engine", "ledger.py"),
                encoding="utf-8").read()
-    assert '"hypothesis_lab": _hypothesis_lab_block()' in src
+    # Wrapped since 2026-09-14 to add per-sport record counts from the
+    # ledger — a COUNT(*) per sport, and still no API call anywhere.
+    assert '"hypothesis_lab": _with_records(_hypothesis_lab_block(), conn)' in src
     fn = src[src.index("def _hypothesis_lab_block("):
              src.index("def _loss_patterns_block(")]
     assert "call" not in fn and "urllib" not in fn   # store-read only

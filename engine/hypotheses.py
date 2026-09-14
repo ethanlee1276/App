@@ -197,9 +197,34 @@ def evidence_pack(lconn, lp_store: dict | None = None) -> dict:
         pass
     # Trim the widest sections first if the pack runs long; the menu and
     # sports lists are load-bearing and never trimmed.
-    while len(json.dumps(pack)) > MAX_PACK_CHARS and pack["markets"]:
-        pack["markets"] = pack["markets"][:-1]
+    pack["markets"] = trim_markets(pack["markets"],
+                                   lambda ms: len(json.dumps(dict(pack, markets=ms))))
+    pack["coverage"] = {s: sum(m["n"] for m in pack["markets"] if m["sport"] == s)
+                        for s in pack["sports"]}
     return pack
+
+
+def trim_markets(markets: list, size, cap: int = MAX_PACK_CHARS) -> list:
+    """Fit the market table under the pack budget WITHOUT dropping a sport.
+
+    It used to cut from the END of a list sorted by (sport, market) —
+    which is alphabetical, so "nfl", "ufc" and "wnba" went first and
+    "cfb" and "mlb" never did. The newest sport on the record was the
+    first one the proposer stopped being shown, every week, for the
+    rest of its life. Now the smallest market of a sport that still has
+    more than one goes first; a sport's last market is never cut while
+    another sport has two.
+    """
+    ms = list(markets)
+    while ms and size(ms) > cap:
+        by_sport: dict = {}
+        for m in ms:
+            by_sport.setdefault(m.get("sport"), []).append(m)
+        multi = [m for m in ms if len(by_sport.get(m.get("sport")) or []) > 1]
+        pool = multi or ms
+        victim = min(pool, key=lambda m: (m.get("n") or 0))
+        ms.remove(victim)
+    return ms
 
 
 # --- the ask -----------------------------------------------------------------
@@ -219,8 +244,11 @@ proposals that survive are acted on.
 
 Propose at most {max_h} hypotheses. Prefer intersections the summary \
 genuinely motivates over exhaustive coverage; an empty list is a valid \
-answer when nothing is motivated. Ideas that CANNOT be expressed in the \
-menu's dimensions belong in the watchlist as one-line prose instead."""
+answer when nothing is motivated. Every sport in the summary is in \
+play: a newer sport with a thinner record is considered on its own \
+evidence, never skipped for being newer. Ideas that CANNOT be expressed \
+in the menu's dimensions belong in the watchlist as one-line prose \
+instead."""
 
 SCHEMA = {
     "type": "object",

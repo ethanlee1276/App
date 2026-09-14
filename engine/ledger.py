@@ -4898,6 +4898,26 @@ def _with_coverage(st: dict, conn) -> dict:
     return st
 
 
+def _with_records(hl: dict, conn) -> dict:
+    """The hypothesis lab's per-sport record counts and the floor a claim
+    needs, so a sport with no hypothesis can say how far it is from one
+    instead of reading as skipped."""
+    try:
+        from .losspatterns import MIN_N
+        hl = dict(hl or {})
+        counts = {sp: 0 for sp in TRACKED_SPORTS}
+        for r in conn.execute(
+                "SELECT sport, COUNT(*) AS n FROM bets WHERE status IN "
+                "('won','lost') AND hit_prob IS NOT NULL GROUP BY sport"):
+            if r["sport"] in counts:
+                counts[r["sport"]] = int(r["n"] or 0)
+        hl["coverage"] = counts
+        hl["min_n"] = int(MIN_N)
+    except Exception:                              # noqa: BLE001
+        pass
+    return hl
+
+
 def _self_tuning_block() -> dict:
     """self_tuning_report with its own history connection, for export_json.
 
@@ -6224,7 +6244,7 @@ def export_json(conn, path) -> None:
         # The hypothesis lab: LLM-proposed slice intersections and the
         # tribunal's verdicts. Read from the store — the export never
         # calls an API; the paid propose step is CLI-only.
-        "hypothesis_lab": _hypothesis_lab_block(),
+        "hypothesis_lab": _with_records(_hypothesis_lab_block(), conn),
         "prereg": _prereg_block(conn),
         # The prose lanes: the nightly postmortem and the weekly model
         # brief, read from their stores — the paid calls happen in the
