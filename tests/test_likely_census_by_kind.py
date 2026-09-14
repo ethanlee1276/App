@@ -160,11 +160,18 @@ def test_the_funnel_adds_up_for_every_kind():
 
 
 def test_shown_is_after_the_caps_and_kept_is_before_them():
-    """Three scorers clear the bar; a board of one seats one. The bar
-    kept three and the caps showed one — two different facts."""
-    board, _flat, kinds = _build(td_watch=[_td("a"), _td("b"), _td("c")], limit=1)
-    assert len(board) == 1
-    assert kinds["td"]["kept"] == 3 and kinds["td"]["shown"] == 1, kinds["td"]
+    """Nine scorers clear the bar; a market seats eight. The bar kept
+    nine and the caps showed eight — two different facts.
+
+    This used to pass `limit=1` and expect one row: `_cut_players` cut
+    the kept rows back to `limit` across markets. Since 2026-09-14 a
+    market's PER_MARKET seats are its own and `limit` is only the
+    back-fill target (docs/ONE_MARKET_NEVER_COSTS_ANOTHER.md), so the
+    cap that separates kept from shown is the per-market one."""
+    nine = [_td(f"s{i}") for i in range(K.PER_MARKET + 1)]
+    board, _flat, kinds = _build(td_watch=nine, limit=1)
+    assert len(board) == K.PER_MARKET, len(board)
+    assert kinds["td"]["kept"] == K.PER_MARKET + 1 and kinds["td"]["shown"] == K.PER_MARKET, kinds["td"]
     assert kinds["td"]["refused"] == {}
 
 

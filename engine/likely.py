@@ -200,7 +200,20 @@ PER_MARKET = 8
 
 def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET) -> list:
     """The player rows the board keeps: each market's best `per_market`
-    first, then the best of the rest, `limit` in all, probability order."""
+    — seats no other market can take — then the best of the rest up to
+    `limit`, probability order.
+
+    ONE MARKET NEVER COSTS ANOTHER (Ethan, 2026-09-14: "If I'm having an
+    issue seeing a certain category of props, to make those props show
+    you should not be affecting another category of props"). Until today
+    the kept rows were cut back to `limit` in probability order ACROSS
+    markets. With five NFL markets at eight seats that never bound; the
+    sixth market (passing touchdowns) joined the board this morning, and
+    the cut would have taken the eight seats back from whichever market
+    priced lowest — passing yards, the one Ethan had just asked for. The
+    per-market seats are guaranteed; `limit` is the back-fill target.
+    See docs/ONE_MARKET_NEVER_COSTS_ANOTHER.md.
+    """
     rows = sorted(rows, key=lambda r: -float(r.get("model_prob") or 0.0))
     kept, taken = [], {}
     for r in rows:
@@ -208,8 +221,6 @@ def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET) -> list:
         if taken.get(m, 0) < per_market:
             taken[m] = taken.get(m, 0) + 1
             kept.append(r)
-    if len(kept) > limit:
-        kept = kept[:limit]
     if len(kept) < limit:
         chosen = {id(r) for r in kept}
         kept += [r for r in rows if id(r) not in chosen][:limit - len(kept)]
@@ -310,8 +321,10 @@ SPREAD_COHERENCE = 0.15
 #: chalk.
 HEAVIEST_PRICE = -250
 
-#: How many rows the board carries per sport before it stops being a
-#: ranking and starts being a dump.
+#: How many player rows the board back-fills to per sport before it
+#: stops being a ranking and starts being a dump. Not a cap on the
+#: per-market seats: a sport that ranks more than LIMIT / PER_MARKET
+#: markets shows every market's PER_MARKET (see `_cut_players`).
 LIMIT = 40
 
 #: A model probability below this is not "likely" by any reading, whatever

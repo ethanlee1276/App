@@ -67,7 +67,12 @@ def test_the_board_uses_the_cut_and_game_rows_keep_their_own_cap():
     import inspect
     src = inspect.getsource(K.build)
     assert "_cut_players(" in src and "[:GAME_LIMIT]" in src
-    assert K.PER_MARKET * 5 == K.LIMIT, "five player markets, eight each, forty in all"
+    # Forty was five markets times eight. The NFL ranks six since
+    # 2026-09-14 (passing touchdowns), and the seats are per market, so
+    # the cut may keep more than LIMIT and must never trim a market's
+    # eight to fit — see tests/test_market_independence.py.
+    cut = inspect.getsource(K._cut_players)
+    assert "kept = kept[:limit]" not in cut, "a cross-market cut is back"
 
 
 if __name__ == "__main__":
