@@ -624,8 +624,17 @@ def file_bytes(path, key: str = ""):
 
 
 def board_bytes(name: str):
-    """``(body, mtime, etag)`` for a board, or ``(None, None, None)``."""
+    """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
+
+    A FREE file is served from its public copy — the only copy anything
+    writes (`gate.full_board_file` says why). The same byte cache, keyed
+    apart from the private boards so a name can never hit the other's
+    entry."""
     from engine import gate
+    label = str(name or "")
+    if (label.endswith(".json") and Path(label).name == label
+            and not label.startswith(".") and gate.is_free(label)):
+        return file_bytes(WEB / "data" / label, key=f"free:{label}")
     path = gate.full_board_file(name)
     if path is None:
         return None, None, None

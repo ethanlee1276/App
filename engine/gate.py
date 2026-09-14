@@ -756,6 +756,16 @@ def seal(web_data=None, verbose=True) -> dict:
         name = path.name
         if is_free(name):
             out["free"].append(name)
+            # And no private copy left behind to be served in its place
+            # — see `full_board_file`. A free file's only copy is the
+            # public one, so a stale one under data/built is removed.
+            try:
+                ghost = _full_dir_for(path) / name
+                if ghost.is_file():
+                    ghost.unlink()
+                    out.setdefault("purged", []).append(name)
+            except OSError:
+                pass
             continue
         try:
             payload = json.loads(path.read_text())
@@ -876,6 +886,20 @@ def full_board_file(name: str) -> "Path | None":
     if not label.endswith(".json") or Path(label).name != label:
         return None
     if label.startswith("."):
+        return None
+    # A FREE FILE HAS NO PRIVATE COPY. Ethan, 2026-09-14, the Record
+    # page signed in: "Updated 2026-09-10T20:54:17" four days later,
+    # with the NFL haircut row missing and a week-old brief, while the
+    # same page on a different connection was current. `export_json`
+    # writes web/data/record.json and only that — record.json is free
+    # and goes through no gate — but /api/board resolved every name
+    # through here to data/built/<name>, and a private copy of a free
+    # file, once it exists (an old seal, a fixture), is never rewritten
+    # by anything. So a signed-in reader got the frozen copy and a
+    # signed-out one got the live file. Free names resolve to nothing
+    # here; the server and `board_source` then read the public file,
+    # which is the only copy that is ever written.
+    if is_free(label):
         return None
     path = FULL_DIR / label
     try:
