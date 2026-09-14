@@ -655,6 +655,30 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  {league.upper()} finals unavailable ({exc}) — those "
                 f"picks stay open until the daily pass")
+    # THE BOX SCORE, the night the game ends (engine/boxsettle). After
+    # the finals, because it only reads a game with a stored final, and
+    # before the settle, because that is what it exists to feed. Ethan,
+    # 2026-09-15: "I still see some edge bets not graded from last
+    # nights nfl games" — Monday's props waited for a file that
+    # publishes the next morning.
+    for league in ("nfl", "cfb"):
+        if not _has_open(lconn, league, days):
+            continue
+        try:
+            from . import boxsettle
+            bx = boxsettle.ingest_for_open(lconn, hconn, league, log=log)
+            if bx["games"]:
+                log(f"  {league.upper()} box scores: {bx['rows']} stat line(s) "
+                    f"from {bx['games']} finished game(s), provisional until "
+                    f"the official file lands")
+            if bx["purged"]:
+                log(f"  {league.upper()} box scores: {bx['purged']} provisional "
+                    f"row(s) replaced by the official file")
+            for s in bx["skipped"]:
+                log(f"  ⚠️  {s}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  {league.upper()} box scores unavailable ({exc}) — "
+                f"those props wait for the official file")
     return res
 
 
