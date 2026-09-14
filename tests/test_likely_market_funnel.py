@@ -62,9 +62,15 @@ def test_the_page_prints_it_under_the_board():
     i = app.index("function renderLikely(")
     assert "likelyMarketFunnel(state.data.likely_census_by_kind)" in app[i:i + 4000]
     k = app.index("function likelyMarketFunnel(")
-    body = app[k:k + 1600]
+    body = app[k:app.index("\nfunction ", k + 10)]
     for word in ("offered", "priced", "shown"):
         assert word in body
+    # The game-line and touchdown kinds on the same ledger (Ethan,
+    # 2026-09-15, on the MLB board: "There is no money lines or pitchers
+    # props or game totals") — a kind the slate handed nothing is left
+    # off rather than printed as a zero row.
+    assert '(k.game || {}).offered > 0' in body and '"Game lines"' in body
+    assert '(k.td || {}).offered > 0' in body and '"Touchdowns"' in body
 
 
 if __name__ == "__main__":

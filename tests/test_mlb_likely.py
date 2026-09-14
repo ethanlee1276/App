@@ -370,6 +370,56 @@ def test_the_likely_tab_is_no_longer_hidden_for_hoops():
     assert '"likely"' not in nba and '"likely"' not in wnba
 
 
+# --- the baseball board says WHICH market lost its rows, and where ----------
+def test_the_baseball_board_counts_every_kind_and_market_on_an_unmeasured_box():
+    """Ethan, 2026-09-15: "MLB most likely bets are only showing hits and
+    total bases. There is no money lines or pitchers props or game totals
+    or anything like that." On a box whose rank store has measured
+    nothing, every prop market is refused for want of a measurement and
+    every game card for want of one — and the census says so PER MARKET
+    AND PER KIND, which is what the page prints. The flat census could
+    only ever count refusals; it could not name the market they came
+    from, and that is the question the report asks."""
+    _clear_store()
+    hit = {"player": "T Player", "team": "NYY", "market": "hits", "market_label": "Hits",
+           "side": "over", "line": 0.5, "hit_prob": 0.72, "has_market": True,
+           "odds": -180, "book": "fanduel", "fair_prob": 0.66}
+    k = dict(hit, player="An Arm", market="strikeouts", market_label="Strikeouts",
+             line=5.5, hit_prob=0.57, odds=-120, fair_prob=0.53)
+    ml = {"bet_type": "moneyline", "market": "moneyline", "has_market": True,
+          "home": "NYY", "away": "BOS", "team": "NYY", "pick_label": "NYY ML",
+          "win_prob": 0.64, "fair_prob": 0.60, "odds": -150, "home_odds": -150,
+          "away_odds": 130, "live": False, "matchup": "BOS @ NYY"}
+    flat, kinds = {}, {}
+    try:
+        got = likely.build([hit, k], sport="mlb", census=flat, game_bets=[ml],
+                           census_by_kind=kinds)
+    finally:
+        _clear_store()
+    assert got == [], got
+    mk = kinds["prop"]["markets"]
+    assert mk["hits"]["offered"] == 1 and mk["hits"]["shown"] == 0, mk
+    assert mk["hits"]["refused"] == {"no measured ranking for this market yet": 1}, mk
+    assert mk["strikeouts"]["refused"] == {"no measured ranking for this market yet": 1}, mk
+    assert kinds["game"]["offered"] == 1 and kinds["game"]["shown"] == 0, kinds["game"]
+    assert kinds["game"]["refused"] == {"this game market has never been measured": 1}, \
+        kinds["game"]
+
+
+def test_the_baseball_and_hoops_builds_hand_the_kind_census_to_the_page():
+    """The football builds have published `likely_census_by_kind` since
+    2026-09-07; the baseball and hoops builds handed the board a flat
+    census only, so their pages could never print the per-market funnel."""
+    with open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert "census_by_kind=_ml_kinds" in src
+    assert 'result["likely_census_by_kind"] = _ml_kinds' in src
+    with open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8") as f:
+        hoops = f.read()
+    assert "census_by_kind=_ml_kinds" in hoops
+    assert 'out["likely_census_by_kind"] = _ml_kinds' in hoops
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

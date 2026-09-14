@@ -739,18 +739,29 @@ def main() -> None:
         from engine.likely import build as _likely_build
         from engine import boards as _mlboards
         _ml_census: dict = {}
+        # PER KIND AND PER MARKET, so the page can say which shelf lost
+        # its rows and at which bar. Ethan, 2026-09-15: "MLB most likely
+        # bets are only showing hits and total bases. There is no money
+        # lines or pitchers props or game totals or anything like that."
+        # The football builds have shipped this census since 09-07; the
+        # baseball build handed the board a flat one, so the Most Likely
+        # page could count refusals but never name the market they came
+        # from — which is the one question that report asks.
+        _ml_kinds: dict = {}
         # The game cards too. A baseball moneyline reaches this board
         # only after `engine.gamerank --save` has measured, on THIS
         # box's game history, that the run-rating model ranks winners —
         # the same earned-per-market rule the prop shelves live by.
         result["most_likely"] = _likely_build(
             result["recommendations"], sport="mlb", census=_ml_census,
-            game_bets=result.get("game_bets") or [])
+            game_bets=result.get("game_bets") or [],
+            census_by_kind=_ml_kinds)
         if not result["most_likely"]:
             from engine.rankfit import load as _rank_store
             if not any(k.startswith("mlb:") for k in _rank_store()):
                 _ml_census["no market measured to rank yet"] = 1
         result["likely_census"] = _ml_census
+        result["likely_census_by_kind"] = _ml_kinds
         result["board_guide"] = _mlboards.guide("mlb")
         result["board_shelves"] = _mlboards.shelves(
             "mlb", result["most_likely"])

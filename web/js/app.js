@@ -6961,23 +6961,27 @@ function showableLikelyRow(r) {
    page; and the bars that turned the rest away, largest first. A
    market with nothing offered tonight is listed as that, not omitted. */
 function likelyMarketFunnel(kinds) {
-  const ms = ((kinds || {}).prop || {}).markets || {};
-  const keys = Object.keys(ms);
-  if (!keys.length) return "";
-  keys.sort((a, b) => (ms[b].offered || 0) - (ms[a].offered || 0));
-  const rows = keys.map((mk) => {
-    const m = ms[mk] || {};
-    const why = Object.entries(m.refused || {})
-      .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
-      .slice(0, 2).map(([k, n]) => `${n} ${escapeHtml(k)}`).join(" · ");
-    return `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:3px 0">
-      <b style="min-width:120px">${escapeHtml(marketWord(mk))}</b>
+  const k = kinds || {};
+  const ms = (k.prop || {}).markets || {};
+  const keys = Object.keys(ms).sort((a, b) => (ms[b].offered || 0) - (ms[a].offered || 0));
+  const why = (m) => Object.entries(m.refused || {})
+    .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+    .slice(0, 2).map(([r, n]) => `${n} ${escapeHtml(r)}`).join(" · ");
+  const line = (label, m, priced) => `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:3px 0">
+      <b style="min-width:120px">${escapeHtml(label)}</b>
       <span style="font-variant-numeric:tabular-nums">${m.offered || 0} offered ·
-        ${m.priced || 0} priced · ${m.shown || 0} shown</span>
-      ${why ? `<span style="opacity:.7">${why}</span>` : ""}</div>`;
-  }).join("");
-  return `<div class="ls-note" style="opacity:.8"><b>Where each market’s props went.</b>
-    ${rows}</div>`;
+        ${priced ? `${m.priced || 0} priced · ` : ""}${m.shown || 0} shown</span>
+      ${why(m) ? `<span style="opacity:.7">${why(m)}</span>` : ""}</div>`;
+  const rows = keys.map((mk) => line(marketWord(mk), ms[mk] || {}, true));
+  /* THE OTHER TWO KINDS ON THE SAME LEDGER (Ethan, 2026-09-15, on the
+     MLB board: "There is no money lines or pitchers props or game
+     totals"). A game card the board refused says at which bar; a
+     slate that handed it none reads as nothing offered. */
+  if ((k.game || {}).offered > 0) rows.push(line("Game lines", k.game, false));
+  if ((k.td || {}).offered > 0) rows.push(line("Touchdowns", k.td, false));
+  if (!rows.length) return "";
+  return `<div class="ls-note" style="opacity:.8"><b>Where each market’s rows went.</b>
+    ${rows.join("")}</div>`;
 }
 
 function likelyRefusedNote(census, shown) {

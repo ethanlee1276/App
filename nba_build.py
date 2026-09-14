@@ -844,15 +844,17 @@ def main() -> None:
             from engine.likely import build as _likely_build
             from engine import boards as _hboards
             _ml_census: dict = {}
+            _ml_kinds: dict = {}      # per kind and market — see mlb_build
             out["most_likely"] = _likely_build(
                 out.get("recommendations") or [], sport=args.league,
-                census=_ml_census)
+                census=_ml_census, census_by_kind=_ml_kinds)
             if not out["most_likely"]:
                 from engine.rankfit import load as _rank_store
                 if not any(k.startswith(f"{args.league}:")
                            for k in _rank_store()):
                     _ml_census["no market measured to rank yet"] = 1
             out["likely_census"] = _ml_census
+            out["likely_census_by_kind"] = _ml_kinds
             out["board_guide"] = _hboards.guide(args.league)
             out["board_shelves"] = _hboards.shelves(args.league,
                                                     out["most_likely"])
