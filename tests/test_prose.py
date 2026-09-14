@@ -384,6 +384,134 @@ def test_the_third_lane_is_recorded_in_the_recipe():
     assert "no LLM output is ever a probability, a stake, or a\ngate" in doc
 
 
+# --- the brief counts what the Record page counts ----------------------------
+def _journal_two_pages():
+    """A journal where the Record page and the diary disagree on purpose:
+    a pre-epoch main bet (Record page excludes it), a long shot (diary
+    counts it, the Record page does not), and football under a week
+    label with its game day stamped this week."""
+    conn = _journal()
+    def bet(sport, player, date, status="won", cat="main", pnl=0.45,
+            game_day="", stake=0.5):
+        conn.execute(
+            "INSERT INTO bets (sport,date,player,market,side,line,odds,"
+            "grade,stake_units,status,category,pnl_units,hit_prob,game_day) "
+            "VALUES (?,?,?,'hits','OVER',1.5,-110,'B',?,?,?,?,0.6,?)",
+            (sport, date, player, stake, status, cat, pnl, game_day))
+    bet("mlb", "Before The Epoch", "2026-07-01")            # pre-RECORD_EPOCH
+    bet("mlb", "A Long Shot", TODAY, cat="longshot", pnl=2.0)
+    for i in range(12):
+        bet("nfl", f"Sunday Man {i}", "2026-W01", game_day=TODAY,
+            status="won" if i % 2 else "lost", pnl=0.45 if i % 2 else -0.5)
+    conn.commit()
+    return conn
+
+
+def test_the_brief_carries_the_record_pages_own_count_and_names_the_rest():
+    """Ethan, 2026-09-14: "it only shows 182 mlb bets graded but we have
+    like 511 bets on the record pages." The brief tallied main + long
+    shots + parlays, all time; the Record page counts the main book,
+    staked, since the epoch. The pack now carries the Record page's
+    figure in the Record page's own definition, named as such."""
+    conn = _journal_two_pages()
+    pack = P.brief_pack(conn)
+    mlb = pack["by_sport"]["mlb"]
+    rec = ledger.performance(conn, "mlb", since=ledger.RECORD_EPOCH)
+    assert mlb["record_page"]["graded"] == rec["settled"] == 2      # Bat One, Bat Two
+    assert mlb["diary_all_time"]["graded"] == 4                      # + pre-epoch + long shot
+    assert mlb["diary_by_category"]["longshot"]["graded"] == 1
+    assert "Record page" in pack["scope"]["record_page"]
+    assert "quote THIS as the record" in pack["scope"]["record_page"]
+    # The fallback note quotes the Record page's number, and says so.
+    fb = P._week_fallback(pack)
+    assert "the Record page" in fb("mlb") and "(2 graded" in fb("mlb")
+
+
+def test_this_week_is_windowed_on_the_game_day_not_the_week_label():
+    """Football's `date` is "2026-W01", and "2026-W01" >= any ISO day is
+    true — every football row ever journaled was "this week"."""
+    conn = _journal_two_pages()
+    pack = P.brief_pack(conn)
+    nfl = pack["by_sport"]["nfl"]
+    assert nfl["this_week"]["graded"] == 12, nfl        # game_day stamped today
+    assert nfl["diary_all_time"]["graded"] == 13        # + the bare week label
+    # Push the game days a fortnight back: no longer this week, still on
+    # the record.
+    conn.execute("UPDATE bets SET game_day=? WHERE sport='nfl' AND game_day!=''",
+                 ((datetime.date.today() - datetime.timedelta(days=14)).isoformat(),))
+    conn.commit()
+    nfl = P.brief_pack(conn)["by_sport"]["nfl"]
+    # 12 Sundays plus the bare week label, which the Record page counts
+    # through its string compare on `date` — the same 13 either way.
+    assert nfl["this_week"]["graded"] == 0 and nfl["record_page"]["graded"] == 13
+
+
+def test_a_season_opening_re_briefs_inside_the_week():
+    """The brief read "NFL — nothing graded this week or this season" the
+    day after the first Sunday's bets settled, and would have for the
+    rest of the week. A sport going from nothing to REBRIEF_MIN graded
+    is one extra call; a sport that merely added a few is not. (The
+    Record page counts a week-labelled football row through its string
+    compare on `date`, so the fixture's one such row is on the record.)"""
+    keep_key = os.environ.get("ANTHROPIC_API_KEY")
+    os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+    p = _tmp("br.json")
+    conn = _journal()                     # NFL: one week-labelled row on the record
+    calls = []
+    orig = P._call
+    P._call = lambda *a, **k: (calls.append(1), CANNED)[1]
+    try:
+        assert P.weekly(conn, log=lambda *a: None, path=p).startswith("done:")
+        stored = json.loads(open(p).read())
+        assert stored[-1]["graded_by_sport"]["nfl"] == 1
+        assert stored[-1]["graded_by_sport"]["mlb"] == 2
+        # A few more MLB bets: same week, no re-brief.
+        for i in range(3):
+            conn.execute(
+                "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+                "stake_units,status,category,pnl_units,hit_prob) VALUES "
+                "('mlb',?,?,'hits','OVER',1.5,-110,'B',0.5,'won','main',0.45,0.6)",
+                (TODAY, f"More Bat {i}"))
+        conn.commit()
+        assert P.weekly(conn, log=lambda *a: None, path=p) == "already"
+        # Football opens: REBRIEF_MIN graded on the record → re-briefed.
+        for i in range(P.REBRIEF_MIN):
+            conn.execute(
+                "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+                "stake_units,status,category,pnl_units,hit_prob,game_day) VALUES "
+                "('nfl','2026-W01',?,'rec_yds','OVER',50.5,-110,'B',0.5,'won','main',0.45,0.6,?)",
+                (f"Sunday Man {i}", TODAY))
+        conn.commit()
+        assert P.weekly(conn, log=lambda *a: None, path=p).startswith("done:")
+        assert len(calls) == 2
+        assert json.loads(open(p).read())[-1]["graded_by_sport"]["nfl"] == P.REBRIEF_MIN + 1
+        # And not again on the next pass.
+        assert P.weekly(conn, log=lambda *a: None, path=p) == "already"
+    finally:
+        P._call = orig
+        if keep_key is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
+def test_the_nightly_diary_narrates_a_football_night_by_its_game_day():
+    """Football rows carry the calendar in game_day since 2026-09-11; the
+    diary read `date` alone and so never narrated a Sunday."""
+    conn = _journal_two_pages()
+    assert P.diary_date(conn) == TODAY
+    pack = P.postmortem_pack(conn, TODAY)
+    assert "nfl" in pack["sports"]
+    assert pack["by_sport"]["nfl"]["graded"] == 12
+    # The bare week label is still not a night.
+    conn.execute("UPDATE bets SET game_day='' WHERE sport='nfl'")
+    conn.commit()
+    assert "nfl" not in P.postmortem_pack(conn, TODAY)["sports"]
+
+
+def test_the_writer_is_told_which_count_is_the_record():
+    assert "record_page figures as its record" in P.SYSTEM_WEEK
+    assert "must be named for what it is" in P.SYSTEM_WEEK
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

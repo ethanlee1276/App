@@ -197,6 +197,10 @@ site's own arithmetic.
 
 Rules, all hard:
 - Use ONLY facts in the JSON. Never invent a number or a cause.
+- The JSON's "scope" block says what each count is. Quote a sport's \
+record_page figures as its record — that is the number the site's Record \
+page shows and the reader will compare against. Any other count \
+(diary_all_time, this_week, a category) must be named for what it is.
 - The learning is per sport; write one short note per sport listed in \
 the pack, plus a 3-5 sentence overall paragraph and a headline under 80 \
 characters. A sport where nothing changed gets one honest sentence.
@@ -250,18 +254,27 @@ def _save_list(rows: list, path: Path, keep: int) -> None:
 
 
 # --- lane one: the nightly postmortem ----------------------------------------
+def _day() -> str:
+    """The day a bet belongs to — `ledger.day_expr`, the one expression
+    every reader of the journal's calendar shares."""
+    from .ledger import day_expr
+    return day_expr()
+
+
 def diary_date(lconn) -> str | None:
     """The most recent ISO date with graded diary picks.
 
     `MAX(date)` alone would be a trap: NFL journals under week labels
     ("2026-W1"), and "W" string-sorts above every digit — the postmortem
-    would chase a label that is not a night. Weekly football belongs to
-    the weekly brief; the diary narrates nights.
+    would chase a label that is not a night. Since 2026-09-11 football
+    rows carry the calendar in `game_day` (`ledger.day_expr` reads it
+    first), so a Sunday's football IS a night here now; a row with only
+    its week label still is not, and the GLOB keeps it out.
     """
     r = lconn.execute(
-        "SELECT MAX(date) FROM bets WHERE status IN "
+        f"SELECT MAX({_day()}) FROM bets WHERE status IN "
         "('won','lost','push','void') AND category IN (?,?,?) "
-        "AND date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
+        f"AND {_day()} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
         DIARY_CATEGORIES).fetchone()
     return r[0] if r and r[0] else None
 
@@ -272,7 +285,7 @@ def postmortem_pack(lconn, date: str) -> dict:
         "SELECT sport, player, market, side, line, odds, status, "
         "stake_units, pnl_units, hit_prob, category, closing_line, "
         "loss_cause FROM bets "
-        "WHERE date=? AND status IN ('won','lost','push','void') "
+        f"WHERE {_day()}=? AND status IN ('won','lost','push','void') "
         "AND category IN (?,?,?)", (date, *DIARY_CATEGORIES))]
     for r in rows:
         # The evidence layer, computed before the writer ever sees the
@@ -391,29 +404,78 @@ def nightly(lconn, log=print, path: Path | str | None = None) -> str:
 
 
 # --- lane two: the weekly model brief ----------------------------------------
+#: A sport whose Record-page count was zero at the last brief and is at
+#: least this now has OPENED; the brief is re-written rather than left
+#: saying "nothing graded this season" for the rest of the week.
+REBRIEF_MIN = 10
+
+
+def _is_day(v) -> bool:
+    """`YYYY-MM-DD` and nothing else — the diary's own GLOB, in Python."""
+    t = str(v or "")
+    return (len(t) == 10 and t[4] == "-" and t[7] == "-"
+            and t[:4].isdigit() and t[5:7].isdigit() and t[8:].isdigit())
+
+
+def _tally(rows: list) -> dict:
+    return {"graded": len(rows),
+            "won": sum(1 for r in rows if r["status"] == "won"),
+            "lost": sum(1 for r in rows if r["status"] == "lost"),
+            "net_units": round(sum(r.get("pnl_units") or 0 for r in rows), 2)}
+
+
 def brief_pack(lconn) -> dict:
+    """What the weekly brief is handed.
+
+    Ethan, 2026-09-14, reading the brief beside the Record page: "it only
+    shows 182 mlb bets graded but we have like 511 bets on the record
+    pages." Both were true and neither said what it counted. The brief
+    tallied main + long shots + parlays, all time, staked or not; the
+    Record page counts the main book, staked, since `RECORD_EPOCH`. So
+    the pack now carries the RECORD PAGE'S OWN FIGURE per sport, in the
+    Record page's own definition (`ledger.performance`, same categories,
+    same epoch), named as such, and the diary breakdown beside it named
+    for what it is — and the system prompt tells the writer which one is
+    "the record". The reader can now hold the two pages side by side.
+
+    "This week" is windowed on the GAME DAY (`ledger.day_expr`), not on
+    `date`: football's `date` is a week label, and "2026-W01" >= any ISO
+    day is true for every football row ever journaled.
+    """
     from . import ledger
     from . import losspatterns as lp
     week_ago = (_dt.date.today() - _dt.timedelta(days=7)).isoformat()
     per = {}
     for sp in ledger.TRACKED_SPORTS:
         rows = [dict(r) for r in lconn.execute(
-            "SELECT date, status, pnl_units FROM bets WHERE sport=? AND "
-            "status IN ('won','lost','push') AND category IN (?,?,?)",
-            (sp, *DIARY_CATEGORIES))]
-        wk = [r for r in rows if str(r.get("date") or "") >= week_ago]
+            f"SELECT {_day()} AS day, status, pnl_units, category FROM bets "
+            "WHERE sport=? AND status IN ('won','lost','push') "
+            "AND category IN (?,?,?)", (sp, *DIARY_CATEGORIES))]
+        # AN ISO DAY, or not this week. A football row that still has no
+        # game_day falls back to its week label, and "2026-W01" is above
+        # every ISO date in a string compare — it would be "this week"
+        # forever. It stays on the record and out of the window.
+        wk = [r for r in rows
+              if _is_day(r.get("day")) and str(r["day"]) >= week_ago]
+        rec = ledger.performance(lconn, sp, since=ledger.RECORD_EPOCH)
         per[sp] = {
-            "season": {"graded": len(rows),
-                       "won": sum(1 for r in rows if r["status"] == "won"),
-                       "lost": sum(1 for r in rows if r["status"] == "lost"),
-                       "net_units": round(sum(r.get("pnl_units") or 0
-                                              for r in rows), 2)},
-            "this_week": {"graded": len(wk),
-                          "won": sum(1 for r in wk if r["status"] == "won"),
-                          "lost": sum(1 for r in wk if r["status"] == "lost"),
-                          "net_units": round(sum(r.get("pnl_units") or 0
-                                                 for r in wk), 2)},
+            "record_page": {"graded": int(rec.get("settled") or 0),
+                            "won": int(rec.get("wins") or 0),
+                            "lost": int(rec.get("losses") or 0),
+                            "net_units": round(float(rec.get("net_units") or 0), 2)},
+            "diary_all_time": _tally(rows),
+            "diary_by_category": {c: _tally([r for r in rows if r["category"] == c])
+                                  for c in DIARY_CATEGORIES},
+            "this_week": _tally(wk),
         }
+    scope = {
+        "record_page": ("the number the site's Record page shows: the main "
+                        f"book only, staked picks, since {ledger.RECORD_EPOCH} "
+                        "— quote THIS as the record"),
+        "diary_all_time": ("main + long shots + parlays, all time, staked or "
+                           "not — a wider count; name it if you use it"),
+        "this_week": "the last seven days by game day, diary categories",
+    }
     from .ledger import _self_tuning_block
     st = _self_tuning_block()
     hl_store = hyp.load()
@@ -433,6 +495,7 @@ def brief_pack(lconn) -> dict:
     }
     pack = {"week_of": _dt.date.today().isoformat(),
             "sports": list(ledger.TRACKED_SPORTS),
+            "scope": scope,
             "by_sport": per, "ladder": ladder}
     for key in ("player_memory", "recency_dials", "calibration",
                 "loss_patterns", "hypotheses"):
@@ -444,14 +507,31 @@ def brief_pack(lconn) -> dict:
 def _week_fallback(pack: dict):
     def fb(sport: str) -> str:
         s = (pack["by_sport"].get(sport) or {})
-        wk, se = s.get("this_week") or {}, s.get("season") or {}
-        if not (se.get("graded") or 0):
+        wk = s.get("this_week") or {}
+        rec = s.get("record_page") or s.get("season") or {}
+        if not (rec.get("graded") or 0) and not (
+                (s.get("diary_all_time") or {}).get("graded") or 0):
             return "Nothing journaled yet — its learning switches on with " \
                    "its first graded picks."
         return (f"{wk.get('won', 0)}-{wk.get('lost', 0)} this week "
                 f"({wk.get('net_units', 0):+.2f}u); "
-                f"{se.get('won', 0)}-{se.get('lost', 0)} on the season.")
+                f"{rec.get('won', 0)}-{rec.get('lost', 0)} on the record "
+                f"({rec.get('graded', 0)} graded, the Record page's count).")
     return fb
+
+
+def _graded_by_sport(pack: dict) -> dict:
+    return {sp: int(((v.get("record_page") or {}).get("graded")) or 0)
+            for sp, v in (pack.get("by_sport") or {}).items()}
+
+
+def _season_opened(prev: dict, now: dict) -> list:
+    """Sports that were under REBRIEF_MIN graded picks at the last brief
+    and are at or over it now — a week-old "nothing graded this season"
+    is wrong for the rest of the week otherwise. Crossing the floor
+    happens once a season, so this is one extra call a season per sport."""
+    return [sp for sp, n in now.items()
+            if n >= REBRIEF_MIN > int((prev or {}).get(sp) or 0)]
 
 
 def write_brief(lconn, path: Path | str | None = None) -> dict:
@@ -466,6 +546,10 @@ def write_brief(lconn, path: Path | str | None = None) -> dict:
         "overall": str(out.get("overall") or "")[:1800],
         "by_sport": _ensure_coverage(out, pack["sports"],
                                      _week_fallback(pack)),
+        # The Record page's count per sport at the time of writing, so
+        # the next pass can tell a season has opened since.
+        "graded_by_sport": _graded_by_sport(pack),
+        "scope": pack.get("scope") or {},
     }
     rows = _load_list(p)
     rows.append(entry)
@@ -485,11 +569,21 @@ def weekly(lconn, log=print, path: Path | str | None = None) -> str:
     if not graded:
         return "nothing-graded"
     rows = _load_list(p)
+    opened: list = []
     if rows:
         try:
             last = _dt.date.fromisoformat(rows[-1].get("week_of") or "")
             if (_dt.date.today() - last).days < BRIEF_EVERY_DAYS:
-                return "already"
+                # A SEASON OPENING BREAKS THE CADENCE. Ethan, 2026-09-14:
+                # the brief on the Results page read "NFL — nothing
+                # graded this week or this season" the day after the
+                # first Sunday's bets settled, and would have for the
+                # rest of the week. One extra call when a sport's record
+                # goes from nothing to something; the cap still stands.
+                opened = _season_opened(rows[-1].get("graded_by_sport"),
+                                        _graded_by_sport(brief_pack(lconn)))
+                if not opened:
+                    return "already"
         except ValueError:
             pass
     if not under_cap():
@@ -498,7 +592,8 @@ def weekly(lconn, log=print, path: Path | str | None = None) -> str:
         return "capped"
     try:
         e = write_brief(lconn, p)
-        log(f"  prose: weekly model brief written ({e['week_of']})")
+        log(f"  prose: weekly model brief written ({e['week_of']})"
+            + (f" — early, {', '.join(opened)} opened" if opened else ""))
         return f"done:{e['week_of']}"
     except ProseUnavailable as exc:
         log(f"  ⚠️  weekly brief skipped: {exc}")
