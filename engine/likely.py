@@ -836,10 +836,21 @@ def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
             if prev is None or odds > prev[0]:
                 best_price[(line, side)] = (odds, book, ln)
     best = None
+    priced = row.get("rung_probs") or {}
     for (line, side), (odds, book, ln) in best_price.items():
-        p_over = display_prob(market, row.get("projection"), line,
-                              row.get("recent_values"), fits=fits)
-        source = "mixture"
+        # A RUNG THE MAKER PRICED ITSELF COMES FIRST. Baseball rows carry
+        # `rung_probs` (engine/mlb/betting.rung_probs): P(over) at each
+        # rung from the same curve that priced the main line — the only
+        # curve that knows a hitter records zero total bases in 40% of
+        # games. The mixture and the normal below are football's, and
+        # neither is the right shape for a count of one or two.
+        pre = priced.get(f"{line:g}")
+        if pre is not None:
+            p_over, source = float(pre), "model"
+        else:
+            p_over = display_prob(market, row.get("projection"), line,
+                                  row.get("recent_values"), fits=fits)
+            source = "mixture"
         if p_over is None:
             # NO MIXTURE FOR THIS MARKET — passing yards, which the
             # yardage fit declined — so price the rung the way the main

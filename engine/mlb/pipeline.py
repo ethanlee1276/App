@@ -26,7 +26,7 @@ from .models import MARKET_LABELS, PITCHER_MARKETS
 from .. import statlogs
 from .parks import get_park
 from .projection import build_mlb_projection
-from .betting import evaluate_mlb_prop
+from .betting import evaluate_mlb_prop, rung_probs as _rung_probs
 from .rules import apply_mlb_rules
 
 
@@ -389,6 +389,24 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
             {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
             for ln in prop.lines
         ],
+        # THE ALTERNATE LADDER, every rung with its own price, the sharp
+        # book's rungs beside it, and — baseball only — the pricer's own
+        # P(over) at each rung. The football rows leave the rung's
+        # probability to `likely._best_rung` (the yardage mixture, or the
+        # projection's normal); a baseball stat is a low count with a
+        # real shape, and the only honest curve for it is the one that
+        # priced the main line (`betting.prob_over_at`). Ethan,
+        # 2026-09-15: "There is no money lines or pitchers props or game
+        # totals ... we need to scan ALL props available."
+        "alt_lines": [
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            for ln in (getattr(prop, "alt_lines", None) or [])
+        ],
+        "alt_sharp_lines": [
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            for ln in (getattr(prop, "alt_sharp_lines", None) or [])
+        ],
+        "rung_probs": _rung_probs(prop, proj),
         "logs": [
             # Each MLB log row is one GAME (not a week); carry its real date
             # so the site can label it as such.

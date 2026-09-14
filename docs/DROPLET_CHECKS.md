@@ -2327,6 +2327,23 @@ rung` at zero with ladders present means every rung fell under the
 floor or past the credibility bar, which the census now counts by
 name.
 
+BASEBALL TOO, since 2026-09-15 (Ethan: "MLB most likely bets are only
+showing hits and total bases. There is no money lines or pitchers props
+or game totals"). The MLB event pull asks for `batter_hits_alternate`,
+`batter_total_bases_alternate` and `pitcher_strikeouts_alternate` —
+eleven credits an event now — and every rung is priced by the curve
+that priced the main line (`engine/mlb/betting.rung_probs`, carried on
+the row as `rung_probs`). The three keys are unproven against the API
+from the dev box: if one is refused, `fetch_event_odds` drops it and
+retries the event without it, once per process, and the spend ledger
+shows one refused call. The same check as above reads
+`web/data/mlb_picks.json`; the Most Likely page's "Where each market's
+rows went" block says, per market, what was offered, priced and shown
+and at which bar the rest were refused — including the game lines,
+which read "this game market has never been measured" until
+`engine.gamerank` has written a figure on this box (the next
+maintenance pass does that by itself now; see docs/LIKELY_GAME_LINES.md).
+
 ## Football is priced three hours before kickoff, and the pacer can see NFL kickoffs now (2026-09-07)
 
 THE FINDING UNDER THE REQUEST. The launcher's kickoff reader took only

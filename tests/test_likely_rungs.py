@@ -211,6 +211,34 @@ def test_a_passing_yards_rung_is_priced_by_the_model_when_no_mixture_fits():
     assert K._best_rung(row, "pass_yds", fits=FITS) is None
 
 
+def test_a_rung_the_maker_priced_itself_is_read_before_any_fit():
+    """Baseball rows carry `rung_probs` — P(over) at each rung from the
+    curve that priced the main line (engine/mlb/betting.rung_probs).
+    Ethan, 2026-09-15: "MLB most likely bets are only showing hits and
+    total bases. There is no ... pitchers props." A strikeout main line
+    sits at the median; the rung under it is where a likely number is
+    for sale, and no football mixture or normal knows the shape of a
+    count of five."""
+    row = _row(market="strikeouts", market_label="strikeouts", line=5.5,
+               projection=5.6, hit_prob=0.51, raw_prob=0.52,
+               recent_values=[7, 4, 6, 5, 8, 3, 6],
+               alt_lines=[_ln("DraftKings", 3.5, -210, 165), _ln("FanDuel", 4.5, -140, 115)],
+               alt_sharp_lines=[], rung_probs={"3.5": 0.71, "4.5": 0.60})
+    rung = K._best_rung(row, "strikeouts", fits=None)
+    assert rung is not None, "the pre-priced ladder was not read"
+    assert rung["line"] == 3.5 and rung["side"] == "over", rung
+    assert rung["source"] == "model" and abs(rung["prob"] - 0.71) < 1e-9, rung
+    # The pricer's number, not a fit's: with the pre-priced entry gone
+    # and no mixture, no spread and no sharp rung, nothing is invented.
+    row["rung_probs"] = {}
+    assert K._best_rung(row, "strikeouts", fits=None) is None
+    # And the whole maker takes the rung on a main line under the floor.
+    row["rung_probs"] = {"3.5": 0.71, "4.5": 0.60}
+    got = K.from_prop(row, _always, fits=None, sport="mlb") if K.rankable("strikeouts", "mlb") else None
+    if got is not None:
+        assert got["line"] == 3.5 and got["prob_source"] == "model"
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]

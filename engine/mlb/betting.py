@@ -135,6 +135,47 @@ def _tto_for(prop):
     return projected_tto(prop.person_id, _dt.date.today().year)
 
 
+def prob_over_at(prop: MLBProp, proj: MLBProjection, line: float,
+                 history: list | None = None) -> float:
+    """P(stat > line) for THIS prop, under the model that prices its main
+    line — the Poisson for home runs, the player's own history blended
+    with the projection's normal for everything else, then the market's
+    live correction. One function, so the ladder rungs the Most Likely
+    board reads (`rung_probs`) are priced by exactly the curve the main
+    line was, at the rung's own number; a second curve would let the two
+    pages disagree about the same hitter."""
+    if history is None:
+        history = [g.value for g in prop.logs] if prop.logs else []
+    if prop.market == HOME_RUNS:
+        # Home runs are already priced with a discrete (Poisson) model.
+        raw = _poisson_over(line, proj.mean)
+    else:
+        parametric = prob_over(line, proj.mean, proj.std)
+        raw = empirical_prob_over(history, line, parametric)
+    return calibrated("mlb", prop.market, raw)
+
+
+def rung_probs(prop: MLBProp, proj: MLBProjection) -> dict:
+    """``{"0.5": 0.78, "1.5": 0.41, ...}`` — P(over) at every distinct
+    number on the prop's alternate ladder, keyed the way `likely._best_rung`
+    looks them up (``f"{line:g}"``). Empty when no ladder was bought or
+    matched. Baseball's stats are low counts with a real shape (a hitter
+    records zero total bases in ~40% of games), so the football boards'
+    mixture and normal fallbacks are the wrong curve here; this is the
+    pricer's own."""
+    out: dict = {}
+    history = [g.value for g in prop.logs] if prop.logs else []
+    for ln in getattr(prop, "alt_lines", None) or []:
+        try:
+            line = float(ln.line)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        key = f"{line:g}"
+        if key not in out:
+            out[key] = round(prob_over_at(prop, proj, line, history), 4)
+    return out
+
+
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False,
                       game=None, hold_override=None) -> Recommendation:
@@ -154,12 +195,10 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     temp, bias = correction_for("mlb", prop.market)
 
     def p_over_at(line: float) -> float:
-        if prop.market == HOME_RUNS:
-            # Home runs are already priced with a discrete (Poisson) model.
-            raw = _poisson_over(line, proj.mean)
-        else:
-            parametric = prob_over(line, proj.mean, proj.std)
-            raw = empirical_prob_over(history, line, parametric)
+        # The curve itself lives in `prob_over_at` (module level), so the
+        # ladder rungs the Most Likely board reads are priced by the
+        # same function as the main line — see `rung_probs`.
+        #
         # Calibrate here, not after the side is chosen: an uncalibrated
         # probability would still decide OVER vs UNDER, so a model known to be
         # over-confident would keep picking the same side and the correction
@@ -170,7 +209,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # the temperature otherwise. `temp`/`bias` are still read above
         # because the LEDGER journals them per row; the correction that
         # was live has to be recoverable from the row itself.
-        return calibrated("mlb", prop.market, raw)
+        return prob_over_at(prop, proj, line, history)
 
     # Home runs are a yes-market: "to hit a home run" is the product,
     # and 'Under 0.5 Home Runs' — a heavy-juice bet that a thing does

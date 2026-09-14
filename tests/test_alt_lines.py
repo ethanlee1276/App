@@ -66,7 +66,10 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     assert all(k.endswith("_alternate") for k in oa.ALT_ODDS_TO_MARKET)
     for sport in ("nfl", "cfb"):
         assert oa.SPORT_CONFIG[sport]["alternates"] is oa.ALT_ODDS_TO_MARKET, sport
-    for sport in ("mlb", "nba", "wnba", "ufc"):
+    # Baseball bought its own three on 2026-09-15 (tests/test_mlb_ladder.py);
+    # hoops and MMA still buy none.
+    assert oa.SPORT_CONFIG["mlb"]["alternates"] is oa.MLB_ALT_ODDS_TO_MARKET
+    for sport in ("nba", "wnba", "ufc"):
         assert not oa.SPORT_CONFIG[sport].get("alternates"), sport
     # 5 props + 1 scorer + 3 game markets + 4 ladders, per event per
     # region. Five since 2026-09-10, when the NFL added
@@ -85,9 +88,12 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     # incident note in `sources.oddsapi`. The derived sum above is the
     # assertion that matters; this one just says which four.
     assert len(cfg["markets"]) == 5, sorted(cfg["markets"])    # five since 2026-09-15: passing TDs
-    # Baseball buys no ladders and keeps the generic price; the cheap
-    # lines lane spends the NFL's money at the NFL's price.
-    assert B.credits_per_event("mlb") == B.CREDITS_PER_EVENT == 8
+    # Baseball's price is derived the same way since its ladders joined
+    # (2026-09-15): five markets, three ladders, three game markets.
+    mlb = oa.SPORT_CONFIG["mlb"]
+    assert (len(mlb["markets"]) + len(mlb["alternates"]) + 3
+            == B.credits_per_event("mlb") == B.EVENT_CREDITS["mlb"] == 11)
+    assert B.CREDITS_PER_EVENT == 8        # the generic price, for leagues without an entry
     # The lines lane spends the SPORT'S money (`budget_sport`), so it
     # answers the sport's own event price — not a price of its own.
     assert B.credits_per_event("nfl_lines") == B.EVENT_CREDITS["nfl"]

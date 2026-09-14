@@ -72,7 +72,9 @@ CREDITS_PER_EVENT = 8
 #: request actually asks for and nothing it does not.
 #: Thirteen again since 2026-09-15: the key is back on the request,
 #: behind `oddsapi.fetch_event_odds`'s drop-and-retry guard.
-EVENT_CREDITS = {"nfl": 13}
+#: Baseball: five player markets, three ladders (2026-09-15, see
+#: `oddsapi.MLB_ALT_ODDS_TO_MARKET`) and the three game markets.
+EVENT_CREDITS = {"nfl": 13, "mlb": 11}
 
 
 def credits_per_event(sport: str | None = None) -> int:

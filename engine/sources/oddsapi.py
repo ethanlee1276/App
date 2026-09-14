@@ -165,6 +165,28 @@ MLB_ODDS_TO_MARKET = {
     "pitcher_outs": "outs",
 }
 
+#: BASEBALL'S LADDERS, 2026-09-15. Ethan: "MLB most likely bets are only
+#: showing hits and total bases. There is no money lines or pitchers
+#: props or game totals or anything like that ... we need to scan ALL
+#: props available." A hit or a total base has a 0.5 line the model
+#: clears at 60-70%; a strikeout line is hung at the pitcher's median,
+#: so the main number sits near 50% and the Most Likely floor (55%)
+#: refuses it every night. The football boards solved exactly this on
+#: 2026-09-07 with the alternate ladders (`ALT_ODDS_TO_MARKET`): the same
+#: stat at a lower number, priced heavier, where "most likely" is for
+#: sale. Baseball never bought them. These three are the ladders the
+#: books hang for the three markets the board can already rank; home
+#: runs stay off (the over is a longshot at every rung, and the under a
+#: heavier price than the board shows). Each key is UNPROVEN until the
+#: API serves it — the drop-and-retry guard in `fetch_event_odds` is what
+#: makes asking safe.
+MLB_ALT_ODDS_TO_MARKET = {
+    "batter_hits_alternate": "hits",
+    "batter_total_bases_alternate": "total_bases",
+    "pitcher_strikeouts_alternate": "strikeouts",
+}
+UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
+
 # Default books to shop, matching the project vision. Keys are The Odds API's.
 # Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
 # best free estimate of a bet's true probability, which is what the
@@ -400,7 +422,9 @@ SPORT_CONFIG = {
             "scorers": SCORER_ODDS_TO_MARKET,
             "alternates": ALT_ODDS_TO_MARKET},
     "mlb": {"sport_key": "baseball_mlb",
-            "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
+            "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR,
+            # The three ladders — see MLB_ALT_ODDS_TO_MARKET.
+            "alternates": MLB_ALT_ODDS_TO_MARKET},
     "nba": {"sport_key": "basketball_nba",
             "markets": NBA_ODDS_TO_MARKET, "teams": NBA_TEAM_ABBR},
     # Same markets and the same book keys; only the league and the team
