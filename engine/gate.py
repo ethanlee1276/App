@@ -907,7 +907,30 @@ def _full_dir_for(public_path) -> "Path":
     parts = parent.parts
     if len(parts) >= 2 and parts[-2:] == ("web", "data"):
         return Path(*parts[:-2]) / "data" / "built"
-    return FULL_DIR
+    # THE FALLBACK USED TO BE FULL_DIR FOR ANY OTHER SHAPE, and that is
+    # how the live Lab page got overwritten by the test suite. The
+    # 2026-09-03 fix reshaped the paywall fixtures to `<tmp>/web/data/`
+    # and left the fallback in place; `tests/test_lab.py` still handed
+    # `run_if_due` a flat `<tmp>/backtest.json`, so every run of the
+    # suite published a four-game seeded page — NFL "skipped", MLB "no
+    # ingested game logs deep enough", every game-line market "no
+    # harvested closing lines stored" — into THIS checkout's
+    # data/built/backtest.json, which is the copy `/api/board` serves a
+    # subscriber. On the droplet that page was stamped 2026-09-10
+    # 10:45:52 and stood for four days over a database holding four NFL
+    # seasons and seventeen thousand MLB closes; Ethan read it as "we
+    # aren't using our data". A tree that is not this checkout's keeps
+    # its private copy BESIDE its public one, in a `built/` sibling,
+    # where nothing on this box serves or reads it. Only a path inside
+    # this checkout's own web tree still resolves to FULL_DIR — a board
+    # nested one level under web/data is still this site's board.
+    try:
+        inside = parent.resolve().is_relative_to(_WEB.resolve())
+    except (OSError, ValueError):                        # noqa: BLE001
+        inside = False
+    if inside:
+        return FULL_DIR
+    return parent / "built"
 
 
 def board_source(public_path) -> "Path":
