@@ -3530,11 +3530,61 @@ function censusFunnelHTML() {
     ${rows}${noPrice}${closed}</div>` : "";
 }
 
+/* Tracker rows with their phase read off the fast scoreboard — see the
+   note at the top of renderLivePicks. Pure: returns new row objects and
+   leaves `state.data.live_picks` as the build wrote it. */
+function liveTrackerRows(rows) {
+  const fast = (typeof _liveAll !== "undefined" && _liveAll && _liveAll.games) || [];
+  if (!fast.length) return rows;
+  const byKey = new Map();
+  fast.forEach((e) => {
+    if (!e || e.sport !== state.sport || !e.g) return;
+    byKey.set(`${e.g.away}@${e.g.home}`, e.g);
+  });
+  if (!byKey.size) return rows;
+  return rows.map((r) => {
+    const g = r.game && r.game.home ? byKey.get(`${r.game.away}@${r.game.home}`) : null;
+    if (!g) return r;
+    const st = (g.live || {}).state;
+    if (st !== "live" && st !== "final") return r;
+    const out = { ...r, game: { ...r.game, ...g,
+      live: { ...(r.game.live || {}), ...(g.live || {}) } } };
+    // A verdict the build reached — cleared, busted, dead, *_pending — is
+    // never rewritten: only the three pre-verdict statuses move below.
+    if (st === "live" && r.phase !== "final") {
+      out.phase = "live";
+      if (r.status === "upcoming" || r.status === "unmapped") out.status = "tracking";
+    } else if (st === "final") {
+      out.phase = "final";
+      if (r.status === "upcoming" || r.status === "tracking") out.status = "final_pending";
+    }
+    return out;
+  });
+}
+
 function renderLivePicks() {
   buzzOnSettle(((state.data || {}).live_picks) || []);
   const host = document.getElementById("live-picks");
   if (!host) return;
-  const rows = (state.data || {}).live_picks || [];
+  /* THE PHASE COMES FROM THE FAST FEED, NOT THE BUILD. `live_picks` is
+     assembled when the BOARD is built — every 45 minutes or so for the
+     football boards — and a row's `phase` is whatever its game's state
+     was at that moment. The game cards beside it read the twelve-second
+     scoreboard. So on 2026-09-13 every NFL game on the Live tab showed
+     live while every bet under it still said UPCOMING, and stayed that
+     way until a build happened to land mid-game. Ethan, the Monday after:
+     "NFL edge bets and most likely bets were not displaying that they
+     were live. But the games were showing live."
+
+     `_liveAll` is the same merged scoreboard the game cards draw from, so
+     a bet is promoted from the same fact its card shows: matched on the
+     matchup, in the viewed league. It only ever moves a row FORWARD —
+     upcoming to in play, in play to final — and never rewrites a verdict
+     the build already reached (cleared, busted, dead, *_pending) — those
+     came from the box score and the scoreboard knows less. Between
+     Live-tab loads `_liveAll` is empty and every row is exactly what the
+     build said. */
+  const rows = liveTrackerRows((state.data || {}).live_picks || []);
   const elsewhere = (state.data || {}).open_elsewhere || 0;
   const trackerErr = (state.data || {}).live_picks_error;
   if (trackerErr) {
