@@ -614,6 +614,33 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     # file and still lands within a day. Game bets — moneyline, spread,
     # total, team total — are what this closes, and they are the ones
     # whose answer was on the screen already.
+    # THE NFL'S STAT LINES, DURING THE DAY AND NOT ONLY AT NIGHT. Finals
+    # below settle the game bets, but a prop grades from nflverse's weekly
+    # stat file, and that file was pulled ONCE, in the nightly chores. On
+    # a Sunday slate nflverse publishes the box scores overnight — after
+    # our pull has already run — so every Sunday prop sat open until
+    # Tuesday. Ethan, Monday 2026-09-14: "none of the nfl bets from Sunday
+    # settled." The pull is cheap to repeat (the CSV is cached 12h, the
+    # upsert is idempotent) and is throttled here on its own ingest_log
+    # row so a five-minute settle loop asks nflverse at most every few
+    # hours, and only while an NFL pick is open.
+    if _has_open(lconn, "nfl", days):
+        try:
+            if _nfl_stats_due(hconn):
+                season = _nfl_season_of(days[-1])
+                res_nfl = ingest.ingest_nfl_results(hconn, season)
+                db_log = getattr(ingest, "db", None)
+                if db_log is not None:
+                    db_log.log_ingest(hconn, "nfl", NFL_STATS_KIND, str(season),
+                                      int(res_nfl.get("player_logs") or 0))
+                if res_nfl.get("player_logs"):
+                    log(f"  NFL weekly stats: {res_nfl['player_logs']:,} row(s) "
+                        f"pulled for the open props")
+                for sk in res_nfl.get("skipped", []):
+                    log(f"  ⚠️  {sk}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  NFL weekly stats unavailable ({exc}) — props stay "
+                f"open until the next pull")
     for league in ("nfl", "cfb"):
         if not _has_open(lconn, league, days):
             continue
@@ -629,6 +656,38 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
             log(f"  ⚠️  {league.upper()} finals unavailable ({exc}) — those "
                 f"picks stay open until the daily pass")
     return res
+
+
+#: How the intraday NFL stats pull records itself, and how often it may run.
+NFL_STATS_KIND = "weekly_stats_intraday"
+NFL_STATS_EVERY_S = 4 * 3600
+
+
+def _nfl_season_of(day: str) -> int:
+    """The NFL season a calendar day belongs to: August onward is that
+    year's season; January and February are the previous year's."""
+    d = _dt.date.fromisoformat(str(day)[:10])
+    return d.year if d.month >= 8 else d.year - 1
+
+
+def _nfl_stats_due(hconn, now: float | None = None) -> bool:
+    """Has it been NFL_STATS_EVERY_S since the last intraday stats pull?
+
+    Read off ingest_log rather than a state file, so the throttle lives
+    beside the thing it throttles and a hand-run ingest counts too.
+    """
+    import time as _time
+    row = hconn.execute(
+        "SELECT ts FROM ingest_log WHERE sport='nfl' AND kind=? "
+        "ORDER BY id DESC LIMIT 1", (NFL_STATS_KIND,)).fetchone()
+    if not row or not row[0]:
+        return True
+    try:
+        last = _dt.datetime.fromisoformat(str(row[0])).replace(
+            tzinfo=_dt.timezone.utc).timestamp()
+    except ValueError:
+        return True
+    return ((now if now is not None else _time.time()) - last) >= NFL_STATS_EVERY_S
 
 
 def _has_open(lconn, sport: str, days: list[str]) -> bool:
