@@ -108,9 +108,36 @@ surface that selected on it *alone*. That is what the rebuild is.
 
 | tier | the fair comes from | why it ranks here |
 |---|---|---|
+| `exchange` | a regulated exchange's two-sided order book | **nothing is assumed** — see below |
 | `sharp` | a sharp book's own two-way de-vig | the professional method, unmodified |
 | `market` | the de-vigged consensus of ≥3 books | line-shopping; the market's own opinion |
 | `model` | our number alone | **refused** — see below |
+
+**Why the exchange outranks the sharp book.** Step two of the method —
+remove the vig — is the step that needs an *assumption*: de-vigging
+Pinnacle means assuming how its margin is spread across the two sides,
+and `odds.devig_two_way` splits it proportionally while the
+favourite-longshot literature says books do not price that way. An
+exchange has no margin to strip. Two people take opposite sides of a
+contract at a price they both chose, so the mid **is** the probability.
+
+We were already pulling it and not using it: `engine/sources/kalshi`
+fetches a CFTC-regulated exchange, keyless, in all fifty states, and
+already parsed the book, matched a market to one of our games and knew
+which side the YES contract paid on. It fed the Prediction Desk and
+nothing else. `engine/exchangefair` hangs it on the rows that can use it.
+
+Three guards, because a number from an exchange only beats a book's if
+the book behind it is real: a **two-sided book** (never a last trade),
+**tight** (`MAX_SPREAD_CENTS` 4 — a 10-cent book puts the truth five
+points either side of the mid and `MIN_EV` asks for two), and **liquid**
+(`MIN_LIQUIDITY`, which is a floor against the obviously thin and is
+*not* a measured figure; `kalshi.price_series` is the tape that will
+eventually set it).
+
+Only the **moneyline**. Kalshi lists who wins; it does not list our run
+line, and letting a win probability settle a spread is the silent
+coercion this codebase keeps finding in its own history.
 
 `potd.rank_key` sorts on the **tier first**, then the edge, then the
 payout. That inversion is the point: sorting on edge size hands every

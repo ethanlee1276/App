@@ -2348,8 +2348,8 @@ async function renderPickOfTheDay() {
      is Pinnacle's de-vigged close than when it is ours. engine/potd
      refuses a model-only pick outright; the model's own read still
      travels and is drawn as context, labelled, never as the reason. */
-  const WITNESS = { sharp: "the sharp book’s fair", market: "the market’s fair",
-                    model: "our number" };
+  const WITNESS = { exchange: "the exchange’s price", sharp: "the sharp book’s fair",
+                    market: "the market’s fair", model: "our number" };
   const who = WITNESS[pick.evidence] || "our number";
   const fair = pick.fair_prob == null ? null : Math.round(pick.fair_prob * 100);
   const ours = pick.model_prob == null ? null : Math.round(pick.model_prob * 100);

@@ -816,6 +816,12 @@ def main() -> None:
         # assembled (engine/potd). One hook, every sport, so the bar
         # cannot drift between leagues; a failure lands in the JSON.
         from engine import potd as _potd
+        # THE EXCHANGE'S FAIR BEFORE THE SELECTOR READS THE ROW. Order is
+        # load-bearing: `potd.attach` picks off these rows, so a board
+        # priced after the pick was chosen would carry exchange numbers
+        # and a pick made without them — which looks like nothing wrong.
+        from engine import exchangefair as _xf
+        print(_xf.attach_to_board(result, "mlb"))
         _pn = _potd.attach(result, "mlb")
         if _pn:
             print(_pn)

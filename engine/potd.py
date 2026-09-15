@@ -49,6 +49,15 @@ This codebase already built that machinery for the Edge board
 `odds.devig_two_way`, `odds.consensus_fair`). What it never had was a
 surface that selected on it alone. That is this module now.
 
+AND ONE RUNG ABOVE THE SHARP BOOK, added 2026-09-15: an EXCHANGE. Step
+two of that method — remove the vig — is the step that needs an
+assumption, and an exchange skips it. Two people take opposite sides of
+a contract at a price they both chose; the mid is the probability with
+no margin baked in and nothing to strip. `engine/exchangefair` hangs it
+on the rows it can match, guarded on the only thing that matters (is
+there a real, tight, liquid book behind that mid), and `EVIDENCE` ranks
+it first.
+
 WHY OUR OWN MODEL IS NOT ALLOWED TO BE THE EVIDENCE, which is the change
 Ethan asked for in as many words ("we shouldn't use that 70%"). It is
 not a style preference — it is measured. `likely.GAME_RANK_MEASURED`
@@ -155,6 +164,18 @@ MAX_ODDS = 190
 #: de-vigged close is worth more than a 6% gap against our own model,
 #: because the measurements above say our model is the weaker witness.
 #:
+#:   exchange  a real two-sided order book on a regulated exchange
+#:           (`engine/exchangefair`, off `sources/kalshi`). RANKED ABOVE
+#:           THE SHARP BOOK, and the reason is an assumption rather than
+#:           a preference: de-vigging Pinnacle means assuming HOW its
+#:           margin is spread across the two sides, and the
+#:           favourite-longshot literature says books do not price that
+#:           way. An exchange has no margin to strip — two people took
+#:           opposite sides at a price they both chose — so its mid IS
+#:           the probability, with nothing assumed. It is guarded hard
+#:           (two-sided book, tight, liquid) because a number from an
+#:           exchange is only better than a book's if the book behind it
+#:           is real.
 #:   sharp   a sharp book quoted this market two ways and we de-vigged
 #:           it; the fair is a number the sharpest money in the world
 #:           agreed on, and the price we take is at a book Ethan can
@@ -165,7 +186,7 @@ MAX_ODDS = 190
 #:   model   only our number disagrees with the price. Measured weaker
 #:           than the market on every market we have measured, so this
 #:           tier can never be the pick — see `shortfall`.
-EVIDENCE = ("sharp", "market", "model")
+EVIDENCE = ("exchange", "sharp", "market", "model")
 
 #: The +EV bar, in probability points of the fair. The retail +EV tools
 #: quote 1-3% as the working range and the low end of that is where the
@@ -271,6 +292,12 @@ def evidence(row: dict) -> str:
     when the board ranked on the book's de-vigged number because that
     number measures better than ours.
     """
+    # ASKED FIRST because it is the fair with nothing assumed in it.
+    # `exchangefair.attach` only sets this on a market it could match to
+    # a real, tight, liquid two-sided book, so its presence IS the
+    # quality check — the guards live where the data is, not here.
+    if row.get("exchange_fair") is not None:
+        return "exchange"
     if row.get("sharp_anchored") and row.get("sharp_fair") is not None:
         return "sharp"
     if row.get("prob_source") in ("sharp", "anchored"):
@@ -290,7 +317,9 @@ def fair_prob(row: dict) -> float | None:
     saying "sharp" while the EV is computed off something else.
     """
     tier = evidence(row)
-    if tier == "sharp":
+    if tier == "exchange":
+        val = row.get("exchange_fair")
+    elif tier == "sharp":
         val = row.get("sharp_fair")
         if val is None:
             val = row.get("win_prob")
