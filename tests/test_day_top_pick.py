@@ -18,6 +18,7 @@ Run directly: `python3 tests/test_day_top_pick.py`
 import inspect
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -292,6 +293,154 @@ def test_the_writer_reads_the_registry_rather_than_naming_files_itself():
         "the day’s top pick no longer reads the board registry"
     assert 'f"{sport}.json"' not in body, \
         "the writer is building board paths from the league code again"
+
+
+# ── the writer actually runs ────────────────────────────────────────
+
+def _run_writer(tmp, boards, journal=()):
+    """`launch._write_day_top_pick` against a temp ROOT and a temp ledger.
+
+    Returns ``(payload, printed, claims)``. The PRINTED half is the point: that
+    function wraps itself in a bare `except Exception` and prints a
+    warning, so every failure inside it looks like a quiet log line — and
+    four separate bugs reached production through it in one day, the last
+    of them a NameError I introduced while fixing the third.
+    """
+    import contextlib
+    import importlib
+    import io
+    import json as _json
+    import launch
+    from engine import ledger as _ledger
+
+    web = os.path.join(tmp, "web", "data")
+    os.makedirs(web, exist_ok=True)
+    for sport, payload in boards.items():
+        rel = launch.BOARD_FILES[sport]
+        path = os.path.join(tmp, *rel.split("/"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            _json.dump(payload, fh)
+
+    old_root, old_db = launch.ROOT, _ledger.DEFAULT_DB
+    launch.ROOT = __import__("pathlib").Path(tmp)
+    _ledger.DEFAULT_DB = __import__("pathlib").Path(tmp) / "ledger.db"
+    try:
+        with _ledger.connect() as conn:
+            for row in journal:
+                conn.execute(
+                    "INSERT INTO bets (ts, sport, date, player, market, side, "
+                    "line, odds, status, category) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    row)
+            conn.commit()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            launch._write_day_top_pick()
+        out = os.path.join(web, "day_top_pick.json")
+        payload = _json.load(open(out)) if os.path.exists(out) else None
+        import datetime as _dt
+        with _ledger.connect() as conn:
+            claims = _ledger.top_pick_claims(conn, _dt.date.today().isoformat())
+        return payload, buf.getvalue(), claims
+    finally:
+        launch.ROOT, _ledger.DEFAULT_DB = old_root, old_db
+        importlib.invalidate_caches()
+
+
+def test_the_writer_writes_a_file_and_says_nothing():
+    """END TO END, WHICH NOTHING DID BEFORE. Every other test in this
+    file exercises the chooser; the function that feeds it opened the
+    wrong paths twice and then raised NameError on a variable I deleted,
+    and each failure printed a warning nobody was reading. A test that
+    calls it is the one that catches all three shapes."""
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    card = {"player": "KC ML", "team": "KC", "market": "moneyline",
+            "kind": "game", "odds": -130, "sharp_anchored": True,
+            "sharp_fair": 0.60, "fair_prob": 0.60, "evidence": "sharp"}
+    with tempfile.TemporaryDirectory() as tmp:
+        payload, printed, claims = _run_writer(
+            tmp, {"nfl": {"pick_of_the_day": {"date": today, "pick": card}}},
+            journal=[(today + "T00:00:00", "nfl", today, "KC", "moneyline",
+                      "OVER", 0.5, -130, "open", "potd")])
+    assert payload is not None, f"no file was written; it printed: {printed!r}"
+    assert "⚠️" not in printed, printed
+    assert payload["sport"] == "nfl", payload
+    assert payload["pick"]["player"] == "KC ML", payload
+    # AND THE CLAIM WAS LOGGED. The file is overwritten every cycle, so
+    # this row is the only thing that survives the day — a writer that
+    # published the headline without recording it would look completely
+    # healthy and lose the history anyway.
+    assert len(claims) == 1, claims
+    assert claims[0]["sport"] == "nfl" and claims[0]["player"] == "KC", claims
+
+
+def test_the_writer_reaches_the_nfl_and_mlb_board_files():
+    """The two whose files are not named after their league. This is the
+    bug of commit a0686df stated as a behaviour rather than as a source
+    check — the writer opened web/data/{sport}.json, so these two were
+    invisible and the census called them simply absent."""
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    card = {"player": "LAA ML", "team": "LAA", "market": "moneyline",
+            "kind": "game", "odds": -120, "sharp_anchored": True,
+            "sharp_fair": 0.58, "fair_prob": 0.58, "evidence": "sharp"}
+    with tempfile.TemporaryDirectory() as tmp:
+        payload, printed, claims = _run_writer(
+            tmp, {"mlb": {"pick_of_the_day": {"date": today, "pick": card}}},
+            journal=[(today + "T00:00:00", "mlb", today, "LAA", "moneyline",
+                      "OVER", 0.5, -120, "open", "potd")])
+    assert payload is not None, printed
+    assert payload["sport"] == "mlb", payload
+
+
+def test_the_headline_is_logged_when_it_changes_and_not_when_it_repeats():
+    """The history that `day_top_pick.json` destroys every cycle. One row
+    per change: a re-quote is the same claim at a new number, and
+    `odds_history` is already the price tape."""
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    card = {"player": "KC ML", "team": "KC", "market": "moneyline",
+            "kind": "game", "odds": -130, "evidence": "sharp"}
+    top = {"date": TODAY, "sport": "nfl", "pick": card}
+    assert ledger.record_top_pick_claim(conn, top) == 1
+    assert ledger.record_top_pick_claim(conn, top) == 0, "repeat was logged"
+    repriced = {"date": TODAY, "sport": "nfl", "pick": dict(card, odds=-145)}
+    assert ledger.record_top_pick_claim(conn, repriced) == 0, \
+        "a re-quote is the same claim"
+    moved = {"date": TODAY, "sport": "mlb",
+             "pick": dict(card, player="LAA ML", team="LAA")}
+    assert ledger.record_top_pick_claim(conn, moved) == 1
+    assert len(ledger.top_pick_claims(conn, TODAY)) == 2
+
+
+def test_a_day_with_no_top_pick_is_logged_as_a_claim_too():
+    """"No top pick today" is what the page said. A log that recorded
+    only the days with a pick would answer "how does the Top Pick do"
+    without ever mentioning the days it declined to name one."""
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    assert ledger.record_top_pick_claim(
+        conn, {"date": TODAY, "sport": "", "pick": None,
+               "note": "no league had a pick in the band"}) == 1
+    rows = ledger.top_pick_claims(conn, TODAY)
+    assert len(rows) == 1 and rows[0]["sport"] == "", rows
+    assert "no league" in rows[0]["note"], rows
+
+
+def test_the_claim_log_never_raises_into_the_cycle():
+    """A history that cannot be written must not take down the page it is
+    a history of."""
+    from engine import ledger
+
+    class Broken:
+        def execute(self, *a, **k):
+            raise RuntimeError("disk gone")
+
+    assert ledger.record_top_pick_claim(Broken(), {"date": TODAY}) == 0
+    assert ledger.top_pick_claims(Broken(), TODAY) == []
+    assert ledger.record_top_pick_claim(
+        ledger.connect(":memory:"), {"pick": None}) == 0, "a dateless claim"
 
 
 # ── it must stay a comparison ───────────────────────────────────────

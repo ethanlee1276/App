@@ -105,7 +105,41 @@ CREATE TABLE IF NOT EXISTS forecast_log (
 );
 """
 
-SCHEMA = _BETS_TABLE + _FORECAST_LOG + """
+#: WHAT THE HEADLINE SAID, AND WHEN IT CHANGED.
+#:
+#: `day_top_pick` names one pick across every league and the refresh
+#: cycle republishes it every few minutes, overwriting the last answer.
+#: So the day's claim exists only for as long as the current cycle, and
+#: which league won a given day is nowhere on disk once tomorrow starts.
+#: It cannot be recomputed afterwards either: the ranking turns on which
+#: WITNESS backed the fair, and `bets` carries odds and edge but not
+#: `evidence`.
+#:
+#: This is that history, and it deliberately settles nothing. There is a
+#: real open question about what a "Top Pick" record should count — the
+#: cross-league winner can legitimately change during the morning as more
+#: leagues journal their picks, so "first cycle wins" favours whichever
+#: league builds first while "last cycle wins" means the early reader saw
+#: a headline that is not the one recorded. Both are answerable FROM this
+#: table and neither is baked INTO it. Recording the sequence costs
+#: nothing and keeps both doors open; not recording it closes both, one
+#: day at a time, permanently.
+#:
+#: ONE ROW PER CHANGE, not per cycle. The dedupe is on the identity of
+#: the claim — league plus the journal key plus whether it was a
+#: below-bar lean — and not on price, because `odds_history` is already
+#: the price tape and a second one here would bury the question this
+#: table exists to answer under a few hundred re-quotes a day.
+_TOP_PICK_LOG = """
+CREATE TABLE IF NOT EXISTS top_pick_log (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT, date TEXT, sport TEXT, player TEXT, market TEXT,
+    side TEXT, line REAL, odds INTEGER, evidence TEXT, below_bar TEXT,
+    note TEXT
+);
+"""
+
+SCHEMA = _BETS_TABLE + _FORECAST_LOG + _TOP_PICK_LOG + """
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -1228,6 +1262,82 @@ def potd_row_key(pick: dict):
     if not player or line is None or not market:
         return None
     return player, market, side, line
+
+
+def _claim_identity(top: dict) -> tuple:
+    """What makes two headline claims the same claim.
+
+    League, the journal key, and whether it was a below-bar lean. NOT the
+    price: a re-quote is the same claim at a new number, and `odds_history`
+    is already the tape for that.
+    """
+    pick = (top or {}).get("pick")
+    if not isinstance(pick, dict):
+        return ("", "", "", "", None, "")
+    keys = potd_row_key(pick) or ("", "", "", None)
+    return ((str(top.get("sport") or ""),) + tuple(keys)
+            + (str(pick.get("below_bar") or ""),))
+
+
+def record_top_pick_claim(conn, top: dict) -> int:
+    """Append what the headline says, IF it has changed. Returns rows written.
+
+    Never raises into the refresh cycle: a history that cannot be written
+    must not take down the page it is a history of.
+
+    AN ABSENCE IS A CLAIM TOO. "no top pick today" is what the page said,
+    and a log that recorded only the days with a pick would answer "how
+    does the Top Pick do" without ever mentioning the days it declined to
+    name one — which is the same selective silence `log_pick_of_the_day`
+    refuses when it keeps below-bar rows off the record.
+    """
+    try:
+        import datetime as _dt
+        date = str((top or {}).get("date") or "")[:10]
+        if not date:
+            return 0
+        now = _dt.datetime.utcnow().isoformat(timespec="seconds")
+        want = _claim_identity(top)
+        last = conn.execute(
+            "SELECT sport, player, market, side, line, below_bar "
+            "FROM top_pick_log WHERE date=? ORDER BY seq DESC LIMIT 1",
+            (date,)).fetchone()
+        if last is not None:
+            have = (str(last["sport"] or ""), str(last["player"] or ""),
+                    str(last["market"] or ""), str(last["side"] or ""),
+                    last["line"], str(last["below_bar"] or ""))
+            if have == want:
+                return 0
+        pick = (top or {}).get("pick")
+        pick = pick if isinstance(pick, dict) else {}
+        odds = pick.get("odds")
+        try:
+            odds = int(odds) if odds is not None else None
+        except (TypeError, ValueError):
+            odds = None
+        conn.execute(
+            "INSERT INTO top_pick_log (ts, date, sport, player, market, "
+            "side, line, odds, evidence, below_bar, note) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (now, date, want[0], want[1], want[2], want[3], want[4], odds,
+             str(pick.get("evidence") or ""), want[5],
+             str((top or {}).get("note") or "")))
+        conn.commit()
+        return 1
+    except Exception:                                         # noqa: BLE001
+        return 0
+
+
+def top_pick_claims(conn, date: str) -> list:
+    """Every headline this day carried, oldest first."""
+    try:
+        rows = conn.execute(
+            "SELECT ts, sport, player, market, side, line, odds, evidence, "
+            "below_bar, note FROM top_pick_log WHERE date=? ORDER BY seq",
+            (str(date or "")[:10],)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return []
+    return [dict(r) for r in rows]
 
 
 def locked_potd_keys(conn, day: str) -> dict:

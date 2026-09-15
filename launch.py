@@ -3322,6 +3322,7 @@ def _write_day_top_pick() -> None:
     """
     try:
         from engine import ledger, potd
+        web = ROOT / "web" / "data"
         boards: dict = {}
         for sport in potd.TOP_PICK_LEAGUES:
             # BOARD_FILES, NEVER A PATH BUILT FROM THE SPORT CODE. The
@@ -3361,11 +3362,22 @@ def _write_day_top_pick() -> None:
         try:
             with ledger.connect() as lconn:
                 locked = ledger.locked_potd_keys(lconn, today)
+                top = potd.day_top_pick(boards, today, locked=locked)
+                # WHAT THE HEADLINE SAID, AND WHEN IT CHANGED. One row per
+                # change, not per cycle. This file is overwritten every few
+                # minutes, so without it the day's claim survives only as
+                # long as the current cycle and which league won a given
+                # day is gone by tomorrow — unrecomputable, because the
+                # ranking turns on which witness backed the fair and `bets`
+                # does not carry that. See `ledger._TOP_PICK_LOG`: it
+                # settles nothing about what a Top Pick RECORD should
+                # count, and keeps both answers reachable.
+                ledger.record_top_pick_claim(lconn, top)
         except Exception as exc:                              # noqa: BLE001
             print(f"  ⚠️  day top pick: today's locked picks are "
                   f"unreadable ({type(exc).__name__}: {exc}) — "
                   f"publishing none rather than an unlocked claim")
-        top = potd.day_top_pick(boards, today, locked=locked)
+            top = potd.day_top_pick(boards, today, locked={})
         p = web / "day_top_pick.json"
         tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(top, indent=1))
