@@ -1733,6 +1733,12 @@ def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
 @dataclass
 class OddsAttachResult:
     matched: int = 0
+    #: Props whose only price came from a game they are not in — a man
+    #: filed under his old team while the book prices him for his new
+    #: one. Refused rather than attached: a price from the wrong game is
+    #: a bet on a number nobody offers for the card shown. See the
+    #: attach loop, and `nflverse.roster_teams` for the filing itself.
+    wrong_game: int = 0
     unmatched: list[str] = field(default_factory=list)
     # Scorer (Yes/No) props that got a real book quote — anytime TD.
     # Counted apart from `matched`, and their misses stay OUT of
@@ -2328,6 +2334,21 @@ def _leg_by_commence(legs: list, commence: str):
     return min(legs, key=_dist)
 
 
+def _wrong_game(prop, pair) -> bool:
+    """Is this price from a game the prop's team is not in?
+
+    False when the pair is unknown (nothing to check against) or the
+    prop names no team (an MLB slate built from the book's own menu).
+    """
+    team = str(getattr(prop, "team", "") or "")
+    if not team or not pair:
+        return False
+    home, away = pair
+    if not home and not away:
+        return False
+    return team not in (home, away)
+
+
 def apply_odds_to_slate(slate, api_key: str | None = None,
                         books: list[str] | None = None,
                         ttl: int = 300, sport: str = "nfl",
@@ -2411,6 +2432,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     # parser because the over/under one requires a point and these have
     # none (see SCORER_ODDS_TO_MARKET).
     scorer_index: dict[tuple[str, str], list[dict]] = {}
+    scorer_pairs: dict = {}
     # THE SLATE'S OWN NAMES BEAT THE STATIC TABLE.
     #
     # SPORT_CONFIG carries a hand-written {full name: abbreviation} map per
@@ -2585,6 +2607,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             if scorer_map:
                 for k, quotes in parse_event_scorers(payload, scorer_map).items():
                     scorer_index.setdefault(k, []).extend(quotes)
+                    # Which game the quote belongs to — the check below
+                    # needs it, and a scorer quote carries no teams.
+                    scorer_pairs.setdefault(k, (home, away))
         # Attach real game-market prices to the matching game (each leg gets
         # its own moneyline/total/spread).
         #
@@ -2681,6 +2706,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             # players a game, not a roster, and absence is the norm here.
             quotes = scorer_index.get((normalize_name(prop.player),
                                        prop.market)) or []
+            if quotes and _wrong_game(prop, scorer_pairs.get(
+                    (normalize_name(prop.player), prop.market))):
+                result.wrong_game += 1
+                quotes = []
             if quotes:
                 prop.lines = [SportsbookLine(
                     book=q["book"], line=0.5, over_odds=int(q["yes_odds"]),
@@ -2689,14 +2718,30 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     for q in quotes]
                 result.scorers_matched += 1
             continue
-        lines = index.get((normalize_name(prop.player), prop.market))
+        hit_key = (normalize_name(prop.player), prop.market)
+        lines = index.get(hit_key)
         if not lines:
             cands = loose.get(f"{_name_key_loose(prop.player)}|{prop.market}")
             if cands and len(cands) == 1:
                 lines = index.get(cands[0])
                 if lines:
+                    hit_key = cands[0]
                     result.loose_matched += 1
                     loose_hits.add((normalize_name(prop.player), prop.market))
+        # THE PRICE MUST COME FROM THE PROP'S OWN GAME. The index is keyed
+        # by name and market across every event on the pull, which is
+        # right for a man who is where the slate says he is and wrong
+        # for one who has moved: Isiah Pacheco filed under the Chiefs
+        # (Ethan, 2026-09-15) took the Lions' game's price and priced a
+        # card for a game he was not playing in. `menu` remembers which
+        # event priced each key; a pair that does not contain the
+        # prop's team is refused, counted, and the prop stays proxy.
+        if lines:
+            info = menu.get(hit_key) or {}
+            if _wrong_game(prop, (info.get("home"), info.get("away"))
+                           if info else None):
+                result.wrong_game += 1
+                lines = None
         if lines:
             prop.lines = lines
             result.matched += 1

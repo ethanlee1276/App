@@ -386,7 +386,7 @@ def _stub_slate(current_rows, week=1, season=2026):
                   spread=-3.0, total=44.5)]
     saved = {n: getattr(nv, n) for n in
              ("build_games", "load_weekly_stats", "roster_index",
-              "load_schedules")}
+              "roster_teams", "load_schedules")}
 
     def _stats(s):
         return current_rows if s == season else prior
@@ -395,6 +395,9 @@ def _stub_slate(current_rows, week=1, season=2026):
     nv.load_weekly_stats = _stats
     nv.roster_index = lambda s: {
         "Carried Guy": {"team": "MIA", "position": "WR"}}
+    # The homing roster (2026-09-15) reads the same file; stubbed apart
+    # so the carry logic, not the network, is what is under test.
+    nv.roster_teams = lambda s: {"Carried Guy": "MIA"}
     nv.load_schedules = lambda: []
     try:
         report = {}

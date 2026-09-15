@@ -296,6 +296,35 @@ def roster_index(season: int) -> dict[str, dict]:
     return out
 
 
+def roster_teams(season: int) -> dict[str, str]:
+    """``{name: team}`` for EVERY player the roster file knows, whatever
+    his status — keyed by the exact name and by its folded form
+    (`oddsapi.normalize_name`), so a stats feed's "Deebo Samuel Sr."
+    finds a roster's "Deebo Samuel".
+
+    WHERE A MAN PLAYS NOW. Ethan, 2026-09-15: "we are showing props for
+    players not even on the team any more. Isaiah pachaceo is on the
+    lions now, not the chiefs." `build_slate.team_of` read the FIRST
+    stat row of the season — Week 1's team — before it ever asked the
+    roster, so a player who moved after his first game stayed on his
+    old team's board for the rest of the year, and the price index
+    (keyed by name alone) then handed him his new team's price. This is
+    the current-season roster, refreshed on the fetch layer's twelve-hour
+    clock, and it is asked first. Unlike `roster_index` it keeps every
+    status: a man on IR has still moved.
+    """
+    from .oddsapi import normalize_name
+    out: dict[str, str] = {}
+    for r in load_rosters(season):
+        name = _s(r, "full_name", "player_name", "football_name")
+        team = _s(r, "team")
+        if not name or not team:
+            continue
+        out.setdefault(name, team)
+        out.setdefault(normalize_name(name), team)
+    return out
+
+
 def headshot_map(season: int) -> dict[str, str]:
     """``{player: headshot_url}`` for everyone the roster file knows.
 
@@ -678,12 +707,44 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             specs = _merge_specs(specs, _carry_specs(
                 prior_stats, roster, participating))
 
+    # WHERE EACH MAN PLAYS NOW — the current roster, every status. See
+    # `roster_teams`. Unreachable is an empty map, and the stat rows
+    # answer alone, as they always did.
+    try:
+        homes = roster_teams(season)
+    except DataUnavailable:
+        homes = {}
+    from .oddsapi import normalize_name as _fold
+
     def team_of(player: str) -> str:
+        """The team a prop is FILED under, which decides his game.
+
+        THE ROSTER FIRST, THEN THE NEWEST STAT ROW. This used to return
+        the first stat row it found — the season's Week 1 — and only
+        asked the roster when there were no rows at all, so a player
+        traded or claimed after his first game was built against his
+        old team's opponent all year (Ethan, 2026-09-15, Pacheco on the
+        Chiefs' board a week after joining the Lions). The roster is the
+        one feed that says where he is today; when it does not know him,
+        the LATEST week he has a row for is the next best fact, and
+        never the first.
+        """
+        now_team = homes.get(player) or homes.get(_fold(player))
+        if now_team:
+            return now_team
+        best: tuple | None = None
         for r in stats:
-            if _s(r, "player_display_name", "player_name", "full_name") == player:
-                return _s(r, "recent_team", "team")
-        # The roster is the authority for a season with no games yet, and
-        # the ONLY place a player who changed teams is on the new one.
+            if _s(r, "player_display_name", "player_name", "full_name") != player:
+                continue
+            team = _s(r, "recent_team", "team")
+            if not team:
+                continue
+            wk = _f(r, "week")
+            if best is None or wk > best[0]:
+                best = (wk, team)
+        if best is not None:
+            return best[1]
+        # A season with no games yet: the carry's own roster view.
         return (roster.get(player) or {}).get("team", "")
 
     # Official headshot URLs. THREE sources, in the order a face is most

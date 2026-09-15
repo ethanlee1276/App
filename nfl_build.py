@@ -691,6 +691,13 @@ def main() -> None:
             if res.unmatched:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
+            if res.wrong_game:
+                # A man filed under a team the book is not pricing him
+                # for: the roster feed and the stat rows disagree about
+                # where he plays (nflverse.roster_teams). His price was
+                # refused rather than attached to the wrong card.
+                print(f"  Refused {res.wrong_game} price(s) from a game the "
+                      f"player is not in — filed under his old team?")
             # Keep the spread and total we just paid for. Both were parsed,
             # attached and priced against, then dropped — which is why the
             # spread/total model has never had a stored close to be graded

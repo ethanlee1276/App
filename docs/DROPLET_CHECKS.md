@@ -676,6 +676,49 @@ cd /srv/qellys && sqlite3 data/ledger.db "UPDATE bets SET status='void', pnl_uni
 After the next refresh, the build log's `Journal:` line should stop
 growing during a game, and `--why-pick` on a live game's prop says
 "kicked off N min ago by its own schedule".
+
+### 7c. A player on his old team (2026-09-15)
+
+Ethan: "we are showing props for players not even on the team any more.
+Isaiah pachaceo is on the lions now, not the chiefs." Two causes, both
+fixed: `build_slate.team_of` read the FIRST stat row of the season
+(Week 1's team) before it asked the roster, and the price index is keyed
+by name across every game on the pull, so a man filed under his old
+team took his new team's price. Now the roster (`nflverse.roster_teams`,
+every status, twelve-hour cache) is asked first, the NEWEST stat row
+second, and a price from a game the prop's team is not in is refused
+and counted (`Refused N price(s) from a game the player is not in`).
+
+To see what the three sources say about one man:
+
+```bash
+cd /srv/qellys && python3 - <<'PY7C'
+import csv, json, sys
+from pathlib import Path
+who = "Isiah Pacheco"                 # the roster's spelling; try the folded name too
+from engine.sources.oddsapi import normalize_name
+from engine.sources.fetch import CACHE_DIR
+key = normalize_name(who)
+for f in sorted(Path(CACHE_DIR).glob("roster_2026.csv")):
+    rows = [r for r in csv.DictReader(open(f)) if normalize_name(r.get("full_name") or "") == key]
+    print("roster:", [(r.get("team"), r.get("status"), r.get("week")) for r in rows] or "not in the file")
+for f in sorted(Path(CACHE_DIR).glob("player_stats_2026.csv")):
+    rows = [r for r in csv.DictReader(open(f)) if normalize_name(r.get("player_display_name") or "") == key]
+    print("stats :", sorted((int(float(r["week"])), r.get("recent_team")) for r in rows) or "no rows yet")
+d = json.load(open("data/built/recommendations.json"))
+for r in d.get("recommendations", []) + d.get("most_likely", []):
+    if normalize_name(r.get("player") or "") == key:
+        print("board :", r.get("team"), "vs", r.get("opponent"), r.get("market"), r.get("book"), r.get("line"))
+PY7C
+```
+
+* `roster:` should name the team he is on today. If it still names the
+  old one, nflverse has not published the move — nothing here can fix
+  that, and the board will follow within twelve hours of it landing.
+* `stats :` is where the OLD code read from: the first tuple is Week 1.
+* `board :` after the next refresh should match `roster:`; a line
+  `Refused N price(s)` in the build log means a price was kept off a
+  card filed under the wrong team.
 * NFL's card is the week label (`2026-W01`), so its rows are the whole
   week's open bets; the other three use the slate date and its two
   neighbours.

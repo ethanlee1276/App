@@ -132,6 +132,7 @@ def test_build_slate_end_to_end(monkeypatch):
 
     monkeypatch.setattr(nv, "load_schedules", lambda: sched)
     monkeypatch.setattr(nv, "load_weekly_stats", lambda season: stats)
+    monkeypatch.setattr(nv, "roster_teams", lambda season: {})
 
     slate = nv.build_slate(2024, 5, upto_week=5)
     assert slate.games and slate.props
@@ -161,6 +162,87 @@ def test_build_slate_end_to_end(monkeypatch):
     from engine.pipeline import run_slate
     result = run_slate(slate)
     assert result["counts"]["props_analyzed"] == len(yardage)
+
+
+# --- where a man plays now (2026-09-15) ---------------------------------------
+def _two_game_week(monkeypatch, stats, homes):
+    sched = [{"season": "2024", "week": "5", "home_team": h, "away_team": a,
+              "roof": "dome", "temp": "", "wind": "", "spread_line": "-3", "total_line": "45"}
+             for h, a in (("AAA", "BBB"), ("CCC", "DDD"))]
+    for wk in (1, 2, 3, 4):
+        # Enough volume on every side that the RB in question is built.
+        for tm, opp in (("AAA", "BBB"), ("BBB", "AAA"), ("CCC", "DDD"), ("DDD", "CCC")):
+            stats.append(_stat(f"WR {tm}", "WR", tm, opp, wk, receiving_yards=80, targets=9))
+    monkeypatch.setattr(nv, "load_schedules", lambda: sched)
+    monkeypatch.setattr(nv, "load_weekly_stats", lambda season: stats)
+    monkeypatch.setattr(nv, "roster_teams", lambda season: homes)
+    return nv.build_slate(2024, 5, upto_week=5)
+
+
+def _mover(slate):
+    return [p for p in slate.props if p.player == "RB Mover" and p.market == "rush_yds"]
+
+
+def test_a_player_is_homed_where_the_roster_says_now(monkeypatch):
+    """Ethan, 2026-09-15: "we are showing props for players not even on
+    the team any more. Isaiah pachaceo is on the lions now, not the
+    chiefs." `team_of` returned the FIRST stat row of the season — Week
+    1's team — before it asked the roster. The roster is asked first."""
+    stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+             for wk in (1, 2, 3, 4)]
+    got = _mover(_two_game_week(monkeypatch, stats, {"RB Mover": "CCC"}))
+    assert got and got[0].team == "CCC" and got[0].opponent == "DDD",         [(p.team, p.opponent) for p in got]
+
+
+def test_without_a_roster_the_newest_stat_row_wins_not_the_first():
+    """A man traded after Week 3 has three rows for the old team and one
+    for the new; the old code filed him under the old team for the rest
+    of the season because it stopped at the first row it saw."""
+    class MP:
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name))); setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+    mp = MP()
+    try:
+        stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+                 for wk in (1, 2, 3)]
+        stats.append(_stat("RB Mover", "RB", "CCC", "ZZZ", 4, rushing_yards=80, carries=18))
+        got = _mover(_two_game_week(mp, stats, {}))
+        assert got and got[0].team == "CCC", [(p.team, p.opponent) for p in got]
+        # And a folded roster name still finds him: "RB Mover Jr." on the file.
+        mp.undo(); mp = MP()
+        got = _mover(_two_game_week(mp, list(stats), {"rb mover": "AAA"}))
+        assert got and got[0].team == "AAA", [(p.team, p.opponent) for p in got]
+    finally:
+        mp.undo()
+
+
+def test_a_roster_that_cannot_be_read_costs_nothing():
+    class MP:
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name))); setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+    mp = MP()
+    try:
+        from engine.sources.fetch import DataUnavailable
+        stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+                 for wk in (1, 2, 3, 4)]
+
+        def boom(season):
+            raise DataUnavailable("no roster here")
+        sched_stats = list(stats)
+        # `_two_game_week` installs its own roster stub; override after.
+        slate = _two_game_week(mp, sched_stats, {})
+        mp.setattr(nv, "roster_teams", boom)
+        slate = nv.build_slate(2024, 5, upto_week=5)
+        got = _mover(slate)
+        assert got and got[0].team == "AAA", [(p.team, p.opponent) for p in got]
+    finally:
+        mp.undo()
 
 
 # --- the outage of 2026-09-10 -----------------------------------------------
