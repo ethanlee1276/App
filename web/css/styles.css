@@ -579,8 +579,20 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
   transition: background var(--dur-base) var(--ease-out),
               border-color var(--dur-base) var(--ease-out);
 }
-.room-card:hover {
-  background: var(--fill-hover); border-color: var(--text-mute);
+/* HOVER ONLY WHERE THERE IS A HOVER. Ethan, 2026-09-14, phone screenshot
+   of the fantasy room: "the highlight for the button goes away" when a
+   card is tapped. A phone keeps :hover on the last thing touched, this
+   rule out-specifies `.subnav-btn.active` by coming later, and the
+   tapped card sat in the hover grey wearing brand-ink text — the one
+   card on the page that could not be read was the one just pressed. */
+@media (hover: hover) {
+  .room-card:hover {
+    background: var(--fill-hover); border-color: var(--text-mute);
+  }
+}
+/* And whatever the pointer does, the selected room keeps its fill. */
+.room-card.active:hover {
+  background: var(--brand); border-color: var(--brand);
 }
 .rc-name {
   font-size: var(--fs-sm); font-weight: 700; color: var(--text);
@@ -617,6 +629,10 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
      and padding need phone sizes). A second line of tabs costs ~30px
      once; a bar that sits where a swipe left it costs a room. */
   .subnav-btn { white-space: nowrap; padding: 7px 9px; }
+  /* Not the room cards, which carry `.subnav-btn` too: their sentence
+     must wrap, or it runs across the neighbouring card (Ethan,
+     2026-09-14: "the letters over lap"). */
+  .room-card { white-space: normal; padding: 11px 13px; }
 }
 .section-title .sub { color: var(--text-mute); font-weight: 500; font-size: var(--fs-sm); }
 

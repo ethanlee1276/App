@@ -267,6 +267,32 @@ def test_the_selected_card_stays_readable_on_the_brand_fill():
     assert "var(--brand-ink)" in _rule(css, ".room-card.active .rc-what")
 
 
+def test_a_room_card_wraps_its_sentence_on_a_phone():
+    """Ethan, 2026-09-14, phone screenshot of the fantasy room: "the
+    letters over lap." The ≤760px rule keeps chip labels on one line, and
+    a room card carries `.subnav-btn` too — so its description ran off
+    the card and across the neighbour. The card wraps; the chips do not."""
+    css = re.sub(r"/\*.*?\*/", " ", _css(), flags=re.S)
+    m = css.index("@media (max-width: 760px) {")
+    block = css[m:m + 1500]
+    nowrap = block.index(".subnav-btn { white-space: nowrap")
+    wrap = block.index(".room-card { white-space: normal")
+    assert nowrap < wrap, "the card's wrap must come after the chip's nowrap to win"
+
+
+def test_the_pressed_card_keeps_its_fill_under_a_sticky_hover():
+    """Ethan, 2026-09-14: "the highlight for the button goes away" on
+    tap. A phone keeps :hover on the last thing touched and the hover rule
+    came later than the active fill. Hover is offered only where a hover
+    exists, and the active card keeps the brand fill under it anyway."""
+    css = re.sub(r"/\*.*?\*/", " ", _css(), flags=re.S)
+    i = css.index(".room-card:hover {")
+    assert "@media (hover: hover)" in css[max(0, i - 120):i], \
+        "room-card hover is not gated on a hover-capable pointer"
+    keep = _rule(css, ".room-card.active:hover")
+    assert "background: var(--brand)" in keep and "border-color: var(--brand)" in keep
+
+
 def test_an_index_card_is_shaped_like_a_control():
     css = _css()
     r = _rule(css, ".room-card")
