@@ -574,6 +574,89 @@ def _card(row: dict, below: str = "") -> dict:
     return out
 
 
+def relock(payload: dict, most_likely, locked_key, journal_pick=None) -> dict:
+    """The published card, re-pointed at the pick this sport ALREADY
+    LOCKED today. A new dict; ``payload`` is not touched.
+
+    Ethan, 2026-09-15, looking at the MLB page: "the mlb is still showing
+    the angles +1.5 as the pick of the day. idk if thats right or it
+    should have been replaced."
+
+    It was not right. The journal had locked Spencer Jones OVER 0.5 total
+    bases that morning. By the evening his price had run from inside the
+    band out to -180, `choose` refused him on price like any other row,
+    and `build` fell through to its best-available lean — LAA +1.5. So
+    the page showed one pick and the record held another, and nothing
+    anywhere connected the two. A reader who saw the morning's pick had
+    no way to find out what happened to it.
+
+    THE LOCK WAS A VETO AND NOT A MEMORY, which is half a lock. It could
+    refuse the board's new favourite; it could not produce the old one.
+    `day_top_pick` had the same hole from the other side: it correctly
+    declined a league whose board had moved on, then handed the day to a
+    below-bar lean, which is exempt from locking precisely because
+    nothing journals it. An unrecorded lean displacing a recorded claim
+    is the exact churn `log_pick_of_the_day` was given a lock to stop.
+
+    WHY THE BOARD ROW IS PREFERRED over the journaled one. The journal
+    stores what a bet needs to settle — player, market, side, line, book,
+    price. It does not store which witness stood behind the fair, and
+    a card that has to say "model" because the tier was never written
+    down would understate a pick that qualified on a sharp one. The row
+    on the board carries all of it and carries TODAY'S price, so when the
+    locked pick is still on the board — it usually is, refused on price
+    rather than gone — the card is rebuilt from it in full. The journal
+    is the fallback for the day the row really does leave.
+
+    THE PRICE IS ALLOWED TO BE OUTSIDE THE BAND HERE, and that is the
+    point rather than a leak. The bars choose the pick; once chosen, the
+    claim stands at whatever the market does to it afterwards. `_card`
+    computes, it does not refuse — `choose` is the only gate, and it has
+    already run. What the card gains is `locked`, so the page can say
+    the price has moved since the pick was made instead of pretending
+    this is a fresh recommendation at -180.
+    """
+    out = dict(payload or {})
+    if not locked_key:
+        return out
+    want = tuple(locked_key)
+    from .ledger import potd_row_key
+    current = out.get("pick")
+    if isinstance(current, dict) and not current.get("below_bar"):
+        got = potd_row_key(current)
+        if got is not None and tuple(got) == want:
+            # Already the locked pick. Say so on the card rather than
+            # leaving the reader to infer it from the record page.
+            out["pick"] = {**current, "locked": True}
+            return out
+    # The board has moved on. Find the locked row where it still lives.
+    for row in (most_likely or []):
+        if not isinstance(row, dict):
+            continue
+        got = potd_row_key(row)
+        if got is not None and tuple(got) == want:
+            card = _card(row)
+            card["locked"] = True
+            out["pick"] = card
+            out["relocked"] = ("the board moved on; this is the pick this "
+                               "sport locked earlier today")
+            return out
+    if isinstance(journal_pick, dict) and journal_pick:
+        out["pick"] = {**journal_pick, "locked": True, "off_board": True}
+        out["relocked"] = ("the board no longer carries this row; shown from "
+                           "the journal at the price it was locked at")
+        return out
+    # LOCKED, AND NOWHERE TO BE FOUND. Not a case to paper over with the
+    # lean that happened to be underneath it: the sport has a claim on
+    # the record for today, and a card showing something else would make
+    # the page and the record disagree silently, which is the bug this
+    # function exists for.
+    out["pick"] = None
+    out["relocked"] = ("this sport locked a pick today that is no longer on "
+                       "the board and could not be read back from the journal")
+    return out
+
+
 def build(most_likely, sport: str, date: str, now=None) -> dict:
     """The day's pick for one sport, in the shape the board publishes.
 

@@ -1340,6 +1340,75 @@ def top_pick_claims(conn, date: str) -> list:
     return [dict(r) for r in rows]
 
 
+def read_only(path: str | Path | None = None) -> sqlite3.Connection:
+    """A connection for READING the journal, with none of `connect`'s
+    schema work.
+
+    `connect` runs `executescript(SCHEMA)` and a column migration for
+    every table on every call. That is right for a writer and it is pure
+    cost for a reader — and on 2026-09-15 it was worse than cost: the
+    droplet spent a night with cfb_build, pm_build, the MLB results
+    ingest and the NFL box scores all failing on "database is locked",
+    and the answer to a reader that needs one SELECT is not a sixth
+    process taking DDL locks on the same file.
+
+    A missing table raises here rather than being created, which is what
+    a reader wants: every caller already treats a database it cannot
+    read as "no answer", and silently creating an empty `bets` table
+    would turn "the journal is not where you think it is" into "there
+    are no picks today".
+    """
+    from .db import tune as _db_tune
+    path = Path(path if path is not None else DEFAULT_DB)
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    _db_tune(conn)
+    return conn
+
+
+def relock_potd(payload: dict, most_likely=None, conn=None,
+                day: str | None = None) -> dict:
+    """The published Pick of the Day card, re-pointed at today's LOCK.
+
+    THE ONE CALL A BUILD MAKES, immediately before it publishes. See
+    `potd.relock` for what this is for and why the board row is
+    preferred over the journaled one; this is the half that knows where
+    the lock lives.
+
+    NEVER RAISES AND NEVER BLANKS THE CARD. A build must not die because
+    the journal was busy, and a card that vanished on a locked database
+    would be indistinguishable from a day with no pick. On any trouble
+    the payload comes back exactly as it went in — which is the
+    pre-lock behaviour, and is wrong in a way a reader can at least see,
+    rather than wrong in a way nobody can.
+    """
+    from . import potd as _potd
+    own = conn is None
+    try:
+        if own:
+            conn = read_only()
+        today = str(day or datetime.datetime.utcnow().strftime("%Y-%m-%d"))
+        locked = locked_potd_picks(conn, today, strict=True)
+        sport = str((payload or {}).get("sport") or "")
+        entry = locked.get(sport)
+        if not entry:
+            return dict(payload or {})
+        return _potd.relock(payload, most_likely, entry["_key"],
+                            journal_pick={k: v for k, v in entry.items()
+                                          if k != "_key"})
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  Pick of the Day lock not applied ("
+              f"{type(exc).__name__}: {exc}) — the card is tonight's "
+              f"board choice, which may not be what was journaled today")
+        return dict(payload or {})
+    finally:
+        if own and conn is not None:
+            try:
+                conn.close()
+            except Exception:                                 # noqa: BLE001
+                pass
+
+
 def locked_potd_keys(conn, day: str) -> dict:
     """``{sport: (player, market, side, line)}`` — today’s LOCKED picks.
 
@@ -1358,22 +1427,82 @@ def locked_potd_keys(conn, day: str) -> dict:
     fall back to ranking whatever is currently on the boards, which is
     the behaviour the lock exists to prevent.
     """
+    return {sport: pick["_key"]
+            for sport, pick in locked_potd_picks(conn, day).items()}
+
+
+def locked_potd_picks(conn, day: str, strict: bool = False) -> dict:
+    """``{sport: card-shaped dict}`` — today’s LOCKED picks, read back.
+
+    THE OTHER HALF OF THE LOCK. `locked_potd_keys` above answers "is the
+    board still showing what it claimed", which is enough to REFUSE a
+    replacement and not enough to SHOW the claim. On 2026-09-15 the MLB
+    card had drifted to a below-bar lean because the locked pick's price
+    had run out of the band, and nothing could put it back: the key alone
+    is not a card. `potd.relock` needs a row.
+
+    IT IS THE FALLBACK, NOT THE SOURCE. What the journal stores is what a
+    bet needs to settle — side, line, book, price. It does not store
+    which witness stood behind the fair, so a card built from here can
+    say what the pick IS but not how good the reason was, and `relock`
+    prefers the row still on the board for exactly that reason. This is
+    for the day the row genuinely leaves the board.
+
+    `implied_prob` is recovered rather than stored: `log_pick_of_the_day`
+    writes `edge` as model minus implied, so implied is model minus edge.
+    One derivation, and it is that one inverted.
+
+    Returns ``{}`` on any database trouble — same contract as the keys
+    reader above, and for the same reason: a chooser that cannot read the
+    lock must publish nothing rather than rank whatever is on the boards.
+
+    ``strict`` RAISES INSTEAD, and exists because {} means two different
+    things to two different callers. To a chooser, "could not read" and
+    "nothing locked" both correctly mean "do not claim a lock". To
+    `relock_potd` they are opposites: one is a quiet day, the other is a
+    build about to publish a card that contradicts the record, and it has
+    to be able to say which. Same query either way — the contract varies,
+    the derivation does not.
+    """
     out: dict = {}
     try:
         rows = conn.execute(
-            "SELECT sport, player, market, side, line FROM bets "
-            "WHERE category=? AND substr(ts,1,10)=?",
+            "SELECT sport, player, market, side, line, book, odds, "
+            "hit_prob, edge, projection, date, ts FROM bets "
+            "WHERE category=? AND substr(ts,1,10)=? ORDER BY ts",
             (POTD_CATEGORY, str(day or "")[:10])).fetchall()
     except Exception:                                         # noqa: BLE001
+        if strict:
+            raise
         return {}
     for r in rows:
-        sport = str(r["sport"] if hasattr(r, "keys") else r[0])
-        player, market, side, line = (
-            (r["player"], r["market"], r["side"], r["line"])
-            if hasattr(r, "keys") else (r[1], r[2], r[3], r[4]))
-        if sport and sport not in out:
-            out[sport] = (str(player), str(market), str(side).upper(),
-                          None if line is None else float(line))
+        g = (lambda k, i: r[k] if hasattr(r, "keys") else r[i])
+        sport = str(g("sport", 0) or "")
+        if not sport or sport in out:
+            continue           # the FIRST of the day is the day's pick
+        line = g("line", 4)
+        model = g("hit_prob", 7)
+        edge_pts = g("edge", 8)
+        implied = (None if model is None or edge_pts is None
+                   else round(float(model) - float(edge_pts), 4))
+        out[sport] = {
+            "player": str(g("player", 1) or ""),
+            "market": str(g("market", 2) or ""),
+            "side": str(g("side", 3) or "").upper(),
+            "line": None if line is None else float(line),
+            "book": str(g("book", 5) or ""),
+            "odds": None if g("odds", 6) is None else int(g("odds", 6)),
+            "model_prob": None if model is None else float(model),
+            "implied_prob": implied,
+            "projection": g("projection", 9),
+            "game_date": str(g("date", 10) or ""),
+            "locked_at": str(g("ts", 11) or ""),
+            # The tuple the lock is keyed on, carried so the two readers
+            # cannot derive it two different ways.
+            "_key": (str(g("player", 1) or ""), str(g("market", 2) or ""),
+                     str(g("side", 3) or "").upper(),
+                     None if line is None else float(line)),
+        }
     return out
 
 

@@ -1001,6 +1001,20 @@ def main() -> None:
         print(f"Open-bet tracker: {_tn}")
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
+    from engine import ledger as _led
+    # THE DAY'S CLAIM OUTRANKS TONIGHT'S BOARD. `potd.build` above
+    # chose from the rows on the board just now; if this sport already
+    # locked a Pick of the Day today, that one is the day's pick and
+    # this puts it back. Read-only, never fatal, and a no-op until a
+    # lock exists — see `ledger.relock_potd` and `potd.relock`.
+    #
+    # IT RUNS BEFORE PUBLISH BECAUSE THE FILE IS THE CARD. The journal
+    # is opened further down, long after the board has been written,
+    # so a swap made there would never reach the page — which is how
+    # the MLB card spent 2026-09-15 showing a below-bar lean while the
+    # record held a pick made that morning.
+    out["pick_of_the_day"] = _led.relock_potd(
+        out.get("pick_of_the_day") or {}, out.get("most_likely") or [])
     gate.publish(out, p)
     # The light copy the Home page draws first (engine/lightboard),
     # published the same way so the paywall strips the same keys.
