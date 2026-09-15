@@ -79,6 +79,34 @@ def test_a_contract_the_exchange_no_longer_lists_voids_only_when_long_past():
     assert _status(L, "KXMLBGAME-26SEP13KC-YES")[0] == "open"
 
 
+def test_a_dropped_batch_is_not_a_delisted_contract():
+    """The batch pull keeps going when one batch fails, so a ticker the
+    first pull did not return is asked about again on its own. Only a
+    pull that answers and still omits it voids; a pull that raises, or
+    one that turns out to list it after all, voids nothing."""
+    L = _world()
+    _ticket(L, "KXMLBGAME-26AUG16NYY-YES")
+    calls = []
+
+    def flaky(tickers):
+        calls.append(list(tickers))
+        if len(calls) == 1:
+            return []                              # the batch that dropped it
+        raise OSError("second pull failed")
+    out = ledger.settle_predmarket(L, fetch=flaky, today=TODAY)
+    assert len(calls) == 2 and out["voided"] == 0 and "second pull" in out["error"], (calls, out)
+    assert _status(L, "KXMLBGAME-26AUG16NYY-YES")[0] == "open"
+    # Listed on the second look (closed, awaiting settlement): still open.
+    calls.clear()
+
+    def relists(tickers):
+        calls.append(list(tickers))
+        return [] if len(calls) == 1 else [
+            {"ticker": "KXMLBGAME-26AUG16NYY-YES", "status": "closed", "result": ""}]
+    out = ledger.settle_predmarket(L, fetch=relists, today=TODAY)
+    assert out["voided"] == 0 and _status(L, "KXMLBGAME-26AUG16NYY-YES")[0] == "open"
+
+
 def test_a_future_event_is_not_asked_about_and_a_failed_fetch_changes_nothing():
     L = _world()
     _ticket(L, "KXNFLGAME-26SEP20KC-YES", date="2026-09-10")  # event in the future

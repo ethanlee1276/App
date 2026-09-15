@@ -1498,10 +1498,25 @@ def settle_predmarket(conn, fetch=None, today: str | None = None) -> dict:
             cancelled.append(t)
     out["settled"] = resolve_predmarket(conn, results)
     lost_before = (today_d - _dt.timedelta(days=PREDMARKET_LOST_DAYS)).isoformat()
-    for t, when in asked.items():
+    # A CONTRACT THE PULL DID NOT RETURN IS NOT YET A WITHDRAWN ONE. The
+    # batch pull keeps going when one batch fails, so an unseen ticker
+    # can be a dropped batch rather than a delisted market. The old
+    # unseen ones are asked about again, on their own, and only a pull
+    # that answers and still omits them says they are gone. A pull that
+    # raises voids nothing.
+    lost = [t for t, when in asked.items()
+            if t not in seen and t not in cancelled and when and when < lost_before]
+    if lost:
+        try:
+            confirm = {str((m or {}).get("ticker") or "") for m in (fetch(sorted(lost)) or [])}
+        except Exception as exc:                             # noqa: BLE001
+            out["error"] = f"{type(exc).__name__}: {exc}"
+            confirm = set(lost)                              # nothing is voided
+        lost = [t for t in lost if t not in confirm]
+    for t in asked:
         if t in cancelled:
             note = PREDMARKET_CANCELLED_NOTE
-        elif t not in seen and when and when < lost_before:
+        elif t in lost:
             note = PREDMARKET_LOST_NOTE
         else:
             continue
