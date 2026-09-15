@@ -2264,6 +2264,118 @@ function renderDataSource(d) {
    live board, and the page says so — the same probation the long-shot
    watchlist and the Polymarket flow model sit under. Saying it once, at
    the top, beats a footnote nobody reads under a stake size. */
+/* ============================================================
+   PICK OF THE DAY — one bet per sport, at the top of the board.
+
+   Ethan, 2026-09-15: "I want too to a 'Pick of the day' for each sport
+   where we find 1 pick ... We should display the 'pick of the day' at
+   the top of the dashboard for each sport."
+
+   THE CARD NEVER SAYS GUARANTEED. He asked for one, and the engine's
+   own header records why it is not built (engine/potd.py): no bet is,
+   and a page that tells a paying reader otherwise turns one ordinary
+   loss into a broken promise. What it says instead is what is true and
+   is a stronger claim than most sites make — this is the single pick we
+   can most defend today, here is our number, here is the market's, and
+   here is what the last N of these actually did.
+
+   TWO STATES, AND THE DIFFERENCE IS THE POINT. A qualifying pick is the
+   day's pick and is on the record. A day when nothing cleared still
+   shows the best available, labelled, and that one is NOT recorded
+   (`ledger.log_pick_of_the_day` refuses it) — so the record below the
+   card only ever counts picks that qualified.
+   ============================================================ */
+async function renderPickOfTheDay() {
+  const host = document.getElementById("potd-zone");
+  if (!host) return;
+  const d = state.data || {};
+  const got = d.pick_of_the_day;
+  // A board built before this shipped, or a sport that carries none:
+  // write nothing rather than an empty frame. The zone costs no fold
+  // in that state, which is what tests/test_board_order.py was told.
+  if (!got || typeof got !== "object") { host.innerHTML = ""; return; }
+  if (d.pick_of_the_day_error) {
+    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} Pick of the Day hit an error this build:
+      <code>${escapeHtml(String(d.pick_of_the_day_error))}</code></p></div>`;
+    return;
+  }
+  const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
+  const pick = got.pick;
+  if (!pick) {
+    host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
+      <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
+      <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">
+        ${escapeHtml(got.note || "No pick today.")}</div></div>`;
+    return;
+  }
+  const below = String(pick.below_bar || "");
+  const band = got.band || [-190, 190];
+  /* The bet in words. A team market's `player` holds an ABBREVIATION and
+     a game total's holds the journal key, so neither is a name to print
+     — the same rule the Live tab's rows follow. */
+  const isTeam = ["moneyline", "spread", "team_total", "total"].includes(pick.market);
+  const label = pick.market_label || pick.market || "";
+  let text;
+  if (pick.market === "moneyline") text = `${teamName(pick.player || pick.team)} Moneyline`;
+  else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
+  else if (isTeam) text = `${teamName(pick.player || pick.team)} ${escapeHtml(String(pick.side || ""))} ${pick.line} ${escapeHtml(label)}`;
+  else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
+  const ours = pick.model_prob == null ? null : Math.round(pick.model_prob * 100);
+  const theirs = pick.implied_prob == null ? null : Math.round(pick.implied_prob * 100);
+  const pays = pick.payout_units == null ? null : Number(pick.payout_units).toFixed(2);
+  const matchup = pick.opponent
+    ? `${teamName(pick.team)} vs ${teamName(pick.opponent)}` : "";
+  const accent = below ? "var(--warn)" : "var(--brand)";
+  const head = below
+    ? `Pick of the Day · ${escapeHtml(league)} — nothing cleared the bar today`
+    : `Pick of the Day · ${escapeHtml(league)}`;
+  const door = ridingAttrs(pick);
+  host.innerHTML = `
+    <div class="card" style="border-left:3px solid ${accent};margin-bottom:12px">
+      <div class="player">${iconMark("target")}${head}</div>
+      <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
+        <span class="pick-id">${betMark(pick, 30)}</span>
+        <span style="flex:1;min-width:0">
+          <strong style="font-size:var(--fs-lg)">${text}</strong>
+          <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
+            ${american(pick.odds)}${pick.book ? ` at ${escapeHtml(pick.book)}` : ""}${
+              pays ? ` · pays ${pays}u on 1u` : ""}${matchup ? ` · ${matchup}` : ""}</span>
+        </span>
+      </div>
+      ${ours != null ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+        <b style="color:var(--text)">${ours}%</b> our number${
+          theirs != null ? ` · ${theirs}% the market’s` : ""} · one pick a day,
+        priced between ${american(band[0])} and ${american(band[1])}</div>` : ""}
+      ${below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">
+        ${icon('warn')} Shown, not recorded — ${escapeHtml(below)}. Nothing on today’s board
+        cleared the bar this pick is judged by, so it stays off the record below.</div>` : ""}
+      <div id="potd-record" style="margin-top:6px;font-size:var(--fs-xs);color:var(--text-mute)"></div>
+    </div>`;
+  /* THE RECORD, UNDER THE CLAIM. A showcase pick with no scoreboard
+     beside it is the thing every tout site does; this is the half that
+     makes it checkable. Loaded after the card so a slow record file
+     cannot hold up the pick itself. */
+  try {
+    const rec = await loadRecordOnce();
+    // The board may have been left while the record was in flight.
+    if (state.view !== "recommended") return;
+    const line = document.getElementById("potd-record");
+    if (!line) return;
+    const r = ((rec || {}).potd_by_sport || {})[state.sport];
+    if (!r || !r.settled) {
+      line.textContent = "No settled Picks of the Day yet in this league — "
+        + "the record starts with the first one to grade.";
+      return;
+    }
+    const units = Number(r.net_units || 0);
+    line.innerHTML = `${escapeHtml(league)} Picks of the Day: <b>${r.wins}-${r.losses}${
+      r.pushes ? `-${r.pushes}` : ""}</b> · ${units >= 0 ? "+" : MINUS}${
+      Math.abs(units).toFixed(2)}u · ${Math.round((r.win_rate || 0) * 100)}% hit rate
+      <span style="opacity:.8">(${r.settled} settled${r.open ? `, ${r.open} riding` : ""})</span>`;
+  } catch (e) {}
+}
+
 function renderProbation() {
   const host = document.getElementById("probation-note");
   if (!host) return;
@@ -2437,6 +2549,7 @@ function renderAll() {
     renderDataSource(d);
     document.getElementById("slate-date").textContent = slateDateLabel(d);
   }
+  renderPickOfTheDay();
   renderProbation();
   renderAdvisories();
   renderTalent();
@@ -13999,6 +14112,70 @@ function recordVerdictHTML(src, scopeLabel) {
   </section>`;
 }
 
+/* THE PICK OF THE DAY'S OWN SPOT ON THE RECORD PAGE.
+
+   Ethan, 2026-09-15: "We will record the 'Pick of the day' record on the
+   record page correlated too the sport, and it will have its own spot on
+   the record page so we can see how it's doing."
+
+   ITS OWN SECTION RATHER THAN A ROW IN THE BOOK TABLE, and above the
+   others, because it is the claim the top of every board makes. A
+   showcase pick whose record is three scrolls below it, mixed into a
+   table, is a claim nobody checks.
+
+   ONE ROW A DAY PER SPORT AT A FLAT UNIT, so W-L and units both read as
+   a record rather than as a rate over a sample of unknown size. The
+   count is stated anyway: a 3-1 is not evidence of anything and the
+   section says so until it has enough to be.
+
+   Scoped renders that sport's own cut (`potd_by_sport`); "All bets"
+   renders the pooled one. A league with nothing in this book yet is an
+   absent entry and draws nothing, the same rule the paper book follows. */
+const POTD_MIN_N = 20;
+
+function recPotdSection(rep, scope, recent) {
+  if (!rep || (!rep.settled && !rep.open)) return "";
+  const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
+  const n = rep.settled || 0;
+  const units = Number(rep.net_units || 0);
+  const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
+  const line = n
+    ? `<b style="font-size:var(--fs-lg)">${rep.wins}-${rep.losses}${
+        rep.pushes ? `-${rep.pushes}` : ""}</b>
+       <span style="color:${units >= 0 ? "var(--good)" : "var(--bad)"};font-weight:700">
+         ${units >= 0 ? "+" : MINUS}${Math.abs(units).toFixed(2)}u</span>
+       <span style="color:var(--text-mute)">· ${Math.round((rep.win_rate || 0) * 100)}% hit rate
+       · ${n} settled${rep.open ? `, ${rep.open} riding` : ""}</span>`
+    : `<span style="color:var(--text-mute)">Nothing settled yet${
+        rep.open ? ` — ${plural(rep.open, "pick")} riding` : ""}.</span>`;
+  return `
+    <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Pick of the Day
+      <span class="sub">— one pick per sport per day, priced near even money, flat staked.
+        ${escapeHtml(where)}</span></div>
+    <div class="card" style="border-left:3px solid var(--brand)">
+      <div>${line}</div>
+      ${n && n < POTD_MIN_N ? `<div style="margin-top:5px;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${plural(n, "settled pick")} is too few to judge a hit rate on. This line is the
+        record so far, not a claim about what it will do — it needs about ${POTD_MIN_N}
+        before the number means much.</div>` : ""}
+      ${rows.length ? `<div style="margin-top:8px">
+        ${rows.map((r) => `<div style="display:flex;gap:8px;align-items:baseline;
+             padding:4px 0;border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
+          <span style="width:64px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(String(r.date || "").slice(5))}</span>
+          <span style="flex:1;min-width:0">${escapeHtml(r.player || "")}
+            <span style="color:var(--text-mute)">${escapeHtml(String(r.market || ""))}
+              ${r.line != null ? escapeHtml(String(r.line)) : ""} · ${american(r.odds)}</span></span>
+          <span style="font-weight:700;color:${
+            r.status === "won" ? "var(--good)" : r.status === "lost" ? "var(--bad)" : "var(--text-mute)"}">
+            ${escapeHtml(String(r.status || "").toUpperCase())}</span>
+        </div>`).join("")}</div>` : ""}
+      <p style="margin:8px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
+        Flat one unit, no dollar exposure — this book is a published claim being scored,
+        kept apart from the edge board’s money. A day when nothing clears the bar shows the
+        best available on the board and records nothing, so every row here qualified.</p>
+    </div>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -14162,6 +14339,8 @@ async function renderRecord() {
      An absent entry (a league with nothing in this book yet) renders
      nothing, exactly as before. */
   const receipts = calendar
+    + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
+                     scope, d.potd_recent || [])
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)
     + verdict + unstaked + small

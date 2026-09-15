@@ -162,7 +162,21 @@ def test_nothing_new_slipped_in_above_the_picks():
                # extra height, and only ever beside a recap — a
                # standalone Tonight strip was deliberately not built,
                # because that fact is the board directly below.
-               "daycard-zone"}
+               "daycard-zone",
+               # potd-zone (2026-09-15, Ethan: "We should display the
+               # 'pick of the day' at the top of the dashboard for each
+               # sport"). ~90px when a board carries one, and zero on a
+               # sport with no games — renderPickOfTheDay writes nothing
+               # when the board has no `pick_of_the_day` at all.
+               #
+               # THE FOLD COST IS SPENT ON PICKS, which is the only
+               # argument this list accepts. It is one bet, the single
+               # most defensible one the boards produced that day, so
+               # the thing the page exists for moved UP rather than
+               # down — the same case #top-picks was moved on in
+               # August, and the reason that precedent is quoted here
+               # rather than the rule being bent.
+               "potd-zone"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

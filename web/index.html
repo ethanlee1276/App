@@ -678,6 +678,17 @@
            from the daily-rhythm plan. Filled from the feed's
            settle_recap event; empty div costs nothing. -->
       <div id="daycard-zone"></div>
+      <!-- PICK OF THE DAY (2026-09-15). One pick per sport per day, in
+           the -190/+190 band, above everything else on the board because
+           that is what Ethan asked for: "We should display the 'pick of
+           the day' at the top of the dashboard for each sport." It is
+           itself a pick — the single most defensible one we have that
+           day — so this is picks moving closer to the top of a page
+           about picks, the same argument #top-picks was moved up on.
+           Empty div until a board carries one; see renderPickOfTheDay
+           and tests/test_board_order.py, which had to be told on
+           purpose. -->
+      <div id="potd-zone"></div>
       <div id="talent-note"></div>
 
       <!-- VENUES FIRST, by Ethan's call (2026-08-08). This block sat below
