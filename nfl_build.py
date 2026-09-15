@@ -705,10 +705,10 @@ def main() -> None:
             try:
                 from engine import lineledger, db as _hdb
                 _hc = _hdb.connect()
-                lineledger.record(_hc, "nfl", slate.games)
+                print(lineledger.record_note(_hc, "nfl", slate.games))
                 _hc.close()
-            except Exception:
-                pass
+            except Exception as _exc:                        # noqa: BLE001
+                print(f"  ⚠️  NFL line ledger skipped: {_exc}")
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
@@ -822,10 +822,10 @@ def main() -> None:
                 try:
                     from engine import lineledger, db as _bdb
                     _bc = _bdb.connect()
-                    lineledger.record(_bc, "nfl", slate.games)
+                    print(lineledger.record_note(_bc, "nfl", slate.games))
                     _bc.close()
-                except Exception:                            # noqa: BLE001
-                    pass
+                except Exception as _exc:                    # noqa: BLE001
+                    print(f"  ⚠️  NFL line ledger skipped: {_exc}")
         except oddsapi.OddsAPIError as exc:
             odds_status["board_error"] = str(exc)
             print(f"\n⚠️  Game-lines refresh unavailable — keeping the "

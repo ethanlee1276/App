@@ -1634,11 +1634,12 @@ def main() -> None:
                     row["sharp_home_ml"], row["sharp_away_ml"] = sh["moneyline"]
                 _rows.append(row)
             _lc = _lhdb.connect()
-            _n_lines = lineledger.record(_lc, "cfb", _rows)
+            # The shared note, not a per-sport sentence: CFB was the only
+            # build that printed anything here, and it still could not say
+            # whether the SHARP pair had landed — which is the only number
+            # the anchor measurement needs (engine/lineledger.record_note).
+            print(lineledger.record_note(_lc, "cfb", _rows))
             _lc.close()
-            if _n_lines:
-                print(f"  Line ledger: {_n_lines} CFB game-line row(s) stored "
-                      f"(free — closes for CLV).")
         except Exception as _exc:                            # noqa: BLE001
             print(f"  ⚠️  CFB line ledger skipped: {_exc}")
 

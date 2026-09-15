@@ -193,7 +193,10 @@ def test_a_priceless_game_writes_nothing():
 
 def test_the_build_keeps_the_lines_it_already_paid_for():
     src = _read("cfb_build.py")
-    assert 'lineledger.record(_lc, "cfb", _rows)' in src, \
+    # Through `record_note` since 2026-09-15 — the bare call returns 0
+    # both when the write threw and when there was nothing to write, so
+    # the build could not say which (engine/lineledger.record_note).
+    assert 'lineledger.record_note(_lc, "cfb", _rows)' in src, \
         "CFB game bets settle with no closing line again"
     assert "cfbteams.remember(learned)" in src, \
         "the build stopped writing down the names it resolved"

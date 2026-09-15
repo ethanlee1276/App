@@ -162,7 +162,10 @@ def test_college_hands_over_the_pair_its_own_pull_parsed():
     assert 'sh = e.get("sharp") or {}' in block, block[:400]
     for key in ("sharp_spread", "sharp_total", "sharp_home_ml"):
         assert f'row["{key}"]' in block, key
-    assert 'lineledger.record(_lc, "cfb", _rows)' in src
+    # Through `record_note` since 2026-09-15, not bare `record`: the bare
+    # form returns 0 for "the write threw" and 0 for "nothing to write",
+    # and the build cannot print which. Every build now takes the note.
+    assert 'lineledger.record_note(_lc, "cfb", _rows)' in src
 
 
 if __name__ == "__main__":

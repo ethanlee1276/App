@@ -285,6 +285,21 @@ class SharpAnchorReport:
     max_ev: float = 0.15
     games_seen: int = 0        # completed games walked over
     games_priced: int = 0      # had BOTH a sharp pair and a soft best price
+    #: THE FUNNEL, because "0 games priced" has three different causes and
+    #: the report used to guess at one of them. It printed "harvest
+    #: Pinnacle closes first" whether the sharp rows were missing, the
+    #: soft rows were missing, or BOTH were on disk and the keys simply
+    #: never joined — and that third case is the one this repository has
+    #: already been bitten by (DROPLET_CHECKS, "the keying bug this tool
+    #: shipped with, and what it cost"). A wrong diagnosis here is
+    #: expensive: it sends someone to buy a historical harvest they
+    #: already own.
+    sharp_rows: int = 0        # (date, home, away) keys loaded for the sharp book
+    soft_rows: int = 0         # ... and for the shopped field
+    matched_sharp: int = 0     # completed games that found a sharp pair
+    matched_soft: int = 0      # ... and a soft price
+    sharp_key: str = ""        # one real key from each side, to eyeball
+    soft_key: str = ""         # when both exist and neither matches
     n_bets: int = 0
     wins: int = 0
     staked: float = 0.0
@@ -306,9 +321,12 @@ class SharpAnchorReport:
             f"{self.games_priced} with both a {self.sharp} pair and a soft price",
         ]
         if not self.games_priced:
-            lines.append(f"  No games priced — harvest {self.sharp} closes first:")
-            lines.append(f"    python3 harvest_odds.py {self.sport} --from <start> --to <end> "
-                         "--markets h2h --books pinnacle --budget 2500")
+            lines.append(f"  Stored      {self.sharp_rows} {self.sharp} game-key(s), "
+                         f"{self.soft_rows} shopped game-key(s)")
+            lines.append(f"  Matched     {self.matched_sharp} of {self.games_seen} "
+                         f"completed games found a {self.sharp} pair, "
+                         f"{self.matched_soft} found a soft price")
+            lines.append("  " + self.diagnosis())
             return "\n".join(lines)
         if self.suspicious:
             lines.append(
@@ -339,6 +357,57 @@ class SharpAnchorReport:
         return "\n".join(lines)
 
 
+    def diagnosis(self) -> str:
+        """Why nothing was priced, named rather than assumed.
+
+        Ordered so the CHEAPEST remedy is only recommended when it is
+        actually the problem. A paid historical harvest is the expensive
+        answer and was the only one this report ever gave.
+        """
+        if not self.sharp_rows and not self.soft_rows:
+            # THE ONE CASE WHERE BUYING IS ACTUALLY AN ANSWER, and it is
+            # half an answer. Two different gaps hide behind one empty
+            # table: nothing is being collected GOING FORWARD (free to
+            # fix, in the build log) and nothing exists for SEASONS
+            # ALREADY PLAYED (only a paid harvest can fill that). The
+            # first draft of this rewrite deleted the harvest hint
+            # wholesale and lost the second half — caught by
+            # tests/test_cfb_sharp_replay.py, which was right to hold it.
+            return (f"NOTHING STORED AT ALL for {self.sport} moneylines. "
+                    f"Two gaps, and they need different fixes. Going "
+                    f"forward: check the build log for the 'line ledger' "
+                    f"line (engine/lineledger.record_note) — if it says "
+                    f"FAILED that is free to fix and no purchase helps. "
+                    f"For seasons already played, only a harvest fills it:"
+                    f"\n    python3 harvest_odds.py {self.sport} "
+                    f"--from <start> --to <end> --markets h2h "
+                    f"--books pinnacle --budget 2500")
+        if not self.sharp_rows:
+            return (f"No {self.sharp} rows stored, {self.soft_rows} shopped "
+                    f"ones — the sharp pair is not reaching the games, so "
+                    f"`sharp_home_ml`/`sharp_away_ml` are never set. That is "
+                    f"a parse bug, not a missing purchase: the build already "
+                    f"asks for this book. Buying history would paper over it.")
+        if not self.soft_rows:
+            return (f"{self.sharp_rows} {self.sharp} rows and no shopped ones "
+                    f"— there is a fair to price against and no price to take.")
+        if not self.matched_sharp and not self.matched_soft:
+            return (f"Both books have rows and NEITHER joins to a completed "
+                    f"game — this is a keying problem, not a data one. "
+                    f"A stored key looks like {self.sharp_key!r}; the walk "
+                    f"builds its own from (season, period, date). Reconcile "
+                    f"those before anything else.")
+        if not (self.matched_sharp and self.matched_soft):
+            missing = self.sharp if not self.matched_sharp else "shopped"
+            return (f"Games join, but never to a {missing} price on the same "
+                    f"day — the two books are being harvested at different "
+                    f"times, or one stopped. The per-day query in "
+                    f"docs/WHEN_YOU_ARE_HOME.md (block PIN) says which.")
+        return ("Games matched both books, but never the same game — the "
+                "overlap is empty. More days of harvest is the answer here, "
+                "and only here.")
+
+
 def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
                           min_ev: float = 0.015,
                           max_ev: float = 0.15) -> SharpAnchorReport:
@@ -356,6 +425,13 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         "ORDER BY season, period", (sport,)).fetchall()
 
     r = SharpAnchorReport(sport=sport, sharp=sharp, min_ev=min_ev, max_ev=max_ev)
+    # The funnel's first two rungs, read off what was loaded rather than
+    # inferred from the empty result — see `SharpAnchorReport.diagnosis`.
+    r.sharp_rows, r.soft_rows = len(sharp_closes), len(soft_closes)
+    if sharp_closes:
+        r.sharp_key = repr(next(iter(sharp_closes)))
+    if soft_closes:
+        r.soft_key = repr(next(iter(soft_closes)))
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
@@ -366,6 +442,13 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
                        date=row["date"]) or {}
         soft = close_for(soft_closes, {}, row["season"], date, home, away,
                          date=row["date"]) or {}
+        # Counted SEPARATELY and before the joint test, so a report with
+        # nothing priced can say which of the two sides went missing —
+        # the whole point of the funnel.
+        if home in sp and away in sp:
+            r.matched_sharp += 1
+        if home in soft or away in soft:
+            r.matched_soft += 1
         if home not in sp or away not in sp or (home not in soft and away not in soft):
             continue
         r.games_priced += 1

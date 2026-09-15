@@ -156,12 +156,63 @@ def record(conn, sport: str, games, now: _dt.datetime | None = None) -> int:
     Never raises into a build: a betting board that fails because its
     telemetry could not write is a board that goes dark for the least
     important reason available.
+
+    PREFER `record_note` IN A BUILD. This returns 0 both when there was
+    nothing to write and when the write threw, and those are opposite
+    facts — see that function's docstring for what that cost.
     """
+    return _write(conn, sport, games, now)[0]
+
+
+def _write(conn, sport: str, games, now=None) -> tuple:
+    """``(rows_stored, books, error)`` — the whole truth, once, so
+    `record` and `record_note` can never disagree about what happened."""
     try:
         from . import db
         rows = rows_for_games(sport, games, now)
         if not rows:
-            return 0
-        return db.upsert_odds_history(conn, rows)
-    except Exception:
-        return 0
+            return 0, {}, ""
+        books: dict = {}
+        for r in rows:
+            books[r["book"]] = books.get(r["book"], 0) + 1
+        return db.upsert_odds_history(conn, rows), books, ""
+    except Exception as exc:                                  # noqa: BLE001
+        return 0, {}, f"{type(exc).__name__}: {exc}"
+
+
+def record_note(conn, sport: str, games, now: _dt.datetime | None = None) -> str:
+    """`record`, plus the sentence the build prints. Never raises.
+
+    THE HOLE THIS CLOSES, and it is the one this repository keeps
+    digging. `record` returns 0 when the write threw and 0 when there
+    was simply nothing to write, and two of the three builds then wrapped
+    the call in `except Exception: pass` and printed nothing at all — a
+    DOUBLE silence. A harvest broken on the day it shipped would have
+    looked exactly like a quiet Tuesday for as long as nobody went
+    looking, which is the same failure shape as the rankings section that
+    returned "" for a month (tests/test_rankings_never_silent.py) and the
+    Live tab that could not tell "nothing on" from "the feed failed".
+    Ethan, 2026-09-15, on the sharp closes this table is supposed to be
+    collecting: "is there anything else you can work on for this". This.
+
+    THE SHARP BOOK IS NAMED SEPARATELY on purpose. Rows stored is not the
+    number that matters — `SHARP_BOOK` rows are, because the whole
+    sharp-anchor measurement is the comparison between those and the
+    shopped field (engine/gamebacktest.backtest_sharp_anchor). A build
+    writing 40 rows of which zero are Pinnacle's is a build that looks
+    healthy and collects nothing we can measure with.
+    """
+    n, books, error = _write(conn, sport, games, now)
+    league = sport.upper()
+    if error:
+        return f"  ⚠️  {league} line ledger FAILED — nothing stored: {error}"
+    if not n:
+        return (f"  {league} line ledger: nothing to store — no game on the "
+                f"slate carried a book price")
+    sharp = books.get(SHARP_BOOK, 0)
+    shopped = books.get(BEST_BOOK, 0)
+    tail = (f"{sharp} from {SHARP_BOOK}" if sharp else
+            f"NONE from {SHARP_BOOK} — the sharp pair is not reaching the "
+            f"games, so the anchor cannot be measured")
+    return (f"  {league} line ledger: {n} row(s) stored free — "
+            f"{shopped} shopped, {tail}.")

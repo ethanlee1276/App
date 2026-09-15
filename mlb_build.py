@@ -160,10 +160,10 @@ def main() -> None:
     try:
         from engine import lineledger, db as _hdb
         _hc = _hdb.connect()
-        lineledger.record(_hc, "mlb", slate.games)
+        print(lineledger.record_note(_hc, "mlb", slate.games))
         _hc.close()
-    except Exception:
-        pass
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  MLB line ledger skipped: {_exc}")
     _stg.stop(_tk)
 
     # WHEN the book prices on this board were last pulled, and when the

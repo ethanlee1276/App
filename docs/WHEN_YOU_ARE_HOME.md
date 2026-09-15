@@ -15,6 +15,54 @@ as they are done.
 
 ---
 
+## PIN. Does the Pinnacle tape exist? (read-only, 10 seconds)
+
+Ethan, 2026-09-15, approving the sharp-anchor work: *"I say start on the
+pinnacle money line closes if you think that's gonna make us more money
+in the long-term."*
+
+**The harvest may already be running.** `engine/lineledger.rows_for_games`
+writes `book="Pinnacle"` moneyline, spread and total rows on every build,
+and all three builds call `lineledger.record` — NFL (nfl_build.py:708,
+:825), CFB (cfb_build.py:1636) and MLB (mlb_build.py:163). What I checked
+before saying otherwise was the DEV copy on the container, which is not
+this box. So this is a measurement, not a build task, and it decides
+six weeks of work either way.
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/history.db "
+SELECT sport, book, market, COUNT(*) rows,
+       COUNT(DISTINCT event_id) games,
+       MIN(substr(taken_at,1,10)) first_day,
+       MAX(substr(taken_at,1,10)) last_day
+FROM odds_history
+GROUP BY sport, book, market
+ORDER BY sport, book, market;"
+```
+
+**What each answer means, so the next step is decided before you paste:**
+
+| what comes back | what it means | what happens next |
+|---|---|---|
+| `Pinnacle` + `moneyline` rows over several days | the harvest has been running all along | `backtest_sharp_anchor` is answerable NOW, not in six weeks — I run it the same night |
+| only `book = best` | the sharp pair never reaches the games | a bug with an address, not a new feature — fixed in the parse, not the schema |
+| almost nothing, any book | `lineledger.record` is failing silently | the `except Exception: return 0` hole (see below); the fix is already written |
+
+If it is the third one, this second block says WHICH sport stopped and
+when, which the first block cannot:
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/history.db "
+SELECT substr(taken_at,1,10) day, sport, book, COUNT(*) rows
+FROM odds_history
+WHERE taken_at >= date('now','-14 days')
+GROUP BY day, sport, book ORDER BY day DESC, sport;"
+```
+
+A day with a board but no rows is the silent failure caught in the act.
+
+---
+
 ## 0. THE SITE IS DOWN — run this first, before anything else
 
 Ethan, 2026-09-09, with a photo: *"the site crashed. It won't load
