@@ -58,6 +58,21 @@ def test_it_is_not_gated_on_a_card_it_cannot_have_yet():
     assert "_slate_games" not in fn
 
 
+def test_no_card_on_the_free_list_means_no_paid_pull():
+    """Between cards the events list is empty and a paid pull buys
+    nothing — which read as "the API never answered" and paused every
+    other lane (2026-09-14). The card is read off the FREE events feed
+    before the budgeter is asked; that is not the circular games>0 gate,
+    which reads the priced output."""
+    fn = _fn("refresh_ufc")
+    assert "_ufc_card_pending(quiet) and _odds_affordable(" in fn
+    gate = _fn("_ufc_card_pending")
+    assert "list_events(" in gate and 'sport="ufc"' in gate
+    assert "select_card(" in gate
+    assert "return True" in gate, "an unknown card must not silence the pull"
+    assert "_slate_games" not in gate and "UFC_OUT" not in gate
+
+
 def test_it_matches_the_nba_rotation_it_was_modelled_on():
     ufc, nba = _fn("refresh_ufc"), _fn("refresh_nba")
     for piece in ('"--odds"', '"--cached-odds"', "_odds_affordable",

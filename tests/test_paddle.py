@@ -163,7 +163,10 @@ def test_the_unverified_scheme_is_flagged_loudly():
 def _sub_payload(kind, status="active", **kw):
     data = {"id": "sub_abc", "customer_id": "ctm_abc", "status": status,
             "custom_data": {"user_id": 7},
-            "current_billing_period": {"ends_at": "2026-09-15T00:00:00Z"}}
+            # A period end in the future relative to the run: a fixed date
+            # here expired the morning it arrived (2026-09-15).
+            "current_billing_period": {"ends_at": time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 30 * 86400))}}
     data.update(kw)
     return {"event_type": kind, "data": data}
 

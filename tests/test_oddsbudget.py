@@ -270,6 +270,45 @@ def test_failed_paid_pull_does_not_burn_the_sparse_slot():
     assert ok is True
 
 
+def test_one_lanes_failed_pull_pauses_that_lane_only():
+    """Droplet, 2026-09-14: the UFC lane was authorised every cycle, found
+    no card, bought nothing, and the quota stamp did not move — so the
+    single "never reached the API" flag paused NFL, college and baseball
+    five minutes at a time, all day. A lane's failure is that lane's
+    cooldown; a landed pull on that lane clears it; a caller pacing
+    without a sport keeps the old global flag."""
+    from engine.oddsbudget import SPARSE_INTERVAL, FAILED_PULL_RETRY_S, paid_pull_result
+    p = _tmp()
+    t0 = 1_000_000.0
+    save(BudgetState(remaining=1327, last_refresh_ts=t0,
+                     sport_last_refresh={"ufc": t0, "nfl": t0},
+                     last_seen_iso="2026-09-14T12:00:00"), p)
+    now = t0 + SPARSE_INTERVAL + 3600
+    assert paid_pull_result("2026-09-14T12:00:00", path=p, now=now, sport="ufc") is False
+    ok, reason = should_refresh(16, now=now + 60, path=p, sport="ufc")
+    assert ok is False and "never reached" in reason
+    ok, reason = should_refresh(16, now=now + 60, path=p, sport="nfl")
+    assert "never reached" not in reason, "UFC's failed pull paused the NFL lane"
+    st = load(p)
+    assert st.retry_after_ts == 0.0 and "ufc" in st.retry_after
+    # The lane's own landed pull clears its own flag.
+    record_quota("1191", "18809", p)
+    assert paid_pull_result("2026-09-14T12:00:00", path=p,
+                            now=now + 120, sport="ufc") is True
+    assert "ufc" not in load(p).retry_after
+    # A sport-less caller still arms and honours the global flag.
+    p2 = _tmp()
+    save(BudgetState(remaining=1327, last_refresh_ts=t0, last_seen_iso="x"), p2)
+    assert paid_pull_result("x", path=p2, now=now) is False
+    ok, reason = should_refresh(16, now=now + 60, path=p2)
+    assert ok is False and "never reached" in reason
+    assert load(p2).retry_after_ts == now + FAILED_PULL_RETRY_S
+    # A stale GLOBAL flag — the shape every box carries from before this
+    # change — does not hold a sport lane either.
+    ok, reason = should_refresh(16, now=now + 60, path=p2, sport="nfl")
+    assert "never reached" not in reason
+
+
 def test_landed_paid_pull_stamps_the_clock():
     """When the quota stamp advanced, the pull really happened — the clock
     stamps and ordinary rate limiting resumes."""

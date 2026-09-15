@@ -1138,6 +1138,22 @@ def _auto_weighins(quiet: bool = False) -> None:
             print(f"  UFC  weigh-ins: auto-pull unavailable ({exc})")
 
 
+def _ufc_card_pending(quiet: bool = False) -> bool:
+    """Is there a card inside `select_card`'s window on the FREE events
+    list? Unknown (no key, feed down) reads as yes, so the paid pull is
+    still offered and the budgeter's own rules decide."""
+    try:
+        from engine.sources import oddsapi
+        from ufc_build import select_card
+        events = oddsapi.list_events(oddsapi.get_api_key(), sport="ufc")
+    except Exception:                                    # noqa: BLE001
+        return True
+    label, card = select_card(events)
+    if not card and not quiet:
+        print("  UFC  no card inside the window — nothing to price, no paid pull")
+    return bool(card)
+
+
 def refresh_ufc(quiet: bool = False) -> bool:
     """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
 
@@ -1155,7 +1171,14 @@ def refresh_ufc(quiet: bool = False) -> bool:
     _auto_dossiers(quiet)
     _auto_weighins(quiet)
     args = ["ufc_build.py", "--out", UFC_OUT]
-    spend = _odds_affordable(UFC_OUT, quiet, sport="ufc")
+    # NOTHING TO BUY, NOTHING TO SPEND. The events list is free and is
+    # where the card comes from; between cards it is empty, and a paid
+    # pull authorised against an empty list buys nothing, moves no quota
+    # stamp, and read as "the API never answered" — which armed the
+    # cooldown every cycle (droplet, 2026-09-14). This is not the circular
+    # games>0 gate the docstring warns about: the card is read off the
+    # free feed, not off the priced output.
+    spend = _ufc_card_pending(quiet) and _odds_affordable(UFC_OUT, quiet, sport="ufc")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")

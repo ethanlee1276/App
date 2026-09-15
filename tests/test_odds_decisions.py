@@ -69,13 +69,13 @@ def _state_file(d, seen="2026-09-05T18:00:00"):
 def test_a_pull_that_bought_nothing_leaves_the_clock_and_touchpoint_alone():
     with tempfile.TemporaryDirectory() as d:
         p = _state_file(d)
-        st = B.load(p); st.sport_last_refresh["cfb"] = 100.0; st.retry_after_ts = 999.0; B.save(st, p)
+        st = B.load(p); st.sport_last_refresh["cfb"] = 100.0; st.retry_after["cfb"] = 999.0; B.save(st, p)
         landed = B.paid_pull_result("2026-09-05T17:00:00", path=p, now=5000.0, sport="cfb", bought_enough=False)
         assert landed is True, "the quota stamp did move — that is still 'landed'"
         st = B.load(p)
         assert st.sport_ts("cfb") == 100.0, "the clock the next full pull waits on is untouched"
         assert st.last_refresh_ts != 5000.0
-        assert st.retry_after_ts == 0.0, "but a failed-pull cooldown is not set either — nothing failed"
+        assert st.retry_ts("cfb") == 0.0, "but a failed-pull cooldown is not set either — nothing failed"
         assert not st.sport_touchpoint.get("cfb"), "and the touchpoint is not claimed"
 
 
@@ -95,7 +95,10 @@ def test_a_pull_that_never_landed_still_sets_the_retry_cooldown():
     with tempfile.TemporaryDirectory() as d:
         p = _state_file(d, seen="same")
         assert B.paid_pull_result("same", path=p, now=5000.0, sport="cfb", bought_enough=False) is False
-        assert B.load(p).retry_after_ts == 5000.0 + B.FAILED_PULL_RETRY_S
+        # The lane's own cooldown, not the global one (2026-09-14: the
+        # UFC lane's empty pulls were pausing every other sport).
+        assert B.load(p).retry_ts("cfb") == 5000.0 + B.FAILED_PULL_RETRY_S
+        assert B.load(p).retry_after_ts == 0.0
 
 
 # --- the launcher --------------------------------------------------------------

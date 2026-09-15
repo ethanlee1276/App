@@ -113,6 +113,15 @@ class BudgetState:
     # blip, host down): a short cooldown before retrying, instead of
     # counting a pull that spent nothing as the day's spend.
     retry_after_ts: float = 0.0
+    # THE SAME COOLDOWN, PER SPORT. The single flag above paused EVERY
+    # lane: the UFC lane was authorised each cycle, found no card in the
+    # events list, bought nothing, and the quota stamp did not move — so
+    # "never reached the API" was armed for five minutes, every five
+    # minutes, and NFL, college and baseball were each told to wait on a
+    # fight that was not happening (droplet, 2026-09-14). A lane's failed
+    # attempt now pauses that lane; the field above is kept for callers
+    # that pace without a sport.
+    retry_after: dict = field(default_factory=dict)
     # Per-sport refresh stamps. The single global clock starved NFL: the
     # launcher checks MLB first each cycle, MLB's pull reset the clock, and
     # NFL's "waited" never grew past a cycle — so once football starts, the
@@ -126,6 +135,12 @@ class BudgetState:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def retry_ts(self, sport: str | None) -> float:
+        """When this lane may try a paid pull again (0 = now)."""
+        if sport is None:
+            return self.retry_after_ts
+        return float(self.retry_after.get(sport, 0.0))
 
     def sport_ts(self, sport: str | None) -> float:
         """The pacing stamp for one sport (global clock when sport unknown)."""
@@ -163,6 +178,9 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             last_refresh_ts=legacy,
             last_seen_iso=str(raw.get("last_seen_iso", "")),
             retry_after_ts=float(raw.get("retry_after_ts", 0.0)),
+            retry_after={str(k): float(v) for k, v in
+                         (raw.get("retry_after") or {}).items()
+                         if isinstance(v, (int, float))},
             sport_last_refresh=per_sport,
             sport_touchpoint=touch,
             keys={str(k): dict(v) for k, v in (raw.get("keys") or {}).items()
@@ -637,7 +655,10 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
     state = load(path)
     landed = bool(state.last_seen_iso) and state.last_seen_iso != before_seen_iso
     if landed:
-        state.retry_after_ts = 0.0
+        if sport:
+            state.retry_after.pop(sport, None)
+        else:
+            state.retry_after_ts = 0.0
         # A PULL THAT BOUGHT NOTHING DOES NOT RESET THE CLOCK. "Landed"
         # is the quota stamp moving, and the cheap board request inside
         # the same build moves it — so college's 6pm "full pull" on
@@ -659,6 +680,8 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
         # unclaimed window re-authorises every MIN_REFRESH_GAP for the whole
         # grace period, which is eight paid pulls where one was intended.
         _claim_touchpoint(state, sport, now)
+    elif sport:
+        state.retry_after[sport] = now + FAILED_PULL_RETRY_S
     else:
         state.retry_after_ts = now + FAILED_PULL_RETRY_S
     save(state, path)
@@ -1097,9 +1120,10 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     """
     now = now if now is not None else time.time()
     state = load(path)
-    if state.retry_after_ts and now < state.retry_after_ts:
+    retry_at = state.retry_ts(sport)
+    if retry_at and now < retry_at:
         return False, (f"last paid pull never reached the odds API — "
-                       f"retrying ~{_fmt_clock(state.retry_after_ts)}")
+                       f"retrying ~{_fmt_clock(retry_at)}")
     window = prime_window(kickoffs, now)
     # THE CLOSE, and whether this ask is the one pull that buys it. Every
     # bound is checked here so the three refusals below can each ask one
