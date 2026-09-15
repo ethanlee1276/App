@@ -1006,30 +1006,10 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             continue
         player = r["player"]
         if r.get("kind") == "game" or market in GAME_MARKETS:
-            # A GAME ROW, in the shapes `log_recommendations` writes for
-            # the same markets, so `_game_actual` grades it with no new
-            # settle path: a moneyline is the team at OVER 0.5, a total
-            # the matchup key at its line, a spread the team at the
-            # NEGATED number, a team total the team at its number. The
-            # board's `player` is the pick label ("KC ML"), which reads
-            # well on a page and matches nothing in the games table.
-            bt = r.get("bet_type") or market
-            if bt == "moneyline":
-                player, side, line = r.get("team") or "", "OVER", 0.5
-            elif bt == "total":
-                player = (r.get("matchup") or "").replace(" ", "")
-                side, line = str(r.get("side") or "OVER").upper(), r.get("line")
-            elif bt == "spread":
-                player, side = r.get("team") or "", "OVER"
-                line = None if r.get("line") is None else -float(r["line"])
-            elif bt == "team_total":
-                player = r.get("team") or ""
-                side, line = str(r.get("side") or "OVER").upper(), r.get("line")
-            else:
+            keys = game_row_keys(r, market)
+            if keys is None:
                 continue
-            if not player or line is None:
-                continue
-            market, line = bt, float(line)
+            player, market, side, line = keys
         else:
             # NORMALISED SO IT CAN ACTUALLY GRADE, and the first cut of
             # this could not. `_grade_side_aware` computes
@@ -1123,6 +1103,147 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         n += cur.rowcount or 0
     conn.commit()
     return n
+
+
+#: The Pick of the Day's own book. Kept apart from every other category
+#: for the reason the likelihood book is: it answers a different
+#: question, and a reader who cannot tell two records apart on the page
+#: has the problem the journal would have had without this column.
+POTD_CATEGORY = "potd"
+
+#: How many settled Picks of the Day the Record page gets as receipts.
+#: One a day per sport, so this is about a fortnight across six books —
+#: enough to read the run, short of a wall of names.
+POTD_RECENT_LIMIT = 40
+
+#: A FLAT UNIT, AND NO DOLLARS. The unit is 1.0 rather than the 0.1 the
+#: measurement books use, because this book has exactly one row a day
+#: per sport and its record is meant to read as a record — "11-5, +2.4u"
+#: — rather than as a tenth-scale sample. The dollars are zero because
+#: it is still a published claim being scored, not the money book: the
+#: edge board owns dollar exposure and mixing the two would put a
+#: showcase pick inside the bankroll's own curve.
+POTD_STAKE = 1.0
+
+
+def log_pick_of_the_day(conn, payload: dict) -> int:
+    """Journal one Pick of the Day. Returns 1 if a row was written.
+
+    Ethan, 2026-09-15: "We will record the 'Pick of the day' record on
+    the record page correlated too the sport, and it will have its own
+    spot on the record page so we can see how it's doing."
+
+    THREE REFUSALS, AND EACH IS THE FEATURE RATHER THAN A GUARD.
+
+    A ROW THE SELECTOR ITSELF REFUSED IS NEVER RECORDED. `potd.build`
+    still returns the best available on a day when nothing clears its
+    bars, flagged `below_bar`, so the page is never blank. That flag is
+    the whole difference between the two things the page can show, and a
+    book padded with rows the selector declined would answer "how do our
+    picks do" with "how does our best guess do on the days we had
+    nothing", quietly, and only on the thinnest days.
+
+    THE FIRST QUALIFYING PICK OF THE DAY IS THE DAY'S PICK. The boards
+    rebuild all day; without this, a sport could churn through picks
+    until settle time and the record would keep whichever one happened
+    to be showing when the grader ran — choosing, in effect, after
+    seeing how the day was going. Locked on the JOURNAL day rather than
+    the game's, because "pick of the day" is a claim made on a day. The
+    table's own unique key (sport, date, player, market, category) then
+    stops the same bet being recorded twice across two days.
+
+    AND NEVER A GAME ALREADY UNDER WAY — `in_play_reason`, the same rule
+    every other book answers to since 2026-09-15.
+    """
+    sport = str(payload.get("sport") or "").strip()
+    pick = payload.get("pick")
+    date = str(payload.get("date") or "")
+    if not sport or not isinstance(pick, dict):
+        return 0
+    if pick.get("below_bar"):
+        return 0
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    if conn.execute(
+            "SELECT 1 FROM bets WHERE category=? AND sport=? "
+            "AND substr(ts,1,10)=? LIMIT 1",
+            (POTD_CATEGORY, sport, now[:10])).fetchone():
+        return 0
+    market = str(pick.get("market") or "")
+    player = str(pick.get("player") or "")
+    side = str(pick.get("side") or "OVER").upper()
+    line = pick.get("line")
+    if pick.get("kind") == "game" or market in GAME_MARKETS:
+        keys = game_row_keys(pick, market)
+        if keys is None:
+            return 0
+        player, market, side, line = keys
+    if not player or line is None or not market:
+        return 0
+    try:
+        odds = int(pick.get("odds") or 0)
+    except (TypeError, ValueError):
+        return 0
+    if abs(odds) < 100 or (pick.get("book") or "").lower() == "proxy":
+        return 0
+    if in_play_reason(pick):
+        return 0
+    # The NFL settles on its WEEK label and every other sport on the
+    # game's own date — the same fork `log_most_likely` makes, and for
+    # the same reason: a bet dated one day off its own result cannot
+    # settle.
+    row_date = date if sport == "nfl" \
+        else str(pick.get("game_date") or "").strip() or date
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
+        "side, line, book, odds, projection, hit_prob, edge, confidence, "
+        "grade, stake_units, stake_dollars, lead_min, status, category) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+        (game_day_for(pick, date), now, sport, row_date, player, market,
+         side, float(line), pick.get("book", ""), odds,
+         pick.get("projection"), pick.get("model_prob"),
+         None if pick.get("implied_prob") is None
+         else round(float(pick["model_prob"]) - float(pick["implied_prob"]), 4),
+         None, "Pick of the Day", POTD_STAKE, 0.0,
+         _lead_min(pick, _kickoff_map(payload)), POTD_CATEGORY))
+    _stamp_team(conn, cur, pick)
+    conn.commit()
+    return cur.rowcount or 0
+
+
+def game_row_keys(r: dict, market: str):
+    """``(player, market, side, line)`` for a GAME row, or None to skip.
+
+    THE SHAPES `log_recommendations` WRITES FOR THE SAME MARKETS, so
+    `_game_actual` grades a row from any book with no new settle path: a
+    moneyline is the team at OVER 0.5, a total the matchup key at its
+    line, a spread the team at the NEGATED number (the grader compares a
+    margin against it), a team total the team at its number. A board's
+    own `player` is the pick label ("KC ML"), which reads well on a page
+    and matches nothing in the games table.
+
+    ONE COPY, because there are now three books that need it. This lived
+    inline in `log_most_likely` and the Pick of the Day needed the same
+    twenty lines; a second copy is how the negated spread ends up right
+    in one book and wrong in another, which is this module's own
+    most-repeated lesson.
+    """
+    bt = r.get("bet_type") or market
+    if bt == "moneyline":
+        player, side, line = r.get("team") or "", "OVER", 0.5
+    elif bt == "total":
+        player = (r.get("matchup") or "").replace(" ", "")
+        side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+    elif bt == "spread":
+        player, side = r.get("team") or "", "OVER"
+        line = None if r.get("line") is None else -float(r["line"])
+    elif bt == "team_total":
+        player = r.get("team") or ""
+        side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+    else:
+        return None
+    if not player or line is None:
+        return None
+    return player, bt, side, float(line)
 
 
 def _journal_longshot_rows(conn, rows, sport, date, now, category,
@@ -6559,6 +6680,21 @@ def export_json(conn, path) -> None:
             ((sp, likely_report(conn, since=since, sport=sp))
              for sp in TRACKED_SPORTS)
             if rep.get("settled") or rep.get("open")},
+        # THE PICK OF THE DAY'S OWN BOOK, pooled and per sport. Ethan,
+        # 2026-09-15: "it will have its own spot on the record page so
+        # we can see how it's doing." One row a day per sport, flat
+        # stake, so the pooled figure and the per-sport cut are both
+        # readable as a plain record rather than a rate.
+        "potd": performance(conn, category=POTD_CATEGORY, since=since),
+        "potd_by_sport": {
+            sp: rep for sp, rep in
+            ((sp, performance(conn, sp, POTD_CATEGORY, since=since))
+             for sp in TRACKED_SPORTS)
+            if rep.get("settled") or rep.get("open")},
+        # The receipts under it: every settled pick, newest first, so the
+        # section can show the run rather than only its total.
+        "potd_recent": recent_settled(conn, POTD_RECENT_LIMIT,
+                                      category=POTD_CATEGORY, since=since),
         # Per sport × per book × per market — the Record page's section
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.

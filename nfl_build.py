@@ -1253,6 +1253,13 @@ def main() -> None:
         # the JSON as `live_picks_error`, where the page can see it.
         from engine.livepicks import attach_tracker as _attach_tracker
         _tn = _attach_tracker(result, "nfl")
+        # THE PICK OF THE DAY, over the likelihood board this build just
+        # assembled (engine/potd). One hook, every sport, so the bar
+        # cannot drift between leagues; a failure lands in the JSON.
+        from engine import potd as _potd
+        _pn = _potd.attach(result, "nfl")
+        if _pn:
+            print(_pn)
         if _tn:
             print(f"Open-bet tracker: {_tn}")
         from engine import gate
@@ -1297,6 +1304,14 @@ def main() -> None:
             ml_logged = ledger.log_most_likely(
                 lconn, {"sport": "nfl", "date": result.get("date", ""),
                         "most_likely": result.get("most_likely") or []})
+            # AND THE PICK OF THE DAY, to its own book. Refuses a row the
+            # selector flagged below its bar, refuses a second pick on a day
+            # that already has one, and refuses a game under way — see
+            # `ledger.log_pick_of_the_day`.
+            potd_n = ledger.log_pick_of_the_day(
+                lconn, result.get("pick_of_the_day") or {})
+            if potd_n:
+                print("Pick of the Day: recorded.")
             if ml_logged:
                 print(f"Most likely: {ml_logged} row(s) journaled.")
             # Yardage-market flags settle from the weekly stats that

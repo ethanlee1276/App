@@ -922,6 +922,14 @@ def main() -> None:
             ml = ledger.log_most_likely(
                 lconn, {"sport": args.league, "date": args.date,
                         "most_likely": out.get("most_likely") or []})
+            # AND THE PICK OF THE DAY, to its own book. Refuses a row the
+            # selector flagged below its bar, refuses a second pick on a day
+            # that already has one, and refuses a game under way — see
+            # `ledger.log_pick_of_the_day`.
+            potd_n = ledger.log_pick_of_the_day(
+                lconn, out.get("pick_of_the_day") or {})
+            if potd_n:
+                print("Pick of the Day: recorded.")
             if ml:
                 print(f"Most likely: {ml} row(s) journaled.")
             settled = ledger.settle_from_history(lconn, connect(), sport=args.league)
@@ -976,6 +984,13 @@ def main() -> None:
     # the JSON as `live_picks_error`, where the page can see it.
     from engine.livepicks import attach_tracker as _attach_tracker
     _tn = _attach_tracker(out, args.league)
+    # THE PICK OF THE DAY, over the likelihood board this build just
+    # assembled (engine/potd). One hook, every sport, so the bar cannot
+    # drift between leagues; a failure lands in the JSON.
+    from engine import potd as _potd
+    _pn = _potd.attach(out, args.league)
+    if _pn:
+        print(_pn)
     if _tn:
         print(f"Open-bet tracker: {_tn}")
     p = Path(args.out)

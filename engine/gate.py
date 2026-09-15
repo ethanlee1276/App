@@ -114,6 +114,11 @@ PAID_KEYS = (
     # below already names it: key-stripping only protects boards whose
     # keys were anticipated. A new view of a paid board is a new key.
     "board_shelves",
+    # THE PICK OF THE DAY. One pick, at the top of the page, which is
+    # the single most valuable row the site publishes on a given day —
+    # the thing somebody would subscribe for on its own. A free copy of
+    # it is the whole product given away in one key.
+    "pick_of_the_day",
     "market_scan",
     "correlation",
     "parlays",

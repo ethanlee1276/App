@@ -812,6 +812,13 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
+        # THE PICK OF THE DAY, over the likelihood board this build just
+        # assembled (engine/potd). One hook, every sport, so the bar
+        # cannot drift between leagues; a failure lands in the JSON.
+        from engine import potd as _potd
+        _pn = _potd.attach(result, "mlb")
+        if _pn:
+            print(_pn)
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
@@ -858,6 +865,14 @@ def main() -> None:
             ml_logged = ledger.log_most_likely(
                 lconn, {"sport": "mlb", "date": args.date,
                         "most_likely": result.get("most_likely") or []})
+            # AND THE PICK OF THE DAY, to its own book. Refuses a row the
+            # selector flagged below its bar, refuses a second pick on a day
+            # that already has one, and refuses a game under way — see
+            # `ledger.log_pick_of_the_day`.
+            potd_n = ledger.log_pick_of_the_day(
+                lconn, result.get("pick_of_the_day") or {})
+            if potd_n:
+                print("Pick of the Day: recorded.")
             if ml_logged:
                 print(f"Most likely: {ml_logged} row(s) journaled.")
             fm_logged = ledger.log_form_picks(lconn, result, team_form_map)
