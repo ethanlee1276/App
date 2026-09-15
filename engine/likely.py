@@ -533,6 +533,15 @@ def engine_credible(row: dict) -> bool:
     # stays on the row (`engine_raw_prob`) and the note prints it.
     if row.get("prob_source") == "market":
         return True
+    # NOR ON A RUNG THAT CARRIES THE MARKET'S CLAIM. A rung priced from
+    # the sharp book's own pair, or on the market's centre with the
+    # model's width (`_anchored_mean`), is not the raw model's claim at
+    # the main line — that claim is exactly what the anchor set aside.
+    # Ethan, 2026-09-15: one passing-yards prop; the raw passing model
+    # sat 15-35 points above the book for most quarterbacks, so this bar
+    # refused the row before any rung could be read.
+    if row.get("rung") == "alt" and row.get("prob_source") in ("sharp", "anchored"):
+        return True
     # ONLY the engine's pre-shrink claim. This board's own `raw_prob` is
     # the display number before the mixture, which is a different
     # quantity measured against a different thing — falling back to it
@@ -795,7 +804,48 @@ def _refuse(census, why: str):
     return None
 
 
-def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
+def _anchored_mean(row: dict, sd: float) -> float | None:
+    """The model's width hung on the MARKET's centre, for a sharp-anchored row.
+
+    Ethan, 2026-09-10 and again 2026-09-15: one passing-yards prop on the
+    Most Likely board. Measured on the local board: the raw passing model
+    ran well above the book (Brissett 0.67, Shough 0.87, Jackson 0.75
+    against a −110 main line) — so the main line failed the credibility
+    bar, every over rung on the ladder failed it by the same margin, and
+    every under rung fell under the floor. One quarterback in a week
+    happened to land in the narrow band between the floor and the bar,
+    and that was the board.
+
+    The edge board already answers this for the main line: where a sharp
+    book quotes, `hit_prob` is the sharp-anchored number and `raw_prob`
+    the model's own. The ladder now prices from the same anchor: the
+    main line's anchored P(over) fixes where the distribution's centre
+    is, the model keeps its width, and each rung is read off that curve.
+    Rows the edge board did not anchor keep the model's own centre.
+    """
+    if not row.get("sharp_anchored") or sd <= 0:
+        return None
+    try:
+        p_side = float(row.get("hit_prob"))
+        main = float(row.get("line"))
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 < p_side < 1.0):
+        return None
+    p_over = p_side if str(row.get("side") or "over").lower() != "under" else 1.0 - p_side
+    p_over = min(max(p_over, 0.02), 0.98)
+    from statistics import NormalDist
+    return main + sd * NormalDist().inv_cdf(p_over)
+
+
+def _tally(ladder, why: str) -> None:
+    """Count a rung's fate for the funnel — see `build`'s per-market ledger."""
+    if ladder is not None:
+        ladder[why] = ladder.get(why, 0) + 1
+
+
+def _best_rung(row: dict, market: str, fits=None, floor=None,
+               ladder: dict | None = None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
     THE LADDER IS WHERE "MOST LIKELY" IS FOR SALE. A main line is hung
@@ -844,6 +894,8 @@ def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
             except (TypeError, ValueError):
                 continue
             if not odds or not _sane(odds) or odds < HEAVIEST_PRICE:
+                if odds and odds < HEAVIEST_PRICE:
+                    _tally(ladder, "heavier than the cap")
                 continue
             prev = best_price.get((line, side))
             if prev is None or odds > prev[0]:
@@ -881,20 +933,28 @@ def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
                 mu, sd = 0.0, 0.0
             if sd > 0:
                 from .statmath import prob_over
-                p_over, source = prob_over(line, mu, sd), "model"
+                anchored = _anchored_mean(row, sd)
+                if anchored is not None:
+                    mu = anchored
+                p_over = prob_over(line, mu, sd)
+                source = "anchored" if anchored is not None else "model"
         if p_over is None:
             pair = sharp.get(line)
             if pair is None:
+                _tally(ladder, "no number to price the rung")
                 continue
             p_over, source = pair[0], "sharp"
         p = 1.0 - float(p_over) if side == "under" else float(p_over)
         if p < _floor(floor):
+            _tally(ladder, "under the floor")
             continue
         fair_over, fair_under = devig_two_way(int(ln.get("over_odds") or 0),
                                               int(ln.get("under_odds") or 0))
         fair = fair_under if side == "under" else fair_over
         if not _credible(p, fair):
+            _tally(ladder, "disagrees with the rung’s own price")
             continue
+        _tally(ladder, "priced")
         cand = {"line": line, "side": side, "book": book, "odds": odds,
                 "prob": p, "fair": fair, "source": source}
         if best is None or p > best["prob"]:
@@ -903,7 +963,8 @@ def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
 
 
 def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
-              census: dict | None = None, floor=None) -> dict | None:
+              census: dict | None = None, floor=None,
+              ladder: dict | None = None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -945,8 +1006,11 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
         # ladder first; the floor's refusal is for a row whose every
         # number is under it. `has_market` still gates the ladder, since
         # a proxy-priced row has no real rungs to show.
-        rung = (_best_rung(row, market, fits)
-                if prob is not None and row.get("has_market") else None)
+        # With or without a model number on the main line: a rung priced
+        # by the model's own curve, or by a sharp book hanging the same
+        # alternate, needs neither (2026-09-15).
+        rung = (_best_rung(row, market, fits, floor=floor, ladder=ladder)
+                if row.get("has_market") else None)
         if rung is not None:
             return _row_from(row, market, sport, bettable, prob, rung=rung)
         return _refuse(census, "under the likelihood floor")
@@ -998,7 +1062,7 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     # bars — is what the row shows; the main number stays on the row
     # as `main_line` so the card can say which book number the rung
     # stands beside. See `_best_rung`.
-    rung = _best_rung(row, market, fits, floor=floor)
+    rung = _best_rung(row, market, fits, floor=floor, ladder=ladder)
     main_ok = shown >= _floor(floor) and _credible(shown, row.get("fair_prob"))
     if rung is not None and (not main_ok or rung["prob"] > shown):
         return _row_from(row, market, sport, bettable, prob, rung=rung)
@@ -1065,7 +1129,7 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "rung": "alt" if rung is not None else "main",
         "main_line": row.get("line"), "main_odds": row.get("odds"),
         "main_book": row.get("book", ""), "main_side": row.get("side", ""),
-        "raw_prob": round(float(prob), 4),
+        "raw_prob": round(float(prob), 4) if prob is not None else None,
         # THE PRE-SHRINK CLAIM AND THE BOOK'S OWN NUMBER, carried so the
         # one bar can ask the engine's question (see `engine_credible`).
         # `raw_prob` above is this board's own raw display number, which
@@ -1579,16 +1643,29 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         for row in props or []:
             mk = str(row.get("market") or "")
             mf = markets_f.setdefault(mk, {"offered": 0, "priced": 0, "kept": 0,
-                                           "shown": 0, "refused": {}})
+                                           "shown": 0, "refused": {},
+                                           # THE LADDER'S OWN LEDGER: how
+                                           # many rows carried one and
+                                           # what became of each rung —
+                                           # "one passing prop: supply or
+                                           # refusal?" could not be
+                                           # answered without it
+                                           # (2026-09-15).
+                                           "laddered": 0, "ladder": {}})
             mf["offered"] += 1
             if row.get("has_market"):
                 mf["priced"] += 1
+            if row.get("alt_lines"):
+                mf["laddered"] += 1
             local: dict = {}
+            rungs: dict = {}
             got = from_prop(row, bettable, fits=fits, sport=sport,
-                            census=local, floor=floor)
+                            census=local, floor=floor, ladder=rungs)
             for why, n in local.items():
                 funnel["prop"]["refused"][why] = funnel["prop"]["refused"].get(why, 0) + n
                 mf["refused"][why] = mf["refused"].get(why, 0) + n
+            for why, n in rungs.items():
+                mf["ladder"][why] = mf["ladder"].get(why, 0) + n
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides — but

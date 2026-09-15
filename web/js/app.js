@@ -6818,7 +6818,10 @@ function likelyCard(r) {
     ? `<div class="mini" style="opacity:.6;margin-top:4px">
        Alternate line — the book’s main number is ${r.main_line}
        (${american(r.main_odds)}); this rung is ${r.prob_source === "sharp"
-         ? "priced from the sharp book’s pair" : "calibrated for this market’s shape"}.</div>`
+         ? "priced from the sharp book’s pair"
+         : r.prob_source === "anchored"
+           ? "priced on the market’s own centre with the model’s spread"
+           : "calibrated for this market’s shape"}.</div>`
     : r.prob_source !== "mixture" ? "" :
     `<div class="mini" style="opacity:.6;margin-top:4px">
        Calibrated for this market’s shape — the model’s raw read was
@@ -6999,11 +7002,26 @@ function likelyMarketFunnel(kinds) {
   const why = (m) => Object.entries(m.refused || {})
     .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
     .slice(0, 2).map(([r, n]) => `${n} ${escapeHtml(r)}`).join(" · ");
+  /* THE LADDER, BESIDE THE MAIN LINE. A prop market's rows can carry an
+     alternate ladder, and the rung is where a likely number is for sale
+     (likely._best_rung) — so "8 offered, 1 shown" needs the next clause
+     to be read: how many rows had a ladder at all, and where its rungs
+     went (Ethan, 2026-09-15: one passing-yards prop). */
+  const rungs = (m) => {
+    if (!m.laddered) return "";
+    const top = Object.entries(m.ladder || {})
+      .filter(([r]) => r !== "priced")
+      .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))[0];
+    return `${m.laddered} with a ladder${(m.ladder || {}).priced
+      ? ` · ${m.ladder.priced} rung${m.ladder.priced === 1 ? "" : "s"} priced` : ""}${
+      top ? ` · ${top[1]} ${escapeHtml(top[0])}` : ""}`;
+  };
   const line = (label, m, priced) => `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:3px 0">
       <b style="min-width:120px">${escapeHtml(label)}</b>
       <span style="font-variant-numeric:tabular-nums">${m.offered || 0} offered ·
         ${priced ? `${m.priced || 0} priced · ` : ""}${m.shown || 0} shown</span>
-      ${why(m) ? `<span style="opacity:.7">${why(m)}</span>` : ""}</div>`;
+      ${why(m) ? `<span style="opacity:.7">${why(m)}</span>` : ""}
+      ${rungs(m) ? `<span style="opacity:.7">${rungs(m)}</span>` : ""}</div>`;
   const rows = keys.map((mk) => line(marketWord(mk), ms[mk] || {}, true));
   /* THE OTHER TWO KINDS ON THE SAME LEDGER (Ethan, 2026-09-15, on the
      MLB board: "There is no money lines or pitchers props or game

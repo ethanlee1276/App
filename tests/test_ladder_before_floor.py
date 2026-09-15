@@ -109,10 +109,16 @@ def test_the_floor_still_refuses_a_row_whose_every_number_is_under_it():
 def test_no_ladder_no_market_and_no_probability_refuse_as_before():
     for kw, why in (({"alt_lines": []}, "under the likelihood floor"),
                     ({"has_market": False}, "under the likelihood floor"),
-                    ({"hit_prob": None, "raw_prob": None}, "under the likelihood floor")):
+                    ({"hit_prob": None, "raw_prob": None, "alt_lines": []},
+                     "under the likelihood floor")):
         census: dict = {}
         assert K.from_prop(_row(**kw), _always, fits=FITS, census=census) is None, kw
         assert census == {why: 1}, (kw, census)
+    # A main line with NO probability but a ladder the mixture can price
+    # takes the rung (2026-09-15): the number lives on the ladder, and a
+    # blank main line is not a reason to leave it there.
+    got = K.from_prop(_row(hit_prob=None, raw_prob=None), _always, fits=FITS)
+    assert got is not None and got["rung"] == "alt" and got["raw_prob"] is None
 
 
 def test_the_rung_lands_on_the_board_end_to_end():

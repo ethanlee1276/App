@@ -40,7 +40,7 @@ def test_each_market_is_counted_from_offered_to_shown():
     assert set(ms) == {"rush_yds", "rec_yds", "pass_yds"}, ms
     assert ms["rush_yds"]["offered"] == 2 and ms["rush_yds"]["priced"] == 1
     assert ms["rush_yds"]["shown"] == 1 and ms["rush_yds"]["refused"] == {"no real book price": 1}
-    assert ms["rec_yds"] == {"offered": 1, "priced": 1, "kept": 1, "shown": 1, "refused": {}}
+    assert ms["rec_yds"] == {"offered": 1, "priced": 1, "kept": 1, "shown": 1, "refused": {}, "laddered": 0, "ladder": {}}
     # The quarterback under the main floor is counted against HIS market:
     # refused at the bar, then seated by the reserve at the lower floor —
     # and the funnel says both, which is exactly what a reader needs to

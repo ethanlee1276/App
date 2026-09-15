@@ -211,6 +211,94 @@ def test_a_passing_yards_rung_is_priced_by_the_model_when_no_mixture_fits():
     assert K._best_rung(row, "pass_yds", fits=FITS) is None
 
 
+def test_a_sharp_anchored_row_prices_its_ladder_from_the_markets_centre():
+    """Ethan, 2026-09-10 and 2026-09-15: one passing-yards prop. The raw
+    passing model sits well above the book — here 250 against a 234.5
+    line the sharp book calls a coin flip — so the main line fails the
+    credibility bar, every over rung fails it by the same margin, and
+    every under rung is under the floor. The edge board already trusts
+    the sharp book at the main line (`sharp_anchored`, `hit_prob`); the
+    ladder now hangs the model's width on that centre and reads the
+    rungs off it."""
+    alts = [_ln("DK", 199.5, -240, 185), _ln("DK", 224.5, -135, 105),
+            _ln("DK", 249.5, 115, -150), _ln("DK", 274.5, 230, -310)]
+    raw = _row(market="pass_yds", market_label="pass_yds", line=234.5,
+               projection=250.0, hit_prob=0.50, raw_prob=0.66, fair_prob=0.50,
+               recent_values=[230, 260, 245, 210], alt_lines=alts,
+               alt_sharp_lines=[], sharp_anchored=False)
+    raw["proj_std"] = 45.0
+    # Not anchored: the model's own centre, and no rung survives its bars.
+    assert K._best_rung(raw, "pass_yds", fits=FITS) is None
+    assert K.from_prop(raw, _always, fits=FITS) is None
+    # Anchored: the same width on the market's centre prices a rung.
+    row = dict(raw, sharp_anchored=True)
+    assert abs(K._anchored_mean(row, 45.0) - 234.5) < 1e-9
+    rung = K._best_rung(row, "pass_yds", fits=FITS)
+    assert rung is not None and rung["source"] == "anchored", rung
+    # Highest probability wins: under 249.5 at −150 reads 0.63 on the
+    # anchored curve (P(N(234.5, 45) < 249.5)) against a 0.56 fair, ahead
+    # of over 224.5 at 0.59. Both cleared every bar; neither did before.
+    assert rung["line"] == 249.5 and rung["side"] == "under", rung
+    assert 0.62 < rung["prob"] < 0.64, rung
+    got = K.from_prop(row, _always, fits=FITS)
+    assert got is not None and got["line"] == 249.5 and got["prob_source"] == "anchored"
+    # The build's raw-claim bar judges the main line's raw number (0.66
+    # against 0.50) and would refuse this row; a rung carrying the
+    # market's own claim passes it, the way a market-ranked card does.
+    assert K.admissible(got) == "", K.admissible(got)
+    assert K.admissible(dict(got, prob_source="model")) != ""
+    # The anchor reads the main line's own side: an UNDER row at 0.60
+    # puts the centre below the line.
+    under = dict(row, side="under", hit_prob=0.60)
+    assert K._anchored_mean(under, 45.0) < 234.5
+    # No anchor without a width, and none for a row the edge board did
+    # not anchor.
+    assert K._anchored_mean(row, 0.0) is None and K._anchored_mean(raw, 45.0) is None
+
+
+def test_a_row_with_no_model_number_still_reads_a_sharp_rung():
+    """A prop the model could not price (no projection this week) used
+    to skip its ladder outright. A sharp book hanging the alternate
+    needs no model, so the rung is read."""
+    row = _row(market="pass_yds", market_label="pass_yds", line=234.5,
+               projection=None, hit_prob=None, raw_prob=None,
+               recent_values=[], alt_lines=[_ln("DK", 199.5, -240, 185)],
+               alt_sharp_lines=[_ln("Pinnacle", 199.5, -225, 190)])
+    row["proj_std"] = 0
+    got = K.from_prop(row, _always, fits=FITS)
+    assert got is not None and got["line"] == 199.5 and got["prob_source"] == "sharp", got
+    assert got["raw_prob"] is None
+
+
+def test_the_funnel_counts_the_ladder_and_where_its_rungs_went():
+    """"One passing-yards prop" could not be told apart from "no ladder
+    was bought" on the page. The per-market funnel now says how many rows
+    carried a ladder and what became of the rungs."""
+    kinds: dict = {}
+    bullish = _row(market="pass_yds", market_label="pass_yds", line=234.5,
+                   projection=250.0, hit_prob=0.50, raw_prob=0.66, fair_prob=0.50,
+                   recent_values=[230, 260, 245, 210],
+                   alt_lines=[_ln("DK", 199.5, -240, 185), _ln("DK", 174.5, -400, 290)],
+                   alt_sharp_lines=[], sharp_anchored=False)
+    bullish["proj_std"] = 45.0
+    bare = _row(player="B Back", alt_lines=[], alt_sharp_lines=[])
+    K.build([bullish, bare], sport="nfl", fits=FITS, census_by_kind=kinds)
+    mf = kinds["prop"]["markets"]
+    assert mf["pass_yds"]["laddered"] == 1 and mf["rush_yds"]["laddered"] == 0
+    lad = mf["pass_yds"]["ladder"]
+    assert lad.get("heavier than the cap") == 1, lad          # the −400 rung
+    assert lad.get("disagrees with the rung’s own price") == 1, lad   # over 199.5
+    assert not lad.get("priced")
+    assert mf["pass_yds"]["shown"] == 0
+    # The same row anchored: its rung prices, and the ledger says so.
+    kinds2: dict = {}
+    anchored = dict(bullish, sharp_anchored=True,
+                    alt_lines=bullish["alt_lines"] + [_ln("DK", 249.5, 115, -150)])
+    K.build([anchored], sport="nfl", fits=FITS, census_by_kind=kinds2)
+    lad2 = kinds2["prop"]["markets"]["pass_yds"]["ladder"]
+    assert lad2.get("priced") == 1 and kinds2["prop"]["markets"]["pass_yds"]["shown"] == 1, lad2
+
+
 def test_a_rung_the_maker_priced_itself_is_read_before_any_fit():
     """Baseball rows carry `rung_probs` — P(over) at each rung from the
     curve that priced the main line (engine/mlb/betting.rung_probs).
