@@ -1083,8 +1083,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
-            "grade, stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
+            "grade, stake_units, stake_dollars, lead_min, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -1108,7 +1108,17 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # `hit_prob` above.
              None if r.get("implied_prob") is None
              else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
-             None, "Likely", flat_stake, 0.0))
+             None, "Likely", flat_stake, 0.0,
+             # MINUTES TO KICKOFF AT JOURNAL TIME, the column the other
+             # three books have carried since capture lag shipped and
+             # this one never did. Ethan, 2026-09-15, after the KC-DEN
+             # rows: a sweep for "every bet placed after its game
+             # started" could answer for the edge, long-shot and stale
+             # books and had to guess at this one by reading timestamps
+             # against kickoff windows by hand. A measurement book that
+             # cannot say when its rows were taken cannot defend its own
+             # calibration.
+             _lead_min(r, kick)))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()

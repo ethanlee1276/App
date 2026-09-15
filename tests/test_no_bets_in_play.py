@@ -223,6 +223,29 @@ def test_the_long_shot_journal_refuses_the_row_in_play():
     assert n == 1 and rows == ["James Cook"], (n, rows)
 
 
+def test_every_book_records_when_the_bet_was_taken():
+    """All four books write `lead_min`, so "was this placed after
+    kickoff" is one query rather than four different guesses.
+
+    Ethan, 2026-09-15: the sweep after the KC-DEN rows answered cleanly
+    for the edge, long-shot and stale books and had to read timestamps
+    against kickoff windows by hand for Most Likely, which is the book
+    whose whole claim is a calibrated pre-game probability."""
+    conn = _conn()
+    d, k = _et(180)
+    ledger.log_most_likely(conn, {"sport": "nfl", "date": "2026-W02",
+                                  "most_likely": [_likely("Josh Allen", "BUF", 180)]})
+    lead = conn.execute("SELECT lead_min FROM bets").fetchone()[0]
+    assert lead is not None and 170 < lead < 190, lead
+    # And a row with no clock at all stores NULL rather than a guess.
+    conn = _conn()
+    row = _likely("Josh Allen", "BUF", 180)
+    row["kickoff"] = row["game_date"] = ""
+    ledger.log_most_likely(conn, {"sport": "nfl", "date": "2026-W02",
+                                  "most_likely": [row], "games": []})
+    assert conn.execute("SELECT lead_min FROM bets").fetchone()[0] is None
+
+
 # --- the launcher and the build ---------------------------------------------------
 def test_the_launcher_passes_live_to_the_nfl_build():
     i = LAUNCH.index("def refresh_nfl(")

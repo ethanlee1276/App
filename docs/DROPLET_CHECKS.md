@@ -677,6 +677,63 @@ After the next refresh, the build log's `Journal:` line should stop
 growing during a game, and `--why-pick` on a live game's prop says
 "kicked off N min ago by its own schedule".
 
+### 7d. The in-play sweep, and what it found on 2026-09-15
+
+Once `ledger.in_play_reason` shipped, the question became how much had
+already landed before it. Every book records `lead_min`, the minutes to
+kickoff when the row was journaled, so a negative value IS the answer:
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/ledger.db "SELECT sport, category, status, COUNT(*) AS n, ROUND(SUM(pnl_units),2) AS pnl FROM bets WHERE lead_min IS NOT NULL AND lead_min < 0 GROUP BY 1,2,3 ORDER BY 1,2,3;"
+```
+
+Run it after any week where a build may not have known a game was live.
+Anything it returns in `category='main'` is real money on the public
+record and should be voided; the other books are measurement and the
+call is judgment.
+
+**Most Likely rows before 2026-09-15 answer NULL here.** That book did
+not write the column until the commit that added this section, so rows
+journaled earlier cannot be swept this way. For those, read `ts` against
+the day's kickoffs by hand, and use `game_day` to separate a row taken
+for that day's early game from one taken hours ahead of the night game:
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/ledger.db "SELECT id, player, team, market, line, game_day, status, ROUND(pnl_units,2) AS pnl, ts FROM bets WHERE sport='nfl' AND category='likely' AND lead_min IS NULL AND ts >= '2026-09-09' ORDER BY game_day, ts;"
+```
+
+Sunday's windows in UTC: early games 17:00, late games 20:05 and 20:25,
+Sunday night 00:20 the next day. Thursday and Monday nights kick at
+00:15. A row whose `game_day` is the day in question and whose `ts` is
+after that day's first kickoff is in play unless the player was in the
+night game.
+
+WHAT THE FIRST SWEEP FOUND, and what was done about it:
+
+| Book | Rows | Net units | Action |
+|---|---|---|---|
+| college edge | 5 | +3.15 | voided |
+| baseball edge | 3 | +0.85 | voided |
+| NFL edge (KC-DEN) | 2 | 0 | voided |
+| NFL Most Likely / stale (KC-DEN) | 7 | +0.02 | voided |
+| NFL Most Likely, Sunday 9/13 | 12 | +0.12 | OPEN QUESTION |
+| baseball long shots | 229 | −0.62 | OPEN QUESTION |
+
+The five college rows were the expensive ones. All were moneylines on
+big underdogs journaled well after kickoff at prices the cached odds
+payload was still serving from before it, and one of them — CIT at
++1300, journaled 207 minutes in, about when a college game ends — was
+carrying +4.55 units of the college edge book on its own. That is the
+shape to watch for: a long price on a live dog is what a stale payload
+looks like from the inside.
+
+The two open questions are deliberately left open. The twelve NFL
+likelihood rows need each player's own game to separate an early-game
+row from a night-game one. The 229 baseball long shots are more than
+half that book, so voiding them halves a calibration sample that is
+already thin; the P&L barely moves either way, and the trade is sample
+size against a home-run model partly measured on games it could see.
+
 ### 7c. A player on his old team (2026-09-15)
 
 Ethan: "we are showing props for players not even on the team any more.
