@@ -117,6 +117,61 @@ payout. That inversion is the point: sorting on edge size hands every
 day to the loudest disagreement, and the loudest disagreements come from
 the weakest witness.
 
+## 3b. Where the candidates come from, and what was starving them
+
+`potd.build` reads `result["most_likely"]` — the Most Likely board's
+output. That board has its own product bars:
+
+| bar | value | what it asks |
+|---|---|---|
+| `likely.MIN_PROB` | 0.55 | is this **most likely**? |
+| `likely.MIN_RANK_AUC` | 0.60 | can this market rank at all? |
+| `likely.HEAVIEST_PRICE` | -250 | is this price worth staking? |
+
+**The first of those was cutting exactly the rows this feature wants.**
+No in-band price can imply more than 58.8% (§1), so the candidates
+nearest the band are the ones sitting closest to `likely`'s 55% floor —
+and a 53% sharp-anchored price at +100 is +6% EV, which is precisely
+this product. Selecting on another board's product bar answered the
+wrong question.
+
+Since 2026-09-15 a **reserve** row — one `likely` ships from below its
+own floor, labelled, so its page is never blank — can be the day's pick,
+**but only on a sharp or market witness**. What is not waived:
+
+- The model tier is still refused outright (§4).
+- The reserve band is measured **at a loss** on the model's own ranking:
+  45-60% went **-7.68%** over 184 settled rows (`likely.RESERVE_MIN_PROB`).
+  That figure is why this is not a general loosening — these rows are
+  admitted on *a sharper book's disagreement*, never on our number.
+- The card says `from_reserve` in as many words, so a reader is told the
+  row did not clear the board's bar and what got it here instead.
+
+Whether that basis pays is **untested here**, and the potd book's own CLV
+is what will answer it (§7).
+
+A useful property falls out of this: the reserve only fires on **thin**
+shelves, so on a full board the widening changes nothing. It helps
+precisely on the quiet days, which are exactly the days this feature was
+otherwise showing "nothing cleared the bar".
+
+## 3c. Seeing it on a real board
+
+`potd_report.py` runs the selector over a published board and prints the
+funnel. Read-only — it opens the JSON, never writes, never fetches a
+price — so it is safe on the production box mid-cycle.
+
+```bash
+python3 potd_report.py                      # every board in web/data
+python3 potd_report.py nfl cfb --rows 10     # with the near misses
+python3 potd_report.py --dir /srv/qellys/web/data
+```
+
+It answers the question no test can: whether a real Tuesday board
+carries anything for these rules to bite on. "68 rows considered, 61
+outside the band, 0 picks" is not a bug report — it is the name of the
+gate to argue with.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against
@@ -170,6 +225,18 @@ accrues on every pick including the losers, and is the metric the sharp
 side actually keeps. The `potd` book flows into
 `clvboard.scoreboard(conn, category="potd")` for free. If these picks do
 not beat the close, this module is wrong and that page will say so.
+
+**Verified end to end**, because a wiring break here would fail no other
+test — the picks would journal, the record page would fill, and the one
+number that answers "is the sharp anchor finding anything" would quietly
+stay empty. A pick taken at -110 and closing at -135 reads back as
+**+5.07 points of price CLV**, `ready: false`, `thin: true`, and nothing
+in the `main`, `paper` or `likely` books
+(`test_the_book_reaches_the_clv_scoreboard_and_nothing_elses`).
+
+**Price CLV is the instrument that matters here**, not line CLV. A 3.5
+receptions line closes at 3.5 on a market that moved plenty; the price
+is what moved, and `clvboard` has measured both since 2026-09-02.
 
 ## 8. The gap that would change the answer
 

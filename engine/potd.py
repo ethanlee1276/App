@@ -200,7 +200,6 @@ HARD_REASONS = (
     "the payout is outside the even-money band",
     "the player is carrying an injury designation",
     "the game has already started",
-    "the board itself says this did not clear its bar",
 )
 
 
@@ -347,12 +346,6 @@ def disqualify(row: dict, now=None) -> str:
     """
     if fair_prob(row) is None:
         return "no fair probability to price against"
-    # The Most Likely board ships rows from below its own floor when
-    # nothing cleared, labelled, so the page is never blank
-    # (`likely.RESERVE_MIN_PROB`). A row its own maker says did not
-    # qualify cannot be the pick of the day on any reading.
-    if row.get("reserve"):
-        return "the board itself says this did not clear its bar"
     book = str(row.get("book") or "").strip().lower()
     if not book or book == "proxy":
         return "no real market price"
@@ -392,6 +385,39 @@ def shortfall(row: dict) -> str:
     # (CFB); on spreads and totals it measures nothing at all. A price
     # only our model disputes is not evidence of a mispriced game, it is
     # evidence of a model that is behind the market.
+    # THE RESERVE, ADMITTED ON A DIFFERENT BASIS THAN IT WAS REFUSED.
+    #
+    # `likely` ships rows from below its own 55% floor, labelled, so its
+    # page is never blank (`likely.RESERVE_MIN_PROB`). Until 2026-09-15
+    # this module refused every one of them outright — "the board itself
+    # says this did not clear its bar" — and that was answering the
+    # wrong question. `likely.MIN_PROB` asks "is this MOST LIKELY?"; a
+    # 53% sharp-anchored price at +100 is not, and is +6% EV, which is
+    # precisely this feature's product. Selecting on another board's
+    # product bar starved this one exactly where the band bites: no
+    # in-band price can imply more than 58.8%, so the rows nearest the
+    # band are the rows `likely` is likeliest to have cut.
+    #
+    # WHAT IS NOT WAIVED, and it is the whole safety of this. A reserve
+    # row reaches the pick ONLY with a sharp or market witness — the
+    # model tier is refused one line above, and the reserve band is
+    # measured AT A LOSS on the model's own ranking (45-60% went -7.68%
+    # over 184 settled rows, `likely.RESERVE_MIN_PROB`). That figure is
+    # why this is not a general loosening: it admits these rows on a
+    # sharper book's disagreement, never on our number, and the card
+    # says `from_reserve` so a reader is told which they are looking at.
+    # Whether that basis pays is untested here and the potd book's own
+    # CLV is what will answer it (docs/PICK_OF_THE_DAY.md §7).
+    #
+    # ASKED BEFORE THE MODEL BAR, AND THAT ORDER IS LOAD-BEARING. The
+    # first draft asked it after, where `evidence(row) == "model"` had
+    # already returned — so the branch was unreachable and the widening
+    # was resting on a line that could never run. Caught by
+    # `test_a_reserve_row_needs_a_sharper_witness_than_us`. Asking first
+    # also names the more specific truth: this row was cut upstream, and
+    # our own number is not the thing that could put it back.
+    if row.get("reserve") and evidence(row) == "model":
+        return "the board itself says this did not clear its bar"
     if evidence(row) == "model":
         return "only our own model disputes this price"
     ev = edge(row)
@@ -489,7 +515,14 @@ def _card(row: dict, below: str = "") -> dict:
         # or ours.
         "fair_prob": None if fair is None else round(fair, 4),
         "evidence": evidence(row),
-        "implied_prob": None if imp is None else round(imp, 4),
+        # THE PRICE'S OWN BREAK-EVEN, under its own name. This used to
+        # overwrite `implied_prob`, which on a `likely` row is the
+        # DE-VIGGED fair (`likely._row_from`) and is what `fair_prob`
+        # reads for the market tier — so the card was stomping the
+        # number the selection had just been made on with a different
+        # quantity that happens to look like it. Both now travel.
+        "price_implied": None if imp is None else round(imp, 4),
+        "from_reserve": bool(row.get("reserve")),
         # The model's own read still travels, clearly labelled as
         # context rather than as the reason — the policy every
         # sharp-anchored card on the site already follows.

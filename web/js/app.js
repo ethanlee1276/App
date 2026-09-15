@@ -2342,7 +2342,12 @@ async function renderPickOfTheDay() {
   const who = WITNESS[pick.evidence] || "our number";
   const fair = pick.fair_prob == null ? null : Math.round(pick.fair_prob * 100);
   const ours = pick.model_prob == null ? null : Math.round(pick.model_prob * 100);
-  const theirs = pick.implied_prob == null ? null : Math.round(pick.implied_prob * 100);
+  /* THE PRICE'S OWN BREAK-EVEN, under its own name. `implied_prob` on a
+     board row is the DE-VIGGED fair and is what the market tier was
+     selected on; `price_implied` is what this ticket has to beat. Older
+     boards carry only the first, so fall back rather than draw nothing. */
+  const theirs = pick.price_implied != null ? Math.round(pick.price_implied * 100)
+    : (pick.implied_prob == null ? null : Math.round(pick.implied_prob * 100));
   const ev = pick.ev_units == null ? null : Number(pick.ev_units);
   const pays = pick.payout_units == null ? null : Number(pick.payout_units).toFixed(2);
   const matchup = pick.opponent
@@ -2370,6 +2375,9 @@ async function renderPickOfTheDay() {
           ev != null ? ` · ${ev >= 0 ? "+" : MINUS}${Math.abs(ev * 100).toFixed(1)}% edge` : ""}${
           ours != null && pick.evidence !== "model" ? ` · our number says ${ours}%` : ""} ·
         one pick a day, priced between ${american(band[0])} and ${american(band[1])}</div>` : ""}
+      ${pick.from_reserve && !below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${icon('info')} Below the Most Likely board’s own 55% floor — taken here because
+        a sharper book disagrees with this price, not because our number does.</div>` : ""}
       ${below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">
         ${icon('warn')} Shown, not recorded — ${escapeHtml(below)}. Nothing on today’s board
         cleared the bar this pick is judged by, so it stays off the record below.</div>` : ""}

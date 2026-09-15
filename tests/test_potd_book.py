@@ -208,6 +208,98 @@ def test_the_hook_survives_a_board_that_cannot_produce_one():
     assert note, "a silent hook is the failure this codebase keeps hitting"
 
 
+def test_the_book_reaches_the_clv_scoreboard_and_nothing_elses():
+    """THE FEEDBACK LOOP, END TO END, because it is the only thing that
+    can tell us whether this feature is real.
+
+    Win-loss on one pick a day is noise for years — the industry’s own
+    rule of thumb is 500-1,000 graded plays. Closing-line value grades
+    the DECISION at kickoff and accrues on every pick including the
+    losers, which is why docs/PICK_OF_THE_DAY.md §7 says this is how the
+    method gets judged. A wiring break here would not fail any other
+    test: the picks would journal, the record page would fill, and the
+    one number that answers "is the sharp anchor finding anything" would
+    silently stay empty.
+
+    PRICE CLV IS THE INSTRUMENT THAT MATTERS HERE. A 3.5 receptions line
+    closes at 3.5, so line CLV is 0 on a market that moved plenty; the
+    price went −110 to −135 and that is the movement worth reading.
+    """
+    from engine import clvboard
+    conn = _conn()
+    # −110 TAKEN, −135 CLOSED, and the direction is the whole point:
+    # the price shortened after we bet it, which is what having got
+    # the better of the market looks like. The fixture defaults to
+    # −140, where closing at −135 is the OPPOSITE fact — so the taken
+    # price is named here rather than inherited.
+    ledger.log_pick_of_the_day(conn, _payload(odds=-110))
+    row = conn.execute("SELECT id, category, stake_units FROM bets").fetchone()
+    assert row["category"] == ledger.POTD_CATEGORY
+    # `clvboard._rows` filters on `stake_units > 0`; a book journaled at
+    # zero would be invisible to it while looking fine everywhere else.
+    assert row["stake_units"] > 0, "a staked-at-zero book cannot be graded"
+
+    conn.execute("UPDATE bets SET status='won', closing_line=?, closing_odds=? "
+                 "WHERE id=?", (3.5, -135, row["id"]))
+    conn.commit()
+
+    sb = clvboard.scoreboard(conn, category=ledger.POTD_CATEGORY)
+    assert len(sb["rows"]) == 1, sb
+    got = sb["rows"][0]
+    assert got["settled"] == 1 and got["with_price_close"] == 1
+    assert got["avg_price_clv_pts"] > 0, "we beat the close and it says so"
+    assert got["ready"] is False and got["thin"] is True, \
+        "one pick is not a verdict and the row must decline to call it"
+
+    # And it stays in its own book, as tests/test_books_never_bleed.py
+    # asks of every other one.
+    for other in ("main", "paper", "likely"):
+        assert clvboard.scoreboard(conn, category=other)["rows"] == [], other
+
+
+def test_what_the_page_shows_and_what_the_record_counts_never_diverge():
+    """A SILENT GAP THIS FEATURE COULD HAVE GROWN, checked rather than
+    assumed. Since 2026-09-15 a reserve row — one `likely` ships from
+    below its own 55% floor — can be the day’s pick when a sharper book
+    disputes the price (engine/potd.shortfall). If the journal ALSO
+    refused reserve rows on its own, the card would show a Pick of the
+    Day that the record page never counted, and the two surfaces would
+    disagree with each other quietly, forever, about what our picks did.
+
+    The journal’s refusal is `below_bar` and nothing else. So the rule
+    is one rule: whatever cleared the selector’s bars is both shown and
+    recorded, and whatever did not is shown labelled and recorded
+    nowhere."""
+    # A BOARD row, not a card: this walks the whole path the build walks,
+    # selector first and journal second, which is the only way the two
+    # can be caught disagreeing.
+    d, k = _et(180)
+    board_row = {"kind": "prop", "player": "A Player", "team": "AAA",
+                 "opponent": "BBB", "market": "receptions",
+                 "market_label": "Receptions", "side": "OVER", "line": 3.5,
+                 "book": "DraftKings", "odds": 100, "reserve": True,
+                 "sharp_anchored": True, "sharp_fair": 0.62,
+                 "model_prob": 0.52, "implied_prob": 0.50, "rank_auc": 0.71,
+                 "bettable": True, "injury_status": "",
+                 "game_date": d, "kickoff": k}
+    shown = potd.build([board_row], "nfl", "2026-W02")
+    pick = shown["pick"]
+    assert pick is not None and pick["below_bar"] == "", \
+        "the selector took it, so the page shows it"
+    assert pick["from_reserve"] is True
+
+    conn = _conn()
+    assert ledger.log_pick_of_the_day(
+        conn, {"sport": "nfl", "date": "2026-W02", "pick": pick}) == 1, \
+        "the page shows it and the record must count it"
+
+    # And the converse still holds: a labelled day is shown, not counted.
+    conn2 = _conn()
+    below = dict(pick, below_bar="the price is not far enough off the fair")
+    assert ledger.log_pick_of_the_day(
+        conn2, {"sport": "nfl", "date": "2026-W02", "pick": below}) == 0
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

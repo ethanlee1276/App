@@ -213,13 +213,41 @@ def test_a_row_outside_the_band_is_disqualified_not_shown_as_a_near_miss():
     assert got["census"]["the payout is outside the even-money band"] == 1
 
 
-def test_a_reserve_row_can_never_be_the_pick():
-    """The Most Likely board ships rows from below its own floor so the
-    page is never blank. A row its own maker refused cannot be the pick
-    of the day on any reading."""
-    r = _row(reserve=True)
-    assert potd.disqualify(r) == "the board itself says this did not clear its bar"
-    assert potd.build([r], "nfl", "2026-W02")["pick"] is None
+def test_a_reserve_row_needs_a_sharper_witness_than_us():
+    """CHANGED 2026-09-15, and the change is the pool this feature picks
+    from. `likely` ships rows below its own 55% floor, labelled, and this
+    module used to refuse every one. That answered the wrong question:
+    `likely.MIN_PROB` asks "is this MOST LIKELY?" and a 53% sharp-anchored
+    price at +100 is not, and is +6% EV, which IS this product. Since no
+    in-band price can imply more than 58.8%, the rows nearest the band
+    are exactly the ones `likely` is likeliest to have cut.
+
+    What is not waived: the reserve band is measured at a loss on the
+    MODEL's ranking (45-60% went -7.68% over 184 rows), so a reserve row
+    reaches the pick only on a sharp or market witness."""
+    ours = _row(reserve=True, sharp_anchored=False, sharp_fair=None,
+                model_prob=0.70)
+    assert potd.refuse(ours) == "the board itself says this did not clear its bar"
+
+    anchored = _row(reserve=True)                 # sharp by default
+    assert potd.refuse(anchored) == "", potd.refuse(anchored)
+    got = potd.build([anchored], "nfl", "2026-W02")
+    assert got["pick"]["below_bar"] == "", "a sharp-anchored reserve qualifies"
+    assert got["pick"]["from_reserve"] is True, \
+        "the card must say the row came from below the board’s own floor"
+
+
+def test_the_card_keeps_the_de_vigged_fair_and_the_price_apart():
+    """A `likely` row’s `implied_prob` is the DE-VIGGED fair
+    (`likely._row_from`) and is what the market tier is selected on.
+    `_card` used to overwrite it with the price’s raw break-even — a
+    different quantity that looks like it — so the card stomped the very
+    number the selection had just been made on."""
+    row = _consensus(implied_prob=0.56, odds=-110)
+    card = potd.build([row], "nfl", "2026-W02")["pick"]
+    assert card["implied_prob"] == 0.56, "the de-vigged fair survives"
+    assert card["price_implied"] == round(potd.implied(-110), 4)
+    assert card["fair_prob"] == 0.56, "and it is what was priced against"
 
 
 def test_an_invented_price_is_never_the_pick():
@@ -335,16 +363,26 @@ def test_an_empty_board_is_a_sentence_not_an_exception():
 
 
 def test_the_census_names_the_gate_that_was_binding():
-    rows = [_row(odds=-400), _row(reserve=True), _row(sharp_fair=0.53),
-            _row(rank_auc=0.49),
+    rows = [_row(odds=-400),
+            _row(reserve=True, sharp_anchored=False, sharp_fair=None,
+                 model_prob=0.70),
+            _row(sharp_fair=0.53), _row(rank_auc=0.49),
             _row(sharp_anchored=False, sharp_fair=None, model_prob=0.70)]
     got = potd.build(rows, "nfl", "2026-W02")
     assert got["census"] == {
         "the payout is outside the even-money band": 1,
+        # The reserve row and the model-only row BOTH have only our
+        # number behind them; each is named by the more specific of the
+        # two true reasons, which is what makes the census worth reading.
         "the board itself says this did not clear its bar": 1,
         "the price is not far enough off the fair to be worth it": 1,
         "this market ranks no better than a coin flip": 1,
         "only our own model disputes this price": 1}, got["census"]
+    # The reserve refusal now lives in `shortfall`, not `disqualify`, so
+    # it is a quality bar the page may fall back to rather than a row the
+    # page may never show.
+    assert "the board itself says this did not clear its bar" \
+        not in potd.HARD_REASONS
 
 
 def test_every_hard_reason_is_one_the_module_can_actually_give():
@@ -353,7 +391,7 @@ def test_every_hard_reason_is_one_the_module_can_actually_give():
     produced = set()
     for r in (_row(sharp_anchored=False, sharp_fair=None, model_prob=None,
                    implied_prob=None, prob_source=None),
-              _row(reserve=True), _row(book="proxy"), _row(book="Pinnacle"),
+              _row(book="proxy"), _row(book="Pinnacle"),
               _row(odds="x"), _row(odds=-400),
               _row(injury_status="out"), _row(live=True)):
         produced.add(potd.disqualify(r))

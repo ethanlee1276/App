@@ -216,6 +216,35 @@ def test_the_headline_number_is_the_fair_and_it_names_its_witness():
     assert "our number says" in body, "the model’s read still travels as context"
 
 
+def test_a_pick_from_below_the_boards_floor_says_so():
+    """DISCLOSURE, NOT A DETAIL. Since 2026-09-15 a reserve row — one
+    `likely` shipped from below its own 55% floor — can be the day’s
+    pick, but only on a sharper book’s disagreement (engine/potd
+    .shortfall). The reserve band is measured at a LOSS on our own
+    ranking, so a reader is owed the fact that this row did not clear the
+    board’s bar and what got it here instead."""
+    body = _card()
+    assert "from_reserve" in body, "the card never reads the flag"
+    i = body.index("from_reserve")
+    block = body[i:i + 400]
+    assert "55%" in block or "floor" in block, block[:200]
+    assert "sharper book" in block, "it must say what admitted the row"
+    # And it is NOT drawn on a below-bar day, where the warn line already
+    # says the stronger thing.
+    assert "!below" in block, "two labels would contradict each other"
+
+
+def test_the_card_draws_the_price_break_even_not_the_de_vigged_fair():
+    """`implied_prob` on a board row is the DE-VIGGED fair; the number a
+    reader needs beside a price is what that PRICE has to beat. The two
+    were one field until 2026-09-15."""
+    body = _card()
+    assert "price_implied" in body, "the card reads the wrong number"
+    i = body.index("price_implied")
+    assert "implied_prob" in body[i:i + 300], \
+        "an older board carries only the de-vigged fair — fall back, do not blank"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
