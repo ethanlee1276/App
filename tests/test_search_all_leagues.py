@@ -229,10 +229,17 @@ def test_the_page_scopes_the_search_to_the_tab_and_says_so_when_empty():
     The engine keeps its all-league search for callers that want it;
     this pins only what the PAGE asks for."""
     js = _js()
-    i = js.index("async function leagueSearch(")
-    body = js[i:i + 1200]
+    body = _fn(js, "async function leagueSearch(")
     assert "&scope=sport" in body, "the page's search lost its tab scope"
     apology = _fn(js, "async function renderPlayers(")
+    # THE ONE WINDOW LEFT, AND IT IS MEASURING PROXIMITY ON PURPOSE.
+    # Every other slice in this file was a byte count standing in for a
+    # structural boundary and has been replaced by one. This pair is not:
+    # the claim is that the league name and the "switch the sport" hint
+    # sit in the SAME empty-state message as the count, not merely
+    # somewhere in a four-hundred-line renderer. Widening it to the whole
+    # function would leave the test passing with the two halves in
+    # different branches, which is the state it exists to refuse.
     k = apology.index("players match “${")
     assert "LEAGUE_LABEL[state.sport]" in apology[k - 300:k], \
         "an empty scoped answer must name the league it looked in"
@@ -252,14 +259,16 @@ def test_the_search_page_wears_its_scope_and_a_hop_keeps_the_typed_name():
     assert 'id="search-scope"' in html
     js = _js()
     i = js.index("const SEARCH_SCOPES")
-    assert '"nfl", "cfb", "mlb", "nba", "wnba", "ufc"' in js[i:i + 120], \
+    decl = js[i:js.index(";", i) + 1]
+    assert '"nfl", "cfb", "mlb", "nba", "wnba", "ufc"' in decl, \
         "the row is the honest list of where the box can look, in his order"
     fn = js[js.index("function renderSearchScope("):]
     fn = fn[:fn.index("\n}")]
     assert 's === state.sport ? " on"' in fn, "the lit chip is the scope"
     assert "LEAGUE_LABEL[s]" in fn, "league names come from the one table"
     j = js.index('e.target.closest(".scope-chip")')
-    hop = js[j:j + 900]
+    # The handler's own end, not a byte count: `});` closes the listener.
+    hop = js[j:js.index("\n  });", j) + 6]
     assert ".sport-btn[data-sport=" in hop, \
         "the hop must ride the real switcher, not a second one"
     assert "state.search = q" in hop and "inp.value = q" in hop, \
@@ -272,8 +281,10 @@ def test_the_ufc_tab_still_finds_fighters_under_the_scope():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     i = src.index("def _players_search(")
     body = src[i:src.index("\n    def ", i + 10)]
+    # `body` is already cut at the next method, so the rest of it IS the
+    # structural window — a second byte count inside one buys nothing.
     j = body.index('== "sport"')
-    scoped = body[j:j + 600]
+    scoped = body[j:]
     assert 'sport == "ufc"' in scoped and "fighters.search(term)" in scoped
 
 
@@ -284,8 +295,7 @@ def test_a_failed_search_is_retried_not_cached_for_the_session():
     answer, and search stayed dead long after the server was back. A
     failure may be remembered for seconds — never for the session."""
     js = _js()
-    i = js.index("async function leagueSearch(")
-    body = js[i:i + 1200]
+    body = _fn(js, "async function leagueSearch(")
     assert "hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS" in body, \
         "a failed fetch must expire, not answer forever"
     assert "ok = true" in body, "only a 200 earns the permanent cache"
@@ -296,9 +306,9 @@ def test_a_hits_logs_come_from_that_hits_league():
     """Asking the NFL endpoint for a WNBA guard returns an empty card —
     which looks exactly like "found him, know nothing about him"."""
     js = _js()
-    i = js.index("async function leagueLogs(")
-    body = js[i:i + 700]
-    assert "leagueLogs(player, sport)" in js[i:i + 120]
+    body = _fn(js, "async function leagueLogs(")
+    assert "leagueLogs(player, sport)" in body.splitlines()[0], \
+        "the league must be a parameter, not read off the tab"
     assert "sport || state.sport" in body
     assert "leagueLogs(m.player, m.sport)" in _fn(js, "async function renderPlayers(")
 
@@ -358,17 +368,16 @@ def test_the_peek_is_board_free_too():
     """A peek opens from a live row, which can be on screen before the
     board payload lands."""
     js = _js()
-    i = js.index("async function openPeek(") if "async function openPeek(" in js \
-        else js.index("playerStats(name)")
-    assert "playerStats(name)" in js[i:i + 2500]
+    assert "async function openPeek(" in js, "the peek lost its own function"
+    assert "playerStats(name)" in _fn(js, "async function openPeek("), \
+        "the peek must read the player endpoint, not the board payload"
 
 
 def test_the_cross_league_helpers_fall_back_to_the_active_tab():
     """Every existing caller passes no sport, and must keep working: a row
     with no league is a row from the board already on screen."""
     js = _js()
-    i = js.index("const teamsIn = ")
-    body = js[i:i + 600]
+    body = _fn(js, "const teamsIn = ")
     assert "sport !== state.sport" in body and "activeTeams()" in body
 
 
@@ -378,8 +387,7 @@ def test_fantasy_and_the_mock_draft_ask_football_outright():
     baseball endpoint for a wide receiver."""
     js = _js()
     for fn in ("_ffDossierCharts", "_mockTrend"):
-        i = js.index(f"async function {fn}(")
-        assert 'leagueLogs(name, "nfl")' in js[i:i + 1200], fn
+        assert 'leagueLogs(name, "nfl")' in _fn(js, f"async function {fn}("), fn
 
 
 if __name__ == "__main__":
