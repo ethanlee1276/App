@@ -240,6 +240,72 @@ Two implementations to weigh when that day comes, and neither is free:
   (player, market), which is what `potd_report` does today for counting.
   No page-weight cost, but it needs a dedupe and a rung-pricing rule.
 
+## 3e. One pick for the DAY, not one per league
+
+Everything above chooses a pick **per sport**, and that was never what
+was asked for. Ethan, 2026-09-15: *"a model that picks one pick for the
+pick of the day."* Singular. What the site actually did was show the MLB
+reader MLB's best and the NFL reader NFL's best, and call both of them
+the Pick of the Day.
+
+`potd.day_top_pick` is the cross-league layer, and it is **a comparison,
+not a second model.** §3's `rank_key` already orders picks on three
+quantities that know nothing about which sport produced them:
+
+| ranked on | league-specific? |
+|---|---|
+| which witness stands behind the fair | no — the ladder is the same everywhere |
+| the edge, in probability points | no |
+| what the price pays | no |
+
+So the cross-league answer is that same comparator over a longer list. A
+cross-sport bar invented at this layer would be a second set of numbers
+to keep honest, fitted to nothing.
+
+**Two refusals do real work.**
+
+A *qualifying* pick always beats a *below-bar* one, whatever the tiers
+say. §3b's reserve means `build` publishes its best available when
+nothing clears, so a below-bar row is on the board by design — letting
+one outrank a pick that cleared every gate would quietly undo the gates,
+and it would look identical from here.
+
+A pick is refused unless its board is **dated today**. Every league
+publishes on its own schedule, and one out of season leaves a perfectly
+well-formed pick on disk from whenever it last ran. Nothing about that
+card looks wrong; only its date says so. Same shape as the stale-price
+ceiling in §3.
+
+**Where it runs.** Not in a build — no build can see the other boards.
+`launch._write_day_top_pick` runs once per refresh cycle, after every
+board has had its turn, and writes `web/data/day_top_pick.json`. The
+page draws it as **one line inside the Pick of the Day card**, not as a
+block of its own: `tests/test_board_order.py` measured that the picks
+already start at 848px on an 844px phone fold, so a second card above
+them pushes the product off the first screen.
+
+**It is paid.** `pick_of_the_day` is in `gate.PAID_KEYS`, and this file
+is that same object promoted to the top level with nothing else in it to
+strip, so it is registered in `PAID_FILES` and fetched through
+`paidFetch`. Registered free it would have handed the headline pick to
+everyone while looking like an ordinary new board.
+
+### What it is not called, and why
+
+The first draft of this feature was `lock_of_the_day` end to end, and it
+would have put those four words on the page. **"lock of the day" is on
+the banned list** `tests/test_potd_card.py` keeps — see §9 — precisely so
+the page cannot promise a paying reader a certainty.
+
+That test did not catch it. It read the two renderers that existed when
+it was written, and this was a third. Both halves are fixed: the feature
+is named for a comparative the ranking can actually support (*the
+highest-ranked pick on the site today*), and the banned list now checks
+every pick renderer plus a guard that **fails when a new one appears**.
+That guard immediately found two more renderers nobody had been checking
+— both already clean, which is the point: nothing had been holding them
+that way.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against

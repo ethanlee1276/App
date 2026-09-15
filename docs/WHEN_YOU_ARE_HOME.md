@@ -15,6 +15,38 @@ as they are done.
 
 ---
 
+## TOP. Is there one pick for the day? (read-only, 5 seconds)
+
+You asked for *"one pick for the pick of the day"* — singular. Until
+today each league chose its own, so the MLB page and the NFL page each
+claimed a different Pick of the Day. There is now a cross-league layer:
+`potd.day_top_pick` runs the SAME ranking over every board and names
+one, written once a cycle by the refresh loop.
+
+```bash
+cat /srv/qellys/web/data/day_top_pick.json | python3 -m json.tool | head -30
+```
+
+**What good looks like:** `"sport"` names a league, `"pick"` is a card,
+`"runners_up"` lists the league picks it beat, `"census"` says why any
+league contributed nothing.
+
+| if you see | it means |
+|---|---|
+| `"pick": null` with a census full of "has not rebuilt today" | the boards are stale — that is the cycle, not this |
+| `"pick": null`, census empty | no league published a board at all |
+| a `below_bar` on the pick | nothing cleared the bar anywhere; it is shown as a lean and is NOT on the record |
+
+On the site it draws as one line inside the Pick of the Day card — it
+does **not** get its own block, because the picks already start right at
+the fold on a phone and another card pushes them under it.
+
+**It is a paid file.** Signed out, `data/day_top_pick.json` should come
+back stripped; signed in, through `/api/board/`, whole. Worth one look
+in a private window, since this is the headline pick.
+
+---
+
 ## BOOKS. Did the seven new books actually show up? (read-only, 5 seconds)
 
 Ethan, 2026-09-15: *"all the us books your using and shit, is that able
