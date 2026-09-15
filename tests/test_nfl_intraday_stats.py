@@ -80,6 +80,63 @@ def test_no_open_nfl_pick_means_no_pull():
     assert calls == [], calls
 
 
+def _game(H, day, home="LV", away="MIA", final=True, period="001"):
+    H.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, "
+              "home_score, away_score) VALUES ('nfl', 2026, ?, ?, ?, ?, ?, ?, ?)",
+              (period, f"{away}@{home}", day, home, away,
+               24.0 if final else None, 20.0 if final else None))
+    H.commit()
+
+
+def _filed(H, team, period="001"):
+    db.upsert_player_logs(H, [{"sport": "nfl", "season": 2026, "period": period,
+                               "game_id": f"{team}-{period}", "player": f"Starter {team}",
+                               "team": team, "opponent": "OPP", "position": "WR",
+                               "home": 1, "market": "rec_yds", "value": 60.0}])
+    H.commit()
+
+
+def test_the_pull_stops_once_the_file_covers_every_finished_game():
+    """The file is owed for the hours between a final and its rows
+    landing — not for the rest of the week. Both teams filed: no pull."""
+    L, H, calls, restore = _world()
+    try:
+        _game(H, "2026-09-13"); _filed(H, "LV"); _filed(H, "MIA")
+        assert maintenance._nfl_day_wanted(H, "2026-09-13") is False
+        maintenance.ingest_for_open_bets(L, H, ["2026-09-13"], log=lambda *a: None)
+    finally:
+        restore()
+    assert calls == [], f"pulled with the file already in: {calls}"
+
+
+def test_a_finished_game_missing_a_team_keeps_the_pull_owed():
+    L, H, calls, restore = _world()
+    try:
+        _game(H, "2026-09-13"); _filed(H, "MIA")              # LV not yet filed
+        assert maintenance._nfl_day_wanted(H, "2026-09-13") is True
+        maintenance.ingest_for_open_bets(L, H, ["2026-09-13"], log=lambda *a: None)
+    finally:
+        restore()
+    assert calls == [2026], calls
+
+
+def test_an_unfinished_day_is_not_pulled_for_and_an_unknown_one_is():
+    L, H, calls, restore = _world()
+    try:
+        _game(H, "2026-09-13", final=False)
+        assert maintenance._nfl_day_wanted(H, "2026-09-13") is False
+        maintenance.ingest_for_open_bets(L, H, ["2026-09-13"], log=lambda *a: None)
+        assert calls == [], "pulled for a game that has not finished"
+        # No schedule row at all: unknown is not covered, so the file is asked.
+        assert maintenance._nfl_day_wanted(H, "2026-09-20") is True
+    finally:
+        restore()
+
+
+def test_the_pull_is_hourly_while_owed():
+    assert maintenance.NFL_STATS_EVERY_S == 3600
+
+
 def test_the_season_follows_the_football_calendar():
     assert maintenance._nfl_season_of("2026-09-13") == 2026
     assert maintenance._nfl_season_of("2027-01-10") == 2026

@@ -624,10 +624,19 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     # upsert is idempotent) and is throttled here on its own ingest_log
     # row so a five-minute settle loop asks nflverse at most every few
     # hours, and only while an NFL pick is open.
-    if _has_open(lconn, "nfl", days):
+    # ONLY WHILE THE FILE IS STILL OWED. A game day whose every finished
+    # game is already in the official file has nothing left to pull for;
+    # a day whose games have not finished cannot be in it yet. The pull
+    # is for the hours in between — Sunday night to Monday morning —
+    # and runs hourly there (2026-09-15; it was every four hours on any
+    # game day, landed or not, which is both slower than the file and
+    # four 15 MB downloads a day for nothing).
+    owed = [d for d in days
+            if _has_open(lconn, "nfl", [d]) and _nfl_day_wanted(hconn, d)]
+    if owed:
         try:
             if _nfl_stats_due(hconn):
-                season = _nfl_season_of(days[-1])
+                season = _nfl_season_of(owed[-1])
                 res_nfl = ingest.ingest_nfl_results(hconn, season)
                 db_log = getattr(ingest, "db", None)
                 if db_log is not None:
@@ -684,7 +693,38 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
 
 #: How the intraday NFL stats pull records itself, and how often it may run.
 NFL_STATS_KIND = "weekly_stats_intraday"
-NFL_STATS_EVERY_S = 4 * 3600
+#: Hourly, and only while a finished game with an open pick is missing
+#: from the file — see `_nfl_day_wanted`. nflverse publishes Sunday's
+#: stats in the small hours of Monday; an hour is the most a graded
+#: Sunday now waits on us rather than on them.
+NFL_STATS_EVERY_S = 3600
+
+
+def _nfl_day_wanted(hconn, day: str) -> bool:
+    """Is the weekly file still owed for this game day?
+
+    True when the schedule has no row for the day (unknown is not
+    covered — ask the file), or when a finished game on it has a team
+    with no official row yet. False when nothing on the day has finished
+    (the file cannot carry it) or every finished game's teams are filed
+    (nothing left to fetch; a player still absent then is the absent-
+    player rule's question, not the ingest's).
+    """
+    games = hconn.execute(
+        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "WHERE sport='nfl' AND date=?", (str(day)[:10],)).fetchall()
+    if not games:
+        return True
+    finals = [g for g in games
+              if g["home_score"] is not None and g["away_score"] is not None]
+    if not finals:
+        return False
+    played = {t for g in finals for t in (g["home"], g["away"])}
+    filed = {r[0] for r in hconn.execute(
+        "SELECT DISTINCT team FROM player_game_logs WHERE sport='nfl' "
+        "AND season=? AND period=? AND game_id NOT LIKE '%-box'",
+        (int(finals[0]["season"]), str(finals[0]["period"])))}
+    return not played <= filed
 
 
 def _nfl_season_of(day: str) -> int:
