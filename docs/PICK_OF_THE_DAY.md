@@ -262,7 +262,7 @@ So the cross-league answer is that same comparator over a longer list. A
 cross-sport bar invented at this layer would be a second set of numbers
 to keep honest, fitted to nothing.
 
-**Two refusals do real work.**
+**Three refusals do real work.**
 
 A *qualifying* pick always beats a *below-bar* one, whatever the tiers
 say. §3b's reserve means `build` publishes its best available when
@@ -276,9 +276,55 @@ well-formed pick on disk from whenever it last ran. Nothing about that
 card looks wrong; only its date says so. Same shape as the stale-price
 ceiling in §3.
 
+A qualifying pick is refused unless it is **the one that league already
+locked**. `ledger.log_pick_of_the_day` writes the first qualifying pick
+of each journal day and refuses every later one, precisely so a sport
+cannot churn picks until settle time and have the record keep whichever
+happened to be showing. `ledger.locked_potd_keys` reads that lock and
+`day_top_pick` honours it.
+
+> **This was missing for the first three hours.** Shipped without it,
+> the cross-league layer ranked whatever was on the boards at the moment
+> the cycle ran — so the day's headline could have been an MLB bet at
+> noon and, after that bet lost, an NFL one at eight, with nothing
+> recording the first claim. Choosing after seeing how the day is going,
+> which is the exact failure the per-league rule exists to prevent,
+> reintroduced one layer up.
+>
+> It reads the existing lock rather than defining a second one: two
+> locks that can disagree is worse than none, because the disagreement
+> is invisible from the page. And `potd_row_key` is lifted out of the
+> journal writer so the writer and the matcher cannot disagree about a
+> negated spread or a moneyline rewritten as OVER 0.5.
+>
+> **Failing closed.** A ledger that cannot be read yields `{}`, which
+> refuses every qualifying pick and publishes nothing — because an
+> unlocked claim looks identical on the page and cannot be graded
+> afterwards.
+
+Below-bar leans are exempt from the lock and that is not an oversight:
+nothing journals them, nothing records them, so there is no lock to
+match — and the page still has to show the strongest thing available on
+a day when no league cleared its bar.
+
 **Where it runs.** Not in a build — no build can see the other boards.
 `launch._write_day_top_pick` runs once per refresh cycle, after every
-board has had its turn, and writes `web/data/day_top_pick.json`. The
+board has had its turn, and writes `web/data/day_top_pick.json`.
+
+> **A board's file is not named after its league,** and three separate
+> readers assumed it was on the day this shipped. The NFL writes
+> `recommendations.json` and MLB `mlb_recommendations.json`; only cfb,
+> nba and wnba match their own code. The writer opened
+> `web/data/{sport}.json`, so the two leagues at the top of
+> `SPORT_PRIORITY` were invisible to it and the day's top pick could
+> only ever have come from college football or the hoops boards. The
+> `FileNotFoundError` underneath swallowed it as "a league this box does
+> not publish".
+>
+> `launch.BOARD_FILES` is the registry, and everything reads it now.
+> `potd_report.py` had the same bug against the *light* copies
+> (`recommendations_picks.json`, not `nfl_picks.json`) and had been
+> silently reporting on three leagues out of five since it shipped. The
 page draws it as **one line inside the Pick of the Day card**, not as a
 block of its own: `tests/test_board_order.py` measured that the picks
 already start at 848px on an 844px phone fold, so a second card above
@@ -289,6 +335,30 @@ is that same object promoted to the top level with nothing else in it to
 strip, so it is registered in `PAID_FILES` and fetched through
 `paidFetch`. Registered free it would have handed the headline pick to
 everyone while looking like an ordinary new board.
+
+**Seeing it on the box.** `python3 potd_report.py --top` prints the
+board's answer beside the locked one, the journaled picks, and a banner
+when the two disagree. That disagreement is ordinary — a league has
+moved off the pick it journaled this morning — and is the single thing
+most likely to look like a broken feature when it is a working one.
+
+### What it still cannot tell you
+
+**The day's top pick has no record of its own.** It is always one of the
+per-league picks, so it is already counted in the `potd` book — but
+which league won on a given day is nowhere on disk, because
+`day_top_pick.json` is overwritten every cycle. The winner's tier is not
+recoverable from the journal row either (`bets` carries odds and edge,
+not `evidence`), so it cannot be recomputed after the fact.
+
+Storing it is a small per-day pointer. What it should point AT is a real
+question and not a detail: the cross-league winner can legitimately
+change during the morning as more leagues journal their picks — a league
+that builds at 6am cannot be outranked by one that has not run yet — so
+"first cycle wins" would systematically favour whichever league builds
+first, while "last cycle wins" means the reader at 6am saw a headline
+that is not the one recorded. Both are defensible and they record
+different things.
 
 ### What it is not called, and why
 
