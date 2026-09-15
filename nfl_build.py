@@ -338,6 +338,14 @@ def main() -> None:
     _mem("start", args.memtrace)
 
     games = show_games(args.season, args.week)
+    if args.games_only and args.live:
+        # The scoreboard overlay for THIS path too; the full build's runs
+        # later, on the slate it builds for itself. `price_games_only`
+        # goes through `_finish_bet`, whose "already started" rule reads
+        # `g.live` first and the game's own clock second.
+        import types as _types
+        from engine.sources.livescores import attach_live
+        attach_live(_types.SimpleNamespace(games=games))
     if args.games_only:
         # A SCHEDULE IS WORTH PUBLISHING, AND ITS GAME MARKETS ARE WORTH
         # PRICING.

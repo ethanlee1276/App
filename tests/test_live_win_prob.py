@@ -237,10 +237,21 @@ def test_the_good_direction_on_a_spread_is_the_smaller_number():
     green on a -1.5 ticket. A bet on -1.5 needs the team to win by two;
     a market at -0.5 expects them to win by one, so that move is the bet
     getting WORSE. More favoured than the number you took means a SMALLER
-    signed spread."""
-    i = APP.index("const better = r.market === \"total\"")
-    block = APP[i:i + 220]
-    assert "Number(now) < Number(r.line)" in block
+    signed spread.
+
+    AND THE NUMBER HE TOOK IS NOT THE STORED ONE (2026-09-14). The
+    journal keeps a spread NEGATED so the over grader applies unchanged
+    (ledger: "margin > -spread — so actual = margin, line = -spread"): a
+    −1.5 ticket is `line` 1.5. The second version compared the market's
+    −0.5 against that +1.5 and painted it green all over again — the
+    same bug, one sign further along. The comparison runs on `took`,
+    the negation, which is the ticket as he bought it."""
+    i = APP.index("const marketLine = (r) =>")
+    block = APP[i:APP.index("\n  };", i)]
+    assert 'const took = r.market === "spread" ? -r.line : r.line;' in block
+    j = block.index("const better = r.market === \"total\"")
+    assert "Number(now) < Number(took)" in block[j:j + 220]
+    assert "Number(r.line)" not in block[j:j + 220], "compared on the stored line again"
 
 
 def test_the_good_direction_on_a_total_follows_the_side():

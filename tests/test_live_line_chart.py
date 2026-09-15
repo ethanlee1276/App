@@ -167,7 +167,7 @@ def test_the_fast_scoreboard_merges_instead_of_replacing():
     # neighbourhood to break on a comment (2026-09-10). Its last line is
     # where it ends, and that anchor cannot be pushed out by prose.
     i = APP.index("async function fetchAllLive(")
-    fn = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
+    fn = APP[i:APP.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
     assert "byKey" in fn and "...bg, ...fg" in fn
     assert "games = df.games;" not in fn, "wholesale replacement is back"
 
@@ -218,7 +218,7 @@ def test_cfb_marks_survive_the_cross_sport_live_tab():
     # the test a tripwire on comment length. Its own comment already had
     # the right answer — "the window is not the contract, the assignment
     # is" — so the slice now runs to the function's own last line.
-    body = APP[j:APP.index("_liveAll = { at: Date.now(), games: out };", j)]
+    body = APP[j:APP.index("_liveAll = { at: Date.now(), games: out, finals: done };", j)]
     assert '_cfbTeams = d.teams' in body
 
 

@@ -714,8 +714,17 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # board builds literally nothing until week 4 — measured on 2025: 0, 0,
     # 0, then 235. It stands itself down as soon as the season has three
     # real games, so there is nothing to switch off later.
+    # --live so the slate knows which games are under way or over. It
+    # never was passed, and it cost real rows: 2026-09-14, Broncos at
+    # Chiefs, the build at 10:32pm and again at 10:51pm — fourth quarter —
+    # saw every game "scheduled", recommended Bo Nix over 217.5 passing
+    # yards and a game-total under 48.5 with 41 points on the board, and
+    # journaled them. One cached scoreboard read (livescores.fetch_live,
+    # 30 s) and `pipeline._finish_bet`'s existing "already started" rule
+    # does the rest; `rules.clock_says_started` is the witness when the
+    # scoreboard is down.
     args = ["nfl_build.py", str(season), str(week), "--out", out,
-            "--injuries", "--depth", "--carry"]
+            "--injuries", "--depth", "--carry", "--live"]
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
     # THE CHEAP TIER, when the expensive one is declined.
@@ -798,7 +807,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
         # disk. It is the only way a moneyline can price here, that being
         # the one game market that needs a book price rather than a rating.
         ok2, tail2 = _run_build(["nfl_build.py", str(season), str(week),
-                                 "--games-only", "--cached-odds",
+                                 "--games-only", "--cached-odds", "--live",
                                  "--out", out])
         if ok2:
             if not quiet:

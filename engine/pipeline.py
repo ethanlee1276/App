@@ -970,6 +970,12 @@ def price_props(slate: Slate, config: RuleConfig | None = None,
         # from, so the Most Likely card carries it too.
         d["ripples"] = list((ripples or {}).get((prop.player, prop.market)) or [])
         d["live"] = bool(game.live and game.live.state == "live")
+        # …AND THE WIDER FACT, as `_finish_bet` writes on a game card:
+        # live OR final, by the overlay or by the game's own clock.
+        # `likely.from_prop` refuses on it and the journal refuses on
+        # it; a prop that carried only `live` was admitted to the Most
+        # Likely board after the whistle.
+        d["started"] = game_has_started(game)
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
         # THE GAME SCRIPT, said the way every other page says it (Ethan,

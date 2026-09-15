@@ -468,8 +468,12 @@ def void_unmeasured_game_bets(conn, sport: str = "nfl",
     return hit
 
 
-def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
+def journal_skip_reason(r: dict, only_recommended: bool = True,
+                        kick: dict | None = None, now=None) -> str | None:
     """Why this recommendation will NOT be journaled — or None if it will.
+
+    ``kick`` is the board's team → kickoff map (`_kickoff_map`) for the
+    in-play refusal at the end, ``now`` a clock for tests.
 
     The four conditions below used to live inline in the loop, which meant
     the only way to find out why a pick shown on the board never reached
@@ -493,6 +497,42 @@ def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
     if stake <= 0:
         return ("stake is 0.00u — Kelly says this price is not beatable at "
                 "our probability, so there is no bet to record")
+    return in_play_reason(r, kick, now)
+
+
+def in_play_reason(r: dict, kick: dict | None = None, now=None) -> str | None:
+    """Why this row cannot be journaled NOW: its game is under way, or over.
+
+    THE JOURNAL IS THE LAST LINE OF DEFENCE, and on 2026-09-14 it had no
+    line here at all. Broncos at Chiefs kicked off at 8:15pm; the NFL
+    build ran at 8:52pm, 10:32pm and 10:51pm with every game "scheduled"
+    (the launcher never passed `--live`, so nothing upstream knew), and
+    this journal placed Adam Trautman over 1.5 receptions in the first
+    quarter, Bo Nix over 217.5 passing yards and Evan Engram over 3.5
+    receptions in the third, and a game-total under 48.5 in the fourth
+    with 41 points already on the board. Every one of them a pre-game
+    price taken in play, on the public record.
+
+    THREE WITNESSES, ANY ONE ENOUGH. The row's own `live` and `started`
+    flags (the pipeline's, from the scoreboard overlay) and the game's
+    own kickoff by the clock — `_lead_min`, the same derivation that
+    stamps `lead_min` on every row, read against `rules.IN_PLAY_WINDOW_MIN`:
+    inside that window after kickoff a price is being taken in play or
+    after the whistle; past it the row is history (a replay, a
+    backtest), which the price ceilings already keep off a live board.
+    A row with no clock and no flag answers None, as `_lead_min` does —
+    refusing on a missing field would refuse real bets.
+    """
+    from .rules import IN_PLAY_WINDOW_MIN
+    if r.get("live"):
+        return "the game is under way — a pre-game price cannot be taken in play"
+    if r.get("started"):
+        return ("the game has already been played — a pre-game price cannot "
+                "be taken after the whistle")
+    lead = _lead_min(r, kick, now=now)
+    if lead is not None and -IN_PLAY_WINDOW_MIN < lead <= 0:
+        return (f"kicked off {abs(lead):.0f} min ago by its own schedule — "
+                f"a pre-game price cannot be taken in play")
     return None
 
 
@@ -574,7 +614,7 @@ def _weather_map(result: dict) -> dict:
     return out
 
 
-def _lead_min(r: dict, kick: dict | None = None) -> float | None:
+def _lead_min(r: dict, kick: dict | None = None, now=None) -> float | None:
     """Minutes to this pick's start, for every board's shape of clock.
 
     ONE PLACE, because there were three and they disagreed. The props
@@ -595,7 +635,7 @@ def _lead_min(r: dict, kick: dict | None = None) -> float | None:
     if stamp and len(str(stamp)) <= 5:
         stamp = kickoff_instant(r.get("game_date") or r.get("date") or "",
                                 stamp) or stamp
-    return minutes_until(stamp)
+    return minutes_until(stamp, now)
 
 
 def _stamp_team(conn, cur, r) -> None:
@@ -639,8 +679,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     for r in result.get("recommendations", []):
         # One predicate, used by the loop AND by --why-pick, so the reason
         # the report gives is the reason the code acted on. Proxy prices,
-        # long shots and zero stakes are all excluded; see the function.
-        if journal_skip_reason(r, only_recommended):
+        # long shots, zero stakes and games already under way are all
+        # excluded; see the function.
+        if journal_skip_reason(r, only_recommended, kick):
             continue
         stake_units = float(r.get("stake_units", 0) or 0)
         # Read the correction HERE, in the same process that just priced
@@ -724,6 +765,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     _wx = _weather_map(result)
     for r in result.get("game_bets", []):
         if not r.get("recommended"):
+            continue
+        # Never a game under way or over — `in_play_reason`, the same
+        # refusal the props loop above makes through `journal_skip_reason`.
+        if in_play_reason(r, kick):
             continue
         bt = r.get("bet_type")
         if bt == "moneyline":
@@ -820,8 +865,13 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
     sport = result.get("sport", "mlb")
     date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
-    n = _journal_longshot_rows(conn, result.get("long_shots") or [],
-                               sport, date, now, "longshot", flat_stake)
+    # Never a game under way or over — see `in_play_reason`. A long-shot
+    # row carries `game_kickoff` (an instant on baseball, a bare Eastern
+    # clock beside `game_date` on football), which is clock enough.
+    kick = _kickoff_map(result)
+    rows = [r for r in (result.get("long_shots") or [])
+            if not in_play_reason(r, kick)]
+    n = _journal_longshot_rows(conn, rows, sport, date, now, "longshot", flat_stake)
     conn.commit()
     return n
 
@@ -912,6 +962,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     rows = (result.get("most_likely") or [])[:max(0, int(depth))]
+    kick = _kickoff_map(result)
     n = 0
     for r in rows:
         market = r.get("market", "")
@@ -943,6 +994,15 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # line of defence against fictional P&L, and a board filter is
         # one refactor away from not being one.
         if r.get("reserve"):
+            continue
+        # NEVER A GAME UNDER WAY OR OVER — see `in_play_reason`. The board
+        # refuses `live` and `started` rows itself (`likely.admissible`),
+        # and it read those flags off a slate that, on 2026-09-14, had
+        # never been told a game was live: Adam Trautman over 1.5
+        # receptions journaled here at 8:52pm, thirty-seven minutes into
+        # Broncos-Chiefs. The row's own kickoff is the witness that needs
+        # no feed.
+        if in_play_reason(r, kick):
             continue
         player = r["player"]
         if r.get("kind") == "game" or market in GAME_MARKETS:

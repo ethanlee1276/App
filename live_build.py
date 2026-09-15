@@ -173,7 +173,7 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     if not live:
         return "no games in progress — no plays fetched"
     from engine.mlb.sources.pbp import fetch_live_playbyplay, recent_plays
-    got = failed = deep = 0
+    got = failed = deep = boxes = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = fetch_live_playbyplay(g["game_pk"])
@@ -184,6 +184,18 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
             g["plays_state"] = "unreachable"
             failed += 1                # the card keeps its score
             continue
+        # THE BOX SCORE ON THE CARD'S ROW — see livescore_build.attach_plays
+        # for why: the Live tab's bets read their number off this file on
+        # the fast clock rather than off the board build, which on
+        # baseball is minutes apart and on football most of an hour. The
+        # same statsapi boxscore the deep file's Player stats room reads,
+        # on its own five-minute cache, through the same rows. A fetch
+        # that fails costs the row its box and nothing else.
+        try:
+            g["players"] = _box_players(g)
+            boxes += 1
+        except Exception:                                    # noqa: BLE001
+            pass
         # THE DEEP FILE, from the payload already in hand (Ethan,
         # 2026-09-05: "click on each live game and see a deeper play by
         # play"). Every completed at-bat, newest last, under
@@ -206,7 +218,20 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
                  f"(scores only)")
     if pbp_dir is not None and got:
         note += f", {deep} deep file(s)"
+    if boxes:
+        note += f", {boxes} box score(s)"
     return note
+
+
+def _box_players(g: dict) -> list[dict]:
+    """``[{player, team, position, stats}]`` for one game, from the
+    statsapi boxscore — the rows the deep file's Player stats room draws
+    and, since 2026-09-14, the rows the Live tab's tracked bets count
+    on. One fetch, one parser, two readers."""
+    from engine.mlb.sources.statslogs import fetch_boxscore
+    from engine.mlb.livestats import box_rows
+    return box_rows(fetch_boxscore(int(g["game_pk"])),
+                    home=g.get("home") or "home", away=g.get("away") or "away")
 
 
 def _utc() -> str:
@@ -253,10 +278,8 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
     # tracker reads, on its own five-minute cache, through the same
     # fields. A fetch that fails costs the tab and nothing else.
     try:
-        from engine.mlb.sources.statslogs import fetch_boxscore
-        from engine.mlb.livestats import box_rows
-        doc["players"] = box_rows(fetch_boxscore(int(g["game_pk"])),
-                                  home=g.get("home") or "home", away=g.get("away") or "away")
+        doc["players"] = (g["players"] if isinstance(g.get("players"), list)
+                          else _box_players(g))
     except Exception:                                        # noqa: BLE001
         pass
     tmp = out.with_suffix(".json.tmp")

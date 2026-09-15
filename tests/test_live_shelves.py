@@ -75,7 +75,7 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # Its own last line, not the next `function` — helpers grew between
     # the two on 2026-09-10 and this slice quietly swallowed them, which
     # would let a deleted line here pass on a match down there.
-    body = src[i:src.index("_liveAll = { at: Date.now(), games: out };", i)]
+    body = src[i:src.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
     assert 'await fetch(url, { cache: "no-cache" })' in body
     assert 'fetch(LIVE_FAST[sport], { cache: "no-store" })' in body
     # A cache-busting query string would defeat every 304 — the URL must

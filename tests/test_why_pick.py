@@ -72,7 +72,7 @@ def test_the_loop_uses_the_same_predicate_it_reports():
     led = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
     i = led.index("def log_recommendations(")
     block = led[i:i + 2000]
-    assert "if journal_skip_reason(r, only_recommended):" in block
+    assert "if journal_skip_reason(r, only_recommended, kick):" in block
     assert 'if r.get("has_market") is False:' not in block, \
         "the loop still has its own inline copy of a gate"
 

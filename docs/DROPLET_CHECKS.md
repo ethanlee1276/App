@@ -598,6 +598,84 @@ What to expect, board by board, after the next refresh cycle:
   the board's `away@home` did not match the fast scoreboard's (the same
   identity join the Live tab's scores use); `feed(s) unreachable` is
   ESPN; `past the 8-game cap` is the budget, by design.
+
+### 7a. The number on the row moves on the fast clock (2026-09-14)
+
+Ethan, 11:01pm, fourth quarter of Broncos-Chiefs, every bet on the Live
+tab reading "in play" and nothing else: "why are we not showing the live
+lines for the live props here and not tracking the live stats like how
+sports books do it." `current=` above is the BUILD's number, up to
+forty-five minutes old on football. The fast scoreboard now carries each
+live game's box rows (`players`, the same rows the play-by-play page's
+Player stats room draws), written every twelve seconds, and the page
+reads a bet's number off them on every poll — so the row under a game
+card counts on the game card's clock. The build's figure is the floor,
+never the ceiling.
+
+```bash
+cd /srv/qellys && python3 - <<'PY7A'
+import json
+for lg in ("nfl", "cfb", "nba", "wnba", "mlb"):
+    try:
+        d = json.load(open(f"web/data/live_{lg}.json"))
+    except FileNotFoundError:
+        print(f"{lg:<5} no fast file"); continue
+    live = [g for g in d.get("games", []) if (g.get("live") or {}).get("state") == "live"]
+    print(f"{lg:<5} {d.get('generated_at')} live={len(live)} note={d.get('plays_note')}")
+    for g in live:
+        rows = g.get("players")
+        print(f"   {g.get('away')}@{g.get('home')} players="
+              f"{'ABSENT' if rows is None else len(rows)}",
+              *[f"{r['player']}={r['stats']}" for r in (rows or [])[:2]])
+PY7A
+```
+
+* `players=ABSENT` on a live game while `plays_note` counts it means the
+  box parser refused the payload (the rows are guarded: the plays stay,
+  the box goes). `past the 8-game cap` games have no box by design — the
+  page keeps the build's number for those.
+* `N box score(s)` in `plays_note` is the count of live games whose box
+  parsed this pass. Zero with live games on is the thing to look at.
+* On the page, a tracked prop reads "57 so far · needs 6 more" and a
+  spread "up 7 · covering −3.5"; both should move within a poll of the
+  scoreboard, not a build. Live PROP LINES are a different question: the
+  odds feed bills eight credits per game per pull for in-play props, and
+  the budget buys none after kickoff. Game lines (`livelines`) are still
+  pulled for the whole slate at three credits.
+
+### 7b. No bet is journaled on a game under way (2026-09-14)
+
+Ethan, 11:15pm: "Whatever u did shows the bets as upcoming again." Two
+things were true at once. The page had dropped the game the moment it
+went final (fixed: `fetchAllLive` keeps finals for the tracker). And the
+BUILD had never known the game was live at all — the launcher never
+passed `--live` to `nfl_build.py` — so at 8:52pm, 10:32pm and 10:51pm
+it recommended and journaled pre-game prices on a game in progress:
+Trautman over 1.5 receptions (Q1), Bo Nix over 217.5 passing yards and
+Engram over 3.5 receptions (Q3), a game-total under 48.5 with 41 points
+scored (Q4). Now: the launcher passes `--live`; `rules.game_has_started`
+also reads the game's own kickoff (`clock_says_started`, an eight-hour
+window after kickoff); and `ledger.in_play_reason` refuses the row at
+journal time on all three books (edge, long shots, Most Likely).
+
+The rows placed in play on the 14th are still open and still on the
+record. Listing them is safe; voiding them is Ethan's call:
+
+```bash
+cd /srv/qellys && sqlite3 -header data/ledger.db "SELECT id, category, player, market, side, line, odds, stake_units, ts, status FROM bets WHERE sport='nfl' AND status='open' AND ts >= '2026-09-15T00:15' AND ts < '2026-09-15T04:00' AND (player IN ('KC','DEN','DEN@KC') OR team IN ('KC','DEN')) ORDER BY ts;"
+```
+
+Kickoff was 00:15Z (8:15pm ET). Every row that query returns was
+journaled after it. To void them with the reason on the row (only on a
+yes):
+
+```bash
+cd /srv/qellys && sqlite3 data/ledger.db "UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0, why_note='placed in play — the build did not know the game had kicked off (2026-09-14)' WHERE sport='nfl' AND status='open' AND ts >= '2026-09-15T00:15' AND ts < '2026-09-15T04:00' AND (player IN ('KC','DEN','DEN@KC') OR team IN ('KC','DEN'));"
+```
+
+After the next refresh, the build log's `Journal:` line should stop
+growing during a game, and `--why-pick` on a live game's prop says
+"kicked off N min ago by its own schedule".
 * NFL's card is the week label (`2026-W01`), so its rows are the whole
   week's open bets; the other three use the slate date and its two
   neighbours.

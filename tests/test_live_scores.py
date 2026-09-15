@@ -154,7 +154,7 @@ def _live_fetch_body(app):
     function ends where it assigns its cache; that is a structural
     anchor and it does not move when the prose does."""
     i = app.index("async function fetchAllLive")
-    return app[i:app.index("_liveAll = { at: Date.now(), games: out };", i)]
+    return app[i:app.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
 
 
 def test_a_missing_fast_file_leaves_the_page_as_it_was():

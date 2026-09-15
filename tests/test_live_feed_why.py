@@ -218,7 +218,7 @@ def test_the_fast_scoreboard_is_read_even_when_the_model_board_is_not():
     Waiting on it to EXIST is the same dependency wearing a different
     hat."""
     i = APP.index("async function fetchAllLive()")
-    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
+    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
     head = body[:body.index("if (LIVE_FAST[sport])")]
     # CODE ONLY. The comment above that fetch quotes the old line to say
     # what it did, and a test that cannot tell prose from an instruction
@@ -239,7 +239,7 @@ def test_the_fetch_keeps_the_note_and_the_stamp_it_used_to_drop():
     """`fetchAllLive` read `games` and nothing else. Both fields the
     builder writes for this purpose must come out of it."""
     i = APP.index("async function fetchAllLive()")
-    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
+    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out, finals: done };", i)]
     assert "df.note" in body, "the note is dropped again"
     assert "df.generated_at" in body, "the stamp is dropped again"
     assert "_liveFeedState[sport] = feed" in body, body[-600:]

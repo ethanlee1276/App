@@ -55,6 +55,16 @@ def _run():
 
 
 def _journal(res):
+    """Journals every row, recommended or not — this file is about the
+    COLUMNS. The sample slate's one live game (KC at BUF, third quarter)
+    is the only game whose props carry a stake, and since 2026-09-14 the
+    journal refuses a row on a game under way (`ledger.in_play_reason`,
+    tests/test_no_bets_in_play.py). The flags are cleared here so the
+    dimension test still has a row to read; the rule has its own file."""
+    import copy
+    res = copy.deepcopy(res)
+    for r in (res.get("recommendations") or []) + (res.get("game_bets") or []):
+        r["live"] = r["started"] = False
     conn = ledger.connect(":memory:")
     ledger.log_recommendations(conn, res, only_recommended=False)
     return conn

@@ -53,11 +53,57 @@ def condition(key: str, label: str, passed: bool, value: str,
             "value": value, "limit": limit}
 
 
-def game_has_started(game) -> bool:
+#: How long after kickoff a game's OWN CLOCK counts it as started, in
+#: minutes. Inside this window a pre-game price is being taken in play or
+#: after the whistle; past it the row is history — a replay, a backtest, a
+#: fixture — and the price ceilings in `oddsapi` (six hours stops a
+#: recommendation) already keep a fresh price from existing on a game that
+#: old, so in production the far edge of the window is never reached.
+IN_PLAY_WINDOW_MIN = 8 * 60
+
+
+def clock_says_started(date, kickoff, now=None) -> bool:
+    """Has this game kicked off by its own schedule, within the window?
+
+    THE SECOND WITNESS. `game_has_started` below read only the live
+    overlay, and the NFL launcher never passed `--live` — so on
+    2026-09-14 the Broncos-Chiefs slate built at 10:32pm and again at
+    10:51pm, in the fourth quarter, with every game "scheduled": the
+    board recommended and the journal placed Bo Nix over 217.5 passing
+    yards, Evan Engram over 3.5 receptions and a game-total under 48.5
+    with 41 points already scored. The scoreboard is now passed, and it
+    is still one feed that can 403; the schedule's own kickoff is on the
+    game row and needs no network at all.
+
+    A bare "HH:MM" is an Eastern clock joined to the row's date by
+    `fatigue.kickoff_instant`; an ISO stamp is read as it is. Anything
+    that cannot be joined honestly answers False — a guess here would
+    refuse real bets on the strength of a missing field.
+    """
+    from .fatigue import kickoff_instant
+    from .losspatterns import minutes_until
+    stamp = str(kickoff or "").strip()
+    if not stamp:
+        return False
+    if len(stamp) <= 5:
+        stamp = kickoff_instant(str(date or ""), stamp)
+        if not stamp:
+            return False
+    lead = minutes_until(stamp, now)
+    return lead is not None and -IN_PLAY_WINDOW_MIN < lead <= 0
+
+
+def game_has_started(game, now=None) -> bool:
     """True once a game is live or final — i.e. once a pre-game projection is
-    stale and the book is pricing something our model isn't modelling."""
+    stale and the book is pricing something our model isn't modelling.
+
+    Two witnesses: the live overlay when the build has one, and the
+    game's own kickoff clock (`clock_says_started`) when it does not."""
     live = getattr(game, "live", None)
-    return bool(live and getattr(live, "state", "") in ("live", "final"))
+    if live and getattr(live, "state", "") in ("live", "final"):
+        return True
+    return clock_says_started(getattr(game, "date", ""),
+                              getattr(game, "kickoff", ""), now=now)
 
 
 def apply_rules(

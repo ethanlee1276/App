@@ -3555,12 +3555,65 @@ function censusFunnelHTML() {
 
 /* Tracker rows with their phase read off the fast scoreboard — see the
    note at the top of renderLivePicks. Pure: returns new row objects and
-   leaves `state.data.live_picks` as the build wrote it. */
+   leaves `state.data.live_picks` as the build wrote it.
+
+   AND THEIR NUMBER, since 2026-09-14. Ethan, 11:01pm, fourth quarter of
+   Broncos-Chiefs, every bet reading "in play" and nothing else: "why are
+   we not showing the live lines for the live props here and not tracking
+   the live stats like how sports books do it." The build's `current`
+   comes from a box score fetched when the BOARD is built, and the page
+   only ever promoted a row's phase. The fast scoreboard now carries each
+   live game's box rows (`livescore_build.attach_plays`, `live_build` for
+   baseball), written every twelve seconds while a game is on — so a
+   prop's number, a team market's score, and the verdict that follows
+   from either move on the game card's clock, by the same arithmetic
+   `assemble_live_picks` does at build time. */
+//: The join key for a box-score name: the same folding the server's
+//: `oddsapi.normalize_name` does — accents, hyphens and periods to
+//: spaces, apostrophes dropped, suffixes and case gone — so a journaled
+//: "Amon-Ra St. Brown" meets ESPN's box and "Ronald Acuña Jr." meets
+//: "Ronald Acuna". Pinned against the Python in
+//: tests/test_live_tracker_fast_phase.py.
+function trackerNameKey(s) {
+  return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[-.]/g, " ").replace(/['\u2019\u02bc]/g, "")
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, "").replace(/\s+/g, " ").trim();
+}
+const TRACKER_TEAM_MARKETS = new Set(["moneyline", "spread", "team_total", "total"]);
+
+/* The number a bet is sitting on right now, from the fast game beside
+   it: a prop's from the box rows, a team market's from the score. null
+   when neither has it — a game past the box-score cap, a name the box
+   spells another way, a moneyline (the score line says it). A spread's
+   number is the bet's team's MARGIN, against the stored line, which the
+   journal keeps NEGATED so the standard over grader applies (a KC −3.5
+   ticket is line 3.5, side OVER: covers when the margin beats 3.5). */
+function trackerCurrent(r, g) {
+  const lv = g.live || {};
+  if (TRACKER_TEAM_MARKETS.has(r.market)) {
+    const hs = lv.home_score, as = lv.away_score;
+    if (hs == null || as == null || r.market === "moneyline") return null;
+    const pickHome = r.player === g.home;
+    if (r.market === "total") return Number(hs) + Number(as);
+    if (r.market === "team_total") return Number(pickHome ? hs : as);
+    return pickHome ? Number(hs) - Number(as) : Number(as) - Number(hs);
+  }
+  const key = trackerNameKey(r.player);
+  const row = (g.players || []).find((p) => p && trackerNameKey(p.player) === key);
+  const v = row && row.stats ? row.stats[r.market] : undefined;
+  return (typeof v === "number" && isFinite(v)) ? v : null;
+}
+
 function liveTrackerRows(rows) {
   const fast = (typeof _liveAll !== "undefined" && _liveAll && _liveAll.games) || [];
-  if (!fast.length) return rows;
+  // The finished games too (`fetchAllLive` keeps them apart because the
+  // cards draw only the live list): a bet on a game that has ended
+  // moves to FINAL here, rather than back to the build's UPCOMING.
+  const done = (typeof _liveAll !== "undefined" && _liveAll && _liveAll.finals) || [];
+  if (!fast.length && !done.length) return rows;
   const byKey = new Map();
-  fast.forEach((e) => {
+  // Finals first, so a live entry wins a shared key (a doubleheader).
+  [...done, ...fast].forEach((e) => {
     if (!e || e.sport !== state.sport || !e.g) return;
     byKey.set(`${e.g.away}@${e.g.home}`, e.g);
   });
@@ -3568,10 +3621,18 @@ function liveTrackerRows(rows) {
   return rows.map((r) => {
     const g = r.game && r.game.home ? byKey.get(`${r.game.away}@${r.game.home}`) : null;
     if (!g) return r;
-    const st = (g.live || {}).state;
+    const lv = g.live || {};
+    const st = lv.state;
     if (st !== "live" && st !== "final") return r;
     const out = { ...r, game: { ...r.game, ...g,
-      live: { ...(r.game.live || {}), ...(g.live || {}) } } };
+      live: { ...(r.game.live || {}), ...lv } } };
+    // The score and the clock, lifted to where the line under the bet
+    // reads them (`gameLine` reads `game.home_score`, the build's own
+    // layout) — so the row says "DEN 14–21 KC · Q4", not "DEN @ KC".
+    ["home_score", "away_score", "period"].forEach((k) => {
+      if (lv[k] != null) out.game[k] = lv[k];
+    });
+    out.game.state = st;
     // A verdict the build reached — cleared, busted, dead, *_pending — is
     // never rewritten: only the three pre-verdict statuses move below.
     if (st === "live" && r.phase !== "final") {
@@ -3580,6 +3641,23 @@ function liveTrackerRows(rows) {
     } else if (st === "final") {
       out.phase = "final";
       if (r.status === "upcoming" || r.status === "tracking") out.status = "final_pending";
+    }
+    // THE NUMBER, on the same clock as the score. The fresher figure
+    // always replaces the build's; the verdict moves only from
+    // "tracking", and only the way the build itself would move it — a
+    // stat only ever climbs, so an over past its line has cleared and an
+    // under past it has died, while a spread's margin swings both ways
+    // and never locks. A row the build already settled keeps its word
+    // and takes the newer number.
+    if (out.phase === "live") {
+      const cur = trackerCurrent(r, g);
+      if (cur != null) {
+        out.current = cur;
+        if (out.status === "tracking" && r.market !== "spread") {
+          if (r.side === "OVER" && cur > r.line) out.status = "cleared";
+          else if (r.side === "UNDER" && cur > r.line) out.status = "busted";
+        }
+      }
     }
     return out;
   });
@@ -3635,10 +3713,17 @@ function renderLivePicks() {
     if (ml(r)) return `${escapeHtml(teamName(r.player))} Moneyline`;
     if (r.market === "total")
       return `${escapeHtml(r.market_label)} ${escapeHtml(r.side)} ${r.line}`;
-    if (r.market === "spread")
+    if (r.market === "spread") {
       // Every journaled spread carries side OVER — the signed number is
       // what states the direction, so print that instead of the word.
-      return `${escapeHtml(teamName(r.player))} ${r.line > 0 ? "+" : ""}${r.line} ${escapeHtml(r.market_label)}`;
+      // THE NUMBER IS THE ONE HE TOOK. The journal stores a spread
+      // NEGATED so the over grader applies unchanged (ledger: "margin >
+      // -spread — so actual = margin, line = -spread"): a KC −3.5 ticket
+      // is line 3.5, and printing the stored figure read "KC +3.5" on
+      // every favourite the Live tab ever showed.
+      const took = -r.line;
+      return `${escapeHtml(teamName(r.player))} ${took > 0 ? "+" : ""}${took} ${escapeHtml(r.market_label)}`;
+    }
     if (r.market === "team_total")
       return `${escapeHtml(teamName(r.player))} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
     return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
@@ -3695,6 +3780,22 @@ function renderLivePicks() {
     if (r.status === "unmapped")
       return `<span style="color:var(--warn);font-weight:700">OPEN</span>
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">couldn’t map to a game this cycle — still settles overnight</span>`;
+    if (r.current != null && r.market === "spread") {
+      /* A spread's number is a MARGIN and its line is stored negated
+         (see `trackerCurrent`): "up 7 · covering −3.5", or "down 3 ·
+         needs 7 more to cover −3.5". A margin that sits exactly on the
+         number is the push it would grade as. */
+      const m = Number(r.current);
+      const took = -r.line;
+      const spreadTxt = `${took > 0 ? "+" : ""}${took}`;
+      const need = r.line - m;
+      const stand = m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : "level";
+      const sub = need < 0 ? `covering ${spreadTxt}`
+        : need === 0 ? `on the number — a push as it stands`
+        : `needs ${Math.ceil(need)} more to cover ${spreadTxt}`;
+      return `<span style="font-weight:800">${stand}</span>
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${sub}</span>`;
+    }
     if (r.current != null) {
       const needs = r.side === "OVER"
         ? `needs ${Math.max(1, Math.ceil(r.line - r.current))} more`
@@ -3828,8 +3929,11 @@ function renderLivePicks() {
     const now = r.live_market;
     if (now == null || r.phase !== "live") return "";
     const sign = (v) => `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}`;
+    // A spread's stored line is negated (see `trackerCurrent`); the
+    // number he took, and the one the market quotes, are the other sign.
+    const took = r.market === "spread" ? -r.line : r.line;
     const mine = r.market === "total"
-      ? `${escapeHtml(r.side)} ${Number(r.line).toFixed(1)}` : sign(r.line);
+      ? `${escapeHtml(r.side)} ${Number(r.line).toFixed(1)}` : sign(took);
     const theirs = r.market === "total"
       ? Number(now).toFixed(1) : sign(now);
     /* Which way is GOOD is not obvious and the first version had the
@@ -3843,7 +3947,7 @@ function renderLivePicks() {
        flips the stored home spread for an away ticket. */
     const better = r.market === "total"
       ? (r.side === "OVER" ? now > r.line : now < r.line)
-      : Number(now) < Number(r.line);
+      : Number(now) < Number(took);
     return `
       <span style="display:block;margin-top:5px;font-size:var(--fs-xs);color:var(--text-mute)">
         market now <b style="color:${better ? "var(--good)" : "var(--bad)"}">${theirs}</b>
@@ -3930,8 +4034,9 @@ function renderLivePicks() {
             + ` This tab tracks THIS league’s card; the Record page counts them all`
           : ""}. A bet journals the moment it’s recommended and stays here until it
         settles — even if the pick later drops off Tonight’s Picks because prices moved.
-        Stat lines update with the board’s refresh cycle; every bet settles
-        officially against ingested final results overnight.`)
+        Stat lines and scores update every few seconds while a game runs, from the
+        same feed the game cards read; every bet settles officially against ingested
+        final results overnight.`)
   + panel(likely, "Open Most Likely bets",
     `the likelihood board’s rows, tracked the same way — a read on who hits,
       journaled at a flat stake with no dollar exposure, graded on its own book.`,
@@ -35358,7 +35463,7 @@ const LIVE_FEEDS = {
 const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
                     cfb: "data/live_cfb.json", nba: "data/live_nba.json",
                     wnba: "data/live_wnba.json" };
-let _liveAll = { at: 0, games: [] };
+let _liveAll = { at: 0, games: [], finals: [] };
 let _liveChip = "all";
 //: The sport the chip was chosen under. Ethan, 2026-09-05: "the live page
 //: is showing live mlb bets and games on the CFB button, it should be
@@ -35391,6 +35496,15 @@ let _liveFeedState = {};
 async function fetchAllLive() {
   if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
   const out = [];
+  /* THE GAMES THAT HAVE ENDED, kept beside the ones in progress. The
+     tracker (`liveTrackerRows`) moves a bet to FINAL off this list; the
+     cards never draw from it. Ethan, 2026-09-14, 11:15pm, minutes after
+     Broncos-Chiefs ended: "Whatever u did shows the bets as upcoming
+     again." A final was dropped here, so the moment a game finished
+     every bet on it lost the fast state that had promoted it and fell
+     back to whatever the build said — UPCOMING, on a board built
+     before kickoff. */
+  const done = [];
   await Promise.all(Object.entries(LIVE_FEEDS).map(async ([sport, url]) => {
     /* THE SCORES DO NOT WAIT ON THE MODEL BOARD. Not for latency — that
        is the 2026-08-16 fix the note under LIVE_FAST describes — and,
@@ -35472,12 +35586,14 @@ async function fetchAllLive() {
         _liveFeedState[sport] = feed;
       }
       games.forEach((g) => {
-        if ((g.live || {}).state === "live") out.push({ sport, g,
+        const st = (g.live || {}).state;
+        if (st === "live") out.push({ sport, g,
           bets: (d.game_bets || []).filter((b) => b.home === g.home && b.away === g.away) });
+        else if (st === "final") done.push({ sport, g });
       });
     } catch (e) {}
   }));
-  _liveAll = { at: Date.now(), games: out };
+  _liveAll = { at: Date.now(), games: out, finals: done };
   return out;
 }
 

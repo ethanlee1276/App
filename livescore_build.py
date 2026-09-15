@@ -293,7 +293,7 @@ def attach_plays(games: list[dict], league: str,
         g["plays_state"] = "capped"
     if not live:
         return f"no games in progress — no {noun} fetched"
-    got = failed = deep = 0
+    got = failed = deep = boxes = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = espnplays.fetch_summary(league, g["event_id"])
@@ -316,6 +316,25 @@ def attach_plays(games: list[dict], league: str,
             g["plays_state"] = "unreachable"
             failed += 1                # the card keeps its score
             continue
+        # THE BOX SCORE, ONTO THE CARD'S OWN ROW, from the payload already
+        # in hand. Ethan, 2026-09-14, 11:01pm, every Broncos-Chiefs bet on
+        # the Live tab reading "in play" and nothing else: "why are we not
+        # ... tracking the live stats like how sports books do it". The
+        # tracker's number came from `livepicks.espn_progress` at BOARD
+        # build time — every forty-five minutes or so on the football
+        # boards — and the page had nothing fresher to read. This file is
+        # written every twelve seconds while a game is on, and the summary
+        # it already fetches for the plays carries the box; the parser the
+        # deep file's Player stats room trusts (`pbp_players`) reads it
+        # here, so the bet under a game card counts on the game card's
+        # clock. A parser that cannot read this payload costs the row its
+        # box and nothing else: the plays stay, and the page keeps the
+        # build's number.
+        try:
+            g["players"] = pbp_players(league, payload, g)
+            boxes += 1
+        except Exception:                                    # noqa: BLE001
+            pass
         if pbp_dir is not None:
             try:
                 write_pbp(league, g, payload, pbp_dir, sides=sides)
@@ -331,6 +350,8 @@ def attach_plays(games: list[dict], league: str,
                  f"(scores only)")
     if pbp_dir is not None and got:
         note += f", {deep} deep file(s)"
+    if boxes:
+        note += f", {boxes} box score(s)"
     return note
 
 
@@ -405,9 +426,12 @@ def pbp_doc(league: str, g: dict, payload: dict,
     else:
         doc["plays"] = espnplays.hoops_plays(payload, league, 0, sides=sides)
     # The box score, for the Player stats tab. A parser that cannot read
-    # this payload leaves the key out; the page says so.
+    # this payload leaves the key out; the page says so. The card's row
+    # already carries it when `attach_plays` parsed it a moment ago, and
+    # one parse per pass is enough.
     try:
-        doc["players"] = pbp_players(league, payload, g)
+        doc["players"] = (g["players"] if isinstance(g.get("players"), list)
+                          else pbp_players(league, payload, g))
     except Exception:                                        # noqa: BLE001
         pass
     return doc

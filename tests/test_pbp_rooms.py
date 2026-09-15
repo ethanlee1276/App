@@ -102,10 +102,18 @@ def test_the_mlb_box_reads_the_trackers_own_fields_and_names_the_sides():
 
 
 def test_the_fast_loop_writes_the_box_on_the_five_minute_cache():
+    """Since 2026-09-14 the box is read once per pass by `_box_players`
+    — the card's row takes it for the Live tab's tracked bets
+    (tests/test_live_box_on_fast_file.py) and the deep file takes the
+    card's rows — but the fetch, the parser and the cache are the same."""
+    i = LIVE_BUILD.index("def _box_players(")
+    helper = LIVE_BUILD[i:LIVE_BUILD.index("\ndef ", i + 10)]
+    assert 'return box_rows(fetch_boxscore(int(g["game_pk"])),' in helper
+    assert 'home=g.get("home") or "home", away=g.get("away") or "away")' in helper
     i = LIVE_BUILD.index("def write_pbp(")
     body = LIVE_BUILD[i:LIVE_BUILD.index("\ndef main(", i)]
-    assert 'doc["players"] = box_rows(fetch_boxscore(int(g["game_pk"])),' in body
-    assert 'home=g.get("home") or "home", away=g.get("away") or "away")' in body
+    assert 'doc["players"] = (g["players"] if isinstance(g.get("players"), list)' in body
+    assert "else _box_players(g))" in body
     assert "except Exception:" in body[body.index('doc["players"]'):], "a fetch that fails costs the tab and nothing else"
     assert 'f"mlb_box_{game_pk}.json", ttl=300' in (ROOT / "engine" / "mlb" / "sources" / "statslogs.py").read_text()
 
