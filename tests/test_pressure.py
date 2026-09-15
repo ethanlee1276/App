@@ -255,7 +255,12 @@ def test_the_live_line_reads_the_scoreboard_against_the_two_teams_rates():
 def test_the_three_surfaces_read_the_same_payload():
     assert "${pressureHTML(d.pressure, d)}" in APP, "the standings page, under the rankings"
     assert "    ${linesGrid}\n    ${pressureLiveHTML(sport, g)}\n    ${playsHTML(g)}" in APP, "the live card"
-    assert "  const games = await fetchAllLive();\n  await pressureWarm(games.map((x) => x.sport));" in APP
+    # The warm-up reads the games the board just fetched. The tracker
+    # redraw (2026-09-14) sits between the two lines; order is the pin.
+    lb = APP[APP.index("async function renderLiveBoard() {"):]
+    lb = lb[:lb.index("\n}\n")]
+    assert lb.index("const games = await fetchAllLive();") \
+        < lb.index("await pressureWarm(games.map((x) => x.sport));")
     assert "${pressurePairHTML(state.sport, g)}" in APP, "the game page"
     ph = _fn("pressureHTML")
     assert 'if (!pr || !pr.ranked) return "";' in ph

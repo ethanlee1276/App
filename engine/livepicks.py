@@ -18,6 +18,78 @@ from __future__ import annotations
 
 from .sources.oddsapi import normalize_name
 
+#: Where `livescore_build` writes `live_{league}.json` every twelve seconds
+#: while anything is on. Module-level so a test can point it at a temp dir;
+#: the suite must never read the box it runs on.
+FAST_DIR = "web/data"
+#: A fast file older than this is a stopped loop, not a quiet evening
+#: (`_live_scores_refresher` writes every 3 minutes even when idle), and a
+#: stopped loop must not pin a phase on anything.
+FAST_FRESH_S = 15 * 60
+_PHASE_RANK = {"scheduled": 0, "live": 1, "final": 2}
+
+
+def fast_live_overlay(sport: str, games: list, fast_dir=None,
+                      now: float | None = None) -> int:
+    """Paint the fast scoreboard's state onto the board's games. Returns
+    how many games moved.
+
+    Ethan, 2026-09-14, 10:51pm, Broncos at Chiefs in the third quarter,
+    every bet on the Live tab reading UPCOMING: "Chief game is live right
+    now yet we are still showing upcoming for all these bets."
+
+    The tracker takes a bet's phase from `game["live"]` on the BOARD, and
+    the launched NFL build never overlays live state (it does not pass
+    `--live`; MLB's build fetches its own). So a football board built at
+    9:30pm said every game was scheduled, and every bet under it said
+    UPCOMING until the page's own promotion caught it — which is the
+    twelve-second scoreboard the game cards beside those bets were
+    already drawing from. The build now reads the same file, so the
+    phase is right in the JSON itself and not only after the page fixes
+    it.
+
+    FORWARD ONLY, like the page: scheduled to live, live to final. A fast
+    file that says less than the board already knows changes nothing.
+    Matched on away@home, the key the page merges on; the fast file
+    writes the league's own codes (`livescores._side_key`) for exactly
+    this reason.
+    """
+    import datetime as _dt
+    import json
+    import time
+    from pathlib import Path
+    if sport not in ("nfl", "cfb", "nba", "wnba"):
+        return 0
+    path = Path(fast_dir or FAST_DIR) / f"live_{sport}.json"
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    try:
+        stamp = _dt.datetime.fromisoformat(
+            str(blob.get("generated_at") or "").replace("Z", "+00:00"))
+        age = (now if now is not None else time.time()) - stamp.timestamp()
+    except (TypeError, ValueError):
+        return 0
+    if age > FAST_FRESH_S:
+        return 0
+    by = {f"{g.get('away')}@{g.get('home')}": (g.get("live") or {})
+          for g in (blob.get("games") or []) if isinstance(g, dict)}
+    moved = 0
+    for g in games or []:
+        lv = by.get(f"{g.get('away')}@{g.get('home')}")
+        if not lv or lv.get("state") not in ("live", "final"):
+            continue
+        have = (g.get("live") or {}).get("state") or "scheduled"
+        if _PHASE_RANK.get(lv["state"], 0) < _PHASE_RANK.get(have, 0):
+            continue
+        fresh = {k: lv[k] for k in ("state", "home_score", "away_score",
+                                     "period", "clock", "detail")
+                 if k in lv}
+        g["live"] = {**(g.get("live") or {}), **fresh}
+        moved += 1
+    return moved
+
 TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 
 
@@ -681,7 +753,7 @@ def _box_rows(league: str, payload: dict, game: dict):
 def attach_tracker(result: dict, sport: str, conn=None,
                    progress: dict | None = None,
                    identity: dict | None = None,
-                   fetcher=None) -> str:
+                   fetcher=None, fast_dir=None) -> str:
     """Put the open-bet tracker on a league board: ``live_picks`` and
     ``open_elsewhere``, or ``live_picks_error``. Returns a line for the
     build log, or "" when there was nothing to say.
@@ -730,6 +802,9 @@ def attach_tracker(result: dict, sport: str, conn=None,
             today, near = open_bets_for(conn, sport, date)
             recs = result.get("recommendations") or []
             games = result.get("games") or []
+            # The twelve-second scoreboard, before anything reads a
+            # phase off these games — see `fast_live_overlay`.
+            fast_live_overlay(sport, games, fast_dir=fast_dir)
             shots = result.get("long_shots") or []
             prog_note = ""
             if progress is None:

@@ -37538,6 +37538,16 @@ async function renderLiveBoard() {
   if (!host) return;
   renderSweatZone();
   const games = await fetchAllLive();
+  /* THE BETS REDRAW THE MOMENT THE SCOREBOARD LANDS. `renderAll` draws
+     the tracker (renderLivePicks) BEFORE it reaches this function, so on
+     the first paint of the Live tab `_liveAll` is still empty and every
+     bet wears the phase the build gave it — UPCOMING, on a football board
+     the build never overlays. Ethan, 2026-09-14, third quarter of
+     Broncos-Chiefs: "Chief game is live right now yet we are still
+     showing upcoming for all these bets." The scoreboard just fetched
+     is what promotes them (liveTrackerRows), so they are drawn again
+     here, from it, rather than on whichever poll comes next. */
+  if (typeof renderLivePicks === "function") renderLivePicks();
   await pressureWarm(games.map((x) => x.sport));
   const bySport = {};
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });

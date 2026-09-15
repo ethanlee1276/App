@@ -14,6 +14,7 @@ and a board shaped like the NFL's, then pins that each build calls it
 before it writes its file.
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -22,10 +23,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import ledger                                    # noqa: E402
+from engine import ledger, livepicks                         # noqa: E402
 from engine.livepicks import (attach_tracker, espn_progress,  # noqa: E402
+                              fast_live_overlay,
                               open_bets_for, shift_day,
                               PROGRESS_MAX_GAMES, TRACKER_CATEGORIES)
+
+# The tracker reads the fast scoreboard file beside the board. This suite
+# must never read the box it runs on, so every test here looks in an
+# empty directory unless it writes its own file.
+livepicks.FAST_DIR = tempfile.mkdtemp()
 
 
 def _journal():
@@ -65,6 +72,77 @@ def _board(state="live"):
              "team": "DET", "opponent": "KC", "headshot": "", "projection": 0.4},
         ],
     }
+
+
+# --- the fast scoreboard -------------------------------------------------------
+
+def _fast_file(d, state="live", age_s=5, home="KC", away="DET", league="nfl"):
+    """A `live_{league}.json` as livescore_build writes it, `age_s` old."""
+    import datetime as dt
+    stamp = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=age_s)
+             ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {"generated_at": stamp, "league": league, "games": [
+        {"event_id": "401", "home": home, "away": away,
+         "live": {"state": state, "home_score": 21, "away_score": 17,
+                  "period": "Q3", "clock": "13:25"}}]}
+    with open(os.path.join(d, f"live_{league}.json"), "w", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+    return d
+
+
+def test_a_board_built_before_kickoff_reads_the_fast_scoreboard():
+    """Ethan, 2026-09-14, 10:51pm, Broncos at Chiefs in the third
+    quarter, every bet reading UPCOMING. The launched football build
+    never overlays live state, so the board said scheduled and the
+    tracker believed it. The twelve-second scoreboard beside the board
+    is what the game cards draw from; the tracker reads it too."""
+    conn = _journal()
+    _bet(conn, "nfl", "2026-W01", "Travis Kelce", "rec_yds")
+    d = _fast_file(tempfile.mkdtemp())
+    result = _board(state="scheduled")
+    attach_tracker(result, "nfl", conn=conn, progress={}, fast_dir=d)
+    [row] = [r for r in result["live_picks"] if r["player"] == "Travis Kelce"]
+    assert row["phase"] == "live" and row["status"] == "tracking", row
+    assert row["game"]["home_score"] == 21, "the score rides along"
+    assert result["games"][0]["live"]["state"] == "live", "the board's own game moved too"
+
+
+def test_the_fast_scoreboard_only_ever_moves_a_game_forward():
+    d = tempfile.mkdtemp()
+    # Final beats live; scheduled never demotes a live board.
+    games = [{"home": "KC", "away": "DET", "live": {"state": "live", "home_score": 3}}]
+    _fast_file(d, state="scheduled")
+    assert fast_live_overlay("nfl", games, fast_dir=d) == 0
+    assert games[0]["live"]["state"] == "live"
+    _fast_file(d, state="final")
+    assert fast_live_overlay("nfl", games, fast_dir=d) == 1
+    assert games[0]["live"]["state"] == "final" and games[0]["live"]["home_score"] == 21
+    # A scoreboard that still says live about a game the board has final
+    # (the box score got there first) does not pull it back.
+    _fast_file(d, state="live")
+    assert fast_live_overlay("nfl", games, fast_dir=d) == 0
+    assert games[0]["live"]["state"] == "final"
+
+
+def test_a_stale_fast_file_pins_nothing():
+    """`_live_scores_refresher` writes every three minutes even when
+    nothing is on; a file an hour old is a stopped loop, and a stopped
+    loop's last word is not tonight's state."""
+    d = _fast_file(tempfile.mkdtemp(), age_s=3600)
+    games = [{"home": "KC", "away": "DET", "live": {"state": "scheduled"}}]
+    assert fast_live_overlay("nfl", games, fast_dir=d) == 0
+    assert games[0]["live"]["state"] == "scheduled"
+
+
+def test_the_fast_file_is_matched_on_the_matchup_and_only_for_its_leagues():
+    d = _fast_file(tempfile.mkdtemp(), home="BUF", away="NE")
+    games = [{"home": "KC", "away": "DET", "live": {"state": "scheduled"}}]
+    assert fast_live_overlay("nfl", games, fast_dir=d) == 0     # a different game
+    # Baseball has its own live feed and its own tracker block; a
+    # `live_mlb.json` that names this very matchup is still not read.
+    _fast_file(d, home="KC", away="DET", league="mlb")
+    assert fast_live_overlay("mlb", games, fast_dir=d) == 0
+    assert fast_live_overlay("nfl", games, fast_dir=os.path.join(d, "missing")) == 0
 
 
 # --- the window ----------------------------------------------------------------

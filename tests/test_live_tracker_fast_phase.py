@@ -56,6 +56,20 @@ def test_render_reads_the_promoted_rows():
     assert "liveTrackerRows((state.data || {}).live_picks || [])" in body
 
 
+def test_the_bets_redraw_when_the_scoreboard_lands():
+    """`renderAll` draws the tracker before it reaches `renderLiveBoard`,
+    so on the Live tab's first paint `_liveAll` is empty and every bet
+    wears the build's phase until the next poll. 2026-09-14, third
+    quarter of Broncos-Chiefs: "still showing upcoming for all these
+    bets." The board redraws them from the scoreboard it just fetched."""
+    body = APP[APP.index("async function renderLiveBoard() {"):]
+    body = body[:body.index("\n}\n")]
+    i = body.index("await fetchAllLive()")
+    j = body.index("renderLivePicks()")
+    assert i < j, "the bets must redraw AFTER the scoreboard is fetched"
+    assert body.index("pressureWarm(") > j, "and before the slower warm-up, not after it"
+
+
 def test_an_upcoming_bet_goes_live_with_its_game():
     got = _run([_row()], _fast("live"))[0]
     assert got["phase"] == "live" and got["status"] == "tracking", got
