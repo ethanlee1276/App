@@ -22,10 +22,40 @@ argument for ranking it first. `kalshi.parse_markets` says it plainly:
 De-vigging Pinnacle means assuming HOW its margin is spread across the
 two sides — `odds.devig_two_way` divides it proportionally, and the
 favourite-longshot literature says books do not actually price that way.
-That assumption is small in the even-money band this feature lives in
-and it is still an assumption. An exchange has no margin to strip: two
-people take opposite sides at a price they both chose. There is nothing
-to assume.
+An exchange has no margin to strip: two people take opposite sides at a
+price they both chose. There is nothing to assume.
+
+HOW BIG THAT ASSUMPTION IS, MEASURED. This paragraph used to say the
+assumption was "small in the even-money band this feature lives in",
+which was true and carried no number, so it could neither be checked nor
+argued with. `bookvig.assumption_points` is the number: the gap between
+the three standard de-vigs — proportional, additive and power — on one
+real pair. Worst case anywhere in this feature's price band (a price
+implying 0.345 at +190 up to 0.587 at -142):
+
+    Pinnacle's ~3% hold       0.70 points     a third of `potd.MIN_EV`
+    a soft book's ~5%         1.18 points     three fifths of it
+    an exchange's 0%          0.00 points
+
+Nearer even money it is half that — 0.39 and 0.66 over the narrower
+range the side actually taken sits in. `engine/bookvig` carries the full
+table and the note on why quoting only that narrower one was misleading.
+
+AND IT IS SMALLER THAN THE ARGUMENT NEEDED. Seven tenths of a point of
+arithmetic certainty does not justify ranking a venue above a sharp book
+on its own, so the ladder's ordering does NOT rest on this paragraph.
+What it rests on is the second sentence up top: an exchange mid is a
+price two people chose, where a book's line is one firm's opinion with a
+business model attached. That is a claim about whose number it is, not
+about how the margin comes off, and `booksharp` is where it gets tested.
+
+WHY THE GAP IS SO SMALL HERE and would not be elsewhere: all three
+methods must return two numbers summing to one, so at a true 50/50 they
+cannot disagree at all, whatever the margin. The disagreement grows with
+DISTANCE FROM EVEN MONEY, and `potd.MIN_ODDS`/`MAX_ODDS` pin this board
+near even money by construction. On a +900 touchdown longshot the same
+arithmetic moves 3.66 points, which is why `engine/devig` exists and
+takes the question seriously one board over.
 
 THREE GUARDS, AND THEY MATTER MORE THAN THE SOURCE DOES. A number from
 an exchange is only better than a book's if the book behind it is real:

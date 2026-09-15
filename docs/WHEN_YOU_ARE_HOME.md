@@ -15,6 +15,45 @@ as they are done.
 
 ---
 
+## BOOKS. Did the seven new books actually show up? (read-only, 5 seconds)
+
+Ethan, 2026-09-15: *"all the us books your using and shit, is that able
+too be used for all sports if it makes sense and can save us api key
+credits?"*
+
+Seven books were added that day — BetRivers, Bally Bet, betPARX, Fliff,
+Wind Creek, Novig, ProphetX — on the argument that the book list is a
+filter on a response already paid for, so books are free. **A book key
+that does not resolve on the live API is free in exactly the same way
+and worth nothing**, and from the board the two look identical: the
+price shown is the best of whoever answered.
+
+This reads the payloads already on disk. No API credit, nothing written.
+
+```bash
+cd /srv/qellys && python3 book_margins.py --hours 24
+```
+
+**What I am looking for**, in the "asked for and never seen" line at the
+bottom of each league:
+
+| that line says | what it means |
+|---|---|
+| nothing at all | every book we ask for is answering — nothing to do |
+| Novig, ProphetX | the two exchange-ish books never resolved; drop them or fix the keys |
+| ten or more names | likely a stale cache rather than a book problem — check the "newest Nh old" figure in the heading first |
+
+The margins above it are the other half. They should run roughly Novig
+≈ 1.00, Pinnacle ≈ 1.03, the ordinary books ≈ 1.045. **A book sitting at
+1.00 that is not an exchange is the interesting case** — either it is
+one and I did not know, or its pair is being parsed wrong.
+
+If a sport prints *"no book quoted both sides of any game"*, that is not
+a book problem: it means no odds payload for that league is on disk at
+all, which is the same question block PIN-2 asks from the other side.
+
+---
+
 ## PIN. Does the Pinnacle tape exist? (read-only, 10 seconds)
 
 Ethan, 2026-09-15, approving the sharp-anchor work: *"I say start on the

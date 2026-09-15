@@ -28,6 +28,10 @@ from dataclasses import dataclass, field
 
 from .fetch import CACHE_DIR, USER_AGENT
 from ..secrets import load_local_secrets
+# Safe at module load in this direction only: `bookvig` reaches back for
+# `BOOK_TITLES` from INSIDE its functions, deliberately, so the cycle
+# never closes while either module is still being defined.
+from .. import bookvig
 from ..models import (
     SportsbookLine, PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS,
 )
@@ -1866,6 +1870,18 @@ class OddsAttachResult:
     #: never been counted at all, which is exactly the hole this fills.
     unattributed_ml: int = 0
     unattributed_spread: int = 0
+    #: WHAT EACH BOOK CHARGES on the two-way game market, measured on
+    #: this very payload: ``{book title: [overround, ...]}``, one entry
+    #: per game the book quoted both sides of. `engine/bookvig` reads it.
+    #:
+    #: FREE, and that is the point. The loop that fills it is the loop
+    #: already walking every book to find the sharp pair — seventeen books
+    #: parsed, one kept. Seven of those seventeen were added on 2026-09-15
+    #: on the argument that books are a filter on a response already paid
+    #: for, which makes a book key that does NOT resolve on the live API
+    #: free in exactly the same way and worth nothing. From the board the
+    #: two cases look identical. This is what tells them apart.
+    book_vig: dict = field(default_factory=dict)
     unattributed_total: int = 0
     reversed_events: int = 0
     #: Games left alone because the price already on them is YOUNGER than
@@ -2137,6 +2153,18 @@ class BoardLinesResult:
     #: never been counted at all, which is exactly the hole this fills.
     unattributed_ml: int = 0
     unattributed_spread: int = 0
+    #: WHAT EACH BOOK CHARGES on the two-way game market, measured on
+    #: this very payload: ``{book title: [overround, ...]}``, one entry
+    #: per game the book quoted both sides of. `engine/bookvig` reads it.
+    #:
+    #: FREE, and that is the point. The loop that fills it is the loop
+    #: already walking every book to find the sharp pair — seventeen books
+    #: parsed, one kept. Seven of those seventeen were added on 2026-09-15
+    #: on the argument that books are a filter on a response already paid
+    #: for, which makes a book key that does NOT resolve on the live API
+    #: free in exactly the same way and worth nothing. From the board the
+    #: two cases look identical. This is what tells them apart.
+    book_vig: dict = field(default_factory=dict)
     unattributed_total: int = 0
     reversed_events: int = 0
     #: Games left alone because the price already on them is YOUNGER than
@@ -2332,6 +2360,13 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             if bk == BOOK_TITLES.get("pinnacle") and home in prices and away in prices:
                 game.sharp_home_ml = prices[home]
                 game.sharp_away_ml = prices[away]
+            # …AND WHAT EVERY BOOK CHARGED FOR IT, off the same parse.
+            # Measurement only: nothing downstream prices off this, and
+            # `engine/bookvig` says at length why it does not (the de-vig
+            # assumption is worth 0.39 points at a sharp book's margin
+            # inside this band — a fifth of `potd.MIN_EV`, which is not a
+            # reason to move a book up a tier).
+        bookvig.Census(result.book_vig).add_event(ev, team_map)
         tot = parse_event_totals(ev)
         if tot:
             game.total, game.total_over_odds, game.total_under_odds = tot
@@ -2702,6 +2737,13 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 if bk == BOOK_TITLES.get("pinnacle") and home in prices and away in prices:
                     game.sharp_home_ml = prices[home]
                     game.sharp_away_ml = prices[away]
+                # …AND WHAT EVERY BOOK CHARGED FOR IT, off the same parse.
+                # Measurement only: nothing downstream prices off this, and
+                # `engine/bookvig` says at length why it does not (the de-vig
+                # assumption is worth 0.39 points at a sharp book's margin
+                # inside this band — a fifth of `potd.MIN_EV`, which is not a
+                # reason to move a book up a tier).
+                bookvig.Census(result.book_vig).add_event(payload, cfg["teams"])
             tot = parse_event_totals(payload)
             if tot:
                 game.total, game.total_over_odds, game.total_under_odds = tot

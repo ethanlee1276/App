@@ -23,6 +23,7 @@ import sys
 from engine.mlb.sources.statslogs import build_live_slate
 from engine.mlb.pipeline import run_mlb_slate
 from engine.sources.fetch import DataUnavailable
+from engine import bookvig
 from engine.rules import RuleConfig
 from engine import stagetime as _stg
 
@@ -112,6 +113,14 @@ def main() -> None:
                   f"{src_note} (quota remaining {res.quota.remaining}).")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
+            # WHAT EVERY BOOK CHARGED, off the same payload — free, and
+            # the only thing that can tell a book key that does not
+            # resolve on the live API from one that resolved and lost
+            # the shop. See `engine/bookvig`; `book_margins.py` asks the
+            # same question of the cache after the fact.
+            _bv = bookvig.Census(res.book_vig)
+            odds_status["book_margins"] = _bv.summary()
+            print(bookvig.report(_bv, "mlb", wanted=oddsapi.DEFAULT_BOOKS))
             # The whole quoted home-run board, journaled so the one-sided
             # hold can be MEASURED instead of assumed at 6% forever
             # (engine/holdwatch — the loop NFL touchdowns proved). Books

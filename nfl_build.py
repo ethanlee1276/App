@@ -19,6 +19,7 @@ import sys
 from engine.sources.nflverse import build_games, build_slate, weather_from_row, load_schedules
 from engine.sources.fetch import DataUnavailable
 from engine.sources import oddsapi
+from engine import bookvig
 from engine.sources import injuries as injuries_feed
 from engine.pipeline import run_slate
 from engine.rules import RuleConfig
@@ -637,6 +638,14 @@ def main() -> None:
                                event_stale_prop_age_s=round(res.stale_prop_age_s or 0.0))
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
+            # WHAT EVERY BOOK CHARGED, off the same payload — free, and
+            # the only thing that can tell a book key that does not
+            # resolve on the live API from one that resolved and lost
+            # the shop. See `engine/bookvig`; `book_margins.py` asks the
+            # same question of the cache after the fact.
+            _bv = bookvig.Census(res.book_vig)
+            odds_status["book_margins"] = _bv.summary()
+            print(bookvig.report(_bv, "nfl", wanted=oddsapi.DEFAULT_BOOKS))
             if res.scorers_matched:
                 print(f"  Anytime-TD quotes attached to {res.scorers_matched} "
                       f"player(s) — the long-shot board prices these.")
@@ -789,6 +798,16 @@ def main() -> None:
                       f"An empty board is worse than a dated one.")
             if bres.quota.remaining is not None:
                 odds_status["quota_remaining"] = bres.quota.remaining
+            # THE BOARD PATH MEASURES MARGINS TOO, and it has to say so
+            # for the same reason the event path does. Kept as its own
+            # key rather than merged into `book_margins`: the two pulls
+            # ask for different markets and can return different books,
+            # and a merged figure would hide a book that answers one and
+            # not the other.
+            _bbv = bookvig.Census(bres.book_vig)
+            odds_status["board_book_margins"] = _bbv.summary()
+            print(bookvig.report(_bbv, "nfl board",
+                                 wanted=oddsapi.DEFAULT_BOOKS))
             # SAY WHICH IT WAS. "from 1 request" on a pass that made no
             # request is a small lie of the exact kind this file keeps
             # having to unpick, and the difference matters: one costs

@@ -73,7 +73,9 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     games looks exactly like a light Saturday.
     """
     from engine.sources import oddsapi
+    from engine import bookvig
 
+    margins = bookvig.Census()
     by_pair = {frozenset((g["home"], g["away"])): g for g in games}
     # WHICH DAYS THIS SLATE COVERS. One request returns the WHOLE SEASON,
     # so without this a Saturday board can be priced off a fixture months
@@ -151,6 +153,11 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         # map from the event itself rather than guessing at spellings.
         team_map = {home_raw: home, away_raw: away}
         learned.update(team_map)
+        # WHAT EVERY BOOK CHARGED for this game, off the payload already
+        # in hand. Free, and for college it is the only route there: the
+        # NFL and MLB get this out of `oddsapi.apply_odds_to_slate`, which
+        # this build does not use. See `engine/bookvig`.
+        margins.add_event(ev, team_map)
         entry: dict = {}
         mls = oddsapi.parse_event_h2h(ev, team_map)
         if mls.get(home) and mls.get(away):
@@ -200,6 +207,12 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
                       f"— closing-line harvests can now join them to bets.")
         except Exception:                                    # noqa: BLE001
             pass                     # telemetry never breaks a board
+
+    # NAMED BEFORE THE NOTE, not folded into it: the census is a block of
+    # lines and `note` is a single ' · '-joined sentence the caller prints
+    # on one row. Forcing one into the other would cost the alignment that
+    # makes a book's margin readable against its neighbours.
+    print(bookvig.report(margins, "cfb", wanted=oddsapi.DEFAULT_BOOKS))
 
     note = f"{len(priced)} of {len(games)} games priced from 1 request"
     if unmatched:

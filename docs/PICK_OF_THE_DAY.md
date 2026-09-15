@@ -270,17 +270,46 @@ wrong, which is the failure this rebuild exists to stop
 `MIN_FAIR` is 0.50: a +EV underdog is a fine bet and a bad thing to name
 the day after.
 
-## 6. The de-vig method barely matters here
+## 6. The de-vig method barely matters here — measured, 2026-09-15
 
 The literature argues constantly about multiplicative vs additive vs
 power vs Shin. They diverge on longshots — that is the whole
 favourite-longshot-bias argument — and converge in the middle of the
-board. At -110/-110 they are identical; across the whole 0.80-1.00
-payout band they disagree by about a point at the plus-money end and
-well under one everywhere else.
-`odds.devig_two_way` is multiplicative and stays that way here. A power
-de-vig is the right argument to have on the touchdown ladders
-(`engine/devig` already had it), not on a coin flip.
+board. This section used to stop there, with "about a point at the
+plus-money end and well under one everywhere else". That was right, and
+it was an adjective. `engine/bookvig.assumption_points` is now the
+number: the spread between proportional, additive and power on one real
+pair, swept across this band.
+
+| book's margin | worst in band | side taken (fair ≥ 0.50) | vs the 2-point EV floor |
+|---|---|---|---|
+| 1.00 an exchange | 0.00 pts | 0.00 pts | 0% |
+| 1.01 | 0.24 | 0.13 | 12% |
+| 1.02 | 0.48 | 0.26 | 24% |
+| 1.03 Pinnacle | 0.70 | 0.39 | 35% |
+| 1.05 a soft book | 1.18 | 0.66 | 59% |
+
+**Why it collapses here and not elsewhere**, which is the part worth
+keeping: all three methods must return two numbers summing to one, so at
+a true 50/50 they *cannot* disagree, whatever the margin. The gap is
+driven by distance from even money, not by the size of the vig — and
+§1's arithmetic pins this band near even money by construction. The same
+sum on a +900 touchdown longshot moves 3.66 points, which is why
+`engine/devig` takes the question seriously one board over and this file
+does not.
+
+`odds.devig_two_way` is multiplicative and stays that way here.
+
+**What this cost.** The measurement was taken while building an exchange
+*detector* — auto-promoting any near-zero-vig book (Novig, ProphetX) to
+the top of the evidence ladder on the theory that a venue with no margin
+needs no de-vig assumption. The premise did not survive its own
+measurement: at these sizes the assumption is worth a third of the
+minimum edge, which does not buy a whole tier. The detector was not
+built. What shipped instead is the measurement and a census of what each
+book charges — `engine/bookvig`, `book_margins.py` — and the exchange
+tier keeps its place on a different argument (whose number it is, not
+how the margin comes off), which `engine/booksharp` is where to test.
 
 ## 7. How we find out whether any of this is real
 
