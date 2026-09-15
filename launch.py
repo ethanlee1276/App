@@ -381,6 +381,19 @@ def _eastern_epoch(day: str, hhmm: str):
         return None
 
 
+def _cfb_player_pull_possible(kickoffs: list, now: float | None = None) -> bool:
+    """Would a full college pull buy any player props right now? True when
+    at least one game kicks off inside the build's own player window
+    (`cfb_build.PLAYER_WINDOW_HOURS`, 36h) and has not kicked off yet."""
+    now = time.time() if now is None else now
+    try:
+        from cfb_build import PLAYER_WINDOW_HOURS as hours
+    except Exception:                                    # noqa: BLE001
+        hours = 36
+    return any(isinstance(k, (int, float)) and now < k <= now + hours * 3600
+               for k in kickoffs or [])
+
+
 def _slate_kickoffs(path: str) -> list:
     """Kickoff epochs from the last build — what tells the pacer WHEN the
     day's credits are worth spending. Unparseable or absent times simply
@@ -985,8 +998,17 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # it authorised college against 504 — eight times its real price, on a
     # pull whose whole argument is that it is cheap. It erred toward
     # under-spending, so nothing was lost but the board.
-    spend = _slate_games(CFB_OUT) > 0 and _odds_affordable(
-        CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST)
+    # THE FULL PULL IS ONLY OFFERED WHEN IT CAN BUY WHAT IT IS FOR.
+    # `cfb_build` prices player props only for games kicking off inside
+    # PLAYER_WINDOW_HOURS; Monday to Thursday there are none, so a full
+    # pull authorised then bought the three-credit lines and nothing
+    # else, the clock was (rightly) left unstamped, and the next cycle
+    # asked again — ~130 three-credit pulls a day on the droplet ledger,
+    # 2026-09-14. Off the window the lane goes straight to the lines
+    # tier below, which paces on its own clock.
+    spend = (_slate_games(CFB_OUT) > 0
+             and _cfb_player_pull_possible(_slate_kickoffs(CFB_OUT))
+             and _odds_affordable(CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST))
     before_seen = _paid_pull_baseline() if spend else ""
     before_spent = _spent_so_far("cfb") if spend else 0
     lines_spend = False

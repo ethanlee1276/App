@@ -127,6 +127,33 @@ def test_the_launcher_logs_every_verdict_measures_the_purchase_and_shows_the_led
     assert "CFB_PLAYER_EVENT_COST = 9" in LAUNCH
 
 
+def test_a_full_college_pull_is_only_offered_inside_the_player_window():
+    """Droplet ledger, 2026-09-14: ~130 three-credit college pulls in a
+    day. Mid-week no game is inside the build's 36-hour player window, so
+    the full pull bought the lines and nothing else, the clock stayed
+    unstamped (rightly), and the next cycle asked again. The full pull is
+    gated on the same window the build prices against; off it, the lane
+    takes the lines tier on its own clock."""
+    cfb = _fn(LAUNCH, "refresh_cfb")
+    assert "_cfb_player_pull_possible(_slate_kickoffs(CFB_OUT))" in cfb
+    assert cfb.index("_cfb_player_pull_possible(") < cfb.index('_odds_affordable(CFB_OUT, quiet, sport="cfb"')
+    gate = _fn(LAUNCH, "_cfb_player_pull_possible")
+    assert "PLAYER_WINDOW_HOURS" in gate
+    # The rule itself, run: a Saturday slate seen on Tuesday is outside
+    # the window; the same slate on Friday afternoon is inside; a game
+    # already kicked off does not count; garbage kickoffs do not crash it.
+    ns: dict = {}
+    exec("import time\n" + gate, ns)                    # noqa: S102
+    fn = ns["_cfb_player_pull_possible"]
+    now = 1_800_000_000.0
+    sat = now + 4 * 86400
+    assert fn([sat], now=now) is False
+    assert fn([sat], now=sat - 20 * 3600) is True
+    assert fn([sat], now=sat + 60) is False
+    assert fn([None, "x", sat], now=sat - 3600) is True
+    assert fn([], now=now) is False
+
+
 def test_the_player_event_cost_is_the_builds_own():
     import cfb_build
     i = LAUNCH.index("CFB_PLAYER_EVENT_COST = ")
