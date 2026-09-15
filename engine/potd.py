@@ -1,100 +1,173 @@
-"""The Pick of the Day: one pick per sport, per day, at close to even money.
+"""The Pick of the Day: one pick per sport, priced the way a sharp prices it.
 
-Ethan, 2026-09-15: "I want too to a 'Pick of the day' for each sport
-where we find 1 pick that is guaranteed to hit. It can be a money line
-or a game total or an over or under or whatever we want ... We want the
-price of the prop too fall in between -190 and +190 so we can basically
-have a 'one props doubles money' type of hit."
+Ethan, 2026-09-15: "we'll keep working on it so we can have a model that
+picks one pick for the pick of the day ... I want it to be a 50-50 money
+flip, basically, either from 80% to 100% flip of your money. And we need
+to look at other pro sports bettors' logic and models ... So we need to
+figure out the models they're using and implement that."
 
-THE WORD "GUARANTEED" IS NOT BUILT HERE, and the disagreement is
-recorded rather than quietly ignored, because somebody reading this in
-six months needs to know it was raised. No bet is guaranteed. A page
-that tells a paying reader otherwise turns one ordinary loss into a
-broken promise, and this module would be the thing that made the
-promise. What is built instead is the strongest single pick the boards
-can defend on the day, in the band he asked for, with its own record
-beside it so the claim is checkable rather than asserted.
+THE WORD "GUARANTEED" IS NOT BUILT HERE. No bet is guaranteed, the
+disagreement was raised once, and Ethan's call stands on everything else
+in this module — the band, the daily cadence, the showcase framing. What
+the page may not do is promise a paying reader a certainty, because the
+first loss then reads as a lie rather than as variance, and this module
+would be the thing that made the promise. `tests/test_potd_card.py`
+holds that line, and the banned list there is why this module is named
+for a pick rather than for a lock. The marketing word is Ethan's to
+choose anywhere the numbers are not; the numbers stay true.
 
-THE BAND DECIDES THE TRADE, NOT US. His two goals pull against each
-other and the prices say by how much: -190 is the market claiming 65.5%
-and paying 0.53 units, +190 is the market claiming 34.5% and paying
-1.90. To find a 70% pick at +190 we would have to be right that the
-market is wrong by thirty-five points, and the standing lesson of this
-codebase (see `betting.MAX_CREDIBLE_EDGE`, and every card that has ever
-claimed a huge edge at a sharp number) is that when our number disagrees
-with the market that violently, ours is the one that is wrong. So
-`MIN_PROB` below is the knob between "almost always hits" and "doubles
-your money", and the arithmetic of what moving it costs is written out
-on the constant.
+WHAT THE BAND COSTS, MEASURED BEFORE ANYTHING WAS BUILT ON IT. The
+payout band below is 0.80 to 1.00 units, which is -125 to +100, which is
+the market claiming between 44.4% and 55.6%. So a main-market favourite
+inside this band CANNOT be a 68% pick — the price forbids it. Replaying
+every stored schedule close (4,431 games with a two-way moneyline), the
+best moneyline on the slate inside the band goes:
 
-WHERE THE CANDIDATES COME FROM. The Most Likely board, and nothing
-else. That board is already calibrated, already priced off real books,
-already deduped, and already carries a measured ranking score per sport
-and market (`likely.rank_auc`). Ethan asked to "use our current models
-too find this pick but obv gonna have too tighten up for this specific
-idea only" — so this is a tightening pass over that board's output
-rather than a second model, and it cannot drift away from the numbers
-the rest of the site shows.
+    nfl   82 picks   44 won   53.7%   the price implied 54.6%   -1.7% ROI
+    cfb  150 picks   80 won   53.3%   the price implied 53.8%   -1.1% ROI
+
+Both land within a fifth of a standard deviation of what the price
+already said. That is the finding this module is built on: at even money
+in an efficient main market you are buying a coin flip at a small loss,
+and no amount of confidence-ranking changes it. Widen to -190/+190 and
+the same selector hits 66.1% / 62.0% — the seventeen points Ethan traded
+away for the bigger payout, and the trade is his to make. Both numbers
+are one constant apart (`MIN_PAYOUT`).
+
+SO THE PICK CANNOT BE A FAVOURITE, IT HAS TO BE A DISAGREEMENT. That is
+also what the professionals actually do, once the marketing is stripped
+off. The public +EV method — Unabated, OddsJam, Outlier, Sharp Lines all
+describe the same three steps — is: take a SHARP book's two-way price
+(Pinnacle is the reference because it runs a 2-3% margin and welcomes
+winners, so its number is priced by the sharpest money), REMOVE THE VIG
+to get a fair probability, and bet only where a book you can actually
+reach prices that outcome worse than the sharp fair. The edge is the gap
+between two books, never between a model and the world.
+
+This codebase already built that machinery for the Edge board
+(`betting.sharp_anchor_for`, `gamebets.sharp_anchor_two_way`,
+`odds.devig_two_way`, `odds.consensus_fair`). What it never had was a
+surface that selected on it alone. That is this module now.
+
+WHY OUR OWN MODEL IS NOT ALLOWED TO BE THE EVIDENCE, which is the change
+Ethan asked for in as many words ("we shouldn't use that 70%"). It is
+not a style preference — it is measured. `likely.GAME_RANK_MEASURED`
+against `likely.GAME_RANK_MARKET`:
+
+    nfl moneyline   model 0.677   the market's own de-vigged number 0.722
+    cfb moneyline   model 0.752   the market's own de-vigged number 0.791
+    spreads, totals, team totals  0.492-0.504 — a coin flip, both leagues
+
+The market ranks winners better than we do, and on the derived markets
+we cannot rank at all. A pick chosen because OUR number disagrees with
+the price is therefore a pick chosen by the weaker of the two opinions
+in the room. `EVIDENCE` below ranks the tiers accordingly and
+`shortfall` refuses the model-only tier outright.
+
+THE DE-VIG METHOD BARELY MATTERS IN THIS BAND, which is worth writing
+down because the literature argues about it constantly. Multiplicative,
+additive, power and Shin diverge on longshots — that is the whole
+favourite-longshot-bias argument — and converge on the middle of the
+board. At -110/-110 they are identical; across the whole 0.80-1.00
+payout band they disagree by well under a point. `odds.devig_two_way` is
+multiplicative and stays that way here. A power de-vig is the right
+argument to have on the touchdown ladders (`engine/devig` already had
+it), not on a coin flip.
+
+WHERE THE CANDIDATES COME FROM. The Most Likely board, as before: it is
+already calibrated, already priced off real books, already deduped, and
+already carries `sharp_anchored` / `sharp_fair` / `implied_prob` /
+`prob_source` / `rank_auc` per row. This is a selection pass over that
+board, not a second model, so it cannot drift away from the numbers the
+rest of the site shows.
+
+HOW WE FIND OUT IF THIS IS REAL, in weeks rather than years. Win-loss on
+one pick a day is noise for a very long time — the industry's own rule
+of thumb is 500-1,000 graded plays before a record means anything, which
+at one a day is three years. Closing-line value grades the DECISION at
+kickoff, accrues on every pick including the losers, and is the metric
+the sharp side actually keeps. The potd book flows into
+`clvboard.scoreboard(conn, category="potd")` for free. If these picks do
+not beat the close, this module is wrong and that page will say so.
 
 A DAY WITH NOTHING GOOD ENOUGH SAYS SO. `build` still returns the best
-in-band candidate on such a day, flagged `below_bar` with the reason it
-fell short, so the page is never blank — the pattern the boards already
-use (`likely.RESERVE_MIN_PROB`). It is NOT journaled. The record this
+in-band candidate, flagged `below_bar` with the reason, so the page is
+never blank — the pattern the boards already use
+(`likely.RESERVE_MIN_PROB`). It is NOT journaled: the record this
 feature keeps has to answer "how do the picks that qualified do", and a
-book padded with rows the selector itself refused would answer a
-different question on exactly the thinnest days.
+book padded with rows the selector refused would answer a different
+question on exactly the thinnest days.
 """
 
 from __future__ import annotations
 
-from .betting import MAX_CREDIBLE_EDGE
+#: THE BAND, in units returned on a one-unit stake — Ethan's own words
+#: ("from 80% to 100% flip of your money") rather than a translation of
+#: them into American odds, because the payout IS the product definition
+#: and the odds are the incidental spelling. 0.80 units is -125, 1.00 is
+#: +100. A row outside it is disqualified rather than shown as a near
+#: miss: "the strongest thing on the card is a -400 favourite" is not
+#: this feature having a quiet day, it is a different feature.
+#:
+#: MOVING THIS IS THE ONE KNOB THAT MATTERS, and the header says what it
+#: buys: 0.53 (-190) restores the 66%/62% hit rates at half the payout.
+MIN_PAYOUT = 0.80
+MAX_PAYOUT = 1.00
 
-#: The price band, Ethan's own numbers. Not a quality bar — it is the
-#: product definition, which is why a row outside it is disqualified
-#: outright rather than shown as a near miss: "the most likely thing on
-#: the card today is a -400 favourite" is not this feature having a
-#: quiet day, it is a different feature.
-MIN_ODDS = -190
-MAX_ODDS = 190
+#: The same band as American odds, derived once so nothing can drift.
+#: Rounded INWARD — a price must clear the payout test itself, and these
+#: exist for the page to print and for the census to read.
+MIN_ODDS = -125
+MAX_ODDS = 100
 
-#: THE CONFIDENCE FLOOR, and the knob between his two goals.
+#: HOW GOOD THE EVIDENCE IS, highest first. This is the ranking key, and
+#: it is deliberately not the edge size: a 3% gap against Pinnacle's
+#: de-vigged close is worth more than a 6% gap against our own model,
+#: because the measurements above say our model is the weaker witness.
 #:
-#: Read it against `MAX_CREDIBLE_EDGE` (0.10), because the two together
-#: decide which prices can ever qualify. A pick must clear this floor
-#: AND sit within ten points of the book's own de-vigged number, so the
-#: market's implied probability must itself be at least MIN_PROB - 0.10:
-#:
-#:     floor 0.58  ->  implied >= 0.48  ->  prices out to +108
-#:     floor 0.60  ->  implied >= 0.50  ->  prices out to +100
-#:     floor 0.62  ->  implied >= 0.52  ->  prices out to -108
-#:     floor 0.65  ->  implied >= 0.55  ->  prices out to -122
-#:
-#: 0.60 is chosen because it is the highest floor that still leaves the
-#: even-money end of his band reachable: at exactly +100 a qualifying
-#: pick doubles the stake, which is the thing he asked for in as many
-#: words. Raising it buys confidence and costs the plus-money half of
-#: the band; lowering it does the reverse. Nothing else in this module
-#: has to move with it.
-MIN_PROB = 0.60
+#:   sharp   a sharp book quoted this market two ways and we de-vigged
+#:           it; the fair is a number the sharpest money in the world
+#:           agreed on, and the price we take is at a book Ethan can
+#:           reach. This is the professional method, unmodified.
+#:   market  no sharp quote, but the field is deep enough to de-vig a
+#:           consensus (`odds.MIN_CONSENSUS_BOOKS`); the fair is the
+#:           market's own opinion and the edge is line-shopping.
+#:   model   only our number disagrees with the price. Measured weaker
+#:           than the market on every market we have measured, so this
+#:           tier can never be the pick — see `shortfall`.
+EVIDENCE = ("sharp", "market", "model")
+
+#: The +EV bar, in probability points of the fair. The retail +EV tools
+#: quote 1-3% as the working range and the low end of that is where the
+#: bet stops surviving the price moving against you between the pull and
+#: the placement. 2% is the middle of the published range and roughly
+#: twice the shopped hold on a -110 pair.
+MIN_EV = 0.02
+
+#: A pick this feature is named after should at least be more likely to
+#: happen than not, by the number we are trusting. Inside the band the
+#: price itself implies at most 55.6%, so this bites on the plus-money
+#: half: a +100 shot our fair calls 48% can be +EV and still is not a
+#: thing to put one name on for the day.
+MIN_FAIR = 0.50
 
 #: A market has to have shown it can rank this outcome better than a
 #: coin flip before one pick a day rides on it. `likely.rank_auc` is the
-#: measured figure per sport and market; the markets this codebase has
-#: measured at 0.49 (see `GAME_RANK_MEASURED`) are exactly the ones a
-#: showcase pick must never come from, and an unmeasured market is not
-#: a pass by default — it is the same unknown wearing a blank.
+#: measured figure per sport and market; the markets measured at 0.49
+#: (see `likely.GAME_RANK_MEASURED`) are exactly the ones a showcase
+#: pick must never come from, and an unmeasured market is not a pass by
+#: default — it is the same unknown wearing a blank.
 MIN_RANK_AUC = 0.55
 
 #: Every reason `disqualify` can give. A row refused for one of these is
 #: never shown, not even as a near miss: it is missing something the
-#: page needs (a price, a probability), or it is outside the product's
-#: own definition (the band), or it is a bet nobody could still place.
+#: page needs, or it is outside the product's own definition, or it is a
+#: bet nobody could still place.
 HARD_REASONS = (
-    "no probability",
+    "no fair probability to price against",
     "no real market price",
     "price a book could not have posted",
-    "priced outside the even-money band",
-    "no market number to check the model against",
+    "the payout is outside the even-money band",
     "the player is carrying an injury designation",
     "the game has already started",
     "the board itself says this did not clear its bar",
@@ -125,8 +198,8 @@ def implied(odds) -> float | None:
 
 def payout(odds) -> float | None:
     """Units returned on a one-unit stake, the winnings alone — the
-    number the band exists to make large. Decimal odds minus the stake,
-    off the same converter, for the reason `implied` gives."""
+    number the band is written in. Decimal odds minus the stake, off the
+    same converter, for the reason `implied` gives."""
     try:
         o = float(odds)
     except (TypeError, ValueError):
@@ -138,15 +211,87 @@ def payout(odds) -> float | None:
 
 
 def in_band(odds) -> bool:
+    """Does this price pay between 80% and 100% of the stake?
+
+    THE PAYOUT IS THE TEST, not the American number, so the two spellings
+    can never disagree — `MIN_ODDS`/`MAX_ODDS` are for printing. A price
+    between -100 and +100 does not exist on an American board; anything
+    claiming to be there is a broken quote, not a coin flip.
+    """
     try:
         o = float(odds)
     except (TypeError, ValueError):
         return False
-    # A price between -100 and +100 does not exist on an American board;
-    # anything claiming to be there is a broken quote, not a coin flip.
     if -100 < o < 100:
         return False
-    return MIN_ODDS <= o <= MAX_ODDS
+    pay = payout(o)
+    if pay is None:
+        return False
+    return MIN_PAYOUT - 1e-9 <= pay <= MAX_PAYOUT + 1e-9
+
+
+def evidence(row: dict) -> str:
+    """Which witness is telling us this price is wrong: "sharp",
+    "market" or "model".
+
+    Read off the fields the Most Likely board already sets, rather than
+    recomputed here, so this can never disagree with what the card shows
+    the reader. `sharp_anchored` is set by `betting.sharp_anchor_for`
+    when a sharp book quoted the same market two ways at the same line;
+    `prob_source` is set by `likely.ranking_number` and reads "market"
+    when the board ranked on the book's de-vigged number because that
+    number measures better than ours.
+    """
+    if row.get("sharp_anchored") and row.get("sharp_fair") is not None:
+        return "sharp"
+    if row.get("prob_source") in ("sharp", "anchored"):
+        return "sharp"
+    if row.get("prob_source") == "market" and row.get("implied_prob") is not None:
+        return "market"
+    return "model"
+
+
+def fair_prob(row: dict) -> float | None:
+    """The probability this pick is priced against — the best witness
+    available, matching `evidence` exactly.
+
+    NOT THE MODEL'S NUMBER unless the model is all there is, and a row
+    that gets there is refused by `shortfall` anyway. The pairing is
+    kept in one function so a future edit cannot leave `evidence`
+    saying "sharp" while the EV is computed off something else.
+    """
+    tier = evidence(row)
+    if tier == "sharp":
+        val = row.get("sharp_fair")
+        if val is None:
+            val = row.get("win_prob")
+        if val is None:
+            val = row.get("model_prob")
+    elif tier == "market":
+        val = row.get("implied_prob")
+    else:
+        val = row.get("model_prob")
+    try:
+        p = float(val)
+    except (TypeError, ValueError):
+        return None
+    return p if 0.0 < p < 1.0 else None
+
+
+def edge(row: dict) -> float | None:
+    """Expected value of a one-unit stake, in units. The professional
+    number: fair probability times what the price pays, minus the stake.
+
+    Positive means the book is charging less than the fair says it
+    should. `odds.expected_value` does exactly this arithmetic and is
+    reused rather than restated.
+    """
+    fair = fair_prob(row)
+    odds = row.get("odds")
+    if fair is None or implied(odds) is None:
+        return None
+    from .odds import expected_value
+    return expected_value(fair, int(float(odds)))
 
 
 def _started(row: dict, now=None) -> bool:
@@ -170,8 +315,8 @@ def disqualify(row: dict, now=None) -> str:
     on a quiet day. The quality bars live in `shortfall`, and a row that
     fails only those is worth showing with the reason attached.
     """
-    if row.get("model_prob") is None:
-        return "no probability"
+    if fair_prob(row) is None:
+        return "no fair probability to price against"
     # The Most Likely board ships rows from below its own floor when
     # nothing cleared, labelled, so the page is never blank
     # (`likely.RESERVE_MIN_PROB`). A row its own maker says did not
@@ -181,13 +326,17 @@ def disqualify(row: dict, now=None) -> str:
     book = str(row.get("book") or "").strip().lower()
     if not book or book == "proxy":
         return "no real market price"
+    # A sharp book is the reference, never the ticket: Pinnacle does not
+    # take US action, so a price quoted there is not a bet Ethan can
+    # place. `odds.is_sharp_book` is the same check the ladder makes.
+    from .odds import is_sharp_book
+    if is_sharp_book(book):
+        return "no real market price"
     odds = row.get("odds")
     if implied(odds) is None:
         return "price a book could not have posted"
     if not in_band(odds):
-        return "priced outside the even-money band"
-    if row.get("implied_prob") is None:
-        return "no market number to check the model against"
+        return "the payout is outside the even-money band"
     # Asked again here although `likely.admissible` already refuses any
     # designation: a rule enforced in one place is not a rule, which is
     # this codebase's most-repeated lesson and is written into
@@ -207,12 +356,22 @@ def shortfall(row: dict) -> str:
     the day is named after. `build` shows the best of them when nothing
     qualifies, and journals none of them.
     """
-    prob = float(row["model_prob"])
-    if prob < MIN_PROB:
-        return "under the confidence floor"
-    fair = row.get("implied_prob")
-    if fair is not None and abs(prob - float(fair)) > MAX_CREDIBLE_EDGE:
-        return "the model disagrees with the market by more than we credit"
+    # THE FIRST BAR IS WHOSE OPINION THIS IS, and it comes first because
+    # it is the one Ethan changed. Our model measures 0.677 where the
+    # market measures 0.722 (NFL moneylines) and 0.752 against 0.791
+    # (CFB); on spreads and totals it measures nothing at all. A price
+    # only our model disputes is not evidence of a mispriced game, it is
+    # evidence of a model that is behind the market.
+    if evidence(row) == "model":
+        return "only our own model disputes this price"
+    ev = edge(row)
+    if ev is None:
+        return "no fair probability to price against"
+    if ev < MIN_EV:
+        return "the price is not far enough off the fair to be worth it"
+    fair = fair_prob(row)
+    if fair is not None and fair < MIN_FAIR:
+        return "more likely to lose than to win, even at a good price"
     auc = row.get("rank_auc")
     if auc is None:
         return "this market has never been measured"
@@ -233,18 +392,28 @@ def refuse(row: dict, now=None) -> str:
 
 
 def rank_key(row: dict) -> tuple:
-    """Sort key, best first: confidence, then the better price.
+    """Sort key, best first: the strength of the WITNESS, then the size
+    of the edge, then the better price.
 
-    THE PROBABILITY IS ROUNDED TO WHOLE POINTS BEFORE IT SORTS, and that
-    is the whole point of the tie-break rather than an accident of
-    formatting. 66.1% and 66.4% are the same claim about the world made
-    twice; treating them as ranked is false precision, and it would hand
-    the day to whichever row happened to round up while a materially
-    better price sat one line below. Equal confidence, better payout —
-    which is Ethan's "doubles money" served wherever it costs nothing.
+    EVIDENCE OUTRANKS EDGE SIZE, and that inversion is the whole lesson
+    of this module. Sorting on edge alone hands every day to whichever
+    row has the loudest disagreement, and the loudest disagreements come
+    from the weakest witness — a model that thinks a game is 12 points
+    off the market is much more often wrong than the market is. Ranking
+    on the tier first means a sharp-anchored 2.5% beats a consensus 5%,
+    which is the order the measurements support.
+
+    THE EDGE IS ROUNDED TO WHOLE POINTS BEFORE IT SORTS. 2.6% and 2.9%
+    are the same claim about the world made twice; treating them as
+    ranked is false precision, and it would hand the day to whichever
+    row happened to round up while a materially better price sat one
+    line below. Equal edge, better payout — which is Ethan's "flip of
+    your money" served wherever it costs nothing.
     """
-    prob = round(float(row.get("model_prob") or 0.0), 2)
-    return (-prob, -(payout(row.get("odds")) or 0.0))
+    tier = evidence(row)
+    rank = EVIDENCE.index(tier) if tier in EVIDENCE else len(EVIDENCE)
+    ev = round(float(edge(row) or 0.0), 2)
+    return (rank, -ev, -(payout(row.get("odds")) or 0.0))
 
 
 def choose(rows, now=None) -> tuple:
@@ -278,20 +447,33 @@ def choose(rows, now=None) -> tuple:
 
 def _card(row: dict, below: str = "") -> dict:
     """The row as the page draws it: the board's own fields, plus the
-    three numbers this feature exists to show together."""
-    prob = float(row.get("model_prob") or 0.0)
-    fair = row.get("implied_prob")
+    numbers this feature exists to show together."""
+    fair = fair_prob(row)
+    ev = edge(row)
+    imp = implied(row.get("odds"))
     out = dict(row)
     out.update({
-        "model_prob": round(prob, 4),
-        "implied_prob": None if fair is None else round(float(fair), 4),
+        # THE FAIR IS THE HEADLINE NUMBER, not the model's. Which
+        # witness it came from is on the card beside it, because a
+        # reader is entitled to know whether "56%" is Pinnacle's opinion
+        # or ours.
+        "fair_prob": None if fair is None else round(fair, 4),
+        "evidence": evidence(row),
+        "implied_prob": None if imp is None else round(imp, 4),
+        # The model's own read still travels, clearly labelled as
+        # context rather than as the reason — the policy every
+        # sharp-anchored card on the site already follows.
+        "model_prob": (None if row.get("model_prob") is None
+                       else round(float(row["model_prob"]), 4)),
         # What a unit returns if it lands. The reason the band exists.
         "payout_units": round(payout(row.get("odds")) or 0.0, 3),
-        # How far our number sits from the book's, in points. Small on
-        # purpose: `MAX_CREDIBLE_EDGE` caps it, and a reader seeing a
-        # large one here would be looking at a bug.
-        "edge_points": None if fair is None
-        else round((prob - float(fair)) * 100.0, 1),
+        # The edge, in units per unit staked, and in probability points
+        # against the price. Small on purpose: a large one here would
+        # mean the sharp fair and the shopped price had drifted apart
+        # further than any real market allows, which is a bug.
+        "ev_units": None if ev is None else round(ev, 4),
+        "edge_points": (None if (fair is None or imp is None)
+                        else round((fair - imp) * 100.0, 1)),
         # EMPTY ON A QUALIFYING PICK, and the reason on every other.
         # The page reads this one field to decide whether it is showing
         # the day's pick or the day's best available.
@@ -318,7 +500,8 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         "considered": len(rows),
         "census": census,
         "band": [MIN_ODDS, MAX_ODDS],
-        "min_prob": MIN_PROB,
+        "payout_band": [MIN_PAYOUT, MAX_PAYOUT],
+        "min_ev": MIN_EV,
     }
     if pick is not None:
         out["pick"] = _card(pick)
@@ -363,5 +546,7 @@ def attach(result: dict, sport: str, now=None) -> str:
         return (f"pick of the day: BELOW THE BAR — {where} "
                 f"({pick['below_bar']}); shown, not recorded")
     return (f"pick of the day: {where} at {pick.get('odds')} — "
-            f"{round(float(pick.get('model_prob') or 0) * 100)}%, "
-            f"pays {pick.get('payout_units')}u")
+            f"{pick.get('evidence')} fair "
+            f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
+            f"{pick.get('ev_units'):+.3f}u EV, pays "
+            f"{pick.get('payout_units')}u")

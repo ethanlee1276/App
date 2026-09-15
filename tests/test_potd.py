@@ -1,18 +1,22 @@
-"""The Pick of the Day picks one row, and can say why it picked it.
+"""The Lock of the Day picks one row, and can say whose opinion picked it.
 
-Ethan, 2026-09-15: "I want too to a 'Pick of the day' for each sport
-where we find 1 pick ... We want the price of the prop too fall in
-between -190 and +190 so we can basically have a 'one props doubles
-money' type of hit."
+Ethan, 2026-09-15: "I want it to be a 50-50 money flip, basically, either
+from 80% to 100% flip of your money. And we need to look at other pro
+sports bettors' logic and models ... So we need to figure out the models
+they're using and implement that."
 
-What this file guards is the part that would rot quietly. The band and
-the floor are product decisions and they are allowed to move; what is
-not allowed is for the selector to publish a row it cannot defend — an
-invented price, a market measured at a coin flip, a game already under
-way, or a probability the board itself refused. Each of those is one
-test, and the arithmetic that ties the floor to the reachable half of
-the band is another, because that arithmetic is the whole argument for
-the default and nothing else in the module restates it.
+What this file guards is the part that would rot quietly. The band is a
+product decision and is allowed to move; what is not allowed is for the
+selector to publish a row it cannot defend — an invented price, a sharp
+book's own quote dressed up as a ticket, a market measured at a coin
+flip, a game already under way, or an "edge" that is nothing but our own
+model shouting at a price. Each of those is one test.
+
+Two of them execute arithmetic rather than asserting prose, because the
+arithmetic is the whole argument and nothing else in the module restates
+it: that no efficient favourite inside this band can be a heavy
+favourite, and that the EV floor therefore asks for about one point of
+disagreement rather than ten.
 
 Run directly: `python3 tests/test_potd.py`
 """
@@ -25,7 +29,6 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import potd                                       # noqa: E402
-from engine.betting import MAX_CREDIBLE_EDGE                  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 
@@ -38,22 +41,34 @@ def _et(minutes):
 
 
 def _row(**kw):
-    """A board row that clears every bar, for a game three hours out."""
+    """A board row that clears every bar, for a game three hours out.
+
+    Sharp-anchored by default because that is the tier the module is
+    built to select: a sharp book quoted this market two ways, the
+    de-vig says 60%, and DraftKings is paying a price that implies 52.4%.
+    """
     d, k = _et(180)
     r = {"kind": "prop", "player": "A Player", "team": "AAA",
          "opponent": "BBB", "market": "receptions", "market_label": "Receptions",
-         "side": "OVER", "line": 3.5, "book": "DraftKings", "odds": -140,
-         "model_prob": 0.64, "implied_prob": 0.583, "rank_auc": 0.71,
+         "side": "OVER", "line": 3.5, "book": "DraftKings", "odds": -110,
+         "sharp_anchored": True, "sharp_fair": 0.60,
+         "model_prob": 0.58, "implied_prob": 0.5238, "rank_auc": 0.71,
          "bettable": True, "injury_status": "", "game_date": d, "kickoff": k}
     r.update(kw)
     return r
 
 
+def _consensus(**kw):
+    """A row whose only witness is the de-vigged market consensus."""
+    return _row(sharp_anchored=False, sharp_fair=None,
+                prob_source="market", **kw)
+
+
 # --- the arithmetic the band rests on ----------------------------------------
 def test_the_price_table_is_the_one_quoted():
-    """These six prices are the table the feature was specified against.
-    If any of them moves, the argument for MIN_PROB moves with it."""
-    want = {-190: (0.6552, 0.526), -150: (0.6000, 0.667), -110: (0.5238, 0.909),
+    """These prices are the table the feature was specified against. If
+    any of them moves, the argument for the band moves with it."""
+    want = {-190: (0.6552, 0.526), -125: (0.5556, 0.800), -110: (0.5238, 0.909),
             100: (0.5000, 1.000), 150: (0.4000, 1.500), 190: (0.3448, 1.900)}
     for odds, (imp, pay) in want.items():
         assert round(potd.implied(odds), 4) == imp, (odds, potd.implied(odds))
@@ -68,10 +83,15 @@ def test_plus_money_is_the_underdog_and_not_the_favourite():
     assert potd.payout(190) > 1.0 > potd.payout(-190)
 
 
-def test_the_band_is_the_one_he_asked_for():
-    assert potd.in_band(-190) and potd.in_band(190)
-    assert not potd.in_band(-191) and not potd.in_band(191)
-    assert not potd.in_band(-250), "chalk is outside the band"
+def test_the_band_is_the_flip_he_asked_for():
+    """"From 80% to 100% flip of your money" — the two ends, and one
+    tick past each of them."""
+    assert potd.payout(potd.MIN_ODDS) == potd.MIN_PAYOUT
+    assert potd.payout(potd.MAX_ODDS) == potd.MAX_PAYOUT
+    assert potd.in_band(-125) and potd.in_band(100) and potd.in_band(-110)
+    assert not potd.in_band(-130), "pays 0.77 — under the flip"
+    assert not potd.in_band(110), "pays 1.10 — over the flip"
+    assert not potd.in_band(-400), "chalk is outside the band"
     # No American price lives between -100 and +100; a quote claiming to
     # is broken, not a coin flip.
     assert not potd.in_band(-95) and not potd.in_band(99)
@@ -79,34 +99,111 @@ def test_the_band_is_the_one_he_asked_for():
         assert not potd.in_band(junk), junk
 
 
-def test_the_floor_and_the_credible_cap_decide_which_prices_can_qualify():
-    """THE ARGUMENT FOR THE DEFAULT, executed rather than asserted in
-    prose. A pick must clear MIN_PROB and sit within MAX_CREDIBLE_EDGE
-    of the book's own number, so the market's implied probability has to
-    be at least MIN_PROB - MAX_CREDIBLE_EDGE. At the shipped values that
-    is 0.50, which is exactly +100 — the even-money end of the band, and
-    the "doubles money" Ethan asked for, still reachable."""
-    need = potd.MIN_PROB - MAX_CREDIBLE_EDGE
-    assert round(need, 4) == 0.50, need
-    # A row at +100 claiming exactly the floor qualifies.
-    assert potd.refuse(_row(odds=100, implied_prob=0.50,
-                            model_prob=potd.MIN_PROB)) == ""
-    # One point of price worse than that, and the same claim cannot be
-    # credited any more.
-    assert potd.shortfall(_row(odds=110, implied_prob=0.4762,
-                               model_prob=potd.MIN_PROB)) != ""
+def test_the_band_is_decided_by_the_payout_not_by_the_odds():
+    """`MIN_ODDS`/`MAX_ODDS` are for printing; the payout is the test.
+    A drift between the two spellings would be invisible on the page and
+    is the exact thing the derivation above exists to prevent."""
+    for odds in range(-300, 301):
+        if -100 < odds < 100:
+            continue
+        by_payout = potd.MIN_PAYOUT - 1e-9 <= potd.payout(odds) <= potd.MAX_PAYOUT + 1e-9
+        by_odds = potd.MIN_ODDS <= odds <= potd.MAX_ODDS
+        assert by_payout == by_odds == potd.in_band(odds), odds
+
+
+def test_no_efficient_favourite_in_this_band_can_be_a_heavy_favourite():
+    """THE MEASUREMENT THE MODULE IS BUILT ON, executed rather than
+    asserted in prose. The most any in-band price can imply is what
+    MIN_ODDS implies — 55.6%. So a straight favourite here is a coin
+    flip by construction, which is why the selector needs a disagreement
+    between two books rather than a confidence ranking. Replayed on the
+    stored closes this came out at 53.7% NFL / 53.3% CFB; the ceiling
+    below is why that was never going to be 68%."""
+    ceiling = potd.implied(potd.MIN_ODDS)
+    assert round(ceiling, 3) == 0.556, ceiling
+    for odds in range(-300, 301):
+        if -100 < odds < 100 or not potd.in_band(odds):
+            continue
+        assert potd.implied(odds) <= ceiling + 1e-9, odds
+
+
+def test_the_ev_floor_asks_for_one_point_not_ten():
+    """What MIN_EV actually demands, at both ends of the band. The
+    answer is about a point of disagreement with the price — the size of
+    gap a real sharp-versus-soft difference produces. A floor that
+    needed ten would only ever be cleared by our own model being wrong,
+    which is the failure this module was rebuilt to stop."""
+    for odds in (potd.MIN_ODDS, -110, potd.MAX_ODDS):
+        imp = potd.implied(odds)
+        # The smallest fair that clears the floor at this price.
+        need = next(f / 10000 for f in range(1, 10000)
+                    if potd.edge({"sharp_anchored": True, "sharp_fair": f / 10000,
+                                  "odds": odds}) >= potd.MIN_EV)
+        assert 0.005 < need - imp < 0.02, (odds, need, imp)
+
+
+# --- whose opinion it is -----------------------------------------------------
+def test_the_witness_is_named_and_the_fair_comes_from_that_witness():
+    """`evidence` and `fair_prob` are a pair. A row whose tier says
+    "sharp" while its number came from somewhere else is the bug this
+    pairing exists to make impossible."""
+    sharp = _row()
+    assert potd.evidence(sharp) == "sharp"
+    assert potd.fair_prob(sharp) == 0.60, "the sharp book's de-vig, not ours"
+
+    market = _consensus(implied_prob=0.56)
+    assert potd.evidence(market) == "market"
+    assert potd.fair_prob(market) == 0.56, "the consensus de-vig"
+
+    ours = _row(sharp_anchored=False, sharp_fair=None, model_prob=0.62)
+    assert potd.evidence(ours) == "model"
+    assert potd.fair_prob(ours) == 0.62
+
+
+def test_our_own_model_can_never_be_the_evidence():
+    """Ethan, 2026-09-15: "we shouldn't use that 70%." Measured, not
+    stylistic — likely.GAME_RANK_MEASURED has our moneyline model at
+    0.677 against the market's 0.722. A price only we dispute is a price
+    disputed by the weaker witness in the room."""
+    ours = _row(sharp_anchored=False, sharp_fair=None, model_prob=0.70,
+                implied_prob=0.5238)
+    assert potd.disqualify(ours) == "", "it is a real, placeable, in-band bet"
+    assert potd.shortfall(ours) == "only our own model disputes this price"
+    assert potd.build([ours], "nfl", "2026-W02")["pick"]["below_bar"] != ""
+
+
+def test_a_sharp_anchor_outranks_a_bigger_consensus_edge():
+    """THE INVERSION THAT IS THE POINT OF THE MODULE. Sorting on edge
+    size hands every day to the loudest disagreement, and the loudest
+    disagreements come from the weakest witness."""
+    quiet = _row(player="Pinnacle says", odds=-110, sharp_fair=0.57)
+    loud = _consensus(player="Consensus says", odds=-110, implied_prob=0.62)
+    assert potd.refuse(quiet) == "" and potd.refuse(loud) == ""
+    assert potd.edge(loud) > potd.edge(quiet), "the loud one has the bigger edge"
+    pick, _, _ = potd.choose([loud, quiet])
+    assert pick["player"] == "Pinnacle says", pick["player"]
+
+
+def test_the_edge_is_the_fair_against_the_price():
+    """EV of one unit, off the shared converter. Checked at a price that
+    pays less than the stake and at one that pays more, because that is
+    where a sign error hides."""
+    assert round(potd.edge(_row(odds=-125, sharp_fair=0.60)), 4) == 0.0800
+    assert round(potd.edge(_row(odds=100, sharp_fair=0.60)), 4) == 0.2000
+    assert potd.edge(_row(odds=-110, sharp_fair=0.40)) < 0
+    assert potd.edge(_row(odds="x")) is None
 
 
 # --- what is never shown -----------------------------------------------------
 def test_a_row_outside_the_band_is_disqualified_not_shown_as_a_near_miss():
-    """The band is the product definition, not a quality bar. "The most
-    likely thing today is a -400 favourite" is not this feature having a
-    quiet day; it is a different feature."""
-    chalk = _row(odds=-400, implied_prob=0.80, model_prob=0.82)
-    assert potd.disqualify(chalk) == "priced outside the even-money band"
+    """The band is the product definition, not a quality bar. "The
+    strongest thing today is a -400 favourite" is not this feature
+    having a quiet day; it is a different feature."""
+    chalk = _row(odds=-400, implied_prob=0.80)
+    assert potd.disqualify(chalk) == "the payout is outside the even-money band"
     got = potd.build([chalk], "nfl", "2026-W02")
     assert got["pick"] is None, got
-    assert got["census"]["priced outside the even-money band"] == 1
+    assert got["census"]["the payout is outside the even-money band"] == 1
 
 
 def test_a_reserve_row_can_never_be_the_pick():
@@ -123,6 +220,14 @@ def test_an_invented_price_is_never_the_pick():
         assert potd.disqualify(_row(book=book)) == "no real market price"
 
 
+def test_the_sharp_book_prices_the_pick_and_is_never_the_ticket():
+    """Pinnacle sets the fair and does not take the action. Quoting its
+    own price as the bet would be a ticket nobody in the US can buy —
+    the rule `odds.is_sharp_book` exists for, enforced here too because
+    a rule enforced in one place is not a rule."""
+    assert potd.disqualify(_row(book="Pinnacle")) == "no real market price"
+
+
 def test_a_game_already_under_way_is_never_the_pick():
     d, k = _et(-30)
     assert potd.disqualify(_row(game_date=d, kickoff=k)) == "the game has already started"
@@ -135,13 +240,22 @@ def test_an_injury_designation_is_never_the_pick():
         "the player is carrying an injury designation"
 
 
-def test_a_model_that_disagrees_with_the_market_too_hard_is_refused():
-    """The standing lesson: when our number disagrees with a real price
-    by more than we credit, ours is the one that is wrong."""
-    wild = _row(odds=150, implied_prob=0.40, model_prob=0.62)
-    assert potd.disqualify(wild) == "", "it is a real, placeable, in-band bet"
-    assert potd.shortfall(wild) == \
-        "the model disagrees with the market by more than we credit"
+def test_a_price_that_is_still_more_likely_to_lose_is_refused():
+    """A +EV underdog is a fine bet and a bad Lock of the Day. At +100 a
+    fair of 48% clears the EV floor comfortably and still loses more
+    often than it wins."""
+    dog = _row(odds=100, sharp_fair=0.48, implied_prob=0.50)
+    assert potd.edge(dog) is not None and potd.edge(dog) < potd.MIN_EV
+    dog = _row(odds=100, sharp_fair=0.545, implied_prob=0.50)
+    assert potd.edge(dog) > potd.MIN_EV, "clears the EV bar"
+    assert potd.shortfall(_row(odds=100, sharp_fair=0.499, implied_prob=0.50)) != ""
+
+
+def test_a_price_barely_off_the_fair_is_not_worth_the_day():
+    thin = _row(odds=-110, sharp_fair=0.53)
+    assert potd.disqualify(thin) == ""
+    assert potd.shortfall(thin) == \
+        "the price is not far enough off the fair to be worth it"
 
 
 def test_an_unmeasured_or_coin_flip_market_is_refused():
@@ -152,34 +266,37 @@ def test_an_unmeasured_or_coin_flip_market_is_refused():
 
 
 # --- how it ranks ------------------------------------------------------------
-def test_confidence_leads_and_the_better_price_breaks_the_tie():
+def test_equal_edges_go_to_the_better_price():
     """Two rows making the same claim to the nearest point are the same
-    claim; the tie goes to the one that pays more. Ethan's "doubles
+    claim; the tie goes to the one that pays more. Ethan's "flip of your
     money", served wherever it costs nothing."""
-    cheap = _row(player="Cheap", odds=-180, implied_prob=0.643, model_prob=0.661)
-    rich = _row(player="Rich", odds=-130, implied_prob=0.565, model_prob=0.660)
-    # Both round to 0.66, and both sit inside the credible cap, so the
-    # only thing left to separate them is what they pay.
-    assert round(cheap["model_prob"], 2) == round(rich["model_prob"], 2) == 0.66
+    cheap = _row(player="Cheap", odds=-125, sharp_fair=0.6389)
+    rich = _row(player="Rich", odds=100, sharp_fair=0.5750)
+    assert round(potd.edge(cheap), 2) == round(potd.edge(rich), 2) == 0.15
     assert potd.refuse(cheap) == "" and potd.refuse(rich) == ""
-    assert potd.payout(-130) > potd.payout(-180)
+    assert potd.payout(100) > potd.payout(-125)
     pick, _, _ = potd.choose([cheap, rich])
     assert pick["player"] == "Rich", pick["player"]
-    # A genuinely higher number still wins outright.
-    better = _row(player="Better", odds=-185, implied_prob=0.649, model_prob=0.72)
+    # A genuinely bigger edge still wins outright.
+    better = _row(player="Better", odds=-125, sharp_fair=0.70)
     pick, _, _ = potd.choose([cheap, rich, better])
     assert pick["player"] == "Better", pick["player"]
 
 
 # --- what the page gets ------------------------------------------------------
-def test_a_qualifying_pick_carries_the_three_numbers_the_card_shows():
+def test_a_qualifying_pick_carries_the_numbers_the_card_shows():
     got = potd.build([_row()], "nfl", "2026-W02")
     pick = got["pick"]
     assert pick["below_bar"] == "", "a qualifying pick is not flagged"
-    assert pick["payout_units"] == round(potd.payout(-140), 3)
-    assert pick["edge_points"] == round((0.64 - 0.583) * 100, 1)
+    assert pick["evidence"] == "sharp"
+    assert pick["fair_prob"] == 0.60
+    assert pick["model_prob"] == 0.58, "ours travels as context, labelled"
+    assert pick["payout_units"] == round(potd.payout(-110), 3)
+    assert pick["ev_units"] == round(potd.edge(_row()), 4)
+    assert pick["edge_points"] == round((0.60 - potd.implied(-110)) * 100, 1)
     assert got["band"] == [potd.MIN_ODDS, potd.MAX_ODDS]
-    assert got["min_prob"] == potd.MIN_PROB
+    assert got["payout_band"] == [potd.MIN_PAYOUT, potd.MAX_PAYOUT]
+    assert got["min_ev"] == potd.MIN_EV
     assert got["considered"] == 1
 
 
@@ -187,15 +304,16 @@ def test_a_quiet_day_shows_the_best_available_and_says_it_missed():
     """The pattern the boards already use so a page is never blank. The
     difference that matters is `below_bar`: the page reads it, and the
     journal refuses the row because of it."""
-    thin = _row(model_prob=0.56, implied_prob=0.583)
+    thin = _row(sharp_fair=0.53)
     got = potd.build([thin], "nfl", "2026-W02")
     assert got["pick"] is not None
-    assert got["pick"]["below_bar"] == "under the confidence floor"
-    assert got["census"]["under the confidence floor"] == 1
+    assert got["pick"]["below_bar"] == \
+        "the price is not far enough off the fair to be worth it"
+    assert got["census"][got["pick"]["below_bar"]] == 1
 
 
 def test_a_qualifying_pick_always_beats_a_near_miss():
-    got = potd.build([_row(model_prob=0.56, implied_prob=0.583), _row(player="Good")],
+    got = potd.build([_row(sharp_fair=0.53), _row(player="Good")],
                      "nfl", "2026-W02")
     assert got["pick"]["player"] == "Good" and got["pick"]["below_bar"] == ""
 
@@ -210,22 +328,26 @@ def test_an_empty_board_is_a_sentence_not_an_exception():
 
 
 def test_the_census_names_the_gate_that_was_binding():
-    rows = [_row(odds=-400, implied_prob=0.8), _row(reserve=True),
-            _row(model_prob=0.56, implied_prob=0.583), _row(rank_auc=0.49)]
+    rows = [_row(odds=-400), _row(reserve=True), _row(sharp_fair=0.53),
+            _row(rank_auc=0.49),
+            _row(sharp_anchored=False, sharp_fair=None, model_prob=0.70)]
     got = potd.build(rows, "nfl", "2026-W02")
     assert got["census"] == {
-        "priced outside the even-money band": 1,
+        "the payout is outside the even-money band": 1,
         "the board itself says this did not clear its bar": 1,
-        "under the confidence floor": 1,
-        "this market ranks no better than a coin flip": 1}, got["census"]
+        "the price is not far enough off the fair to be worth it": 1,
+        "this market ranks no better than a coin flip": 1,
+        "only our own model disputes this price": 1}, got["census"]
 
 
 def test_every_hard_reason_is_one_the_module_can_actually_give():
     """The tuple is documentation the page may read; a name in it that
     no branch produces is a lie that survives a refactor."""
     produced = set()
-    for r in (_row(model_prob=None), _row(reserve=True), _row(book="proxy"),
-              _row(odds="x"), _row(odds=-400), _row(implied_prob=None),
+    for r in (_row(sharp_anchored=False, sharp_fair=None, model_prob=None,
+                   implied_prob=None, prob_source=None),
+              _row(reserve=True), _row(book="proxy"), _row(book="Pinnacle"),
+              _row(odds="x"), _row(odds=-400),
               _row(injury_status="out"), _row(live=True)):
         produced.add(potd.disqualify(r))
     assert produced == set(potd.HARD_REASONS), produced ^ set(potd.HARD_REASONS)

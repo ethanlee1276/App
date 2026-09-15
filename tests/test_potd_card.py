@@ -192,6 +192,30 @@ def test_the_copy_uses_the_typographic_apostrophe():
                 assert not any(w in line for w in ("’s the", "n't ", "'s the")), line
 
 
+def test_the_headline_number_is_the_fair_and_it_names_its_witness():
+    """Ethan, 2026-09-15: "we shouldn’t use that 70%." The card used to
+    lead with our model’s confidence. It now leads with the fair the
+    pick was priced against and says whose fair that is, because "56%"
+    means a different thing from Pinnacle than from us — and the
+    measurement says the difference runs against us (0.677 to 0.722 on
+    NFL moneylines). A regression here would put our own number back at
+    the top of the page with nothing marking it as ours."""
+    body = _card()
+    assert "fair_prob" in body, "the card no longer reads the fair"
+    i = body.index("WITNESS")
+    block = body[i:i + 400]
+    for tier in ("sharp", "market", "model"):
+        assert f"{tier}:" in block or f'"{tier}"' in block, tier
+    # The witness word is CHOSEN BY THE PICK’S OWN TIER and then drawn.
+    # Asserting only that `who` is rendered let a mutant that hard-coded
+    # `who = "our number"` survive — the card still said a word, just
+    # always the wrong one.
+    assert "WITNESS[pick.evidence]" in body, \
+        "the witness word is not chosen by the pick’s own tier"
+    assert "${who}" in body, "the card computes the witness and never draws it"
+    assert "our number says" in body, "the model’s read still travels as context"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

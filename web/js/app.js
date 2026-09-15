@@ -2276,8 +2276,19 @@ function renderDataSource(d) {
    and a page that tells a paying reader otherwise turns one ordinary
    loss into a broken promise. What it says instead is what is true and
    is a stronger claim than most sites make — this is the single pick we
-   can most defend today, here is our number, here is the market's, and
-   here is what the last N of these actually did.
+   can most defend today, here is the fair it was priced against and
+   WHOSE fair that is, here is what the price implies, and here is what
+   the last N of these actually did.
+
+   WHOSE NUMBER LEADS CHANGED ON 2026-09-15, and it is the change Ethan
+   asked for ("we shouldn't use that 70%"). The headline was our model's
+   confidence; it is now the fair the pick was priced against, which on
+   a qualifying pick is a sharp book's de-vigged close or the market
+   consensus. Our own number still travels beside it as context. The
+   reason is measured rather than stylistic — likely.GAME_RANK_MEASURED
+   has our moneyline model at 0.677 where the market's own de-vigged
+   number is 0.722 — and engine/potd.shortfall refuses a pick whose only
+   witness is us.
 
    TWO STATES, AND THE DIFFERENCE IS THE POINT. A qualifying pick is the
    day's pick and is on the record. A day when nothing cleared still
@@ -2310,7 +2321,7 @@ async function renderPickOfTheDay() {
     return;
   }
   const below = String(pick.below_bar || "");
-  const band = got.band || [-190, 190];
+  const band = got.band || [-125, 100];
   /* The bet in words. A team market's `player` holds an ABBREVIATION and
      a game total's holds the journal key, so neither is a name to print
      — the same rule the Live tab's rows follow. */
@@ -2321,8 +2332,18 @@ async function renderPickOfTheDay() {
   else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
   else if (isTeam) text = `${teamName(pick.player || pick.team)} ${escapeHtml(String(pick.side || ""))} ${pick.line} ${escapeHtml(label)}`;
   else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
+  /* WHOSE NUMBER LEADS. The fair this pick was priced against, and the
+     witness it came from, because "56%" means a different thing when it
+     is Pinnacle's de-vigged close than when it is ours. engine/potd
+     refuses a model-only pick outright; the model's own read still
+     travels and is drawn as context, labelled, never as the reason. */
+  const WITNESS = { sharp: "the sharp book’s fair", market: "the market’s fair",
+                    model: "our number" };
+  const who = WITNESS[pick.evidence] || "our number";
+  const fair = pick.fair_prob == null ? null : Math.round(pick.fair_prob * 100);
   const ours = pick.model_prob == null ? null : Math.round(pick.model_prob * 100);
   const theirs = pick.implied_prob == null ? null : Math.round(pick.implied_prob * 100);
+  const ev = pick.ev_units == null ? null : Number(pick.ev_units);
   const pays = pick.payout_units == null ? null : Number(pick.payout_units).toFixed(2);
   const matchup = pick.opponent
     ? `${teamName(pick.team)} vs ${teamName(pick.opponent)}` : "";
@@ -2343,10 +2364,12 @@ async function renderPickOfTheDay() {
               pays ? ` · pays ${pays}u on 1u` : ""}${matchup ? ` · ${matchup}` : ""}</span>
         </span>
       </div>
-      ${ours != null ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
-        <b style="color:var(--text)">${ours}%</b> our number${
-          theirs != null ? ` · ${theirs}% the market’s` : ""} · one pick a day,
-        priced between ${american(band[0])} and ${american(band[1])}</div>` : ""}
+      ${fair != null ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+        <b style="color:var(--text)">${fair}%</b> ${who}${
+          theirs != null ? ` · this price implies ${theirs}%` : ""}${
+          ev != null ? ` · ${ev >= 0 ? "+" : MINUS}${Math.abs(ev * 100).toFixed(1)}% edge` : ""}${
+          ours != null && pick.evidence !== "model" ? ` · our number says ${ours}%` : ""} ·
+        one pick a day, priced between ${american(band[0])} and ${american(band[1])}</div>` : ""}
       ${below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">
         ${icon('warn')} Shown, not recorded — ${escapeHtml(below)}. Nothing on today’s board
         cleared the bar this pick is judged by, so it stays off the record below.</div>` : ""}

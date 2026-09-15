@@ -678,10 +678,14 @@
            from the daily-rhythm plan. Filled from the feed's
            settle_recap event; empty div costs nothing. -->
       <div id="daycard-zone"></div>
-      <!-- PICK OF THE DAY (2026-09-15). One pick per sport per day, in
-           the -190/+190 band, above everything else on the board because
-           that is what Ethan asked for: "We should display the 'pick of
-           the day' at the top of the dashboard for each sport." It is
+      <!-- PICK OF THE DAY (2026-09-15, rebuilt the same day). One pick
+           per sport per day, in the -125/+100 band — Ethan's "80% to
+           100% flip of your money" — above everything else on the board
+           because that is what he asked for: "We should display the
+           'pick of the day' at the top of the dashboard for each
+           sport." Selected on a sharp book's de-vigged fair against the
+           price we can actually take, never on our own model alone; see
+           engine/potd.py for why that order is measured. It is
            itself a pick — the single most defensible one we have that
            day — so this is picks moving closer to the top of a page
            about picks, the same argument #top-picks was moved up on.
