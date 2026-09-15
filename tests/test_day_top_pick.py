@@ -266,6 +266,34 @@ def test_a_card_without_its_tier_is_not_described_as_none():
     assert "sharp fair" in line, line
 
 
+# ── it reads the files the builds actually write ────────────────────
+
+def test_every_league_it_ranks_has_a_registered_board_file():
+    """THE BUG THIS EXISTS FOR, found an hour after shipping. The writer
+    opened `web/data/{sport}.json` for all five leagues, and two of those
+    files do not exist — the NFL writes `recommendations.json` and MLB
+    `mlb_recommendations.json`; only cfb, nba and wnba happen to be named
+    after their league. So the day’s top pick could never have come from
+    the two leagues at the top of SPORT_PRIORITY, and the missing files
+    were swallowed as "a league this box does not publish"."""
+    import launch
+    for sport in potd.TOP_PICK_LEAGUES:
+        assert sport in launch.BOARD_FILES, \
+            f"{sport} is ranked for the day’s top pick and has no board file"
+
+
+def test_the_writer_reads_the_registry_rather_than_naming_files_itself():
+    """A second list of board paths is how one of them goes stale in
+    silence. `BOARD_FILES` is the launcher’s own registry and every
+    other reader of the boards already uses it."""
+    import launch
+    body = inspect.getsource(launch._write_day_top_pick)
+    assert "BOARD_FILES[" in body, \
+        "the day’s top pick no longer reads the board registry"
+    assert 'f"{sport}.json"' not in body, \
+        "the writer is building board paths from the league code again"
+
+
 # ── it must stay a comparison ───────────────────────────────────────
 
 def test_the_cross_league_chooser_invents_no_bar_of_its_own():

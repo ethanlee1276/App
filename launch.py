@@ -3322,10 +3322,19 @@ def _write_day_top_pick() -> None:
     """
     try:
         from engine import ledger, potd
-        web = ROOT / "web" / "data"
         boards: dict = {}
         for sport in potd.TOP_PICK_LEAGUES:
-            f = web / f"{sport}.json"
+            # BOARD_FILES, NEVER A PATH BUILT FROM THE SPORT CODE. The
+            # first draft of this opened `web/data/{sport}.json` for all
+            # five, and two of those files do not exist: the NFL writes
+            # `recommendations.json` and MLB `mlb_recommendations.json`.
+            # Only cfb, nba and wnba happen to be named after their
+            # league. So the day's top pick could never have come from
+            # the two leagues at the top of SPORT_PRIORITY, and the
+            # FileNotFoundError below swallowed it as "a league this box
+            # does not publish" — an ordinary-looking empty result, which
+            # is the failure shape this repository keeps finding.
+            f = ROOT / BOARD_FILES[sport]
             try:
                 with open(f, encoding="utf-8") as fh:
                     boards[sport] = json.load(fh)
