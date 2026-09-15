@@ -63,15 +63,48 @@ def _run_section(rep, scope, recent=None):
 
 
 # --- the claim the page is allowed to make -----------------------------------
-def test_neither_surface_promises_a_certainty():
+def test_no_surface_promises_a_certainty():
     """The one that must never regress. "Guaranteed" was asked for and
-    deliberately not built; if it reappears it will appear here."""
+    deliberately not built; if it reappears it will appear here.
+
+    EVERY SURFACE, not just the two that existed when this was written.
+    That gap was not hypothetical: the cross-league chooser shipped on
+    2026-09-15 was called `lock_of_the_day` end to end and would have
+    put those exact four words on the page, in a THIRD renderer this
+    test did not know about. A banned list that only reads the
+    renderers it was born with is a banned list that stops working the
+    first time somebody adds a card.
+    """
     banned = ("guarantee", "guaranteed", "lock of the day", "can't lose",
               "cannot lose", "sure thing", "risk-free", "risk free")
-    for name, body in (("card", _card()), ("record section", _fn("recPotdSection"))):
+    surfaces = [("card", _card()), ("record section", _fn("recPotdSection")),
+                ("day top pick", _fn("renderDayTopPick")),
+                # FOUND BY THE TEST BELOW, not by anyone reading the file.
+                # Both were already clean — the point is that nothing had
+                # been holding them that way.
+                ("live picks", _fn("renderLivePicks")),
+                ("top picks", _fn("renderTopPicks"))]
+    for name, body in surfaces:
         low = body.lower()
         for word in banned:
             assert word not in low, f"{name} promises a certainty: {word!r}"
+
+
+def test_every_pick_renderer_is_on_the_banned_list():
+    """THE GUARD ON THE GUARD. The test above can only check surfaces it
+    names, so a fourth renderer would be invisible to it exactly the way
+    the third one was. This counts them instead: every top-level
+    function whose name renders a pick has to be in that list."""
+    import re as _re
+    src = APP
+    found = set(_re.findall(r"async function (render\w*[Pp]ick\w*)\s*\(", src))
+    found |= set(_re.findall(r"\bfunction (render\w*[Pp]ick\w*)\s*\(", src))
+    checked = {"renderPickOfTheDay", "renderDayTopPick",
+               "renderLivePicks", "renderTopPicks"}
+    missing = found - checked
+    assert not missing, (
+        f"these pick renderers are not checked for banned claims: "
+        f"{sorted(missing)} — add them to test_no_surface_promises_a_certainty")
 
 
 def test_the_card_shows_our_number_beside_the_markets():

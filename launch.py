@@ -3291,7 +3291,57 @@ def _background_refresher(interval: int) -> None:
         # heartbeat answers "is the LOOP alive", which file mtimes cannot —
         # a failing build and a dead thread both leave boards old, and only
         # one of them fixes itself.
+        # THE DAY'S ONE PICK, across every league, chosen only once all
+        # the boards have had their turn — which is why it lives here
+        # and not in a build. Ethan, 2026-09-15: "a model that picks one
+        # pick for the pick of the day". Singular, and for the DAY: each
+        # build produces its own league's best, so a reader on the MLB
+        # page and a reader on the NFL page were shown different "picks
+        # of the day" and neither was the day's.
+        _write_day_top_pick()
+        # THE HEARTBEAT IS LAST, ALWAYS. Proof of life has to be the
+        # final thing the cycle does, or a step added after it can take
+        # the liveness stamp down with it and the page then cannot tell
+        # a dead loop from a slow one. `tests/test_doctor.py` asserts
+        # this function ENDS here — it caught the first draft of the
+        # line above, which had been written underneath.
         _write_heartbeat(interval, swept=_swept)
+
+
+def _write_day_top_pick() -> None:
+    """web/data/day_top_pick.json — the best pick across every board.
+
+    NEVER FATAL, and it runs at the end of a cycle that may have failed
+    halfway, so the boards it reads can be any mixture of fresh and old.
+    `potd.day_top_pick` is what refuses a stale one — by DATE, per
+    league, because a league out of season leaves a perfectly well-formed
+    pick on disk from whenever it last ran and nothing about the card
+    would look wrong.
+    """
+    try:
+        from engine import potd
+        web = ROOT / "web" / "data"
+        boards: dict = {}
+        for sport in potd.TOP_PICK_LEAGUES:
+            f = web / f"{sport}.json"
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    boards[sport] = json.load(fh)
+            except FileNotFoundError:
+                continue           # a league this box does not publish
+            except Exception:      # noqa: BLE001
+                # A board mid-write, or corrupt. Counted as absent rather
+                # than taken down with it — one bad file must not cost
+                # the other four leagues their shot at the day's pick.
+                boards[sport] = {}
+        today = time.strftime("%Y-%m-%d")
+        top = potd.day_top_pick(boards, today)
+        p = web / "day_top_pick.json"
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(top, indent=1))
+        tmp.replace(p)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  day top pick not written: {type(exc).__name__}: {exc}")
 
 
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:

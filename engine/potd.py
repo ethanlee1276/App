@@ -642,3 +642,163 @@ def attach(result: dict, sport: str, now=None) -> str:
             f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
             f"{pick.get('ev_units'):+.3f}u EV, pays "
             f"{pick.get('payout_units')}u")
+
+
+#: Leagues the cross-board top pick considers, in the order a tie is broken.
+#: NOT a ranking of how good each league's picks are — that would be an
+#: assertion of exactly the kind this module refuses. It is a stable
+#: order so that two picks identical on every measured quantity resolve
+#: the same way on every run, instead of the answer depending on which
+#: board finished writing first.
+TOP_PICK_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba")
+
+
+def _pick_is_today(pick_of_the_day: dict, today: str) -> bool:
+    """Is this board's pick for the day we are actually in?
+
+    THE FAILURE THIS EXISTS FOR. Every board publishes its own file on
+    its own schedule, and a league out of season — or one whose build
+    threw — leaves a perfectly well-formed `pick_of_the_day` on disk
+    from whenever it last ran. A cross-board chooser with no date check
+    would happily crown a pick from a game that finished on Saturday and
+    present it as today's, and nothing about the card would look wrong. This is the same shape as the stale price ceiling
+    (`oddsapi.price_is_showable`) one layer up.
+    """
+    got = str((pick_of_the_day or {}).get("date") or "").strip()
+    return bool(got) and got == str(today or "").strip()
+
+
+def day_top_pick(boards: dict, today: str, now=None) -> dict:
+    """The one pick across EVERY league, or the reason there is not one.
+
+    Ethan, 2026-09-15: "a model that picks one pick for the pick of the
+    day, which is a guaranteed lock for the day." Singular, and for the
+    DAY rather than for a league — `build` above produces one per sport,
+    so a reader on the MLB page and a reader on the NFL page were being
+    shown different "picks of the day" and neither was the day's.
+
+    NOT NAMED FOR THE WORD HE USED, and the reason is at the top of this
+    module: no bet is guaranteed, and "lock of the day" is on the banned
+    list `tests/test_potd_card.py` keeps precisely so the page cannot
+    promise a paying reader a certainty. The first draft of this feature
+    was called `lock_of_the_day` end to end and would have put those
+    four words on the card — the banned-list test did not catch it only
+    because it scoped itself to the one renderer that existed when it
+    was written. That gap is closed there; this is the same decision
+    applied to the thing it was made about. What this IS is a
+    comparative — the highest-ranked pick on the whole site today —
+    which is a claim the ranking can actually support.
+
+    WHY THIS IS A COMPARISON AND NOT A NEW MODEL. `rank_key` already
+    orders picks on three quantities that know nothing about which sport
+    they came from: which witness stands behind the fair, how big the
+    edge is in points, and what the price pays. Nothing in it needs a
+    per-league calibration, so the cross-board answer is the same
+    comparator applied to a longer list. A separate cross-sport bar
+    would be a second set of numbers to keep honest, measured on
+    nothing.
+
+    ``boards`` is ``{sport: published board dict}``. Returns the card
+    plus the league it came from, the runners-up, and a census of every
+    league that offered nothing and why.
+
+    A QUALIFYING PICK ALWAYS BEATS A BELOW-BAR ONE, whatever the tiers
+    say. `build` publishes its best available when nothing clears, so a
+    below-bar row is on the board by design; letting one outrank a pick
+    that cleared every gate would quietly undo the gates.
+    """
+    import datetime as _dt
+    clear: list = []
+    below: list = []
+    census: dict = {}
+
+    def _tally(why: str) -> None:
+        census[why] = census.get(why, 0) + 1
+
+    order = {s: i for i, s in enumerate(TOP_PICK_LEAGUES)}
+    seen = sorted((boards or {}).items(),
+                  key=lambda kv: (order.get(kv[0], len(order)), kv[0]))
+    for sport, board in seen:
+        if not isinstance(board, dict):
+            _tally(f"{sport}: no board")
+            continue
+        if board.get("pick_of_the_day_error"):
+            _tally(f"{sport}: the board could not choose a pick")
+            continue
+        potd = board.get("pick_of_the_day") or {}
+        pick = potd.get("pick")
+        if not isinstance(pick, dict):
+            _tally(f"{sport}: {potd.get('note') or 'no pick on the board'}")
+            continue
+        if not _pick_is_today(potd, today):
+            _tally(f"{sport}: the board has not rebuilt today "
+                   f"(its pick is dated {potd.get('date') or 'nothing'})")
+            continue
+        entry = dict(pick)
+        entry["sport"] = sport
+        (below if pick.get("below_bar") else clear).append(entry)
+
+    clear.sort(key=lambda p: (rank_key(p), order.get(p["sport"], len(order))))
+    below.sort(key=lambda p: (rank_key(p), order.get(p["sport"], len(order))))
+
+    out = {
+        "date": str(today or ""),
+        "generated_at": (now or _dt.datetime.now(_dt.timezone.utc))
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "leagues_seen": len(seen),
+        "candidates": len(clear) + len(below),
+        "census": census,
+        "band": [MIN_ODDS, MAX_ODDS],
+        "min_ev": MIN_EV,
+    }
+    winner = clear[0] if clear else (below[0] if below else None)
+    if winner is None:
+        out["pick"] = None
+        out["sport"] = ""
+        out["note"] = ("No top pick today: " + (
+            "no league published a board" if not seen
+            else "no league had a pick in the band"))
+        return out
+    out["pick"] = winner
+    out["sport"] = winner.get("sport", "")
+    # THE ONES IT BEAT, so the choice can be argued with. A single card
+    # with nothing beside it is indistinguishable from a card chosen at
+    # random, and this feature's entire claim is that the ORDER means
+    # something.
+    out["runners_up"] = [p for p in (clear + below) if p is not winner][:4]
+    if winner.get("below_bar"):
+        out["note"] = ("Nothing cleared the bar in any league today — this "
+                       "is the best available, shown and not recorded.")
+    return out
+
+
+def top_pick_line(top: dict) -> str:
+    """The build-log sentence. Never raises, never returns "".
+
+    A cross-board step that prints nothing on a day it chose nothing is
+    the failure `lineledger.record_note` and the rankings section were
+    both dragged out of. The empty case gets the census.
+    """
+    try:
+        pick = (top or {}).get("pick")
+        if not pick:
+            why = ", ".join(f"{k}" for k in sorted((top or {})
+                                                   .get("census") or {}))
+            return ("top pick: none — "
+                    + (why or (top or {}).get("note", "no candidates")))
+        where = (f"{pick.get('player', '')} "
+                 f"{pick.get('market_label') or pick.get('market', '')}").strip()
+        head = (f"top pick: {(top.get('sport') or '').upper()} "
+                f"{where} at {pick.get('odds')}")
+        if pick.get("below_bar"):
+            return f"{head} — BELOW THE BAR ({pick['below_bar']}); shown, not recorded"
+        # THE TIER IS RECOMPUTED IF THE CARD DID NOT CARRY IT. `_card`
+        # always sets `evidence`, so this only fires on a card assembled
+        # somewhere else — and "None fair 60%" in a build log is worse
+        # than useless, because it reads like a measured absence.
+        tier = pick.get("evidence") or evidence(pick)
+        return (f"{head} — {tier} fair "
+                f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
+                f"beat {len(top.get('runners_up') or [])} other league pick(s)")
+    except Exception as exc:                                  # noqa: BLE001
+        return f"top pick: could not be described — {type(exc).__name__}: {exc}"

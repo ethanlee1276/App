@@ -227,6 +227,15 @@ def paid_keys_for(name: str = "") -> tuple:
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json",
+    # THE DAY'S ONE PICK, and not a close call: `pick_of_the_day` is
+    # already in PAID_KEYS above, so the per-league card is paid. This
+    # file is the SAME OBJECT promoted to the top level — the single
+    # highest-ranked pick on the site, with nothing else in the file to
+    # strip. Registering it free would have handed over the headline
+    # product to everyone, and it would have looked like an ordinary new
+    # board while doing it. The gate asks the question by name for
+    # exactly this reason.
+    "day_top_pick.json",
     # The live feed: every entry names a pick — an edge appearing IS a
     # recommendation — so the whole file is the model's output.
     "feed.json",
@@ -355,6 +364,11 @@ KNOWN_BOARDS = (
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json",
+    # The day's one pick across every league, written by the refresh
+    # cycle rather than by a build (launch._write_day_top_pick). PAID —
+    # see PAID_FILES below, and the note there about why this one is not
+    # a close call.
+    "day_top_pick.json",
 )
 
 #: Boards that are neither wholly free nor wholly paid: a free schedule and

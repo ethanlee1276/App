@@ -2317,7 +2317,9 @@ async function renderPickOfTheDay() {
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
       <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">
-        ${escapeHtml(got.note || "No pick today.")}</div></div>`;
+        ${escapeHtml(got.note || "No pick today.")}</div>
+      <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
+    renderDayTopPick();
     return;
   }
   const below = String(pick.below_bar || "");
@@ -2414,8 +2416,17 @@ async function renderPickOfTheDay() {
         ${icon('warn')} A lean, not the Pick of the Day — ${escapeHtml(below)}.
         It is the strongest thing on today’s board and it did not clear the bar,
         so it is shown here and kept off the record below.</div>` : ""}
+      <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div>
       <div id="potd-record" style="margin-top:6px;font-size:var(--fs-xs);color:var(--text-mute)"></div>
     </div>`;
+  /* INSIDE THE CARD, NOT ABOVE IT. The first draft gave the day's top
+     pick its own block at the top of the board and tests/test_board_order
+     refused it with a measurement: the picks already start at 848px on an
+     844px fold, so one more card above them pushes the product itself off
+     the first screen. It belongs here anyway — a reader looking at this
+     league's pick is exactly who needs to know another league's is
+     stronger, and one line beats a second card saying the same thing. */
+  renderDayTopPick();
   /* THE RECORD, UNDER THE CLAIM. A showcase pick with no scoreboard
      beside it is the thing every tout site does; this is the half that
      makes it checkable. Loaded after the card so a slow record file
@@ -2438,6 +2449,112 @@ async function renderPickOfTheDay() {
       Math.abs(units).toFixed(2)}u · ${Math.round((r.win_rate || 0) * 100)}% hit rate
       <span style="opacity:.8">(${r.settled} settled${r.open ? `, ${r.open} riding` : ""})</span>`;
   } catch (e) {}
+}
+
+/* ============================================================
+   TODAY’S TOP PICK — the one pick across every league.
+
+   Ethan, 2026-09-15: "a model that picks one pick for the pick of the
+   day, which is a guaranteed lock for the day." Singular, and for the
+   DAY — though NOT under the word he used. No bet is guaranteed, "lock
+   of the day" is on the banned list tests/test_potd_card.py keeps, and
+   the first draft of this feature was called that end to end. What the
+   page says instead is a comparative the ranking can support: the
+   highest-ranked pick on the whole site today. `engine/potd.build` chooses one per SPORT, so a reader on the
+   MLB page and a reader on the NFL page were each shown a different
+   "Pick of the Day" and neither of them was the day's.
+
+   NO NEW MODEL AND NO NEW BAR. `potd.rank_key` already orders picks on
+   three quantities that know nothing about which sport they came from —
+   which witness stands behind the fair, the edge in points, the payout
+   — so the cross-league answer is that same comparator over a longer
+   list. Written by the refresh cycle, not a build, because no single
+   build can see the other boards.
+
+   IT DOES NOT REPEAT ITSELF. When the top pick IS this league’s pick, the
+   banner says so in one line and leaves the numbers to the card
+   directly below it. Drawing the same bet twice, with the same figures,
+   would read as two different recommendations that happen to agree. */
+let _topPickCache = null;
+async function loadTopPickOnce() {
+  if (_topPickCache !== null) return _topPickCache;
+  try {
+    /* THROUGH THE ENTITLED ROUTE, because this file IS the paid product.
+       `pick_of_the_day` is in gate.PAID_KEYS, and this board is that
+       same object promoted to the top level with nothing else in it to
+       strip — so reading it off the public path would hand a subscriber
+       the stranger's copy and, worse, would have been the shape that
+       leaks it. `paidFetch` asks /api/board first and falls back to the
+       static file, which on the public path is already stripped. */
+    const res = await paidFetch("day_top_pick.json");
+    _topPickCache = res.ok ? await res.json() : {};
+  } catch (e) { _topPickCache = {}; }
+  return _topPickCache;
+}
+
+async function renderDayTopPick() {
+  const host = document.getElementById("potd-top-pick");
+  if (!host) return;
+  const top = await loadTopPickOnce();
+  /* A box that has not run a full cycle since this shipped has no file.
+     Write nothing rather than an empty frame or an apology — the
+     league's own pick is directly below and is not diminished by the
+     banner being absent. */
+  if (!top || typeof top !== "object" || !("pick" in top)) {
+    host.innerHTML = ""; return;
+  }
+  const pick = top.pick;
+  if (!pick) {
+    /* NOT SILENT, though. "No lock today" with the reason is a fact
+       about a slate; an empty div is indistinguishable from a broken
+       feature, which is the failure this codebase keeps finding. */
+    const why = Object.keys(top.census || {}).length
+      ? Object.keys(top.census).join(" · ")
+      : (top.note || "no candidates today");
+    host.innerHTML = `<span style="color:var(--text-mute)">${icon('info')}
+      Nothing cleared the bar in any league today — ${escapeHtml(why)}.</span>`;
+    return;
+  }
+  const from = String(top.sport || "");
+  const name = (SPORT_META[from] || {}).name || from.toUpperCase();
+  const below = String(pick.below_bar || "");
+  const accent = below ? "var(--warn)" : "var(--brand)";
+  const beat = (top.runners_up || []).length;
+  const head = below
+    ? "Today’s strongest lean, across every league"
+    : "Today’s Top Pick";
+  if (from === state.sport) {
+    /* THE CARD ABOVE IS ALREADY THE ANSWER. One line confirming it is
+       the strongest on the site today, and not one number repeated. */
+    host.innerHTML = `<span style="color:var(--text-mute)">${icon('info')}
+      ${escapeHtml(head)} across every league${beat
+        ? ` — it beat ${beat} other league${beat === 1 ? "" : "s"}’ pick${
+            beat === 1 ? "" : "s"} on the same ranking`
+        : ""}.</span>`;
+    return;
+  }
+  /* FROM ANOTHER LEAGUE: name the bet and the league, and open it. The
+     numbers stay on that league's own card rather than being restated
+     here, so there is exactly one place on the site where this bet is
+     described in full. */
+  const text = pick.market === "moneyline"
+    ? `${teamName(pick.player || pick.team)} Moneyline`
+    : `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${
+        pick.line != null ? pick.line : ""} ${escapeHtml(pick.market_label || pick.market || "")}`.trim();
+  host.innerHTML = `<span class="openable" data-top-pick-sport="${escapeHtml(from)}"
+      style="color:${accent}">${icon(below ? 'warn' : 'info')}
+    ${escapeHtml(head)} is in the ${escapeHtml(name)}:
+    <b>${text}</b> ${american(pick.odds)}${
+      below ? ` — a lean, not a pick (${escapeHtml(below)})` : ""} ·
+    <span style="text-decoration:underline">open it</span></span>`;
+  /* THE LEAGUE ROUTE, not the switcher's internals. `#mlb` is a real
+     destination the hash handler already knows (it sets the sport,
+     applies it, loads and lands on the board), so opening the lock's
+     league is one assignment rather than a second copy of the eight
+     pieces of state the sport buttons reset. It is also a URL, which
+     means this card is shareable and the back button works. */
+  const card = host.querySelector("[data-top-pick-sport]");
+  if (card) card.addEventListener("click", () => { location.hash = from; });
 }
 
 function renderProbation() {
