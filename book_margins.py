@@ -51,6 +51,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from engine import bookvig                                    # noqa: E402
+from engine.sources.oddsapi import SPORT_CONFIG               # noqa: E402
 
 #: Where the builds write the payloads they bought.
 DEFAULT_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -65,17 +66,32 @@ def sport_of(filename: str) -> str:
     third underscore-separated field in both. Read rather than guessed at
     because a mis-read here would file every sport under one heading and
     make the census look complete when it is one league repeated.
+
+    A NAME THAT DOES NOT CARRY A LEAGUE GETS NO LEAGUE — "" — rather than
+    whatever sat in that position. See the comment below; this is the
+    difference between four headings and several hundred.
     """
     base = os.path.splitext(os.path.basename(filename))[0]
     for prefix in ("odds_event_", "odds_board_"):
         if base.startswith(prefix):
             rest = base[len(prefix):]
+            # A KNOWN LEAGUE OR NOTHING. Not every event cache on the box
+            # was written by `event_cache_name`: the droplet holds hundreds
+            # spelled `odds_event_<EVENTID>_<tag>.json`, with no league in
+            # the name at all, and the first version of this returned the
+            # EVENT ID as the league. The report Ethan ran on the real box
+            # printed several hundred hex-string "leagues", each one saying
+            # no book quoted both sides, with the four real leagues buried
+            # somewhere in the middle. Checking the token against the one
+            # list of leagues we actually pull is what makes the report
+            # readable — an unrecognised token is not a league.
             # THE EXTENSION COMES OFF FIRST, above. A board pull with no
             # cache tag is `odds_board_mlb.json` with nothing after the
             # league, so splitting the basename on "_" returned
             # "mlb.json" and every heading, every census key and the
             # `--sports` filter carried it. Caught by running the thing.
-            return rest.split("_", 1)[0]
+            token = rest.split("_", 1)[0]
+            return token if token in SPORT_CONFIG else ""
     return ""
 
 

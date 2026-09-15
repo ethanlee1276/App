@@ -318,6 +318,30 @@ def test_a_board_pull_with_no_cache_tag_is_filed_under_its_league():
     assert book_margins.sport_of("games.csv") == ""
 
 
+def test_a_cache_name_with_no_league_in_it_is_filed_under_no_league():
+    """The droplet holds hundreds of `odds_event_<EVENTID>_<tag>.json`
+    with no sport in the name at all. Returning the token in that
+    position made the report print several hundred hex-string
+    "leagues", each saying no book quoted both sides, with the four
+    real ones buried in the middle. Found by running it on the box."""
+    hexed = "odds_event_8F42799432660532A3E011A06B8356_1a2b.json"
+    assert book_margins.sport_of(hexed) == ""
+
+    # And the guard is the one list of leagues we pull, not a hex test:
+    # a plausible-looking token that is not a league we buy is still no
+    # league, or the next name shape reopens the same hole.
+    assert book_margins.sport_of("odds_event_soccer_abc_9f3.json") == ""
+    assert book_margins.sport_of("odds_board_epl.json") == ""
+
+    # Every league we do pull survives the guard. Spelled from the
+    # config rather than a list here, so adding a sport cannot make
+    # this tool quietly stop reporting it.
+    from engine.sources.oddsapi import SPORT_CONFIG
+    for league in SPORT_CONFIG:
+        assert book_margins.sport_of(f"odds_board_{league}.json") == league
+        assert book_margins.sport_of(f"odds_event_{league}_abc_9f3.json") == league
+
+
 def test_both_cached_payload_shapes_are_read():
     """A board pull is a LIST of events; an event pull is ONE event
     object. A reader that handled either alone would report a book as
