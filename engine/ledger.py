@@ -170,6 +170,15 @@ def _migrate(conn) -> None:
         "DROP TABLE bets_v1;")
 
 
+#: Journals this PROCESS has already brought up to schema, and the
+#: `PRAGMA schema_version` each was left at (see `db.needs_schema`). Kept
+#: apart from `db._SCHEMA_DONE` because the two modules own different
+#: schemas over what may be different files; one shared map would let a
+#: journal connection skip its work on the strength of a history
+#: connection having run something else.
+_SCHEMA_DONE: dict = {}
+
+
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # WAL + a busy timeout, from the one place that explains why — see
     # engine/db.tune(). The refresher journals this file while the
@@ -183,6 +192,13 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     _db_tune(conn)
+    # ONCE PER FILE PER PROCESS. The schema script and the ALTER probes
+    # below are all writes, they all take the exclusive lock, and after
+    # the first connection in a process they all do nothing. See
+    # `db.needs_schema` for what that cost on the droplet.
+    from .db import needs_schema as _needs_schema
+    if not _needs_schema(conn, path, _SCHEMA_DONE):
+        return conn
     _migrate(conn)
     conn.executescript(SCHEMA)
     # Doubleheader leg (1/2) — lets the settler grade a DH bet against the
@@ -327,6 +343,11 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
+    # AFTER every migration above, never before: the schema work is itself
+    # a schema change, so a version recorded up front is the one we were
+    # about to move off.
+    from .db import mark_schema as _mark_schema
+    _mark_schema(conn, path, _SCHEMA_DONE)
     return conn
 
 

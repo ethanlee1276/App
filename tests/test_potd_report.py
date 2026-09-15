@@ -337,6 +337,81 @@ def test_the_top_report_never_comes_back_empty():
         assert out.strip() and "DAY TOP PICK" in out, (boards, out)
 
 
+# ── why the TOP rung of the ladder is empty ─────────────────────────
+
+def _model_row(**kw):
+    """A row with no witness but our own — the state every league's board
+    was in on 2026-09-15, and the only state where the exchange question
+    is worth asking."""
+    r = _row(sharp_anchored=False, sharp_fair=None)
+    r.update(kw)
+    return r
+
+
+def _xboard(rows=None, **top):
+    b = _board(rows if rows is not None else [_model_row()])
+    b.update(top)
+    return b
+
+
+def test_a_dead_exchange_feed_is_named_and_not_blamed_on_the_budget():
+    """Kalshi is keyless. A reader who sees an empty tier and assumes we
+    ran out of API credits will go and look at the wrong thing."""
+    out = R.report(_xboard(exchange_fair_error="TimeoutError: kalshi"), "mlb")
+    assert "TimeoutError: kalshi" in out, out
+    assert "costs no credits" in out, out
+
+
+def test_the_markets_it_threw_away_are_named_with_their_reasons():
+    """`exchangefair.quality` refuses a market for a stated reason — too
+    wide, too thin, a last trade rather than a two-sided book. The census
+    keys ARE those reasons, so the report quotes them rather than saying
+    "0 priced" and stopping."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 4, "attached": 0, "usable markets": 0,
+        "book 9c wide": 3, "last trade only": 2}), "mlb")
+    assert "0 of 4 moneyline row(s) priced" in out, out
+    assert "3 book 9c wide" in out and "2 last trade only" in out, out
+
+
+def test_usable_markets_that_matched_nothing_say_it_is_a_NAME_problem():
+    """The two ways to land zero are opposite jobs. Markets refused on
+    quality is a venue problem and nothing to do; markets that were fine
+    but matched no game is our own name matching, which is fixable."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 4, "attached": 0, "usable markets": 6}), "mlb")
+    assert "name-matching problem" in out, out
+    assert "not a liquidity one" in out, out
+
+
+def test_a_board_of_player_props_is_told_it_can_never_reach_this_tier():
+    """`exchangefair.MARKETS` is moneyline and nothing else — the venue
+    lists game winners. A baseball board that is 57 total-bases rows has
+    no path to the top rung, and a reader deserves to know that rather
+    than hunting for a broken feed."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 0, "attached": 0, "usable markets": 6}), "mlb")
+    assert "no moneyline rows on this board" in out, out
+    assert "game winners and nothing else" in out, out
+
+
+def test_a_board_with_no_census_at_all_says_the_hook_did_not_reach_it():
+    """Distinct from "the hook ran and found nothing", which is every
+    case above. This one means the build did not write it."""
+    out = R.report(_xboard(), "mlb")
+    assert "no exchange census" in out, out
+
+
+def test_it_says_nothing_when_the_tier_actually_worked():
+    """A line printed on a healthy board is a line nobody reads. The
+    whole section exists to explain an absence."""
+    good = _model_row(market="moneyline", exchange_fair=0.61)
+    out = R.report(_xboard([good], exchange_fair_census={
+        "rows": 1, "attached": 1, "usable markets": 6}), "mlb")
+    assert "Exchange    " not in out, out
+    assert "1 exchange" in out, out       # the tier tally still shows it
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

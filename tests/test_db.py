@@ -252,6 +252,118 @@ def test_date_ranges_exposes_logs_vs_odds_coverage_gap():
     assert lo < r["mlb_logs"][0]
 
 
+# ── the schema is run once per file per process, not per connection ──
+
+def test_a_fresh_file_always_gets_its_schema():
+    """The one way this optimisation could be catastrophic: memoise too
+    eagerly and a caller opening a NEW database gets a connection with no
+    tables in it. Every path is its own answer."""
+    import tempfile
+    for _ in range(3):
+        path = os.path.join(tempfile.mkdtemp(), "fresh.db")
+        conn = db.connect(path)
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        assert names, "a new database came back with no tables"
+
+
+def test_the_second_connection_to_the_same_file_skips_the_schema():
+    """THE POINT. `executescript(SCHEMA)` and the ALTER probes under it
+    are all WRITES — a failing `ADD COLUMN` still takes SQLite's exclusive
+    lock, discovers the column exists, and releases it. Seven or eight of
+    those on every connection, on a box running concurrent builds against
+    one file on one core, is the difference this removes."""
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "twice.db")
+    conn = db.connect(path)                 # the first one does the work
+    assert db.needs_schema(conn, path) is False
+    assert db.needs_schema(db.connect(path), path) is False
+
+
+def test_the_tables_are_still_there_on_the_skipped_connection():
+    """Behavioural, because the assertion above is about a flag and this
+    is about whether the database works. A connection that skipped the
+    schema must be indistinguishable from one that ran it."""
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "shared.db")
+    first = db.connect(path)
+    first.execute("INSERT OR IGNORE INTO games (sport, season, period, home, "
+                  "away) VALUES ('mlb', 2026, '2026-09-15', 'LAD', 'SD')")
+    first.commit()
+    second = db.connect(path)
+    got = second.execute("SELECT home FROM games").fetchone()
+    assert got and got[0] == "LAD", got
+
+
+def test_memory_databases_always_run_it():
+    """`:memory:` is a brand new empty database on every connect, so it
+    can never be skipped. Getting this wrong would empty the suite."""
+    import sqlite3
+    assert db.needs_schema(sqlite3.connect(":memory:"), ":memory:") is True
+    assert db.needs_schema(sqlite3.connect(":memory:"), ":memory:") is True
+    conn = db.connect(":memory:")
+    assert conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+
+
+def test_a_schema_changed_underneath_us_is_migrated_again():
+    """THE CORRECTNESS ARGUMENT for the whole memo, and the case that
+    caught the first version of it before it shipped.
+
+    A path-only memo turns a real migration into a silent no-op the
+    moment anything else alters the file — the connection comes back
+    "already done" over a database missing the column the migration was
+    for. Keying on `PRAGMA schema_version`, which SQLite bumps on every
+    schema change, means the memo NOTICES and simply migrates again.
+
+    `tests/test_refit_capture` does this for real on the journal; this
+    states it as the invariant rather than leaving it as a side effect
+    of another file's fixture."""
+    import sqlite3
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "drifted.db")
+    conn = db.connect(path)
+    assert db.needs_schema(conn, path) is False
+    conn.close()
+
+    # Something else alters the file — a rollback, a hand-edit, another
+    # version of the code.
+    raw = sqlite3.connect(path)
+    raw.execute("ALTER TABLE games ADD COLUMN scratch TEXT")
+    raw.commit()
+    raw.close()
+
+    again = sqlite3.connect(path)
+    assert db.needs_schema(again, path) is True, \
+        "the memo did not notice the schema move underneath it"
+
+
+def test_the_version_is_recorded_after_the_work_not_before():
+    """Running the schema IS a schema change. A version stamped up front
+    is the one we were about to move off, so every later connection
+    would find a mismatch and redo everything — the memo would exist and
+    save nothing."""
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "stamped.db")
+    first = db.connect(path)
+    assert db.needs_schema(first, path) is False, \
+        "the first connection did not record the version it left behind"
+
+
+def test_the_journal_and_the_history_keep_separate_books():
+    """They own different schemas, over what may be different files. One
+    shared set would let a journal connection skip its own schema on the
+    strength of a history connection having run a different one."""
+    from engine import ledger
+    assert ledger._SCHEMA_DONE is not db._SCHEMA_DONE
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "both.db")
+    conn = db.connect(path)                 # history has now migrated it
+    assert db.needs_schema(conn, path, db._SCHEMA_DONE) is False
+    # The journal has not seen this path, whatever the history did.
+    assert db.needs_schema(conn, path, ledger._SCHEMA_DONE) is True
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

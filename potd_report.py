@@ -195,6 +195,64 @@ def _ladder_note(rows, payload) -> list:
     return out
 
 
+def _exchange_lines(payload: dict, tiers: dict) -> list:
+    """Why the TOP rung of the ladder is empty, in the tool that shows it
+    empty.
+
+    THE ANSWER WAS ALREADY ON DISK. `exchangefair.attach_to_board` runs in
+    every build and writes its funnel into the board as
+    `exchange_fair_census` — how many markets it could use, how many rows
+    it priced, and the quality reason for each market it threw away. It
+    also returns a one-line summary, which each build PRINTS, and which
+    the launcher swallows on a successful cycle: `journalctl` for "line
+    ledger" comes back empty on a box whose line ledger is demonstrably
+    writing, and this hook is relayed exactly the same way.
+
+    So the state on 2026-09-15 was a report saying "0 exchange" five times
+    beside a census, in the same file, explaining it — and no way to see
+    the second without opening the JSON by hand. That is the same failure
+    as the Most Likely board reading empty: the fact was not missing, the
+    reader was.
+
+    Silent when the tier landed rows, because then there is nothing to
+    explain; silent on a board with no exchange census at all, which is
+    every board built before the hook existed.
+    """
+    err = payload.get("exchange_fair_error")
+    census = payload.get("exchange_fair_census")
+    if tiers.get("exchange"):
+        return []                       # the tier worked; nothing to say
+    if err:
+        return [f"  Exchange    the feed did not answer — {err}",
+                "              (Kalshi is keyless and costs no credits, so "
+                "this is the venue or the network, not the budget)"]
+    if not isinstance(census, dict) or not census:
+        return ["  Exchange    this board carries no exchange census — the "
+                "build's `exchangefair` hook did not run or did not reach "
+                "the board file."]
+    seen = census.get("rows", 0)
+    usable = census.get("usable markets", 0)
+    # The remaining keys ARE the reasons, straight from
+    # `exchangefair.quality` — a market too wide, too thin, or priced off
+    # a last trade rather than a two-sided book. Named, not counted.
+    why = ", ".join(f"{n} {k}" for k, n in sorted(census.items())
+                    if k not in ("rows", "attached", "usable markets"))
+    line = (f"  Exchange    0 of {seen} moneyline row(s) priced  ·  "
+            f"{usable} usable market(s)")
+    out = [line]
+    if why:
+        out.append(f"              markets refused: {why}")
+    elif not seen:
+        out.append("              no moneyline rows on this board to price — "
+                   "the exchange lists game winners and nothing else, so a "
+                   "board of player props can never reach this tier.")
+    elif usable:
+        out.append("              markets were usable but none matched a "
+                   "game on this board — a name-matching problem, not a "
+                   "liquidity one.")
+    return out
+
+
 def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     if payload.get("_error"):
         return f"{sport.upper()}: could not read the board — {payload['_error']}"
@@ -232,6 +290,7 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
                    "board — every row is our own number, so the selector "
                    "cannot take any of them. Check the odds pull for this "
                    "league before touching a bar.")
+    out.extend(_exchange_lines(payload, tiers))
 
     if census:
         out.append("  Refused:")

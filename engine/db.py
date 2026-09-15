@@ -349,6 +349,88 @@ def journal_warning(mode: str) -> str:
             f"process holding {DEFAULT_DB}.")
 
 
+#: Databases this PROCESS has already brought up to schema: resolved path
+#: -> the `PRAGMA schema_version` it was left at. See `needs_schema`.
+_SCHEMA_DONE: dict = {}
+
+
+def needs_schema(conn, path, done: dict = None) -> bool:
+    """Does this connection have to run the schema and the migrations?
+
+    ONCE PER FILE PER PROCESS, not once per connection — and the
+    difference is write locks. `connect` below and `ledger.connect` each
+    run `executescript(SCHEMA)` and then a string of `ALTER TABLE ... ADD
+    COLUMN` probes that are EXPECTED to fail, seven or eight of them,
+    every single time anyone opens the database. A failing ALTER is still
+    a write: SQLite takes the exclusive lock, discovers the column is
+    there, and releases it. `CREATE TABLE IF NOT EXISTS` is the same
+    story.
+
+    On this box that is not free. The droplet runs its builds as
+    concurrent subprocesses against one 3.5 GB file on a single core, and
+    spent the evening of 2026-09-15 with cfb_build, pm_build, the MLB
+    results ingest and the NFL box scores all dying on
+
+        sqlite3.OperationalError: database is locked
+
+    every cycle, through a 30-second busy timeout, in WAL. WAL lets a
+    reader run beside a writer; it does not let two writers overlap. Every
+    connection that opened the journal to read one row was queueing behind
+    — and adding to — that same write lock.
+
+    NOT A CLAIM THAT THIS WAS THE WHOLE CAUSE. The file is large, the box
+    is small, and a real writer holding the lock is still a real writer.
+    What is certain is that the DDL was pure waste on every connection
+    after the first, and waste on the scarcest resource on the machine.
+
+    KEYED ON `PRAGMA schema_version`, NOT ON THE PATH ALONE, and that is
+    the whole correctness argument. SQLite bumps that counter on every
+    schema change, so remembering the version we migrated to means the
+    memo notices when the file has been altered underneath us and simply
+    migrates again. A path-only memo does not, and would turn a real
+    migration into a silent no-op the moment anything else touched the
+    schema — which is precisely what
+    `tests/test_refit_capture.test_the_new_columns_migrate_onto_an_existing_ledger`
+    does on purpose, and how this was caught before it shipped. Reading
+    the pragma is a pure read and takes no lock, so the check costs
+    nothing it is trying to save. In steady state nobody issues DDL, the
+    version stops moving, and every connection after the first skips.
+
+    `:memory:` is a NEW, EMPTY database on every connect, so it always
+    needs the schema; skipping it there would hand back a connection with
+    no tables at all, which is how this would otherwise break the suite.
+    """
+    done = _SCHEMA_DONE if done is None else done
+    if str(path) == ":memory:":
+        return True
+    try:
+        key = str(Path(path).resolve())
+    except OSError:
+        return True                    # cannot place it; do the safe thing
+    try:
+        ver = conn.execute("PRAGMA schema_version").fetchone()[0]
+    except sqlite3.DatabaseError:
+        return True
+    return done.get(key) != ver
+
+
+def mark_schema(conn, path, done: dict = None) -> None:
+    """Remember the schema version this file was left at.
+
+    AFTER the work, never before: running the schema is itself a schema
+    change, so a version recorded up front is the one we were about to
+    move off and every later connection would re-run everything.
+    """
+    done = _SCHEMA_DONE if done is None else done
+    if str(path) == ":memory:":
+        return
+    try:
+        key = str(Path(path).resolve())
+        done[key] = conn.execute("PRAGMA schema_version").fetchone()[0]
+    except (OSError, sqlite3.DatabaseError, TypeError):
+        pass                           # unremembered simply means "redo it"
+
+
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     if str(path) != ":memory:":
@@ -356,6 +438,8 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     tune(conn)
+    if not needs_schema(conn, path):
+        return conn
     conn.executescript(SCHEMA)
     # Migrations for columns added after a table shipped (CREATE IF NOT
     # EXISTS won't touch an existing table).
@@ -375,6 +459,7 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         conn.commit()
     except sqlite3.OperationalError:
         pass                              # column already there
+    mark_schema(conn, path)
     return conn
 
 
