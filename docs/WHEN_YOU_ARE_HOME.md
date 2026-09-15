@@ -63,6 +63,47 @@ A day with a board but no rows is the silent failure caught in the act.
 
 ---
 
+## PIN-2. What the Pick of the Day actually saw (read-only, 10 seconds)
+
+The same trip, the second question. `potd_report.py` runs the selector
+over the boards already on disk and prints what it saw, chose and
+refused. It opens the JSON, never writes, never fetches a price — safe
+mid-cycle.
+
+```bash
+cd /srv/qellys && python3 potd_report.py --dir web/data --rows 10
+```
+
+**Two lines in that output decide the next build.**
+
+**The census.** A day with no pick names the gate that was binding. If
+it reads "61 of 68 outside the even-money band", the band is the
+constraint and `potd.MIN_PAYOUT` is the argument to have. If it reads
+"40 with only our own model behind them", the sharp prices are not
+arriving and that is a pull problem, not a selector one.
+
+**The ladder line**, which is the one piece of work left on this feature
+(docs/PICK_OF_THE_DAY.md §3d):
+
+```
+  Ladder      1 of 2 price-refused row(s) HAVE a rung inside the band,
+              unreached today:
+    Heavy Fav rush_yds at -400 → 34.5 at -115 (DraftKings)
+```
+
+A -400 read is unbettable at that price and perfectly bettable at 34.5.
+Wiring that through means a new pricing path — what is the fair at an
+alternate line, and is the sharp book quoting that rung two ways — so it
+waits on this count rather than on a hunch. **Several rows a day with a
+reachable rung makes it worth building. Zero saves the work.** Either
+answer is worth the ten seconds.
+
+If the line is absent entirely, this board carries no alternate ladder
+at all, which is its own answer and points at the pull rather than the
+selector.
+
+---
+
 ## 0. THE SITE IS DOWN — run this first, before anything else
 
 Ethan, 2026-09-09, with a photo: *"the site crashed. It won't load
