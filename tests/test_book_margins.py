@@ -318,6 +318,48 @@ def test_a_board_pull_with_no_cache_tag_is_filed_under_its_league():
     assert book_margins.sport_of("games.csv") == ""
 
 
+def test_the_census_counts_each_event_once_not_once_per_book():
+    """`Census.add_event` walks the whole payload itself — every book in
+    it, in one call. Putting that call inside the per-book loop that sits
+    above it adds the same event once for each bookmaker quoting it, so
+    on a well-covered game every margin is counted fifteen-odd times.
+
+    IT READ PLAUSIBLY ANYWAY, which is why it survived. Each book in an
+    event is over-counted by the SAME factor, so the ORDER of the margins
+    — the only thing the report is really for — came out right; only the
+    row counts were wrong, and wrong by a different multiple per sport
+    and per slate, so there was nothing to compare them against.
+
+    Checked on the SYNTAX TREE rather than by eye or by indentation
+    string: the two call sites are three hundred lines apart in
+    `oddsapi`, one of them drifted a level in, and the invariant is
+    exactly "this call is not inside that loop"."""
+    import ast
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(here, "engine", "sources", "oddsapi.py"),
+               encoding="utf-8").read()
+
+    def _calls(node, name):
+        return [n for n in ast.walk(node) if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute) and n.func.attr == name]
+
+    tree = ast.parse(src)
+    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For)
+             and _calls(n.iter, "items")
+             and "parse_event_h2h_by_book" in ast.dump(n.iter)]
+    assert len(loops) == 2, f"the per-book loops moved: found {len(loops)}"
+    for loop in loops:
+        inside = [c for stmt in loop.body for c in _calls(stmt, "add_event")]
+        assert not inside, (
+            "bookvig.Census(...).add_event is inside the per-book loop — "
+            "every event is counted once per bookmaker")
+
+    # And it is still called — a fix that simply deleted it would pass the
+    # assertion above and silently stop measuring anything.
+    assert len(_calls(tree, "add_event")) == 2, \
+        "both pull paths should still feed the census exactly once"
+
+
 def test_a_cache_name_with_no_league_in_it_is_filed_under_no_league():
     """The droplet holds hundreds of `odds_event_<EVENTID>_<tag>.json`
     with no sport in the name at all. Returning the token in that

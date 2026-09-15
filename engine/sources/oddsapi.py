@@ -2363,7 +2363,7 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             # …AND WHAT EVERY BOOK CHARGED FOR IT, off the same parse.
             # Measurement only: nothing downstream prices off this, and
             # `engine/bookvig` says at length why it does not (the de-vig
-            # assumption is worth 0.39 points at a sharp book's margin
+            # assumption is worth 0.70 points at a sharp book's margin
             # inside this band — a fifth of `potd.MIN_EV`, which is not a
             # reason to move a book up a tier).
         bookvig.Census(result.book_vig).add_event(ev, team_map)
@@ -2737,13 +2737,26 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 if bk == BOOK_TITLES.get("pinnacle") and home in prices and away in prices:
                     game.sharp_home_ml = prices[home]
                     game.sharp_away_ml = prices[away]
-                # …AND WHAT EVERY BOOK CHARGED FOR IT, off the same parse.
-                # Measurement only: nothing downstream prices off this, and
-                # `engine/bookvig` says at length why it does not (the de-vig
-                # assumption is worth 0.39 points at a sharp book's margin
-                # inside this band — a fifth of `potd.MIN_EV`, which is not a
-                # reason to move a book up a tier).
-                bookvig.Census(result.book_vig).add_event(payload, cfg["teams"])
+            # …AND WHAT EVERY BOOK CHARGED FOR IT, off the same parse.
+            # Measurement only: nothing downstream prices off this, and
+            # `engine/bookvig` says at length why it does not (the de-vig
+            # assumption is worth 0.70 points at a sharp book's margin
+            # across this band — about a third of `potd.MIN_EV`, which is
+            # not a reason to move a book up a tier).
+            #
+            # ONCE PER EVENT, NOT ONCE PER BOOK. This sat one level in,
+            # inside the `for bk, prices` loop above, so every event was
+            # added to the census once for each bookmaker quoting it —
+            # fifteen-odd times on a well-covered game. `add_event` walks
+            # the whole payload itself, so the counts in `book_margins.py`
+            # were inflated by however many books happened to answer, and
+            # inflated by a DIFFERENT factor per sport and per slate. The
+            # ORDER of the margins survived it (every book was
+            # over-counted by the same factor within an event) which is
+            # why the report still read plausibly. The event-level path
+            # above has always had this outside its loop; this is the
+            # copy that drifted.
+            bookvig.Census(result.book_vig).add_event(payload, cfg["teams"])
             tot = parse_event_totals(payload)
             if tot:
                 game.total, game.total_over_odds, game.total_under_odds = tot
