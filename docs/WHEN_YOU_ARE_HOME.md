@@ -24,6 +24,15 @@ claimed a different Pick of the Day. There is now a cross-league layer:
 one, written once a cycle by the refresh loop.
 
 ```bash
+cd /srv/qellys && python3 potd_report.py --top
+```
+
+That prints the board's answer beside the locked one. **When those two
+lines differ it is not a bug** — it means a league has moved off the pick
+it journaled this morning, and the locked line is what the site
+publishes. The raw file is still there if you want it:
+
+```bash
 cat /srv/qellys/web/data/day_top_pick.json | python3 -m json.tool | head -30
 ```
 
@@ -35,7 +44,17 @@ league contributed nothing.
 |---|---|
 | `"pick": null` with a census full of "has not rebuilt today" | the boards are stale — that is the cycle, not this |
 | `"pick": null`, census empty | no league published a board at all |
+| "nothing locked for today yet" | that league's pick was below its bar, so it was never journaled and cannot be published |
+| "the board has changed its pick" | the league is showing something else now; the journaled one still stands |
 | a `below_bar` on the pick | nothing cleared the bar anywhere; it is shown as a lean and is NOT on the record |
+
+**One thing worth knowing about this tool.** Until 2026-09-15 it looked
+for `nfl_picks.json` and `mlb_picks.json`, and neither exists — the NFL
+writes `recommendations_picks.json` and MLB
+`mlb_recommendations_picks.json`. So every run before that quietly
+skipped your two priority leagues and said nothing about it. It reads the
+launcher's own board registry now, and names any league it could not find
+a board for.
 
 On the site it draws as one line inside the Pick of the Day card — it
 does **not** get its own block, because the picks already start right at

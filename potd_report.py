@@ -41,6 +41,49 @@ from engine import potd                                       # noqa: E402
 BOARDS = ("mlb", "nfl", "cfb", "nba", "wnba")
 
 
+def board_paths(sport: str, where: str) -> list:
+    """Every file that might carry this league’s board, best first.
+
+    THE BUG THIS EXISTS FOR, and it is the third instance of the same
+    one in a day. A board’s file is NOT named after its league: the NFL
+    writes `recommendations.json` and MLB `mlb_recommendations.json`;
+    only cfb, nba and wnba happen to match their own code. This tool
+    looked for `{sport}_picks.json`, so it silently skipped the two
+    leagues at the top of SPORT_PRIORITY — and its "no board found"
+    message only fires when NOTHING is found, so with college football
+    present it reported happily and said nothing about the other two.
+
+    `launch.BOARD_FILES` is the registry every other reader uses and
+    `lightboard.light_path` is the one definition of the light copy’s
+    name, so both are asked rather than guessed at. The light copy is
+    preferred because it is small and carries `pick_of_the_day` whole
+    (`lightboard.DROP_TOP` drops only `player_stats`); the full board is
+    the fallback for a box that has not written one yet.
+    """
+    out = []
+    try:
+        import launch
+        from engine import lightboard
+        rel = launch.BOARD_FILES.get(sport)
+        if rel:
+            name = os.path.basename(rel)
+            out.append(os.path.join(where, os.path.basename(
+                lightboard.light_path(name))))
+            out.append(os.path.join(where, name))
+    except Exception:                                         # noqa: BLE001
+        # A checkout without the launcher importable still gets the
+        # conventional names rather than nothing at all.
+        pass
+    out.append(os.path.join(where, f"{sport}_picks.json"))
+    out.append(os.path.join(where, f"{sport}.json"))
+    seen, uniq = set(), []
+    for path in out:
+        if path not in seen:
+            seen.add(path)
+            uniq.append(path)
+    return uniq
+
+
 def _load(path: str):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -212,6 +255,74 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     return "\n".join(out)
 
 
+def top_report(boards: dict, today: str, locked) -> str:
+    """The cross-league layer, board answer beside locked answer.
+
+    TWO RUNS, AND THE GAP BETWEEN THEM IS THE POINT. `potd.day_top_pick`
+    with no lock says what the boards would choose right now; with the
+    lock it says what may actually be published. When those differ, a
+    league has moved off the pick it journaled this morning — which is
+    ordinary and correct, and is also the single thing most likely to
+    make somebody think the feature is broken when it is working.
+    """
+    from engine import potd
+    lines = [f"DAY TOP PICK  ·  {today}"]
+    live = potd.day_top_pick(boards, today)
+    held = potd.day_top_pick(boards, today, locked=locked)
+    lines.append(f"  boards say : {potd.top_pick_line(live)[len('top pick: '):]}")
+    lines.append(f"  locked     : {potd.top_pick_line(held)[len('top pick: '):]}")
+    if locked is None:
+        lines.append("  (no ledger on this box — the locked line is the "
+                     "board line)")
+    elif not locked:
+        lines.append("  NOTHING IS LOCKED TODAY. Every league’s pick was "
+                     "below its bar, or no build has journaled yet — either "
+                     "way nothing qualifying can be published.")
+    else:
+        lines.append("  locked picks in the journal today:")
+        for sport in sorted(locked):
+            player, market, side, line = locked[sport]
+            lines.append(f"    {sport:<5} {player} {side} {line} {market}")
+    same = ((live.get("sport"), (live.get("pick") or {}).get("player"))
+            == (held.get("sport"), (held.get("pick") or {}).get("player")))
+    if not same:
+        lines.append("  ⚠️  THE TWO DISAGREE — a league is showing a "
+                     "different pick than the one it locked. The locked "
+                     "line is what the site publishes.")
+    census = held.get("census") or {}
+    if census:
+        lines.append("  why each league contributed nothing:")
+        for why in sorted(census):
+            lines.append(f"    {why}")
+    return "\n".join(lines)
+
+
+def load_boards(where: str, sports) -> dict:
+    """``{sport: board}`` for the cross-league report."""
+    out = {}
+    for sport in sports:
+        path = next((p for p in board_paths(sport, where)
+                     if os.path.exists(p)), None)
+        if path is not None:
+            out[sport] = _load(path)
+    return out
+
+
+def read_lock(today: str):
+    """Today’s journaled picks, or None when there is no ledger here.
+
+    None and {} MEAN DIFFERENT THINGS and the report says which: None is
+    "this box has no journal to ask", {} is "asked, nothing locked". The
+    second is a real answer about the day; the first is a missing tool.
+    """
+    try:
+        from engine import ledger
+        with ledger.connect() as conn:
+            return ledger.locked_potd_keys(conn, today)
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("sports", nargs="*", help="leagues to report (default: all found)")
@@ -219,18 +330,35 @@ def main(argv=None) -> int:
                     help="where the *_picks.json boards live")
     ap.add_argument("--rows", type=int, default=5,
                     help="how many near misses to print per board (0 for none)")
+    ap.add_argument("--top", action="store_true",
+                    help="the cross-league day top pick, board vs locked")
     args = ap.parse_args(argv)
 
+    if args.top:
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        sports = [s.lower() for s in args.sports] or list(BOARDS)
+        print(top_report(load_boards(args.dir, sports), today,
+                         read_lock(today)))
+        return 0
+
     wanted = [s.lower() for s in args.sports] or list(BOARDS)
-    found = 0
+    found, absent = 0, []
     for sport in wanted:
-        path = os.path.join(args.dir, f"{sport}_picks.json")
-        if not os.path.exists(path):
-            # A league that simply is not in season is not an error; say
-            # so once and move on rather than printing a stack of them.
+        path = next((p for p in board_paths(sport, args.dir)
+                     if os.path.exists(p)), None)
+        if path is None:
+            # A league that simply is not in season is not an error — but
+            # it is NAMED at the end rather than skipped in silence, which
+            # is how this tool hid two leagues from its own reader.
+            absent.append(sport)
             continue
         found += 1
         print(report(_load(path), sport, args.rows))
+        print()
+    if absent:
+        print(f"No board on disk for: {', '.join(absent)} "
+              f"(not in season, or that build has not run).")
         print()
     if not found:
         looked = os.path.join(args.dir, "*_picks.json")

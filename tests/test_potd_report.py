@@ -243,6 +243,100 @@ def test_the_header_quotes_the_band_from_the_engine_not_from_a_copy():
     assert f"{potd.MIN_EV:.0%}" in out, out
 
 
+# ── it reads the files the builds actually write ────────────────────
+
+def test_it_looks_for_the_real_board_names_not_the_league_code():
+    """THE BUG THIS EXISTS FOR, and the third instance of it in a day.
+    A board’s file is not named after its league: the NFL writes
+    `recommendations.json` and MLB `mlb_recommendations.json`; only cfb,
+    nba and wnba match their own code. This tool looked for
+    `{sport}_picks.json` and so skipped the two leagues at the top of
+    SPORT_PRIORITY — and its "no board found" message only fires when
+    NOTHING is found, so with college football present it reported
+    happily and said nothing about the other two."""
+    for sport, expect in (("nfl", "recommendations_picks.json"),
+                          ("mlb", "mlb_recommendations_picks.json"),
+                          ("cfb", "cfb_picks.json")):
+        names = [os.path.basename(p)
+                 for p in R.board_paths(sport, "web/data")]
+        assert expect in names, (sport, names)
+
+
+def test_the_light_copy_is_preferred_and_the_full_board_is_the_fallback():
+    """The light copy is small and keeps `pick_of_the_day` whole —
+    `lightboard.DROP_TOP` drops only `player_stats`. A box that has not
+    written one yet still gets an answer from the full board."""
+    names = [os.path.basename(p)
+             for p in R.board_paths("nfl", "web/data")]
+    assert names[0] == "recommendations_picks.json", names
+    assert "recommendations.json" in names, names
+
+
+def test_a_league_with_no_board_is_named_rather_than_skipped():
+    """Skipping in silence is exactly how this tool hid two leagues from
+    its own reader for a day."""
+    import contextlib
+    import io
+    d = _in_tmp({"wnba_picks.json": _board([_row()])})
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        R.main(["nfl", "cfb", "wnba", "--dir", d])
+    out = buf.getvalue()
+    assert "No board on disk for" in out, out
+    assert "nfl" in out and "cfb" in out, out
+
+
+# ── the cross-league layer ──────────────────────────────────────────
+
+def test_the_top_report_shows_the_board_answer_beside_the_locked_one():
+    """The gap between them is the point: when they differ, a league has
+    moved off the pick it journaled this morning, which is ordinary and
+    correct and is also the thing most likely to look like a bug."""
+    card = {"player": "KC ML", "team": "KC", "market": "moneyline",
+            "kind": "game", "odds": -130, "sharp_anchored": True,
+            "sharp_fair": 0.60, "fair_prob": 0.60, "evidence": "sharp"}
+    boards = {"nfl": {"pick_of_the_day": {"date": "2026-04-01", "pick": card}}}
+    out = R.top_report(boards, "2026-04-01",
+                                 {"nfl": ("KC", "moneyline", "OVER", 0.5)})
+    assert "boards say" in out and "locked" in out, out
+    assert "NFL KC ML" in out, out
+    # CASE-INSENSITIVE, because the banner reads "THE TWO DISAGREE" and
+    # the first version of this asserted lowercase — which made the
+    # negative here pass for the wrong reason and the positive below
+    # fail for it.
+    assert "disagree" not in out.lower(), out
+
+
+def test_the_top_report_shouts_when_the_two_disagree():
+    card = {"player": "KC ML", "team": "KC", "market": "moneyline",
+            "kind": "game", "odds": -130, "sharp_anchored": True,
+            "sharp_fair": 0.60, "fair_prob": 0.60, "evidence": "sharp"}
+    boards = {"nfl": {"pick_of_the_day": {"date": "2026-04-01", "pick": card}}}
+    out = R.top_report(boards, "2026-04-01",
+                       {"nfl": ("BUF", "moneyline", "OVER", 0.5)})
+    assert "disagree" in out.lower(), out
+
+
+def test_no_journal_and_an_empty_journal_read_differently():
+    """None is "this box has no journal to ask"; {} is "asked, nothing
+    locked". The second is a real answer about the day, the first is a
+    missing tool, and a report that conflated them would send somebody
+    looking for a bug in the selector."""
+    boards = {"nfl": {"pick_of_the_day": {"date": "2026-04-01", "pick": None,
+                                          "note": "the board had no rows"}}}
+    none_out = R.top_report(boards, "2026-04-01", None)
+    empty_out = R.top_report(boards, "2026-04-01", {})
+    assert "no ledger on this box" in none_out, none_out
+    assert "NOTHING IS LOCKED TODAY" in empty_out, empty_out
+    assert none_out != empty_out
+
+
+def test_the_top_report_never_comes_back_empty():
+    for boards in ({}, {"nfl": {}}, {"nfl": {"pick_of_the_day": {}}}):
+        out = R.top_report(boards, "2026-04-01", {})
+        assert out.strip() and "DAY TOP PICK" in out, (boards, out)
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
