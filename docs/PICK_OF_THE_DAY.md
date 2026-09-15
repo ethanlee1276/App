@@ -172,6 +172,47 @@ carries anything for these rules to bite on. "68 rows considered, 61
 outside the band, 0 picks" is not a bug report — it is the name of the
 gate to argue with.
 
+## 3d. The lever not pulled yet: the alternate ladder
+
+A -400 read is outside the band by the widest margin available. But the
+same book quotes the same player at other numbers — 34.5 rushing yards
+at -115 instead of 24.5 at -400 — so the read is not unbettable, it is
+unbettable **at that price**. Converting a strong read into a band-legal
+price is what a lot of pick services are actually doing when they post
+"Team -7.5" instead of "Team ML -400".
+
+**The machinery exists and the wiring does not.** `likely._best_rung`
+already walks the ladder, but it picks the rung with the highest
+*probability* subject to the Most Likely board's bars — a different
+optimisation from "which rung lands in the band" — and
+`likely._row_from` then drops `alt_lines` from the row it emits. So the
+ladder never reaches this module.
+
+It is still in the published board, on the Edge rows
+(`pipeline._rec_to_dict`). **So the question is measurable before it is
+buildable**, and `potd_report.py` measures it:
+
+```
+  Ladder      1 of 2 price-refused row(s) HAVE a rung inside the band,
+              unreached today:
+    Heavy Fav rush_yds at -400 → 34.5 at -115 (DraftKings)
+```
+
+That count is the decision. Wiring the ladder through means a new
+pricing path (what *is* the fair at an alternate line, and is the sharp
+book quoting that rung two ways?), which is real work on a path that
+prices real money. It should be built when the report says there is
+something there, and not before — the same order every other measured
+decision in this file follows.
+
+Two implementations to weigh when that day comes, and neither is free:
+
+- **Carry the ladder on the likely row.** Simplest, and it bloats every
+  board row; the MLB board is already 8 MB.
+- **Have `potd` read the Edge rows as a ladder source**, keyed by
+  (player, market), which is what `potd_report` does today for counting.
+  No page-weight cost, but it needs a dedupe and a rung-pricing rule.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against

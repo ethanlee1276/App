@@ -67,6 +67,59 @@ def _one_line(row: dict) -> str:
     return "  ".join(str(b) for b in bits)
 
 
+def _ladders(payload: dict) -> dict:
+    """``{(player, market): [rung, ...]}`` off the recommendation rows.
+
+    The Most Likely rows do not carry the ladder; the Edge board's rows
+    in the SAME published file do (`pipeline._rec_to_dict`), and the two
+    are keyed the same way. Read-only: nothing here prices a rung, it
+    only asks what numbers exist.
+    """
+    out: dict = {}
+    for r in (payload.get("recommendations") or []):
+        if not isinstance(r, dict):
+            continue
+        alts = r.get("alt_lines") or []
+        if alts:
+            out[(str(r.get("player") or ""), str(r.get("market") or ""))] = alts
+    return out
+
+
+def _ladder_note(rows, payload) -> list:
+    """Lines saying how many band-refused rows have a band-legal rung."""
+    ladders = _ladders(payload)
+    if not ladders:
+        return []
+    refused = [r for r in rows
+               if potd.disqualify(r) == "the payout is outside the even-money band"]
+    if not refused:
+        return []
+    reachable, examples = 0, []
+    for r in refused:
+        key = (str(r.get("player") or ""), str(r.get("market") or ""))
+        hit = None
+        for ln in ladders.get(key) or []:
+            for side in ("over_odds", "under_odds"):
+                if potd.in_band(ln.get(side)):
+                    hit = (ln.get("line"), ln.get(side), ln.get("book"))
+                    break
+            if hit:
+                break
+        if hit:
+            reachable += 1
+            if len(examples) < 3:
+                examples.append(
+                    f"{key[0]} {key[1]} at {r.get('odds')} → "
+                    f"{hit[0]} at {hit[1]:+d} ({hit[2]})")
+    if not reachable:
+        return [f"  Ladder      {len(refused)} row(s) refused on price, none "
+                f"with a rung inside the band — nothing to recover here."]
+    out = [f"  Ladder      {reachable} of {len(refused)} price-refused row(s) "
+           f"HAVE a rung inside the band, unreached today:"]
+    out.extend(f"    {e}" for e in examples)
+    return out
+
+
 def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     if payload.get("_error"):
         return f"{sport.upper()}: could not read the board — {payload['_error']}"
@@ -98,6 +151,25 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
         out.append(f"              ({potd.shortfall(near)}) — shown, not recorded")
     else:
         out.append("  no pick     and nothing in the band at a real price to show")
+
+    # WHAT THE ALTERNATE LADDER COULD RECOVER, which is the one lever
+    # this feature has not pulled yet and the reason to measure before
+    # building it.
+    #
+    # A -400 read is outside the band by the widest margin available, and
+    # the same book quotes the same team at other numbers — a -1.5 spread
+    # at -130, say — so the read is not unbettable, it is unbettable AT
+    # THAT PRICE. `likely._best_rung` already walks that ladder, but it
+    # picks the rung with the highest PROBABILITY subject to the Most
+    # Likely board's bars, and `likely._row_from` then drops `alt_lines`
+    # from the row it emits. So the ladder never reaches this module.
+    #
+    # It IS still in the published board, on the recommendation rows
+    # (`pipeline._rec_to_dict`). This counts, WITHOUT PRICING ANYTHING,
+    # how many band-refused rows have a rung that would have been in the
+    # band — which is the number that says whether wiring it through is
+    # worth a new pricing path or is chasing nothing.
+    out.extend(_ladder_note(rows, payload))
 
     # The near misses, so a reader can see what one gate away looks like.
     misses = [r for r in rows if not potd.disqualify(r) and potd.shortfall(r)]

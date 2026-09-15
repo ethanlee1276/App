@@ -119,6 +119,65 @@ def test_the_line_names_the_witness_and_never_only_a_number():
     assert "market fair" in out2, out2
 
 
+# --- what the ladder could recover, measured before it is built --------------
+def _with_ladder(most_likely, recs):
+    return {"built_at": "2026-09-15T12:00:00", "most_likely": most_likely,
+            "recommendations": recs}
+
+
+def test_a_price_refused_row_with_a_band_legal_rung_is_counted():
+    """THE MEASUREMENT THAT DECIDES A BUILD. A -400 read is out of the
+    band by the widest margin available, and the same book quotes the
+    same player at other numbers — so the read is not unbettable, it is
+    unbettable AT THAT PRICE. `likely._row_from` drops `alt_lines` from
+    the rows this module sees, so the ladder never reaches the selector;
+    the ladder is still in the published board on the Edge rows. This
+    counts what wiring it through would recover, WITHOUT pricing
+    anything, so the decision rests on a number rather than on a hunch."""
+    board = _with_ladder(
+        [_row(player="Heavy", market="rush_yds", odds=-400, line=24.5)],
+        [{"player": "Heavy", "market": "rush_yds", "alt_lines": [
+            {"book": "DraftKings", "line": 34.5,
+             "over_odds": -115, "under_odds": -105}]}])
+    out = R.report(board, "nfl")
+    assert "Ladder" in out, out
+    assert "1 of 1" in out, out
+    assert "34.5 at -115" in out, "it shows the rung that was reachable"
+
+
+def test_a_ladder_with_nothing_in_the_band_says_there_is_nothing_to_recover():
+    """The answer that saves the work. A report that only ever said
+    "there is more out there" would argue for the build either way."""
+    board = _with_ladder(
+        [_row(player="Deep", market="rec_yds", odds=-400, line=40.5)],
+        [{"player": "Deep", "market": "rec_yds", "alt_lines": [
+            {"book": "DraftKings", "line": 20.5,
+             "over_odds": -600, "under_odds": 400}]}])
+    out = R.report(board, "nfl")
+    assert "nothing to recover here" in out, out
+
+
+def test_the_ladder_line_is_absent_when_there_is_no_ladder_to_read():
+    """An older board, or a sport whose pull never bought alternates,
+    must not grow a line claiming zero opportunities — that reads as a
+    measurement and is an absence."""
+    out = R.report(_board([_row(odds=-400)]), "nfl")
+    assert "Ladder" not in out, out
+
+
+def test_the_ladder_count_only_looks_at_rows_refused_on_PRICE():
+    """A row refused for an injury or a coin-flip market is not waiting
+    on a better number, and counting it would inflate the case for a
+    build that would not help it."""
+    board = _with_ladder(
+        [_row(player="Hurt", market="rush_yds", injury_status="questionable")],
+        [{"player": "Hurt", "market": "rush_yds", "alt_lines": [
+            {"book": "DraftKings", "line": 34.5,
+             "over_odds": -115, "under_odds": -105}]}])
+    out = R.report(board, "nfl")
+    assert "Ladder" not in out, out
+
+
 # --- and it is safe to point at the production box ---------------------------
 def test_a_missing_league_is_skipped_and_a_missing_everything_explains():
     d = _in_tmp({})
