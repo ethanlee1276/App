@@ -17,12 +17,25 @@ working that produced them.
 
 ## 1. What the band can physically contain
 
-"80% to 100% flip of your money" is a payout of 0.80 to 1.00 units,
-which is **-125 to +100**, which is the market claiming between **44.4%
-and 55.6%**.
+Ethan said it twice on 2026-09-15 and the second time was the clearer
+one:
+
+> maybe the pick of the day should not go off of our 70% model thing …
+> I want it to be a 50-50 money flip, basically, either from 80% to 100%
+> flip of your money
+
+> I guess I should reword that … I just wanted it to be a guaranteed for
+> the day like I'm putting 100 bucks on it. I wanna make at least $70 if
+> that makes sense … I feel like my wording is kind of fucked up a little
+> bit.
+
+The reworded spec is a **floor on the winnings**, not a window, and it is
+the better spec. $70 on $100 is a payout of **0.70 units**, which is
+**-142** (-143 pays $69.93 and misses by seven cents), which is the
+market claiming at most **58.8%**.
 
 That ceiling is arithmetic, not opinion. No price inside this band can
-imply more than 55.6%, so **a main-market favourite inside this band
+imply more than 58.8%, so **a main-market favourite inside this band
 cannot be a heavy favourite.** `tests/test_potd.py` executes this rather
 than asserting it, because every other decision in the module follows
 from it.
@@ -33,27 +46,43 @@ from it.
 moneyline (NFL 2021-26, CFB 2022-26). De-vig both sides, take the safer
 one, one pick per slate:
 
-| band | league | picks | won | hit rate | price implied | ROI | sd above the price |
+| floor | league | picks | won | hit rate | price implied | ROI | sd above the price |
 |---|---|---|---|---|---|---|---|
-| **-125 / +100** | NFL | 82 | 44 | **53.7%** | 54.6% | -1.7% | -0.16 |
-| **-125 / +100** | CFB | 150 | 80 | **53.3%** | 53.8% | -1.1% | -0.11 |
-| -190 / +190 | NFL | 109 | 72 | 66.1% | 62.5% | +5.3% | +0.77 |
-| -190 / +190 | CFB | 242 | 150 | 62.0% | 60.3% | +3.1% | +0.52 |
+| **$70 (-143)** | NFL | 109 | 56 | **51.4%** | 55.4% | -7.1% | -0.86 |
+| **$70 (-143)** | CFB | 242 | 122 | **50.4%** | 52.0% | -4.4% | -0.50 |
+| $80 (-125) | NFL | 82 | 44 | 53.7% | 54.6% | -1.7% | -0.16 |
+| $80 (-125) | CFB | 150 | 80 | 53.3% | 53.8% | -1.1% | -0.11 |
+| $60 (-167) | NFL | 109 | 58 | 53.2% | 59.8% | -11.5% | -1.41 |
+| $60 (-167) | CFB | 242 | 134 | 55.4% | 56.9% | -3.4% | -0.49 |
+| $53 (-190) | NFL | 109 | 72 | 66.1% | 62.5% | +5.3% | +0.77 |
+| $53 (-190) | CFB | 242 | 150 | 62.0% | 60.3% | +3.1% | +0.52 |
 | any price | NFL | 110 | 94 | 85.5% | 84.7% | -0.3% | +0.22 |
 | any price | CFB | 325 | 266 | 81.8% | 80.1% | +1.7% | +0.84 |
 
-Two readings, and both matter.
+Three readings, and all three matter.
 
-**The band is a trade, and the trade is real.** Tightening from
--190/+190 to -125/+100 costs about twelve points of hit rate in both
-leagues and buys roughly double the payout. That is Ethan's call and
-`potd.MIN_PAYOUT` is the one constant that reverses it.
+**The floor decides how much favourite you may buy, and the market
+prices that almost exactly.** Every row's hit rate tracks its own implied
+probability within a few points. That is what an efficient market looks
+like from the inside.
 
-**Nothing here is an edge.** Every row lands within one standard
-deviation of what the price already said. Swept across floors from -110
-to -350 in both leagues, the largest figure was +1.17 sd on 108 NFL
-picks — one good season inside noise. Picking the safest side is not a
-strategy; it is buying the favourite at the favourite's price.
+**The trade is real and it is steep.** Ethan's $70 floor costs about ten
+to fifteen points of hit rate against a $53 floor (-190), and no
+selector can buy them back — nobody sells a 65% outcome for 70 cents.
+That is his call and `potd.MIN_PAYOUT` is the one constant that reverses
+it.
+
+**Nothing here is an edge.** Every row lands within one and a half
+standard deviations of what the price already said. Swept across floors
+from -110 to -350 in both leagues, the largest figure was +1.17 sd on
+108 NFL picks — one good season inside noise. Picking the safest side is
+not a strategy; it is buying the favourite at the favourite's price.
+
+**And none of this table is what the selector does.** It buys a
+disagreement, not a favourite (§3). The band only says which prices may
+be shopped, which is why the plus-money end is left open to +190 and
+`MIN_FAIR` — the pick must be likelier to win than lose by the fair we
+trust — does the work of keeping it a favourite.
 
 ## 3. So the pick has to be a disagreement, which is also what pros do
 
@@ -107,9 +136,9 @@ and the row is shown as a near miss, never as the day's pick.
 
 ## 5. What the EV floor actually asks for
 
-`MIN_EV` is 0.02 units. At the two ends of the band that works out to
-about **one point** of disagreement with the price (0.6 to 1.2 points
-across the band — `tests/test_potd.py` solves for it). That is the size
+`MIN_EV` is 0.02 units. Across the band that works out to about **one
+point** of disagreement with the price (0.7 to 1.2 points —
+`tests/test_potd.py` solves for it rather than quoting it). That is the size
 of gap a genuine sharp-versus-soft difference produces. A floor that
 needed ten points would only ever be cleared by our own model being
 wrong, which is the failure this rebuild exists to stop
@@ -124,7 +153,8 @@ The literature argues constantly about multiplicative vs additive vs
 power vs Shin. They diverge on longshots — that is the whole
 favourite-longshot-bias argument — and converge in the middle of the
 board. At -110/-110 they are identical; across the whole 0.80-1.00
-payout band they disagree by well under a point.
+payout band they disagree by about a point at the plus-money end and
+well under one everywhere else.
 `odds.devig_two_way` is multiplicative and stays that way here. A power
 de-vig is the right argument to have on the touchdown ladders
 (`engine/devig` already had it), not on a coin flip.

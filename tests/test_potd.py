@@ -18,6 +18,10 @@ it: that no efficient favourite inside this band can be a heavy
 favourite, and that the EV floor therefore asks for about one point of
 disagreement rather than ten.
 
+The band itself is a FLOOR on the winnings — "I’m putting 100 bucks on
+it. I wanna make at least $70" — so the test that pins it checks the
+cheap end to the cent. -143 pays $69.93 and is out.
+
 Run directly: `python3 tests/test_potd.py`
 """
 
@@ -83,15 +87,18 @@ def test_plus_money_is_the_underdog_and_not_the_favourite():
     assert potd.payout(190) > 1.0 > potd.payout(-190)
 
 
-def test_the_band_is_the_flip_he_asked_for():
-    """"From 80% to 100% flip of your money" — the two ends, and one
-    tick past each of them."""
-    assert potd.payout(potd.MIN_ODDS) == potd.MIN_PAYOUT
-    assert potd.payout(potd.MAX_ODDS) == potd.MAX_PAYOUT
-    assert potd.in_band(-125) and potd.in_band(100) and potd.in_band(-110)
-    assert not potd.in_band(-130), "pays 0.77 — under the flip"
-    assert not potd.in_band(110), "pays 1.10 — over the flip"
+def test_the_band_is_the_seventy_dollars_he_asked_for():
+    """Ethan, 2026-09-15, rewording his own first spec: "I’m putting 100
+    bucks on it. I wanna make at least $70." That is a FLOOR on the
+    winnings, and the floor is the end that has to be exact — a price
+    paying $69.93 is not the product."""
+    assert potd.payout(-142) >= 0.70 and potd.in_band(-142)
+    assert potd.payout(-143) < 0.70 and not potd.in_band(-143), \
+        "−143 pays 0.6993 — seven cents short of the promise"
+    assert potd.in_band(-110) and potd.in_band(100) and potd.in_band(190)
+    assert not potd.in_band(-200), "pays 0.50 — half the promise"
     assert not potd.in_band(-400), "chalk is outside the band"
+    assert not potd.in_band(191), "past the sanity cap"
     # No American price lives between -100 and +100; a quote claiming to
     # is broken, not a coin flip.
     assert not potd.in_band(-95) and not potd.in_band(99)
@@ -114,13 +121,13 @@ def test_the_band_is_decided_by_the_payout_not_by_the_odds():
 def test_no_efficient_favourite_in_this_band_can_be_a_heavy_favourite():
     """THE MEASUREMENT THE MODULE IS BUILT ON, executed rather than
     asserted in prose. The most any in-band price can imply is what
-    MIN_ODDS implies — 55.6%. So a straight favourite here is a coin
-    flip by construction, which is why the selector needs a disagreement
-    between two books rather than a confidence ranking. Replayed on the
-    stored closes this came out at 53.7% NFL / 53.3% CFB; the ceiling
-    below is why that was never going to be 68%."""
+    MIN_ODDS implies — 58.7%. So a straight favourite here is close to a
+    coin flip by construction, which is why the selector needs a
+    disagreement between two books rather than a confidence ranking.
+    Replayed on the stored closes this came out at 51.4% NFL / 50.4%
+    CFB; the ceiling below is why that was never going to be 68%."""
     ceiling = potd.implied(potd.MIN_ODDS)
-    assert round(ceiling, 3) == 0.556, ceiling
+    assert round(ceiling, 3) == 0.587, ceiling
     for odds in range(-300, 301):
         if -100 < odds < 100 or not potd.in_band(odds):
             continue

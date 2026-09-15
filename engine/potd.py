@@ -17,22 +17,22 @@ for a pick rather than for a lock. The marketing word is Ethan's to
 choose anywhere the numbers are not; the numbers stay true.
 
 WHAT THE BAND COSTS, MEASURED BEFORE ANYTHING WAS BUILT ON IT. The
-payout band below is 0.80 to 1.00 units, which is -125 to +100, which is
-the market claiming between 44.4% and 55.6%. So a main-market favourite
-inside this band CANNOT be a 68% pick — the price forbids it. Replaying
-every stored schedule close (4,431 games with a two-way moneyline), the
-best moneyline on the slate inside the band goes:
+payout floor below is 0.70 units — "$100 on it, I wanna make at least
+$70" — which is -142, which is the market claiming at most 58.8%. So a
+main-market favourite inside this band CANNOT be a 68% pick; the price
+forbids it. Replaying every stored schedule close (4,431 games with a
+two-way moneyline), the best moneyline on the slate inside the band goes:
 
-    nfl   82 picks   44 won   53.7%   the price implied 54.6%   -1.7% ROI
-    cfb  150 picks   80 won   53.3%   the price implied 53.8%   -1.1% ROI
+    nfl  109 picks   56 won   51.4%   the price implied 55.4%   -7.1% ROI
+    cfb  242 picks  122 won   50.4%   the price implied 52.0%   -4.4% ROI
 
-Both land within a fifth of a standard deviation of what the price
-already said. That is the finding this module is built on: at even money
-in an efficient main market you are buying a coin flip at a small loss,
-and no amount of confidence-ranking changes it. Widen to -190/+190 and
-the same selector hits 66.1% / 62.0% — the seventeen points Ethan traded
-away for the bigger payout, and the trade is his to make. Both numbers
-are one constant apart (`MIN_PAYOUT`).
+Both land within one standard deviation of what the price already said.
+That is the finding this module is built on: near even money in an
+efficient main market you are buying a coin flip at a small loss, and no
+amount of confidence-ranking changes it. Drop the floor to 0.53 (-190)
+and the same selector hits 66.1% / 62.0% — the ten to fifteen points the
+payout costs, and the trade is Ethan's to make. All of it is one
+constant apart (`MIN_PAYOUT`).
 
 SO THE PICK CANNOT BE A FAVOURITE, IT HAS TO BE A DISAGREEMENT. That is
 also what the professionals actually do, once the marketing is stripped
@@ -68,8 +68,9 @@ THE DE-VIG METHOD BARELY MATTERS IN THIS BAND, which is worth writing
 down because the literature argues about it constantly. Multiplicative,
 additive, power and Shin diverge on longshots — that is the whole
 favourite-longshot-bias argument — and converge on the middle of the
-board. At -110/-110 they are identical; across the whole 0.80-1.00
-payout band they disagree by well under a point. `odds.devig_two_way` is
+board. At -110/-110 they are identical; across the 0.70-1.90 payout
+band they disagree by about a point at the plus-money end and well
+under one everywhere else. `odds.devig_two_way` is
 multiplicative and stays that way here. A power de-vig is the right
 argument to have on the touchdown ladders (`engine/devig` already had
 it), not on a coin flip.
@@ -102,23 +103,52 @@ question on exactly the thinnest days.
 from __future__ import annotations
 
 #: THE BAND, in units returned on a one-unit stake — Ethan's own words
-#: ("from 80% to 100% flip of your money") rather than a translation of
-#: them into American odds, because the payout IS the product definition
-#: and the odds are the incidental spelling. 0.80 units is -125, 1.00 is
-#: +100. A row outside it is disqualified rather than shown as a near
-#: miss: "the strongest thing on the card is a -400 favourite" is not
-#: this feature having a quiet day, it is a different feature.
+#: rather than a translation of them into American odds, because the
+#: payout IS the product definition and the odds are the incidental
+#: spelling. He said it twice and the second time was the clearer one:
 #:
-#: MOVING THIS IS THE ONE KNOB THAT MATTERS, and the header says what it
-#: buys: 0.53 (-190) restores the 66%/62% hit rates at half the payout.
-MIN_PAYOUT = 0.80
-MAX_PAYOUT = 1.00
+#:   2026-09-15, first   "from 80% to 100% flip of your money"
+#:   2026-09-15, second  "I just wanted it to be a guaranteed for the
+#:                        day like I'm putting 100 bucks on it. I wanna
+#:                        make at least $70 ... I feel like my wording
+#:                        is kind of fucked up a little bit"
+#:
+#: The reworded one is a FLOOR on the winnings, not a window, and it is
+#: the better spec: $70 on $100 is 0.70 units, which is -143. A row
+#: outside the band is disqualified rather than shown as a near miss —
+#: "the strongest thing on the card is a -400 favourite" is not this
+#: feature having a quiet day, it is a different feature.
+#:
+#: WHAT THE FLOOR BUYS, MEASURED, because it is the one knob that
+#: matters and the arithmetic is unkind. The floor decides how much
+#: favourite the pick may buy, and the market prices that almost exactly:
+#:
+#:     floor          price    the most it can imply    it actually hit
+#:     1.00  ($100)    +100         50.0%                    —
+#:     0.70  ($70)     -143         58.8%              51.4% / 50.4%
+#:     0.60  ($60)     -167         62.5%              53.2% / 55.4%
+#:     0.53  ($53)     -190         65.4%              66.1% / 62.0%
+#:
+#: (NFL / CFB, one pick per slate, every stored close — see
+#: docs/PICK_OF_THE_DAY.md §2.) So his floor costs about ten points of
+#: hit rate against -190, and no selector can buy them back: nobody
+#: sells a 65% outcome for 70 cents.
+#:
+#: THAT TABLE IS ABOUT PICKING A FAVOURITE, WHICH IS NOT WHAT THIS DOES.
+#: The band only says which prices may be shopped; `shortfall` still
+#: demands a real disagreement with a sharp fair. A wider band is
+#: therefore MORE candidates and more chances at a real edge, not a
+#: weaker pick — which is why the plus-money end is left open and
+#: `MIN_FAIR` does the work of keeping the pick a favourite.
+MIN_PAYOUT = 0.70
+MAX_PAYOUT = 1.90
 
 #: The same band as American odds, derived once so nothing can drift.
 #: Rounded INWARD — a price must clear the payout test itself, and these
-#: exist for the page to print and for the census to read.
-MIN_ODDS = -125
-MAX_ODDS = 100
+#: exist for the page to print and for the census to read. -143 pays
+#: 0.699 and is OUT by a thousandth; -142 pays 0.704 and is in.
+MIN_ODDS = -142
+MAX_ODDS = 190
 
 #: HOW GOOD THE EVIDENCE IS, highest first. This is the ranking key, and
 #: it is deliberately not the edge size: a 3% gap against Pinnacle's
