@@ -1,0 +1,68 @@
+# Nightly health check.
+#
+# This runs on GitHub's machines, which means it can only see what is in
+# the repository. The databases and web/data/ are gitignored, so the
+# journal, the stats and the built slates are NOT here — `--code-only`
+# drops the checks that need them rather than having them report "not my
+# machine" six times a night. Six warnings that are all correct behaviour
+# is noise, and noise teaches you to ignore the run.
+#
+# The real-data check runs on the laptop instead, automatically, inside
+# `python3 launch.py` — that is the machine that has the data.
+#
+# 11:00 UTC is 7am Eastern. GitHub's scheduler is best-effort and can run
+# late under load; nothing here is time-sensitive, so that is fine.
+#
+# To stop these: delete this file, or switch it off under the repo's
+# Actions tab. It costs nothing on a public repo and a couple of minutes
+# of the free allowance on a private one.
+
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 11 * * *"
+  workflow_dispatch:        # so it can be run by hand from the Actions tab
+  push:
+    branches: [claude/sports-betting-app-vhgmho]
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # No install step and no requirements file, deliberately: the whole
+      # engine is standard library. If this job ever needs a `pip install`,
+      # that is a fact worth noticing rather than papering over.
+
+      - name: Test suite
+        run: python3 run_tests.py
+
+      - name: Health check
+        run: python3 doctor.py --code-only --skip-tests
+
+      # Do the docs still describe the code? Each model doc ends with an
+      # implementation map, and its ✅ rows are the only place this system
+      # states what it has finished. They are prose, so nothing stops them
+      # rotting — a constant renamed during a fix leaves the row citing a
+      # name that is gone, and the map then reads as authoritative while
+      # being wrong. Cheap to check, and never checked by a human.
+      - name: Implementation map matches the code
+        run: python3 mapcheck.py
+
+      # The suite passes on a clone with no databases — verified before
+      # this workflow was written. If that stops being true, the failure
+      # belongs here, loudly, and not in a surprise on someone's laptop.
+      - name: Every module still imports
+        run: |
+          set -e
+          for f in engine/*.py *_build.py; do
+            m="${f%.py}"; m="${m//\//.}"
+            python3 -c "import importlib,sys; importlib.import_module('$m')" \
+              || { echo "FAILED TO IMPORT: $f"; exit 1; }
+          done

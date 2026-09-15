@@ -1,0 +1,201 @@
+"""The numbers were the tell.
+
+"Fonts for the numbers need to be changed, the website is still giving heavy
+AI slop and I need it to look and feel human made."
+
+The numbers were set in the same grotesque as the labels, at weight 800 with
+-0.5px tracking — the house style of every generated dashboard, and the part
+that read as machine-made whatever else changed around it. They are now IBM
+Plex Mono (SIL OFL, latin subset, 20KB for two weights): slotted zero,
+flagged one, a column you can scan down.
+
+The serif was tried first and MEASURED out, which is why it is worth writing
+down rather than re-litigating later:
+
+  * it has no `tnum` feature at all — "111" renders 29.9px and "777" renders
+    43.7px, a 46% jump on a board that rewrites itself every 60 seconds, and
+    `font-variant-numeric: tabular-nums` does nothing because the feature is
+    not in the file
+  * its "1" is an unflagged vertical stroke, so "11" reads as "ll"
+
+Beautiful for a masthead. Unusable for a scoreboard.
+"""
+
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _windows import lines_after as _lines_after  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+JS = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+
+def _block(selector_start: str) -> str:
+    i = CSS.index(selector_start)
+    return CSS[i:CSS.index("}", i)]
+
+
+#: The mono-face rule, located by a member that is ACTUALLY RENDERED.
+#: These four lookups used to spell the whole selector list including
+#: `.stat-v` — a class no element has carried for some time — which made
+#: a dead selector load-bearing: removing the rot would have broken the
+#: tests that describe the rule. Found by the nightly sweep 2026-09-02.
+#: `.conf-num` is the discriminator (the tabular-nums list above does not
+#: contain it), so this still cannot match the wrong block.
+MONO_RULE = ".tile .v, .metric .v, .ml-odds, .conf-num"
+
+
+# --- the face ---------------------------------------------------------------
+def test_the_mono_is_self_hosted_like_everything_else():
+    """A board that renders with the network unplugged does not get to make
+    an exception for the typeface its numbers are in."""
+    for name in ("plex-mono.woff2", "plex-mono-500.woff2"):
+        path = os.path.join(ROOT, "web", "fonts", name)
+        assert os.path.exists(path), f"{name} is referenced but not shipped"
+        assert 4000 < os.path.getsize(path) < 60000, f"{name} looks wrong"
+    assert 'url("../fonts/plex-mono.woff2")' in CSS
+
+
+def test_the_mono_leads_the_stack():
+    m = re.search(r"--font-mono: ([^;]+);", CSS)
+    assert m and m.group(1).strip().startswith('"IBM Plex Mono"')
+    # …and still degrades to a real monospace if the file ever fails.
+    assert "monospace" in m.group(1)
+
+
+def test_both_weights_have_a_job():
+    """A face nothing matches is a file the browser never fetches and a line
+    of CSS that quietly means nothing — the dead declaration the italic
+    serif was deleted for."""
+    for weight in ("400", "500"):
+        assert f"font-weight: {weight};" in CSS
+    # Counted in LINES, because the anchor is a comment and the scope is
+    # "the declarations it introduces" — a reader can check twelve lines
+    # against the file; 400 characters is not a unit anyone can verify.
+    assert "font-weight: 400" in _lines_after(CSS, "Both weights get a job", 12)
+
+
+# --- what is set in it ------------------------------------------------------
+def test_the_numbers_are_the_mono_and_the_prose_is_not():
+    block = _block(MONO_RULE)
+    assert "font-family: var(--font-mono)" in block
+    for kpi in (".tile .v", ".metric .v", ".ml-odds", ".rec-chart .rc-net"):
+        assert kpi in block, f"{kpi} is still set in the sans"
+    # td and .book carry player names and "FanDuel"; a proportional word in
+    # a fixed-pitch face looks like a bug rather than a choice.
+    assert "td.num" in block and "td," not in block
+
+
+def test_the_weight_is_one_the_font_actually_ships():
+    """800 on a face that ships 400 and 500 is browser-faked bold — a
+    smeared outline at 30px, the loudest thing on the page."""
+    block = _block(MONO_RULE)
+    assert "font-weight: 500;" in block
+    assert "800" not in block
+
+
+def test_the_negative_tracking_is_gone():
+    """Tight tracking is the Inter-dashboard tell, and on a fixed-pitch face
+    it fights the one property the face has."""
+    block = _block(MONO_RULE)
+    assert "letter-spacing: 0;" in block
+
+
+def test_figures_are_tabular_and_the_zero_is_slashed():
+    block = _block(MONO_RULE)
+    assert '"tnum" 1' in block
+    assert '"zero" 1' in block
+
+
+def test_a_wallet_address_is_monospaced_because_you_compare_it_by_eye():
+    assert ".wallet { font-family: var(--font-mono); }" in CSS
+    assert 'class="wallet"' in JS
+
+
+# --- what the wider face broke, and how it was fixed ------------------------
+def test_the_unit_is_subordinate_to_the_figure():
+    """A mono is wider per character than the sans it replaced, and
+    "-106.50 pts" at full display size wrapped onto a second line at EVERY
+    width. The unit is not part of the number."""
+    block = _block(".tile .v .unit")
+    assert "font-size: .5em" in block
+    assert "font-weight: 400" in block
+
+
+def test_the_value_can_still_break_between_number_and_unit():
+    """White-space: nowrap fixed the wrap and started a clip — an
+    unbreakable value ran 56px out of a 320px phone tile, which is worse
+    than two lines. Two lines on a phone is fine; losing "pts" is not."""
+    assert ".tile .v { white-space: nowrap; }" not in CSS
+    # The space before the span IS the break opportunity. Without it the run
+    # is continuous and clips again.
+    assert """' <span class="unit">pts</span>'""" in JS
+
+
+def test_the_header_note_counts_the_files_that_ship():
+    n = len(set(re.findall(r'url\("\.\./fonts/([^"]+)"', CSS)))
+    assert n == 7
+    assert "Seven files" in CSS
+    assert "IBM Plex Mono for every NUMBER" in CSS
+
+
+def test_the_serif_rejection_is_recorded_with_its_measurement():
+    """So the next person to think "the numbers should be the serif" finds
+    the reason instead of repeating the experiment."""
+    assert "no `tnum` feature" in CSS
+    assert "reads as \"ll\"" in CSS
+
+
+
+
+# --- the same disease, one layer down ---------------------------------------
+def test_the_probation_note_is_prose_and_not_a_build_log():
+    """The WNBA note rendered on the board as:
+
+        UPDATED: margin_sd 11.5 → 13.54 (from 1576 games); sd_cv[pts] 0.3 →
+        0.84 (29662 rows); sd_cv[reb] 0.4 → 0.811 (29662 rows); sd_cv[ast]
+        0.43 → 0.939 (29662 rows); sd_cv[pra] 0.24 → 0.69 (29662 rows);
+        sd_cv[fg3m] 0.55 → 1.172 (29662 rows).
+
+    Six variable names and their row counts in a paragraph a bettor is meant
+    to read. That is not transparency, it is a log file with a border around
+    it — and it is precisely what "machine-made" looks like on a page."""
+    from engine.hoops_fit import fitted_sentence
+    report = {"fitted": [f"sd_cv[{s}] 0.3 → 0.84 (29662 rows)"
+                         for s in ("pts", "reb", "ast", "pra", "fg3m")],
+              "games": 1576, "stat_rows": {"pts": 29662}}
+    out = fitted_sentence(report)
+    assert "sd_cv[" not in out and "margin_sd" not in out, \
+        "variable names are still being shown to the reader"
+    assert "→" not in out
+    assert "1,576 games" in out, "the sample size is worth keeping"
+    assert "probation" in out
+
+
+def test_the_terminal_still_gets_every_line():
+    """Losing the detail would be the opposite mistake — whoever is
+    debugging the fit needs each constant and its row count."""
+    from engine.hoops_fit import describe
+    out = describe({"league": "wnba",
+                    "fitted": ["margin_sd 11.5 → 13.54 (from 1576 games)"],
+                    "inherited": ["sd_cv[fg3m] 0.55 — 12 rows, need 400"]})
+    assert "margin_sd 11.5 → 13.54" in out
+    assert "sd_cv[fg3m]" in out
+
+
+def test_it_reads_correctly_for_a_single_constant():
+    from engine.hoops_fit import fitted_sentence
+    out = fitted_sentence({"fitted": ["one"], "games": 0, "stat_rows": {}})
+    assert "1 of these constants is now measured" in out
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

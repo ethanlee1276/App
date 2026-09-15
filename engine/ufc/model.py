@@ -1,0 +1,560 @@
+"""Scalpy MMA — the UFC model. Distributions of outcomes, never predictions.
+
+MMA is not basketball: one event, no law of large numbers, four-ounce
+gloves. The doctrine, as enforced code:
+
+* **weighted scorecard** — style matchup is the highest-weight input (25%),
+  then grappling and striking differentials, durability, cardio,
+  situational. The differential maps to a win probability HARD-CAPPED at
+  88%: nobody is safer than that in four-ounce gloves, and any model
+  output above it is a model error;
+* **method of victory is a JOINT distribution** — P(A by KO) = P(A wins) ×
+  P(KO | A wins); the six outcomes must sum to 1.00 or the model is
+  broken (validated in code and tests). Conditionals start from divisional
+  base rates and shift on knockdown rates, chin damage, and sub threat;
+* **durability beats finishing** — being finishable is a stable trait;
+  finishing ability is noisy. The opponent's durability history weighs
+  ~1.5× the fighter's finishing history in the distance model;
+* **the humility clamp** — w by information quality (0.60 unpriced news →
+  0.45 standard → 0.20 thin samples → NO BET for debutants), kill rule at
+  a 15-point disagreement. RE-TUNED 2026-07-29: the old pairing (w=0.25
+  vs a 4-point-over-break-even gate) was mathematically closed — the
+  largest clamped edge was 3.75pts vs fair, ~1.75 over break-even,
+  against a 4-point requirement; only the unpriced-news branch could
+  ever bet. Same welded-door audit as NBA and the prop tiers. Thin
+  samples stay effectively closed on purpose;
+* **the approval gate** — edge ≥4 pts over break-even (5 on props), EV
+  ≥5%, price never worse than −300 (MMA favorites above that are traps),
+  camp red flags block, 1 position per fight. There is no cap on how
+  many fights a card may produce — money is capped instead;
+* **the pass list** — every fight NOT bet gets one line on why. A 13-fight
+  card with zero bets is a completely valid output.
+
+Staking is one-fifth Kelly (model error runs higher than NBA), capped at
+2.5% per bet.
+"""
+
+from __future__ import annotations
+
+from . import environment
+from . import grade as grade_mod
+from . import markets
+
+WIN_CAP = 0.88
+CLAMP_KILL_DIFF = 0.15
+GATE_EDGE_ML = 0.04
+GATE_EDGE_PROP = 0.05
+GATE_MIN_EV = 0.05
+GATE_WORST_PRICE = -300
+# No headcount cap on a card. See `approval_gate` — the 2.5%/8% money
+# caps in engine.ufc.grade are what bound the risk, and they allocate in
+# grade order instead of card order.
+KELLY_FRACTION = 0.20
+STAKE_CAP = 0.025
+
+# §6.1 weights — style is the single highest-weight input.
+WEIGHTS = {"style": 0.25, "grappling": 0.20, "striking": 0.20,
+           "durability": 0.10, "cardio": 0.10, "situational": 0.10,
+           "fight_iq": 0.05}
+
+# §6.1 differential → P(win) anchors (interpolated between).
+DIFF_TO_P = ((0.0, 0.50), (0.5, 0.56), (1.0, 0.62), (1.5, 0.68),
+             (2.0, 0.73), (2.5, 0.78), (3.0, 0.82), (4.0, 0.88))
+
+# §7.2 divisional outcome rates (KO, SUB, DEC) — anchors, recompute yearly.
+DIVISION_RATES = {
+    "heavyweight": (0.52, 0.11, 0.37), "light_heavyweight": (0.43, 0.17, 0.37),
+    "middleweight": (0.40, 0.15, 0.40), "welterweight": (0.37, 0.15, 0.43),
+    "lightweight": (0.35, 0.13, 0.47), "featherweight": (0.30, 0.14, 0.52),
+    "bantamweight": (0.28, 0.15, 0.55), "flyweight": (0.25, 0.18, 0.53),
+    "w_bantamweight": (0.22, 0.20, 0.57), "w_flyweight": (0.18, 0.20, 0.60),
+    "w_strawweight": (0.13, 0.20, 0.66),
+}
+DEFAULT_RATES = (0.33, 0.19, 0.47)
+
+# §5.2 style interaction: (a_archetype, b_archetype) → (diff shift toward A,
+# method lean for the favored side, note). Mirrored automatically.
+STYLE_MATRIX = {
+    ("wrestler", "striker_poor_tdd"): (0.8, "dec",
+        "wrestler vs poor TDD — control decision or GnP TKO"),
+    ("striker_elite_tdd", "wrestler"): (0.6, "ko",
+        "elite TDD vs one-dimensional wrestler — wrestlers get hurt failing shots"),
+    ("pressure", "counter"): (0.4, "dec",
+        "pressure denies the counter striker space"),
+    ("counter", "wild_aggressor"): (0.7, "ko",
+        "counter striker vs defensively loose aggressor — the highest "
+        "KO-probability matchup in the sport"),
+    ("submission", "wrestler"): (-0.4, "dec",
+        "wrestlers stay on top and avoid subs"),
+    ("submission", "striker_poor_tdd"): (0.7, "sub",
+        "grappler vs poor TDD — submission path"),
+    ("cardio_machine", "front_runner"): (0.5, "dec",
+        "cardio machine drowns the front-runner late"),
+}
+
+
+def _interp(diff: float) -> float:
+    d = abs(diff)
+    pts = DIFF_TO_P
+    if d >= pts[-1][0]:
+        p = pts[-1][1]
+    else:
+        p = pts[0][1]
+        for (d0, p0), (d1, p1) in zip(pts, pts[1:]):
+            if d0 <= d <= d1:
+                p = p0 + (p1 - p0) * (d - d0) / (d1 - d0)
+                break
+    p = min(p, WIN_CAP)
+    return p if diff >= 0 else round(1.0 - p, 4)
+
+
+def age_mult(age: int | None) -> float:
+    """Peak 27-32; decline from 33, sharp after 35."""
+    if age is None or 27 <= age <= 32:
+        return 1.00
+    if age < 27:
+        return 0.99
+    return {33: 0.97, 34: 0.94, 35: 0.90}.get(age, 0.85)
+
+
+def style_read(a_arch: str, b_arch: str) -> tuple[float, str | None, str]:
+    key = (a_arch, b_arch)
+    if key in STYLE_MATRIX:
+        return STYLE_MATRIX[key]
+    rev = (b_arch, a_arch)
+    if rev in STYLE_MATRIX:
+        shift, lean, note = STYLE_MATRIX[rev]
+        return -shift, lean, note
+    return 0.0, None, "no strong style read"
+
+
+def _clamp3(x: float) -> float:
+    return max(-3.0, min(3.0, x))
+
+
+def scorecard(a: dict, b: dict) -> tuple[float, list[str]]:
+    """Weighted differential (A positive) from both dossiers."""
+    notes = []
+    style_shift, _lean, style_note = style_read(a.get("archetype", ""),
+                                                b.get("archetype", ""))
+    notes.append(f"Style: {style_note}")
+
+    def sdiff(fa, fb, scale):
+        return _clamp3((fa - fb) / scale)
+
+    striking = sdiff((a.get("slpm", 3.5) - a.get("sapm", 3.5)),
+                     (b.get("slpm", 3.5) - b.get("sapm", 3.5)), 1.5)
+    grappling = _clamp3(
+        sdiff(a.get("td_per15", 1.0) * a.get("td_acc", 0.4),
+              b.get("td_per15", 1.0) * b.get("td_acc", 0.4), 1.0)
+        + sdiff(a.get("tdd", 0.6), b.get("tdd", 0.6), 0.25)
+        + sdiff(a.get("ctrl_per15", 2.0), b.get("ctrl_per15", 2.0), 3.0))
+    durability = _clamp3(sdiff(b.get("ko_losses", 0) + 2 * b.get("ko_losses_last3", 0),
+                               a.get("ko_losses", 0) + 2 * a.get("ko_losses_last3", 0),
+                               1.5))
+    cardio = _clamp3(sdiff(b.get("r3_decay", 0.15), a.get("r3_decay", 0.15), 0.15))
+    situational = _clamp3(3.0 * (age_mult(a.get("age")) - age_mult(b.get("age")))
+                          - 0.5 * (len(a.get("red_flags", []))
+                                   - len(b.get("red_flags", [])))
+                          # Script §5: "short notice is the largest
+                          # situational penalty in the sport" — sub-two-week
+                          # replacements win in the high thirties against
+                          # lines that say more. This was a data-quality
+                          # flag only; the MODEL now knows it too.
+                          - (0.9 if a.get("short_notice") else 0.0)
+                          + (0.9 if b.get("short_notice") else 0.0))
+    if a.get("short_notice"):
+        notes.append(f"{a.get('name', 'A')} on short notice — no camp, no "
+                     f"path analysis; replacements win far below their lines")
+    if b.get("short_notice"):
+        notes.append(f"{b.get('name', 'B')} on short notice — no camp, no "
+                     f"path analysis; replacements win far below their lines")
+
+    diff = (WEIGHTS["style"] * 4 * style_shift
+            + WEIGHTS["striking"] * striking
+            + WEIGHTS["grappling"] * grappling
+            + WEIGHTS["durability"] * durability
+            + WEIGHTS["cardio"] * cardio
+            + WEIGHTS["situational"] * situational)
+    return round(diff, 3), notes
+
+
+def win_probability(a: dict, b: dict) -> tuple[float, list[str]]:
+    """P(A wins), scorecard-driven, hard-capped at 88%."""
+    diff, notes = scorecard(a, b)
+    p = _interp(diff)
+    p = min(max(p, 1.0 - WIN_CAP), WIN_CAP)
+    return round(p, 4), notes
+
+
+def method_conditionals(f: dict, opp: dict, division: str) -> dict:
+    """P(method | this fighter wins) — divisional prior, shifted by traits,
+    normalized so ko+sub+dec = 1."""
+    ko, sub, dec = DIVISION_RATES.get(division, DEFAULT_RATES)
+    # Knockdown rate & the opponent's chin push KO; the chin doesn't heal.
+    ko *= 1.0 + 0.8 * min(1.5, f.get("kd_per100", 1.0) / 2.0)
+    ko *= 1.0 + 0.35 * min(3, opp.get("ko_losses_last3", 0))
+    # Script §4: the age cliff is ASYMMETRIC — reflexes and durability
+    # decay from the mid-thirties while power ages last, so an older
+    # opponent is a softer target regardless of what his record shows.
+    # This is the mechanism behind the aging-slugger structure: his
+    # OWN ko share survives (kd rate above), the opponent's rises here,
+    # and the fight's ITD widens in both directions.
+    opp_age = opp.get("age") or 0
+    if opp_age > 34:
+        ko *= 1.0 + min(0.45, 0.11 * (opp_age - 34))
+    # Sub threat needs BOTH an active hunter and a takedown-vulnerable
+    # opponent; a wrestler on top produces decisions, not submissions.
+    if f.get("archetype") == "wrestler":
+        dec *= 1.4
+    else:
+        sub *= 1.0 + 0.6 * min(2.0, f.get("sub_att_per15", 0.5)) \
+            * (1.0 + max(0.0, 0.6 - opp.get("tdd", 0.6)))
+    # Durable opponents drag fights to the cards — durability is stable
+    # (weighted 1.5×); finishing ability is noisy.
+    finished_rate = opp.get("times_finished", 0) / max(1, opp.get("fights", 10))
+    dec *= 1.0 + 1.5 * (0.35 - min(0.7, finished_rate))
+    total = ko + sub + dec
+    return {"ko": round(ko / total, 4), "sub": round(sub / total, 4),
+            "dec": round(dec / total, 4)}
+
+
+def joint_method(p_a: float, cond_a: dict, cond_b: dict) -> dict:
+    """The six-outcome joint. Sums to 1.00 or the model is broken."""
+    p_b = 1.0 - p_a
+    out = {
+        "a_ko": round(p_a * cond_a["ko"], 4),
+        "a_sub": round(p_a * cond_a["sub"], 4),
+        "a_dec": round(p_a * cond_a["dec"], 4),
+        "b_ko": round(p_b * cond_b["ko"], 4),
+        "b_sub": round(p_b * cond_b["sub"], 4),
+        "b_dec": round(p_b * cond_b["dec"], 4),
+    }
+    assert abs(sum(out.values()) - 1.0) < 0.005, "joint must sum to 1"
+    out["distance"] = round(out["a_dec"] + out["b_dec"], 4)
+    return out
+
+
+# --- clamp, gate, staking ---------------------------------------------------
+def clamp_weight(a: dict, b: dict, unpriced_info: bool = False) -> float | None:
+    """w for the humility clamp — or None, meaning NO BET (debutants,
+    regional records, catchweight chaos)."""
+    fa, fb = a.get("ufc_fights", 0), b.get("ufc_fights", 0)
+    if min(fa, fb) < 1:
+        return None
+    if unpriced_info:
+        return 0.60
+    if min(fa, fb) < 3 or a.get("short_notice") or b.get("short_notice"):
+        return 0.20        # still effectively no-bet vs the gate — intended
+    if min(fa, fb) >= 5:
+        return 0.55
+    return 0.45
+
+
+def humility_clamp(p_model: float, p_market: float, w: float) -> tuple:
+    diff = abs(p_model - p_market)
+    if diff > CLAMP_KILL_DIFF:
+        return None, (f"model and market disagree by {diff:.0%} — MMA lines "
+                      f"are soft but not that soft. Re-audit, no bet.")
+    return round(w * p_model + (1 - w) * p_market, 4), f"w={w:g}"
+
+
+def _dec_odds(odds: int) -> float:
+    return 1.0 + (100.0 / abs(odds) if odds < 0 else odds / 100.0)
+
+
+def approval_gate(p_final: float, odds: int, market: str,
+                  red_flags: list[str], bets_on_card: int = 0,
+                  thin_data: bool = False, edge: float | None = None,
+                  required: float | None = None) -> list[str]:
+    """Every reason this bet fails the gate; empty list = approved.
+
+    ``edge``/``required`` describe the market actually being taken, which
+    is not always the moneyline — §3.8's whole point. When they're absent
+    the moneyline's own numbers are used, which is the old behaviour.
+    """
+    fails = []
+    be = 1.0 / _dec_odds(odds)
+    if required is None:
+        required = markets.min_edge_for(market, thin_data)
+    if edge is None:
+        edge = p_final - be
+    if edge < required:
+        fails.append(f"edge {edge:+.1%} < {required:.1%} over "
+                     f"break-even {be:.1%}"
+                     + (" (thin data — prelim/debut/short-notice bar)"
+                        if thin_data and market == "moneyline" else ""))
+    ev = p_final * (_dec_odds(odds) - 1.0) - (1.0 - p_final)
+    if ev < GATE_MIN_EV:
+        fails.append(f"EV {ev:+.1%} < +5%")
+    if odds < GATE_WORST_PRICE:
+        fails.append(f"price {odds} worse than −300 — MMA favorites there are traps")
+    if red_flags:
+        fails.append("unresolved red flag(s): " + ", ".join(red_flags[:3]))
+    # No headcount cap. It used to reject anything past the third qualifying
+    # fight, which threw away real edges for a reason that was never about
+    # the fights — and worse, it applied in CARD ORDER, so the third-best
+    # play could knock out the best one purely by being listed earlier.
+    # Money is still capped, which is the constraint that actually protects
+    # a bankroll: 2.5% on one fight and 8% across the card, allocated in
+    # grade order by `apply_card_caps`. Ten good bets now means ten smaller
+    # bets, not seven discarded ones.
+    return fails
+
+
+def stake_units(p: float, odds: int) -> float:
+    """Fifth Kelly under the spec's 2.5%-of-bankroll cap, converted on the
+    shared scale (1u = 1% of bankroll) with its price-band ceilings — a
+    live dog at +250 stakes a dime no matter how live the read."""
+    from ..staking import kelly_fraction, to_units
+    kelly = kelly_fraction(p, odds)
+    if kelly <= 0:
+        return 0.0
+    return to_units(min(kelly * KELLY_FRACTION, STAKE_CAP), odds)
+
+
+# --- card runner ------------------------------------------------------------
+def fighter_brief(d: dict | None, name: str) -> dict:
+    """The at-a-glance card the site shows for each corner — enough to
+    eyeball whether the model's read is sane, even on passed fights."""
+    if not d:
+        return {"name": name, "has_dossier": False, "covered": 0}
+    return {
+        "name": d.get("name", name), "has_dossier": True,
+        "record": d.get("record"), "age": d.get("age"),
+        "archetype": d.get("archetype"), "division": d.get("division"),
+        "covered": d.get("ufc_fights", 0),
+        "career": d.get("career_fights", d.get("fights")),
+        "slpm": d.get("slpm"), "sapm": d.get("sapm"), "tdd": d.get("tdd"),
+        "td_per15": d.get("td_per15"), "sub_att_per15": d.get("sub_att_per15"),
+        "red_flags": list(d.get("red_flags") or []),
+    }
+
+
+def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
+                   division: str, bets_so_far: int = 0) -> dict:
+    """One fight → a pick, or a pass-list line with the reason."""
+    name_a = prices.get("fighter_a", (a or {}).get("name", "A"))
+    name_b = prices.get("fighter_b", (b or {}).get("name", "B"))
+    briefs = [fighter_brief(a, name_a), fighter_brief(b, name_b)]
+    base = {"fight": f"{name_a} vs {name_b}", "division": division,
+            "fighters": briefs}
+    if not a or not b:
+        missing = [br["name"] for br in briefs if not br["has_dossier"]]
+        return {**base, "kind": "pass", "reason_code": "no_dossier",
+                "why": f"no dossier for {' and '.join(missing)} — no bet "
+                       f"(run python3 ufc_dossiers.py)"}
+    w = clamp_weight(a, b)
+    if w is None:
+        # Distinguish "we have no data" from "this fighter is new". A
+        # 19-3 regional veteran isn't a debutant — the honest statement
+        # is that nobody tracks his fights stat-by-stat, so we can't
+        # model him. Same verdict, accurate reason.
+        thin = [br["name"] for br in briefs if not br["covered"]]
+        why = ("no fight-by-fight stats for " + " or ".join(thin)
+               + " — record is regional/uncovered, so the model has nothing "
+                 "measured to work with") if thin else \
+              "too few tracked fights to model — no bet"
+        return {**base, "kind": "pass", "reason_code": "no_data", "why": why}
+    odds_a, odds_b = prices.get("a_odds"), prices.get("b_odds")
+    if not odds_a or not odds_b:
+        return {**base, "kind": "pass", "reason_code": "no_price",
+                "why": "no two-sided price posted yet — books open MMA "
+                       "lines closer to the card"}
+
+    from ..nba.prob import devig, market_hold
+    p_model, notes = win_probability(a, b)
+    mkt_a, mkt_b = devig(int(odds_a), int(odds_b))
+
+    # Bet the side the model likes vs its de-vigged price.
+    if p_model - mkt_a >= (1 - p_model) - mkt_b:
+        side, p_m, p_mkt, odds, fighter, opp = (name_a, p_model, mkt_a,
+                                                int(odds_a), a, b)
+    else:
+        side, p_m, p_mkt, odds, fighter, opp = (name_b, 1 - p_model, mkt_b,
+                                                int(odds_b), b, a)
+
+    p_final, clamp_note = humility_clamp(p_m, p_mkt, w)
+    if p_final is None:
+        return {**base, "kind": "pass", "reason_code": "clamp_kill",
+                "why": clamp_note}
+
+    cond_a = method_conditionals(a, b, division)
+    cond_b = method_conditionals(b, a, division)
+    joint = joint_method(p_model, cond_a, cond_b)
+
+    # §8 — where the fight happens reshapes HOW it ends. Bounded, and it
+    # never touches who wins: each fighter's total win probability is
+    # preserved, so a venue can't manufacture a moneyline edge.
+    env_shift = environment.distribution_shift(prices.get("venue", ""),
+                                               prices.get("city", ""))
+    joint = environment.apply_to_joint(joint, env_shift)
+
+    # §8 — a close decision on the road, or an offence judges score badly,
+    # is a worse path than the raw numbers say. The haircut moves that
+    # fighter's decision share into the opponent's, which is where it
+    # actually goes.
+    for who, f, opp_who in (("a", a, "b"), ("b", b, "a")):
+        jr = environment.judging_read(f, bool(prices.get("road_" + who)))
+        if jr["decision_haircut"]:
+            moved = round(joint[f"{who}_dec"] * jr["decision_haircut"], 4)
+            joint[f"{who}_dec"] = round(joint[f"{who}_dec"] - moved, 4)
+            joint[f"{opp_who}_dec"] = round(joint[f"{opp_who}_dec"] + moved, 4)
+            notes.append(f"Judging: {f.get('name', who)} — "
+                         + "; ".join(jr["why"]))
+    joint["distance"] = round(joint["a_dec"] + joint["b_dec"], 4)
+
+    red = list(fighter.get("red_flags", []))
+    thin = markets.thin_data_fight(a, b, prices)
+
+    # §3.8 — the translation step. The distribution prices every market the
+    # fight implies, not just the famous one. Books derive method props
+    # lazily off the moneyline, so the moneyline is the number they thought
+    # about and the props are the ones they didn't.
+    implied = markets.implied_markets(joint, name_a, name_b)
+    prop_prices = prices.get("props") or {}
+    board = []
+    for row in implied:
+        is_ml_side = (row["market"] == "moneyline" and row["selection"] == side)
+        book_odds = odds if is_ml_side else prop_prices.get(row["selection"])
+        board.append(markets.price_market(
+            row, book_odds,
+            haircut_p=p_final if is_ml_side else None,
+            thin_data=thin, book=prices.get("book", "")))
+
+    # §2/§8 — the triangle's gate: a method bet is a HOW purchased on a
+    # WHO, and only worth buying when the sharp moneyline already
+    # endorses the who. A method row on a fighter the devigged
+    # moneyline prices far below our number is a moneyline opinion
+    # mispriced into a 20-30% overround — gated, with the reason on the
+    # row, and never chosen as the fight's best market.
+    from .triangle import expected_minutes, hazard_tilt, ml_agreement
+    for c in board:
+        if c["market"] not in ("method", "fighter_finish"):
+            continue
+        sel = c.get("selection") or ""
+        if sel.startswith(name_a):
+            why = ml_agreement(p_model, mkt_a)
+        elif sel.startswith(name_b):
+            why = ml_agreement(1.0 - p_model, mkt_b)
+        else:
+            why = ""
+        if why:
+            c["gate"] = why
+
+    best = markets.best_market(board)
+    ml_card = next(c for c in board
+                   if c["market"] == "moneyline" and c["selection"] == side)
+    chosen = best or ml_card
+
+    # §10 — the 0-100 grade. Two of its six components ask how much we
+    # actually know, which in this sport is 30% of the answer.
+    dq = grade_mod.data_quality(a, b)
+    ci = grade_mod.camp_info(prices.get("weigh_in"), a, b)
+    sc = grade_mod.style_clarity(notes, a, b)
+    es = grade_mod.environment_score(env_shift)
+    # Components with no feed score None and drop out, rather than taking a
+    # fixed neutral that no fight can ever improve on. `movement` has no
+    # UFC line-history feed at all yet, so it is always one of them.
+    gd = grade_mod.grade_detail(
+        edge=chosen.get("edge") or 0.0,
+        required=chosen["required_edge"], data=dq["score"], camp=ci["score"],
+        style=sc["score"], env=es["score"], movement=None)
+    score = gd["score"]
+
+    # §1.3 — expected duration, "the quiet workhorse of the entire prop
+    # menu", derived from the ITD probability over the script's
+    # front-loaded hazard prior (§6), bent by the fight's own profile.
+    # The feed carries no scheduled-rounds field, so three rounds is
+    # assumed and SAID — §1.4's warning stands, and a five-round main
+    # event's number is knowably conservative rather than silently wrong.
+    _tilt = hazard_tilt(a, b)
+    _rounds = int(prices.get("rounds") or 3)
+    _e_min = expected_minutes(1.0 - joint["distance"], _rounds, _tilt)
+
+    card = {
+        **base, "pick": side, "odds": odds, "book": prices.get("book", ""),
+        "e_minutes": _e_min, "scheduled_rounds": _rounds,
+        "hazard_tilt": _tilt,
+        "p_model": round(p_m, 4), "p_market": round(p_mkt, 4),
+        "p_final": p_final, "w": w,
+        "break_even": round(1.0 / _dec_odds(odds), 4),
+        "edge": round(p_final - 1.0 / _dec_odds(odds), 4),
+        "ev": round(p_final * (_dec_odds(odds) - 1) - (1 - p_final), 4),
+        "hold": market_hold(int(odds_a), int(odds_b)),
+        "method": joint, "p_distance": joint["distance"],
+        "style_notes": notes,
+        # §13 — the full board, so the page can show what to shop even
+        # where our feed carried no price.
+        "market_board": board,
+        "best_market": chosen,
+        "market": chosen["market"], "market_tier": chosen["market_tier"],
+        "selection": chosen["selection"],
+        "volatility": chosen["volatility"],
+        "required_edge": chosen["required_edge"],
+        "thin_data": thin,
+        "environment": env_shift,
+        "grade_score": score, "grade_label": grade_mod.grade_label(score),
+        "grade_parts": {"data": dq, "camp": ci, "style": sc, "env": es},
+        "grade_coverage": gd["coverage"], "grade_missing": gd["missing"],
+        "grade_capped": gd["capped"], "grade_why": gd["why"],
+        "kill_if": ("missed weight, late replacement, or visible cut damage "
+                    "at weigh-ins → automatic void"),
+    }
+
+    fails = approval_gate(p_final, chosen.get("odds") or odds,
+                          chosen["market"], red,
+                          thin_data=thin, edge=chosen.get("edge"),
+                          required=chosen["required_edge"])
+    if score < grade_mod.MIN_GRADE:
+        fails.append(f"grade {score} below the {grade_mod.MIN_GRADE} bar — "
+                     f"no bet, no leans")
+    if fails:
+        return {**card, "kind": "pass", "reason_code": "gate",
+                "why": "; ".join(fails[:2]), "near_miss": True}
+
+    # Kelly runs on the market we are actually taking.
+    p_bet = chosen["p_used"]
+    card["stake_fraction"] = grade_mod.stake_fraction(
+        p_bet, chosen["odds"], score, drawdown=bool(prices.get("drawdown")))
+    card["stake_units"] = grade_mod.units(card["stake_fraction"])
+    return {**card, "kind": "pick"}
+
+
+def run_card(fights: list[dict]) -> dict:
+    """fights: [{a, b, prices, division}] → picks + the pass list."""
+    picks, passes = [], []
+    for f in fights:
+        prices = dict(f.get("prices", {}))
+        # The weigh-in state annotate_fight attached, so the grade's
+        # fight-week component can see the one fight-week fact we observe.
+        prices["weigh_in"] = f.get("weigh_in")
+        r = evaluate_fight(f.get("a"), f.get("b"), prices,
+                           f.get("division", ""))
+        (picks if r["kind"] == "pick" else passes).append(r)
+
+    # §10 — 2.5% per fight with correlated positions counted together, 8%
+    # across the card. This is now the ONLY cap: nothing limits how many
+    # fights may qualify, because a card that genuinely offers six edges
+    # should show six. What must not grow with the count is the money, and
+    # `apply_card_caps` allocates it in grade order — so a seventh play
+    # takes room from the weakest, never from the best.
+    picks = grade_mod.apply_card_caps(picks)
+    for p in picks:
+        p["stake_units"] = grade_mod.units(p.get("stake_fraction", 0.0))
+    dropped = [p for p in picks if p["stake_units"] <= 0]
+    picks = [p for p in picks if p["stake_units"] > 0]
+    passes += [{**p, "kind": "pass", "reason_code": "card_cap",
+                "why": p.get("cap_note") or "no room under the card cap"}
+               for p in dropped]
+    picks.sort(key=lambda p: (-p.get("grade_score", 0), -p.get("ev", 0)))
+
+    near = [p for p in passes if p.get("near_miss")][:3]
+    exposure = round(sum(p.get("stake_fraction", 0.0) for p in picks), 5)
+    return {"sport": "ufc", "picks": picks, "pass_list": passes,
+            "near_misses": near, "no_qualifying": not picks,
+            "exposure": exposure,
+            "card_cap": grade_mod.CAP_PER_CARD,
+            "correlation_flags": markets.correlation_flags(picks),
+            "counts": {"fights": len(fights), "picks": len(picks),
+                       "passes": len(passes)}}

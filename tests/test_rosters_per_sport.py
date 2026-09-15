@@ -1,0 +1,366 @@
+"""A roster belongs to a league.
+
+Rosters used to be one page in the tools menu, next to Polymarket, and it
+only ever meant the NFL. Two things wrong with that: "who is on this team"
+is a question you ask *while* looking at a league's board, and every other
+sport on the site had no answer at all.
+
+Only the NFL has a published players file. For MLB, the NBA and the WNBA
+the honest source is the one we already own — our own ingested game logs.
+Who actually appeared, how often, how recently. That is a record of who
+played rather than a copy of somebody's roster page, and the page must
+never let those two read as the same claim.
+"""
+
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.db import connect, upsert_player_logs
+from engine import rosters as R
+
+
+def _log(player, team, period, market="pa", season=2026, pos="OF"):
+    return {"sport": "mlb", "season": season, "period": period,
+            "game_id": f"{player}-{period}", "player": player, "team": team,
+            "opponent": "XXX", "position": pos, "home": 1,
+            "market": market, "value": 4.0}
+
+
+def _seed():
+    conn = connect(":memory:")
+    rows = []
+    for d in range(1, 21):
+        rows.append(_log("Everyday Guy", "NYY", f"2026-07-{d:02d}"))
+    for d in range(1, 6):
+        rows.append(_log("Bench Guy", "NYY", f"2026-07-{d:02d}"))
+    # Traded mid-season: BOS through June, NYY in July.
+    for d in range(1, 11):
+        rows.append(_log("Traded Guy", "BOS", f"2026-06-{d:02d}"))
+    for d in range(15, 21):
+        rows.append(_log("Traded Guy", "NYY", f"2026-07-{d:02d}"))
+    upsert_player_logs(conn, rows)
+    return conn
+
+
+def test_players_are_listed_by_measured_playing_time():
+    """With no published depth chart, playing time IS the depth chart —
+    and it is measured rather than claimed."""
+    out = R.from_game_logs(_seed(), "mlb", seasons=[2026], today="2026-07-21")
+    nyy = out["teams"]["NYY"]["players"]
+    assert [p["player"] for p in nyy][:2] == ["Everyday Guy", "Traded Guy"]
+    assert nyy[0]["games"] == 20
+
+
+def test_a_traded_player_appears_only_on_his_current_club():
+    """He has rows under both teams. Listing him on both would show a
+    roster the league does not have."""
+    out = R.from_game_logs(_seed(), "mlb", seasons=[2026], today="2026-07-21")
+    everyone = [p["player"] for t in out["teams"].values() for p in t["players"]]
+    assert everyone.count("Traded Guy") == 1
+    assert "Traded Guy" in [p["player"] for p in out["teams"]["NYY"]["players"]]
+    assert "Traded Guy" not in [p["player"]
+                                for p in out["teams"].get("BOS", {}).get("players", [])]
+
+
+def test_somebody_who_stopped_appearing_is_shown_as_cold_not_deleted():
+    """A roster with the missing players quietly removed reads as a
+    healthy team."""
+    out = R.from_game_logs(_seed(), "mlb", seasons=[2026], today="2026-08-15")
+    nyy = out["teams"]["NYY"]
+    assert nyy["unavailable"] == nyy["count"], "nobody has played in weeks"
+    assert all(p["status"].startswith("not in a game since")
+               for p in nyy["players"])
+
+
+def test_a_week_number_period_makes_no_staleness_claim():
+    """The NFL stores week numbers here, not dates. Comparing "018" to a
+    date cutoff always succeeds and always means nothing — it would stamp
+    a whole league "not in a game since 018"."""
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [
+        {"sport": "nba", "season": 2026, "period": "018", "game_id": "g1",
+         "player": "Week Guy", "team": "BOS", "opponent": "MIA",
+         "position": "G", "home": 1, "market": "min", "value": 30.0}])
+    out = R.from_game_logs(conn, "nba", seasons=[2026], today="2026-08-01")
+    p = out["teams"]["BOS"]["players"][0]
+    assert p["unavailable"] is False and p["status"] == ""
+
+
+def test_a_sport_with_no_appearance_market_returns_nothing_rather_than_guessing():
+    assert R.from_game_logs(_seed(), "cfb")["player_count"] == 0
+
+
+# --- the page ---------------------------------------------------------------
+def _read(*parts):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, *parts), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def test_rosters_is_a_sport_tab_not_a_tool_page():
+    html = _read("web", "index.html")
+    js = _read("web", "js", "app.js")
+    assert 'data-sport="rosters"' not in html, "still a standalone tool page"
+    assert 'data-view="rosters"' in html, "no per-sport tab"
+    modes = re.search(r"const STANDALONE_MODES = \[([^\]]*)\]", js).group(1)
+    assert '"rosters"' not in modes
+
+
+def test_each_sport_loads_its_own_payload():
+    js = _read("web", "js", "app.js")
+    assert "rosters_${key}.json" in js or "rosters_${sport}.json" in js, \
+        "the page still loads one shared roster file"
+
+
+def test_switching_leagues_redraws_the_roster_tab():
+    """Rosters live outside the slate, so nothing in renderAll touched
+    them — switching leagues left the old league's teams on screen under
+    the new league's header."""
+    js = _read("web", "js", "app.js")
+    fn = js[js.index("function renderAll("):js.index("function renderEmptySlate(")]
+    assert 'state.view === "rosters"' in fn
+
+
+def test_every_roster_sport_describes_its_source():
+    """This asserted CFB must HIDE the tab ("no player feed"). The feed
+    existed all along — ESPN box scores, the same API family the CFB
+    scoreboard reads — and appearance-built rosters shipped 2026-08-24.
+    The claim that survives: every sport with a rosters tab says which
+    KIND of roster it shows, and CFB is now one of them."""
+    js = _read("web", "js", "app.js")
+    hidden = js[js.index("const HIDDEN_VIEWS"):]
+    hidden = hidden[:hidden.index("};")]
+    cfb_line = hidden.split("cfb:")[1].split("]")[0]
+    assert '"rosters"' not in cfb_line,         "CFB rosters were re-hidden — they build from appearances now"
+    copy = js[js.index("const ROSTER_COPY"):js.index("function rosterPlayerHTML")]
+    assert "cfb:" in copy, "CFB's roster page has no source description"
+    import rosters_build as RB
+    assert "cfb" in RB.FROM_LOGS
+
+
+def test_the_page_says_which_kind_of_roster_it_is_showing():
+    """A published depth chart and a list of who happened to play are not
+    the same claim, and the page must not present them as one."""
+    js = _read("web", "js", "app.js")
+    copy = js[js.index("const ROSTER_COPY"):js.index("function rosterPlayerHTML")]
+    assert "depth chart" in copy, "the NFL's source is not described"
+    for sport in ("mlb:", "nba:", "wnba:"):
+        assert sport in copy, f"{sport} has no description of its source"
+    assert "actually appeared" in copy
+
+
+def test_the_search_box_speaks_the_sport_it_is_sitting_on():
+    """It shipped asking for "49ers, SF, Purdy" on every league, which on
+    the MLB page is an example of nothing you can type."""
+    js = _read("web", "js", "app.js")
+    block = js[js.index("const ROSTER_PLACEHOLDER"):js.index("const ROSTER_COPY")]
+    for sport, hint in (("nfl", "Purdy"), ("mlb", "Judge"),
+                        ("nba", "Tatum"), ("wnba", "Stewart")):
+        assert f"{sport}:" in block and hint in block, f"{sport} has no examples"
+    assert "search.placeholder = ROSTER_PLACEHOLDER" in js, \
+        "the placeholder is defined but never applied"
+
+
+def test_the_builder_covers_every_sport_the_site_shows():
+    src = _read("rosters_build.py")
+    for sport in ("mlb", "nba", "wnba"):
+        assert f'"{sport}"' in src
+    # And the one with no source must be explained, not left blank.
+    # CFB left that club 2026-08-24: it builds from appearances now, so
+    # the "no free player-level roster feed" sentence — which was never
+    # true — is required to be GONE rather than present.
+    assert '"cfb"' in src and "ufc" in src
+    assert "no free player-level roster feed" not in src, \
+        "the stale no-feed claim is back in rosters_build"
+    assert "MMA has fighters, not rosters" in src
+
+
+def test_the_launcher_builds_them():
+    src = _read("launch.py")
+    assert "refresh_sport_rosters" in src
+    fn = src[src.index("def refresh_all("):src.index("def _run_maintenance(")]
+    assert "refresh_sport_rosters(" in fn, "never called from the refresh loop"
+
+
+# --- the league feed, and the half of the roster appearances lost ------------
+def _feed():
+    """fetch_active_rosters()'s shape, straight off the hydrated endpoint."""
+    return {
+        "LAD": [
+            {"name": "New Trade Arm", "position": "RP", "number": "99",
+             "status": "Active", "person_id": 1},
+            {"name": "Ace Starter", "position": "SP", "number": "22",
+             "status": "Active", "person_id": 2},
+            {"name": "Franchise Bat", "position": "RF", "number": "50",
+             "status": "Active", "person_id": 3},
+            {"name": "Hurt Guy", "position": "C", "number": "16",
+             "status": "Injured List (10-day)", "person_id": 4},
+        ],
+    }
+
+
+def test_the_league_feed_lists_pitchers_the_appearance_page_never_could():
+    """An MLB "appearance" was a plate-appearance row, and in the
+    universal-DH era pitchers never bat — so no pitcher ever qualified for
+    the roster page, and a trade-deadline reliever was invisible twice
+    over: no pa rows ever, and no appearances at all for his new club
+    until he plays AND the game is ingested. The league's own roster
+    answers "who is on the team" directly."""
+    out = R.mlb_feed_rosters(_feed())
+    lad = out["teams"]["LAD"]
+    names = [p["player"] for p in lad["players"]]
+    assert "New Trade Arm" in names            # the Dodgers pickup, day one
+    assert "Ace Starter" in names
+    positions = {p["player"]: p["position"] for p in lad["players"]}
+    assert positions["New Trade Arm"] == "RP"
+    # Pitchers lead the page — they are the half that was lost.
+    assert lad["players"][0]["position"] in ("SP", "P", "RP", "TWP")
+
+
+def test_an_injured_list_status_rides_along_rather_than_hiding_the_player():
+    out = R.mlb_feed_rosters(_feed())
+    hurt = next(p for p in out["teams"]["LAD"]["players"]
+                if p["player"] == "Hurt Guy")
+    assert hurt["unavailable"] is True
+    assert "Injured" in hurt["status"]
+    assert out["teams"]["LAD"]["unavailable"] == 1
+
+
+def test_measured_games_decorate_the_feed_and_count_both_halves():
+    """Playing time stays the measured column — pa rows for hitters, outs
+    rows for pitchers, because no single market sees both halves."""
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [
+        _log("Franchise Bat", "LAD", f"2026-07-{d:02d}") for d in range(1, 21)
+    ] + [
+        _log("Ace Starter", "LAD", f"2026-07-{d:02d}", market="outs", pos="SP")
+        for d in range(1, 5)
+    ])
+    games = R.mlb_games_by_player(conn, seasons=[2026])
+    assert games[("LAD", "Franchise Bat")] == 20
+    assert games[("LAD", "Ace Starter")] == 4
+    out = R.mlb_feed_rosters(_feed(), games)
+    by = {p["player"]: p for p in out["teams"]["LAD"]["players"]}
+    assert by["Franchise Bat"]["games"] == 20
+    assert by["Ace Starter"]["games"] == 4
+    assert by["New Trade Arm"]["games"] == 0   # listed anyway — that is the fix
+
+
+def test_the_build_prefers_the_league_feed_and_falls_back_to_appearances():
+    """Feed up: source says league. Feed down: the appearance page returns,
+    clearly labelled, exactly as before."""
+    import rosters_build as RB
+    from engine.mlb.sources import mlbstats
+
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [_log("Log Only Guy", "LAD", "2026-07-01")])
+
+    orig = mlbstats.fetch_active_rosters
+    mlbstats.fetch_active_rosters = lambda ttl=21600: _feed()
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "league"
+    assert "New Trade Arm" in [p["player"]
+                               for p in out["teams"]["LAD"]["players"]]
+
+    def _down(ttl=21600):
+        raise RuntimeError("egress blocked")
+    mlbstats.fetch_active_rosters = _down
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "appearances"
+    assert "Log Only Guy" in [p["player"]
+                              for p in out["teams"]["LAD"]["players"]]
+
+
+def test_the_player_search_falls_back_to_the_roster_directory():
+    """Searching a reliever used to return a bare "no players match", which
+    read as "never heard of him". The pool is tonight's prop board — a
+    profile IS a prop card — so a miss now consults the roster payload and
+    says who he is, where he plays, and why there is no card."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    body = app[app.index("async function renderPlayers"):]
+    body = body[:body.index("\nfunction profileHTML")]
+    assert "rosterMatches(q)" in body
+    # Apostrophe-agnostic — see the note in test_capture_lag.
+    flat = " ".join(body.split()).replace("\u2019", "'")
+    assert "No prop on tonight's board" in flat
+    assert "async function rosterMatches" in app
+    assert "function openRoster" in app
+
+
+def test_the_feed_parser_accepts_both_roster_shapes():
+    """The hydrated roster arrives as {"roster": [...]} on some statsapi
+    versions and as a bare list on others. The dict-only parse raised
+    AttributeError on the list shape, the builder's fallback swallowed it,
+    and the page ran pitcher-less while the dict-shaped fixture stayed
+    green — the exact live failure Ethan reported from his phone."""
+    from engine.mlb.sources import mlbstats as MS
+    entry = {"person": {"fullName": "List Shape Arm", "id": 9},
+             "position": {"abbreviation": "SP"},
+             "jerseyNumber": "11", "status": {"description": "Active"}}
+    for roster_field in ({"roster": [entry]}, [entry]):
+        payload = {"teams": [{"id": 119, "abbreviation": "LAD",
+                              "roster": roster_field}]}
+        keep = MS._get_json
+        MS._get_json = lambda *a, **k: payload
+        try:
+            out = MS.fetch_active_rosters()
+        finally:
+            MS._get_json = keep
+        assert any(p["name"] == "List Shape Arm"
+                   for p in out.get("LAD", [])), roster_field
+
+
+def test_a_feed_failure_is_named_on_the_page_not_swallowed():
+    """Days of a pitcher-less roster page traced to `except: pass` — the
+    feed was failing and nothing anywhere said so. The fallback still
+    works; now it says WHY it is the fallback, and names the blind spot
+    (pitchers don't bat) so the absence reads as a feed problem, not a
+    team change."""
+    import rosters_build as RB
+    from engine.mlb.sources import mlbstats
+
+    conn = connect(":memory:")
+    upsert_player_logs(conn, [_log("Log Only Guy", "LAD", "2026-07-01")])
+
+    def _down(ttl=21600):
+        raise RuntimeError("egress blocked")
+    orig = mlbstats.fetch_active_rosters
+    mlbstats.fetch_active_rosters = _down
+    try:
+        out = RB.payload_for(conn, "mlb", today="2026-08-03")
+    finally:
+        mlbstats.fetch_active_rosters = orig
+    assert out["source"] == "appearances"
+    assert "league feed failed" in out["note"]
+    assert "egress blocked" in out["note"]
+    assert "pitchers" in out["note"].lower()
+
+
+def test_the_cli_reports_the_source_the_payload_actually_used():
+    """The build line printed "from appearances" over every payload — so the
+    one machine where the league feed mattered read its own success as the
+    fallback, and the fallback as itself. The print must quote the blob."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "rosters_build.py"), encoding="utf-8").read()
+    body = src[src.index("def main("):]
+    assert "from {blob['source']}" in body
+    assert "from appearances)" not in body, \
+        "the source is hardcoded in the print again"
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

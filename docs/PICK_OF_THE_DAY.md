@@ -1,0 +1,522 @@
+# Pick of the Day — what it selects on, and what that is worth
+
+Ethan, 2026-09-15, twice. First: "find 1 pick that is guaranteed to hit
+... between -190 and +190 so we can basically have a 'one props doubles
+money' type of hit." Then, after seeing what the first version selected
+on: "maybe the pick of the day should not go off of our 70% model thing
+... We shouldn't use that 70%" and "I want it to be a 50-50 money flip,
+basically, either from 80% to 100% flip of your money. And we need to
+look at other pro sports bettors' logic and models ... So we need to
+figure out the models they're using and implement that."
+
+This file is the measurement behind the second version. The code is
+`engine/potd.py`; its header carries the same numbers, and this is the
+working that produced them.
+
+---
+
+## 1. What the band can physically contain
+
+Ethan said it twice on 2026-09-15 and the second time was the clearer
+one:
+
+> maybe the pick of the day should not go off of our 70% model thing …
+> I want it to be a 50-50 money flip, basically, either from 80% to 100%
+> flip of your money
+
+> I guess I should reword that … I just wanted it to be a guaranteed for
+> the day like I'm putting 100 bucks on it. I wanna make at least $70 if
+> that makes sense … I feel like my wording is kind of fucked up a little
+> bit.
+
+The reworded spec is a **floor on the winnings**, not a window, and it is
+the better spec. $70 on $100 is a payout of **0.70 units**, which is
+**-142** (-143 pays $69.93 and misses by seven cents), which is the
+market claiming at most **58.8%**.
+
+That ceiling is arithmetic, not opinion. No price inside this band can
+imply more than 58.8%, so **a main-market favourite inside this band
+cannot be a heavy favourite.** `tests/test_potd.py` executes this rather
+than asserting it, because every other decision in the module follows
+from it.
+
+## 2. What that costs, replayed on our own history
+
+`data/history.db` holds 4,431 completed games carrying a two-way closing
+moneyline (NFL 2021-26, CFB 2022-26). De-vig both sides, take the safer
+one, one pick per slate:
+
+| floor | league | picks | won | hit rate | price implied | ROI | sd above the price |
+|---|---|---|---|---|---|---|---|
+| **$70 (-143)** | NFL | 109 | 56 | **51.4%** | 55.4% | -7.1% | -0.86 |
+| **$70 (-143)** | CFB | 242 | 122 | **50.4%** | 52.0% | -4.4% | -0.50 |
+| $80 (-125) | NFL | 82 | 44 | 53.7% | 54.6% | -1.7% | -0.16 |
+| $80 (-125) | CFB | 150 | 80 | 53.3% | 53.8% | -1.1% | -0.11 |
+| $60 (-167) | NFL | 109 | 58 | 53.2% | 59.8% | -11.5% | -1.41 |
+| $60 (-167) | CFB | 242 | 134 | 55.4% | 56.9% | -3.4% | -0.49 |
+| $53 (-190) | NFL | 109 | 72 | 66.1% | 62.5% | +5.3% | +0.77 |
+| $53 (-190) | CFB | 242 | 150 | 62.0% | 60.3% | +3.1% | +0.52 |
+| any price | NFL | 110 | 94 | 85.5% | 84.7% | -0.3% | +0.22 |
+| any price | CFB | 325 | 266 | 81.8% | 80.1% | +1.7% | +0.84 |
+
+Three readings, and all three matter.
+
+**The floor decides how much favourite you may buy, and the market
+prices that almost exactly.** Every row's hit rate tracks its own implied
+probability within a few points. That is what an efficient market looks
+like from the inside.
+
+**The trade is real and it is steep.** Ethan's $70 floor costs about ten
+to fifteen points of hit rate against a $53 floor (-190), and no
+selector can buy them back — nobody sells a 65% outcome for 70 cents.
+That is his call and `potd.MIN_PAYOUT` is the one constant that reverses
+it.
+
+**Nothing here is an edge.** Every row lands within one and a half
+standard deviations of what the price already said. Swept across floors
+from -110 to -350 in both leagues, the largest figure was +1.17 sd on
+108 NFL picks — one good season inside noise. Picking the safest side is
+not a strategy; it is buying the favourite at the favourite's price.
+
+**And none of this table is what the selector does.** It buys a
+disagreement, not a favourite (§3). The band only says which prices may
+be shopped, which is why the plus-money end is left open to +190 and
+`MIN_FAIR` — the pick must be likelier to win than lose by the fair we
+trust — does the work of keeping it a favourite.
+
+## 3. So the pick has to be a disagreement, which is also what pros do
+
+Strip the marketing off the public +EV method — Unabated, OddsJam,
+Outlier, Sharp Lines all describe the same three steps — and it is:
+
+1. Take a **sharp book's** two-way price. Pinnacle is the reference
+   because it runs a 2-3% margin and does not limit winners, so its
+   number is the one priced by the sharpest money.
+2. **Remove the vig** to get a fair probability.
+3. Bet only where a book you can actually reach prices that outcome
+   **worse than the sharp fair**.
+
+The edge is the gap between two books. It is never the gap between a
+model and the world.
+
+We already had this machinery for the Edge board
+(`betting.sharp_anchor_for`, `gamebets.sharp_anchor_two_way`,
+`odds.devig_two_way`, `odds.consensus_fair`). What we did not have was a
+surface that selected on it *alone*. That is what the rebuild is.
+
+### The evidence ladder
+
+| tier | the fair comes from | why it ranks here |
+|---|---|---|
+| `exchange` | a regulated exchange's two-sided order book | **nothing is assumed** — see below |
+| `sharp` | a sharp book's own two-way de-vig | the professional method, unmodified |
+| `market` | the de-vigged consensus of ≥3 books | line-shopping; the market's own opinion |
+| `model` | our number alone | **refused** — see below |
+
+**Why the exchange outranks the sharp book.** Step two of the method —
+remove the vig — is the step that needs an *assumption*: de-vigging
+Pinnacle means assuming how its margin is spread across the two sides,
+and `odds.devig_two_way` splits it proportionally while the
+favourite-longshot literature says books do not price that way. An
+exchange has no margin to strip. Two people take opposite sides of a
+contract at a price they both chose, so the mid **is** the probability.
+
+We were already pulling it and not using it: `engine/sources/kalshi`
+fetches a CFTC-regulated exchange, keyless, in all fifty states, and
+already parsed the book, matched a market to one of our games and knew
+which side the YES contract paid on. It fed the Prediction Desk and
+nothing else. `engine/exchangefair` hangs it on the rows that can use it.
+
+Three guards, because a number from an exchange only beats a book's if
+the book behind it is real: a **two-sided book** (never a last trade),
+**tight** (`MAX_SPREAD_CENTS` 4 — a 10-cent book puts the truth five
+points either side of the mid and `MIN_EV` asks for two), and **liquid**
+(`MIN_LIQUIDITY`, which is a floor against the obviously thin and is
+*not* a measured figure; `kalshi.price_series` is the tape that will
+eventually set it).
+
+Only the **moneyline**. Kalshi lists who wins; it does not list our run
+line, and letting a win probability settle a spread is the silent
+coercion this codebase keeps finding in its own history.
+
+`potd.rank_key` sorts on the **tier first**, then the edge, then the
+payout. That inversion is the point: sorting on edge size hands every
+day to the loudest disagreement, and the loudest disagreements come from
+the weakest witness.
+
+## 3b. Where the candidates come from, and what was starving them
+
+`potd.build` reads `result["most_likely"]` — the Most Likely board's
+output. That board has its own product bars:
+
+| bar | value | what it asks |
+|---|---|---|
+| `likely.MIN_PROB` | 0.55 | is this **most likely**? |
+| `likely.MIN_RANK_AUC` | 0.60 | can this market rank at all? |
+| `likely.HEAVIEST_PRICE` | -250 | is this price worth staking? |
+
+**The first of those was cutting exactly the rows this feature wants.**
+No in-band price can imply more than 58.8% (§1), so the candidates
+nearest the band are the ones sitting closest to `likely`'s 55% floor —
+and a 53% sharp-anchored price at +100 is +6% EV, which is precisely
+this product. Selecting on another board's product bar answered the
+wrong question.
+
+Since 2026-09-15 a **reserve** row — one `likely` ships from below its
+own floor, labelled, so its page is never blank — can be the day's pick,
+**but only on a sharp or market witness**. What is not waived:
+
+- The model tier is still refused outright (§4).
+- The reserve band is measured **at a loss** on the model's own ranking:
+  45-60% went **-7.68%** over 184 settled rows (`likely.RESERVE_MIN_PROB`).
+  That figure is why this is not a general loosening — these rows are
+  admitted on *a sharper book's disagreement*, never on our number.
+- The card says `from_reserve` in as many words, so a reader is told the
+  row did not clear the board's bar and what got it here instead.
+
+Whether that basis pays is **untested here**, and the potd book's own CLV
+is what will answer it (§7).
+
+A useful property falls out of this: the reserve only fires on **thin**
+shelves, so on a full board the widening changes nothing. It helps
+precisely on the quiet days, which are exactly the days this feature was
+otherwise showing "nothing cleared the bar".
+
+## 3c. Seeing it on a real board
+
+`potd_report.py` runs the selector over a published board and prints the
+funnel. Read-only — it opens the JSON, never writes, never fetches a
+price — so it is safe on the production box mid-cycle.
+
+```bash
+python3 potd_report.py                      # every board in web/data
+python3 potd_report.py nfl cfb --rows 10     # with the near misses
+python3 potd_report.py --dir /srv/qellys/web/data
+```
+
+It answers the question no test can: whether a real Tuesday board
+carries anything for these rules to bite on. "68 rows considered, 61
+outside the band, 0 picks" is not a bug report — it is the name of the
+gate to argue with.
+
+## 3d. The lever not pulled yet: the alternate ladder
+
+A -400 read is outside the band by the widest margin available. But the
+same book quotes the same player at other numbers — 34.5 rushing yards
+at -115 instead of 24.5 at -400 — so the read is not unbettable, it is
+unbettable **at that price**. Converting a strong read into a band-legal
+price is what a lot of pick services are actually doing when they post
+"Team -7.5" instead of "Team ML -400".
+
+**The machinery exists and the wiring does not.** `likely._best_rung`
+already walks the ladder, but it picks the rung with the highest
+*probability* subject to the Most Likely board's bars — a different
+optimisation from "which rung lands in the band" — and
+`likely._row_from` then drops `alt_lines` from the row it emits. So the
+ladder never reaches this module.
+
+It is still in the published board, on the Edge rows
+(`pipeline._rec_to_dict`). **So the question is measurable before it is
+buildable**, and `potd_report.py` measures it:
+
+```
+  Ladder      1 of 2 price-refused row(s) HAVE a rung inside the band,
+              unreached today:
+    Heavy Fav rush_yds at -400 → 34.5 at -115 (DraftKings)
+```
+
+That count is the decision. Wiring the ladder through means a new
+pricing path (what *is* the fair at an alternate line, and is the sharp
+book quoting that rung two ways?), which is real work on a path that
+prices real money. It should be built when the report says there is
+something there, and not before — the same order every other measured
+decision in this file follows.
+
+Two implementations to weigh when that day comes, and neither is free:
+
+- **Carry the ladder on the likely row.** Simplest, and it bloats every
+  board row; the MLB board is already 8 MB.
+- **Have `potd` read the Edge rows as a ladder source**, keyed by
+  (player, market), which is what `potd_report` does today for counting.
+  No page-weight cost, but it needs a dedupe and a rung-pricing rule.
+
+## 3e. One pick for the DAY, not one per league
+
+Everything above chooses a pick **per sport**, and that was never what
+was asked for. Ethan, 2026-09-15: *"a model that picks one pick for the
+pick of the day."* Singular. What the site actually did was show the MLB
+reader MLB's best and the NFL reader NFL's best, and call both of them
+the Pick of the Day.
+
+`potd.day_top_pick` is the cross-league layer, and it is **a comparison,
+not a second model.** §3's `rank_key` already orders picks on three
+quantities that know nothing about which sport produced them:
+
+| ranked on | league-specific? |
+|---|---|
+| which witness stands behind the fair | no — the ladder is the same everywhere |
+| the edge, in probability points | no |
+| what the price pays | no |
+
+So the cross-league answer is that same comparator over a longer list. A
+cross-sport bar invented at this layer would be a second set of numbers
+to keep honest, fitted to nothing.
+
+**Three refusals do real work.**
+
+A *qualifying* pick always beats a *below-bar* one, whatever the tiers
+say. §3b's reserve means `build` publishes its best available when
+nothing clears, so a below-bar row is on the board by design — letting
+one outrank a pick that cleared every gate would quietly undo the gates,
+and it would look identical from here.
+
+A pick is refused unless its board is **dated today**. Every league
+publishes on its own schedule, and one out of season leaves a perfectly
+well-formed pick on disk from whenever it last ran. Nothing about that
+card looks wrong; only its date says so. Same shape as the stale-price
+ceiling in §3.
+
+A qualifying pick is refused unless it is **the one that league already
+locked**. `ledger.log_pick_of_the_day` writes the first qualifying pick
+of each journal day and refuses every later one, precisely so a sport
+cannot churn picks until settle time and have the record keep whichever
+happened to be showing. `ledger.locked_potd_keys` reads that lock and
+`day_top_pick` honours it.
+
+> **This was missing for the first three hours.** Shipped without it,
+> the cross-league layer ranked whatever was on the boards at the moment
+> the cycle ran — so the day's headline could have been an MLB bet at
+> noon and, after that bet lost, an NFL one at eight, with nothing
+> recording the first claim. Choosing after seeing how the day is going,
+> which is the exact failure the per-league rule exists to prevent,
+> reintroduced one layer up.
+>
+> It reads the existing lock rather than defining a second one: two
+> locks that can disagree is worse than none, because the disagreement
+> is invisible from the page. And `potd_row_key` is lifted out of the
+> journal writer so the writer and the matcher cannot disagree about a
+> negated spread or a moneyline rewritten as OVER 0.5.
+>
+> **Failing closed.** A ledger that cannot be read yields `{}`, which
+> refuses every qualifying pick and publishes nothing — because an
+> unlocked claim looks identical on the page and cannot be graded
+> afterwards.
+
+Below-bar leans are exempt from the lock and that is not an oversight:
+nothing journals them, nothing records them, so there is no lock to
+match — and the page still has to show the strongest thing available on
+a day when no league cleared its bar.
+
+**Where it runs.** Not in a build — no build can see the other boards.
+`launch._write_day_top_pick` runs once per refresh cycle, after every
+board has had its turn, and writes `web/data/day_top_pick.json`.
+
+> **A board's file is not named after its league,** and three separate
+> readers assumed it was on the day this shipped. The NFL writes
+> `recommendations.json` and MLB `mlb_recommendations.json`; only cfb,
+> nba and wnba match their own code. The writer opened
+> `web/data/{sport}.json`, so the two leagues at the top of
+> `SPORT_PRIORITY` were invisible to it and the day's top pick could
+> only ever have come from college football or the hoops boards. The
+> `FileNotFoundError` underneath swallowed it as "a league this box does
+> not publish".
+>
+> `launch.BOARD_FILES` is the registry, and everything reads it now.
+> `potd_report.py` had the same bug against the *light* copies
+> (`recommendations_picks.json`, not `nfl_picks.json`) and had been
+> silently reporting on three leagues out of five since it shipped. The
+page draws it as **one line inside the Pick of the Day card**, not as a
+block of its own: `tests/test_board_order.py` measured that the picks
+already start at 848px on an 844px phone fold, so a second card above
+them pushes the product off the first screen.
+
+**It is paid.** `pick_of_the_day` is in `gate.PAID_KEYS`, and this file
+is that same object promoted to the top level with nothing else in it to
+strip, so it is registered in `PAID_FILES` and fetched through
+`paidFetch`. Registered free it would have handed the headline pick to
+everyone while looking like an ordinary new board.
+
+**Seeing it on the box.** `python3 potd_report.py --top` prints the
+board's answer beside the locked one, the journaled picks, and a banner
+when the two disagree. That disagreement is ordinary — a league has
+moved off the pick it journaled this morning — and is the single thing
+most likely to look like a broken feature when it is a working one.
+
+### What it still cannot tell you
+
+**The day's top pick has no record of its own.** It is always one of the
+per-league picks, so it is already counted in the `potd` book — but
+which league won on a given day is nowhere on disk, because
+`day_top_pick.json` is overwritten every cycle. The winner's tier is not
+recoverable from the journal row either (`bets` carries odds and edge,
+not `evidence`), so it cannot be recomputed after the fact.
+
+Storing it is a small per-day pointer. What it should point AT is a real
+question and not a detail: the cross-league winner can legitimately
+change during the morning as more leagues journal their picks — a league
+that builds at 6am cannot be outranked by one that has not run yet — so
+"first cycle wins" would systematically favour whichever league builds
+first, while "last cycle wins" means the reader at 6am saw a headline
+that is not the one recorded. Both are defensible and they record
+different things.
+
+### What it is not called, and why
+
+The first draft of this feature was `lock_of_the_day` end to end, and it
+would have put those four words on the page. **"lock of the day" is on
+the banned list** `tests/test_potd_card.py` keeps — see §9 — precisely so
+the page cannot promise a paying reader a certainty.
+
+That test did not catch it. It read the two renderers that existed when
+it was written, and this was a third. Both halves are fixed: the feature
+is named for a comparative the ranking can actually support (*the
+highest-ranked pick on the site today*), and the banned list now checks
+every pick renderer plus a guard that **fails when a new one appears**.
+That guard immediately found two more renderers nobody had been checking
+— both already clean, which is the point: nothing had been holding them
+that way.
+
+## 4. Why our own model is not allowed to be the evidence
+
+Not a style preference. `likely.GAME_RANK_MEASURED` against
+`likely.GAME_RANK_MARKET`:
+
+| market | our model | the market's own de-vigged number |
+|---|---|---|
+| NFL moneyline (1,420 games) | 0.677 | **0.722** |
+| CFB moneyline (3,011 games) | 0.752 | **0.791** |
+| spreads, totals, team totals | 0.492-0.504 | — |
+
+The market ranks winners better than we do, and on the derived markets
+we cannot rank at all. A pick chosen because *our* number disagrees with
+the price is a pick chosen by the weaker of the two opinions in the
+room. `potd.shortfall` returns "only our own model disputes this price"
+and the row is shown as a near miss, never as the day's pick.
+
+## 5. What the EV floor actually asks for
+
+`MIN_EV` is 0.02 units. Across the band that works out to about **one
+point** of disagreement with the price (0.7 to 1.2 points —
+`tests/test_potd.py` solves for it rather than quoting it). That is the size
+of gap a genuine sharp-versus-soft difference produces. A floor that
+needed ten points would only ever be cleared by our own model being
+wrong, which is the failure this rebuild exists to stop
+(`betting.MAX_CREDIBLE_EDGE` is the same lesson from the other side).
+
+`MIN_FAIR` is 0.50: a +EV underdog is a fine bet and a bad thing to name
+the day after.
+
+## 6. The de-vig method barely matters here — measured, 2026-09-15
+
+The literature argues constantly about multiplicative vs additive vs
+power vs Shin. They diverge on longshots — that is the whole
+favourite-longshot-bias argument — and converge in the middle of the
+board. This section used to stop there, with "about a point at the
+plus-money end and well under one everywhere else". That was right, and
+it was an adjective. `engine/bookvig.assumption_points` is now the
+number: the spread between proportional, additive and power on one real
+pair, swept across this band.
+
+| book's margin | worst in band | side taken (fair ≥ 0.50) | vs the 2-point EV floor |
+|---|---|---|---|
+| 1.00 an exchange | 0.00 pts | 0.00 pts | 0% |
+| 1.01 | 0.24 | 0.13 | 12% |
+| 1.02 | 0.48 | 0.26 | 24% |
+| 1.03 Pinnacle | 0.70 | 0.39 | 35% |
+| 1.05 a soft book | 1.18 | 0.66 | 59% |
+
+**Why it collapses here and not elsewhere**, which is the part worth
+keeping: all three methods must return two numbers summing to one, so at
+a true 50/50 they *cannot* disagree, whatever the margin. The gap is
+driven by distance from even money, not by the size of the vig — and
+§1's arithmetic pins this band near even money by construction. The same
+sum on a +900 touchdown longshot moves 3.66 points, which is why
+`engine/devig` takes the question seriously one board over and this file
+does not.
+
+`odds.devig_two_way` is multiplicative and stays that way here.
+
+**What this cost.** The measurement was taken while building an exchange
+*detector* — auto-promoting any near-zero-vig book (Novig, ProphetX) to
+the top of the evidence ladder on the theory that a venue with no margin
+needs no de-vig assumption. The premise did not survive its own
+measurement: at these sizes the assumption is worth a third of the
+minimum edge, which does not buy a whole tier. The detector was not
+built. What shipped instead is the measurement and a census of what each
+book charges — `engine/bookvig`, `book_margins.py` — and the exchange
+tier keeps its place on a different argument (whose number it is, not
+how the margin comes off), which `engine/booksharp` is where to test.
+
+## 7. How we find out whether any of this is real
+
+**Not from the win-loss record.** The industry's own rule of thumb is
+500-1,000 graded plays before a record means anything; at one pick a day
+that is three years.
+
+**From closing-line value.** CLV grades the *decision* at kickoff,
+accrues on every pick including the losers, and is the metric the sharp
+side actually keeps. The `potd` book flows into
+`clvboard.scoreboard(conn, category="potd")` for free. If these picks do
+not beat the close, this module is wrong and that page will say so.
+
+**Verified end to end**, because a wiring break here would fail no other
+test — the picks would journal, the record page would fill, and the one
+number that answers "is the sharp anchor finding anything" would quietly
+stay empty. A pick taken at -110 and closing at -135 reads back as
+**+5.07 points of price CLV**, `ready: false`, `thin: true`, and nothing
+in the `main`, `paper` or `likely` books
+(`test_the_book_reaches_the_clv_scoreboard_and_nothing_elses`).
+
+**Price CLV is the instrument that matters here**, not line CLV. A 3.5
+receptions line closes at 3.5 on a market that moved plenty; the price
+is what moved, and `clvboard` has measured both since 2026-09-02.
+
+## 8. The gap that would change the answer
+
+`backtest_sharp_anchor` returns **zero priced games** for NFL, CFB and
+MLB. `odds_history` holds 64 rows — NFL only, book "best" only, spread
+and total only, from a two-minute window on 2026-09-10. There are no
+stored Pinnacle closes anywhere, so the sharp-anchor strategy has never
+been measured on our own data; it is adopted here on the published
+evidence for the method, not on ours.
+
+**Harvesting Pinnacle moneyline closes nightly into `odds_history` is
+the single piece of work that would let us measure it.** Four to six
+weeks of harvest makes `backtest_sharp_anchor` answerable, and that is
+what would turn this from "the method the professionals use" into "the
+method we have measured here".
+
+## 9. What the page may not say
+
+No bet is guaranteed. The disagreement was raised once and Ethan's call
+stands on everything else — the band, the daily cadence, the showcase
+framing. What the page may not do is promise a paying reader a
+certainty, because the first loss then reads as a lie rather than as
+variance. `tests/test_potd_card.py::test_neither_surface_promises_a_certainty`
+holds that line, and its banned list is why the module is named for a
+pick rather than for a lock.
+
+## 10. Sources
+
+The public method, as described by the tools that sell it:
+
+- <https://unabated.com/articles/finding-positive-ev-wagers-step-by-step-guide>
+- <https://help.outlier.bet/en/articles/8208129-how-to-devig-odds-comparing-the-methods>
+- <https://8rainstation.com/blog/understanding-positive-ev-betting-exploring-multiple-devigging-options>
+- <https://picktheodds.app/en/blog/sharp-sportsbooks-what-they-are-and-how-to-use-them-to-find-edges>
+- <https://www.pinnacleoddsdropper.com/blog/closing-line-value>
+- <https://www.boydsbets.com/closing-line-value/>
+
+Derivative markets (first-half, team totals, alternate rungs) as the
+place where soft books are laziest — the next thing to mine once the
+main-market anchor is measured:
+
+- <https://www.predictem.com/betting/strategy/betting-derivatives/>
+- <https://oddsindex.com/guides/first-half-totals-strategy>
+
+Reverse line movement, which we do NOT use: profitable in some
+published samples, explicitly not profitable in college-football totals
+over 2005-2016 (Journal of Economics and Finance,
+<https://link.springer.com/article/10.1007/s12197-019-09479-3>). It needs
+ticket-vs-handle splits we do not buy, and the evidence is mixed enough
+that it is not worth one pick a day.

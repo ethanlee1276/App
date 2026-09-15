@@ -1,0 +1,1778 @@
+{
+  "date": "2026-06-20",
+  "note": "Illustrative sample slate with realistic-but-fictional numbers. Replace with live loaders (MLB Stats API schedule/lineups/logs, Open-Meteo weather, odds feed) for production use.",
+  "games": [
+    {
+      "home": "CHC",
+      "away": "PHI",
+      "park": "wrigley",
+      "total": 9.5,
+      "weather": {
+        "roof_closed": false,
+        "temp_f": 82,
+        "wind_mph": 16,
+        "wind_dir_rel": "out",
+        "humidity": 0.62,
+        "precip_chance": 0.05
+      },
+      "lineups_confirmed": true,
+      "pitchers": {
+        "CHC": {
+          "name": "Javier Assad",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.525,
+          "slg_allowed_vs_r": 0.41,
+          "k_rate": 0.19,
+          "xera": 4.6
+        },
+        "PHI": {
+          "name": "Zack Wheeler",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.36,
+          "slg_allowed_vs_r": 0.33,
+          "k_rate": 0.29,
+          "xera": 3.05
+        }
+      },
+      "bullpen_rank": {
+        "CHC": 27,
+        "PHI": 6
+      },
+      "team_k_rate": {
+        "CHC": 0.26,
+        "PHI": 0.21
+      },
+      "home_ml": 140,
+      "away_ml": -165,
+      "home_rating": -0.15,
+      "away_rating": 0.35,
+      "home_off": -0.05,
+      "home_def": 0.1,
+      "away_off": 0.15,
+      "away_def": -0.2,
+      "spread": 1.5,
+      "spread_home_odds": -150,
+      "spread_away_odds": 125,
+      "date": "2026-06-20",
+      "kickoff": "2026-06-20T18:20:00Z"
+    },
+    {
+      "home": "COL",
+      "away": "NYY",
+      "park": "coors",
+      "total": 11.5,
+      "live": {
+        "state": "live",
+        "home_score": 5,
+        "away_score": 3,
+        "period": "Top 6th",
+        "outs": 1,
+        "bases": [
+          2
+        ]
+      },
+      "weather": {
+        "roof_closed": false,
+        "temp_f": 88,
+        "wind_mph": 7,
+        "wind_dir_rel": "cross",
+        "humidity": 0.3,
+        "precip_chance": 0.1
+      },
+      "lineups_confirmed": true,
+      "pitchers": {
+        "COL": {
+          "name": "Kyle Freeland",
+          "throws": "L",
+          "slg_allowed_vs_l": 0.395,
+          "slg_allowed_vs_r": 0.5,
+          "k_rate": 0.17,
+          "xera": 5.1
+        },
+        "NYY": {
+          "name": "Carlos Rodon",
+          "throws": "L",
+          "slg_allowed_vs_l": 0.35,
+          "slg_allowed_vs_r": 0.43,
+          "k_rate": 0.26,
+          "xera": 3.9
+        }
+      },
+      "bullpen_rank": {
+        "COL": 29,
+        "NYY": 9
+      },
+      "team_k_rate": {
+        "COL": 0.23,
+        "NYY": 0.24
+      },
+      "home_ml": 120,
+      "away_ml": -140,
+      "home_rating": -0.5,
+      "away_rating": 0.7,
+      "home_off": 1.5,
+      "home_def": 1.9,
+      "away_off": 0.5,
+      "away_def": -0.2,
+      "spread": 1.5,
+      "spread_home_odds": -140,
+      "spread_away_odds": 120,
+      "date": "2026-06-20",
+      "kickoff": "2026-06-21T01:10:00Z"
+    },
+    {
+      "home": "MIA",
+      "away": "LAD",
+      "park": "loandepot",
+      "total": 7.5,
+      "weather": {
+        "roof_closed": true,
+        "temp_f": 74,
+        "wind_mph": 0,
+        "wind_dir_rel": "cross",
+        "humidity": 0.5,
+        "precip_chance": 0.0
+      },
+      "lineups_confirmed": false,
+      "pitchers": {
+        "MIA": {
+          "name": "Sandy Alcantara",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.4,
+          "slg_allowed_vs_r": 0.37,
+          "k_rate": 0.23,
+          "xera": 3.6
+        },
+        "LAD": {
+          "name": "Yoshinobu Yamamoto",
+          "throws": "R",
+          "slg_allowed_vs_l": 0.34,
+          "slg_allowed_vs_r": 0.32,
+          "k_rate": 0.28,
+          "xera": 3.1
+        }
+      },
+      "bullpen_rank": {
+        "MIA": 25,
+        "LAD": 4
+      },
+      "team_k_rate": {
+        "MIA": 0.27,
+        "LAD": 0.22
+      },
+      "home_ml": 150,
+      "away_ml": -175,
+      "home_rating": -0.25,
+      "away_rating": 0.4,
+      "home_off": -0.55,
+      "home_def": -0.3,
+      "away_off": 0.0,
+      "away_def": -0.4,
+      "spread": 1.5,
+      "spread_home_odds": -155,
+      "spread_away_odds": 130,
+      "date": "2026-06-20",
+      "kickoff": "2026-06-20T23:10:00Z"
+    }
+  ],
+  "props": [
+    {
+      "player": "Bryce Harper",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "1B",
+      "market": "total_bases",
+      "bats": "L",
+      "lineup_spot": 2,
+      "career_avg": 1.85,
+      "vs_pitcher_avg": 2.4,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "MIL",
+          "value": 3,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "MIL",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "ATL",
+          "value": 4,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "ATL",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "ATL",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "NYM",
+          "value": 5,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "WSH",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "WSH",
+          "value": 3,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "SF",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 5,
+          "opponent": "SF",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 4,
+          "opponent": "SD",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 3,
+          "opponent": "SD",
+          "value": 4,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 2,
+          "opponent": "STL",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 1,
+          "opponent": "STL",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-05"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 3.0,
+          "over_odds": 111,
+          "under_odds": -110
+        }
+      ],
+      "statcast": {
+        "xslg": 0.56,
+        "slg": 0.505,
+        "xwoba": 0.4,
+        "woba": 0.375,
+        "barrel_pct": 0.15,
+        "hard_hit_pct": 0.52
+      }
+    },
+    {
+      "player": "Kyle Tucker",
+      "team": "CHC",
+      "opponent": "PHI",
+      "position": "RF",
+      "market": "home_runs",
+      "bats": "L",
+      "lineup_spot": 3,
+      "career_avg": 0.18,
+      "vs_pitcher_avg": 0.1,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "STL",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "STL",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "PIT",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "PIT",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "CIN",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "CIN",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "MIL",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "HOU",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 5,
+          "opponent": "HOU",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 4,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 3,
+          "opponent": "NYM",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 2,
+          "opponent": "ATL",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 1,
+          "opponent": "ATL",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-05"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 318,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 318,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 318,
+          "under_odds": -110
+        }
+      ]
+    },
+    {
+      "player": "Zack Wheeler",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "SP",
+      "market": "strikeouts",
+      "throws": "R",
+      "lineup_spot": 1,
+      "career_avg": 6.4,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "MIL",
+          "value": 8,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "ATL",
+          "value": 7,
+          "home": false,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "NYM",
+          "value": 9,
+          "home": true,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "WSH",
+          "value": 6,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": true,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "SD",
+          "value": 5,
+          "home": false,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "STL",
+          "value": 7,
+          "home": true,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "MIA",
+          "value": 10,
+          "home": true,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "ATL",
+          "value": 6,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "CIN",
+          "value": 7,
+          "home": false,
+          "date": "2026-06-10"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 8.5,
+          "over_odds": -135,
+          "under_odds": 105
+        },
+        {
+          "book": "FanDuel",
+          "line": 8.5,
+          "over_odds": -135,
+          "under_odds": 105
+        },
+        {
+          "book": "BetMGM",
+          "line": 8.5,
+          "over_odds": -135,
+          "under_odds": 105
+        }
+      ],
+      "statcast": {
+        "csw_pct": 0.32,
+        "whiff_pct": 0.33
+      }
+    },
+    {
+      "player": "Aaron Judge",
+      "team": "NYY",
+      "opponent": "COL",
+      "position": "RF",
+      "market": "total_bases",
+      "bats": "R",
+      "lineup_spot": 2,
+      "career_avg": 2.1,
+      "vs_pitcher_avg": 2.8,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "BOS",
+          "value": 4,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "BOS",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "TOR",
+          "value": 5,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "TOR",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "TOR",
+          "value": 3,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "BAL",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "BAL",
+          "value": 6,
+          "home": true,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "TBR",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "TBR",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "CLE",
+          "value": 3,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 5,
+          "opponent": "CLE",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 4,
+          "opponent": "DET",
+          "value": 4,
+          "home": false,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 3,
+          "opponent": "DET",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 2,
+          "opponent": "HOU",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 1,
+          "opponent": "HOU",
+          "value": 3,
+          "home": true,
+          "date": "2026-06-05"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 3.5,
+          "over_odds": -170,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 3.5,
+          "over_odds": -170,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 3.5,
+          "over_odds": -170,
+          "under_odds": -110
+        }
+      ],
+      "statcast": {
+        "xslg": 0.64,
+        "slg": 0.61,
+        "barrel_pct": 0.2,
+        "hard_hit_pct": 0.58
+      }
+    },
+    {
+      "player": "Ezequiel Tovar",
+      "team": "COL",
+      "opponent": "NYY",
+      "position": "SS",
+      "market": "hits",
+      "bats": "R",
+      "lineup_spot": 6,
+      "career_avg": 1.05,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SD",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "SD",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "LAD",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "LAD",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "SF",
+          "value": 0,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "SF",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "STL",
+          "value": 3,
+          "home": true,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "STL",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-10"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.0,
+          "over_odds": -1900,
+          "under_odds": -110
+        }
+      ]
+    },
+    {
+      "player": "Yoshinobu Yamamoto",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "SP",
+      "market": "strikeouts",
+      "throws": "R",
+      "lineup_spot": 1,
+      "career_avg": 6.8,
+      "vs_pitcher_avg": null,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 9,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "SD",
+          "value": 7,
+          "home": false,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "ARI",
+          "value": 8,
+          "home": true,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "COL",
+          "value": 6,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "SF",
+          "value": 8,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "NYM",
+          "value": 7,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "PIT",
+          "value": 10,
+          "home": true,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "CIN",
+          "value": 6,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "STL",
+          "value": 7,
+          "home": true,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "ATL",
+          "value": 5,
+          "home": false,
+          "date": "2026-06-10"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 9.5,
+          "over_odds": -107,
+          "under_odds": -110
+        }
+      ],
+      "statcast": {
+        "csw_pct": 0.32,
+        "whiff_pct": 0.33
+      }
+    },
+    {
+      "player": "Mookie Betts",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "2B",
+      "market": "total_bases",
+      "bats": "R",
+      "lineup_spot": 0,
+      "career_avg": 1.9,
+      "vs_pitcher_avg": 1.6,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "SF",
+          "value": 3,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 4,
+          "home": true,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 5,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "NYM",
+          "value": 2,
+          "home": true,
+          "date": "2026-06-10"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 1.5,
+          "over_odds": -180,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 1.5,
+          "over_odds": -180,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 1.5,
+          "over_odds": -180,
+          "under_odds": -110
+        }
+      ]
+    },
+    {
+      "player": "Freddie Freeman",
+      "team": "LAD",
+      "opponent": "MIA",
+      "position": "1B",
+      "market": "hits",
+      "bats": "L",
+      "lineup_spot": 3,
+      "career_avg": 1.2,
+      "vs_pitcher_avg": 1.0,
+      "logs": [
+        {
+          "game": 15,
+          "opponent": "SF",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-19"
+        },
+        {
+          "game": 14,
+          "opponent": "SF",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 13,
+          "opponent": "SD",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 12,
+          "opponent": "SD",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 11,
+          "opponent": "ARI",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 10,
+          "opponent": "ARI",
+          "value": 0,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 2,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 1,
+          "home": false,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 7,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 6,
+          "opponent": "NYM",
+          "value": 1,
+          "home": true,
+          "date": "2026-06-10"
+        }
+      ],
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": -635,
+          "under_odds": -110
+        }
+      ],
+      "statcast": {
+        "xslg": 0.4,
+        "slg": 0.47,
+        "barrel_pct": 0.06
+      }
+    },
+    {
+      "player": "Aaron Judge",
+      "team": "NYY",
+      "opponent": "COL",
+      "position": "RF",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-26"
+        },
+        {
+          "game": 2,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-27"
+        },
+        {
+          "game": 3,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-28"
+        },
+        {
+          "game": 4,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-29"
+        },
+        {
+          "game": 5,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false,
+          "date": "2026-05-30"
+        },
+        {
+          "game": 6,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-31"
+        },
+        {
+          "game": 7,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-01"
+        },
+        {
+          "game": 8,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-02"
+        },
+        {
+          "game": 9,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-03"
+        },
+        {
+          "game": 10,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": true,
+          "date": "2026-06-04"
+        },
+        {
+          "game": 11,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-05"
+        },
+        {
+          "game": 12,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 13,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 14,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 15,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 16,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 17,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 18,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 19,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 20,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 21,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 22,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 23,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 24,
+          "opponent": "COL",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 25,
+          "opponent": "COL",
+          "value": 1.0,
+          "home": false,
+          "date": "2026-06-19"
+        }
+      ],
+      "career_avg": 0.2,
+      "vs_pitcher_avg": null,
+      "bats": "R",
+      "lineup_spot": 2,
+      "statcast": {
+        "barrel_pct": 0.145,
+        "hard_hit_pct": 0.55,
+        "xslg": 0.64,
+        "slg": 0.6
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 285,
+          "under_odds": -384
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 305,
+          "under_odds": -411
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 270,
+          "under_odds": -364
+        }
+      ]
+    },
+    {
+      "player": "Bryce Harper",
+      "team": "PHI",
+      "opponent": "CHC",
+      "position": "1B",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-26"
+        },
+        {
+          "game": 2,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-27"
+        },
+        {
+          "game": 3,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-28"
+        },
+        {
+          "game": 4,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-29"
+        },
+        {
+          "game": 5,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-30"
+        },
+        {
+          "game": 6,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-31"
+        },
+        {
+          "game": 7,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": false,
+          "date": "2026-06-01"
+        },
+        {
+          "game": 8,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-02"
+        },
+        {
+          "game": 9,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-03"
+        },
+        {
+          "game": 10,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-04"
+        },
+        {
+          "game": 11,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-05"
+        },
+        {
+          "game": 12,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 13,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 14,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": true,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 15,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 16,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 17,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 18,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 19,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 20,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 21,
+          "opponent": "CHC",
+          "value": 1.0,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 22,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 23,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 24,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 25,
+          "opponent": "CHC",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-19"
+        }
+      ],
+      "career_avg": 0.143,
+      "vs_pitcher_avg": null,
+      "bats": "L",
+      "lineup_spot": 3,
+      "statcast": {
+        "barrel_pct": 0.115,
+        "hard_hit_pct": 0.48,
+        "xslg": 0.56,
+        "slg": 0.52
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 380,
+          "under_odds": -513
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 400,
+          "under_odds": -540
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 365,
+          "under_odds": -492
+        }
+      ]
+    },
+    {
+      "player": "Ezequiel Tovar",
+      "team": "COL",
+      "opponent": "NYY",
+      "position": "SS",
+      "market": "home_runs",
+      "logs": [
+        {
+          "game": 1,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-26"
+        },
+        {
+          "game": 2,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-27"
+        },
+        {
+          "game": 3,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-28"
+        },
+        {
+          "game": 4,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-29"
+        },
+        {
+          "game": 5,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-05-30"
+        },
+        {
+          "game": 6,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-05-31"
+        },
+        {
+          "game": 7,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-01"
+        },
+        {
+          "game": 8,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-02"
+        },
+        {
+          "game": 9,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-03"
+        },
+        {
+          "game": 10,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-04"
+        },
+        {
+          "game": 11,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-05"
+        },
+        {
+          "game": 12,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-06"
+        },
+        {
+          "game": 13,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-07"
+        },
+        {
+          "game": 14,
+          "opponent": "NYY",
+          "value": 1.0,
+          "home": true,
+          "date": "2026-06-08"
+        },
+        {
+          "game": 15,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-09"
+        },
+        {
+          "game": 16,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-10"
+        },
+        {
+          "game": 17,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-11"
+        },
+        {
+          "game": 18,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-12"
+        },
+        {
+          "game": 19,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-13"
+        },
+        {
+          "game": 20,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-14"
+        },
+        {
+          "game": 21,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-15"
+        },
+        {
+          "game": 22,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-16"
+        },
+        {
+          "game": 23,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-17"
+        },
+        {
+          "game": 24,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": true,
+          "date": "2026-06-18"
+        },
+        {
+          "game": 25,
+          "opponent": "NYY",
+          "value": 0.0,
+          "home": false,
+          "date": "2026-06-19"
+        }
+      ],
+      "career_avg": 0.071,
+      "vs_pitcher_avg": null,
+      "bats": "R",
+      "lineup_spot": 7,
+      "statcast": {
+        "barrel_pct": 0.062,
+        "hard_hit_pct": 0.38,
+        "xslg": 0.43,
+        "slg": 0.445
+      },
+      "lines": [
+        {
+          "book": "DraftKings",
+          "line": 0.5,
+          "over_odds": 620,
+          "under_odds": -837
+        },
+        {
+          "book": "FanDuel",
+          "line": 0.5,
+          "over_odds": 640,
+          "under_odds": -864
+        },
+        {
+          "book": "BetMGM",
+          "line": 0.5,
+          "over_odds": 605,
+          "under_odds": -816
+        }
+      ]
+    }
+  ]
+}
