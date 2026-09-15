@@ -104,6 +104,71 @@ selector.
 
 ---
 
+## PIN-3. Two budget calls I made for you, and the one query that checks them
+
+Ethan, 2026-09-15: *"I would like you too choose what you think is best.
+I just don't want too drain my 100k api credits immediately."*
+
+**The two levers price completely differently, and that decided it.**
+The API bills per MARKET per region — `oddsbudget`'s header records the
+4-8x overspend that burned 19k of a 20k plan in a day when the pacer
+counted requests while the meter counted credits. The `bookmakers`
+parameter is a **filter on a response already paid for**.
+
+| lever | costs | call |
+|---|---|---|
+| more books | **nothing** | **taken** — BetRivers added |
+| more sharp references | nothing to fetch, but it is a pricing claim | **declined** — `booksharp` measures it |
+| earlier / extra pulls | **billed, and NFL's 12-market event call is the priciest thing we buy** | **declined** |
+
+**Why the extra pull window was declined.** It is the only one that
+touches your meter, and it would land hardest on Thu/Sun/Mon where the
+NFL already owns the budget. The hypothesis behind it is real — our own
+`backtest_sharp_anchor` docstring says *"soft books have mostly
+converged to sharp ones by then; a live version gets to act earlier,
+when gaps are wider"* — but it is a hypothesis, and **it can be tested
+for free from tape we already keep**:
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/history.db "
+SELECT substr(taken_at,12,2) AS hour_utc,
+       COUNT(*) rows, COUNT(DISTINCT event_id) games,
+       ROUND(AVG(ABS(over_odds)),1) avg_price
+FROM odds_history
+WHERE market='moneyline' AND taken_at >= date('now','-30 days')
+GROUP BY hour_utc ORDER BY hour_utc;"
+```
+
+If the tape shows real spread between books early and convergence late,
+the extra window is worth paying for and we size it against the NFL
+days. If it shows nothing, we just saved the credits. **Either answer is
+free; the pull is not.**
+
+**Why no book was promoted to sharp.** The obvious fix for an MLB board
+with no sharp witness was to name Circa or BookMaker sharp. `engine
+/booksharp` exists to stop exactly that — *"received wisdom about which
+book is sharp is the single most repeated claim in this industry and the
+least often checked."* It measures lead time and accuracy against the
+close from our own tape. Promotion waits on it.
+
+**Check the book keys are real** (an unknown key is ignored by the API,
+so a typo costs a missing book and says nothing):
+
+```bash
+cd /srv/qellys && python3 -c "
+import json,glob
+for f in sorted(glob.glob('web/data/*_picks.json')):
+    d=json.load(open(f)); seen=set()
+    for r in (d.get('recommendations') or [])+(d.get('most_likely') or []):
+        if r.get('book'): seen.add(r['book'])
+    print(f.split('/')[-1], sorted(seen))"
+```
+
+BetRivers should appear once a pull has run since this shipped. If it
+never does, the key is wrong and the fix is one word.
+
+---
+
 ## 0. THE SITE IS DOWN — run this first, before anything else
 
 Ethan, 2026-09-09, with a photo: *"the site crashed. It won't load

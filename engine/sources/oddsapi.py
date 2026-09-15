@@ -214,10 +214,30 @@ UNPROVEN_MARKETS = (UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
 # completed December 2025). The API's key for the renamed book couldn't be
 # confirmed from docs, so all three plausible keys are requested — unknown
 # bookmaker keys are ignored, and whichever answers gets the right title.
+#: THE BOOK LIST COSTS NOTHING TO LENGTHEN, which is why it is long.
+#: The API bills per MARKET per region (`oddsbudget`'s own header, after
+#: the 4-8x overspend that burned 19k of a 20k plan in a day), and
+#: `affordable_events` has no book term at all — the `bookmakers`
+#: parameter FILTERS a response we have already paid for. Ethan,
+#: 2026-09-15: "I just don't want too drain my 100k api credits
+#: immediately". Adding a book does not touch that meter; adding a pull
+#: window does, which is why one happened here and the other did not.
+#:
+#: MORE BOOKS IS TWO DIFFERENT WINS. It shops a better price on the side
+#: we take, and — the one that matters for the Pick of the Day — it
+#: makes a de-vigged CONSENSUS reachable more often
+#: (`odds.MIN_CONSENSUS_BOOKS` is 3). The MLB board on 2026-09-15 had no
+#: sharp and no market witness at all, so every row fell to the model
+#: tier and the selector could not take any of them.
+#:
+#: AN UNKNOWN KEY IS IGNORED by the API rather than erroring (see the
+#: note at `BOOK_TITLES` below), so a key that turns out not to exist
+#: costs a missing book and nothing else — check the real list with the
+#: PIN-3 block in docs/WHEN_YOU_ARE_HOME.md.
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
     "espnbet", "thescorebet", "thescore",
-    "fanatics", "hardrockbet", "pinnacle",
+    "fanatics", "hardrockbet", "betrivers", "pinnacle",
 ]
 # Pretty names for the UI / explanations.
 BOOK_TITLES = {
@@ -225,10 +245,28 @@ BOOK_TITLES = {
     "williamhill_us": "Caesars", "fanatics": "Fanatics",
     "espnbet": "theScore Bet", "thescorebet": "theScore Bet",
     "thescore": "theScore Bet",
-    "hardrockbet": "Hard Rock", "pinnacle": "Pinnacle",
+    "hardrockbet": "Hard Rock", "betrivers": "BetRivers",
+    "pinnacle": "Pinnacle",
 }
 # Books a user can actually bet at (Pinnacle doesn't take US action); the
 # sharp reference must never be quoted as the price to take.
+#
+# STILL ONE BOOK, ON PURPOSE, 2026-09-15. The obvious move when the MLB
+# board showed no sharp witness was to name more books sharp — Circa and
+# BookMaker are the usual two — and `engine/booksharp` exists precisely
+# to stop that: "received wisdom about which book is sharp is the single
+# most repeated claim in this industry and the least often checked." It
+# measures sharpness from our own tape (lead time, and accuracy against
+# the close) and NOTHING here is promoted until it has. Adding a name to
+# this set is a pricing claim; adding one to DEFAULT_BOOKS above is not,
+# which is why the free half was taken and this half was not.
+#
+# The membership test also carries a SECOND meaning — "not a ticket the
+# reader can take" — and the offshore reduced-juice books (LowVig,
+# BetOnline, Bovada) would qualify on that axis while failing the first.
+# Wiring them in needs a third category, reference-but-not-sharp, and
+# that is a product decision about which books Ethan wants quoted rather
+# than a measurement.
 SHARP_BOOKS = {"pinnacle"}
 
 #: The oldest a cached payload may be and still price a GAME market.
