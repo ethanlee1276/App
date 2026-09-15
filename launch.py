@@ -3316,10 +3316,12 @@ def _write_day_top_pick() -> None:
     `potd.day_top_pick` is what refuses a stale one — by DATE, per
     league, because a league out of season leaves a perfectly well-formed
     pick on disk from whenever it last ran and nothing about the card
-    would look wrong.
+    would look wrong. And by LOCK: see the note at the `locked` read
+    below, which is the difference between a claim and a running tally
+    of whichever bet is still alive.
     """
     try:
-        from engine import potd
+        from engine import ledger, potd
         web = ROOT / "web" / "data"
         boards: dict = {}
         for sport in potd.TOP_PICK_LEAGUES:
@@ -3335,7 +3337,26 @@ def _write_day_top_pick() -> None:
                 # the other four leagues their shot at the day's pick.
                 boards[sport] = {}
         today = time.strftime("%Y-%m-%d")
-        top = potd.day_top_pick(boards, today)
+        # THE CLAIM EACH LEAGUE ALREADY MADE, read rather than re-derived.
+        # `ledger.log_pick_of_the_day` locks the first qualifying pick of
+        # each journal day precisely so a sport cannot churn picks until
+        # settle time; ranking ACROSS leagues has to honour that lock, or
+        # the day's top pick silently becomes whichever league's bet is
+        # still alive at the moment this happens to run.
+        #
+        # A DATABASE WE CANNOT READ YIELDS {}, which refuses every
+        # qualifying pick and publishes nothing. That is the right way to
+        # fail here: the alternative is an unlocked claim, which looks
+        # identical on the page and cannot be graded afterwards.
+        locked: dict = {}
+        try:
+            with ledger.connect() as lconn:
+                locked = ledger.locked_potd_keys(lconn, today)
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  ⚠️  day top pick: today's locked picks are "
+                  f"unreadable ({type(exc).__name__}: {exc}) — "
+                  f"publishing none rather than an unlocked claim")
+        top = potd.day_top_pick(boards, today, locked=locked)
         p = web / "day_top_pick.json"
         tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(top, indent=1))

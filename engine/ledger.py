@@ -1168,17 +1168,10 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
             "AND substr(ts,1,10)=? LIMIT 1",
             (POTD_CATEGORY, sport, now[:10])).fetchone():
         return 0
-    market = str(pick.get("market") or "")
-    player = str(pick.get("player") or "")
-    side = str(pick.get("side") or "OVER").upper()
-    line = pick.get("line")
-    if pick.get("kind") == "game" or market in GAME_MARKETS:
-        keys = game_row_keys(pick, market)
-        if keys is None:
-            return 0
-        player, market, side, line = keys
-    if not player or line is None or not market:
+    keys = potd_row_key(pick)
+    if keys is None:
         return 0
+    player, market, side, line = keys
     try:
         odds = int(pick.get("odds") or 0)
     except (TypeError, ValueError):
@@ -1208,6 +1201,70 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     _stamp_team(conn, cur, pick)
     conn.commit()
     return cur.rowcount or 0
+
+
+def potd_row_key(pick: dict):
+    """``(player, market, side, line)`` this pick is JOURNALED under, or None.
+
+    ONE COPY, and it earns that the moment a second reader appears.
+    `log_pick_of_the_day` derives this to write the row; the cross-league
+    chooser has to derive the SAME tuple to ask "is this the pick this
+    league already locked today". Two copies of a derivation that negates
+    a spread and rewrites a moneyline as OVER 0.5 is exactly how one book
+    ends up right and another wrong — which is `game_row_keys`’ own
+    stated lesson, one level down.
+    """
+    if not isinstance(pick, dict):
+        return None
+    market = str(pick.get("market") or "")
+    player = str(pick.get("player") or "")
+    side = str(pick.get("side") or "OVER").upper()
+    line = pick.get("line")
+    if pick.get("kind") == "game" or market in GAME_MARKETS:
+        keys = game_row_keys(pick, market)
+        if keys is None:
+            return None
+        player, market, side, line = keys
+    if not player or line is None or not market:
+        return None
+    return player, market, side, line
+
+
+def locked_potd_keys(conn, day: str) -> dict:
+    """``{sport: (player, market, side, line)}`` — today’s LOCKED picks.
+
+    THE CLAIM A LEAGUE HAS ALREADY MADE. `log_pick_of_the_day` writes the
+    first qualifying pick of each journal day and refuses every later one,
+    precisely so a sport cannot churn picks until settle time and have the
+    record keep whichever happened to be showing. That lock exists in the
+    `bets` table and nowhere else, so anything ranking picks ACROSS
+    leagues has to read it rather than invent a second one — two locks
+    that can disagree is worse than none, because the disagreement is
+    invisible from the page.
+
+    Keyed on the JOURNAL day (`ts`), which is what the lock itself is
+    keyed on. Returns ``{}`` on any database trouble: a cross-league
+    chooser that cannot read the lock must publish nothing rather than
+    fall back to ranking whatever is currently on the boards, which is
+    the behaviour the lock exists to prevent.
+    """
+    out: dict = {}
+    try:
+        rows = conn.execute(
+            "SELECT sport, player, market, side, line FROM bets "
+            "WHERE category=? AND substr(ts,1,10)=?",
+            (POTD_CATEGORY, str(day or "")[:10])).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return {}
+    for r in rows:
+        sport = str(r["sport"] if hasattr(r, "keys") else r[0])
+        player, market, side, line = (
+            (r["player"], r["market"], r["side"], r["line"])
+            if hasattr(r, "keys") else (r[1], r[2], r[3], r[4]))
+        if sport and sport not in out:
+            out[sport] = (str(player), str(market), str(side).upper(),
+                          None if line is None else float(line))
+    return out
 
 
 def game_row_keys(r: dict, market: str):

@@ -668,7 +668,7 @@ def _pick_is_today(pick_of_the_day: dict, today: str) -> bool:
     return bool(got) and got == str(today or "").strip()
 
 
-def day_top_pick(boards: dict, today: str, now=None) -> dict:
+def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
     """The one pick across EVERY league, or the reason there is not one.
 
     Ethan, 2026-09-15: "a model that picks one pick for the pick of the
@@ -706,6 +706,26 @@ def day_top_pick(boards: dict, today: str, now=None) -> dict:
     say. `build` publishes its best available when nothing clears, so a
     below-bar row is on the board by design; letting one outrank a pick
     that cleared every gate would quietly undo the gates.
+
+    ``locked`` IS THE CLAIM EACH LEAGUE ALREADY MADE — `ledger.
+    locked_potd_keys`, the first qualifying pick journaled for each sport
+    today. Pass it and a qualifying pick is considered ONLY if it is that
+    pick.
+
+    WHY THAT IS NOT OPTIONAL POLISH. The boards rebuild all day. Without
+    it this function ranks whatever is on them at the moment it runs, so
+    the day’s top pick could be an MLB bet at noon and, after that bet
+    lost, an NFL one at eight — with nothing anywhere recording the first
+    claim. That is choosing after seeing how the day is going, and it is
+    the precise failure `ledger.log_pick_of_the_day` was given a lock to
+    prevent one level down. Re-deriving a second lock here would be worse
+    than none: two locks that disagree disagree invisibly.
+
+    BELOW-BAR LEANS ARE EXEMPT, because they are not claims. Nothing
+    journals them (`log_pick_of_the_day` refuses a `below_bar` row) and
+    nothing records them, so there is no lock for them to match and the
+    page still shows the strongest thing available on a day when no
+    league cleared its bar.
     """
     import datetime as _dt
     clear: list = []
@@ -736,7 +756,26 @@ def day_top_pick(boards: dict, today: str, now=None) -> dict:
             continue
         entry = dict(pick)
         entry["sport"] = sport
-        (below if pick.get("below_bar") else clear).append(entry)
+        if pick.get("below_bar"):
+            below.append(entry)
+            continue
+        if locked is not None:
+            from .ledger import potd_row_key
+            want = locked.get(sport)
+            got = potd_row_key(pick)
+            if want is None:
+                _tally(f"{sport}: nothing locked for today yet")
+                continue
+            if got is None or tuple(got) != tuple(want):
+                # THE BOARD HAS MOVED ON AND THE CLAIM HAS NOT. The
+                # league is showing a different pick than the one it
+                # journaled this morning; the journaled one is what we
+                # said, so the board's current favourite does not get to
+                # stand in for it.
+                _tally(f"{sport}: the board has changed its pick since "
+                       f"the one it locked today")
+                continue
+        clear.append(entry)
 
     clear.sort(key=lambda p: (rank_key(p), order.get(p["sport"], len(order))))
     below.sort(key=lambda p: (rank_key(p), order.get(p["sport"], len(order))))

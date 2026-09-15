@@ -140,6 +140,91 @@ def test_a_fresh_league_still_wins_when_a_stale_one_looks_stronger():
     assert got["sport"] == "mlb", got["sport"]
 
 
+# ── the claim locks ─────────────────────────────────────────────────
+
+def _game(player="KC ML", team="KC", **extra):
+    """A moneyline card, in the shape the journal rewrites."""
+    return dict(player=player, team=team, market="moneyline", kind="game",
+                odds=-130, sharp_anchored=True, sharp_fair=0.60,
+                fair_prob=0.60, evidence="sharp", **extra)
+
+
+def test_the_pick_a_league_locked_this_morning_is_the_one_that_competes():
+    """THE PROPERTY THAT MAKES THE RECORD MEAN ANYTHING. The boards
+    rebuild all day. Ranking whatever is on them at the moment this runs
+    means the day’s top pick can be an MLB bet at noon and, after that
+    bet lost, an NFL one at eight — with nothing anywhere recording the
+    first claim. `ledger.log_pick_of_the_day` was given a lock for
+    exactly that reason one level down; this honours it rather than
+    inventing a second one that can disagree with it."""
+    from engine import ledger
+    board = {"nfl": _board(**_game())}
+    key = ledger.potd_row_key(_game())
+    assert key == ("KC", "moneyline", "OVER", 0.5), key
+    got = potd.day_top_pick(board, TODAY, locked={"nfl": key})
+    assert got["sport"] == "nfl", got
+
+
+def test_a_board_that_changed_its_pick_does_not_get_to_substitute_it():
+    """The league is showing something else now. The journaled one is
+    what we said, so the board’s current favourite does not stand in."""
+    got = potd.day_top_pick({"nfl": _board(**_game())}, TODAY,
+                            locked={"nfl": ("BUF", "moneyline", "OVER", 0.5)})
+    assert got["pick"] is None, got["pick"]
+    assert any("changed its pick" in k for k in got["census"]), got["census"]
+
+
+def test_a_league_with_nothing_locked_yet_cannot_win_the_day():
+    """No journal row means no claim was made — most often because the
+    league’s pick was below the bar, which is never recorded."""
+    got = potd.day_top_pick({"nfl": _board(**_game())}, TODAY, locked={})
+    assert got["pick"] is None, got["pick"]
+    assert any("nothing locked" in k for k in got["census"]), got["census"]
+
+
+def test_an_unreadable_lock_publishes_nothing_rather_than_an_unlocked_claim():
+    """The launcher hands `{}` when the database cannot be read. Failing
+    closed matters here: an unlocked claim looks identical on the page
+    and cannot be graded afterwards."""
+    got = potd.day_top_pick({"nfl": _board(**_game()), "mlb": _board(**_sharp())},
+                            TODAY, locked={})
+    assert got["pick"] is None, got["pick"]
+
+
+def test_a_below_bar_lean_needs_no_lock_because_it_is_not_a_claim():
+    """Nothing journals a below-bar row, so there is no lock for it to
+    match — and the page still has to show the strongest thing available
+    on a day when no league cleared its bar."""
+    got = potd.day_top_pick(
+        {"nfl": _board(**_game(below_bar="the price drifted"))},
+        TODAY, locked={})
+    assert got["pick"] is not None, got
+    assert got["pick"]["below_bar"] == "the price drifted"
+
+
+def test_omitting_the_lock_entirely_still_ranks_every_board():
+    """`locked=None` is the unlocked mode the tests above this section
+    use, and the callers that have no journal (the report CLI). It must
+    stay distinguishable from `{}`, which means "read the lock, found
+    nothing"."""
+    got = potd.day_top_pick({"nfl": _board(**_game())}, TODAY)
+    assert got["sport"] == "nfl", got
+
+
+def test_the_journal_key_is_derived_in_exactly_one_place():
+    """Two copies of a derivation that negates a spread and rewrites a
+    moneyline as OVER 0.5 is how one book ends up right and another
+    wrong — `game_row_keys`’ own stated lesson. The writer and this
+    matcher must call the same function."""
+    from engine import ledger
+    body = inspect.getsource(ledger.log_pick_of_the_day)
+    assert "potd_row_key(" in body, \
+        "the journal no longer derives its key through the shared helper"
+    chooser = inspect.getsource(potd.day_top_pick)
+    assert "potd_row_key" in chooser, \
+        "the chooser has started deriving journal keys of its own"
+
+
 # ── it never goes quiet ─────────────────────────────────────────────
 
 def test_a_day_with_no_top_pick_says_which_league_failed_and_why():
