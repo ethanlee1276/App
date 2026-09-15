@@ -237,7 +237,20 @@ UNPROVEN_MARKETS = (UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
 DEFAULT_BOOKS = [
     "draftkings", "fanduel", "betmgm", "williamhill_us",  # Caesars = William Hill US
     "espnbet", "thescorebet", "thescore",
-    "fanatics", "hardrockbet", "betrivers", "pinnacle",
+    "fanatics", "hardrockbet", "betrivers",
+    # MORE REGULATED US BOOKS, 2026-09-15. Free (see above), bettable, and
+    # each one is another chance the field reaches
+    # `odds.MIN_CONSENSUS_BOOKS` on a game where Pinnacle is silent.
+    "ballybet", "betparx", "fliff", "windcreek",
+    # THE TWO EXCHANGES, and they are here for a different reason than
+    # the rest. Novig and ProphetX are US-legal peer-to-peer venues:
+    # nobody takes the other side as a house, so their price carries no
+    # margin to strip — the same property that made Kalshi the top rung
+    # of the Pick of the Day's ladder (`engine/exchangefair`). If these
+    # keys resolve, they are candidates to feed that tier rather than
+    # merely the shop, and the check is block PIN-3.
+    "novig", "prophetx",
+    "pinnacle",
 ]
 # Pretty names for the UI / explanations.
 BOOK_TITLES = {
@@ -246,6 +259,8 @@ BOOK_TITLES = {
     "espnbet": "theScore Bet", "thescorebet": "theScore Bet",
     "thescore": "theScore Bet",
     "hardrockbet": "Hard Rock", "betrivers": "BetRivers",
+    "ballybet": "Bally Bet", "betparx": "betPARX", "fliff": "Fliff",
+    "windcreek": "Wind Creek", "novig": "Novig", "prophetx": "ProphetX",
     "pinnacle": "Pinnacle",
 }
 # Books a user can actually bet at (Pinnacle doesn't take US action); the

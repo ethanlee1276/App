@@ -108,6 +108,52 @@ def test_the_list_only_grows_with_a_reason_written_beside_it():
         "the reason more books helps the selector is not written down"
 
 
+# --- the one-word change that would double the bill -------------------------
+def test_every_paid_call_asks_for_exactly_one_region():
+    """THE MOST EXPENSIVE WORD IN THE CODEBASE, guarded.
+
+    Ethan, 2026-09-15: "is that able too be used for all sports if it
+    makes sense and can save us api key credits?" The book list already
+    is shared across every sport and already costs nothing. REGIONS are
+    the other half of `markets x regions`, and there the multiplier is
+    real: a second region DOUBLES every call, for every sport, forever.
+
+    The trap is specific and foreseeable. Some of the books added on
+    2026-09-15 (Fliff, betPARX, and possibly Novig and ProphetX) may
+    live in the API's `us2` region rather than `us`. If so they simply
+    do not appear — which costs nothing — and the obvious next move is
+    to add `us2` to go and get them. That one word turns a 100k month
+    into a 200k one, and in a diff it looks exactly like adding a book,
+    which is free.
+
+    This codebase has already paid for confusing those two: the pacer
+    counted requests while the meter counted credits and burned 19k of a
+    20k plan in a day (`oddsbudget`'s header). So the region count is
+    pinned, and changing it has to come here and say why.
+    """
+    import re
+    src = inspect.getsource(oddsapi)
+    code = "\n".join(ln for ln in src.splitlines()
+                      if not ln.lstrip().strip().startswith("#"))
+    asked = re.findall(r'"regions":\s*"([^"]+)"', code)
+    assert asked, "no call asks for a region at all"
+    for spec in asked:
+        names = [r for r in spec.split(",") if r.strip()]
+        assert names == ["us"], (
+            f'a paid call asks for regions={spec!r}. Each extra region '
+            f'MULTIPLIES the credit cost of that call — see this test. If '
+            f'this is deliberate, budget it first and update the pin.')
+
+
+def test_the_cost_rule_is_markets_times_regions_and_the_code_says_so():
+    """`_classify` reads both off the URL actually sent rather than
+    assuming. If it ever stops multiplying by regions, the guard above
+    is protecting a number that no longer drives the bill."""
+    body = inspect.getsource(oddsapi._classify)
+    assert "regions" in body and "markets" in body, body[:300]
+    assert "markets" in body and "*" in body, "the two are no longer multiplied"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

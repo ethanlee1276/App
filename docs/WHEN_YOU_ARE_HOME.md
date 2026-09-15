@@ -164,8 +164,56 @@ for f in sorted(glob.glob('web/data/*_picks.json')):
     print(f.split('/')[-1], sorted(seen))"
 ```
 
-BetRivers should appear once a pull has run since this shipped. If it
-never does, the key is wrong and the fix is one word.
+Seventeen keys are asked for now, up from ten. The new ones are
+BetRivers, Bally Bet, betPARX, Fliff, Wind Creek — and **Novig and
+ProphetX**, which are the two worth looking for. They are US-legal
+peer-to-peer exchanges: nobody takes the other side as a house, so their
+price carries no margin to strip. That is the same property that put
+Kalshi at the TOP of the Pick of the Day's ladder above Pinnacle
+(`engine/exchangefair`, docs/PICK_OF_THE_DAY.md §3). **If either name
+appears in that output, tell me** — they should be feeding the exchange
+tier rather than just the shop, and that is a change worth making.
+
+Any name that never appears is a key the API does not recognise. It
+costs a missing book and nothing else, and the fix is one word.
+
+### The one-word change that would double your bill
+
+Ethan asked whether the US book list could be shared across sports to
+save credits. It already is — one `DEFAULT_BOOKS` serves every league —
+and it saves nothing because books were never billed. **Regions are the
+half that is.**
+
+```
+credits = markets x regions      (oddsapi._classify, read off the real URL)
+```
+
+We ask for **`regions: "us"` — one**, which is the cheapest setting
+available and is also already shared across every sport.
+
+**So the trap is this.** Some of the new books may live in the API's
+`us2` region rather than `us`. If so they never appear, which costs
+nothing — and the obvious next move is to add `us2` to go and get them.
+That single word **doubles every call, for every sport, forever**: a
+100k month becomes 200k. In a diff it looks exactly like adding a book,
+which is free. This repo has already paid for confusing the two — the
+pacer counted requests while the meter counted credits and burned 19k of
+a 20k plan in a day.
+
+`test_every_paid_call_asks_for_exactly_one_region` now fails that change
+with the arithmetic in the message. If a missing book is worth a second
+region, budget it first — do not let it in as a typo.
+
+**Not added, and waiting on you:** the offshore reduced-juice books
+(LowVig, BetOnline, Bovada). They would want a third category —
+reference-but-not-a-ticket — because `odds.is_sharp_book` currently
+carries BOTH "this is the sharp reference" and "never quote this as the
+price to take" across sixteen call sites. That is a real refactor on a
+pricing path, it is speculative until PIN-2 says whether MLB's problem
+is book coverage or no pull at all, and it needs your answer to a
+question I cannot settle from here: **would you bet at those books?** If
+not, their price can still inform the fair — but it must never be the
+ticket on the card.
 
 ---
 
