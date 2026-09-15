@@ -285,7 +285,13 @@ def _settled_props_with_close(sport: str) -> tuple[int, int]:
             (sport, *GAME_MARKETS, *GRADED_ELSEWHERE)).fetchone()
         conn.close()
         return int(row[0] or 0), int(row[1] or 0)
-    except Exception:                                      # noqa: BLE001
+    except Exception as exc:                               # noqa: BLE001
+        # (0, 0) READS AS "no settled props yet", which is a real and
+        # common state — so a broken query here would look like an early
+        # season rather than a broken query, and the coverage report
+        # would keep saying the reassuring thing.
+        print(f"  ⚠️  {sport} prop-close coverage unreadable — "
+              f"{type(exc).__name__}: {exc}")
         return 0, 0
 
 

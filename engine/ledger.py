@@ -2572,7 +2572,18 @@ def _snapshot_closes() -> dict:
         # change to the settling path and wants its own measurement.
         from .linemoves import stream_history, closing_lines_by_date
         return closing_lines_by_date(stream_history())
-    except Exception:            # never let CLV bookkeeping block settling
+    except Exception as exc:     # noqa: BLE001
+        # NEVER LET CLV BOOKKEEPING BLOCK SETTLING — and never let it fail
+        # in silence either. `{}` here is indistinguishable from "no
+        # snapshots have accrued yet", so a corrupt history file or a
+        # renamed column would take CLV to zero and read as a quiet
+        # Tuesday. CLV is the verdict metric this whole Pick of the Day
+        # feature is measured on (docs/PICK_OF_THE_DAY.md §7), so its
+        # source going dark is the last thing that should be inferred
+        # from an absence.
+        print(f"  ⚠️  CLV closes unavailable — {type(exc).__name__}: {exc}. "
+              f"Settling continues; closing-line value will read empty "
+              f"until this is fixed.")
         return {}
 
 
