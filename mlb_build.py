@@ -675,11 +675,11 @@ def main() -> None:
             _ident = {}
         rows = assemble_live_picks(open_today, result["recommendations"],
                                    result["games"], progress, _ls, _ident,
-                                   pitching)
+                                   pitching, sport="mlb")
         rows += [r for r in assemble_live_picks(open_near,
                                                 result["recommendations"],
                                                 result["games"], progress, _ls,
-                                                _ident)
+                                                _ident, sport="mlb")
                  if r["status"] != "unmapped"]
         result["live_picks"] = rows
         # Every other open bet, so the page's count always reconciles with

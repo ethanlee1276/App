@@ -365,7 +365,8 @@ def test_the_build_ships_the_bullpen_on_the_game():
 def test_the_build_passes_who_is_pitching():
     assert "pitching |= current_pitchers(_box)" in BUILD
     assert "result[\"games\"], progress, _ls, _ident,\n" in BUILD \
-        and "pitching)" in BUILD
+        and 'pitching, sport="mlb")' in BUILD, \
+        "the pitcher set (and, since 2026-09-15, the sport) go into the tracker"
 
 
 def test_the_pitcher_set_is_only_built_for_live_games():

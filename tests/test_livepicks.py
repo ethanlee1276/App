@@ -234,6 +234,40 @@ def test_the_page_does_not_call_a_future_bet_older():
     assert "other boards" in line
 
 
+# --- a row never prints a market key (2026-09-15) ----------------------------
+def test_a_tracker_row_prints_a_label_not_a_market_key():
+    """Ethan, 4:41am, an unmapped row reading "Isiah Pacheco OVER 0.5
+    anytime_td": the journal keeps keys, and a row the board no longer
+    carried took its label from the journal. `market_label` asks the
+    models table, then the tracker's own, and baseball's spread is a
+    run line."""
+    from engine.livepicks import assemble_live_picks, market_label
+    assert market_label("anytime_td") == "Anytime TD"
+    assert market_label("rec_yds") == "Receiving Yards"
+    assert market_label("total_bases") == "Total Bases"
+    assert market_label("spread", "mlb") == "Run Line"
+    assert market_label("spread", "nfl") == "Spread"
+    assert market_label("spread") == "Spread"
+    assert market_label("something_new") == "something_new"
+    # An unmapped row (no board row to place it): the label still reads.
+    row = assemble_live_picks([_bet("Isiah Pacheco", "anytime_td", line=0.5)],
+                              [], [], sport="nfl")[0]
+    assert row["status"] == "unmapped" and row["market_label"] == "Anytime TD", row
+    # A mapped row placed through the player's OTHER market (no exact rec):
+    # the fallback label, not the key.
+    recs = [_rec("Isiah Pacheco", "rush_yds", "DET", "GB")]
+    g = {"home": "DET", "away": "GB", "live": {"state": "live", "period": "Q2",
+                                               "home_score": 7, "away_score": 3}}
+    row = assemble_live_picks([_bet("Isiah Pacheco", "anytime_td", line=0.5)],
+                              recs, [g], sport="nfl")[0]
+    assert row["status"] != "unmapped" and row["market_label"] == "Anytime TD", row
+    # And a team market on each board.
+    ml = assemble_live_picks([_bet("DET", "spread", line=3.5)], [], [g], sport="nfl")[0]
+    assert ml["market_label"] == "Spread", ml["market_label"]
+    rl = assemble_live_picks([_bet("DET", "spread", line=1.5)], [], [g], sport="mlb")[0]
+    assert rl["market_label"] == "Run Line", rl["market_label"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

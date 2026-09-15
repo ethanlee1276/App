@@ -92,6 +92,35 @@ def fast_live_overlay(sport: str, games: list, fast_dir=None,
 
 TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 
+#: Labels for the markets `engine.models.MARKET_LABELS` does not name —
+#: the game markets and the baseball and basketball props — so a tracker
+#: row never prints a market KEY. Ethan, 2026-09-15, 4:41am, an unmapped
+#: row reading "Isiah Pacheco OVER 0.5 anytime_td": a row the board no
+#: longer carries took its label from the journal, and the journal keeps
+#: keys. `market_label` below asks the models table first.
+TRACKER_LABELS = {
+    "moneyline": "Moneyline", "total": "Game Total", "spread": "Spread",
+    "team_total": "Team Total",
+    "hits": "Hits", "total_bases": "Total Bases", "home_runs": "Home Runs",
+    "strikeouts": "Strikeouts", "outs": "Outs Recorded",
+    "points": "Points", "rebounds": "Rebounds", "assists": "Assists",
+    "threes": "3-Pointers", "pra": "Pts + Reb + Ast",
+}
+
+
+def market_label(market: str, sport: str | None = None) -> str:
+    """A human label for a market key, whatever board it came from.
+
+    Baseball's spread is a run line and says so; every other sport calls
+    it a spread. An unknown key comes back as it is, which is still
+    better than a blank.
+    """
+    from .models import MARKET_LABELS
+    m = str(market or "")
+    if m == "spread" and sport == "mlb":
+        return "Run Line"
+    return MARKET_LABELS.get(m) or TRACKER_LABELS.get(m) or m
+
 
 def _live_prob(bet, market, side, line, current, game, live, progress,
                rec_means, pitching, out=None):
@@ -281,8 +310,12 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                         progress: dict | None = None,
                         longshots: list[dict] | None = None,
                         identity: dict | None = None,
-                        pitching: set | None = None) -> list[dict]:
+                        pitching: set | None = None,
+                        sport: str | None = None) -> list[dict]:
     """One row per open journaled pick whose game is LIVE right now.
+
+    ``sport``: names the league for the one label that differs by it
+    (`market_label`: a baseball spread is a run line).
 
     ``progress``: {normalized player name: {market: current value}} from
     engine.mlb.livestats — optional; rows render without it.
@@ -404,7 +437,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
         map is a fact worth showing, not hiding."""
         return {
             "player": b.get("player"), "market": b.get("market", ""),
-            "market_label": b.get("market", ""),
+            "market_label": market_label(b.get("market", ""), sport),
             "side": (b.get("side") or "OVER").upper(),
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
@@ -529,9 +562,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
         out.append({
             "player": b.get("player"), "market": market,
             "market_label": (rec or {}).get("market_label")
-                or {"moneyline": "Moneyline", "total": "Game Total",
-                    "spread": "Run Line", "team_total": "Team Total"}
-                    .get(market, market),
+                or market_label(market, sport),
             "side": side, "line": line,
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
             "current": current, "status": status, "phase": phase,
@@ -813,9 +844,10 @@ def attach_tracker(result: dict, sport: str, conn=None,
                 except Exception as exc:                      # noqa: BLE001
                     progress, prog_note = {}, f"live stats unavailable: {exc}"
             rows = assemble_live_picks(today, recs, games, progress, shots,
-                                       identity)
+                                       identity, sport=sport)
             rows += [r for r in assemble_live_picks(near, recs, games,
-                                                    progress, shots, identity)
+                                                    progress, shots, identity,
+                                                    sport=sport)
                      if r["status"] != "unmapped"]
             result["live_picks"] = rows
             all_open = conn.execute(
