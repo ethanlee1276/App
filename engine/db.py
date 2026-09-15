@@ -282,12 +282,71 @@ ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
 #: it. Wrapped because a read-only directory (or :memory:) refuses the
 #: conversion, and that must not take down a caller that only wanted to
 #: read.
-def tune(conn) -> None:
+#: Journal modes that are fine to be in. "wal" is what a file on disk
+#: should be; "memory" is what `:memory:` always reports and is not a
+#: fault. Anything else is a rollback journal, where a reader blocks a
+#: writer and a writer blocks a reader.
+OK_JOURNAL = ("wal", "memory")
+
+#: One warning per process, not one per connection. `connect()` is called
+#: from every build, every tool and every request path.
+_JOURNAL_WARNED = False
+
+
+def tune(conn) -> str:
+    """Set WAL and the busy timeout. Returns the journal mode IN FORCE.
+
+    THE PRAGMA'S RESULT IS THE ANSWER, and it was being thrown away.
+    `PRAGMA journal_mode=WAL` is a request: it returns the mode the
+    database ended up in, and when another connection holds the file it
+    comes back "delete" — no exception, no error, just a different
+    string. The old body ran it inside a bare `except ... : pass` and
+    ignored the row, so a box that failed to enter WAL behaved exactly
+    like one that succeeded, right up until the write lock started
+    changing hands.
+
+    That matters here more than it would elsewhere. In WAL a reader and
+    a writer coexist; in a rollback journal they do not, and this box
+    runs builds as concurrent subprocesses against one file. The
+    difference between the two modes is the difference between a slow
+    cycle and:
+
+        sqlite3.OperationalError: database is locked
+
+    which is what cfb_build, pm_build, the MLB results ingest and the
+    NFL box scores were all dying on, every cycle, on 2026-09-15.
+
+    Whether that was the cause there is a question for the box, not for
+    this docstring. What is true either way is that the box could not be
+    ASKED: nothing recorded which mode it was in. Now it says so, once
+    per process, and only when the answer is wrong.
+    """
+    global _JOURNAL_WARNED
+    mode = ""
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
-    except sqlite3.DatabaseError:
-        pass
+        row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        mode = str((row[0] if row else "") or "").lower()
+    except sqlite3.DatabaseError as exc:
+        mode = f"unavailable ({type(exc).__name__}: {exc})"
     conn.execute("PRAGMA busy_timeout=30000")
+    warning = journal_warning(mode)
+    if warning and not _JOURNAL_WARNED:
+        _JOURNAL_WARNED = True
+        print(warning)
+    return mode
+
+
+def journal_warning(mode: str) -> str:
+    """The sentence for a journal mode, or "" when there is nothing to
+    say. Split out from `tune` so the decision can be tested without a
+    second process to contend with — forcing a real lock from inside the
+    suite would be a test about process scheduling, not about this."""
+    if str(mode).lower() in OK_JOURNAL:
+        return ""
+    return (f"  ⚠️  SQLite is in \"{mode}\" journal mode, not WAL — in this "
+            f"mode a reader blocks a writer, and concurrent builds against "
+            f"one file fail with \"database is locked\". Check for another "
+            f"process holding {DEFAULT_DB}.")
 
 
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:

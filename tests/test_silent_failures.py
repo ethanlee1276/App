@@ -34,7 +34,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine import coverage, ledger, linemoves                # noqa: E402
+from engine import coverage, db, ledger, linemoves            # noqa: E402
 
 
 def _blow_up(*_a, **_k):
@@ -173,6 +173,73 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         f"new whole-body swallower(s): {sorted(found - judged)} — decide "
         f"whether the value returned on failure is one a QUIET DAY also "
         f"produces. If it is, make the failure say so and add the name here.")
+
+
+# ── the pragma whose result was thrown away ─────────────────────────
+
+def test_a_journal_mode_that_is_not_wal_is_said_out_loud():
+    """`PRAGMA journal_mode=WAL` is a REQUEST, not a command: it returns
+    the mode the database ended up in, and comes back "delete" — with no
+    exception at all — when another connection holds the file. The old
+    body ran it under a bare `except: pass` and ignored the row, so a box
+    that never entered WAL was indistinguishable from one that did.
+
+    It is the difference between a slow cycle and four builds a cycle
+    dying on "database is locked", which is where the droplet was on
+    2026-09-15."""
+    assert db.journal_warning("delete"), "a rollback journal said nothing"
+    assert "database is locked" in db.journal_warning("delete")
+    assert "WAL" in db.journal_warning("delete")
+
+
+def test_the_two_healthy_answers_stay_quiet():
+    """A warning that fires on every connection is a warning nobody
+    reads. `:memory:` reports "memory" and can never be WAL; that is not
+    a fault and must not print."""
+    assert db.journal_warning("wal") == ""
+    assert db.journal_warning("WAL") == "", "the check is case-sensitive"
+    assert db.journal_warning("memory") == ""
+
+
+def test_tune_reports_the_mode_actually_in_force():
+    """Behavioural, over both real shapes, so the reader of `tune` is not
+    taking the pragma's word for it from a docstring."""
+    import tempfile
+    assert db.tune(db.connect(":memory:")) == "memory"
+    path = os.path.join(tempfile.mkdtemp(), "x.db")
+    assert db.tune(db.connect(path)) == "wal"
+
+
+def test_a_bad_mode_prints_once_and_not_once_per_connection():
+    """`connect()` is called from every build, every tool and every
+    request path. The fix for an invisible outage must not be a visible
+    flood."""
+    conn = db.connect(":memory:")
+    real, printed = conn.execute, []
+
+    class _Rollback:
+        """A connection that answers the pragma the way a locked file
+        does: a row, no exception, the wrong mode."""
+        def execute(self, sql, *a):
+            if "journal_mode" in sql:
+                class _Cur:
+                    def fetchone(self_):
+                        return ("delete",)
+                return _Cur()
+            return real(sql, *a)
+
+    was = db._JOURNAL_WARNED
+    try:
+        db._JOURNAL_WARNED = False
+        for _ in range(3):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                assert db.tune(_Rollback()) == "delete"
+            printed.append(buf.getvalue())
+    finally:
+        db._JOURNAL_WARNED = was
+    assert printed[0].strip(), "the first connection said nothing"
+    assert printed[1] == "" and printed[2] == "", printed
 
 
 if __name__ == "__main__":
