@@ -996,6 +996,12 @@ def board_source(public_path) -> "Path":
       launch.py --odds-doctor         counted priced games off the public
                                       copy and reported 0 of 15.
 
+    There are ten now; tests/test_tools_read_the_full_board.py keeps the
+    full list, because the count is the argument. The most recent pair
+    (2026-09-15) are the Pick of the Day's own report and the writer of
+    the day's top pick — `most_likely` and `pick_of_the_day` are paid
+    keys as much as `recommendations` is.
+
     The private copy is the truth; the public one is a derived artifact.
     Falls back to the public path when there is no private copy — a board
     built before data/built/ existed, or a machine with the paywall off

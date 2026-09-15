@@ -59,6 +59,18 @@ def board_paths(sport: str, where: str) -> list:
     preferred because it is small and carries `pick_of_the_day` whole
     (`lightboard.DROP_TOP` drops only `player_stats`); the full board is
     the fallback for a box that has not written one yet.
+
+    AND EVERY CANDIDATE GOES THROUGH `gate.board_source`, which is the
+    bug Ethan hit on 2026-09-15. `web/data` is the PUBLIC copy, and
+    `most_likely` is on `gate.PAID_KEYS` — so on the droplet, with the
+    paywall on, this tool read five leagues off five stripped boards and
+    printed “the board carries no Most Likely rows at all” five times,
+    on a box whose journal held a locked pick made that morning. It
+    reported honestly on nothing, which is exactly the shape
+    `board_source`’s own docstring names five prior victims of.
+
+    `board_source` falls back to the public path when there is no
+    private copy, so a dev box with the paywall off is unaffected.
     """
     out = []
     try:
@@ -76,6 +88,15 @@ def board_paths(sport: str, where: str) -> list:
         pass
     out.append(os.path.join(where, f"{sport}_picks.json"))
     out.append(os.path.join(where, f"{sport}.json"))
+    try:
+        from engine import gate
+        out = [str(gate.board_source(p)) for p in out]
+    except Exception:                                         # noqa: BLE001
+        # Same reasoning as above: a checkout that cannot import the
+        # gate still reads SOMETHING rather than nothing. It will be the
+        # public copy, which is the pre-2026-09-15 behaviour and is
+        # correct on any box with the paywall off.
+        pass
     seen, uniq = set(), []
     for path in out:
         if path not in seen:

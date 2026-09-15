@@ -3321,7 +3321,7 @@ def _write_day_top_pick() -> None:
     of whichever bet is still alive.
     """
     try:
-        from engine import ledger, potd
+        from engine import gate as _gate, ledger, potd
         web = ROOT / "web" / "data"
         boards: dict = {}
         for sport in potd.TOP_PICK_LEAGUES:
@@ -3335,7 +3335,18 @@ def _write_day_top_pick() -> None:
             # FileNotFoundError below swallowed it as "a league this box
             # does not publish" — an ordinary-looking empty result, which
             # is the failure shape this repository keeps finding.
-            f = ROOT / BOARD_FILES[sport]
+            #
+            # AND THROUGH `gate.board_source`, which is the SECOND way
+            # this function read nothing. BOARD_FILES points into
+            # web/data — the PUBLIC copy — and `most_likely` and
+            # `pick_of_the_day` are both on `gate.PAID_KEYS`, so with
+            # the paywall on every board handed back an empty list and
+            # this wrote "no pick today" every cycle on a box that had
+            # one. Nothing raised; the stripped copy is valid JSON with
+            # the key emptied. `board_source` falls back to the public
+            # path where there is no private copy, so a box with the
+            # paywall off behaves exactly as before.
+            f = _gate.board_source(ROOT / BOARD_FILES[sport])
             try:
                 with open(f, encoding="utf-8") as fh:
                     boards[sport] = json.load(fh)

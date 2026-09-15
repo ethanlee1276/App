@@ -30,6 +30,23 @@ is thin:
 None of them raised. That is the whole shape of this bug: the public
 copy is valid JSON with a key missing, so every reader gets an empty
 list and reports honestly on nothing.
+
+THE NINTH AND TENTH ARRIVED ON 2026-09-15, both written the same day,
+and between them they broke the feature Ethan had asked for that
+morning. `most_likely` and `pick_of_the_day` are on PAID_KEYS too:
+
+    potd_report.py           printed "The board carries no Most Likely
+                             rows at all" for five leagues at once, on a
+                             box whose journal held a pick locked that
+                             morning — which read as every board on the
+                             site having gone empty
+    launch._write_day_top_pick  ranked five stripped boards against each
+                             other and published "no pick" every cycle,
+                             on a card that cannot look any different on
+                             a genuinely quiet day
+
+The first one is why the second went unnoticed: the tool you would open
+to check the card was reading the same empty file the card was.
 """
 
 import contextlib
@@ -352,6 +369,133 @@ def test_the_shut_gate_sits_above_every_numeric_one():
     # The walk is eligibility first, by construction rather than by the
     # order somebody happened to type the list in.
     assert "gates = eligibility + bars" in fn
+
+
+# ------------------------------- the day's top pick, and its own report
+
+def _likely(player="Shohei Ohtani", odds=-130, fair=0.62):
+    """One Most Likely row with a sharp witness behind its fair."""
+    return {"player": player, "market": "moneyline", "side": "over",
+            "odds": odds, "sharp_anchored": True, "sharp_fair": fair,
+            "fair_prob": fair, "prob": fair, "evidence": "sharp",
+            "team": "LAD", "opponent": "SD"}
+
+
+def _paywalled_likely(sport="nfl", rows=None, day=None, below_bar=""):
+    """A paywalled tree whose board carries the two keys the Pick of the
+    Day features read: `most_likely` (the pool `potd_report` walks) and
+    `pick_of_the_day` (what `_write_day_top_pick` ranks across leagues).
+    BOTH are on `gate.PAID_KEYS`, which is the whole bug.
+
+    Dated from the CLOCK, not from a fixed day: `_write_day_top_pick`
+    compares the board's date against today's, so a frozen date here
+    would make the test pass or fail by the calendar.
+    """
+    import time as _time
+    rows = [_likely()] if rows is None else rows
+    day = day or _time.strftime("%Y-%m-%d")
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    rel = {"nfl": "recommendations.json",
+           "mlb": "mlb_recommendations.json"}.get(sport, f"{sport}.json")
+    pub = tmp / "web" / "data" / rel
+    pub.parent.mkdir(parents=True, exist_ok=True)
+    full = tmp / "data" / "built" / pub.name
+    full.parent.mkdir(parents=True, exist_ok=True)
+    top = dict(rows[0]) if rows else None
+    if top and below_bar:
+        top["below_bar"] = below_bar
+    board = {"recommendations": [], "most_likely": rows, "counts": {},
+             "games": [], "built_at": f"{day}T12:00:00",
+             "pick_of_the_day": {"date": day, "pick": top}}
+    full.write_text(json.dumps(board))
+    pub.write_text(json.dumps(gate.redact(board, pub.name)))
+    return tmp
+
+
+def test_the_public_copy_loses_the_likelihood_board_too():
+    """The premise, stated the same way as the one at the top of this
+    file: if `most_likely` or `pick_of_the_day` ever stops being paid,
+    this says so rather than letting the rest pass for a wrong reason."""
+    tmp = _paywalled_likely()
+    pub = json.loads((tmp / "web" / "data" / "recommendations.json").read_text())
+    full = json.loads((tmp / "data" / "built" / "recommendations.json").read_text())
+    assert pub.get("most_likely") == [], pub.get("most_likely")
+    assert not (pub.get("pick_of_the_day") or {}).get("pick"), pub
+    assert len(full["most_likely"]) == 1
+    assert full["pick_of_the_day"]["pick"]
+
+
+def test_the_potd_report_does_not_call_a_full_board_empty():
+    """The sentence Ethan got back from the droplet, five times over —
+    once per league — on a box whose journal held a pick locked that
+    morning: "The board carries no Most Likely rows at all"."""
+    import potd_report
+    tmp = _paywalled_likely(rows=[_likely(player=f"P{i}") for i in range(3)])
+    path = next(p for p in potd_report.board_paths("nfl", str(tmp / "web" / "data"))
+                if os.path.exists(p))
+    out = potd_report.report(potd_report._load(path), "nfl")
+    assert "no Most Likely rows at all" not in out, out
+    assert "3 row(s) considered" in out, out
+
+
+def test_the_potd_report_on_the_stripped_copy_is_the_bug_reproduced():
+    """The negative control that makes the assertion above mean
+    something. Delete the private copy and the old reading comes back:
+    no error, no complaint, just a confident report about nothing."""
+    import potd_report
+    tmp = _paywalled_likely(rows=[_likely(player=f"P{i}") for i in range(3)])
+    (tmp / "data" / "built" / "recommendations.json").unlink()
+    path = next(p for p in potd_report.board_paths("nfl", str(tmp / "web" / "data"))
+                if os.path.exists(p))
+    out = potd_report.report(potd_report._load(path), "nfl")
+    assert "no Most Likely rows at all" in out, out
+
+
+def test_the_day_top_pick_writer_reads_the_full_board():
+    """`_write_day_top_pick` opened `ROOT / BOARD_FILES[sport]` — the
+    public copy — so on the droplet it ranked five empty boards and
+    published "no pick" every cycle. A below-bar lean is used because it
+    is the one shape exempt from the journal lock, and the journal here
+    is empty by construction (the suite must not read this box)."""
+    tmp = _paywalled_likely(below_bar="the price drifted past the band")
+    _run(launch._write_day_top_pick, tmp)
+    got = json.loads((tmp / "web" / "data" / "day_top_pick.json").read_text())
+    assert got.get("pick"), got
+    assert got.get("sport") == "nfl", got
+
+
+def test_the_day_top_pick_writer_on_the_stripped_copy_publishes_nothing():
+    """Same negative control. This is what the droplet was writing every
+    five minutes, and the card on the page cannot tell it from a quiet
+    day — which is why it went unnoticed until the report beside it said
+    the same thing five times."""
+    tmp = _paywalled_likely(below_bar="the price drifted past the band")
+    (tmp / "data" / "built" / "recommendations.json").unlink()
+    _run(launch._write_day_top_pick, tmp)
+    got = json.loads((tmp / "web" / "data" / "day_top_pick.json").read_text())
+    assert not got.get("pick"), got
+
+
+def test_the_writer_is_still_silent_on_a_healthy_cycle():
+    """It runs inside the build loop, and a warning printed every five
+    minutes is a warning nobody reads. The NameError it carried for
+    three commits reached production behind exactly such a line."""
+    tmp = _paywalled_likely(below_bar="the price drifted past the band")
+    out = _run(launch._write_day_top_pick, tmp)
+    assert out.strip() == "", out
+
+
+def test_both_potd_readers_resolve_through_board_source():
+    """Pinned on the CALL as well as the behaviour, for the same reason
+    `--why-empty` and `--why-many` are above: the failure is a path built
+    by hand, and the next reader copied from either of these should copy
+    the resolution with it."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    fn = src.split("def _write_day_top_pick", 1)[1].split("\ndef ", 1)[0]
+    assert "board_source(ROOT / BOARD_FILES[sport])" in fn, fn[:400]
+    rep = open(os.path.join(ROOT, "potd_report.py"), encoding="utf-8").read()
+    paths = rep.split("def board_paths", 1)[1].split("\ndef ", 1)[0]
+    assert "gate.board_source" in paths, paths[:400]
 
 
 if __name__ == "__main__":
