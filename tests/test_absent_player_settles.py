@@ -28,7 +28,11 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
-from engine import db, ledger                                  # noqa: E402
+from engine import db, ledger, cfbroster                       # noqa: E402
+
+# The college verdict falls back to the roster file on the box; this
+# suite must never read it, so the lookup points at an empty temp dir.
+cfbroster.CACHE_DIR = Path(tempfile.mkdtemp())
 
 TODAY = dt.date.today()
 D = lambda n: (TODAY + dt.timedelta(days=n)).isoformat()      # noqa: E731

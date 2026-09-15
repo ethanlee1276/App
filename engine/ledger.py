@@ -1435,6 +1435,84 @@ def resolve_predmarket(conn, results: dict) -> int:
     return n
 
 
+#: A contract whose event is this far past and which the exchange no
+#: longer returns at all is not going to settle — the market was
+#: withdrawn or the ticker was never one the exchange knew.
+PREDMARKET_LOST_DAYS = 14
+PREDMARKET_LOST_NOTE = ("Voided: the exchange no longer lists this contract "
+                        f"{PREDMARKET_LOST_DAYS} days after its event.")
+PREDMARKET_CANCELLED_NOTE = "Voided: the exchange cancelled this contract."
+
+
+def settle_predmarket(conn, fetch=None, today: str | None = None) -> dict:
+    """Grade every open desk ticket the exchange has finalised.
+
+    THIS WAS NEVER WIRED. `resolve_predmarket` takes ``{ticker: "yes"|"no"}``
+    and nothing in production ever built that mapping — the settlement
+    pull (`kalshi.fetch_markets_by_tickers`) existed, the grader existed,
+    and no line joined them. Ethan, 2026-09-14: 103 desk tickets open on
+    the Record page, the oldest from August.
+
+    ``fetch(tickers) -> raw market objects`` is injectable; the default is
+    the exchange pull. Only tickets whose event date is past are asked
+    about (an undated ticker is asked about too — unknown is not "fine").
+    A returned market with a yes/no result grades; one the exchange
+    cancelled voids; one the exchange no longer lists at all, more than
+    PREDMARKET_LOST_DAYS after its event, voids with the note saying so.
+    A fetch that fails changes nothing.
+    """
+    import datetime as _dt
+    today_d = _dt.date.fromisoformat(today) if today else _dt.date.today()
+    rows = conn.execute(
+        "SELECT id, player, date, game_day FROM bets "
+        "WHERE category='predmarket' AND status='open'").fetchall()
+    asked: dict = {}
+    for r in rows:
+        when = predmarket_event_date(r["player"]) or r["game_day"] or None
+        if when and when >= today_d.isoformat():
+            continue                     # the event has not happened
+        asked[r["player"]] = when
+    out = {"checked": len(asked), "settled": 0, "voided": 0, "error": ""}
+    if not asked:
+        return out
+    if fetch is None:
+        from .sources.kalshi import fetch_markets_by_tickers as fetch
+    try:
+        markets = fetch(sorted(asked))
+    except Exception as exc:                                 # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}: {exc}"
+        return out
+    results: dict = {}
+    cancelled: list = []
+    seen: set = set()
+    for m in markets or []:
+        t = str((m or {}).get("ticker") or "")
+        if t not in asked:
+            continue
+        seen.add(t)
+        res = str(m.get("result") or "").lower()
+        status = str(m.get("status") or "").lower()
+        if res in ("yes", "no"):
+            results[t] = res
+        elif status in ("cancelled", "canceled", "voided"):
+            cancelled.append(t)
+    out["settled"] = resolve_predmarket(conn, results)
+    lost_before = (today_d - _dt.timedelta(days=PREDMARKET_LOST_DAYS)).isoformat()
+    for t, when in asked.items():
+        if t in cancelled:
+            note = PREDMARKET_CANCELLED_NOTE
+        elif t not in seen and when and when < lost_before:
+            note = PREDMARKET_LOST_NOTE
+        else:
+            continue
+        cur = conn.execute(
+            "UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0, why_note=? "
+            "WHERE category='predmarket' AND status='open' AND player=?", (note, t))
+        out["voided"] += cur.rowcount
+    conn.commit()
+    return out
+
+
 def predmarket_report(conn, since: str | None = None) -> dict:
     """The desk's own scoreboard — never mixed into the headline record."""
     p = performance(conn, category="predmarket", since=since)
@@ -1731,15 +1809,29 @@ def log_ufc_picks(conn, result: dict) -> int:
     return n
 
 
-def settle_ufc(conn, fetch_result=None) -> int:
+#: A card this far past with no completed bout for the fighter is a
+#: bout that did not happen — scratched, postponed off the card, or a
+#: name the results feed spells differently — and a book voids a bout
+#: that does not happen. Ethan, 2026-09-14: one UFC row from August
+#: still open on the Record page, a month after the card.
+UFC_UNRESOLVED_DAYS = 10
+UFC_UNRESOLVED_NOTE = ("Voided: no completed bout for this fighter within "
+                       f"{UFC_UNRESOLVED_DAYS} days of the card — scratched, "
+                       "moved, or unmatched in the results feed.")
+
+
+def settle_ufc(conn, fetch_result=None, today=None) -> int:
     """Settle open UFC picks from post-card results.
 
     ``fetch_result(name, since_date)`` defaults to the ESPN MMA lookup;
     injectable for tests. won → 1/0 through the standard side-aware
-    grader; a draw/NC voids, exactly as a book would."""
+    grader; a draw/NC voids, exactly as a book would. A card
+    UFC_UNRESOLVED_DAYS past with still no completed bout voids too,
+    with the note saying so."""
     import datetime as _dt
     if fetch_result is None:
         from .sources.espnmma import latest_result as fetch_result
+    today = today or _dt.date.today()
     settled = 0
     for b in conn.execute("SELECT * FROM bets WHERE status='open' "
                           "AND sport='ufc'").fetchall():
@@ -1752,6 +1844,11 @@ def settle_ufc(conn, fetch_result=None) -> int:
         except Exception:
             continue
         if not res:
+            if (today - since).days > UFC_UNRESOLVED_DAYS:
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, "
+                             "pnl_dollars=0, why_note=? WHERE id=?",
+                             (UFC_UNRESOLVED_NOTE, b["id"]))
+                settled += 1
             continue                       # card not fought/ingested yet
         if res.get("won") is None:
             conn.execute("UPDATE bets SET status='void', pnl_units=0, "
@@ -3175,6 +3272,16 @@ def _absent_player_verdict(hist_conn, b):
             if normalize_name(r["player"]) == target:
                 team = r["team"]
                 break
+    if not team:
+        # THE ROSTER FILE, third. A first appearance has no history and
+        # a row from before the bet carried its team has no stamp; the
+        # cached cfbfastR roster names his school (engine/cfbroster).
+        try:
+            from .cfbroster import team_of
+            team = team_of(hist_conn, b["player"] or "",
+                           d0.year if d0.month >= 8 else d0.year - 1)
+        except Exception:                                # noqa: BLE001
+            team = None
     if not team:
         return None
     lo = (d0 - datetime.timedelta(days=1)).isoformat()

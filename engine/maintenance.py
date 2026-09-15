@@ -374,6 +374,7 @@ def _maybe_harvest(day: _dt.date, log, budget_path=None, hconn=None) -> None:
 # query when nothing recent is open, and the results it pulls are the free
 # league feeds, so the shorter clock costs nothing.
 SETTLE_EVERY_S = 300             # 5 minutes between intraday passes
+DESK_EVERY_S = 3600              # the exchange is asked about open tickets hourly
 # How far back an intraday pass will reach for still-open picks. The daily
 # chores handle anything older (and reach CATCH_UP_DAYS), so this only has
 # to cover "tonight, and last night if the launcher was closed".
@@ -482,6 +483,9 @@ KEEP_CACHE_PREFIXES = {
     "snap_counts_": "nflverse per-season bulk, same",
     "depth_charts_": "nflverse per-season bulk, same",
     "roster_": "nflverse per-season bulk, same",
+    "cfb_rosters_": ("cfbfastR per-season roster, one file a season; the settler "
+                     "reads it OFFLINE for a first-appearance player's school "
+                     "(engine/cfbroster) — pruning it would blind that read"),
     "injuries_": "nflverse per-season bulk, same",
     "line_": "line_history.jsonl is accumulated history, not a fetch cache",
     "maintenance": "this module's own state",
@@ -892,6 +896,23 @@ def settle_open(log=print, state_path: Path | None = None,
             log(f"  ⚠️  long-shot re-file skipped: {exc}")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
+        # THE DESK, hourly. Its tickets grade against the exchange, not
+        # the history database, and until 2026-09-15 nothing on any
+        # clock asked the exchange (see `ledger.settle_predmarket`).
+        last_desk = state.get("last_desk_ts")
+        if not (isinstance(last_desk, (int, float)) and now - last_desk < DESK_EVERY_S):
+            try:
+                dk = ledger.settle_predmarket(lconn)
+                if dk.get("error"):
+                    log(f"  ⚠️  desk settle skipped: {dk['error']}")
+                elif dk["settled"] or dk["voided"]:
+                    log(f"  desk: {dk['settled']} ticket(s) graded, "
+                        f"{dk['voided']} voided, of {dk['checked']} asked")
+                settled += dk["settled"] + dk["voided"]
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  desk settle failed: {exc}")
+            state["last_desk_ts"] = now
+            _save_state(state_path, state)
         # Self-healing: any bet ever graded off a partial stat line gets
         # re-graded once the real final number is in.
         fixed = ledger.resettle_mismatches(lconn, hconn)

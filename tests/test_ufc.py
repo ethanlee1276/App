@@ -229,6 +229,32 @@ def test_journal_and_settle_from_fight_results():
     lconn.close()
 
 
+def test_a_card_long_past_with_no_bout_found_voids_with_the_reason():
+    """Ethan, 2026-09-14: one UFC row from August still open a month
+    after the card. No completed bout for the fighter ten days on is a
+    scratch, a move off the card, or a name the results feed spells
+    differently; a book voids a bout that does not happen. A fresh card
+    with no result yet stays open."""
+    import os
+    import tempfile
+    import datetime as dt
+    from engine import ledger
+
+    lconn = ledger.connect(os.path.join(tempfile.mkdtemp(), "led.db"))
+    for date, name in (("2026-08-01", "Gone Missing"), ("2026-09-13", "Fresh Card")):
+        ledger.log_ufc_picks(lconn, {"status": "card", "event_date": date, "picks": [
+            {"pick": name, "odds": 120, "book": "DK", "p_final": 0.51,
+             "edge": 0.06, "stake_units": 0.4}]})
+    n = ledger.settle_ufc(lconn, fetch_result=lambda name, since: None,
+                          today=dt.date(2026, 9, 15))
+    assert n == 1
+    rows = {r["player"]: (r["status"], r["why_note"]) for r in
+            lconn.execute("SELECT player, status, why_note FROM bets")}
+    assert rows["Gone Missing"][0] == "void" and "no completed bout" in rows["Gone Missing"][1]
+    assert rows["Fresh Card"][0] == "open", rows
+    lconn.close()
+
+
 # The runner stays at the TRUE END of the file — a test defined after it
 # never runs (this exact bug has now bitten three test files).
 # --- telling a misspelling from a missing fighter (#96) ----------------------
