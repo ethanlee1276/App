@@ -2330,7 +2330,18 @@ async function renderPickOfTheDay() {
   let text;
   if (pick.market === "moneyline") text = `${teamName(pick.player || pick.team)} Moneyline`;
   else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
-  else if (isTeam) text = `${teamName(pick.player || pick.team)} ${escapeHtml(String(pick.side || ""))} ${pick.line} ${escapeHtml(label)}`;
+  else if (isTeam) {
+    /* THE LINE, ONCE. A game spread row carries the SIGNED NUMBER as its
+       side ("+1.5") and the same number again as `line`, so the naive
+       join read "LAA +1.5 1.5 Spread" on the MLB card (Ethan, 2026-09-15).
+       A team total's side is over/under and still needs its line, so the
+       test is whether the side already IS the number rather than which
+       market it is. */
+    const sd = String(pick.side || "").trim();
+    const dup = pick.line != null && Math.abs(parseFloat(sd)) === Math.abs(Number(pick.line));
+    text = `${teamName(pick.player || pick.team)} ${escapeHtml(sd)}${
+      dup ? "" : ` ${pick.line}`} ${escapeHtml(label)}`;
+  }
   else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
   /* WHOSE NUMBER LEADS. The fair this pick was priced against, and the
      witness it came from, because "56%" means a different thing when it
@@ -2353,8 +2364,14 @@ async function renderPickOfTheDay() {
   const matchup = pick.opponent
     ? `${teamName(pick.team)} vs ${teamName(pick.opponent)}` : "";
   const accent = below ? "var(--warn)" : "var(--brand)";
+  /* THE HEADLINE AND THE CARD MUST NOT ARGUE. "nothing cleared the bar
+     today" sitting above a pick with a bold percentage and an edge reads
+     as a page contradicting itself, which is how Ethan read it. The
+     honest framing is that there IS a lean and it is not a pick: the
+     strongest thing on the board, shown because the page is never blank,
+     and not one we will put the day's name on. */
   const head = below
-    ? `Pick of the Day · ${escapeHtml(league)} — nothing cleared the bar today`
+    ? `Today’s lean · ${escapeHtml(league)} — no pick cleared the bar`
     : `Pick of the Day · ${escapeHtml(league)}`;
   const door = ridingAttrs(pick);
   host.innerHTML = `
@@ -2369,18 +2386,34 @@ async function renderPickOfTheDay() {
               pays ? ` · pays ${pays}u on 1u` : ""}${matchup ? ` · ${matchup}` : ""}</span>
         </span>
       </div>
-      ${fair != null ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+      ${fair != null ? (pick.evidence === "model" ? `
+      <div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+        <!-- A MODEL-ONLY ROW NEVER LEADS WITH ITS OWN NUMBER. Ethan,
+             2026-09-15, on the MLB card: "it seems like it’s not
+             confident in its own pick?" — it was not, and it was
+             shouting "59%" and "+11.8% edge" while saying so. Those are
+             the figures engine/potd.shortfall has just declined to
+             stand behind; printing them bold is the exact habit this
+             whole rebuild removed. The price leads instead, and our
+             number is context in the same breath as why it is not
+             enough. -->
+        No sharp book is quoting this market, so the only number
+        disputing ${american(pick.odds)} is ours — it says ${fair}% where
+        the price implies ${theirs != null ? theirs + "%" : "less"}. We do
+        not name a day after our own number alone.</div>` : `
+      <div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         <b style="color:var(--text)">${fair}%</b> ${who}${
           theirs != null ? ` · this price implies ${theirs}%` : ""}${
           ev != null ? ` · ${ev >= 0 ? "+" : MINUS}${Math.abs(ev * 100).toFixed(1)}% edge` : ""}${
-          ours != null && pick.evidence !== "model" ? ` · our number says ${ours}%` : ""} ·
-        one pick a day, priced between ${american(band[0])} and ${american(band[1])}</div>` : ""}
+          ours != null ? ` · our number says ${ours}%` : ""} ·
+        one pick a day, priced between ${american(band[0])} and ${american(band[1])}</div>`) : ""}
       ${pick.from_reserve && !below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${icon('info')} Below the Most Likely board’s own 55% floor — taken here because
         a sharper book disagrees with this price, not because our number does.</div>` : ""}
       ${below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">
-        ${icon('warn')} Shown, not recorded — ${escapeHtml(below)}. Nothing on today’s board
-        cleared the bar this pick is judged by, so it stays off the record below.</div>` : ""}
+        ${icon('warn')} A lean, not the Pick of the Day — ${escapeHtml(below)}.
+        It is the strongest thing on today’s board and it did not clear the bar,
+        so it is shown here and kept off the record below.</div>` : ""}
       <div id="potd-record" style="margin-top:6px;font-size:var(--fs-xs);color:var(--text-mute)"></div>
     </div>`;
   /* THE RECORD, UNDER THE CLAIM. A showcase pick with no scoreboard

@@ -178,6 +178,41 @@ def test_the_ladder_count_only_looks_at_rows_refused_on_PRICE():
     assert "Ladder" not in out, out
 
 
+def test_a_spread_prints_its_number_once_here_too():
+    """The same join, the same bug, this tool’s own copy. Ethan’s MLB
+    card read "LAA +1.5 1.5 Spread" (2026-09-15); so did this report."""
+    row = _row(player="LAA", team="LAA", market="spread",
+               market_label="Spread", side="+1.5", line=1.5, odds=-113)
+    line = R._one_line(row)
+    assert "LAA +1.5 Spread" in line, line
+    assert "1.5 1.5" not in line, line
+    # A team total’s side is a word, so its line still has to be drawn.
+    tt = _row(player="SEA", team="SEA", market="team_total",
+              market_label="Team Total", side="over", line=4.5)
+    assert "4.5" in R._one_line(tt), R._one_line(tt)
+
+
+def test_the_board_says_whose_opinion_it_is_made_of():
+    """Ethan’s MLB card said "only our own model disputes this price",
+    and the useful question is not why that ONE row was refused — it is
+    whether ANY row on the board had a sharper witness. A board that is
+    all model rows is a PULL problem, and no amount of arguing with the
+    selector’s bars would ever have found it."""
+    all_ours = [_row(sharp_anchored=False, sharp_fair=None, model_prob=0.59)
+                for _ in range(3)]
+    out = R.report(_board(all_ours), "mlb")
+    assert "Evidence" in out and "3 model" in out, out
+    assert "NO sharp or market witness anywhere" in out, out
+    assert "Check the odds pull" in out, "it must name where to look"
+
+
+def test_a_board_with_a_sharp_witness_does_not_cry_wolf():
+    out = R.report(_board([_row(), _row(sharp_anchored=False, sharp_fair=None,
+                                        model_prob=0.6)]), "nfl")
+    assert "1 sharp" in out and "1 model" in out, out
+    assert "NO sharp or market witness" not in out, out
+
+
 # --- and it is safe to point at the production box ---------------------------
 def test_a_missing_league_is_skipped_and_a_missing_everything_explains():
     d = _in_tmp({})

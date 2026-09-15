@@ -53,12 +53,23 @@ def _one_line(row: dict) -> str:
     """A candidate in a line: who, at what, on whose say-so."""
     who = row.get("player") or row.get("team") or "?"
     what = row.get("market_label") or row.get("market") or ""
-    side = str(row.get("side") or "").upper()
+    side = str(row.get("side") or "").strip()
     line = row.get("line")
+    # THE LINE, ONCE. A game spread carries the signed number as its side
+    # ("+1.5") and the same number again as `line`, so the naive join
+    # reads "LAA +1.5 1.5 Spread" — the same bug Ethan caught on the card
+    # (2026-09-15), in this tool's own copy of the join.
+    try:
+        if line is not None and abs(float(side)) == abs(float(line)):
+            line = None
+    except (TypeError, ValueError):
+        pass
+    side = side.upper()
     odds = row.get("odds")
     fair = potd.fair_prob(row)
     ev = potd.edge(row)
-    bits = [f"{who} {side} {line if line is not None else ''} {what}".strip(),
+    bits = [" ".join(str(x) for x in (who, side, line, what)
+                     if x is not None and str(x).strip()),
             f"{odds:+d}" if isinstance(odds, (int, float)) else str(odds),
             f"{potd.evidence(row)} fair {fair:.1%}" if fair is not None else "no fair",
             f"{ev:+.1%} EV" if ev is not None else "no EV"]
@@ -139,6 +150,25 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     out.append(f"  Band        {potd.MIN_ODDS:+d} to {potd.MAX_ODDS:+d} "
                f"(pays {potd.MIN_PAYOUT:.2f}u to {potd.MAX_PAYOUT:.2f}u)  ·  "
                f"EV floor {potd.MIN_EV:.0%}  ·  fair floor {potd.MIN_FAIR:.0%}")
+    # WHOSE OPINION THIS BOARD IS MADE OF, before any bar is applied.
+    #
+    # Ethan's MLB card, 2026-09-15, read "only our own model disputes
+    # this price" — and the useful question is not why that ONE row was
+    # refused, it is whether ANY row on that board had a sharper witness.
+    # "68 rows: 0 sharp, 0 market, 68 model" says the sharp prices are
+    # not arriving at all, which is a pull problem and not a selector
+    # one, and no amount of arguing with the bars would have found it.
+    tiers: dict = {}
+    for r in rows:
+        tiers[potd.evidence(r)] = tiers.get(potd.evidence(r), 0) + 1
+    spread = ", ".join(f"{tiers.get(t, 0)} {t}" for t in potd.EVIDENCE)
+    out.append(f"  Evidence    {spread}")
+    if not tiers.get("sharp") and not tiers.get("market"):
+        out.append("              NO sharp or market witness anywhere on this "
+                   "board — every row is our own number, so the selector "
+                   "cannot take any of them. Check the odds pull for this "
+                   "league before touching a bar.")
+
     if census:
         out.append("  Refused:")
         for why, n in sorted(census.items(), key=lambda kv: -kv[1]):

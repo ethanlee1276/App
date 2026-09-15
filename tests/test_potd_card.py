@@ -103,8 +103,16 @@ def test_a_day_that_cleared_nothing_is_labelled_and_says_it_is_not_recorded():
     card can show, and the reader has to be told which one it is."""
     body = _card()
     assert "below_bar" in body
-    i = body.index("Shown, not recorded")
-    assert "off the record below" in body[i:i + 400], body[i:i + 400]
+    # RE-WORDED 2026-09-15. "Shown, not recorded" sat under a headline
+    # reading "nothing cleared the bar today" and beside a bold
+    # percentage with an edge — a card arguing with itself, which is how
+    # Ethan read it ("it seems like it’s not confident in its own
+    # pick?"). It now calls the row a LEAN, which is what it is.
+    i = body.index("A lean, not the Pick of the Day")
+    assert "kept off the record below" in body[i:i + 400], body[i:i + 400]
+    assert "Today’s lean" in body, "the headline must agree with the note"
+    assert "nothing cleared the bar today" not in body, \
+        "the old contradiction is back"
 
 
 def test_the_card_carries_the_band_and_the_payout():
@@ -243,6 +251,78 @@ def test_the_card_draws_the_price_break_even_not_the_de_vigged_fair():
     i = body.index("price_implied")
     assert "implied_prob" in body[i:i + 300], \
         "an older board carries only the de-vigged fair — fall back, do not blank"
+
+
+def test_a_spread_prints_its_number_once():
+    """Ethan’s MLB card, 2026-09-15: "LAA +1.5 1.5 Spread". A game
+    spread row carries the SIGNED NUMBER as its side and the same number
+    again as `line`, and the naive join printed both. A team total’s
+    side is over/under and still needs its line, so the guard asks
+    whether the side already IS the number rather than which market it
+    is."""
+    body = _card()
+    i = body.index("const sd = String(pick.side")
+    block = body[i:i + 500]
+    assert "parseFloat(sd)" in block and "Number(pick.line)" in block, block
+    assert "dup ?" in block, "the duplicate is detected and never dropped"
+
+    # Executed, because a guard this fiddly is worth running rather than
+    # reading: the spread case collapses, the team total keeps its line.
+    js = """
+    const teamName = (t) => t, escapeHtml = (s) => String(s == null ? "" : s);
+    function render(pick, label) {
+      const sd = String(pick.side || "").trim();
+      const dup = pick.line != null && Math.abs(parseFloat(sd)) === Math.abs(Number(pick.line));
+      return `${teamName(pick.player || pick.team)} ${escapeHtml(sd)}${
+        dup ? "" : ` ${pick.line}`} ${escapeHtml(label)}`;
+    }
+    console.log(JSON.stringify([
+      render({player: "LAA", side: "+1.5", line: 1.5}, "Spread"),
+      render({player: "LAA", side: "-1.5", line: 1.5}, "Spread"),
+      render({player: "SEA", side: "over", line: 4.5}, "Team Total"),
+    ]));
+    """
+    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    spread_plus, spread_minus, team_total = json.loads(out.stdout)
+    assert spread_plus == "LAA +1.5 Spread", spread_plus
+    assert spread_minus == "LAA -1.5 Spread", spread_minus
+    assert team_total == "SEA over 4.5 Team Total", team_total
+
+
+def test_a_model_only_lean_never_leads_with_our_own_number():
+    """Ethan, 2026-09-15, on the MLB card: "it seems like it’s not
+    confident in its own pick?" It was not — and it was shouting
+    "**59%**" and "+11.8% edge" while saying so.
+
+    Those are precisely the figures `engine/potd.shortfall` has just
+    declined to stand behind: our model measures 0.677 where the market
+    measures 0.722, so a price only we dispute is disputed by the weaker
+    witness. Printing its edge in bold is the habit this whole rebuild
+    removed, and it had crept back into the one state where it does the
+    most damage."""
+    body = _card()
+    assert 'pick.evidence === "model"' in body, \
+        "the card draws every tier the same way again"
+    # The branch carries a long comment saying WHY, so the copy sits well
+    # past a narrow window — search the card rather than a slice of it.
+    assert "No sharp book is quoting this market" in body
+    assert "not name a day after our own number alone" in body
+    # THE EDGE IS DRAWN EXACTLY ONCE, in the branch that earned it. A
+    # second occurrence would mean it had crept back into the state where
+    # the number is the one we just declined to stand behind.
+    #
+    # COMMENTS ARE STRIPPED FIRST, because the branch’s own comment
+    # QUOTES the card Ethan sent — "+11.8% edge" — and a test that
+    # counts prose is measuring the explanation rather than the page.
+    import re as _re
+    drawn = _re.sub(r"<!--.*?-->", "", body, flags=_re.S)
+    assert drawn.count("% edge") == 1, \
+        f"the edge is drawn {drawn.count('% edge')} times, not once"
+    i_model = drawn.index("No sharp book is quoting this market")
+    i_edge = drawn.index("% edge")
+    assert i_edge > i_model, \
+        "the edge is drawn before the model-only branch — wrong branch"
 
 
 if __name__ == "__main__":
