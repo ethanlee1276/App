@@ -110,18 +110,34 @@ def test_a_favourite_is_allowed_through_the_door_at_all():
 
 
 def test_the_confidence_floor_names_itself_and_is_left_to_measurement():
-    """THE ONE BAR NOT SET IN THIS CHANGE, deliberately.
+    """THE ONE BAR THIS FILE REFUSED TO SET BY OPINION — and the
+    measurement that finally set it.
 
     A pass at this raised it to 60% and the arithmetic said no: `MAX_EV`
     refuses a gap over 7%, so -110 can carry a fair of at most 56.0% and
     a floor above that makes every -110 row ineligible. Most of the board
     is -110. Raising it by judgement would have made the feature BLANKER,
-    which is the opposite of what was asked for.
+    which is the opposite of what was asked for. So it stayed at 0.50
+    until `--sweep-conf` existed.
 
-    So it stays where it is until `--sweep-conf` says otherwise, and what
-    is pinned here is the seam and the sentence rather than a number
-    somebody guessed."""
-    assert potd.MIN_FAIR == 0.50, (
+    IT SAID 0.55, on 66 days of settled MLB closes (Ethan ran it
+    2026-09-16 and made the call):
+
+        floor  days  bets    W-L   hit rate   units      ROI
+         50%     44    44  29-15     65.9%   +8.13   +18.5%
+         55%     25    25   18-7     72.0%   +5.43   +21.7%   <- shipped
+         58%     21    21   16-5     76.2%   +5.84   +27.8%
+         60%     17    17   12-5     70.6%   +2.78   +16.4%
+         62%      8     8    5-3     62.5%   -0.33    -4.2%
+
+    58% is the peak on both columns and therefore the cell most likely
+    fitted to noise on 21 bets; 55% is the same monotone stretch one step
+    short of it. The full reasoning, including what the volume costs, is
+    on `potd.MIN_FAIR`.
+
+    This assertion is still the guard it always was: the number may only
+    move when that table does."""
+    assert potd.MIN_FAIR == 0.55, (
         "the confidence floor moved — if that came from --sweep-conf, "
         "update this test and say which table; if it came from an "
         "opinion, it is the mistake this test exists to catch")

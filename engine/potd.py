@@ -281,8 +281,39 @@ from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 #: like", which is what the card has been publishing: 55% at -122, with
 #: the old band making anything better unreachable.
 #:
-#: STILL 0.50, AND DELIBERATELY NOT RAISED BY GUESS. A first pass at
-#: this change set it to 0.60 and the arithmetic said no:
+#: 0.55, SET FROM `--sweep-conf` ON 2026-09-16 AND NOT BY JUDGEMENT.
+#: Ethan ran it over 66 days of settled MLB closes:
+#:
+#:   floor  days  bets    W-L    hit rate   units      ROI
+#:    50%     44    44   29-15      65.9%   +8.13   +18.5%   (shipped before)
+#:    55%     25    25    18-7      72.0%   +5.43   +21.7%   <- this
+#:    58%     21    21    16-5      76.2%   +5.84   +27.8%
+#:    60%     17    17    12-5      70.6%   +2.78   +16.4%
+#:    62%      8     8     5-3      62.5%   -0.33    -4.2%
+#:    65%      5     5     3-2      60.0%   -0.58   -11.7%
+#:
+#: READ THE SHAPE, NOT THE BEST CELL, which is what the sweep prints
+#: above its own table. Hit rate and ROI rise together from 50% to 58%
+#: and fall off a cliff after; 62% and 65% are losing. 58% is the peak on
+#: both columns and is therefore the cell most likely to be fitted to
+#: noise on 21 bets. 55% is the same monotone stretch one step short of
+#: the peak.
+#:
+#: WHAT IT COSTS, stated because it is the real trade and it is Ethan's:
+#: 25 days with a pick instead of 44, so the card fires on 38% of days
+#: rather than 67%, and +5.43u instead of +8.13u. Volume pays. He asked
+#: for "confident winning picks" and then for "whatever makes the most
+#: roi and wins and money in the long run" — those point opposite ways
+#: here, and 2026-09-16 he chose the hit rate.
+#:
+#: AND IT MOVES THE TOP OF THE BAND. `MAX_EV` caps the gap at 7%, so the
+#: highest price that can still carry a fair at the floor is where
+#: f*(b+1) = 1.07: +114 at a 50% floor, +94 at 55%. `effective_max_odds`
+#: below derives that rather than leaving `MAX_ODDS` (+190) to describe
+#: a stretch of the band no bet can occupy.
+#:
+#: NOT RAISED BY GUESS, AND HERE IS THE GUESS THAT WAS REFUSED. A first
+#: pass at this change set it to 0.60 and the arithmetic said no:
 #:
 #:   price   most confident fair it can carry under MAX_EV
 #:   -110    56.0%
@@ -296,12 +327,12 @@ from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 #: most of the board is -110. Raising this by judgement would have made
 #: the feature BLANKER, which is the opposite of what was asked for.
 #:
-#: So the floor is the one thing here left to measurement.
-#: `potd_backtest.py --sweep-conf` replays it against settled results
-#: and prints the hit rate with the units beside it. Set it from that
-#: table. The band and the ranking below are already changed and are
-#: pure loosening — they can only add candidates, never remove one.
-MIN_FAIR = 0.50
+#: That reasoning is why this waited for `potd_backtest.py --sweep-conf`
+#: rather than being set from the same instinct twice. 0.55 clears the
+#: -110 rows (56.0% is the most confident fair a -110 price can carry)
+#: with a point to spare, which is exactly why the cliff is at 62% and
+#: not lower.
+MIN_FAIR = 0.55
 
 #: A market has to have shown it can rank this outcome better than a
 #: coin flip before one pick a day rides on it. `likely.rank_auc` is the
@@ -364,6 +395,49 @@ def implied(odds) -> float | None:
         return None
     from .odds import american_to_prob
     return american_to_prob(o)
+
+
+def effective_max_odds(min_fair=None, max_ev=None) -> int:
+    """The highest price a qualifying pick can actually carry.
+
+    `MAX_ODDS` (+190) is the band's stated top and has not been reachable
+    since `MAX_EV` shipped. Two bars cross: a pick must be at least
+    `MIN_FAIR` to win, and its edge must be at most `MAX_EV` or the
+    quote is treated as stale. Write the second at the first’s boundary
+    — EV = f*b - (1 - f) = max_ev, so b = (1 + max_ev)/f - 1 — and the
+    top of the usable band falls out:
+
+        floor 50%   b = 1.140   +114
+        floor 55%   b = 0.945   -106
+        floor 58%   b = 0.845   -118
+
+    THE SIGN FLIPS AT AN EVEN-MONEY FLOOR, and getting it wrong is easy
+    — I told Ethan "+94" for the 55% floor on 2026-09-16 by reading
+    b = 0.945 as a plus price. Net odds below 1.0 are a FAVOURITE:
+    -100/0.945 is -106. So a 55% floor does not trim the plus side, it
+    closes it entirely, and the usable band is -250 to -106.
+
+    WHY THE CARD NEEDS THIS RATHER THAN THE CONSTANT. The card prints
+    "one pick a day, priced between -250 and +190", and a reader who
+    goes looking for a +150 Pick of the Day will never see one. That is
+    the same shape of untruth as the NO BET card naming a bet: a stated
+    range that the machinery cannot produce. `MAX_ODDS` still bounds the
+    CANDIDATE pool, which is a real job — this is only what gets said.
+
+    Returned as American odds, rounded DOWN to the whole point, because
+    rounding the other way would advertise a price that misses the bar.
+    """
+    f = float(MIN_FAIR if min_fair is None else min_fair)
+    cap = float(MAX_EV if max_ev is None else max_ev)
+    if f <= 0:
+        return int(MAX_ODDS)
+    b = (1.0 + cap) / f - 1.0
+    if b <= 0:
+        return int(MIN_ODDS)
+    # Decimal net odds to American, the same two cases everywhere else
+    # in this codebase spells them.
+    top = int(b * 100) if b >= 1.0 else -int(round(100.0 / b))
+    return min(int(MAX_ODDS), top)
 
 
 def payout(odds) -> float | None:
@@ -1088,7 +1162,11 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "considered": len(rows),
         "census": census,
-        "band": [MIN_ODDS, MAX_ODDS],
+        # THE BAND AS STATED TO A READER — see `effective_max_odds`.
+        # `MAX_ODDS` still bounds the candidate pool; it has not been
+        # a reachable PRICE since `MAX_EV` shipped, and the card
+        # prints this pair verbatim.
+        "band": [MIN_ODDS, effective_max_odds()],
         "payout_band": [MIN_PAYOUT, MAX_PAYOUT],
         "min_ev": MIN_EV,
     }
@@ -1400,7 +1478,11 @@ def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
         "leagues_seen": len(seen),
         "candidates": len(clear) + len(below),
         "census": census,
-        "band": [MIN_ODDS, MAX_ODDS],
+        # THE BAND AS STATED TO A READER — see `effective_max_odds`.
+        # `MAX_ODDS` still bounds the candidate pool; it has not been
+        # a reachable PRICE since `MAX_EV` shipped, and the card
+        # prints this pair verbatim.
+        "band": [MIN_ODDS, effective_max_odds()],
         "min_ev": MIN_EV,
     }
     winner = clear[0] if clear else (below[0] if below else None)

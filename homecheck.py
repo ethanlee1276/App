@@ -93,6 +93,14 @@ def filler() -> list:
         rows = board.get("game_bets") or []
         unbooked = [r for r in rows if not str(r.get("book") or "").strip()]
         bad = [r for r in unbooked if r.get("odds") in (-110, 110)]
+        # AND WHETHER ANY OF THEM IS BEING RECOMMENDED, which is the
+        # question the filler count leaves open. Ethan's 2026-09-16 run
+        # read "nfl 80 game rows | 32 name no book | 0 at a filler
+        # price" — the filler is dead, and 32 rows still carry a price
+        # nobody is named as posting. #207 made `pipeline` set
+        # `recommended = False` on exactly those, so this number should
+        # be zero; if it is not, that guard is not reaching them.
+        pushed = [r for r in unbooked if r.get("recommended")]
         by_mkt: dict = {}
         for r in bad:
             key = r.get("bet_type")
@@ -100,6 +108,10 @@ def filler() -> list:
         out.append(f"  {sport:4} {len(rows):3d} game rows | "
                    f"{len(unbooked):3d} name no book | "
                    f"{len(bad):3d} at a filler price {by_mkt or ''}")
+        if pushed:
+            out.append(f"       !! {len(pushed)} of those unbooked rows are "
+                       f"still RECOMMENDED — #207's guard is not reaching "
+                       f"them")
     return out
 
 

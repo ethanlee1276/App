@@ -1,14 +1,29 @@
-"""`MIN_FAIR` and `MAX_EV` meet at +114, and the band says +190.
+"""`MIN_FAIR` and `MAX_EV` cross, and the band used to claim otherwise.
 
-Two bars that are each defensible alone, multiplied together, quietly
-shorten the price band the feature advertises. `potd.MAX_ODDS` reads 190
-and since 2026-09-16 no row above +114 can reach the pick at all:
+Two bars that are each defensible alone, multiplied together, shorten
+the price band the feature can actually use:
 
     EV at the fair floor = MIN_FAIR × (1 + payout) − 1
 
-At +114 that is exactly 7.0% — `MAX_EV`. At +115 it is 7.5%, so a row
-there is refused as a suspect gap if it clears `MIN_FAIR` and refused by
+Where that equals `MAX_EV` is the last usable price. Above it a row is
+refused as a suspect gap if it clears `MIN_FAIR`, and refused by
 `MIN_FAIR` if it does not. There is no price in between.
+
+    floor 50%   +114        the plus side survives to +114
+    floor 55%   -106        THE PLUS SIDE IS GONE ENTIRELY
+    floor 58%   -118
+
+THE FLOOR WENT TO 55% ON 2026-09-16 (Ethan, from `--sweep-conf`: 72.0%
+hit rate against 65.9%), and that closed the plus side completely. Net
+odds of 0.945 is a FAVOURITE, -106, not "+94" — I told Ethan +94 in chat
+by reading a sub-1.0 payout as a plus price, and this file is where that
+arithmetic now lives so it cannot be done from memory again.
+
+`potd.effective_max_odds` derives it, and `build` publishes THAT as the
+card's band instead of `MAX_ODDS`. The card used to read "priced between
+-250 and +190" while no bet above -106 could qualify — a stated range
+the machinery cannot produce, which is the same shape of untruth as the
+NO BET card naming a bet.
 
 WHY THIS FILE EXISTS RATHER THAN A COMMENT. The crossing point is a
 PRODUCT of two constants neither of which mentions the other, so it
@@ -33,37 +48,63 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import potd                                       # noqa: E402
 
-#: The highest plus price at which a row can satisfy both bars, and the
-#: figure docs/PICK_OF_THE_DAY.md §3i-b quotes.
-DOCUMENTED_CEILING = 114
+#: Where the two bars cross at the SHIPPED floor. Update this and
+#: docs/PICK_OF_THE_DAY.md §3i-b together whenever `MIN_FAIR` moves.
+DOCUMENTED_CEILING = -106
 
 
-def _highest_reachable_plus_price():
-    """The last plus price where even the loosest allowed fair is still
-    inside the trust ceiling. Derived, never restated."""
+def _last_usable_price():
+    """The last price where the loosest allowed fair is still inside the
+    trust ceiling, found by walking real prices rather than by algebra —
+    so it is an independent check on `effective_max_odds` and not a
+    second copy of it."""
     best = None
-    for odds in range(100, int(potd.MAX_ODDS) + 1):
+    for odds in list(range(-300, -99)) + list(range(100, 401)):
         pay = potd.payout(odds)
         if pay is None:
             continue
         if potd.MIN_FAIR * (1.0 + pay) - 1.0 <= potd.MAX_EV + 1e-12:
-            best = odds
+            if best is None or pay > potd.payout(best):
+                best = odds
     return best
 
 
 def test_the_two_bars_cross_where_the_docs_say_they_do():
-    got = _highest_reachable_plus_price()
+    got = _last_usable_price()
     assert got == DOCUMENTED_CEILING, (
         f"the bars now cross at {got:+d}, not {DOCUMENTED_CEILING:+d} — "
         f"MIN_FAIR={potd.MIN_FAIR}, MAX_EV={potd.MAX_EV}. Update "
         f"docs/PICK_OF_THE_DAY.md §3i-b and this constant together.")
 
 
-def test_the_advertised_band_is_wider_than_the_usable_one():
-    """The whole point. If these ever agree, the collision is gone and
-    this file can go with it."""
-    assert potd.MAX_ODDS > DOCUMENTED_CEILING, (
-        "MAX_ODDS no longer overstates the plus side — delete this file")
+def test_the_derivation_agrees_with_walking_the_prices():
+    """`effective_max_odds` does it in one line of algebra; the walk
+    above does it by trying every price. A disagreement means the
+    algebra is wrong, and the algebra is what the card prints."""
+    assert potd.effective_max_odds() == _last_usable_price()
+
+
+def test_the_card_advertises_the_band_it_can_actually_fill():
+    """THE FAILURE THIS FILE WAS WRITTEN FOR, now closed. `MAX_ODDS`
+    still bounds the candidate pool — a real job — but it is no longer
+    what a reader is told."""
+    assert potd.effective_max_odds() < potd.MAX_ODDS, (
+        "the two agree now; the collision is gone and this file can go")
+    import datetime as _dt
+    got = potd.build([], "mlb", _dt.date.today().isoformat())
+    assert got["band"] == [potd.MIN_ODDS, potd.effective_max_odds()], got["band"]
+
+
+def test_a_fifty_five_percent_floor_closes_the_plus_side_entirely():
+    """The consequence of Ethan's 2026-09-16 choice, stated as a fact
+    rather than left to be rediscovered. A payout under 1.0 unit is a
+    favourite; there is no plus price left."""
+    if potd.MIN_FAIR < 0.55:
+        return                      # a looser floor keeps some plus side
+    assert potd.effective_max_odds() < 0, potd.effective_max_odds()
+    for odds in (100, 120, 150, 190):
+        why = potd.shortfall(_row(potd.MIN_FAIR, odds))
+        assert "gap is too big" in why, (odds, why)
 
 
 def _row(fair, odds):
@@ -77,8 +118,11 @@ def _row(fair, odds):
 def test_a_price_past_the_crossing_is_refused_whichever_side_it_falls_on():
     """Behavioural, not arithmetic: the refusal is `shortfall`'s, at a
     real price, both ways round. There is no third answer at +150."""
-    # Clears MIN_FAIR at +150 → the edge is 25%, past the ceiling.
-    assert potd.shortfall(_row(0.50, 150)) == \
+    # Clears MIN_FAIR at +150 → the edge is enormous, past the ceiling.
+    # THE FAIR IS THE FLOOR ITSELF, not a hard-coded 0.50, because the
+    # floor moved to 0.55 on 2026-09-16 and a fixture under it gets the
+    # OTHER refusal — `shortfall` asks confidence first.
+    assert potd.shortfall(_row(potd.MIN_FAIR, 150)) == \
         "the gap is too big to trust — the sharp side has probably moved"
 
     # Inside the ceiling at +150 → the fair has to be under 43%, which
@@ -108,19 +152,43 @@ def test_the_plus_side_window_closes_as_the_price_climbs():
         hi = (1.0 + potd.MAX_EV) / (1.0 + pay)
         return max(0.0, hi - lo)
 
-    assert window(100) > window(110) > window(DOCUMENTED_CEILING - 1)
-    assert window(DOCUMENTED_CEILING) < 1e-9, window(DOCUMENTED_CEILING)
-    assert window(DOCUMENTED_CEILING + 1) == 0.0
+    top = potd.effective_max_odds()
+    # Walk AWAY from the crossing toward shorter prices: the window opens
+    # as the payout falls, and is shut at the crossing and everywhere
+    # past it. Spelled in payouts rather than in American odds because
+    # the sign flips across even money and the ordering does not.
+    assert window(-130) > window(-115) > window(top)
+    # `top` is rounded so as never to advertise an unreachable price, so
+    # it is the last price with a window at all — a sliver, not zero.
+    # One step shorter and it is shut.
+    assert window(top) > 0.0, window(top)
+    assert window(top + 1) == 0.0, (top + 1, window(top + 1))
+    assert window(100) == 0.0, "the plus side is supposed to be shut"
     assert window(int(potd.MAX_ODDS)) == 0.0
 
 
 def test_the_minus_side_is_still_bounded_by_the_band_itself():
-    """`MIN_FAIR` cannot bite on a favourite — a minus price needs a fair
-    above 50% to show any edge at all — so on that side `MIN_ODDS` is
-    still the real floor and nothing is being hidden."""
+    """`MIN_FAIR` alone cannot reach the bottom of the band — at
+    `MIN_ODDS` a row needs a far higher fair than the floor to show any
+    edge at all — so on that side `MIN_ODDS` is still the real floor and
+    nothing is being hidden."""
     pay = potd.payout(potd.MIN_ODDS)
     assert potd.MIN_FAIR * (1.0 + pay) - 1.0 < potd.MIN_EV, \
-        "a 50% fair now shows an edge at the worst price in the band"
+        "the floor's own fair now shows an edge at the worst price in the band"
+
+
+def test_the_bottom_of_the_band_is_still_reachable_by_something():
+    """A band shut at both ends is a dead feature. At -250 a fair
+    between about 73% and 76% clears every bar, which is narrow and
+    real."""
+    lo, hi = None, None
+    for i in range(500, 1000):
+        f = i / 1000.0
+        if potd.shortfall(_row(f, potd.MIN_ODDS)) == "":
+            lo = f if lo is None else lo
+            hi = f
+    assert lo is not None, "nothing at all can be picked at MIN_ODDS"
+    assert lo < hi, (lo, hi)
 
 
 if __name__ == "__main__":

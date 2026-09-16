@@ -78,7 +78,10 @@ def test_the_pick_and_the_gates_both_appear():
 def test_a_day_with_no_pick_names_the_binding_gate_rather_than_shrugging():
     """The whole reason the tool exists. A blank day must say which bar
     it was, or the next hour is spent guessing at it."""
-    out = R.report(_board([_row(sharp_fair=0.53)]), "nfl")
+    # -120 AT THE FLOOR, not 0.53 at -110. The confidence floor went
+    # to 55% on 2026-09-16 and is asked first, so the old fixture
+    # names a different (also correct) bar than the one under test.
+    out = R.report(_board([_row(odds=-120, sharp_fair=0.55)]), "nfl")
     assert "no pick" in out, out
     assert "not far enough off the fair" in out, out
     assert "shown, not recorded" in out, out
@@ -97,7 +100,10 @@ def test_a_board_it_cannot_read_says_so_and_does_not_pretend():
 
 
 def test_the_near_misses_carry_the_reason_each_one_missed_by():
-    rows = [_row(player="Thin", sharp_fair=0.53),
+    # "Thin" is -120 at the confidence floor since 2026-09-16: the
+    # same thin-edge refusal, at a fixture the 55% floor cannot
+    # intercept first.
+    rows = [_row(player="Thin", odds=-120, sharp_fair=0.55),
             # A COIN-FLIP MARKET ON THE MARKET TIER. This was a sharp
             # row until 2026-09-16, when the ranking bar was scoped to
             # the tiers our model is the witness for — a sharp-anchored
@@ -255,7 +261,8 @@ def test_the_header_quotes_the_band_from_the_engine_not_from_a_copy():
     """A tool printing its own idea of the band would tell a reader the
     selector is doing something it is not."""
     out = R.report(_board([_row()]), "nfl")
-    assert f"{potd.MIN_ODDS:+d}" in out and f"{potd.MAX_ODDS:+d}" in out, out
+    assert f"{potd.MIN_ODDS:+d}" in out, out
+    assert f"{potd.effective_max_odds():+d}" in out, out
     assert f"{potd.MIN_EV:.0%}" in out, out
 
 

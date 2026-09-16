@@ -232,7 +232,10 @@ def test_a_sharp_anchor_outranks_a_bigger_consensus_edge():
     """THE INVERSION THAT IS THE POINT OF THE MODULE. Sorting on edge
     size hands every day to the loudest disagreement, and the loudest
     disagreements come from the weakest witness."""
-    quiet = _row(player="Pinnacle says", odds=-110, sharp_fair=0.54)
+    # THE WINDOW AT -110 IS 55.0%-56.0% under the 55% floor and the 7%
+    # ceiling, so both fixtures live inside it. It used to be 0.54 vs
+    # 0.56, which the floor now refuses outright.
+    quiet = _row(player="Pinnacle says", odds=-110, sharp_fair=0.55)
     # BOTH INSIDE `MAX_EV`, or the point would be made by the trust
     # ceiling rather than by the tier order this test is about.
     loud = _consensus(player="Consensus says", odds=-110, implied_prob=0.56)
@@ -342,7 +345,12 @@ def test_a_price_that_is_still_more_likely_to_lose_is_refused():
 
 
 def test_a_price_barely_off_the_fair_is_not_worth_the_day():
-    thin = _row(odds=-110, sharp_fair=0.53)
+    # 0.53 AT -110 USED TO ISOLATE THE MIN_EV BAR and cannot since
+    # 2026-09-16: the confidence floor went to 55% and `shortfall`
+    # asks it first, so a 53% fair now gets the OTHER refusal.
+    # -120 at the floor itself is 0.83% EV — same bar, same side,
+    # a fixture the floor cannot intercept.
+    thin = _row(odds=-120, sharp_fair=potd.MIN_FAIR)
     assert potd.disqualify(thin) == ""
     assert potd.shortfall(thin) == \
         "the price is not far enough off the fair to be worth it"
@@ -380,7 +388,8 @@ def test_a_sharp_witness_is_not_refused_by_our_models_ranking():
         assert potd.shortfall(_row(rank_auc=None, **tier)) == ""
     # AND EVERY OTHER BAR STILL BITES on exactly those rows: the pool
     # widened, the standard did not move.
-    assert potd.shortfall(_row(rank_auc=0.49, sharp_fair=0.53)) == \
+    assert potd.shortfall(_row(rank_auc=0.49, odds=-120,
+                               sharp_fair=potd.MIN_FAIR)) == \
         "the price is not far enough off the fair to be worth it"
     assert potd.disqualify(_row(rank_auc=0.49, odds=-400)) == \
         "the payout is outside the even-money band"
@@ -433,9 +442,12 @@ def test_a_distrusted_gap_is_a_lean_and_not_a_blank_day():
 
 def test_the_ceiling_does_not_swallow_the_floor():
     """Both ends still bite, and they say different things."""
-    assert potd.shortfall(_row(sharp_fair=0.53)) == \
+    assert potd.shortfall(_row(odds=-120, sharp_fair=potd.MIN_FAIR)) == \
         "the price is not far enough off the fair to be worth it"
     assert potd.shortfall(_row(sharp_fair=0.60)).startswith("the gap is too big")
+    # AND THE THIRD END, added with the 55% floor: under it, the answer
+    # is neither of those two.
+    assert "not confident enough" in potd.shortfall(_row(sharp_fair=0.53))
 
 
 # --- how it ranks ------------------------------------------------------------
@@ -478,7 +490,11 @@ def test_a_qualifying_pick_carries_the_numbers_the_card_shows():
     assert pick["payout_units"] == round(potd.payout(-110), 3)
     assert pick["ev_units"] == round(potd.edge(_row()), 4)
     assert pick["edge_points"] == round((0.55 - potd.implied(-110)) * 100, 1)
-    assert got["band"] == [potd.MIN_ODDS, potd.MAX_ODDS]
+    # THE BAND AS ADVERTISED, which is the REACHABLE top rather than
+    # `MAX_ODDS` — see tests/test_potd_band_collision.py. `MAX_ODDS`
+    # still bounds the candidate pool; it stopped being a price a
+    # qualifying pick could carry when `MAX_EV` shipped.
+    assert got["band"] == [potd.MIN_ODDS, potd.effective_max_odds()]
     assert got["payout_band"] == [potd.MIN_PAYOUT, potd.MAX_PAYOUT]
     assert got["min_ev"] == potd.MIN_EV
     assert got["considered"] == 1
@@ -488,7 +504,7 @@ def test_a_quiet_day_shows_the_best_available_and_says_it_missed():
     """The pattern the boards already use so a page is never blank. The
     difference that matters is `below_bar`: the page reads it, and the
     journal refuses the row because of it."""
-    thin = _row(sharp_fair=0.53)
+    thin = _row(odds=-120, sharp_fair=potd.MIN_FAIR)
     got = potd.build([thin], "nfl", "2026-W02")
     assert got["pick"] is not None
     assert got["pick"]["below_bar"] == \
@@ -497,7 +513,8 @@ def test_a_quiet_day_shows_the_best_available_and_says_it_missed():
 
 
 def test_a_qualifying_pick_always_beats_a_near_miss():
-    got = potd.build([_row(sharp_fair=0.53), _row(player="Good")],
+    got = potd.build([_row(odds=-120, sharp_fair=potd.MIN_FAIR),
+                      _row(player="Good")],
                      "nfl", "2026-W02")
     assert got["pick"]["player"] == "Good" and got["pick"]["below_bar"] == ""
 
@@ -515,7 +532,9 @@ def test_the_census_names_the_gate_that_was_binding():
     rows = [_row(odds=-400),
             _row(reserve=True, sharp_anchored=False, sharp_fair=None,
                  model_prob=0.70),
-            _row(sharp_fair=0.53),
+            # -120 at the floor, not 0.53 at -110: the same MIN_EV bar,
+            # at a fixture the 55% confidence floor cannot intercept.
+            _row(odds=-120, sharp_fair=potd.MIN_FAIR),
             # A COIN-FLIP MARKET ON THE MARKET TIER. It used to be a
             # sharp row, which since 2026-09-16 clears this bar — the
             # ranking figure is our model's and is asked only where our

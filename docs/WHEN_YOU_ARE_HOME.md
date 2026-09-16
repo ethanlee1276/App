@@ -270,10 +270,25 @@ are both refused rather than guessed. The two-club rule is intact.
 `tests/test_the_exchange_finds_the_game_in_its_ticker.py` runs Ethan's
 own two pasted lines as fixtures.
 
-**What the run below is now for** is confirming it fires on the live
-feed: the shape is inferred from one fixture, and a series whose tickers
-are laid out differently would still come back zero. Look for a non-zero
-`markets matched to a game` on both sports.
+**CONFIRMED ON THE LIVE FEED 2026-09-16 — #256 IS CLOSED.** Ethan ran it
+against `b4ce344`:
+
+```
+KXNFLGAME-26SEP17DETBUF-BUF   "Buffalo wins"
+KXMLBGAME-26SEP161340NYYMIN-NYY   "New York Y wins"
+```
+
+Both clubs concatenated in the middle segment, exactly the shape the
+fixture had. `potd_report mlb` went from **0 matched to 31 of 45 usable
+markets matched a game**. The tier is alive.
+
+**THE BOTTLENECK MOVED, and it is worth knowing where to.** That same
+report reads `0 of 1 moneyline row(s) priced`: 15 games on the board, 31
+matched markets, and the MLB board carries exactly ONE moneyline row for
+them to attach to. Kalshi lists game winners and nothing else
+(`exchangefair.MARKETS`), so the exchange tier's ceiling is now how many
+moneyline rows the edge board publishes, not the matcher. That is a
+board-composition question, filed separately from this block.
 
 **RUN IT AS THE BUILD USER.** Ethan, 2026-09-16, declining to run the
 first version of this: *"KX-2 writes Kalshi cache files. As root they
@@ -648,6 +663,13 @@ Run it **after the timer has pulled** — check `HEAD` in the output is
 ```bash
 cd /srv/qellys && python3 homecheck.py filler
 ```
+
+**CONFIRMED ZERO ON ALL THREE LEAGUES 2026-09-16 — #258 IS CLOSED**
+(`mlb 5 rows | 2 no book | 0 filler`, `nfl 80 | 32 | 0`,
+`cfb 3 | 0 | 0`). Both `59becc8` (totals) and `70ee99f` (team totals)
+took. Keep running it after a pricing change; the 32 unbooked NFL rows
+are a separate question and the check now says whether any of them is
+being recommended.
 
 **It used to be a thirty-line heredoc and Ethan could not paste it**
 (2026-09-16: *"i couldnt get that last command to work"*), while the

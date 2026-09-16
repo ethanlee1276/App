@@ -143,7 +143,13 @@ def test_every_other_bar_still_bites_on_a_sharp_spread():
     row = _row("spread")
     from copy import deepcopy
 
-    thin = deepcopy(row); thin["sharp_fair"] = 0.52
+    # 0.52 AT -110 no longer reaches this bar: the confidence floor went
+    # to 55% on 2026-09-16 and `shortfall` asks it first. -120 at the
+    # floor itself is 0.83% EV — the same bar, asked where the floor
+    # cannot answer instead of it.
+    thin = deepcopy(row)
+    thin["sharp_fair"] = potd.MIN_FAIR
+    thin["odds"] = -120
     assert potd.shortfall(thin) == \
         "the price is not far enough off the fair to be worth it"
 

@@ -420,7 +420,10 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     # WHERE THE ROWS WENT, biggest gate first. This is the whole point:
     # a day with no pick should say which bar was binding rather than
     # shrugging, exactly as `likely.build`'s own funnel does.
-    out.append(f"  Band        {potd.MIN_ODDS:+d} to {potd.MAX_ODDS:+d} "
+    # THE REACHABLE TOP, not `MAX_ODDS` — the two parted company when
+    # `MAX_EV` shipped, and this report is read to find out why a day
+    # produced nothing. See `potd.effective_max_odds`.
+    out.append(f"  Band        {potd.MIN_ODDS:+d} to {potd.effective_max_odds():+d} "
                f"(pays {potd.MIN_PAYOUT:.2f}u to {potd.MAX_PAYOUT:.2f}u)  ·  "
                f"EV floor {potd.MIN_EV:.0%}  ·  fair floor {potd.MIN_FAIR:.0%}")
     # WHOSE OPINION THIS BOARD IS MADE OF, before any bar is applied.

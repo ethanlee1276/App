@@ -98,6 +98,33 @@ def test_a_league_with_no_board_names_itself_and_the_others_still_print():
     assert "1 at a filler price" in out, "the league that HAS a board was lost"
 
 
+def test_an_unbooked_row_that_is_still_recommended_is_shouted_about():
+    """#207 sets `recommended = False` on a row whose price names no
+    book. Ethan's board carries 32 unbooked NFL rows; this is the line
+    that says whether any of them is being pushed at a reader."""
+    real = _swap({"mlb": [
+        {"odds": -135, "book": "", "bet_type": "moneyline",
+         "recommended": True},
+        {"odds": -135, "book": "", "bet_type": "spread"},
+    ]})
+    try:
+        out = "\n".join(homecheck.filler())
+    finally:
+        homecheck._board = real
+    assert "1 of those unbooked rows are still RECOMMENDED" in out, out
+    assert "#207" in out, out
+
+
+def test_unbooked_rows_that_are_not_recommended_say_nothing_extra():
+    """The ordinary case. A warning that fires every run is not read."""
+    real = _swap({"mlb": [{"odds": -135, "book": "", "bet_type": "spread"}]})
+    try:
+        out = "\n".join(homecheck.filler())
+    finally:
+        homecheck._board = real
+    assert "RECOMMENDED" not in out, out
+
+
 # --- it never throws at the caller -------------------------------------------
 def test_one_check_blowing_up_does_not_take_the_run_with_it():
     """`all` exists so one paste returns everything. A traceback in the

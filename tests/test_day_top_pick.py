@@ -457,7 +457,8 @@ def test_the_cross_league_chooser_invents_no_bar_of_its_own():
     # directly: the band this publishes must be potd's own constants,
     # not numbers typed again here.
     out = potd.day_top_pick({}, TODAY)
-    assert out["band"] == [potd.MIN_ODDS, potd.MAX_ODDS], out["band"]
+    assert out["band"] == [potd.MIN_ODDS, potd.effective_max_odds()], \
+        out["band"]
     assert out["min_ev"] == potd.MIN_EV, out["min_ev"]
 
 

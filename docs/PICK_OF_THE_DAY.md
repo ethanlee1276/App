@@ -554,38 +554,57 @@ rest of the site refuses to stake. Eight tests failed the moment the
 ceiling landed. The fixture is now 55% (+5.0%), an ordinary
 sharp-anchor row.
 
-### 3i-b. The ceiling narrows the price band to +114, and that is Ethan's call
+### 3i-b. The two bars cross, and at a 55% floor the plus side is gone
 
 **Not a side effect worth burying.** `MIN_FAIR` wants the pick likelier
-to win than lose (50%). `MAX_EV` wants the edge no wider than 7%. Those
-two meet:
+to win than lose. `MAX_EV` wants the edge no wider than 7%. Those two
+meet where
 
-    EV at the 50% floor = 0.50 × (1 + payout) − 1
+    EV at the fair floor = MIN_FAIR × (1 + payout) − 1  =  MAX_EV
 
-At +114 that is exactly 7.0%. At +115 it is 7.5% — so **above +114 no
-bet can be both at-or-above the fair floor and at-or-below the trust
-ceiling.** Every price from +115 to `MAX_ODDS` (+190) is now unreachable:
-a row there either implies under 50% (refused by `MIN_FAIR`) or carries
-over 7% (refused by `MAX_EV`).
+and above that price no bet can be both at-or-above the fair floor and
+at-or-below the trust ceiling: a row there either implies less than the
+floor (refused by `MIN_FAIR`) or carries more than 7% (refused by
+`MAX_EV`). There is no price in between.
 
-**The effective band is −142 … +114, not −142 … +190.** `MAX_ODDS` still
-reads 190 and is no longer the binding constraint on the plus side.
-Pinned in `tests/test_potd_band_collision.py` so it cannot drift
-silently: if either bar moves, the test names the new crossing point.
+| `MIN_FAIR` | last usable price | the plus side |
+|---|---|---|
+| 50% | **+114** | survives to +114 |
+| **55% (shipped 2026-09-16)** | **−106** | **closed entirely** |
+| 58% | −118 | closed |
+
+**The effective band is −250 … −106.** Every plus price is now
+unreachable, and so is the stretch from −105 to +190.
+
+**A CORRECTION, because the arithmetic is easy to get wrong.** I told
+Ethan in chat that a 55% floor moved the ceiling to "+94". It does not.
+The net payout at the crossing is 0.945 units, and a payout under 1.0 is
+a FAVOURITE — −100/0.945 is −106. Reading a sub-1.0 payout as a plus
+price is the mistake; `potd.effective_max_odds` now does the conversion
+so it is never done from memory again.
+
+**THE CARD PRINTS THE REACHABLE BAND, since 2026-09-16.** It used to
+read "one pick a day, priced between −250 and +190" while no bet above
+−106 could qualify — a stated range the machinery cannot produce, which
+is the same shape of untruth as a NO BET card naming a bet. `build`
+publishes `effective_max_odds()` as the band. `MAX_ODDS` still bounds the
+CANDIDATE pool, which is a real job; it is simply no longer what a reader
+is told. Pinned in `tests/test_potd_band_collision.py`, which also checks
+the algebra against a walk over every real price.
 
 **WHY IT IS LEFT STANDING.** Both bars are defensible on their own and
 the collision only removes prices where the two disagree about the same
 row. A +150 dog at a 7%-or-less edge implies a fair near 43% — refused by
-`MIN_FAIR`, a bar that predates this work. A +150 dog at a 50%+ fair
-implies a 25% edge — the exact shape `_sharpify` grades Pass. Neither
-kind was ever a pick the rest of the site would stake.
+`MIN_FAIR`. A +150 dog at a 55%+ fair implies a 37% edge — the exact
+shape `_sharpify` grades Pass. Neither kind was ever a pick the rest of
+the site would stake.
 
-**WHAT WOULD CHANGE IT.** Dropping `MIN_FAIR` below 50% for
-sharp-anchored rows reopens the plus side, and the argument for that is
-that a price disagreement does not care which side is favoured. It is
-not made here because `MIN_FAIR` is Ethan's product bar — "the pick
-should be more likely to win than lose" — and moving it is his call, not
-a consequence of a measurement.
+**WHAT WOULD CHANGE IT.** Dropping `MIN_FAIR` below the even-money line
+for sharp-anchored rows reopens the plus side, and the argument for it is
+that a price disagreement does not care which side is favoured. That
+question is still open and still Ethan's: it points the opposite way from
+the 55% floor he chose on the same day, so choosing 55% answered it in
+practice rather than in principle.
 
 ### 3j. The MLB board had no witnesses at all, and the cause was one boolean
 
