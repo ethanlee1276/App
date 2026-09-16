@@ -505,11 +505,15 @@ def test_the_writer_never_drops_a_league_without_recording_it():
     from pathlib import Path as _P
     src = (_P(__file__).resolve().parents[1] / "launch.py").read_text()
     i = src.index("except FileNotFoundError:")
-    block = src[i:i + 1200]
+    block = src[i:i + 4000]
     # Up to the next `except` or the end of the try, whichever is first.
     end = block.find("except Exception")
     if end > 0:
         block = block[:end]
+    assert "missing[sport]" in block, (
+        "the branch records that a board was absent but not WHICH path "
+        "was absent \u2014 'nfl: no board' is a symptom, the path is the "
+        "diagnosis:\n" + block)
     assert "boards[sport]" in block, (
         "the missing-board branch does not record the league \u2014 it will "
         "vanish from the census again:\n" + block)
@@ -517,6 +521,19 @@ def test_the_writer_never_drops_a_league_without_recording_it():
             if ln.strip() and not ln.strip().startswith("#")]
     assert "continue" not in body, (
         "the bare `continue` is back; a dropped league leaves no trace")
+
+
+def test_the_missing_paths_reach_the_published_file():
+    """`boards_unreadable` is the whole point of recording them — a path
+    collected and never written is a diagnosis nobody can read."""
+    from pathlib import Path as _P
+    src = (_P(__file__).resolve().parents[1] / "launch.py").read_text()
+    i = src.index("def _write_day_top_pick")
+    body = src[i:i + 20000]
+    assert 'top["boards_unreadable"] = missing' in body, \
+        "the paths are collected and never published"
+    assert body.index('top["boards_unreadable"]') < body.index('"day_top_pick.json"'), \
+        "the paths are attached after the file is written"
 
 
 if __name__ == "__main__":

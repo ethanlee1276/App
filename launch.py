@@ -3442,6 +3442,7 @@ def _write_day_top_pick() -> None:
         from engine import gate as _gate, ledger, potd
         web = ROOT / "web" / "data"
         boards: dict = {}
+        missing: dict = {}
         for sport in potd.TOP_PICK_LEAGUES:
             # BOARD_FILES, NEVER A PATH BUILT FROM THE SPORT CODE. The
             # first draft of this opened `web/data/{sport}.json` for all
@@ -3486,7 +3487,17 @@ def _write_day_top_pick() -> None:
                 #
                 # `None` is not a dict, so `day_top_pick` tallies
                 # "{sport}: no board" and the census is complete.
+                #
+                # AND THE PATH, because "no board" is a symptom and the
+                # path is the diagnosis. `board_source` falls back to the
+                # public copy when there is no private one, so it cannot
+                # hand back a path that does not exist unless BOTH are
+                # gone — which is a different problem from a league that
+                # simply did not build. Recording it means the next
+                # `day_top_pick.json` answers this without anyone
+                # opening a shell.
                 boards[sport] = None
+                missing[sport] = str(f)
             except Exception:      # noqa: BLE001
                 # A board mid-write, or corrupt. Counted as absent rather
                 # than taken down with it — one bad file must not cost
@@ -3524,6 +3535,17 @@ def _write_day_top_pick() -> None:
                   f"unreadable ({type(exc).__name__}: {exc}) — "
                   f"publishing none rather than an unlocked claim")
             top = potd.day_top_pick(boards, today, locked={})
+        # WHICH FILES WERE NOT THERE, in the artifact itself. A census
+        # entry saying "nfl: no board" is true and unactionable; the path
+        # says whether the build never ran, the publish never landed, or
+        # someone is looking in the wrong directory.
+        # IN THE FILE, NOT ON STDOUT. `test_the_writer_writes_a_file_and
+        # _says_nothing` exists because this function's earlier failures
+        # "printed a warning nobody was reading" — a cycle log nobody
+        # tails is where a diagnosis goes to die. The artifact is read by
+        # the page and by `potd_report`, so that is where the paths go.
+        if missing:
+            top["boards_unreadable"] = missing
         p = web / "day_top_pick.json"
         tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(top, indent=1))
@@ -5459,11 +5481,28 @@ def show_likely() -> None:
             print(f"    {b['lo']:.0%}-{b['hi']:.0%}  {b['n']:5d}  "
                   f"{b['claimed']:6.1%}  {b['actual']:6.1%}  {b['roi']:+7.2%}")
     if p.get("by_market"):
+        # THE BAND AND THE GATE, because this is the table a shelf gets
+        # cut from. Printing `pass_td 2 bets -22.20%` next to
+        # `total_bases 216 bets +2.98%` in the same column, with nothing
+        # to say the first is two coin flips, is an invitation to act on
+        # noise — and the whole-board verdict below has carried both a
+        # band and an `enough` gate since it shipped.
         print("\n  by market (the board's shelves)")
-        print("    market            n    said     hit      roi")
+        print("    market            n    said     hit      roi"
+              "      noise  act on it?")
+        need = 0
         for m, d in sorted(p["by_market"].items()):
+            band = d.get("roi_band")
+            need = d.get("needed") or need
+            shown = f"+/-{band:.0%}" if band else "n/a"
+            call = "yes" if d.get("enough") else f"no ({d['n']}/{d.get('needed')})"
             print(f"    {m:<15} {d['n']:5d}  {d['claimed']:6.1%}  "
-                  f"{d['actual']:6.1%}  {d['roi']:+7.2%}")
+                  f"{d['actual']:6.1%}  {d['roi']:+7.2%}  {shown:>7}  {call}")
+        if need:
+            print(f"\n    A shelf needs {need} settled before its ROI is worth "
+                  f"acting on.\n    Under that the band is wider than the "
+                  f"number, and a losing shelf\n    and an unlucky one are the "
+                  f"same picture.")
     # SAID LAST, because it is the sentence that decides what happens
     # next and a reader who stops early should still have hit it.
     if not p.get("enough"):

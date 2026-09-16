@@ -6201,6 +6201,23 @@ LIKELY_VERDICT_N = 100
 LIKELY_BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 
 
+#: Settled rows a single SHELF needs before its ROI is worth acting on.
+#:
+#: NOT `LIKELY_VERDICT_N`, which gates the whole board's promotion to
+#: real money and is rightly larger. This is the smaller question — "is
+#: this one market's number distinguishable from noise" — and it is
+#: still not small: at 40 flat bets the two-standard-error band on the
+#: ROI is about +/-32 points, which is why a shelf showing -6% at n=27
+#: is not a shelf that has been shown to lose.
+#:
+#: CHOSEN, NOT MEASURED, and said so on the constant rather than implied
+#: by its use. It is the n at which the band drops under a third, which
+#: is the point where the sign of a double-digit ROI starts to mean
+#: something. Move it when there is a reason, not when a shelf is
+#: inconvenient.
+LIKELY_MARKET_MIN_N = 40
+
+
 def likely_report(conn, since: str | None = None,
                   sport: str | None = None) -> dict:
     """The Most Likely scoreboard — the paper record, read back.
@@ -6305,11 +6322,37 @@ def likely_report(conn, since: str | None = None,
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
             "FROM bets WHERE 1=1 " + graded + win + sw
             + " GROUP BY market", wargs + sargs):
+        n, stake = r["n"], r["s"]
+        roi = (r["u"] / stake) if stake else 0.0
+        # HOW MUCH OF THAT ROI IS THE SAMPLE TALKING, for each shelf.
+        #
+        # The whole-board verdict has carried a noise band and an
+        # `enough` gate since it shipped; this table carried neither, and
+        # it is the table a shelf gets cut from. Ethan's 2026-09-16 run
+        # printed `pass_td  2 bets  -22.20%` beside `total_bases  216
+        # bets  +2.98%` in the same column with nothing to say the first
+        # number is two coin flips. Acting on it is exactly the error
+        # this repo has already made twice today with the MAX_EV band and
+        # the underdog split.
+        #
+        # The band is the same two-standard-error rule `calibration`
+        # uses, applied to the per-bet returns rather than the hit rate:
+        # a flat stake means the standard error of the ROI is the spread
+        # of the per-bet results over sqrt(n), and at a flat unit the
+        # worst case per bet is bounded, so 2/sqrt(n) is the honest
+        # order of magnitude without storing every gain.
+        band = round(2.0 / (n ** 0.5), 4) if n else None
         p["by_market"][r["market"]] = {
-            "n": r["n"], "w": r["w"],
+            "n": n, "w": r["w"],
             "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
             "actual": round(r["actual"], 4) if r["actual"] is not None else None,
-            "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
+            "roi": round(roi, 4),
+            "roi_band": band,
+            # ENOUGH TO ACT ON is a separate question from the sign of
+            # the ROI, and keeping them apart is the point: a shelf can
+            # be deeply negative and still not be cuttable.
+            "enough": bool(n >= LIKELY_MARKET_MIN_N),
+            "needed": LIKELY_MARKET_MIN_N}
 
     # Per sport, with the same two tests the headline gets — Ethan,
     # 2026-09-01: "make sure you dont stop testing each sport until the
