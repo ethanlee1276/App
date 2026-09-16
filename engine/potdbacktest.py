@@ -486,14 +486,27 @@ def sweep_conf(conn, sport: str = "mlb", sharp: str = "Pinnacle",
            f"  {rows[0][1].days_seen} days with at least one priced game",
            "",
            f"  {'floor':>6}  {'days':>5}  {'bets':>5}  {'W-L':>9}  "
-           f"{'HIT RATE':>9}  {'units':>8}  {'ROI':>8}",
-           "  " + "-" * 70]
+           f"{'HIT RATE':>9}  {'units':>8}  {'ROI':>8}  {'UNDERDOGS':>16}",
+           "  " + "-" * 88]
     for f, r, hit, roi in rows:
+        # THE UNDERDOG COLUMN, added 2026-09-16. Ethan: "we should know
+        # when an underdog has a serious chance to win ... we need to be
+        # elite and advanced enough to know if an underdog can actually
+        # win or not." A confidence floor does not only trade hit rate
+        # against price — above the even-money line it deletes plus-money
+        # picks entirely, and the table could not say so. At the 50%
+        # floor 8 of 44 picks were dogs and returned +2.20u; at 55% there
+        # are none, and nothing in the old six columns showed that.
+        dog = r.prices.get("underdog") or {"n": 0, "wins": 0, "net": 0.0}
+        cell = ("none" if not dog["n"] else
+                f"{dog['n']}: {dog['wins']}-{dog['n'] - dog['wins']} "
+                f"{dog['net']:+.2f}u")
         out.append(f"  {_pct(f, 0):>6}  {r.days_with_pick:>5}  {r.n_bets:>5}  "
                    f"{r.wins}-{r.n_bets - r.wins:<7}  "
                    f"{'n/a' if hit is None else f'{hit:.1%}':>9}  "
                    f"{r.net:>+8.2f}  "
-                   f"{'n/a' if roi is None else f'{roi:+.1f}%':>8}")
+                   f"{'n/a' if roi is None else f'{roi:+.1f}%':>8}  "
+                   f"{cell:>16}")
     out += ["",
             f"  Shipped floor: {_pct(potd.MIN_FAIR, 0)}. Band {potd.MIN_ODDS} "
             f"to +{potd.MAX_ODDS}, so the most confident price reachable "
@@ -501,7 +514,15 @@ def sweep_conf(conn, sport: str = "mlb", sharp: str = "Pinnacle",
             "  A floor above what the band can reach selects nothing — raise",
             "  both together or neither.",
             "  HIT RATE is the number being asked for; units is what it costs.",
-            "  A floor whose picks land well under it has not earned the word."]
+            "  A floor whose picks land well under it has not earned the word.",
+            "",
+            f"  UNDERDOGS is the column that says what a floor COSTS IN KIND.",
+            f"  A floor above even money cannot admit a plus price at all: a",
+            f"  dog our fair likes is by definition a big disagreement with",
+            f"  the market, and `potd.MAX_EV` ({potd.MAX_EV:.0%}) refuses those",
+            f"  before the floor is ever asked. So 'none' in this column is",
+            f"  not a slate that had no dogs — it is the bar shutting them out.",
+            f"  Today the crossing is at {potd.effective_max_odds():+d}."]
     return "\n".join(out)
 
 

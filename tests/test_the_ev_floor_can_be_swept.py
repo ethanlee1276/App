@@ -26,6 +26,7 @@ a bar fitted to noise.
 Run through the gate's env.
 """
 
+import inspect
 import os
 import subprocess
 import sys
@@ -154,6 +155,47 @@ def test_help_does_not_crash_on_a_percent_sign():
     assert "--sweep-ev" in p.stdout and "--min-ev" in p.stdout
     assert f"{potd.MIN_EV * 100:.1f}%" in p.stdout, \
         "the help does not name the shipped floor it is offering to replace"
+
+
+def test_the_confidence_sweep_says_what_a_floor_costs_in_underdogs():
+    """Ethan, 2026-09-16: "we should know when an underdog has a serious
+    chance to win ... we need to be elite and advanced enough to know if
+    an underdog can actually win or not."
+
+    A confidence floor above even money cannot admit a plus price AT
+    ALL — a dog our fair likes is by definition a large disagreement
+    with the market, and `MAX_EV` refuses those before the floor is
+    asked. The six-column table could not show that: it said 44 bets at
+    the 50% floor and 25 at 55% and gave no hint that ALL eight plus
+    prices were among the nineteen that went.
+    """
+    src = inspect.getsource(B.sweep_conf)
+    # THE HEADER, not the word. A bare `"UNDERDOGS" in src` passed with
+    # the column deleted, because the legend below the table says the
+    # word too — the assertion was reading the explanation of a column
+    # that no longer existed.
+    assert "{'UNDERDOGS':>" in src, "the column header is gone"
+    assert "{cell:>" in src, "nothing is printed under the header"
+    assert 'r.prices.get("underdog")' in src, \
+        "the column is not reading the price split the replay already keeps"
+    # "none" must be distinguishable from "no dogs on the slate" — the
+    # legend is what makes the empty cell readable.
+    assert "not a slate that had no dogs" in src, \
+        "an empty underdog cell reads as an accident of the schedule"
+
+
+def test_the_underdog_cell_is_built_from_the_shared_tally():
+    """`_tally` fills `prices` for every settled pick, and the report's
+    own `by price` block reads the same dict. A second count here is how
+    two numbers on one page start disagreeing."""
+    r = B.PotdReplay()
+    B._tally(r.prices, "underdog", True, 1.10)
+    B._tally(r.prices, "underdog", False, -1.0)
+    B._tally(r.prices, "favourite", True, 0.90)
+    assert r.prices["underdog"]["n"] == 2
+    assert r.prices["underdog"]["wins"] == 1
+    assert abs(r.prices["underdog"]["net"] - 0.10) < 1e-9, r.prices
+    assert r.prices["favourite"]["n"] == 1
 
 
 if __name__ == "__main__":
