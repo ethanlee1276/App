@@ -112,6 +112,41 @@ def _readers() -> str:
     return "\n".join(out)
 
 
+#: Consumers that are NOT pages. A field named here is not shown to a
+#: reader — which is the question this module asks — but it is also not
+#: dead, and the two are different answers with different fixes.
+OFF_PAGE = ("server.py", "digest.py", "engine/mailer.py",
+            "engine/boardlint.py", "engine/explainer.py")
+
+
+def _off_page() -> dict:
+    """``{name-ish text: which file}`` for everything downstream of the
+    build that is not a page.
+
+    WHY THIS IS A MARK AND NOT A READER. Widening `_readers` to cover
+    these would be the obvious fix and the wrong one: Ethan asked which
+    numbers we compute that "nobody ever sees", and a field the API
+    filters on or the nightly email counts is still not one anybody
+    sees. Folding them in would answer a different question and quietly
+    shrink the list.
+
+    But leaving them unmarked is worse in the other direction. On
+    2026-09-16 this report called 81 fields unread on a dev box and
+    three of them were read by `server.py` — a confident "nothing reads
+    this" about something that does. On the droplet's 312 that is a
+    dozen or so lines somebody is asked to classify or delete with the
+    one fact that settles it missing.
+
+    So the name still appears, and it says where else it turns up.
+    """
+    blobs = {}
+    for rel in OFF_PAGE:
+        f = ROOT / rel
+        if f.is_file():
+            blobs[rel] = f.read_text(encoding="utf-8", errors="replace")
+    return blobs
+
+
 def _walk(obj, prefix="", depth=0, out=None):
     """Top-level keys, one level of nesting, and the shape of list rows."""
     if out is None:
@@ -184,6 +219,9 @@ def audit(paths=None, show_internal=False, data_dir=None, blob=None):
     files = sorted(p for p in data.glob("*.json")
                    if not paths or p.name in paths)
     lines, leads = [], 0
+    # Read once, not once per field: `_off_page` opens five files and the
+    # loop below asks about every leaf in every feed.
+    off = _off_page()
     for p in files:
         try:
             d = json.loads(p.read_text(encoding="utf-8"))
@@ -218,6 +256,13 @@ def audit(paths=None, show_internal=False, data_dir=None, blob=None):
                     else f"{where[0]} and {len(where) - 1} more")
             blank = _emptiness(d, leaf)
             mark = "  [always empty]" if blank else ""
+            # `elsewhere`, not `where` — that name is already the list of
+            # keys this leaf appears under, three lines up, and shadowing
+            # it here would silently rewrite the column beside it.
+            elsewhere = [rel for rel, blob in off.items()
+                         if f'"{leaf}"' in blob or f"'{leaf}'" in blob]
+            if elsewhere:
+                mark += f"  [also in {', '.join(elsewhere)}]"
             lines.append(f"    {leaf:26s} {tail}{mark}")
             if why:
                 lines.append(f"    {'':26s} internal — {why}")
@@ -236,6 +281,11 @@ def audit(paths=None, show_internal=False, data_dir=None, blob=None):
         lines.append("Anything WITHOUT that mark is carrying real values that")
         lines.append("no page shows, which is the shorter and more interesting")
         lines.append("list.")
+        lines.append("[also in <file>] SOMETHING OFF THE PAGE NAMES IT — the")
+        lines.append("API, the nightly email, the board lint. Still not a")
+        lines.append("number anybody SEES, which is what this asks, but not")
+        lines.append("dead either: deleting it breaks that file. Classify")
+        lines.append("these; do not cut them.")
     return lines, leads
 
 
