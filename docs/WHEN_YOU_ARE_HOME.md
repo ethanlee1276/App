@@ -15,7 +15,33 @@ as they are done.
 
 ---
 
-## SHARP. Did the MLB board get its sharp witnesses back? (read-only, 10 seconds)
+## TIMING. Why these take longer than they read (read first)
+
+Ethan, 2026-09-16, after running seven of these back to back: *"these
+took far longer than the doc's one-to-two-minute estimates, around 25
+minutes each, because four processes were sharing the single core."*
+
+The estimates in this file were wall-clock on an idle box. The droplet is
+ONE core and the 5-minute deploy timer, the 45-minute build cycle and the
+nightly fitters all want it. Run these one at a time, and if a build is
+in flight expect a replay or a backtest to take tens of minutes rather
+than the seconds it costs on its own.
+
+To see what you are sharing the core with before you start:
+
+```bash
+uptime
+systemctl list-units --type=service --state=running 'qellys*'
+ps -o pid,pcpu,etime,cmd --sort=-pcpu -e | head -8
+```
+
+A load average near or above 1.00 means the next block will be slow, not
+broken. Nothing in this file is time-sensitive — waiting for a quiet
+minute costs less than reading a number you then have to re-run.
+
+---
+
+## SHARP. Did the MLB board get its sharp witnesses back? (read-only, seconds — but see the timing note)
 
 **This is the one to run first.** On 2026-09-16 your MLB board had thirty
 game rows and **not one** carried a sharp or a market witness, so
@@ -71,7 +97,15 @@ print('prob_source:  ', Counter(r.get('prob_source') for r in rows))
 
 ---
 
-## KX. Why the NFL exchange tier is dead (read-only, 10 seconds)
+## KX. Why the exchange tier is dead — BOTH SPORTS, ran 2026-09-16 (read-only, seconds — but see the timing note)
+
+
+**RAN, AND THE PREMISE WAS TOO NARROW.** Ethan, 2026-09-16: NFL is zero
+matched on 60 usable markets and **MLB is zero matched on 42** — this was
+filed as an NFL problem and baseball has it identically. The cause is
+reproduced in KX-2 below and it is not the spelling: `match_game` needs
+BOTH clubs in the market's text and the exchange titles name only the
+winner. Read KX-2; this block is kept for the census it prints.
 
 Your 2026-09-16 run said: nine NFL rows, 58 usable Kalshi markets, zero
 matched. The report called that *"OUR name matching"* — **and it could
@@ -82,7 +116,9 @@ tonight's games, or the game matched and we could not resolve which side
 the YES pays on.
 
 I could not tell them apart from here, and guessing at a matcher change
-risks breaking MLB, which works. So the census now names the step, and
+risked breaking MLB — **which I assumed was working, and it is not.** The
+2026-09-16 run put baseball at zero matched too, so there was never a
+working sport to protect. So the census now names the step, and
 prints **both parties' spellings**:
 
 ```bash
@@ -113,6 +149,63 @@ working and this change touched the shared code path:
 ```bash
 cd /srv/qellys && python3 potd_report.py mlb | grep -A4 Exchange
 ```
+
+---
+
+## KX-2. The one thing the exchange fix needs (read-only, seconds)
+
+Ethan ran KX on 2026-09-16 and it named the failure exactly:
+
+```
+NFL  exchange says:  Buffalo wins; Philadelphia wins
+     the board says: DET @ BUF; CAR @ ATL   [16 games, 0 matched]
+MLB  exchange says:  New York Y wins; Chicago WS wins
+     the board says: CWS @ CLE; SF @ STL   [15 games, 0 matched]
+```
+
+**It is not the spelling.** Reproduced here: "Buffalo wins" tokenises to
+`{BUFFALO}`, and BUF's names tokenise to `{BUFFALO, BILLS}`, so the home
+side matches perfectly. What fails is that `kalshi.match_game` requires
+BOTH teams to appear in the market's text, and the exchange's title names
+only the winner. Detroit is nowhere in "Buffalo wins", so the game is
+never matched. That rule is not a mistake — it is there because one name
+alone matches every futures market and half the league — and baseball
+shows exactly why it cannot simply be relaxed: "New York Y wins"
+tokenises to `{NEW, YORK}`, which matches the Yankees AND the Mets.
+
+So the fix needs a second identifier, and Kalshi puts one in the event
+ticker. **I have not seen this box's tickers and will not guess their
+shape**, which is the whole reason for this block.
+
+```bash
+cd /srv/qellys && python3 - <<'PY'
+import json
+from engine import exchangefair
+from engine.sources import kalshi
+
+markets, meta = kalshi.fetch_sports_markets(kalshi.parse_markets)
+print("series report:", meta)
+print()
+for sport in ("nfl", "mlb"):
+    mine = [m for m in markets if kalshi.sport_of(m) in (None, sport)]
+    usable = [m for m in mine if not exchangefair.quality(m)]
+    print(f"=== {sport}: {len(usable)} usable of {len(mine)} ===")
+    for m in usable[:6]:
+        print(json.dumps({k: m.get(k) for k in
+                          ("ticker", "event_ticker", "title", "subtitle")},
+                         ensure_ascii=False))
+    print()
+PY
+```
+
+**Paste the whole thing.** Six rows per sport is enough. What I am
+looking for is whether `event_ticker` carries both clubs — something like
+`...25SEP14DETBUF...` — because if it does the fix is to match the
+abbreviation PAIR inside it, which disambiguates the Yankees from the
+Mets without loosening the two-team rule at all.
+
+If `load_markets` is not the name on this box, the KX block above prints
+how it fetched them; reuse that line and keep the rest.
 
 ---
 
@@ -193,66 +286,66 @@ not a consequence of a measurement. Say the word either way.
 
 ---
 
-## GATE. Which refusal is costing money (#164) (read-only, ~2 minutes)
+## GATE. Which refusal is costing money (#164) — RAN, STILL UNPROVEN
 
-The open question was *"whether any ordering would have ADMITTED bets the
-edge gate refused"*, and the first run said the admitted slice ran 11.5%
-WORSE than what it refused — on proxy-priced rows, interval
-[-31.5%, +8.0%], straddling zero. Not a finding. It needs a book-priced
-arm, which needs this box's harvest:
+**Ran 2026-09-16. The negative point estimate reproduces on the droplet
+and it is still not evidence.**
 
-```bash
-cd /srv/qellys && python3 backtest.py --weeks 6-17 --gate --real-lines --gate-basis book
-```
+Admitted ran −10.1% over 82 bets against refused at −6.7% over 1,655 — a
+difference of **−3.4% with an interval of [−25.6%, +20.0%]**. That
+straddles zero by a wide margin on both sides, which is the honest
+reading: 82 bets cannot separate a board that is working from one that
+is not, and the point estimate being negative is not a finding.
 
-**New in this run:** a gate that costs money is not one fact, because it
-is not one rule. Under the arms table there is now a split by WHICH bar
-refused each row:
+**The leads, which are leads and not results.** Every one is a small
+slice, and the tool says to read them that way:
 
-```
-  What each refusal turned down, flat 1u, best first:
-      240 rows  ROI   +11.4%   +27.30u  Model disagrees with the market by more…
-       90 rows  ROI    -8.2%    -7.40u  This market's calibration fit hit the edge…
-```
+| refusal | ROI if admitted | rows |
+|---|---|---|
+| confidence just under the 6.0 bar | +23.2% | 21 |
+| confidence, next band down | +13.4% | 35 |
+| rest deficit | +13.8% | 48 |
+| market disagreement | +0.6% | 296 |
 
-A **positive** line is a bar the gate was wrong to apply — that is the
-one to change. Read the caveat it prints: these are many small slices of
-one sample and the smallest always looks the most extreme.
+The bottom row is the informative one and it is the one that looks
+boring: 296 rows is the only sample here with any weight, and it says
+that bar is costing nothing and saving nothing. The three positive
+slices are 21, 35 and 48 rows — the size at which a coin flip produces
++20% regularly.
 
-**If it says `no refusal reasons recorded`,** the walk-forward ran before
-`SettledProp.refusal` shipped — pull and re-run, the field is filled at
-settle time.
-
-**Paste the arms table and the split.** If the book-priced arm reproduces
-the negative point estimate, the split names the line to change and I can
-prereg a test for it.
-
----
-
-## ALT. Should we buy alternate spreads and totals? (#253) (read-only, 10 seconds)
-
-Already in the report you are running for block KX — no extra command.
-Look for the `Alternate lines` block:
+**Nothing changes on the board off this.** What would settle it is more
+settled bets through the same bars, which arrives on its own. Re-run when
+the admitted count is past a few hundred.
 
 ```bash
-cd /srv/qellys && python3 potd_report.py --all | grep -A8 "Alternate lines"
+cd /srv/qellys && python3 backtest.py 2025 --weeks 6-17 --gate --real-lines --gate-basis book
 ```
 
-**The purchase decision is in the market split.** Spreads and totals have
-a ladder of alternate numbers; **a moneyline does not** — there is one
-number and it is the price.
+Note the season positional — the line here omitted it until 2026-09-16
+and argparse exited 2 without measuring anything. Weeks 6-17 of 2026 do
+not exist yet, which is why the command names 2025.
 
-| if the block says | it means |
-|---|---|
-| `VERDICT: every price refusal is in a market with no alternate line to buy` | **DO NOT BUY.** The credits would buy nothing. |
-| `VERDICT: nothing was refused on price today` | nothing to address today — run it over a week before concluding |
-| `N of the M clear every OTHER bar` | that N is the number to watch over a fortnight. If it is 0-1 a day, the purchase is not worth it |
+## ALT. Should we buy alternate spreads and totals? (#253) — ANSWERED: NO
 
-It deliberately does NOT tell you an alternate line would have cleared —
-an alternate is a different bet, not the same bet at a better number, and
-guessing that is the thing the purchase exists to find out.
+**Ran 2026-09-16. The answer is do not buy, and the tool said so itself.**
 
----
+Ethan: *"The NFL's six price refusals are all moneyline, where no
+alternate exists, and it prints that verdict outright. Baseball has one
+addressable spread refusal at −177, but zero of that one clears every
+other bar, which is your 'not worth it' row."*
+
+That is the whole case. An alternate line can only rescue a row refused
+ON PRICE in a market that HAS alternates — spreads and totals. Every NFL
+price refusal was a moneyline, which has no ladder to climb, so the
+entire football case is empty by construction rather than by a close
+call. Baseball produced exactly one candidate and it failed the other
+bars anyway, so buying the ladder would have cost quota to convert zero
+rows on either board.
+
+Nothing to re-run. If the shape of the refusals changes — several
+spread-or-total price refusals showing up on one board — the question is
+worth reopening, and `potd_report.py | grep -A8 "Alternate lines"` is
+still the way to ask it.
 
 ## BARS. The Most Likely board's safety bars (#165) — nothing to run
 
@@ -314,7 +407,7 @@ before/after is what makes the rest of that task readable. Paste both.
 
 ---
 
-## POTD-MLB. Why the MLB Pick of the Day is blank (read-only, 20 seconds)
+## POTD-MLB. Why the MLB Pick of the Day is blank (read-only, seconds — but see the timing note)
 
 **RUN THIS ONE FIRST.** Ethan, 2026-09-16: *"pick of the day for mlb
 isn't showing still but nfl is showing And so is CFB."*
@@ -420,7 +513,7 @@ run settles which of these it is.
 
 ---
 
-## FILLER. Did the baseball filler price actually die? (read-only, 15 seconds)
+## FILLER. Did the baseball filler price actually die? (read-only, seconds — but see the timing note)
 
 Ethan, 2026-09-16, reading the MLB census: *"Eleven of the twelve game
 rows carry an empty book field … Those eleven all show odds of exactly
@@ -467,18 +560,20 @@ PY
 `team_total`; after it, **`total` must be gone from every league's
 filler count** — a total is now priced only when a book posted one.
 
-`team_total` will still be there, on all three leagues. That is #258 and
-it is deliberate: `gamebets.price_team_total` defaults both its odds to
--110 and no sport passes any, so every team-total card on every board
-still publishes at a price nobody quoted. Shared code, three public
-boards, your call — it was not changed on the way past.
+`team_total` SHOULD ALSO BE GONE NOW. When Ethan first ran this on
+2026-09-16 it still showed 32 such rows on the NFL and 2 on the MLB, and
+this block said to expect them — that was #258, unfixed at the time.
+He made the call the same day and commit 70ee99f took the filler out of
+`price_team_total` as well, so a run against that commit or later should
+show **zero at a filler price on all three leagues**. If `team_total`
+still appears, the deploy has not landed; check HEAD.
 
 If `total` still appears in MLB's filler count with `HEAD` at `59becc8`
 or later, the fix did not take and I want the whole line.
 
 ---
 
-## SHRINK. Does the market shrink help or hurt the top of the board? (#77) (read-only, ~1 minute)
+## SHRINK. Does the market shrink help or hurt the top of the board? (#77) (read-only — but see the timing note)
 
 The Most Likely page prints a touchdown row's probability **already
 shrunk halfway toward the book** (`betting.MARKET_SHRINK = 0.5`). The
@@ -528,7 +623,7 @@ one-constant change with a measurement behind it.
 
 ---
 
-## TOP. Is there one pick for the day? (read-only, 5 seconds)
+## TOP. Is there one pick for the day? (read-only, seconds — but see the timing note)
 
 You asked for *"one pick for the pick of the day"* — singular. Until
 today each league chose its own, so the MLB page and the NFL page each
@@ -579,7 +674,7 @@ in a private window, since this is the headline pick.
 
 ---
 
-## BOOKS. Did the seven new books actually show up? (read-only, 5 seconds)
+## BOOKS. Did the seven new books actually show up? (read-only, seconds — but see the timing note)
 
 Ethan, 2026-09-15: *"all the us books your using and shit, is that able
 too be used for all sports if it makes sense and can save us api key
@@ -618,7 +713,7 @@ all, which is the same question block PIN-2 asks from the other side.
 
 ---
 
-## PIN. Does the Pinnacle tape exist? (read-only, 10 seconds)
+## PIN. Does the Pinnacle tape exist? (read-only, seconds — but see the timing note)
 
 Ethan, 2026-09-15, approving the sharp-anchor work: *"I say start on the
 pinnacle money line closes if you think that's gonna make us more money
@@ -666,7 +761,7 @@ A day with a board but no rows is the silent failure caught in the act.
 
 ---
 
-## PIN-2. What the Pick of the Day actually saw (read-only, 10 seconds)
+## PIN-2. What the Pick of the Day actually saw (read-only, seconds — but see the timing note)
 
 The same trip, the second question. `potd_report.py` runs the selector
 over the boards already on disk and prints what it saw, chose and

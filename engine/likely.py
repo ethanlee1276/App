@@ -129,11 +129,20 @@ GAME_RANK_AUC = {
 #: job is then to be PRINTED on each of them — a row from a market that
 #: sorts games at 0.49 says so on its face, carries `ranked` False, and
 #: is shown as the model's lean at that number rather than as a claim to
-#: rank. A market with NO figure at all (MLB, until `gamerank --save`
-#: runs on the droplet) still has nothing to say and stays off.
+#: rank. A market with NO figure at all still has nothing to say and
+#: stays off.
+#:
+#: BASEBALL'S MONEYLINE ARRIVED 2026-09-16 (#257) — the walk could only
+#: ever run where the MLB history is, and Ethan ran it on the droplet.
+#: The model ranks winners at 0.5596 on 1,088 quoted games, which is
+#: close enough to a coin flip to be worth stating plainly: baseball's
+#: game rows were being ordered on very little. Its other three markets
+#: were not measured and so are still absent, which keeps them off the
+#: board exactly as before.
 GAME_RANK_MEASURED = {
     "nfl": {"moneyline": 0.677, "spread": 0.504, "total": 0.496, "team_total": 0.500},
     "cfb": {"moneyline": 0.752, "spread": 0.496, "total": 0.503, "team_total": 0.492},
+    "mlb": {"moneyline": 0.5596},
 }
 
 #: THE MARKET'S OWN RANKING, and why the board ranks on it where it can.
@@ -145,6 +154,19 @@ GAME_RANK_MEASURED = {
 #:
 #:     nfl  market 0.722 on 1,420 games (2021-26)   model 0.677
 #:     cfb  market 0.791 on 3,011 games (2022-26)   model 0.752
+#:
+#: BASEBALL JOINED ON 2026-09-16 (#257). It could only ever be measured
+#: where the MLB history lives, so Ethan ran the same walk on the droplet
+#: and it came back with the widest gap of the three:
+#:
+#:     mlb  market 0.6727 on 1,088 games            model 0.5596
+#:
+#: 1,088 quoted games is well past the 400-game floor the walk refuses
+#: below, and the same run re-measured the NFL as a control: 0.7236
+#: against the 0.722 stored here, so the harvest has not drifted under
+#: the table. The model at 0.5596 is close enough to a coin flip that
+#: baseball's game rows were being ordered on very little; this is the
+#: measurement #257 was opened to get.
 #:
 #: So a game row on the NFL or college board ranks on the book's
 #: de-vigged number for its side — `fair_prob` on the card — rather
@@ -159,6 +181,7 @@ GAME_RANK_MEASURED = {
 GAME_RANK_MARKET = {
     "nfl": {"moneyline": 0.722},
     "cfb": {"moneyline": 0.7905},
+    "mlb": {"moneyline": 0.6727},
 }
 
 

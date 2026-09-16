@@ -172,13 +172,31 @@ def test_mlb_has_shelves_and_unlisted_sports_still_do_not():
 
 def test_mlb_shelf_auc_reads_the_fitted_store():
     _clear_store()
-    assert all(s["rank_auc"] is None for s in boards.shelves("mlb"))
+    # THE PLAYER SHELVES, not every shelf. Since #257 (2026-09-16) the
+    # game-lines shelf has a documented moneyline figure to fall back on
+    # — 0.6727, measured on the droplet — exactly as the NFL's has had
+    # 0.722 all along, so it is not None with the fitted store empty and
+    # asking it to be would assert that baseball never got measured.
+    player = [s for s in boards.shelves("mlb") if s["key"] != "gamelines"]
+    assert player, "no player shelves to check"
+    assert all(s["rank_auc"] is None for s in player)
     rankfit._save({"mlb:home_runs": {"auc": 0.68, "n": 9000}})
     try:
         homers = boards.shelves("mlb")[0]
         assert homers["rank_auc"] == 0.68
     finally:
         _clear_store()
+
+
+def test_the_mlb_game_lines_shelf_states_its_measured_figure():
+    """The other half of #257, asked directly. An empty fitted store is
+    the normal state for this shelf — nothing fits a game-line AUC
+    nightly — so the documented measurement is what it has to speak
+    with, and a shelf that says nothing is a shelf nobody can judge."""
+    _clear_store()
+    gl = [s for s in boards.shelves("mlb") if s["key"] == "gamelines"]
+    assert gl, "baseball lost its game-lines shelf"
+    assert gl[0]["rank_auc"] == 0.6727, gl[0]["rank_auc"]
 
 
 def test_a_measured_market_flows_through_build_to_the_board():
@@ -371,7 +389,7 @@ def test_the_likely_tab_is_no_longer_hidden_for_hoops():
 
 
 # --- the baseball board says WHICH market lost its rows, and where ----------
-def test_the_baseball_board_counts_every_kind_and_market_on_an_unmeasured_box():
+def test_the_baseball_board_counts_every_kind_and_market_on_a_part_measured_box():
     """Ethan, 2026-09-15: "MLB most likely bets are only showing hits and
     total bases. There is no money lines or pitchers props or game totals
     or anything like that." On a box whose rank store has measured
@@ -396,14 +414,28 @@ def test_the_baseball_board_counts_every_kind_and_market_on_an_unmeasured_box():
                            census_by_kind=kinds)
     finally:
         _clear_store()
-    assert got == [], got
+    # THE PROPS ARE STILL REFUSED, and still say which market lost them.
+    # That half of Ethan's 2026-09-15 sentence stands: nothing has fitted
+    # a ranking for hits or strikeouts on a cleared store.
     mk = kinds["prop"]["markets"]
     assert mk["hits"]["offered"] == 1 and mk["hits"]["shown"] == 0, mk
     assert mk["hits"]["refused"] == {"no measured ranking for this market yet": 1}, mk
     assert mk["strikeouts"]["refused"] == {"no measured ranking for this market yet": 1}, mk
-    assert kinds["game"]["offered"] == 1 and kinds["game"]["shown"] == 0, kinds["game"]
-    assert kinds["game"]["refused"] == {"this game market has never been measured": 1}, \
-        kinds["game"]
+
+    # THE MONEYLINE IS NOT, ANY MORE — and this is the other half of that
+    # sentence being answered rather than counted. Until 2026-09-16 this
+    # asserted the game row was refused for "this game market has never
+    # been measured", which was true and was the complaint. #257 measured
+    # it on the droplet (market 0.6727 against the model's 0.5596 on
+    # 1,088 games), so the row now reaches the board.
+    assert kinds["game"]["offered"] == 1 and kinds["game"]["shown"] == 1, kinds["game"]
+    assert not kinds["game"]["refused"], kinds["game"]
+    assert [r["pick_label"] for r in got] == ["NYY ML"], got
+    row = got[0]
+    assert row["prob_source"] == "market", row["prob_source"]
+    assert row["rank_auc"] == 0.6727 and row["ranked"] is True
+    # The model's own number stays ON the row — only the ORDER changed.
+    assert row["win_prob"] == 0.64 and row["raw_prob"] == 0.60
 
 
 def test_the_baseball_and_hoops_builds_hand_the_kind_census_to_the_page():

@@ -204,6 +204,12 @@ def _decimal(odds: int) -> float:
 #: Below this the bootstrap is resampling anecdotes.
 MIN_SHRINK_SLATES = 30
 
+#: One NFL regular season, in weeks — which is also its maximum number of
+#: slates. It sits beside the floor above because the two together are a
+#: fact worth stating out loud: 18 < 30, so the shrink question cannot be
+#: answered from a single season no matter how long the box runs.
+REG_SEASON_WEEKS = 18
+
 #: Depths the shrink question is asked at. The top of the board is the
 #: subject — the deep rows already sit near their bands.
 SHRINK_DEPTHS = (1, 3, 5, 10)
@@ -247,10 +253,41 @@ def shrink_report(rows: list, depths=SHRINK_DEPTHS, seed: int = 7) -> list[str]:
         slates.setdefault((r["season"], r["week"]), []).append(r)
     groups = list(slates.values())
     if len(groups) < MIN_SHRINK_SLATES:
-        return [f"  shrink check: {len(groups)} priced slate(s) — needs "
-                f"{MIN_SHRINK_SLATES}. This box has no odds_history, or "
-                f"the harvest is young; the question stays open, not "
-                f"answered."]
+        # WHY THIS SAYS MORE THAN "NOT ENOUGH YET". It used to guess —
+        # "the harvest is young" — and on 2026-09-16 Ethan ran it two
+        # weeks after the last run and the count had gone DOWN, 14 slates
+        # to 12. A refusal that tells you to wait is worth nothing if
+        # waiting cannot work, and nothing here was measuring whether it
+        # could. So the refusal now shows the replay's own funnel, the
+        # slates it actually found, and the arithmetic.
+        #
+        # THE ARITHMETIC IS THE POINT. A slate is one (season, week), and
+        # an NFL regular season is 18 of them — so a single season tops
+        # out at 18 against a floor of 30 and CANNOT reach it however
+        # long anyone waits. Only a second season of priced closes can,
+        # which makes this a harvest question and not a patience one.
+        seasons = sorted({r["season"] for r in rows if r.get("season")})
+        out = [f"  shrink check: {len(groups)} priced slate(s) — needs "
+               f"{MIN_SHRINK_SLATES}. NOT ANSWERED:"]
+        funnel = getattr(board_priced, "funnel", None)
+        if funnel:
+            out.append("    replay funnel: "
+                       + ", ".join(f"{k} {v:,}" for k, v in funnel.items()))
+        out.append(f"    seasons with a priced row: "
+                   f"{', '.join(str(x) for x in seasons) or 'none'}")
+        if groups:
+            found = ", ".join(f"{sn}w{wk}" for sn, wk in sorted(slates))
+            out.append(f"    slates found: {found}")
+        if len(seasons) < 2:
+            out.append(f"    A REGULAR SEASON IS {REG_SEASON_WEEKS} WEEKS, so "
+                       f"one season tops out at {REG_SEASON_WEEKS} against a "
+                       f"floor of {MIN_SHRINK_SLATES}. Waiting cannot close "
+                       f"this — a second season of priced closes has to be "
+                       f"harvested, or the floor has to be argued down.")
+        else:
+            out.append("    The seasons are there; the funnel above names "
+                       "the step that is dropping them.")
+        return out
 
     def panel(sample, k, key):
         """(claims by name, landed, rows, slates) at depth k ranked by key."""

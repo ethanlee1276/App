@@ -159,13 +159,22 @@ def test_the_cli_exposes_it():
 
 
 def test_the_figures_are_the_ones_written_down():
-    """The constants are documented measurements (2026-09-07, this box's
-    schedule closes: NFL 0.722 on 1,420 games, college 0.7905 on 3,011),
-    and the market beats the model on both. Only the moneyline was
-    measured, so only the moneyline ranks on the market."""
+    """The constants are documented measurements and the market beats the
+    model on every sport listed:
+
+        nfl  0.722  on 1,420 games   (2026-09-07, this box's closes)
+        cfb  0.7905 on 3,011 games   (2026-09-07, this box's closes)
+        mlb  0.6727 on 1,088 games   (2026-09-16, the droplet — #257)
+
+    Only the moneyline was measured anywhere, so only the moneyline ranks
+    on the market. Baseball joined last because the MLB history only
+    exists on the droplet; the same run re-measured the NFL at 0.7236
+    against the 0.722 pinned here, which is the control saying the
+    harvest has not drifted under the table."""
     assert K.GAME_RANK_MARKET == {"nfl": {"moneyline": 0.722},
-                                  "cfb": {"moneyline": 0.7905}}, K.GAME_RANK_MARKET
-    for sport, floor in (("nfl", 0.70), ("cfb", 0.77)):
+                                  "cfb": {"moneyline": 0.7905},
+                                  "mlb": {"moneyline": 0.6727}}, K.GAME_RANK_MARKET
+    for sport, floor in (("nfl", 0.70), ("cfb", 0.77), ("mlb", 0.65)):
         want = K.GAME_RANK_MARKET[sport]["moneyline"]
         assert want > K.GAME_RANK_MEASURED[sport]["moneyline"] >= floor - 0.1
     for sport in K.GAME_RANK_MARKET:

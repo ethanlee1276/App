@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
-from engine.tdbook import shrink_report, MIN_SHRINK_SLATES
+from engine.tdbook import (shrink_report, MIN_SHRINK_SLATES,
+                          REG_SEASON_WEEKS)
 
 
 def _row(season, week, cal, fair, scored, player="p"):
@@ -93,14 +94,49 @@ def test_the_ordering_panel_sees_a_reordering_the_shrink_causes():
 
 def test_too_few_slates_is_a_refusal_not_a_verdict():
     lines = shrink_report(_slates_market_is_truth(5))
-    assert len(lines) == 1
-    assert "stays open" in lines[0]
+    assert "NOT ANSWERED" in lines[0], lines
     assert str(MIN_SHRINK_SLATES) in lines[0]
+
+
+def test_the_refusal_says_why_waiting_will_not_close_it():
+    """Ethan ran this on 2026-09-16, two weeks after the last run, and
+    the priced-slate count had gone DOWN — 14 to 12. The old refusal said
+    "the harvest is young; the question stays open", which is advice to
+    wait, and waiting cannot work: a slate is one (season, week) and a
+    regular season holds 18 of them against a floor of 30. One season
+    cannot reach it. The refusal has to say that rather than imply the
+    opposite."""
+    lines = shrink_report(_slates_market_is_truth(5))
+    blob = "\n".join(lines)
+    assert str(REG_SEASON_WEEKS) in blob, blob
+    assert "Waiting cannot close this" in blob, blob
+    assert "second season" in blob, blob
+
+
+def test_the_refusal_shows_the_slates_it_actually_found():
+    """So the next run can be compared with the last one instead of
+    reduced to a single number that went the wrong way unexplained."""
+    lines = shrink_report(_slates_market_is_truth(5))
+    blob = "\n".join(lines)
+    assert "slates found:" in blob, blob
+    assert "seasons with a priced row:" in blob, blob
+
+
+def test_two_seasons_present_points_at_the_funnel_instead():
+    """The arithmetic only applies while one season is all there is. With
+    two, the shortfall is something dropping rows and the refusal has to
+    send the reader to the funnel rather than repeat the season maths."""
+    rows = _slates_market_is_truth(5)
+    for r in rows[: len(rows) // 2]:
+        r["season"] = r["season"] - 1
+    blob = "\n".join(shrink_report(rows))
+    assert "Waiting cannot close this" not in blob, blob
+    assert "names the step that is dropping them" in blob, blob
 
 
 def test_no_rows_at_all_is_the_same_refusal():
     lines = shrink_report([])
-    assert "stays open" in lines[0]
+    assert "NOT ANSWERED" in lines[0], lines
 
 
 def test_a_depth_no_slate_can_answer_sits_out_silently():

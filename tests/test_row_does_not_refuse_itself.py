@@ -110,13 +110,37 @@ def test_a_market_ranked_row_does_not_carry_it():
 @_no_information
 def test_a_model_ranked_row_keeps_it():
     """Where the row is sorted on the model's own number, a refusal of
-    that number is about the row. Only the moneyline ranks on the market
-    (GAME_RANK_MARKET); a sport without that entry ranks on the model."""
-    row = K.from_game_bet(_card(), "mlb")
-    if row is None:
-        return                      # MLB game markets are unmeasured here
-    assert row["prob_source"] == "model"
-    assert G.RATING_ERROR_REASON in row["reasons"]
+    that number is about the row, so it stays.
+
+    THE FIXTURE IS A SPREAD, and that is a fact about the board rather
+    than a convenience. This used to name MLB's MONEYLINE, because
+    baseball had no `GAME_RANK_MARKET` entry and therefore ranked on the
+    model. #257 measured it on 2026-09-16, and with baseball in the table
+    every sport that produces a game row at all now ranks its moneyline
+    on the market — hoops produce none — so there is no model-ranked
+    moneyline left anywhere to test with.
+
+    What still ranks on the model is a MARKET with no entry: only the
+    moneyline was ever measured, so spreads, totals and team totals rank
+    on the model on every board. The assertion below checks that, and the
+    one above it checks the table, so if a spread is ever measured this
+    file says so instead of quietly testing nothing."""
+    assert all(set(m) == {"moneyline"} for m in K.GAME_RANK_MARKET.values()), \
+        ("a second market now ranks on the market's number — pick another "
+         "for this fixture, or this test is asserting the wrong thing")
+    row = dict(_card(), bet_type="spread", market="spread",
+               market_label="Spread", side="MIN", line=-1.5,
+               pick_label="MIN -1.5",
+               # The board refuses a game row whose OTHER side has no
+               # price — it ranks the side more likely to land and will
+               # not guess the opposite number. A spread fixture without
+               # this is refused for that, not for anything this test is
+               # about.
+               odds=-110, other_odds=-110)
+    got = K.from_game_bet(row, "nfl")
+    assert got is not None, "the spread produced no row to check"
+    assert got["prob_source"] == "model", got["prob_source"]
+    assert G.RATING_ERROR_REASON in got["reasons"], got["reasons"]
 
 
 @_no_information
