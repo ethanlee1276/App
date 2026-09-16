@@ -3299,6 +3299,11 @@ def _background_refresher(interval: int) -> None:
         # page and a reader on the NFL page were shown different "picks
         # of the day" and neither was the day's.
         _write_day_top_pick()
+        # AND REWIND THE WRITE-AHEAD LOG BEFORE GOING IDLE. See
+        # `_checkpoint_wal` — this is the one moment in the cycle when
+        # every build has finished writing, which is the only moment a
+        # truncating checkpoint has a chance of succeeding.
+        _checkpoint_wal()
         # THE HEARTBEAT IS LAST, ALWAYS. Proof of life has to be the
         # final thing the cycle does, or a step added after it can take
         # the liveness stamp down with it and the page then cannot tell
@@ -3306,6 +3311,91 @@ def _background_refresher(interval: int) -> None:
         # this function ENDS here — it caught the first draft of the
         # line above, which had been written underneath.
         _write_heartbeat(interval, swept=_swept)
+
+
+#: A write-ahead log worth mentioning. Below this the checkpoint is
+#: routine housekeeping and saying so every few minutes is noise; above
+#: it, something wrote a lot and a reader deserves to know it was
+#: reclaimed — or that it could not be.
+WAL_NOISY_BYTES = 32 * 1024 * 1024
+
+#: How long the end-of-cycle checkpoint will wait for a reader to let go,
+#: against the 30 seconds every other connection uses. This one is
+#: housekeeping and gives way to real work immediately — a skipped rewind
+#: costs one cycle, a stalled build costs a board.
+WAL_CHECKPOINT_TIMEOUT_MS = 5000
+
+
+def _checkpoint_wal() -> None:
+    """Rewind the write-ahead log. Never fatal, never blocks for long.
+
+    THE MEASUREMENT THAT MADE THIS NECESSARY. On 2026-09-16 the droplet's
+    `history.db-wal` was truncated to zero and was back to 230 MB twelve
+    minutes later — roughly 19 MB a minute, sustained, with six
+    "database is locked" failures in the same window.
+
+    WHY IT GROWS WITHOUT BOUND, which is not what most people expect of
+    WAL. SQLite's automatic checkpoint is PASSIVE: it copies pages from
+    the log into the database, but it cannot rewind the log to the start
+    while any reader still holds an older snapshot. This box serves a web
+    server that keeps read connections open. So the pages are copied out,
+    the file never rewinds, and it grows all day — and every later
+    checkpoint has more file to walk, holding locks longer, while writers
+    queue behind a 30-second timeout. That is the failure the builds were
+    dying on.
+
+    TRUNCATE, AND ON A SHORT LEASH. Only a TRUNCATE (or RESTART)
+    checkpoint waits for readers and rewinds; PASSIVE is what is already
+    happening and is not enough. But waiting for readers is exactly what
+    could stall a build cycle, so the timeout is dropped to five seconds
+    for this call alone: if a reader is mid-transaction we would rather
+    skip a cycle than hold one up. SQLite answers SQLITE_BUSY, the first
+    number in the result row, and nothing is harmed.
+
+    A BUSY RESULT IS THE INTERESTING ONE and is always printed. If this
+    can never get a clear moment, the long-lived reader is the problem
+    and no amount of checkpointing here will fix it — that is a finding,
+    not a routine skip, and it must not be swallowed into silence like
+    the line-ledger note was.
+    """
+    try:
+        import sqlite3 as _sq
+        from engine import db as _db, ledger as _led
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  WAL checkpoint skipped: {type(exc).__name__}: {exc}")
+        return
+    for label, path in (("history", _db.DEFAULT_DB),
+                        ("journal", _led.DEFAULT_DB)):
+        wal = Path(f"{path}-wal")
+        try:
+            before = wal.stat().st_size if wal.exists() else 0
+        except OSError:
+            before = 0
+        conn = None
+        try:
+            conn = _sq.connect(str(path))
+            # SHORTER THAN THE 30s EVERY OTHER CONNECTION USES. This one
+            # is housekeeping; it gives way to real work immediately.
+            conn.execute(f"PRAGMA busy_timeout={WAL_CHECKPOINT_TIMEOUT_MS}")
+            row = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            busy = bool(row and row[0])
+            if busy:
+                print(f"  ⚠️  {label} WAL could not be rewound "
+                      f"({before / 1e6:.0f} MB) — a reader held it for the "
+                      f"whole {WAL_CHECKPOINT_TIMEOUT_MS / 1000:.0f}s. If this "
+                      f"repeats every cycle the log will "
+                      f"grow all day and writers will time out behind it.")
+            elif before >= WAL_NOISY_BYTES:
+                print(f"  {label} WAL rewound: {before / 1e6:.0f} MB reclaimed")
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  ⚠️  {label} WAL checkpoint failed: "
+                  f"{type(exc).__name__}: {exc}")
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:                             # noqa: BLE001
+                    pass
 
 
 def _write_day_top_pick() -> None:
