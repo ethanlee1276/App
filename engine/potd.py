@@ -619,6 +619,25 @@ def _card(row: dict, below: str = "") -> dict:
     return out
 
 
+#: Where a build leaves the rows `likely.build`'s display caps dropped,
+#: for `attach` to select over and then remove. Underscored because it is
+#: a hand-off between two steps of one build and never a published field.
+POOL_KEY = "_potd_pool"
+
+
+def _same_row(row: dict, card: dict) -> bool:
+    """Is this board row the one `_card` was built from?
+
+    `_card` copies the row and adds fields, so identity is lost by the
+    time `attach` wants to seat it. The journal's own key is the right
+    comparison — it is what `relock` will look this pick up by, so a
+    match here is exactly a match there.
+    """
+    from .ledger import potd_row_key
+    a, b = potd_row_key(row), potd_row_key(card)
+    return a is not None and b is not None and tuple(a) == tuple(b)
+
+
 def verdict(payload: dict) -> dict:
     """The call, in the one shape both the page and the log read.
 
@@ -793,7 +812,7 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     return out
 
 
-def attach(result: dict, sport: str, now=None) -> str:
+def attach(result: dict, sport: str, now=None, cut=None) -> str:
     """Put the day's pick on a finished board. Returns a build-log line.
 
     ONE HOOK, CALLED FROM EVERY BUILD, for the reason
@@ -806,16 +825,89 @@ def attach(result: dict, sport: str, now=None) -> str:
     take down a build that had already priced everything else. The
     failure lands in the JSON as `pick_of_the_day_error`, where the page
     can see it, rather than only in a log the launcher swallows.
+
+    ``cut`` IS THE REST OF THE BOARD — the rows `likely.build` refused a
+    SEAT rather than refusing on the merits (`likely.build`'s own `cut`
+    argument). Ethan, 2026-09-16: "I think the selector should see the
+    full game list so no prop or game is left unscanned."
+
+    WHY THE SEAT WAS THE WRONG GATE FOR THIS. `GAME_LIMIT` keeps the
+    twenty LIKELIEST game rows, and this module's band exists to throw
+    the likeliest rows away — no in-band price can imply more than 58.8%.
+    So the cap was discarding, by construction, the part of the board
+    this feature shops in: a sharp-anchored +130 dog with a real edge
+    sits at position 21 on a probability ranking and was never
+    considered. The two rankings answer different questions and the cap
+    only ever meant to answer the page's.
+
+    NOTHING IS WAIVED. Every row in `cut` already cleared `likely
+    .admissible` and every refusal in `from_prop` / `from_game_bet`, and
+    it still has to clear `disqualify` and `shortfall` here. The pool
+    grew; the bars did not move. Props in it are refused on the first
+    line of `disqualify` (game markets only), which is why this takes
+    the whole cut rather than a filtered one — the market policy lives
+    in one place and the pool does not need to know it.
     """
+    # WHERE THE CUT ROWS COME FROM, and why they arrive on the result.
+    #
+    # `cut` is the explicit door and is what tests use. The builds use
+    # the key: NFL assembles its board inside `engine.pipeline` and calls
+    # this from `nfl_build`, so there is no local variable to hand over —
+    # the two are a dict apart. One mechanism for all five leagues beats
+    # four explicit arguments and one smuggled key.
+    #
+    # POPPED, NOT READ. These rows are deliberately NOT on the published
+    # board (`GAME_LIMIT` is a real page-weight decision and the MLB
+    # payload is already 8 MB), so the key must not survive to
+    # `gate.publish`. Popping here makes that structural rather than a
+    # thing five builds each have to remember — see
+    # `test_the_pool_never_reaches_the_published_board`.
+    pool_key = result.pop(POOL_KEY, None)
+    if cut is None:
+        cut = pool_key
     try:
+        seated = result.get("most_likely") or []
+        pool = list(seated) + [r for r in (cut or []) if isinstance(r, dict)]
         result["pick_of_the_day"] = build(
-            result.get("most_likely") or [], sport,
-            str(result.get("date") or ""), now=now)
+            pool, sport, str(result.get("date") or ""), now=now)
     except Exception as exc:                                  # noqa: BLE001
         result["pick_of_the_day_error"] = str(exc)
         return f"pick of the day: error — {exc}"
     got = result["pick_of_the_day"]
     pick = got.get("pick")
+    # A PICK FROM BEYOND THE CAP IS SEATED ON THE BOARD.
+    #
+    # Everything downstream finds the day's pick by looking for its row
+    # among `most_likely`: `ledger.relock_potd` re-points the card at it
+    # every build, the card's door opens the row's page, and the Live
+    # tab maps the journal row back through the board. A pick that is
+    # not there still works — `relock` falls back to the journal and
+    # says `off_board` — but that fallback exists to DESCRIBE a rare
+    # accident, and left alone this change would have made it the
+    # normal state of every widened pick: a card reading "shown from the
+    # journal at the price it was locked at" every night, with a price
+    # that never refreshes.
+    #
+    # One row, appended rather than inserted, so the board's own
+    # probability order is untouched for every reader that assumes it.
+    # NEVER RAISES, like everything else in this function. A board whose
+    # `most_likely` is not a list is not a reason to take down a build
+    # that has already priced everything else — and the cost of failing
+    # here is small and already handled: `relock` falls back to the
+    # journal row and says `off_board`, which is precisely the case that
+    # fallback was written for.
+    try:
+        if isinstance(pick, dict) and isinstance(seated, list) \
+                and not any(r is pick for r in seated):
+            for row in (cut or []):
+                if row is pick or (isinstance(row, dict)
+                                   and _same_row(row, pick)):
+                    seated.append(row)
+                    result["most_likely"] = seated
+                    got["from_beyond_the_cap"] = True
+                    break
+    except Exception:                                         # noqa: BLE001
+        pass
     if pick is None:
         return f"pick of the day: NO BET ({got.get('note', 'no candidate')})"
     where = f"{pick.get('player', '')} {pick.get('market_label') or pick.get('market', '')}".strip()

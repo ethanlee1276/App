@@ -487,17 +487,21 @@ from . import boards as _boards                          # noqa: E402
 
 def _likely_board(results: list, td_picks: list, td_watch: list,
                   census: dict | None = None, game_bets=None,
-                  census_by_kind: dict | None = None) -> list:
+                  census_by_kind: dict | None = None,
+                  cut: list | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists.
 
     `game_bets` are the cards `_game_bets` priced for the edge board; the
     likelihood board ranks the ones whose market has been measured to
-    rank (today: the moneyline) beside the player rows."""
+    rank (today: the moneyline) beside the player rows.
+
+    `cut` is filled with the rows the board's display caps dropped — see
+    `likely.build`. They are for `potd.attach` and are never published."""
     from .likely import build
     try:
         return build(results, td_picks, td_watch, sport="nfl",
                      census=census, game_bets=game_bets,
-                     census_by_kind=census_by_kind)
+                     census_by_kind=census_by_kind, cut=cut)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -1075,8 +1079,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # `_likely_board`'s own header warns about one level up.
     _likely_census: dict = {}
     _likely_kinds: dict = {}
+    # The rows the display caps drop. They travel on the board under
+    # `potd.POOL_KEY` for `potd.attach` to select over, and that call
+    # pops the key, so they never reach the published payload.
+    from . import potd as _potd
+    _likely_cut: list = []
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
-                            game_bets=game_bets, census_by_kind=_likely_kinds)
+                            game_bets=game_bets, census_by_kind=_likely_kinds,
+                            cut=_likely_cut)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1123,6 +1133,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # Built from the SAME evaluated rows, so the two pages can never
         # disagree about the same player.
         "most_likely": _likely,
+        # The rows the display caps dropped, for `potd.attach` to select
+        # over. It POPS this key, so it never reaches the published
+        # payload — see `potd.POOL_KEY`.
+        _potd.POOL_KEY: _likely_cut,
         # WHAT EACH BOARD IS, travelling with the boards themselves.
         # Ethan, 2026-08-30: "we need to be more clear on what bets are
         # what and what bets to use and trust and whats being recorded

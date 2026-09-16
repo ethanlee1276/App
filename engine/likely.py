@@ -1574,7 +1574,8 @@ def _funnel() -> dict:
 
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
-          game_bets=None, census_by_kind: dict | None = None) -> list:
+          game_bets=None, census_by_kind: dict | None = None,
+          cut: list | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
@@ -1804,6 +1805,35 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # that keeps this true if someone raises RESERVE_LIMIT.
     players = _cut_players([r for r in out if r.get("kind") != "game"], limit)
     games = [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]
+    # WHAT THE DISPLAY CAPS DROPPED, HANDED BACK TO A CALLER THAT ASKED.
+    #
+    # Ethan, 2026-09-16: "I think the selector should see the full game
+    # list so no prop or game is left unscanned." He is right, and the
+    # reason is that the two rankings pull opposite ways. The cut above
+    # keeps the LIKELIEST rows; `potd`'s band (-142 to +190) exists to
+    # throw the likeliest rows away, because a -300 favourite pays too
+    # little to be the day's pick. So the rows this cap discards are
+    # exactly the rows the Pick of the Day is shopping for — a
+    # sharp-anchored +130 dog with a real edge sits at position 21 on a
+    # probability ranking and never reached the selector at all.
+    #
+    # THESE ARE CUT ROWS, NOT RAW ONES, and that distinction is the whole
+    # safety of it. Every row here already cleared `admissible` and every
+    # refusal in `from_prop` / `from_game_bet` — the price cap, the
+    # credibility bar, an injury designation, a game under way, a
+    # moneyline that contradicts its own spread. What it failed is a
+    # SEAT, which is a page-layout fact and not a judgement about the
+    # bet. Handing a caller the rows the model refused would be a
+    # different and much worse change.
+    #
+    # THE BOARD ITSELF IS UNCHANGED. `GAME_LIMIT` and `limit` still say
+    # what the page draws and the payload carries (the MLB board is
+    # already 8 MB); this is a second, in-memory view for a caller whose
+    # question the caps were never about. Filled in place, like
+    # `census_by_kind`, so no existing caller has to change.
+    if cut is not None:
+        seated = {id(r) for r in players} | {id(r) for r in games}
+        cut.extend(r for r in out if id(r) not in seated)
     out = sorted(players + games, key=lambda r: -float(r["model_prob"] or 0.0))
     # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
     # for it. An empty college Saturday has several causes and a census

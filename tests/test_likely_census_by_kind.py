@@ -194,10 +194,15 @@ def test_the_football_boards_publish_it_beside_the_flat_census():
     pipe = open(os.path.join(ROOT, "engine", "pipeline.py"), encoding="utf-8").read()
     cfb = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
     checks = open(os.path.join(ROOT, "docs", "DROPLET_CHECKS.md"), encoding="utf-8").read()
+    # ANCHORED ON THE ARGUMENT, NOT ON THE CLOSING PAREN. These read
+    # "census_by_kind=_likely_kinds)" until 2026-09-16, when a second
+    # keyword (`cut=`, for the Pick of the Day's pool) was added after
+    # it — and the test failed a change that never touched the census.
+    # A guard on an argument list has to survive that list growing.
     assert '"likely_census_by_kind": _likely_kinds,' in pipe
-    assert "census_by_kind=_likely_kinds)" in pipe
+    assert "census_by_kind=_likely_kinds" in pipe
     assert 'out["likely_census_by_kind"] = _ml_kinds' in cfb
-    assert "census_by_kind=_ml_kinds)" in cfb
+    assert "census_by_kind=_ml_kinds" in cfb
     assert "likely_census_by_kind" in checks and "`td` offered 0" in checks
 
 

@@ -131,8 +131,12 @@ def test_the_page_shelf_keeps_its_size_and_the_board_is_offered_everything():
     """The slice moved to where the page's key is published; the board
     call above it gets the whole list."""
     assert 'out["longshot_watch"] = watch[:_tds.CFB_WATCH_LIMIT]' in BUILD
+    # THE CALL, TO ITS OWN CLOSING PAREN. This used to slice to the
+    # literal "census_by_kind=_ml_kinds)" — which stopped existing on
+    # 2026-09-16 when a `cut=` keyword was added after it, and the slice
+    # raised on a change that never touched what this test guards.
     call = BUILD[BUILD.index('out["most_likely"] = _likely('):]
-    call = call[:call.index("census_by_kind=_ml_kinds)") + 30]
+    call = call[:call.index(")\n", call.index("census_by_kind=_ml_kinds"))]
     assert "rows, watch, sport=\"cfb\"" in call, call
     assert "watch[:" not in call, "the board is still handed a sliced menu"
     assert "limit=_player_limit" in call

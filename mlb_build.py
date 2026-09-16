@@ -761,10 +761,14 @@ def main() -> None:
         # only after `engine.gamerank --save` has measured, on THIS
         # box's game history, that the run-rating model ranks winners —
         # the same earned-per-market rule the prop shelves live by.
+        # The rows the display caps drop go to the Pick of the Day and
+        # nowhere else — `potd.POOL_KEY`, popped by `potd.attach`.
+        from engine import potd as _potd_keys
+        result[_potd_keys.POOL_KEY] = _ml_cut = []
         result["most_likely"] = _likely_build(
             result["recommendations"], sport="mlb", census=_ml_census,
             game_bets=result.get("game_bets") or [],
-            census_by_kind=_ml_kinds)
+            census_by_kind=_ml_kinds, cut=_ml_cut)
         if not result["most_likely"]:
             from engine.rankfit import load as _rank_store
             if not any(k.startswith("mlb:") for k in _rank_store()):

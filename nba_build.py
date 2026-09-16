@@ -858,9 +858,13 @@ def main() -> None:
             from engine import boards as _hboards
             _ml_census: dict = {}
             _ml_kinds: dict = {}      # per kind and market — see mlb_build
+            # The rows the display caps drop go to the Pick of the Day
+            # and nowhere else — popped by `potd.attach`.
+            from engine import potd as _potd_keys
+            out[_potd_keys.POOL_KEY] = _ml_cut = []
             out["most_likely"] = _likely_build(
                 out.get("recommendations") or [], sport=args.league,
-                census=_ml_census, census_by_kind=_ml_kinds)
+                census=_ml_census, census_by_kind=_ml_kinds, cut=_ml_cut)
             if not out["most_likely"]:
                 from engine.rankfit import load as _rank_store
                 if not any(k.startswith(f"{args.league}:")
