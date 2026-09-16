@@ -532,6 +532,13 @@ def note_for(sport: str, market: str) -> str | None:
 if __name__ == "__main__":                       # pragma: no cover
     import sys
     argv = sys.argv[1:]
+    # See the note in `engine/corrfit`: a bare-argv CLI has no help
+    # unless it writes one.
+    if "--help" in argv or "-h" in argv:
+        print(__doc__.strip().split("\n")[0])
+        print("\n  --sport NAME   one league (default: every league in the db)")
+        print("  --db PATH      history database (default: data/history.db)")
+        raise SystemExit(0)
     sport = argv[argv.index("--sport") + 1] if "--sport" in argv else None
     db = argv[argv.index("--db") + 1] if "--db" in argv else "data/history.db"
     conn = sqlite3.connect(db)

@@ -1182,8 +1182,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
                     default=datetime.date.today().isoformat())
-    ap.add_argument("--odds", action="store_true")
-    ap.add_argument("--cached-odds", action="store_true")
+    ap.add_argument("--odds", action="store_true",
+                    help="buy fresh odds for this slate (spends API credits)")
+    ap.add_argument("--cached-odds", action="store_true",
+                    help="use the odds already on disk — no purchase")
     ap.add_argument("--lines-odds", action="store_true",
                     help="Buy the GAME markets only — one request for the "
                          "whole board, three credits — and read player "

@@ -64,8 +64,11 @@ def _print_store(store: dict) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="The hypothesis lab.")
-    ap.add_argument("--show", action="store_true")
-    ap.add_argument("--retest", action="store_true")
+    ap.add_argument("--show", action="store_true",
+                    help="print the stored hypotheses and exit — no API call")
+    ap.add_argument("--retest", action="store_true",
+                    help="re-score every stored hypothesis against the "
+                         "journal as it stands now, then print them")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the evidence pack and exit — no API call")
     ap.add_argument("--spend", action="store_true",

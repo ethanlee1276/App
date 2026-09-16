@@ -603,6 +603,15 @@ def measured(name: str, sport: str | None = None) -> dict | None:
 if __name__ == "__main__":                       # pragma: no cover
     import sys
     argv = sys.argv[1:]
+    # THE FLAGS, SAID OUT LOUD. A bare-argv CLI generates no help, so
+    # anything it accepts is discoverable only by reading the source —
+    # which is how `tdbook --shrink` answered an open question for weeks
+    # without anyone able to find it (#77, 2026-09-16).
+    if "--help" in argv or "-h" in argv:
+        print(__doc__.strip().split("\n")[0])
+        print("\n  --sport NAME   one league (default: every league in the db)")
+        print("  --db PATH      history database (default: data/history.db)")
+        raise SystemExit(0)
     sport = argv[argv.index("--sport") + 1] if "--sport" in argv else None
     db = argv[argv.index("--db") + 1] if "--db" in argv else "data/history.db"
     report(fit_all(db=db, sport=sport))

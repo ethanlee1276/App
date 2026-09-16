@@ -46,12 +46,18 @@ def _spend_line() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="The prose lanes.")
-    ap.add_argument("--postmortem", action="store_true")
+    ap.add_argument("--postmortem", action="store_true",
+                    help="write last night's postmortem (spends API budget)")
     ap.add_argument("--date", default=None,
                     help="which night (default: latest with graded picks)")
-    ap.add_argument("--brief", action="store_true")
-    ap.add_argument("--triage", action="store_true")
-    ap.add_argument("--show", action="store_true")
+    ap.add_argument("--brief", action="store_true",
+                    help="write the weekly brief (spends API budget)")
+    ap.add_argument("--triage", action="store_true",
+                    help="draft watchlist ideas into miner dimensions "
+                         "(spends API budget)")
+    ap.add_argument("--show", action="store_true",
+                    help="print the postmortem and brief already on the "
+                         "site, and the spend so far — writes nothing")
     args = ap.parse_args()
 
     if args.show:

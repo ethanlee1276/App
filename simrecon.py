@@ -437,8 +437,10 @@ def main() -> None:
                     help="scoring-sim trials per lineup")
     ap.add_argument("--fit-trials", type=int, default=4000,
                     help="calibration trials per fit round")
-    ap.add_argument("--forward-only", action="store_true")
-    ap.add_argument("--history-only", action="store_true")
+    ap.add_argument("--forward-only", action="store_true",
+                    help="only the forward simulation arm")
+    ap.add_argument("--history-only", action="store_true",
+                    help="only the historical arm")
     ap.add_argument("--journal", default=LOG_PATH)
     args = ap.parse_args()
 

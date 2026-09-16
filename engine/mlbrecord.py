@@ -510,7 +510,8 @@ def main(argv=None) -> int:
         "data", "ledger.db"))
     ap.add_argument("--sport", default="mlb")
     ap.add_argument("--since", default=None)
-    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json", action="store_true",
+                    help="machine-readable output instead of the report")
     a = ap.parse_args(argv)
     if not os.path.exists(a.db):
         print(f"no ledger at {a.db}", file=sys.stderr)

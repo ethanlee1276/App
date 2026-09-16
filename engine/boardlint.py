@@ -558,7 +558,8 @@ def main(argv=None) -> int:
     ap.add_argument("--file", default=None)
     ap.add_argument("--injuries", default=None, help="injuries.json path")
     ap.add_argument("--all", action="store_true", help="print unflagged rows too")
-    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json", action="store_true",
+                    help="machine-readable output instead of the report")
     a = ap.parse_args(argv)
     path = a.file or os.path.join(ROOT, "web", "data", FILES[a.sport])
     asked = path

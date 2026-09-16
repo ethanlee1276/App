@@ -165,11 +165,13 @@ def all_h2h(payload: dict, name_a: str, name_b: str) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--odds", action="store_true")
+    ap.add_argument("--odds", action="store_true",
+                    help="buy fresh odds for this slate (spends API credits)")
     ap.add_argument("--why", action="store_true",
                     help="group the passes by reason — missing data, no "
                          "posted price, or the model refusing")
-    ap.add_argument("--cached-odds", action="store_true")
+    ap.add_argument("--cached-odds", action="store_true",
+                    help="use the odds already on disk — no purchase")
     ap.add_argument("--out", default="web/data/ufc.json")
     args = ap.parse_args()
     load_local_secrets()

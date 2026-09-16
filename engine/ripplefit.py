@@ -442,7 +442,8 @@ def main(argv=None) -> int:
     ap.add_argument("--season", type=int, action="append",
                     help="Season(s) with closes to use (default: every season "
                          "that has a stored close)")
-    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json", action="store_true",
+                    help="machine-readable output instead of the report")
     args = ap.parse_args(argv)
     conn = _db.connect()
     out = run(conn, seasons=args.season, log=(lambda *_: None) if args.json else print)

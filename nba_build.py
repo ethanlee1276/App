@@ -379,8 +379,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("date", nargs="?",
                     default=datetime.date.today().isoformat())
-    ap.add_argument("--odds", action="store_true")
-    ap.add_argument("--cached-odds", action="store_true")
+    ap.add_argument("--odds", action="store_true",
+                    help="buy fresh odds for this slate (spends API credits)")
+    ap.add_argument("--cached-odds", action="store_true",
+                    help="use the odds already on disk — no purchase")
     ap.add_argument("--out", default="web/data/nba.json")
     # One build, two leagues. The WNBA runs the same Scalpy pipeline on the
     # same JSON shapes from its own CDN; what differs is the tuning (a

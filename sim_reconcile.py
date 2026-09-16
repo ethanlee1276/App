@@ -254,6 +254,16 @@ def run(date: str, dump_path: str | None = None,
 
 
 if __name__ == "__main__":
+    # See the note in `engine/corrfit`: a bare-argv CLI has no help
+    # unless it writes one, and `--trials` in particular is the whole
+    # difference between a real bias and sampler noise on a rare market.
+    if "--help" in sys.argv[1:] or "-h" in sys.argv[1:]:
+        print(__doc__.strip().split("\n")[0])
+        print("\n  YYYY-MM-DD       which night (default: today)")
+        print("  --dump[=PATH]    write the gate failures as JSON")
+        print("  --trials=N       Monte Carlo trials (default 20000; raise "
+              "it to tell a real bias from sampler error on a rare market)")
+        raise SystemExit(0)
     date = next((a for a in sys.argv[1:] if not a.startswith("-")),
                 _dt.date.today().isoformat())
     _dump = next((a.split("=", 1)[1] for a in sys.argv[1:]
