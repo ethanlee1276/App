@@ -373,6 +373,32 @@ def disqualify(row: dict, now=None) -> str:
     on a quiet day. The quality bars live in `shortfall`, and a row that
     fails only those is worth showing with the reason attached.
     """
+    # GAME MARKETS ONLY, and it is asked first because no other bar can
+    # rescue a row this one turns away.
+    #
+    # Ethan, 2026-09-15: "i do want the pick of the day to be moneylines
+    # and spreads only for all sports ... feels like relying on one
+    # player is more volitole and risky instead of relying on a whole
+    # team." Half right, and the other half is the stronger argument. A
+    # single bet's variance is p(1-p) whatever it is about, so a 60%
+    # player prop and a 60% moneyline are equally bumpy. What a player
+    # really carries is ESTIMATION error we cannot see — ejected, pulled
+    # after four innings, rested, a hamstring in the first.
+    #
+    # THE DECIDING REASON IS THE EVIDENCE LADDER. `exchangefair.MARKETS`
+    # is moneyline and nothing else, because the exchange lists game
+    # winners; and a sharp book's player-prop coverage is thin to absent.
+    # So a player prop is structurally stuck near the bottom of
+    # `EVIDENCE` — and `shortfall` refuses a model-only row outright.
+    # The selector was choosing the day's headline from a pool most of
+    # which could never meet the standard it holds them to. On the MLB
+    # board of 2026-09-15: 52 rows, 0 sharp, 0 market, 0 exchange.
+    #
+    # Props keep their own boards — Most Likely, Long Shots, the props
+    # scanner. They stop being eligible for the day's name.
+    from .ledger import is_game_row
+    if not is_game_row(row):
+        return "a player prop — the day’s pick is game markets only"
     if fair_prob(row) is None:
         return "no fair probability to price against"
     book = str(row.get("book") or "").strip().lower()

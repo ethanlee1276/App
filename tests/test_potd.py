@@ -50,10 +50,17 @@ def _row(**kw):
     Sharp-anchored by default because that is the tier the module is
     built to select: a sharp book quoted this market two ways, the
     de-vig says 60%, and DraftKings is paying a price that implies 52.4%.
+
+    A GAME TOTAL RATHER THAN A PROP since 2026-09-15, because the day's
+    pick is game markets only (`potd.disqualify`, and `ledger
+    .is_game_row` for the test it makes). A total was chosen over a
+    moneyline or a spread so that `side` and `line` keep the exact shape
+    the prop fixture had — every number below this line is unchanged, and
+    the tests that rest on them still rest on the same arithmetic.
     """
     d, k = _et(180)
-    r = {"kind": "prop", "player": "A Player", "team": "AAA",
-         "opponent": "BBB", "market": "receptions", "market_label": "Receptions",
+    r = {"kind": "game", "player": "Over 3.5", "team": "AAA",
+         "opponent": "BBB", "market": "total", "market_label": "Total",
          "side": "OVER", "line": 3.5, "book": "DraftKings", "odds": -110,
          "sharp_anchored": True, "sharp_fair": 0.60,
          "model_prob": 0.58, "implied_prob": 0.5238, "rank_auc": 0.71,
@@ -396,6 +403,84 @@ def test_every_hard_reason_is_one_the_module_can_actually_give():
               _row(injury_status="out"), _row(live=True)):
         produced.add(potd.disqualify(r))
     assert produced == set(potd.HARD_REASONS), produced ^ set(potd.HARD_REASONS)
+
+
+# ── game markets only ───────────────────────────────────────────────
+
+def _prop(**kw):
+    """A player prop that would otherwise clear every bar — same price,
+    same sharp fair, same everything as `_row`. The only difference is
+    that it is one player's line."""
+    d, k = _et(180)
+    r = {"kind": "prop", "player": "A Player", "team": "AAA",
+         "opponent": "BBB", "market": "receptions",
+         "market_label": "Receptions", "side": "OVER", "line": 3.5,
+         "book": "DraftKings", "odds": -110, "sharp_anchored": True,
+         "sharp_fair": 0.60, "model_prob": 0.58, "implied_prob": 0.5238,
+         "rank_auc": 0.71, "bettable": True, "injury_status": "",
+         "game_date": d, "kickoff": k}
+    r.update(kw)
+    return r
+
+
+def test_a_player_prop_can_never_be_the_day_s_pick():
+    """Ethan, 2026-09-15: "i do want the pick of the day to be moneylines
+    and spreads only for all sports."
+
+    THE REASON IS THE EVIDENCE LADDER, not volatility — a single bet's
+    variance is p(1-p) whatever it is about. `exchangefair.MARKETS` is
+    moneyline and nothing else, and a sharp book's prop coverage is thin
+    to absent, so a prop is structurally stuck near the bottom of
+    `EVIDENCE` while `shortfall` refuses a model-only row outright."""
+    assert potd.disqualify(_prop()) != ""
+    assert "game markets only" in potd.disqualify(_prop())
+    # And the identical row as a game total is fine, so the refusal is
+    # about the MARKET and not about the numbers.
+    assert potd.disqualify(_row()) == ""
+
+
+def test_it_is_refused_before_every_other_bar():
+    """A prop with something else wrong with it is still counted as a
+    prop. Ordering is what makes the census readable: "44 player props"
+    is an answer, and "44 outside the band" over a board of props sends
+    the reader to move a bar that would change nothing."""
+    out_of_band = _prop(odds=-400)
+    assert "game markets only" in potd.disqualify(out_of_band)
+    started = _prop(**dict(zip(("game_date", "kickoff"), _et(-30))))
+    assert "game markets only" in potd.disqualify(started)
+
+
+def test_a_prop_is_not_the_fallback_lean_either():
+    """`build` shows the best available when nothing clears. If a prop
+    could be that, the card would name a player on a day the day's own
+    universe had nothing — shown, labelled, and still from a pool the
+    selector had just been told to ignore."""
+    got = potd.build([_prop()], "nfl", "2026-09-16")
+    assert got.get("pick") is None, got.get("pick")
+    assert any("game markets only" in why for why in got["census"]), got["census"]
+
+
+def test_all_four_game_markets_are_in():
+    """Moneyline, spread and total are Ethan's list. Team total is in
+    because it is a whole team's scoring and meets the reason he gave —
+    and because `ledger.GAME_MARKETS` is the one definition of a game
+    row, so a second list here would be a second thing to keep in sync.
+    Cutting team totals is a one-line change if he wants it."""
+    from engine.ledger import GAME_MARKETS
+    assert set(GAME_MARKETS) == {"moneyline", "spread", "total", "team_total"}
+    for market in sorted(GAME_MARKETS):
+        row = _row(kind="game", market=market)
+        assert potd.disqualify(row) == "", (market, potd.disqualify(row))
+
+
+def test_a_row_with_no_kind_is_read_off_its_market():
+    """An older board, a hand-built payload, a journal row read back —
+    `kind` is not always there, and the market alone has to answer."""
+    from engine import ledger
+    assert ledger.is_game_row({"market": "moneyline"}) is True
+    assert ledger.is_game_row({"market": "receptions"}) is False
+    assert ledger.is_game_row({"kind": "game"}) is True
+    assert ledger.is_game_row(None) is False
 
 
 if __name__ == "__main__":

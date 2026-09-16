@@ -1258,6 +1258,28 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     return cur.rowcount or 0
 
 
+def is_game_row(row: dict) -> bool:
+    """Is this a whole-game bet rather than one player's line?
+
+    ONE DEFINITION, and it earns that the moment a second reader appears.
+    `potd_row_key` asks it to pick the right key shape; `potd.disqualify`
+    asks it because the Pick of the Day is game markets only (Ethan,
+    2026-09-15: "i do want the pick of the day to be moneylines and
+    spreads only for all sports ... feels like relying on one player is
+    more volitole"). Two copies of this drift the day one of them learns
+    about a market the other has not.
+
+    BOTH TESTS, because either can be missing. `kind` is what the maker
+    stamped and is the honest answer where it exists; `GAME_MARKETS`
+    catches a row that arrived without one — an older board, a hand-built
+    payload, a journal row read back.
+    """
+    if not isinstance(row, dict):
+        return False
+    return (row.get("kind") == "game"
+            or str(row.get("market") or "") in GAME_MARKETS)
+
+
 def potd_row_key(pick: dict):
     """``(player, market, side, line)`` this pick is JOURNALED under, or None.
 
@@ -1275,7 +1297,7 @@ def potd_row_key(pick: dict):
     player = str(pick.get("player") or "")
     side = str(pick.get("side") or "OVER").upper()
     line = pick.get("line")
-    if pick.get("kind") == "game" or market in GAME_MARKETS:
+    if is_game_row(pick):
         keys = game_row_keys(pick, market)
         if keys is None:
             return None

@@ -272,11 +272,18 @@ def test_what_the_page_shows_and_what_the_record_counts_never_diverge():
     nowhere."""
     # A BOARD row, not a card: this walks the whole path the build walks,
     # selector first and journal second, which is the only way the two
-    # can be caught disagreeing.
+    # can be caught disagreeing. A GAME row since 2026-09-15 — the day's
+    # pick is game markets only, so a prop here would be refused before
+    # the reserve question this test is about could be asked.
+    #
+    # `matchup` IS NOT DECORATION. A total's journal key is built from it
+    # (`ledger.game_row_keys`), so a total row without one cannot be
+    # recorded at all — which is what the first cut of this fixture hit.
+    # `likely.from_game_bet` stamps it on every real game row.
     d, k = _et(180)
-    board_row = {"kind": "prop", "player": "A Player", "team": "AAA",
-                 "opponent": "BBB", "market": "receptions",
-                 "market_label": "Receptions", "side": "OVER", "line": 3.5,
+    board_row = {"kind": "game", "player": "Over 3.5", "team": "AAA",
+                 "opponent": "BBB", "market": "total", "matchup": "BBB @ AAA",
+                 "market_label": "Total", "side": "OVER", "line": 3.5,
                  "book": "DraftKings", "odds": 100, "reserve": True,
                  "sharp_anchored": True, "sharp_fair": 0.62,
                  "model_prob": 0.52, "implied_prob": 0.50, "rank_auc": 0.71,

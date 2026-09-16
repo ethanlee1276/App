@@ -32,11 +32,17 @@ ET = ZoneInfo("America/New_York")
 
 
 def _row(**kw):
-    """A board row three hours from kickoff that clears every bar."""
+    """A board row three hours from kickoff that clears every bar.
+
+    A GAME SPREAD RATHER THAN A PROP since 2026-09-15: the day's pick is
+    game markets only, so a prop fixture here would be testing the
+    report over rows the selector now refuses before any other bar. A
+    spread keeps a printable name in `player`, which several assertions
+    below read."""
     t = dt.datetime.now(ET) + dt.timedelta(minutes=180)
-    r = {"kind": "prop", "player": "A Player", "team": "AAA",
-         "opponent": "BBB", "market": "receptions",
-         "market_label": "Receptions", "side": "over", "line": 3.5,
+    r = {"kind": "game", "player": "AAA", "team": "AAA",
+         "opponent": "BBB", "market": "spread",
+         "market_label": "Spread", "side": "+3.5", "line": 3.5,
          "book": "DraftKings", "odds": -110, "sharp_anchored": True,
          "sharp_fair": 0.60, "model_prob": 0.58, "implied_prob": 0.5238,
          "rank_auc": 0.71, "bettable": True, "injury_status": "",
