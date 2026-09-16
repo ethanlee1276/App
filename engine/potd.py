@@ -276,44 +276,42 @@ from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 #: THE CONFIDENCE FLOOR — and since 2026-09-16 the bar that defines this
 #: feature rather than a footnote to it.
 #:
-#: Ethan: "The point of the pick of the day is to give out confident
-#: winning picks." A floor of 50% says nothing more than "a coin flip we
-#: like", which is what the card has been publishing: 55% at -122, with
-#: the old band making anything better unreachable.
+#: 0.50, AND IT WENT TO 0.55 AND BACK IN ONE AFTERNOON. Both moves were
+#: Ethan's and both were made off the same `--sweep-conf` table, over 66
+#: days of settled MLB closes:
 #:
-#: 0.55, SET FROM `--sweep-conf` ON 2026-09-16 AND NOT BY JUDGEMENT.
-#: Ethan ran it over 66 days of settled MLB closes:
+#:   floor  days  % of days  bets    W-L    hit    units     ROI   dogs
+#:    50%     44       67%     44   29-15  65.9%   +8.13  +18.5%   8, 5-3 +2.20u
+#:    55%     25       38%     25    18-7  72.0%   +5.43  +21.7%   none
+#:    58%     21       32%     21    16-5  76.2%   +5.84  +27.8%   none
+#:    60%     17       26%     17    12-5  70.6%   +2.78  +16.4%   none
+#:    62%      8       12%      8     5-3  62.5%   -0.33   -4.2%   none
+#:    65%      5        8%      5     3-2  60.0%   -0.58  -11.7%   none
 #:
-#:   floor  days  bets    W-L    hit rate   units      ROI
-#:    50%     44    44   29-15      65.9%   +8.13   +18.5%   (shipped before)
-#:    55%     25    25    18-7      72.0%   +5.43   +21.7%   <- this
-#:    58%     21    21    16-5      76.2%   +5.84   +27.8%
-#:    60%     17    17    12-5      70.6%   +2.78   +16.4%
-#:    62%      8     8     5-3      62.5%   -0.33    -4.2%
-#:    65%      5     5     3-2      60.0%   -0.58   -11.7%
+#: WHAT CHANGED WAS THE QUESTION, NOT THE DATA. He picked 55% when the
+#: only column on the table was hit rate. Then he added two more
+#: requirements, and 50% is the only floor that satisfies all three:
 #:
-#: READ THE SHAPE, NOT THE BEST CELL, which is what the sweep prints
-#: above its own table. Hit rate and ROI rise together from 50% to 58%
-#: and fall off a cliff after; 62% and 65% are losing. 58% is the peak on
-#: both columns and is therefore the cell most likely to be fitted to
-#: noise on 21 bets. 55% is the same monotone stretch one step short of
-#: the peak.
+#:   "i lowkey want bets shown more then not"   — 67% of days vs 38%
+#:   "whatever ... returns the most roi and wins and money"
+#:                                              — +8.13u vs +5.43u
+#:   "we should know when an underdog has a serious chance to win"
+#:                                              — 8 dogs vs none
 #:
-#: WHAT IT COSTS, stated because it is the real trade and it is Ethan's:
-#: 25 days with a pick instead of 44, so the card fires on 38% of days
-#: rather than 67%, and +5.43u instead of +8.13u. Volume pays. He asked
-#: for "confident winning picks" and then for "whatever makes the most
-#: roi and wins and money in the long run" — those point opposite ways
-#: here, and 2026-09-16 he chose the hit rate.
+#: The price is six points of hit rate, 65.9% against 72.0%. Roughly one
+#: pick in three loses instead of one in four; both are winning records.
 #:
-#: AND IT MOVES THE TOP OF THE BAND. `MAX_EV` caps the gap at 7%, so the
-#: highest price that can still carry a fair at the floor is where
-#: f*(b+1) = 1.07: +114 at a 50% floor, +94 at 55%. `effective_max_odds`
-#: below derives that rather than leaving `MAX_ODDS` (+190) to describe
-#: a stretch of the band no bet can occupy.
+#: WHY A FLOOR ABOVE EVEN MONEY KILLS THE UNDERDOGS, which is the part
+#: that is not obvious and is why this constant carries the note. A dog
+#: our fair likes is BY DEFINITION a large disagreement with the market
+#: — the price says 43%, we say 52% — and `MAX_EV` refuses a gap over 7%
+#: as a probably-stale quote. So the dog dies at the ceiling before the
+#: floor is ever asked, and the floor only decides whether the ceiling
+#: gets the chance. `effective_max_odds` is where the two meet: +114 at
+#: this floor, -106 at 0.55, which is the whole plus side gone.
 #:
-#: NOT RAISED BY GUESS, AND HERE IS THE GUESS THAT WAS REFUSED. A first
-#: pass at this change set it to 0.60 and the arithmetic said no:
+#: DO NOT RAISE THIS BY JUDGEMENT. A pass at it set 0.60 and the
+#: arithmetic said no:
 #:
 #:   price   most confident fair it can carry under MAX_EV
 #:   -110    56.0%
@@ -324,15 +322,15 @@ from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 #: `MAX_EV` refuses a gap bigger than 7% as a stale quote, so a fair far
 #: above the price's own number is not admissible AT that price. A floor
 #: over ~56% therefore makes every -110 row ineligible outright — and
-#: most of the board is -110. Raising this by judgement would have made
-#: the feature BLANKER, which is the opposite of what was asked for.
+#: most of the board is -110. Raising this on instinct makes the feature
+#: BLANKER, which is the opposite of what was asked for every time it
+#: has been asked.
 #:
-#: That reasoning is why this waited for `potd_backtest.py --sweep-conf`
-#: rather than being set from the same instinct twice. 0.55 clears the
-#: -110 rows (56.0% is the most confident fair a -110 price can carry)
-#: with a point to spare, which is exactly why the cliff is at 62% and
-#: not lower.
-MIN_FAIR = 0.55
+#: 58% IS THE BEST CELL ON BOTH MEASURED COLUMNS and is still not the
+#: answer: it is the peak on a 21-bet sample, which is the shape most
+#: likely to be noise. This file has already withdrawn one claim made
+#: from about a dozen bets (see `MAX_EV`). Read the shape.
+MIN_FAIR = 0.50
 
 #: A market has to have shown it can rank this outcome better than a
 #: coin flip before one pick a day rides on it. `likely.rank_auc` is the

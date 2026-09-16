@@ -445,9 +445,13 @@ def test_the_ceiling_does_not_swallow_the_floor():
     assert potd.shortfall(_row(odds=-120, sharp_fair=potd.MIN_FAIR)) == \
         "the price is not far enough off the fair to be worth it"
     assert potd.shortfall(_row(sharp_fair=0.60)).startswith("the gap is too big")
-    # AND THE THIRD END, added with the 55% floor: under it, the answer
-    # is neither of those two.
-    assert "not confident enough" in potd.shortfall(_row(sharp_fair=0.53))
+    # AND THE THIRD END: under the confidence floor the answer is
+    # neither of those two. Asked one point BELOW whatever floor ships,
+    # so this keeps working at 0.50 or 0.55 — a hard-coded 0.53 tested
+    # the floor at 0.55 and tested nothing at 0.50.
+    under = _row(sharp_fair=max(0.01, potd.MIN_FAIR - 0.05))
+    assert "not confident enough" in potd.shortfall(under), \
+        potd.shortfall(under)
 
 
 # --- how it ranks ------------------------------------------------------------

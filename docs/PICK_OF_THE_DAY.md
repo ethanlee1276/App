@@ -569,12 +569,23 @@ floor (refused by `MIN_FAIR`) or carries more than 7% (refused by
 
 | `MIN_FAIR` | last usable price | the plus side |
 |---|---|---|
-| 50% | **+114** | survives to +114 |
-| **55% (shipped 2026-09-16)** | **−106** | **closed entirely** |
+| **50% (shipped)** | **+114** | **survives to +114** |
+| 55% | −106 | closed entirely |
 | 58% | −118 | closed |
 
-**The effective band is −250 … −106.** Every plus price is now
-unreachable, and so is the stretch from −105 to +190.
+**The effective band is −250 … +114.** The stretch from +115 to `MAX_ODDS`
+(+190) is unreachable.
+
+**THIS TABLE IS WHY THE FLOOR IS 50%.** It went to 55% on 2026-09-16 and
+came back the same afternoon. Nothing in the data changed — the question
+did. 55% is right when hit rate is the only column that counts; then
+Ethan added "i lowkey want bets shown more then not" (67% of days against
+38%) and "we should know when an underdog has a serious chance to win",
+and this row is the one that settles the second: **a floor above even
+money cannot admit a plus price at all.** A dog our fair likes is by
+definition a large disagreement with the market, and `MAX_EV` refuses
+those before the floor is ever asked. The floor only decides whether the
+ceiling gets the chance.
 
 **A CORRECTION, because the arithmetic is easy to get wrong.** I told
 Ethan in chat that a 55% floor moved the ceiling to "+94". It does not.
@@ -599,12 +610,11 @@ row. A +150 dog at a 7%-or-less edge implies a fair near 43% — refused by
 shape `_sharpify` grades Pass. Neither kind was ever a pick the rest of
 the site would stake.
 
-**WHAT WOULD CHANGE IT.** Dropping `MIN_FAIR` below the even-money line
-for sharp-anchored rows reopens the plus side, and the argument for it is
-that a price disagreement does not care which side is favoured. That
-question is still open and still Ethan's: it points the opposite way from
-the 55% floor he chose on the same day, so choosing 55% answered it in
-practice rather than in principle.
+**WHAT WOULD WIDEN IT.** The plus side is open to +114 but no further,
+and past that it is `MAX_EV` doing the refusing rather than the floor.
+Raising that ceiling is the only thing that would admit a longer dog —
+and `MAX_EV` is currently UNPROVEN in both directions (§3i-c), on about a
+dozen bets. It needs roughly forty before either reading means anything.
 
 ### 3j. The MLB board had no witnesses at all, and the cause was one boolean
 

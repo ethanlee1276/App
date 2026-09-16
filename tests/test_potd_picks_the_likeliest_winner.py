@@ -124,20 +124,27 @@ def test_the_confidence_floor_names_itself_and_is_left_to_measurement():
     2026-09-16 and made the call):
 
         floor  days  bets    W-L   hit rate   units      ROI
-         50%     44    44  29-15     65.9%   +8.13   +18.5%
-         55%     25    25   18-7     72.0%   +5.43   +21.7%   <- shipped
+         50%     44    44  29-15     65.9%   +8.13   +18.5%   <- shipped
+         55%     25    25   18-7     72.0%   +5.43   +21.7%
          58%     21    21   16-5     76.2%   +5.84   +27.8%
          60%     17    17   12-5     70.6%   +2.78   +16.4%
          62%      8     8    5-3     62.5%   -0.33    -4.2%
 
-    58% is the peak on both columns and therefore the cell most likely
-    fitted to noise on 21 bets; 55% is the same monotone stretch one step
-    short of it. The full reasoning, including what the volume costs, is
-    on `potd.MIN_FAIR`.
+    IT WENT TO 0.55 AND BACK THE SAME AFTERNOON, and the data never
+    moved — the question did. 55% is the answer when hit rate is the
+    only column that counts. Ethan then added two more requirements
+    ("i lowkey want bets shown more then not", and knowing when an
+    underdog can win) and 50% is the only floor that meets all three:
+    67% of days against 38%, +8.13u against +5.43u, and eight underdogs
+    against none. The cost is six points of hit rate.
+
+    58% is the peak on both measured columns and is still not the
+    answer, because a peak on 21 bets is the shape most likely to be
+    noise. The full reasoning is on `potd.MIN_FAIR`.
 
     This assertion is still the guard it always was: the number may only
     move when that table does."""
-    assert potd.MIN_FAIR == 0.55, (
+    assert potd.MIN_FAIR == 0.50, (
         "the confidence floor moved — if that came from --sweep-conf, "
         "update this test and say which table; if it came from an "
         "opinion, it is the mistake this test exists to catch")

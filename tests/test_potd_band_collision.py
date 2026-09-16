@@ -9,15 +9,18 @@ Where that equals `MAX_EV` is the last usable price. Above it a row is
 refused as a suspect gap if it clears `MIN_FAIR`, and refused by
 `MIN_FAIR` if it does not. There is no price in between.
 
-    floor 50%   +114        the plus side survives to +114
+    floor 50%   +114        the plus side survives to +114   <- shipped
     floor 55%   -106        THE PLUS SIDE IS GONE ENTIRELY
     floor 58%   -118
 
-THE FLOOR WENT TO 55% ON 2026-09-16 (Ethan, from `--sweep-conf`: 72.0%
-hit rate against 65.9%), and that closed the plus side completely. Net
-odds of 0.945 is a FAVOURITE, -106, not "+94" — I told Ethan +94 in chat
-by reading a sub-1.0 payout as a plus price, and this file is where that
-arithmetic now lives so it cannot be done from memory again.
+THE FLOOR WENT TO 55% AND BACK ON 2026-09-16, and this file is why the
+second move happened. Raising it closed the plus side completely — net
+odds of 0.945 is a FAVOURITE, -106, not "+94"; I told Ethan +94 in chat
+by reading a sub-1.0 payout as a plus price. Once that was written down
+here, "the floor decides whether there are underdogs at all" became
+visible, and underdogs were something he wanted ("i prefer that since it
+gives us under dogs"). The arithmetic lives in this file so it is never
+done from memory again.
 
 `potd.effective_max_odds` derives it, and `build` publishes THAT as the
 card's band instead of `MAX_ODDS`. The card used to read "priced between
@@ -50,7 +53,7 @@ from engine import potd                                       # noqa: E402
 
 #: Where the two bars cross at the SHIPPED floor. Update this and
 #: docs/PICK_OF_THE_DAY.md §3i-b together whenever `MIN_FAIR` moves.
-DOCUMENTED_CEILING = -106
+DOCUMENTED_CEILING = 114
 
 
 def _last_usable_price():
@@ -95,16 +98,40 @@ def test_the_card_advertises_the_band_it_can_actually_fill():
     assert got["band"] == [potd.MIN_ODDS, potd.effective_max_odds()], got["band"]
 
 
-def test_a_fifty_five_percent_floor_closes_the_plus_side_entirely():
-    """The consequence of Ethan's 2026-09-16 choice, stated as a fact
-    rather than left to be rediscovered. A payout under 1.0 unit is a
-    favourite; there is no plus price left."""
-    if potd.MIN_FAIR < 0.55:
-        return                      # a looser floor keeps some plus side
-    assert potd.effective_max_odds() < 0, potd.effective_max_odds()
+def test_a_floor_above_even_money_closes_the_plus_side_entirely():
+    """WHY THE FLOOR IS AN UNDERDOG SWITCH — not obvious, and the fact
+    that sent Ethan back to 0.50 on 2026-09-16.
+
+    ASKED AT 0.55 EXPLICITLY, not at whatever ships. The first version
+    of this returned early when `MIN_FAIR` was under 0.55, so the moment
+    the floor went back to 0.50 it passed by asserting NOTHING — the
+    dead-guard pattern this codebase keeps finding in its own history,
+    written by me, in the file whose whole job is to notice when a bar
+    stops meaning what it says. `shortfall` and `effective_max_odds`
+    both take the floor as an argument; a test about a regime can ask
+    for that regime instead of waiting for it to ship.
+    """
+    assert potd.effective_max_odds(min_fair=0.55) < 0, \
+        "a 55% floor is supposed to leave no plus price at all"
     for odds in (100, 120, 150, 190):
-        why = potd.shortfall(_row(potd.MIN_FAIR, odds))
+        why = potd.shortfall(_row(0.55, odds), min_fair=0.55)
         assert "gap is too big" in why, (odds, why)
+
+
+def test_the_shipped_floor_keeps_the_plus_side_open():
+    """The other half, and the reason 0.50 is the shipped number: Ethan,
+    2026-09-16, "i prefer that since it gives us under dogs"."""
+    top = potd.effective_max_odds()
+    assert top > 0, (
+        f"the shipped floor ({potd.MIN_FAIR:.0%}) leaves no plus price "
+        f"({top:+d}) — the Pick of the Day can never be an underdog")
+    # AT THE CROSSING THE ADMISSIBLE FAIR IS THE FLOOR ITSELF — that is
+    # what "crossing" means. The MIN_EV end of the window sits BELOW the
+    # floor there (0.477 against 0.50 at +114), so deriving the fair
+    # from MIN_EV asks the question at a price the floor already
+    # refuses, which is not what this test is about.
+    assert potd.shortfall(_row(potd.MIN_FAIR, top)) == "", \
+        f"the crossing price {top:+d} is dead at the floor itself"
 
 
 def _row(fair, odds):
@@ -163,7 +190,6 @@ def test_the_plus_side_window_closes_as_the_price_climbs():
     # One step shorter and it is shut.
     assert window(top) > 0.0, window(top)
     assert window(top + 1) == 0.0, (top + 1, window(top + 1))
-    assert window(100) == 0.0, "the plus side is supposed to be shut"
     assert window(int(potd.MAX_ODDS)) == 0.0
 
 
