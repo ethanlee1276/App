@@ -15,6 +15,184 @@ as they are done.
 
 ---
 
+## SHARP. Did the MLB board get its sharp witnesses back? (read-only, 10 seconds)
+
+**This is the one to run first.** On 2026-09-16 your MLB board had thirty
+game rows and **not one** carried a sharp or a market witness, so
+`potd.shortfall` refused all thirty with *"only our own model disputes
+this price"* — the league with by far the most data could not produce a
+Pick of the Day on any day.
+
+The cause was one boolean. `engine/mlb/pipeline.py` calls the sharp
+pricers exactly as the football pipeline does, but `sharp_anchored` was
+being written by each pipeline *after* the card came back — NFL three
+times by hand, college once, **MLB never**. Fixed at the source: the
+function that prices the card sets it now.
+
+Wait for one full build cycle after you pull (the timer is every 5
+minutes, so give it ~10), then:
+
+```bash
+cd /srv/qellys && python3 potd_report.py mlb
+```
+
+**What good looks like:** the witness breakdown names `sharp` on some
+rows. Before the fix it read `model` on all thirty.
+
+```bash
+# The blunt version — count the witness tiers straight off the board.
+#
+# It goes through `launch.BOARD_FILES` and `gate.board_source` rather
+# than opening a path by hand, for two reasons this file has already
+# been bitten by: MLB's board is NOT `mlb_picks.json` (it is
+# `mlb_recommendations_picks.json`), and `web/data` is the PUBLIC copy
+# with `most_likely` stripped out by the paywall. Guessing either one
+# gives you a confident zero.
+cd /srv/qellys && python3 -c "
+import json
+from collections import Counter
+import launch
+from engine import gate
+p = gate.board_source(launch.BOARD_FILES['mlb'])
+b = json.load(open(p))
+rows = [r for r in (b.get('most_likely') or []) if r.get('kind') == 'game']
+print('read:', p)
+print('game rows:', len(rows))
+print('sharp_anchored:', Counter(bool(r.get('sharp_anchored')) for r in rows))
+print('prob_source:  ', Counter(r.get('prob_source') for r in rows))
+"
+```
+
+| if you see | it means |
+|---|---|
+| `sharp_anchored: {True: n}` with n > 0 | **fixed** — the witness is reaching the board |
+| all `False` and `prob_source` all `model` | Pinnacle quoted nothing on tonight's slate, OR the fix has not deployed yet — check `git log -1` in /srv/qellys |
+| `prob_source` never says `market` | expected, and NOT a bug — see block MKT below |
+
+---
+
+## KX. Why the NFL exchange tier is dead (read-only, 10 seconds)
+
+Your 2026-09-16 run said: nine NFL rows, 58 usable Kalshi markets, zero
+matched. The report called that *"OUR name matching"* — **and it could
+not actually know that.** `NO_MATCH` was one bucket covering three
+different failures with three different fixes: our spelling of a club
+differs from the exchange's, the board is a day stale so no market names
+tonight's games, or the game matched and we could not resolve which side
+the YES pays on.
+
+I could not tell them apart from here, and guessing at a matcher change
+risks breaking MLB, which works. So the census now names the step, and
+prints **both parties' spellings**:
+
+```bash
+cd /srv/qellys && python3 potd_report.py nfl
+```
+
+Look for these two lines under `Exchange`:
+
+```
+      exchange says:  Chiefs vs Bills
+      the board says: BUF @ KC   [9 game(s) on the board, 0 matched one]
+```
+
+**That line is the whole answer.** Read it like this:
+
+| if you see | the cause is | and the fix is |
+|---|---|---|
+| exchange naming teams the board also names, but spelled differently | our name matching | `exchangefair.names_for` / `kalshi._name_tokens` |
+| exchange naming **different games** from the board | the board is stale, or it is tomorrow's slate | the build cycle, not the matcher |
+| `0 game(s) on the board` | the NFL payload shipped no `games` list | `pipeline._game_to_dict` |
+| `the exchange priced this game but not this side` | `kalshi.yes_team` could not name a side | that function, not the matching |
+
+Paste those two lines back and I can fix the real one in a single pass.
+
+**Also worth running for MLB**, since that league's exchange tier was
+working and this change touched the shared code path:
+
+```bash
+cd /srv/qellys && python3 potd_report.py mlb | grep -A4 Exchange
+```
+
+---
+
+## MKT. The measurement MLB never had (read-only, ~1 minute)
+
+The second half of why MLB showed no witness: `likely.GAME_RANK_MARKET`
+has entries for **nfl.moneyline (0.722)** and **cfb.moneyline (0.7905)**
+and no `mlb` key at all — so `ranking_number` can never return "market"
+for baseball. That is a missing measurement, not a bug: nothing has ever
+replayed MLB's de-vigged consensus against closes.
+
+`gamerank.measure_market_moneyline` has existed since 09-07 and **nothing
+could run it** — `measure()` walks the model's markets only, and the CLI
+walks `measure()`. The two football numbers were taken by calling the
+function by hand. There is now a flag:
+
+```bash
+cd /srv/qellys && python3 -m engine.gamerank --sport mlb --market
+```
+
+It prints the market's AUC beside the model's, on the same quoted games,
+and gives a verdict. **It will not print a table entry off a thin
+sample** — under 400 quoted games it declines and says why.
+
+```bash
+# Sanity: the same command on NFL should reproduce the 0.722 already
+# written down. If it does not, the harvest changed under us and BOTH
+# football entries need re-reading before the MLB one is trusted.
+cd /srv/qellys && python3 -m engine.gamerank --sport nfl --market
+```
+
+**Paste both.** If MLB's market figure beats its model figure on a real
+sample, the verdict prints the exact line to add and I will add it. If it
+does not, we leave the table alone and the honest answer is that our MLB
+model ranks as well as the book does — which is worth knowing either way.
+
+---
+
+## BT. Re-read the Pick of the Day verdict under the new ceiling (~30 seconds)
+
+`potd.MAX_EV` landed on 09-16: a gap wider than 7% is refused, because
+`gamebets._sharpify` already grades those Pass at a stake of zero on the
+edge board. Your own bucket split is what made the case — the 7-15% band
+went −7.2% over 27 bets while the two tighter bands went +71.4% and
++47.1%.
+
+The replay now splits the **leans** across the same bands, which is the
+only place the question *"was refusing them right?"* can still be asked:
+
+```bash
+cd /srv/qellys && python3 potd_backtest.py mlb
+```
+
+**The new block to read** is under `IF THE LEANS HAD BEEN BET TOO`:
+
+```
+    the leans, by the edge they were refused at:
+      7-15% (suspect)     n bets   n won   +/-n.nnu  ROI +/-n.n%
+```
+
+A **negative** ROI on that line is the ceiling earning its keep. A
+**positive** one means it is costing money and I should reconsider.
+
+Also worth one run across everything, now that MLB should have witnesses:
+
+```bash
+cd /srv/qellys && python3 potd_backtest.py --all
+```
+
+**One decision for you in here.** `MIN_FAIR` (50%) and `MAX_EV` (7%)
+cross at **+114**: above that price no bet can be both at-or-above the
+fair floor and at-or-below the trust ceiling, so the usable band is
+−142…+114 while `MAX_ODDS` still reads 190. Both bars are defensible
+alone and I left it standing. Reopening the plus side means dropping
+`MIN_FAIR` below 50% for sharp-anchored rows — that is your product bar
+("the pick should be more likely to win than lose"), so it is your call,
+not a consequence of a measurement. Say the word either way.
+
+---
+
 ## TOP. Is there one pick for the day? (read-only, 5 seconds)
 
 You asked for *"one pick for the pick of the day"* — singular. Until

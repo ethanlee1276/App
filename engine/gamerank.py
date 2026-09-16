@@ -792,6 +792,71 @@ def lines(results: list[GameRank]) -> list[str]:
     return out
 
 
+def market_lines(conn, sport: str) -> list[str]:
+    """The MARKET's moneyline figure beside the MODEL's, and the verdict.
+
+    `measure_market_moneyline` has existed since 2026-09-07 and nothing
+    could run it: `measure()` walks the model's markets only, and the CLI
+    walks `measure()`. The two NFL and college numbers in
+    `likely.GAME_RANK_MARKET` were obtained by calling the function by
+    hand, and MLB was never done — so `ranking_number` has no `mlb` entry,
+    the market tier is unreachable for baseball, and half of why Ethan's
+    MLB board showed thirty rows with no witness at all (2026-09-16,
+    docs/PICK_OF_THE_DAY.md §3j) is a measurement nobody could take.
+
+    THE COMPARISON IS THE POINT, not either number alone.
+    `GAME_RANK_MARKET` exists to say "rank on the book's number WHERE IT
+    MEASURES BETTER THAN OURS", so a figure printed without the model's
+    beside it cannot answer the question it was taken for.
+
+    Prints the verdict too, and refuses to give one on a thin sample:
+    `finish()` writes its own note under `MIN_GAMES`, and a number that
+    has not earned a claim must not arrive looking like one.
+    """
+    from .likely import MIN_RANK_AUC
+    mkt = measure_market_moneyline(conn, sport)
+    model = next((r for r in measure(conn, sport)
+                  if r.market == "moneyline"), None)
+    out = [f"game rank {sport}:moneyline — who ranks winners better?"]
+    for who, r in (("the market (de-vigged close)", mkt),
+                   ("our model", model)):
+        if r is None or r.auc is None:
+            out.append(f"  {who:<28} not measured — "
+                       f"{(r.note if r else 'no model figure')}")
+            continue
+        out.append(f"  {who:<28} AUC {r.auc:.4f} on {len(r.pairs):,} "
+                   f"quoted games ({r.pushes} pushes)")
+        if r.note:
+            out.append(f"  {'':<28} {r.note}")
+    # NO SEPARATE THIN-SAMPLE BRANCH, and that is deliberate. The first
+    # draft had one, under `MIN_GAMES` — and `finish()` already nulls the
+    # AUC below that floor and writes the reason into `note`, so the
+    # branch could never run. A guard that cannot fire reads like
+    # protection and is not any, which is the shape of two of today's
+    # bugs. The notes printed above carry the sample reason already.
+    if mkt.auc is None or model is None or model.auc is None:
+        missing = [w for w, r in (("the market", mkt), ("our model", model))
+                   if r is None or r.auc is None]
+        out.append(f"  VERDICT: cannot compare — no figure for "
+                   f"{' and '.join(missing)} (reason above). "
+                   f"Nothing goes in `GAME_RANK_MARKET` on this.")
+        return out
+    if mkt.auc > model.auc:
+        out.append(f"  VERDICT: the market ranks better by "
+                   f"{mkt.auc - model.auc:+.4f}. An entry belongs in "
+                   f"`likely.GAME_RANK_MARKET`:")
+        out.append(f'      "{sport}": {{"moneyline": {mkt.auc:.4f}}},')
+        if mkt.auc < MIN_RANK_AUC:
+            out.append(f"  …BUT it is under `MIN_RANK_AUC` ({MIN_RANK_AUC}), "
+                       f"so rows would ship as leans, not ranked.")
+    else:
+        out.append(f"  VERDICT: our model ranks as well or better "
+                   f"({model.auc:.4f} vs {mkt.auc:.4f}) — no entry. "
+                   f"`ranking_number` falls through to the model, which is "
+                   f"what it already does.")
+    return out
+
+
 def measure_and_store(conn, sport: str, log=print, path=None) -> list[str]:
     """Measure, then write what the sample supports into the rank store.
 
@@ -839,6 +904,10 @@ def main(argv=None) -> int:
     ap.add_argument("--raw-bar", action="store_true",
                     help="the credibility bar on market-ranked moneylines, "
                          "measured (see measure_raw_bar)")
+    ap.add_argument("--market", action="store_true",
+                    help="the MARKET's moneyline ranking beside the model's, "
+                         "with the verdict — the figure "
+                         "`likely.GAME_RANK_MARKET` carries (see market_lines)")
     a = ap.parse_args(argv)
     conn = db.connect()
     try:
@@ -847,6 +916,10 @@ def main(argv=None) -> int:
         for sport in sports:
             if a.raw_bar:
                 for ln in raw_bar_lines(measure_raw_bar(conn, sport)):
+                    print(ln)
+                continue
+            if a.market:
+                for ln in market_lines(conn, sport):
                     print(ln)
                 continue
             if a.save:

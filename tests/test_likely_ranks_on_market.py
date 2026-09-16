@@ -97,6 +97,67 @@ def test_the_market_figure_is_measured_the_way_the_models_is():
     assert "the close itself" in r.note
 
 
+def _synthetic_book(conn, sport="nfl", n=5, market_skill=True):
+    """A book that orders winners well (or badly), on a throwaway db."""
+    rows = []
+    for i in range(n):
+        # Home favoured and home wins, unless the book is being useless.
+        hs, as_ = (24, 17) if market_skill else (17, 24)
+        rows.append((f"A{i}", f"B{i}", hs, as_, (-200, 170)))
+        rows.append((f"C{i}", f"D{i}", 17, 24, (150, -170)))
+    games = []
+    for n_, (h, a, hs, as_, ml) in enumerate(rows):
+        games.append({"sport": sport, "season": 2025, "period": str(n_ + 1),
+                      "game_id": f"2025-{n_ + 1}-{a}@{h}", "home": h, "away": a,
+                      "home_score": hs, "away_score": as_,
+                      "date": "2025-09-%02d" % (1 + n_ % 28),
+                      "extra": json.dumps({"ml": list(ml)})})
+    db.upsert_games(conn, games)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def test_the_market_figure_can_actually_be_run():
+    """THE GAP THAT MADE #257 UNANSWERABLE. `measure_market_moneyline`
+    has existed since 2026-09-07 and nothing could invoke it: `measure()`
+    walks the model's markets only, and the CLI walks `measure()`. The
+    two numbers in `GAME_RANK_MARKET` were taken by calling the function
+    by hand and MLB was never done — so `ranking_number` has no mlb entry
+    and the market tier is unreachable for baseball.
+
+    Synthetic book, never this box's database — same rule as the test
+    above, and for the same CI crash."""
+    from engine.gamerank import market_lines
+    conn = _synthetic_book(db.connect(":memory:"), "mlb")
+    out = "\n".join(market_lines(conn, "mlb"))
+    assert "the market (de-vigged close)" in out, out
+    assert "our model" in out, out
+    assert "VERDICT" in out, out
+
+
+def test_the_verdict_refuses_to_claim_anything_on_a_thin_sample():
+    """`MIN_GAMES` is 400 and these fixtures are ten, so `finish()` nulls
+    the AUC and the verdict must decline rather than invent one. A number
+    that has not earned a claim must not arrive looking like one."""
+    from engine.gamerank import market_lines, MIN_GAMES
+    conn = _synthetic_book(db.connect(":memory:"), "mlb")
+    out = "\n".join(market_lines(conn, "mlb"))
+    assert "cannot compare" in out, out
+    assert f"needs {MIN_GAMES}" in out, out       # the sample reason survives
+    assert "Nothing goes in `GAME_RANK_MARKET`" in out, out
+    # …and it must NOT print a table entry off ten games.
+    assert '"mlb": {"moneyline"' not in out, out
+
+
+def test_the_cli_exposes_it():
+    """A measurement nobody can run is a measurement nobody takes."""
+    import inspect
+    from engine import gamerank
+    src = inspect.getsource(gamerank.main)
+    assert '"--market"' in src, "the flag is gone"
+    assert "market_lines(conn, sport)" in src, "the flag reaches nothing"
+
+
 def test_the_figures_are_the_ones_written_down():
     """The constants are documented measurements (2026-09-07, this box's
     schedule closes: NFL 0.722 on 1,420 games, college 0.7905 on 3,011),

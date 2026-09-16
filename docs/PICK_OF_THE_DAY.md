@@ -622,6 +622,15 @@ a missing measurement rather than a bug — nothing has replayed MLB's
 de-vigged consensus against closes — and it is left standing and stated
 rather than guessed at.
 
+`gamerank.measure_market_moneyline` is the function that answers it, and
+until 2026-09-16 **nothing could run it**: `measure()` walks the model's
+markets only and the CLI walks `measure()`, so both football figures were
+taken by calling it by hand. There is a flag now —
+`python3 -m engine.gamerank --sport mlb --market` — which prints the
+market's AUC beside the model's on the same quoted games and gives the
+verdict, and declines to print a table entry on a sample that has not
+earned one. Droplet block MKT in `docs/WHEN_YOU_ARE_HOME.md`.
+
 **THE FIX PUTS THE FLAG WHERE IT CANNOT BE FORGOTTEN.** The function that
 prices the card sets it, because that function is the only thing that
 knows: `_sharpify` stamps totals and spreads, `price_moneyline_sharp`
