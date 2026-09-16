@@ -118,10 +118,22 @@ def test_the_card_shows_our_number_beside_the_markets():
 # --- the card's states -------------------------------------------------------
 def test_a_board_without_one_draws_nothing():
     """The fold cost this zone was allowed (tests/test_board_order.py) was
-    argued on it costing nothing when there is no pick."""
+    argued on it costing nothing when there is no pick.
+
+    ASKED AS A PROPERTY, not as a character distance. This used to
+    require the bail within 400 characters of `const got = …`, which is
+    not the rule — the rule is that a board carrying no card writes
+    nothing. The window broke on 2026-09-16 when the ERROR check moved
+    ABOVE the bail (it had to: `potd.attach`'s failure path leaves no
+    card, so the error branch was unreachable in the one state it exists
+    for). Nothing about the fold changed; only the distance did.
+    """
     body = _card()
-    i = body.index("const got = d.pick_of_the_day")
-    assert 'host.innerHTML = ""' in body[i:i + 400], body[i:i + 400]
+    assert 'host.innerHTML = ""' in body, "the empty-board bail is gone"
+    i = body.index('host.innerHTML = ""')
+    # It is the `!got` branch that bails, not some other empty write.
+    guard = body[max(0, i - 200):i]
+    assert "!got" in guard and "typeof got" in guard, guard
 
 
 def test_a_build_that_failed_says_so_rather_than_going_quiet():

@@ -946,6 +946,40 @@ def attach(result: dict, sport: str, now=None, cut=None) -> str:
             pool, sport, str(result.get("date") or ""), now=now)
     except Exception as exc:                                  # noqa: BLE001
         result["pick_of_the_day_error"] = str(exc)
+        # AND A CARD REGARDLESS, which this did not do until 2026-09-16.
+        #
+        # The docstring above promises the failure "lands in the JSON as
+        # `pick_of_the_day_error`, where the page can see it". The page
+        # could not: `renderPickOfTheDay` bails on a MISSING
+        # `pick_of_the_day` before it ever looks at the error key, so the
+        # single state that branch was written for was the one state it
+        # could never draw. The zone went blank and nothing anywhere said
+        # why — on the most valuable slot on the page.
+        #
+        # THE SHAPE IS `build`'s OWN, AND IT IS OBTAINED FROM `build`.
+        #
+        # Writing the fields out by hand here is how this drifts: a real
+        # card carries `band`, `considered`, `min_ev`, `payout_band` and
+        # `generated_at` as well as the obvious four, and a reader that
+        # meets a card without them either crashes or silently skips. So
+        # the empty-pool card IS the template — one call, the simplest
+        # path `build` has, and the error is laid over it.
+        day = str(result.get("date") or "")
+        try:
+            card = build([], sport, day, now=now)
+        except Exception:                                     # noqa: BLE001
+            # `build` itself is broken, not just this board. A minimal
+            # card still beats a missing key: the page can render "no
+            # pick, here is why" from these four and nothing else needs
+            # to be true for that.
+            card = {"sport": sport, "date": day, "pick": None, "census": {}}
+        card["note"] = f"the selector could not run on this board — {exc}"
+        card["error"] = str(exc)
+        try:
+            card["verdict"] = verdict(card)
+        except Exception:                                     # noqa: BLE001
+            card["verdict"] = {"bet": False, "say": card["note"]}
+        result["pick_of_the_day"] = card
         return f"pick of the day: error — {exc}"
     got = result["pick_of_the_day"]
     pick = got.get("pick")

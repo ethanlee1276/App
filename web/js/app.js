@@ -2385,16 +2385,26 @@ async function renderPickOfTheDay() {
   if (!host) return;
   const d = state.data || {};
   const got = d.pick_of_the_day;
-  // A board built before this shipped, or a sport that carries none:
-  // write nothing rather than an empty frame. The zone costs no fold
-  // in that state, which is what tests/test_board_order.py was told.
-  if (!got || typeof got !== "object") { host.innerHTML = ""; return; }
+  /* THE ERROR IS ASKED FIRST, and the order is the whole point.
+     It used to be asked second, after the bail below — and the state it
+     was written for is precisely a board with an ERROR AND NO CARD,
+     because `potd.attach`'s failure path set the error key and never
+     set `pick_of_the_day`. So the branch could not draw in the one case
+     it existed for: the zone went blank on the most valuable slot on
+     the page and nothing said why. (`attach` now always writes a card
+     too, so this is belt and braces — but a renderer that can only
+     explain a failure when the failure is well-behaved is not much of
+     an explanation.) */
   if (d.pick_of_the_day_error) {
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} Pick of the Day hit an error this build:
       <code>${escapeHtml(String(d.pick_of_the_day_error))}</code></p></div>`;
     return;
   }
+  // A board built before this shipped, or a sport that carries none:
+  // write nothing rather than an empty frame. The zone costs no fold
+  // in that state, which is what tests/test_board_order.py was told.
+  if (!got || typeof got !== "object") { host.innerHTML = ""; return; }
   const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
   const pick = got.pick;
   if (!pick) {
