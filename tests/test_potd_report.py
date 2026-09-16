@@ -516,6 +516,104 @@ def test_a_player_whose_name_ends_in_ML_keeps_it():
                     odds=-120).startswith("Kenny ML "), "a name was trimmed"
 
 
+# --- what the PAGE is saying, beside what the rows would say now -------------
+def test_the_report_leads_with_the_published_call():
+    """An operator asking "what does the site say right now" was getting
+    the answer to a different question. Everything else in this report
+    is a fresh re-derivation over the board's live rows; the card can be
+    showing a pick locked hours ago at a price those rows would now
+    refuse."""
+    board = {"built_at": "now", "most_likely": [],
+             "pick_of_the_day": {
+                 "verdict": {"call": "bet", "stake": 1.0,
+                             "book": "FanDuel", "odds": -118},
+                 "pick": {"player": "TOR ML", "market": "moneyline",
+                          "market_label": "Moneyline", "odds": -118,
+                          "book": "FanDuel"}}}
+    out = R.report(board, "mlb")
+    assert "PUBLISHED   BET 1u on TOR Moneyline at FanDuel (-118)" in out, out
+
+
+def test_the_published_call_says_no_bet_with_the_reason():
+    board = {"built_at": "now", "most_likely": [],
+             "pick_of_the_day": {
+                 "verdict": {"call": "no bet", "stake": 0.0,
+                             "why": "only our own model disputes this price"},
+                 "pick": {"below_bar": "only our own model disputes this price"}}}
+    out = R.report(board, "mlb")
+    assert "PUBLISHED   NO BET" in out
+    assert "only our own model disputes this price" in out
+
+
+def test_a_relocked_card_says_so_on_the_published_line():
+    """`ledger.relock_potd` re-points the card at the pick this sport
+    locked earlier. Without the mark, an operator reads a live
+    recommendation where there is a claim from this morning."""
+    board = {"built_at": "now", "most_likely": [],
+             "pick_of_the_day": {
+                 "verdict": {"call": "bet", "stake": 1.0, "odds": -180},
+                 "relocked": "the board moved on; this is the pick this "
+                             "sport locked earlier today",
+                 "pick": {"player": "TOR ML", "market": "moneyline",
+                          "market_label": "Moneyline", "odds": -180,
+                          "book": "DraftKings", "locked": True,
+                          "off_board": True}}}
+    out = R.report(board, "mlb")
+    assert "read back from the journal" in out
+    # AND THE LOCK MARK ON ITS OWN, with no `relocked` sentence to hide
+    # inside — the first version of this test asserted "locked earlier
+    # today" against a card whose `relocked` text ends in those very
+    # words, so deleting the mark passed.
+    bare = {"built_at": "now", "most_likely": [],
+            "pick_of_the_day": {
+                "verdict": {"call": "bet", "stake": 1.0, "odds": -118},
+                "pick": {"player": "TOR ML", "market": "moneyline",
+                         "market_label": "Moneyline", "odds": -118,
+                         "book": "FanDuel", "locked": True}}}
+    assert "[locked earlier today]" in R.report(bare, "mlb")
+
+
+def test_a_board_without_a_verdict_draws_no_published_line():
+    """A report that invents "NO BET" out of a missing field is worse
+    than one that says nothing about it."""
+    for card in ({"pick": None}, {}, {"verdict": {}}, None):
+        board = {"built_at": "now", "most_likely": [],
+                 "pick_of_the_day": card}
+        assert "PUBLISHED" not in R.report(board, "mlb")
+
+
+def test_the_report_never_derives_a_second_verdict():
+    """ONE DEFINITION. The card carries its own (`potd.build`,
+    `potd.relock`); a report computing another would be the second
+    answer this feature spent two days removing."""
+    import ast
+    import inspect
+    fn = ast.parse(inspect.getsource(R._published_call)).body[0]
+    # THE DOCSTRING SAYS "potd.verdict is not recomputed here", so a
+    # substring search over the source would be reading the promise
+    # rather than the code. The body without it is what runs.
+    code = "\n".join(ast.dump(n) for n in fn.body[1:])
+    assert "verdict" not in code.replace("'verdict'", ""), code
+
+
+def test_the_bet_is_spelled_one_way_in_this_tool():
+    """`_bet_name` was split out of `_one_line` when the published card
+    wanted the same spelling without the fair and the EV. Every trap in
+    it was a real line off Ethan's board; a second copy of the join
+    would step into all of them again."""
+    import inspect
+    assert "_bet_name(row)" in inspect.getsource(R._one_line)
+    assert R._bet_name({"player": "Over 8", "market": "total",
+                        "market_label": "Total", "side": "OVER",
+                        "line": 8.0}) == "OVER 8 Total"
+    assert R._bet_name({"player": "TOR ML", "market": "moneyline",
+                        "market_label": "Moneyline",
+                        "line": 0.0}) == "TOR Moneyline"
+    assert R._bet_name({"player": "LAA", "market": "spread",
+                        "market_label": "Spread", "side": "+1.5",
+                        "line": 1.5}) == "LAA +1.5 Spread"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

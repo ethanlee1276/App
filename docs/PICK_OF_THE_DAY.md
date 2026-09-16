@@ -199,7 +199,7 @@ carries anything for these rules to bite on. "68 rows considered, 61
 outside the band, 0 picks" is not a bug report — it is the name of the
 gate to argue with.
 
-## 3d. The lever not pulled yet: the alternate ladder
+## 3d. The ladder lever, and why it stopped being the lever
 
 A -400 read is outside the band by the widest margin available. But the
 same book quotes the same player at other numbers — 34.5 rushing yards
@@ -208,37 +208,42 @@ unbettable **at that price**. Converting a strong read into a band-legal
 price is what a lot of pick services are actually doing when they post
 "Team -7.5" instead of "Team ML -400".
 
-**The machinery exists and the wiring does not.** `likely._best_rung`
-already walks the ladder, but it picks the rung with the highest
-*probability* subject to the Most Likely board's bars — a different
-optimisation from "which rung lands in the band" — and
-`likely._row_from` then drops `alt_lines` from the row it emits. So the
-ladder never reaches this module.
-
-It is still in the published board, on the Edge rows
-(`pipeline._rec_to_dict`). **So the question is measurable before it is
-buildable**, and `potd_report.py` measures it:
+On 2026-09-15 `potd_report` counted the prize on production: **23 of 44
+price-refused rows had a rung inside the band**, unreached.
 
 ```
-  Ladder      1 of 2 price-refused row(s) HAVE a rung inside the band,
-              unreached today:
-    Heavy Fav rush_yds at -400 → 34.5 at -115 (DraftKings)
+  Ketel Marte total_bases at -245 → 1.5 at -105 (FanDuel)
+  Drake Baldwin total_bases at -235 → 1.5 at +125 (DraftKings)
+  Spencer Jones total_bases at -180 → 1.5 at +140 (Fanatics)
 ```
 
-That count is the decision. Wiring the ladder through means a new
-pricing path (what *is* the fair at an alternate line, and is the sharp
-book quoting that rung two ways?), which is real work on a path that
-prices real money. It should be built when the report says there is
-something there, and not before — the same order every other measured
-decision in this file follows.
+**Every one of those is a player prop, and §3f closed the day's pick to
+player props.** So the count that justified the work is now counting
+rows the selector will not take under any price.
 
-Two implementations to weigh when that day comes, and neither is free:
+**And there is no game ladder to walk.** `alt_lines` is populated only
+by the prop feeds (`oddsapi.ALT_ODDS_TO_MARKET` and its per-sport
+cousins); the game markets this feature now selects on are bought as
+`h2h`, `spreads`, `totals` — main lines and nothing else.
+`alternate_spreads` and `alternate_totals` are never requested from the
+API. Walking the ladder from `potd.choose` today would be machinery over
+an empty source.
 
-- **Carry the ladder on the likely row.** Simplest, and it bloats every
-  board row; the MLB board is already 8 MB.
-- **Have `potd` read the Edge rows as a ladder source**, keyed by
-  (player, market), which is what `potd_report` does today for counting.
-  No page-weight cost, but it needs a dedupe and a rung-pricing rule.
+**What it would take, and it is a purchase decision rather than a
+wiring one.** Buying `alternate_spreads` and `alternate_totals` for the
+focus leagues is new credits against a budget that already puts MLB on a
+limited allowance (`engine/sources/oddsapi` — NFL and CFB first). The
+question to answer before spending them is the same one §3d always
+asked, re-pointed at game rows: **how often is a game row refused on
+price when an alternate number would have been in the band?**
+`potd_report` cannot answer that until the alternates are bought, which
+is the circularity — so the honest order is to buy one league's
+alternates for a fortnight, count, and decide.
+
+`likely.rungs` and `likely._best_rung` (split 2026-09-15 so the
+derivation and the choice are separate) are ready for the day that data
+exists. Nothing else about the ladder is wired, and this file should not
+say otherwise again.
 
 ## 3e. One pick for the DAY, not one per league
 
@@ -376,6 +381,69 @@ That guard immediately found two more renderers nobody had been checking
 — both already clean, which is the point: nothing had been holding them
 that way.
 
+## 3f. Game markets only — the day's pick is not a player prop
+
+Ethan, 2026-09-15: "i do want the pick of the day to be moneylines and
+spreads only for all sports i think ... feels like relying on one player
+is more volitole and risky instead of relying on a whole team." He then
+added totals. `potd.disqualify` asks it first, off `ledger.is_game_row`.
+
+**His stated reason is half right and it is the weaker half.** A single
+bet's variance is p(1−p) whatever the bet is about, so a 60% player prop
+and a 60% moneyline are exactly as bumpy. What a player really carries
+is *estimation* error nobody can see from a projection: ejected, pulled
+after four innings, rested, a hamstring on the first drive.
+
+**The deciding reason is the evidence ladder.** `exchangefair.MARKETS`
+is `("moneyline",)` — the exchange lists game winners and nothing else —
+and a sharp book's player-prop coverage is thin to absent. So a player
+prop is structurally stuck near the bottom of `potd.EVIDENCE`, and
+`shortfall` refuses a model-only row outright (§4). The selector was
+choosing the day's headline out of a pool most of which could never meet
+the standard it holds them to. On the MLB board of 2026-09-15: **52
+rows, 0 sharp, 0 market, 0 exchange.**
+
+Props keep every board they had — Most Likely, Long Shots, the props
+scanner. They stop being eligible for the day's name.
+
+## 3g. The card leads with the call
+
+Ethan, 2026-09-15: the card "should say whether to bet". It did not. It
+opened with the bet in words, a fair, an edge and a payout, and left the
+one question a reader arrives with — *do I put money on this today?* —
+to be inferred from the colour of a 3px border and a sentence six lines
+below the fold. A lean and the day's pick wore the same furniture.
+
+`potd.verdict` is the single definition:
+
+| state | call | stake |
+|---|---|---|
+| a qualifying pick | **BET** | `STAKE_UNITS`, 1.0 |
+| a below-bar lean | **NO BET**, with the bar it missed | 0 |
+| no pick at all | **NO BET**, with the board's note | 0 |
+
+**A lean gets the same call as an empty board**, because that is already
+what the product does with it — `ledger.log_pick_of_the_day` refuses to
+journal one, so nothing about it is on the record.
+
+**The stake is flat, not a Kelly fraction.** This feature publishes one
+pick a day chosen on the strength of the witness rather than the size of
+the edge, and `rank_key` already rounds the edge to whole points before
+sorting; sizing on differences the selector will not treat as ranked
+would swing the stake threefold on noise. Flat is also the shape the
+record below the card is kept in, so the two agree.
+
+**Derived over the published payload, never over the board's rows.**
+`relock` can turn a card that cleared into a card showing nothing at
+all, and `day_top_pick` can crown a below-bar lean from a league whose
+own board published "no bet" about that very row. Both recompute; `build`
+has one exit so the call cannot be attached to two outcomes and
+forgotten on the third. The page draws the verdict and nothing else.
+
+The no-bet state is deliberately **not** painted red. Declining to bet
+is not a loss, and drawing it as one pushes a reader toward the action
+on exactly the day the engine has said not to.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against
@@ -471,20 +539,87 @@ in the `main`, `paper` or `likely` books
 receptions line closes at 3.5 on a market that moved plenty; the price
 is what moved, and `clvboard` has measured both since 2026-09-02.
 
-## 8. The gap that would change the answer
+## 7b. And from replaying the selector itself
 
-`backtest_sharp_anchor` returns **zero priced games** for NFL, CFB and
-MLB. `odds_history` holds 64 rows — NFL only, book "best" only, spread
-and total only, from a two-minute window on 2026-09-10. There are no
-stored Pinnacle closes anywhere, so the sharp-anchor strategy has never
-been measured on our own data; it is adopted here on the published
-evidence for the method, not on ours.
+CLV grades the decision; it does not say what the product returned.
+`potd_backtest.py` does, and it is the only thing here that grades the
+**product** rather than the method underneath it:
 
-**Harvesting Pinnacle moneyline closes nightly into `odds_history` is
-the single piece of work that would let us measure it.** Four to six
-weeks of harvest makes `backtest_sharp_anchor` answerable, and that is
-what would turn this from "the method the professionals use" into "the
-method we have measured here".
+```
+python3 potd_backtest.py mlb
+python3 potd_backtest.py --all
+```
+
+It replays every stored day: builds the moneyline rows from the
+harvested sharp pair and the shopped soft price, runs them through
+`potd.disqualify`, `potd.shortfall` and `potd.rank_key` **as they ship**,
+takes the one qualifying pick a day the way `ledger.log_pick_of_the_day`
+locks it, and settles against the final score.
+
+**Why it can disagree with `backtest_sharp_anchor`, and why this is the
+number that matters.** That replay takes every disagreement it can find
+— a few hundred bets a season. This takes one a day, ranked on the
+witness before the edge. Same pool, different sample, and on this box's
+MLB data the pool's returns run *backwards* in EV (§2): under 4% EV
+returned +29.3%, over 8% returned −16.8%. Inheriting the method's
+headline for the product would be assuming the answer.
+
+**It settles the leans separately**, under `IF THE LEANS HAD BEEN BET
+TOO`. That is the live product question — Ethan wants a pick every
+single day — priced rather than argued. The leans are not in the
+headline because the product does not bet them and
+`log_pick_of_the_day` refuses to journal them; if that block is
+positive over a real sample, a second labelled tier is arguable, and if
+it is negative the current behaviour is already right.
+
+**What it cannot see**, all four stated in `engine/potdbacktest`'s own
+header rather than only here: moneylines only (the only market with both
+a sharp pair and a soft price stored); no exchange tier (Kalshi is read
+live and never stored, and it ranks *above* sharp, so a day this gives
+to a sharp row may in production go to an exchange row); close against
+close (soft books have mostly converged by then — the live board acts
+earlier); and `bettable` assumed, so the count of days with a pick is an
+upper bound. It is a floor with the reasons written down.
+
+**Every ROI it prints carries a standard error beside it.** One pick a
+day is a small sample by construction, and an ROI quoted alone invites a
+reader to treat +9% over 90 bets as a fact about the world.
+
+## 8. The gap that closed, and the one still open
+
+**Closed: Pinnacle closes exist now.** This section used to read "there
+are no stored Pinnacle closes anywhere, so the sharp-anchor strategy has
+never been measured on our own data". The nightly harvest has since
+filled `odds_history` on production, and on 2026-09-15
+`backtest_sharp_anchor` answered for the first time:
+
+```
+MLB · 741 games with both a Pinnacle pair and a soft price
+  203 bets, 110 won (54.2%), net +19.93u, ROI +9.8%
+  EV buckets:  <4% → +29.3%    4-8% → +17.0%    8-15% → -16.8%
+```
+
+**Read the buckets before the headline.** +9.8% is about 1.4 standard
+errors from zero on 203 bets — encouraging, not established. And the
+buckets run **backwards**: the biggest claimed edges lost money. That is
+the signature of a stale or mis-joined price rather than of a real edge,
+and it is the reason `potd.rank_key` ranks on the witness before the
+edge size and why §3's ceiling on "suspicious" EV exists. Each bucket is
+59-74 bets, so the ordering itself is not established either.
+
+**This box is not that box.** `data/history.db` here holds 64
+`odds_history` rows, so `backtest_sharp_anchor` and `potd_backtest.py`
+both return zero priced games locally and say so in their own funnels.
+Both numbers come from the droplet.
+
+**Still open: the product has not been replayed over a real sample.**
+`potd_backtest.py` (§7b) is the instrument and it is only as long as the
+harvest. A fortnight of nightly Pinnacle moneyline closes per league is
+what turns its output from a shape into a measurement.
+
+**Still open: no game-market alternate ladder.** §3d — the lever that
+would turn a price-refused game row into a band-legal one needs
+`alternate_spreads` and `alternate_totals`, which are never bought.
 
 ## 9. What the page may not say
 

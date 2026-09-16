@@ -113,8 +113,15 @@ def _load(path: str):
         return {"_error": f"{type(exc).__name__}: {exc}"}
 
 
-def _one_line(row: dict) -> str:
-    """A candidate in a line: who, at what, on whose say-so."""
+def _bet_name(row: dict) -> str:
+    """How this tool SPELLS a bet: "TOR Moneyline", "OVER 8 Total",
+    "LAA +1.5 Spread".
+
+    Split out of `_one_line` below when the published card wanted the
+    same spelling without the fair and the EV beside it. Every trap in
+    here was a real line off Ethan’s board on 2026-09-15, and a second
+    copy of the join would step into all of them again.
+    """
     market = str(row.get("market") or "")
     who = row.get("player") or row.get("team") or "?"
     what = row.get("market_label") or row.get("market") or ""
@@ -156,11 +163,16 @@ def _one_line(row: dict) -> str:
     if isinstance(line, float) and line.is_integer():
         line = int(line)
     side = side.upper()
+    return " ".join(str(x) for x in (who, side, line, what)
+                    if x is not None and str(x).strip())
+
+
+def _one_line(row: dict) -> str:
+    """A candidate in a line: who, at what, on whose say-so."""
     odds = row.get("odds")
     fair = potd.fair_prob(row)
     ev = potd.edge(row)
-    bits = [" ".join(str(x) for x in (who, side, line, what)
-                     if x is not None and str(x).strip()),
+    bits = [_bet_name(row),
             f"{odds:+d}" if isinstance(odds, (int, float)) else str(odds),
             f"{potd.evidence(row)} fair {fair:.1%}" if fair is not None else "no fair",
             f"{ev:+.1%} EV" if ev is not None else "no EV"]
@@ -296,6 +308,54 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
     return out
 
 
+def _published_call(payload: dict) -> list:
+    """What the PAGE is telling a reader to do, read off the card.
+
+    Everything else in this report is a fresh re-derivation over the
+    board’s rows, and that is the right thing for a diagnosis — but it
+    is not always what is on screen. `ledger.relock_potd` re-points the
+    published card at the pick this sport locked hours earlier, so the
+    card can be showing a bet at a price the live rows would now refuse,
+    or showing nothing at all while the rows below it still offer a
+    lean. An operator asking "what does the site say right now" was
+    getting the answer to a different question.
+
+    `potd.verdict` is not recomputed here. The card carries its own
+    (`potd.build`, `potd.relock`), and a report that derived a second
+    one would be the second definition this whole feature has spent two
+    days removing.
+
+    Returns [] for a board built before the verdict shipped — a report
+    that invents "NO BET" out of a missing field would be worse than one
+    that says nothing about it.
+    """
+    card = payload.get("pick_of_the_day")
+    if not isinstance(card, dict):
+        return []
+    v = card.get("verdict")
+    if not isinstance(v, dict) or not v.get("call"):
+        return []
+    pick = card.get("pick") if isinstance(card.get("pick"), dict) else {}
+    marks = []
+    if pick.get("locked"):
+        marks.append("locked earlier today")
+    if pick.get("off_board"):
+        marks.append("read back from the journal")
+    if card.get("relocked"):
+        marks.append(str(card["relocked"]))
+    tail = f"   [{'; '.join(marks)}]" if marks else ""
+    if str(v["call"]) == "bet":
+        where = _bet_name(pick) if pick else "?"
+        odds = v.get("odds", pick.get("odds"))
+        book = str(v.get("book") or pick.get("book") or "").strip()
+        price = f" ({odds:+d})" if isinstance(odds, int) else ""
+        at = f" at {book}" if book else ""
+        return [f"  PUBLISHED   BET {v.get('stake'):g}u on "
+                f"{where}{at}{price}{tail}"]
+    why = str(v.get("why") or "").strip() or "nothing cleared the bar"
+    return [f"  PUBLISHED   NO BET — {why}{tail}"]
+
+
 def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     if payload.get("_error"):
         return f"{sport.upper()}: could not read the board — {payload['_error']}"
@@ -303,6 +363,7 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
     pick, near, census = potd.choose(rows)
     out = [f"{sport.upper()}  ·  board built {payload.get('built_at', '?')}  ·  "
            f"{len(rows)} row(s) considered"]
+    out.extend(_published_call(payload))
 
     if not rows:
         out.append("  The board carries no Most Likely rows at all — the pool "
