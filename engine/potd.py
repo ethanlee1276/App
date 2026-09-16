@@ -210,6 +210,25 @@ MIN_FAIR = 0.50
 #: default — it is the same unknown wearing a blank.
 MIN_RANK_AUC = 0.55
 
+#: WHAT A READER IS ACTUALLY BEING TOLD TO DO. One unit, flat, on the
+#: day's pick and nothing on any other day.
+#:
+#: Ethan, 2026-09-15: the card "should say whether to bet". It did not.
+#: It said a percentage, a fair, an edge and a payout, and left the one
+#: question a reader came with — do I put money on this? — to be
+#: inferred from which colour the border was. A lean and a pick were
+#: told apart by a warning stripe and a sentence six lines down.
+#:
+#: FLAT, AND NOT A KELLY FRACTION, on purpose. This feature publishes
+#: ONE pick a day chosen on the strength of the witness rather than the
+#: size of the edge (`rank_key`), and the edges it clears are small by
+#: construction — 2% to maybe 6%. Sizing those by Kelly would swing the
+#: stake by a factor of three on differences this module has already
+#: said it will not treat as ranked (`rank_key` rounds the edge to whole
+#: points before sorting). A flat unit is also the shape the record
+#: below the card is kept in, so the two agree.
+STAKE_UNITS = 1.0
+
 #: Every reason `disqualify` can give. A row refused for one of these is
 #: never shown, not even as a near miss: it is missing something the
 #: page needs, or it is outside the product's own definition, or it is a
@@ -600,7 +619,61 @@ def _card(row: dict, below: str = "") -> dict:
     return out
 
 
+def verdict(payload: dict) -> dict:
+    """The call, in the one shape both the page and the log read.
+
+    ``{"call": "bet"|"no bet", "stake": units, "why": reason}`` — and on
+    a bet, the book and price it is at.
+
+    THE CARD LEADS WITH THIS. Everything else this module publishes is
+    the working: the fair, whose fair it is, what the price implies, the
+    edge, the payout, the record. A reader who reads none of it is still
+    entitled to the answer, and until 2026-09-16 the card did not state
+    one — it showed a lean and the day’s pick in the same furniture and
+    distinguished them with a border colour and a sentence below the
+    fold.
+
+    A LEAN IS "NO BET", WITHOUT SOFTENING. `build` shows the best row on
+    the board when nothing cleared, because a blank page tells a paying
+    reader nothing; `ledger.log_pick_of_the_day` refuses to journal it.
+    Those two facts already say the product does not stand behind it, so
+    the call it gets here is the same call an empty board gets. The
+    reason travels in `why` and the page prints it.
+
+    PURE, AND OVER THE PUBLISHED PAYLOAD rather than over a row, so the
+    answer cannot disagree with what was published: `relock` re-points
+    the card at a pick chosen hours earlier, and a verdict derived from
+    the board’s live rows could then say "bet" about a row the card is
+    no longer showing.
+    """
+    pick = (payload or {}).get("pick")
+    if not isinstance(pick, dict) or not pick:
+        why = str((payload or {}).get("note") or "").strip()
+        return {"call": "no bet", "stake": 0.0,
+                "why": why or "no pick today"}
+    below = str(pick.get("below_bar") or "").strip()
+    if below:
+        return {"call": "no bet", "stake": 0.0, "why": below}
+    return {"call": "bet", "stake": STAKE_UNITS, "why": "",
+            "book": str(pick.get("book") or ""),
+            "odds": pick.get("odds")}
+
+
 def relock(payload: dict, most_likely, locked_key, journal_pick=None) -> dict:
+    """`_repoint` below, with the call recomputed over what it landed on.
+
+    THE VERDICT IS DERIVED LAST, ALWAYS. Re-pointing can turn a card
+    that led with "BET" into one showing nothing at all (the locked row
+    left the board and the journal could not be read), and a verdict
+    carried over from `build` would then still say bet. One line, here,
+    rather than five inside `_repoint`’s branches.
+    """
+    out = _repoint(payload, most_likely, locked_key, journal_pick)
+    out["verdict"] = verdict(out)
+    return out
+
+
+def _repoint(payload: dict, most_likely, locked_key, journal_pick=None) -> dict:
     """The published card, re-pointed at the pick this sport ALREADY
     LOCKED today. A new dict; ``payload`` is not touched.
 
@@ -706,14 +779,17 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     }
     if pick is not None:
         out["pick"] = _card(pick)
-        return out
-    if near is not None:
+    elif near is not None:
         out["pick"] = _card(near, below=shortfall(near))
-        return out
-    out["pick"] = None
-    out["note"] = ("No pick today: " + (
-        "the board had no rows" if not rows
-        else "nothing on the board is in the band at a real price"))
+    else:
+        out["pick"] = None
+        out["note"] = ("No pick today: " + (
+            "the board had no rows" if not rows
+            else "nothing on the board is in the band at a real price"))
+    # ONE EXIT, so the call cannot be attached to two of the three
+    # outcomes and forgotten on the third — which is how a page ends up
+    # leading with "BET" on a day the engine declined.
+    out["verdict"] = verdict(out)
     return out
 
 
@@ -741,12 +817,18 @@ def attach(result: dict, sport: str, now=None) -> str:
     got = result["pick_of_the_day"]
     pick = got.get("pick")
     if pick is None:
-        return f"pick of the day: none ({got.get('note', 'no candidate')})"
+        return f"pick of the day: NO BET ({got.get('note', 'no candidate')})"
     where = f"{pick.get('player', '')} {pick.get('market_label') or pick.get('market', '')}".strip()
     if pick.get("below_bar"):
-        return (f"pick of the day: BELOW THE BAR — {where} "
+        return (f"pick of the day: NO BET — below the bar: {where} "
                 f"({pick['below_bar']}); shown, not recorded")
-    return (f"pick of the day: {where} at {pick.get('odds')} — "
+    # THE LOG LEADS WITH THE CALL for the same reason the card does: the
+    # operator reading `journalctl` is asking the same question the
+    # reader is, and "pick of the day: TOR Moneyline at -118" does not
+    # answer it on a day the engine declined.
+    return (f"pick of the day: BET "
+            f"{got.get('verdict', {}).get('stake', STAKE_UNITS):g}u on "
+            f"{where} at {pick.get('odds')} — "
             f"{pick.get('evidence')} fair "
             f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
             f"{pick.get('ev_units'):+.3f}u EV, pays "
@@ -906,9 +988,16 @@ def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
         out["note"] = ("No top pick today: " + (
             "no league published a board" if not seen
             else "no league had a pick in the band"))
+        out["verdict"] = verdict(out)
         return out
     out["pick"] = winner
     out["sport"] = winner.get("sport", "")
+    # THE SAME CALL THE PER-LEAGUE CARD MAKES, over the row that won the
+    # cross-board comparison. Derived here rather than copied off the
+    # league board, because a below-bar lean can win this comparison on
+    # a day no league cleared — and the league it came from published
+    # "no bet" about that very row.
+    out["verdict"] = verdict(out)
     # THE ONES IT BEAT, so the choice can be argued with. A single card
     # with nothing beside it is indistinguishable from a card chosen at
     # random, and this feature's entire claim is that the ORDER means

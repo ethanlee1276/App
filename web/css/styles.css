@@ -10340,3 +10340,35 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .ffleague-n { font-size: var(--fs-sm); font-weight: 700; }
 .ffleague-m { font-size: var(--fs-2xs); color: var(--text-mute);
   letter-spacing: .06em; }
+
+/* --- The Pick of the Day's call ----------------------------------------
+   Ethan, 2026-09-15: the card should say whether to bet. This is the line
+   that says it, and it sits directly under the card's own heading, above
+   the bet, the fair, the edge and the record.
+
+   TWO STATES AND THEY DO NOT LOOK ALIKE. A lean and the day's pick used
+   to be distinguished by the colour of a 3px border and a sentence six
+   lines down, which is a difference a reader scrolling a phone does not
+   register. Bet is the green the site already uses for a result that went
+   your way; no bet is muted, flat and unfilled — deliberately not red,
+   because declining to bet is not a loss and drawing it as one would push
+   a reader toward the action on a day the engine has just said not to.
+   The mark carries the same meaning as the colour for anyone who cannot
+   separate the two. */
+.potd-call {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 9px;
+  margin-top: 8px; padding: 7px 10px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border);
+}
+.potd-call.is-bet {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  background: color-mix(in srgb, var(--good) 11%, transparent);
+}
+.potd-call.is-pass { background: var(--fill-subtle); }
+.potd-call-word {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 800; letter-spacing: .06em; font-size: var(--fs-md);
+}
+.potd-call.is-bet .potd-call-word { color: var(--good); }
+.potd-call.is-pass .potd-call-word { color: var(--text-mute); }
+.potd-call-why { color: var(--text-mute); font-size: var(--fs-sm); }

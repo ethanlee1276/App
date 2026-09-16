@@ -2296,6 +2296,39 @@ function renderDataSource(d) {
    (`ledger.log_pick_of_the_day` refuses it) — so the record below the
    card only ever counts picks that qualified.
    ============================================================ */
+/* THE CALL, ABOVE THE WORKING.
+
+   Ethan, 2026-09-15: the card should say whether to bet. It did not. It
+   opened with the bet in words and a fair and an edge, and left the one
+   question a reader arrives with — do I put money on this today? — to be
+   inferred from the colour of the left border and a sentence below the
+   fold. A lean and the day’s pick wore the same furniture.
+
+   THE VERDICT IS THE ENGINE’S, NOT THIS FUNCTION’S. `engine/potd.verdict`
+   derives it once, over the payload that was actually published, and it
+   travels on the board as `verdict`. Re-deriving it here from `pick` and
+   `below_bar` would be a second definition of "is this a bet", in the
+   language least able to keep it honest.
+
+   AN OLD BOARD ON DISK CARRIES NO `verdict`, and a page that leads with
+   "NO BET" because a field is missing is worse than one that leads with
+   nothing. No verdict draws no strip; the card below is unchanged and
+   still says everything it said before. */
+function potdCallStrip(payload) {
+  const v = (payload || {}).verdict;
+  if (!v || typeof v !== "object" || !v.call) return "";
+  const bet = String(v.call) === "bet";
+  const n = Number(v.stake);
+  const units = !isFinite(n) || n <= 0 ? ""
+    : ` ${n % 1 === 0 ? n : n.toFixed(2)} unit${n === 1 ? "" : "s"}`;
+  const why = String(v.why || "").trim();
+  return `<div class="potd-call ${bet ? "is-bet" : "is-pass"}">
+    <span class="potd-call-word">${icon(bet ? "check" : "cross", 15)}${
+      bet ? `BET${units}` : "NO BET"}</span>${
+    bet ? "" : `<span class="potd-call-why">${
+      escapeHtml(why || "nothing cleared the bar today")}</span>`}</div>`;
+}
+
 async function renderPickOfTheDay() {
   const host = document.getElementById("potd-zone");
   if (!host) return;
@@ -2316,6 +2349,7 @@ async function renderPickOfTheDay() {
   if (!pick) {
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
       <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
+      ${potdCallStrip(got)}
       <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">
         ${escapeHtml(got.note || "No pick today.")}</div>
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
@@ -2379,6 +2413,7 @@ async function renderPickOfTheDay() {
   host.innerHTML = `
     <div class="card" style="border-left:3px solid ${accent};margin-bottom:12px">
       <div class="player">${iconMark("target")}${head}</div>
+      ${potdCallStrip(got)}
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
         <span class="pick-id">${betMark(pick, 30)}</span>
         <span style="flex:1;min-width:0">
