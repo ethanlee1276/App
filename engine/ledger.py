@@ -1384,29 +1384,11 @@ def top_pick_claims(conn, date: str) -> list:
 
 
 def read_only(path: str | Path | None = None) -> sqlite3.Connection:
-    """A connection for READING the journal, with none of `connect`'s
-    schema work.
-
-    `connect` runs `executescript(SCHEMA)` and a column migration for
-    every table on every call. That is right for a writer and it is pure
-    cost for a reader — and on 2026-09-15 it was worse than cost: the
-    droplet spent a night with cfb_build, pm_build, the MLB results
-    ingest and the NFL box scores all failing on "database is locked",
-    and the answer to a reader that needs one SELECT is not a sixth
-    process taking DDL locks on the same file.
-
-    A missing table raises here rather than being created, which is what
-    a reader wants: every caller already treats a database it cannot
-    read as "no answer", and silently creating an empty `bets` table
-    would turn "the journal is not where you think it is" into "there
-    are no picks today".
-    """
-    from .db import tune as _db_tune
-    path = Path(path if path is not None else DEFAULT_DB)
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
-    _db_tune(conn)
-    return conn
+    """`db.read_only` against the journal — see it for why a reader takes
+    no schema locks. Kept as a name here because every caller in this
+    module reaches for the journal and should not have to name it."""
+    from .db import read_only as _read_only
+    return _read_only(path if path is not None else DEFAULT_DB)
 
 
 def relock_potd(payload: dict, most_likely=None, conn=None,

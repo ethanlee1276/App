@@ -359,6 +359,36 @@ def tune(conn) -> str:
     return mode
 
 
+def read_only(path=None) -> sqlite3.Connection:
+    """A connection for READING one of this box’s databases, with none of
+    `connect`’s schema work.
+
+    `connect` runs its schema script and a column migration for every
+    table on every call. That is right for a writer and it is pure cost
+    for a reader — and on 2026-09-15 it was worse than cost: the droplet
+    spent a night with cfb_build, pm_build, the MLB results ingest and
+    the NFL box scores all failing on "database is locked", and the
+    answer to a reader that needs one SELECT is not a sixth process
+    taking DDL locks on the same file.
+
+    A missing table raises here rather than being created, which is what
+    a reader wants: a caller already treats a database it cannot read as
+    "no answer", and silently creating the empty table turns "the
+    database is not where you think it is" into "there is nothing in it".
+
+    LIVES HERE RATHER THAN IN `ledger`, WHERE IT WAS BORN. Nothing in it
+    was ever about the journal — `ledger.read_only` is now this function
+    with the journal’s default path, and the second reader that wanted
+    one (`potdbacktest`, against `history.db`) is what made the copy
+    worth removing before it was made.
+    """
+    path = Path(path if path is not None else DEFAULT_DB)
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    tune(conn)
+    return conn
+
+
 def journal_warning(mode: str) -> str:
     """The sentence for a journal mode, or "" when there is nothing to
     say. Split out from `tune` so the decision can be tested without a
