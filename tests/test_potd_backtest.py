@@ -88,11 +88,15 @@ def _db(games, quotes):
 
 
 def _one_day(day="2026-05-01", hs=5.0, as_=3.0,
-             sharp=(-160, 140), soft=(-120, 150)):
+             sharp=(-160, 140), soft=(-131, 150)):
     """One game with a Pinnacle pair and a shopped soft price on each
-    side. -160/+140 de-vigs to about 60/40; +150 on the home side would
-    be a huge edge, so the soft home price is the modest one and the
-    picked row is whichever clears."""
+    side. -160/+140 de-vigs to about 60/40 and -131 on the home side is
+    +5.0% EV — inside `potd.MAX_EV`, which since 2026-09-16 refuses a
+    gap past 7% as one the sharp side has probably already repriced.
+
+    THE DEFAULT WAS -120 (+9.3%) UNTIL THEN, so every fixture in this
+    file was a bet the selector now declines and the edge board already
+    staked nothing on."""
     games = [(day, "AAA", "BBB", hs, as_)]
     quotes = [(day, "AAA", "BBB", "Pinnacle", "AAA", sharp[0]),
               (day, "AAA", "BBB", "Pinnacle", "BBB", sharp[1]),
@@ -144,7 +148,7 @@ def test_only_one_pick_a_day_however_many_games():
         games.append((day, h, a, 5.0, 3.0))
         quotes += [(day, h, a, "Pinnacle", h, -160),
                    (day, h, a, "Pinnacle", a, 140),
-                   (day, h, a, "best", h, -120),
+                   (day, h, a, "best", h, -131),
                    (day, h, a, "best", a, 150)]
     r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
     assert r.games_priced == 3
@@ -158,7 +162,7 @@ def test_two_days_are_two_picks():
         games.append((day, "AAA", "BBB", 5.0, 3.0))
         quotes += [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
                    (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
-                   (day, "AAA", "BBB", "best", "AAA", -120),
+                   (day, "AAA", "BBB", "best", "AAA", -131),
                    (day, "AAA", "BBB", "best", "BBB", 150)]
     r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
     assert r.days_seen == 2 and r.n_bets == 2
@@ -202,11 +206,17 @@ def test_a_lean_is_counted_but_never_in_the_headline():
     # let alone a lean, and this test was asserting a state production
     # cannot produce.
     #
-    # +120/-140 de-vigs the home side to ~44%, and +150 on it is +9.5%
-    # EV — inside [2%, 15%], so the card exists. `potd.MIN_FAIR` then
-    # refuses it: more likely to lose than to win, even at a good price.
-    # That is the exact reason seven of the droplet's MLB leans carried.
-    conn = _one_day(sharp=(120, -140), soft=(150, -140), hs=5.0, as_=3.0)
+    # +120/-140 de-vigs the home side to ~43.8%, and +140 on it is +5.1%
+    # EV — inside [2%, 15%] so the gate builds the card, and inside
+    # `potd.MAX_EV` so the selector reaches the bar this test is about.
+    # `potd.MIN_FAIR` then refuses it: more likely to lose than to win,
+    # even at a good price. That is the exact reason seven of the
+    # droplet's MLB leans carried.
+    #
+    # +150 UNTIL 2026-09-16, which is +9.5% — past the new ceiling, so
+    # the lean came back carrying "the gap is too big to trust" and this
+    # test was no longer about `MIN_FAIR` at all.
+    conn = _one_day(sharp=(120, -140), soft=(140, -140), hs=5.0, as_=3.0)
     r = potdbacktest.replay_potd(conn, "mlb", rank_auc=AUC)
     assert r.days_with_pick == 0
     assert r.n_bets == 0 and r.net == 0.0
@@ -286,17 +296,27 @@ def test_a_one_sided_soft_quote_is_counted_not_guessed():
     assert r.n_bets == 0
 
 
-def test_the_report_says_how_many_gaps_the_pricer_distrusts():
-    """A suspect gap still becomes a card in production, graded Pass at
-    a stake of zero. The reader is told how much of the book rides on
-    quotes the pricer itself does not trust."""
+def test_a_gap_the_pricer_distrusts_is_counted_and_never_bet():
+    """A suspect gap still becomes a card in production — graded Pass at
+    a stake of zero — and since `potd.MAX_EV` (2026-09-16) the selector
+    will not name one either. So the count is a fact about the POOL, and
+    the bet count under it has to be zero or the ceiling is not holding.
+
+    This is the assertion that `MAX_EV` is wired to the same number the
+    pricer stops believing at. If the two ever drift, the replay will
+    bet a gap the live site grades Pass and the ROI will be about a
+    product nobody ships — which is the failure this whole file exists
+    to catch, one level down."""
     # -160/+140 de-vigs the home side to ~59.6%. At -115 that is +11.5%
     # EV — inside the 15% cap so the card exists, past the 7% line so
     # production grades it Pass. At -131 it is +5.2% and ordinary.
     hot = potdbacktest.replay_potd(
         _one_day(sharp=(-160, 140), soft=(-115, -140)), "mlb", rank_auc=AUC)
-    assert hot.n_bets == 1, hot.gate_refused
     assert hot.suspect == 1, hot.suspect
+    assert hot.n_bets == 0, "a gap production grades Pass was bet"
+    assert hot.lean_bets == 1 and list(hot.lean_why) == [
+        "the gap is too big to trust — the sharp side has probably moved"
+    ], hot.lean_why
 
     calm = potdbacktest.replay_potd(
         _one_day(sharp=(-160, 140), soft=(-131, -140)), "mlb", rank_auc=AUC)
@@ -314,26 +334,64 @@ def test_the_picks_are_split_by_the_edge_they_were_chosen_for():
     `backtest_sharp_anchor` measured at -16.8%. This is the cut that
     says whether the edge-first sort is choosing against the evidence.
 
-    Deliberately split at `SHARP_SUSPECT_EV` rather than a round number:
-    the question is not "is the edge big" but "is it past the point
-    production stops believing it"."""
-    days, games, quotes = [], [], []
-    # Three days: a small edge, a middling one, and a suspect one.
-    for i, (soft_home, day) in enumerate(((-131, "2026-05-01"),
-                                          (-120, "2026-05-02"),
-                                          (-115, "2026-05-03"))):
+    Split at `SHARP_SUSPECT_EV` rather than a round number: the question
+    is not "is the edge big" but "is it past the point production stops
+    believing it"."""
+    games, quotes = [], []
+    # -160/+140 de-vigs the home side to ~59.6%, so: -138 is +2.8%,
+    # -131 is +5.2%, -115 is +11.5% and past the ceiling.
+    for soft_home, day in ((-138, "2026-05-01"),
+                           (-131, "2026-05-02"),
+                           (-115, "2026-05-03")):
         games.append((day, "AAA", "BBB", 5.0, 3.0))
         quotes += [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
                    (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
                    (day, "AAA", "BBB", "best", "AAA", soft_home),
                    (day, "AAA", "BBB", "best", "BBB", -140)]
     r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
-    assert r.n_bets == 3, (r.n_bets, r.gate_refused)
-    assert sum(b["n"] for b in r.ev_buckets.values()) == 3, r.ev_buckets
-    assert "7-15% (suspect)" in r.ev_buckets, r.ev_buckets
+    assert r.n_bets == 2, (r.n_bets, r.gate_refused)
+    assert sum(b["n"] for b in r.ev_buckets.values()) == 2, r.ev_buckets
+    assert set(r.ev_buckets) == {"under 4%", "4-7%"}, r.ev_buckets
     out = potdbacktest.summarize(r)
     assert "by the edge it was chosen for:" in out
+
+
+def test_the_suspect_band_is_read_off_the_leans_now_that_none_are_bet():
+    """`MAX_EV` empties the suspect band among the PICKS by
+    construction, so the split above can no longer say whether refusing
+    those gaps was right. The refused rows are settled as leans and
+    split the same way, which is the only place that question can still
+    be asked — a negative line there is the ceiling earning its keep."""
+    games, quotes = [], []
+    for soft_home, day in ((-131, "2026-05-01"), (-115, "2026-05-02")):
+        games.append((day, "AAA", "BBB", 5.0, 3.0))
+        quotes += [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
+                   (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
+                   (day, "AAA", "BBB", "best", "AAA", soft_home),
+                   (day, "AAA", "BBB", "best", "BBB", -140)]
+    r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
+    assert r.n_bets == 1 and r.lean_bets == 1
+    assert "7-15% (suspect)" not in r.ev_buckets, r.ev_buckets
+    assert "7-15% (suspect)" in r.lean_ev_buckets, r.lean_ev_buckets
+    assert r.lean_ev_buckets["7-15% (suspect)"]["n"] == 1
+    out = potdbacktest.summarize(r)
+    assert "the leans, by the edge they were refused at:" in out
     assert "7-15% (suspect)" in out
+
+
+def test_the_two_splits_are_the_same_bands_computed_once():
+    """The picks and the leans have to be cut at the same places or the
+    comparison between them is meaningless. Both read `BANDS`."""
+    import inspect
+    src = inspect.getsource(potdbacktest.summarize)
+    assert '"under 4%"' not in src and "'under 4%'" not in src, \
+        "summarize writes a band name out instead of reading BANDS"
+    assert src.count("in BANDS") == 2, "one of the two splits is not on BANDS"
+    assert potdbacktest.BANDS[2].endswith("(suspect)")
+    assert potdbacktest._band(0.039) == potdbacktest.BANDS[0]
+    assert potdbacktest._band(0.04) == potdbacktest.BANDS[1]
+    assert potdbacktest._band(0.0699) == potdbacktest.BANDS[1]
+    assert potdbacktest._band(0.071) == potdbacktest.BANDS[2]
 
 
 # --- the report ---------------------------------------------------------------
@@ -354,7 +412,7 @@ def test_the_report_quotes_a_standard_error_beside_every_roi():
         games.append((day, "AAA", "BBB", 5.0 if i % 3 else 3.0, 3.0 if i % 3 else 5.0))
         quotes += [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
                    (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
-                   (day, "AAA", "BBB", "best", "AAA", -120),
+                   (day, "AAA", "BBB", "best", "AAA", -131),
                    (day, "AAA", "BBB", "best", "BBB", 150)]
     r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
     assert r.n_bets == 12

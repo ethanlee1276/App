@@ -285,7 +285,11 @@ def test_what_the_page_shows_and_what_the_record_counts_never_diverge():
                  "opponent": "BBB", "market": "total", "matchup": "BBB @ AAA",
                  "market_label": "Total", "side": "OVER", "line": 3.5,
                  "book": "DraftKings", "odds": 100, "reserve": True,
-                 "sharp_anchored": True, "sharp_fair": 0.62,
+                 # 0.62 was +18.4% EV — past `potd.MAX_EV` since
+                 # 2026-09-16, which refuses a gap that big. 0.53 at
+                 # +100 is +6.0%: a reserve row the selector will take,
+                 # which is the whole point of this test.
+                 "sharp_anchored": True, "sharp_fair": 0.53,
                  "model_prob": 0.52, "implied_prob": 0.50, "rank_auc": 0.71,
                  "bettable": True, "injury_status": "",
                  "game_date": d, "kickoff": k}

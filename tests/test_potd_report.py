@@ -44,7 +44,8 @@ def _row(**kw):
          "opponent": "BBB", "market": "spread",
          "market_label": "Spread", "side": "+3.5", "line": 3.5,
          "book": "DraftKings", "odds": -110, "sharp_anchored": True,
-         "sharp_fair": 0.60, "model_prob": 0.58, "implied_prob": 0.5238,
+         # 0.60 was +14.5% EV, refused by `potd.MAX_EV` since 2026-09-16.
+         "sharp_fair": 0.55, "model_prob": 0.58, "implied_prob": 0.5238,
          "rank_auc": 0.71, "bettable": True, "injury_status": "",
          "game_date": t.strftime("%Y-%m-%d"), "kickoff": t.strftime("%H:%M")}
     r.update(kw)
@@ -103,7 +104,10 @@ def test_the_near_misses_carry_the_reason_each_one_missed_by():
             # spread is no longer refused on our own 0.49, so the row
             # became the PICK and stopped being a near miss.
             _row(player="Flip", rank_auc=0.49, sharp_anchored=False,
-                 sharp_fair=None, prob_source="market", implied_prob=0.60),
+                 # 0.55 at -110 is +5.0% — inside `MAX_EV`, so the
+                 # RANKING bar is the one left to bite. At 0.60 the row
+                 # is refused for the gap and this tests nothing.
+                 sharp_fair=None, prob_source="market", implied_prob=0.55),
             _row(player="Ours", sharp_anchored=False, sharp_fair=None,
                  model_prob=0.70)]
     out = R.report(_board(rows), "nfl", rows_shown=5)

@@ -49,7 +49,18 @@ def _row(**kw):
 
     Sharp-anchored by default because that is the tier the module is
     built to select: a sharp book quoted this market two ways, the
-    de-vig says 60%, and DraftKings is paying a price that implies 52.4%.
+    de-vig says 55%, and DraftKings is paying a price that implies
+    52.4% — a 2.6-point disagreement, which is +5.0% EV.
+
+    THE FAIR WAS 60% UNTIL 2026-09-16, and that was not a realistic
+    row. A 60% fair against -110 is a 7.6-point disagreement with the
+    sharpest book in the world and +14.5% EV — past
+    `gamebets.SHARP_SUSPECT_EV`, where `_sharpify` already grades the
+    card Pass and stakes nothing, because a gap that size usually means
+    the sharp side repriced on news and the soft quote is stale. Every
+    test in this file was therefore built on a bet the rest of the site
+    refuses. `potd.MAX_EV` now refuses it here too, which is what
+    surfaced the fixture. 55% is an ordinary sharp-anchor row.
 
     A GAME TOTAL RATHER THAN A PROP since 2026-09-15, because the day's
     pick is game markets only (`potd.disqualify`, and `ledger
@@ -62,7 +73,7 @@ def _row(**kw):
     r = {"kind": "game", "player": "Over 3.5", "team": "AAA",
          "opponent": "BBB", "market": "total", "market_label": "Total",
          "side": "OVER", "line": 3.5, "book": "DraftKings", "odds": -110,
-         "sharp_anchored": True, "sharp_fair": 0.60,
+         "sharp_anchored": True, "sharp_fair": 0.55,
          "model_prob": 0.58, "implied_prob": 0.5238, "rank_auc": 0.71,
          "bettable": True, "injury_status": "", "game_date": d, "kickoff": k}
     r.update(kw)
@@ -163,7 +174,7 @@ def test_the_witness_is_named_and_the_fair_comes_from_that_witness():
     pairing exists to make impossible."""
     sharp = _row()
     assert potd.evidence(sharp) == "sharp"
-    assert potd.fair_prob(sharp) == 0.60, "the sharp book's de-vig, not ours"
+    assert potd.fair_prob(sharp) == 0.55, "the sharp book's de-vig, not ours"
 
     market = _consensus(implied_prob=0.56)
     assert potd.evidence(market) == "market"
@@ -190,8 +201,10 @@ def test_a_sharp_anchor_outranks_a_bigger_consensus_edge():
     """THE INVERSION THAT IS THE POINT OF THE MODULE. Sorting on edge
     size hands every day to the loudest disagreement, and the loudest
     disagreements come from the weakest witness."""
-    quiet = _row(player="Pinnacle says", odds=-110, sharp_fair=0.57)
-    loud = _consensus(player="Consensus says", odds=-110, implied_prob=0.62)
+    quiet = _row(player="Pinnacle says", odds=-110, sharp_fair=0.54)
+    # BOTH INSIDE `MAX_EV`, or the point would be made by the trust
+    # ceiling rather than by the tier order this test is about.
+    loud = _consensus(player="Consensus says", odds=-110, implied_prob=0.56)
     assert potd.refuse(quiet) == "" and potd.refuse(loud) == ""
     assert potd.edge(loud) > potd.edge(quiet), "the loud one has the bigger edge"
     pick, _, _ = potd.choose([loud, quiet])
@@ -202,6 +215,10 @@ def test_the_edge_is_the_fair_against_the_price():
     """EV of one unit, off the shared converter. Checked at a price that
     pays less than the stake and at one that pays more, because that is
     where a sign error hides."""
+    # `edge` is arithmetic and answers for any row; the bars live in
+    # `shortfall`. These two deliberately sit outside `MAX_EV` — a sign
+    # error would hide at exactly these prices, and clamping the fixture
+    # to keep the selector happy would stop testing the converter.
     assert round(potd.edge(_row(odds=-125, sharp_fair=0.60)), 4) == 0.0800
     assert round(potd.edge(_row(odds=100, sharp_fair=0.60)), 4) == 0.2000
     assert potd.edge(_row(odds=-110, sharp_fair=0.40)) < 0
@@ -306,9 +323,13 @@ def test_an_unmeasured_or_coin_flip_market_is_refused():
     the test below. `MIN_RANK_AUC` is `likely.rank_auc`, measured by
     replaying OUR pricer, so it speaks to a consensus we de-vig
     ourselves and not to a sharp book's own pair."""
-    assert potd.shortfall(_consensus(implied_prob=0.60, rank_auc=None)) == \
+    # 55% against -110 is +5.0% EV — inside the band and inside the
+    # trust ceiling, so the RANKING bar is the one left to bite. At 60%
+    # the row is refused for the gap instead and this would be testing
+    # the wrong thing.
+    assert potd.shortfall(_consensus(implied_prob=0.55, rank_auc=None)) == \
         "this market has never been measured"
-    assert potd.shortfall(_consensus(implied_prob=0.60, rank_auc=0.49)) == \
+    assert potd.shortfall(_consensus(implied_prob=0.55, rank_auc=0.49)) == \
         "this market ranks no better than a coin flip"
     assert potd.shortfall(_row(bettable=False)) == \
         "this market's probabilities are not reliable enough to bet"
@@ -320,8 +341,8 @@ def test_a_sharp_witness_is_not_refused_by_our_models_ranking():
     sharp-anchored spread on that figure. Ranking is the wrong question
     here: this selector buys a price disagreement, and a 50/50 outcome
     bought at a good price is +EV whether or not anyone can order it."""
-    for tier in ({"sharp_anchored": True, "sharp_fair": 0.60},
-                 {"exchange_fair": 0.60}):
+    for tier in ({"sharp_anchored": True, "sharp_fair": 0.55},
+                 {"exchange_fair": 0.55}):
         row = _row(rank_auc=0.49, **tier)
         assert potd.evidence(row) in ("sharp", "exchange")
         assert potd.shortfall(row) == "", (tier, potd.shortfall(row))
@@ -334,20 +355,77 @@ def test_a_sharp_witness_is_not_refused_by_our_models_ranking():
         "the payout is outside the even-money band"
 
 
+def test_a_gap_too_big_to_trust_is_not_the_days_pick():
+    """THE CONTRADICTION THIS RESOLVES, which matters more than the
+    backtest that found it.
+
+    `gamebets._sharpify` already sets grade Pass and stake 0.0 on any
+    sharp gap past `SHARP_SUSPECT_EV`, with the reason written onto the
+    card: a disagreement that size usually means the sharp side repriced
+    on news and the soft quote is stale. So the edge board stakes
+    NOTHING on these. This feature took them at a full unit and led the
+    front page with them — one product giving two answers about whether
+    the same price can be trusted.
+
+    Measured too, twice, on two different samples of the droplet's MLB
+    data: `potd_backtest` put the 7-15% band at -7.2% over 27 picks
+    while under-7% returned +59% over 18; `backtest_sharp_anchor` put
+    8-15% at -16.8% across every bet on the board. Same direction,
+    independently.
+    """
+    from engine.gamebets import SHARP_SUSPECT_EV
+    assert potd.MAX_EV == SHARP_SUSPECT_EV, "two definitions of one bar"
+    assert potd.MIN_EV < potd.MAX_EV
+
+    ok = _row(sharp_fair=0.55)                      # +5.0%
+    assert round(potd.edge(ok), 3) == 0.050
+    assert potd.shortfall(ok) == ""
+
+    hot = _row(sharp_fair=0.60)                     # +14.5%
+    assert potd.edge(hot) > potd.MAX_EV
+    assert potd.shortfall(hot) == \
+        "the gap is too big to trust — the sharp side has probably moved"
+
+
+def test_a_distrusted_gap_is_a_lean_and_not_a_blank_day():
+    """A QUALITY BAR, NOT A HARD REFUSAL. The bet is real and placeable,
+    so a day whose only candidate is a suspect gap shows it labelled —
+    the same treatment every other `shortfall` row gets — rather than
+    going blank and telling a reader nothing."""
+    got = potd.build([_row(sharp_fair=0.60)], "nfl", "2026-W02")
+    assert got["pick"] is not None
+    assert got["pick"]["below_bar"] == \
+        "the gap is too big to trust — the sharp side has probably moved"
+    assert got["verdict"]["call"] == "no bet"
+    assert "the gap is too big to trust" not in " ".join(potd.HARD_REASONS)
+
+
+def test_the_ceiling_does_not_swallow_the_floor():
+    """Both ends still bite, and they say different things."""
+    assert potd.shortfall(_row(sharp_fair=0.53)) == \
+        "the price is not far enough off the fair to be worth it"
+    assert potd.shortfall(_row(sharp_fair=0.60)).startswith("the gap is too big")
+
+
 # --- how it ranks ------------------------------------------------------------
 def test_equal_edges_go_to_the_better_price():
     """Two rows making the same claim to the nearest point are the same
     claim; the tie goes to the one that pays more. Ethan's "flip of your
     money", served wherever it costs nothing."""
-    cheap = _row(player="Cheap", odds=-125, sharp_fair=0.6389)
-    rich = _row(player="Rich", odds=100, sharp_fair=0.5750)
-    assert round(potd.edge(cheap), 2) == round(potd.edge(rich), 2) == 0.15
+    # 5% on both, inside the band AND inside `MAX_EV` — a tie the
+    # selector may actually be asked to break. The pair used to claim
+    # 15% each, which the trust ceiling now refuses outright.
+    cheap = _row(player="Cheap", odds=-125, sharp_fair=0.5833)
+    rich = _row(player="Rich", odds=100, sharp_fair=0.5250)
+    assert round(potd.edge(cheap), 2) == round(potd.edge(rich), 2) == 0.05
     assert potd.refuse(cheap) == "" and potd.refuse(rich) == ""
     assert potd.payout(100) > potd.payout(-125)
     pick, _, _ = potd.choose([cheap, rich])
     assert pick["player"] == "Rich", pick["player"]
-    # A genuinely bigger edge still wins outright.
-    better = _row(player="Better", odds=-125, sharp_fair=0.70)
+    # A genuinely bigger edge still wins outright — while it is one the
+    # module will stand behind.
+    better = _row(player="Better", odds=-125, sharp_fair=0.59)
+    assert potd.refuse(better) == ""
     pick, _, _ = potd.choose([cheap, rich, better])
     assert pick["player"] == "Better", pick["player"]
 
@@ -358,11 +436,11 @@ def test_a_qualifying_pick_carries_the_numbers_the_card_shows():
     pick = got["pick"]
     assert pick["below_bar"] == "", "a qualifying pick is not flagged"
     assert pick["evidence"] == "sharp"
-    assert pick["fair_prob"] == 0.60
+    assert pick["fair_prob"] == 0.55
     assert pick["model_prob"] == 0.58, "ours travels as context, labelled"
     assert pick["payout_units"] == round(potd.payout(-110), 3)
     assert pick["ev_units"] == round(potd.edge(_row()), 4)
-    assert pick["edge_points"] == round((0.60 - potd.implied(-110)) * 100, 1)
+    assert pick["edge_points"] == round((0.55 - potd.implied(-110)) * 100, 1)
     assert got["band"] == [potd.MIN_ODDS, potd.MAX_ODDS]
     assert got["payout_band"] == [potd.MIN_PAYOUT, potd.MAX_PAYOUT]
     assert got["min_ev"] == potd.MIN_EV
@@ -405,7 +483,7 @@ def test_the_census_names_the_gate_that_was_binding():
             # sharp row, which since 2026-09-16 clears this bar — the
             # ranking figure is our model's and is asked only where our
             # model is the witness.
-            _consensus(implied_prob=0.60, rank_auc=0.49),
+            _consensus(implied_prob=0.55, rank_auc=0.49),
             _row(sharp_anchored=False, sharp_fair=None, model_prob=0.70)]
     got = potd.build(rows, "nfl", "2026-W02")
     assert got["census"] == {
@@ -448,7 +526,7 @@ def _prop(**kw):
          "opponent": "BBB", "market": "receptions",
          "market_label": "Receptions", "side": "OVER", "line": 3.5,
          "book": "DraftKings", "odds": -110, "sharp_anchored": True,
-         "sharp_fair": 0.60, "model_prob": 0.58, "implied_prob": 0.5238,
+         "sharp_fair": 0.55, "model_prob": 0.58, "implied_prob": 0.5238,
          "rank_auc": 0.71, "bettable": True, "injury_status": "",
          "game_date": d, "kickoff": k}
     r.update(kw)

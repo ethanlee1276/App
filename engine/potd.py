@@ -195,6 +195,40 @@ EVIDENCE = ("exchange", "sharp", "market", "model")
 #: twice the shopped hold on a -110 pair.
 MIN_EV = 0.02
 
+#: THE CEILING ON A DISAGREEMENT WE WILL BET.
+#:
+#: Not a new number: it is `gamebets.SHARP_SUSPECT_EV`, imported so there
+#: is one definition of "this gap is too big to believe". Past it,
+#: `gamebets._sharpify` already sets grade Pass and stake 0.0 and writes
+#: the reason onto the card — "a disagreement this big between books
+#: usually means the sharp side repriced on news (scratch, injury,
+#: weather) and this quote is stale, not free money".
+#:
+#: SO THE SITE ALREADY REFUSED TO STAKE THESE EVERYWHERE BUT HERE. The
+#: edge board puts nothing on them. This feature took them at a full
+#: unit and led the front page with them, which is the contradiction
+#: that matters more than any backtest: one product, two answers to
+#: whether the same price is trustworthy.
+#:
+#: AND THE MEASUREMENTS AGREE, twice, on two different samples of the
+#: same data (droplet, 2026-09-16, MLB):
+#:
+#:   potd_backtest        under 4%  +71.4% (9)   4-7%  +47.1% (9)
+#:                        7-15%      -7.2% (27)
+#:   backtest_sharp_anchor  <4%     +29.3%       4-8% +17.0%
+#:                        8-15%     -16.8%
+#:
+#: The first is one pick a day; the second is every price disagreement
+#: on the board. Same direction, independently. 27 of the 45 picks in
+#: that replay — sixty per cent — came from the losing bucket, because
+#: `rank_key` sorts on the biggest edge and the biggest edges live here.
+#:
+#: A QUALITY BAR, NOT A HARD REFUSAL. The bet is real and placeable, so
+#: a day whose only candidate is a suspect gap shows it as a lean with
+#: this reason attached rather than going blank — the same treatment
+#: every other `shortfall` row gets.
+from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
+
 #: A pick this feature is named after should at least be more likely to
 #: happen than not, by the number we are trusting. Inside the band the
 #: price itself implies at most 55.6%, so this bites on the plus-money
@@ -499,6 +533,8 @@ def shortfall(row: dict) -> str:
         return "no fair probability to price against"
     if ev < MIN_EV:
         return "the price is not far enough off the fair to be worth it"
+    if ev > MAX_EV:
+        return "the gap is too big to trust — the sharp side has probably moved"
     fair = fair_prob(row)
     if fair is not None and fair < MIN_FAIR:
         return "more likely to lose than to win, even at a good price"

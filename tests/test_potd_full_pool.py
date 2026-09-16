@@ -55,7 +55,10 @@ def _row(prob, **kw):
     r = {"kind": "game", "player": "AAA ML", "team": "AAA", "opponent": "BBB",
          "matchup": "AAA@BBB", "market": "moneyline", "market_label": "Moneyline",
          "side": "", "line": None, "book": "DraftKings", "odds": -110,
-         "model_prob": prob, "sharp_anchored": True, "sharp_fair": 0.60,
+         # 55% against -110 is +5.0% EV — an ordinary sharp-anchor row.
+         # It read 0.60 (+14.5%) until `potd.MAX_EV` landed and refused
+         # it as a gap too big to trust.
+         "model_prob": prob, "sharp_anchored": True, "sharp_fair": 0.55,
          "implied_prob": 0.5238, "rank_auc": 0.71, "bettable": True,
          "injury_status": "", "game_date": d, "kickoff": k}
     r.update(kw)
@@ -68,7 +71,12 @@ def test_a_row_beyond_the_cap_can_now_be_the_pick():
     refuses; the row that clears sits in the cut."""
     day = _et(180)[0]
     seated = [_row(0.80, player="CHALK ML", team="CHALK", odds=-400)]
-    cut = [_row(0.54, player="DOG ML", team="DOG", odds=130)]
+    # -115 AND NOT +130, and the reason is worth writing down:
+    # `MIN_FAIR` (50%) and `MAX_EV` (7%) collide at +114. Above that
+    # price no bet can be both likelier than a coin flip and a gap we
+    # trust, so a +130 row is unreachable by construction now. See
+    # docs/PICK_OF_THE_DAY.md §3i.
+    cut = [_row(0.54, player="DOG ML", team="DOG", odds=-115)]
     board = {"date": day, "most_likely": seated}
     # Without the cut there is no pick: -400 is outside the band.
     assert potd.build(seated, "mlb", day)["pick"] is None
@@ -94,8 +102,10 @@ def test_the_wider_pool_waives_no_bar():
             # number (see tests/test_potd_spreads_and_totals.py). The
             # market tier still answers to it.
             (_row(0.54, rank_auc=0.50, sharp_anchored=False,
+                  # 0.55 at -110 is +5.0%, inside `MAX_EV`, so the
+                  # ranking bar is the one that bites.
                   sharp_fair=None, prob_source="market",
-                  implied_prob=0.60), "coin flip"),
+                  implied_prob=0.55), "coin flip"),
             (_row(0.54, kind="prop", market="hits"), "player prop")):
         board = {"date": day, "most_likely": []}
         potd.attach(board, "mlb", cut=[bad])
@@ -128,7 +138,7 @@ def test_a_pick_from_beyond_the_cap_is_put_on_the_board():
     with a price that never refreshes."""
     from engine import ledger
     day = _et(180)[0]
-    winner = _row(0.54, player="DOG ML", team="DOG", odds=130)
+    winner = _row(0.54, player="DOG ML", team="DOG", odds=-115)
     board = {"date": day, "most_likely": [], "pick_of_the_day": None}
     potd.attach(board, "mlb", cut=[winner])
     assert board["pick_of_the_day"]["from_beyond_the_cap"] is True
@@ -144,7 +154,7 @@ def test_a_pick_from_beyond_the_cap_is_put_on_the_board():
 
 def test_a_pick_already_on_the_board_is_not_seated_twice():
     day = _et(180)[0]
-    seated = [_row(0.54, player="DOG ML", team="DOG", odds=130)]
+    seated = [_row(0.54, player="DOG ML", team="DOG", odds=-115)]
     board = {"date": day, "most_likely": seated}
     potd.attach(board, "mlb", cut=[])
     assert len(board["most_likely"]) == 1

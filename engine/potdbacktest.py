@@ -94,6 +94,12 @@ class PotdReplay:
     # Theory says the selector is fishing in the losing bucket. These
     # counters are how we find out instead of arguing.
     ev_buckets: dict = field(default_factory=dict)
+    #: The same split over the LEANS. Since `potd.MAX_EV` landed
+    #: (2026-09-16) no bet can sit in the suspect band — the selector
+    #: refuses it — so `ev_buckets` can no longer answer "what is the
+    #: ceiling costing us?". The leans can: they are exactly the rows it
+    #: now turns away, settled.
+    lean_ev_buckets: dict = field(default_factory=dict)
     # THE COUNTERFACTUAL, SETTLED SEPARATELY. On a day nothing cleared,
     # `build` still shows the best row on the board and calls it a lean.
     # Ethan asked for a pick every single day; the open question is
@@ -151,6 +157,30 @@ class PotdReplay:
         if not self.n_bets:
             return None
         return (self.fair_sum, float(self.wins))
+
+#: The edge bands the picks and the leans are both split across, in
+#: report order. Split at `SHARP_SUSPECT_EV` rather than a round number:
+#: the question is not "is the edge big" but "is it past the point
+#: production stops believing it".
+BANDS = ("under 4%", "4-7%",
+         f"{SHARP_SUSPECT_EV * 100:.0f}-15% (suspect)")
+
+
+def _band(ev: float) -> str:
+    """Which edge band a selection at `ev` was chosen in."""
+    return (BANDS[0] if ev < 0.04
+            else BANDS[1] if ev < SHARP_SUSPECT_EV
+            else BANDS[2])
+
+
+def _tally(bucket: dict, key: str, won: bool, gain: float) -> None:
+    """One settled row into a named bucket. Shared by the tier, price,
+    edge-band and lean-reason splits so they cannot drift apart."""
+    b = bucket.setdefault(key, {"n": 0, "wins": 0, "net": 0.0})
+    b["n"] += 1
+    b["wins"] += 1 if won else 0
+    b["net"] += gain
+
 
 def _row(sport, date, team, opp, home, away, fair_p, odds, auc):
     """One board row in the shape `potd.choose` selects on.
@@ -299,10 +329,9 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
             r.lean_net += gain
             r.lean_gains.append(gain)
             why = potd.shortfall(near)
-            b = r.lean_why.setdefault(why, {"n": 0, "wins": 0, "net": 0.0})
-            b["n"] += 1
-            b["wins"] += 1 if won else 0
-            b["net"] += gain
+            _tally(r.lean_why, why, won, gain)
+            _tally(r.lean_ev_buckets,
+                   _band(float(potd.edge(near) or 0.0)), won, gain)
             continue
         r.days_with_pick += 1
         won = next(w for row, w in rows if row is pick)
@@ -316,21 +345,9 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         ev_at_pick = float(potd.edge(pick) or 0.0)
         r.fair_sum += float(potd.fair_prob(pick) or 0.0)
         r.ev_sum += ev_at_pick
-        # The same cut `backtest_sharp_anchor` reports, split at the line
-        # production stops trusting a gap rather than at a round number.
-        band = ("under 4%" if ev_at_pick < 0.04
-                else "4-7%" if ev_at_pick < SHARP_SUSPECT_EV
-                else "7-15% (suspect)")
-        b = r.ev_buckets.setdefault(band, {"n": 0, "wins": 0, "net": 0.0})
-        b["n"] += 1
-        b["wins"] += 1 if won else 0
-        b["net"] += gain
-        for bucket, key in ((r.tiers, potd.evidence(pick)),
-                            (r.prices, "favourite" if odds < 0 else "underdog")):
-            b = bucket.setdefault(key, {"n": 0, "wins": 0, "net": 0.0})
-            b["n"] += 1
-            b["wins"] += 1 if won else 0
-            b["net"] += gain
+        _tally(r.ev_buckets, _band(ev_at_pick), won, gain)
+        _tally(r.tiers, potd.evidence(pick), won, gain)
+        _tally(r.prices, "favourite" if odds < 0 else "underdog", won, gain)
     return r
 
 def _pct(x, places=1):
@@ -366,7 +383,15 @@ def summarize(r: PotdReplay) -> str:
            f"  gate refused      {r.gate_refused}   "
            f"(`sharp_anchor_two_way`: under 2% EV, or past the 15% "
            f"broken-price cap)",
-           f"  days priced       {r.days_seen}"]
+           f"  days priced       {r.days_seen}",
+           # IN BOTH BRANCHES, deliberately. Since `potd.MAX_EV` a day
+           # can price a card, refuse it as a suspect gap and bet
+           # nothing — and the reader of a zero needs this number to
+           # tell that apart from a day that priced nothing at all.
+           f"  suspect gaps      {r.suspect}   (past "
+           f"{SHARP_SUSPECT_EV:.0%} — production grades these Pass and "
+           f"stakes nothing, and `potd.MAX_EV` keeps every one of them "
+           f"out of the picks; they settle as leans)"]
     if r.days_seen:
         out += [f"  days with a pick  {r.days_with_pick}   "
                 f"({r.days_with_pick / r.days_seen * 100:.0f}% of days)",
@@ -398,10 +423,7 @@ def summarize(r: PotdReplay) -> str:
     fair, got = r.calibration
     out += [f"  the fairs said    {fair:.1f} wins out of {r.n_bets}; "
             f"{got:.0f} happened",
-            f"  average edge at selection {_pct(r.ev_sum / r.n_bets)}",
-            f"  suspect gaps      {r.suspect}   (past "
-            f"{SHARP_SUSPECT_EV:.0%} — production grades these Pass and "
-            f"stakes nothing)"]
+            f"  average edge at selection {_pct(r.ev_sum / r.n_bets)}"]
     if r.tiers:
         out.append("  by witness:")
         for tier in potd.EVIDENCE:
@@ -411,11 +433,13 @@ def summarize(r: PotdReplay) -> str:
                            f"{b['wins']:>4} won  {b['net']:+7.2f}u")
     if r.ev_buckets:
         # THE CUT THAT DECIDES WHETHER `rank_key` IS FISHING IN THE
-        # LOSING BUCKET. If the money is in "under 4%" and "7-15%"
-        # loses, the selector's edge-first sort is choosing against the
-        # evidence and the fix is to stop ranking on edge size.
+        # LOSING BUCKET. If the money is in the narrowest band and the
+        # widest one loses, the selector's edge-first sort is choosing
+        # against the evidence and the fix is to stop ranking on edge
+        # size. The band names live in `BANDS` and nowhere else, so the
+        # picks and the leans below cannot be cut at different places.
         out.append("  by the edge it was chosen for:")
-        for band in ("under 4%", "4-7%", "7-15% (suspect)"):
+        for band in BANDS:
             b = r.ev_buckets.get(band)
             if b:
                 roi = b["net"] / b["n"]
@@ -456,6 +480,20 @@ def summarize(r: PotdReplay) -> str:
         for why, b in sorted(r.lean_why.items(), key=lambda kv: -kv[1]["n"])[:5]:
             out.append(f"      {b['n']:>4} bets  {b['wins']:>4} won  "
                        f"{b['net']:+7.2f}u  {why}")
+        if r.lean_ev_buckets:
+            # WHAT THE CEILING IS BUYING, AND IT CAN ONLY BE READ HERE.
+            # `MAX_EV` means the suspect band is empty among the picks by
+            # construction, so the split above can no longer show whether
+            # refusing those gaps was right. These are the refused rows,
+            # settled: a negative suspect line is the ceiling earning its
+            # keep, a positive one is it costing money.
+            out.append("    the leans, by the edge they were refused at:")
+            for band in BANDS:
+                b = r.lean_ev_buckets.get(band)
+                if b:
+                    out.append(f"      {band:<16} {b['n']:>4} bets  "
+                               f"{b['wins']:>4} won  {b['net']:+7.2f}u  "
+                               f"ROI {b['net'] / b['n'] * 100:+.1f}%")
     out += ["",
             "  READ THIS BEFORE THE ROI. Closing price against closing "
             "price, moneylines only, no exchange tier, `bettable` assumed "

@@ -61,7 +61,10 @@ def _card(market="spread", **kw):
          "matchup": "AAA @ BBB", "home": "BBB", "away": "AAA", "team": "BBB",
          "pick_label": "BBB -2.5", "headline": "BBB -2.5",
          "side": "-2.5" if market == "spread" else "Over", "line": -2.5,
-         "win_prob": 0.60, "fair_prob": 0.5238, "edge": 0.0762,
+         # 55% against -110 is +5.0% EV. It read 0.60 (+14.5%) until
+         # `potd.MAX_EV` landed on 2026-09-16 — a gap that size is one
+         # `gamebets._sharpify` already grades Pass and stakes nothing on.
+         "win_prob": 0.55, "fair_prob": 0.5238, "edge": 0.0262,
          "odds": -110, "other_odds": -110, "has_market": True,
          "book": "DraftKings", "home_book": "DraftKings",
          "away_book": "DraftKings", "sharp_anchored": True,
@@ -80,9 +83,9 @@ def test_a_sharp_spread_row_records_its_witness():
     row = _row("spread")
     assert row is not None, "the board refused the card outright"
     assert row["sharp_anchored"] is True
-    assert row["sharp_fair"] == 0.60, row.get("sharp_fair")
+    assert row["sharp_fair"] == 0.55, row.get("sharp_fair")
     assert potd.evidence(row) == "sharp", potd.evidence(row)
-    assert potd.fair_prob(row) == 0.60
+    assert potd.fair_prob(row) == 0.55
 
 
 def test_the_same_holds_for_a_total():
@@ -90,7 +93,7 @@ def test_the_same_holds_for_a_total():
                headline="Over 44.5")
     assert row is not None
     assert potd.evidence(row) == "sharp"
-    assert potd.fair_prob(row) == 0.60
+    assert potd.fair_prob(row) == 0.55
 
 
 def test_a_card_with_no_sharp_anchor_is_still_ours_alone():
@@ -107,13 +110,13 @@ def test_the_recorded_fair_follows_the_side_the_row_takes():
     """`from_game_bet` flips to the likely side when the card backs a
     dog. The sharp fair recorded has to be the fair for the side the row
     ends up on, or the card prices one side against the other's number."""
-    row = _row("spread", win_prob=0.40, fair_prob=0.40,
+    row = _row("spread", win_prob=0.45, fair_prob=0.45,
                team="AAA", pick_label="AAA +2.5", line=2.5, side="+2.5")
     if row is None:
         print("  SKIP the flip path refused this fixture"); return
     assert row["flipped"] is True
     assert row["sharp_fair"] == round(row["win_prob"], 4)
-    assert abs(row["sharp_fair"] - 0.60) < 1e-6, row["sharp_fair"]
+    assert abs(row["sharp_fair"] - 0.55) < 1e-6, row["sharp_fair"]
 
 
 # --- step two: the ranking bar is asked of the right rows --------------------
@@ -140,13 +143,20 @@ def test_every_other_bar_still_bites_on_a_sharp_spread():
     row = _row("spread")
     from copy import deepcopy
 
-    thin = deepcopy(row); thin["sharp_fair"] = 0.53
+    thin = deepcopy(row); thin["sharp_fair"] = 0.52
     assert potd.shortfall(thin) == \
         "the price is not far enough off the fair to be worth it"
 
-    dog = deepcopy(row); dog["sharp_fair"] = 0.48; dog["odds"] = 150
+    # +115, not +150: at +150 a 48% fair is +20% EV, which `MAX_EV`
+    # refuses one line earlier. The fair bar is what this case is for,
+    # so the price is the one that lets the question be asked.
+    dog = deepcopy(row); dog["sharp_fair"] = 0.48; dog["odds"] = 115
     assert potd.shortfall(dog) == \
         "more likely to lose than to win, even at a good price"
+
+    hot = deepcopy(row); hot["sharp_fair"] = 0.62
+    assert potd.shortfall(hot) == \
+        "the gap is too big to trust — the sharp side has probably moved"
 
     priced = deepcopy(row); priced["odds"] = -400
     assert potd.disqualify(priced) == \
@@ -157,7 +167,7 @@ def test_the_market_tier_keeps_the_ranking_bar():
     """A de-vigged consensus is a number WE compute from a field WE
     choose, so our own measurement does speak to it."""
     row = _row("spread", sharp_anchored=False)
-    row = {**row, "prob_source": "market", "implied_prob": 0.60}
+    row = {**row, "prob_source": "market", "implied_prob": 0.55}
     assert potd.evidence(row) == "market"
     assert potd.shortfall(row) == "this market ranks no better than a coin flip"
 

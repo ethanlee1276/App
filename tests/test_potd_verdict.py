@@ -55,7 +55,8 @@ def _row(**kw):
     r = {"kind": "game", "player": "Over 3.5", "team": "AAA",
          "opponent": "BBB", "market": "total", "market_label": "Total",
          "side": "OVER", "line": 3.5, "book": "DraftKings", "odds": -110,
-         "sharp_anchored": True, "sharp_fair": 0.60, "matchup": "AAA@BBB",
+         # 0.60 was +14.5% EV, refused by `potd.MAX_EV` since 2026-09-16.
+         "sharp_anchored": True, "sharp_fair": 0.55, "matchup": "AAA@BBB",
          "model_prob": 0.58, "implied_prob": 0.5238, "rank_auc": 0.71,
          "bettable": True, "injury_status": "", "game_date": d, "kickoff": k}
     r.update(kw)

@@ -500,6 +500,93 @@ the METHOD's logic, not on a measurement of them. Storing a sharp
 spread/total pair in `odds_history` is what would close it, and it is
 the same nightly harvest that closed the moneyline gap.
 
+## 3i. The ceiling: a gap too big to trust is not a pick
+
+**Measured on the droplet, 2026-09-16, first honest replay of the
+product** (`potd_backtest.py mlb`, after the replay was fixed to call
+production's own gate):
+
+| the edge it was chosen for | picks | won | net | ROI |
+|---|---|---|---|---|
+| under 4% | 9 | 8 | +6.42u | **+71.4%** |
+| 4–7% | 9 | 7 | +4.23u | **+47.1%** |
+| 7–15% (suspect) | 27 | 13 | −1.95u | **−7.2%** |
+
+`backtest_sharp_anchor`, over every price disagreement on the board
+rather than one a day, had already said the same thing on the same data:
+`<4%` +29.3%, `4–8%` +17.0%, `8–15%` **−16.8%**. Two samples, two
+selectors, one direction.
+
+**Twenty-seven of the forty-five picks — sixty per cent — came from the
+losing bucket**, and `rank_key` is why: within a tier it sorts by the
+biggest edge, so every day goes to the loudest disagreement available.
+Its own docstring already knew that was dangerous — *"the loudest
+disagreements come from the weakest witness"* — but applied the thought
+ACROSS tiers and never WITHIN one.
+
+**THE STRONGER ARGUMENT IS NOT THE BACKTEST.** `gamebets._sharpify`
+already sets `grade = "Pass"` and `stake_units = 0.0` on any sharp gap
+past `SHARP_SUSPECT_EV`, and writes the reason onto the card: a
+disagreement that size usually means the sharp side repriced on news
+(scratch, injury, weather) and the soft quote is stale. **The edge board
+stakes nothing on these.** This feature took them at a full unit and led
+the front page with them — one product, two answers to whether the same
+price can be trusted. That is a contradiction to remove whatever a
+45-bet sample says.
+
+So `potd.MAX_EV` IS `gamebets.SHARP_SUSPECT_EV`, imported rather than
+restated, and `shortfall` refuses past it.
+
+**A QUALITY BAR, NOT A HARD REFUSAL.** The bet is real and placeable, so
+a day whose only candidate is a suspect gap shows it as a lean with the
+reason attached rather than going blank.
+
+**WHAT THIS DOES NOT CLAIM.** 45 picks is not a verdict on the feature —
+the headline was +19.4% ± 14.1%, 1.4 standard errors from zero, which is
+encouraging and not established. The bucket split is a stronger signal
+than the headline because it replicates, but 9/9/27 are small numbers.
+What is NOT in doubt is the inconsistency, and that is what was fixed.
+
+**AND IT SURFACED A BAD FIXTURE.** Every test in `tests/test_potd.py`
+was built on a row with a 60% sharp fair against −110 — a 7.6-point
+disagreement with the sharpest book in the world, +14.5% EV, a bet the
+rest of the site refuses to stake. Eight tests failed the moment the
+ceiling landed. The fixture is now 55% (+5.0%), an ordinary
+sharp-anchor row.
+
+### 3i-b. The ceiling narrows the price band to +114, and that is Ethan's call
+
+**Not a side effect worth burying.** `MIN_FAIR` wants the pick likelier
+to win than lose (50%). `MAX_EV` wants the edge no wider than 7%. Those
+two meet:
+
+    EV at the 50% floor = 0.50 × (1 + payout) − 1
+
+At +114 that is exactly 7.0%. At +115 it is 7.5% — so **above +114 no
+bet can be both at-or-above the fair floor and at-or-below the trust
+ceiling.** Every price from +115 to `MAX_ODDS` (+190) is now unreachable:
+a row there either implies under 50% (refused by `MIN_FAIR`) or carries
+over 7% (refused by `MAX_EV`).
+
+**The effective band is −142 … +114, not −142 … +190.** `MAX_ODDS` still
+reads 190 and is no longer the binding constraint on the plus side.
+Pinned in `tests/test_potd_band_collision.py` so it cannot drift
+silently: if either bar moves, the test names the new crossing point.
+
+**WHY IT IS LEFT STANDING.** Both bars are defensible on their own and
+the collision only removes prices where the two disagree about the same
+row. A +150 dog at a 7%-or-less edge implies a fair near 43% — refused by
+`MIN_FAIR`, a bar that predates this work. A +150 dog at a 50%+ fair
+implies a 25% edge — the exact shape `_sharpify` grades Pass. Neither
+kind was ever a pick the rest of the site would stake.
+
+**WHAT WOULD CHANGE IT.** Dropping `MIN_FAIR` below 50% for
+sharp-anchored rows reopens the plus side, and the argument for that is
+that a price disagreement does not care which side is favoured. It is
+not made here because `MIN_FAIR` is Ethan's product bar — "the pick
+should be more likely to win than lose" — and moving it is his call, not
+a consequence of a measurement.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against
