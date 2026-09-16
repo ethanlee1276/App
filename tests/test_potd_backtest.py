@@ -307,6 +307,35 @@ def test_the_report_says_how_many_gaps_the_pricer_distrusts():
     assert "suspect gaps      1" in out, out
 
 
+def test_the_picks_are_split_by_the_edge_they_were_chosen_for():
+    """`potd.rank_key` sorts by the BIGGEST edge within a tier, and on
+    the droplet the average selected edge came out at 8.6% — above the
+    line where the pricer itself grades a gap Pass, and inside the band
+    `backtest_sharp_anchor` measured at -16.8%. This is the cut that
+    says whether the edge-first sort is choosing against the evidence.
+
+    Deliberately split at `SHARP_SUSPECT_EV` rather than a round number:
+    the question is not "is the edge big" but "is it past the point
+    production stops believing it"."""
+    days, games, quotes = [], [], []
+    # Three days: a small edge, a middling one, and a suspect one.
+    for i, (soft_home, day) in enumerate(((-131, "2026-05-01"),
+                                          (-120, "2026-05-02"),
+                                          (-115, "2026-05-03"))):
+        games.append((day, "AAA", "BBB", 5.0, 3.0))
+        quotes += [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
+                   (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
+                   (day, "AAA", "BBB", "best", "AAA", soft_home),
+                   (day, "AAA", "BBB", "best", "BBB", -140)]
+    r = potdbacktest.replay_potd(_db(games, quotes), "mlb", rank_auc=AUC)
+    assert r.n_bets == 3, (r.n_bets, r.gate_refused)
+    assert sum(b["n"] for b in r.ev_buckets.values()) == 3, r.ev_buckets
+    assert "7-15% (suspect)" in r.ev_buckets, r.ev_buckets
+    out = potdbacktest.summarize(r)
+    assert "by the edge it was chosen for:" in out
+    assert "7-15% (suspect)" in out
+
+
 # --- the report ---------------------------------------------------------------
 def test_an_empty_replay_says_which_rung_emptied():
     """A zero that cannot explain itself costs an evening."""

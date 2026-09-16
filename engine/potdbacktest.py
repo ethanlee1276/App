@@ -79,6 +79,21 @@ class PotdReplay:
     tiers: dict = field(default_factory=dict)
     prices: dict = field(default_factory=dict)
     gains: list = field(default_factory=list)
+    # WHERE THE PICKS SIT ON THE EDGE THEY WERE CHOSEN FOR.
+    #
+    # `potd.rank_key` sorts by tier and then by the BIGGEST edge, so
+    # every day goes to the loudest disagreement in the strongest tier.
+    # Its own docstring says why that is dangerous — "the loudest
+    # disagreements come from the weakest witness" — but it applies the
+    # thought ACROSS tiers and not WITHIN one.
+    #
+    # The droplet's first honest run put the average selected edge at
+    # 8.6%, above `SHARP_SUSPECT_EV`, so the typical Pick of the Day is
+    # a bet the pricer itself would grade Pass; and
+    # `backtest_sharp_anchor` measured that same 8-15% band at -16.8%.
+    # Theory says the selector is fishing in the losing bucket. These
+    # counters are how we find out instead of arguing.
+    ev_buckets: dict = field(default_factory=dict)
     # THE COUNTERFACTUAL, SETTLED SEPARATELY. On a day nothing cleared,
     # `build` still shows the best row on the board and calls it a lean.
     # Ethan asked for a pick every single day; the open question is
@@ -298,8 +313,18 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         r.staked += 1.0
         r.net += gain
         r.gains.append(gain)
+        ev_at_pick = float(potd.edge(pick) or 0.0)
         r.fair_sum += float(potd.fair_prob(pick) or 0.0)
-        r.ev_sum += float(potd.edge(pick) or 0.0)
+        r.ev_sum += ev_at_pick
+        # The same cut `backtest_sharp_anchor` reports, split at the line
+        # production stops trusting a gap rather than at a round number.
+        band = ("under 4%" if ev_at_pick < 0.04
+                else "4-7%" if ev_at_pick < SHARP_SUSPECT_EV
+                else "7-15% (suspect)")
+        b = r.ev_buckets.setdefault(band, {"n": 0, "wins": 0, "net": 0.0})
+        b["n"] += 1
+        b["wins"] += 1 if won else 0
+        b["net"] += gain
         for bucket, key in ((r.tiers, potd.evidence(pick)),
                             (r.prices, "favourite" if odds < 0 else "underdog")):
             b = bucket.setdefault(key, {"n": 0, "wins": 0, "net": 0.0})
@@ -384,6 +409,19 @@ def summarize(r: PotdReplay) -> str:
             if b:
                 out.append(f"    {tier:<9} {b['n']:>4} bets  "
                            f"{b['wins']:>4} won  {b['net']:+7.2f}u")
+    if r.ev_buckets:
+        # THE CUT THAT DECIDES WHETHER `rank_key` IS FISHING IN THE
+        # LOSING BUCKET. If the money is in "under 4%" and "7-15%"
+        # loses, the selector's edge-first sort is choosing against the
+        # evidence and the fix is to stop ranking on edge size.
+        out.append("  by the edge it was chosen for:")
+        for band in ("under 4%", "4-7%", "7-15% (suspect)"):
+            b = r.ev_buckets.get(band)
+            if b:
+                roi = b["net"] / b["n"]
+                out.append(f"    {band:<16} {b['n']:>4} bets  "
+                           f"{b['wins']:>4} won  {b['net']:+7.2f}u  "
+                           f"ROI {roi * 100:+.1f}%")
     if r.prices:
         out.append("  by price:")
         for side in ("favourite", "underdog"):
