@@ -97,48 +97,53 @@ print('prob_source:  ', Counter(r.get('prob_source') for r in rows))
 
 ---
 
-## BAR. Where should the Pick of the Day's EV floor sit? (read-only, ~1 minute)
+## BAR. Where should the EV floor sit? (#164-adj) — ANSWERED: IT STAYS
 
-Ethan, 2026-09-16, on an MLB card that led with NO BET above a named
-bet: *"we need to be confident in our pick, and if that's a good pick,
-then we need to say to bet it, not to not bet it."* He chose to lower
-the bar. This is the run that says what to lower it to.
+**Ran 2026-09-16. The floor was never the thing holding the product
+back, and the table says so in the column built to say it.**
 
-**One thing first, because it changes what you are looking for.** The
-row on that card was at **-0.4% edge** — the price was WORSE than fair.
-No floor admits that without admitting a bet the price itself says you
-lose on, so the sweep does not offer a negative floor and this change
-will not produce a pick on a day like that one. What it changes is how
-often a real edge gets through.
+```
+  floor  days w/ pick   bets      W-L       ROI
+  0.0%            37     37    25-12     +27.9%
+  0.5%            37     37    25-12     +27.9%
+  1.0%            37     37    25-12     +27.9%
+  1.5%            37     37    25-12     +27.9%
+  2.0%            37     37    25-12     +27.9%   <- shipped
+  3.0%            30     30    18-12     +12.9%
+  4.0%            22     22    14-8      +19.5%
+```
+
+**Flat across the entire range below the shipped floor**, then falling
+when raised. Ethan: *"There is no cliff to find beneath 2.0% because
+nothing down there is being excluded."* Not one extra day is bought by
+lowering it, at any value tried.
+
+**The binding column names the real constraint,** and it is the same at
+every floor: on days with no pick the bar that turned the best row away
+is *"the gap is too big to trust — the sharp side has probably moved"* —
+`MAX_EV`, not the EV floor. The thing standing between the card and a
+bet more often is the sharp-witness disagreement gate.
+
+**AND THAT CEILING IS EARNED, measured the same day.** The leans it
+excludes at 7-15% edge ran **-23.1% over 12 bets**; leans under 7% were
+positive. So the gate is not a conservatism to be relaxed — it is
+refusing a population that loses money, which is why the answer to "give
+me more picks" is not "loosen it".
+
+**Read the ROI last and lightly.** +27.9% is 37 bets, and the dip to
++12.9% at 3.0% and back to +19.5% at 4.0% is not a shape, it is the
+noise this block warned about. Ethan: *"The finding here is the flatness
+below 2.0%, which is structural rather than statistical, not the return
+figure."* Agreed, and that is the right way round.
+
+**THE NFL TABLE CANNOT ANSWER ANYTHING YET** — one day with a priced
+game, zero picks at every floor. The season is two weeks old. Re-run
+once the harvest has a month in it.
 
 ```bash
 cd /srv/qellys && python3 potd_backtest.py mlb --sweep-ev
-cd /srv/qellys && python3 potd_backtest.py nfl --sweep-ev
+cd /srv/qellys && python3 potd_backtest.py nfl --sweep-ev   # from mid-October
 ```
-
-**How to read it, in this order.**
-
-1. **days w/ pick** — what a lower floor actually buys. Usually less
-   than it looks.
-2. **binding when nothing cleared** — why. If this column says something
-   other than the EV bar at every floor, then the EV floor was never
-   what was holding the product back and lowering it changes nothing
-   except the ROI of the picks you already had.
-3. **ROI** — last, and never by picking the best cell. Seven floors on
-   one sample means the best of seven is a bar fitted to noise, which is
-   the trap `calibrate`'s bake-off exists to refuse. What is worth
-   reading is the SHAPE: a floor where ROI falls off a cliff is a real
-   signal; a flat table says the bar is not the lever.
-
-Paste both tables. I will set the floor from them and say why, and if
-the tables say the floor is not the lever I will say that instead of
-lowering it to look responsive.
-
-**Also useful, same seam:** `--min-ev 0.01` replays the whole report at
-one floor instead of sweeping, so a candidate can be read with the full
-funnel and every caveat under it rather than as one row.
-
----
 
 ## KX. Why the exchange tier is dead — BOTH SPORTS, ran 2026-09-16 (read-only, seconds — but see the timing note)
 
@@ -220,8 +225,19 @@ So the fix needs a second identifier, and Kalshi puts one in the event
 ticker. **I have not seen this box's tickers and will not guess their
 shape**, which is the whole reason for this block.
 
+**RUN IT AS THE BUILD USER.** Ethan, 2026-09-16, declining to run the
+first version of this: *"KX-2 writes Kalshi cache files. As root they
+come back root-owned, the build user then silently falls back to a stale
+cache, and there are already 6,098 root-owned files in that directory."*
+
+That is a live problem this file caused, not a hypothetical — every
+block here that touches `fetch_text` writes into the shared cache, and a
+root-owned entry is one the build can read and never replace. The
+`sudo -u qellys` below is not optional, and there is a cleanup for the
+6,098 underneath it.
+
 ```bash
-cd /srv/qellys && python3 - <<'PY'
+cd /srv/qellys && sudo -u qellys python3 - <<'PY'
 import json
 from engine import exchangefair
 from engine.sources import kalshi
@@ -247,8 +263,19 @@ looking for is whether `event_ticker` carries both clubs — something like
 abbreviation PAIR inside it, which disambiguates the Yankees from the
 Mets without loosening the two-team rule at all.
 
-If `load_markets` is not the name on this box, the KX block above prints
-how it fetched them; reuse that line and keep the rest.
+**And the 6,098 already there**, which are silently costing every build
+a fresh pull. Count first, then fix ownership — no deletion, because a
+valid cache entry is worth keeping whoever wrote it:
+
+```bash
+sudo find /srv/qellys/data/cache -user root | wc -l
+sudo chown -R qellys:qellys /srv/qellys/data/cache
+sudo find /srv/qellys/data/cache -user root | wc -l   # expect 0
+```
+
+If the second count is not zero, something is still writing there as
+root on a timer and that is worth finding before anything else in this
+file.
 
 ---
 
@@ -896,13 +923,25 @@ close from our own tape. Promotion waits on it.
 so a typo costs a missing book and says nothing):
 
 ```bash
-cd /srv/qellys && python3 -c "
-import json,glob
-for f in sorted(glob.glob('web/data/*_picks.json')):
-    d=json.load(open(f)); seen=set()
-    for r in (d.get('recommendations') or [])+(d.get('most_likely') or []):
-        if r.get('book'): seen.add(r['book'])
-    print(f.split('/')[-1], sorted(seen))"
+cd /srv/qellys && python3 - <<'PY'
+import json, glob
+# data/built, NOT web/data. Ethan, 2026-09-16: this globbed the web copy
+# and came back with an empty list for all five boards -- a confident
+# zero read off the paywalled file, which is the exact blind spot the
+# SHARP block warns about three sections earlier. Against the full
+# copies the boards carry 13 books for the NFL and 9 for baseball, both
+# exchanges included. Third instance of it in one day.
+#
+# A HEREDOC RATHER THAN python3 -c "...", because the prose above wants
+# quotes and quotes inside a double-quoted -c argument end the argument.
+for f in sorted(glob.glob('data/built/*_picks.json')):
+    d = json.load(open(f))
+    seen = set()
+    for r in (d.get('recommendations') or []) + (d.get('most_likely') or []):
+        if r.get('book'):
+            seen.add(r['book'])
+    print(f.split('/')[-1], sorted(seen))
+PY
 ```
 
 Seventeen keys are asked for now, up from ten. The new ones are
@@ -1044,11 +1083,19 @@ environment, so it cannot be fooled by an edit that did not get applied:
 
 ```bash
 tr '\0' '\n' < /proc/$(systemctl show -p MainPID --value qellys)/environ \
-  | grep -E 'MALLOC|TZ'
+  | grep -E '^(MALLOC_ARENA_MAX|TZ)='
 ```
 
 Expected: `MALLOC_ARENA_MAX=2` and `TZ=America/New_York`. If MALLOC is
 missing, the copy or the daemon-reload did not happen.
+
+**ANCHORED, AND THAT IS NOT STYLE.** Until 2026-09-16 this read
+`grep -E 'MALLOC|TZ'` over the whole environ, and Ethan caught what that
+does: the two letters TZ appear inside a promo code, so the command
+would have printed **every live discount code on the site** into a
+terminal. `QB_PROMOS` lives in that same environment. Any filter over a
+process environment gets anchored to the variable names it wants, or it
+is a secret dump with a filter-shaped comment above it.
 
 ---
 
@@ -1120,7 +1167,12 @@ sudo awk -F'"' '{print $0}' /var/log/caddy/qellys.log 2>/dev/null | tail -1 >/de
 sudo python3 - <<'PY'
 import json, collections, glob, gzip, io
 c = collections.Counter(); status = collections.Counter(); paths = collections.Counter()
-for p in sorted(glob.glob("/var/log/caddy/qellys.log*")):
+# THE ROTATED ARCHIVES ARE NAMED WITH A DASH, not a suffix on .log —
+# qellys-2026-09-15.log.gz, not qellys.log.1.gz. So `qellys.log*` matched
+# the live file alone, the gzip branch below was dead code, and the
+# readability check could never print its failure line. Ethan read all
+# six files with a corrected glob on 2026-09-16.
+for p in sorted(glob.glob("/var/log/caddy/qellys*.log*")):
     op = gzip.open if p.endswith(".gz") else open
     try:
         for line in op(p, "rt", errors="ignore"):
