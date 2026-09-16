@@ -172,6 +172,51 @@ def test_a_reader_holding_the_log_is_reported_not_swallowed():
     assert "history" in out, out
 
 
+def test_a_busy_report_says_whether_it_is_growing_or_holding():
+    """On 2026-09-16 this printed the same "610 MB" every cycle for ten
+    minutes. The number alone cannot say whether that is a stable ceiling
+    — which would be survivable — or a spiral, which is what it was. The
+    second report onward carries the delta."""
+    was_t, was_l = launch.WAL_CHECKPOINT_TIMEOUT_MS, dict(launch._WAL_LAST)
+    try:
+        launch.WAL_CHECKPOINT_TIMEOUT_MS = 50
+        launch._WAL_LAST.clear()
+        h, hc = _wal_db(rows=2000)
+        j, jc = _wal_db(rows=200)
+        jc.close()
+        reader = sqlite3.connect(h)
+        reader.execute("BEGIN")
+        reader.execute("SELECT COUNT(*) FROM t").fetchone()
+        try:
+            first = _run(h, j)
+            # More written, still pinned: the log is now bigger.
+            hc.executemany("INSERT INTO t VALUES (?, ?)",
+                           [(i, "y" * 400) for i in range(4000)])
+            hc.commit()
+            second = _run(h, j)
+        finally:
+            reader.close(); hc.close()
+    finally:
+        launch.WAL_CHECKPOINT_TIMEOUT_MS = was_t
+        launch._WAL_LAST.clear(); launch._WAL_LAST.update(was_l)
+    assert "MB)" in first, f"the first report should carry no delta: {first}"
+    assert "+" in second and "MB)" in second, second
+
+
+def test_the_ceiling_on_what_a_reset_leaves_behind_is_set():
+    """`journal_size_limit` is what SQLite offers for this: when the log
+    IS reset — a restart, or a real gap — the file comes back to the
+    limit rather than staying at its high-water mark. Not a fix for the
+    growth, and the constant says so; a ceiling on the damage."""
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "limited.db")
+    conn = db.connect(path)
+    got = conn.execute("PRAGMA journal_size_limit").fetchone()[0]
+    assert got == db.WAL_SIZE_LIMIT, (got, db.WAL_SIZE_LIMIT)
+    assert 0 < db.WAL_SIZE_LIMIT < 610 * 1024 * 1024, \
+        "the ceiling must be below what this box actually reached"
+
+
 def test_it_never_raises_and_never_stops_the_cycle():
     """It runs one line before the heartbeat. A database that has gone
     missing must cost the rewind and nothing else."""

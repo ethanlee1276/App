@@ -288,6 +288,12 @@ ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
 #: writer and a writer blocks a reader.
 OK_JOURNAL = ("wal", "memory")
 
+#: What a write-ahead log is allowed to leave behind after it is reset,
+#: in bytes. See the note in `tune`. 64 MB is comfortably more than one
+#: cycle writes, so a healthy box never touches the ceiling, and far
+#: less than the 610 MB this box reached on 2026-09-16.
+WAL_SIZE_LIMIT = 64 * 1024 * 1024
+
 #: One warning per process, not one per connection. `connect()` is called
 #: from every build, every tool and every request path.
 _JOURNAL_WARNED = False
@@ -329,6 +335,23 @@ def tune(conn) -> str:
     except sqlite3.DatabaseError as exc:
         mode = f"unavailable ({type(exc).__name__}: {exc})"
     conn.execute("PRAGMA busy_timeout=30000")
+    # AND A CEILING ON THE LOG ITSELF. `journal_size_limit` is what
+    # SQLite offers for exactly this: whenever the write-ahead log IS
+    # reset — a restart, or a genuine gap between readers — the file is
+    # truncated back to this rather than left at whatever high-water mark
+    # it reached. Without it a log that once hit 610 MB stays 610 MB for
+    # the life of the file, and every reader pays to map it.
+    #
+    # NOT A FIX FOR THE GROWTH, and it must not be read as one. The log
+    # grows because a checkpoint cannot rewind it while readers hold old
+    # frames, and this box runs a live build every fifteen seconds on one
+    # core, so a reader is essentially always alive. This bounds what a
+    # reset leaves behind; `launch._checkpoint_wal` is what tries to earn
+    # the reset, and says so out loud when it cannot.
+    try:
+        conn.execute(f"PRAGMA journal_size_limit={WAL_SIZE_LIMIT}")
+    except sqlite3.DatabaseError:
+        pass                     # older SQLite; the timeout above stands
     warning = journal_warning(mode)
     if warning and not _JOURNAL_WARNED:
         _JOURNAL_WARNED = True

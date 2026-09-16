@@ -3325,6 +3325,11 @@ WAL_NOISY_BYTES = 32 * 1024 * 1024
 #: costs one cycle, a stalled build costs a board.
 WAL_CHECKPOINT_TIMEOUT_MS = 5000
 
+#: The last size each log was seen at, so a busy report can say
+#: whether it is growing or holding. Process-local on purpose: a
+#: restart resets the log anyway, so there is nothing to persist.
+_WAL_LAST: dict = {}
+
 
 def _checkpoint_wal() -> None:
     """Rewind the write-ahead log. Never fatal, never blocks for long.
@@ -3380,11 +3385,22 @@ def _checkpoint_wal() -> None:
             row = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
             busy = bool(row and row[0])
             if busy:
+                # GROWING OR HOLDING — the only question that matters
+                # once we know it is busy. On 2026-09-16 this printed the
+                # same "610 MB" every cycle for ten minutes, and the
+                # number alone could not say whether that was a stable
+                # ceiling or a spiral. It was a spiral, and the delta is
+                # what would have said so on the very first line.
+                was = _WAL_LAST.get(label)
+                _WAL_LAST[label] = before
+                trend = "" if was is None else f", {(before - was) / 1e6:+.0f} MB"
                 print(f"  ⚠️  {label} WAL could not be rewound "
-                      f"({before / 1e6:.0f} MB) — a reader held it for the "
-                      f"whole {WAL_CHECKPOINT_TIMEOUT_MS / 1000:.0f}s. If this "
-                      f"repeats every cycle the log will "
-                      f"grow all day and writers will time out behind it.")
+                      f"({before / 1e6:.0f} MB{trend}) — a reader held it for "
+                      f"the whole {WAL_CHECKPOINT_TIMEOUT_MS / 1000:.0f}s. "
+                      f"This box starts a live build every few seconds on "
+                      f"one core, so a reader is almost always alive; while "
+                      f"that is true the log cannot rewind and writers time "
+                      f"out behind it.")
             elif before >= WAL_NOISY_BYTES:
                 print(f"  {label} WAL rewound: {before / 1e6:.0f} MB reclaimed")
         except Exception as exc:                              # noqa: BLE001
