@@ -60,6 +60,15 @@ class PotdReplay:
     sharp: str = "Pinnacle"
     rank_auc: float | None = None
     auc_supplied: bool = False   # the caller asked a what-if; see `replay_potd`
+    #: The EV floor this replay ran under. None means `potd.MIN_EV`, the
+    #: live product's bar; anything else is a sweep asking where the bar
+    #: SHOULD sit, and the report marks it so a what-if cannot be read as
+    #: the shipped setting.
+    min_ev: float | None = None
+    #: On a day with no pick, which bar turned the best row away. Counted
+    #: across days so a sweep can say what lowering the EV floor actually
+    #: buys — usually less than it looks, because another bar takes over.
+    binding: dict = field(default_factory=dict)
     games_seen: int = 0
     games_priced: int = 0        # had both a sharp pair and a soft price
     one_sided: int = 0           # soft quote on one side only — ungateable
@@ -209,7 +218,7 @@ def _row(sport, date, team, opp, home, away, fair_p, odds, auc):
 
 
 def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
-                rank_auc=None) -> PotdReplay:
+                rank_auc=None, min_ev=None) -> PotdReplay:
     """Run `potd.choose` over every stored day and settle what it picked.
 
     ONE PICK PER DAY, AND ONLY A QUALIFYING ONE. `build` shows a lean
@@ -234,7 +243,8 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
     r = PotdReplay(sport=sport, sharp=sharp,
                    rank_auc=(likely.measured_auc(sport, "moneyline")
                              if rank_auc is None else float(rank_auc)),
-                   auc_supplied=rank_auc is not None)
+                   auc_supplied=rank_auc is not None,
+                   min_ev=None if min_ev is None else float(min_ev))
     sharp_closes = moneyline_closes(conn, sport, book=sharp)
     soft_closes = moneyline_closes(conn, sport, book="best")
 
@@ -311,7 +321,20 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
     for day in sorted(by_day):
         rows = by_day[day]
         r.days_seen += 1
-        pick, near, census = potd.choose([row for row, _ in rows])
+        pick, near, census = potd.choose([row for row, _ in rows],
+                                         min_ev=min_ev)
+        # WHICH BAR WAS BINDING on a day that produced nothing. The
+        # census already counts every refusal; what a sweep needs is the
+        # ONE reason that stood between this day and a pick, which is the
+        # reason attached to the best row that got closest.
+        if not pick:
+            why = ""
+            if near:
+                why = potd.shortfall(near, min_ev) or ""
+            if not why and census:
+                why = max(census.items(), key=lambda kv: kv[1])[0]
+            if why:
+                r.binding[why] = r.binding.get(why, 0) + 1
         for why, n in census.items():
             r.census[why] = r.census.get(why, 0) + n
         if pick is None:
@@ -354,6 +377,69 @@ def _pct(x, places=1):
     return "n/a" if x is None else f"{x * 100:.{places}f}%"
 
 
+#: The EV floors a sweep tries, lowest first. 2% is the shipped bar; 0%
+#: is "any edge at all"; below that is not swept, because a negative EV
+#: floor admits a bet the price says we lose on and no sample size makes
+#: that a good idea.
+SWEEP_FLOORS = (0.0, 0.005, 0.01, 0.015, 0.02, 0.03, 0.04)
+
+
+def sweep_ev(conn, sport: str = "mlb", sharp: str = "Pinnacle",
+             floors=SWEEP_FLOORS, rank_auc=None) -> str:
+    """Where should the EV floor sit? One table, settled results. (#207-adj)
+
+    Ethan, 2026-09-16, on a day the card led with NO BET: "we need to be
+    confident in our pick, and if that's a good pick, then we need to say
+    to bet it." Lowering the bar is the change he asked for; this is the
+    number it should be lowered TO, rather than a guess.
+
+    WHAT THE TABLE IS FOR, and it is not only the ROI. A lower floor buys
+    more days with a pick — but usually fewer than it looks, because the
+    EV bar stops binding and ANOTHER bar takes over, and the days it does
+    buy are by construction the thinnest edges in the sample. So the
+    table prints three things together: how many days got a pick, what
+    those picks returned, and which bar was binding on the days that
+    still got nothing. Read them in that order.
+
+    A FLOOR IS NOT CHOSEN BY THE BEST ROI IN THIS TABLE. Picking the
+    best cell of seven on one sample is how a bar gets fitted to noise —
+    the trap `calibrate`'s bake-off exists to refuse. What this is good
+    for is the SHAPE: a floor where ROI falls off a cliff is a real
+    signal, and a floor where nothing changes says the bar was never the
+    thing holding the product back.
+    """
+    from . import potd
+    rows = []
+    for f in floors:
+        r = replay_potd(conn, sport, sharp=sharp, rank_auc=rank_auc, min_ev=f)
+        roi = (r.net / r.staked * 100.0) if r.staked else None
+        rows.append((f, r, roi))
+    out = [f"EV floor sweep · {sport.upper()} · {sharp} as the sharp witness",
+           f"  {rows[0][1].days_seen} days with at least one priced game",
+           "",
+           f"  {'floor':>6}  {'days w/ pick':>12}  {'bets':>5}  {'W-L':>9}  "
+           f"{'ROI':>8}   binding when nothing cleared",
+           "  " + "-" * 82]
+    for f, r, roi in rows:
+        losses = r.n_bets - r.wins
+        top = ""
+        if r.binding:
+            why, n = max(r.binding.items(), key=lambda kv: kv[1])
+            top = f"{why} ({n})"
+        out.append(f"  {_pct(f):>6}  {r.days_with_pick:>12}  {r.n_bets:>5}  "
+                   f"{r.wins}-{losses:<7}  "
+                   f"{'n/a' if roi is None else f'{roi:+.1f}%':>8}   {top[:40]}")
+    shipped = next((r for f, r, _ in rows if abs(f - potd.MIN_EV) < 1e-9), None)
+    out += ["",
+            f"  The shipped floor is {_pct(potd.MIN_EV)}"
+            + (f" — {shipped.days_with_pick} of {shipped.days_seen} days"
+               if shipped else ""),
+            "  Read the SHAPE, not the best cell: one sample's best floor is a",
+            "  floor fitted to noise. A cliff is a signal; a flat table says the",
+            "  EV bar was never what was holding the product back."]
+    return "\n".join(out)
+
+
 def summarize(r: PotdReplay) -> str:
     """The replay as a paragraph an operator can act on.
 
@@ -367,7 +453,10 @@ def summarize(r: PotdReplay) -> str:
     out = [f"Pick of the Day replay · {r.sport.upper()} · "
            f"{r.sharp} as the sharp witness",
            f"  band {potd.MIN_ODDS} to +{potd.MAX_ODDS}, "
-           f"EV floor {_pct(potd.MIN_EV)}, fair floor {_pct(potd.MIN_FAIR, 0)}, "
+           f"EV floor {_pct(potd.MIN_EV if r.min_ev is None else r.min_ev)}"
+           + ("" if r.min_ev is None
+              else f"   ← SWEPT, not the shipped {_pct(potd.MIN_EV)}")
+           + f", fair floor {_pct(potd.MIN_FAIR, 0)}, "
            f"ranking bar {potd.MIN_RANK_AUC}",
            f"  {'SUPPLIED' if r.auc_supplied else 'measured'} moneyline AUC "
            f"for this sport: "

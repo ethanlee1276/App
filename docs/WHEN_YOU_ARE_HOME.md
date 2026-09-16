@@ -97,6 +97,49 @@ print('prob_source:  ', Counter(r.get('prob_source') for r in rows))
 
 ---
 
+## BAR. Where should the Pick of the Day's EV floor sit? (read-only, ~1 minute)
+
+Ethan, 2026-09-16, on an MLB card that led with NO BET above a named
+bet: *"we need to be confident in our pick, and if that's a good pick,
+then we need to say to bet it, not to not bet it."* He chose to lower
+the bar. This is the run that says what to lower it to.
+
+**One thing first, because it changes what you are looking for.** The
+row on that card was at **-0.4% edge** — the price was WORSE than fair.
+No floor admits that without admitting a bet the price itself says you
+lose on, so the sweep does not offer a negative floor and this change
+will not produce a pick on a day like that one. What it changes is how
+often a real edge gets through.
+
+```bash
+cd /srv/qellys && python3 potd_backtest.py mlb --sweep-ev
+cd /srv/qellys && python3 potd_backtest.py nfl --sweep-ev
+```
+
+**How to read it, in this order.**
+
+1. **days w/ pick** — what a lower floor actually buys. Usually less
+   than it looks.
+2. **binding when nothing cleared** — why. If this column says something
+   other than the EV bar at every floor, then the EV floor was never
+   what was holding the product back and lowering it changes nothing
+   except the ROI of the picks you already had.
+3. **ROI** — last, and never by picking the best cell. Seven floors on
+   one sample means the best of seven is a bar fitted to noise, which is
+   the trap `calibrate`'s bake-off exists to refuse. What is worth
+   reading is the SHAPE: a floor where ROI falls off a cliff is a real
+   signal; a flat table says the bar is not the lever.
+
+Paste both tables. I will set the floor from them and say why, and if
+the tables say the floor is not the lever I will say that instead of
+lowering it to look responsive.
+
+**Also useful, same seam:** `--min-ev 0.01` replays the whole report at
+one floor instead of sweeping, so a candidate can be read with the full
+funnel and every caveat under it rather than as one row.
+
+---
+
 ## KX. Why the exchange tier is dead — BOTH SPORTS, ran 2026-09-16 (read-only, seconds — but see the timing note)
 
 

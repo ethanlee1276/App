@@ -4,6 +4,7 @@
     python3 potd_backtest.py mlb
     python3 potd_backtest.py nfl
     python3 potd_backtest.py --all
+    python3 potd_backtest.py mlb --sweep-ev      # where should the EV floor sit?
 
 Ethan, 2026-09-16: "you should not stop until you confirm that the Pick
 of the Day we show every day is elite and worth betting on." This is the
@@ -21,8 +22,8 @@ from __future__ import annotations
 
 import argparse
 
-from engine import db
-from engine.potdbacktest import replay_potd, summarize
+from engine import db, potd
+from engine.potdbacktest import replay_potd, summarize, sweep_ev
 
 SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
 
@@ -37,6 +38,21 @@ def main() -> None:
     ap.add_argument("--sharp", default="Pinnacle",
                     help="the book whose two-way close is de-vigged for the "
                          "fair (default Pinnacle)")
+    ap.add_argument("--sweep-ev", action="store_true",
+                    help="where should the EV floor sit? Replays at every "
+                         "floor in potdbacktest.SWEEP_FLOORS and prints days "
+                         "with a pick, the record, the ROI and which bar was "
+                         "binding on the days that still got nothing. Read "
+                         "the shape, not the best cell.")
+    ap.add_argument("--min-ev", type=float, default=None,
+                    # `%%`, not `%`: argparse runs help through %-expansion
+                    # and a bare percent sign raises ValueError from
+                    # `--help` itself — which takes the WHOLE parser's help
+                    # down, not just this line's.
+                    help=f"replay at ONE EV floor instead of the shipped "
+                         f"{potd.MIN_EV * 100:.1f}%%. The report marks a "
+                         f"supplied floor so a what-if cannot be read as "
+                         f"the shipped setting.")
     ap.add_argument("--rank-auc", type=float, default=None,
                     help="ask a what-if: replay as if this sport's moneyline "
                          "had measured this AUC, instead of what it did. The "
@@ -46,8 +62,13 @@ def main() -> None:
 
     conn = db.read_only(args.db)
     for sport in (SPORTS if args.all else [args.sport]):
-        print(summarize(replay_potd(conn, sport, sharp=args.sharp,
-                                    rank_auc=args.rank_auc)))
+        if args.sweep_ev:
+            print(sweep_ev(conn, sport, sharp=args.sharp,
+                           rank_auc=args.rank_auc))
+        else:
+            print(summarize(replay_potd(conn, sport, sharp=args.sharp,
+                                        rank_auc=args.rank_auc,
+                                        min_ev=args.min_ev)))
         print()
 
 

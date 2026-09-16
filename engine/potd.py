@@ -479,7 +479,7 @@ def disqualify(row: dict, now=None) -> str:
     return ""
 
 
-def shortfall(row: dict) -> str:
+def shortfall(row: dict, min_ev=None) -> str:
     """"" if this row clears the quality bars, else which one it missed.
 
     A row failing only these is still a real, placeable bet at a real
@@ -531,7 +531,20 @@ def shortfall(row: dict) -> str:
     ev = edge(row)
     if ev is None:
         return "no fair probability to price against"
-    if ev < MIN_EV:
+    # THE EV FLOOR IS THE ONE BAR A CALLER MAY MOVE, and only a caller
+    # that says so. `MIN_EV` is the live product's bar; `min_ev` is the
+    # seam the backtest sweeps it on (`potd_backtest.py --sweep-ev`), so
+    # "where should the floor sit" can be answered with settled results
+    # instead of an opinion. Ethan, 2026-09-16, on a day the card led
+    # with NO BET: "we need to be confident in our pick, and if that's a
+    # good pick, then we need to say to bet it."
+    #
+    # NOTHING ELSE IS OVERRIDABLE. The other bars are refusals about
+    # whether a number means anything — no fair to price against, a
+    # market nobody sharp is quoting, a payout outside the band. A floor
+    # on HOW MUCH edge is enough is the only one of them that is a
+    # product judgement, and so the only one worth sweeping.
+    if ev < (MIN_EV if min_ev is None else float(min_ev)):
         return "the price is not far enough off the fair to be worth it"
     if ev > MAX_EV:
         return "the gap is too big to trust — the sharp side has probably moved"
@@ -620,7 +633,7 @@ def rank_key(row: dict) -> tuple:
     return (rank, -ev, -(payout(row.get("odds")) or 0.0))
 
 
-def choose(rows, now=None) -> tuple:
+def choose(rows, now=None, min_ev=None) -> tuple:
     """``(pick, best_below_bar, census)`` over a board's rows.
 
     ``pick`` is the best row clearing every bar, or None. ``best_below``
@@ -636,7 +649,7 @@ def choose(rows, now=None) -> tuple:
         if hard:
             census[hard] = census.get(hard, 0) + 1
             continue
-        soft = shortfall(row)
+        soft = shortfall(row, min_ev)
         if soft:
             census[soft] = census.get(soft, 0) + 1
             near.append(row)
