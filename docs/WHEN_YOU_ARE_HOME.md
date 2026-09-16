@@ -420,6 +420,64 @@ run settles which of these it is.
 
 ---
 
+## FILLER. Did the baseball filler price actually die? (read-only, 15 seconds)
+
+Ethan, 2026-09-16, reading the MLB census: *"Eleven of the twelve game
+rows carry an empty book field … Those eleven all show odds of exactly
+-110, which is a filler number rather than a posted quote."* You were
+right, and commit `59becc8` fixes it. This is the after-picture.
+
+Run it **after the timer has pulled** — check `HEAD` in the output is
+`59becc8` or later, or you are reading the before-picture again.
+
+```bash
+cd /srv/qellys && python3 - <<'PY'
+import json, subprocess
+import launch
+from engine import gate, lightboard
+
+print("HEAD:", subprocess.run(["git", "log", "-1", "--format=%h %ad %s",
+                               "--date=short"], capture_output=True,
+                              text=True).stdout.strip())
+print()
+
+for sport in ("mlb", "nfl", "cfb"):
+    try:
+        path = gate.board_source(lightboard.light_path(launch.BOARD_FILES[sport]))
+        board = json.loads(open(path).read())
+    except Exception as exc:
+        print(f"{sport}: cannot read board — {exc}")
+        continue
+    rows = board.get("game_bets") or []
+    filler = [r for r in rows
+              if r.get("odds") in (-110, 110)
+              and not str(r.get("book") or "").strip()]
+    unbooked = [r for r in rows if not str(r.get("book") or "").strip()]
+    by_mkt = {}
+    for r in filler:
+        by_mkt[r.get("bet_type")] = by_mkt.get(r.get("bet_type"), 0) + 1
+    print(f"{sport:4} {len(rows):3d} game rows | "
+          f"{len(unbooked):3d} name no book | "
+          f"{len(filler):3d} at a filler price {by_mkt or ''}")
+PY
+```
+
+**What to look for.** The number that has to move is baseball's
+`bet_type` mix. Before the fix MLB's filler rows were `total` and
+`team_total`; after it, **`total` must be gone from every league's
+filler count** — a total is now priced only when a book posted one.
+
+`team_total` will still be there, on all three leagues. That is #258 and
+it is deliberate: `gamebets.price_team_total` defaults both its odds to
+-110 and no sport passes any, so every team-total card on every board
+still publishes at a price nobody quoted. Shared code, three public
+boards, your call — it was not changed on the way past.
+
+If `total` still appears in MLB's filler count with `HEAD` at `59becc8`
+or later, the fix did not take and I want the whole line.
+
+---
+
 ## SHRINK. Does the market shrink help or hurt the top of the board? (#77) (read-only, ~1 minute)
 
 The Most Likely page prints a touchdown row's probability **already
