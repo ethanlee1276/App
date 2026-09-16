@@ -2686,14 +2686,46 @@ async function renderDayTopPick() {
      The lean is still in the payload for `potd_report` and the log. */
   const below = String((pick || {}).below_bar || "");
   if (!pick || below) {
-    /* NOT SILENT, though. "No lock today" with the reason is a fact
+    /* "IN ANY LEAGUE" IS A CLAIM ABOUT EVERY LEAGUE, and this line made
+       it twice without the standing to.
+
+       Ethan, 2026-09-16, screenshot: the NFL card read "BET 1 unit ·
+       Bills OVER 4.5 spread" and the line directly under it read
+       "Nothing cleared the bar in any league today — cfb: no pick ·
+       nba: no pick · wnba: no pick". Three leagues named, five in
+       `TOP_PICK_LEAGUES`; NFL and MLB were dropped before the census
+       ever saw them (`launch._write_day_top_pick` swallowed a missing
+       board file), so the sentence was built from a count of three and
+       spoke for all five.
+
+       TWO GUARDS, BECAUSE THE DATA FIX ALONE IS NOT ENOUGH. The
+       swallow is fixed and `leagues_expected` now ships beside
+       `leagues_seen` — but a page that can contradict the card six
+       inches above it should refuse to, whatever arrives in the file.
+       So: a partial census does not get to say "any league", and a
+       league whose OWN card says BET is proof this one is wrong. */
+    const seen = Number(top.leagues_seen);
+    const want = Number(top.leagues_expected);
+    const partial = isFinite(seen) && isFinite(want) && seen < want;
+    const mine = ((state.data || {}).pick_of_the_day || {}).verdict || {};
+    if (String(mine.call || "") === "bet") {
+      /* THE CARD ABOVE IS THE ANSWER AND IT DISAGREES WITH THIS FILE.
+         Saying anything here beyond that is an argument the reader did
+         not ask to watch; the bet they came for is already on screen. */
+      host.innerHTML = "";
+      return;
+    }
+    /* NOT SILENT OTHERWISE. "No lock today" with the reason is a fact
        about a slate; an empty div is indistinguishable from a broken
        feature, which is the failure this codebase keeps finding. */
     const why = below || (Object.keys(top.census || {}).length
       ? Object.keys(top.census).join(" · ")
       : (top.note || "no candidates today"));
+    const scope = partial
+      ? `Nothing cleared the bar in the ${seen} league${seen === 1 ? "" : "s"} we could read`
+      : "Nothing cleared the bar in any league today";
     host.innerHTML = `<span style="color:var(--text-mute)">${icon('info')}
-      Nothing cleared the bar in any league today — ${escapeHtml(why)}.</span>`;
+      ${scope} — ${escapeHtml(why)}.</span>`;
     return;
   }
   const from = String(top.sport || "");

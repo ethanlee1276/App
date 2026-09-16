@@ -468,6 +468,57 @@ def test_an_empty_slate_is_a_fact_rather_than_an_exception():
     assert got["note"], got
 
 
+def test_the_payload_says_how_many_leagues_there_were_supposed_to_be():
+    """`leagues_seen` alone cannot tell a complete answer from a partial
+    one, and "nothing cleared in ANY league" is only true of a complete
+    one. Ethan's 2026-09-16 board shipped a census of three leagues out
+    of five and the page spoke for all five."""
+    out = potd.day_top_pick({"cfb": {}, "nba": {}, "wnba": {}}, "2026-09-16")
+    assert out["leagues_seen"] == 3
+    assert out["leagues_expected"] == len(potd.TOP_PICK_LEAGUES) == 5
+
+
+def test_a_league_handed_in_as_none_is_censused_rather_than_vanishing():
+    """The shape `launch._write_day_top_pick` now hands over when a board
+    file is missing. It used to `continue`, so the league never entered
+    `boards`, never reached the loop, and left no trace anywhere."""
+    out = potd.day_top_pick({"nfl": None, "cfb": {}}, "2026-09-16")
+    assert out["leagues_seen"] == 2
+    assert any("nfl" in k and "no board" in k for k in out["census"]), \
+        out["census"]
+
+
+def test_the_writer_never_drops_a_league_without_recording_it():
+    """THE ROOT CAUSE OF ETHAN'S 2026-09-16 SCREENSHOT, pinned where it
+    happened. `launch._write_day_top_pick` opened each board file and,
+    on FileNotFoundError, ran a bare `continue` — so that league never
+    entered `boards`, never reached `day_top_pick`'s loop, and left no
+    census entry. The page then wrote "Nothing cleared the bar in any
+    league today" from a census of three leagues out of five.
+
+    ASKED OF THE SOURCE because the function opens real files, reads the
+    ledger and writes into web/data; a test that ran it would be testing
+    this box. What can be asked cheaply is the shape: that branch has to
+    put SOMETHING into `boards` for the league, and `None` is enough
+    because `day_top_pick` tallies anything that is not a dict.
+    """
+    from pathlib import Path as _P
+    src = (_P(__file__).resolve().parents[1] / "launch.py").read_text()
+    i = src.index("except FileNotFoundError:")
+    block = src[i:i + 1200]
+    # Up to the next `except` or the end of the try, whichever is first.
+    end = block.find("except Exception")
+    if end > 0:
+        block = block[:end]
+    assert "boards[sport]" in block, (
+        "the missing-board branch does not record the league \u2014 it will "
+        "vanish from the census again:\n" + block)
+    body = [ln.strip() for ln in block.splitlines()[1:]
+            if ln.strip() and not ln.strip().startswith("#")]
+    assert "continue" not in body, (
+        "the bare `continue` is back; a dropped league leaves no trace")
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

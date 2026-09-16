@@ -3469,7 +3469,24 @@ def _write_day_top_pick() -> None:
                 with open(f, encoding="utf-8") as fh:
                     boards[sport] = json.load(fh)
             except FileNotFoundError:
-                continue           # a league this box does not publish
+                # NOT `continue`. A league dropped here never entered
+                # `boards`, so `day_top_pick` never saw it and never
+                # censused it — and the page then said "Nothing cleared
+                # the bar in any league today" on the strength of a
+                # census covering three leagues out of five.
+                #
+                # Ethan, 2026-09-16, screenshot: the NFL card read "BET 1
+                # unit · Bills OVER 4.5 spread" and the line underneath
+                # it read "Nothing cleared the bar in any league today —
+                # cfb: no pick · nba: no pick · wnba: no pick". NFL and
+                # MLB are not in that list because they were never
+                # looked at. The comment above this one already called
+                # that swallow "the failure shape this repository keeps
+                # finding" while the code kept doing it.
+                #
+                # `None` is not a dict, so `day_top_pick` tallies
+                # "{sport}: no board" and the census is complete.
+                boards[sport] = None
             except Exception:      # noqa: BLE001
                 # A board mid-write, or corrupt. Counted as absent rather
                 # than taken down with it — one bad file must not cost

@@ -1474,6 +1474,12 @@ def day_top_pick(boards: dict, today: str, now=None, locked=None) -> dict:
         "generated_at": (now or _dt.datetime.now(_dt.timezone.utc))
         .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "leagues_seen": len(seen),
+        # HOW MANY THERE WERE SUPPOSED TO BE. `leagues_seen` alone
+        # cannot tell a complete answer from a partial one, and the
+        # page's "nothing cleared in ANY league" is only true of a
+        # complete one. A caller that drops a league before it gets here
+        # shows up as a gap between these two numbers.
+        "leagues_expected": len(TOP_PICK_LEAGUES),
         "candidates": len(clear) + len(below),
         "census": census,
         # THE BAND AS STATED TO A READER — see `effective_max_odds`.

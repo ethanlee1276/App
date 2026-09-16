@@ -182,6 +182,54 @@ def test_the_cross_league_line_obeys_the_same_rule():
         assert thing not in top, f"the lean is still named: {thing!r}\n{top}"
 
 
+def test_the_cross_league_line_never_contradicts_a_bet_on_the_card():
+    """Ethan, 2026-09-16, screenshot: the NFL card read "BET 1 unit ·
+    Bills OVER 4.5 spread" and the line under it read "Nothing cleared
+    the bar in any league today". Both were rendered by this file, six
+    inches apart, in the same pass."""
+    row = dict(LEAN_ROW, below_bar="")
+    _, top = render(_payload(row, "bet"),
+                    top={"sport": "nfl", "pick": None,
+                         "leagues_seen": 3, "leagues_expected": 5,
+                         "census": {"cfb: no pick on the board": 1,
+                                    "nba: no pick on the board": 1,
+                                    "wnba: no pick on the board": 1}})
+    assert "Nothing cleared" not in top, top
+    assert top.strip() == "", top
+
+
+def test_a_partial_census_does_not_speak_for_every_league():
+    """`leagues_seen` under `leagues_expected` means a league was
+    dropped before the census saw it. The sentence has to shrink to what
+    was actually read — even on a day this league has no pick either."""
+    _, top = render(_payload(LEAN_ROW, "no bet"),
+                    top={"sport": "nfl", "pick": None,
+                         "leagues_seen": 3, "leagues_expected": 5,
+                         "census": {"cfb: no pick on the board": 1}})
+    assert "in any league" not in top, top
+    assert "3 leagues we could read" in top, top
+
+
+def test_a_complete_census_still_says_any_league():
+    """The ordinary case has to keep its plain sentence, or the guard
+    has made every day read like a malfunction."""
+    _, top = render(_payload(LEAN_ROW, "no bet"),
+                    top={"sport": "nfl", "pick": None,
+                         "leagues_seen": 5, "leagues_expected": 5,
+                         "census": {"cfb: no pick on the board": 1}})
+    assert "Nothing cleared the bar in any league today" in top, top
+
+
+def test_an_old_file_without_the_counts_is_not_called_partial():
+    """A `day_top_pick.json` written before `leagues_expected` shipped
+    carries neither number. Reading a missing field as "partial" would
+    reword the line on every box until the next full cycle."""
+    _, top = render(_payload(LEAN_ROW, "no bet"),
+                    top={"sport": "nfl", "pick": None,
+                         "census": {"cfb: no pick on the board": 1}})
+    assert "Nothing cleared the bar in any league today" in top, top
+
+
 def test_no_card_state_promises_a_certainty():
     """The banned list, asked of the RENDERED output rather than the
     source, because that is where a promise would reach a reader."""
