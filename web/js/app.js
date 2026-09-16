@@ -2422,22 +2422,31 @@ async function renderPickOfTheDay() {
 
      THE FIRST ANSWER WAS TO LOWER THE BAR SO A PICK EXISTED, and the
      measurement closed that door. `potd_backtest --sweep-ev` over the
-     stored MLB closes is FLAT from a 0% EV floor through 2.0% — 37 days,
-     25-12, +27.9% at every floor — and the bar that was binding on the
-     days that produced nothing is the same one at every setting: the
-     gap is too big to trust (`gamebets.SHARP_SUSPECT_EV`). The floor was
-     never what stood between the reader and a pick, so moving it buys
-     nothing. And that ceiling is earned rather than cautious — the leans
-     it excludes, at 7-15% claimed edge, settled −23.1% over 12 bets in
-     the same replay, while the leans under it were positive.
+     stored MLB closes is FLAT from a 0% EV floor through 2.0%, and the
+     bar that was binding on the days that produced nothing is the same
+     one at every setting: the gap is too big to trust
+     (`gamebets.SHARP_SUSPECT_EV`). The floor was never what stood
+     between the reader and a pick, so moving it buys nothing. That part
+     has held across every run.
 
-     SO THE CARD CHANGES INSTEAD, in the direction he asked for. On a day
-     nothing clears, the strongest row on the board is exactly the thing
-     that replay measured at −23.1%, and putting its team, its price and
-     its book in the card’s headline furniture is an advertisement for
-     it whatever the banner above says. The lean is still computed, still
-     published, still in `potd_report` and the operator log — it is the
-     working, and the working is honest. It is not the product.
+     WHAT DID NOT HOLD, and it is written here because an earlier version
+     of this comment asserted it: the leans that ceiling excludes do NOT
+     reliably lose. On 2026-09-16 the 7-15% band read −23.1% over 12
+     bets; on Ethan’s run later the same day, with more days settled, the
+     same band read +20.5% over 11 and every lean band was positive. Two
+     readings of one replay, opposite in sign, on about a dozen bets —
+     which means there was never a finding there, only noise wearing a
+     number. `MAX_EV` is UNPROVEN, not earned, and nothing on this card
+     rests on it any more.
+
+     SO THE CARD CHANGES ANYWAY, because the reason it changes is not an
+     ROI claim. A page that names a bet, its price and its book under a
+     banner saying NO BET is arguing with itself whatever that bet went
+     on to do; Ethan read it that way and he was right to. The lean is
+     still computed, still published, still in `potd_report` and the
+     operator log — it is the working, and the working is honest. It is
+     not the product, and a surface that recommends by placement while
+     declining in words is not an honest surface at any ROI.
 
      WHAT FILLS THE HOLE IS A REAL PICK, NOT A BLANK. `renderDayTopPick`
      below already reads `day_top_pick.json`, which ranks every league’s

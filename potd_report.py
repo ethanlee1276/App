@@ -289,12 +289,23 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
     # "['Angels vs Mariners'] unmatched market titles" in among the book
     # widths — a number about our own logging, in the place a reader is
     # looking for a number about the exchange.
+    # QUALITY AND MATCHING ARE DIFFERENT STEPS, and this line is about
+    # the first one. A market that failed to MATCH passed quality — it
+    # is inside the `usable` count — so printing it here is a false
+    # statement about the exchange's book. Ethan's 2026-09-16 MLB run is
+    # the example: "14 neither the title nor the ticker names both
+    # clubs" sat among twenty-odd book widths and read as a venue
+    # problem when it is ours.
+    try:
+        from engine.sources.kalshi import MATCH_REASONS
+    except Exception:                                         # noqa: BLE001
+        MATCH_REASONS = ()
+    skip = {"rows", "attached", "usable markets", "games on the board",
+            "markets matched to a game", NO_MATCH, NO_SIDE, *MATCH_REASONS}
     why = ", ".join(f"{n} {k}" for k, n in sorted(census.items())
-                    if isinstance(n, int)
-                    and k not in ("rows", "attached", "usable markets",
-                                  "games on the board",
-                                  "markets matched to a game",
-                                  NO_MATCH, NO_SIDE))
+                    if isinstance(n, int) and k not in skip)
+    unmatched_markets = ", ".join(
+        f"{census[k]} {k}" for k in MATCH_REASONS if census.get(k))
     out = [f"  Exchange    0 of {seen} moneyline row(s) priced  ·  "
            f"{usable} usable market(s)"]
     # THE HEADLINE FIRST, ALWAYS — it was conditional on there being no
@@ -338,6 +349,9 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
                    f"market(s) matched one]")
     if why:
         out.append(f"              markets refused on quality: {why}")
+    if unmatched_markets:
+        out.append(f"              markets that passed quality and matched no "
+                   f"game: {unmatched_markets}")
     return out
 
 

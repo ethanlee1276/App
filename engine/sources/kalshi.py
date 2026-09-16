@@ -198,6 +198,20 @@ def _name_tokens(text: str) -> set[str]:
             if len(t) >= 3 and t not in _STOP}
 
 
+#: Why a market could not be tied to one of tonight's games. NAMED
+#: CONSTANTS BECAUSE THEY TRAVEL: `exchangefair.attach` puts them in the
+#: census and `potd_report` has to tell them apart from the QUALITY
+#: refusals, which happen earlier and mean something else. The first cut
+#: of this returned bare strings, and the report — which builds its
+#: "markets refused on quality" line from every int left in the census —
+#: printed "14 neither the title nor the ticker names both clubs" in
+#: among the book widths on Ethan's 2026-09-16 run. Those 14 markets
+#: passed quality; they were counted in `usable`.
+NO_PAIR = "neither the title nor the ticker names both clubs"
+TWO_GAMES = "the ticker names more than one of tonight's games"
+MATCH_REASONS = (NO_PAIR, TWO_GAMES)
+
+
 def _ticker_text(row: dict) -> str:
     """The market's tickers with the SERIES NAME taken out, or "" if this
     is not a GAME market at all.
@@ -303,8 +317,8 @@ def match_game_verbose(row: dict, games: list[dict]) -> tuple:
     if len(hits) == 1:
         return hits[0], ""
     if len(hits) > 1:
-        return None, "the ticker names more than one of tonight's games"
-    return None, "neither the title nor the ticker names both clubs"
+        return None, TWO_GAMES
+    return None, NO_PAIR
 
 
 # --- the tape ---------------------------------------------------------------

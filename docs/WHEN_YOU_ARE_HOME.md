@@ -39,6 +39,18 @@ A load average near or above 1.00 means the next block will be slow, not
 broken. Nothing in this file is time-sensitive — waiting for a quiet
 minute costs less than reading a number you then have to re-run.
 
+**And which commit the box is on, before anything else.** The deploy
+timer pulls every five minutes, so a block run a moment too early reads
+the BEFORE-picture and looks like the fix did not work:
+
+```bash
+cd /srv/qellys && python3 homecheck.py head
+```
+
+`homecheck.py` is where the checks in this file live that used to be
+pasted heredocs — `python3 homecheck.py` on its own lists them, and
+`python3 homecheck.py all` runs every read-only one in a single paste.
+
 ---
 
 ## SHARP. Did the MLB board get its sharp witnesses back? (read-only, seconds — but see the timing note)
@@ -124,11 +136,27 @@ is *"the gap is too big to trust — the sharp side has probably moved"* —
 `MAX_EV`, not the EV floor. The thing standing between the card and a
 bet more often is the sharp-witness disagreement gate.
 
-**AND THAT CEILING IS EARNED, measured the same day.** The leans it
-excludes at 7-15% edge ran **-23.1% over 12 bets**; leans under 7% were
-positive. So the gate is not a conservatism to be relaxed — it is
-refusing a population that loses money, which is why the answer to "give
-me more picks" is not "loosen it".
+**~~AND THAT CEILING IS EARNED~~ — WITHDRAWN 2026-09-16.** This block said
+the leans `MAX_EV` excludes at 7-15% edge ran **-23.1% over 12 bets**, so
+the gate was refusing a population that loses money. Ethan re-ran the
+same replay later that day, with more days settled:
+
+```
+  the leans, by the edge they were refused at:
+    under 4%            1 bets     1 won    +1.18u  ROI +118.0%
+    4-7%                3 bets     2 won    +1.77u  ROI +59.0%
+    7-15% (suspect)    11 bets     6 won    +2.25u  ROI +20.5%
+```
+
+**+20.5%, not -23.1%.** Two readings of one replay, opposite in sign, on
+about a dozen bets. That is not a finding reversing — it is a sample too
+small to have supported either claim, and I stated the first one without
+saying so. `MAX_EV` is **UNPROVEN**, not earned.
+
+It stays at 7% for now, because nothing argues for moving it either: the
+positive read is +20.5% on 11 bets and the whole lean book is +34.7% ±
+29.9%, about 1.2 standard errors from zero. Revisit when that band passes
+~40 bets. Nothing else in the product rests on it.
 
 **Read the ROI last and lightly.** +27.9% is 37 bets, and the dip to
 +12.9% at 3.0% and back to +19.5% at 4.0% is not a shape, it is the
@@ -259,25 +287,13 @@ root-owned entry is one the build can read and never replace. The
 6,098 underneath it.
 
 ```bash
-cd /srv/qellys && sudo -u qellys python3 - <<'PY'
-import json
-from engine import exchangefair
-from engine.sources import kalshi
-
-markets, meta = kalshi.fetch_sports_markets(kalshi.parse_markets)
-print("series report:", meta)
-print()
-for sport in ("nfl", "mlb"):
-    mine = [m for m in markets if kalshi.sport_of(m) in (None, sport)]
-    usable = [m for m in mine if not exchangefair.quality(m)]
-    print(f"=== {sport}: {len(usable)} usable of {len(mine)} ===")
-    for m in usable[:6]:
-        print(json.dumps({k: m.get(k) for k in
-                          ("ticker", "event_ticker", "title", "subtitle")},
-                         ensure_ascii=False))
-    print()
-PY
+cd /srv/qellys && sudo -u qellys python3 homecheck.py exchange
 ```
+
+**`sudo -u qellys` is still not optional** — this is the one check
+that fetches, and a cache entry written as root is one the build can
+read and never replace. The script refuses quietly to pretend
+otherwise: run it as root and the first line of its output says so.
 
 **Paste the whole thing.** Six rows per sport is enough. What I am
 looking for is whether `event_ticker` carries both clubs — something like
@@ -470,14 +486,28 @@ twice and the second run flips nothing.
 
 ```bash
 cd /srv/qellys && python3 -c "
-from engine import db, ledger
-conn = db.connect()
+from engine import ledger
+conn = ledger.connect()
 try:
     print(ledger.repair_inverted_likely_sides(conn))
 finally:
     conn.close()
 "
 ```
+
+**CORRECTED 2026-09-16.** This line said `db.connect()` and Ethan got
+`sqlite3.OperationalError: no such table: bets`. There are two databases:
+`db.DEFAULT_DB` is `data/history.db` (games, player logs) and
+`ledger.DEFAULT_DB` is `data/ledger.db` (the journal). The function now
+raises a message naming that mistake rather than a raw sqlite error.
+
+**And the premise may already be gone.** The `--likely` scoreboard from
+that same run reads `home_runs  11  said 94.0%  hit 90.9%` — which is
+what a CORRECT row looks like, not the inverted signature (#165 recorded
+"said 94.0%, hit 10.0%"). So expect `{'flipped': 0}`, and if that is what
+comes back the repair is done and the settle pass below is unnecessary.
+Paste the number either way: zero closes it, non-zero means there were
+still rows to fix.
 
 It re-OPENS the rows rather than re-grading them, so the settle pass has
 to run before the numbers move:
@@ -616,36 +646,14 @@ Run it **after the timer has pulled** — check `HEAD` in the output is
 `59becc8` or later, or you are reading the before-picture again.
 
 ```bash
-cd /srv/qellys && python3 - <<'PY'
-import json, subprocess
-import launch
-from engine import gate, lightboard
-
-print("HEAD:", subprocess.run(["git", "log", "-1", "--format=%h %ad %s",
-                               "--date=short"], capture_output=True,
-                              text=True).stdout.strip())
-print()
-
-for sport in ("mlb", "nfl", "cfb"):
-    try:
-        path = gate.board_source(lightboard.light_path(launch.BOARD_FILES[sport]))
-        board = json.loads(open(path).read())
-    except Exception as exc:
-        print(f"{sport}: cannot read board — {exc}")
-        continue
-    rows = board.get("game_bets") or []
-    filler = [r for r in rows
-              if r.get("odds") in (-110, 110)
-              and not str(r.get("book") or "").strip()]
-    unbooked = [r for r in rows if not str(r.get("book") or "").strip()]
-    by_mkt = {}
-    for r in filler:
-        by_mkt[r.get("bet_type")] = by_mkt.get(r.get("bet_type"), 0) + 1
-    print(f"{sport:4} {len(rows):3d} game rows | "
-          f"{len(unbooked):3d} name no book | "
-          f"{len(filler):3d} at a filler price {by_mkt or ''}")
-PY
+cd /srv/qellys && python3 homecheck.py filler
 ```
+
+**It used to be a thirty-line heredoc and Ethan could not paste it**
+(2026-09-16: *"i couldnt get that last command to work"*), while the
+five one-line blocks he ran the same evening all worked. The check is
+now `homecheck.py`, which prints `HEAD` itself — so there is no
+separate step to confirm you are reading the after-picture.
 
 **What to look for.** The number that has to move is baseball's
 `bet_type` mix. Before the fix MLB's filler rows were `total` and

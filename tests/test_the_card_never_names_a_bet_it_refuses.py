@@ -7,14 +7,23 @@ that's a good pick, then we need to say to bet it, not to not bet it."
 
 THE FIRST ANSWER WAS TO LOWER THE BAR SO A PICK EXISTED, and it was
 wrong — measurably. `potd_backtest --sweep-ev` over the stored MLB
-closes is flat from a 0% EV floor through 2.0% (37 days, 25-12, +27.9%
-at every one), and the bar binding on the days that produced nothing is
-the same at every setting: the gap is too big to trust. Moving the floor
-buys no picks. Worse, the leans that ceiling excludes settled −23.1%
-over 12 bets in the same replay, so showing them IS the expensive
-choice.
+closes is flat from a 0% EV floor through 2.0%, and the bar binding on
+the days that produced nothing is the same at every setting: the gap is
+too big to trust. Moving the floor buys no picks. That part has held
+across every run.
 
-So the card changed instead. This file is the thing that keeps it
+THE SECOND ARGUMENT DID NOT SURVIVE, and this file deliberately does not
+rest on it. An earlier draft said the leans that ceiling excludes had
+settled −23.1% over 12 bets, so showing them was the expensive choice.
+Ethan re-ran the same replay later the same day, with more days settled,
+and that band read +20.5% over 11 bets — every lean band positive. Two
+readings of one replay, opposite in sign, on about a dozen bets: that is
+noise wearing a number, not a finding, and none of the assertions below
+depend on which way it lands.
+
+The card changed anyway, because the reason is not an ROI claim: a page
+that names a bet, its price and its book under a banner reading NO BET
+is arguing with itself whatever that bet goes on to do. This file is the thing that keeps it
 changed, and it RUNS THE RENDERER rather than reading its source — a
 grep for "A lean, not the Pick of the Day" is satisfied by a card that
 prints the team, the price and the book directly above that sentence,

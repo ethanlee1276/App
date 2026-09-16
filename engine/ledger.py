@@ -977,7 +977,24 @@ def repair_inverted_likely_sides(conn) -> dict:
     everything else.
 
     Idempotent: once flipped, the rows no longer match.
+
+    THE CONNECTION HAS TO BE THIS MODULE'S. Ethan, 2026-09-16, running
+    the runbook line I wrote: `sqlite3.OperationalError: no such table:
+    bets`. There are two databases — `db.DEFAULT_DB` is history.db, which
+    holds games and player logs, and `ledger.DEFAULT_DB` is ledger.db,
+    which holds `bets` — and the paste said `db.connect()`. The raw
+    sqlite error names the table and not the mistake, so it is caught
+    here and named, because a repair that reports a missing table is
+    indistinguishable from a repair that found nothing to do.
     """
+    try:
+        conn.execute("SELECT 1 FROM bets LIMIT 1")
+    except sqlite3.OperationalError as exc:
+        raise RuntimeError(
+            f"this connection has no `bets` table ({exc}) — the journal "
+            f"lives in {DEFAULT_DB}, so open it with `ledger.connect()`; "
+            f"`db.connect()` opens the stats database and has no journal "
+            f"in it") from exc
     rows = conn.execute(
         "SELECT id FROM bets WHERE category='likely' AND market='home_runs' "
         "AND side='OVER' AND hit_prob > 0.5").fetchall()
