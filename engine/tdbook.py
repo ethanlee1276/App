@@ -728,5 +728,12 @@ if __name__ == "__main__":                       # pragma: no cover
         for line in report_lines(rows):
             print(line)
         print("\n  --roi to price the board instead of grading its bands; "
-              "--rank to ask whether the market ranks scorers better.")
+              "--rank to ask whether the market ranks scorers better;")
+        # `--shrink` HAS WORKED SINCE IT SHIPPED AND WAS IN NO USAGE TEXT.
+        # A flag nobody can find is a flag nobody runs: #77 sat open
+        # reading as though the measurement still had to be built, and
+        # the answer was one undiscoverable word away. Listed here and in
+        # the droplet runbook (block SHRINK).
+        print("  --shrink to ask whether the market shrink helps or hurts "
+              "the TOP of that board (#77).")
     conn.close()

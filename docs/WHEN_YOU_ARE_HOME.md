@@ -314,6 +314,56 @@ before/after is what makes the rest of that task readable. Paste both.
 
 ---
 
+## SHRINK. Does the market shrink help or hurt the top of the board? (#77) (read-only, ~1 minute)
+
+The Most Likely page prints a touchdown row's probability **already
+shrunk halfway toward the book** (`betting.MARKET_SHRINK = 0.5`). The
+replay says the top of that board UNDERCLAIMS even after the fitted
+temperature — top-1 claims 60.0% and lands 67.4% — so the shrink is
+either closing exactly that gap or dragging good numbers toward a lazy
+consensus. **Those read identically on the page**, and the headline
+number the whole board is sorted by depends on which.
+
+The measurement has existed since it shipped and ran **only from the
+weekly maintenance pass, into a log** — so this could be asked once every
+seven days, by waiting. There is a flag now:
+
+```bash
+cd /srv/qellys && python3 -m engine.tdbacktest --board
+cd /srv/qellys && python3 -m engine.tdbook --shrink
+```
+
+Run `--board` first (the task says so) to confirm the replay reproduces
+on the droplet, then `--shrink`. **Note the two different modules** —
+`tdbacktest` grades the replay, `tdbook` joins it to harvested closes,
+and the shrink question needs the prices.
+
+The flag has worked since it shipped and was in no usage text, which is
+most of why #77 sat open reading as though the measurement still had to
+be built. It is listed now.
+
+**What it prints:** three claims per top-of-board row — the corrected
+MODEL, the SHRUNK number the page actually shows, and the de-vigged
+MARKET — against what landed, at each depth, plus which claim the landed
+rate sits nearest.
+
+| if you see | it means |
+|---|---|
+| `nearest: shrunk` at most depths | `MARKET_SHRINK` is the right knob and **0.5 should be fitted, not assumed** |
+| `nearest: model` | the shrink is dragging good numbers down — the page should show the model's number |
+| `nearest: market` | our model adds nothing at the top and the book should be the display number |
+| `noise` | the slate bootstrap could not separate them. **That is an answer, not a failure** — do not act on the point estimate |
+| `shrink check: N priced slate(s) — needs 30` | the harvest is too young. Nothing to do but wait; the question stays open |
+
+The second panel asks the ordering half separately: does ranking by the
+shrunk number land more of the top k than ranking by the model alone?
+Same rows, same slates, paired by slate.
+
+**Paste both panels.** If it says anything but noise, this is a
+one-constant change with a measurement behind it.
+
+---
+
 ## TOP. Is there one pick for the day? (read-only, 5 seconds)
 
 You asked for *"one pick for the pick of the day"* — singular. Until

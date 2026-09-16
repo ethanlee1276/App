@@ -639,4 +639,10 @@ if __name__ == "__main__":                       # pragma: no cover
         print("\n  --fit to fit and save the correction the board reads.")
         print("  --board to grade the TOP of the likelihood board instead "
               "of its bands.")
+        # THE SHRINK QUESTION LIVES IN `tdbook`, not here, and pointing at
+        # it beats growing a second door onto the same report — which is
+        # what the first version of this did (#77, 2026-09-16). Two entry
+        # points to one measurement is how they drift.
+        print("  `python3 -m engine.tdbook --shrink` asks whether the market "
+              "shrink helps or hurts that top (#77).")
     conn.close()

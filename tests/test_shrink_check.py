@@ -132,6 +132,53 @@ def test_the_weekly_pass_tracks_the_devig_bands_too():
     assert "stays open" in block
 
 
+def test_the_flag_that_runs_it_is_discoverable():
+    """#77 read as though the measurement still had to be built. It did
+    not: `tdbook --shrink` has worked since it shipped — AND WAS IN NO
+    USAGE TEXT. `tdbook`'s own help line listed `--roi` and `--rank` and
+    stopped.
+
+    A flag nobody can find is a flag nobody runs, which is most of why a
+    question with a working answer sat open. (The first fix here added a
+    SECOND `--shrink` to `tdbacktest`; that is two doors onto one report
+    and is how they drift. Reverted — `tdbacktest` points at this one
+    instead.)
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "engine", "tdbook.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert '"--shrink" in argv' in src, "the flag is gone"
+    assert "shrink_report(rows)" in src, "the flag parses and reaches nothing"
+    assert "--shrink to ask" in src, "the flag is not in the usage text"
+
+
+def test_there_is_exactly_one_door_onto_the_shrink_report():
+    """Two entry points to one measurement is how they drift — and the
+    pointer from `tdbacktest` has to name the real one, or a reader
+    lands where the task told them to go and finds nothing."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "engine", "tdbacktest.py"),
+              encoding="utf-8") as f:
+        other = f.read()
+    assert '"--shrink" in argv' not in other, \
+        "tdbacktest grew its own --shrink again — one report, one door"
+    assert "engine.tdbook --shrink" in other, \
+        "tdbacktest no longer points at where the question is answered"
+
+
+def test_the_weekly_pass_still_runs_it_too():
+    """The CLI is an ADDITION, not a replacement. The weekly pass is what
+    makes the answer arrive without anybody deciding to ask, which was
+    the original point (#65's finding came from a CLI nobody remembered
+    to re-run)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "engine", "maintenance.py"),
+              encoding="utf-8") as f:
+        src = f.read()
+    assert "shrink_report(board_priced(_sc))" in src, \
+        "the weekly shrink check is gone — the CLI does not replace it"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
