@@ -5,6 +5,7 @@
     python3 potd_backtest.py nfl
     python3 potd_backtest.py --all
     python3 potd_backtest.py mlb --sweep-ev      # where should the EV floor sit?
+    python3 potd_backtest.py mlb --sweep-conf    # how confident can the pick be?
 
 Ethan, 2026-09-16: "you should not stop until you confirm that the Pick
 of the Day we show every day is elite and worth betting on." This is the
@@ -23,7 +24,8 @@ from __future__ import annotations
 import argparse
 
 from engine import db, potd
-from engine.potdbacktest import replay_potd, summarize, sweep_ev
+from engine.potdbacktest import (replay_potd, summarize, sweep_ev,
+                                 sweep_conf)
 
 SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
 
@@ -44,6 +46,15 @@ def main() -> None:
                          "with a pick, the record, the ROI and which bar was "
                          "binding on the days that still got nothing. Read "
                          "the shape, not the best cell.")
+    ap.add_argument("--sweep-conf", action="store_true",
+                    help="how confident can the day's pick actually be? "
+                         "Replays at every confidence floor and prints the "
+                         "HIT RATE with the units beside it, because those "
+                         "two move in opposite directions and the decision "
+                         "lives in that trade.")
+    ap.add_argument("--min-fair", type=float, default=None,
+                    help=f"replay at ONE confidence floor instead of the "
+                         f"shipped {potd.MIN_FAIR * 100:.0f}%%.")
     ap.add_argument("--min-ev", type=float, default=None,
                     # `%%`, not `%`: argparse runs help through %-expansion
                     # and a bare percent sign raises ValueError from
@@ -62,13 +73,17 @@ def main() -> None:
 
     conn = db.read_only(args.db)
     for sport in (SPORTS if args.all else [args.sport]):
-        if args.sweep_ev:
+        if args.sweep_conf:
+            print(sweep_conf(conn, sport, sharp=args.sharp,
+                             rank_auc=args.rank_auc))
+        elif args.sweep_ev:
             print(sweep_ev(conn, sport, sharp=args.sharp,
                            rank_auc=args.rank_auc))
         else:
             print(summarize(replay_potd(conn, sport, sharp=args.sharp,
                                         rank_auc=args.rank_auc,
-                                        min_ev=args.min_ev)))
+                                        min_ev=args.min_ev,
+                                        min_fair=args.min_fair)))
         print()
 
 

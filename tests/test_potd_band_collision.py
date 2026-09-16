@@ -81,9 +81,15 @@ def test_a_price_past_the_crossing_is_refused_whichever_side_it_falls_on():
     assert potd.shortfall(_row(0.50, 150)) == \
         "the gap is too big to trust — the sharp side has probably moved"
 
-    # Inside the ceiling at +150 → the fair has to be under 43%.
-    assert potd.shortfall(_row(0.42, 150)) == \
-        "more likely to lose than to win, even at a good price"
+    # Inside the ceiling at +150 → the fair has to be under 43%, which
+    # is under the confidence floor. THE WORDING OF THAT REFUSAL CHANGED
+    # on 2026-09-16: `MIN_FAIR` stopped being "at least a coin flip" and
+    # became the floor the day's pick is chosen on, so the sentence names
+    # the bar and its value rather than asserting a 50% test that is no
+    # longer what the constant means.
+    why = potd.shortfall(_row(0.42, 150))
+    assert "not confident enough" in why, why
+    assert f"{potd.MIN_FAIR:.0%}" in why, why
 
 
 def test_the_minus_side_of_the_band_is_untouched():

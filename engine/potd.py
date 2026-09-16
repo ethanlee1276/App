@@ -149,14 +149,32 @@ from __future__ import annotations
 #: therefore MORE candidates and more chances at a real edge, not a
 #: weaker pick — which is why the plus-money end is left open and
 #: `MIN_FAIR` does the work of keeping the pick a favourite.
-MIN_PAYOUT = 0.70
+#: WIDENED 2026-09-16, and this is the change that makes the feature
+#: possible at all. Ethan: "I don't care about the edge a bet has when it
+#: comes to the pick of the day. I care about if the pick is going to hit
+#: or not … The point of the pick of the day is to give out confident
+#: winning picks."
+#:
+#: A payout floor of 0.70 IS a price floor of -142, and -142 implies
+#: 58.7%. So the old band did not merely prefer close games — it made a
+#: confident pick ARITHMETICALLY IMPOSSIBLE. Every card read 55% because
+#: nothing above roughly 59% was allowed to be selected. Asking for
+#: confidence while banning favourites is the contradiction underneath
+#: the one Ethan could see on the page.
+#:
+#: 0.40 is -250, which implies 71.4%. That is as far as this goes for
+#: now: past it the arithmetic turns ugly fast — at -400 a single loss
+#: costs four wins — and the floor belongs on measured hit rate rather
+#: than on how brave the band is. `potd_backtest.py --sweep-conf` is
+#: where that number comes from.
+MIN_PAYOUT = 0.40
 MAX_PAYOUT = 1.90
 
 #: The same band as American odds, derived once so nothing can drift.
 #: Rounded INWARD — a price must clear the payout test itself, and these
-#: exist for the page to print and for the census to read. -143 pays
-#: 0.699 and is OUT by a thousandth; -142 pays 0.704 and is in.
-MIN_ODDS = -142
+#: exist for the page to print and for the census to read. -251 pays
+#: 0.398 and is OUT; -250 pays 0.400 and is in.
+MIN_ODDS = -250
 MAX_ODDS = 190
 
 #: HOW GOOD THE EVIDENCE IS, highest first. This is the ranking key, and
@@ -188,11 +206,37 @@ MAX_ODDS = 190
 #:           tier can never be the pick — see `shortfall`.
 EVIDENCE = ("exchange", "sharp", "market", "model")
 
-#: The +EV bar, in probability points of the fair. The retail +EV tools
-#: quote 1-3% as the working range and the low end of that is where the
-#: bet stops surviving the price moving against you between the pull and
-#: the placement. 2% is the middle of the published range and roughly
-#: twice the shopped hold on a -110 pair.
+#: STILL 2%, AND THE REASON IS ETHAN'S OWN TIEBREAKER.
+#:
+#: On 2026-09-16 he said "I don't care about the edge a bet has when it
+#: comes to the pick of the day … Who cares about ev and shit", and then,
+#: asked which of two conflicting specs should win: "whatever makes more
+#: sense and returns the most roi and wins and money in the long run."
+#:
+#: THOSE TWO PULL APART, and the second is the one that decides. Hit
+#: rate and money are different axes. A 71% pick at -250 breaks even at
+#: exactly 71.4% — betting confident favourites at fair prices returns
+#: zero minus the hold, forever, however good the record looks. The only
+#: thing that makes money over a long run is taking a price better than
+#: the true chance, which IS this bar. Dropping it to zero would have
+#: bought a better-looking hit rate and a worse bankroll.
+#:
+#: SO THE TWO GOALS ARE SPLIT ACROSS TWO JOBS, and both are served:
+#:   * this bar decides WHETHER there is a pick at all — money;
+#:   * `rank_key` decides WHICH of the qualifying rows gets the day, and
+#:     it now picks the likeliest winner rather than the biggest edge —
+#:     confidence.
+#: Every published pick is one worth betting, and among those the day is
+#: named after the one most likely to land. That is both instructions
+#: honoured where they do not conflict, and the money one honoured where
+#: they do.
+#:
+#: WHAT IT COSTS, SAID PLAINLY: a day whose best row is priced worse than
+#: fair still produces nothing, because betting it loses money. The card
+#: Ethan photographed was -0.4% EV and would still be no pick.
+#:
+#: The 2% itself is the middle of the published retail +EV range and is
+#: the number `--sweep-ev` exists to replace with a measured one.
 MIN_EV = 0.02
 
 #: THE CEILING ON A DISAGREEMENT WE WILL BET.
@@ -229,11 +273,34 @@ MIN_EV = 0.02
 #: every other `shortfall` row gets.
 from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 
-#: A pick this feature is named after should at least be more likely to
-#: happen than not, by the number we are trusting. Inside the band the
-#: price itself implies at most 55.6%, so this bites on the plus-money
-#: half: a +100 shot our fair calls 48% can be +EV and still is not a
-#: thing to put one name on for the day.
+#: THE CONFIDENCE FLOOR — and since 2026-09-16 the bar that defines this
+#: feature rather than a footnote to it.
+#:
+#: Ethan: "The point of the pick of the day is to give out confident
+#: winning picks." A floor of 50% says nothing more than "a coin flip we
+#: like", which is what the card has been publishing: 55% at -122, with
+#: the old band making anything better unreachable.
+#:
+#: STILL 0.50, AND DELIBERATELY NOT RAISED BY GUESS. A first pass at
+#: this change set it to 0.60 and the arithmetic said no:
+#:
+#:   price   most confident fair it can carry under MAX_EV
+#:   -110    56.0%
+#:   -130    60.5%
+#:   -150    64.2%
+#:   -250    76.4%
+#:
+#: `MAX_EV` refuses a gap bigger than 7% as a stale quote, so a fair far
+#: above the price's own number is not admissible AT that price. A floor
+#: over ~56% therefore makes every -110 row ineligible outright — and
+#: most of the board is -110. Raising this by judgement would have made
+#: the feature BLANKER, which is the opposite of what was asked for.
+#:
+#: So the floor is the one thing here left to measurement.
+#: `potd_backtest.py --sweep-conf` replays it against settled results
+#: and prints the hit rate with the units beside it. Set it from that
+#: table. The band and the ranking below are already changed and are
+#: pure loosening — they can only add candidates, never remove one.
 MIN_FAIR = 0.50
 
 #: A market has to have shown it can rank this outcome better than a
@@ -479,7 +546,7 @@ def disqualify(row: dict, now=None) -> str:
     return ""
 
 
-def shortfall(row: dict, min_ev=None) -> str:
+def shortfall(row: dict, min_ev=None, min_fair=None) -> str:
     """"" if this row clears the quality bars, else which one it missed.
 
     A row failing only these is still a real, placeable bet at a real
@@ -528,6 +595,24 @@ def shortfall(row: dict, min_ev=None) -> str:
         return "the board itself says this did not clear its bar"
     if evidence(row) == "model":
         return "only our own model disputes this price"
+    # THE CONFIDENCE FLOOR IS ASKED FIRST, because since 2026-09-16 it
+    # is what this feature IS. A row can fail this and the price test at
+    # once — a 52% pick at -110 is both under-confident and badly priced
+    # — and the reason the card prints should be the one the product is
+    # about. Before the reorder it said "the price is not far enough off
+    # the fair", which is an answer to a question Ethan had just told us
+    # he does not care about.
+    fair = fair_prob(row)
+    if fair is not None and fair < (MIN_FAIR if min_fair is None
+                                    else float(min_fair)):
+        # THE WORDING FOLLOWS THE BAR. While `MIN_FAIR` was 0.50 this
+        # could honestly say "more likely to lose than to win"; as a
+        # confidence floor it cannot — a 64% pick under a 65% floor is
+        # not a coin flip, it is simply not confident enough to be the
+        # one bet the day is named after.
+        return (f"not confident enough — the day's pick has to be at least "
+                f"{(MIN_FAIR if min_fair is None else float(min_fair)):.0%} "
+                f"to win")
     ev = edge(row)
     if ev is None:
         return "no fair probability to price against"
@@ -548,9 +633,6 @@ def shortfall(row: dict, min_ev=None) -> str:
         return "the price is not far enough off the fair to be worth it"
     if ev > MAX_EV:
         return "the gap is too big to trust — the sharp side has probably moved"
-    fair = fair_prob(row)
-    if fair is not None and fair < MIN_FAIR:
-        return "more likely to lose than to win, even at a good price"
     # THE RANKING BAR IS A STATEMENT ABOUT OUR MODEL, so it is asked of
     # the rows our model is the witness for.
     #
@@ -609,31 +691,54 @@ def refuse(row: dict, now=None) -> str:
 
 
 def rank_key(row: dict) -> tuple:
-    """Sort key, best first: the strength of the WITNESS, then the size
-    of the edge, then the better price.
+    """Sort key, best first: HOW LIKELY THE PICK IS TO HIT, then the
+    strength of the witness saying so, then the better price.
 
-    EVIDENCE OUTRANKS EDGE SIZE, and that inversion is the whole lesson
-    of this module. Sorting on edge alone hands every day to whichever
-    row has the loudest disagreement, and the loudest disagreements come
-    from the weakest witness — a model that thinks a game is 12 points
-    off the market is much more often wrong than the market is. Ranking
-    on the tier first means a sharp-anchored 2.5% beats a consensus 5%,
-    which is the order the measurements support.
+    REWRITTEN 2026-09-16 ON ETHAN'S CALL. It used to sort on the size of
+    the EDGE — how far the price sat from fair — which is the right key
+    for a +EV board and the wrong one for this feature:
 
-    THE EDGE IS ROUNDED TO WHOLE POINTS BEFORE IT SORTS. 2.6% and 2.9%
-    are the same claim about the world made twice; treating them as
-    ranked is false precision, and it would hand the day to whichever
-    row happened to round up while a materially better price sat one
-    line below. Equal edge, better payout — which is Ethan's "flip of
-    your money" served wherever it costs nothing.
+        "I don't care about the edge a bet has when it comes to the pick
+        of the day. I care about if the pick is going to hit or not. The
+        point of the pick of the day is to give out confident winning
+        picks."
+
+    That is a product decision and it is his to make. The old key handed
+    the day to the loudest disagreement; the new one hands it to the
+    likeliest winner. They are different products and the old one was
+    never the one advertised — the card is called the Pick of the Day and
+    it sits above a hit-rate record.
+
+    THE WITNESS STILL RANKS FIRST, AND THAT IS NOT A HEDGE ON THE
+    ABOVE. A first draft of this change put probability first and
+    `test_the_better_witness_wins_across_leagues_not_the_bigger_edge`
+    caught it, correctly: a model-only "70%" is not a 70%. The MLB model
+    ranks winners at 0.5596 — a coin flip with opinions — so the number
+    it prints is not a probability anyone should bet on being right. A
+    sharp book's de-vigged 60% is measured at 0.6727 and IS.
+    "Most likely to hit" therefore has to mean "most likely among the
+    numbers measured to be right", or the feature hands the day to
+    whichever witness is loudest and least reliable — which is the exact
+    failure the old edge-ranking had, arriving by a new road.
+
+    So: whose number (tier), then what the number says (probability),
+    then the price. Within a tier — which is where the choice actually
+    happens most days, because a day's candidates usually share one —
+    the likeliest winner wins, and that is Ethan's rule doing the work.
+
+    PROBABILITY IS ROUNDED TO WHOLE POINTS BEFORE IT SORTS, for the
+    reason the edge used to be: 71.4% and 71.2% are the same claim about
+    the world made twice, and treating them as ranked would hand the day
+    to whichever row happened to round up while a materially better price
+    sat one line below. Equal chance, better payout.
     """
     tier = evidence(row)
     rank = EVIDENCE.index(tier) if tier in EVIDENCE else len(EVIDENCE)
-    ev = round(float(edge(row) or 0.0), 2)
-    return (rank, -ev, -(payout(row.get("odds")) or 0.0))
+    p = round(float(fair_prob(row) or 0.0), 2)
+    return (rank, -p, -(payout(row.get("odds")) or 0.0))
 
 
-def choose(rows, now=None, min_ev=None) -> tuple:
+def choose(rows, now=None, min_ev=None, min_fair=None) -> tuple:
     """``(pick, best_below_bar, census)`` over a board's rows.
 
     ``pick`` is the best row clearing every bar, or None. ``best_below``
@@ -649,7 +754,7 @@ def choose(rows, now=None, min_ev=None) -> tuple:
         if hard:
             census[hard] = census.get(hard, 0) + 1
             continue
-        soft = shortfall(row, min_ev)
+        soft = shortfall(row, min_ev, min_fair)
         if soft:
             census[soft] = census.get(soft, 0) + 1
             near.append(row)

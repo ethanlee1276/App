@@ -151,8 +151,12 @@ def test_every_other_bar_still_bites_on_a_sharp_spread():
     # refuses one line earlier. The fair bar is what this case is for,
     # so the price is the one that lets the question be asked.
     dog = deepcopy(row); dog["sharp_fair"] = 0.48; dog["odds"] = 115
-    assert potd.shortfall(dog) == \
-        "more likely to lose than to win, even at a good price"
+    why = potd.shortfall(dog)
+    # The confidence floor's sentence, which names the bar and its value
+    # since 2026-09-16 rather than asserting a coin-flip test the
+    # constant no longer means.
+    assert "not confident enough" in why, why
+    assert f"{potd.MIN_FAIR:.0%}" in why, why
 
     hot = deepcopy(row); hot["sharp_fair"] = 0.62
     assert potd.shortfall(hot) == \

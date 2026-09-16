@@ -54,7 +54,14 @@ def test_a_last_trade_is_not_a_market_opinion():
 def test_a_wide_book_cannot_settle_a_question_this_fine():
     """THE ARITHMETIC, executed. A book 10 cents wide puts the true
     number five points either side of the mid; `potd.MIN_EV` asks for
-    two. A guard wider than the edge it protects is not a guard."""
+    two. A guard wider than the edge it protects is not a guard.
+
+    IF THE CONFIDENCE FLOOR EVER BECOMES THE BINDING BAR — `MIN_FAIR` is
+    the one constant `--sweep-conf` exists to raise — this comparison
+    moves with it: the exchange's own bid/ask width must not be big
+    enough to be the reason a pick looks confident either. Half a
+    four-cent spread is two points, so a floor set less than four points
+    above a coin flip would need the cap tightened."""
     assert X.MAX_SPREAD_CENTS / 100.0 <= potd.MIN_EV * 2, (
         "the spread cap admits more slop than the EV floor asks for")
     assert X.quality(_mkt(spread_cents=X.MAX_SPREAD_CENTS)) == ""

@@ -111,7 +111,17 @@ def test_a_sharp_books_pair_costs_under_a_point_across_the_whole_band():
             if got > worst:
                 worst, at = got, fair
     assert n > 500, f"the sweep stopped covering the band: {n} pairs"
+    # UNDER A POINT, and it still is across the WIDER band. The band's
+    # chalk end moved from -142 to -250 on 2026-09-16 when the Pick of
+    # the Day started selecting on confidence, which puts the sweep into
+    # territory where the de-vig assumption has more room to move. It
+    # does not move enough: the worst case is still inside a point.
     assert worst < 1.0, (worst, at)
+    # …AND INSIDE WHAT THE DAY'S PICK CAN EVEN SEE. `potd.rank_key`
+    # rounds probability to whole points before it sorts, so an
+    # assumption smaller than a point cannot reorder the day's pick —
+    # which matters since 2026-09-16, when the ranking became a ranking
+    # ON probability rather than on edge size.
     assert worst < potd.MIN_EV * 100 / 2.0, (worst, at, potd.MIN_EV)
 
 

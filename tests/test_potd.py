@@ -105,17 +105,37 @@ def test_plus_money_is_the_underdog_and_not_the_favourite():
     assert potd.payout(190) > 1.0 > potd.payout(-190)
 
 
-def test_the_band_is_the_seventy_dollars_he_asked_for():
-    """Ethan, 2026-09-15, rewording his own first spec: "I’m putting 100
-    bucks on it. I wanna make at least $70." That is a FLOOR on the
-    winnings, and the floor is the end that has to be exact — a price
-    paying $69.93 is not the product."""
-    assert potd.payout(-142) >= 0.70 and potd.in_band(-142)
-    assert potd.payout(-143) < 0.70 and not potd.in_band(-143), \
-        "−143 pays 0.6993 — seven cents short of the promise"
+def test_the_band_now_buys_confidence_instead_of_the_seventy_dollars():
+    """TWO OF ETHAN'S OWN SPECS COLLIDE HERE, and the later one won.
+
+    2026-09-15: "I’m putting 100 bucks on it. I wanna make at least
+    $70." That is a floor on the winnings, and it is what `MIN_PAYOUT`
+    0.70 — a price floor of -142 — was built to keep exactly.
+
+    2026-09-16: "I care about if the pick is going to hit or not. The
+    point of the pick of the day is to give out confident winning
+    picks."
+
+    THOSE CANNOT BOTH HOLD. -142 implies 58.7%, so a pick that pays $70
+    is at best a 59% shot; a pick that is 71% to land pays $40. The
+    market does not sell confidence and a big payout together, and no
+    selector can conjure a row that does. The later instruction is the
+    product one, so the floor moved to 0.40 (-250) and the $70 promise
+    is retired rather than quietly broken — a test that still asserted
+    it would be pinning a promise the feature no longer makes.
+
+    THIS IS FLAGGED, NOT DECIDED. If the $70 matters more than the
+    confidence, the floor goes back and today's complaint stands."""
+    # The epsilon is `in_band`'s own: -250 pays 0.3999999999999999 in
+    # binary floating point, and asserting >= 0.40 on the nose fails on
+    # arithmetic rather than on the product. `in_band` already carries
+    # the 1e-9 for exactly this, so the test asks it the same way.
+    assert potd.in_band(-250) and potd.payout(-250) >= 0.40 - 1e-9
+    assert not potd.in_band(-251) and potd.payout(-251) < 0.40 - 1e-9, \
+        "the floor is still exact at its new value"
     assert potd.in_band(-110) and potd.in_band(100) and potd.in_band(190)
-    assert not potd.in_band(-200), "pays 0.50 — half the promise"
-    assert not potd.in_band(-400), "chalk is outside the band"
+    assert potd.in_band(-200), "a confident pick has to be reachable"
+    assert not potd.in_band(-400), "chalk past 80% is still outside"
     assert not potd.in_band(191), "past the sanity cap"
     # No American price lives between -100 and +100; a quote claiming to
     # is broken, not a coin flip.
@@ -136,16 +156,27 @@ def test_the_band_is_decided_by_the_payout_not_by_the_odds():
         assert by_payout == by_odds == potd.in_band(odds), odds
 
 
-def test_no_efficient_favourite_in_this_band_can_be_a_heavy_favourite():
-    """THE MEASUREMENT THE MODULE IS BUILT ON, executed rather than
-    asserted in prose. The most any in-band price can imply is what
-    MIN_ODDS implies — 58.7%. So a straight favourite here is close to a
-    coin flip by construction, which is why the selector needs a
-    disagreement between two books rather than a confidence ranking.
-    Replayed on the stored closes this came out at 51.4% NFL / 50.4%
-    CFB; the ceiling below is why that was never going to be 68%."""
+def test_the_band_no_longer_caps_how_confident_a_pick_may_be():
+    """THIS TEST USED TO ASSERT THE BUG, and it is the clearest single
+    record of what was wrong with the feature.
+
+    It read: "The most any in-band price can imply is what MIN_ODDS
+    implies — 58.7%. So a straight favourite here is close to a coin
+    flip BY CONSTRUCTION, which is why the selector needs a disagreement
+    between two books rather than a confidence ranking."
+
+    Every word of that was true and it was an argument from a constant.
+    The band was set to keep a $70 payout, that capped confidence at
+    59%, and the selector was then designed around the cap — ranking on
+    disagreement because confidence was unavailable. Ethan asked for
+    confident picks on 2026-09-16 and the honest answer was not a better
+    selector, it was that the band had been forbidding them all along.
+
+    The ceiling is now 71.4%, so a confidence ranking has something to
+    rank."""
     ceiling = potd.implied(potd.MIN_ODDS)
-    assert round(ceiling, 3) == 0.587, ceiling
+    assert round(ceiling, 3) == 0.714, ceiling
+    assert ceiling > 0.587, "the old cap is back and confidence is capped again"
     for odds in range(-300, 301):
         if -100 < odds < 100 or not potd.in_band(odds):
             continue
@@ -408,18 +439,24 @@ def test_the_ceiling_does_not_swallow_the_floor():
 
 
 # --- how it ranks ------------------------------------------------------------
-def test_equal_edges_go_to_the_better_price():
-    """Two rows making the same claim to the nearest point are the same
-    claim; the tie goes to the one that pays more. Ethan's "flip of your
-    money", served wherever it costs nothing."""
-    # 5% on both, inside the band AND inside `MAX_EV` — a tie the
-    # selector may actually be asked to break. The pair used to claim
-    # 15% each, which the trust ceiling now refuses outright.
-    cheap = _row(player="Cheap", odds=-125, sharp_fair=0.5833)
-    rich = _row(player="Rich", odds=100, sharp_fair=0.5250)
-    assert round(potd.edge(cheap), 2) == round(potd.edge(rich), 2) == 0.05
+def test_equal_chances_go_to_the_better_price():
+    """Two rows making the same claim ABOUT WHETHER THEY LAND are the
+    same claim; the tie goes to the one that pays more. Ethan's "flip of
+    your money", served wherever it costs nothing.
+
+    THE TIE IS NOW ON PROBABILITY, NOT ON EDGE. This asked about equal
+    EDGES until 2026-09-16, when the day's pick stopped being chosen on
+    the size of the disagreement and started being chosen on how likely
+    the pick is to hit. Two rows with equal edges and different
+    probabilities are no longer a tie at all — the likelier one simply
+    wins — so the tie this has to break is two rows at the same chance."""
+    # Same 56% fair, two prices. Both clear MIN_EV and sit under MAX_EV,
+    # so this is a tie the selector may actually be asked to break.
+    cheap = _row(player="Cheap", odds=-115, sharp_fair=0.56)
+    rich = _row(player="Rich", odds=-110, sharp_fair=0.56)
+    assert potd.fair_prob(cheap) == potd.fair_prob(rich)
     assert potd.refuse(cheap) == "" and potd.refuse(rich) == ""
-    assert potd.payout(100) > potd.payout(-125)
+    assert potd.payout(-110) > potd.payout(-115)
     pick, _, _ = potd.choose([cheap, rich])
     assert pick["player"] == "Rich", pick["player"]
     # A genuinely bigger edge still wins outright — while it is one the

@@ -65,6 +65,10 @@ class PotdReplay:
     #: SHOULD sit, and the report marks it so a what-if cannot be read as
     #: the shipped setting.
     min_ev: float | None = None
+    #: The confidence floor this replay ran under. None means
+    #: `potd.MIN_FAIR`. Swept by `sweep_conf`, which is the table that
+    #: answers "how confident can the day's pick actually be".
+    min_fair: float | None = None
     #: On a day with no pick, which bar turned the best row away. Counted
     #: across days so a sweep can say what lowering the EV floor actually
     #: buys — usually less than it looks, because another bar takes over.
@@ -218,7 +222,7 @@ def _row(sport, date, team, opp, home, away, fair_p, odds, auc):
 
 
 def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
-                rank_auc=None, min_ev=None) -> PotdReplay:
+                rank_auc=None, min_ev=None, min_fair=None) -> PotdReplay:
     """Run `potd.choose` over every stored day and settle what it picked.
 
     ONE PICK PER DAY, AND ONLY A QUALIFYING ONE. `build` shows a lean
@@ -244,7 +248,8 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
                    rank_auc=(likely.measured_auc(sport, "moneyline")
                              if rank_auc is None else float(rank_auc)),
                    auc_supplied=rank_auc is not None,
-                   min_ev=None if min_ev is None else float(min_ev))
+                   min_ev=None if min_ev is None else float(min_ev),
+                   min_fair=None if min_fair is None else float(min_fair))
     sharp_closes = moneyline_closes(conn, sport, book=sharp)
     soft_closes = moneyline_closes(conn, sport, book="best")
 
@@ -322,7 +327,7 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         rows = by_day[day]
         r.days_seen += 1
         pick, near, census = potd.choose([row for row, _ in rows],
-                                         min_ev=min_ev)
+                                         min_ev=min_ev, min_fair=min_fair)
         # WHICH BAR WAS BINDING on a day that produced nothing. The
         # census already counts every refusal; what a sweep needs is the
         # ONE reason that stood between this day and a pick, which is the
@@ -330,7 +335,7 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         if not pick:
             why = ""
             if near:
-                why = potd.shortfall(near, min_ev) or ""
+                why = potd.shortfall(near, min_ev, min_fair) or ""
             if not why and census:
                 why = max(census.items(), key=lambda kv: kv[1])[0]
             if why:
@@ -437,6 +442,66 @@ def sweep_ev(conn, sport: str = "mlb", sharp: str = "Pinnacle",
             "  Read the SHAPE, not the best cell: one sample's best floor is a",
             "  floor fitted to noise. A cliff is a signal; a flat table says the",
             "  EV bar was never what was holding the product back."]
+    return "\n".join(out)
+
+
+#: Confidence floors a sweep tries. Stops at 75% because 75% is -300,
+#: where one loss costs three wins — past there the product is selling
+#: chalk it cannot pay for, and that is a different argument from "how
+#: confident can we be".
+CONF_FLOORS = (0.55, 0.58, 0.60, 0.62, 0.65, 0.68, 0.70, 0.75)
+
+
+def sweep_conf(conn, sport: str = "mlb", sharp: str = "Pinnacle",
+               floors=CONF_FLOORS, rank_auc=None) -> str:
+    """How confident can the day's pick actually be? (2026-09-16)
+
+    Ethan: "I don't care about the edge a bet has when it comes to the
+    pick of the day. I care about if the pick is going to hit or not."
+    So this table leads with the HIT RATE, which is the number he is
+    asking about, and prints the units beside it — because those two move
+    in opposite directions and the whole decision lives in that trade.
+
+    THE TRADE, PLAINLY. Confidence is bought with price. A 71% pick is
+    -250, so it pays 0.40u and one loss costs two and a half wins. Raise
+    the floor and the hit rate goes up while the money each win brings in
+    goes down; there is a floor somewhere where the hit rate stops
+    keeping up with the price, and that is the number this looks for.
+
+    CLAIMED vs LANDED is the column that says whether the floor means
+    anything. A floor of 65% is worth nothing if the picks it admits land
+    at 55% — that is not a confident pick, it is a confident-sounding
+    one, and the gap between the two columns is the honest measure of
+    whether the model has earned the word.
+    """
+    from . import potd
+    rows = []
+    for f in floors:
+        r = replay_potd(conn, sport, sharp=sharp, rank_auc=rank_auc, min_fair=f)
+        hit = (r.wins / r.n_bets) if r.n_bets else None
+        roi = (r.net / r.staked * 100.0) if r.staked else None
+        rows.append((f, r, hit, roi))
+    out = [f"Confidence floor sweep · {sport.upper()} · "
+           f"{sharp} as the sharp witness",
+           f"  {rows[0][1].days_seen} days with at least one priced game",
+           "",
+           f"  {'floor':>6}  {'days':>5}  {'bets':>5}  {'W-L':>9}  "
+           f"{'HIT RATE':>9}  {'units':>8}  {'ROI':>8}",
+           "  " + "-" * 70]
+    for f, r, hit, roi in rows:
+        out.append(f"  {_pct(f, 0):>6}  {r.days_with_pick:>5}  {r.n_bets:>5}  "
+                   f"{r.wins}-{r.n_bets - r.wins:<7}  "
+                   f"{'n/a' if hit is None else f'{hit:.1%}':>9}  "
+                   f"{r.net:>+8.2f}  "
+                   f"{'n/a' if roi is None else f'{roi:+.1f}%':>8}")
+    out += ["",
+            f"  Shipped floor: {_pct(potd.MIN_FAIR, 0)}. Band {potd.MIN_ODDS} "
+            f"to +{potd.MAX_ODDS}, so the most confident price reachable "
+            f"implies {_pct(abs(potd.MIN_ODDS) / (abs(potd.MIN_ODDS) + 100.0), 1)}.",
+            "  A floor above what the band can reach selects nothing — raise",
+            "  both together or neither.",
+            "  HIT RATE is the number being asked for; units is what it costs.",
+            "  A floor whose picks land well under it has not earned the word."]
     return "\n".join(out)
 
 

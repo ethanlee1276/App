@@ -209,9 +209,11 @@ def test_a_lean_is_counted_but_never_in_the_headline():
     # +120/-140 de-vigs the home side to ~43.8%, and +140 on it is +5.1%
     # EV — inside [2%, 15%] so the gate builds the card, and inside
     # `potd.MAX_EV` so the selector reaches the bar this test is about.
-    # `potd.MIN_FAIR` then refuses it: more likely to lose than to win,
-    # even at a good price. That is the exact reason seven of the
-    # droplet's MLB leans carried.
+    # `potd.MIN_FAIR` then refuses it: not confident enough to be the
+    # one bet the day is named after. That is the exact reason seven of
+    # the droplet's MLB leans carried — the bar is the same one, and on
+    # 2026-09-16 its sentence changed with its meaning, from "at least a
+    # coin flip" to the floor the pick is now chosen on.
     #
     # +150 UNTIL 2026-09-16, which is +9.5% — past the new ceiling, so
     # the lean came back carrying "the gap is too big to trust" and this
@@ -227,8 +229,10 @@ def test_a_lean_is_counted_but_never_in_the_headline():
     # read by reason rather than as one number — and the reason is the
     # shipped `shortfall`'s own words, not a label this module invented.
     assert sum(b["n"] for b in r.lean_why.values()) == 1
-    assert list(r.lean_why) == [
-        "more likely to lose than to win, even at a good price"], r.lean_why
+    assert len(r.lean_why) == 1, r.lean_why
+    why = next(iter(r.lean_why))
+    assert "not confident enough" in why, why
+    assert f"{potd.MIN_FAIR:.0%}" in why, why
 
 
 def test_a_blank_day_is_told_apart_from_a_lean_day():
