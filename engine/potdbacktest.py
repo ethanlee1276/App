@@ -48,7 +48,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .odds import american_to_decimal, devig_two_way
+from .gamebets import SHARP_SUSPECT_EV, sharp_anchor_two_way
+from .odds import american_to_decimal
 from .gamebacktest import close_for, moneyline_closes
 
 
@@ -61,6 +62,9 @@ class PotdReplay:
     auc_supplied: bool = False   # the caller asked a what-if; see `replay_potd`
     games_seen: int = 0
     games_priced: int = 0        # had both a sharp pair and a soft price
+    one_sided: int = 0           # soft quote on one side only — ungateable
+    gate_refused: int = 0        # `sharp_anchor_two_way` said no
+    suspect: int = 0             # past SHARP_SUSPECT_EV; production Passes it
     days_seen: int = 0           # days with at least one priced game
     days_with_pick: int = 0
     days_with_only_a_lean: int = 0
@@ -214,15 +218,50 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         # an NFL replay locks one pick per WEEK. Said in the summary
         # rather than silently.
         day = str(g["date"] or period)[:10]
-        fair_home, fair_away = devig_two_way(int(sp[home]), int(sp[away]))
-        for team, opp, fair_p, won in ((home, away, fair_home, hs > as_),
-                                       (away, home, fair_away, as_ > hs)):
-            odds = soft.get(team)
-            if odds is None:
-                continue
-            row = _row(sport, day, team, opp, home, away, fair_p, odds,
-                       r.rank_auc)
-            by_day.setdefault(day, []).append((row, won))
+        # THE PRODUCTION GATE, CALLED RATHER THAN RESTATED.
+        #
+        # `sharp_anchor_two_way` is what decides, live, whether a sharp
+        # disagreement becomes a card at all: it de-vigs the pair, takes
+        # the better side, and returns None unless the EV lands inside
+        # [SHARP_MIN_EV, SHARP_MAX_EV]. That ceiling is the point — "a
+        # disagreement this big between books usually means the sharp
+        # side repriced on news and this quote is stale, not free money".
+        #
+        # THE FIRST VERSION COMPUTED THE EV ITSELF and skipped the
+        # ceiling, so it replayed bets production would never have made.
+        # On the droplet, 2026-09-16: the MLB run reported an average
+        # edge at selection of 29.5%, against a 15% cap and a
+        # grade-it-Pass line at 7%, and printed +25.6% ROI for a book the
+        # live site refuses by construction.
+        #
+        # This file's own first test says the selector must be imported
+        # and never restated. That was true of `potd.choose` and false of
+        # the row it was handed, which is the more expensive half.
+        both = (soft.get(home), soft.get(away))
+        if both[0] is None or both[1] is None:
+            # The real gate compares both sides, so a one-sided soft
+            # quote cannot be run through it — and inventing the missing
+            # price is the restatement above. Counted, never guessed.
+            r.one_sided += 1
+            continue
+        pick = sharp_anchor_two_way(int(sp[home]), int(sp[away]),
+                                    int(both[0]), int(both[1]))
+        if pick is None:
+            r.gate_refused += 1
+            continue
+        i, fair_p, ev = pick
+        team, opp = (home, away) if i == 0 else (away, home)
+        won = (hs > as_) if i == 0 else (as_ > hs)
+        row = _row(sport, day, team, opp, home, away, fair_p,
+                   int(both[i]), r.rank_auc)
+        # SUSPECT BUT NOT REFUSED, exactly as production leaves it: a gap
+        # past `SHARP_SUSPECT_EV` still becomes a card, graded Pass at a
+        # stake of zero. Recorded so the summary can say how much of the
+        # book rides on quotes the pricer itself distrusts.
+        if ev > SHARP_SUSPECT_EV:
+            row["suspect_gap"] = True
+            r.suspect += 1
+        by_day.setdefault(day, []).append((row, won))
 
     for day in sorted(by_day):
         rows = by_day[day]
@@ -297,6 +336,11 @@ def summarize(r: PotdReplay) -> str:
            f"  games seen        {r.games_seen}",
            f"  games priced      {r.games_priced}   "
            f"(a sharp pair AND a soft price)",
+           f"  one-sided soft    {r.one_sided}   "
+           f"(the real gate needs both prices)",
+           f"  gate refused      {r.gate_refused}   "
+           f"(`sharp_anchor_two_way`: under 2% EV, or past the 15% "
+           f"broken-price cap)",
            f"  days priced       {r.days_seen}"]
     if r.days_seen:
         out += [f"  days with a pick  {r.days_with_pick}   "
@@ -329,7 +373,10 @@ def summarize(r: PotdReplay) -> str:
     fair, got = r.calibration
     out += [f"  the fairs said    {fair:.1f} wins out of {r.n_bets}; "
             f"{got:.0f} happened",
-            f"  average edge at selection {_pct(r.ev_sum / r.n_bets)}"]
+            f"  average edge at selection {_pct(r.ev_sum / r.n_bets)}",
+            f"  suspect gaps      {r.suspect}   (past "
+            f"{SHARP_SUSPECT_EV:.0%} — production grades these Pass and "
+            f"stakes nothing)"]
     if r.tiers:
         out.append("  by witness:")
         for tier in potd.EVIDENCE:

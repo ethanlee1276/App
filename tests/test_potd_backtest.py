@@ -194,9 +194,19 @@ def test_a_lean_is_counted_but_never_in_the_headline():
     `log_pick_of_the_day` refuses to journal. The product does not bet
     it, so neither does the headline — it is settled into its own books
     so the "always have a pick" question can be priced."""
-    # A fair of ~0.526 against a -120 price: in the band, real, and
-    # under the EV floor.
-    conn = _one_day(sharp=(-115, -105), soft=(-120, -110), hs=5.0, as_=3.0)
+    # A ROW THE PRODUCTION GATE PASSES AND THE SELECTOR WILL NOT NAME.
+    #
+    # The first fixture here priced a NEGATIVE edge, which
+    # `sharp_anchor_two_way` refuses outright — so after the replay
+    # started calling that gate (2026-09-16) there was no card at all,
+    # let alone a lean, and this test was asserting a state production
+    # cannot produce.
+    #
+    # +120/-140 de-vigs the home side to ~44%, and +150 on it is +9.5%
+    # EV — inside [2%, 15%], so the card exists. `potd.MIN_FAIR` then
+    # refuses it: more likely to lose than to win, even at a good price.
+    # That is the exact reason seven of the droplet's MLB leans carried.
+    conn = _one_day(sharp=(120, -140), soft=(150, -140), hs=5.0, as_=3.0)
     r = potdbacktest.replay_potd(conn, "mlb", rank_auc=AUC)
     assert r.days_with_pick == 0
     assert r.n_bets == 0 and r.net == 0.0
@@ -208,7 +218,7 @@ def test_a_lean_is_counted_but_never_in_the_headline():
     # shipped `shortfall`'s own words, not a label this module invented.
     assert sum(b["n"] for b in r.lean_why.values()) == 1
     assert list(r.lean_why) == [
-        "the price is not far enough off the fair to be worth it"], r.lean_why
+        "more likely to lose than to win, even at a good price"], r.lean_why
 
 
 def test_a_blank_day_is_told_apart_from_a_lean_day():
@@ -217,6 +227,84 @@ def test_a_blank_day_is_told_apart_from_a_lean_day():
     conn = _one_day(sharp=(-600, 450), soft=(-400, 300))
     r = potdbacktest.replay_potd(conn, "mlb", rank_auc=AUC)
     assert r.days_blank == 1 and r.days_with_only_a_lean == 0
+
+
+# --- the gate production applies, applied here too ---------------------------
+def test_a_gap_too_big_to_trust_is_never_bet():
+    """THE ONE THIS FILE WAS WRITTEN TO CATCH AND DID NOT.
+
+    `gamebets.sharp_anchor_two_way` refuses any side whose EV lands
+    outside [SHARP_MIN_EV, SHARP_MAX_EV] — 2% to 15% — because "a
+    disagreement this big between books usually means the sharp side
+    repriced on news and this quote is stale, not free money". Production
+    never builds the card at all.
+
+    The first version of this replay computed the EV itself and skipped
+    that ceiling. On the droplet, 2026-09-16, it reported an average edge
+    at selection of 29.5% and an ROI of +25.6% — a book made almost
+    entirely of bets the live site refuses by construction.
+    """
+    from engine.gamebets import SHARP_MAX_EV
+    conn = _one_day(sharp=(-160, 140), soft=(300, -140))
+    r = potdbacktest.replay_potd(conn, "mlb", rank_auc=AUC)
+    assert r.games_priced == 1
+    assert r.gate_refused == 1
+    assert r.n_bets == 0 and r.lean_bets == 0
+    assert r.days_with_pick == 0
+    # …and the ordinary fixture still gets through, so this is a ceiling
+    # and not a wall.
+    ok = potdbacktest.replay_potd(_one_day(), "mlb", rank_auc=AUC)
+    assert ok.n_bets == 1 and ok.gate_refused == 0
+    assert ok.ev_sum <= SHARP_MAX_EV + 1e-9, ok.ev_sum
+
+
+def test_the_replay_calls_the_gate_rather_than_restating_it():
+    """Same rule as the selector: a backtest that reimplements the thing
+    it grades measures the reimplementation. That was checked for
+    `potd.choose` and not for the row handed to it, which is the more
+    expensive half."""
+    import inspect
+    src = inspect.getsource(potdbacktest)
+    assert "sharp_anchor_two_way(" in src
+    for restated in ("SHARP_MIN_EV =", "SHARP_MAX_EV =",
+                     "devig_two_way("):
+        assert restated not in src, f"the replay restates {restated!r}"
+
+
+def test_a_one_sided_soft_quote_is_counted_not_guessed():
+    """The real gate compares both sides, so a game quoted on one side
+    only cannot be run through it — and inventing the other price is the
+    restatement the test above forbids."""
+    day = "2026-05-01"
+    conn = _db([(day, "AAA", "BBB", 5.0, 3.0)],
+               [(day, "AAA", "BBB", "Pinnacle", "AAA", -160),
+                (day, "AAA", "BBB", "Pinnacle", "BBB", 140),
+                (day, "AAA", "BBB", "best", "AAA", -120)])
+    r = potdbacktest.replay_potd(conn, "mlb", rank_auc=AUC)
+    assert r.games_priced == 1
+    assert r.one_sided == 1
+    assert r.n_bets == 0
+
+
+def test_the_report_says_how_many_gaps_the_pricer_distrusts():
+    """A suspect gap still becomes a card in production, graded Pass at
+    a stake of zero. The reader is told how much of the book rides on
+    quotes the pricer itself does not trust."""
+    # -160/+140 de-vigs the home side to ~59.6%. At -115 that is +11.5%
+    # EV — inside the 15% cap so the card exists, past the 7% line so
+    # production grades it Pass. At -131 it is +5.2% and ordinary.
+    hot = potdbacktest.replay_potd(
+        _one_day(sharp=(-160, 140), soft=(-115, -140)), "mlb", rank_auc=AUC)
+    assert hot.n_bets == 1, hot.gate_refused
+    assert hot.suspect == 1, hot.suspect
+
+    calm = potdbacktest.replay_potd(
+        _one_day(sharp=(-160, 140), soft=(-131, -140)), "mlb", rank_auc=AUC)
+    assert calm.n_bets == 1 and calm.suspect == 0, calm.suspect
+
+    out = potdbacktest.summarize(hot)
+    assert "gate refused" in out
+    assert "suspect gaps      1" in out, out
 
 
 # --- the report ---------------------------------------------------------------
