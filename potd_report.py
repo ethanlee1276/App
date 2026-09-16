@@ -115,10 +115,32 @@ def _load(path: str):
 
 def _one_line(row: dict) -> str:
     """A candidate in a line: who, at what, on whose say-so."""
+    market = str(row.get("market") or "")
     who = row.get("player") or row.get("team") or "?"
     what = row.get("market_label") or row.get("market") or ""
     side = str(row.get("side") or "").strip()
     line = row.get("line")
+    # A GAME TOTAL'S `player` IS NOT A NAME. It holds the journal key —
+    # "Over 51.5" — so leading with it and then printing the side and the
+    # line prints the number three times:
+    #
+    #     Over 51.5 OVER 51.5 Total      (Ethan's board, 2026-09-15)
+    #     Over 8 OVER 8.0 Total          (…and inconsistently formatted)
+    #
+    # `renderPickOfTheDay` in web/js/app.js already refuses it, in that
+    # file's own words: "a game total's [player] holds the journal key, so
+    # neither is a name to print". This is the same rule, in the tool that
+    # reads the same board.
+    if market == "total":
+        who = ""
+    # A MONEYLINE HAS NO LINE AND SAYS ITS MARKET ONCE. `player` is the
+    # journal key "TOR ML" and `line` is the 0.0 every moneyline row
+    # carries, so the join read "TOR ML 0.0 Moneyline" — a number that
+    # means nothing beside a market named twice. Same board, same night.
+    if market == "moneyline":
+        line = None
+        if who.upper().endswith(" ML"):
+            who = who[:-3].strip()
     # THE LINE, ONCE. A game spread carries the signed number as its side
     # ("+1.5") and the same number again as `line`, so the naive join
     # reads "LAA +1.5 1.5 Spread" — the same bug Ethan caught on the card
@@ -128,6 +150,11 @@ def _one_line(row: dict) -> str:
             line = None
     except (TypeError, ValueError):
         pass
+    # 8.0 AND 8 ARE THE SAME TOTAL. `line` arrives as a float from the
+    # board and as an int from some makers, and a card reading "Over 8
+    # OVER 8.0" is the join showing its seams.
+    if isinstance(line, float) and line.is_integer():
+        line = int(line)
     side = side.upper()
     odds = row.get("odds")
     fair = potd.fair_prob(row)

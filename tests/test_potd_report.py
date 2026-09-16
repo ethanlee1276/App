@@ -443,6 +443,73 @@ def test_it_says_nothing_when_the_tier_actually_worked():
     assert "1 exchange" in out, out       # the tier tally still shows it
 
 
+# ── the row in words, said once ─────────────────────────────────────
+
+def _line_of(**kw):
+    r = {"model_prob": 0.6, "fair_prob": 0.6, "implied_prob": 0.58}
+    r.update(kw)
+    return R._one_line(r).split("  ")[0]
+
+
+def test_a_game_total_does_not_print_its_number_three_times():
+    """Ethan's board, 2026-09-15: `Over 51.5 OVER 51.5 Total`. A game
+    total's `player` is not a name — it holds the journal key, which
+    already contains the line — and then the side and the line print it
+    twice more. `renderPickOfTheDay` already refuses it in app.js; this
+    is the same rule in the tool that reads the same board."""
+    got = _line_of(player="Over 51.5", market="total", market_label="Total",
+                   side="over", line=51.5, odds=-105)
+    assert got == "OVER 51.5 Total", got
+    assert got.count("51.5") == 1, got
+
+
+def test_eight_and_eight_point_oh_are_the_same_total():
+    """`Over 8 OVER 8.0 Total`, from the same board. `line` arrives as a
+    float from the board and as an int from some makers, and printing
+    both spellings side by side is the join showing its seams."""
+    got = _line_of(player="Over 8", market="total", market_label="Total",
+                   side="over", line=8.0, odds=-114)
+    assert got == "OVER 8 Total", got
+
+
+def test_a_moneyline_has_no_line_and_names_its_market_once():
+    """`TOR ML 0.0 Moneyline` — a number that means nothing, beside a
+    market named twice. Every moneyline row carries line 0.0 and a
+    journal key ending in " ML"."""
+    got = _line_of(player="TOR ML", market="moneyline",
+                   market_label="Moneyline", side="", line=0.0, odds=-134)
+    assert got == "TOR Moneyline", got
+
+
+def test_a_spread_still_prints_its_number_once():
+    """The fix that was already here, kept honest: a spread carries the
+    signed number as its SIDE and the same number again as `line`."""
+    got = _line_of(player="LAA", market="spread", market_label="Spread",
+                   side="+1.5", line=1.5, odds=-113)
+    assert got == "LAA +1.5 Spread", got
+
+
+def test_a_player_prop_is_untouched_by_any_of_it():
+    """The negative control. A prop's `player` IS a name, its line is a
+    real threshold, and none of the rules above may touch it — they are
+    all keyed on the market, not on the shape of the string."""
+    assert _line_of(player="Austin Riley", market="total_bases",
+                    market_label="Total Bases", side="over", line=0.5,
+                    odds=-140) == "Austin Riley OVER 0.5 Total Bases"
+    # And a market with no line at all still reads.
+    assert _line_of(player="Puka Nacua", market="anytime_td",
+                    market_label="Anytime TD", side="yes", line=None,
+                    odds=140) == "Puka Nacua YES Anytime TD"
+
+
+def test_a_player_whose_name_ends_in_ML_keeps_it():
+    """The moneyline strip is keyed on the MARKET. Doing it by suffix
+    alone would rename anyone unlucky enough to end in those letters."""
+    assert _line_of(player="Kenny ML", market="total_bases",
+                    market_label="Total Bases", side="over", line=1.5,
+                    odds=-120).startswith("Kenny ML "), "a name was trimmed"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
