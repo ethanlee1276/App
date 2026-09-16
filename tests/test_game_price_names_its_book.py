@@ -174,23 +174,42 @@ def test_an_empty_shelf_under_this_bar_stays_empty():
     assert not any(r.get("reserve") for r in got), got
 
 
-# --- and the edge board's gate is a deliberate hold, not an oversight ---
-def test_the_edge_board_gate_is_held_back_on_purpose_and_says_so():
-    """The Most Likely board refuses an unattributed football price; the
-    edge board does not yet withdraw `recommended` for the same thing.
+# --- and the edge board's hold has been lifted, with the measurement ---------
+def test_the_edge_board_gate_is_applied_and_names_what_lifted_the_hold():
+    """UNTIL 2026-09-16 THIS ASSERTED THE OPPOSITE, and was right to.
 
-    That asymmetry is a decision, not a gap someone forgot. Applying the
-    rule to `_finish_bet` as well would ALSO strip the recommendation
-    from every NFL game bet on a build where the books happen to be
-    missing — and whether that is the droplet's state could not be
-    checked from here. One unverified swing the night before Week 1 is
-    enough. Pinned so the reasoning is found by whoever notices the
-    inconsistency, rather than "fixed" blind."""
+    The edge board deliberately did NOT withdraw `recommended` for a
+    missing book, because applying the rule blind "would ALSO strip the
+    recommendation from every NFL game bet on a build where the books
+    happen to be missing — and whether that is the droplet's state could
+    not be checked from here."
+
+    It was checked. Ethan ran the FILLER census on production: 80 NFL
+    game rows, 32 naming no book, and all 32 were team totals, which have
+    no book to name by construction. All 48 of the rest named one. So the
+    rule costs the live board nothing, the hold came off (#207), and what
+    this pins now is that the gate exists AND that the evidence for it is
+    written where the next reader will find it — a rule with no reason
+    beside it is the thing that gets "fixed" blind next time."""
     pipe = open(os.path.join(ROOT, "engine", "pipeline.py"), encoding="utf-8").read()
     i = pipe.index("def _finish_bet(")
     body = pipe[i:pipe.index("\ndef ", i + 10)]
-    assert "THE EDGE BOARD DOES NOT YET GATE ON A MISSING NAME" in body
-    assert "Task #207" in body, "the hold has no follow-up recorded"
+    assert "price_is_attributable" in body, "the edge board stopped checking"
+    assert "recommended" in body
+    assert "FILLER" in body, "the measurement that lifted the hold is not recorded"
+    assert "#207" in body
+
+
+def test_the_gate_sits_below_the_line_that_attaches_the_book():
+    """ORDER IS THE WHOLE BUG HERE. `attach_books` is what puts the name
+    on the card; a check above it reads every card as unattributed and
+    empties the board — which is the exact swing the original hold was
+    written to prevent, and which a first draft of this change did."""
+    pipe = open(os.path.join(ROOT, "engine", "pipeline.py"), encoding="utf-8").read()
+    i = pipe.index("def _finish_bet(")
+    body = pipe[i:pipe.index("\ndef ", i + 10)]
+    assert body.index("_attach_books(d, g)") < body.index("price_is_attributable("), \
+        "the attribution check runs before the book is attached"
 
 
 if __name__ == "__main__":

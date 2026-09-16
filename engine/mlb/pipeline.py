@@ -146,11 +146,20 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     started = game_has_started(g)
     # No Leans (docs §10): a lean is a bet that failed the filter published
     # anyway. Lean-graded game bets still render, but never as picks.
+    # A PRICE WITH NO SHOP BESIDE IT IS NOT A PLAY (#207) — the same
+    # rule the football board keeps, from the same function, so the two
+    # cannot answer it differently again.
+    from ..gamebets import (price_is_attributable,
+                            UNATTRIBUTED_PRICE_WARNING)
+    _no_book = not price_is_attributable(d)
     d["recommended"] = (d["grade"] not in ("Pass", "Lean")
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
                         and d["odds"] >= config.max_juice
+                        and not _no_book
                         and not (config.block_live_games and started))
+    if _no_book:
+        d.setdefault("warnings", []).append(UNATTRIBUTED_PRICE_WARNING)
     if started:
         d.setdefault("warnings", []).append(
             "Game already started — pre-game model cannot price an in-play market")

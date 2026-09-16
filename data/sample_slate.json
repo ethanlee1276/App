@@ -157,7 +157,13 @@
       "total_over_odds": -110,
       "total_under_odds": -110,
       "spread_home_odds": -110,
-      "spread_away_odds": -110
+      "spread_away_odds": -110,
+      "home_ml_book": "DraftKings",
+      "home_spread_book": "DraftKings",
+      "total_over_book": "DraftKings",
+      "away_ml_book": "FanDuel",
+      "away_spread_book": "FanDuel",
+      "total_under_book": "FanDuel"
     },
     {
       "home": "MIN",
@@ -189,7 +195,13 @@
       "total_over_odds": -110,
       "total_under_odds": -110,
       "spread_home_odds": -110,
-      "spread_away_odds": -110
+      "spread_away_odds": -110,
+      "home_ml_book": "FanDuel",
+      "home_spread_book": "FanDuel",
+      "total_over_book": "FanDuel",
+      "away_ml_book": "BetMGM",
+      "away_spread_book": "BetMGM",
+      "total_under_book": "BetMGM"
     },
     {
       "home": "KC",
@@ -237,7 +249,13 @@
       "total_over_odds": -110,
       "total_under_odds": -110,
       "spread_home_odds": -110,
-      "spread_away_odds": -110
+      "spread_away_odds": -110,
+      "home_ml_book": "BetMGM",
+      "home_spread_book": "BetMGM",
+      "total_over_book": "BetMGM",
+      "away_ml_book": "Caesars",
+      "away_spread_book": "Caesars",
+      "total_under_book": "Caesars"
     }
   ],
   "props": [

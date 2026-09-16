@@ -970,10 +970,19 @@ def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
     if started:
         card.setdefault("warnings", []).append(
             "Game already started — a pre-game price cannot be taken in play")
+    # AND THE BOOK, which this gate never asked for either (#207). A
+    # sharp card is priced at the SOFT book being beaten, so the name
+    # should be there — and `_book_for_side` above returns "" when it is
+    # not, which is exactly the case worth refusing.
+    _no_book = not gamebets.price_is_attributable(card)
     card["recommended"] = (card["grade"] not in ("Pass", "Lean")
                            and float(card.get("stake_units") or 0) > 0
                            and not card["price_stale"]
+                           and not _no_book
                            and not started)
+    if _no_book:
+        card.setdefault("warnings", []).append(
+            gamebets.UNATTRIBUTED_PRICE_WARNING)
     return card
 
 

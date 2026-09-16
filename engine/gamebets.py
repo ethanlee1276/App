@@ -737,6 +737,53 @@ def shrink_in_force(sport: str, market: str):
     return measured_shrink(sport, market)[0]
 
 
+#: What a card says when its price cannot be traced to a shop.
+UNATTRIBUTED_PRICE_WARNING = (
+    "No book is named for this price — shown, but not a play until a "
+    "pull attributes it to a shop you can bet at")
+
+
+def price_is_attributable(card: dict) -> bool:
+    """Could somebody take this card's price at a named book? (#207)
+
+    THREE BOARDS, THREE ANSWERS, AND THE WRONG ONE STAKED. The Most
+    Likely board has refused an unattributed game price since 2026-09-09
+    (`likely.admissible`, Ethan's MIN ML -220 against a market at -125),
+    and the Pick of the Day refuses it too (`potd.disqualify` — "no real
+    market price"). The EDGE board, the only one of the three that puts
+    money down, checked the grade, the confidence, the edge, the juice,
+    the price age and whether the game had started — and never the book.
+    A card with an empty book came out `recommended` at a full unit.
+
+    That rule then lived in three separate `recommended` gates —
+    `pipeline._finish_bet`, `mlb.pipeline._finish_bet` and
+    `cfb_build._finish_sharp_card` — which is how the other two acquired
+    different ideas of what a price is. It lives here now, once.
+
+    A CARD WITH NO PRICE AT ALL PASSES. Zero odds means nothing was
+    posted (see `_real_price`), which `has_market` and the grade already
+    refuse; failing it here as well would report the wrong cause on a
+    card that is not claiming anything. What this catches is the
+    dangerous shape: a real, bettable-looking number with nothing behind
+    it.
+
+    "proxy" is the engine's own invented price and is refused by name,
+    the same way `betting.py` refuses it on the prop side.
+
+    NOT YET IN THIS RULE: a price quoted only at a SHARP book. `potd`
+    refuses those as well, because Pinnacle does not take US action, so a
+    number quoted there is not a bet Ethan can place. That is a real
+    difference between the two boards and it is deliberate to leave it —
+    sharp-anchored cards are priced at the SOFT book being beaten, so it
+    should not arise, and widening this to `odds.is_sharp_book` without
+    evidence that it does would be a money change made on a guess.
+    """
+    if not card.get("odds"):
+        return True
+    book = str(card.get("book") or "").strip()
+    return bool(book) and book.lower() != "proxy"
+
+
 def _real_price(*odds) -> bool:
     """Did a book actually post every price this card was built on?
 

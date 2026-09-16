@@ -20,6 +20,8 @@ from .rules import apply_rules, RuleConfig, game_has_started
 from .explain import headline, summary, bullet_reasons
 from .stadiums import stadium_to_dict
 from .gamebets import (
+    price_is_attributable as _price_is_attributable,
+    UNATTRIBUTED_PRICE_WARNING as _UNATTRIBUTED_PRICE_WARNING,
     nfl_win_prob, price_moneyline, moneyline_to_dict,
     project_total, project_team_points, game_margin,
     price_total, price_team_total, price_spread,
@@ -581,6 +583,10 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # the game rather than the row because `_finish_bet` is the one place
     # every game card passes through.
     _stale_price = bool(getattr(g, "price_stale", False))
+    # The book is NOT on the card yet at this point — `attach_books`
+    # runs further down — so the unattributed-price rule (#207) is
+    # applied there rather than here, where it would read every card as
+    # unattributed.
     d["recommended"] = (d["grade"] not in ("Pass", "Lean")
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
@@ -640,15 +646,29 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # the game total and the spread, so there is no book posting it and
     # no name to print. See `price_team_total`.
     #
-    # THE EDGE BOARD DOES NOT YET GATE ON A MISSING NAME, and that is a
-    # deliberate hold rather than an oversight. `likely.from_game_bet`
-    # refuses an unattributable football game price outright, which is
-    # what took MIN ML -220 off the page. Applying the same rule here
-    # would ALSO withdraw the recommendation from every NFL game bet on
-    # a build where the books happen to be missing — and whether that is
-    # the droplet's state tonight is exactly what cannot be checked from
-    # here. One unverified swing the night before Week 1 is enough.
-    # Task #207 measures it on the box and then closes this gap.
+    # THE EDGE BOARD NOW GATES ON A MISSING NAME (#207, 2026-09-16), and
+    # the hold that stood here has the measurement it was waiting for.
+    #
+    # What it said: applying the Most Likely board's rule here "would
+    # ALSO withdraw the recommendation from every NFL game bet on a build
+    # where the books happen to be missing — and whether that is the
+    # droplet's state tonight is exactly what cannot be checked from
+    # here. One unverified swing the night before Week 1 is enough."
+    #
+    # It has now been checked. Ethan ran the FILLER census on production:
+    # 80 NFL game rows, 32 of them naming no book — and all 32 were team
+    # totals, which by construction have no book to name. Every one of
+    # the other 48 named one. So the rule costs the live board nothing,
+    # and what it refuses is the shape that produced MIN ML -220 beside a
+    # market at -125.
+    #
+    # APPLIED HERE, BELOW `attach_books`, because that is where the name
+    # arrives. A first draft put it up with the other bars and read every
+    # card as unattributed, which would have emptied the board — the
+    # exact swing the hold was written to prevent.
+    if not _price_is_attributable(d):
+        d["recommended"] = False
+        d.setdefault("warnings", []).append(_UNATTRIBUTED_PRICE_WARNING)
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner

@@ -104,6 +104,21 @@ def load_slate(path: str | Path) -> Slate:
             total_under_odds=g.get("total_under_odds", 0),
             spread_home_odds=g.get("spread_home_odds", 0),
             spread_away_odds=g.get("spread_away_odds", 0),
+            # AND THE SHOP THAT POSTED EACH SIDE. `Game` has declared
+            # these since the football boards learned to name a book, and
+            # `oddsapi.apply_odds_to_slate` sets them on every live pull
+            # — but this loader never read them off a slate FILE, so a
+            # slate on disk could carry the names and hand back a Game
+            # with six empty strings. Since #207 (2026-09-16) the edge
+            # board refuses to stake a price it cannot attribute, which
+            # turned that silent drop into a board that recommends
+            # nothing from a file.
+            home_ml_book=g.get("home_ml_book", ""),
+            away_ml_book=g.get("away_ml_book", ""),
+            home_spread_book=g.get("home_spread_book", ""),
+            away_spread_book=g.get("away_spread_book", ""),
+            total_over_book=g.get("total_over_book", ""),
+            total_under_book=g.get("total_under_book", ""),
         )
         for g in data["games"]
     ]
