@@ -444,6 +444,62 @@ The no-bet state is deliberately **not** painted red. Declining to bet
 is not a loss, and drawing it as one pushes a reader toward the action
 on exactly the day the engine has said not to.
 
+## 3h. Spreads and totals, and the bar that was keeping them out
+
+Ethan's game-markets call (§3f) named moneylines, spreads and totals.
+For a day it delivered **moneylines only**, and the cause was in two
+places a step apart. Written down because the shape recurs: a fact
+discarded early, then a bar asked of the wrong rows late.
+
+**The real one: the sharp anchor was dropped on the way to the row.**
+`gamebets.price_spread_sharp` and `price_total_sharp` de-vig a sharp
+book's two-way pair at a matching number and hand back a card whose
+`win_prob` has been REWRITTEN to that fair (`_sharpify` — the same
+rewrite `price_moneyline_sharp` does). `likely.from_game_bet` built its
+row and did not carry `sharp_anchored` across. `potd.evidence` then fell
+through to `prob_source`, which `ranking_number` sets to `"model"` for
+any market with no `GAME_RANK_MARKET` entry — every spread and every
+total — and `shortfall` refused the row:
+
+> only our own model disputes this price
+
+**That sentence was false about the row.** The number disputing the
+price was Pinnacle's. The evidence had not been weighed and found
+wanting; it had been thrown away two functions earlier.
+
+**The second one: the ranking bar was asked of somebody else's number.**
+`MIN_RANK_AUC` is `likely.rank_auc` — OUR pricer replayed over stored
+closes, which reads 0.49–0.50 on spreads and totals in both football
+leagues (§the header table in `engine/likely`). It now applies to the
+tiers where our model IS the witness. The model tier is refused outright
+two checks earlier; the `market` tier keeps the bar, because a de-vigged
+consensus is a number we compute from a field we choose; the exchange
+and sharp tiers are exempt.
+
+**And ranking is the wrong question for this feature anyway.** A board
+that sorts by probability needs to know a market can be ordered. This
+selector buys a PRICE DISAGREEMENT, and a 50/50 outcome bought at +100
+is +EV whether or not anybody can say which side lands. A spread sits
+near 50% by construction — the book moves the number until the money
+splits — which is exactly why nothing ranks it and exactly why it can
+still be mispriced.
+
+**What did not move.** The model tier is still refused. `MIN_EV` still
+wants 2% against the sharp fair. `MIN_FAIR` still wants the pick
+likelier to win than lose by that fair, which on a spread is a real cut
+rather than a formality — half of them sit under it. And
+`ranking_number` is untouched: which number the Most Likely board SORTS
+on, and whether a spread ships there labelled a lean, is Ethan's
+2026-09-02 call and this does not reach it.
+
+**NOT MEASURED, AND THAT IS THE HONEST CAVEAT.** The sharp-anchor method
+has been replayed on moneylines (§8) and never on spreads or totals,
+because no sharp spread or total pair is stored to replay —
+`potd_backtest.py` inherits the same gap. These markets are opened on
+the METHOD's logic, not on a measurement of them. Storing a sharp
+spread/total pair in `odds_history` is what would close it, and it is
+the same nightly harvest that closed the moneyline gap.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against

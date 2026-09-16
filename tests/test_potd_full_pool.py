@@ -88,7 +88,14 @@ def test_the_wider_pool_waives_no_bar():
             (_row(0.54, book=""), "no real market price"),
             (_row(0.54, sharp_anchored=False, sharp_fair=None), "model"),
             (_row(0.54, bettable=False), "reliable"),
-            (_row(0.54, rank_auc=0.50), "coin flip"),
+            # THE RANKING BAR, ON THE TIER THAT STILL KEEPS IT. Since
+            # 2026-09-16 a sharp or exchange witness is exempt — the
+            # figure is OUR model's and says nothing about Pinnacle's
+            # number (see tests/test_potd_spreads_and_totals.py). The
+            # market tier still answers to it.
+            (_row(0.54, rank_auc=0.50, sharp_anchored=False,
+                  sharp_fair=None, prob_source="market",
+                  implied_prob=0.60), "coin flip"),
             (_row(0.54, kind="prop", market="hits"), "player prop")):
         board = {"date": day, "most_likely": []}
         potd.attach(board, "mlb", cut=[bad])

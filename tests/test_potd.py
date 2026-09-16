@@ -301,10 +301,37 @@ def test_a_price_barely_off_the_fair_is_not_worth_the_day():
 
 
 def test_an_unmeasured_or_coin_flip_market_is_refused():
-    assert potd.shortfall(_row(rank_auc=None)) == "this market has never been measured"
-    assert potd.shortfall(_row(rank_auc=0.49)) == "this market ranks no better than a coin flip"
+    """THE BAR IS ASKED OF THE ROWS OUR MODEL IS THE WITNESS FOR, which
+    since 2026-09-16 means the market tier and not the sharp one — see
+    the test below. `MIN_RANK_AUC` is `likely.rank_auc`, measured by
+    replaying OUR pricer, so it speaks to a consensus we de-vig
+    ourselves and not to a sharp book's own pair."""
+    assert potd.shortfall(_consensus(implied_prob=0.60, rank_auc=None)) == \
+        "this market has never been measured"
+    assert potd.shortfall(_consensus(implied_prob=0.60, rank_auc=0.49)) == \
+        "this market ranks no better than a coin flip"
     assert potd.shortfall(_row(bettable=False)) == \
         "this market's probabilities are not reliable enough to bet"
+
+
+def test_a_sharp_witness_is_not_refused_by_our_models_ranking():
+    """Ethan asked for spreads and totals and got moneylines, because
+    our spread model ranks covers at 0.49 and the bar refused every
+    sharp-anchored spread on that figure. Ranking is the wrong question
+    here: this selector buys a price disagreement, and a 50/50 outcome
+    bought at a good price is +EV whether or not anyone can order it."""
+    for tier in ({"sharp_anchored": True, "sharp_fair": 0.60},
+                 {"exchange_fair": 0.60}):
+        row = _row(rank_auc=0.49, **tier)
+        assert potd.evidence(row) in ("sharp", "exchange")
+        assert potd.shortfall(row) == "", (tier, potd.shortfall(row))
+        assert potd.shortfall(_row(rank_auc=None, **tier)) == ""
+    # AND EVERY OTHER BAR STILL BITES on exactly those rows: the pool
+    # widened, the standard did not move.
+    assert potd.shortfall(_row(rank_auc=0.49, sharp_fair=0.53)) == \
+        "the price is not far enough off the fair to be worth it"
+    assert potd.disqualify(_row(rank_auc=0.49, odds=-400)) == \
+        "the payout is outside the even-money band"
 
 
 # --- how it ranks ------------------------------------------------------------
@@ -373,7 +400,12 @@ def test_the_census_names_the_gate_that_was_binding():
     rows = [_row(odds=-400),
             _row(reserve=True, sharp_anchored=False, sharp_fair=None,
                  model_prob=0.70),
-            _row(sharp_fair=0.53), _row(rank_auc=0.49),
+            _row(sharp_fair=0.53),
+            # A COIN-FLIP MARKET ON THE MARKET TIER. It used to be a
+            # sharp row, which since 2026-09-16 clears this bar — the
+            # ranking figure is our model's and is asked only where our
+            # model is the witness.
+            _consensus(implied_prob=0.60, rank_auc=0.49),
             _row(sharp_anchored=False, sharp_fair=None, model_prob=0.70)]
     got = potd.build(rows, "nfl", "2026-W02")
     assert got["census"] == {

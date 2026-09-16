@@ -1555,6 +1555,36 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # ranks and never sizes, and a flipped row is not on the edge
         # board at all.
         "win_prob": round(prob_model, 4),
+        # WHOSE NUMBER THIS IS, carried rather than inferred.
+        #
+        # Ethan, 2026-09-16, on the Pick of the Day being moneylines in
+        # practice when he had asked for spreads and totals too. The
+        # cause was here: a sharp-anchored SPREAD card arrives with
+        # `win_prob` already set to the sharp book's de-vigged fair
+        # (`gamebets._sharpify`, the same rewrite `price_moneyline_sharp`
+        # does), and this row dropped the fact on the floor. Downstream,
+        # `potd.evidence` found no `sharp_anchored`, read `prob_source`
+        # — which `ranking_number` sets to "model" for any market with no
+        # GAME_RANK_MARKET entry, i.e. every spread and total — and
+        # refused the row as "only our own model disputes this price".
+        #
+        # THAT SENTENCE WAS FALSE ABOUT THE ROW. The number disputing
+        # the price was Pinnacle's. The evidence was not weighed and
+        # found wanting, it was discarded on the way here.
+        #
+        # `ranking_number` is deliberately NOT changed: which number the
+        # board RANKS on, and whether a spread ships labelled a lean, is
+        # Ethan's 2026-09-02 call and this does not touch it. These two
+        # fields only record where the probability came from.
+        #
+        # FLIP-SAFE BY CONSTRUCTION: `prob_model` is flipped above with
+        # the side, so the fair recorded here is the fair for the side
+        # this row actually takes — which is why it reuses the very
+        # number published as `win_prob` one line up rather than reading
+        # the card again.
+        "sharp_anchored": bool(row.get("sharp_anchored")),
+        "sharp_fair": (round(prob_model, 4)
+                       if row.get("sharp_anchored") else None),
         "fair_prob": None if fair is None else round(float(fair), 4),
         "edge": edge,
         "has_market": True, "live": False, "credible": True,

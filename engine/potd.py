@@ -502,11 +502,49 @@ def shortfall(row: dict) -> str:
     fair = fair_prob(row)
     if fair is not None and fair < MIN_FAIR:
         return "more likely to lose than to win, even at a good price"
-    auc = row.get("rank_auc")
-    if auc is None:
-        return "this market has never been measured"
-    if float(auc) < MIN_RANK_AUC:
-        return "this market ranks no better than a coin flip"
+    # THE RANKING BAR IS A STATEMENT ABOUT OUR MODEL, so it is asked of
+    # the rows our model is the witness for.
+    #
+    # Ethan, 2026-09-16: "do what's best to make this pick of the day
+    # feature the best it can be", on learning that his spreads-and-
+    # totals decision was in practice moneylines only.
+    #
+    # `MIN_RANK_AUC` is `likely.rank_auc` — measured by replaying OUR
+    # pricer over stored closes. On spreads and totals it reads 0.49 to
+    # 0.50 in both football leagues, so it refused every one of them.
+    # But this module never selects on our model's ranking: `shortfall`
+    # refuses a model-only row outright two checks above, and what
+    # reaches here is a row priced against an exchange's mid or a sharp
+    # book's de-vigged pair. "Our spread model cannot rank covers" is
+    # true and says nothing whatever about Pinnacle's number.
+    #
+    # AND RANKING IS THE WRONG QUESTION FOR THIS FEATURE. A board that
+    # sorts by probability needs to know a market can be ordered. This
+    # selector buys a PRICE DISAGREEMENT: a 50/50 outcome bought at +100
+    # is +EV whether or not anybody can say which side lands. A spread
+    # sits near 50% by construction — the book moves the number until
+    # the money splits — which is precisely why nothing ranks it and
+    # precisely why it can still be mispriced.
+    #
+    # WHAT STILL HOLDS, and it is most of the bar: the model tier is
+    # refused above; `MIN_EV` wants 2% against the sharp fair; `MIN_FAIR`
+    # wants the pick likelier to win than lose by that fair, which on a
+    # spread is a real cut since half of them sit under it; and the
+    # `market` tier below keeps the ranking bar, because a de-vigged
+    # consensus is a number WE compute from a field WE choose, so our own
+    # measurement does speak to it.
+    #
+    # NOT MEASURED, AND SAID PLAINLY: the sharp-anchor method has been
+    # replayed on moneylines (docs/PICK_OF_THE_DAY.md §8) and never on
+    # spreads or totals, because no sharp spread pair is stored to replay.
+    # `potd_backtest.py` inherits that gap. This opens the markets on the
+    # method's logic, not on a measurement of these markets.
+    if evidence(row) not in ("exchange", "sharp"):
+        auc = row.get("rank_auc")
+        if auc is None:
+            return "this market has never been measured"
+        if float(auc) < MIN_RANK_AUC:
+            return "this market ranks no better than a coin flip"
     # `bettable` is `calibrate.is_reliable` — whether this market's
     # probabilities have earned the right to be bet rather than read.
     # A showcase pick is a bet.

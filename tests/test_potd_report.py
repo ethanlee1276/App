@@ -97,7 +97,13 @@ def test_a_board_it_cannot_read_says_so_and_does_not_pretend():
 
 def test_the_near_misses_carry_the_reason_each_one_missed_by():
     rows = [_row(player="Thin", sharp_fair=0.53),
-            _row(player="Flip", rank_auc=0.49),
+            # A COIN-FLIP MARKET ON THE MARKET TIER. This was a sharp
+            # row until 2026-09-16, when the ranking bar was scoped to
+            # the tiers our model is the witness for — a sharp-anchored
+            # spread is no longer refused on our own 0.49, so the row
+            # became the PICK and stopped being a near miss.
+            _row(player="Flip", rank_auc=0.49, sharp_anchored=False,
+                 sharp_fair=None, prob_source="market", implied_prob=0.60),
             _row(player="Ours", sharp_anchored=False, sharp_fair=None,
                  model_prob=0.70)]
     out = R.report(_board(rows), "nfl", rows_shown=5)
