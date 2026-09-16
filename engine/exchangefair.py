@@ -180,6 +180,24 @@ def fair_for_team(market: dict, team: str, game: dict) -> float | None:
 #: the wrong one.
 NO_MATCH = "no exchange market for this game"
 
+#: The row's game WAS on the exchange and the row's side still could not
+#: be priced. A different failure with a different fix: `fair_for_team`
+#: refused, which means `kalshi.yes_team` could not say which club the
+#: YES pays on, or the row's team is not a side of the matched game.
+#:
+#: SPLIT OUT ON 2026-09-16, after the NFL board reported nine rows, 58
+#: usable markets and zero matches, and `NO_MATCH` could not say whether
+#: that was our name matching, an empty games list, or a side we could
+#: not resolve. Three causes, three fixes, one bucket — which is the
+#: failure `SharpAnchorReport.diagnosis` was dragged out of, in another
+#: module, for the same reason.
+NO_SIDE = "the exchange priced this game but not this side"
+
+#: How many unmatched market titles to carry back for the log line. Two
+#: is enough to see a shape ("Chiefs at Bills" against a board saying
+#: "KC @ BUF") and few enough that a bad night does not print a page.
+SAMPLE = 2
+
 
 def names_for(sport: str) -> dict:
     """``{abbr: "every full name this club goes by"}`` for one league.
@@ -276,6 +294,33 @@ def attach(rows, markets, games, sport: str = "") -> dict:
     # here rather than inside the row loop, which walks every market for
     # every row.
     games = with_names(games, sport)
+    census["games on the board"] = len(games)
+
+    # MARKETS ARE MATCHED TO GAMES ONCE, BEFORE ANY ROW IS PRICED. The
+    # first draft did it inside the row loop, so a 9-row board against 58
+    # markets ran `match_game` 522 times to answer 58 questions — and,
+    # worse, could not say afterwards whether the markets had failed to
+    # match or the ROWS had, because the two were computed together.
+    # Separating them is what lets the census below name a cause.
+    pairs, unmatched = [], []
+    for m in usable:
+        g = kalshi.match_game(m, games or [])
+        if g is None:
+            if len(unmatched) < SAMPLE:
+                unmatched.append(str(m.get("title") or m.get("ticker") or "?"))
+            continue
+        pairs.append((m, g))
+    census["markets matched to a game"] = len(pairs)
+
+    # WHAT DID NOT LINE UP, in both parties' own words. A reader with
+    # this line does not have to guess whether the exchange is naming
+    # clubs differently from us or whether the board is a day stale —
+    # the two strings sit next to each other and say which.
+    if unmatched:
+        census["unmatched market titles"] = unmatched
+        census["board matchups"] = [
+            f"{g.get('away', '?')} @ {g.get('home', '?')}"
+            for g in (games or [])[:SAMPLE]]
 
     for row in rows or []:
         if not isinstance(row, dict):
@@ -285,16 +330,23 @@ def attach(rows, markets, games, sport: str = "") -> dict:
         census["rows"] += 1
         team = row.get("team") or row.get("player") or ""
         hit = None
-        for m in usable:
-            g = kalshi.match_game(m, games or [])
-            if not g:
-                continue
+        on_the_exchange = False
+        for m, g in pairs:
+            # Did the exchange price this row's GAME at all? Asked
+            # separately from whether it priced this row's SIDE, because
+            # those two have different fixes.
+            if row.get("home") and row.get("away"):
+                same = ({str(g.get("home") or "").upper(),
+                         str(g.get("away") or "").upper()}
+                        == {str(row.get("home") or "").upper(),
+                            str(row.get("away") or "").upper()})
+                on_the_exchange = on_the_exchange or same
             fair = fair_for_team(m, team, g)
             if fair is not None:
                 hit = (fair, m)
                 break
         if hit is None:
-            _tally(NO_MATCH)
+            _tally(NO_SIDE if on_the_exchange else NO_MATCH)
             continue
         fair, m = hit
         row["exchange_fair"] = fair
@@ -347,10 +399,29 @@ def attach_to_board(result: dict, sport: str) -> str:
         # WHY NOTHING LANDED, not just that nothing did. The census keys
         # are the quality reasons from `quality()`, so this names the
         # book that was too wide or too thin rather than shrugging.
-        why = ", ".join(f"{n} {k}" for k, n in sorted(census.items())
-                        if k not in ("rows", "attached", "usable markets"))
-        return (f"  {sport.upper()} exchange fair: 0 of {seen} row(s) priced"
+        #
+        # THE COUNTS ONLY, and the two sample lists are printed after
+        # them rather than summed into them — "2 unmatched market titles"
+        # would be a number about our own logging.
+        shown = {k: v for k, v in census.items() if isinstance(v, int)}
+        why = ", ".join(f"{n} {k}" for k, n in sorted(shown.items())
+                        if k not in ("rows", "attached", "usable markets",
+                                     "games on the board",
+                                     "markets matched to a game"))
+        line = (f"  {sport.upper()} exchange fair: 0 of {seen} row(s) priced"
                 + (f" — {why}" if why else ""))
+        # AND WHAT DID NOT LINE UP, side by side. `NO_MATCH` on every row
+        # with markets present is a naming problem or a stale board, and
+        # the only way to tell from a log is to print both parties'
+        # spellings — see `attach`.
+        titles = census.get("unmatched market titles") or []
+        mine = census.get("board matchups") or []
+        if titles:
+            line += (f"\n      exchange says: {'; '.join(titles)}"
+                     f"\n      the board says: {'; '.join(mine) or '(no games)'}"
+                     f"  [{census.get('games on the board', 0)} game(s), "
+                     f"{census.get('markets matched to a game', 0)} matched]")
+        return line
     return (f"  {sport.upper()} exchange fair: {got} of {seen} moneyline "
             f"row(s) carry an exchange number "
             f"({census.get('usable markets', 0)} usable market(s))")

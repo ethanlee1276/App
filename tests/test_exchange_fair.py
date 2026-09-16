@@ -317,11 +317,120 @@ def test_it_never_mutates_the_board_it_was_handed():
 def test_a_row_that_found_no_market_is_tallied_apart_from_a_refused_one():
     """One census, two different questions, and `potd_report` has to tell
     them apart to say anything useful. Pinned on the constant so the two
-    modules cannot drift to different spellings."""
+    modules cannot drift to different spellings.
+
+    ASKED OF THE CENSUS, NOT OF THE SOURCE. This used to assert the
+    literal string `_tally(NO_MATCH)` appeared in `attach`, which broke
+    the moment the reason was split in two and, worse, would have gone on
+    passing if the tally had been moved to a branch that never runs.
+    """
     assert X.NO_MATCH == "no exchange market for this game"
-    import inspect
-    src = inspect.getsource(X.attach)
-    assert "_tally(NO_MATCH)" in src, src[-400:]
+    census = X.attach([{"market": "moneyline", "team": "NYY",
+                        "home": "BOS", "away": "NYY"}],
+                      [_mkt()], [{"home": "BOS", "away": "NYY"}], "mlb")
+    assert census[X.NO_MATCH] == 1, census
+    assert census["attached"] == 0
+
+
+# --- the census names WHICH step lost the row --------------------------------
+def test_a_game_the_exchange_priced_is_not_reported_as_unmatched():
+    """THE DISTINCTION THIS WAS SPLIT FOR, 2026-09-16. The NFL board
+    reported nine rows, 58 usable markets and zero matches, and the
+    census could not say whether that was our name matching, a stale
+    board, or a side we could not resolve. Those have three different
+    fixes and had one bucket.
+
+    Here the market matches the game and the ROW's team is not a side of
+    it — so the exchange did price this game, and saying "no exchange
+    market for this game" would send a reader hunting for a naming bug
+    that is not there."""
+    game = {"home": "LAA", "away": "SEA"}
+    census = X.attach([{"market": "moneyline", "team": "NYY",
+                        "home": "LAA", "away": "SEA"}],
+                      [_mkt()], [game], "mlb")
+    assert census.get(X.NO_SIDE) == 1, census
+    assert X.NO_MATCH not in census, census
+    assert census["markets matched to a game"] == 1
+
+
+def test_the_two_reasons_are_never_both_charged_for_one_row():
+    """A row is lost at exactly one step, or the counts stop adding up
+    to the rows."""
+    rows = [{"market": "moneyline", "team": "NYY", "home": "LAA",
+             "away": "SEA"},
+            {"market": "moneyline", "team": "ZZZ", "home": "ZZZ",
+             "away": "YYY"}]
+    census = X.attach(rows, [_mkt()], [{"home": "LAA", "away": "SEA"}], "mlb")
+    lost = census.get(X.NO_MATCH, 0) + census.get(X.NO_SIDE, 0)
+    assert lost + census["attached"] == census["rows"], census
+
+
+def test_an_unmatched_market_carries_both_spellings_back():
+    """The only way to tell a naming problem from a stale board is to
+    print what each side called the game. A census that says "0 matched"
+    and nothing else costs an evening."""
+    # An NFL market (so `sport_of` keeps it) naming a game the board
+    # does not have — which is what a stale board or a spelling mismatch
+    # both look like from here, and the reason both strings come back.
+    census = X.attach([{"market": "moneyline", "team": "KC",
+                        "home": "KC", "away": "BUF"}],
+                      [_mkt(ticker="KXNFLGAME-25SEP07SFSEA-SF",
+                            title="Angels vs Mariners", subtitle="")],
+                      [{"home": "KC", "away": "BUF"}], "nfl")
+    assert census["markets matched to a game"] == 0
+    assert census["games on the board"] == 1
+    assert census["unmatched market titles"] == ["Angels vs Mariners"]
+    assert census["board matchups"] == ["BUF @ KC"]
+
+
+def test_the_log_line_prints_both_spellings_when_nothing_lands():
+    """…and it has to reach a reader, not just the JSON."""
+    import engine.exchangefair as mod
+    result = {"most_likely": [{"market": "moneyline", "team": "KC",
+                               "home": "KC", "away": "BUF"}],
+              "games": [{"home": "KC", "away": "BUF"}]}
+    real = mod.attach
+    try:
+        mod.attach = lambda *a, **k: {
+            "rows": 1, "attached": 0, "usable markets": 58,
+            "games on the board": 1, "markets matched to a game": 0,
+            mod.NO_MATCH: 1,
+            "unmatched market titles": ["Angels vs Mariners"],
+            "board matchups": ["BUF @ KC"]}
+        import engine.sources.kalshi as kx
+        fetch = kx.fetch_sports_markets
+        try:
+            kx.fetch_sports_markets = lambda parse: ([{"x": 1}], {})
+            line = mod.attach_to_board(result, "nfl")
+        finally:
+            kx.fetch_sports_markets = fetch
+    finally:
+        mod.attach = real
+    assert "Angels vs Mariners" in line, line
+    assert "BUF @ KC" in line, line
+    assert "1 game(s), 0 matched" in line, line
+    # The sample lists are not summed into the reason counts.
+    assert "unmatched market titles" not in line, line
+
+
+def test_the_markets_are_matched_once_not_once_per_row():
+    """A 9-row board against 58 markets used to run `match_game` 522
+    times to answer 58 questions — and could not say afterwards whether
+    the MARKETS had failed to match or the ROWS had, because the two were
+    computed in the same loop."""
+    import engine.sources.kalshi as kx
+    calls = []
+    real = kx.match_game
+    try:
+        kx.match_game = lambda m, g: (calls.append(m) or real(m, g))
+        rows = [{"market": "moneyline", "team": "LAA", "home": "LAA",
+                 "away": "SEA"} for _ in range(5)]
+        X.attach(rows, [_mkt(), _mkt(ticker="KXMLBGAME-26SEP15NYYBOS-NYY",
+                                     title="Yankees vs Red Sox")],
+                 [{"home": "LAA", "away": "SEA"}], "mlb")
+    finally:
+        kx.match_game = real
+    assert len(calls) == 2, f"{len(calls)} match_game calls for 2 markets"
 
 
 if __name__ == "__main__":

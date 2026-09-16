@@ -270,20 +270,31 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
                 "build's `exchangefair` hook did not run or did not reach "
                 "the board file."]
     try:
-        from engine.exchangefair import NO_MATCH
+        from engine.exchangefair import NO_MATCH, NO_SIDE
     except Exception:                                         # noqa: BLE001
         NO_MATCH = "no exchange market for this game"
+        NO_SIDE = "the exchange priced this game but not this side"
     seen = census.get("rows", 0)
     usable = census.get("usable markets", 0)
     unmatched = census.get(NO_MATCH, 0)
+    wrong_side = census.get(NO_SIDE, 0)
     # ROW REASONS AND MARKET REASONS ARE DIFFERENT JOBS, and the first cut
     # of this printed them in one list under a heading that said "markets
     # refused" — so "4 no exchange market for this game", which is about
     # ROWS and is the whole answer, sat in the middle of eighteen market
     # widths. Ethan's 2026-09-15 output is the example: MLB read 62 usable
     # markets and 0 of 4 rows priced, and the reason was buried.
+    # COUNTS ONLY. `attach` now carries two SAMPLE LISTS back as well
+    # (see below), and formatting a list with "{n} {k}" would print
+    # "['Angels vs Mariners'] unmatched market titles" in among the book
+    # widths — a number about our own logging, in the place a reader is
+    # looking for a number about the exchange.
     why = ", ".join(f"{n} {k}" for k, n in sorted(census.items())
-                    if k not in ("rows", "attached", "usable markets", NO_MATCH))
+                    if isinstance(n, int)
+                    and k not in ("rows", "attached", "usable markets",
+                                  "games on the board",
+                                  "markets matched to a game",
+                                  NO_MATCH, NO_SIDE))
     out = [f"  Exchange    0 of {seen} moneyline row(s) priced  ·  "
            f"{usable} usable market(s)"]
     # THE HEADLINE FIRST, ALWAYS — it was conditional on there being no
@@ -300,9 +311,31 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
     elif unmatched:
         out.append(f"              {unmatched} of {seen} row(s) matched no "
                    f"market; the rest were priced but did not attach.")
+    elif wrong_side:
+        # A DIFFERENT DIAGNOSIS WITH A DIFFERENT FIX. The exchange DID
+        # price these games — `kalshi.yes_team` could not say which club
+        # the YES pays on, or the row is on a side the contract does not
+        # name. Sending a reader to the name matching for this would be
+        # sending them to the wrong file.
+        out.append(f"              the exchange priced {wrong_side} of these "
+                   f"{seen} game(s) but not the side the row takes — this is "
+                   f"`kalshi.yes_team`, not the name matching.")
     elif usable:
         out.append("              markets were usable but none reached a row "
                    "on this board.")
+    # BOTH SPELLINGS, SIDE BY SIDE. "Every row matched no market" is as
+    # true of a naming mismatch as of a board a day stale, and the only
+    # way to tell from a report is to read what each side called the
+    # game. Ethan's 2026-09-16 NFL output — nine rows, 58 usable, zero
+    # matched — could have been either, and cost a morning for it.
+    titles = census.get("unmatched market titles") or []
+    mine = census.get("board matchups") or []
+    if titles and not tiers.get("exchange"):
+        out.append(f"              exchange says:  {'; '.join(titles)}")
+        out.append(f"              the board says: {'; '.join(mine) or '(no games)'}"
+                   f"   [{census.get('games on the board', 0)} game(s) on the "
+                   f"board, {census.get('markets matched to a game', 0)} "
+                   f"market(s) matched one]")
     if why:
         out.append(f"              markets refused on quality: {why}")
     return out

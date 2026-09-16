@@ -442,6 +442,40 @@ def test_a_board_of_player_props_is_told_it_can_never_reach_this_tier():
     assert "game winners and nothing else" in out, out
 
 
+def test_the_report_prints_both_spellings_when_nothing_matched():
+    """Ethan's 2026-09-16 NFL output — nine rows, 58 usable markets, zero
+    matched — read as "this is OUR name matching". It could equally have
+    been a board a day stale, and nothing printed could tell the two
+    apart. Both sides' spellings now sit next to each other."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 9, "attached": 0, "usable markets": 58,
+        "games on the board": 9, "markets matched to a game": 0,
+        "no exchange market for this game": 9,
+        "unmatched market titles": ["Chiefs vs Bills"],
+        "board matchups": ["BUF @ KC"]}), "nfl")
+    assert "Chiefs vs Bills" in out, out
+    assert "BUF @ KC" in out, out
+    assert "9 game(s) on the board" in out, out
+    # …and the sample lists are never counted as refusal reasons.
+    refused = [ln for ln in out.splitlines() if "refused on quality" in ln]
+    assert not any("unmatched market titles" in ln for ln in out.splitlines()), out
+    assert not refused or "board matchups" not in refused[0], refused
+
+
+def test_a_side_we_could_not_resolve_is_not_blamed_on_name_matching():
+    """A different diagnosis with a different fix. The exchange DID price
+    these games; `kalshi.yes_team` could not say which club the YES pays
+    on. Sending a reader to the name matching for this is sending them to
+    the wrong file."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 4, "attached": 0, "usable markets": 20,
+        "games on the board": 4, "markets matched to a game": 4,
+        "the exchange priced this game but not this side": 4}), "mlb")
+    assert "not the side the row takes" in out, out
+    assert "yes_team" in out, out
+    assert "OUR name matching" not in out, out
+
+
 def test_a_board_with_no_census_at_all_says_the_hook_did_not_reach_it():
     """Distinct from "the hook ran and found nothing", which is every
     case above. This one means the build did not write it."""
