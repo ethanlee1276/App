@@ -193,6 +193,127 @@ not a consequence of a measurement. Say the word either way.
 
 ---
 
+## GATE. Which refusal is costing money (#164) (read-only, ~2 minutes)
+
+The open question was *"whether any ordering would have ADMITTED bets the
+edge gate refused"*, and the first run said the admitted slice ran 11.5%
+WORSE than what it refused — on proxy-priced rows, interval
+[-31.5%, +8.0%], straddling zero. Not a finding. It needs a book-priced
+arm, which needs this box's harvest:
+
+```bash
+cd /srv/qellys && python3 backtest.py --weeks 6-17 --gate --real-lines --gate-basis book
+```
+
+**New in this run:** a gate that costs money is not one fact, because it
+is not one rule. Under the arms table there is now a split by WHICH bar
+refused each row:
+
+```
+  What each refusal turned down, flat 1u, best first:
+      240 rows  ROI   +11.4%   +27.30u  Model disagrees with the market by more…
+       90 rows  ROI    -8.2%    -7.40u  This market's calibration fit hit the edge…
+```
+
+A **positive** line is a bar the gate was wrong to apply — that is the
+one to change. Read the caveat it prints: these are many small slices of
+one sample and the smallest always looks the most extreme.
+
+**If it says `no refusal reasons recorded`,** the walk-forward ran before
+`SettledProp.refusal` shipped — pull and re-run, the field is filled at
+settle time.
+
+**Paste the arms table and the split.** If the book-priced arm reproduces
+the negative point estimate, the split names the line to change and I can
+prereg a test for it.
+
+---
+
+## ALT. Should we buy alternate spreads and totals? (#253) (read-only, 10 seconds)
+
+Already in the report you are running for block KX — no extra command.
+Look for the `Alternate lines` block:
+
+```bash
+cd /srv/qellys && python3 potd_report.py --all | grep -A8 "Alternate lines"
+```
+
+**The purchase decision is in the market split.** Spreads and totals have
+a ladder of alternate numbers; **a moneyline does not** — there is one
+number and it is the price.
+
+| if the block says | it means |
+|---|---|
+| `VERDICT: every price refusal is in a market with no alternate line to buy` | **DO NOT BUY.** The credits would buy nothing. |
+| `VERDICT: nothing was refused on price today` | nothing to address today — run it over a week before concluding |
+| `N of the M clear every OTHER bar` | that N is the number to watch over a fortnight. If it is 0-1 a day, the purchase is not worth it |
+
+It deliberately does NOT tell you an alternate line would have cleared —
+an alternate is a different bet, not the same bet at a better number, and
+guessing that is the thing the purchase exists to find out.
+
+---
+
+## BARS. The Most Likely board's safety bars (#165) — nothing to run
+
+Reported here rather than as a command, because the answer came out of
+the code: **all of them fire.** `tests/test_likely_bars_are_alive.py`
+produces a row for every refusal `likely.admissible` can return and each
+one is reachable — the price cap, the likelihood floor, the proxy-price
+refusal, the impossible-price refusal, all three credibility bars and the
+injury hold.
+
+That matters because a dead bar is invisible in a census: an unreachable
+branch reports zero, and zero is exactly what a bar that is simply not
+binding tonight reports. So when your `--likely` scoreboard shows a bar
+at zero refusals, that now means **not binding**, not broken.
+
+**Still owed on the droplet** (from #165, unchanged):
+
+First read the scoreboard as it stands, so there is a BEFORE:
+
+```bash
+cd /srv/qellys && python3 launch.py --likely | tee /tmp/likely-before.txt
+```
+
+Then the repair. It lives in `engine/ledger` and takes a connection, and
+it is **the only block on this page that writes** — it flips the side on
+`home_runs` rows in the `likely` bucket carrying `side='OVER'` with a
+probability above a coin flip, which is a bet nobody could have made
+(`likely.MIN_PROB` refuses a home-run over outright). Idempotent: run it
+twice and the second run flips nothing.
+
+```bash
+cd /srv/qellys && python3 -c "
+from engine import db, ledger
+conn = db.connect()
+try:
+    print(ledger.repair_inverted_likely_sides(conn))
+finally:
+    conn.close()
+"
+```
+
+It re-OPENS the rows rather than re-grading them, so the settle pass has
+to run before the numbers move:
+
+```bash
+cd /srv/qellys && python3 launch.py --settle all
+cd /srv/qellys && python3 launch.py --likely | tee /tmp/likely-after.txt
+```
+
+(The #165 note says `ingest.py --settle all`; that flag does not exist on
+`ingest.py` — the settler is `launch.py --settle`, which `ingest.py`'s own
+help text points at. Corrected here rather than in the note, because this
+is the file you paste from.)
+
+The home-run rows were journaled with the side inverted (said 94.0%, hit
+10.0% over 10 rows — 42.8% of all losses from 2.4% of the bets). **Every
+band and per-market number in #165 still contains those rows**, so the
+before/after is what makes the rest of that task readable. Paste both.
+
+---
+
 ## TOP. Is there one pick for the day? (read-only, 5 seconds)
 
 You asked for *"one pick for the pick of the day"* — singular. Until
