@@ -114,8 +114,10 @@ def gate_report(report, basis: str = "book") -> None:
     The walk-forward settles the whole candidate surface, so the arm
     exists; this prints it.
     """
-    from engine.selectorder import from_settled, gate_split, gate_reading
-    res = gate_split(from_settled(report.settled), basis=basis)
+    from engine.selectorder import (from_settled, gate_split, gate_reading,
+                                    by_refusal, refusal_lines)
+    rows = from_settled(report.settled)
+    res = gate_split(rows, basis=basis)
     print(f"\n{'='*70}\n  WHAT HAPPENED TO THE PROPS THE GATE REFUSED"
           f"\n{'='*70}")
     if not res["enough"]:
@@ -148,6 +150,12 @@ def gate_report(report, basis: str = "book") -> None:
     print(f"\n  DIFFERENCE IN ROI, bootstrap within each arm")
     print(f"    admitted - refused   {pt}  [{lo}, {hi}]")
     print(f"\n  {gate_reading(res)}.\n")
+    # WHICH REFUSAL, not just whether the gate is costing. A gate that
+    # loses money is not one fact, because it is not one rule — see
+    # `selectorder.by_refusal`.
+    for line in refusal_lines(by_refusal(rows, basis=basis)):
+        print(line)
+    print()
 
 
 if __name__ == "__main__":

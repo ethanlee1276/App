@@ -157,7 +157,12 @@ def usable(rows) -> list[dict]:
                     # on every one of them and `basis` is not recorded.
                     # They arrive on rows built by `from_settled`.
                     "recommended": bool(r.get("recommended", True)),
-                    "basis": r.get("basis") or ""})
+                    "basis": r.get("basis") or "",
+                    # …and WHICH bar refused it, for `by_refusal`. Dropped
+                    # here in the first draft, which made the new split
+                    # read "reason not recorded" on every row and look
+                    # like a data gap rather than a lost field.
+                    "refusal": r.get("refusal") or ""})
     return out
 
 
@@ -195,6 +200,9 @@ def from_settled(settled) -> list[dict]:
             "market": getattr(sp, "market", "") or "",
             "recommended": bool(getattr(sp, "recommended", False)),
             "basis": getattr(sp, "basis", "") or "",
+            # WHICH refusal, so the refused arm can be split by it. See
+            # `SettledProp.refusal`; "" on an admitted row.
+            "refusal": getattr(sp, "refusal", "") or "",
         })
     return rows
 
@@ -361,6 +369,71 @@ def _boot_two_sample(a: list[dict], b: list[dict], stakes: str,
     return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
 
 
+def by_refusal(rows, stakes: str = "flat", basis: str = "book",
+               min_n: int = 20) -> list[dict]:
+    """The REFUSED arm, split by which bar refused it, worst first.
+
+    THE FOLLOW-UP `gate_split` NAMED AND COULD NOT ASK. A gate that costs
+    money is not one fact — it is not one rule. "The gate is costing 11%"
+    is unactionable; "the credibility bar is costing 11% over 240 rows
+    and the calibration bar is earning its place over 90" names a line to
+    change.
+
+    EACH REASON IS SCORED ON ITS OWN ROWS, at a flat 1u, against the same
+    outcomes. No interval is computed per reason and that is deliberate:
+    these are many small slices of one sample, so the smallest one will
+    always look the most extreme, and quoting a bootstrap beside each
+    would dress that up as a finding. `min_n` is the floor for a slice
+    being listed at all; everything under it is pooled into one line so
+    the reader can see how much is being withheld rather than how much
+    happens to be left.
+
+    THIS IS A LEAD, NOT A VERDICT, and the reading below says so. Acting
+    on the worst line here is choosing a threshold on the rows that
+    suggested it — `engine/prereg.py`, the discipline #164 and #165 both
+    open with.
+    """
+    pool = [r for r in usable(rows)
+            if (not basis or r.get("basis") == basis) and not r["recommended"]]
+    groups: dict = {}
+    for r in pool:
+        groups.setdefault(r.get("refusal") or "refused, reason not recorded",
+                          []).append(r)
+    out, thin = [], []
+    for why, rs in groups.items():
+        if len(rs) < min_n:
+            thin.extend(rs)
+            continue
+        sl = _score_slice(rs, range(len(rs)), stakes)
+        out.append({"refusal": why, "n": len(rs), "roi": sl.get("roi"),
+                    "net": sl.get("net"), "won": sl.get("won")})
+    out.sort(key=lambda d: (d["roi"] is None, -(d["roi"] or 0.0)))
+    if thin:
+        sl = _score_slice(thin, range(len(thin)), stakes)
+        out.append({"refusal": f"(+{len(groups) - len(out)} reason(s) under "
+                               f"{min_n} rows, pooled)",
+                    "n": len(thin), "roi": sl.get("roi"),
+                    "net": sl.get("net"), "won": sl.get("won"), "thin": True})
+    return out
+
+
+def refusal_lines(split: list[dict]) -> list[str]:
+    """`by_refusal` as the lines a reader acts on — or declines to."""
+    if not split:
+        return ["  no refused rows to split (no refusal reasons recorded — "
+                "re-run the walk-forward after `SettledProp.refusal` shipped)"]
+    out = ["  What each refusal turned down, flat 1u, best first:"]
+    for row in split:
+        roi = "n/a" if row["roi"] is None else f"{row['roi'] * 100:+.1f}%"
+        out.append(f"    {row['n']:>5} rows  ROI {roi:>8}  "
+                   f"{row['net']:+8.2f}u  {row['refusal'][:70]}")
+    out.append("    READ THIS AS A LEAD, NOT A VERDICT. These are many small "
+               "slices of one sample: the smallest will always look the most "
+               "extreme, and acting on the worst line is choosing a threshold "
+               "on the rows that suggested it (engine/prereg.py).")
+    return out
+
+
 def gate_split(rows, stakes: str = "flat", min_n: int = GATE_MIN_N,
                reps: int = 2000, seed: int = 20260909,
                basis: str = "book") -> dict:
@@ -374,9 +447,10 @@ def gate_split(rows, stakes: str = "flat", min_n: int = GATE_MIN_N,
 
     WHAT A RESULT WOULD MEAN, and what it would not. If the refused arm
     made money, the gate is leaving money on the table and the next
-    question is which refusal did it — this function does not know, and
-    saying which would need the refusal REASON on the row, which
-    `SettledProp` does not carry. If the refused arm lost, the gate is
+    question is which refusal did it — `by_refusal` answers that now,
+    since `SettledProp.refusal` carries the reason (it did not when this
+    was written, and the gap is why that field exists). If the refused
+    arm lost, the gate is
     earning its place. If the interval straddles zero, this sample says
     nothing, which on a first season it very likely will.
 

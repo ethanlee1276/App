@@ -97,6 +97,20 @@ class SettledProp:
     # market-relative P&L answer "do higher-conviction picks actually win
     # more?" in the product's own vocabulary.
     grade: str = ""
+    #: WHY THE GATE TURNED THIS PROP DOWN, "" when it was admitted.
+    #:
+    #: `selectorder.gate_split` can already score the admitted arm against
+    #: the refused one — and its own docstring named the hole: "if the
+    #: refused arm made money, the next question is which refusal did it
+    #: — this function does not know, and saying which would need the
+    #: refusal REASON on the row, which SettledProp does not carry."
+    #:
+    #: A gate that costs money is not one fact but several, because it is
+    #: not one rule. "The gate is costing 11%" is unactionable; "the
+    #: credibility bar is costing 11% and the calibration bar is earning
+    #: its place" names a line to change. Carried here so the answer
+    #: arrives with the measurement rather than a season later.
+    refusal: str = ""
 
     @property
     def over_hit(self) -> int | None:
@@ -498,6 +512,39 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
 
 # --- real-data driver -------------------------------------------------------
+def refusal_of(rec: dict) -> str:
+    """Why the gate refused this recommendation, "" if it did not.
+
+    READS THE CARD'S OWN SENTENCES rather than re-deriving the decision.
+    Re-deriving would be a second definition of the gate — the thing this
+    repository keeps removing — and it would drift from the one the
+    reader was shown the moment either changed.
+
+    `decision.warnings` is the refusal channel and is preferred;
+    `reasons` is the fallback, matched against the NAMED constants in
+    `engine/betting` so a sentence that is a refusal is recognised as one
+    (the same list `tests/test_refusals.py` holds the front end to).
+
+    A refused rec with nothing to say is labelled as such rather than
+    silently bucketed with a named reason — an unlabelled refusal is a
+    row that would quietly make some other bar look worse than it is.
+    """
+    if rec.get("recommended"):
+        return ""
+    for w in (rec.get("warnings") or []):
+        w = str(w).strip()
+        if w:
+            return w
+    from . import betting as _b
+    named = [getattr(_b, n) for n in dir(_b)
+             if n.endswith("_REASON") and isinstance(getattr(_b, n), str)]
+    for line in (rec.get("reasons") or []):
+        text = str(line).strip()
+        if any(text.startswith(n[:40]) for n in named):
+            return text
+    return "refused, reason not recorded"
+
+
 def settle_recommendations(recommendations: list[dict],
                            actuals: dict[tuple[str, str], float]) -> list[SettledProp]:
     """Pair pipeline recommendation dicts with actual results.
@@ -522,6 +569,7 @@ def settle_recommendations(recommendations: list[dict],
             stake_units=rec.get("stake_units", 1.0),
             side=rec.get("side", "OVER"),
             grade=rec.get("grade", ""),
+            refusal=refusal_of(rec),
             # THE BOOK NAME DECIDES THE BASIS, rather than a flag carried
             # alongside it. `build_slate` stamps "proxy" on the recent-form
             # line it invents; a harvested close carries the real book's

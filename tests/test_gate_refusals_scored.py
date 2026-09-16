@@ -171,16 +171,111 @@ def test_the_two_arms_never_share_a_row():
     assert len(took) == 70 and len(left) == 70
 
 
+# --- WHICH refusal is costing ------------------------------------------------
+def _refused(why, n, won):
+    """`n` refused rows carrying reason `why`, `won` of them winners at
+    -110 — so a reason with more than 52.4% winners is one the gate was
+    wrong to refuse."""
+    return [{"status": "won" if i < won else "lost", "hit_prob": 0.55,
+             "odds": -110, "stake_units": 1.0, "market": "hits",
+             "recommended": False, "basis": "book", "refusal": why}
+            for i in range(n)]
+
+
+def test_the_refused_arm_splits_by_the_bar_that_refused_it():
+    """THE FOLLOW-UP `gate_split`'s OWN DOCSTRING NAMED AND COULD NOT
+    ASK: "which refusal did it — this function does not know, and saying
+    which would need the refusal REASON on the row, which SettledProp
+    does not carry." It carries it now."""
+    from engine.selectorder import by_refusal
+    # THE LOSING REASON IS INSERTED FIRST, deliberately. Python dicts
+    # keep insertion order, so a fixture listing the winner first passes
+    # whether or not anything sorts — and did, until a mutant that
+    # deleted the sort survived this test.
+    rows = _refused("no credible edge", 40, 10) + \
+        _refused("the price looks off", 40, 30)
+    got = by_refusal(rows)
+    assert len(got) == 2, got
+    # Best first, so the bar the gate was most wrong to apply leads.
+    assert got[0]["refusal"] == "the price looks off", got
+    assert got[0]["roi"] > 0 and got[1]["roi"] < 0, got
+    assert got[0]["n"] == 40 and got[1]["n"] == 40
+
+
+def test_a_thin_reason_is_pooled_rather_than_quoted():
+    """Many small slices of one sample: the smallest always looks the
+    most extreme. A reason under the floor is pooled and the reader is
+    told how much is being withheld."""
+    from engine.selectorder import by_refusal, refusal_lines
+    rows = _refused("a common bar", 40, 30) + _refused("a rare bar", 3, 3)
+    got = by_refusal(rows, min_n=20)
+    assert len(got) == 2, got
+    assert got[-1].get("thin") is True, got
+    assert got[-1]["n"] == 3
+    assert "pooled" in got[-1]["refusal"]
+    out = "\n".join(refusal_lines(got))
+    assert "a rare bar" not in out, "a 3-row slice was quoted as a finding"
+
+
+def test_the_reading_refuses_to_call_it_a_verdict():
+    """Acting on the worst line is choosing a threshold on the rows that
+    suggested it — engine/prereg.py, the discipline #164 opens with."""
+    from engine.selectorder import by_refusal, refusal_lines
+    out = "\n".join(refusal_lines(by_refusal(
+        _refused("a bar", 40, 30))))
+    assert "LEAD, NOT A VERDICT" in out, out
+    assert "prereg" in out, out
+
+
+def test_an_admitted_row_is_never_in_the_split():
+    from engine.selectorder import by_refusal
+    rows = _refused("a bar", 40, 30)
+    for r in rows[:10]:
+        r["recommended"] = True
+        r["refusal"] = ""
+    got = by_refusal(rows, min_n=1)
+    assert sum(g["n"] for g in got) == 30, got
+
+
+def test_a_settled_prop_carries_the_reason_off_the_card():
+    """Read from the card's own sentences, not re-derived — a second
+    definition of the gate would drift from the one the reader saw."""
+    from engine.backtest import refusal_of
+    assert refusal_of({"recommended": True, "warnings": ["x"]}) == ""
+    assert refusal_of({"recommended": False,
+                       "warnings": ["the price looks off"]}) == \
+        "the price looks off"
+    # A refused rec with nothing to say is LABELLED, not silently
+    # bucketed with a named reason.
+    assert refusal_of({"recommended": False}) == "refused, reason not recorded"
+
+
+def test_the_reason_survives_the_trip_to_the_scorer():
+    """`usable` rebuilds every row, and dropping the field there made the
+    split read "reason not recorded" on every row — a lost field looking
+    exactly like a data gap."""
+    from engine.selectorder import usable
+    got = usable(_refused("a named bar", 1, 1))
+    assert got[0]["refusal"] == "a named bar", got
+
+
 # --- the CLI reads it -------------------------------------------------------
 def test_the_backtest_cli_can_print_it():
     src = open(os.path.join(ROOT, "backtest.py"), encoding="utf-8").read()
     assert '"--gate"' in src, "the flag is gone"
     assert "def gate_report(" in src
-    assert "from engine.selectorder import from_settled, gate_split, gate_reading" in src
+    # NAMED, NOT SPELLED AS ONE IMPORT LINE. Asserting the exact import
+    # statement broke the moment `by_refusal` joined it — for a reason
+    # that has nothing to do with whether the CLI reads the split. What
+    # matters is that each function is reached.
+    for fn in ("from_settled", "gate_split", "gate_reading"):
+        assert fn in src, f"the CLI no longer calls {fn}"
     assert "report.settled" in src, "the CLI is not reading the candidate surface"
     # AND IT CAN FILL THE BOOK-PRICED ARM. Without harvested closes every
     # row is basis=naive and `--gate` has nothing market-relative to read
     # — which is what the first live run of this did, silently.
+    assert "by_refusal" in src and "refusal_lines" in src, \
+        "the CLI prints whether the gate costs money and never which bar"
     assert '"--real-lines"' in src, "the join that makes --gate mean anything is gone"
     assert "nfl_real_lines" in src
     # THE VALUE REACHES THE REPLAY, not just the flag reaching argparse.

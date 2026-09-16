@@ -428,6 +428,16 @@ def report(payload: dict, sport: str, rows_shown: int = 5) -> str:
                    "cannot take any of them. Check the odds pull for this "
                    "league before touching a bar.")
     out.extend(_exchange_lines(payload, tiers))
+    # WHAT AN ALTERNATE-LINE PURCHASE COULD ADDRESS (#253). Printed only
+    # when something WAS refused on price — on a board where nothing was,
+    # the answer is a line of zeroes and the report is long enough.
+    try:
+        from engine.potd import price_gap, price_gap_lines
+        _gap = price_gap(rows)
+        if _gap.get("refused_on_price"):
+            out.extend(price_gap_lines(_gap))
+    except Exception as _exc:                                 # noqa: BLE001
+        out.append(f"  Alternate lines  could not be counted — {_exc}")
 
     if census:
         out.append("  Refused:")

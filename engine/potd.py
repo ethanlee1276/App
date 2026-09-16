@@ -649,6 +649,110 @@ def choose(rows, now=None) -> tuple:
             census)
 
 
+#: The game markets an exchange or book actually lists ALTERNATE numbers
+#: for. Spreads and totals have a ladder of lines; a moneyline does not —
+#: there is one number and it is the price. That asymmetry is the whole
+#: finding this function exists to surface, so it is named rather than
+#: assumed: a price refusal on a moneyline CANNOT be rescued by buying
+#: `alternate_spreads`/`alternate_totals`, however many of them there are.
+ALT_MARKETS = ("spread", "total")
+
+
+def price_gap(rows, now=None) -> dict:
+    """How much of this board an alternate-line purchase could address.
+
+    #253 IS A PURCHASE DECISION, NOT A WIRING JOB. `likely.rungs` /
+    `_best_rung` can already walk a ladder; `oddsapi` buys h2h, spreads
+    and totals — MAIN LINES — and never `alternate_spreads` or
+    `alternate_totals`, so the machinery has an empty source. Before
+    spending credits on a fortnight of alternates, count what they could
+    possibly have bought.
+
+    WHAT THIS DOES NOT CLAIM, and the reason it counts rather than
+    estimates. An alternate line changes BOTH the price and the true
+    probability of the side — a team at -1.5 is a different bet from the
+    same team at -2.5, not the same bet at a better number. So nothing
+    here re-prices a row at a hypothetical alternate and asks whether it
+    would clear; that would be inventing the answer the purchase is
+    supposed to provide. It reports the SIZE and the SHAPE of the pool a
+    purchase could address, and leaves the verdict to the data.
+
+    THE SHAPE IS THE POINT. Returns the price refusals split by market,
+    because `ALT_MARKETS` is spreads and totals: a moneyline refused on
+    price is not addressable by this purchase at any budget. A board
+    whose price refusals are all moneylines is a board that says "do not
+    buy" — and that is a sentence this can produce today, for free, from
+    a board already on disk.
+
+    Returns a dict; `potd_report` prints it. Never raises.
+    """
+    out = {"game_rows": 0, "refused_on_price": 0, "addressable": 0,
+           "by_market": {}, "prices": [], "other_bars_too": 0}
+    band_reason = "the payout is outside the even-money band"
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            from .ledger import is_game_row
+            if not is_game_row(row):
+                continue
+            out["game_rows"] += 1
+            if disqualify(row, now) != band_reason:
+                continue
+            out["refused_on_price"] += 1
+            market = str(row.get("market") or "?")
+            b = out["by_market"].setdefault(
+                market, {"n": 0, "addressable": 0})
+            b["n"] += 1
+            if market in ALT_MARKETS:
+                out["addressable"] += 1
+                b["addressable"] += 1
+                odds = row.get("odds")
+                try:
+                    out["prices"].append(int(odds))
+                except (TypeError, ValueError):
+                    pass
+            # WOULD A BETTER PRICE HAVE BEEN ENOUGH? Asked with the price
+            # bar removed and every OTHER bar still standing, so a row
+            # that also fails on evidence or fair probability is not
+            # counted as something a purchase would have rescued.
+            if shortfall(row):
+                out["other_bars_too"] += 1
+        except Exception:                                     # noqa: BLE001
+            continue
+    return out
+
+
+def price_gap_lines(gap: dict) -> list:
+    """`price_gap` as the sentences that decide the purchase."""
+    n, addr = gap.get("refused_on_price", 0), gap.get("addressable", 0)
+    out = [f"  Alternate lines  {gap.get('game_rows', 0)} game row(s), "
+           f"{n} refused on price, {addr} in a market that HAS alternates "
+           f"({', '.join(ALT_MARKETS)})"]
+    for market, b in sorted(gap.get("by_market", {}).items(),
+                            key=lambda kv: -kv[1]["n"]):
+        word = "addressable" if market in ALT_MARKETS else "NO alternates exist"
+        out.append(f"      {market:<12} {b['n']:>3} refused on price  "
+                   f"— {word}")
+    prices = gap.get("prices") or []
+    if prices:
+        out.append(f"      the addressable prices: "
+                   f"{', '.join(f'{p:+d}' for p in sorted(prices)[:12])}")
+    if not n:
+        out.append("      VERDICT: nothing was refused on price today, so an "
+                   "alternate-line purchase would have bought nothing here.")
+    elif not addr:
+        out.append("      VERDICT: every price refusal is in a market with no "
+                   "alternate line to buy. DO NOT BUY on this evidence.")
+    else:
+        other = gap.get("other_bars_too", 0)
+        out.append(f"      {addr - min(other, addr)} of the {addr} clear every "
+                   f"OTHER bar, so a better number is the only thing between "
+                   f"them and the pick. That is the number to watch over a "
+                   f"fortnight before spending anything.")
+    return out
+
+
 def _card(row: dict, below: str = "") -> dict:
     """The row as the page draws it: the board's own fields, plus the
     numbers this feature exists to show together."""
