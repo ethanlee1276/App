@@ -200,6 +200,130 @@ def test_the_hook_survives_a_feed_that_is_down():
         k.fetch_sports_markets = real
 
 
+# ── the names the matcher was written against, and never got ────────
+
+def test_the_board_gives_the_matcher_no_names_to_match_on():
+    """THE PREMISE, stated first so the rest cannot pass for the wrong
+    reason. `pipeline._game_to_dict` writes the board's `games`, and it
+    writes abbreviations only — no `home_name`, no `away_name`. Asserted
+    against the real function rather than a fixture, because a fixture
+    would just be me agreeing with myself."""
+    import inspect
+    from engine import pipeline
+    from engine.mlb import pipeline as mlb_pipeline
+    for mod in (pipeline, mlb_pipeline):
+        src = inspect.getsource(mod._game_to_dict)
+        assert '"home_name"' not in src, (
+            f"{mod.__name__}._game_to_dict now writes names — if that is "
+            f"deliberate, `exchangefair.with_names` can stop filling them")
+
+
+def test_a_two_letter_abbreviation_can_never_match_on_its_own():
+    """WHY THE FALLBACK WAS NOT ENOUGH, and it is arithmetic rather than
+    bad luck. `kalshi._name_tokens` drops anything under three characters,
+    so SD, SF, LA, KC, TB, NY and NE are not tokens at all — and
+    `match_game` needs BOTH teams to hit. Half of baseball could never
+    match however good the exchange's book was."""
+    from engine.sources import kalshi
+    short = [t for t in ("SD", "SF", "LA", "KC", "TB", "NY", "NE")
+             if t not in kalshi._name_tokens(f"KXMLBGAME-26SEP15LAD{t} {t}")]
+    assert short == ["SD", "SF", "LA", "KC", "TB", "NY", "NE"], short
+
+
+def test_attach_prices_a_board_that_carries_only_abbreviations():
+    """THE MUTANT THIS EXISTS FOR. Testing `with_names` alone left
+    `attach` free to stop calling it and nothing failed — the fix was
+    proved and the wiring was not. This is the shape Ethan's board
+    actually publishes: `{"home": "LAA", "away": "SEA"}` and no names."""
+    rows = [{"market": "moneyline", "team": "LAA", "odds": -130}]
+    markets = [_mkt()]
+    games = [{"home": "LAA", "away": "SEA"}]
+    census = X.attach(rows, markets, games, "mlb")
+    assert census["attached"] == 1, census
+    assert rows[0].get("exchange_fair") is not None, rows[0]
+
+
+def test_the_names_are_filled_in_and_the_match_then_lands():
+    """The fix, end to end, on the shape Ethan's board actually
+    publishes: abbreviations and nothing else, against a market titled
+    the way the exchange titles them."""
+    from engine.sources import kalshi
+    board_games = [{"home": "LAD", "away": "SD"}]
+    market = {"title": "Will the Dodgers beat the Padres?", "subtitle": "",
+              "event_ticker": "KXMLBGAME-26SEP15LADSD"}
+    assert kalshi.match_game(market, board_games) is None, \
+        "the premise is gone: this matched without names"
+    named = X.with_names(board_games, "mlb")
+    assert kalshi.match_game(market, named) is not None
+
+
+def test_every_spelling_a_club_goes_by_is_carried():
+    """`SPORT_CONFIG` maps more than one name to the same club — MLB has
+    both "Oakland Athletics" and "Athletics" for OAK. Inverting to a
+    single winner throws away whichever one the exchange happens to use.
+
+    COMPARED AGAINST THE CONFIG, not against two words I picked. The
+    first version of this asserted "Oakland" and "Athletics" were both
+    present, which "Oakland Athletics" satisfies on its own — so keeping
+    one spelling passed it. Every name the config maps to a club has to
+    survive, and the tokens have to survive as tokens."""
+    from engine.sources.oddsapi import SPORT_CONFIG
+    from engine.sources.kalshi import _name_tokens
+    teams = SPORT_CONFIG["mlb"]["teams"]
+    names = X.names_for("mlb")
+    multi = [a for a in names
+             if len([n for n, ab in teams.items() if ab == a]) > 1]
+    assert multi, "no club in this league has two spellings; test is moot"
+    for abbr in multi:
+        got = _name_tokens(names[abbr])
+        for spelling, ab in teams.items():
+            if ab == abbr:
+                assert _name_tokens(spelling) <= got, (abbr, spelling, names[abbr])
+
+
+def test_a_name_the_board_already_carries_is_not_overwritten():
+    """A real name beats one looked up from three letters.
+
+    TESTED ON A LEAGUE THAT HAS A MAP. The first version used cfb, where
+    `names_for` returns {} and so nothing is ever written — an overwrite
+    bug could not have been seen. Here the lookup has a different answer
+    ready and must not use it."""
+    board = [{"home": "LAD", "away": "SD",
+              "home_name": "Brooklyn Dodgers", "away_name": "SD Padres"}]
+    assert X.names_for("mlb")["LAD"] != "Brooklyn Dodgers", "fixture is moot"
+    got = X.with_names(board, "mlb")
+    assert got[0]["home_name"] == "Brooklyn Dodgers", got[0]
+    assert got[0]["away_name"] == "SD Padres", got[0]
+
+
+def test_college_has_no_map_and_does_not_invent_one():
+    """188 teams and no abbreviation table; its builder stamps the names
+    itself. Guessing here would be worse than leaving it alone."""
+    assert X.names_for("cfb") == {}
+    got = X.with_names([{"home": "SYR", "away": "CLEM"}], "cfb")
+    assert not got[0].get("home_name"), got[0]
+
+
+def test_it_never_mutates_the_board_it_was_handed():
+    """`attach` is given the published board's own `games` list. Writing
+    names into it would put a field on the page that the build did not
+    put there."""
+    original = {"home": "LAD", "away": "SD"}
+    games = [original]
+    X.with_names(games, "mlb")
+    assert original == {"home": "LAD", "away": "SD"}, original
+
+
+def test_a_row_that_found_no_market_is_tallied_apart_from_a_refused_one():
+    """One census, two different questions, and `potd_report` has to tell
+    them apart to say anything useful. Pinned on the constant so the two
+    modules cannot drift to different spellings."""
+    assert X.NO_MATCH == "no exchange market for this game"
+    import inspect
+    src = inspect.getsource(X.attach)
+    assert "_tally(NO_MATCH)" in src, src[-400:]
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

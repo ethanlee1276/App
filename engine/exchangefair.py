@@ -171,6 +171,82 @@ def fair_for_team(market: dict, team: str, game: dict) -> float | None:
     return None
 
 
+#: The census key for a ROW that found no market, as opposed to a MARKET
+#: refused on quality. One derivation, because `potd_report` has to tell
+#: the two apart to say anything useful: markets refused is the venue's
+#: problem and nothing to do about it, rows unmatched is our own name
+#: matching and is fixable. Printing them in one list, as the first cut
+#: of that report did, hides the difference under a heading that names
+#: the wrong one.
+NO_MATCH = "no exchange market for this game"
+
+
+def names_for(sport: str) -> dict:
+    """``{abbr: "every full name this club goes by"}`` for one league.
+
+    EVERY name, joined, not one of them. `oddsapi.SPORT_CONFIG[sport]
+    ["teams"]` maps name to abbreviation and more than one name can map
+    to the same club — MLB carries both "Oakland Athletics" and
+    "Athletics" for OAK. Inverting it to a single winner would throw away
+    whichever spelling the exchange happens to use. `_name_tokens` splits
+    on non-alphanumerics, so joining them costs nothing and matches
+    either.
+
+    College has no such map (188 teams, and its own builder already
+    stamps `home_name` on the game), so this returns {} for cfb and the
+    board's own names are used instead.
+    """
+    try:
+        from .sources.oddsapi import SPORT_CONFIG
+        teams = (SPORT_CONFIG.get(sport) or {}).get("teams") or {}
+    except Exception:                                         # noqa: BLE001
+        return {}
+    out: dict = {}
+    for name, abbr in teams.items():
+        a = str(abbr or "").strip().upper()
+        if a and name:
+            out.setdefault(a, []).append(str(name))
+    return {a: " ".join(v) for a, v in out.items()}
+
+
+def with_names(games, sport: str = "") -> list:
+    """``games`` with full team names filled in. New dicts; no mutation.
+
+    THE CONTRACT `kalshi.match_game` WAS WRITTEN AGAINST AND NEVER GOT.
+    Its docstring says "games rows carry home/away abbreviations plus
+    full names", and it matches on the names first — but `pipeline.
+    _game_to_dict`, the function that writes the board's `games`, has
+    only ever written the abbreviations. So the primary path had no data
+    from the day it shipped and everything fell through to the fallback:
+    the abbreviation itself appearing as a whole token in the exchange's
+    text.
+
+    THAT FALLBACK CANNOT MATCH HALF THE LEAGUE. `_name_tokens` drops
+    anything under three characters, so SD, SF, LA, KC, TB, NY and NE can
+    never be tokens at all, and both teams must hit for a match. On
+    2026-09-15 the MLB board reported 62 usable exchange markets, 4
+    moneyline rows, and zero matches — the guards were fine, the venue was
+    fine, the names were simply not there.
+
+    A board that DOES carry names keeps them: college stamps its own, and
+    a real name beats one looked up from an abbreviation.
+    """
+    lookup = names_for(sport)
+    out = []
+    for g in games or []:
+        if not isinstance(g, dict):
+            continue
+        row = dict(g)
+        for side in ("home", "away"):
+            key = f"{side}_name"
+            if not str(row.get(key) or "").strip():
+                abbr = str(row.get(side) or "").strip().upper()
+                if abbr and lookup.get(abbr):
+                    row[key] = lookup[abbr]
+        out.append(row)
+    return out
+
+
 def attach(rows, markets, games, sport: str = "") -> dict:
     """Hang `exchange_fair` on every row an exchange market can price.
 
@@ -196,6 +272,10 @@ def attach(rows, markets, games, sport: str = "") -> dict:
     census["usable markets"] = len(usable)
     if not usable:
         return census
+    # THE NAMES `match_game` MATCHES ON — see `with_names`. Built once
+    # here rather than inside the row loop, which walks every market for
+    # every row.
+    games = with_names(games, sport)
 
     for row in rows or []:
         if not isinstance(row, dict):
@@ -214,7 +294,7 @@ def attach(rows, markets, games, sport: str = "") -> dict:
                 hit = (fair, m)
                 break
         if hit is None:
-            _tally("no exchange market for this game")
+            _tally(NO_MATCH)
             continue
         fair, m = hit
         row["exchange_fair"] = fair

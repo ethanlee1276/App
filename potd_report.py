@@ -230,26 +230,42 @@ def _exchange_lines(payload: dict, tiers: dict) -> list:
         return ["  Exchange    this board carries no exchange census — the "
                 "build's `exchangefair` hook did not run or did not reach "
                 "the board file."]
+    try:
+        from engine.exchangefair import NO_MATCH
+    except Exception:                                         # noqa: BLE001
+        NO_MATCH = "no exchange market for this game"
     seen = census.get("rows", 0)
     usable = census.get("usable markets", 0)
-    # The remaining keys ARE the reasons, straight from
-    # `exchangefair.quality` — a market too wide, too thin, or priced off
-    # a last trade rather than a two-sided book. Named, not counted.
+    unmatched = census.get(NO_MATCH, 0)
+    # ROW REASONS AND MARKET REASONS ARE DIFFERENT JOBS, and the first cut
+    # of this printed them in one list under a heading that said "markets
+    # refused" — so "4 no exchange market for this game", which is about
+    # ROWS and is the whole answer, sat in the middle of eighteen market
+    # widths. Ethan's 2026-09-15 output is the example: MLB read 62 usable
+    # markets and 0 of 4 rows priced, and the reason was buried.
     why = ", ".join(f"{n} {k}" for k, n in sorted(census.items())
-                    if k not in ("rows", "attached", "usable markets"))
-    line = (f"  Exchange    0 of {seen} moneyline row(s) priced  ·  "
-            f"{usable} usable market(s)")
-    out = [line]
-    if why:
-        out.append(f"              markets refused: {why}")
-    elif not seen:
+                    if k not in ("rows", "attached", "usable markets", NO_MATCH))
+    out = [f"  Exchange    0 of {seen} moneyline row(s) priced  ·  "
+           f"{usable} usable market(s)"]
+    # THE HEADLINE FIRST, ALWAYS — it was conditional on there being no
+    # market refusals, which is exactly backwards: a board with refusals
+    # is the one that needs telling which of them mattered.
+    if not seen:
         out.append("              no moneyline rows on this board to price — "
                    "the exchange lists game winners and nothing else, so a "
                    "board of player props can never reach this tier.")
+    elif unmatched and unmatched >= seen:
+        out.append(f"              every row ({unmatched}) matched no market, "
+                   f"with {usable} usable — this is OUR name matching, not "
+                   f"the venue's liquidity.")
+    elif unmatched:
+        out.append(f"              {unmatched} of {seen} row(s) matched no "
+                   f"market; the rest were priced but did not attach.")
     elif usable:
-        out.append("              markets were usable but none matched a "
-                   "game on this board — a name-matching problem, not a "
-                   "liquidity one.")
+        out.append("              markets were usable but none reached a row "
+                   "on this board.")
+    if why:
+        out.append(f"              markets refused on quality: {why}")
     return out
 
 

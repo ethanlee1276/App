@@ -374,14 +374,45 @@ def test_the_markets_it_threw_away_are_named_with_their_reasons():
     assert "3 book 9c wide" in out and "2 last trade only" in out, out
 
 
-def test_usable_markets_that_matched_nothing_say_it_is_a_NAME_problem():
+def test_rows_that_matched_nothing_are_called_OUR_problem_not_the_venue_s():
     """The two ways to land zero are opposite jobs. Markets refused on
-    quality is a venue problem and nothing to do; markets that were fine
-    but matched no game is our own name matching, which is fixable."""
+    quality is the venue's and there is nothing to do about it; rows that
+    matched no market is our own name matching, and it is fixable. Ethan's
+    2026-09-15 MLB board was the second — 62 usable markets, 4 rows, zero
+    matched."""
     out = R.report(_xboard(exchange_fair_census={
-        "rows": 4, "attached": 0, "usable markets": 6}), "mlb")
-    assert "name-matching problem" in out, out
-    assert "not a liquidity one" in out, out
+        "rows": 4, "attached": 0, "usable markets": 62,
+        "no exchange market for this game": 4}), "mlb")
+    assert "OUR name matching" in out, out
+    assert "not the venue" in out, out
+
+
+def test_the_row_reason_is_not_filed_under_markets_refused():
+    """The flaw in the first cut of this section, found by running it on
+    the real box: "4 no exchange market for this game" is about ROWS and
+    was the whole answer, and it sat in the middle of eighteen market
+    widths under a heading that said markets were refused."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 4, "attached": 0, "usable markets": 62,
+        "no exchange market for this game": 4,
+        "book is 11c wide": 1}), "mlb")
+    refused = [ln for ln in out.splitlines() if "refused on quality" in ln]
+    assert len(refused) == 1, out
+    assert "no exchange market for this game" not in refused[0], refused[0]
+    assert "book is 11c wide" in refused[0], refused[0]
+
+
+def test_the_headline_survives_a_pile_of_market_refusals():
+    """It used to be conditional on there being none, which is exactly
+    backwards: the board with eighteen refusal lines is the one that most
+    needs telling which of them mattered. CFB's real answer on 2026-09-15
+    was `rows: 0` and it never got printed."""
+    out = R.report(_xboard(exchange_fair_census={
+        "rows": 0, "attached": 0, "usable markets": 123,
+        "book is 5c wide": 9,
+        "no two-sided book — only a last trade": 15}), "mlb")
+    assert "no moneyline rows on this board" in out, out
+    assert "refused on quality" in out, out
 
 
 def test_a_board_of_player_props_is_told_it_can_never_reach_this_tier():
