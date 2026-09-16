@@ -848,6 +848,22 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
                ladder: dict | None = None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
+    THE CHOICE, over `rungs` below, which is the derivation. This board
+    asks "what is most likely", so it takes the highest probability. The
+    Pick of the Day asks a different question of the same ladder — what
+    clears an EV floor at a price inside an even-money band — and a
+    second walk of the ladder to answer it would be a second set of
+    probabilities to keep honest. One derivation, two views.
+    """
+    got = rungs(row, market, fits, floor=floor, ladder=ladder)
+    return max(got, key=lambda c: c["prob"]) if got else None
+
+
+def rungs(row: dict, market: str, fits=None, floor=None,
+          ladder: dict | None = None) -> list:
+    """EVERY priced number on the prop's alternate ladder that clears the
+    floor and its own credibility bar, best price per (line, side).
+
     THE LADDER IS WHERE "MOST LIKELY" IS FOR SALE. A main line is hung
     where the book thinks the coin is fair, so the calibrated number at
     it sits near 50% and a board asking for 55% at no heavier than -250
@@ -870,7 +886,7 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
     from .odds import devig_two_way, is_sharp_book
     alts = row.get("alt_lines") or []
     if not alts:
-        return None
+        return []
     sharp: dict[float, tuple[float, float]] = {}
     for ln in row.get("alt_sharp_lines") or []:
         try:
@@ -900,7 +916,7 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
             prev = best_price.get((line, side))
             if prev is None or odds > prev[0]:
                 best_price[(line, side)] = (odds, book, ln)
-    best = None
+    out: list = []
     priced = row.get("rung_probs") or {}
     for (line, side), (odds, book, ln) in best_price.items():
         # A RUNG THE MAKER PRICED ITSELF COMES FIRST. Baseball rows carry
@@ -955,11 +971,12 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
             _tally(ladder, "disagrees with the rung’s own price")
             continue
         _tally(ladder, "priced")
-        cand = {"line": line, "side": side, "book": book, "odds": odds,
-                "prob": p, "fair": fair, "source": source}
-        if best is None or p > best["prob"]:
-            best = cand
-    return best
+        out.append({"line": line, "side": side, "book": book, "odds": odds,
+                    "prob": p, "fair": fair, "source": source})
+    # Highest probability first, so a caller that wants one can take the
+    # head and a caller with its own bars walks a sensible order.
+    out.sort(key=lambda c: -c["prob"])
+    return out
 
 
 def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",

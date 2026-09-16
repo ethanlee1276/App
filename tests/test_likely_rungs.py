@@ -327,6 +327,67 @@ def test_a_rung_the_maker_priced_itself_is_read_before_any_fit():
         assert got["line"] == 3.5 and got["prob_source"] == "model"
 
 
+# ── the derivation and the choice are separate ──────────────────────
+
+def test_the_choice_is_the_head_of_the_derivation():
+    """`rungs` is EVERY priced number on the ladder that clears the floor
+    and its own credibility bar; `_best_rung` is one VIEW of it — the
+    likeliest, which is the Most Likely board's question.
+
+    THEY EXIST APART because the Pick of the Day asks a different
+    question of the same ladder: what clears an EV floor at a price
+    inside an even-money band. That is not the likeliest rung, and a
+    second walk of the ladder to find it would be a second set of
+    probabilities to keep honest."""
+    row = _row()
+    got = K.rungs(row, "rush_yds", fits=FITS)
+    assert got, "the fixture's ladder priced nothing"
+    best = K._best_rung(row, "rush_yds", fits=FITS)
+    assert best == max(got, key=lambda c: c["prob"]), (best, got)
+
+
+def test_the_derivation_comes_back_likeliest_first():
+    """A caller with its own bars walks it in a sensible order, and the
+    caller that wants one can take the head.
+
+    THE LADDER IS HANDED IN BACKWARDS ON PURPOSE. The default fixture
+    lists its rungs low-number-first, which is already descending by
+    probability — so the sort was a no-op on it and deleting the sort
+    passed. A test that only holds when the input happens to arrive in
+    the right order is not testing the sort."""
+    backwards = _row(alt_lines=[_ln("DraftKings", 75.5, 150),
+                                _ln("FanDuel", 50.5, -155),
+                                _ln("DraftKings", 50.5, -160),
+                                _ln("FanDuel", 40.5, -230),
+                                _ln("DraftKings", 40.5, -240)])
+    got = K.rungs(backwards, "rush_yds", fits=FITS)
+    assert len(got) > 1, "one rung cannot show an ordering"
+    assert got == sorted(got, key=lambda c: -c["prob"]), got
+    # And the head really is the likeliest, which is what `_best_rung`
+    # hands the Most Likely board.
+    assert got[0] == K._best_rung(backwards, "rush_yds", fits=FITS)
+
+
+def test_a_ladder_with_nothing_on_it_is_an_empty_list_not_None():
+    """The two readers want different empties: `_best_rung` answers None,
+    `rungs` answers []. A None here would make every caller guard."""
+    assert K.rungs(_row(alt_lines=[]), "rush_yds", fits=FITS) == []
+    assert K._best_rung(_row(alt_lines=[]), "rush_yds", fits=FITS) is None
+
+
+def test_every_rung_carries_what_a_second_reader_needs():
+    """A caller with its own bars needs the price, the number, the side,
+    the book, the probability AT that rung and the rung's own de-vigged
+    fair. Anything it has to recompute is a derivation in two places."""
+    got = K.rungs(_row(), "rush_yds", fits=FITS)
+    assert got, "the fixture's ladder priced nothing"
+    for c in got:
+        assert set(c) >= {"line", "side", "book", "odds", "prob", "fair",
+                          "source"}, c
+        assert 0.0 < c["prob"] < 1.0, c
+        assert isinstance(c["odds"], int), c
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]
