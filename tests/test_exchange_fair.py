@@ -253,11 +253,20 @@ def test_attach_prices_a_board_that_carries_only_abbreviations():
 def test_the_names_are_filled_in_and_the_match_then_lands():
     """The fix, end to end, on the shape Ethan's board actually
     publishes: abbreviations and nothing else, against a market titled
-    the way the exchange titles them."""
+    the way the exchange titles them.
+
+    THE TICKER IS EMPTY HERE ON PURPOSE, since 2026-09-16. This used to
+    carry `KXMLBGAME-26SEP15LADSD`, and `match_game` grew a second path
+    that reads both club codes out of exactly that string — so the
+    unnamed board started matching and the test's own premise line
+    ("the premise is gone") fired. Both paths are real; this one is
+    about the NAMES, and a fixture that satisfies the other cannot say
+    anything about it. The ticker path has its own file.
+    """
     from engine.sources import kalshi
     board_games = [{"home": "LAD", "away": "SD"}]
     market = {"title": "Will the Dodgers beat the Padres?", "subtitle": "",
-              "event_ticker": "KXMLBGAME-26SEP15LADSD"}
+              "event_ticker": ""}
     assert kalshi.match_game(market, board_games) is None, \
         "the premise is gone: this matched without names"
     named = X.with_names(board_games, "mlb")
@@ -425,19 +434,24 @@ def test_the_markets_are_matched_once_not_once_per_row():
     times to answer 58 questions — and could not say afterwards whether
     the MARKETS had failed to match or the ROWS had, because the two were
     computed in the same loop."""
+    # `attach` calls `match_game_verbose` since 2026-09-16 — the wrapper
+    # that also returns WHY a market did not match, so the census can
+    # name the step. Counting the wrapper rather than `match_game` is
+    # what this is asking about either way: once per market, not once
+    # per row.
     import engine.sources.kalshi as kx
     calls = []
-    real = kx.match_game
+    real = kx.match_game_verbose
     try:
-        kx.match_game = lambda m, g: (calls.append(m) or real(m, g))
+        kx.match_game_verbose = lambda m, g: (calls.append(m) or real(m, g))
         rows = [{"market": "moneyline", "team": "LAA", "home": "LAA",
                  "away": "SEA"} for _ in range(5)]
         X.attach(rows, [_mkt(), _mkt(ticker="KXMLBGAME-26SEP15NYYBOS-NYY",
                                      title="Yankees vs Red Sox")],
                  [{"home": "LAA", "away": "SEA"}], "mlb")
     finally:
-        kx.match_game = real
-    assert len(calls) == 2, f"{len(calls)} match_game calls for 2 markets"
+        kx.match_game_verbose = real
+    assert len(calls) == 2, f"{len(calls)} match calls for 2 markets"
 
 
 if __name__ == "__main__":

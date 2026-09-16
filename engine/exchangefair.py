@@ -303,14 +303,23 @@ def attach(rows, markets, games, sport: str = "") -> dict:
     # match or the ROWS had, because the two were computed together.
     # Separating them is what lets the census below name a cause.
     pairs, unmatched = [], []
+    # WHY EACH MARKET FAILED, not just how many did. `match_game_verbose`
+    # separates "nothing on the board names both clubs" from "the ticker
+    # names two of tonight's games and I will not guess" — the second is
+    # a matcher problem and the first is usually a stale board, and they
+    # were one number until 2026-09-16.
+    why_counts: dict = {}
     for m in usable:
-        g = kalshi.match_game(m, games or [])
+        g, why = kalshi.match_game_verbose(m, games or [])
         if g is None:
+            why_counts[why] = why_counts.get(why, 0) + 1
             if len(unmatched) < SAMPLE:
                 unmatched.append(str(m.get("title") or m.get("ticker") or "?"))
             continue
         pairs.append((m, g))
     census["markets matched to a game"] = len(pairs)
+    for why, n in why_counts.items():
+        census[why] = census.get(why, 0) + n
 
     # WHAT DID NOT LINE UP, in both parties' own words. A reader with
     # this line does not have to guess whether the exchange is naming

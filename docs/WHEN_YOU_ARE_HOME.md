@@ -222,8 +222,30 @@ shows exactly why it cannot simply be relaxed: "New York Y wins"
 tokenises to `{NEW, YORK}`, which matches the Yankees AND the Mets.
 
 So the fix needs a second identifier, and Kalshi puts one in the event
-ticker. **I have not seen this box's tickers and will not guess their
-shape**, which is the whole reason for this block.
+ticker.
+
+**SHIPPED 2026-09-16 — this block is now a CHECK, not a blocker.** The
+paragraph above used to end "I have not seen this box's tickers and will
+not guess their shape", and it was wrong about what this repository
+already knew: `tests/test_prediction_desk.py` has carried
+`KXMLBGAME-26AUG111840CLEDET-CLE` as a fixture since the desk shipped,
+and both clubs are in the middle segment. `match_game` was already
+feeding `event_ticker` into its haystack and simply could not SEE them —
+`_name_tokens` splits on non-alphanumerics, so `26AUG111840CLEDET` is one
+token and `"CLE" in hay` is False.
+
+`kalshi.match_game` now also searches the ticker text for both club codes
+as substrings, which needs to know nothing about where in the ticker they
+sit or what separates them, and takes the match only when EXACTLY ONE
+game on the board fits — so the Yankees/Mets case and an MLB doubleheader
+are both refused rather than guessed. The two-club rule is intact.
+`tests/test_the_exchange_finds_the_game_in_its_ticker.py` runs Ethan's
+own two pasted lines as fixtures.
+
+**What the run below is now for** is confirming it fires on the live
+feed: the shape is inferred from one fixture, and a series whose tickers
+are laid out differently would still come back zero. Look for a non-zero
+`markets matched to a game` on both sports.
 
 **RUN IT AS THE BUILD USER.** Ethan, 2026-09-16, declining to run the
 first version of this: *"KX-2 writes Kalshi cache files. As root they

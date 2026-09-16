@@ -198,14 +198,96 @@ def _name_tokens(text: str) -> set[str]:
             if len(t) >= 3 and t not in _STOP}
 
 
-def match_game(row: dict, games: list[dict]) -> dict | None:
-    """Match one Kalshi market to one of tonight's games, by team name.
+def _ticker_text(row: dict) -> str:
+    """The market's tickers with the SERIES NAME taken out, or "" if this
+    is not a GAME market at all.
 
-    ``games`` rows carry home/away abbreviations plus full names. Both
-    teams must appear in the market's text — one name alone matches every
-    future series and half the league's markets. No fuzzy scoring: a match
-    this cheap is either obvious or it is wrong, and wrong here means
-    hanging an edge claim on somebody else's game.
+    THE EMPTY RETURN IS THE GUARD THAT MAKES THE TICKER PATH SAFE. A
+    game ticker carries both clubs, and reading a pair out of it is only
+    sound because a game is the one thing that HAS a pair. A futures
+    market names one club and a date (`KXMLBPLAYOFF-26-NYY`), so it
+    cannot produce a false pair on its own — but `board()` is handed
+    whatever markets its caller fetched, including the general /markets
+    page, and a matchup future ("NYY vs LAD in the World Series") would
+    name two. `SPORT_SERIES` is already this module's list of GAME
+    series, so requiring one of those names is a check against data we
+    already keep rather than a guess about ticker layout. A game series
+    we have not listed simply does not use this path, which is the same
+    way `fetch_sports_markets` already fails.
+
+    `KXMLBGAME` and `KXNFLGAME` are then removed from the haystack: they
+    are the same nine characters on every row of a league and carry no
+    game in them, so leaving them in only gives a two-letter club code
+    somewhere to hit by accident. Removed by name rather than by cutting
+    at the first dash, because a series that ever ships without one would
+    silently take the date with it.
+    """
+    text = f"{row.get('ticker', '')} {row.get('event_ticker', '')}".upper()
+    hit = False
+    for names in SPORT_SERIES.values():
+        for series in names:
+            if series.upper() in text:
+                hit = True
+                text = text.replace(series.upper(), " ")
+    return text if hit else ""
+
+
+def _pair_in_ticker(text: str, g: dict) -> bool:
+    """Both of this game's club codes, as substrings of the ticker text."""
+    home = str(g.get("home") or "").strip().upper()
+    away = str(g.get("away") or "").strip().upper()
+    # A one-character code cannot identify anything; two is the shortest
+    # real one (SD, SF, KC, NE) and is already thin enough to need the
+    # uniqueness check in `match_game`.
+    if len(home) < 2 or len(away) < 2 or home == away:
+        return False
+    return home in text and away in text
+
+
+def match_game(row: dict, games: list[dict]) -> dict | None:
+    """Match one Kalshi market to one of tonight's games, or None."""
+    return match_game_verbose(row, games)[0]
+
+
+def match_game_verbose(row: dict, games: list[dict]) -> tuple:
+    """``(game or None, "" or why not)``.
+
+    TWO WAYS IN, AND THE SECOND ONE IS WHY THIS TIER WAS DEAD.
+
+    The first is the original: both clubs named in the market's prose.
+    ``games`` rows carry home/away abbreviations plus full names, and
+    both teams must appear — one name alone matches every futures market
+    and half the league's. No fuzzy scoring: a match this cheap is either
+    obvious or it is wrong, and wrong here means hanging an edge claim on
+    somebody else's game.
+
+    THE EXCHANGE DOES NOT WRITE PROSE THAT WAY. Ethan, 2026-09-16, off
+    the droplet: 60 usable NFL markets and 42 usable MLB markets, zero
+    matched on either. The titles read "Buffalo wins" and "New York Y
+    wins" — the WINNER only, never the matchup — so a rule that needs both
+    clubs in the text can never fire, and the tier ranked first on
+    `potd.EVIDENCE` had contributed nothing since the day it shipped.
+
+    THE PAIR WAS IN THE DATA THE WHOLE TIME. Kalshi's game tickers carry
+    both codes concatenated — `KXMLBGAME-26AUG111840CLEDET-CLE` — and
+    `match_game` already fed `event_ticker` into the haystack. What it
+    could not do was SEE them: `_name_tokens` splits on non-alphanumerics,
+    so `26AUG111840CLEDET` is one token and `"CLE" in hay` is False. The
+    fix is a substring search over the same string, which needs to know
+    nothing about where in the ticker the codes sit or what separates
+    them.
+
+    AND IT DOES NOT LOOSEN THE TWO-CLUB RULE, which is the thing worth
+    protecting. Both codes are still required, and the ticker path
+    additionally demands that EXACTLY ONE game on the board matches — so
+    the case that made relaxing the prose rule unsafe ("New York Y wins"
+    tokenising to {NEW, YORK}, which is the Yankees and the Mets) is
+    refused here rather than guessed at. A two-letter code is short
+    enough to land inside a date segment by accident; the uniqueness
+    check is what makes that harmless instead of wrong.
+
+    The reason is returned rather than logged so `exchangefair.attach`'s
+    census can name the step, the way every other funnel here does.
     """
     hay = _name_tokens(f"{row.get('title', '')} {row.get('subtitle', '')} "
                        f"{row.get('event_ticker', '')}")
@@ -215,8 +297,14 @@ def match_game(row: dict, games: list[dict]) -> dict | None:
         away_hit = (_name_tokens(g.get("away_name", "")) & hay
                     or g.get("away", "").upper() in hay)
         if home_hit and away_hit:
-            return g
-    return None
+            return g, ""
+    text = _ticker_text(row)
+    hits = [g for g in games if _pair_in_ticker(text, g)]
+    if len(hits) == 1:
+        return hits[0], ""
+    if len(hits) > 1:
+        return None, "the ticker names more than one of tonight's games"
+    return None, "neither the title nor the ticker names both clubs"
 
 
 # --- the tape ---------------------------------------------------------------

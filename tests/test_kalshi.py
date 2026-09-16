@@ -84,8 +84,14 @@ def test_a_market_matches_only_when_both_teams_appear():
     row = kx.parse_markets([_mkt()])[0]
     g = kx.match_game(row, GAMES)
     assert g is not None and g["home"] == "BOS"
+    # THE TICKER HAS TO MATCH THE TITLE, since 2026-09-16. This left the
+    # fixture's default GAME ticker (`KXMLBGAME-26AUG03-NYYBOS-NYY`) on a
+    # market titled as a FUTURE, which no real feed does — and the ticker
+    # became load-bearing when `match_game` learned to read the club pair
+    # out of it. A real futures market names one club and a date.
     lone = kx.parse_markets([_mkt(title="Yankees make the playoffs",
-                                  subtitle="", event_ticker="KXMLBPLAYOFF")])[0]
+                                  subtitle="", ticker="KXMLBPLAYOFF-26-NYY",
+                                  event_ticker="KXMLBPLAYOFF-26")])[0]
     assert kx.match_game(lone, GAMES) is None
 
 
