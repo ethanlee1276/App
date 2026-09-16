@@ -3357,6 +3357,18 @@ def _checkpoint_wal() -> None:
     skip a cycle than hold one up. SQLite answers SQLITE_BUSY, the first
     number in the result row, and nothing is harmed.
 
+    WHO THE READER IS, AS OF 2026-09-16: NOT KNOWN, and this comment has
+    already been wrong once. It first said the live refreshers were
+    holding it — five threads shelling out to `*_build.py` every few
+    seconds — and that is false: `livescore_build`, `live_build`,
+    `ufc_live_build` and `memes_build` do not open `history.db` at all.
+    What IS on the record is that the cycle's own builds are long
+    (2026-09-16 heartbeat: mlb 196s, predmarkets 176s, autosettle 97s,
+    nfl 95s, out of a 615s cycle) and that `server.py` opens and closes
+    the file per request. Naming a culprit before `lsof` has named one is
+    how the last wrong answer got written into a warning this prints at
+    the operator.
+
     A BUSY RESULT IS THE INTERESTING ONE and is always printed. If this
     can never get a clear moment, the long-lived reader is the problem
     and no amount of checkpointing here will fix it — that is a finding,
@@ -3397,10 +3409,10 @@ def _checkpoint_wal() -> None:
                 print(f"  ⚠️  {label} WAL could not be rewound "
                       f"({before / 1e6:.0f} MB{trend}) — a reader held it for "
                       f"the whole {WAL_CHECKPOINT_TIMEOUT_MS / 1000:.0f}s. "
-                      f"This box starts a live build every few seconds on "
-                      f"one core, so a reader is almost always alive; while "
-                      f"that is true the log cannot rewind and writers time "
-                      f"out behind it.")
+                      f"Something held a read the whole time; while that "
+                      f"keeps happening the log cannot rewind and writers "
+                      f"time out behind it. `lsof` on the file names the "
+                      f"holder — see `_checkpoint_wal`.")
             elif before >= WAL_NOISY_BYTES:
                 print(f"  {label} WAL rewound: {before / 1e6:.0f} MB reclaimed")
         except Exception as exc:                              # noqa: BLE001
