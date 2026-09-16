@@ -143,19 +143,32 @@ def test_a_build_that_failed_says_so_rather_than_going_quiet():
     assert "warn" in body[i:i + 400]
 
 
-def test_a_day_that_cleared_nothing_is_labelled_and_says_it_is_not_recorded():
-    """`below_bar` is the whole difference between the two things this
-    card can show, and the reader has to be told which one it is."""
+def test_a_day_that_cleared_nothing_bails_before_the_bet_is_drawn():
+    """`below_bar` decides which of two cards is drawn, and it has to
+    decide it BEFORE the bet furniture, not label it afterwards.
+
+    REWRITTEN 2026-09-16, and the two versions before it are the reason
+    this one is a position rather than a phrase. The first drew the lean
+    under "nothing cleared the bar today"; the second renamed the
+    headline to "Today’s lean" and kept the team, the price and the book
+    in the same bold slot underneath. Ethan read the second one and
+    said: "if we shouldn’t be betting a pick, why are we displaying
+    one?" Relabelling was never going to answer that.
+
+    The behaviour is tested by RUNNING the renderer in
+    tests/test_the_card_never_names_a_bet_it_refuses.py. What is asked
+    here is the structural half a rendered-output test cannot see: that
+    the refusal is a bail, so no future edit can reach the bet.
+    """
     body = _card()
     assert "below_bar" in body
-    # RE-WORDED 2026-09-15. "Shown, not recorded" sat under a headline
-    # reading "nothing cleared the bar today" and beside a bold
-    # percentage with an edge — a card arguing with itself, which is how
-    # Ethan read it ("it seems like it’s not confident in its own
-    # pick?"). It now calls the row a LEAN, which is what it is.
-    i = body.index("A lean, not the Pick of the Day")
-    assert "kept off the record below" in body[i:i + 400], body[i:i + 400]
-    assert "Today’s lean" in body, "the headline must agree with the note"
+    guard = body.index("if (!pick || below)")
+    for later in ("pick-id", "payout_units", "pick.book"):
+        assert body.index(later) > guard, (
+            f"{later!r} is drawn before the no-bet bail — a refused card "
+            f"can reach it again")
+    assert "A lean, not the Pick of the Day" not in body, \
+        "the lean is back in the card"
     assert "nothing cleared the bar today" not in body, \
         "the old contradiction is back"
 
@@ -282,9 +295,13 @@ def test_a_pick_from_below_the_boards_floor_says_so():
     block = body[i:i + 400]
     assert "55%" in block or "floor" in block, block[:200]
     assert "sharper book" in block, "it must say what admitted the row"
-    # And it is NOT drawn on a below-bar day, where the warn line already
-    # says the stronger thing.
-    assert "!below" in block, "two labels would contradict each other"
+    # It used to carry an explicit `&& !below` so the disclosure could
+    # not land under the lean’s own warn line. The no-bet bail above it
+    # makes that guard unreachable, and an unreachable guard is the
+    # pattern this codebase keeps finding — so the rule is asked of
+    # POSITION instead, which is what actually enforces it now.
+    assert body.index("from_reserve") > body.index("if (!pick || below)"), \
+        "the reserve disclosure can be reached on a refused card again"
 
 
 def test_the_card_draws_the_price_break_even_not_the_de_vigged_fair():

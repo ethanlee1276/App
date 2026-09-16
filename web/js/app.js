@@ -2291,10 +2291,14 @@ function renderDataSource(d) {
    witness is us.
 
    TWO STATES, AND THE DIFFERENCE IS THE POINT. A qualifying pick is the
-   day's pick and is on the record. A day when nothing cleared still
-   shows the best available, labelled, and that one is NOT recorded
-   (`ledger.log_pick_of_the_day` refuses it) — so the record below the
-   card only ever counts picks that qualified.
+   day's pick and is on the record. A day when nothing cleared draws NO
+   BET AND NO BET — not the best available in the same furniture, which
+   is what this card did until 2026-09-16 and what Ethan read as the page
+   arguing with itself. The engine still computes that lean, still
+   publishes it and still refuses to journal it
+   (`ledger.log_pick_of_the_day`); the page no longer advertises it, and
+   the replay that says those leans lose money is quoted on
+   `renderPickOfTheDay`.
    ============================================================ */
 /* THE CALL, ABOVE THE WORKING.
 
@@ -2407,17 +2411,55 @@ async function renderPickOfTheDay() {
   if (!got || typeof got !== "object") { host.innerHTML = ""; return; }
   const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
   const pick = got.pick;
-  if (!pick) {
+  const below = String((pick || {}).below_bar || "");
+  /* A CARD THAT SAYS "NO BET" DOES NOT THEN NAME A BET.
+
+     Ethan, 2026-09-16, reading the MLB card: "I see that we’re showing a
+     pick, but then we’re also saying don’t bet the pick. So if we
+     shouldn’t be betting a pick, why are we displaying one? ... if
+     that’s a good pick, then we need to say to bet it, not to not bet
+     it."
+
+     THE FIRST ANSWER WAS TO LOWER THE BAR SO A PICK EXISTED, and the
+     measurement closed that door. `potd_backtest --sweep-ev` over the
+     stored MLB closes is FLAT from a 0% EV floor through 2.0% — 37 days,
+     25-12, +27.9% at every floor — and the bar that was binding on the
+     days that produced nothing is the same one at every setting: the
+     gap is too big to trust (`gamebets.SHARP_SUSPECT_EV`). The floor was
+     never what stood between the reader and a pick, so moving it buys
+     nothing. And that ceiling is earned rather than cautious — the leans
+     it excludes, at 7-15% claimed edge, settled −23.1% over 12 bets in
+     the same replay, while the leans under it were positive.
+
+     SO THE CARD CHANGES INSTEAD, in the direction he asked for. On a day
+     nothing clears, the strongest row on the board is exactly the thing
+     that replay measured at −23.1%, and putting its team, its price and
+     its book in the card’s headline furniture is an advertisement for
+     it whatever the banner above says. The lean is still computed, still
+     published, still in `potd_report` and the operator log — it is the
+     working, and the working is honest. It is not the product.
+
+     WHAT FILLS THE HOLE IS A REAL PICK, NOT A BLANK. `renderDayTopPick`
+     below already reads `day_top_pick.json`, which ranks every league’s
+     pick on the same comparator; when this league has nothing and
+     another league cleared, that line IS a bet a reader can place. When
+     no league cleared, the honest card is the one that says so. */
+  if (!pick || below) {
+    /* THE REASON IS NOT SAID TWICE. `potdCallStrip` already prints it
+       beside NO BET — it reads it off the same `verdict.why` — so this
+       line answers the question the strip leaves open: then what do I do
+       with today? */
+    const why = below
+      ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
+      : escapeHtml(got.relocked || got.note || "No pick today.");
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
       <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
-      <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">
-        ${escapeHtml(got.relocked || got.note || "No pick today.")}</div>
+      <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
     renderDayTopPick();
     return;
   }
-  const below = String(pick.below_bar || "");
   const band = got.band || [-125, 100];
   /* The bet in words. A team market's `player` holds an ABBREVIATION and
      a game total's holds the journal key, so neither is a name to print
@@ -2464,19 +2506,18 @@ async function renderPickOfTheDay() {
      border before the words: red while the bet is running, which is what
      every other live surface on this site uses. */
   const liveNow = potdLiveRow();
-  const accent = liveNow ? "var(--bad)"
-    : below ? "var(--warn)" : "var(--brand)";
-  /* THE HEADLINE AND THE CARD MUST NOT ARGUE. "nothing cleared the bar
-     today" sitting above a pick with a bold percentage and an edge reads
-     as a page contradicting itself, which is how Ethan read it. The
-     honest framing is that there IS a lean and it is not a pick: the
-     strongest thing on the board, shown because the page is never blank,
-     and not one we will put the day's name on. */
-  const head = below
-    ? `Today’s lean · ${escapeHtml(league)} — no pick cleared the bar`
-    : liveNow
-      ? `Pick of the Day · ${escapeHtml(league)} — in play`
-      : `Pick of the Day · ${escapeHtml(league)}`;
+  // Past the bail above, `below` is always "" — this card is a BET or it
+  // is not this card. The warn colour that used to mean "lean" went with
+  // the lean.
+  const accent = liveNow ? "var(--bad)" : "var(--brand)";
+  /* THE HEADLINE AND THE CARD CANNOT ARGUE, because only one of them
+     can be drawn. The "Today’s lean — no pick cleared the bar" heading
+     was the first attempt at that and it still sat on top of a named bet
+     at a named price; the bail above is the second and it removes the
+     bet instead of re-labelling it. */
+  const head = liveNow
+    ? `Pick of the Day · ${escapeHtml(league)} — in play`
+    : `Pick of the Day · ${escapeHtml(league)}`;
   const door = ridingAttrs(pick);
   /* WHAT `potd._repoint` DID TO THIS CARD, in its own words.
      That function exists because the MLB page spent 2026-09-15 showing
@@ -2532,13 +2573,9 @@ async function renderPickOfTheDay() {
           ev != null ? ` · ${ev >= 0 ? "+" : MINUS}${Math.abs(ev * 100).toFixed(1)}% edge` : ""}${
           ours != null ? ` · our number says ${ours}%` : ""} ·
         one pick a day, priced between ${american(band[0])} and ${american(band[1])}</div>`) : ""}
-      ${pick.from_reserve && !below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+      ${pick.from_reserve ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${icon('info')} Below the Most Likely board’s own 55% floor — taken here because
         a sharper book disagrees with this price, not because our number does.</div>` : ""}
-      ${below ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--warn)">
-        ${icon('warn')} A lean, not the Pick of the Day — ${escapeHtml(below)}.
-        It is the strongest thing on today’s board and it did not clear the bar,
-        so it is shown here and kept off the record below.</div>` : ""}
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div>
       <div id="potd-record" style="margin-top:6px;font-size:var(--fs-xs);color:var(--text-mute)"></div>
     </div>`;
@@ -2627,32 +2664,40 @@ async function renderDayTopPick() {
     host.innerHTML = ""; return;
   }
   const pick = top.pick;
-  if (!pick) {
+  /* THE SAME RULE AS THE CARD ABOVE, and it has to be the same rule or
+     the fix is cosmetic. `potd.day_top_pick` ranks every league’s card
+     on one comparator and, when no league cleared, hands back the
+     strongest LEAN — so this line used to read "Today’s strongest lean,
+     across every league is in the MLB: <team> Moneyline −130 — a lean,
+     not a pick". That is a bet, named, priced and clickable, under a
+     sentence telling the reader not to take it, which is exactly what
+     Ethan objected to on the card; it was merely in smaller type.
+
+     A DAY WITH NO PICK ANYWHERE IS ONE FACT and it gets one sentence.
+     The lean is still in the payload for `potd_report` and the log. */
+  const below = String((pick || {}).below_bar || "");
+  if (!pick || below) {
     /* NOT SILENT, though. "No lock today" with the reason is a fact
        about a slate; an empty div is indistinguishable from a broken
        feature, which is the failure this codebase keeps finding. */
-    const why = Object.keys(top.census || {}).length
+    const why = below || (Object.keys(top.census || {}).length
       ? Object.keys(top.census).join(" · ")
-      : (top.note || "no candidates today");
+      : (top.note || "no candidates today"));
     host.innerHTML = `<span style="color:var(--text-mute)">${icon('info')}
       Nothing cleared the bar in any league today — ${escapeHtml(why)}.</span>`;
     return;
   }
   const from = String(top.sport || "");
   const name = (SPORT_META[from] || {}).name || from.toUpperCase();
-  const below = String(pick.below_bar || "");
-  const accent = below ? "var(--warn)" : "var(--brand)";
   const beat = (top.runners_up || []).length;
-  const head = below
-    ? "Today’s strongest lean, across every league"
-    : "Today’s Top Pick";
+  const head = "Today’s Top Pick";
   if (from === state.sport) {
     /* THE CARD ABOVE IS ALREADY THE ANSWER. One line confirming it is
        the strongest on the site today, and not one number repeated. */
     host.innerHTML = `<span style="color:var(--text-mute)">${icon('info')}
       ${escapeHtml(head)} across every league${beat
-        ? ` — it beat ${beat} other league${beat === 1 ? "" : "s"}’ pick${
-            beat === 1 ? "" : "s"} on the same ranking`
+        ? ` — it beat ${beat === 1 ? "one other league’s pick"
+            : `${beat} other leagues’ picks`} on the same ranking`
         : ""}.</span>`;
     return;
   }
@@ -2665,10 +2710,9 @@ async function renderDayTopPick() {
     : `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${
         pick.line != null ? pick.line : ""} ${escapeHtml(pick.market_label || pick.market || "")}`.trim();
   host.innerHTML = `<span class="openable" data-top-pick-sport="${escapeHtml(from)}"
-      style="color:${accent}">${icon(below ? 'warn' : 'info')}
+      style="color:var(--brand)">${icon('info')}
     ${escapeHtml(head)} is in the ${escapeHtml(name)}:
-    <b>${text}</b> ${american(pick.odds)}${
-      below ? ` — a lean, not a pick (${escapeHtml(below)})` : ""} ·
+    <b>${text}</b> ${american(pick.odds)} ·
     <span style="text-decoration:underline">open it</span></span>`;
   /* THE LEAGUE ROUTE, not the switcher's internals. `#mlb` is a real
      destination the hash handler already knows (it sets the sport,

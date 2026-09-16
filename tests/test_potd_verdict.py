@@ -237,9 +237,14 @@ def test_both_states_of_the_card_lead_with_the_strip():
     body = _fn("renderPickOfTheDay")
     assert body.count("potdCallStrip(got)") == 2, \
         "the call strip is not drawn in both of the card's states"
-    for marker in ("No pick today.", "american(pick.odds)"):
-        i_strip = body.index("potdCallStrip(got)") if marker == "No pick today." \
-            else body.rindex("potdCallStrip(got)")
+    # THE MARKER IS THE TEMPLATE LINE, NOT THE COPY. This used to look
+    # for the words "No pick today." and broke on 2026-09-16 when the
+    # no-bet branch started choosing its sentence in a `const why`
+    # ABOVE the template — the strip had not moved, the string had.
+    # `${why}` is where that sentence is actually drawn.
+    for marker in ("${why}</div>", "american(pick.odds)"):
+        i_strip = (body.index("potdCallStrip(got)") if marker == "${why}</div>"
+                   else body.rindex("potdCallStrip(got)"))
         assert i_strip < body.index(marker), \
             f"the call is drawn after {marker!r} — it is not leading"
 
