@@ -2412,7 +2412,7 @@ async function renderPickOfTheDay() {
       <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
       <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">
-        ${escapeHtml(got.note || "No pick today.")}</div>
+        ${escapeHtml(got.relocked || got.note || "No pick today.")}</div>
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
     renderDayTopPick();
     return;
@@ -2478,10 +2478,29 @@ async function renderPickOfTheDay() {
       ? `Pick of the Day · ${escapeHtml(league)} — in play`
       : `Pick of the Day · ${escapeHtml(league)}`;
   const door = ridingAttrs(pick);
+  /* WHAT `potd._repoint` DID TO THIS CARD, in its own words.
+     That function exists because the MLB page spent 2026-09-15 showing
+     one pick while the record held another, and it writes three states
+     to say which is on screen: `relocked` (the board moved on, this is
+     the pick the sport locked earlier today), `off_board` (the row is
+     gone entirely, this is the journal at the price it was locked at)
+     and `locked` (the board still agrees). THE PAGE RENDERED NONE OF
+     THEM — `relocked` appeared nowhere in this file — so a card
+     re-pointed at a morning lock looked exactly like a fresh pick at a
+     price that had since run away from the band.
+
+     A reader is entitled to know they are looking at a claim made
+     hours ago rather than a recommendation made now. */
+  const relockNote = got.relocked
+    || (pick.off_board
+        ? "shown from the journal at the price it was locked at"
+        : (pick.locked ? "locked earlier today — the board still agrees" : ""));
   host.innerHTML = `
     <div class="card" style="border-left:3px solid ${accent};margin-bottom:12px">
       <div class="player">${iconMark("target")}${head}</div>
       ${potdCallStrip(got)}
+      ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${iconMark("lock")}${escapeHtml(relockNote)}</div>` : ""}
       ${potdLiveStrip(liveNow)}
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
         <span class="pick-id">${betMark(pick, 30)}</span>

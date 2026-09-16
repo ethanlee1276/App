@@ -2354,6 +2354,11 @@ def main() -> None:
         print(_pn)
     if _tn:
         print(f"Open-bet tracker: {_tn}")
+    # THE LOCK IS APPLIED INSIDE `_write`, not here — see the block above
+    # `gate.publish` in that function. A first pass at 2026-09-16 added a
+    # second call at this line, having grepped the call sites and not the
+    # writer; two calls to `relock_potd` is two places for the rule to
+    # live and one of them to drift.
     _write(out, args.out)
     conn.close()
     _sharp_picks = sum(1 for b in sharp_bets if b.get("recommended"))

@@ -314,6 +314,57 @@ before/after is what makes the rest of that task readable. Paste both.
 
 ---
 
+## POTD-MLB. Why the MLB Pick of the Day is blank (read-only, 20 seconds)
+
+**RUN THIS ONE FIRST.** Ethan, 2026-09-16: *"pick of the day for mlb
+isn't showing still but nfl is showing And so is CFB."*
+
+MLB-only rules out most of what was suspected: the paywall, the
+renderer's error branch and the sign-in state would all hit three
+leagues, not one. I found two real defects looking for it (the card never
+rendered `potd._repoint`'s explanation, fixed) but **I have not proven
+either is what you are seeing.** This names it in one run.
+
+```bash
+cd /srv/qellys && python3 -c "
+import json
+import launch
+from engine import gate, lightboard
+for sp in ('mlb', 'nfl', 'cfb'):
+    for label, path in (('full ', gate.board_source(launch.BOARD_FILES[sp])),
+                        ('light', gate.board_source(
+                            lightboard.light_path(launch.BOARD_FILES[sp])))):
+        try:
+            b = json.load(open(path))
+        except Exception as exc:
+            print(f'{sp:4} {label}  UNREADABLE {type(exc).__name__}: {exc}')
+            continue
+        got = b.get('pick_of_the_day')
+        print(f'{sp:4} {label}  potd={type(got).__name__:9} '
+              f'pick={(got or {}).get(\"pick\") is not None} '
+              f'err={b.get(\"pick_of_the_day_error\") or \"-\"} '
+              f'relocked={((got or {}).get(\"relocked\") or \"-\")[:44]} '
+              f'ml={len(b.get(\"most_likely\") or [])} '
+              f'locked_reason={b.get(\"locked_reason\") or \"-\"}')
+"
+```
+
+Read the MLB rows against the NFL and CFB rows — the difference is the
+answer:
+
+| MLB shows | it means | fix |
+|---|---|---|
+| `potd=NoneType` while NFL/CFB are `dict` | the key never reached the file. The build's POTD hook did not run or raised before my 2026-09-16 fix — check `git log -1` in /srv/qellys |
+| `potd=dict pick=False relocked=this sport locked…` | **the likeliest one.** MLB locked a pick today that has left the board and cannot be read back. The card now SAYS this; before today it said "No pick today." |
+| `locked_reason` set and `ml=0` | the page is being served the paywall STUB, not the board. MLB's is the 8 MB one, so a slow or failed API read falls back further than the others do |
+| `err=` anything | the selector raised; the string is the cause |
+| identical to NFL/CFB | the file is fine and the problem is in the browser — hard-refresh, then check the console |
+
+**Paste the whole table.** With NFL and CFB beside it as controls, one
+run settles which of these it is.
+
+---
+
 ## SHRINK. Does the market shrink help or hurt the top of the board? (#77) (read-only, ~1 minute)
 
 The Most Likely page prints a touchdown row's probability **already
