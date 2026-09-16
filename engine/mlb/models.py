@@ -183,11 +183,63 @@ class MLBGame:
     home_def: float = 0.0
     away_off: float = 0.0
     away_def: float = 0.0
-    total_over_odds: int = -110
-    total_under_odds: int = -110
+    #: ZERO MEANS NOBODY POSTED IT, and these defaulted to -110 until
+    #: 2026-09-16. That is a real American price sitting inside the
+    #: even-money band, so an unpriced baseball game published a total at
+    #: a number no book had quoted — and every downstream check that asks
+    #: "is there a price?" by truthiness answered yes.
+    #:
+    #: Found from the live board: eleven of twelve MLB game rows carried
+    #: odds of exactly -110 with an EMPTY book name. `potd.disqualify`
+    #: caught them on the book name ("no real market price") and was the
+    #: only thing standing between a filler number and the Pick of the
+    #: Day. A band check on the same rows passed all eleven, because -110
+    #: is comfortably inside -142..+190.
+    #:
+    #: `engine/models.Game` (NFL) has defaulted these to 0 since the
+    #: football boards were hardened (#198, #205). This is the same fix,
+    #: one sport late.
+    total_over_odds: int = 0
+    total_under_odds: int = 0
     spread: float = 0.0          # home run line (e.g. -1.5); 0 = not offered
-    spread_home_odds: int = -110
-    spread_away_odds: int = -110
+    spread_home_odds: int = 0
+    spread_away_odds: int = 0
+
+    #: DID A BOOK ACTUALLY POST THIS NUMBER? `oddsapi.apply_odds_to_slate`
+    #: is sport-agnostic and has been stamping these onto MLB games since
+    #: it shipped — `MLBGame` never declared them, so they landed as
+    #: stray instance attributes and nothing ever read them back.
+    total_measured: bool = False
+    spread_measured: bool = False
+
+    #: WHO POSTED IT. Declared for the same reason as the flags above:
+    #: `gamebets.attach_books` reads these with `getattr(g, ..., "")`, so
+    #: an undeclared field is not an error — it is a silent empty string
+    #: on every card. They arrive from the same sport-agnostic setter and
+    #: were landing as stray instance attributes too.
+    home_ml_book: str = ""
+    away_ml_book: str = ""
+    home_spread_book: str = ""
+    away_spread_book: str = ""
+    total_over_book: str = ""
+    total_under_book: str = ""
+
+    #: THE ONE QUESTION, ASKED THE WAY THE NFL ASKS IT. Same names, same
+    #: logic as `engine.models.Game`, deliberately: a number is the
+    #: market's if the source said so OR if a book's two prices are
+    #: sitting on it, because attached odds ARE the evidence and
+    #: requiring the flag on top of them would refuse every path that
+    #: builds a priced game directly (the backtests and half the
+    #: fixtures do exactly that).
+    @property
+    def total_is_posted(self) -> bool:
+        return bool(self.total_measured
+                    or (self.total_over_odds and self.total_under_odds))
+
+    @property
+    def spread_is_posted(self) -> bool:
+        return bool(self.spread_measured
+                    or (self.spread_home_odds and self.spread_away_odds))
 
 
 @dataclass

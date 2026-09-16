@@ -241,6 +241,16 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 if not MLB_ML_RECOMMENDATIONS:
                     _info_only(ml, _NO_ANCHOR)
                 out.append(ml)
+        # A TOTAL NOBODY POSTED IS NOT PRICED. `MLBGame.total` defaults to
+        # 8.5 and its odds defaulted to -110, so before 2026-09-16 this
+        # branch priced a total for every rated game whether or not a book
+        # had quoted one — publishing a card at a number nobody offered,
+        # with an empty book name beside it. The moneyline path was never
+        # exposed (`home_ml` defaults to 0 and the branch checks it) and
+        # neither was the spread (`spread` defaults to 0.0); totals were
+        # the hole, because 8.5 and -110 are both truthy.
+        #
+        # This is the football rule (#198, #205) reaching baseball.
         if has_rating:
             pt = project_total("mlb", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.2f} / def {g.home_def:+.2f}, "
@@ -248,32 +258,57 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             # Totals: sharp-anchored when the sharp book quotes the SAME line;
             # otherwise the model card renders as information only — same
             # policy as moneylines, for the same measured reason.
-            sharp_tot = None
-            if (g.sharp_total and g.sharp_total == g.total
-                    and g.sharp_total_over_odds and g.sharp_total_under_odds):
-                sharp_tot = price_total_sharp(
-                    g.home, g.away, g.total,
-                    g.total_over_odds, g.total_under_odds,
-                    g.sharp_total_over_odds, g.sharp_total_under_odds,
-                    units="runs", context=tctx)
-            if sharp_tot is not None:
-                out.append(_finish_bet(sharp_tot, g, config))
-            else:
-                total = price_total("mlb", g.home, g.away, pt, g.total,
-                                    g.total_over_odds, g.total_under_odds, "runs", tctx)
-                out.append(_info_only(_finish_bet(total, g, config), _NO_ANCHOR))
-            # Team totals — no sharp reference exists for them, so they are
-            # always informational.
-            ph = project_team_points("mlb", g.home_off, g.away_def)
-            pa = project_team_points("mlb", g.away_off, g.home_def)
-            tl = _half(g.total / 2)
-            out.append(_info_only(_finish_bet(
-                price_team_total("mlb", g.home, g.home, g.away, ph, tl,
-                                 units="runs"), g, config), _NO_ANCHOR))
-            out.append(_info_only(_finish_bet(
-                price_team_total("mlb", g.away, g.home, g.away, pa, tl,
-                                 units="runs"), g, config), _NO_ANCHOR))
-            if g.spread:
+            #
+            # …AND ONLY WHEN A BOOK POSTED ONE. See the note above: the
+            # guard is on the TOTAL alone, not on the whole rated block —
+            # a game can have a posted run line and no posted total, and
+            # the first draft of this put the team totals and the spread
+            # behind a posted total as well.
+            if g.total_is_posted:
+                sharp_tot = None
+                if (g.sharp_total and g.sharp_total == g.total
+                        and g.sharp_total_over_odds and g.sharp_total_under_odds):
+                    sharp_tot = price_total_sharp(
+                        g.home, g.away, g.total,
+                        g.total_over_odds, g.total_under_odds,
+                        g.sharp_total_over_odds, g.sharp_total_under_odds,
+                        units="runs", context=tctx)
+                if sharp_tot is not None:
+                    out.append(_finish_bet(sharp_tot, g, config))
+                else:
+                    total = price_total("mlb", g.home, g.away, pt, g.total,
+                                        g.total_over_odds, g.total_under_odds,
+                                        "runs", tctx)
+                    out.append(_info_only(_finish_bet(total, g, config),
+                                          _NO_ANCHOR))
+                # Team totals — no sharp reference exists for them, so
+                # they are always informational.
+                #
+                # THE SAME PRICE GATE, and for the reason football gives
+                # at `pipeline.py`'s team totals: the LINE is derived
+                # from the total. `_half(g.total / 2)` over an unposted
+                # total is half of `MLBGame.total`'s 8.5 default — a
+                # number split off another number nobody quoted. That is
+                # why this block sits inside the guard rather than beside
+                # it.
+                #
+                # It does not fix the PRICE. `price_team_total` defaults
+                # its two odds to -110 and baseball passes none, so these
+                # two cards still publish at a filler quote with no book
+                # beside them — the third place -110 is minted, in shared
+                # code that NFL and CFB call the same way. Guarded here
+                # so the line is real; the price is its own task.
+                ph = project_team_points("mlb", g.home_off, g.away_def)
+                pa = project_team_points("mlb", g.away_off, g.home_def)
+                tl = _half(g.total / 2)
+                out.append(_info_only(_finish_bet(
+                    price_team_total("mlb", g.home, g.home, g.away, ph, tl,
+                                     units="runs"), g, config), _NO_ANCHOR))
+                out.append(_info_only(_finish_bet(
+                    price_team_total("mlb", g.away, g.home, g.away, pa, tl,
+                                     units="runs"), g, config), _NO_ANCHOR))
+            # …and the same question of the run line, asked the same way.
+            if g.spread and g.spread_is_posted:
                 margin = game_margin("mlb", g.home_rating, g.away_rating)
                 sctx = [f"Projected run margin {margin:+.2f} (home)"]
                 sharp_sp = None

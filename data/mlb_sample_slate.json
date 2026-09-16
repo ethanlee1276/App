@@ -54,7 +54,9 @@
       "spread_home_odds": -150,
       "spread_away_odds": 125,
       "date": "2026-06-20",
-      "kickoff": "2026-06-20T18:20:00Z"
+      "kickoff": "2026-06-20T18:20:00Z",
+      "total_over_odds": -105,
+      "total_under_odds": -115
     },
     {
       "home": "COL",
@@ -118,7 +120,9 @@
       "spread_home_odds": -140,
       "spread_away_odds": 120,
       "date": "2026-06-20",
-      "kickoff": "2026-06-21T01:10:00Z"
+      "kickoff": "2026-06-21T01:10:00Z",
+      "total_over_odds": -115,
+      "total_under_odds": -105
     },
     {
       "home": "MIA",
@@ -172,7 +176,9 @@
       "spread_home_odds": -155,
       "spread_away_odds": 130,
       "date": "2026-06-20",
-      "kickoff": "2026-06-20T23:10:00Z"
+      "kickoff": "2026-06-20T23:10:00Z",
+      "total_over_odds": -108,
+      "total_under_odds": -112
     }
   ],
   "props": [

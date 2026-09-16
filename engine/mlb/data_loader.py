@@ -55,11 +55,16 @@ def _game(d: dict) -> MLBGame:
         home_def=d.get("home_def", 0.0),
         away_off=d.get("away_off", 0.0),
         away_def=d.get("away_def", 0.0),
-        total_over_odds=d.get("total_over_odds", -110),
-        total_under_odds=d.get("total_under_odds", -110),
+        # ZERO, NOT -110 — see `MLBGame.total_over_odds`. This loader was
+        # the second place the filler was minted, so changing the
+        # dataclass default alone would have left it in.
+        total_over_odds=d.get("total_over_odds", 0),
+        total_under_odds=d.get("total_under_odds", 0),
         spread=d.get("spread", 0.0),
-        spread_home_odds=d.get("spread_home_odds", -110),
-        spread_away_odds=d.get("spread_away_odds", -110),
+        spread_home_odds=d.get("spread_home_odds", 0),
+        spread_away_odds=d.get("spread_away_odds", 0),
+        total_measured=d.get("total_measured", False),
+        spread_measured=d.get("spread_measured", False),
         game_number=d.get("game_number", 1),
         doubleheader=d.get("doubleheader", False),
     )
