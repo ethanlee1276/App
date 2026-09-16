@@ -635,6 +635,25 @@ TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
 #: calibration sample, often 100+ names, and would bury the bets placed.
 TRACKER_CATEGORIES = ("main", "longshot", "likely")
 
+#: THE PICK OF THE DAY IS NOT IN THE LIST ABOVE, and it is tracked all
+#: the same — separately, under `live_potd`, because it is not an open
+#: bet among others.
+#:
+#: Ethan, 2026-09-16, on the Live tab: "The live page does not show the
+#: pick of the day when it’s live." It did not, and the reason was one
+#: tuple: the day’s headline pick journals to its own book
+#: (`ledger.POTD_CATEGORY`), and the only query the tracker ran asked for
+#: the other three. The one bet the whole front page is named after was
+#: the one bet that vanished at first pitch.
+#:
+#: ADDING "potd" TO THE TUPLE ABOVE WOULD HAVE DRAWN IT TWICE. The pick
+#: comes off the Most Likely board, so the same wager is already in the
+#: journal under `likely`; one list built from both books shows a reader
+#: the same ticket in two rows and makes the tab’s own count disagree
+#: with the journal. Its own key, drawn as its own card, is both the
+#: honest shape and the one the product asks for.
+POTD_TRACKER_CATEGORIES = ("potd",)
+
 
 def shift_day(date: str, days: int) -> str:
     """An ISO date moved by ``days``; anything else comes back unchanged.
@@ -662,7 +681,8 @@ def shift_day(date: str, days: int) -> str:
         return date
 
 
-def open_bets_for(conn, sport: str, date: str) -> tuple[list[dict], list[dict]]:
+def open_bets_for(conn, sport: str, date: str,
+                  categories=None) -> tuple[list[dict], list[dict]]:
     """``(today, near)`` — this sport's open journaled bets on the card,
     and on the neighbouring days.
 
@@ -671,10 +691,17 @@ def open_bets_for(conn, sport: str, date: str) -> tuple[list[dict], list[dict]]:
     UTC; a query for today alone never sees it. Today's rows are shown
     mapped or not, so the section's count reconciles with the Record's;
     a neighbour's row is shown only if it lands on a game on this card.
+
+    ``categories`` names which journal books to read; the default is the
+    Live tab's three. The Pick of the Day passes its own
+    (`POTD_TRACKER_CATEGORIES`) so it can be tracked without being mixed
+    into the open-bet list — see that constant for why the two are not
+    one query.
     """
+    cats = tuple(categories) if categories else TRACKER_CATEGORIES
     where = ("status='open' AND sport=? AND category IN "
-             + "(" + ",".join("?" * len(TRACKER_CATEGORIES)) + ")")
-    args = (sport, *TRACKER_CATEGORIES)
+             + "(" + ",".join("?" * len(cats)) + ")")
+    args = (sport, *cats)
     today = [dict(r) for r in conn.execute(
         f"SELECT {TRACKER_COLS} FROM bets WHERE {where} AND date=?",
         (*args, date))]
@@ -850,6 +877,20 @@ def attach_tracker(result: dict, sport: str, conn=None,
                                                     sport=sport)
                      if r["status"] != "unmapped"]
             result["live_picks"] = rows
+            # THE DAY'S HEADLINE PICK, TRACKED ON ITS OWN. Read from its
+            # own book and published under its own key, so the Live tab
+            # can lead with it while the open-bet list below stays the
+            # list of open bets. Same assembly, same arithmetic, same
+            # live overlay — nothing here knows it is special except
+            # which query found it.
+            potd_today, potd_near = open_bets_for(
+                conn, sport, date, POTD_TRACKER_CATEGORIES)
+            potd_rows = assemble_live_picks(potd_today, recs, games, progress,
+                                            shots, identity, sport=sport)
+            potd_rows += [r for r in assemble_live_picks(
+                potd_near, recs, games, progress, shots, identity,
+                sport=sport) if r["status"] != "unmapped"]
+            result["live_potd"] = potd_rows
             all_open = conn.execute(
                 "SELECT COUNT(*) FROM bets WHERE status='open' "
                 "AND category IN ('main','longshot') "
@@ -863,12 +904,20 @@ def attach_tracker(result: dict, sport: str, conn=None,
         result["live_picks_error"] = str(exc)
         return f"tracker error: {exc}"
     rows = result["live_picks"]
-    if not rows:
+    potd = result.get("live_potd") or []
+    if not rows and not potd:
         return ""
     n_live = sum(1 for r in rows if r["phase"] == "live")
     n_likely = sum(1 for r in rows if r.get("category") == "likely")
     note = (f"{len(rows)} on this card ({n_live} live"
             + (f", {n_likely} likely" if n_likely else "") + ")")
+    if potd:
+        # NAMED IN THE LOG, because a Pick of the Day that stops being
+        # tracked is invisible everywhere else: the card still draws
+        # from the board and the journal still holds the row.
+        note += (f"; pick of the day tracked ({potd[0]['status']}"
+                 + (f", {potd[0]['phase']}" if potd[0]["phase"] != "upcoming"
+                    else "") + ")")
     if result["open_elsewhere"]:
         note += f", {result['open_elsewhere']} open on other boards"
     if prog_note:

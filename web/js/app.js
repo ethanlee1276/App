@@ -2314,6 +2314,57 @@ function renderDataSource(d) {
    "NO BET" because a field is missing is worse than one that leads with
    nothing. No verdict draws no strip; the card below is unchanged and
    still says everything it said before. */
+/* IS THE DAY'S PICK RUNNING RIGHT NOW, and what is the score.
+
+   Ethan, 2026-09-16, on the dashboard card: "we should show it’s live on
+   this page in the screenshot as well". The card drew the same thing at
+   nine in the morning and in the seventh inning — a price, a fair and an
+   edge, with nothing saying the bet was in flight.
+
+   READ OFF `live_potd`, which is the tracker’s own row for this very
+   bet (engine/livepicks), promoted from the twelve-second scoreboard by
+   `liveTrackerRows` exactly as the Live tab promotes it. Deriving a
+   second answer from the board’s games would be a second definition of
+   "is this game on", and the two would disagree on precisely the
+   forty-five-minute window where it matters.
+
+   Returns null when there is no row, when the board predates the key, or
+   when the game has not started — three different facts that all mean
+   the card draws exactly what it drew before. */
+function potdLiveRow() {
+  const rows = liveTrackerRows((state.data || {}).live_potd || []);
+  return rows.find((r) => r.phase === "live") || null;
+}
+
+/* The live strip on the dashboard card: the pulse, the score, the clock,
+   and where the bet stands. Deliberately quieter than the call strip
+   above it — the call is still the lead, and this says the call is in
+   flight. */
+function potdLiveStrip(row) {
+  if (!row) return "";
+  const g = row.game || {};
+  const score = (g.home_score != null && g.away_score != null)
+    ? `${escapeHtml(teamName(g.away))} ${g.away_score}–${g.home_score} ${escapeHtml(teamName(g.home))}`
+    : `${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}`;
+  const per = g.period ? ` · ${escapeHtml(String(g.period))}` : "";
+  /* WHAT THE TICKET IS WORTH FROM HERE, when the row carries it — the
+     same number the Live tab draws, under the same rule: a certainty is
+     not a forecast, so 0 and 1 print nothing and let the words beside
+     them say CLEARED or GONE instead. */
+  const p = row.live_prob;
+  const cash = (p == null || p <= 0 || p >= 1) ? ""
+    : ` · <b>${p < 0.005 ? "<1" : p > 0.995 ? ">99"
+        : Math.round(p * 100)}%</b> to cash from here`;
+  const verdict = row.status === "cleared"
+    ? ` <span style="color:var(--good);font-weight:800">· CLEARED</span>`
+    : (row.status === "busted" || row.status === "dead")
+      ? ` <span style="color:var(--bad);font-weight:800">· GONE</span>` : "";
+  return `<div class="potd-live-strip">
+    <span class="lb-live" style="color:var(--bad)"><span class="live-dot"></span>LIVE</span>
+    <span class="potd-live-score">${score}${per}${cash}${verdict}</span>
+    <a class="potd-live-door" href="#live">Live tab →</a></div>`;
+}
+
 function potdCallStrip(payload) {
   const v = (payload || {}).verdict;
   if (!v || typeof v !== "object" || !v.call) return "";
@@ -2399,7 +2450,12 @@ async function renderPickOfTheDay() {
   const pays = pick.payout_units == null ? null : Number(pick.payout_units).toFixed(2);
   const matchup = pick.opponent
     ? `${teamName(pick.team)} vs ${teamName(pick.opponent)}` : "";
-  const accent = below ? "var(--warn)" : "var(--brand)";
+  /* THE CARD'S OWN COLOUR SAYS IT TOO, for a reader who takes in the
+     border before the words: red while the bet is running, which is what
+     every other live surface on this site uses. */
+  const liveNow = potdLiveRow();
+  const accent = liveNow ? "var(--bad)"
+    : below ? "var(--warn)" : "var(--brand)";
   /* THE HEADLINE AND THE CARD MUST NOT ARGUE. "nothing cleared the bar
      today" sitting above a pick with a bold percentage and an edge reads
      as a page contradicting itself, which is how Ethan read it. The
@@ -2408,12 +2464,15 @@ async function renderPickOfTheDay() {
      and not one we will put the day's name on. */
   const head = below
     ? `Today’s lean · ${escapeHtml(league)} — no pick cleared the bar`
-    : `Pick of the Day · ${escapeHtml(league)}`;
+    : liveNow
+      ? `Pick of the Day · ${escapeHtml(league)} — in play`
+      : `Pick of the Day · ${escapeHtml(league)}`;
   const door = ridingAttrs(pick);
   host.innerHTML = `
     <div class="card" style="border-left:3px solid ${accent};margin-bottom:12px">
       <div class="player">${iconMark("target")}${head}</div>
       ${potdCallStrip(got)}
+      ${potdLiveStrip(liveNow)}
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
         <span class="pick-id">${betMark(pick, 30)}</span>
         <span style="flex:1;min-width:0">
@@ -3993,7 +4052,8 @@ function liveTrackerRows(rows) {
 }
 
 function renderLivePicks() {
-  buzzOnSettle(((state.data || {}).live_picks) || []);
+  buzzOnSettle([...(((state.data || {}).live_picks) || []),
+                ...(((state.data || {}).live_potd) || [])]);
   const host = document.getElementById("live-picks");
   if (!host) return;
   /* THE PHASE COMES FROM THE FAST FEED, NOT THE BUILD. `live_picks` is
@@ -4015,6 +4075,21 @@ function renderLivePicks() {
      Live-tab loads `_liveAll` is empty and every row is exactly what the
      build said. */
   const rows = liveTrackerRows((state.data || {}).live_picks || []);
+  /* THE DAY'S PICK, ON THE SAME CLOCK AS EVERYTHING ELSE.
+
+     Ethan, 2026-09-16: "The live page does not show the pick of the day
+     when it's live." It did not, and the cause was one tuple in
+     `engine/livepicks`: the Pick of the Day journals to its own book and
+     the tracker's query asked for the other three, so the one bet the
+     front page is named after was the one bet that vanished at first
+     pitch.
+
+     ITS OWN KEY, NOT A ROW IN THE LIST BELOW. The pick comes off the
+     Most Likely board, so the same wager is already journaled under
+     `likely`; one list built from both books would draw a reader the
+     same ticket twice. `liveTrackerRows` promotes it from the fast
+     scoreboard exactly as it promotes the rest. */
+  const potdRows = liveTrackerRows((state.data || {}).live_potd || []);
   const elsewhere = (state.data || {}).open_elsewhere || 0;
   const trackerErr = (state.data || {}).live_picks_error;
   if (trackerErr) {
@@ -4024,7 +4099,7 @@ function renderLivePicks() {
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
   }
-  if (!rows.length && !elsewhere) {
+  if (!rows.length && !elsewhere && !potdRows.length) {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
       <div class="section-title">${iconMark("target")} Open bets
@@ -4353,7 +4428,39 @@ function renderLivePicks() {
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">${foot}</p>
     </div>`;
   };
-  host.innerHTML = panel(edge, "Open edge bets",
+  /* THE DAY'S PICK, LED WITH.
+
+     It is one bet, and it is the bet this whole page is named after, so
+     it gets a frame rather than a line in a list: the call it was
+     published under, the ticket, and the same live internals every other
+     row gets (`rowHTML` — one definition of the progress bar, the live
+     probability and the market line, so the headline card cannot quietly
+     drift from the rows below it).
+
+     THE BORDER IS THE STATE. Red while it runs, because that is what the
+     rest of this page uses for live; green once it has cleared; the
+     brand colour before first pitch. */
+  const potdLive = potdRows.some((r) => r.phase === "live");
+  const potdWon = potdRows.length && potdRows.every(
+    (r) => r.status === "cleared" || r.status === "won_pending");
+  const potdEdge = potdWon ? "var(--good)"
+    : potdLive ? "var(--bad)" : "var(--brand)";
+  const potdPanel = !potdRows.length ? "" : `
+    <div class="section-title">
+      <span style="color:${potdEdge}">${icon('dot')}</span> Pick of the Day
+      ${potdLive ? `<span class="lb-live" style="color:var(--bad);margin-left:7px">
+        <span class="live-dot"></span>LIVE NOW</span>` : ""}
+      <span class="sub">— the one pick today is named after, tracked from first pitch to final</span></div>
+    <div class="card potd-live${potdLive ? " is-live" : ""}"
+         style="padding:0;border-left:3px solid ${potdEdge};margin-bottom:14px">
+      ${potdRows.map(rowHTML).join("")}
+      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
+        One pick a day per league, journaled to its own book the moment it clears
+        the bar and graded there alone — it is not counted in the edge or Most Likely
+        records below. A day when nothing cleared has no row here.</p>
+    </div>`;
+
+  host.innerHTML = potdPanel + panel(edge, "Open edge bets",
     `every journaled edge bet on today’s card: live with real-time progress,
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.`,

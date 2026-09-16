@@ -143,8 +143,16 @@ def test_the_slip_and_the_tracker_buzz_where_they_should():
     st = _fn("slipToggle")
     assert st.count('buzz("tap");') == 1
     assert st.index("s.legs.splice(i, 1);") < st.index('buzz("tap");'), "a removal is silent; the add buzzes"
+    # THE TRACKER BUZZES FIRST THING, over every row it is about to draw.
+    # Anchored on the CALL rather than on one spelling of its argument:
+    # 2026-09-16 added the Pick of the Day's own list to it, and a test
+    # pinned to the old literal failed a change that did exactly what
+    # this test wants — buzz on more settles, not fewer.
     i = APP.index("function renderLivePicks() {")
-    assert APP[i:i + 120].count("buzzOnSettle(((state.data || {}).live_picks) || []);") == 1
+    head = APP[i:i + 260]
+    assert head.count("buzzOnSettle(") == 1
+    assert "live_picks" in head and "live_potd" in head, \
+        "a settled bet on one of the two lists buzzes and the other does not"
     bs = _fn("buzzOnSettle")
     assert 'buzz(fire.includes("win") ? "win" : "loss")' in bs
 

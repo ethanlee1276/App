@@ -170,6 +170,19 @@ PAID_KEYS = (
     # untouched and stays free, because that is the evidence, not the
     # product.
     "live_picks",
+    # THE PICK OF THE DAY WHILE ITS GAME RUNS, shipped 2026-09-16 under a
+    # key of its own (`livepicks.POTD_TRACKER_CATEGORIES` says why it is
+    # not folded into `live_picks`). It carries the player, market, side,
+    # line and the price we took — which is `pick_of_the_day`, forty
+    # lines up and paid, with a score beside it.
+    #
+    # THE FIFTH TIME THIS FILE HAS BEEN TAUGHT THE SAME LESSON —
+    # predmarkets, UFC's picks/pass_list, board_shelves, likely_parlays,
+    # now this. A NEW VIEW OF A PAID BOARD IS A NEW KEY, and key-
+    # stripping only ever protects the keys somebody remembered. This one
+    # was remembered in the same edit that created it, which is the only
+    # time it is cheap.
+    "live_potd",
 )
 
 #: PAID KEYS THAT BELONG TO ONE BOARD ONLY.

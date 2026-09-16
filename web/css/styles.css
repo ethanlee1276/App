@@ -265,6 +265,12 @@
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
   --grad-range: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
+  /* The highlight that travels across the Pick of the Day's live strip.
+     A token because every gradient here is one (tests/test_newlook.py):
+     the palette is declared in one place so a theme can restate it, and
+     a raw one in a rule is a colour nobody can find again. */
+  --grad-potd-sweep: linear-gradient(100deg, transparent 35%,
+    color-mix(in srgb, var(--bad) 16%, transparent) 50%, transparent 65%);
   /* The "more below" fade for scroll rails — a mask, so the color is
      alpha only and no theme ever has to restate it. */
   --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
@@ -10372,3 +10378,52 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .potd-call.is-bet .potd-call-word { color: var(--good); }
 .potd-call.is-pass .potd-call-word { color: var(--text-mute); }
 .potd-call-why { color: var(--text-mute); font-size: var(--fs-sm); }
+
+/* --- The Pick of the Day, in flight -------------------------------------
+   Ethan, 2026-09-16: "we should show it's live on this page ... and kinda
+   style it how you think looks cool."
+
+   THE SAME LANGUAGE THE REST OF THE SITE ALREADY SPEAKS. Red is live
+   here because red is live on the game cards, the play-by-play rail and
+   the Live tab's own panel headers; inventing a fourth colour for the
+   same fact would make the one card that matters most the one card a
+   reader has to learn separately. The strip sits under the call, not
+   over it — "BET 1 unit" is still the lead and this says that bet is
+   running right now.
+
+   The sweep is the only ornament: a slow highlight across the strip, so
+   the card reads as moving at a glance from across the room without
+   anything jumping. It is one gradient on one element, it stops dead for
+   anyone who asked for less motion, and there is no layout in it. */
+.potd-live-strip {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px;
+  margin-top: 8px; padding: 7px 10px; border-radius: var(--radius);
+  font-size: var(--fs-sm); color: var(--text-body);
+  border: var(--hairline) solid color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+}
+.potd-live-strip::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: var(--grad-potd-sweep);
+  transform: translateX(-120%);
+  animation: potdSweep 3.6s ease-in-out infinite;
+}
+@keyframes potdSweep { 0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(120%); } }
+.potd-live-score { flex: 1; min-width: 0; }
+.potd-live-door { margin-left: auto; color: var(--bad); font-weight: 700;
+  white-space: nowrap; text-decoration: none; }
+.potd-live-door:hover { text-decoration: underline; }
+/* The Live tab's own hero. Its LEFT border is set inline from the bet's
+   state (running, cleared, waiting); this warms the other three so the
+   card reads as one object rather than as a panel with a stripe.
+   A BORDER AND NOT A GLOW: `--shadow` is `none` site-wide and has been
+   since the redesign — this palette separates things with line weight
+   and fill, never with a halo, and one card is not the place to start. */
+.card.potd-live.is-live {
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .potd-live-strip::after { animation: none; opacity: 0; }
+}
