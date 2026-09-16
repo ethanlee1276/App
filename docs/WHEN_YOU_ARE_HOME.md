@@ -326,28 +326,83 @@ rendered `potd._repoint`'s explanation, fixed) but **I have not proven
 either is what you are seeing.** This names it in one run.
 
 ```bash
-cd /srv/qellys && python3 -c "
-import json
+cd /srv/qellys && python3 - <<'PY'
+import json, os, subprocess, time
 import launch
 from engine import gate, lightboard
-for sp in ('mlb', 'nfl', 'cfb'):
-    for label, path in (('full ', gate.board_source(launch.BOARD_FILES[sp])),
-                        ('light', gate.board_source(
-                            lightboard.light_path(launch.BOARD_FILES[sp])))):
+
+print("HEAD:", subprocess.run(["git", "log", "-1", "--format=%h %ad %s",
+                               "--date=short"], capture_output=True,
+                              text=True).stdout.strip())
+print()
+hdr = f"{'sport':5} {'copy':6} {'age':>7}  potd      pick   most_likely  notes"
+print(hdr)
+print("-" * len(hdr))
+for sp in ("mlb", "nfl", "cfb"):
+    board = launch.BOARD_FILES.get(sp)
+    if not board:
+        print(f"{sp:5} {'-':6}  NOT IN launch.BOARD_FILES")
+        continue
+    for label, path in (("full", gate.board_source(board)),
+                        ("light", gate.board_source(
+                            lightboard.light_path(board)))):
         try:
+            age = f"{(time.time() - os.path.getmtime(path)) / 60:.0f}m"
             b = json.load(open(path))
         except Exception as exc:
-            print(f'{sp:4} {label}  UNREADABLE {type(exc).__name__}: {exc}')
+            print(f"{sp:5} {label:6} {'-':>7}  UNREADABLE  "
+                  f"{type(exc).__name__}: {exc}")
             continue
-        got = b.get('pick_of_the_day')
-        print(f'{sp:4} {label}  potd={type(got).__name__:9} '
-              f'pick={(got or {}).get(\"pick\") is not None} '
-              f'err={b.get(\"pick_of_the_day_error\") or \"-\"} '
-              f'relocked={((got or {}).get(\"relocked\") or \"-\")[:44]} '
-              f'ml={len(b.get(\"most_likely\") or [])} '
-              f'locked_reason={b.get(\"locked_reason\") or \"-\"}')
-"
+        got = b.get("pick_of_the_day")
+        notes = []
+        if b.get("pick_of_the_day_error"):
+            notes.append("ERROR=" + str(b["pick_of_the_day_error"])[:60])
+        if b.get("locked_reason"):
+            notes.append("PAYWALL STUB: " + str(b["locked_reason"])[:40])
+        if isinstance(got, dict):
+            if got.get("relocked"):
+                notes.append("relocked=" + str(got["relocked"])[:60])
+            if got.get("note") and not got.get("pick"):
+                notes.append("note=" + str(got["note"])[:60])
+            if isinstance(got.get("pick"), dict):
+                p = got["pick"]
+                notes.append(f"{p.get('player') or p.get('team')} "
+                             f"{p.get('market')} {p.get('odds')}"
+                             + (" LOCKED" if p.get("locked") else "")
+                             + (" OFF_BOARD" if p.get("off_board") else ""))
+        print(f"{sp:5} {label:6} {age:>7}  {type(got).__name__:9} "
+              f"{str(isinstance(got, dict) and got.get('pick') is not None):5}  "
+              f"{len(b.get('most_likely') or []):>11}  {' | '.join(notes)}")
+print()
+print("Today's locked Pick of the Day per sport, straight from the journal:")
+try:
+    from engine import ledger, db
+    import datetime
+    conn = db.read_only()
+    try:
+        day = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+        locked = ledger.locked_potd_picks(conn, day, strict=True)
+        if not locked:
+            print(f"  none locked for {day} (UTC)")
+        for sport, entry in sorted(locked.items()):
+            print(f"  {sport:5} {entry.get('player') or entry.get('team')} "
+                  f"{entry.get('market')} {entry.get('side')} "
+                  f"{entry.get('line')} @ {entry.get('odds')}")
+    finally:
+        conn.close()
+except Exception as exc:
+    print(f"  could not read the journal: {type(exc).__name__}: {exc}")
+PY
 ```
+
+A heredoc rather than `python3 -c "..."`, because the quoting in a `-c`
+string one level down from a shell one level down from markdown is how a
+paste-able command stops being paste-able. It degrades on every line: a
+board it cannot read says so and the next one still runs.
+
+**`age` is doing real work here.** A board 300 minutes old on a five
+minute timer is a build that stopped, and that alone would explain a
+stale or missing card without anything else being wrong.
 
 Read the MLB rows against the NFL and CFB rows — the difference is the
 answer:
