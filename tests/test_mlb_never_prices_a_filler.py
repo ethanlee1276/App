@@ -172,25 +172,28 @@ def test_nothing_published_on_a_game_market_carries_a_price_with_no_book():
     assert seen, "the fixture priced nothing, so this asserted nothing"
 
 
-def test_the_team_total_price_is_still_a_filler_and_this_says_so_out_loud():
-    """KNOWN AND UNFIXED, asserted so it cannot be fixed quietly or
-    forgotten quietly.
+def test_the_team_total_price_is_no_longer_a_filler_either():
+    """THE TRIPWIRE FIRED, AND THIS IS WHAT REPLACED IT.
 
-    `gamebets.price_team_total` defaults `over_odds`/`under_odds` to -110
-    and all three sports call it without odds, so every team-total card
-    on every board publishes at a price no book posted. That is shared
-    code on the football and college boards too, so it is not a baseball
-    change and is not made here. When it IS made, this test fails and
-    that is the signal to delete it."""
+    Until 2026-09-16 this file asserted the opposite: that team-total
+    cards still published at -110 with no book, deliberately unfixed
+    because `gamebets.price_team_total` is shared code on three public
+    boards. Ethan made the call the same day — mark them unpriced rather
+    than buy quotes we would never stake — so the assertion inverts and
+    the old one is gone rather than left commented out.
+
+    The full behaviour lives in test_a_card_with_no_price_claims_nothing;
+    this keeps baseball's own board honest about it."""
     g = _rated(total=8.5, total_over_odds=-105, total_under_odds=-115,
                total_over_book="DraftKings", total_under_book="FanDuel")
     tt = [c for c in _game_bets([g], RuleConfig())
           if c.get("bet_type") == "team_total"]
     assert tt, "no team total to check"
-    assert all(c.get("odds") in (-110, 110) for c in tt), \
-        f"the team-total filler moved: {[c.get('odds') for c in tt]}"
-    assert all(not str(c.get("book") or "").strip() for c in tt), \
-        "a team total named a book — the shared default may have been fixed"
+    assert all(c.get("odds") == 0 for c in tt), \
+        f"a filler price came back: {[c.get('odds') for c in tt]}"
+    assert all(c.get("has_market") is False for c in tt)
+    assert all(c.get("edge") == 0.0 for c in tt), \
+        "an edge measured against a price of zero"
 
 
 if __name__ == "__main__":

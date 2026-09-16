@@ -127,14 +127,30 @@ def test_project_team_points_uses_offense_vs_opp_defense():
 
 
 def test_price_team_total_backs_the_value_side():
-    # Team projected well above its posted number -> over.
-    over = price_team_total("nfl", "KC", "KC", "BUF", proj_points=30.0, line=24.5)
+    # PRICES PASSED EXPLICITLY. This used to rely on the -110 default,
+    # which since #258 is 0 — and a card with no posted price carries no
+    # edge, so the assertion below would have been measuring the refusal
+    # rather than the side taken.
+    over = price_team_total("nfl", "KC", "KC", "BUF", proj_points=30.0,
+                            line=24.5, over_odds=-110, under_odds=-110)
     assert over["bet_type"] == "team_total"
     assert over["team"] == "KC" and over["side"] == "Over"
     assert over["edge"] > 0
     # And under when projected below.
-    under = price_team_total("nfl", "KC", "KC", "BUF", proj_points=18.0, line=24.5)
+    under = price_team_total("nfl", "KC", "KC", "BUF", proj_points=18.0,
+                             line=24.5, over_odds=-110, under_odds=-110)
     assert under["side"] == "Under" and under["edge"] > 0
+
+
+def test_an_unpriced_team_total_still_picks_a_side_but_claims_no_edge():
+    """The projection is the product here; the edge was never real. The
+    same call without prices still says which way the model leans — it
+    just stops attaching a number to a market that does not exist."""
+    card = price_team_total("nfl", "KC", "KC", "BUF", proj_points=30.0,
+                            line=24.5)
+    assert card["side"] == "Over" and card["team"] == "KC"
+    assert card["has_market"] is False
+    assert card["edge"] == 0.0 and card["ev_per_unit"] == 0.0
 
 
 def test_price_spread_backs_the_value_side():

@@ -105,6 +105,13 @@ RATING_ERROR_REASON_EFFICIENT = (
     f"Model disagrees with the market by more than {MAX_CREDIBLE_EDGE:.0%} "
     f"— in a market this efficiently priced that is a rating error, not an edge")
 
+#: A card nobody posted a price for. Not a refusal of the model's number —
+#: the projection stands and is still worth reading — but there is no
+#: quote to measure it against, so the card claims no edge and takes no
+#: stake. Same policy as the prop layer's `has_market` branch.
+NO_PRICE_REASON = ("No book has posted a price for this market — the "
+                   "projection stands, the edge beside it would not")
+
 
 def spread_win_prob(sport: str, home_spread: float) -> float | None:
     """P(home win) implied by a posted spread, or None if this sport has
@@ -746,8 +753,50 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
               credible=True, has_market=True, cal_temp=None, other_odds=None,
               raw_win=None):
-    ev = expected_value(win, odds)
-    quality = game_bet_score(edge, bet_type) if credible else 0
+    if not has_market:
+        # NO REAL PRICE TO BEAT — so no number on this card may read as
+        # an edge. This is the prop layer's rule (`betting.py`'s
+        # `if not has_market` branch, from Ethan's Blackburn card on
+        # 2026-09-05) finally reaching game bets, which set `has_market`
+        # and then published an edge, an EV, a grade and a stake off a
+        # price of zero anyway.
+        #
+        # `edge` was measured against `devig_two_way(0, 0)`, which
+        # returns the 0.5/0.5 fallback — so the "edge" was the model's
+        # distance from a coin flip, routinely double digits on a team
+        # total. Zeroing it here rather than after the fact is what makes
+        # the quality, the grade and the stake below fall out at nothing
+        # on their own: there is one place the refusal lives, and no
+        # second assignment that could drift from it or quietly stop
+        # being reachable.
+        #
+        # Zeroed rather than blanked, matching the prop layer and for its
+        # reason: `edge` and `ev_per_unit` are sorted on in several
+        # places, and a None there is a NaN in the sort.
+        edge = 0.0
+        # …AND THE ONE NUMBER THE ROW STILL SHOWS IS THE MODEL'S OWN.
+        # `temper` shrinks the projection toward the market's fair, which
+        # here is that same 0.5 — so a lean row published a probability
+        # haircut toward a coin flip no book had quoted: the model said
+        # 65.8%, the card said 57.9%, and neither the market nor the
+        # model claimed the number in between. The haircut exists to
+        # respect a price; with no price there is nothing to respect. The
+        # row shows what the model actually says, and `fair_prob` stays
+        # at 0.5 to record that nothing priced it.
+        if raw_win is not None:
+            win = raw_win
+        reasons = list(reasons) + [NO_PRICE_REASON]
+    # `expected_value(win, 0)` reads a missing price as even money and
+    # returns `win - 1`, so a 62% projection advertised "EV/unit -38%".
+    # It is the one number that does not fall out of a zeroed edge.
+    ev = expected_value(win, odds) if has_market else 0.0
+    # …and `has_market` belongs in this condition beside `credible`, not
+    # in a second assignment below it. `game_bet_score` has a FLOOR of 35
+    # — a zeroed edge still scores — so an unpriced card that skipped
+    # this printed "confidence 3.5" off a price of zero. With the
+    # condition here, the grade and the stake below fall out at Pass and
+    # nothing on their own.
+    quality = game_bet_score(edge, bet_type) if (credible and has_market) else 0
     confidence = round(quality / 10.0, 1)
     grade = quality_letter(quality) if credible else "Pass"
     stake = _kelly_stake(win, odds) if grade != "Pass" else 0.0
@@ -832,9 +881,29 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
 
 def price_team_total(sport: str, team: str, home: str, away: str,
                      proj_points: float, line: float,
-                     over_odds: int = -110, under_odds: int = -110,
+                     over_odds: int = 0, under_odds: int = 0,
                      units: str = "points", context: list[str] | None = None) -> dict:
-    """Price a single team's total (over/under) from its projected scoring."""
+    """Price a single team's total (over/under) from its projected scoring.
+
+    THE ODDS DEFAULT TO 0, NOT -110. Zero means NOT OFFERED, the way it
+    does everywhere else in this module (`_real_price`); -110 is a real
+    American price and there is nothing on a card carrying it to say a
+    book never posted it.
+
+    No sport passes odds here — the feed is asked for h2h, spreads and
+    totals, and team totals are not among them — so before 2026-09-16
+    every team-total card on the NFL, CFB and MLB boards published at a
+    price nobody had quoted, with an empty book name beside it. Ethan
+    found the shape reading the live MLB census. With the default at 0
+    the card is `has_market=False`, which the rest of the system already
+    knows how to handle: the ledger will not journal it, the census
+    excludes it, the feed marks it unpriced, the likelihood board gates
+    its ladder on it, and `_game_bet` now refuses to print an edge for
+    it. What is left is the projection, shown as a lean — which is what
+    these rows have been since #107.
+
+    A caller that HAS a real pair still passes it and gets the full card.
+    """
     fair_over, fair_under = devig_two_way(over_odds, under_odds)
     sd = _sd(TEAM_TOTAL_SD, sport, "team-total SD")
     p_over = clamp(normal_cdf((proj_points - line) / sd), 0.02, 0.98)

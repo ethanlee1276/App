@@ -137,7 +137,17 @@ def test_a_slate_with_posted_lines_still_produces_them():
     got = _game_bets([g], RuleConfig())
     markets = {r["market"] for r in got}
     assert {"moneyline", "total", "team_total", "spread"} <= markets, markets
-    assert all(r["has_market"] for r in got)
+    # THE THREE MARKETS THIS FIXTURE POSTED PRICES FOR. It posts none for
+    # the team totals, and since 2026-09-16 (#258) they say so instead of
+    # carrying `price_team_total`'s old -110 default — so asking this of
+    # every row would assert the bug rather than the board.
+    for r in got:
+        if r["market"] == "team_total":
+            assert r["has_market"] is False, \
+                "a team total claimed a price the fixture never posted"
+            assert r["odds"] == 0
+        else:
+            assert r["has_market"], r["market"]
 
 
 def test_no_shrink_guess_can_recommend_a_model_game_bet_any_more():
