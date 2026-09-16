@@ -195,13 +195,41 @@ def test_the_shelf_and_the_guide_carry_the_market_figure():
 
 
 def test_every_sharp_game_card_says_so():
-    """`ranking_number` reads `sharp_anchored`; the NFL's three sharp
-    branches stamp it (college's `_finish_sharp` already did)."""
+    """`ranking_number` reads `sharp_anchored`, so a sharp card that does
+    not carry it is ranked as our model's opinion and `potd.shortfall`
+    refuses it outright.
+
+    THIS TEST USED TO COUNT THE STRING IN `pipeline._game_bets`, and that
+    was pinning the bug rather than the property. "Each pipeline stamps
+    it by hand" is a rule three files followed and a fourth did not:
+    `engine/mlb/pipeline.py` never stamped anything, so on 2026-09-16
+    every one of the MLB board's thirty game rows claimed a model
+    witness and the league could not produce a Pick of the Day at all.
+    A source count in ONE pipeline could never have seen that.
+
+    So the property is asked of the CARD, out of the real pipeline —
+    here for the NFL, and in tests/test_sharp_anchor_is_stamped.py for
+    the pricers and for MLB.
+    """
     from engine import pipeline
-    src = inspect.getsource(pipeline._game_bets)
-    assert src.count('"sharp_anchored"') >= 3 or src.count("sharp_anchored") >= 3, src.count("sharp_anchored")
-    import cfb_build
-    assert 'card["sharp_anchored"] = True' in inspect.getsource(cfb_build._finish_sharp)
+    from engine.models import Game, Weather
+    from engine.rules import RuleConfig
+
+    g = Game(home="BBB", away="AAA", weather=Weather(),
+             home_ml=-131, away_ml=150,
+             sharp_home_ml=-160, sharp_away_ml=140,
+             home_rating=1.5, away_rating=-1.0)
+    cards = pipeline._game_bets([g], RuleConfig())
+    mls = [c for c in cards if c.get("bet_type") == "moneyline"]
+    assert mls, "the NFL pipeline priced no moneyline from a quoted game"
+    assert mls[0].get("sharp_anchored") is True, mls[0].get("reasons")
+
+    # …and a game the sharp book is silent on still claims nothing.
+    quiet = Game(home="BBB", away="AAA", weather=Weather(),
+                 home_ml=-131, away_ml=150,
+                 home_rating=1.5, away_rating=-1.0)
+    for c in pipeline._game_bets([quiet], RuleConfig()):
+        assert not c.get("sharp_anchored"), c.get("bet_type")
 
 
 if __name__ == "__main__":

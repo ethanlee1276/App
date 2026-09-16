@@ -216,6 +216,20 @@ class MoneylineRec:
     #: the engine's number, and with this absent it answered True for
     #: every game row and admitted them all.
     raw_win_prob: float | None = None
+    #: WHOSE NUMBER `win_prob` IS. True means this card came out of
+    #: `price_moneyline_sharp` and `win_prob` is a sharp book's de-vigged
+    #: fair, not our model's read.
+    #:
+    #: IT LIVES HERE BECAUSE IT KEPT NOT BEING SET. Until 2026-09-16 the
+    #: flag was written by each pipeline AFTER the card came back —
+    #: `engine/pipeline.py` did it three times, `cfb_build.py` once, and
+    #: `engine/mlb/pipeline.py` never did. So every MLB game row reached
+    #: the Most Likely board claiming our model was the only witness,
+    #: `potd.shortfall` refused all thirty of them with "only our own
+    #: model disputes this price", and the league with by far the most
+    #: data could not produce a Pick of the Day at all. A fact about how
+    #: a card was priced belongs to the function that priced it.
+    sharp_anchored: bool = False
 
 
 #: Post-haircut edge that saturates the confidence scale. It is half of the
@@ -287,6 +301,9 @@ def _sharpify(card: dict, fair: float, soft_odds: int, ev: float,
     """Rewrite a game-bet card so its numbers come from the sharp anchor:
     probability = sharp fair, edge = fair minus the soft implied, grade by EV."""
     implied = american_to_prob(soft_odds)
+    # WHOSE NUMBER THIS NOW IS — see `MoneylineRec.sharp_anchored` for
+    # why the card says so itself rather than trusting its caller to.
+    card["sharp_anchored"] = True
     card["win_prob"] = round(fair, 4)
     card["fair_prob"] = round(implied, 4)
     card["edge"] = round(fair - implied, 4)
@@ -401,6 +418,10 @@ def price_moneyline_sharp(home: str, away: str,
         ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
         quality=quality, home_odds=home_ml, away_odds=away_ml,
+        # `win_prob` above IS `fair` — the sharp book's de-vigged number
+        # for this side, not our model's. Saying so is this function's
+        # job; see `MoneylineRec.sharp_anchored`.
+        sharp_anchored=True,
     )
 
 
@@ -552,6 +573,10 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         # The pre-shrink claim — see MoneylineRec.raw_win_prob. The
         # likelihood board's credibility bar reads this and `fair_prob`.
         "engine_raw_prob": rec.raw_win_prob,
+        # See `MoneylineRec.sharp_anchored`. `likely.from_game_bet` reads
+        # this to set `prob_source`, and `potd.evidence` reads it to pick
+        # the tier — dropping it here made every MLB row a model row.
+        "sharp_anchored": rec.sharp_anchored,
     }
 
 

@@ -587,6 +587,51 @@ not made here because `MIN_FAIR` is Ethan's product bar — "the pick
 should be more likely to win than lose" — and moving it is his call, not
 a consequence of a measurement.
 
+### 3j. The MLB board had no witnesses at all, and the cause was one boolean
+
+**Ethan's droplet report, 2026-09-16:** the MLB Most Likely board carried
+**thirty game rows, of which zero had a sharp or a market witness.**
+`shortfall` refuses a model-only row outright, so the league with by far
+the most data could not produce a Pick of the Day on any day.
+
+The prices were never missing. `engine/mlb/pipeline._game_bets` calls
+`price_moneyline_sharp`, `price_total_sharp` and `price_spread_sharp`
+exactly as the football pipeline does, and Pinnacle has been in
+`oddsapi.DEFAULT_BOOKS` since 09-15. What was missing was the flag that
+says so. `sharp_anchored` was written by each pipeline *after* the card
+came back:
+
+| where | stamped? |
+|---|---|
+| `engine/pipeline.py` (NFL) | three times, by hand |
+| `cfb_build.py` | once, in `_finish_sharp_card` |
+| `engine/mlb/pipeline.py` | **never** |
+
+So every baseball card reached `likely.from_game_bet` claiming our model
+was the only witness, and the selector believed it.
+
+**THE SAME SHAPE AS §3f, ONE DAY EARLIER** — there `from_game_bet`
+dropped the flag on the floor; here it was never set. Both times a sharp
+book's number was thrown away and a sentence about *our* model was
+printed over it. The evidence was discarded, not outweighed.
+
+**AND MLB WAS LOSING IT TWICE**, which is why the board showed no
+`market` tier either: `GAME_RANK_MARKET` has no `mlb` entry, so
+`ranking_number` cannot return "market" for baseball at all. That one is
+a missing measurement rather than a bug — nothing has replayed MLB's
+de-vigged consensus against closes — and it is left standing and stated
+rather than guessed at.
+
+**THE FIX PUTS THE FLAG WHERE IT CANNOT BE FORGOTTEN.** The function that
+prices the card sets it, because that function is the only thing that
+knows: `_sharpify` stamps totals and spreads, `price_moneyline_sharp`
+stamps its rec, `moneyline_to_dict` carries it onto the card. The three
+hand-written lines in `engine/pipeline.py` are gone as redundant. A fifth
+pipeline added tomorrow gets it for free, and
+`tests/test_sharp_anchor_is_stamped.py` runs a real game through the real
+MLB pipeline rather than testing the pricer in isolation — which is the
+test that would have caught this.
+
 ## 4. Why our own model is not allowed to be the evidence
 
 Not a style preference. `likely.GAME_RANK_MEASURED` against
