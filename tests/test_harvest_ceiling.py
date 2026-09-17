@@ -46,10 +46,29 @@ sys.path.insert(0, str(ROOT))
 from engine import oddsbudget as ob                          # noqa: E402
 
 
-def _ledger(rows):
-    """A spend ledger holding `rows` of (kind, sport, credits), dated today."""
+#: THE DAY, AS A CLOCK AND NOT JUST A STORY. Every number in the docstring
+#: above was measured on 2026-09-10, and the day's ceiling is one of them:
+#: `daily_allowance` divides the month's balance by the days LEFT in the
+#: month, so the same 62,092 credits buy a 136-credit slice for baseball on
+#: the 10th and a 204-credit slice on the 17th. Read the wall clock and
+#: this file asserts a different arithmetic every morning — which is what
+#: happened: the second-pull case spends 176 against that ceiling, so it
+#: held until the 13th and then failed every night from the 14th, on code
+#: that never changed. `should_refresh` warns about this exact trap in its
+#: own comments ("a test that passed on the 28th failed on the 29th"), and
+#: gives the answer: take the date from the same clock the rest of the
+#: numbers came from. Nothing below reads the real one.
+THE_DAY_TS = dt.datetime(2026, 9, 10, 17, 27, 48).timestamp()
+
+
+def _ledger(rows, when: float = THE_DAY_TS):
+    """A spend ledger holding `rows` of (kind, sport, credits), dated `when`.
+
+    The ledger's date has to be the same day the reader asks about, or
+    `spent_today` sees an empty day and every ceiling case passes by
+    finding nothing spent."""
     tmp = Path(tempfile.mkdtemp()) / "spend.jsonl"
-    day = dt.datetime.now().isoformat(timespec="seconds")
+    day = dt.datetime.fromtimestamp(when).isoformat(timespec="seconds")
     with tmp.open("w", encoding="utf-8") as fh:
         for kind, sport, credits in rows:
             fh.write(json.dumps({"ts": 0, "iso": day, "kind": kind,
@@ -74,12 +93,12 @@ def test_a_report_still_counts_every_credit_the_league_spent():
     question "what did baseball spend today" keeps its old answer, or
     every spend report quietly under-reports."""
     p = _ledger(THE_DAY)
-    assert ob.spent_today(path=p, sport="mlb") == 235
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb") == 235
 
 
 def test_the_ceiling_does_not_meter_the_harvest():
     p = _ledger(THE_DAY)
-    assert ob.spent_today(path=p, sport="mlb",
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb",
                           exclude=ob.HARVEST_KINDS) == 0
 
 
@@ -87,7 +106,7 @@ def test_a_board_pull_still_counts_against_itself():
     """The exclusion is one lane, not an amnesty: the ceiling exists to
     stop the second, third and fortieth board pull, and it still does."""
     p = _ledger(THE_DAY + [("live_event", "mlb", 48)])
-    assert ob.spent_today(path=p, sport="mlb",
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb",
                           exclude=ob.HARVEST_KINDS) == 48
 
 
@@ -95,14 +114,15 @@ def test_the_cache_answers_each_question_with_its_own_number():
     """Both questions read the same file within one cycle. Keyed on the
     league alone, the second would be served the first's answer."""
     p = _ledger(THE_DAY + [("live_event", "mlb", 48)])
-    assert ob.spent_today(path=p, sport="mlb") == 283
-    assert ob.spent_today(path=p, sport="mlb", exclude=ob.HARVEST_KINDS) == 48
-    assert ob.spent_today(path=p, sport="mlb") == 283          # not 48
-    assert ob.spent_today(path=p, sport="mlb",
-                          exclude=ob.HARVEST_KINDS) == 48      # not 283
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb") == 283
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb",
+                          exclude=ob.HARVEST_KINDS) == 48
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb") == 283   # not 48
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="mlb",
+                          exclude=ob.HARVEST_KINDS) == 48           # not 283
 
 
-def _verdict(ledger, remaining=62092, share=0.093, games=5, now=None,
+def _verdict(ledger, remaining=62092, share=0.093, games=5, now=THE_DAY_TS,
              last_refresh_ts=0.0):
     """`should_refresh` for baseball, on the droplet's own shape.
 
@@ -110,6 +130,11 @@ def _verdict(ledger, remaining=62092, share=0.093, games=5, now=None,
     reads the per-SPORT clock for those — and set only where the
     whole-account probe would otherwise answer instead of the branch
     under test.
+
+    `now` defaults to THE_DAY_TS, which fixes the day's ceiling as well as
+    the cadence: `should_refresh` derives its date from whatever `now` it
+    is handed, so a pinned clock here is what keeps the arithmetic below
+    the same one the droplet did.
     """
     tmp = Path(tempfile.mkdtemp()) / "state.json"
     ob.save(ob.BudgetState(remaining=remaining,
@@ -144,21 +169,56 @@ def test_the_ceiling_still_stops_the_second_board_pull():
     assert "budget is spent for this slate" in why, why
 
 
+def test_the_ceiling_stops_the_second_pull_on_every_day_of_the_month():
+    """The case above is pinned to one day, which is what makes its numbers
+    readable and what makes it blind to the other twenty-nine. The CEILING
+    moves by design — the month's balance is divided by the days LEFT in
+    it, so baseball's slice of 62,092 credits grows from 95 on the 1st to
+    over 2,000 on the 30th — and a case that spends a fixed 128 against it
+    is only testing the rule on the days the arithmetic happens to line up.
+
+    What must not move is the rule: a league that has already spent its
+    slice today is refused, whatever the slice is worth. So spend exactly
+    that day's slice, on that day, and ask again.
+
+    This is the assertion that turns the earlier fault into an honest
+    signal. A calendar-dependent case fails on some mornings and not
+    others, which reads as flakiness in the code; this one fails on no day
+    of the month or on all thirty, which reads as what it is."""
+    state = ob.BudgetState(remaining=62092, last_refresh_ts=0.0,
+                           last_seen_iso="2026-09-10T17:27:48")
+    cost = 6 * ob.credits_per_event("mlb")
+    for day in range(1, 31):
+        ts = dt.datetime(2026, 9, day, 17, 27, 48).timestamp()
+        # The day's own ceiling, floored at one pull exactly as
+        # `should_refresh` floors it.
+        ceiling = max(int(ob.daily_allowance(state, dt.date(2026, 9, day))
+                          * 0.093), cost)
+        ok, why = _verdict(_ledger(THE_DAY + [("live_event", "mlb", ceiling)],
+                                   when=ts), now=ts)
+        assert not ok, f"Sep {day}: {why}"
+        assert "budget is spent for this slate" in why, f"Sep {day}: {why}"
+        # …and the same day's FIRST pull is still affordable, so this is
+        # not passing because the whole month refuses everything.
+        ok, why = _verdict(_ledger(THE_DAY, when=ts), now=ts)
+        assert ok, f"Sep {day}, first pull: {why}"
+
+
 def test_football_is_unchanged_by_any_of_this():
     """The league that never hit the bug must not move. Its own harvest
     is small and its ceiling is four times baseball's, so the verdict on
     an ordinary NFL day is the same before and after."""
     p = _ledger([("live_event", "nfl", 204), ("live_board", "nfl", 3)])
-    assert ob.spent_today(path=p, sport="nfl") == 207
-    assert ob.spent_today(path=p, sport="nfl", exclude=ob.HARVEST_KINDS) == 207
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="nfl") == 207
+    assert ob.spent_today(THE_DAY_TS, path=p, sport="nfl",
+                          exclude=ob.HARVEST_KINDS) == 207
 
 
 def test_the_month_reserve_still_refuses_everything():
     """The exclusion touches the DAY's ceiling and nothing above it. A
     plan spent down to its reserve says no, harvest or no harvest."""
-    import time as _t
     ok, why = _verdict(_ledger(THE_DAY), remaining=ob.RESERVE - 1,
-                       last_refresh_ts=_t.time())
+                       last_refresh_ts=THE_DAY_TS)
     assert not ok, why
     assert "quota nearly exhausted" in why, why
 
