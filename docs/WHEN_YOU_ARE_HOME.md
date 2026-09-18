@@ -679,7 +679,39 @@ The reasons are `ledger.why_open`'s, the same ones `doctor.py --stuck`
 prints. That check already existed and already knew; it just lived in a
 command nobody runs daily. This puts it in the paste.
 
-**WHAT THE DEV BOX SHOWS, AND WHY IT IS NOT YET A PRODUCTION FINDING.**
+**FOUND AND FIXED 2026-09-18 — the college player-log ingest never ran
+for the season being played.**
+
+Ethan: *"It's been like that since week zero."* It was. Two compounding
+faults in the nightly, both in `engine/maintenance`:
+
+1. The one-time historical backfill is `[today.year - n for n in
+   (4, 3, 2, 1)]` — 2022-2025 in 2026. **The season being played has
+   never been in that list.** A box that ran it came away with four
+   years of history and nothing from the year its board prices.
+2. The only other path was `elif today.weekday() == 0` — Mondays, and
+   unreachable at that, because the `elif` hangs off a floor (`have <
+   5,000`) that counts EVERY season's rows. Five years of history
+   satisfied a threshold that says nothing about whether this season
+   landed.
+
+The results half of the same nightly already refreshes the current
+season with `[season] if in_season else []` — which is exactly why
+`games` was current to the day while the player half was a month
+behind. The player half now follows the same rule
+(`maintenance.cfb_player_seasons`), and the file for a season still
+being played gets a 12-hour cache instead of the seven-day one a
+finished season deserves.
+
+**Nothing needs backfilling by hand.** `fetch_season` pulls the whole
+season file, so the first nightly after this deploys ingests all of 2026
+to date in one pass — a dry run on 2026-09-18 parsed **12,179 rows
+covering 08-29 through 09-06**, the exact games that were not grading —
+and `settle_from_history` then grades the open college book on the next
+build. Run `homecheck.py grading` the morning after to confirm `cfb`
+shows settled rows.
+
+**WHAT THE DEV BOX SHOWED, AND WHY IT WAS A LEAD RATHER THAN A FINDING.**
 On the container this was written in, `data/history.db` holds, for the
 2026 college season:
 

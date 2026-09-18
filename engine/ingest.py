@@ -793,8 +793,19 @@ def cfb_games_for(conn, season: int) -> dict:
     return out
 
 
+#: How long a CURRENT-season player file may be served from cache.
+#:
+#: `cfbstats.fetch_season` defaults to seven days, which is right for a
+#: finished season — that file never changes again — and is exactly wrong
+#: for the one being played, where a week's games land every Saturday. A
+#: nightly refresh against a seven-day cache would re-parse last week's
+#: file six nights running and call it fresh.
+CFB_LIVE_SEASON_TTL = 43_200          # 12 hours
+
+
 def ingest_cfb_player_history(conn, seasons: list[int],
-                              quiet: bool = False) -> dict:
+                              quiet: bool = False,
+                              fresh: int | None = None) -> dict:
     """Past college PLAYER production, so the TD board has somebody to price.
 
     The companion to `ingest_cfb_history`, and the more urgent half.
@@ -825,7 +836,13 @@ def ingest_cfb_player_history(conn, seasons: list[int],
             roster = {}
             result["skipped"].append(f"cfb rosters {season}: {exc}")
         try:
-            out = cfbstats.fetch_season(int(season), games, roster=roster)
+            # ``fresh`` names the season still being played, whose file
+            # gains rows every week; everything else is finished and
+            # keeps the long cache.
+            out = cfbstats.fetch_season(
+                int(season), games, roster=roster,
+                **({"ttl": CFB_LIVE_SEASON_TTL}
+                   if fresh is not None and int(season) == int(fresh) else {}))
         except DataUnavailable as exc:
             result["skipped"].append(f"cfb players {season}: {exc}")
             continue

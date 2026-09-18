@@ -119,6 +119,42 @@ BACKUP_FILES = ("data/history.db", "data/ledger.db", "data/accounts.db",
 BACKUP_GLOBS = ("data/profiles/*.json",)
 
 
+def cfb_player_seasons(today, have: int) -> list[int]:
+    """Which college seasons the nightly should ingest player logs for.
+
+    ``have`` is the all-time count of college anytime_td rows, which is
+    what gates the one-time historical backfill.
+
+    TWO RULES, AND THE SECOND ONE WAS MISSING FOR A SEASON.
+
+    The historical backfill runs once per box, on the four seasons before
+    this one. Note what has never been in that list: the season being
+    PLAYED. `(4, 3, 2, 1)` is 2022-2025 in 2026, so a box that ran it
+    came away with four years of history and nothing from the year its
+    board is pricing.
+
+    The second rule is the current season, and it now runs EVERY NIGHT
+    the season is on. It used to be `elif today.weekday() == 0` — Mondays
+    only, and unreachable on any day until `have` fell under the floor,
+    which it never does again after the first backfill.
+
+    Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
+    likely bets ... it's been like that since week zero." Every college
+    player-market bet settles against these rows. The results half of
+    this nightly already refreshes the current season in season, which is
+    why `games` was current to the day while the player half was a month
+    behind. Same rule on both halves now.
+    """
+    season = today.year if today.month >= 8 else today.year - 1
+    in_season = today.month >= 8 or today.month <= 1
+    seasons: list[int] = []
+    if have < CFB_MIN_PLAYER_ROWS:
+        seasons = [today.year - n for n in (4, 3, 2, 1)]
+    if in_season and season not in seasons:
+        seasons.append(season)
+    return seasons
+
+
 def _maybe_backup(state: dict, today: _dt.date, log,
                   root: Path | None = None,
                   backup_dir: Path | None = None) -> None:
@@ -1537,13 +1573,10 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 "SELECT COUNT(*) FROM player_game_logs WHERE sport='cfb' "
                 "AND market='anytime_td'").fetchone()[0]
             season = today.year if today.month >= 8 else today.year - 1
-            seasons = []
-            if have < CFB_MIN_PLAYER_ROWS:
-                seasons = [today.year - n for n in (4, 3, 2, 1)]
-            elif today.weekday() == 0:
-                seasons = [season]
+            seasons = cfb_player_seasons(today, have)
             if seasons:
-                res = ingest_cfb_player_history(_pconn, seasons, quiet=True)
+                res = ingest_cfb_player_history(_pconn, seasons, quiet=True,
+                                                fresh=season)
                 log(f"  cfb players: {res['rows']:,} log rows across "
                     f"{len(res['seasons'])} season(s), "
                     f"{res['assets']:,} identities — the touchdown board "
