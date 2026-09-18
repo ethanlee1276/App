@@ -353,7 +353,11 @@ def measure_cfb(conn, min_team_games: int = 4, keep=None) -> list[GameRank]:
     from . import teamrates
     from .cfb import ratings as cfbratings
     prepare(conn, "cfb")
-    baseline = _sd(SCORING_BASELINE, "cfb", "scoring baseline")
+    # CALLED FOR THE REFUSAL, NOT THE VALUE: `_sd` raises when this
+    # league has no registered variance, and pricing it against
+    # another league’s physics is the silent wrong answer it exists
+    # to prevent. Bound to a name it read like dead code.
+    _sd(SCORING_BASELINE, "cfb", "scoring baseline")
     plain = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
     fit = cfbratings.fit_from_history(conn, plain)
     cols = "sport, season, period, home, away, home_score, away_score, extra"
@@ -521,7 +525,11 @@ def measure_nfl(conn, min_team_games: int = 4,
     import sqlite3
     from . import teamrates
     from .gamebets import NFL_HOME_FIELD
-    baseline = _sd(SCORING_BASELINE, "nfl", "scoring baseline")
+    # CALLED FOR THE REFUSAL, NOT THE VALUE: `_sd` raises when this
+    # league has no registered variance, and pricing it against
+    # another league’s physics is the silent wrong answer it exists
+    # to prevent. Bound to a name it read like dead code.
+    _sd(SCORING_BASELINE, "nfl", "scoring baseline")
     cols = "sport, season, period, home, away, home_score, away_score, extra"
     rows = conn.execute(
         f"SELECT {cols}, date FROM games WHERE sport='nfl' AND home_score IS NOT NULL "

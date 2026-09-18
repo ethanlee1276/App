@@ -869,9 +869,8 @@ def bands(lconn, categories=LEARNING_CATEGORIES) -> dict:
         if label is None:
             continue
         by_band.setdefault(label, []).append(r)
-    for label, lo, hi in PRICE_BANDS:
+    for label, _lo, _hi in PRICE_BANDS:
         got = by_band.get(label) or []
-        sp = (stored.get("sports") or {})
         prior = (stored.get("pooled") or {}).get("shift", 0.0) or 0.0
         stamp = (stored.get("fitted_at") or "")
         pairs = _pairs(got, prior, stamp)

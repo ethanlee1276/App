@@ -131,7 +131,7 @@ def redistribution(rows, team: str, player: str, kind: str = "targets"
     """
     weeks = team_weeks(rows, team)
     played, missed = [], []
-    for w, wk in sorted(weeks.items()):
+    for _w, wk in sorted(weeks.items()):
         s = shares(wk, kind)
         if not s:
             continue
@@ -271,7 +271,6 @@ def note_text(out_player: str, status: str, kind: str, res: dict,
     n_out = int(res.get("n_out") or 0)
     word = "carries" if kind == "carries" else "targets"
     games = f"{n_out} missed game{'' if n_out == 1 else 's'}"
-    who = out_player.split()[-1] if out_player else "teammate"
     st = (status or "out").lower()
     if res.get("enough") and b:
         d = float(b["delta"])

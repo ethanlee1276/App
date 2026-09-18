@@ -110,7 +110,7 @@ def walk(starts: dict, min_history: int = MIN_HISTORY) -> dict:
     err_direct = err_decomp = err_oracle = 0.0
     paired: list[float] = []
     players = 0
-    for player, series in starts.items():
+    for _player, series in starts.items():
         usable = [(v, o) for _p, v, o in series if o >= MIN_OUTS]
         if len(usable) <= min_history:
             continue

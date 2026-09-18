@@ -112,7 +112,7 @@ def main() -> None:
 
     print(f"Replaying the model against {len(real):,} harvested "
           f"{args.market} prices ({len(entries)} players)…")
-    settled, used = settled_props_from_logs(
+    settled, _used = settled_props_from_logs(
         entries, args.market, min_history=args.min_history, real_lines=real)
 
     rows = []

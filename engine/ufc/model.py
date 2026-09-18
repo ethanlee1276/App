@@ -368,10 +368,10 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
 
     # Bet the side the model likes vs its de-vigged price.
     if p_model - mkt_a >= (1 - p_model) - mkt_b:
-        side, p_m, p_mkt, odds, fighter, opp = (name_a, p_model, mkt_a,
+        side, p_m, p_mkt, odds, fighter, _opp = (name_a, p_model, mkt_a,
                                                 int(odds_a), a, b)
     else:
-        side, p_m, p_mkt, odds, fighter, opp = (name_b, 1 - p_model, mkt_b,
+        side, p_m, p_mkt, odds, fighter, _opp = (name_b, 1 - p_model, mkt_b,
                                                 int(odds_b), b, a)
 
     p_final, clamp_note = humility_clamp(p_m, p_mkt, w)

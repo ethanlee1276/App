@@ -337,7 +337,7 @@ def fit(rows: list) -> dict:
         for label, part in (("train", train), ("test", test)):
             f = fit_ols([((r.x,), r.resid) for r in part]) if len(part) >= 3 else None
             if f:
-                (a, b), (sa, sb) = f
+                (_a, b), (_sa, sb) = f
                 m[f"{label}_slope"], m[f"{label}_slope_se"] = round(b, 4), round(sb, 4)
                 m[f"{label}_n"] = len(part)
         floor = BET_FLOOR.get(market, 0.0)

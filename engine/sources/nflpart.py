@@ -58,7 +58,6 @@ def _urls(season: int) -> list[str]:
 
 def load_participation(season: int) -> list[dict]:
     """One row per play for a season, cached on disk after the first pull."""
-    local = CACHE_DIR / f"pbp_participation_{season}.csv"
     # A WEEKLY TTL, not the eternal cache this had and not the layer's
     # 12-hour default. The old exists() check served the first pull
     # forever, so a season aggregate that fills week by week froze at

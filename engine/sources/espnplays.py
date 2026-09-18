@@ -441,7 +441,7 @@ def _football_players(text: str, roster) -> list[str]:
         m = pat.search(words)
         if m:
             at.setdefault(m.start(), set()).add(full)
-    return [next(iter(who)) for pos, who in sorted(at.items())
+    return [next(iter(who)) for _pos, who in sorted(at.items())
             if len(who) == 1]
 
 

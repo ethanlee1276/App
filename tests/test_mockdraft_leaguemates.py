@@ -69,8 +69,15 @@ def test_the_rooms_are_seated_from_the_league_not_only_drawn():
 def test_the_rooms_are_called_by_name_where_the_league_gave_one():
     room = APP[APP.index("function mockDraftHTML("):]
     room = room[:room.index("\nfunction _mockSetupHTML(")]
-    assert room.count("_mockRoomName(m,") >= 4, \
-        "the pick log, the board, the clock line and the hero no longer share one name"
+    # RE-ANCHORED 2026-09-18, from four to three. One of the four
+    # surfaces was `recent` — the pre-redesign pick log, built on every
+    # render into a string that was never placed. Deleting a dead surface
+    # lowers the count without weakening the property, and the property
+    # is not the count: it is that EVERY surface naming a room goes
+    # through the one helper. The ban below is what actually enforces
+    # that, and it is unchanged.
+    assert room.count("_mockRoomName(m,") >= 3, \
+        "the board, the clock line and the hero no longer share one name"
     assert '"Room " + (e.team + 1)' not in room and '"Team " + (e.team + 1)' not in room, \
         "a room is numbered where the league named it"
     # Sleeper names are the league's text, not ours: escaped on every

@@ -18,8 +18,7 @@ from ..betting import (
     apply_selection, net_edge, favourite_surcharge,
     pick_side, quote_prices_its_line, temper_edge, under_reason,
 )
-from ..calibrate import (apply_temperature, calibrated, correction_for,
-                        is_reliable)
+from ..calibrate import apply_temperature, calibrated, is_reliable
 from ..losspatterns import veto as lp_veto
 from ..odds import consensus_fair, expected_value
 from ..statmath import prob_over, clamp
@@ -192,7 +191,6 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
                           mlb_volatility, mlb_quality_score, mlb_letter)
     history = [g.value for g in prop.logs] if prop.logs else []
-    temp, bias = correction_for("mlb", prop.market)
 
     def p_over_at(line: float) -> float:
         # The curve itself lives in `prob_over_at` (module level), so the

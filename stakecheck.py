@@ -312,7 +312,7 @@ def info_report(rows: list[dict]) -> None:
           f"away\n    that pairing would widen this interval for no reason.")
 
     # --- what it means, stated before the numbers can be admired --------
-    _, e_auc, e_lo, e_hi = rows_out[2]
+    _, _e_auc, e_lo, e_hi = rows_out[2]
     print(f"\n  READ IT LIKE THIS")
     if e_lo <= 0.5 <= e_hi:
         print(f"    The claimed edge cannot be told apart from noise: its "
@@ -1381,7 +1381,12 @@ def clv_report(rows: list[dict]) -> None:
     rest_mean = (sum(v for _, v in pairs[len(worst):]) /
                  max(len(pairs) - len(worst), 1))
     print(f"\n  THE WORST DECILE, BY NAME")
-    print(f"    {len(worst)} bets averaging {sum(v for _, v in worst) / len(worst):+.2%}")
+    # AGAINST THE OTHER NINE. "averaging -12%" is a number; "-12% against
+    # +0.4% for the rest" is the comparison that says whether the decile
+    # is a tail of one distribution or a different population. The second
+    # figure was computed here and dropped.
+    print(f"    {len(worst)} bets averaging {sum(v for _, v in worst) / len(worst):+.2%}"
+          f"  ·  the other {len(pairs) - len(worst)} average {rest_mean:+.2%}")
     # NAMED, because at this magnitude the question stops being statistical.
     # A CLV of -20 points means a price that implied 50% closed implying
     # 27% — scratch-level, not ordinary prop movement. Eleven of those in

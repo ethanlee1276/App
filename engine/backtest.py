@@ -440,7 +440,7 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
     # Betting performance on recommended bets, overall and per pricing basis.
     bets = [s for s in settled if s.recommended]
-    staked = won = net = 0.0
+    staked = net = 0.0
     wins = pushes = 0
     clvs = []
     seg: dict[str, dict] = {}
@@ -498,7 +498,7 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     r.units_staked = staked
     r.net_units = net
     r.roi = (net / staked) if staked else 0.0
-    for basis, g in seg.items():
+    for _basis, g in seg.items():
         g["roi"] = (g["net"] / g["staked"]) if g["staked"] else 0.0
         graded = g["n_bets"] - g["pushes"]
         g["win_rate"] = (g["wins"] / graded) if graded else 0.0

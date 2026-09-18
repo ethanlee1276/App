@@ -274,7 +274,7 @@ def league_rates(conn, season: int,
     for p in data["players"].values():
         if (p["position"] or "").upper() in NO_VOLUME_FIT:
             continue
-        for wk, m in p["weeks"].items():
+        for _wk, m in p["weeks"].items():
             by_pos.setdefault(p["position"], []).append(
                 (m.get("targets", 0.0), m.get("carries", 0.0),
                  m.get("fp_ppr", 0.0)))

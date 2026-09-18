@@ -598,7 +598,7 @@ def _impossible_games(bag: dict, games: dict, skipped: dict) -> set:
     mis-parsed play could delete a hundred good games.
     """
     scored: dict = {}
-    for (gid, team, _opp, home, _player), slot in bag.items():
+    for (gid, _team, _opp, home, _player), slot in bag.items():
         value = slot.get("anytime_td", 0.0)
         if value:
             scored[(gid, bool(home))] = scored.get((gid, bool(home)), 0.0) \

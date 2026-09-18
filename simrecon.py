@@ -242,10 +242,10 @@ def run_history(conn, days: int, trials: int, fit_trials: int,
              "gate_failed": 0, "too_few_hitters": 0, "hr_pairs": 0}
     tally, hr_tally = Tally(), Tally()
 
-    for (period, team, leg), players in sorted(team_games.items()):
+    for (period, _team, _leg), players in sorted(team_games.items()):
         # As-of projections for every hitter who actually appeared.
         means, spots_rank = {}, []
-        for name, night in players.items():
+        for name, _night in players.items():
             games = hist.get(name) or []
             prior = [g for g in games if g[0][0] < period]
             mk = {}

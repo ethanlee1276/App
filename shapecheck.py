@@ -485,7 +485,7 @@ def report(pairs, name):
         print(f"    too few to ask a two-parameter question. Nothing is "
               f"reported rather\n    than reported thinly.")
         return
-    shown = _band_table(pairs)
+    _band_table(pairs)
 
     iqr = _logit_iqr(pairs)
     lo = sf._sigmoid(sorted(sf._logit(p) for p, _ in pairs)[n // 4])

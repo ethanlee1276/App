@@ -285,7 +285,6 @@ def check_odds_budget(rep):
         if not Path(ob.STATE_PATH).exists():
             rep.add("odds budget", WARN, _no_data("odds-budget state"))
             return
-        st = ob.load()
         # Recomputed at read time, not the stored headline: the headline is
         # whatever the LAST paid pull summed, and after a key rotation it
         # keeps counting the dead key's ghost until some pull rewrites it.
@@ -460,7 +459,7 @@ def check_premature_evidence(rep):
                 f"AND COALESCE(category, 'main') NOT IN ({cats})",
                 (*ledger.GAME_MARKETS, *ledger.GRADED_ELSEWHERE)).fetchall():
             where, wargs = ledger._hist_where(b)
-            rows, actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
+            rows, _actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
             finals = [g for g in rows if g["home_score"] is not None]
             if finals:
                 continue

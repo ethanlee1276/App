@@ -1179,7 +1179,7 @@ def _ufc_card_pending(quiet: bool = False) -> bool:
         events = oddsapi.list_events(oddsapi.get_api_key(), sport="ufc")
     except Exception:                                    # noqa: BLE001
         return True
-    label, card = select_card(events)
+    _label, card = select_card(events)
     if not card and not quiet:
         print("  UFC  no card inside the window — nothing to price, no paid pull")
     return bool(card)
@@ -2070,7 +2070,6 @@ def weigh_in_cli(argv: list) -> None:
     args = [a for a in argv[argv.index("--weigh-in") + 1:]
             if not a.startswith("--")]
     title = "--title" in argv
-    store = weighin.load_store()
 
     if len(args) >= 2:
         name, raw = " ".join(args[:-1]), args[-1]
@@ -6978,7 +6977,7 @@ def show_learning() -> None:
     # The store keys are the receipt, and they are what this table reads.
     from engine.ledger import TRACKED_SPORTS
     stores = {}
-    for label, mod_name, fname in (("temps", "calibrate", "calibration.json"),
+    for label, mod_name, _fname in (("temps", "calibrate", "calibration.json"),
                                    ("dial", "formfit", "formfit.json"),
                                    ("memory", "playerfit", "playerfit.json")):
         try:
@@ -9342,6 +9341,11 @@ def main() -> None:
                   f"oldest {age:>4.0f}d  "
                   + ("prunes at 30d" if prunable else "kept always"))
         n, freed = prune_cache(log=lambda m: print(m.strip()))
+        # AND HOW MUCH CAME BACK. `prune_cache` returns the bytes it
+        # freed and the caller printed only the count, which is the
+        # half that does not answer “do I still have a disk problem”.
+        if n:
+            print(f"  Freed {freed / 1e6:,.1f} MB across {n} file(s).")
         if not n:
             print(f"  Nothing older than {CACHE_KEEP_DAYS} days yet — "
                   f"pruning starts as these age out. History, budget state "

@@ -471,7 +471,7 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     hosts = home_teams(seasons)
     cand: dict = {}
     for key, hist, career, vs_opp, line, over, _oo, _uo in rows:
-        season, week, player, team, opponent = key
+        season, week, player, team, _opponent = key
         logs = [GameLog(week=0, opponent="", value=v) for v in hist]
         car = (sum(career) / len(career)) if career else (
             sum(hist) / len(hist) if hist else 0.0)
@@ -599,7 +599,7 @@ def roi_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     hosts = home_teams(seasons)
     recs: list = []
     for key, hist, career, vs_opp, line, over, oo, uo in rows:
-        season, week, player, team, opponent = key
+        season, week, player, team, _opponent = key
         logs = [GameLog(week=0, opponent="", value=v) for v in hist]
         car = (sum(career) / len(career)) if career else (
             sum(hist) / len(hist) if hist else 0.0)

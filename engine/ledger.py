@@ -2279,7 +2279,7 @@ def log_form_picks(conn, result: dict, team_form: dict,
         sh, sa = scores.get(home), scores.get(away)
         if sh is None or sa is None or abs(sh - sa) < FORM_GAP_BAR:
             continue
-        hot, hot_score = (home, sh) if sh > sa else (away, sa)
+        hot, _hot_score = (home, sh) if sh > sa else (away, sa)
         odds = g.get("home_ml") if hot == home else g.get("away_ml")
         if not odds:
             continue                      # no real price — nothing to sample

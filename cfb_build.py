@@ -84,7 +84,7 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     days = oddsapi.slate_days(games)
     other_day = reversed_events = 0
     try:
-        events, quota = oddsapi.fetch_sport_odds(
+        events, _quota = oddsapi.fetch_sport_odds(
             "cfb", api_key=api_key, cache_only=cache_only)
     except oddsapi.OddsAPIError as exc:
         return {}, f"odds unavailable: {exc}"

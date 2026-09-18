@@ -297,7 +297,7 @@ def _main(argv):
         data_dir = argv[i + 1] if i + 1 < len(argv) else None
         argv = argv[:i] + argv[i + 2:]
     names = [a for a in argv if not a.startswith("-")]
-    lines, leads = audit(names or None, show_internal=show, data_dir=data_dir)
+    lines, _leads = audit(names or None, show_internal=show, data_dir=data_dir)
     for line in lines:
         print(line)
     # Never nonzero: this is a reading, not a gate. A tool that fails the

@@ -366,7 +366,7 @@ def build_live_slate(date: str, season: int | None = None,
     for _, game, *_rest in raw:
         by_pair.setdefault((game.home, game.away), []).append(game)
     prop_games: set[int] = set()
-    for pair, legs in by_pair.items():
+    for _pair, legs in by_pair.items():
         if len(legs) > 1:
             legs.sort(key=lambda x: x.kickoff or "")
             for i, leg in enumerate(legs):
@@ -384,7 +384,7 @@ def build_live_slate(date: str, season: int | None = None,
     for g, game, *_rest in raw:
         game.sched_state = str(
             (g.get("status", {}) or {}).get("abstractGameState") or "").lower()
-    for pair, legs in by_pair.items():
+    for _pair, legs in by_pair.items():
         pg = next((x for x in legs if not finals.get(id(x))), legs[0])
         prop_games.add(id(pg))
 

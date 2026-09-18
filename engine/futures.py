@@ -315,7 +315,7 @@ def simulate(sport: str, ratings: dict, records: dict,
                 n_div[best] += 1
 
         champs = []
-        for conf, members in by_conf.items():
+        for _conf, members in by_conf.items():
             field = _seed_field(shape, table, members, sport, rng)
             for t in field:
                 n_po[t] += 1

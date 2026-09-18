@@ -680,6 +680,11 @@ def report(conn, sport: str = "mlb") -> int:
               f"scored by a fit that never saw its night")
         print(f"  gap {cv['gap_before']:+.1%} -> {cv['gap_after']:+.1%}   "
               f"(2σ ±{2 * cv['se']:.1%})     would read: {cv_v}")
+        # AND WHY IT READS THAT WAY. `verdict` returns the word and the
+        # sentence; the headline above prints both and these two printed
+        # only the word, so the opinion a reader is asked to weigh
+        # against it arrived with its reasoning removed.
+        print(f"  {cv_why}")
         ts = sorted(f[0] for f in cv["fits"])
         print(f"  temperatures across folds: {ts[0]:.2f} to {ts[-1]:.2f}"
               + ("   ** one or more hit the grid ceiling **"
@@ -765,6 +770,7 @@ def report(conn, sport: str = "mlb") -> int:
         print("  earlier nights — no future data anywhere in it")
         print(f"  gap {wf['gap_before']:+.1%} -> {wf['gap_after']:+.1%}   "
               f"(2σ ±{2 * wf['se']:.1%})     would read: {wf_v}")
+        print(f"  {wf_why}")
         ts = sorted(f[2] for f in wf["fits"])
         print(f"  temperatures across refits: {ts[0]:.2f} to {ts[-1]:.2f}")
         print()

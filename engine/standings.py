@@ -148,7 +148,7 @@ def compute(conn, sport: str, season: int | None = None,
             skipped_unfinished += 1
             continue
         home, away = _rec(r["home"]), _rec(r["away"])
-        for me, opp, mine, theirs, at_home in (
+        for me, _opp, mine, theirs, at_home in (
                 (home, away, hs, as_, True), (away, home, as_, hs, False)):
             me.points_for += mine
             me.points_against += theirs

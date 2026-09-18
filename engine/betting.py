@@ -15,7 +15,7 @@ from .projection import Projection
 from .odds import (BestLine, best_over_line, best_under_line, consensus_fair,
                    devig_two_way, expected_value, is_quotable)
 from .statmath import prob_over, prob_over_discrete, clamp
-from .calibrate import apply_temperature, calibrated, correction_for
+from .calibrate import apply_temperature, calibrated
 
 # --- calibration guards -----------------------------------------------------
 # The prop model is not yet calibrated to real outcomes, and live feeds
@@ -571,7 +571,6 @@ def evaluate_prop(prop: Prop, proj: Projection,
                           letter as quality_letter)
     from .calibrate import is_reliable
     from .losspatterns import veto as lp_veto
-    temp, bias = correction_for(sport, prop.market)
 
     def p_over_at(line: float) -> float:
         if prop.market == PASS_TD:

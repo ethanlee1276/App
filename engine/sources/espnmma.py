@@ -584,7 +584,7 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
     total_fights = len(comp_refs)
 
     fights: list[dict] = []
-    for i, ref in enumerate(comp_refs):
+    for _i, ref in enumerate(comp_refs):
         if len(fights) >= window:
             break
         cid = ref.rstrip("/").split("/")[-1].split("?")[0]

@@ -52,7 +52,18 @@ def test_the_generic_gate_carries_every_rung_and_no_hardcoded_sport():
     src = open(os.path.join(ROOT, "engine", "betting.py"),
                encoding="utf-8").read()
     assert 'correction_for("nfl"' not in src     # the old silent leak
-    assert "correction_for(sport, prop.market)" in src
+    # RE-ANCHORED 2026-09-18. This asserted a direct
+    # `correction_for(sport, prop.market)` call in this module. That call
+    # fetched the temperature and intercept and then DROPPED them — the
+    # correction is applied inside `p_over_at` by `calibrated`, which
+    # performs the same sport-keyed lookup itself. The guard is unchanged
+    # in substance: the lookup must be parameterised by this prop's sport
+    # and market and must never be a literal league. It is now asserted
+    # on the call that actually applies it, and the hardcoding ban is
+    # extended to that call too.
+    assert "calibrated(sport, prop.market, raw)" in src
+    assert 'calibrated("nfl"' not in src
+    assert 'calibrated("mlb"' not in src
     assert "is_reliable(sport, prop.market)" in src
     assert "lp_veto(sport, prop.market" in src
     i = src.index("gate_ok = ")

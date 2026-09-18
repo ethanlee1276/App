@@ -129,7 +129,7 @@ def main() -> None:
         if err:
             print(f"  {label:16} skipped — {err}")
             continue
-        c, report = got
+        c, _report = got
         # Stamp who fitted this and when. The journal fitter reads the basis
         # to decide what it may refit, and an unstamped entry is treated as
         # this fitter's — correct for the ones already on disk, but only a

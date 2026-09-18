@@ -189,7 +189,6 @@ def load_snap_counts(season: int) -> list[dict]:
     """Per-player offensive snap shares — the cleanest measured-role signal
     the volume stats can't provide (a back can have 8 carries on 70% of
     snaps or on 20%, and those are different players to bet on)."""
-    local = CACHE_DIR / f"snap_counts_{season}.csv"
     # NO local.exists() SHORT-CIRCUIT — it froze this feed forever.
     # `fetch_csv` caches at this same path with a 12-hour TTL and falls
     # back to the stale file when the network is down (and to a
@@ -582,7 +581,7 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
             cands = [(k, v) for k, v in agg.items() if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
             take = 1 if pos in ("QB",) else per_team
-            for (t, p, name), _v in cands[:take]:
+            for (_t, _p, name), _v in cands[:take]:
                 for market, role in markets:
                     specs.append(PlayerSpec(name, market, role))
     return specs

@@ -29019,22 +29019,14 @@ function mockDraftHTML() {
   // order (what the room pays) — the reader chose which list to draft
   // from, and the list, the default card and the auto-pick all read it.
   const sheet = _mockSheet(m);
-  const avail = sheet.slice(0, 12).map((p) => `
-    <div class="mk-log-row">
-      ${face(p, 32)}
-      ${idBlock(p, ` · VORP +${(p.vorp || 0).toFixed(1)} · Tier ${p.tier || "—"}`)}
-      ${sim ? _mockOdds(sim.survive.get(p.player)) : ""}
-      <button class="btn mk-take" data-mkp="${escapeAttr(p.player)}"
-        ${yourTurn ? "" : "disabled"}>Draft</button></div>`).join("");
-  const recent = m.log.slice(-m.teams).reverse().map((e) => `
-    <div class="mk-log-row${e.team === m.you ? " you" : ""}">
-      <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
-      <span class="mk-room" title="${escapeAttr(_mockRoomTitle(m, e.team))}">${
-        escapeHtml(_mockRoomName(m, e.team))}${
-        e.team === m.you ? "" : `<i class="mk-arch">${escapeHtml(
-          (((m.personas || [])[e.team] || {}).name || "").split(" ")[0])}</i>`}</span>
-      ${idBlock(e.player, "")}
-      <span class="chip">${escapeHtml(e.player.position)}</span></div>`).join("");
+  /* `avail` (the top twelve with a Draft button) and `recent` (the last
+     round's picks) were built here every render and never placed. They
+     are the pre-redesign versions of `poolList` and `boardList` below —
+     the three-column draft room replaced both and left these computing
+     face images and survival odds for twelve players, per keystroke,
+     into a string nobody read. Drafting itself was never affected: the
+     live button is `mk-draftbtn` on the selected-player card and the
+     click handler matches on `data-mkp`, which both lists carry. */
   const roster = m.rosters[m.you].map((p) => `
     <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}
       <span class="chip">${escapeHtml(p.position)}</span></div>`).join("");
@@ -30860,7 +30852,6 @@ async function renderUFC() {
   // A passed fight still shows both corners — the matchup is the whole
   // point of the page, and an unbet fight you can read is far more useful
   // than a one-line "no bet".
-  const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
   const fighterCol = fighterColHTML;
 
   const REASON_STYLE = {

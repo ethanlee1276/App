@@ -288,6 +288,24 @@ def attach(rows, markets, games, sport: str = "") -> dict:
             continue
         usable.append(m)
     census["usable markets"] = len(usable)
+    # HOW MANY BOARD ROWS WERE ELIGIBLE, COUNTED BEFORE ANY EARLY EXIT.
+    #
+    # This was tallied inside the row loop below, which never runs when
+    # the exchange sent nothing usable — so `rows` came back 0 and the
+    # caller's `if not seen` branch printed "no moneyline rows on the
+    # board to price" on a board that was full of them. The sentence
+    # blamed the board for the exchange's silence and sent a reader to
+    # look in the wrong place, which is the same fault as the census
+    # mislabelling fixed on 2026-09-16 one function over.
+    #
+    # `rows` now means "eligible rows on the board" whatever the feed
+    # did, and `attached` means "rows that got a number". A zero in the
+    # first is a board fact; a zero in the second with markets present is
+    # a matching fact; a zero in the second with no markets is a feed
+    # fact, and `attach_to_board` can now tell the three apart.
+    census["rows"] = sum(1 for row in rows or []
+                         if isinstance(row, dict)
+                         and str(row.get("market") or "") in MARKETS)
     if not usable:
         return census
     # THE NAMES `match_game` MATCHES ON — see `with_names`. Built once
@@ -336,7 +354,7 @@ def attach(rows, markets, games, sport: str = "") -> dict:
             continue
         if str(row.get("market") or "") not in MARKETS:
             continue
-        census["rows"] += 1
+        # `census["rows"]` is counted above, before the early exit.
         team = row.get("team") or row.get("player") or ""
         hit = None
         on_the_exchange = False
@@ -390,10 +408,36 @@ def attach_to_board(result: dict, sport: str) -> str:
         return f"  {sport.upper()} exchange fair: no board rows to price"
     try:
         from .sources import kalshi
-        markets, meta = kalshi.fetch_sports_markets(kalshi.parse_markets)
+        markets, series = kalshi.fetch_sports_markets(kalshi.parse_markets)
     except Exception as exc:                                  # noqa: BLE001
         result["exchange_fair_error"] = f"{type(exc).__name__}: {exc}"
         return f"  ⚠️  {sport.upper()} exchange fair: feed unavailable — {exc}"
+    # THE FEED'S OWN VERDICT, BEFORE THE BOARD'S.
+    #
+    # This report was FETCHED AND THROWN AWAY — `markets, meta = ...` and
+    # `meta` never read again. It is the one thing that separates three
+    # situations the log otherwise renders identically, and
+    # `fetch_sports_markets` says so in its own docstring: "A missing
+    # series is simply absent from the exchange's catalog under that name
+    # — recorded as 0 so the report distinguishes 'wrong name' from
+    # 'feed down'."
+    #
+    # AND THE `except` ABOVE CANNOT COVER IT. `fetch_sports_markets`
+    # catches per-series failures internally and records "error"; it does
+    # not raise. So an exchange that is entirely unreachable returns
+    # `([], {every series: "error"})` — no exception — and everything
+    # below reported it as a MATCHING problem: "0 of 30 rows priced — 30
+    # neither the title nor the ticker names both clubs". A feed that is
+    # down looked exactly like a naming bug, which is the same failure
+    # that cost #256 its diagnosis for weeks.
+    errored = sorted(k for k, v in (series or {}).items() if v == "error")
+    result["exchange_series"] = dict(series or {})
+    if series and len(errored) == len(series):
+        result["exchange_fair_error"] = (
+            "every Kalshi series failed to fetch: " + ", ".join(errored))
+        return (f"  ⚠️  {sport.upper()} exchange fair: THE FEED IS DOWN — all "
+                f"{len(errored)} series errored ({', '.join(errored)}). "
+                f"Nothing below is a matching problem.")
     try:
         census = attach(rows, markets, result.get("games") or [], sport)
     except Exception as exc:                                  # noqa: BLE001
@@ -419,6 +463,18 @@ def attach_to_board(result: dict, sport: str) -> str:
                                      "markets matched to a game"))
         line = (f"  {sport.upper()} exchange fair: 0 of {seen} row(s) priced"
                 + (f" — {why}" if why else ""))
+        # WHICH SERIES ANSWERED, on the one path where it decides what to
+        # go and look at. An empty catalog under every name is a ticker
+        # problem (`SPORT_SERIES`); some series erroring is a partial
+        # outage; both are invisible in a count of unmatched titles.
+        if errored:
+            line += (f"\n      {len(errored)} of {len(series)} series errored: "
+                     f"{', '.join(errored)} — a partial outage, not a match")
+        elif series and not any(v for v in series.values()):
+            line += (f"\n      every series came back EMPTY "
+                     f"({', '.join(sorted(series))}) — the exchange lists no "
+                     f"open events under these tickers, so there was nothing "
+                     f"to match against")
         # AND WHAT DID NOT LINE UP, side by side. `NO_MATCH` on every row
         # with markets present is a naming problem or a stale board, and
         # the only way to tell from a log is to print both parties'

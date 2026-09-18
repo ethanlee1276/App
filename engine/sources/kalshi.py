@@ -73,7 +73,7 @@ def fetch_sports_markets(parse) -> tuple[list[dict], dict]:
     simply absent from the exchange's catalog under that name — recorded
     as 0 so the report distinguishes "wrong name" from "feed down"."""
     out, report = [], {}
-    for sport, candidates in SPORT_SERIES.items():
+    for _sport, candidates in SPORT_SERIES.items():
         for series in candidates:
             try:
                 events = fetch_events(series)
