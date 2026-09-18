@@ -297,14 +297,71 @@ def test_the_journal_line_the_tracker_can_actually_see_is_marked():
         "a date the tracker cannot see is marked as one it can: " + miss)
 
 
-def test_open_bets_with_nothing_tracked_is_shouted_about():
+def test_bets_filed_under_a_date_the_tracker_cannot_match_are_shouted_about():
     """The failure this check exists for, and the one that is invisible
     from the page: a tracker whose exact match finds nothing draws the
-    same thing as a night with no bets."""
+    same thing as a night with no bets.
+
+    NOTE THE SHAPE. These rows are under 2026-W02 and the board is on
+    W03, so the count of rows the tracker CAN reach is zero — which is
+    why a single `reachable and not drawn` condition is a dead guard
+    here and the two failures are reported separately."""
     out = _live({"nfl": {"date": "2026-W03", "live_picks": [], "live_potd": []}},
                 [("nfl", "2026-W02", "main"), ("nfl", "2026-W02", "likely")])
-    assert "tracks NONE" in out, out
+    assert "invisible on the Live tab" in out, out
+    assert "2 row(s) in books the tab draws" in out, out
     assert "0 tracked" in out and "journal: 2 open nfl bet(s)" in out, out
+    # AND NOT ALSO AS A SETTLING NOTE. These are main and likely rows —
+    # bets the tab is supposed to draw — so calling them measurement rows
+    # under a past slate reports one fault as two and buries the loud one.
+    assert "measurement row(s) still open" not in out, out
+
+
+def test_a_tracker_that_misses_rows_on_its_own_date_is_a_louder_problem():
+    """The other failure: the rows are right there, under the board's own
+    date, in a book the tab draws, and nothing was tracked."""
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [], "live_potd": []}},
+                [("nfl", "2026-W03", "main"), ("nfl", "2026-W03", "likely")])
+    assert "the tracker itself is not working" in out, out
+    assert "invisible on the Live tab" not in out, (
+        "the rows ARE on the board's date; calling them mis-filed sends "
+        "the reader after the wrong thing:\n" + out)
+
+
+def test_a_measurement_book_is_never_counted_as_a_missing_bet():
+    """Ethan's 2026-09-18 run: `nfl 39 tracked` over `journal: 101 open`
+    — a 62-row gap with not one row missing. 59 were `stale`, the
+    line-staleness shadow book, which the Live tab has never drawn and
+    should not. Counting those made a healthy league read as a hole."""
+    out = _live({"nfl": {"date": "2026-W02",
+                         "live_picks": [{"phase": "live", "category": "main"}],
+                         "live_potd": []}},
+                [("nfl", "2026-W02", "main")]
+                + [("nfl", "2026-W02", "stale")] * 59)
+    assert "60 open nfl bet(s) — 1 in the books the Live tab draws" in out, out
+    assert "measurement book, never on the tab" in out, out
+    assert "1 drawn (1 tracked + 0 pick of the day) vs 1 reachable" in out, out
+    assert "!!" not in out, "a healthy league is being shouted about:\n" + out
+
+
+def test_the_books_the_tab_draws_come_from_the_engine_not_a_copy():
+    """A second list here would drift the first time a book is added,
+    and this check would go on calling the new one invisible."""
+    import inspect
+    body = inspect.getsource(homecheck.live).split('"""')[-1]
+    assert "TRACKER_CATEGORIES" in body and "POTD_TRACKER_CATEGORIES" in body, \
+        "the shown-book list is hand-written rather than imported"
+
+
+def test_a_stranded_measurement_row_gets_a_note_not_an_alarm():
+    """An NFL `stale` flag still open under 2026-W01 a week later is a
+    settling gap. Real, and not the thing the reader came here for."""
+    out = _live({"nfl": {"date": "2026-W02",
+                         "live_picks": [{"phase": "live", "category": "main"}]}},
+                [("nfl", "2026-W02", "main"), ("nfl", "2026-W01", "stale")])
+    assert "1 measurement row(s) still open under a past slate" in out, out
+    assert "invisible on the Live tab" not in out, (
+        "a measurement row is being reported as a tracking failure:\n" + out)
 
 
 def test_a_genuinely_quiet_league_is_not_shouted_about():

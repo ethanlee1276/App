@@ -163,6 +163,22 @@ def live() -> list:
     of open bets under one label and a board carrying another is a
     tracker that finds nothing and says nothing, and that is invisible
     from the page: it reads exactly like a quiet night.
+
+    AND WHICH BOOKS THE TAB EVEN DRAWS, because without that the two
+    numbers do not appear to reconcile and a healthy league reads as a
+    hole. Ethan's 2026-09-18 run showed `nfl 39 tracked` over
+    `journal: 101 open` — a 62-row gap, and not one row missing: 59 of
+    those are `stale`, the shadow book that measures line-staleness at a
+    zero stake, and the Live tab has never drawn it. `TRACKER_CATEGORIES`
+    is main/longshot/likely, plus the Pick of the Day on its own key, and
+    nothing else. So every line now says whether it is a book the tab
+    draws, and the arithmetic is printed rather than left to be done from
+    memory.
+
+    THE SHOUT COUNTS ONLY THOSE BOOKS, for the same reason. Reading the
+    whole open count made a league whose only open rows are measurement
+    rows look like a broken tracker — a false alarm on the honest state
+    of a quiet day.
     """
     out = ["LIVE — the open-bet tracker, per league",
            "  board's live_picks/live_potd, against the journal's open rows"]
@@ -203,16 +219,69 @@ def live() -> list:
                        f"{type(exc).__name__}: {exc}")
             continue
         total = sum(r["n"] for r in openrows)
-        out.append(f"       journal: {total} open {sport} bet(s)")
+        # The books the Live tab draws, straight off the engine's own
+        # tuples rather than a copy of them here — a second list would
+        # drift the first time a book is added and this check would go on
+        # calling the new one invisible.
+        from engine.livepicks import (POTD_TRACKER_CATEGORIES,
+                                      TRACKER_CATEGORIES)
+        shown_books = set(TRACKER_CATEGORIES) | set(POTD_TRACKER_CATEGORIES)
+        shown = sum(r["n"] for r in openrows
+                    if str(r["category"]) in shown_books)
+        # ON THE BOARD'S DATE, which is the number the tracker can
+        # actually reach: the right-hand side of the reconciliation.
+        reachable = sum(r["n"] for r in openrows
+                        if str(r["category"]) in shown_books
+                        and str(r["date"]) == date)
+        out.append(f"       journal: {total} open {sport} bet(s) — "
+                   f"{shown} in the books the Live tab draws")
         for r in openrows:
-            mark = "   <- the board's date" if str(r["date"]) == date else ""
+            cat = str(r["category"])
+            on_date = str(r["date"]) == date
+            if cat not in shown_books:
+                note = "   measurement book, never on the tab"
+            elif on_date:
+                note = "   shown  <- the board's date"
+            else:
+                note = "   !! a shown book under another date — INVISIBLE"
             out.append(f"         {str(r['date']):12} "
-                       f"{str(r['category']):16} {r['n']:3d}{mark}")
-        if total and not rows and not potd:
-            out.append("       !! the journal holds open bets and the board "
-                       "tracks NONE — no line above is marked as the "
-                       "board's date, so the tracker's exact match on it "
-                       "found nothing")
+                       f"{cat:16} {r['n']:3d}{note}")
+        drawn = len(rows) + len(potd)
+        out.append(f"       reconciles: {drawn} drawn "
+                   f"({len(rows)} tracked + {len(potd)} pick of the day) "
+                   f"vs {reachable} reachable"
+                   + ("" if drawn == reachable else "   !! THESE DISAGREE"))
+        # TWO DIFFERENT FAILURES, AND THEY NEED SAYING SEPARATELY.
+        #
+        # The first draft of this shouted only on `reachable and not
+        # drawn`, which is a dead guard for the case the check was
+        # WRITTEN for: rows filed under a date the tracker cannot match
+        # have `reachable == 0`, so the one condition could never fire on
+        # them. Both are named now.
+        invisible = shown - reachable
+        if invisible:
+            out.append(f"       !! {invisible} row(s) in books the tab draws "
+                       f"are filed under a date that is NOT the board's — "
+                       f"`open_bets_for` matches it exactly, so they are "
+                       f"invisible on the Live tab and will stay that way")
+        if reachable and not drawn:
+            out.append("       !! the journal holds bets in books the tab "
+                       "draws, on the board's OWN date, and the board "
+                       "tracks none of them — the tracker itself is not "
+                       "working")
+        # AN OPEN ROW FROM A SLATE THAT IS OVER, in a book the tab never
+        # draws: not a tracking problem, and not nothing either — nothing
+        # downstream will ever close it. Ethan's 2026-09-18 run carried
+        # one, an NFL `stale` flag still open under 2026-W01 a week on.
+        # Shown books under an old date get the louder line above instead
+        # of being counted twice here.
+        stranded = sum(r["n"] for r in openrows
+                       if str(r["date"]) != date
+                       and str(r["category"]) not in shown_books)
+        if stranded:
+            out.append(f"       note: {stranded} measurement row(s) still "
+                       f"open under a past slate — a settling gap, not a "
+                       f"tracking one")
     if conn is not None:
         conn.close()
     return out

@@ -672,23 +672,44 @@ thing.
 cd /srv/qellys && python3 homecheck.py live
 ```
 
-**What to look for.** Two numbers per league, and whether they agree:
+**RAN 2026-09-18 — ALL THREE LEAGUES RECONCILE EXACTLY.** The NFL board
+had 39 tracked rows with 5 live and 2 Pick of the Day rows while Ethan
+was reading a list of baseball bets, which settles it: the bets were
+there, the page was showing another league's. The output:
 
 ```
-  nfl  board date 2026-W03   |   6 tracked (4 live, 2 likely) | 1 pick of the day
-       journal: 6 open nfl bet(s)
-         2026-W03     main               4   <- the board's date
-         2026-W03     likely             2   <- the board's date
+  nfl  board date 2026-W02     |  39 tracked (5 live, 31 likely) | 2 pick of the day
+       journal: 101 open nfl bet(s) — 41 in the books the Live tab draws
+         2026-W02     likely            31   shown  <- the board's date
+         2026-W02     longshot           3   shown  <- the board's date
+         2026-W02     main               5   shown  <- the board's date
+         2026-W02     potd               2   shown  <- the board's date
+         2026-W02     stale             59   measurement book, never on the tab
+         2026-W01     stale              1   measurement book, never on the tab
+       reconciles: 41 drawn (39 tracked + 2 pick of the day) vs 41 reachable
+       note: 1 measurement row(s) still open under a past slate
 ```
 
-* **`tracked` is 0 and `journal` is 0** — nothing was journaled for this
-  league today. The tab is right and the question moves upstream to why
-  the board recommended nothing.
-* **`tracked` is 0 and `journal` is not** — the tracker cannot find rows
-  that exist. Read the date column: `livepicks.open_bets_for` matches
-  `date` EXACTLY, and football files a **week label** (`2026-W03`), not
-  a day. Any line without the `<- the board's date` marker is invisible
-  to the Live tab, and the check shouts when every line is unmarked.
+**101 open against 39 tracked is not a 62-row hole.** 59 of those are
+`stale`, the line-staleness shadow book, which is journaled at a zero
+stake to be measured and has never been drawn on the Live tab.
+`TRACKER_CATEGORIES` is main/longshot/likely plus the Pick of the Day on
+its own key — so the number to compare is the `reconciles:` line, and it
+is the check that does the arithmetic rather than you.
+
+**What to look for.**
+
+* **`reconciles:` disagrees** — shouted as `THESE DISAGREE`. Rows the
+  tracker could reach and did not draw.
+* **`invisible on the Live tab`** — rows in a book the tab draws, filed
+  under a date that is NOT the board's. `open_bets_for` matches `date`
+  exactly and football files a **week label** (`2026-W02`), not a day,
+  so these never appear and never will.
+* **`the tracker itself is not working`** — the rows are on the board's
+  own date, in a book the tab draws, and nothing was tracked.
+* **`measurement row(s) still open under a past slate`** — a settling
+  gap, not a tracking one. The one NFL `stale` flag under `2026-W01` is
+  the current example: nothing downstream will ever close it.
 * **`live_picks_error`** — the build's tracker threw. The message is the
   build's own, written into the board so the page could show it.
 
