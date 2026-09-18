@@ -28402,19 +28402,6 @@ function _mockSim() {
   return _mock.sim;
 }
 
-/* A survival chance, said the way a drafter reads it. The bands are the
-   decision, not decoration: over 80% is a player you can wait on, under
-   25% is one you take now or lose. */
-function _mockOdds(pct) {
-  if (pct == null) return "";
-  const n = Math.round(pct * 100);
-  const cls = n >= 80 ? "up" : n <= 25 ? "down" : "";
-  const tip = n >= 80 ? "Very likely still here at your next pick."
-    : n <= 25 ? "Usually gone before your next pick — take him now or plan without him."
-    : "A coin-flip-ish wait. The number is how often he survived the simulated picks between now and your turn.";
-  return `<span class="chip mk-odds ${cls}" title="${escapeAttr(tip)}">${n}%</span>`;
-}
-
 /* ---- The cliff --------------------------------------------------------
    Every simulator worth copying flags a tier break, and for a good
    reason: inside a tier the differences are noise (the kit's own notes

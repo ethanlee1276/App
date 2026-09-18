@@ -3851,15 +3851,11 @@ body.msg-thread-open .footer { display: none; }
 .mk-meta { color: var(--text-mute); font-size: var(--fs-xs);
   display: inline-flex; align-items: center; gap: 4px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mk-pickno { color: var(--text-mute); font-variant-numeric: tabular-nums;
-  min-width: 3em; flex: none; }
-.mk-room { flex: none; min-width: 4.2em; }
 .mk-slotchip { min-width: 3.4em; text-align: center; flex: none; }
 .mk-advice { display: block; padding: 12px 16px; margin-bottom: 16px;
   border-left: 3px solid var(--brand-2); font-size: var(--fs-sm); }
 .mk-advice-head { font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: .06em; color: var(--text-mute); margin-bottom: 6px; }
-.mk-take { padding: 4px 10px; flex: none; margin-left: auto; }
 
 /* The fantasy player dossier — a bottom sheet on phones, centred on
    desktop. One overlay reused for every open; sections only render when
@@ -7811,7 +7807,6 @@ button.rc-day b { font-size: var(--fs-sm); }
 .mk-prog > i { position: absolute; left: 0; top: 0; bottom: 0;
   background: var(--grad-brand); }
 /* The survival odds, which are the point of the whole simulation. */
-.mk-odds { flex-shrink: 0; font-variant-numeric: tabular-nums; font-weight: 800; }
 .mk-wait { padding: 12px 14px; margin-bottom: 14px; }
 .mk-wait-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; }
@@ -7872,7 +7867,7 @@ button.rc-day b { font-size: var(--fs-sm); }
 .mk-mate-line { color: var(--text-mute); font-size: var(--fs-2xs); letter-spacing: .04em;
   margin-left: 6px; }
 .mk-mate-draw { color: var(--text-mute); font-style: italic; font-size: var(--fs-sm); }
-.mk-room, .mk-bteam { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis;
+.mk-bteam { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .mk-startbtn { width: 100%; margin-top: 14px; padding: 12px; display: flex;
   flex-direction: column; align-items: center; gap: 2px;
@@ -7930,10 +7925,6 @@ button.rc-day b { font-size: var(--fs-sm); }
   font-variant-numeric: tabular-nums; }
 .mk-wait-foot { margin: 10px 0 0; font-size: var(--fs-xs);
   color: var(--text-mute); line-height: var(--lh-body); }
-/* Which build each rival room is running — the thing that makes a draft
-   feel like a room of people rather than one algorithm twelve times. */
-.mk-arch { display: block; font-style: normal; font-size: var(--fs-2xs);
-  font-weight: 600; color: var(--text-mute); letter-spacing: .02em; }
 
 /* --- How this number was built (Ethan, 2026-08-20) ---------------------
    The model's own arithmetic as a ledger: base, each named factor, the
