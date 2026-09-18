@@ -6742,6 +6742,16 @@ body.has-rail .shell {
 .lb-shelf .mini { color: var(--text-mute); font-weight: 600;
   letter-spacing: 0; text-transform: none; }
 .lb-shelf + .lb-grid { margin-bottom: 24px; }
+/* The league a Live-tab BETS panel is speaking for (2026-09-18). The
+   game cards above can be filtered to any league or to all of them; the
+   bets are always one loaded board's. Small, mono, and in the header
+   rather than a footnote, because the whole point is that it is read
+   before the rows under it are. */
+.lb-of-league { display: inline-block; margin-left: 7px; padding: 1px 7px;
+  border: var(--hairline) solid var(--border); border-radius: 999px;
+  background: var(--panel-2);
+  font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .1em; color: var(--text-mute); vertical-align: middle; }
 .lb-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
   background-color: var(--panel); background-image: var(--grad-card);
   padding: 13px 15px; cursor: pointer;

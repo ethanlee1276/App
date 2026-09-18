@@ -4206,6 +4206,23 @@ function renderLivePicks() {
   const potdRows = liveTrackerRows((state.data || {}).live_potd || []);
   const elsewhere = (state.data || {}).open_elsewhere || 0;
   const trackerErr = (state.data || {}).live_picks_error;
+  /* WHOSE BETS THESE ARE, said on every panel.
+
+     These lists are the LOADED BOARD's — `state.data`, one league at a
+     time — while the game cards above them can be filtered to any league
+     or to all of them at once. Nothing on the page said so, which is how
+     Ethan came to be looking at the Lions live above a list of baseball
+     bets on 2026-09-18 and had no way to tell what he was reading.
+
+     The chip now moves the whole tab (see `renderLiveBoard`), so the two
+     halves agree whenever a league is chosen. "All" is the state that
+     cannot agree — bets cannot be all-league — and this is what makes
+     that state legible instead of wrong-looking. It is also the guard
+     that survives the next bug of this shape: a panel that names its
+     league cannot show another one's silently. */
+  const leagueNow = LEAGUE_LABEL[state.sport]
+    || String(state.sport || "").toUpperCase();
+  const leagueTag = `<span class="lb-of-league">${escapeHtml(leagueNow)}</span>`;
   if (trackerErr) {
     // A broken tracker must say so — an empty space reads as "no bets".
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-top:8px">
@@ -4216,9 +4233,9 @@ function renderLivePicks() {
   if (!rows.length && !elsewhere && !potdRows.length) {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
-      <div class="section-title">${iconMark("target")} Open bets
+      <div class="section-title">${iconMark("target")} Open bets ${leagueTag}
         <span class="sub">— every journaled bet on today’s card, tracked while its game runs</span></div>
-      <div class="card">${emptySlate("inbox", "No open bets on today’s card", "A pick journals the moment it’s recommended and lives here until it settles — live progress bars, at-bat situation, and provisional grades as the games run.")}</div>`;
+      <div class="card">${emptySlate("inbox", `No open ${leagueNow} bets on today’s card`, "A pick journals the moment it’s recommended and lives here until it settles — live progress bars, at-bat situation, and provisional grades as the games run. Another league’s bets live on that league’s Live tab — use the chips above the games.")}</div>`;
     return;
   }
 
@@ -4534,7 +4551,7 @@ function renderLivePicks() {
     return `
     <div class="section-title">${n
         ? `<span style="color:var(--bad)">${icon('dot')}</span>`
-        : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title}
+        : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title} ${leagueTag}
       <span class="sub">— ${sub}</span></div>
     <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
       ${list.length ? list.map(rowHTML).join("")
@@ -4561,7 +4578,7 @@ function renderLivePicks() {
     : potdLive ? "var(--bad)" : "var(--brand)";
   const potdPanel = !potdRows.length ? "" : `
     <div class="section-title">
-      <span style="color:${potdEdge}">${icon('dot')}</span> Pick of the Day
+      <span style="color:${potdEdge}">${icon('dot')}</span> Pick of the Day ${leagueTag}
       ${potdLive ? `<span class="lb-live" style="color:var(--bad);margin-left:7px">
         <span class="live-dot"></span>LIVE NOW</span>` : ""}
       <span class="sub">— the one pick today is named after, tracked from first pitch to final</span></div>
@@ -4578,7 +4595,7 @@ function renderLivePicks() {
     `every journaled edge bet on today’s card: live with real-time progress,
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.`,
-    "No open edge bets on today’s card.",
+    `No open ${escapeHtml(leagueNow)} edge bets on today’s card.`,
     `${edge.length} open edge ${pluralWord(edge.length, "bet")} on today’s card${elsewhere
           ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
             + ` This tab tracks THIS league’s card; the Record page counts them all`
@@ -4590,7 +4607,7 @@ function renderLivePicks() {
   + panel(likely, "Open Most Likely bets",
     `the likelihood board’s rows, tracked the same way — a read on who hits,
       journaled at a flat stake with no dollar exposure, graded on its own book.`,
-    "No open Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.",
+    `No open ${escapeHtml(leagueNow)} Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.`,
     `${plural(likely.length, "Most Likely row")} on today’s card. These are ranked by measured
         likelihood, not by edge against the price, and settle on the likelihood book
         the Record page keeps separately.`);
@@ -38359,8 +38376,55 @@ async function renderLiveBoard() {
         <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
     </div>
     ${nothingHere}${shelved}`;
+  /* A LEAGUE CHIP MOVES THE WHOLE TAB, NOT THE TOP HALF OF IT.
+
+     Ethan, 2026-09-18, during Lions-Bills: "we have a live nfl game
+     right now and it's not showing any live edge or most likely bets in
+     the live tab. Instead, it's showing mlb bets."
+
+     Nothing was stale and nothing was mis-filed. THIS TAB HAD TWO
+     LEAGUE SELECTORS and only one of them moved the page. The chip row
+     set `_liveChip`, which filters the GAME CARDS above and is read by
+     nothing else; the bets below (`renderLivePicks`, `renderSweatZone`,
+     the Pick of the Day panel) all read `state.data`, the board of the
+     league the SPORTBAR button is on. So tapping NFL here drew the
+     Lions game over a list of baseball bets, and every one of those
+     panels was correct about a league the reader had just left.
+
+     The coupling already ran the other way — `_liveChipSport` makes the
+     chip follow the sport button, which is the note above this one — so
+     it was a selector that could only ever be half-obeyed. It now does
+     what the sportbar button does, through the sportbar button itself
+     rather than a second copy of the switch: one definition of "change
+     league", and the bets under the games are the bets for the games.
+
+     "All" stays a pure filter, because bets cannot be all-league — one
+     board is loaded at a time. That state is the reason every panel
+     below now carries its league in the header. */
   host.querySelectorAll(".lb-chip").forEach((b) =>
-    b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
+    b.addEventListener("click", () => {
+      const want = b.dataset.chip;
+      _liveChip = want;
+      if (want !== "all" && want !== state.sport && SPORT_CODES.includes(want)) {
+        // `_liveChipSport` IS DELIBERATELY NOT TOUCHED HERE. Setting it
+        // to the chosen league looked like belt and braces and was a
+        // dead guard: on the fallback below it makes the follow rule at
+        // the top of this function see chip-and-league already agreed,
+        // so the rule resets `_liveChip` to the league we did NOT
+        // switch to — the tap filters nothing and does nothing. Left
+        // alone it still reads as the PREVIOUS league on both paths,
+        // which is what the rule needs to fire (or not) correctly.
+        const btn = document.querySelector(
+          `.sportbar-in .sport-btn[data-sport="${want}"]`);
+        // That button is the switcher: state.sport, applySport(), and a
+        // load() that redraws this tab — bets included — off the league
+        // just chosen. A league with no button in the bar (hidden by the
+        // nav setting is still in the DOM; genuinely absent is not)
+        // falls through and at least filters the cards.
+        if (btn) { btn.click(); return; }
+      }
+      renderLiveBoard();
+    }));
   if (typeof mountLiveTicks === "function") mountLiveTicks(host);
   host.querySelectorAll(".lb-card").forEach((el) =>
     el.addEventListener("click", () => {

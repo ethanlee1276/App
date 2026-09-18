@@ -228,6 +228,142 @@ def test_every_check_this_script_offers_is_reachable_from_the_runbook():
         f"nobody will run them: {missing}")
 
 
+# --- LIVE: the tab that could not tell an empty tracker from a quiet night ---
+def _swap_boards(boards):
+    """Whole boards, not just game rows. Same rule as `_swap`: THE TESTS
+    DO NOT READ THIS BOX."""
+    real = homecheck._board
+
+    def fake(sport):
+        if sport not in boards:
+            raise FileNotFoundError(f"no board for {sport}")
+        return boards[sport]
+    homecheck._board = fake
+    return real
+
+
+def _swap_journal(rows):
+    """An in-memory journal holding ``(sport, date, category)`` rows.
+
+    A real sqlite, so the check's own SQL is what is being exercised —
+    a hand-built stub returning the shape the check wants would test the
+    stub. In memory, so nothing on this box is opened or locked.
+    """
+    import sqlite3
+    real = homecheck._journal_ro
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, date TEXT, category TEXT, "
+                 "status TEXT)")
+    conn.executemany("INSERT INTO bets VALUES (?,?,?, 'open')", rows)
+    homecheck._journal_ro = lambda: (conn, "")
+    return real
+
+
+def _live(boards, rows):
+    real_b = _swap_boards(boards)
+    real_j = _swap_journal(rows)
+    try:
+        return "\n".join(homecheck.live())
+    finally:
+        homecheck._board = real_b
+        homecheck._journal_ro = real_j
+
+
+def test_the_two_numbers_that_have_to_agree_are_printed_together():
+    """The board's tracked count and the journal's open count, on
+    adjacent lines. Either alone answers nothing."""
+    out = _live({"nfl": {"date": "2026-W03",
+                         "live_picks": [{"phase": "live", "category": "main"},
+                                        {"phase": "upcoming", "category": "likely"}],
+                         "live_potd": [{}]}},
+                [("nfl", "2026-W03", "main"), ("nfl", "2026-W03", "likely")])
+    assert "board date 2026-W03" in out, out
+    assert "2 tracked (1 live, 1 likely)" in out, out
+    assert "1 pick of the day" in out, out
+    assert "journal: 2 open nfl bet(s)" in out, out
+
+
+def test_the_journal_line_the_tracker_can_actually_see_is_marked():
+    """`open_bets_for` matches `date` EXACTLY. Which of the journal's
+    dates is the board's is the whole diagnosis, so it is marked rather
+    than left to be eyeballed against a label three lines up."""
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [{"phase": "live"}]}},
+                [("nfl", "2026-W03", "main"), ("nfl", "2026-W02", "main")])
+    hit = [x for x in out.splitlines() if "2026-W03" in x and "main" in x][0]
+    miss = [x for x in out.splitlines() if "2026-W02" in x][0]
+    assert "<- the board's date" in hit, hit
+    assert "<- the board's date" not in miss, (
+        "a date the tracker cannot see is marked as one it can: " + miss)
+
+
+def test_open_bets_with_nothing_tracked_is_shouted_about():
+    """The failure this check exists for, and the one that is invisible
+    from the page: a tracker whose exact match finds nothing draws the
+    same thing as a night with no bets."""
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [], "live_potd": []}},
+                [("nfl", "2026-W02", "main"), ("nfl", "2026-W02", "likely")])
+    assert "tracks NONE" in out, out
+    assert "0 tracked" in out and "journal: 2 open nfl bet(s)" in out, out
+
+
+def test_a_genuinely_quiet_league_is_not_shouted_about():
+    """Nothing journaled and nothing tracked is the tab being right. A
+    warning that fires on a quiet Tuesday is a warning nobody reads."""
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [], "live_potd": []}},
+                [])
+    assert "tracks NONE" not in out, out
+    assert "0 tracked" in out, "a zero still has to be printed"
+
+
+def test_a_tracker_that_threw_says_so_instead_of_reading_as_empty():
+    """`attach_tracker` writes its own failure into the board precisely
+    so it is not read as a zero."""
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [],
+                         "live_picks_error": "no such column: leg"}},
+                [])
+    assert "live_picks_error: no such column: leg" in out, out
+
+
+def test_a_board_that_cannot_be_read_does_not_take_the_other_leagues():
+    out = _live({"nfl": {"date": "2026-W03", "live_picks": [{"phase": "live"}]}},
+                [("nfl", "2026-W03", "main")])
+    assert "mlb" in out and "cannot read board" in out, out
+    assert "1 tracked" in out, "the league that HAS a board was lost"
+
+
+def test_the_journal_is_opened_read_only_and_from_the_right_file():
+    """Two mistakes this repo has already made, in one function.
+
+    `ledger.connect()` runs the migrations and the schema script on the
+    first connection in a process — writes, on the file the refresher
+    and the settler are using — and every subcommand here is advertised
+    as safe to run mid-cycle. `db.connect()` opens history.db, which has
+    no `bets` table; that swap cost Ethan a runbook command on
+    2026-09-16 and came back as a bare sqlite error.
+    """
+    import inspect
+    # THE CODE, NOT THE DOCSTRING. The first draft of this searched the
+    # whole source and failed on the function's own explanation of why
+    # `ledger.connect()` is wrong — an assertion matching the prose that
+    # documents the fix rather than the fix.
+    body = inspect.getsource(homecheck._journal_ro).split('"""')[-1]
+    assert "mode=ro" in body, \
+        "the journal is opened writable — it can take the exclusive lock"
+    assert "ledger.DEFAULT_DB" in body, \
+        "the journal is not read from the ledger's own path"
+    assert "ledger.connect(" not in body, \
+        "ledger.connect() migrates and writes on first use in a process"
+    assert "db.connect(" not in body, \
+        "that is history.db, which has no `bets` table"
+
+
+def test_the_live_check_runs_inside_the_daily_paste():
+    """A check outside `all` is a check nobody runs twice."""
+    assert homecheck.CHECKS["live"][2] is True, \
+        "`live` is excluded from `all`, so the daily paste will not carry it"
+
+
 CHECK_NAMES = tuple(homecheck.CHECKS)
 
 

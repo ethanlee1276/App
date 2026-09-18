@@ -89,8 +89,11 @@ def test_a_likely_row_never_prints_a_stake_or_a_riding_warning():
 
 def test_each_panel_has_its_own_empty_state():
     body = _fn("renderLivePicks")
-    assert "No open edge bets on today’s card." in body
-    assert "No open Most Likely bets on today’s card" in body
+    # Each empty line names its LEAGUE (2026-09-18). A panel that says
+    # "no open edge bets" without saying whose was the sentence Ethan
+    # read with the Lions on and the MLB board loaded.
+    assert "No open ${escapeHtml(leagueNow)} edge bets on today’s card." in body
+    assert "No open ${escapeHtml(leagueNow)} Most Likely bets on today’s card" in body
 
 
 def test_the_sweat_splits_the_same_way():

@@ -49,11 +49,25 @@ def test_a_league_without_a_live_feed_lands_on_all():
 
 
 def test_the_choice_survives_until_the_sport_changes():
+    """Re-anchored 2026-09-18. This asserted the handler was the literal
+    one-liner `_liveChip = b.dataset.chip; renderLiveBoard();`, which is
+    the thing that had to change: a chip that only set that variable
+    moved the GAME CARDS and left the bets on the league the sportbar
+    was on, so Ethan tapped NFL during Lions-Bills and read a list of
+    baseball bets. The chip switches the league now.
+
+    What survives, and what this test is actually about, is the memory:
+    the chip is still set directly from the tap, and the follow rule
+    still fires only when the SPORT has moved since the chip was chosen
+    — so a choice is not overwritten on every redraw. The switching
+    behaviour is pinned behaviourally, by running the handler, in
+    tests/test_the_live_tab_says_whose_bets_these_are.py."""
     assert "let _liveChipSport = null;" in APP
     body = _fn("renderLiveBoard")
-    # The click handler still sets the chip directly; the follow only
-    # fires when the sport differs from the one the chip was chosen under.
-    assert "_liveChip = b.dataset.chip; renderLiveBoard();" in body
+    assert "_liveChip = want;" in body, \
+        "the tap no longer sets the chip it was made on"
+    assert "if (_liveChipSport !== state.sport) {" in body, \
+        "the follow rule fires on every draw, so a chosen chip cannot stick"
 
 
 def test_a_dark_league_says_so_instead_of_an_empty_grid():

@@ -650,6 +650,52 @@ run settles which of these it is.
 
 ---
 
+## LIVE. Does the Live tab have any bets to draw? (read-only, seconds)
+
+Ethan, 2026-09-18, during Lions-Bills: *"we have a live nfl game right
+now, and it's not showing any live edge or most likely bets in the live
+tab. Instead, it's showing mlb bets."*
+
+Two separate faults wear that one sentence, and only one of them is
+visible from a browser.
+
+The **showing mlb bets** half was the page: the Live tab had two league
+selectors and the chips above the games only moved the games. Fixed —
+a chip now switches the league outright, and every bets panel prints
+the league it is speaking for, so the mismatch cannot come back silent.
+
+The **not showing any** half is this check. It is not answerable from
+the page, because an empty tracker and a quiet night draw the same
+thing.
+
+```bash
+cd /srv/qellys && python3 homecheck.py live
+```
+
+**What to look for.** Two numbers per league, and whether they agree:
+
+```
+  nfl  board date 2026-W03   |   6 tracked (4 live, 2 likely) | 1 pick of the day
+       journal: 6 open nfl bet(s)
+         2026-W03     main               4   <- the board's date
+         2026-W03     likely             2   <- the board's date
+```
+
+* **`tracked` is 0 and `journal` is 0** — nothing was journaled for this
+  league today. The tab is right and the question moves upstream to why
+  the board recommended nothing.
+* **`tracked` is 0 and `journal` is not** — the tracker cannot find rows
+  that exist. Read the date column: `livepicks.open_bets_for` matches
+  `date` EXACTLY, and football files a **week label** (`2026-W03`), not
+  a day. Any line without the `<- the board's date` marker is invisible
+  to the Live tab, and the check shouts when every line is unmarked.
+* **`live_picks_error`** — the build's tracker threw. The message is the
+  build's own, written into the board so the page could show it.
+
+`live` runs inside `homecheck.py all`, so the daily paste carries it.
+
+---
+
 ## FILLER. Did the baseball filler price actually die? (read-only, seconds — but see the timing note)
 
 Ethan, 2026-09-16, reading the MLB census: *"Eleven of the twelve game

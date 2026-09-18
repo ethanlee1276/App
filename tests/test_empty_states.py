@@ -60,7 +60,11 @@ def test_the_permanent_messages_moved_rather_than_vanished():
     """A conversion that quietly dropped a sentence would pass the test
     above and lose the thing the sentence said."""
     for said in ("Nothing settled yet",
-                 "No open bets on today",
+                 # Re-anchored 2026-09-18: the sentence now names the
+                 # league it is empty FOR, which is the whole point of
+                 # the change — it was read on a night the reader had
+                 # an NFL game up and a baseball board loaded.
+                 "No open ${leagueNow} bets on today",
                  "Flags settle as their markets resolve",
                  "Nobody outside the sustainable band right now",
                  "No market clears the gate right now",
