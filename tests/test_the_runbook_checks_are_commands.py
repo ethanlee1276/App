@@ -421,6 +421,104 @@ def test_the_live_check_runs_inside_the_daily_paste():
         "`live` is excluded from `all`, so the daily paste will not carry it"
 
 
+# --- GRADING: a book that can never close a bet ------------------------------
+def _grading(counts, stuck=()):
+    """`counts` is (sport, status, n); `stuck` is (sport, reason) rows as
+    `ledger.why_open` would return them."""
+    import sqlite3
+    from engine import ledger
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT)")
+    for sport, status, n in counts:
+        conn.executemany("INSERT INTO bets VALUES (?,?)",
+                         [(sport, status)] * n)
+    real_j, real_h = homecheck._journal_ro, homecheck._history_ro
+    real_w = ledger.why_open
+    homecheck._journal_ro = lambda: (conn, "")
+    homecheck._history_ro = lambda: (sqlite3.connect(":memory:"), "")
+    ledger.why_open = lambda *a, **k: [{"sport": sp, "reason": why}
+                                       for sp, why in stuck]
+    try:
+        return "\n".join(homecheck.grading())
+    finally:
+        homecheck._journal_ro, homecheck._history_ro = real_j, real_h
+        ledger.why_open = real_w
+
+
+def test_settled_and_open_are_printed_side_by_side():
+    """"0 open past the window" means nothing alone: a league that has
+    graded four hundred bets and one that has never graded any can both
+    be quiet today."""
+    out = _grading([("mlb", "won", 21), ("mlb", "lost", 11),
+                    ("mlb", "open", 1)])
+    assert "32 settled" in out and "1 open" in out, out
+    assert "won 21" in out and "lost 11" in out, out
+
+
+def test_a_book_that_has_never_closed_a_bet_is_shouted_about():
+    """Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
+    likely bets." A league with open rows and nothing settled is not a
+    quiet week."""
+    out = _grading([("cfb", "open", 34)])
+    assert "HAS NEVER GRADED A BET" in out, out
+    assert "34 open, 0 settled" in out, out
+
+
+def test_a_league_that_has_graded_is_not_shouted_about():
+    """The warning has to stay rare or it stops being read."""
+    out = _grading([("mlb", "won", 5), ("mlb", "open", 2)])
+    assert "HAS NEVER GRADED" not in out, out
+
+
+def test_results_that_were_never_stored_are_named_as_the_ingest_s_problem():
+    """The distinction the whole check exists for: a bet waiting on
+    Saturday's kickoff and a bet waiting on a feed that stopped landing
+    in August look identical from the journal."""
+    out = _grading([("cfb", "open", 3)],
+                   stuck=[("cfb", "no results ingested")] * 3)
+    assert "waiting on results that were never stored" in out, out
+    assert "the ingest is the fix, not the settler" in out, out
+    assert "3 stuck past the settle window — no results ingested" in out, out
+
+
+def test_a_stuck_reason_that_is_not_the_ingest_is_reported_without_the_alarm():
+    """"player has no log" is a scratch or a spelling, and a person
+    fixes it. It gets a line, not a shout."""
+    out = _grading([("nfl", "won", 4), ("nfl", "open", 2)],
+                   stuck=[("nfl", "player has no log")] * 2)
+    assert "player has no log" in out, out
+    assert "the ingest is the fix" not in out, out
+
+
+def test_the_reasons_come_from_the_ledger_not_a_second_opinion():
+    """`ledger.why_open` already classifies every stuck bet and is what
+    `doctor.py` reads. A second classifier here would drift from it, and
+    then two commands would disagree about the same bet."""
+    import inspect
+    body = inspect.getsource(homecheck.grading).split('"""')[-1]
+    assert "ledger.why_open" in body, \
+        "the stuck reasons are being derived here instead of read"
+    assert "no results ingested" in body, \
+        "the loud case is not keyed to a reason the ledger actually emits"
+
+
+def test_the_history_db_is_opened_read_only():
+    """Same promise as the journal: every check here is safe mid-cycle,
+    and `db.connect()` runs the schema on first use in a process."""
+    import inspect
+    body = inspect.getsource(homecheck._history_ro).split('"""')[-1]
+    assert "mode=ro" in body, "the results DB is opened writable"
+    assert "db.DEFAULT_DB" in body, "not the history database's own path"
+    assert "db.connect(" not in body, \
+        "db.connect() creates the schema on first use in a process"
+
+
+def test_the_grading_check_runs_inside_the_daily_paste():
+    assert homecheck.CHECKS["grading"][2] is True, \
+        "`grading` is excluded from `all`, so nobody will run it twice"
+
+
 CHECK_NAMES = tuple(homecheck.CHECKS)
 
 

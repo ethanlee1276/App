@@ -650,6 +650,63 @@ run settles which of these it is.
 
 ---
 
+## GRADING. Is every league's book actually settling? (read-only, seconds)
+
+Ethan, 2026-09-18: *"CFB still hasn't graded any edge bets or most likely
+bets."*
+
+```bash
+cd /srv/qellys && python3 homecheck.py grading
+```
+
+**A bet that can never settle does not announce itself.**
+`settle_from_history` says so in its own docstring — "bets whose games
+haven't been ingested yet simply stay open" — and an open bet waiting on
+Saturday's kickoff looks exactly like an open bet waiting on a results
+feed that stopped landing in August. One resolves itself. The other
+never will. Both read as a quiet book.
+
+```
+  cfb       0 settled  |     34 open
+             31 stuck past the settle window — no results ingested
+       !! CFB HAS NEVER GRADED A BET (34 open, 0 settled) — this is not a
+          quiet week, it is a book that has never closed one
+       !! 31 cfb bet(s) are waiting on results that were never stored —
+          the ingest is the fix, not the settler
+```
+
+The reasons are `ledger.why_open`'s, the same ones `doctor.py --stuck`
+prints. That check already existed and already knew; it just lived in a
+command nobody runs daily. This puts it in the paste.
+
+**WHAT THE DEV BOX SHOWS, AND WHY IT IS NOT YET A PRODUCTION FINDING.**
+On the container this was written in, `data/history.db` holds, for the
+2026 college season:
+
+* `games` — **100 rows**, through 2026-09-07. Scores ARE being ingested.
+* `player_game_logs` — **0 real rows.** The only 2026 entries are ten on
+  08-23 that are plainly fixtures: `game_id` "401", and a player called
+  "Opp Back" on CLEM.
+
+If the droplet looks like that, then every college PLAYER-market bet —
+props, TD long shots, Most Likely player rows, stale flags on player
+markets — has nothing to grade against and never will, while game
+markets (moneyline, spread, total) settle fine off `games`. That would
+explain the exact split Ethan is seeing.
+
+**This box is not the droplet and its history file may simply be a stale
+copy.** Run the command before believing any of it. What is NOT
+box-dependent, and is already fixed: nothing in the daily checks could
+tell that story apart from an ordinary quiet week.
+
+**The settler itself is correct and was checked first.** With no logs on
+file, `_absent_player_verdict`'s college branch returns `None` — it
+voids only when the team's box IS filed — so the bets stay open rather
+than being graded zero. An ungraded bet is visible and honest; an
+invented grade would be neither. Nothing needs undoing.
+
+---
+
 ## LIVE. Does the Live tab have any bets to draw? (read-only, seconds)
 
 Ethan, 2026-09-18, during Lions-Bills: *"we have a live nfl game right

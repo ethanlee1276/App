@@ -22,6 +22,7 @@ a reading one.
 
     python3 homecheck.py filler        # FILLER: did the -110 filler die?
     python3 homecheck.py live          # LIVE: does the Live tab have bets to draw?
+    python3 homecheck.py grading       # GRADING: is every league's book settling?
     python3 homecheck.py exchange      # KX-2: what the Kalshi tickers look like
     python3 homecheck.py head          # which commit this box is running
     python3 homecheck.py all           # every read-only check, in order
@@ -141,6 +142,111 @@ def _journal_ro():
         return None, f"cannot open {path} read-only — {type(exc).__name__}: {exc}"
     conn.row_factory = sqlite3.Row
     return conn, ""
+
+
+def _history_ro():
+    """The results database, opened READ-ONLY, or ``(None, why)``.
+
+    Same reasoning as `_journal_ro`: `db.connect()` runs the schema on
+    first use, and this file promises every check is safe mid-cycle.
+    """
+    import sqlite3
+    from engine import db
+    path = db.DEFAULT_DB
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except Exception as exc:                                  # noqa: BLE001
+        return None, f"cannot open {path} read-only — {type(exc).__name__}: {exc}"
+    conn.row_factory = sqlite3.Row
+    return conn, ""
+
+
+def grading() -> list:
+    """GRADING. Is each league's book actually settling, and if not, why.
+
+    Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
+    likely bets."
+
+    A bet that cannot settle does not announce itself.
+    `settle_from_history` says so in its own docstring — "bets whose
+    games haven't been ingested yet simply stay open" — and an open bet
+    waiting on Saturday's kickoff looks exactly like an open bet waiting
+    on a results feed that stopped landing in August. One resolves
+    itself; the other never will, and both read as a quiet book.
+
+    THE REASONS COME FROM `ledger.why_open`, not from a second opinion
+    written here. That function already classifies every open bet whose
+    day is done — "no results ingested", "player has no log", "market not
+    ingested", "game not found" — and it is what `doctor.py` reads. The
+    gap this check closes is not that nothing knew: it is that the thing
+    that knew was in a command nobody runs daily, which is the same
+    shape as every other finding in this file.
+
+    THE SETTLED COUNT IS PRINTED BESIDE IT, because "0 open past the
+    window" means nothing on its own. A league that has graded 400 bets
+    and a league that has never graded one can both be quiet today.
+    """
+    out = ["GRADING — is each league's book settling, and if not, why",
+           "  settled vs open, and the reason every stuck bet is stuck"]
+    conn, why = _journal_ro()
+    if why:
+        return out + [f"  {why}"]
+    hconn, hwhy = _history_ro()
+    if hwhy:
+        out.append(f"  {hwhy}")
+    try:
+        counts = conn.execute(
+            "SELECT sport, status, COUNT(*) n FROM bets GROUP BY sport, status"
+        ).fetchall()
+    except Exception as exc:                                  # noqa: BLE001
+        conn.close()
+        return out + [f"  journal unreadable — {type(exc).__name__}: {exc}"]
+
+    by_sport: dict = {}
+    for r in counts:
+        by_sport.setdefault(str(r["sport"]), {})[str(r["status"])] = r["n"]
+
+    stuck: dict = {}
+    if hconn is not None:
+        try:
+            from engine import ledger
+            import datetime as _dt
+            for row in ledger.why_open(conn, hconn, _dt.date.today().isoformat()):
+                key = (str(row.get("sport") or "?"), str(row.get("reason") or "?"))
+                stuck[key] = stuck.get(key, 0) + 1
+        except Exception as exc:                              # noqa: BLE001
+            out.append(f"  why_open failed — {type(exc).__name__}: {exc}")
+
+    SETTLED = ("won", "lost", "push", "void")
+    for sport in sorted(by_sport):
+        st = by_sport[sport]
+        done = sum(st.get(k, 0) for k in SETTLED)
+        openn = st.get("open", 0)
+        out.append(f"  {sport:5} {done:5d} settled  |  {openn:5d} open"
+                   + (f"   ({', '.join(f'{k} {st[k]}' for k in SETTLED if st.get(k))})"
+                      if done else ""))
+        mine = {r: n for (sp, r), n in stuck.items() if sp == sport}
+        for reason, n in sorted(mine.items(), key=lambda x: -x[1]):
+            out.append(f"          {n:4d} stuck past the settle window — {reason}")
+        # THE LOUD CASE. A league that has never graded anything is not a
+        # quiet week; it is a book that has never closed a bet, and if
+        # its stuck rows blame the ingest then nothing it holds will ever
+        # grade on its own.
+        if not done and openn:
+            out.append(f"       !! {sport.upper()} HAS NEVER GRADED A BET "
+                       f"({openn} open, 0 settled) — this is not a quiet "
+                       f"week, it is a book that has never closed one")
+        if mine.get("no results ingested"):
+            out.append(f"       !! {mine['no results ingested']} {sport} bet(s) "
+                       f"are waiting on results that were never stored — the "
+                       f"ingest is the fix, not the settler; these will not "
+                       f"grade on their own")
+    if not by_sport:
+        out.append("  the journal holds no bets at all")
+    conn.close()
+    if hconn is not None:
+        hconn.close()
+    return out
 
 
 def live() -> list:
@@ -338,6 +444,8 @@ CHECKS = {
     "head": (head, "which commit this box is running", True),
     "filler": (filler, "FILLER: game rows at -110 with no book", True),
     "live": (live, "LIVE: what the Live tab has to draw, per league", True),
+    "grading": (grading, "GRADING: is each league's book settling, and why not",
+                True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }
