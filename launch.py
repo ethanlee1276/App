@@ -8431,8 +8431,23 @@ def show_stuck() -> None:
             "stranded. Judged on its journal date instead, which is why it "
             "is listed. Worth a look at the ticker itself.",
         "gradeable now":
-            "results ARE there and these match — run `python3 launch.py "
-            "--settle all`; if they survive it, tell me.",
+            "results ARE there and the settler's own decider picks a game "
+            "for these — run `python3 launch.py --settle all`; if they "
+            "survive it, tell me. (Since 2026-09-19 this asks "
+            "`_pick_dh_game`, the function the settler uses, rather than "
+            "re-deriving the answer — so it no longer files a bet the "
+            "settler is deliberately waiting on under this heading.)",
+        "waiting on the rest of the day":
+            "part of this bet's day is final and part is not, so the "
+            "settler is WAITING on purpose: grading now would pick a game "
+            "by coin flip. Nothing to do — it settles itself when the "
+            "remaining game finals, and it voids itself if the finished "
+            "legs end up disagreeing.",
+        "voids on the next pass":
+            "every leg of this bet's day is final and they disagree on "
+            "the outcome, so there is no honest grade. The settler voids "
+            "it on its next run; seeing it here means no pass has run "
+            "since the last leg finished.",
         "player has no log":
             "that day IS ingested and this player is not in it: a scratch or "
             "a DNP (correct to void), or the journal spells his name "

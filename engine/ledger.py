@@ -3423,12 +3423,45 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
             # found" put seven future bets in the doctor's stuck list on
             # Ethan's first nightly — a week that has not been PLAYED is
             # the calendar working, not a bet stuck.
-            rows_g, _ = _game_bet_evidence(hist_conn, b, where, wargs)
+            rows_g, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
+            if not rows_g and b["sport"] == "cfb":
+                # The settler falls back to the neighbouring day for a
+                # college game (the Hawaii-UNLV UTC drift). Not doing the
+                # same here reported a bet as stranded that the next
+                # settle pass grades without help.
+                nrows, nfn = _neighbour_game_evidence(hist_conn, b, where, wargs)
+                if nrows:
+                    rows_g, actual_fn = nrows, nfn
             finals = [r for r in rows_g
                       if r["home_score"] is not None
                       and r["away_score"] is not None]
             if finals:
-                reason = "gradeable now"
+                # ASK THE SETTLER'S OWN DECIDER, do not re-derive it.
+                #
+                # This said "gradeable now" whenever ANY row was final,
+                # and `settle_from_history` does not settle on that. It
+                # calls `_pick_dh_game`, which WAITS when the bet names a
+                # leg that is not final yet, and waits again when only
+                # part of a multi-game day is in. Both cases have a final
+                # row, so both were reported as gradeable.
+                #
+                # The doctor's own advice then made it worse: "run
+                # `--settle all`; if they survive it, tell me." The
+                # settler runs every five minutes, so of course it
+                # survived — it was never going to grade, and the report
+                # sent Ethan chasing a bug in the settler that was really
+                # two functions answering the same question differently.
+                # Ethan, 2026-09-19, one NFL bet reading "gradeable now".
+                #
+                # One question, one function. Same reason `_hist_where`
+                # and `close_dates` are each written once.
+                g, verdict = _pick_dh_game(rows_g, b, actual_fn)
+                if g is not None:
+                    reason = "gradeable now"
+                elif verdict == "void":
+                    reason = "voids on the next pass"
+                else:
+                    reason = "waiting on the rest of the day"
             elif rows_g and not real_age:
                 continue          # scheduled, unplayed week — not stuck
             else:
