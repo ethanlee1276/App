@@ -1,0 +1,188 @@
+"""`injury_events` was read by nothing; now it is measured.
+
+Ethan, 2026-09-19: *"figure out what data we need to source and what we
+can use to make all of our edge bets and all of our most likely bets
+better. I know it's out there."*
+
+The cheapest source is the one already on disk, and `engine.datause`'s
+new table audit found exactly one store nobody reads: `injury_events`.
+`engine.newstape` INSERTs into it every night — player, status,
+`posted_at` from the feed, `first_seen` from us — and no model, no gate
+and no page has ever selected a row back out.
+
+It is worth the trouble because injury news is a MECHANICAL edge rather
+than a predictive one: when a starter is ruled out the number moves, and
+the money is in the gap between the filing and the move. We do not have
+to out-forecast anyone, only be early — and early is measurable.
+
+`odds_history` is timestamped and carries `player`, so a player's own
+prop quotes line up against the moment his status changed. This file
+pins the arithmetic that turns those two stores into an answer, in both
+directions: a NEGATIVE lead (the market moved first) has to be
+reportable, or the measurement can only ever flatter us.
+
+Run directly: `python3 tests/test_are_we_ahead_on_injury_news.py`
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine import injurylag as il                             # noqa: E402
+
+SEEN = "2026-09-14T12:00:00"
+
+
+def _q(*pairs):
+    return list(pairs)
+
+
+# --- the good case: we saw it first ------------------------------------
+def test_a_line_that_moves_after_we_see_the_news_is_a_positive_lead():
+    """THE SIGNAL. Baseline holds until our filing, then the market
+    reprices — the gap is the window we could have bet in."""
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T09:00:00", 62.5),
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T12:45:00", 55.5)))
+    assert got["moved"] is True, got
+    assert got["move"] == -7.0, got
+    assert got["lead_minutes"] == 45.0, got
+
+
+def test_the_lead_is_to_the_first_quote_that_moved():
+    """A line that drifts back before the close still moved, and the
+    window we care about is the FIRST chance to bet it."""
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T12:30:00", 55.5),
+        ("2026-09-14T18:00:00", 61.0)))
+    assert got["lead_minutes"] == 30.0, got
+
+
+# --- the bad case, which has to be reportable --------------------------
+def test_a_market_that_moved_first_reads_as_a_negative_lead():
+    """THE ANSWER THAT MATTERS MOST. If the line had already moved
+    before our filing, the news was priced before we saw it — our feed
+    is a newspaper. A measurement that cannot say this can only ever
+    flatter us."""
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T08:00:00", 62.5),
+        ("2026-09-14T10:00:00", 55.5),      # market moved two hours early
+        ("2026-09-14T11:30:00", 55.5),
+        ("2026-09-14T13:00:00", 54.0)))
+    assert got["moved"] is True, got
+    assert got["lead_minutes"] is not None and got["lead_minutes"] < 0, got
+
+
+def test_a_line_that_never_moves_is_not_counted_as_being_early():
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T13:00:00", 62.5)))
+    assert got["moved"] is False, got
+    assert got["lead_minutes"] is None, got
+
+
+# --- and the honest refusals -------------------------------------------
+def test_quotes_on_only_one_side_say_nothing():
+    """Counting these as "no move" would quietly claim we were early on
+    a filing we have no before-price for."""
+    assert il.classify(SEEN, _q(("2026-09-14T13:00:00", 55.5))) is None
+    assert il.classify(SEEN, _q(("2026-09-14T09:00:00", 62.5))) is None
+
+
+def test_a_move_smaller_than_a_tick_is_not_a_move():
+    """Half a point is the tick books quote in; under it is the same
+    number wearing a rounding error, and counting those would report a
+    move on every quote and make the lead meaningless."""
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T13:00:00", 62.5 + il.MOVE_EPS / 2)))
+    assert got["moved"] is False, got
+
+
+def test_quotes_from_another_day_are_not_this_filings_reaction():
+    got = il.classify(SEEN, _q(
+        ("2026-09-11T11:00:00", 62.5),
+        ("2026-09-18T13:00:00", 40.0)))
+    assert got is None, got
+
+
+def test_an_unreadable_timestamp_costs_its_own_row_not_the_pass():
+    got = il.classify(SEEN, _q(
+        ("not a date", 99.0),
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T13:00:00", 55.5)))
+    assert got["moved"] is True, got
+    assert il.classify("nonsense", _q(("2026-09-14T11:00:00", 62.5))) is None
+
+
+def test_a_missing_line_is_skipped_rather_than_read_as_zero():
+    got = il.classify(SEEN, _q(
+        ("2026-09-14T11:00:00", 62.5),
+        ("2026-09-14T12:10:00", None),
+        ("2026-09-14T13:00:00", 55.5)))
+    assert got["moved"] is True and got["move"] == -7.0, got
+
+
+# --- the verdict over many filings -------------------------------------
+def test_the_rate_is_over_moves_not_over_every_filing():
+    """A filing whose line never moved says nothing about our speed.
+    Folding those in would flatter whichever answer had more quiet news
+    in it."""
+    rows = [
+        {"moved": True, "move": -7.0, "lead_minutes": 45.0},
+        {"moved": True, "move": -3.0, "lead_minutes": -20.0},
+        {"moved": False, "move": 0.0, "lead_minutes": None},
+        {"moved": False, "move": 0.0, "lead_minutes": None},
+        None,
+    ]
+    s = il.summarise(rows)
+    assert s["filings"] == 5 and s["usable"] == 4, s
+    assert s["moved"] == 2 and s["ahead"] == 1, s
+    assert s["ahead_rate"] == 0.5, s
+
+
+def test_a_book_with_no_moves_reports_no_rate_rather_than_zero():
+    """"0% ahead" and "nothing measurable yet" are different facts and
+    the second one must not print as the first."""
+    s = il.summarise([{"moved": False, "move": 0.0, "lead_minutes": None}])
+    assert s["ahead_rate"] is None, s
+    assert s["median_lead_minutes"] is None, s
+
+
+def test_the_summary_survives_having_nothing_at_all():
+    s = il.summarise([])
+    assert s["filings"] == 0 and s["ahead_rate"] is None, s
+
+
+# --- it reads only the statuses that move a market ---------------------
+def test_only_statuses_the_market_has_to_reprice_are_measured():
+    """"Probable" moves nothing, and including it would bury the signal
+    in filings that were never going to matter."""
+    assert "out" in il.MOVING_STATUSES and "doubtful" in il.MOVING_STATUSES
+    assert "probable" not in il.MOVING_STATUSES
+
+
+def test_nothing_in_here_writes():
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "engine", "injurylag.py"),
+        encoding="utf-8").read()
+    for write in ("INSERT", "UPDATE ", "DELETE", "commit("):
+        assert write not in src, f"{write} in a measurement"
+
+
+if __name__ == "__main__":
+    fails = ran = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            ran += 1
+            try:
+                fn()
+                print(f"  ok  {name}")
+            except AssertionError as exc:
+                fails += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{fails} failed" if fails else f"\n{ran} tests passed.")
+    sys.exit(1 if fails else 0)

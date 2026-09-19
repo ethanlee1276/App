@@ -405,6 +405,44 @@ def edge() -> list:
     return out
 
 
+def data() -> list:
+    """DATA. What we store, whether any model reads it, and how fast we
+    are on injury news. (read-only)
+
+    Ethan, 2026-09-19: "figure out what data we need to source and what
+    we can use to make all of our edge bets and all of our most likely
+    bets better. I know it's out there."
+
+    Some of it is already here. `engine.datause` registers twelve
+    signals by hand and reports them all healthy; the table audit asks
+    the DATABASE instead, which cannot forget a store nobody
+    registered — and the first run found `injury_events` written every
+    night and selected from by nothing.
+
+    The second half measures that store: for every filing, did the
+    player's own line move after we first saw the news, and by how
+    much. A positive lead is the edge. A negative one says the market
+    knew first and the fix is a faster feed, not a better model.
+    """
+    out = ["DATA — what we store, and whether it earns its keep"]
+    try:
+        from engine.datause import table_report
+        out += table_report().splitlines()
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  table audit failed — {type(exc).__name__}: {exc}")
+    conn, why = _history_ro()
+    if conn is None:
+        return out + [f"  {why}"]
+    try:
+        from engine.injurylag import report as _lag
+        out += _lag(conn).splitlines()
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  injury lag failed — {type(exc).__name__}: {exc}")
+    finally:
+        conn.close()
+    return out
+
+
 def grading() -> list:
     """GRADING. Is each league's book actually settling, and if not, why.
 
@@ -813,6 +851,8 @@ CHECKS = {
     "record": (record, "RECORD: what the published record.json holds", True),
     "edge": (edge, "EDGE: does the staked book make money, and which "
                    "selector earned it", True),
+    "data": (data, "DATA: what we store, whether a model reads it, and "
+                   "how fast we are on injury news", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

@@ -713,6 +713,54 @@ file — and this prints both side by side.
 
 ---
 
+## DATA. Is what we store earning its keep? (read-only, seconds)
+
+Ethan, 2026-09-19: *"figure out what data we need to source and what we
+can use to make all of our edge bets and all of our most likely bets
+better. I know it's out there."*
+
+Some of it is already here.
+
+```bash
+cd /srv/qellys && python3 homecheck.py data
+```
+
+Two halves. The first asks the DATABASE which of its tables any model
+reads — `engine.datause` also keeps a hand-written list of twelve
+signals, and a hand-written list can only answer for what somebody
+remembered to register. The first run of the table audit found
+`injury_events` written every night by the news tape and selected from
+by **nothing**.
+
+The second measures that store. For every injury filing, did the
+player's own prop line move after we first saw it?
+
+```
+  !!     injury_events            read by NOTHING
+
+  ARE WE AHEAD OF THE MARKET ON INJURY NEWS?
+  nfl     412 filings ·  190 with quotes either side ·   64 moved the line
+        we were first on 41/64 (64%)   median lead 23.0 min   median move 1.5
+```
+
+**What the answer means, both ways.**
+
+* **A POSITIVE median lead is an edge you can bet.** Minutes between our
+  filing and the market's move, at a price still on the board. Injury
+  news is mechanical rather than predictive — we do not have to
+  out-forecast anyone, only be early — so a positive lead with a real
+  sample is the most actionable number on this page.
+* **A NEGATIVE lead means the market moved first.** Our feed is a
+  newspaper, not a wire. No model fixes that; only a faster source,
+  which is a purchase rather than a patch.
+* **`read by NOTHING`** — a feed we pay for, a nightly that runs, and a
+  column no model reads. The cheapest data to start using is the data
+  already on disk.
+* Nothing in this check bets or writes. It is the information test from
+  `docs/THE_INFORMATION_TEST.md` pointed at a store we already keep.
+
+---
+
 ## EDGE. Does the book we stake actually make money? (read-only, seconds)
 
 Ethan, 2026-09-19, after the stale book's promotion verdict came back

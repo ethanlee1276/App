@@ -291,6 +291,114 @@ def audit() -> list[dict]:
     return out
 
 
+#: Tables that are plumbing, not evidence — nothing models them and
+#: nothing should. Each says why, so the list cannot grow by accident.
+PLUMBING_TABLES = {
+    "ingest_log": "bookkeeping: which feed ran when",
+    "calibration_runs": "the calibration's own history, read by calibhistory",
+    "player_assets": "headshots and logos — presentation, never a number",
+}
+
+
+def schema_tables() -> list[str]:
+    """Every table the results database creates."""
+    import re
+    src = (ROOT / "engine" / "db.py").read_text()
+    return sorted(set(re.findall(
+        r"CREATE TABLE IF NOT EXISTS (\w+)", src)))
+
+
+def _readers_of(table: str) -> dict:
+    """Files that READ a table, never the ones that only write it.
+
+    WRITING IS NOT USING, and the first version of this counted both.
+    `injury_events` came back "in pipeline" on the strength of
+    `engine/newstape.py`, which INSERTS into it and never selects from
+    it — so a table written every night and read by nothing reported as
+    healthy. That is the precise failure this module was written to
+    catch, reproduced inside the check itself.
+
+    A read is `FROM <table>` or `JOIN <table>`, which is how every
+    query here is spelled. Crude on purpose, for the reason `consumers`
+    gives: the question is whether anything looks at it at all.
+    """
+    out: dict = {}
+    for p in _py_files():
+        rel = str(p.relative_to(ROOT))
+        if rel == "engine/db.py":
+            continue
+        try:
+            body = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        low = body.lower()
+        if f"from {table}" in low or f"join {table}" in low:
+            out[rel] = [table]
+    return out
+
+
+def table_audit() -> list[dict]:
+    """WHAT WE STORE, AND WHETHER ANY MODEL READS IT.
+
+    `SIGNALS` above is a hand-kept list of twelve, so it answers only
+    for signals somebody remembered to register — the same weakness the
+    published-key audit had until it was closed on 2026-09-19. A table
+    nobody registered is invisible to it, and a table nobody registered
+    is exactly the one most likely to be unread.
+
+    This asks the database instead, which cannot forget. Every table in
+    `engine/db.py`, who touches it, and which of the four places it
+    lands in. A table read only by its ingester and a page is data we
+    PAY TO COLLECT and never bet on.
+
+    Ethan, 2026-09-19: "figure out what data we need to source and what
+    we can use." The cheapest source is the one already on disk.
+    """
+    out = []
+    for t in schema_tables():
+        found = _readers_of(t)
+        kinds = {k for k in (_kind_of(r) for r in found) if k}
+        out.append({
+            "table": t,
+            "consumers": found,
+            "kinds": sorted(kinds),
+            "plumbing": t in PLUMBING_TABLES,
+            "why_plumbing": PLUMBING_TABLES.get(t, ""),
+            # MODELLED means a pricing path or the journal reads it.
+            # A page reading it is a display, not an edge.
+            "modelled": bool(kinds & {"pipeline", "journal", "gate"}),
+        })
+    return out
+
+
+def table_report() -> str:
+    rows = table_audit()
+    lines = ["", "=" * 70,
+             "  WHAT WE STORE, AND WHETHER ANY MODEL READS IT", "=" * 70]
+    unread = [r for r in rows if not r["modelled"] and not r["plumbing"]]
+    for r in rows:
+        if r["plumbing"]:
+            mark, extra = "--", f"plumbing — {r['why_plumbing']}"
+        elif r["modelled"]:
+            mark, extra = "ok", "in " + ", ".join(r["kinds"])
+        else:
+            mark = "!!"
+            extra = ("read by NOTHING" if not r["consumers"]
+                     else "read only by " + ", ".join(sorted(r["consumers"])))
+        lines.append(f"  {mark:6} {r['table']:24} {extra}")
+    if unread:
+        lines += ["",
+                  "  !! THESE ARE INGESTED AND NEVER PRICED. Every one is a",
+                  "     feed we pay for, a nightly that runs, and a column no",
+                  "     model reads — the cheapest data to start using, because",
+                  "     it is already on disk."]
+    lines += ["",
+              "  pipeline = a board build reads it · journal = written on a bet",
+              "  gate = it can refuse a pick · a page alone is a display, not",
+              "  an edge.", ""]
+    return "\n".join(lines)
+
+
 def report() -> str:
     rows = audit()
     lines = ["", "=" * 70,
