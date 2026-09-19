@@ -59,6 +59,14 @@ MOVE_EPS = 0.5
 #: narrow enough that the next day's news is not attributed to this one.
 WINDOW_HOURS = 24
 
+#: A ceiling on the quotes pulled for one filing.
+#:
+#: A day of one player's props across every book is tens of rows, not
+#: thousands. The cap is there so a pathological key — a name that
+#: matches half the board, a feed that stamped everything at midnight —
+#: costs one bounded read instead of the whole table.
+MAX_QUOTES = 5_000
+
 #: Statuses worth measuring. A player downgraded to OUT or DOUBTFUL is
 #: the case the market has to reprice; "probable" is noise that moves
 #: nothing, and including it would bury the signal in filings that were
@@ -192,10 +200,34 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
         st = str(ev["status"] or "").strip().lower()
         if statuses and not any(s in st for s in statuses):
             continue
+        seen = _parse(ev["first_seen"] or ev["posted_at"])
+        if seen is None:
+            # Parsed BEFORE the quote lookup, not after. A filing with no
+            # readable stamp can never be classified, and querying for it
+            # is a full window scan bought for nothing.
+            continue
+        # BOUNDED BY `taken_at`, WHICH IS WHAT MAKES THIS FINISH.
+        #
+        # `odds_history`'s primary key is (sport, taken_at, event_id,
+        # player, market, book), so `sport=? AND player=?` cannot use it
+        # — `taken_at` sits between them, and SQLite falls back to
+        # scanning the table. One scan per filing over months of quotes,
+        # a few thousand times: Ethan's first run on the droplet was
+        # still going after thirteen minutes and had to be killed.
+        #
+        # Adding the time bounds makes the leading two columns of the
+        # index usable, so each lookup is a range scan over one day
+        # instead of a walk through every quote we have ever stored. The
+        # window is the one `classify` would keep anyway, so nothing that
+        # could have counted is lost.
+        lo = (seen - _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
+        hi = (seen + _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
         quotes = hist_conn.execute(
             "SELECT taken_at, line FROM odds_history "
-            "WHERE sport=? AND player=? AND line IS NOT NULL",
-            (ev["sport"], ev["player"])).fetchall()
+            "WHERE sport=? AND taken_at BETWEEN ? AND ? "
+            "AND player=? AND line IS NOT NULL "
+            "LIMIT ?",
+            (ev["sport"], lo, hi, ev["player"], MAX_QUOTES)).fetchall()
         got = classify(ev["first_seen"] or ev["posted_at"],
                        [(q2["taken_at"], q2["line"]) for q2 in quotes])
         out.setdefault(ev["sport"], []).append(got)

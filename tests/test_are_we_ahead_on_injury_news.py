@@ -24,6 +24,7 @@ reportable, or the measurement can only ever flatter us.
 Run directly: `python3 tests/test_are_we_ahead_on_injury_news.py`
 """
 
+import datetime as _dt
 import os
 import sys
 
@@ -171,6 +172,114 @@ def test_nothing_in_here_writes():
         encoding="utf-8").read()
     for write in ("INSERT", "UPDATE ", "DELETE", "commit("):
         assert write not in src, f"{write} in a measurement"
+
+
+# --- and it has to FINISH on a real box --------------------------------
+class _Rows:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
+class _Spy:
+    """A connection that answers nothing and remembers everything asked.
+
+    The bug this catches is a PERFORMANCE one, and performance is not
+    visible in a return value — the old code gave the right answer and
+    took thirteen minutes to give it. What a query touches is only
+    checkable by looking at the query.
+    """
+
+    def __init__(self, filings, quotes=()):
+        self.filings, self.quotes = list(filings), list(quotes)
+        self.asked = []
+
+    def execute(self, sql, args=()):
+        flat = " ".join(sql.split())
+        self.asked.append((flat, list(args)))
+        return _Rows(self.filings if "FROM injury_events" in flat
+                     else self.quotes)
+
+    def quote_reads(self):
+        return [q for q in self.asked if "FROM odds_history" in q[0]]
+
+
+def _filing(first_seen=SEEN, sport="nfl", player="A Back"):
+    return {"sport": sport, "player": player, "status": "out",
+            "posted_at": first_seen, "first_seen": first_seen}
+
+
+def test_each_quote_lookup_is_bounded_by_the_time_column():
+    """THE THIRTEEN MINUTES. Ethan, 2026-09-19: the first run of
+    `homecheck.py data` on the droplet was still going after thirteen
+    minutes and had to be killed.
+
+    `odds_history`'s primary key is (sport, taken_at, event_id, player,
+    market, book), so `sport=? AND player=?` cannot use it — `taken_at`
+    sits between them and SQLite scans the whole table instead. One scan
+    per filing, a few thousand filings, months of quotes. Bounding
+    `taken_at` makes the leading two columns usable and each lookup a
+    range scan over one day."""
+    spy = _Spy([_filing()])
+    il.measure(spy)
+    reads = spy.quote_reads()
+    assert len(reads) == 1, spy.asked
+    sql, args = reads[0]
+    assert "taken_at BETWEEN ? AND ?" in sql, sql
+    lo, hi = args[1], args[2]
+    assert lo < SEEN.replace("T", " ") < hi, args
+    span = (il._parse(hi) - il._parse(lo)).total_seconds() / 3600.0
+    assert span == il.WINDOW_HOURS * 2, span
+
+
+def test_the_window_is_the_one_the_arithmetic_would_have_kept_anyway():
+    """So the speed-up costs no measurement: `classify` discards a quote
+    further than WINDOW_HOURS from the filing, which is exactly what the
+    bounds refuse to fetch."""
+    spy = _Spy([_filing()])
+    il.measure(spy)
+    sql, args = spy.quote_reads()[0]
+    assert "BETWEEN" in sql and len(args) >= 3, (sql, args)
+    lo, hi = args[1], args[2]
+    seen = il._parse(SEEN)
+    assert il._parse(lo) == seen - _dt.timedelta(hours=il.WINDOW_HOURS)
+    assert il._parse(hi) == seen + _dt.timedelta(hours=il.WINDOW_HOURS)
+
+
+def test_a_filing_with_no_readable_stamp_never_buys_a_lookup():
+    """A filing that can never be classified must not be paid for. The
+    stamp is parsed BEFORE the quotes are fetched, not after."""
+    spy = _Spy([_filing(first_seen="not a date")])
+    il.measure(spy)
+    assert spy.quote_reads() == [], spy.asked
+
+
+def test_one_filing_costs_one_read():
+    """Not one per quote, and not one per book."""
+    spy = _Spy([_filing(player="A"), _filing(player="B"),
+                _filing(player="C")])
+    il.measure(spy)
+    assert len(spy.quote_reads()) == 3, spy.asked
+
+
+def test_a_pathological_key_still_costs_a_bounded_read():
+    """A name that matches half the board, or a feed that stamped every
+    row at midnight, buys one capped read rather than the table."""
+    spy = _Spy([_filing()])
+    il.measure(spy)
+    sql, args = spy.quote_reads()[0]
+    assert "LIMIT ?" in sql, sql
+    assert args[-1] == il.MAX_QUOTES, args
+
+
+def test_a_status_the_market_ignores_is_filtered_before_the_read():
+    """"Probable" is not measured, so it must not cost a query either."""
+    spy = _Spy([dict(_filing(), status="probable")])
+    il.measure(spy)
+    assert spy.quote_reads() == [], spy.asked
+
 
 
 if __name__ == "__main__":
