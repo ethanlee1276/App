@@ -20,6 +20,11 @@ survival -0%, 95% on landed [-1.75%, +1.56%]. Every band spans zero,
 including the 1,680 games where the model claimed sixteen points. The
 model's disagreement with the close carries no information at all.
 
+AND ASKED OF THE OTHER LEAGUE, because a finding about one league is a
+finding about one league until it is. NFL, 1,356 quoted games: claimed
++9.77%, landed -1.13%, survival -12%, 95% [-3.79%, +1.50%]. The same
+shape. This is not a college problem.
+
 THE TRAP THIS FILE EXISTS TO KEEP OUT. A measurement that reads
 "survival is 0%" invites the edit "so set HAIRCUT to 1.0" — and that
 would be fitting a constant to a number whose interval spans zero. It
@@ -161,6 +166,16 @@ def test_the_report_prints_the_shipped_haircuts_beside_the_measurement():
     assert "SPANS ZERO" in txt, "an interval over zero is printed as a finding"
     assert "assumes survival 65%" in txt, "the 35% haircut is not stated"
     assert "assumes survival 50%" in txt, "the marquee haircut is not stated"
+
+
+def test_both_football_walks_are_reachable_not_just_the_college_one():
+    """The claim "this is not a college problem" rests on the NFL walk
+    being wired here too. A measurement that silently only ever ran one
+    league would make that sentence an assumption."""
+    import inspect
+    src = inspect.getsource(H._rows)
+    assert '"nfl"' in src and '"cfb"' in src, src
+    assert "measure_nfl" in src and "measure_cfb" in src, src
 
 
 def test_a_sport_without_a_raw_claim_says_so_rather_than_returning_zeros():

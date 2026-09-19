@@ -69,6 +69,23 @@ MEASURED 2026-09-19, CFB, 2,729 quoted games:
      4%- 8%  n=  553  claimed  +6.08%  landed +0.64%   spans zero
      8%+     n= 1680  claimed +16.03%  landed -0.25%   spans zero
 
+MEASURED THE SAME DAY, NFL, 1,356 quoted games — because a finding
+about one league is a finding about one league until it is asked of the
+other:
+
+    claims of 2% or more    claimed  +9.77%   landed -1.13%
+                            survival -12%  →  implied haircut 112%
+                            95% on landed [-3.79%, +1.50%]  spans zero
+
+     0%- 2%  n=  203  claimed  +0.99%  landed +0.93%   spans zero
+     2%- 4%  n=  209  claimed  +3.00%  landed +3.40%   spans zero
+     4%- 8%  n=  337  claimed  +6.02%  landed -2.73%   spans zero
+     8%+     n=  607  claimed +14.18%  landed -1.80%   spans zero
+
+The same shape: a large claim, nothing landed, every interval over
+zero. It is not a college problem, it is what a football rating model
+is worth against a closing line.
+
 THE ANSWER IS THAT THE CLAIM IS WORTH NOTHING. The college model's own
 pre-shrink rating disagrees with the close by twelve points of
 probability on the games it likes, and that disagreement predicts
