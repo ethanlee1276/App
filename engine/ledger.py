@@ -1036,6 +1036,19 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     rows = (result.get("most_likely") or [])[:max(0, int(depth))]
     kick = _kickoff_map(result)
     n = 0
+    # STAKED, OR STILL A MEASUREMENT — decided per league, and by one
+    # predicate so the category, the stake and the dollars can never
+    # disagree about which book a row is in. See LIKELY_LIVE_SPORTS for
+    # the decision and the number it was made against.
+    staked = likely_is_staked(sport)
+    category = LIKELY_LIVE_CATEGORY if staked else "likely"
+    stake_units = LIKELY_LIVE_STAKE if staked else flat_stake
+    grade = LIKELY_LIVE_GRADE if staked else "Likely"
+    # Real units mean real dollars, off the same roll and the same
+    # unit_pct the edge book sizes from. One bankroll, because there is
+    # one bankroll.
+    unit_dollars = (float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
+                    if staked else 0.0)
     for r in rows:
         market = r.get("market", "")
         try:
@@ -1136,7 +1149,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, lead_min, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -1160,7 +1173,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # `hit_prob` above.
              None if r.get("implied_prob") is None
              else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
-             None, "Likely", flat_stake, 0.0,
+             None, grade, stake_units,
+             round(stake_units * unit_dollars, 2),
              # MINUTES TO KICKOFF AT JOURNAL TIME, the column the other
              # three books have carried since capture lag shipped and
              # this one never did. Ethan, 2026-09-15, after the KC-DEN
@@ -1170,7 +1184,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # against kickoff windows by hand. A measurement book that
              # cannot say when its rows were taken cannot defend its own
              # calibration.
-             _lead_min(r, kick)))
+             _lead_min(r, kick), category))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()
@@ -6328,6 +6342,61 @@ def longshot_report(conn, since: str | None = None) -> dict:
 #: finding and building on it.
 LIKELY_VERDICT_N = 100
 
+#: THE LEAGUES WHOSE LIKELIHOOD BOARD IS STAKED WITH REAL MONEY.
+#:
+#: Ethan, 2026-09-19, having been shown the number and asked: *"yeah id
+#: rather stake regardless."* His call, made with the arithmetic in
+#: front of him, and it is written here rather than implied so nobody
+#: later reads this book's existence as evidence that it cleared a bar.
+#:
+#: IT DID NOT CLEAR A BAR. What the MLB paper record actually showed on
+#: the day this was switched on:
+#:
+#:     586 settled, 407-179, claimed 66.4% and hit 69.5%
+#:     paper ROI +2.1% at an implied average price of -213
+#:     standard error +/-2.8%  ->  z = 0.75
+#:     95% interval  -3.4% .. +7.6%
+#:
+#: Zero is inside that interval. For +2.1% to reach the z >= 2.0 the
+#: stale book must clear before IT is allowed to stake, this board would
+#: need roughly 4,200 settled rows — seven times what it has. And the
+#: per-band shape argues against the board as a unit at all:
+#:
+#:     45-60%   125 settled   -3.9%
+#:     60-75%   394 settled   +6.4%
+#:     75-101%   67 settled  -12.0%
+#:
+#: Every dollar of the headline lives in one band, and the MOST
+#: confident band is the worst. A real edge usually strengthens where
+#: the model is surest.
+#:
+#: WHY IT IS ITS OWN BOOK. `performance` reads ('main','paper'), so
+#: nothing here can move the Edge book's ROI, its curve or its verdict.
+#: A signal this thin must be able to fail in public without taking the
+#: honest number down with it — and if it pays, it will have done so on
+#: its own line, which is worth more than a footnote in someone else's.
+LIKELY_LIVE_SPORTS = ("mlb",)
+
+#: Flat, and SMALLER than the stale book's promoted stake (0.5u).
+#:
+#: Flat because the evidence is a flat-stake paper ROI; Kelly would size
+#: on a win probability the band table above shows is worst exactly
+#: where it is highest. Smaller because that book cleared its bar and
+#: this one is going live below its own.
+LIKELY_LIVE_STAKE = 0.25
+
+#: Its own bucket, so the paper history is never rewritten by the thing
+#: it licensed — the same rule the stale promotion is tested on. The 586
+#: settled rows stay `likely` and keep answering the question they were
+#: asked; only rows journaled from today forward carry money.
+LIKELY_LIVE_CATEGORY = "likely_live"
+LIKELY_LIVE_GRADE = "Likely (staked)"
+
+
+def likely_is_staked(sport) -> bool:
+    """Is this league's likelihood board playing for money?"""
+    return str(sport or "").lower() in LIKELY_LIVE_SPORTS
+
 #: The bands the claimed probability is checked in. Wider than the
 #: betting bands on purpose: this board runs from MIN_PROB (0.30) up, and
 #: a band needs rows in it more than it needs to be narrow.
@@ -6543,6 +6612,11 @@ def likely_report(conn, since: str | None = None,
     p["sport"] = sport or ""
     p["needed"] = LIKELY_VERDICT_N
     p["enough"] = n >= LIKELY_VERDICT_N
+    # Whether THIS league's board is playing for money, so the verdict
+    # can say so. A page that reports a book's record without saying
+    # whether it is staked is describing two different things with one
+    # sentence.
+    p["staked"] = likely_is_staked(sport)
     p["verdict"] = _likely_verdict(p)
     return p
 
@@ -6579,10 +6653,76 @@ def _likely_verdict(p: dict) -> str:
     # that loses to the vig is the expected outcome, not a contradiction,
     # and money is gated on this half.
     if roi is not None:
-        honest += (f". At the prices shown it would have returned "
-                   f"{roi:+.1%} — money stays off until that is positive "
-                   f"over a sample this size.")
+        honest += f". At the prices shown it returned {roi:+.1%}"
+        z = _roi_z(cal.get("actual"), roi, n)
+        if z is not None:
+            honest += f" (z {z:+.2f})"
+        staked = p.get("staked")
+        if z is not None and abs(z) < 2.0:
+            # THE SENTENCE THIS REPLACED SAID "money stays off until that
+            # is positive over a sample this size" — and on 2026-09-19 it
+            # said it while the number WAS positive (+2.1%), so it read as
+            # a refusal whose own condition had already been met and told
+            # a reader nothing about what would change the answer. A
+            # positive sign is not the test; being distinguishable from
+            # zero is.
+            need = _roi_n_for_z(cal.get("actual"), roi, 2.0)
+            honest += (f" — inside the noise, so this is not yet "
+                       f"distinguishable from break-even"
+                       + (f"; about {need:,.0f} settled would settle it "
+                          f"if the number holds" if need else ""))
+        elif z is not None:
+            honest += (" — clear of the noise band" if roi > 0 else
+                       " — and it is clear of the noise band on the LOSING "
+                       "side")
+        honest += (". Staked with real money at Ethan's call, below this "
+                   "bar and knowingly — see LIKELY_LIVE_SPORTS."
+                   if staked else
+                   ". No money is staked on this book.")
     return honest
+
+
+def _roi_z(hit_rate, roi, n) -> float | None:
+    """How many standard errors the flat-stake ROI is from zero.
+
+    The hit rate and the ROI together pin the average price actually
+    taken, and that is what sets the spread of a single bet's return —
+    so no extra column is needed to say whether a number this size on a
+    sample this size means anything. `stale_verdict` gates money on the
+    same idea; this book had no such test at all, which is how "+2.1%"
+    came to read as a green light.
+    """
+    try:
+        p, roi, n = float(hit_rate), float(roi), int(n)
+        if not 0 < p < 1 or n < 2:
+            return None
+        b = (roi + (1 - p)) / p                    # decimal payout - 1
+        if b <= 0:
+            return None
+        sd = (p * (b - roi) ** 2 + (1 - p) * (-1 - roi) ** 2) ** 0.5
+        return round(roi / (sd / n ** 0.5), 2) if sd else None
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _roi_n_for_z(hit_rate, roi, target_z) -> float | None:
+    """The settled count at which THIS ROI would reach `target_z`.
+
+    A refusal that does not say what would change it is a slower way of
+    saying nothing — the same complaint the injury report earned on the
+    same day.
+    """
+    try:
+        p, roi = float(hit_rate), float(roi)
+        if not 0 < p < 1 or not roi:
+            return None
+        b = (roi + (1 - p)) / p
+        if b <= 0:
+            return None
+        sd = (p * (b - roi) ** 2 + (1 - p) * (-1 - roi) ** 2) ** 0.5
+        return (target_z * sd / abs(roi)) ** 2
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
 
 
 def open_by_day(conn, today: str) -> list[dict]:
@@ -7070,6 +7210,13 @@ def _edge_series(conn, category: str = "main") -> list[dict]:
 BOOK_SECTIONS = (
     ("edge", "Edge bets", ("main", "paper")),
     ("likely", "Most Likely", ("likely",)),
+    # ITS OWN LINE, NOT FOLDED INTO EITHER NEIGHBOUR. Staked from
+    # 2026-09-19 at Ethan's call, below its own bar and knowingly (see
+    # LIKELY_LIVE_SPORTS). Beside "Most Likely" it would be read as that
+    # book's record, which is a different question answered by a
+    # different sample; inside "Edge bets" it would move the one number
+    # in this project that has been kept honest the longest.
+    ("likely_live", "Most Likely — staked", (LIKELY_LIVE_CATEGORY,)),
     ("longshots", "Long Shots", ("longshot",)),
 )
 

@@ -45,6 +45,17 @@ def _auc_range() -> str:
 #: One entry per board a reader can land on. `key` matches the payload
 #: key the page renders from, so a board that exists without an entry —
 #: or an entry with no board — is a test failure rather than a surprise.
+def _likely_staked(sport) -> bool:
+    """Is this league's likelihood board playing for money?
+
+    Read from the ledger rather than restated here: a second list of
+    staked leagues is a second thing to forget to update, and the one
+    that gets forgotten is always the one a reader is looking at.
+    """
+    from .ledger import likely_is_staked
+    return likely_is_staked(sport)
+
+
 def _likely_measured(sport: str) -> str:
     """The likelihood board's evidence sentence, in the sport's OWN
     numbers. The first cut had one sentence — the NFL's — and every
@@ -122,13 +133,25 @@ def guide(sport: str = "nfl") -> list[dict]:
             "title": "Most Likely",
             "selects_on": "how likely we think it is to happen",
             "measured": _likely_measured(sport),
-            "journal": "likely",
-            "money": False,
+            # PER LEAGUE, because as of 2026-09-19 it differs by league.
+            # A single False here was a claim to every reader that this
+            # board carries no money, and for MLB that stopped being
+            # true the day it was staked.
+            "journal": ("likely_live" if _likely_staked(sport) else "likely"),
+            "money": _likely_staked(sport),
             "trust": (
                 "The strongest evidence on the site. This is the model "
                 "doing the thing it measurably does well — sorting who "
                 "hits. It is now recorded so the ledger, not a backtest, "
-                "can settle it."),
+                "can settle it."
+                + (" MLB is STAKED with real money from 2026-09-19, at "
+                   "Ethan's call and below this board's own bar: its "
+                   "paper ROI was +2.1% over 586 settled, which is z "
+                   "0.75 — not distinguishable from break-even. It runs "
+                   "on its own line in the record and cannot move the "
+                   "Edge book's number."
+                   if _likely_staked(sport) else
+                   " No money is staked on this board.")),
         },
         {
             "key": "long_shots",

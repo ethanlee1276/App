@@ -217,9 +217,16 @@ def test_the_recommended_books_are_the_ones_with_a_section():
     """Anything counted on a chip has to be reachable under it, or the
     badge names rows the scope cannot show."""
     rec = set(ledger.RECOMMENDED_CATEGORIES)
-    assert rec == {"main", "paper", "likely", "longshot", "potd", "ufc"}, rec
+    assert rec == {"main", "paper", "likely", "likely_live", "longshot",
+                   "potd", "ufc"}, rec
     shadow = {c for _k, _l, cs in ledger.SHADOW_SECTIONS for c in cs}
     assert not (rec & shadow), rec & shadow
+    # The list is DERIVED from the sections rather than typed twice, so a
+    # new book cannot be counted on a chip without being reachable under
+    # it. `likely_live` arrived on 2026-09-19 by adding one section and
+    # nothing else, which is the property this line pins.
+    from_sections = {c for _k, _l, cs in ledger.BOOK_SECTIONS for c in cs}
+    assert from_sections <= rec, from_sections - rec
 
 
 def test_a_league_off_the_board_cannot_unbalance_the_total():

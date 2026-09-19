@@ -98,19 +98,48 @@ def test_every_board_names_the_journal_that_actually_writes_it():
 
 
 def test_only_the_board_that_stakes_money_says_it_does():
-    got = boards.by_key()
-    assert got["recommendations"]["money"] is True
-    assert got["most_likely"]["money"] is False
-    assert got["long_shots"]["money"] is False
-    # And the zero-dollar claim is true of the code, not just the copy —
-    # checked on the function that writes the ROW, since `log_longshots`
-    # delegates to `_journal_longshot_rows` and asserting on the wrapper
-    # would pass without proving anything.
+    """RE-ANCHORED 2026-09-19. This used to assert `most_likely` carries
+    no money FULL STOP, and it caught the change that made that copy a
+    lie: MLB's likelihood board is staked from that date at Ethan's
+    call. The claim is now per league, which is what it always should
+    have been — one flag was telling every reader the same thing about
+    five different books."""
+    for sport in ("nfl", "cfb", "wnba"):
+        got = {b["key"]: b for b in boards.guide(sport)}
+        assert got["recommendations"]["money"] is True, sport
+        assert got["most_likely"]["money"] is False, sport
+        assert got["long_shots"]["money"] is False, sport
+    mlb = {b["key"]: b for b in boards.guide("mlb")}
+    assert mlb["most_likely"]["money"] is True
+    assert mlb["most_likely"]["journal"] == ledger.LIKELY_LIVE_CATEGORY
+    assert mlb["long_shots"]["money"] is False
+
+
+def test_the_guide_reads_the_ledgers_own_list_of_staked_leagues():
+    """Not a second copy of it. A restated list is a second thing to
+    forget, and the one that gets forgotten is the one a reader is
+    looking at."""
     import inspect
-    for fn in (ledger.log_most_likely, ledger._journal_longshot_rows):
-        src = inspect.getsource(fn)
-        assert "stake_dollars" in src, fn.__name__
-        assert "flat_stake, 0.0" in src, fn.__name__
+    src = inspect.getsource(boards)
+    assert "likely_is_staked" in src, \
+        "the guide is deciding for itself which leagues carry money"
+    for sport in ("mlb", "nfl"):
+        got = {b["key"]: b for b in boards.guide(sport)}
+        assert got["most_likely"]["money"] is ledger.likely_is_staked(sport)
+
+
+def test_a_board_that_claims_no_money_really_writes_none():
+    """The zero-dollar claim checked against the code, not the copy —
+    on the function that writes the ROW, since `log_longshots` delegates
+    and asserting on the wrapper would pass without proving anything."""
+    import inspect
+    src = inspect.getsource(ledger._journal_longshot_rows)
+    assert "stake_dollars" in src
+    assert "flat_stake, 0.0" in src
+    # And the likelihood board's dollars are zero exactly when it is not
+    # staked, which is the condition that replaced the flat claim.
+    likely = inspect.getsource(ledger.log_most_likely)
+    assert "unit_dollars" in likely and "if staked else 0.0" in likely
 
 
 def test_the_summary_line_says_where_each_one_lands():

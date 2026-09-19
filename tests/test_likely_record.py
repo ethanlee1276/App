@@ -81,7 +81,17 @@ def _likely_row(market, side, prob, line=0.5, odds=-500, player="P"):
             "implied_prob": None, "game_date": "2026-08-20"}
 
 
-def _journal(conn, row, sport="mlb"):
+def _journal(conn, row, sport="wnba"):
+    """Journal one row and read it back out of the PAPER book.
+
+    The fixture league was "mlb" until 2026-09-19, when MLB's likelihood
+    board was staked and its rows moved to `likely_live`. This file is
+    about the paper book's side/line normalisation, which is identical in
+    both, so it now runs on a league that is still paper rather than
+    quietly following the money into a different bucket. That MLB lands
+    in the live book is pinned in
+    tests/test_the_likelihood_board_plays_for_money.py.
+    """
     ledger.log_most_likely(conn, {"sport": sport, "date": "2026-08-20",
                                   "most_likely": [row]})
     return conn.execute("SELECT market, side, line, hit_prob FROM bets "
@@ -308,7 +318,13 @@ def test_a_verdict_at_size_names_the_direction_of_the_miss():
         _bet(conn, 0.60, "lost")
     v = ledger.likely_report(conn)["verdict"]
     assert "real miss" in v
-    assert "money stays off" in v
+    # RE-ANCHORED 2026-09-19. This asserted the sentence "money stays off
+    # until that is positive over a sample this size", which on the day
+    # MLB was staked was being printed BESIDE a positive ROI — a refusal
+    # whose own condition had already been met. The claim worth pinning
+    # is not that one phrase but that the verdict states, plainly,
+    # whether money is on this book.
+    assert "No money is staked on this book." in v, v
 
 
 # --- the breakdowns -------------------------------------------------------
