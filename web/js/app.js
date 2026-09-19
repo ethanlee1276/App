@@ -11649,15 +11649,33 @@ function recBookSections(br, scope, opts) {
    each of these buckets with its hit rate and its promotion verdict,
    and printing the same W-L twice on one screen is the failure the ROI
    comment in `book_records` exists for. */
-function recShadowBooks(sb, scope) {
+const SHADOW_ORDER = [
+  ["stale", "Stale-line flags"], ["form", "Form sampler"],
+  ["loose", "Looser gates"], ["longshot_watch", "Long-shot watch"],
+  ["predmarket", "Prediction desk"]];
+
+/* ON "ALL BETS", ONLY THE BOOKS WITH NO PANEL OF THEIR OWN.
+   `recStaleSection`, `recFormSection` and `recLooseSection` already draw
+   their buckets there, with hit rates and promotion verdicts this table
+   does not have. The other two have no renderer anywhere — which is how
+   `weather`, 2,589 graded desk contracts, was reachable from no page at
+   all (Ethan's droplet run, 2026-09-19). */
+const SHADOW_ORDER_ALL = SHADOW_ORDER.filter(
+  ([k]) => k === "longshot_watch" || k === "predmarket");
+
+function recShadowBooks(sb, scope, order) {
+  const all = !scope || scope === "all";
   return recBookSections(sb, scope, {
-    order: [["stale", "Stale-line flags"], ["form", "Form sampler"],
-            ["loose", "Looser gates"], ["longshot_watch", "Long-shot watch"],
-            ["predmarket", "Prediction desk"]],
+    order: order || (all ? SHADOW_ORDER_ALL : SHADOW_ORDER),
     title: "Also tracked, never staked",
-    sub: `— every other pick journaled for this league, kept deliberately
-      out of the P&L above: they are measurements, not money. Each one
-      earns its way into the record on its own graded run.`,
+    sub: all
+      ? `— books kept deliberately out of the P&L above and counted by no
+         chip: measurements, not money. Pooled across every league,
+         including ones with no board of their own.`
+      : `— every other pick journaled for this league, kept deliberately
+         out of the P&L above and counted by no chip: they are
+         measurements, not money. Each one earns its way into the record
+         on its own graded run.`,
   });
 }
 
@@ -15050,9 +15068,10 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
      + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))
-     // SCOPED ONLY, and the inverse guard is deliberate: on "All bets"
-     // the panels above already draw these buckets in full.
-     + (scoped ? recShadowBooks(d.shadow_books, scope) : "")
+     // BOTH SCOPES, different book lists. A sport gets all five; "All
+     // bets" gets only the two with no dedicated panel above it, so one
+     // book never prints two W-Ls on one screen.
+     + recShadowBooks(d.shadow_books, scope)
      // Polymarket's flags are not wagers in this ledger — they are graded
      // by their own report card. Folding a flag rate into a betting P&L
      // would make both numbers mean nothing.

@@ -6994,6 +6994,26 @@ BOOK_SECTIONS = (
 #: both on the sport's own scope. Listing them here would print one
 #: book's record twice on one screen, which is the failure the ROI
 #: comment in `book_records` was written for.
+#: WHAT A SCOPE CHIP COUNTS: picks the site RECOMMENDED.
+#:
+#: Ethan, 2026-09-19, looking at the chip row after the first version of
+#: `journaled_counts` shipped: "why is it showing we have so many bets
+#: recorded now". MLB read 7,951. Its recommended books hold 1,724 —
+#: edge 743, Most Likely 586, Long Shots 395. The other ~6,200 were the
+#: SAMPLERS: 3,040 looser-gates rows, 2,433 stale-line flags, 370 desk
+#: contracts, 327 form rows. Those are measurements the engine runs on
+#: its own; nobody was ever told to bet one. Counting them on a badge
+#: that reads "MLB 7951" overstates what this site recommended by four
+#: times, and a record that overstates is the one thing this page
+#: exists not to do.
+#:
+#: So the chip counts these books and the shadow ones are SHOWN without
+#: being counted — visible under "Also tracked, never staked", outside
+#: every total. `potd` and `ufc` join the three headline books here
+#: because both are real recommendations with their own section.
+RECOMMENDED_CATEGORIES = tuple(
+    c for _k, _l, cs in BOOK_SECTIONS for c in cs) + (POTD_CATEGORY, "ufc")
+
 SHADOW_SECTIONS = (
     ("stale", "Stale-line flags", ("stale",)),
     ("form", "Form sampler", ("form",)),
@@ -7017,9 +7037,18 @@ def journaled_counts(conn, since: str | None = None) -> dict:
     0 beside eighteen graded fights. Ethan, 2026-09-19: "i want all bets
     shown on the record page that had been placed."
 
-    Counted here with NO category filter and NO stake filter, so the
-    promise the chips make is the query that answers them, and the
-    sports still sum to "All bets" because both come from this one scan.
+    Counted with NO STAKE FILTER — that is the half that was broken, and
+    it is why a probation league read 0 — but over `RECOMMENDED_CATEGORIES`
+    only. The first version of this counted every category and MLB's chip
+    jumped to 7,951 against 1,724 actual recommendations; see that
+    constant for why the samplers are shown without being counted.
+
+    The sports still sum to "All bets" because both come from this one
+    scan. They would NOT have with no category filter at all: `weather`
+    is journaled (2,589 desk contracts) and is not in TRACKED_SPORTS, so
+    it has no chip, and its rows landed in the total with nothing under
+    it to account for them — 13,093 on the badge against 10,417 summed
+    beneath. Every category counted here belongs to a board with a chip.
 
     VOIDS ARE EXCLUDED. A voided bet was refunded — no result, no stake
     at risk — and every panel on the page leaves it out, so counting it
@@ -7028,14 +7057,17 @@ def journaled_counts(conn, since: str | None = None) -> dict:
     stating.
     """
     win = " AND date >= ?" if since else ""
-    args: tuple = (since,) if since else ()
+    cats = RECOMMENDED_CATEGORIES
+    marks = ",".join("?" * len(cats))
+    args: tuple = tuple(cats) + ((since,) if since else ())
     out: dict = {}
     tot = {"settled": 0, "open": 0}
     for r in conn.execute(
             "SELECT sport, "
             "SUM(status IN ('won','lost','push')) s, "
             "SUM(status='open') o "
-            "FROM bets WHERE status IN ('won','lost','push','open')"
+            "FROM bets WHERE status IN ('won','lost','push','open') "
+            f"AND category IN ({marks})"
             + win + " GROUP BY sport", args):
         if not r["sport"]:
             continue

@@ -153,7 +153,10 @@ def test_the_chip_counts_every_book_not_just_the_staked_one():
     got = jc["by_sport"].get("cfb")
     assert got is not None, \
         "college is missing from the counts — the scan is filtered again"
-    assert got == {"settled": 10, "open": 1}, jc
+    # Five graded Most Likely rows and one open, all at a ZERO stake.
+    # The five stale-line flags `_cfb` also journals are NOT here: they
+    # are a sampler, not a recommendation. See RECOMMENDED_CATEGORIES.
+    assert got == {"settled": 5, "open": 1}, jc
     assert ledger.performance(c, "cfb")["settled"] == 0, \
         "the edge book is still empty — that is the whole point"
 
@@ -191,7 +194,98 @@ def test_the_export_carries_the_chip_counts():
     doc = json.loads(out.read_text())
     jc = doc.get("journaled")
     assert jc, "the export dropped the chip counts"
-    assert jc["by_sport"].get("cfb", {}).get("settled") == 10, jc
+    assert jc["by_sport"].get("cfb", {}).get("settled") == 5, jc
+
+
+# --- the chip counts RECOMMENDATIONS, not samplers ---------------------
+#: Ethan, 2026-09-19, on the chip row after the first version shipped:
+#: "why is it showing we have so many bets recorded now". MLB read 7,951
+#: with 1,724 actual recommendations under it.
+def test_the_chip_does_not_count_the_samplers():
+    """THE OVERSHOOT. Counting every category made a badge that says
+    "MLB 7951" over a book that recommended 1,724 picks."""
+    c = _conn()
+    for cat in ("main", "likely", "longshot"):
+        _bet(c, "mlb", cat, "won")
+    for cat in ("loose", "stale", "form", "predmarket", "longshot_watch"):
+        _bet(c, "mlb", cat, "won")
+    jc = ledger.journaled_counts(c, since=ledger.RECORD_EPOCH)
+    assert jc["by_sport"]["mlb"]["settled"] == 3, jc
+
+
+def test_the_recommended_books_are_the_ones_with_a_section():
+    """Anything counted on a chip has to be reachable under it, or the
+    badge names rows the scope cannot show."""
+    rec = set(ledger.RECOMMENDED_CATEGORIES)
+    assert rec == {"main", "paper", "likely", "longshot", "potd", "ufc"}, rec
+    shadow = {c for _k, _l, cs in ledger.SHADOW_SECTIONS for c in cs}
+    assert not (rec & shadow), rec & shadow
+
+
+def test_a_league_off_the_board_cannot_unbalance_the_total():
+    """THE BUG I SHIPPED, in miniature. `weather` carries 2,589 desk
+    contracts and is not in TRACKED_SPORTS, so it has no chip — and with
+    no category filter its rows went into "All bets" with nothing
+    beneath to account for them: 13,093 against 10,417 summed."""
+    c = _conn()
+    _cfb(c)
+    _bet(c, "mlb", "main", "won")
+    for _ in range(3):
+        _bet(c, "weather", "predmarket", "won", market="temp_high")
+    jc = ledger.journaled_counts(c, since=ledger.RECORD_EPOCH)
+    assert "weather" not in jc["by_sport"], jc
+    assert jc["all"]["settled"] == sum(
+        v["settled"] for v in jc["by_sport"].values()), jc
+
+
+def test_every_counted_sport_is_one_the_chips_list():
+    """The invariant stated directly: a sport can only appear in the
+    counts if the board — and so the chip row — carries it."""
+    c = _conn()
+    for cat in ledger.RECOMMENDED_CATEGORIES:
+        _bet(c, "weather", cat, "won", market=f"m_{cat}")
+        _bet(c, "cfb", cat, "won", market=f"m_{cat}")
+    jc = ledger.journaled_counts(c, since=ledger.RECORD_EPOCH)
+    off = set(jc["by_sport"]) - set(ledger.TRACKED_SPORTS)
+    assert off == {"weather"}, (
+        "a league with recommended picks and no chip would unbalance the "
+        f"total again: {off}")
+
+
+# --- and the uncounted books are still reachable -----------------------
+def test_the_all_scope_draws_the_books_that_have_no_panel():
+    """`weather`'s rows are counted by no chip and scoped to by nobody,
+    so "All bets" is the only place they can be seen. Before this they
+    were reachable from no page at all."""
+    body = _fn("recShadowBooks")
+    assert "SHADOW_ORDER_ALL" in body, body
+    i = APP.index("const SHADOW_ORDER_ALL")
+    blob = APP[i:i + 200]
+    assert "longshot_watch" in blob and "predmarket" in blob, blob
+
+
+def test_the_all_scope_does_not_redraw_a_book_that_has_a_panel():
+    """stale, form and loose already draw there with their hit rates
+    and verdicts. Two W-Ls for one book on one screen is the failure the
+    ROI comment in `book_records` exists for."""
+    i = APP.index("const SHADOW_ORDER_ALL")
+    blob = APP[i:i + 200]
+    for key in ("stale", "form", "loose"):
+        assert f'"{key}"' not in blob, f"{key} is drawn twice on All bets"
+
+
+def test_the_products_room_draws_the_shadow_books_on_both_scopes():
+    """UNCONDITIONALLY. Guarding this on `scoped` is what left weather's
+    2,589 desk contracts reachable from no page at all: they are counted
+    by no chip and scoped to by nobody, so "All bets" is their only
+    home. The book LIST differs by scope — that is `SHADOW_ORDER_ALL`'s
+    job, inside the renderer — but the call does not."""
+    src = _fn("_recordRooms")
+    assert "recShadowBooks(d.shadow_books, scope)" in src, src
+    i = src.index("recShadowBooks(d.shadow_books, scope)")
+    line = src[src.rindex("\n", 0, i) + 1:i].strip()
+    assert line == "+", \
+        f"the shadow books are behind a scope guard again: {line!r}"
 
 
 # --- the page reads both -----------------------------------------------
@@ -206,15 +300,6 @@ def test_the_chip_falls_back_for_a_file_published_before_the_key():
     zeros there would be a worse lie than the narrow count."""
     src = _fn("recordScopeHTML")
     assert "|| r.overall" in src and "|| d.overall" in src, src
-
-
-def test_the_products_room_draws_the_shadow_books_when_scoped():
-    src = _fn("_recordRooms")
-    assert "recShadowBooks(d.shadow_books, scope)" in src, src
-    i = src.index("recShadowBooks")
-    assert "scoped ?" in src[max(0, i - 120):i], \
-        "the shadow books must be SCOPED — on 'All bets' the panels " \
-        "above already draw each of these buckets in full"
 
 
 def test_the_shadow_renderer_reuses_the_book_arithmetic():
@@ -232,8 +317,14 @@ def test_the_shadow_renderer_reuses_the_book_arithmetic():
 def test_the_shadow_books_say_they_are_not_money():
     body = _fn("recShadowBooks")
     assert "never staked" in body, body
+    assert "counted by no chip" in body, \
+        "the subtitle no longer says these are outside every total"
+    # The book list lives in SHADOW_ORDER now, so the "All bets" variant
+    # can be a filter of it rather than a second hand-kept list.
+    i = APP.index("const SHADOW_ORDER = [")
+    order = APP[i:APP.index("];", i)]
     for key in ("stale", "form", "loose", "longshot_watch", "predmarket"):
-        assert f'"{key}"' in body, f"{key} has no row in the renderer"
+        assert f'"{key}"' in order, f"{key} has no row in the renderer"
 
 
 def test_the_empty_state_counts_the_shadow_books_too():
