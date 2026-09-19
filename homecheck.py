@@ -23,6 +23,7 @@ a reading one.
     python3 homecheck.py filler        # FILLER: did the -110 filler die?
     python3 homecheck.py live          # LIVE: does the Live tab have bets to draw?
     python3 homecheck.py grading       # GRADING: is every league's book settling?
+    python3 homecheck.py record        # RECORD: does the page's file carry every league?
     python3 homecheck.py exchange      # KX-2: what the Kalshi tickers look like
     python3 homecheck.py head          # which commit this box is running
     python3 homecheck.py all           # every read-only check, in order
@@ -159,6 +160,103 @@ def _history_ro():
         return None, f"cannot open {path} read-only — {type(exc).__name__}: {exc}"
     conn.row_factory = sqlite3.Row
     return conn, ""
+
+
+def record() -> list:
+    """RECORD. What the published record.json holds, against the journal.
+
+    Ethan, 2026-09-19, with `grading` showing cfb 285 likely + 8 main +
+    1 longshot settled — all three in books the Record page renders —
+    and the page showing him nothing.
+
+    EVERY LAYER BETWEEN THE TWO IS GENERIC, which is why this check
+    exists rather than another guess. `TRACKED_SPORTS` includes cfb;
+    `book_records` groups by sport with no league list; the scope chips
+    loop `d.tracked_sports` and deliberately list a sport with nothing
+    journaled rather than hide it; `recBookSections` indexes
+    `br[scope]`. Nothing in that chain can single a league out.
+
+    So the remaining question is not what the code does but what the
+    FILE says, and whether it is the file the page is being served. This
+    reads the published artifact and prints, per sport, what a reader
+    would find in it — beside what the journal holds, so the two can
+    disagree out loud instead of in a browser.
+    """
+    import datetime as _dt
+    import json as _json
+    from pathlib import Path as _P
+    out = ["RECORD — what the published record.json holds, per sport",
+           "  the artifact the Record page renders, against the journal"]
+    try:
+        from engine import gate
+        path = gate.board_source(_P("web/data/record.json"))
+        with open(path, encoding="utf-8") as fh:
+            doc = _json.load(fh)
+    except Exception as exc:                                  # noqa: BLE001
+        return out + [f"  cannot read record.json — "
+                      f"{type(exc).__name__}: {exc}"]
+    out.append(f"  read: {path}")
+    stamp = str(doc.get("generated_at") or "")
+    age = ""
+    try:
+        made = _dt.datetime.fromisoformat(stamp)
+        hrs = (_dt.datetime.now() - made).total_seconds() / 3600.0
+        age = f"  ({hrs:.1f}h old)"
+        if hrs > 6:
+            age += "   !! STALE — the page is rendering an old export"
+    except ValueError:
+        pass
+    out.append(f"  generated_at {stamp or '(none)'}{age}")
+    out.append(f"  record_epoch {doc.get('record_epoch')}  "
+               f"— rows before this date are NOT in the public record")
+    tracked = list(doc.get("tracked_sports") or [])
+    out.append(f"  tracked_sports {tracked}")
+
+    by_sport = doc.get("by_sport") or {}
+    books = doc.get("book_records") or {}
+    conn, why = _journal_ro()
+    if why:
+        out.append(f"  {why}")
+    for sp in sorted(set(tracked) | set(by_sport) | set(books)):
+        entry = (by_sport.get(sp) or {}).get("overall") or {}
+        mine = books.get(sp) or {}
+        shown = ", ".join(
+            f"{k} {(b.get('w', 0) + b.get('l', 0))}" for k, b in sorted(mine.items())
+        ) or "(no book sections)"
+        out.append(f"  {sp:5} by_sport settled {entry.get('settled', 0):5}  "
+                   f"open {entry.get('open', 0):4}  |  books: {shown}")
+        if conn is None:
+            continue
+        # THE JOURNAL'S OWN ANSWER, beside it. A league the journal has
+        # graded into a rendered book and the artifact does not carry is
+        # the exact shape of Ethan's report, and no amount of reading
+        # the front end finds it.
+        try:
+            from engine.ledger import BOOK_SECTIONS, RECORD_EPOCH
+            cats = tuple(c for _k, _l, cs in BOOK_SECTIONS for c in cs)
+            marks = ",".join("?" * len(cats))
+            n = conn.execute(
+                f"SELECT COUNT(*) FROM bets WHERE sport=? AND date >= ? "
+                f"AND status IN ('won','lost','push') "
+                f"AND category IN ({marks})",
+                (sp, RECORD_EPOCH, *cats)).fetchone()[0]
+        except Exception as exc:                              # noqa: BLE001
+            out.append(f"         journal unreadable — "
+                       f"{type(exc).__name__}: {exc}")
+            continue
+        if n and not mine:
+            out.append(f"       !! the journal has graded {n} {sp} bet(s) into "
+                       f"books the Record page renders, and the published "
+                       f"file carries NONE of them — the export is the gap, "
+                       f"not the journal")
+        elif n:
+            drawn = sum(b.get("w", 0) + b.get("l", 0) for b in mine.values())
+            if drawn < n:
+                out.append(f"       !! journal {n} graded, file {drawn} — "
+                           f"{n - drawn} row(s) did not reach the page")
+    if conn is not None:
+        conn.close()
+    return out
 
 
 def grading() -> list:
@@ -527,6 +625,7 @@ CHECKS = {
     "live": (live, "LIVE: what the Live tab has to draw, per league", True),
     "grading": (grading, "GRADING: is each league's book settling, and why not",
                 True),
+    "record": (record, "RECORD: what the published record.json holds", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

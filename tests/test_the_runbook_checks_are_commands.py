@@ -626,6 +626,106 @@ def test_the_grading_check_runs_inside_the_daily_paste():
         "`grading` is excluded from `all`, so nobody will run it twice"
 
 
+# --- RECORD: the artifact the page renders, against the journal -------------
+def _record(doc, graded=()):
+    """`doc` stands in for record.json; `graded` is (sport, n) rows the
+    journal has settled into books the Record page renders."""
+    import json as _json
+    import sqlite3
+    import tempfile
+    from pathlib import Path as _P
+    from engine import gate, ledger
+    tmp = _P(tempfile.mkdtemp()) / "record.json"
+    tmp.write_text(_json.dumps(doc), encoding="utf-8")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, date TEXT, status TEXT, "
+                 "category TEXT)")
+    for sport, n in graded:
+        conn.executemany(
+            "INSERT INTO bets VALUES (?, '2026-09-10', 'won', 'likely')",
+            [(sport,)] * n)
+    real_src, real_j = gate.board_source, homecheck._journal_ro
+    gate.board_source = lambda _p: tmp
+    homecheck._journal_ro = lambda: (conn, "")
+    try:
+        return "\n".join(homecheck.record())
+    finally:
+        gate.board_source, homecheck._journal_ro = real_src, real_j
+
+
+def _doc(**kw):
+    base = {"generated_at": "2026-09-19T00:00:00", "record_epoch": "2026-08-06",
+            "tracked_sports": ["cfb", "mlb"], "by_sport": {}, "book_records": {}}
+    base.update(kw)
+    return base
+
+
+def test_a_league_the_journal_graded_and_the_file_lost_is_shouted_about():
+    """Ethan, 2026-09-19: `grading` showed cfb with 285 likely, 8 main
+    and 1 longshot settled — all three rendered books — and the page
+    showed him nothing. Every layer between is generic, so the artifact
+    is where the two can disagree."""
+    out = _record(_doc(), graded=[("cfb", 294)])
+    assert "the journal has graded 294 cfb bet(s)" in out, out
+    assert "the export is the gap, not the journal" in out, out
+
+
+def test_a_league_the_file_carries_is_not_shouted_about():
+    out = _record(_doc(book_records={"cfb": {"likely": {"w": 200, "l": 94}}}),
+                  graded=[("cfb", 294)])
+    assert "the export is the gap" not in out, out
+    assert "likely 294" in out, out
+
+
+def test_a_partial_export_says_how_many_rows_were_lost():
+    out = _record(_doc(book_records={"cfb": {"likely": {"w": 100, "l": 94}}}),
+                  graded=[("cfb", 294)])
+    assert "journal 294 graded, file 194" in out, out
+    assert "100 row(s) did not reach the page" in out, out
+
+
+def test_a_stale_export_is_named_as_stale():
+    """A page rendering a twelve-hour-old file looks exactly like a page
+    rendering a broken one."""
+    out = _record(_doc(generated_at="2020-01-01T00:00:00"))
+    assert "STALE — the page is rendering an old export" in out, out
+
+
+def test_a_fresh_export_is_not_called_stale():
+    import datetime as dt
+    now = dt.datetime.now().replace(microsecond=0).isoformat()
+    out = _record(_doc(generated_at=now))
+    assert "STALE" not in out, out
+
+
+def test_the_epoch_is_printed_because_it_legitimately_hides_rows():
+    """`RECORD_EPOCH` is a real reason for a league to be absent, and a
+    reader chasing a missing section needs to rule it out first."""
+    out = _record(_doc())
+    assert "record_epoch 2026-08-06" in out, out
+    assert "NOT in the public record" in out, out
+
+
+def test_a_missing_file_is_reported_not_raised():
+    import json as _json
+    import tempfile
+    from pathlib import Path as _P
+    from engine import gate
+    real = gate.board_source
+    gate.board_source = lambda _p: _P(tempfile.mkdtemp()) / "nope.json"
+    try:
+        out = "\n".join(homecheck.record())
+    finally:
+        gate.board_source = real
+    assert "cannot read record.json" in out, out
+
+
+def test_the_record_check_runs_inside_the_daily_paste():
+    assert homecheck.CHECKS["record"][2] is True
+
+
 CHECK_NAMES = tuple(homecheck.CHECKS)
 
 

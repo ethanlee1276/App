@@ -650,6 +650,45 @@ run settles which of these it is.
 
 ---
 
+## RECORD. Does the page's own file carry every league? (read-only, seconds)
+
+Ethan, 2026-09-19. `grading` came back with college football holding
+**285 Most Likely, 8 Edge and 1 Long Shot settled** — all three are
+books the Record page renders — and the page was showing him nothing.
+
+```bash
+cd /srv/qellys && python3 homecheck.py record
+```
+
+**Every layer between the journal and the page is generic**, which is
+why this reads the artifact instead of the code. `TRACKED_SPORTS` lists
+cfb; `book_records` groups by sport with no league list; the scope chips
+loop `tracked_sports` and deliberately show a league with nothing
+journaled rather than hide it; `recBookSections` just indexes
+`br[scope]`. Nothing in that chain can single a league out. So the
+disagreement, if there is one, is between the journal and the published
+file — and this prints both side by side.
+
+```
+  generated_at 2026-09-19T00:29:05  (11.2h old)   !! STALE
+  record_epoch 2026-08-06  — rows before this date are NOT in the public record
+  cfb   by_sport settled   294  open   13  |  books: likely 285, main 8, longshots 1
+```
+
+**What to look for, in order.**
+
+* **`STALE`** — the page is rendering an old export. `export_json` runs
+  after every settle, so a file hours old means the settle loop is not
+  reaching it. That alone explains a missing league with nothing else
+  wrong.
+* **`the export is the gap, not the journal`** — the journal has graded
+  rows into a rendered book and the file carries none of them.
+* **`journal N graded, file M`** — a partial export.
+* **`record_epoch`** — rows dated before it are excluded from the public
+  record by design. Rule this out before chasing anything else.
+
+---
+
 ## GRADING. Is every league's book actually settling? (read-only, seconds)
 
 Ethan, 2026-09-18: *"CFB still hasn't graded any edge bets or most likely
