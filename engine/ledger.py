@@ -1036,19 +1036,31 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     rows = (result.get("most_likely") or [])[:max(0, int(depth))]
     kick = _kickoff_map(result)
     n = 0
-    # STAKED, OR STILL A MEASUREMENT — decided per league, and by one
-    # predicate so the category, the stake and the dollars can never
-    # disagree about which book a row is in. See LIKELY_LIVE_SPORTS for
-    # the decision and the number it was made against.
+    # STAKED, OR STILL A MEASUREMENT — and the BREAKER decides, not the
+    # league list alone. `live_verdict` is asked ONCE here rather than
+    # per row, because it queries the journal and this loop can carry a
+    # hundred rows; the answer cannot change mid-slate.
     staked = likely_is_staked(sport)
-    category = likely_category(sport)
-    stake_units = LIKELY_LIVE_STAKE if staked else flat_stake
-    grade = LIKELY_LIVE_GRADE if staked else "Likely"
-    # Real units mean real dollars, off the same roll and the same
-    # unit_pct the edge book sizes from. One bankroll, because there is
-    # one bankroll.
+    brk = live_verdict(conn, sport) if staked else None
     unit_dollars = (float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
                     if staked else 0.0)
+    stopped_bands = [(b["lo"], b["hi"]) for b in (brk or {}).get("bands", [])
+                     if b["verdict"] == "stop"]
+    book_stopped = bool(brk and brk["verdict"] == "stop")
+
+    def _stake_for(prob) -> float:
+        """This row's stake after the breaker. 0.0 means the pick is
+        still published and still graded — just not with money on it."""
+        if not staked or book_stopped:
+            return flat_stake if not staked else 0.0
+        try:
+            pr = float(prob)
+        except (TypeError, ValueError):
+            return LIKELY_LIVE_STAKE
+        for lo, hi in stopped_bands:
+            if lo <= pr < hi:
+                return 0.0
+        return LIKELY_LIVE_STAKE
     for r in rows:
         market = r.get("market", "")
         try:
@@ -1145,6 +1157,18 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # result cannot settle.
         row_date = date if sport == "nfl" \
             else str(r.get("game_date") or "").strip() or date
+        # PER ROW, because the breaker can cut one BAND and leave the
+        # rest of the board staked. A row it stops goes back to the
+        # paper book at the paper stake: still published, still graded,
+        # no money on it — so the record keeps answering whether
+        # stopping was the right call.
+        stake_units = _stake_for(r.get("model_prob"))
+        category = (LIKELY_LIVE_CATEGORY if stake_units and staked
+                    else "likely")
+        grade = LIKELY_LIVE_GRADE if category == LIKELY_LIVE_CATEGORY \
+            else "Likely"
+        if not stake_units:
+            stake_units = flat_stake
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
@@ -1174,7 +1198,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              None if r.get("implied_prob") is None
              else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
              None, grade, stake_units,
-             round(stake_units * unit_dollars, 2),
+             round(stake_units * unit_dollars, 2)
+             if category == LIKELY_LIVE_CATEGORY else 0.0,
              # MINUTES TO KICKOFF AT JOURNAL TIME, the column the other
              # three books have carried since capture lag shipped and
              # this one never did. Ethan, 2026-09-15, after the KC-DEN
@@ -6430,6 +6455,168 @@ LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
 def likely_is_staked(sport) -> bool:
     """Is this league's likelihood board playing for money?"""
     return str(sport or "").lower() in LIKELY_LIVE_SPORTS
+
+
+#: THE DEMOTION BAR — the half that was missing when these boards were
+#: staked.
+#:
+#: The stale book had to CLEAR a bar (200 settled, z >= 2.0, positive
+#: ROI) before it was allowed to risk a penny. The likelihood boards were
+#: switched on below their own bar at Ethan's call on 2026-09-19, four of
+#: them with no settled record at all — and nothing anywhere would have
+#: told him if one of them started bleeding. He would have found out by
+#: reading the Record page and noticing.
+#:
+#: A promotion bar with no demotion bar is not a policy, it is an
+#: opinion about the first day.
+#:
+#: WHY THESE NUMBERS. At this board's prices a settled bet's return has a
+#: standard deviation near 0.68, so at 100 settled the standard error on
+#: the ROI is about 6.8 points. z <= -2.0 therefore means roughly -13.5%,
+#: which at a flat 0.25u is about 3.4 units — a real but survivable loss
+#: to be near-certain the book is losing rather than unlucky. Stopping
+#: sooner stops good books on noise; stopping later is paying tuition for
+#: a lesson already learned.
+LIVE_STOP_MIN_N = 100
+LIVE_STOP_Z = -2.0
+
+#: Loud, but does not touch the stake. The gap between this and the stop
+#: is where a human should be looking, which is the whole point of
+#: saying it out loud before it becomes a decision.
+LIVE_REVIEW_Z = -1.0
+
+#: A band needs its own sample before its own record means anything.
+#: Smaller than the book's, because a band is a quarter of a board and
+#: waiting for 100 in each would mean never cutting one.
+LIVE_BAND_MIN_N = 60
+
+
+def _verdict_from(n, roi, hit, min_n) -> tuple:
+    """``(verdict, z, why)`` for one staked record, book or band."""
+    if not n or n < min_n:
+        return "run", None, (f"{n or 0} settled, {min_n} needed before this "
+                             f"can be judged")
+    z = _roi_z(hit, roi, n)
+    if z is None:
+        return "run", None, f"{n} settled, no usable price to measure against"
+    if z <= LIVE_STOP_Z:
+        return "stop", z, (f"{roi:+.1%} over {n} settled (z {z:+.2f}) — clear "
+                           f"of the noise band on the losing side")
+    if z <= LIVE_REVIEW_Z:
+        return "review", z, (f"{roi:+.1%} over {n} settled (z {z:+.2f}) — "
+                             f"losing, but not yet past doubt")
+    return "run", z, f"{roi:+.1%} over {n} settled (z {z:+.2f})"
+
+
+def live_verdict(conn, sport, since: str | None = None) -> dict:
+    """Should this league's staked likelihood board still be staked?
+
+    ``{"verdict": run|review|stop, "z", "why", "bands": {...}}``.
+
+    READS ONLY THE STAKED ROWS. The paper history is a different
+    question asked of a different sample — it is what licensed the
+    stake, and letting it vote on whether the stake is working would let
+    586 old rows outvote the evidence that matters.
+
+    ON A READ FAILURE IT RETURNS "run", NOT "stop", and that is the one
+    place this file does not fail closed. The safe-by-default reading
+    would be to stop betting when the breaker cannot see; the reason it
+    does not is that Ethan asked for these boards to be staked, and a
+    database hiccup silently cancelling his bets is a surprise he did
+    not agree to. The caller says out loud that the check could not run,
+    which is the honest version of carrying on.
+    """
+    out = {"sport": sport, "verdict": "run", "z": None, "why": "",
+           "bands": [], "n": 0, "roi": None, "readable": True}
+    try:
+        # THE BANDS ARE JUDGED FIRST, and the book is then judged on what
+        # is LEFT. Otherwise one bleeding band drags the whole board over
+        # the stop line and the parts that were working get pulled with
+        # it — which is exactly the MLB shape this was written for:
+        # -3.9% / +6.4% / -12.0%, every dollar in the middle band. Cut
+        # the band, keep the board; and if every band is cut, the board
+        # has nothing left to stake anyway.
+        def _cut(lo, hi):
+            r = conn.execute(
+                "SELECT COUNT(*) n, SUM(status='won') w, "
+                "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+                "FROM bets WHERE sport=? AND category=? AND stake_units > 0 "
+                "AND status IN ('won','lost') "
+                + ("AND hit_prob >= ? AND hit_prob < ?" if lo is not None
+                   else "AND 1=1"),
+                (sport, LIKELY_LIVE_CATEGORY)
+                + ((lo, hi) if lo is not None else ())).fetchone()
+            n = int(r["n"] or 0)
+            roi = (r["u"] / r["s"]) if r["s"] else None
+            hit = (float(r["w"]) / n) if n else None
+            return n, roi, hit
+
+        for lo, hi in LIKELY_BANDS:
+            bn, broi, bhit = _cut(lo, hi)
+            v, bz, why = _verdict_from(bn, broi, bhit, LIVE_BAND_MIN_N)
+            out["bands"].append({"lo": lo, "hi": hi, "n": bn, "roi": broi,
+                                 "z": bz, "verdict": v, "why": why})
+
+        keep = [(b["lo"], b["hi"]) for b in out["bands"]
+                if b["verdict"] != "stop"]
+        if len(keep) == len(out["bands"]):
+            n, roi, hit = _cut(None, None)          # nothing cut: the lot
+        else:
+            tot = [_cut(lo, hi) for lo, hi in keep]
+            n = sum(t[0] for t in tot)
+            won = sum((t[2] or 0) * t[0] for t in tot)
+            # Units, not an average of averages — a band with six rows
+            # must not weigh the same as one with six hundred.
+            u = sum((t[1] or 0) * t[0] for t in tot)
+            roi = (u / n) if n else None
+            hit = (won / n) if n else None
+        out["n"], out["roi"] = n, roi
+        out["verdict"], out["z"], out["why"] = _verdict_from(
+            n, roi, hit, LIVE_STOP_MIN_N)
+        cut = [b for b in out["bands"] if b["verdict"] == "stop" and b["n"]]
+        if cut and not n:
+            # EVERY BAND THAT HAD ANYTHING IN IT HAS BEEN CUT. Judging
+            # the remainder would report "0 settled, 100 needed" about a
+            # book that has just had all of its evidence thrown out for
+            # losing — a sentence that reads like patience and means the
+            # opposite. Nothing would be staked either way; the label
+            # has to agree with that.
+            out["verdict"] = "stop"
+            out["why"] = ("every band with a record has been cut for "
+                          "losing: " + "; ".join(b["why"] for b in cut))
+    except Exception as exc:                                  # noqa: BLE001
+        out["readable"] = False
+        out["why"] = f"the breaker could not read the journal — {exc}"
+    return out
+
+
+def likely_stake_for(conn, sport, model_prob) -> float:
+    """The stake this row actually gets, after the breaker has spoken.
+
+    0.0 sends it back to the paper book: the board goes on publishing
+    and grading the pick, and stops risking money on it. That is the
+    demotion, and it is the same shape as the promotion — the bet is
+    still journaled, so the record keeps answering whether stopping was
+    right.
+    """
+    if not likely_is_staked(sport):
+        return 0.0
+    v = live_verdict(conn, sport)
+    if v["verdict"] == "stop":
+        return 0.0
+    try:
+        p = float(model_prob)
+    except (TypeError, ValueError):
+        return LIKELY_LIVE_STAKE
+    for b in v["bands"]:
+        if b["lo"] <= p < b["hi"] and b["verdict"] == "stop":
+            # ONE BAND CUT, THE REST LEFT ALONE. On the day this shipped
+            # the MLB paper record ran -3.9% / +6.4% / -12.0% across its
+            # bands: every dollar in one of them and the most confident
+            # band the worst. Pulling the whole board for that would
+            # throw away the part that was working.
+            return 0.0
+    return LIKELY_LIVE_STAKE
 
 
 def likely_category(sport) -> str:

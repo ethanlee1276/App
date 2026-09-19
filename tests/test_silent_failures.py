@@ -140,6 +140,15 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         "code_version", "_journal", "record_top_pick_claim", "top_pick_line",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
+        # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep
+        # on the day it was written. It returns "run" when it cannot read
+        # the journal, which IS a value a quiet day produces — so it
+        # carries `readable: False` and a `why` naming the error, and
+        # every caller that prints it says the check could not run. The
+        # choice not to fail closed is argued on `live_verdict` itself:
+        # stopping the bets Ethan asked for because a query threw is a
+        # surprise he did not agree to.
+        "live_verdict",
     }
 
     def broad(h):
