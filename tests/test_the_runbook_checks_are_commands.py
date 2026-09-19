@@ -429,9 +429,12 @@ def _grading(counts, stuck=()):
     from engine import ledger
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT)")
+    # A `date` column, because the check reports which slates were
+    # journaled and a fixture without one exercises its error path
+    # instead of its answer.
+    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT, date TEXT)")
     for sport, status, n in counts:
-        conn.executemany("INSERT INTO bets VALUES (?,?)",
+        conn.executemany("INSERT INTO bets VALUES (?,?,'2026-09-17')",
                          [(sport, status)] * n)
     real_j, real_h = homecheck._journal_ro, homecheck._history_ro
     real_w = ledger.why_open
@@ -512,6 +515,64 @@ def test_the_history_db_is_opened_read_only():
     assert "db.DEFAULT_DB" in body, "not the history database's own path"
     assert "db.connect(" not in body, \
         "db.connect() creates the schema on first use in a process"
+
+
+def test_how_many_slates_were_journaled_is_printed():
+    """Ethan, 2026-09-19: "can we still fill the record page with all the
+    bets that we have made since week zero". The answer is the set of
+    rows in the journal and nothing else, so the check has to say how
+    many days of the season were actually written down."""
+    out = _grading([("cfb", "open", 34)])
+    assert "slate(s) journaled" in out, out
+
+
+def test_a_single_slate_season_is_visible_as_one_line():
+    """The shape that answers the question: a league that has been
+    publishing boards for a month and journaled one day of them."""
+    import sqlite3
+    from engine import ledger
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT, date TEXT)")
+    conn.executemany("INSERT INTO bets VALUES ('cfb','open',?)",
+                     [("2026-09-17",)] * 34)
+    real_j, real_h = homecheck._journal_ro, homecheck._history_ro
+    real_w = ledger.why_open
+    homecheck._journal_ro = lambda: (conn, "")
+    homecheck._history_ro = lambda: (sqlite3.connect(":memory:"), "")
+    ledger.why_open = lambda *a, **k: []
+    try:
+        out = "\n".join(homecheck.grading())
+    finally:
+        homecheck._journal_ro, homecheck._history_ro = real_j, real_h
+        ledger.why_open = real_w
+    assert "1 slate(s) journaled, 2026-09-17 \u2192 2026-09-17" in out, out
+    assert "2026-09-17      34 bet(s)" in out, out
+
+
+def test_a_long_season_is_summarised_rather_than_listed():
+    """Thirty MLB slates must not print thirty lines into a paste that
+    has four other leagues to get through."""
+    import sqlite3
+    from engine import ledger
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT, date TEXT)")
+    days = [f"2026-07-{d:02d}" for d in range(1, 31)]
+    conn.executemany("INSERT INTO bets VALUES ('mlb','won',?)",
+                     [(d,) for d in days])
+    real_j, real_h = homecheck._journal_ro, homecheck._history_ro
+    real_w = ledger.why_open
+    homecheck._journal_ro = lambda: (conn, "")
+    homecheck._history_ro = lambda: (sqlite3.connect(":memory:"), "")
+    ledger.why_open = lambda *a, **k: []
+    try:
+        out = "\n".join(homecheck.grading())
+    finally:
+        homecheck._journal_ro, homecheck._history_ro = real_j, real_h
+        ledger.why_open = real_w
+    assert "30 slate(s) journaled, 2026-07-01 \u2192 2026-07-30" in out, out
+    assert "2026-07-15" not in out, "thirty lines were printed:\n" + out
 
 
 def test_the_grading_check_runs_inside_the_daily_paste():

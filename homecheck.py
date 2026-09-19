@@ -217,6 +217,31 @@ def grading() -> list:
         except Exception as exc:                              # noqa: BLE001
             out.append(f"  why_open failed — {type(exc).__name__}: {exc}")
 
+    # WHICH SLATES THE JOURNAL ACTUALLY HOLDS, per league.
+    #
+    # Ethan, 2026-09-19: "can we still fill the record page with all the
+    # bets that we have made since week zero". The answer is exactly the
+    # set of rows in this table and nothing else — `docs/BACKUPS.md` is
+    # explicit that only the journal and the accounts are backed up and
+    # "everything else regenerates from the pipeline", so there is no
+    # archive of a past board to reconstruct a pick from. A bet the
+    # journal never recorded cannot be recovered, and inventing one now
+    # from an old board would be choosing what we would have bet after
+    # seeing the result.
+    #
+    # So the honest question is not "can we grade the season" but "how
+    # many days of it did we write down", and that is what this prints.
+    slates: dict = {}
+    try:
+        for r in conn.execute(
+                "SELECT sport, date, COUNT(*) n FROM bets "
+                "GROUP BY sport, date ORDER BY sport, date"):
+            slates.setdefault(str(r["sport"]), []).append((str(r["date"]),
+                                                           r["n"]))
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  slate breakdown unavailable — "
+                   f"{type(exc).__name__}: {exc}")
+
     SETTLED = ("won", "lost", "push", "void")
     for sport in sorted(by_sport):
         st = by_sport[sport]
@@ -225,6 +250,13 @@ def grading() -> list:
         out.append(f"  {sport:5} {done:5d} settled  |  {openn:5d} open"
                    + (f"   ({', '.join(f'{k} {st[k]}' for k in SETTLED if st.get(k))})"
                       if done else ""))
+        days = slates.get(sport) or []
+        if days:
+            out.append(f"          {len(days)} slate(s) journaled, "
+                       f"{days[0][0]} \u2192 {days[-1][0]}")
+            if len(days) <= 6:
+                for d, n in days:
+                    out.append(f"            {d:12} {n:5d} bet(s)")
         mine = {r: n for (sp, r), n in stuck.items() if sp == sport}
         for reason, n in sorted(mine.items(), key=lambda x: -x[1]):
             out.append(f"          {n:4d} stuck past the settle window — {reason}")
