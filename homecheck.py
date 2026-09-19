@@ -214,10 +214,16 @@ def record() -> list:
 
     by_sport = doc.get("by_sport") or {}
     books = doc.get("book_records") or {}
+    # The quarantined books, per sport, added 2026-09-19 with the fix
+    # that put them on the page. Printed here so "is college showing
+    # every bet it placed?" can be answered from the terminal instead
+    # of by scrolling the site.
+    shadow = doc.get("shadow_books") or {}
+    jc = (doc.get("journaled") or {}).get("by_sport") or {}
     conn, why = _journal_ro()
     if why:
         out.append(f"  {why}")
-    for sp in sorted(set(tracked) | set(by_sport) | set(books)):
+    for sp in sorted(set(tracked) | set(by_sport) | set(books) | set(shadow)):
         entry = (by_sport.get(sp) or {}).get("overall") or {}
         mine = books.get(sp) or {}
         # W-L, NOT SETTLED. `book_records` counts pushes in their own
@@ -232,6 +238,22 @@ def record() -> list:
         ) or "(no book sections)"
         out.append(f"  {sp:5} by_sport settled {entry.get('settled', 0):5}  "
                    f"open {entry.get('open', 0):4}  |  books W-L: {shown}")
+        mine_s = shadow.get(sp) or {}
+        if mine_s:
+            out.append("        also tracked, never staked: " + ", ".join(
+                f"{k} {(b.get('w', 0) + b.get('l', 0))}"
+                + (f" (+{b['push']} push)" if b.get("push") else "")
+                for k, b in sorted(mine_s.items())))
+        chip = jc.get(sp)
+        if chip is not None:
+            out.append(f"        scope chip reads "
+                       f"{chip.get('settled', 0) + chip.get('open', 0)} "
+                       f"({chip.get('settled', 0)} settled, "
+                       f"{chip.get('open', 0)} open)")
+        elif "journaled" not in doc:
+            out.append("        !! no `journaled` key — this file predates "
+                       "the chip-count fix; the chips are falling back to "
+                       "the staked edge book and will under-read")
         if conn is None:
             continue
         # THE JOURNAL'S OWN ANSWER, beside it. A league the journal has

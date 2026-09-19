@@ -673,6 +673,8 @@ file — and this prints both side by side.
   generated_at 2026-09-19T00:29:05  (11.2h old)   !! STALE
   record_epoch 2026-08-06  — rows before this date are NOT in the public record
   cfb   by_sport settled     0  open    0  |  books W-L: likely 246, main 8
+        also tracked, never staked: stale 210
+        scope chip reads 504 (446 settled, 58 open)
   mlb   by_sport settled   743  open    2  |  books W-L: edge …, likely … (+9 push)
 ```
 
@@ -692,6 +694,16 @@ file — and this prints both side by side.
   check reported nine phantom missing MLB rows on 2026-09-19.
 * **`record_epoch`** — rows dated before it are excluded from the public
   record by design. Rule this out before chasing anything else.
+* **`also tracked, never staked`** — the quarantined books (stale-line
+  flags, form and looser-gates samplers, long-shot watch, prediction
+  desk). Since 2026-09-19 a sport's own Record scope draws these under
+  that heading, so every bet the league placed is reachable. They are
+  never in the P&L.
+* **`scope chip reads N`** — what the chip beside that league on the
+  Record page shows: every book, open and settled, voids excluded. It
+  counted only the staked edge book until 2026-09-19, which is why
+  college read 0 with a full page under it. A `!! no journaled key` line
+  means the published file predates that fix.
 * **`by_sport settled 0` beside a full book** is NORMAL for a league on
   probation. `by_sport` is the staked Edge book (`performance` filters
   `stake_units > 0`); a probation league is journaled and graded at a

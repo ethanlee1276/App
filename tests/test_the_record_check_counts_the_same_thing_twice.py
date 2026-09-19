@@ -20,6 +20,11 @@ did to me for the length of an afternoon. Both sides count won and lost
 now, and the pushes are printed beside the book rather than vanishing
 into the arithmetic.
 
+It also covers what the check PRINTS, which grew the same day: the
+quarantined books per sport and the scope-chip count, so "is college
+showing every bet it placed?" is answerable from the droplet instead of
+by scrolling the site.
+
 Run directly:
 `python3 tests/test_the_record_check_counts_the_same_thing_twice.py`
 """
@@ -74,9 +79,9 @@ def _run(journal_path, doc, monkey=[]):
         ledger.DEFAULT_DB, gate.board_source = old_db, old_src
 
 
-def _doc(w, l, push):
+def _doc(w, l, push, shadow=None, journaled=None):
     """What the export publishes for that journal."""
-    return {
+    doc = {
         "generated_at": "", "record_epoch": ledger.RECORD_EPOCH,
         "tracked_sports": ["mlb"],
         "by_sport": {"mlb": {"overall": {"settled": w + l + push, "open": 0}}},
@@ -84,6 +89,46 @@ def _doc(w, l, push):
             "label": "Edge bets", "n": w + l + push,
             "w": w, "l": l, "push": push, "net_u": 0.0, "markets": {}}}},
     }
+    if shadow is not None:
+        doc["shadow_books"] = shadow
+    if journaled is not None:
+        doc["journaled"] = journaled
+    return doc
+
+
+# --- the quarantined books are visible from the terminal too ----------
+def test_the_shadow_books_are_printed_beside_the_headline_ones():
+    """Ethan, 2026-09-19: "i want all bets shown on the record page."
+    Whether they made it into the FILE has to be answerable without
+    scrolling the site."""
+    out = _run(_journal(5, 4, 9),
+               _doc(5, 4, 9, shadow={"mlb": {"stale": {
+                   "w": 40, "l": 170, "push": 2}}}))
+    assert "also tracked, never staked: stale 210 (+2 push)" in out, out
+
+
+def test_a_sport_with_only_shadow_rows_still_gets_a_line():
+    """College's case: nothing in the three headline books, 210 rows in
+    a book that used to be invisible. A check that skipped it would
+    reproduce the bug it exists to catch."""
+    out = _run(_journal(0, 0, 0),
+               _doc(0, 0, 0, shadow={"cfb": {"stale": {"w": 39, "l": 171}}}))
+    assert "cfb" in out and "stale 210" in out, out
+
+
+def test_the_chip_count_is_printed():
+    out = _run(_journal(5, 4, 9),
+               _doc(5, 4, 9, journaled={"by_sport": {
+                   "mlb": {"settled": 18, "open": 3}}}))
+    assert "scope chip reads 21 (18 settled, 3 open)" in out, out
+
+
+def test_a_file_from_before_the_chip_fix_is_named_as_such():
+    """A published file with no `journaled` key means the chips are
+    falling back to the staked edge book — worth saying out loud rather
+    than leaving a reader to wonder why college reads 0."""
+    out = _run(_journal(5, 4, 9), _doc(5, 4, 9))
+    assert "predates the chip-count fix" in out, out
 
 
 # --- Ethan's case ------------------------------------------------------
