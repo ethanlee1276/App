@@ -21,6 +21,10 @@ ESPN_NFL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboar
 #: Every league whose scoreboard has this shape. ONE PAYLOAD SHAPE, four
 #: leagues — the situation block is football-only and simply absent for
 #: basketball, which the parser below already fails open on.
+#: ESPN's group id for Division I-A (FBS) — the same constant
+#: `cfbdata` keys its own college pulls on.
+FBS_GROUP = "80"
+
 ESPN_SCOREBOARD = {
     "nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
     "cfb": ("https://site.api.espn.com/apis/site/v2/sports/football/"
@@ -28,6 +32,29 @@ ESPN_SCOREBOARD = {
     "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "wnba": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
 }
+
+#: What the scoreboard needs ASKED FOR, per league. Appended by
+#: `fetch_rows`; the table above stays bare endpoint URLs because
+#: `espnplays.ESPN_SUMMARY` derives the summary endpoint from them by
+#: swapping the last segment, and a query string on the end would make
+#: that slice cut into the wrong characters.
+#:
+#: COLLEGE IS NOT OPTIONAL HERE, and this file shipped without it.
+#: `cfbdata.fetch_scoreboard` has said why since the day it was written
+#: — "ESPN defaults to a couple of dozen events and a September Saturday
+#: has 60+, so the default would silently drop half the slate" — and it
+#: passes `groups` and `limit` for exactly that reason. The LIVE path
+#: called the same endpoint bare, so the fast board saw ESPN's default
+#: handful and every other college game was missing from `live_cfb.json`
+#: altogether: no score, no state, no plays, and no deep file to open.
+#: Ethan, 2026-09-19: "none of the live play by play is working for CFB
+#: games." The same rule honoured in one place and not the other, which
+#: is the defect shape this repo keeps paying for.
+#:
+#: The other three leagues have a slate small enough that the default
+#: covers it — 16 NFL games, a dozen hoops — so they ask for nothing and
+#: the entry is absent rather than empty.
+SCOREBOARD_QUERY = {"cfb": f"?groups={FBS_GROUP}&limit=900"}
 
 # ESPN abbreviations that differ from nflverse.
 ESPN_ABBR = {"WSH": "WAS", "LAR": "LA"}
@@ -274,6 +301,7 @@ def fetch_rows(league: str = "nfl", ttl: int = 30) -> list[dict]:
     url = ESPN_SCOREBOARD.get(league)
     if not url:
         raise DataUnavailable(f"no ESPN scoreboard configured for {league!r}")
+    url += SCOREBOARD_QUERY.get(league, "")
     text = fetch_text(url, f"espn_{league}_scoreboard.json", ttl=ttl,
                       user_agent=DEFAULT_AGENT)
     return parse_espn_rows(json.loads(text), league)

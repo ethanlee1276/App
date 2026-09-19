@@ -361,7 +361,10 @@ def test_the_scoreboard_write_makes_the_deep_directory_and_prunes_it():
     i = src.index("def write(league: str, out_dir: Path = OUT)")
     body = src[i:src.index("\ndef main", i)]
     assert 'pbp_dir = Path(out_dir) / "pbp"' in body
-    assert "build(league, pbp_dir=pbp_dir)" in body
+    # The opening of the call, for the reason spelled out in
+    # tests/test_football_plays.py — `prev=` joined it on 2026-09-19 and
+    # a pinned closing bracket made an ADDED argument a failure.
+    assert "build(league, pbp_dir=pbp_dir" in body
     assert "prune_pbp(pbp_dir)" in body
     m = (ROOT / "live_build.py").read_text()
     assert 'pbp_dir = out.parent / "pbp"' in m and "prune_pbp(pbp_dir)" in m

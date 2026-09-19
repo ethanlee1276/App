@@ -204,7 +204,8 @@ def _row(r: dict, league: str = "") -> dict:
     return out
 
 
-def build(league: str, pbp_dir: Path | None = None) -> dict:
+def build(league: str, pbp_dir: Path | None = None,
+          prev: dict | None = None) -> dict:
     """`{"games": [...], "generated_at": ...}` — or an honest empty board.
 
     A feed that cannot be reached returns NO GAMES rather than raising,
@@ -231,12 +232,89 @@ def build(league: str, pbp_dir: Path | None = None) -> dict:
     games = [_row(r, league) for r in rows]
     games.sort(key=lambda g: (g["live"]["start_time"] or "", g["event_id"]))
     out = {"generated_at": now, "league": league, "games": games}
-    out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir)
+    out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir,
+                                     prev=prev)
     return out
 
 
+def _round_robin(live: list[dict], league: str,
+                 pbp_dir: Path | None) -> list[dict]:
+    """Live games, LEAST RECENTLY SERVED FIRST.
+
+    THE CAP WAS A RANKING, AND IT NEVER MOVED. `PLAYS_MAX_GAMES` was
+    chosen against a measured constraint — a summary is a few hundred
+    kilobytes and this box OOM-killed seven test children on 2026-09-04
+    — so raising it is not the fix. The bug was that the same eight
+    games won the cap on every pass: the order was the scoreboard's,
+    which is kickoff order, and kickoff order does not change during a
+    game. On a September Saturday the early window held the budget for
+    three hours and every other college game had no plays on its card
+    and NO DEEP FILE AT ALL, so opening it showed nothing. Ethan,
+    2026-09-19: "none of the live play by play is working for CFB
+    games."
+
+    The deep file's own mtime is the cursor — a game that has never been
+    served has no file and sorts first, and one served a moment ago
+    sorts last. Nothing is stored between passes and nothing has to be:
+    the answer is already on disk. Thirty live games against a cap of
+    eight now means every game is refreshed about every four passes,
+    which on a twelve-second clock is under a minute, rather than
+    twenty-two games never being fetched at all.
+
+    Same ceiling, same requests per pass, all of the slate.
+    """
+    if pbp_dir is None:
+        return list(live)
+
+    def served_at(g: dict) -> float:
+        try:
+            return (Path(pbp_dir) /
+                    f"{league}_{g['event_id']}.json").stat().st_mtime
+        except OSError:
+            return 0.0                 # never served: it goes first
+
+    return sorted(live, key=served_at)
+
+
+def _carry_forward(waiting: list[dict], league: str,
+                   prev: dict | None) -> int:
+    """Give a game past the cap the plays it had LAST pass. Returns how
+    many were carried.
+
+    Without this the round robin trades one failure for another: a card
+    would show six plays on the pass it was fetched and an empty strip
+    on the next three, so the strip would blink rather than lag. A play
+    list a few passes old is the honest thing to show while the budget
+    is elsewhere, and `plays_state` says which it is so the page can
+    word it.
+
+    ``prev`` is the fast file already on disk — ONE small read for the
+    whole league, not one per game. Re-reading each deep file here would
+    put the cost back exactly where the cap took it out.
+    """
+    if not waiting or not prev:
+        return 0
+    was = {str(g.get("event_id") or ""): g
+           for g in (prev.get("games") or []) if isinstance(g, dict)}
+    n = 0
+    for g in waiting:
+        old = was.get(str(g.get("event_id") or "")) or {}
+        plays = old.get("plays")
+        if not plays:
+            continue
+        g["plays"] = plays
+        if old.get("drive"):
+            g["drive"] = old["drive"]
+        if old.get("players"):
+            g.setdefault("players", old["players"])
+        g["plays_state"] = "carried"
+        n += 1
+    return n
+
+
 def attach_plays(games: list[dict], league: str,
-                 pbp_dir: Path | None = None) -> str:
+                 pbp_dir: Path | None = None,
+                 prev: dict | None = None) -> str:
     """Put the last few plays — and, for football, the current drive —
     on every game IN PROGRESS. Returns a note for the log and the file.
 
@@ -289,12 +367,14 @@ def attach_plays(games: list[dict], league: str,
     for g in games:
         g["plays_state"] = "idle"
     live = [g for g in games if g["live"]["state"] == "live"]
-    for g in live[PLAYS_MAX_GAMES:]:
-        g["plays_state"] = "capped"
     if not live:
         return f"no games in progress — no {noun} fetched"
+    live = _round_robin(live, league, pbp_dir)
+    served, waiting = live[:PLAYS_MAX_GAMES], live[PLAYS_MAX_GAMES:]
+    for g in waiting:
+        g["plays_state"] = "capped"
     got = failed = deep = boxes = 0
-    for g in live[:PLAYS_MAX_GAMES]:
+    for g in served:
         try:
             payload = espnplays.fetch_summary(league, g["event_id"])
             sides = {str(g.get("home_id") or ""): g["home"],
@@ -341,13 +421,15 @@ def attach_plays(games: list[dict], league: str,
                 deep += 1
             except Exception:                                # noqa: BLE001
                 pass                       # the card keeps its plays
+    carried = _carry_forward(waiting, league, prev)
     skipped = max(0, len(live) - PLAYS_MAX_GAMES)
     note = f"{noun}: {got} of {len(live)} live game(s)"
     if failed:
         note += f", {failed} feed(s) unreachable"
     if skipped:
         note += (f", {skipped} past the {PLAYS_MAX_GAMES}-game cap "
-                 f"(scores only)")
+                 f"({carried} carried forward, "
+                 f"{skipped - carried} scores only)")
     if pbp_dir is not None and got:
         note += f", {deep} deep file(s)"
     if boxes:
@@ -471,9 +553,26 @@ def prune_pbp(pbp_dir: Path, max_age_s: int = PBP_MAX_AGE_S,
     return gone
 
 
+def _previous(out_dir: Path, league: str) -> dict | None:
+    """Last pass's fast file, for the plays a capped game keeps.
+
+    Unreadable or absent is None and costs only the carry-forward — the
+    scoreboard this function serves is the more important product, and a
+    first run has no previous pass by definition.
+    """
+    try:
+        with open(Path(out_dir) / f"live_{league}.json",
+                  encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else None
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
 def write(league: str, out_dir: Path = OUT) -> dict:
     pbp_dir = Path(out_dir) / "pbp"
-    payload = build(league, pbp_dir=pbp_dir)
+    payload = build(league, pbp_dir=pbp_dir,
+                    prev=_previous(out_dir, league))
     try:
         prune_pbp(pbp_dir)
     except Exception:                                        # noqa: BLE001

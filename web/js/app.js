@@ -38229,7 +38229,15 @@ async function renderPbpPage() {
    bug report. */
 const PLAYS_EMPTY = {
   unreachable: "We could not reach the play feed for this game. The score above is still live.",
-  capped: "Scores only for this one right now — the play feed takes the busiest games first.",
+  /* "the busiest games first" was true of the old order and is not any
+     more: the budget now goes round the live games least-recently-served
+     first, so a capped game is one waiting its turn — under a minute on
+     a full college Saturday — not one that lost a ranking. It also
+     almost never shows, because a game past the cap keeps the plays it
+     had last pass; this is the first-time case, before it has ever been
+     fetched. */
+  capped: "Waiting its turn for the play feed — the score above is still live.",
+  carried: "Waiting its turn for the play feed — the score above is still live.",
   no_source: "No play-by-play source for this league yet.",
   ok: "No plays yet.",
 };
@@ -38325,7 +38333,15 @@ function playsHTML(g) {
         p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
       ${at}</div>`;
   };
-  return `<div class="lb-plays">${driveLine}${plays.map(row).join("")}</div>`;
+  /* A STRIP THAT IS A MOMENT BEHIND SAYS SO. A college Saturday has
+     more live games than the play budget fetches in one pass, so a game
+     waiting its turn keeps the plays it had last time rather than
+     blinking empty — which is the better failure, but only if the
+     reader is not told a stale drive is the current one. */
+  const behind = (g || {}).plays_state === "carried"
+    ? `<div class="lb-play lb-why">Catching up — this strip is a pass or two behind while the feed works through the other live games.</div>`
+    : "";
+  return `<div class="lb-plays">${behind}${driveLine}${plays.map(row).join("")}</div>`;
 }
 
 /* How the market has moved since first pitch.

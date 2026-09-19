@@ -302,7 +302,16 @@ def test_the_note_rides_on_the_published_file():
     src = (ROOT / "livescore_build.py").read_text()
     # `pbp_dir=` joined the call on 2026-09-05: the same pass now writes
     # each live game's deep file (tests/test_pbp_files.py).
-    assert 'out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir)' in src
+    #
+    # THE CALL'S OPENING, NOT THE WHOLE LINE. This pinned the closing
+    # bracket too and went red on 2026-09-19 for an argument being ADDED
+    # — `prev=`, last pass's file, which is what a game waiting its turn
+    # in the play budget keeps its strip from. A test that breaks when a
+    # call grows a keyword is measuring the punctuation; the claim is
+    # that the note this function returns is what gets published, and
+    # that the deep directory is handed down.
+    assert 'out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir' \
+        in src
 
 
 # --- the page ----------------------------------------------------------------
