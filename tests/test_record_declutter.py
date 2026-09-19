@@ -138,7 +138,12 @@ def test_an_empty_sport_scope_is_the_empty_state_and_nothing_else():
     tuned for NBA yet", a mining panel counting 461 graded bets of every
     sport, preregistered tests about NFL props, a lab of four zeros."""
     rr = _fn("renderRecord")
-    i = rr.index("if (scoped && !o.settled && !o.open) {")
+    # Re-anchored 2026-09-19. The branch still exists and still draws
+    # exactly this much; what changed is the question it asks. It used
+    # to read `!o.settled && !o.open` — the STAKED EDGE book — and so
+    # called college football empty while its Most Likely book held 246
+    # graded rows. `recordHasSomething` asks the books too.
+    i = rr.index("if (scoped && !recordHasSomething(")
     branch = rr[i:rr.index("bindRecordScopes(host);", i)]
     assert "Nothing journaled for" in branch and "All bets" in branch
     for panel in ("recSelfTuningSection", "recLossPatternsSection", "recPrereg", "recHypothesisLab"):

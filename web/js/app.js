@@ -13497,6 +13497,33 @@ function recPolymarketSection(v) {
    to a perfect calibration line nobody should trust. */
 let _recordScope = null;          // null = follow the sport you are on
 
+/* IS THERE ANYTHING TO SHOW FOR THIS LEAGUE — asked of every book, not
+   just the one that takes money.
+
+   Ethan, 2026-09-19, with the college Record page reading "Nothing
+   journaled for College Football yet" while `record.json` carried 246
+   graded Most Likely rows for it.
+
+   `o` is `by_sport[sport].overall`, and that comes from
+   `ledger.performance`, whose SQL is `category IN ('main','paper') AND
+   stake_units > 0` — the EDGE book, staked. A league whose picks are
+   journaled at a zero stake reads 0 settled and 0 open there however
+   full its other books are, and a zero stake is exactly what PROBATION
+   means. College football has been on it all season: the maintenance
+   note calls it "journaled and graded, never staked". So the page asked
+   the one book college cannot have rows in, believed the answer, and
+   returned before `recBookSections` could draw the two books that were
+   full.
+
+   The books carry no stake filter — `book_records` counts wins and
+   losses per category — so they are the honest test of whether a league
+   has a record worth rendering. */
+function recordHasSomething(o, books) {
+  if ((o || {}).settled || (o || {}).open) return true;
+  return Object.values(books || {}).some(
+    (b) => ((b || {}).w || 0) + ((b || {}).l || 0) > 0);
+}
+
 function recordScopeHTML(d, scope) {
   const tracked = d.tracked_sports || [];
   const btn = (key, label, n) => `<button class="rec-scope${
@@ -14699,7 +14726,7 @@ async function renderRecord() {
     bindRecordScopes(host);
     return;
   }
-  if (scoped && !o.settled && !o.open) {
+  if (scoped && !recordHasSomething(o, (d.book_records || {})[scope])) {
     // THE EMPTY STATE, AND ONLY WHAT HAS SOMETHING TO SAY ABOUT THIS
     // SPORT. This used to append the whole learning ladder under the
     // slate, on the argument that an empty journal is not an empty
