@@ -43,12 +43,24 @@ def _fn(name):
     return APP[i:j + 3]
 
 
-def has_something(overall, books):
+def has_something(overall, books, own=None):
     """`recordHasSomething` run against the real source."""
     js = f"""
     {_fn("recordHasSomething")}
     console.log(JSON.stringify(recordHasSomething(
-        {json.dumps(overall)}, {json.dumps(books)})));
+        {json.dumps(overall)}, {json.dumps(books)}, {json.dumps(own)})));
+    """
+    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def own_book(d, scope):
+    """`recordOwnBook` run against the real source."""
+    js = f"""
+    {_fn("recordOwnBook")}
+    console.log(JSON.stringify(recordOwnBook(
+        {json.dumps(d)}, {json.dumps(scope)}) || null));
     """
     out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -104,11 +116,68 @@ def test_a_push_alone_does_not_make_a_record():
                          {"likely": {"w": 0, "l": 0, "push": 4}}) is False
 
 
+# --- the same bug, one scope over: UFC ---------------------------------
+#: Ethan's record check, same run: "ufc  by_sport settled 0  open 0",
+#: beside a journal holding 18 settled and 4 open UFC bets.
+UFC_RECORD = {"settled": 18, "open": 4, "wins": 9, "losses": 9}
+
+
+def test_the_ufc_scope_is_not_empty_when_its_own_book_has_fights():
+    """UFC picks are journaled under category 'ufc'. `by_sport` reads
+    main/paper and `book_records` maps only the categories in
+    `ledger.BOOK_SECTIONS`, so neither can see them — and the empty
+    state fired one line ABOVE `recUfcSection`, the only thing on the
+    page that draws them."""
+    assert has_something({"settled": 0, "open": 0}, {}, UFC_RECORD) is True
+
+
+def test_open_fights_alone_keep_the_scope_alive():
+    """A card journaled and not yet fought is still something to show."""
+    assert has_something({"settled": 0, "open": 0}, {},
+                         {"settled": 0, "open": 4}) is True
+
+
+def test_an_own_book_with_nothing_in_it_does_not_rescue_the_scope():
+    assert has_something({"settled": 0, "open": 0}, {},
+                         {"settled": 0, "open": 0}) is False
+
+
+def test_only_ufc_has_an_own_book():
+    """Every other scope's books are already in the first two
+    arguments; handing one a phantom would double-count it."""
+    d = {"ufc_record": UFC_RECORD}
+    assert own_book(d, "ufc") == UFC_RECORD
+    for scope in ("cfb", "nfl", "mlb", "nba", "wnba", "all"):
+        assert own_book(d, scope) is None, scope
+
+
+def test_the_own_book_survives_a_payload_without_one():
+    assert own_book({}, "ufc") is None
+    assert own_book(None, "ufc") is None
+
+
+def test_the_branch_asks_for_the_scope_own_book():
+    src = APP[APP.index("function renderRecord"):]
+    src = src[:src.index("\n}\n")]
+    assert "recordOwnBook(d, scope)" in src, \
+        "the empty state cannot see the UFC book again"
+
+
+def test_the_ufc_section_is_below_the_branch_it_used_to_die_behind():
+    """If `recUfcSection` ever moves ABOVE the empty return this test
+    is measuring nothing, so it checks the order it depends on."""
+    src = APP[APP.index("function renderRecord"):]
+    branch = src.index("if (scoped && !recordHasSomething(")
+    draw = APP.index("recUfcSection(d.ufc_record)")
+    assert draw > APP.index("function renderRecord") + branch, \
+        "recUfcSection now draws before the empty state — re-read this test"
+
+
 # --- the page actually asks it -----------------------------------------
 def test_the_empty_branch_consults_the_books():
     src = APP[APP.index("function renderRecord"):]
     src = src[:src.index("\n}\n")]
-    assert "recordHasSomething(o, (d.book_records || {})[scope])" in src, \
+    assert "recordHasSomething(o, (d.book_records || {})[scope]," in src, \
         "the empty state is back to asking only the staked edge book"
     assert "if (scoped && !o.settled && !o.open)" not in src, \
         "the old two-field test is still there"

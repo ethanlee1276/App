@@ -13518,10 +13518,33 @@ let _recordScope = null;          // null = follow the sport you are on
    The books carry no stake filter — `book_records` counts wins and
    losses per category — so they are the honest test of whether a league
    has a record worth rendering. */
-function recordHasSomething(o, books) {
+function recordHasSomething(o, books, own) {
   if ((o || {}).settled || (o || {}).open) return true;
+  if ((own || {}).settled || (own || {}).open) return true;
   return Object.values(books || {}).some(
     (b) => ((b || {}).w || 0) + ((b || {}).l || 0) > 0);
+}
+
+/* THE BOOK A SCOPE OWNS THAT NEITHER `by_sport` NOR `book_records` CAN
+   SEE, so the check above can ask it before it calls a league empty.
+
+   `by_sport` is `performance(sport, category=BOOK)` and `book_records`
+   maps only the three categories in `ledger.BOOK_SECTIONS` — main,
+   paper, likely, longshot. UFC picks are journaled under a category of
+   their own, 'ufc', which is in neither, and they are read by
+   `ledger.ufc_report` into its own top-level key and drawn by
+   `recUfcSection` under "By product".
+
+   So the UFC scope read 0 settled and 0 open with eighteen graded
+   fights in the journal, hit the empty state, and returned one line
+   ABOVE its own section. Ethan's record check on 2026-09-19 printed it
+   as "ufc: empty" next to a journal holding 18 settled and 4 open —
+   the same shape as the college bug in the same branch, one scope over.
+
+   Returns whatever that scope's own book is, or null. Every other
+   scope's books are already in the two arguments before it. */
+function recordOwnBook(d, scope) {
+  return scope === "ufc" ? ((d || {}).ufc_record || null) : null;
 }
 
 function recordScopeHTML(d, scope) {
@@ -14726,7 +14749,8 @@ async function renderRecord() {
     bindRecordScopes(host);
     return;
   }
-  if (scoped && !recordHasSomething(o, (d.book_records || {})[scope])) {
+  if (scoped && !recordHasSomething(o, (d.book_records || {})[scope],
+                                    recordOwnBook(d, scope))) {
     // THE EMPTY STATE, AND ONLY WHAT HAS SOMETHING TO SAY ABOUT THIS
     // SPORT. This used to append the whole learning ladder under the
     // slate, on the argument that an empty journal is not an empty
