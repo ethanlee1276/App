@@ -84,6 +84,30 @@ QUOTE_SQL = ("SELECT taken_at, line FROM odds_history "
              "AND player=? AND line IS NOT NULL "
              "LIMIT ?")
 
+#: Do we EVER quote this man, at any hour?
+#:
+#: Asked only when the window came back empty, to separate "the books do
+#: not price him" from "they price him, but we hold nothing near the
+#: news". One is a coverage fact and one is a timing fact.
+NAME_SQL = ("SELECT 1 FROM odds_history "
+            "WHERE sport=? AND player=? LIMIT 1")
+
+
+def _norm(name) -> str:
+    """The books' spelling of a man, which is the one on disk.
+
+    `engine.sources.oddsapi.parse_event_lines` keys every prop by
+    `normalize_name(player)`, so that is what `odds_history` holds.
+    Imported lazily: this module is a measurement and must not drag an
+    API client in at import time.
+    """
+    try:
+        from .sources.oddsapi import normalize_name
+        return normalize_name(str(name or ""))
+    except Exception:                                         # noqa: BLE001
+        return str(name or "").strip().lower()
+
+
 
 def _parse(ts) -> _dt.datetime | None:
     """A timestamp from either store, or None. Never raises: these are
@@ -207,6 +231,7 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
     if since:
         q += " AND COALESCE(first_seen, posted_at) >= ?"; args.append(since)
     out: dict = {}
+    blind: dict = {}
     for ev in hist_conn.execute(q, args).fetchall():
         st = str(ev["status"] or "").strip().lower()
         if statuses and not any(s in st for s in statuses):
@@ -233,13 +258,35 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
         # could have counted is lost.
         lo = (seen - _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
         hi = (seen + _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
+        # THE TWO STORES SPELL HIM DIFFERENTLY. `injury_events` keeps the
+        # feed's display name; `odds_history` keeps the books' menu run
+        # through `normalize_name` at parse time. So the join is
+        # "A.J. Terrell Jr." against "a j terrell" — 0 of 708 NFL players
+        # matched on the droplet, which is why this reported zero usable
+        # filings in every sport and looked like a quiet season.
+        name = _norm(ev["player"])
         quotes = hist_conn.execute(
-            QUOTE_SQL,
-            (ev["sport"], lo, hi, ev["player"], MAX_QUOTES)).fetchall()
-        got = classify(ev["first_seen"] or ev["posted_at"],
-                       [(q2["taken_at"], q2["line"]) for q2 in quotes])
-        out.setdefault(ev["sport"], []).append(got)
-    return {sp: summarise(rows) for sp, rows in out.items()}
+            QUOTE_SQL, (ev["sport"], lo, hi, name, MAX_QUOTES)).fetchall()
+        if quotes:
+            got = classify(ev["first_seen"] or ev["posted_at"],
+                           [(q2["taken_at"], q2["line"]) for q2 in quotes])
+            out.setdefault(ev["sport"], []).append(got)
+            continue
+        # NOTHING IN THE WINDOW — AND WHICH KIND OF NOTHING MATTERS.
+        # "we never quote this man" and "we quote him, but never near the
+        # news" are different problems with different fixes, and the first
+        # version of this report could not tell them apart. It printed
+        # "0 with quotes either side" for both and sent me looking in the
+        # wrong place twice.
+        ever = hist_conn.execute(NAME_SQL, (ev["sport"], name)).fetchone()
+        out.setdefault(ev["sport"], []).append(None)
+        blind.setdefault(ev["sport"], [0, 0])[0 if ever is None else 1] += 1
+    res = {}
+    for sp, rows in out.items():
+        s = summarise(rows)
+        s["never_quoted"], s["quoted_elsewhen"] = blind.get(sp, (0, 0))
+        res[sp] = s
+    return res
 
 
 #: The index this measurement cannot run without.
@@ -303,6 +350,27 @@ def report(hist_conn, sport: str | None = None, since: str | None = None) -> str
         lines.append(
             f"  {sp:5} {s['filings']:5} filings · {s['usable']:4} with quotes "
             f"either side · {s['moved']:4} moved the line")
+        if not s["usable"]:
+            # WHICH KIND OF NOTHING. Printed because the first version of
+            # this report said only "0 with quotes either side", which is
+            # true of a name mismatch, a coverage gap and a timing gap
+            # alike — and on 2026-09-19 it was the first of those in every
+            # sport, with nothing on the page to say so.
+            never, elsewhen = s.get("never_quoted", 0), s.get("quoted_elsewhen", 0)
+            lines.append(
+                f"        {never} never quoted by any book · {elsewhen} "
+                f"quoted, but never within {WINDOW_HOURS}h of the news")
+            if never >= elsewhen:
+                lines.append(
+                    "        the books do not price these men, or we spell "
+                    "them differently — a coverage or naming gap, not a "
+                    "verdict on our speed")
+            else:
+                lines.append(
+                    "        we price these men but hold no quote when the "
+                    "news breaks — the edge may be real and is not being "
+                    "recorded")
+            continue
         if not s["moved"]:
             lines.append("        no measurable moves — nothing to conclude yet")
             continue

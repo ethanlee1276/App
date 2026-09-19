@@ -182,6 +182,9 @@ class _Rows:
     def fetchall(self):
         return self._rows
 
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
 
 class _Spy:
     """A connection that answers nothing and remembers everything asked.
@@ -192,18 +195,30 @@ class _Spy:
     checkable by looking at the query.
     """
 
-    def __init__(self, filings, quotes=()):
+    def __init__(self, filings, quotes=(), ever=False):
         self.filings, self.quotes = list(filings), list(quotes)
+        self.ever = ever          # does the name probe find him at all?
         self.asked = []
 
     def execute(self, sql, args=()):
         flat = " ".join(sql.split())
         self.asked.append((flat, list(args)))
-        return _Rows(self.filings if "FROM injury_events" in flat
-                     else self.quotes)
+        if "FROM injury_events" in flat:
+            return _Rows(self.filings)
+        if "BETWEEN" in flat:
+            return _Rows(self.quotes)
+        return _Rows([{"1": 1}] if self.ever else [])
 
     def quote_reads(self):
-        return [q for q in self.asked if "FROM odds_history" in q[0]]
+        """The bounded window reads — one per filing that can be dated."""
+        return [q for q in self.asked
+                if "FROM odds_history" in q[0] and "BETWEEN" in q[0]]
+
+    def name_probes(self):
+        """The "do we ever quote this man" fallback, asked only when the
+        window came back empty."""
+        return [q for q in self.asked
+                if "FROM odds_history" in q[0] and "BETWEEN" not in q[0]]
 
 
 def _filing(first_seen=SEEN, sport="nfl", player="A Back"):
@@ -336,6 +351,96 @@ def test_the_required_index_is_actually_in_the_schema():
     i = db.index(il.REQUIRED_INDEX)
     decl = " ".join(db[i:i + 200].split())
     assert "odds_history (sport, player, taken_at)" in decl, decl
+
+
+
+# --- the two stores spell the same man differently ---------------------
+def test_the_lookup_asks_for_the_books_spelling_of_the_name():
+    """THE ZERO. Ethan, 2026-09-19, on the droplet: 2,015 filings and not
+    one with quotes on both sides, in every sport at once.
+
+    `injury_events` keeps the feed's display name; `odds_history` keeps
+    the books' menu, which `parse_event_lines` runs through
+    `normalize_name` before storing. So the join was "A.J. Terrell Jr."
+    against "a j terrell" and matched 0 of 708 NFL players. Nothing was
+    broken about the arithmetic — it was never handed a row."""
+    spy = _Spy([_filing(player="A.J. Terrell Jr.")])
+    il.measure(spy)
+    args = spy.quote_reads()[0][1]
+    assert args[3] == "a j terrell", args
+
+
+def test_the_normaliser_is_the_books_own_one():
+    """Not a third spelling convention invented here. `odds_history` is
+    written with `oddsapi.normalize_name`, so the lookup has to use that
+    function and not a lookalike."""
+    from engine.sources.oddsapi import normalize_name
+    for raw in ("A.J. Terrell Jr.", "Amon-Ra St. Brown", "Ja'Marr Chase",
+                "Ronald Acuña Jr."):
+        assert il._norm(raw) == normalize_name(raw), raw
+
+
+def test_an_unspellable_name_does_not_cost_the_pass():
+    assert il._norm(None) == ""
+    assert il._norm("") == ""
+
+
+# --- and an empty answer says WHICH empty ------------------------------
+def test_a_man_no_book_prices_is_counted_apart():
+    """"0 with quotes either side" was true of a name mismatch, a
+    coverage gap and a timing gap alike, and the report printed the same
+    sentence for all three. That is what sent me looking in the wrong
+    place twice."""
+    spy = _Spy([_filing()], quotes=[], ever=False)
+    got = il.measure(spy)["nfl"]
+    assert got["never_quoted"] == 1, got
+    assert got["quoted_elsewhen"] == 0, got
+
+
+def test_a_man_we_price_but_not_near_the_news_is_counted_apart():
+    """The more interesting failure: the names are fine and we simply
+    hold no quote when the news breaks. That is a recording gap, and
+    recording is free — the prices are already in memory."""
+    spy = _Spy([_filing()], quotes=[], ever=True)
+    got = il.measure(spy)["nfl"]
+    assert got["quoted_elsewhen"] == 1, got
+    assert got["never_quoted"] == 0, got
+
+
+def test_the_probe_is_only_paid_for_when_the_window_is_empty():
+    """It exists to explain a zero, so a filing that measured fine must
+    not buy one."""
+    spy = _Spy([_filing()], quotes=[
+        {"taken_at": "2026-09-14T11:00:00Z", "line": 62.5},
+        {"taken_at": "2026-09-14T13:00:00Z", "line": 55.5}])
+    il.measure(spy)
+    assert spy.name_probes() == [], spy.asked
+
+
+def test_the_report_says_which_kind_of_nothing_it_found():
+    spy = _Spy([_filing()], quotes=[], ever=False)
+    out = il.report(_Ready(spy))
+    assert "never quoted by any book" in out, out
+    assert "naming gap" in out, out
+
+
+def test_the_report_says_the_other_kind_too():
+    spy = _Spy([_filing()], quotes=[], ever=True)
+    out = il.report(_Ready(spy))
+    assert "no quote when the news breaks" in out, out
+
+
+class _Ready(_Spy):
+    """A spy that also answers the index-readiness check, so `report`
+    gets past its guard and renders."""
+
+    def __init__(self, spy):
+        super().__init__(spy.filings, spy.quotes, spy.ever)
+
+    def execute(self, sql, args=()):
+        if "sqlite_master" in sql:
+            return _Rows([{"1": 1}])
+        return super().execute(sql, args)
 
 
 

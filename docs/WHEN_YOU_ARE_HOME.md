@@ -736,12 +736,27 @@ The second measures that store. For every injury filing, did the
 player's own prop line move after we first saw it?
 
 ```
-  !!     injury_events            read by NOTHING
+  ok     injury_events            in pipeline
 
   ARE WE AHEAD OF THE MARKET ON INJURY NEWS?
-  nfl     412 filings ·  190 with quotes either side ·   64 moved the line
-        we were first on 41/64 (64%)   median lead 23.0 min   median move 1.5
+  nfl    1553 filings ·    0 with quotes either side ·    0 moved the line
+        708 never quoted by any book · 0 quoted, but never within 24h
+        the books do not price these men, or we spell them differently
 ```
+
+That is the REAL first run, 2026-09-19, and it is a zero — which is why
+the block above is the measured output and not an illustration. An
+invented sample showing a healthy lead would have sat here next to a
+check that returns nothing, and the next reader would have trusted the
+wrong one.
+
+The zero had a cause: the two stores spell a man differently.
+`injury_events` keeps the news feed's display name, `odds_history` keeps
+the books' menu run through `oddsapi.normalize_name` at parse time, so
+the join was `A.J. Terrell Jr.` against `a j terrell` and matched 0 of
+708. The lookup now normalises; the counts below the headline exist
+because the first version printed only "0 with quotes either side",
+which is equally true of a naming gap, a coverage gap and a timing gap.
 
 **What the answer means, both ways.**
 
@@ -753,9 +768,21 @@ player's own prop line move after we first saw it?
 * **A NEGATIVE lead means the market moved first.** Our feed is a
   newspaper, not a wire. No model fixes that; only a faster source,
   which is a purchase rather than a patch.
-* **`read by NOTHING`** — a feed we pay for, a nightly that runs, and a
-  column no model reads. The cheapest data to start using is the data
-  already on disk.
+* **A high "never quoted"** is a coverage or naming gap, not a verdict
+  on our speed. The books may not price these men at all, or the two
+  stores may not spell them the same way — the failure this check hit on
+  its first real run.
+* **A high "quoted, but never within 24h"** is the more interesting one:
+  the names are fine and we simply hold no price at the moment the news
+  breaks. That says the edge is unRECORDED rather than unmeasurable, and
+  recording is free — the prop prices are already in memory on every
+  build, which is the argument `engine/lineledger.py` makes for the game
+  lines it started storing.
+* **`read by NOTHING`** in the table audit — a feed we pay for, a nightly
+  that runs, and a column no model reads. The cheapest data to start
+  using is the data already on disk. `injury_events` was the first one
+  found, and reads `ok ... in pipeline` now only because this check reads
+  it; that is a measurement, not yet a bet.
 * Nothing in this check bets or writes. It is the information test from
   `docs/THE_INFORMATION_TEST.md` pointed at a store we already keep.
 
