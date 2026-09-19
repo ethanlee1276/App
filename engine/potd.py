@@ -544,6 +544,50 @@ def edge(row: dict) -> float | None:
     return expected_value(fair, int(float(odds)))
 
 
+#: The clock this card's "today" is measured on.
+#:
+#: Eastern, because that is already the site's convention — a bare
+#: "HH:MM" kickoff on a game row is read as an Eastern clock by
+#: `fatigue.kickoff_instant`, and a second timezone for the same
+#: question would put the card and the schedule a day apart on every
+#: late game.
+POTD_TZ = "America/New_York"
+
+#: Passed as `today` by a caller that is NOT choosing today's pick.
+#:
+#: `price_gap` asks "how many of these rows could an alternate-line
+#: purchase have rescued" — a question about prices, over whatever board
+#: it is handed, including a replayed one. Letting the day gate answer
+#: first would report every row as "not today" and the purchase question
+#: would go unanswered. Spelled as a constant rather than passed as None
+#: so the exemption is deliberate and greppable; None still means "work
+#: out today from the clock".
+ANY_DAY = "*any*"
+
+
+def slate_day(now=None) -> str:
+    """Today, on the clock the schedule is written in."""
+    import datetime as _dt
+    n = now or _dt.datetime.now(_dt.timezone.utc)
+    if getattr(n, "tzinfo", None) is None:
+        n = n.replace(tzinfo=_dt.timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        return n.astimezone(ZoneInfo(POTD_TZ)).strftime("%Y-%m-%d")
+    except Exception:                                         # noqa: BLE001
+        return n.strftime("%Y-%m-%d")
+
+
+def _row_day(row: dict) -> str:
+    """The calendar day this row's GAME is played on.
+
+    Same fallback `_started` uses, so the two questions a card has to
+    answer about a game — has it started, and is it even today — are
+    asked of the same field.
+    """
+    return str(row.get("game_date") or row.get("date") or "").strip()[:10]
+
+
 def _started(row: dict, now=None) -> bool:
     """Has this row's game kicked off? The SAME rule the journal refuses
     on (`rules.game_has_started`, and `clock_says_started` under it), so
@@ -556,8 +600,21 @@ def _started(row: dict, now=None) -> bool:
                               row.get("kickoff") or "", now=now)
 
 
-def disqualify(row: dict, now=None) -> str:
+def disqualify(row: dict, now=None, today=None) -> str:
     """"" if this row could be the pick, else why it can never be today.
+
+    THE FIRST REFUSAL IS THE DAY, added 2026-09-19. Ethan: *"the NFL page
+    will throw out picks of the day on days that we do not have NFL games
+    going on. And it will be different picks every time. So I feel like
+    we are giving misleading information."*
+
+    He is right, and the cause was that this function had seven refusals
+    and not one of them was "that game is not today". The Most Likely
+    board legitimately carries the whole upcoming week — that is what a
+    board is for — and the DAY'S pick was drawn from it with no date
+    filter, so on a Wednesday it crowned a Sunday game. It changed
+    between builds because the candidate pool was the whole week and the
+    ordering moved under it, which reads as a fresh call on a real game.
 
     Split from `shortfall` below on purpose. These are the refusals that
     make a row unshowable — no price, no number, not in the band, not
@@ -588,6 +645,17 @@ def disqualify(row: dict, now=None) -> str:
     #
     # Props keep their own boards — Most Likely, Long Shots, the props
     # scanner. They stop being eligible for the day's name.
+    when = str(today if today is not None else slate_day(now)).strip()
+    day = _row_day(row)
+    if when == ANY_DAY:
+        day = when                     # the caller is not asking about a day
+    if not day:
+        # CANNOT PROVE IT IS TODAY. For the most prominent claim on the
+        # site that is a refusal rather than a shrug — the failure this
+        # gate exists for looked exactly like a normal card.
+        return "no game date — cannot show it is today’s game"
+    if day != when:
+        return "the game is not today"
     from .ledger import is_game_row
     if not is_game_row(row):
         return "a player prop — the day’s pick is game markets only"
@@ -756,10 +824,10 @@ def shortfall(row: dict, min_ev=None, min_fair=None) -> str:
     return ""
 
 
-def refuse(row: dict, now=None) -> str:
+def refuse(row: dict, now=None, today=None) -> str:
     """Why this row is not the pick, hard reasons first. "" if it is a
     candidate."""
-    return disqualify(row, now) or shortfall(row)
+    return disqualify(row, now, today) or shortfall(row)
 
 
 def rank_key(row: dict) -> tuple:
@@ -810,7 +878,7 @@ def rank_key(row: dict) -> tuple:
     return (rank, -p, -(payout(row.get("odds")) or 0.0))
 
 
-def choose(rows, now=None, min_ev=None, min_fair=None) -> tuple:
+def choose(rows, now=None, min_ev=None, min_fair=None, today=None) -> tuple:
     """``(pick, best_below_bar, census)`` over a board's rows.
 
     ``pick`` is the best row clearing every bar, or None. ``best_below``
@@ -822,7 +890,7 @@ def choose(rows, now=None, min_ev=None, min_fair=None) -> tuple:
     census: dict = {}
     good, near = [], []
     for row in rows or []:
-        hard = disqualify(row, now)
+        hard = disqualify(row, now, today)
         if hard:
             census[hard] = census.get(hard, 0) + 1
             continue
@@ -887,7 +955,12 @@ def price_gap(rows, now=None) -> dict:
             if not is_game_row(row):
                 continue
             out["game_rows"] += 1
-            if disqualify(row, now) != band_reason:
+            # ASKED AS IF THIS ROW'S OWN DAY WERE TODAY, so the day gate
+            # cannot shadow the answer. This function is not choosing a
+            # pick — it is counting how many rows an alternate-line
+            # purchase could have rescued, and a row refused because its
+            # game is tomorrow tells us nothing about that either way.
+            if disqualify(row, now, today=ANY_DAY) != band_reason:
                 continue
             out["refused_on_price"] += 1
             market = str(row.get("market") or "?")
@@ -1152,7 +1225,11 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     """
     import datetime as _dt
     rows = [r for r in (most_likely or []) if isinstance(r, dict)]
-    pick, near, census = choose(rows, now)
+    # NOT `date`. For the NFL that argument is a WEEK LABEL ("2026-W03"),
+    # so comparing a game's calendar day against it would refuse every
+    # row in the league this gate was written for.
+    today = slate_day(now)
+    pick, near, census = choose(rows, now, today=today)
     out = {
         "sport": sport,
         "date": date,

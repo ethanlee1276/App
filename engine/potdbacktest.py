@@ -326,8 +326,14 @@ def replay_potd(conn, sport: str = "mlb", sharp: str = "Pinnacle",
     for day in sorted(by_day):
         rows = by_day[day]
         r.days_seen += 1
+        # REPLAYED AS IF IT WERE THAT DAY. The chooser refuses a row
+        # whose game is not today (added 2026-09-19, because the NFL
+        # card was crowning Sunday games on a Wednesday) — and every
+        # row in a backtest is from a past day, so leaving this out
+        # would refuse the entire history and report a sweep of zeros.
         pick, near, census = potd.choose([row for row, _ in rows],
-                                         min_ev=min_ev, min_fair=min_fair)
+                                         min_ev=min_ev, min_fair=min_fair,
+                                         today=day)
         # WHICH BAR WAS BINDING on a day that produced nothing. The
         # census already counts every refusal; what a sweep needs is the
         # ONE reason that stood between this day and a pick, which is the

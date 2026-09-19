@@ -628,7 +628,11 @@ def test_a_moneyline_row_is_journaled_in_the_shape_the_settler_grades():
     got = dict(conn.execute("SELECT * FROM bets").fetchone())
     assert got["player"] == "DET" and got["market"] == "moneyline"
     assert got["side"] == "OVER" and got["line"] == 0.5
-    assert got["category"] == "likely" and got["stake_dollars"] == 0.0
+    # The BOOK, not the dollars: every league's likelihood board was
+    # staked on 2026-09-19, so "no dollars" stopped being true while
+    # "its own book, never the headline" stayed true.
+    assert got["category"] == ledger.likely_category("nfl"), got["category"]
+    assert got["category"] not in ("main", "paper"), got["category"]
     # The journaled probability is the page's ranking number — the
     # market's 62% on an NFL moneyline — not the model's 66%.
     # …and the journal records the book that posted it. It recorded the
@@ -689,7 +693,9 @@ def test_the_record_cuts_the_game_rows_per_sport_and_market():
     row = K.from_game_bet(_ml(), sport="nfl")
     conn, n = _book([row])
     assert n == 1
-    conn.execute("UPDATE bets SET status='won', pnl_units=0.0606 WHERE category='likely'")
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.0606 "
+                 "WHERE category IN ('likely', ?)",
+                 (ledger.LIKELY_LIVE_CATEGORY,))
     conn.commit()
     rep = ledger.likely_report(conn)
     got = rep["by_sport_market"]["nfl"]["moneyline"]

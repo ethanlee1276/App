@@ -138,7 +138,8 @@ def test_the_most_likely_board_grades_on_the_same_pass():
     _ingest(h)
     ledger.settle_from_history(l, h)
     got = {(r["market"], r["status"]) for r in l.execute(
-        "SELECT market, status FROM bets WHERE category='likely'")}
+        "SELECT market, status FROM bets WHERE category IN ('likely', ?)",
+        (ledger.LIKELY_LIVE_CATEGORY,))}
     assert got == {("rec_yds", "won"), ("receptions", "lost")}, got
     # And it stays in its own bucket: the headline record is the edge book.
     assert l.execute("SELECT COUNT(*) c FROM bets WHERE category='main'"

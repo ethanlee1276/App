@@ -76,6 +76,9 @@ def test_lowering_the_floor_hands_the_refusal_to_the_next_bar():
 
 def _reason(rows, **kw):
     """Whatever `choose` says stood between these rows and a pick."""
+    # ANY_DAY: this file sweeps the EV floor over a fixture board, which
+    # is the same question the replay asks and is not about a calendar.
+    kw.setdefault("today", potd.ANY_DAY)
     pick, near, census = potd.choose(rows, **kw)
     if pick:
         return ""

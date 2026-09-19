@@ -95,7 +95,8 @@ def _journal(conn, row, sport="wnba"):
     ledger.log_most_likely(conn, {"sport": sport, "date": "2026-08-20",
                                   "most_likely": [row]})
     return conn.execute("SELECT market, side, line, hit_prob FROM bets "
-                        "WHERE category='likely'").fetchall()
+                        "WHERE category=?",
+                        (ledger.likely_category(sport),)).fetchall()
 
 
 def test_a_home_run_row_is_journaled_on_the_side_the_board_showed():

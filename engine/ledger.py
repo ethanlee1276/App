@@ -1041,7 +1041,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     # disagree about which book a row is in. See LIKELY_LIVE_SPORTS for
     # the decision and the number it was made against.
     staked = likely_is_staked(sport)
-    category = LIKELY_LIVE_CATEGORY if staked else "likely"
+    category = likely_category(sport)
     stake_units = LIKELY_LIVE_STAKE if staked else flat_stake
     grade = LIKELY_LIVE_GRADE if staked else "Likely"
     # Real units mean real dollars, off the same roll and the same
@@ -5340,19 +5340,29 @@ def receipts(conn, since: str | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def recent_settled(conn, limit: int = 30, category: str = "main",
+def recent_settled(conn, limit: int = 30,
+                   category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
                    since: str | None = None) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
-    show "won but got lucky" / "lost but beat the close" honestly."""
+    show "won but got lucky" / "lost but beat the close" honestly.
+
+    `category` takes a tuple as well as a string, the same way
+    `performance` does, because a book can span more than one of them —
+    the Most Likely record is `likely` before 2026-09-19 and
+    `likely_live` after, and a receipts list that showed only half of it
+    would go quiet on the day the board started playing for money.
+    """
+    cats = (category,) if isinstance(category, str) else tuple(category)
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
          "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
          "why_tag, why_note FROM bets "
-         "WHERE status IN ('won','lost','push') AND category=? "
+         "WHERE status IN ('won','lost','push') "
+         f"AND category IN ({','.join('?' * len(cats))}) "
          "AND stake_units > 0")
-    args: list = [category]
+    args: list = list(cats)
     if since:
         q += " AND date >= ?"
         args.append(since)
@@ -6375,7 +6385,17 @@ LIKELY_VERDICT_N = 100
 #: A signal this thin must be able to fail in public without taking the
 #: honest number down with it — and if it pays, it will have done so on
 #: its own line, which is worth more than a footnote in someone else's.
-LIKELY_LIVE_SPORTS = ("mlb",)
+#: EXTENDED 2026-09-19, same conversation: *"after that do this for all
+#: the other sports with most likely paper bets."*
+#:
+#: MLB is the only one of these with a record worth the name. The others
+#: were switched on by the same instruction, and the honest note is that
+#: their samples are far smaller — the football seasons are two and three
+#: weeks old — so for most of them this is not "a thin edge staked
+#: anyway", it is a board with no settled record at all being staked from
+#: the start. `homecheck.py record` prints each league's n, ROI and z so
+#: that is visible rather than assumed.
+LIKELY_LIVE_SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
 
 #: Flat, and SMALLER than the stale book's promoted stake (0.5u).
 #:
@@ -6392,10 +6412,36 @@ LIKELY_LIVE_STAKE = 0.25
 LIKELY_LIVE_CATEGORY = "likely_live"
 LIKELY_LIVE_GRADE = "Likely (staked)"
 
+#: BOTH HALVES OF ONE BOARD'S RECORD.
+#:
+#: The rows written before 2026-09-19 sit in `likely` and the ones
+#: written after sit in `likely_live`, but they are the same board
+#: making the same selections at the same prices — the only difference
+#: is whether money rode on them. The Most Likely record has to span
+#: both or it freezes at the 586 it had on the day it was staked and
+#: never shows a reader how the live rows are doing, which is the
+#: opposite of what staking them was for.
+#:
+#: THE HEADLINE IS STILL UNTOUCHED: `performance` defaults to BOOK =
+#: ("main","paper") and neither of these is in it.
+LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
+
 
 def likely_is_staked(sport) -> bool:
     """Is this league's likelihood board playing for money?"""
     return str(sport or "").lower() in LIKELY_LIVE_SPORTS
+
+
+def likely_category(sport) -> str:
+    """Which book this league's likelihood rows are journaled to.
+
+    ONE ANSWER, asked by the journal, the board guide and the tests
+    alike. Written as a function on the day every league was staked,
+    because up to then "the likely book" was a constant string and
+    twelve places had it typed in — so the split could not be made
+    without each of them quietly meaning the wrong book.
+    """
+    return LIKELY_LIVE_CATEGORY if likely_is_staked(sport) else "likely"
 
 #: The bands the claimed probability is checked in. Wider than the
 #: betting bands on purpose: this board runs from MIN_PROB (0.30) up, and
@@ -6468,8 +6514,9 @@ def likely_report(conn, since: str | None = None,
     # one sport's calibration beside every sport's ROI.
     sw = " AND sport=?" if sport else ""
     sargs: tuple = (sport,) if sport else ()
-    p = performance(conn, sport=sport, category="likely", since=since)
-    graded = ("AND status IN ('won','lost') AND category='likely'")
+    p = performance(conn, sport=sport, category=LIKELY_BOOKS, since=since)
+    graded = ("AND status IN ('won','lost') AND category IN "
+              "('likely','likely_live')")
 
     row = conn.execute(
         "SELECT COUNT(*) n, AVG(hit_prob) claimed, "
@@ -6605,9 +6652,9 @@ def likely_report(conn, since: str | None = None,
             "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
 
     p["open"] = conn.execute(
-        "SELECT COUNT(*) FROM bets WHERE category='likely' "
+        "SELECT COUNT(*) FROM bets WHERE category IN ('likely','likely_live') "
         "AND status='open'" + sw, sargs).fetchone()[0]
-    p["recent"] = recent_settled(conn, limit=15, category="likely",
+    p["recent"] = recent_settled(conn, limit=15, category=LIKELY_BOOKS,
                                  sport=sport, since=since)
     p["sport"] = sport or ""
     p["needed"] = LIKELY_VERDICT_N

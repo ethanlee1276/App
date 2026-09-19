@@ -72,15 +72,31 @@ def test_the_mlb_board_is_staked():
     assert r["stake_dollars"] > 0, dict(r)
 
 
-def test_every_other_league_is_still_paper():
-    """One league was asked for. A blanket switch would stake three more
-    boards nobody has looked at."""
-    for sport in ("nfl", "cfb", "wnba"):
+def test_every_league_with_a_likelihood_board_is_staked():
+    """RE-ANCHORED the same afternoon. This asserted that only MLB was
+    staked; Ethan then said *"after that do this for all the other
+    sports with most likely paper bets"*, so the list is now every
+    league that HAS such a board.
+
+    The honest note, kept here because it is the thing a later reader
+    will want: MLB is the only one of these with a record worth the
+    name. The football seasons are two and three weeks old, so for most
+    of these this is not a thin edge staked anyway — it is a board with
+    no settled record at all, staked from the start."""
+    for sport in ("nfl", "cfb", "nba", "wnba", "mlb"):
         conn = _conn()
         ledger.log_most_likely(conn, _board(sport))
         r = _rows(conn)[0]
-        assert r["category"] == "likely", (sport, dict(r))
-        assert r["stake_dollars"] == 0.0, (sport, dict(r))
+        assert r["category"] == ledger.LIKELY_LIVE_CATEGORY, (sport, dict(r))
+        assert r["stake_dollars"] > 0, (sport, dict(r))
+        assert ledger.performance(conn, sport)["open"] == 0, sport
+
+
+def test_a_league_with_no_likelihood_board_is_not_staked():
+    """UFC keeps its own book and never reaches `log_most_likely`, so it
+    must not be swept in by a list that says "all the other sports"."""
+    assert not ledger.likely_is_staked("ufc")
+    assert ledger.likely_category("ufc") == "likely"
 
 
 def test_the_staked_rows_carry_real_dollars_off_the_real_roll():

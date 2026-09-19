@@ -101,8 +101,15 @@ def test_the_receipts_export_carries_the_tag():
     src = open(os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "engine", "ledger.py"), encoding="utf-8").read()
+    # THE FUNCTION'S BODY, not a fixed slice of bytes after its name.
+    # This read `src[i:i + 800]` until 2026-09-19, when adding six lines
+    # of docstring to `recent_settled` pushed the SELECT past the window
+    # and failed a test about a column nobody had touched. An anchor
+    # that a comment can break is measuring the comment.
     i = src.index("def recent_settled(")
-    assert "why_tag, why_note" in src[i:i + 800]
+    body = src[i:]
+    body = body[:body.index("\ndef ", 10)]
+    assert "why_tag, why_note" in body, body[:400]
 
 
 if __name__ == "__main__":

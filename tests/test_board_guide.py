@@ -87,7 +87,9 @@ def test_every_board_names_the_journal_that_actually_writes_it():
     import inspect
     got = boards.by_key()
     assert "'likely'" in inspect.getsource(ledger.log_most_likely)
-    assert got["most_likely"]["journal"] == "likely"
+    # The guide's claim, checked against the league it was asked about.
+    # A bare "likely" here stopped being right when the board was staked.
+    assert got["most_likely"]["journal"] == ledger.likely_category("nfl")
     assert '"longshot", flat_stake' in inspect.getsource(ledger.log_longshots)
     assert got["long_shots"]["journal"] == "longshot"
     # The main book is category 'main' unless paper mode is on, and
@@ -104,15 +106,15 @@ def test_only_the_board_that_stakes_money_says_it_does():
     call. The claim is now per league, which is what it always should
     have been — one flag was telling every reader the same thing about
     five different books."""
-    for sport in ("nfl", "cfb", "wnba"):
+    for sport in ("nfl", "cfb", "wnba", "mlb"):
         got = {b["key"]: b for b in boards.guide(sport)}
         assert got["recommendations"]["money"] is True, sport
-        assert got["most_likely"]["money"] is False, sport
+        # Staked from 2026-09-19 in every league that has this board.
+        assert got["most_likely"]["money"] is True, sport
+        assert got["most_likely"]["journal"] == ledger.LIKELY_LIVE_CATEGORY
+        # The long-shot book was NOT part of that call and must not have
+        # been swept along with it.
         assert got["long_shots"]["money"] is False, sport
-    mlb = {b["key"]: b for b in boards.guide("mlb")}
-    assert mlb["most_likely"]["money"] is True
-    assert mlb["most_likely"]["journal"] == ledger.LIKELY_LIVE_CATEGORY
-    assert mlb["long_shots"]["money"] is False
 
 
 def test_the_guide_reads_the_ledgers_own_list_of_staked_leagues():

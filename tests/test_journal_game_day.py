@@ -108,7 +108,10 @@ def test_the_most_likely_board_stamps_a_football_row():
                                   ) == 1
     got = conn.execute("SELECT date, game_day, category FROM bets").fetchone()
     assert got["game_day"] == "2026-09-13", dict(got)
-    assert got["category"] == "likely", dict(got)
+    # The BOOK is whichever half of the likelihood record this league
+    # writes to — `likely` before 2026-09-19, `likely_live` after. The
+    # claim under test is the game_day stamp, not which book it is in.
+    assert got["category"] == ledger.likely_category("nfl"), dict(got)
 
 
 def test_the_stamped_row_is_inside_the_settle_window():

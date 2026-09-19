@@ -50,14 +50,33 @@ def _book(rows, sport="nfl", date="2026-W01", **kw):
 
 
 # --- it is a measurement bucket, not a position ---------------------------
-def test_rows_land_in_their_own_category_with_no_dollars_on_them():
+def test_rows_land_in_their_own_book_and_never_in_the_headline():
+    """RE-ANCHORED 2026-09-19, when every league's likelihood board was
+    staked at Ethan's call. Two halves of the old claim, and only one of
+    them survived.
+
+    STILL TRUE, and the part that matters: these rows are in their OWN
+    book. `performance` reads ('main','paper'), so whatever they do they
+    cannot move the headline record.
+
+    NO LONGER TRUE: "no dollars on them". They carry real money now for
+    every staked league, which is the whole point of the change — so
+    this asserts the dollars follow the league's staked flag rather than
+    asserting they are always zero."""
     conn, n = _book([_row()])
     assert n == 1
     got = dict(conn.execute("SELECT * FROM bets").fetchone())
-    assert got["category"] == "likely"
-    assert got["stake_dollars"] == 0.0
+    sport = got["sport"]
+    assert got["category"] == ledger.likely_category(sport), got["category"]
+    assert got["category"] not in ("main", "paper"), got["category"]
     assert got["stake_units"] > 0, "a zero stake cannot answer what it returned"
+    if ledger.likely_is_staked(sport):
+        assert got["stake_dollars"] > 0, got
+    else:
+        assert got["stake_dollars"] == 0.0, got
     assert got["status"] == "open"
+    assert ledger.performance(conn, sport)["open"] == 0, \
+        "a likelihood row reached the headline book"
 
 
 def test_the_headline_record_is_untouched():
@@ -66,7 +85,12 @@ def test_the_headline_record_is_untouched():
     clothes."""
     conn, _n = _book([_row()])
     cats = [r[0] for r in conn.execute("SELECT DISTINCT category FROM bets")]
-    assert cats == ["likely"], cats
+    # ITS OWN BOOK, whichever half of it. Rows landed in `likely` until
+    # 2026-09-19 and in `likely_live` after; what must never change is
+    # that neither is a headline category.
+    assert len(cats) == 1, cats
+    assert cats[0] in ledger.LIKELY_BOOKS, cats
+    assert cats[0] not in ("main", "paper"), cats
 
 
 def test_it_journals_the_probability_the_page_showed():
