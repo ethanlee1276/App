@@ -248,24 +248,44 @@ def test_each_quote_lookup_is_bounded_by_the_time_column():
     assert len(reads) == 1, spy.asked
     sql, args = reads[0]
     assert "taken_at BETWEEN ? AND ?" in sql, sql
-    lo, hi = args[1], args[2]
-    assert lo < SEEN.replace("T", " ") < hi, args
-    span = (il._parse(hi) - il._parse(lo)).total_seconds() / 3600.0
-    assert span == il.WINDOW_HOURS * 2, span
+    lo, hi = il._parse(args[1]), il._parse(args[2])
+    assert lo < il._parse(SEEN) < hi, args
+    # The exact width is the two tests below this one; what matters here
+    # is that a width exists at all, which is what the index needs.
 
 
-def test_the_window_is_the_one_the_arithmetic_would_have_kept_anyway():
-    """So the speed-up costs no measurement: `classify` discards a quote
-    further than WINDOW_HOURS from the filing, which is exactly what the
-    bounds refuse to fetch."""
+def test_the_sql_window_is_a_superset_of_the_one_that_is_kept():
+    """The SQL bound is deliberately WIDER than WINDOW_HOURS, and only
+    ever wider.
+
+    `BETWEEN` on a TEXT column is a string comparison, and both stores
+    stamp "…T15:00:00Z" while an isoformat bound reads "… 15:00:00" —
+    "T" sorts after " ", so an exact bound sharing a quote's calendar
+    date decided the comparison on that one character and dropped quotes
+    from the after-side of the filing. Date-only bounds cannot have that
+    argument with a timestamp whatever separator it carries.
+
+    `classify` re-parses every row and applies the real window, so a
+    superset costs a few extra rows off one player's index range and
+    nothing else. A SUBSET would cost measurements, silently."""
     spy = _Spy([_filing()])
     il.measure(spy)
     sql, args = spy.quote_reads()[0]
     assert "BETWEEN" in sql and len(args) >= 3, (sql, args)
-    lo, hi = args[1], args[2]
+    lo, hi = il._parse(args[1]), il._parse(args[2])
     seen = il._parse(SEEN)
-    assert il._parse(lo) == seen - _dt.timedelta(hours=il.WINDOW_HOURS)
-    assert il._parse(hi) == seen + _dt.timedelta(hours=il.WINDOW_HOURS)
+    assert lo <= seen - _dt.timedelta(hours=il.WINDOW_HOURS), (lo, seen)
+    assert hi >= seen + _dt.timedelta(hours=il.WINDOW_HOURS), (hi, seen)
+
+
+def test_the_sql_window_is_not_wider_than_it_needs_to_be():
+    """A superset is safe; an unbounded one is the table scan this whole
+    thread started with."""
+    spy = _Spy([_filing()])
+    il.measure(spy)
+    args = spy.quote_reads()[0][1]
+    span = (il._parse(args[2]) - il._parse(args[1])).total_seconds() / 3600.0
+    assert span <= il.WINDOW_HOURS * 2 + 48, span
 
 
 def test_a_filing_with_no_readable_stamp_never_buys_a_lookup():

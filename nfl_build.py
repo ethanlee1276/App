@@ -718,6 +718,24 @@ def main() -> None:
                 _hc.close()
             except Exception as _exc:                        # noqa: BLE001
                 print(f"  ⚠️  NFL line ledger skipped: {_exc}")
+            # AND THE PROP PRICES FOR MEN ON AN INJURY REPORT. The same
+            # argument one table over: they are already in memory, and
+            # `engine.injurylag` measured on 2026-09-19 that 817 of 1,554
+            # NFL filings name a player the books DO price while we hold
+            # no number from the hours the news landed in.
+            #
+            # ITS OWN HANDLER, not the ledger's. Sharing one would print
+            # "NFL line ledger skipped" for a prop-tape failure — a
+            # sentence that sends the reader to the wrong file, which is
+            # the same class of wrong-cause reporting this build has been
+            # corrected for twice.
+            try:
+                from engine import proptape, db as _pdb
+                _pc = _pdb.connect()
+                print(proptape.record_note(_pc, "nfl", slate))
+                _pc.close()
+            except Exception as _exc:                        # noqa: BLE001
+                print(f"  ⚠️  NFL prop tape skipped: {_exc}")
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")

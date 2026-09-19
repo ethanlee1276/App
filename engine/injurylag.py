@@ -256,8 +256,24 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
         # instead of a walk through every quote we have ever stored. The
         # window is the one `classify` would keep anyway, so nothing that
         # could have counted is lost.
-        lo = (seen - _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
-        hi = (seen + _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
+        # WHOLE DATES, AND DELIBERATELY ONE DAY WIDER THAN THE WINDOW.
+        #
+        # `BETWEEN` on a TEXT column is a STRING comparison, and the two
+        # stores stamp "2026-09-19T15:00:00Z" while an isoformat bound
+        # reads "2026-09-19 15:00:00". "T" sorts after " ", so a bound
+        # sharing a quote's calendar date decided the comparison on that
+        # one character: a quote 13 hours AFTER the filing was excluded
+        # and one 6 hours before the window opened was let in. The skew
+        # ran against the after-side, which is the only side that can
+        # show the move.
+        #
+        # Date-only bounds cannot have that argument with a timestamp,
+        # whatever separator or trailing Z it carries, and the extra day
+        # each way makes the SQL a superset. `classify` re-parses every
+        # row and applies the real WINDOW_HOURS, so the exact filtering
+        # is done once, by the code that can do it properly.
+        lo = (seen - _dt.timedelta(hours=WINDOW_HOURS, days=1)).strftime("%Y-%m-%d")
+        hi = (seen + _dt.timedelta(hours=WINDOW_HOURS, days=1)).strftime("%Y-%m-%d")
         # THE TWO STORES SPELL HIM DIFFERENTLY. `injury_events` keeps the
         # feed's display name; `odds_history` keeps the books' menu run
         # through `normalize_name` at parse time. So the join is
