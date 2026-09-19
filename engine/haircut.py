@@ -103,6 +103,26 @@ then takes 35% of an edge that was already ~0. Tuning it up or down
 moves nothing, because the real shrink is upstream and the measurement
 above says that shrink is right.
 
+CONFIRMED INDEPENDENTLY BY THE SHRINK STORE, which is the reason to
+trust this rather than to act on it. `gamecal` fits a slope of the
+model's disagreement against the outcome and stores what survives;
+asked on 2026-09-19 it answers:
+
+    nfl  spread 0.0063 (n=899)   total 0.0296 (n=899)   moneyline 0.0 (n=897)
+    cfb  spread 0.0    (n=2055)  total 0.1151 (n=2055)  moneyline 0.0 (n=2016)
+
+A moneyline shrink of 0.0 means `temper` publishes `fair + 0 x (raw -
+fair)` — the market's number exactly, the model's claim discarded in
+full. Two measurements by different routes, one a slope fit and one a
+count of what landed, agreeing that the claim is worth nothing. The
+production chain was already acting on it.
+
+SO THE TIER HAIRCUT IS INERT ON THESE MARKETS. `cfb.model.HAIRCUT`
+takes 35% of `p_model - p_market`, and on a football moneyline that
+difference is already exactly zero by the time it is computed. Raising
+it or lowering it moves nothing. That is the answer to "is 35% the
+right number": the question does not reach the board.
+
 TWO THINGS THIS DOES NOT CLAIM, stated so the number is not overread:
 
   * The side taken is the one the model likes MORE, which is a max over
