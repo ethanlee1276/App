@@ -363,13 +363,22 @@ STAKE_UNITS = 1.0
 #: never shown, not even as a near miss: it is missing something the
 #: page needs, or it is outside the product's own definition, or it is a
 #: bet nobody could still place.
+#:
+#: `STARTED` IS NAMED BECAUSE TWO PLACES COUNT IT. `build` subtracts it
+#: from the candidate count to work out how much of the slate was still
+#: open when a judgement was made, and `carry` compares that number
+#: between builds. A census key spelled out by hand in one of them and
+#: changed in the other is a silent zero — which in `carry` means "no
+#: slate was open", the answer that loses the day's pick.
+STARTED = "the game has already started"
+
 HARD_REASONS = (
     "no fair probability to price against",
     "no real market price",
     "price a book could not have posted",
     "the payout is outside the even-money band",
     "the player is carrying an injury designation",
-    "the game has already started",
+    STARTED,
 )
 
 
@@ -682,7 +691,7 @@ def disqualify(row: dict, now=None, today=None) -> str:
     if str(row.get("injury_status") or "").strip():
         return "the player is carrying an injury designation"
     if _started(row, now):
-        return "the game has already started"
+        return STARTED
     return ""
 
 
@@ -1244,6 +1253,22 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         "band": [MIN_ODDS, effective_max_odds()],
         "payout_band": [MIN_PAYOUT, MAX_PAYOUT],
         "min_ev": MIN_EV,
+        # WHEN THIS JUDGEMENT WAS MADE, AND AGAINST HOW MUCH OF THE DAY.
+        #
+        # The day's pick was re-decided from scratch on every build, and
+        # a board rebuilt at two in the afternoon is not the same board:
+        # every game that has kicked off since the morning is gone from
+        # the pool. On the college slate of 2026-09-19 that was EIGHT of
+        # the twelve game rows by the first afternoon build, so the card
+        # a reader met in the evening was the last and worst reading of
+        # the day rather than the day's call.
+        #
+        # `open_candidates` is what makes two readings comparable: the
+        # rows that were still placeable when each was taken. `carry`
+        # below refuses to let a smaller reading overwrite a larger one.
+        "decided_at": _dt.datetime.now(_dt.timezone.utc)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "open_candidates": max(0, len(rows) - int(census.get(STARTED, 0))),
     }
     if pick is not None:
         out["pick"] = _card(pick)
@@ -1261,7 +1286,111 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     return out
 
 
-def attach(result: dict, sport: str, now=None, cut=None) -> str:
+def has_pick(card) -> bool:
+    """Does this card name a bet, rather than the nearest thing to one?
+
+    `build` puts the near-miss in `pick` too, with `below_bar` on it, so
+    the presence of `pick` is NOT the question. One helper because three
+    callers ask it and a fourth will.
+    """
+    pick = (card or {}).get("pick")
+    return bool(pick) and not str(pick.get("below_bar") or "").strip()
+
+
+def carry(card: dict, prev: dict | None) -> dict:
+    """Today's judgement, or the earlier one it must not overwrite.
+
+    THE DAY'S PICK WAS BEING RE-DECIDED EVERY BUILD, against a board that
+    shrinks all day. Ethan, 2026-09-19: *"we haven't been getting any
+    college football pick of the days"* — and the census said why: of
+    twelve college game rows, EIGHT had already kicked off by the first
+    afternoon build. The reader meets the last reading of the day, taken
+    from whatever the slate had not yet swallowed, and a pick the morning
+    board would have named is gone without ever being shown.
+
+    It is also the churn he reported on the NFL four days earlier —
+    *"it will be different picks every time"* — from the same cause: a
+    pool that moves under the selector between builds.
+
+    THE RULE, IN ORDER:
+
+      1. a real pick beats anything — a build that FINDS one is always an
+         upgrade, and must be able to overturn an earlier decline;
+      2. an earlier real pick is never replaced by a later decline —
+         that is the day's call, made when it could still be placed, and
+         `relock` keeps the price with it;
+      3. two declines: keep the one taken when more of the slate was
+         still open, because it judged more of the day. Ties go to the
+         earlier, which is the one a reader has already seen.
+
+    NOT A LOCK, and deliberately weaker than one. `ledger.relock_potd`
+    holds a pick that was JOURNALED — money moved, the row is in the
+    book. This holds a JUDGEMENT, including a refusal, and only against
+    a strictly worse reading of the same day. A new day, a board that
+    finds something, or a build with more of the slate open all move it.
+    """
+    if not isinstance(prev, dict) or not prev:
+        return card
+    # A different day is not this day's judgement at all. `date` is a
+    # week label for football, so the comparison is `decided_at`'s
+    # calendar day — the one field both cards state in UTC.
+    if str(prev.get("decided_at") or "")[:10] != str(
+            card.get("decided_at") or "")[:10]:
+        return card
+    if str(prev.get("sport") or "") != str(card.get("sport") or ""):
+        return card
+    if has_pick(card):
+        return card
+    # `>=`, NOT `>`. Two readings of an unchanged board must not churn
+    # the card — Ethan, 2026-09-15: "it will be different picks every
+    # time." A tie keeps the one a reader has already seen.
+    if has_pick(prev) or int(prev.get("open_candidates") or 0) >= int(
+            card.get("open_candidates") or 0):
+        out = dict(prev)
+        # WHY THE READER IS SEEING AN OLDER CARD, on the card. A stale
+        # judgement presented as a fresh one is the failure this repo
+        # keeps paying for; `generated_at` stays honest about the build.
+        out["generated_at"] = card.get("generated_at") or out.get("generated_at")
+        out["carried"] = (
+            f"decided {str(prev.get('decided_at') or '')[11:16]} UTC, when "
+            f"{int(prev.get('open_candidates') or 0)} of the slate had not "
+            f"started — since then the day has moved on and this is still "
+            f"the best read we have")
+        return out
+    return card
+
+
+def previous_card(sport: str, built_dir=None) -> dict | None:
+    """The card this sport published last build, or None.
+
+    `data/built/<board>.json` is the UNREDACTED board — `web/data`'s copy
+    has `pick_of_the_day` stripped, because it is a paid key, so reading
+    the published one would see `{}` and carry nothing forward.
+
+    NEVER RAISES. A missing file is the first build of a session, an
+    unreadable one is a disk problem, and neither is a reason to fail a
+    board that has already priced everything else — the rule the whole of
+    `attach` follows.
+    """
+    import json
+    import os
+    from .routes import BOARD_FILES, ROOT
+    name = BOARD_FILES.get(str(sport or "").lower())
+    if not name:
+        return None
+    path = os.path.join(str(built_dir or os.path.join(str(ROOT), "data",
+                                                      "built")), name)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        card = (got or {}).get("pick_of_the_day")
+        return card if isinstance(card, dict) and card else None
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def attach(result: dict, sport: str, now=None, cut=None,
+           prev: dict | None = None, built_dir=None) -> str:
     """Put the day's pick on a finished board. Returns a build-log line.
 
     ONE HOOK, CALLED FROM EVERY BUILD, for the reason
@@ -1317,8 +1446,13 @@ def attach(result: dict, sport: str, now=None, cut=None) -> str:
     try:
         seated = result.get("most_likely") or []
         pool = list(seated) + [r for r in (cut or []) if isinstance(r, dict)]
-        result["pick_of_the_day"] = build(
-            pool, sport, str(result.get("date") or ""), now=now)
+        # THE DAY'S JUDGEMENT, NOT THE LAST BUILD'S. `carry` refuses to
+        # let a pool that has lost its started games overwrite a reading
+        # taken when more of the slate was open — see its docstring for
+        # the college Saturday that prompted it.
+        result["pick_of_the_day"] = carry(
+            build(pool, sport, str(result.get("date") or ""), now=now),
+            prev if prev is not None else previous_card(sport, built_dir))
     except Exception as exc:                                  # noqa: BLE001
         result["pick_of_the_day_error"] = str(exc)
         # AND A CARD REGARDLESS, which this did not do until 2026-09-16.
@@ -1401,13 +1535,24 @@ def attach(result: dict, sport: str, now=None, cut=None) -> str:
     # operator reading `journalctl` is asking the same question the
     # reader is, and "pick of the day: TOR Moneyline at -118" does not
     # answer it on a day the engine declined.
-    return (f"pick of the day: BET "
-            f"{got.get('verdict', {}).get('stake', STAKE_UNITS):g}u on "
-            f"{where} at {pick.get('odds')} — "
-            f"{pick.get('evidence')} fair "
-            f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
-            f"{pick.get('ev_units'):+.3f}u EV, pays "
-            f"{pick.get('payout_units')}u")
+    #
+    # AND IT IS GUARDED, because since `carry` this line can be handed a
+    # card THIS BUILD DID NOT MAKE. Every field below came from `_card`
+    # a moment earlier and was guaranteed; a card carried from an
+    # earlier build is only as complete as that build was, and one
+    # missing number formatted here would raise out of a function whose
+    # docstring promises it never does — taking down a board that had
+    # already priced everything else, to garnish a log line.
+    try:
+        return (f"pick of the day: BET "
+                f"{got.get('verdict', {}).get('stake', STAKE_UNITS):g}u on "
+                f"{where} at {pick.get('odds')} — "
+                f"{pick.get('evidence')} fair "
+                f"{round(float(pick.get('fair_prob') or 0) * 100)}%, "
+                f"{pick.get('ev_units'):+.3f}u EV, pays "
+                f"{pick.get('payout_units')}u")
+    except Exception:                                         # noqa: BLE001
+        return f"pick of the day: BET {where} at {pick.get('odds')}"
 
 
 #: Leagues the cross-board top pick considers, in the order a tie is broken.

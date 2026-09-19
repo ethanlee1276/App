@@ -2405,10 +2405,23 @@ async function renderPickOfTheDay() {
       <code>${escapeHtml(String(d.pick_of_the_day_error))}</code></p></div>`;
     return;
   }
-  // A board built before this shipped, or a sport that carries none:
-  // write nothing rather than an empty frame. The zone costs no fold
-  // in that state, which is what tests/test_board_order.py was told.
-  if (!got || typeof got !== "object") { host.innerHTML = ""; return; }
+  /* A board built before this shipped, or a sport that carries none:
+     write nothing rather than an empty frame. The zone costs no fold
+     in that state, which is what tests/test_board_order.py was told.
+
+     AND AN EMPTY OBJECT IS ONE OF THOSE STATES — it was not, and that
+     was a real failure on the most valuable slot on the page.
+     `pick_of_the_day` is in `gate.PAID_KEYS`, so a reader without a
+     subscription is served `{}`. `{}` is an object AND truthy, so it
+     sailed through this very guard, fell to the no-pick branch below,
+     and printed “No pick today.” — to a reader for whom a pick exists
+     and is merely paid for. The headline product read as “we had
+     nothing”, which is both false and the opposite of what a paywall
+     is supposed to do. A locked board writes nothing, the same rule
+     `renderDayCard` follows one screen over. */
+  if (!got || typeof got !== "object" || !Object.keys(got).length) {
+    host.innerHTML = ""; return;
+  }
   const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
   const pick = got.pick;
   const below = String((pick || {}).below_bar || "");
@@ -2460,7 +2473,8 @@ async function renderPickOfTheDay() {
        with today? */
     const why = below
       ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
-      : escapeHtml(got.relocked || got.note || "No pick today.");
+      : escapeHtml(got.carried || got.relocked || got.note
+                    || "No pick today.");
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
       <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
@@ -2541,6 +2555,12 @@ async function renderPickOfTheDay() {
 
      A reader is entitled to know they are looking at a claim made
      hours ago rather than a recommendation made now. */
+  /* AND WHETHER THIS IS TODAY'S READING OR AN EARLIER ONE. `potd.carry`
+     holds the judgement taken when more of the slate was still open, so
+     a card can outlive the build that made it. Saying so is the whole
+     point — an old read presented as a fresh one is the failure this
+     page keeps being fixed for. */
+  const carriedNote = got.carried ? escapeHtml(got.carried) : "";
   const relockNote = got.relocked
     || (pick.off_board
         ? "shown from the journal at the price it was locked at"
@@ -2551,6 +2571,8 @@ async function renderPickOfTheDay() {
       ${potdCallStrip(got)}
       ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${iconMark("lock")}${escapeHtml(relockNote)}</div>` : ""}
+      ${carriedNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${iconMark("clock")}${carriedNote}</div>` : ""}
       ${potdLiveStrip(liveNow)}
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
         <span class="pick-id">${betMark(pick, 30)}</span>
