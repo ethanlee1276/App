@@ -17,10 +17,12 @@ Where each sport's answer comes from:
   roster page: a record of who played, which is closer to the question a
   bettor is asking, and it refreshes with the same nightly ingest that
   feeds the models.
-* **CFB** — appearances, like the three above, since 2026-08-24: ESPN's
-  keyless box scores feed the logs. Before that this line said "no
-  player-level feed" — the feed existed all along, in the same API family
-  the scoreboard already reads.
+* **CFB** — ESPN's published per-school roster, one keyless request per
+  team on a day's cache, since 2026-09-19. It was built from appearances
+  too, and for college that was badly wrong: the appearance markets are
+  ``pass_yds``, ``carries`` and ``receptions``, so a page claiming to be
+  a roster listed only the men who touched the ball. Appearances remain
+  the fallback and still fill the games column.
 
 Usage:
     python3 rosters_build.py                 # every sport we can build
@@ -38,17 +40,24 @@ from engine import rosters as _r
 from engine.db import connect
 from engine.seasons import season_of
 
-# Sports built from our own game logs, and what to say when a sport has
-# no roster source at all.
-# CFB joined 2026-08-24: ESPN's own box scores now feed player_game_logs
-# for college football (engine/sources/cfbdata.ingest_player_logs), so
-# the appearance-built page works exactly as it does for the other three
-# — with the note that college rosters churn hardest, so early-season
-# appearance lists thin out until the year's games accumulate.
+# Every sport this script can build, and what to say when a sport has no
+# roster source at all. MLB and CFB reach a published roster first and
+# fall back to appearances; NBA and WNBA are appearance-built outright,
+# where it costs far less — basketball counts a minute played, so anyone
+# who got off the bench is on the page.
 FROM_LOGS = ("mlb", "nba", "wnba", "cfb")
 NO_SOURCE = {
     "ufc": "MMA has fighters, not rosters. Each fighter's measured record "
            "lives in his dossier on the UFC card itself.",
+}
+
+#: What an appearance-built page cannot see, per sport. Said out loud on
+#: the page whenever the feed fails and the fallback runs.
+BLIND_SPOT = {
+    "mlb": "every pitcher, because pitchers don't bat and an appearance "
+           "here is a plate appearance,",
+    "cfb": "every lineman, defender, kicker and backup, because an "
+           "appearance here is a carry, a catch or a pass,",
 }
 
 OUT_DIR = Path("web/data")
@@ -91,6 +100,49 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
             # build printed success: nothing anywhere said the feed had
             # failed, or why.
             feed_err = f"the league feed failed ({type(exc).__name__}: {exc})"
+    if sport == "cfb":
+        # ESPN's published rosters, one keyless request per school on a
+        # day's cache — and the slate has already paid for most of them.
+        #
+        # Ethan, 2026-09-19: "a lot of CFB player dont show up in the
+        # player search." The appearance list below answers "who is on
+        # this team" with "who produced a counted stat in a game we
+        # ingested", and for college that is pass_yds, carries and
+        # receptions ONLY. Every lineman, defender, kicker and backup was
+        # missing — from this page, and from the player search, which
+        # reads the same population. 5,522 names on this box against a
+        # league of roughly fifteen thousand.
+        try:
+            from engine.sources import cfbdata
+            ids = {ab: t.get("id") for ab, t in
+                   cfbdata.parse_teams(cfbdata.fetch_teams()).items()}
+            feed, missed = cfbdata.fetch_people(ids)
+            out = _r.cfb_feed_rosters(
+                feed, _r.cfb_games_by_player(conn, seasons=[season]),
+                faces=_r._faces(conn, "cfb"))
+            if out["player_count"]:
+                out.update({
+                    "sport": sport, "season": season,
+                    "generated_at": datetime.datetime.now()
+                    .isoformat(timespec="seconds"),
+                    "feed": "live", "source": "roster",
+                    # A build that published 110 of 134 schools looks
+                    # exactly like one that published them all, so the
+                    # shortfall is on the page rather than in a log line
+                    # nobody reads.
+                    "note": "" if not missed else (
+                        f"{len(missed)} school rosters would not load and "
+                        f"are missing from this page: "
+                        f"{', '.join(sorted(missed)[:12])}"
+                        + (" …" if len(missed) > 12 else "")),
+                })
+                return out
+            feed_err = "no school roster would load"
+        except Exception as exc:                   # noqa: BLE001
+            # Same rule as the baseball path above: fall back, carry the
+            # reason. A silent fall-back here would put the page straight
+            # back into the state Ethan reported and say nothing.
+            feed_err = f"the roster feed failed ({type(exc).__name__}: {exc})"
     # This season, falling back to last: in the first weeks of a year the
     # current season has barely any appearances on file, and an empty
     # roster page is worse than a slightly stale one that says its date.
@@ -118,11 +170,14 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
                        f"on file yet. It updates itself once games are played "
                        f"and ingested.")
     if feed_err:
-        # Appearance mode has a known blind spot, and the page must own it:
-        # pitchers never bat, so they are absent HERE, not from the team.
+        # Appearance mode has a known blind spot, and the page must own
+        # it: these men are absent HERE, not from the team. The sentence
+        # is per sport because the blind spots are different ones, and
+        # telling a college reader that pitchers do not bat would be a
+        # confident explanation of the wrong absence.
         out["note"] = (f"Built from appearances because {feed_err} — "
-                       f"pitchers don't bat, so they are missing from this "
-                       f"view until the league feed recovers. "
+                       f"{BLIND_SPOT.get(sport, 'anyone who has not played')} "
+                       f"is missing from this view until the feed recovers. "
                        + (out["note"] or "")).strip()
     return out
 

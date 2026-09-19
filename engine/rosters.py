@@ -342,6 +342,111 @@ def mlb_feed_rosters(feed: dict, games_by_player: dict | None = None,
             "player_count": sum(t["count"] for t in teams.values())}
 
 
+#: College positions in page order — the groups ESPN files them under,
+#: then the ball-carriers first inside offence. An unknown abbreviation
+#: sorts last rather than being dropped.
+CFB_POSITION_ORDER = {
+    "QB": 0, "RB": 1, "FB": 2, "WR": 3, "TE": 4,
+    "OT": 5, "OG": 6, "G": 6, "C": 7, "OL": 8,
+    "DE": 9, "DT": 10, "DL": 11, "NT": 11, "LB": 12, "ILB": 12, "OLB": 12,
+    "CB": 13, "S": 14, "DB": 15, "PK": 16, "K": 16, "P": 17, "LS": 18,
+}
+
+
+def cfb_feed_rosters(feed: dict, games_by_player: dict | None = None,
+                     faces: dict | None = None) -> dict:
+    """ESPN's published college rosters, in the page's payload shape.
+
+    Ethan, 2026-09-19: *"a lot of CFB player dont show up in the player
+    search."*
+
+    THE APPEARANCE LIST WAS NEVER A ROSTER, AND FOR COLLEGE IT IS NOT
+    EVEN CLOSE. `from_game_logs` answers "who is on this team" with "who
+    produced a counted stat in a game we ingested", and college football
+    counts appearances from `pass_yds`, `carries` and `receptions` alone
+    — so every lineman, every defender, every kicker and every backup was
+    absent from the roster page AND from the player search, which reads
+    the same population. Not ranked low: absent, and indistinguishable
+    from a name we have never heard of.
+
+    ``feed`` is ``{abbr: [people]}`` from `cfbdata.fetch_people`.
+    ``games_by_player`` decorates each man with how often he has actually
+    played — the same division of labour the MLB feed path uses, and for
+    the same reason: playing time stays the measured column, the roster
+    just stops it from also deciding EXISTENCE.
+    """
+    games = games_by_player or {}
+    teams: dict[str, dict] = {}
+    for ab, people in (feed or {}).items():
+        rows = []
+        for p in people:
+            name = str(p.get("player") or "").strip()
+            if not name:
+                continue
+            played = games.get((ab, _norm_key(name)))
+            rows.append({
+                "player": name,
+                "team": ab,
+                "position": str(p.get("position") or "").upper(),
+                "depth_pos": str(p.get("position") or "").upper(),
+                "depth_order": None,
+                # NO STALENESS CLAIM HERE. `from_game_logs` greys a man
+                # who has not appeared lately, which it can do because
+                # appearing is the only way it knows he exists. On a
+                # published roster, nought games means he has not carried,
+                # caught or thrown — for four fifths of a college roster
+                # that is the normal state of a healthy starter, and
+                # calling it unavailable would grey out the offensive line.
+                "status": "", "unavailable": False,
+                "injury_status": "", "questionable": False, "injury": "",
+                "rookie": False,
+                "years_exp": None,
+                "number": p.get("number") or None,
+                "age": None,
+                "games": int(played[0]) if played else 0,
+                "last_seen": str(played[1]) if played else "",
+                "headshot": (face_of(faces, name)
+                             or str(p.get("headshot") or "")),
+            })
+        rows.sort(key=lambda r: (CFB_POSITION_ORDER.get(r["position"], 99),
+                                 -r["games"], r["player"]))
+        teams[ab] = {
+            "players": rows,
+            "count": len(rows),
+            "unavailable": 0,
+            "rookies": 0,
+        }
+    return {"teams": teams, "team_count": len(teams),
+            "player_count": sum(t["count"] for t in teams.values())}
+
+
+def cfb_games_by_player(conn, seasons: list[int] | None = None) -> dict:
+    """``{(team, normalised name): (games, last period)}`` from our logs.
+
+    KEYED ON THE NORMALISED NAME, because the two sides are spelled by
+    different hands: the roster payload publishes "A.J. Terrell Jr." and
+    the ingest files what the box score called him. Joining on the exact
+    string is the mistake `injurylag` shipped on 2026-09-19 — 0 of 708
+    names matched, and the report read as "no edge" rather than "no
+    join".
+    """
+    markets = APPEARANCE_MARKET["cfb"]
+    q = ("SELECT player, team, MAX(period) AS last_seen, "
+         "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
+         "WHERE sport='cfb' AND market IN (%s) "
+         "AND team IS NOT NULL AND team != ''" % ",".join("?" * len(markets)))
+    args: list = list(markets)
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " GROUP BY player, team"
+    out: dict = {}
+    for r in conn.execute(q, args):
+        out[(r["team"], _norm_key(r["player"]))] = (int(r["games"]),
+                                                    str(r["last_seen"]))
+    return out
+
+
 def mlb_games_by_player(conn, seasons: list[int] | None = None) -> dict:
     """{(team, player): games appeared} across BOTH halves of the roster —
     plate appearances for hitters, recorded outs for pitchers. Two markets

@@ -266,11 +266,27 @@ def test_the_page_shows_why_it_fell_back_instead_of_a_short_roster():
 
 def test_the_fallback_note_names_the_blind_spot_it_creates():
     """Saying "the feed failed" is only half of it — the reader needs to
-    know what that costs them on THIS page."""
+    know what that costs them on THIS page.
+
+    RE-ANCHORED 2026-09-19, when college football got a published roster
+    of its own and a fallback of its own to explain. The sentence used to
+    be one string inside `payload_for` and this read it there; it is now
+    a sentence PER SPORT, because the blind spots are different ones and
+    telling a college reader that pitchers do not bat would be a
+    confident explanation of the wrong absence. The claim is unchanged —
+    a fallback says what it costs — so this now reads the table the
+    sentence comes from and checks that `payload_for` still composes it,
+    rather than searching a function body for a literal it no longer
+    contains."""
     import inspect
     import rosters_build
     src = inspect.getsource(rosters_build.payload_for)
-    assert "pitchers don" in src and "missing from this" in src
+    assert "BLIND_SPOT" in src and "missing from this" in src, \
+        "the fallback note no longer explains itself"
+    assert "pitchers don" in rosters_build.BLIND_SPOT["mlb"]
+    # Every sport that reaches a published feed first needs one, or its
+    # fallback reads as an ordinary roster.
+    assert "cfb" in rosters_build.BLIND_SPOT
 
 
 def test_an_unhydrated_teams_response_falls_back_instead_of_returning_nothing():

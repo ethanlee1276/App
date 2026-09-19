@@ -676,6 +676,47 @@ def _athletes(payload: dict):
             yield normalize_name(str(name)), a, fallback
 
 
+def parse_team_people(payload: dict) -> list[dict]:
+    """Everyone on one team's roster, spelled the way a reader types it.
+
+    Ethan, 2026-09-19: *"a lot of CFB player dont show up in the player
+    search."*
+
+    `parse_team_roster` normalises the name away, because the lookup it
+    serves joins on the normalised key. A SEARCH needs the display
+    spelling back — "A.J. Terrell Jr.", not "a j terrell" — so this walks
+    the same `_athletes` rule and keeps the string ESPN published.
+
+    THE THIRD READER OF ONE PAYLOAD, ON PURPOSE. `_athletes` already
+    exists so `parse_team_roster` and `parse_team_headshots` cannot
+    disagree about which athletes are on a team; a reader that walked the
+    payload its own way would be the bug that helper was extracted to
+    prevent.
+    """
+    out: list[dict] = []
+    for _norm, a, fallback in _athletes(payload):
+        name = (a.get("fullName") or a.get("displayName") or
+                " ".join(x for x in (a.get("firstName"),
+                                     a.get("lastName")) if x))
+        pos = a.get("position")
+        if isinstance(pos, dict):
+            pos = pos.get("abbreviation") or pos.get("name") or ""
+        shot = a.get("headshot")
+        if isinstance(shot, dict):
+            shot = shot.get("href")
+        url = str(shot or "").strip()
+        out.append({
+            "player": str(name).strip(),
+            "position": str(pos or fallback).upper(),
+            # Same rule as `parse_team_headshots`: anything that is not a
+            # URL yields no face, because the page draws the helmet for an
+            # absent one and a broken image for a wrong one.
+            "headshot": url if url.startswith("http") else "",
+            "number": str(a.get("jersey") or "").strip(),
+        })
+    return out
+
+
 def parse_team_headshots(payload: dict) -> dict:
     """``{normalised name: headshot url}`` for everyone who has a face.
 
@@ -749,6 +790,54 @@ def fetch_headshots(teams, ttl: int = 24 * 3600) -> dict:
         for norm, url in got.items():
             out.setdefault(norm, url)
     return out
+
+
+def fetch_people(team_ids: dict, ttl: int = 24 * 3600,
+                 budget: float = 300.0) -> tuple[dict, list]:
+    """``({abbr: [people]}, [abbrs that would not load])`` for the league.
+
+    ``team_ids`` is ``{abbr: espn id}`` — `parse_teams` output, keyed the
+    way the roster payload is keyed.
+
+    A DAY'S CACHE, AND THE SLATE HAS ALREADY PAID FOR MOST OF IT. The
+    transfer lookup and the headshot join both call `fetch_team_roster`
+    for every team playing that day, so on a Saturday build this asks
+    only for the schools that are idle.
+
+    THE FAILURES COME BACK RATHER THAN VANISHING. A team whose roster
+    will not load contributes nobody, and a build that quietly published
+    110 of 134 schools would look exactly like a build that published all
+    of them — which is the shape of failure this repo keeps shipping. The
+    caller says the number out loud.
+
+    AND THE LOOP IS ON A CLOCK. `fetch_json` waits 45 seconds before
+    giving up, so a dark feed would cost 134 × 45s — an hour and a half
+    inside a refresh stage that runs every forty-five minutes. On
+    2026-09-05 one board that would not finish froze the other twelve;
+    a per-team retry storm is the same bug with a different feed. Past
+    the budget the rest of the league is MISSED, not skipped silently,
+    and the page says how many.
+    """
+    import time
+    out: dict = {}
+    missed: list = []
+    until = time.monotonic() + max(0.0, budget)
+    for abbr, ident in (team_ids or {}).items():
+        if not abbr or not ident:
+            continue
+        if time.monotonic() >= until:
+            missed.append(abbr)
+            continue
+        try:
+            people = parse_team_people(fetch_team_roster(ident, ttl=ttl))
+        except Exception:                                     # noqa: BLE001
+            missed.append(abbr)
+            continue
+        if people:
+            out[abbr] = people
+        else:
+            missed.append(abbr)
+    return out, missed
 
 
 def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:

@@ -895,11 +895,20 @@ def refresh_fantasy(quiet: bool = False) -> bool:
 
 
 def refresh_sport_rosters(quiet: bool = False) -> bool:
-    """Per-sport roster tabs. Zero network — reads our own game logs.
+    """Per-sport roster tabs.
 
-    The NFL's rosters come off the players feed inside `fantasy_build`;
-    everything else is built from who actually appeared for a team, which
-    is a second reading of history the nightly ingest already stores.
+    The NFL's rosters come off the players feed inside `fantasy_build`.
+    Basketball is built from who actually appeared for a team, a second
+    reading of history the nightly ingest already stores, and costs
+    nothing.
+
+    BASEBALL AND COLLEGE FOOTBALL REACH A PUBLISHED ROSTER FIRST, so this
+    step is no longer network-free: one keyless request for all thirty
+    MLB clubs, and one per college school on a day's cache — so the first
+    run of the day pays and the rest are free. College had to: the
+    appearance markets there are `pass_yds`, `carries` and `receptions`,
+    so an appearance-built college roster is the men who touched the
+    ball and nobody else. Both fall back to appearances, saying why.
     """
     ok, tail = _run_build(["rosters_build.py"])
     if not quiet:
