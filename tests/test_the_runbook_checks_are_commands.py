@@ -19,6 +19,7 @@ Run directly: `python3 tests/test_the_runbook_checks_are_commands.py`
 import io
 import os
 import subprocess
+import tempfile
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -28,6 +29,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import homecheck                                              # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _fn_src(name):
+    """One function's source out of homecheck.py."""
+    src = (ROOT / "homecheck.py").read_text()
+    i = src.index(f"def {name}(")
+    j = src.index("\ndef ", i + 10)
+    return src[i:j]
+
 DOC = (ROOT / "docs" / "WHEN_YOU_ARE_HOME.md").read_text(encoding="utf-8")
 
 
@@ -730,6 +740,101 @@ def test_the_record_check_runs_inside_the_daily_paste():
 
 
 CHECK_NAMES = tuple(homecheck.CHECKS)
+
+
+
+# --- the stuck list hands over the command that clears it -------------
+def test_a_reingestable_reason_prints_a_runnable_command():
+    """Ethan, 2026-09-19: 143 NFL bets on "day barely ingested". The
+    check named the cause and left him to work out which days and what
+    to type, which is most of the work."""
+    body = _fn_src("grading")
+    assert 'f"               python3 ingest.py {sport} --dates "' in body, body
+    assert "--settle all" in body, "the second half of the fix is missing"
+
+
+def test_only_the_reasons_a_reingest_fixes_get_a_command():
+    """A name-map problem and a postponement are not fixed by fetching
+    the day again; a command there sends the reader in a circle."""
+    assert homecheck._REINGEST_FIXES == (
+        "day barely ingested", "no results ingested"), homecheck._REINGEST_FIXES
+    for wrong in ("player has no log", "game not found", "gradeable now",
+                  "market not ingested", "waiting on the rest of the day"):
+        assert wrong not in homecheck._REINGEST_FIXES, wrong
+
+
+def test_the_dates_are_calendar_days_not_journal_dates():
+    """The NFL journals "2026-W01" and `ingest.py` wants days, so the
+    command has to come off `game_day` or it cannot run."""
+    body = _fn_src("_game_days")
+    assert "SELECT DISTINCT game_day" in body, body
+
+
+def test_the_day_lookup_chunks_instead_of_one_huge_query():
+    """143 stuck rows today, and SQLite's variable limit is 999 on the
+    builds that still ship it. Asserted by COUNTING the queries: a test
+    that just passes 1,200 ids proves nothing on a build whose limit is
+    32,766, which is how the un-chunked version survived mutation."""
+    class Counting:
+        def __init__(self):
+            self.calls = 0
+        def execute(self, sql, args):
+            self.calls += 1
+            assert len(args) <= 999, f"{len(args)} variables in one query"
+            return [(f"2026-09-1{self.calls % 10}",)]
+    c = Counting()
+    days = homecheck._game_days(c, list(range(1, 1201)))
+    assert c.calls == 3, f"1,200 ids went out in {c.calls} quer(ies)"
+    assert days == sorted(set(days))
+    assert homecheck._game_days(Counting(), []) == []
+
+
+def test_the_day_lookup_reads_real_rows():
+    """And the query itself works against a real journal."""
+    from engine import ledger as _l
+    c = _l.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
+    ids = []
+    for i in range(6):
+        cur = c.execute(
+            "INSERT INTO bets (game_day,sport,date,player,market,side,line,"
+            "odds,book,hit_prob,edge,stake_units,stake_dollars,ts,status,"
+            "category) VALUES (?,'nfl','2026-W01',?,'rush_yds','OVER',0.5,"
+            "-110,'DK',0.5,0,1.0,0,'now','open','main')",
+            ("2026-09-14" if i % 2 else "2026-09-15", f"P{i}"))
+        ids.append(cur.lastrowid)
+    c.commit()
+    assert homecheck._game_days(c, ids) == ["2026-09-14", "2026-09-15"]
+
+
+# --- the edge check ---------------------------------------------------
+def test_the_edge_check_is_a_registered_command():
+    """`homecheck.py edge` — does the staked book make money."""
+    assert "edge" in homecheck.CHECKS, sorted(homecheck.CHECKS)
+    fn, desc, in_all = homecheck.CHECKS["edge"]
+    assert in_all is True, "edge is read-only and belongs in `all`"
+    assert "money" in desc.lower(), desc
+
+
+def test_the_edge_check_reads_only():
+    body = _fn_src("edge")
+    assert "_journal_ro()" in body, "edge must use the read-only handle"
+    for write in ("INSERT", "UPDATE", "DELETE", "commit("):
+        assert write not in body, f"{write} in a read-only check"
+
+
+def test_the_edge_check_says_when_a_sample_is_too_thin():
+    """A 17-bet ROI is not evidence, and the whole point of this check
+    is deciding where to spend a week."""
+    body = _fn_src("edge")
+    assert "too thin to call" in body, body
+
+
+def test_the_edge_check_cuts_by_grade():
+    """A sharp-anchored card, a model card and a promoted stale flag all
+    land in `main`; pooling them hides which is carrying the book."""
+    body = _fn_src("edge")
+    assert "GROUP BY grade" in body, body
+    assert "stale_verdict" in body, "the promotion ladder belongs beside it"
 
 
 if __name__ == "__main__":

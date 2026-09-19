@@ -162,6 +162,32 @@ def _history_ro():
     return conn, ""
 
 
+#: Stuck reasons a re-ingest actually fixes. "player has no log" is a
+#: name-map or a DNP, "game not found" is usually a postponement that
+#: wants a void, and neither is helped by fetching the day again —
+#: printing a command for those would send the next reader in a circle.
+_REINGEST_FIXES = ("day barely ingested", "no results ingested")
+
+
+def _game_days(conn, ids) -> list:
+    """The distinct CALENDAR days behind a set of stuck bet ids."""
+    if not ids:
+        return []
+    out = set()
+    # Chunked: SQLite's variable limit is 999 and a stuck list can be
+    # longer than that — 143 today, and a bad week would be more.
+    ids = [i for i in ids if i is not None]
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        marks = ",".join("?" * len(chunk))
+        for r in conn.execute(
+                f"SELECT DISTINCT game_day FROM bets WHERE id IN ({marks})",
+                chunk):
+            if r[0]:
+                out.add(str(r[0]))
+    return sorted(out)
+
+
 def record() -> list:
     """RECORD. What the published record.json holds, against the journal.
 
@@ -299,6 +325,86 @@ def record() -> list:
     return out
 
 
+def edge() -> list:
+    """EDGE. Does the book we actually stake make money? (read-only)
+
+    Ethan, 2026-09-19, after the stale book's promotion verdict came
+    back "hold" for every sport with three of the four measured
+    NEGATIVE: the question that decides what to build next is not why
+    college has no edge bets, it is whether the edge bets we DO place
+    are worth placing.
+
+    Nothing else prints this plainly. The Record page shows a verdict
+    gated below the ledger's own sample bar, which is right for a public
+    page and useless for deciding where to spend a week. This is the
+    same numbers ungated, per sport, with the sample beside each so a
+    thin one cannot be mistaken for evidence.
+
+    CUT BY GRADE as well, because the edge book is not one selector. A
+    sharp-anchored card, a model card and (since today) a promoted
+    stale flag all land in `main`, and pooling them hides which one is
+    carrying the book — or sinking it.
+    """
+    out = ["EDGE — does the staked book make money, per sport",
+           "  category main+paper, stake above zero, since the record epoch"]
+    conn, why = _journal_ro()
+    if conn is None:
+        return out + [f"  {why}"]
+    try:
+        from engine import ledger as _l
+        def _line(name, p):
+            n = p.get("settled", 0)
+            if not n:
+                out.append(f"  {name:6} nothing settled")
+                return
+            roi = (p.get("roi") or 0.0) * 100
+            clv = p.get("avg_clv")
+            thin = "" if n >= 100 else f"   !! {n} settled — too thin to call"
+            out.append(
+                f"  {name:6} {p.get('wins',0)}-{p.get('losses',0)}"
+                f"-{p.get('pushes',0)}  {n:5} settled  ROI {roi:+6.2f}%  "
+                f"net {p.get('net_units',0):+7.2f}u on "
+                f"{p.get('units_staked',0):.1f}u"
+                + (f"  CLV {clv:+.2f}" if clv is not None else "  CLV n/a")
+                + thin)
+        for sp in _l.TRACKED_SPORTS:
+            _line(sp, _l.performance(conn, sp, since=_l.RECORD_EPOCH))
+        _line("ALL", _l.performance(conn, since=_l.RECORD_EPOCH))
+        out.append("")
+        out.append("  by grade — which selector earned it")
+        rows = conn.execute(
+            "SELECT grade, COUNT(*) n, SUM(status='won') w, "
+            "SUM(status='lost') l, COALESCE(SUM(pnl_units),0) u, "
+            "COALESCE(SUM(CASE WHEN status='push' THEN 0 ELSE stake_units "
+            "END),0) s FROM bets WHERE category IN ('main','paper') "
+            "AND stake_units > 0 AND status IN ('won','lost','push') "
+            "AND date >= ? GROUP BY grade ORDER BY n DESC",
+            (_l.RECORD_EPOCH,)).fetchall()
+        if not rows:
+            out.append("    (nothing settled in the edge book yet)")
+        for r in rows:
+            roi = (r["u"] / r["s"] * 100) if r["s"] else 0.0
+            out.append(f"    {str(r['grade'] or '(none)'):12} "
+                       f"{r['w']}-{r['l']}  {r['n']:5} rows  ROI {roi:+6.2f}%")
+        # The promotion ladder beside it: where the next selector is.
+        out.append("")
+        out.append("  stale-line book — the promotion ladder")
+        v = _l.stale_verdict(conn, since=_l.RECORD_EPOCH)
+        if not v:
+            out.append("    (no settled flags yet)")
+        for sp, e in sorted(v.items(), key=lambda kv: -kv[1]["n"]):
+            mark = "PROMOTE" if e["verdict"] == "promote" else "hold   "
+            out.append(f"    {sp:5} {mark} {e['n']:5} flags  "
+                       f"hit {e['hit_rate']*100:.1f}% vs {e['break_even']*100:.1f}% "
+                       f"break-even  z {e['z']:+.2f}  ROI {e['roi']*100:+.2f}%")
+            out.append(f"          {e['why']}")
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  journal unreadable — {type(exc).__name__}: {exc}")
+    finally:
+        conn.close()
+    return out
+
+
 def grading() -> list:
     """GRADING. Is each league's book actually settling, and if not, why.
 
@@ -345,6 +451,7 @@ def grading() -> list:
         by_sport.setdefault(str(r["sport"]), {})[str(r["status"])] = r["n"]
 
     stuck: dict = {}
+    stuck_ids: dict = {}
     if hconn is not None:
         try:
             from engine import ledger
@@ -352,6 +459,7 @@ def grading() -> list:
             for row in ledger.why_open(conn, hconn, _dt.date.today().isoformat()):
                 key = (str(row.get("sport") or "?"), str(row.get("reason") or "?"))
                 stuck[key] = stuck.get(key, 0) + 1
+                stuck_ids.setdefault(key, []).append(row.get("id"))
         except Exception as exc:                              # noqa: BLE001
             out.append(f"  why_open failed — {type(exc).__name__}: {exc}")
 
@@ -447,6 +555,26 @@ def grading() -> list:
         mine = {r: n for (sp, r), n in stuck.items() if sp == sport}
         for reason, n in sorted(mine.items(), key=lambda x: -x[1]):
             out.append(f"          {n:4d} stuck past the settle window — {reason}")
+            # AND THE COMMAND THAT CLEARS IT, ready to paste.
+            #
+            # Ethan, 2026-09-19: 143 NFL bets on "day barely ingested".
+            # The check named the cause and left him to work out which
+            # days and what to type, which is most of the work. The
+            # dates come from `game_day`, the CALENDAR day — the NFL
+            # journals week labels like "2026-W01" and `ingest.py`
+            # wants days, so printing `date` here would hand him a
+            # command that cannot run.
+            if reason not in _REINGEST_FIXES:
+                continue
+            ids = stuck_ids.get((sport, reason)) or []
+            days = _game_days(conn, ids)
+            if not days:
+                out.append("               (no calendar day stamped on these "
+                           "rows — nothing to re-ingest by date)")
+                continue
+            out.append(f"               python3 ingest.py {sport} --dates "
+                       + ",".join(days))
+            out.append("               then: python3 launch.py --settle all")
         # THE LOUD CASE. A league that has never graded anything is not a
         # quiet week; it is a book that has never closed a bet, and if
         # its stuck rows blame the ingest then nothing it holds will ever
@@ -666,6 +794,8 @@ CHECKS = {
     "grading": (grading, "GRADING: is each league's book settling, and why not",
                 True),
     "record": (record, "RECORD: what the published record.json holds", True),
+    "edge": (edge, "EDGE: does the staked book make money, and which "
+                   "selector earned it", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

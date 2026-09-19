@@ -713,6 +713,51 @@ file — and this prints both side by side.
 
 ---
 
+## EDGE. Does the book we stake actually make money? (read-only, seconds)
+
+Ethan, 2026-09-19, after the stale book's promotion verdict came back
+`hold` for every sport with three of the four measured NEGATIVE: the
+question that decides what to build next is not why college has no edge
+bets, it is whether the edge bets we DO place are worth placing.
+
+```bash
+cd /srv/qellys && python3 homecheck.py edge
+```
+
+```
+EDGE — does the staked book make money, per sport
+  category main+paper, stake above zero, since the record epoch
+  mlb    412-331-9    743 settled  ROI  +2.14%  net  +15.9u on 743.0u  CLV +0.31
+  nfl     14-12-0      26 settled  ROI  -4.40%  net   -1.1u on 26.0u  CLV n/a   !! 26 settled — too thin to call
+
+  by grade — which selector earned it
+    Sharp anchor  318-241   559 rows  ROI  +3.90%
+    Play          108-102   210 rows  ROI  -1.20%
+
+  stale-line book — the promotion ladder
+    mlb   hold     2433 flags  hit 36.8% vs 37.9% break-even  z -1.10  ROI -1.81%
+          hit rate 36.8% is -1.1 standard errors from the 37.9% break-even, needs +2.0
+```
+
+**What to look for.**
+
+* **`too thin to call`** — under 100 settled. An ROI on 17 bets is a
+  coin, not a result. The warning is there because the number looks
+  like evidence and is not.
+* **`by grade`** — the edge book is not one selector. A sharp-anchored
+  card, a model card and (since 2026-09-19) a promoted stale flag all
+  land in `main`. Pooling them hides which one is carrying the book, or
+  sinking it. **This is the line that says where to spend the next
+  week.**
+* **the promotion ladder** — the stale-line book's progress toward
+  becoming real edge bets, per sport, with the guard that is holding it.
+  A sport reading `PROMOTE` starts staking on the next build.
+* Numbers here are UNGATED, unlike the Record page's verdict, which is
+  deliberately held below the ledger's sample bar. That is right for a
+  public page and useless for deciding what to work on.
+
+---
+
 ## GRADING. Is every league's book actually settling? (read-only, seconds)
 
 Ethan, 2026-09-18: *"CFB still hasn't graded any edge bets or most likely

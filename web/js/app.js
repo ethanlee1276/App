@@ -11322,6 +11322,26 @@ function countUp(el) {
    Nothing to disclose draws nothing: a book with no picks before the
    epoch is not hiding anything, and a permanent notice about zero bets
    would be noise pretending to be candour. */
+/* HOW MUCH OF THE RECORD HAS A REAL CLOSING LINE BEHIND IT.
+
+   `ledger.clv_coverage` computes this on every export — its own comment
+   calls it "the honest prerequisite for anything that wants to reason
+   from CLV" — and until 2026-09-19 no page read it. The Model-vs-market
+   room quotes closing-line value all over itself; a reader had no way to
+   know whether that rested on every settled pick or on a tenth of them.
+
+   Per-market coverage is already on `recClvBoard`'s rows as
+   `with_close/settled`. This is the one-line whole-book version, which
+   is what belongs beside an all-time claim. */
+function recCoverageNote(cov) {
+  const n = cov.settled || 0, w = cov.with_close || 0;
+  if (!n) return "";
+  const pct = (w / n) * 100;
+  return `Closing lines are stored for ${w} of those ${n} picks (${
+    pct.toFixed(0)}%) — every CLV number on this page is measured on `
+    + (w === n ? "all of them." : "that share, not the whole book.");
+}
+
 function recEpochHTML(d, src) {
   const ep = (d || {}).record_epoch;
   // `src` is the scoped report on a sport scope and the whole payload on
@@ -11331,6 +11351,7 @@ function recEpochHTML(d, src) {
   const at = (src || d || {}).all_time || {};
   const o = at.overall || {};
   const hidden = at.hidden_settled || 0;
+  const cov = (d || {}).clv_coverage || {};
   if (!ep || !hidden || !o.settled) return "";
   const roi = `${(o.roi || 0) >= 0 ? "+" : ""}${((o.roi || 0) * 100).toFixed(1)}%`;
   return `<details class="rec-epoch">
@@ -11343,9 +11364,13 @@ function recEpochHTML(d, src) {
       model, not the bookkeeping: the boards before it ran on gates that no
       longer exist, so their record is a fact about a system that is not
       picking tonight.
-      <br><br>All-time, including everything before that date, the book is
+      <br><br>All-time${at.curve_from
+        ? `, from the first journaled pick on ${escapeHtml(
+            formatGameDate(at.curve_from) || at.curve_from)}`
+        : ", including everything before that date"}, the book is
       <strong>${o.wins}\u2011${o.losses}\u2011${o.pushes || 0}</strong> at
-      <strong>${roi}</strong> ROI on ${o.settled} settled picks.</div>
+      <strong>${roi}</strong> ROI on ${o.settled} settled picks.
+      ${cov.settled ? `<br><br>${escapeHtml(recCoverageNote(cov))}` : ""}</div>
   </details>`;
 }
 
