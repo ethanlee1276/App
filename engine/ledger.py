@@ -2112,6 +2112,18 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
     slate_date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     rows = ((result.get("market_scan") or {}).get("stale")) or []
+    # HAS THIS SPORT'S BOOK EARNED THE EDGE BOOK? Asked once per slate,
+    # not per row, so one verdict governs the whole day's flags.
+    #
+    # A promoted flag is journaled as an EDGE BET INSTEAD OF a shadow
+    # one — not as well as. The same bet in two books would be counted
+    # twice by `book_records` and would let the sampler keep grading the
+    # consequences of its own promotion. The settled rows that earned
+    # the promotion stay exactly where they are, as the evidence.
+    promoted = stale_promoted(conn, sport)
+    category = "main" if promoted else "stale"
+    stake = STALE_PROMOTED_STAKE if promoted else flat_stake
+    grade = STALE_PROMOTED_GRADE if promoted else "Stale"
     n = 0
     for r in rows:
         if r.get("live") or r.get("started"):
@@ -2128,7 +2140,7 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'stale')",
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
             # Slate-level date first: it's the key settling maps to the
             # history DB (NFL journals '2025-W05', not the game's ISO day).
             # …and the calendar day beside it — see `log_most_likely`.
@@ -2139,7 +2151,7 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
              # hit_prob = the field's consensus implied — what the flag
              # claims the true price is; edge = the gap being sampled.
              r.get("consensus"), (r.get("gap_pts") or 0) / 100.0,
-             None, "Stale", flat_stake, 0.0))
+             None, grade, stake, 0.0, category))
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
@@ -2252,6 +2264,66 @@ def stale_verdict(conn, since: str | None = None,
                            "z": round(z, 2), "roi": round(roi, 4),
                            "verdict": verdict, "why": why}
     return out
+
+
+#: What a PROMOTED stale flag is staked at, per bet.
+#:
+#: FLAT, and flat on purpose. The evidence that earns a promotion is a
+#: flat-stake ROI over 200+ settled flags at the prices actually taken —
+#: so the bet that evidence licenses is the one it measured. Kelly would
+#: size on a win probability the sampler never estimated: the flag says
+#: "this price is a point below the field", not "this side wins 58% of
+#: the time". Sizing on a number nobody measured is how the 0.5 guess
+#: cost twelve NFL bets in August (see `measured_shrink`).
+#:
+#: Deliberately smaller than a full unit. A promotion says the signal
+#: has cleared a bar, not that it is the best thing on the board, and
+#: the first real-money run of any promoted book is itself evidence.
+STALE_PROMOTED_STAKE = 0.5
+
+#: The grade a promoted flag carries, so the edge book can be cut by it.
+#: The Record page's Grade split then shows promoted-stale rows as their
+#: own line inside the edge book — if the signal decays after promotion,
+#: that is where it shows, separately from the model's own picks.
+STALE_PROMOTED_GRADE = "Stale edge"
+
+
+def stale_promoted(conn, sport: str, since: str | None = None) -> bool:
+    """Has this sport's stale-line book EARNED a place in the edge book?
+
+    Ethan, 2026-09-19: "us not having any edge bets for cfb in 2 weeks is
+    a problem so we need to fix that." College's model cannot supply
+    them — `gamecal` measures its disagreement with the line at a
+    NEGATIVE slope over 2,016 games, so `temper` shrinks every edge to
+    nothing and the board correctly grades Pass. Reopening that path
+    would stake money on a signal measured to lose.
+
+    The stale-line book is the other way in, and it was built for
+    exactly this: it bets a PRICE DISAGREEMENT — a book a point below
+    the field's consensus — not an opinion about who wins. It has been
+    journaling since the season opened so it could earn its way up, and
+    `stale_verdict` has been computing the answer every export. Nothing
+    has ever read it. Its own docstring says so: "the pipeline that
+    would act on a promote is a separate change, made with this number
+    in hand." This is that change.
+
+    THE BAR IS ARITHMETIC, not a mood, and it is `stale_verdict`'s: 200+
+    settled flags, a hit rate clearing the average break-even OF THE
+    PRICES ACTUALLY TAKEN by two standard errors, and a positive
+    flat-stake ROI. Nothing here can lower it.
+
+    FAILS CLOSED. Any error reading the journal returns False. The
+    opposite default is what `measured_shrink` documents as having cost
+    real money: a board that reverts to a guess when a file will not
+    open, and says nothing. Here the safe direction is obvious — not
+    promoting costs a missed bet, wrongly promoting stakes money on an
+    unverified signal.
+    """
+    try:
+        v = stale_verdict(conn, since=since).get(sport) or {}
+        return v.get("verdict") == "promote"
+    except Exception:                                         # noqa: BLE001
+        return False
 
 
 def log_form_picks(conn, result: dict, team_form: dict,

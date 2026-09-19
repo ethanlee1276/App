@@ -11663,6 +11663,55 @@ const SHADOW_ORDER = [
 const SHADOW_ORDER_ALL = SHADOW_ORDER.filter(
   ([k]) => k === "longshot_watch" || k === "predmarket");
 
+/* THE PROMOTION LADDER, SHOWN — what a shadow book needs to become a
+   real one, and how close each league is.
+
+   `ledger.stale_verdict` has computed this every export since it was
+   written, `export_json` publishes it as `stale_verdicts`, and until
+   2026-09-19 NOTHING READ IT — no renderer, no pipeline. Its own
+   docstring said the acting half was "a separate change, made with
+   this number in hand", and that change was never made.
+
+   Ethan, the same day: "us not having any edge bets for cfb in 2 weeks
+   is a problem". College's model cannot supply them — its measured
+   disagreement with the line has a negative slope over 2,016 games —
+   so the stale-line book is the way up, and a reader should be able to
+   see it climbing instead of asking why the board is empty.
+
+   The bar is `stale_verdict`'s and this only reports it: 200 settled
+   flags, a hit rate two standard errors over the break-even of the
+   prices actually taken, and a positive flat-stake ROI. */
+function recStaleLadder(sv, scope) {
+  const rows = Object.entries(sv || {})
+    .filter(([sp]) => !scope || scope === "all" || sp === scope)
+    .sort((a, b) => (b[1].n || 0) - (a[1].n || 0));
+  if (!rows.length) return "";
+  const line = ([sp, v]) => {
+    const up = v.verdict === "promote";
+    return `<div class="rl-row ${up ? "won" : ""}">
+      <span class="rl-icon">${icon(up ? "check" : "dash")}</span>
+      <span class="rl-date">${escapeHtml(
+        (SPORT_META[sp] || {}).name || String(sp).toUpperCase())}</span>
+      <span class="rl-main">${up
+        ? "Promoted — these flags are edge bets"
+        : escapeHtml(v.why || "")}</span>
+      <span class="rl-proc">${plural(v.n, "flag")} · ${
+        ((v.hit_rate || 0) * 100).toFixed(1)}% vs ${
+        ((v.break_even || 0) * 100).toFixed(1)}% break-even</span>
+      <span class="rl-odds">z ${(v.z || 0) >= 0 ? "+" : ""}${
+        (v.z || 0).toFixed(1)}</span>
+    </div>`;
+  };
+  return `
+    <div class="section-title">Earning its way up
+      <span class="sub">— the stale-line book bets a price a point below
+      the field, not an opinion on who wins. It becomes a real edge bet
+      when its own graded record says it pays: 200 settled flags, two
+      standard errors clear of the break-even on the prices actually
+      taken, and a positive flat-stake ROI.</span></div>
+    <div class="card" style="padding:0">${rows.map(line).join("")}</div>`;
+}
+
 function recShadowBooks(sb, scope, order) {
   const all = !scope || scope === "all";
   return recBookSections(sb, scope, {
@@ -15072,6 +15121,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // bets" gets only the two with no dedicated panel above it, so one
      // book never prints two W-Ls on one screen.
      + recShadowBooks(d.shadow_books, scope)
+     + recStaleLadder(d.stale_verdicts, scope)
      // Polymarket's flags are not wagers in this ledger — they are graded
      // by their own report card. Folding a flag rate into a betting P&L
      // would make both numbers mean nothing.
