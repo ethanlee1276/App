@@ -127,7 +127,8 @@ def _face_of(conn, sport: str, player: str) -> str:
         return ""
 
 
-def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
+def search(sport: str, q: str, limit: int = 12, db_path=None,
+           data_dir=None) -> list[dict]:
     """Every player in the league whose name contains ``q``, newest first.
 
     Ethan, 2026-08-18: "You should be able too look up any player in the
@@ -144,10 +145,13 @@ def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
         return []
     path = str(db_path or _db.DEFAULT_DB)
     if not os.path.exists(path):
-        return []
+        # No history store at all — the roster is still a true answer,
+        # and a league whose logs have not landed yet should not read as
+        # a league with no players in it.
+        return _roster_hits(sport, q, limit, set(), data_dir)
     conn = _db.connect(path)
     try:
-        return _search_conn(conn, sport, q, limit)
+        return _search_conn(conn, sport, q, limit, data_dir)
     finally:
         conn.close()
 
@@ -218,7 +222,8 @@ def _ranked_names(conn, sport: str, q: str, limit: int) -> dict:
     return out
 
 
-def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
+def _search_conn(conn, sport: str, q: str, limit: int,
+                 data_dir=None) -> list[dict]:
     """One league's hits on an already-open connection.
 
     Split out so the all-league search opens the database once instead of
@@ -227,7 +232,10 @@ def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
     """
     ranked = _ranked_names(conn, sport, q, limit)
     if not ranked:
-        return []
+        # NOTHING HAS PLAYED UNDER THAT NAME — which is not the same as
+        # nobody having it. The roster answers for the men the logs
+        # cannot; see `_roster_players`.
+        return _roster_hits(sport, q, limit, set(), data_dir)
     # HOW WELL IT MATCHES FIRST, how recently he played second. Recency is
     # the right tiebreak between two men who match equally well — a
     # current starter over a 2021 namesake — and the wrong first key
@@ -291,11 +299,98 @@ def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
                     "team": (t["team"] if t else "") or "",
                     "position": (t["position"] if t else "") or "",
                     "headshot": face})
+    # TOPPED UP, NOT REPLACED. A man with a stat line outranks one
+    # without, always — so the roster only ever fills the space the
+    # logs left empty, and a thin log store degrades into a roster
+    # search instead of into a blank page.
+    if len(out) < int(limit):
+        out += _roster_hits(sport, q, int(limit) - len(out),
+                            {r["player"] for r in out}, data_dir)
     return out
 
 
+#: Where the published roster payloads live, and how long one stays
+#: good in memory. Same quarter-hour as the name index above, for the
+#: same reason: a roster changes on a nightly, not on a keystroke.
+ROSTER_DIR = "web/data"
+ROSTER_TTL = 900
+_ROSTER: dict = {}
+
+
+def _roster_players(sport: str, data_dir=None) -> list[dict]:
+    """Everyone on a published roster, whether or not he has played.
+
+    Ethan, 2026-09-19: *"a lot of CFB players dont show up in the player
+    search."*
+
+    They could not. This module searches `player_game_logs`, which is
+    everyone who has APPEARED IN AN INGESTED GAME — and in September a
+    college roster is a hundred men of whom a couple of dozen have a
+    stat line. Backups, freshmen, specialists and anyone whose week has
+    not been ingested were not merely ranked low; they were absent, and
+    the page could not tell that apart from "no such player".
+
+    The rosters were already on disk and already published. Nothing
+    here fetches.
+    """
+    import json
+    import os
+    import time
+    key = (sport, str(data_dir or ROSTER_DIR))
+    hit = _ROSTER.get(key)
+    now = time.time()
+    if hit and now - hit[0] < ROSTER_TTL:
+        return hit[1]
+    out: list[dict] = []
+    path = os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        for team, entry in (doc.get("teams") or {}).items():
+            # `{team: {"players": [...]}}`, which is what `rosters.build`
+            # publishes — the roster page reads the same shape. A bare
+            # list is accepted too so an older payload on disk does not
+            # silently read as an empty league.
+            players = (entry.get("players") if isinstance(entry, dict)
+                       else entry) or []
+            for pl in players:
+                name = str((pl or {}).get("player") or "").strip()
+                if name:
+                    out.append({"player": name, "team": team,
+                                "position": str(pl.get("position") or ""),
+                                "headshot": str(pl.get("headshot") or "")})
+    except Exception:                                    # noqa: BLE001
+        out = []      # no roster published for this league: logs only
+    _ROSTER[key] = (now, out)
+    return out
+
+
+def _roster_hits(sport: str, q: str, want: int, seen: set,
+                 data_dir=None) -> list[dict]:
+    """Roster names matching `q` that the logs did not already answer.
+
+    ``games: 0`` is the honest part — the page must not promise a chart
+    for a man with no logged game, and "we know who he is, he has not
+    played" is a different fact from "we have never heard of him".
+    """
+    from .playersearch import rank
+    out = []
+    for pl in _roster_players(sport, data_dir):
+        if pl["player"] in seen:
+            continue
+        got = rank(pl["player"], q)
+        if got is None:
+            continue
+        out.append({"player": pl["player"], "games": 0, "sport": sport,
+                    "rank": got, "team": pl["team"],
+                    "position": pl["position"],
+                    "headshot": pl["headshot"]})
+    out.sort(key=lambda r: (r["rank"], r["player"]))
+    return out[:max(0, want)]
+
+
 def search_by_sport(q: str, limit: int = 12, sports=None,
-                    db_path=None) -> dict:
+                    db_path=None, data_dir=None) -> dict:
     """{sport: ranked hits} for every log-backed league, ONE connection.
 
     The per-source lists rather than a merged one, because the merge is
@@ -313,16 +408,18 @@ def search_by_sport(q: str, limit: int = 12, sports=None,
         return {}
     path = str(db_path or _db.DEFAULT_DB)
     if not os.path.exists(path):
-        return {}
+        # Still the rosters — see `search`. A league whose logs have not
+        # landed is not a league with no players in it.
+        return {s: _roster_hits(s, q, limit, set(), data_dir) for s in want}
     conn = _db.connect(path)
     try:
-        return {s: _search_conn(conn, s, q, limit) for s in want}
+        return {s: _search_conn(conn, s, q, limit, data_dir) for s in want}
     finally:
         conn.close()
 
 
 def search_all(q: str, limit: int = 12, prefer: str = "",
-               db_path=None) -> list[dict]:
+               db_path=None, data_dir=None) -> list[dict]:
     """Every player in every LOG-BACKED league whose name contains ``q``.
 
     Ethan, 2026-08-23: "searching for a player should search through ALL
@@ -342,7 +439,8 @@ def search_all(q: str, limit: int = 12, prefer: str = "",
     if not q:
         return []
     order = [s for s in source_order(prefer) if s in SPORT_MARKETS]
-    return merge(search_by_sport(q, limit, order, db_path), q, limit, order,
+    return merge(search_by_sport(q, limit, order, db_path, data_dir),
+                 q, limit, order,
                  prefer=prefer)
 
 

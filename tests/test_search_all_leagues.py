@@ -28,6 +28,17 @@ from engine import db, statlogs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# NO ROSTERS, ON PURPOSE, FOR THE WHOLE FILE. Since 2026-09-19 the search
+# tops up its answer from the published `web/data/rosters_<sport>.json`, so
+# a man who has not played yet is still findable. Every claim in this file
+# is about the LOG store — who ranks first, which leagues reach the list,
+# what a blank query does — and pointing the top-up at the repo's real
+# `web/data` would make those answers depend on which roster files happen
+# to be on the box. One empty directory, passed everywhere, keeps them
+# reading only the fixture they build. The roster top-up has its own file:
+# tests/test_a_rostered_player_is_findable_before_he_plays.py
+NO_ROSTERS = tempfile.mkdtemp()
+
 
 def _db_with_all_leagues():
     path = os.path.join(tempfile.mkdtemp(), "h.db")
@@ -88,7 +99,8 @@ def test_an_nfl_name_is_found_while_standing_on_the_wnba_tab():
     """The complaint, exactly: on one tab, looking for a player on
     another."""
     path = _db_with_all_leagues()
-    hits = statlogs.search_all("mahomes", prefer="wnba", db_path=path)
+    hits = statlogs.search_all("mahomes", prefer="wnba", db_path=path,
+                               data_dir=NO_ROSTERS)
     assert [h["player"] for h in hits] == ["Patrick Mahomes"]
     assert hits[0]["sport"] == "nfl"
 
@@ -100,8 +112,8 @@ def test_every_league_reaches_a_short_list():
     needs no cross-league comparison, and no league can crowd out the
     rest."""
     path = _db_with_all_leagues()
-    got = {h["sport"] for h in statlogs.search_all("a", limit=6,
-                                                   db_path=path)}
+    got = {h["sport"] for h in statlogs.search_all(
+        "a", limit=6, db_path=path, data_dir=NO_ROSTERS)}
     assert got == {"nfl", "mlb", "nba", "wnba"}
 
 
@@ -109,7 +121,7 @@ def test_a_name_that_starts_with_the_query_leads():
     """"judge" must find Aaron Judge before any longer name that merely
     contains those letters."""
     path = _db_with_all_leagues()
-    hits = statlogs.search_all("judge", db_path=path)
+    hits = statlogs.search_all("judge", db_path=path, data_dir=NO_ROSTERS)
     assert hits and hits[0]["player"] == "Aaron Judge"
 
 
@@ -119,7 +131,8 @@ def test_the_preferred_league_leads_but_never_excludes():
     so nothing but the preference can decide who goes first."""
     path = _db_with_all_leagues()
     for tab in ("nfl", "mlb", "nba", "wnba"):
-        hits = statlogs.search_all("z", limit=12, prefer=tab, db_path=path)
+        hits = statlogs.search_all("z", limit=12, prefer=tab,
+                                   db_path=path, data_dir=NO_ROSTERS)
         assert hits[0]["sport"] == tab, tab
         assert len({h["sport"] for h in hits}) == 4, tab
 
@@ -138,7 +151,8 @@ def test_the_tab_you_are_on_empties_its_shelf_before_other_leagues():
         "opponent": "OPP", "position": "RB", "home": 1,
         "market": "rush_yds", "value": 40.0} for i in range(6)])
     conn.close()
-    hits = statlogs.search_all("z", limit=12, prefer="nfl", db_path=path)
+    hits = statlogs.search_all("z", limit=12, prefer="nfl", db_path=path,
+                               data_dir=NO_ROSTERS)
     sports = [h["sport"] for h in hits]
     assert sports[:2] == ["nfl", "nfl"], \
         f"an MLB name was woven between the NFL hits: {sports}"
@@ -150,7 +164,8 @@ def test_a_leading_match_outranks_the_tab_you_are_standing_on():
     whose name STARTS with what you typed is the better answer even when
     he plays in another league."""
     path = _db_with_all_leagues()
-    hits = statlogs.search_all("a", limit=12, prefer="nfl", db_path=path)
+    hits = statlogs.search_all("a", limit=12, prefer="nfl", db_path=path,
+                               data_dir=NO_ROSTERS)
     assert hits[0]["player"] in ("Aaron Judge", "Aja Wilson")
     assert hits[0]["sport"] != "nfl"
 
@@ -159,8 +174,10 @@ def test_every_hit_names_its_own_league():
     """CIN is the Bengals and the Reds. A row that does not say which is a
     row the page will colour wrong."""
     path = _db_with_all_leagues()
-    hits = statlogs.search_all("cin", db_path=path)   # matches nothing
-    hits = statlogs.search_all("e", limit=12, db_path=path)
+    # matches nothing
+    hits = statlogs.search_all("cin", db_path=path, data_dir=NO_ROSTERS)
+    hits = statlogs.search_all("e", limit=12, db_path=path,
+                               data_dir=NO_ROSTERS)
     assert hits and all(h.get("sport") in statlogs.SPORT_MARKETS
                         for h in hits)
     cin = {h["sport"] for h in hits if h["team"] == "CIN"}
@@ -169,26 +186,29 @@ def test_every_hit_names_its_own_league():
 
 def test_single_league_search_is_unchanged_and_now_tagged():
     path = _db_with_all_leagues()
-    hits = statlogs.search("nfl", "mahomes", db_path=path)
+    hits = statlogs.search("nfl", "mahomes", db_path=path, data_dir=NO_ROSTERS)
     assert [h["player"] for h in hits] == ["Patrick Mahomes"]
     assert hits[0]["sport"] == "nfl"
 
 
 def test_no_database_is_an_empty_list_not_a_crash():
-    assert statlogs.search_all("anyone", db_path="/no/such/file.db") == []
-    assert statlogs.search_all("", db_path="/no/such/file.db") == []
+    assert statlogs.search_all("anyone", db_path="/no/such/file.db",
+                               data_dir=NO_ROSTERS) == []
+    assert statlogs.search_all("", db_path="/no/such/file.db",
+                               data_dir=NO_ROSTERS) == []
 
 
 def test_a_blank_query_matches_nobody():
     """LIKE '%%' matches the entire league. A cleared search box must not
     dump every player who has ever been logged."""
     path = _db_with_all_leagues()
-    assert statlogs.search_all("   ", db_path=path) == []
+    assert statlogs.search_all("   ", db_path=path, data_dir=NO_ROSTERS) == []
 
 
 def test_the_limit_is_honoured_across_leagues():
     path = _db_with_all_leagues()
-    assert len(statlogs.search_all("a", limit=3, db_path=path)) == 3
+    assert len(statlogs.search_all("a", limit=3, db_path=path,
+                                   data_dir=NO_ROSTERS)) == 3
 
 
 # --- the endpoint ---------------------------------------------------------
