@@ -214,6 +214,23 @@ CREATE INDEX IF NOT EXISTS idx_logs_game
 -- index.
 CREATE INDEX IF NOT EXISTS idx_logs_player
     ON player_game_logs (sport, player, season, period);
+-- AND THE SAME TWIN FOR THE QUOTES, for the same reason.
+--
+-- `idx_odds_hist_lookup` above leads (sport, market, player, taken_at),
+-- because the pricing models read one market at a time. The MEASUREMENTS
+-- do not: `engine.injurylag` asks "every quote on this man around the
+-- moment his status changed" — sport and player and a time window, no
+-- market — and with nothing to use, that degrades to the primary key,
+-- which leads (sport, taken_at). Scanning a sport's whole 48-hour
+-- partition, every player and every book, once per injury filing.
+--
+-- Ethan, 2026-09-19, twice: `homecheck.py data` ran thirteen minutes,
+-- then five more after the first fix bounded the time. The bound was
+-- right and still not enough, because a range over (sport, taken_at)
+-- is every quote we took that day. This is the index that makes it a
+-- handful of rows.
+CREATE INDEX IF NOT EXISTS idx_odds_hist_player
+    ON odds_history (sport, player, taken_at);
 -- WHEN WE LEARNED IT, which is a different fact from what we learned.
 --
 -- Ethan, 2026-09-07, on the data a winning model needs: "News timing.

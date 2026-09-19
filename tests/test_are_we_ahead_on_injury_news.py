@@ -282,6 +282,63 @@ def test_a_status_the_market_ignores_is_filtered_before_the_read():
 
 
 
+# --- and it refuses to run where it cannot run fast --------------------
+def test_a_store_without_the_index_is_refused_not_crawled():
+    """Ethan, 2026-09-19, the second report: five more minutes after the
+    first fix. `homecheck` opens the history READ-ONLY — correct, a check
+    must be safe mid-cycle — so it cannot build the index it needs, and
+    a fresh deploy read exactly like the bug it fixed: a command that
+    sits there. A measurement that cannot be fast should say so in a
+    second."""
+    import sqlite3
+    bare = sqlite3.connect(":memory:")
+    bare.row_factory = sqlite3.Row
+    assert il.index_ready(bare) is False
+    out = il.report(bare)
+    assert "not measured" in out, out
+    assert il.REQUIRED_INDEX in out, out
+
+
+def test_the_refusal_says_how_to_fix_it():
+    """A refusal that does not hand over the next command is a slower
+    way of saying nothing."""
+    import sqlite3
+    bare = sqlite3.connect(":memory:")
+    bare.row_factory = sqlite3.Row
+    out = il.report(bare)
+    assert "db.connect()" in out, out
+    assert "nightly" in out, out
+
+
+def test_a_store_that_has_the_index_is_measured():
+    """The refusal has to END, or it is just the check being off."""
+    from engine.db import connect
+    out = il.report(connect(":memory:"))
+    assert "not measured" not in out, out
+    assert "Nothing here bets" in out, out
+
+
+def test_an_unreadable_store_reads_as_not_ready():
+    """FAILS CLOSED, the same way `stale_promoted` does: refusing costs
+    a report, crawling costs the box."""
+    class Broken:
+        def execute(self, *a, **k):
+            raise RuntimeError("no such table: sqlite_master")
+    assert il.index_ready(Broken()) is False
+
+
+def test_the_required_index_is_actually_in_the_schema():
+    """The guard names an index; the schema has to build it, or the
+    refusal is permanent and nothing ever measures."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db = open(os.path.join(root, "engine", "db.py"), encoding="utf-8").read()
+    assert il.REQUIRED_INDEX in db, "the guard names an index nothing creates"
+    i = db.index(il.REQUIRED_INDEX)
+    decl = " ".join(db[i:i + 200].split())
+    assert "odds_history (sport, player, taken_at)" in decl, decl
+
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

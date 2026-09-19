@@ -242,7 +242,56 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
     return {sp: summarise(rows) for sp, rows in out.items()}
 
 
+#: The index this measurement cannot run without.
+#:
+#: `idx_odds_hist_lookup` leads (sport, market, player, taken_at) because
+#: the pricing models read one market at a time. This one asks for every
+#: quote on a man around a moment, naming no market, so it needs the twin
+#: that leads (sport, player, taken_at) — see `engine/db.py`.
+REQUIRED_INDEX = "idx_odds_hist_player"
+
+
+def index_ready(conn) -> bool:
+    """Is the index this read depends on actually built?
+
+    `homecheck` opens the history READ-ONLY, which is correct — a check
+    must be safe to run mid-cycle — but it also means this process
+    cannot create the index it needs. Without the check, a fresh deploy
+    reads exactly like the bug it fixed: a command that sits there.
+
+    A measurement that cannot be fast should say so in a second rather
+    than be slow for five minutes and explain nothing.
+    """
+    try:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+            (REQUIRED_INDEX,)).fetchone() is not None
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
 def report(hist_conn, sport: str | None = None, since: str | None = None) -> str:
+    # REFUSE RATHER THAN CRAWL. The guard is here and not in `measure`
+    # because `measure` is arithmetic over rows and is tested against a
+    # connection that has no schema at all; this is a fact about the
+    # store a reader is pointed at.
+    if not index_ready(hist_conn):
+        return "\n".join([
+            "", "=" * 70,
+            "  ARE WE AHEAD OF THE MARKET ON INJURY NEWS?", "=" * 70,
+            f"  not measured — {REQUIRED_INDEX} is not built yet.",
+            "",
+            "  Without it this read falls back to the primary key, whose",
+            "  range over (sport, taken_at) is every quote taken that day",
+            "  — every player, every market, every book — once per injury",
+            "  filing. That is the five minutes, and refusing is faster",
+            "  than proving it again.",
+            "",
+            "  The nightly builds it on its next writable connect. To do",
+            "  it now:",
+            "",
+            "      python3 -c \"from engine import db; db.connect().close()\"",
+            "", ])
     res = measure(hist_conn, sport=sport, since=since)
     lines = ["", "=" * 70,
              "  ARE WE AHEAD OF THE MARKET ON INJURY NEWS?", "=" * 70]

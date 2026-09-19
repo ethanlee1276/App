@@ -108,9 +108,15 @@ def test_the_injury_quote_lookup_searches_on_the_time_column():
     assert hits, ("odds_history is a full table SCAN — this is the read "
                   "that took thirteen minutes on the droplet")
     terms = hits.get("odds_history", "")
-    assert "taken_at" in terms, (
-        f"matched only on {terms!r} — without taken_at the index stops at "
-        f"sport, which on this table is no index at all")
+    # BOTH, and the second one is the half-fix that cost another five
+    # minutes. Bounding `taken_at` alone lands on the primary key, whose
+    # range over (sport, taken_at) is every quote taken for that sport
+    # that day — every player, every market, every book — read once per
+    # injury filing. `player` is what makes it a handful of rows.
+    for col in ("taken_at", "player"):
+        assert col in terms, (
+            f"matched only on {terms!r} — without {col} this reads far "
+            f"more of the table than the filing needs")
 
 
 
