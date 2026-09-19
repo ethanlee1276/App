@@ -242,6 +242,32 @@ def grading() -> list:
         out.append(f"  slate breakdown unavailable — "
                    f"{type(exc).__name__}: {exc}")
 
+    # WHICH BOOK, because that is the question the Record page answers.
+    #
+    # Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
+    # likely bets" — and the 2026-09-19 run came back `cfb 446 settled`.
+    # Both are true. `ledger.BOOK_SECTIONS` is Edge (main/paper), Most
+    # Likely (likely) and Long Shots (longshot), and `book_records` says
+    # in as many words that "sections a sport has never journaled are
+    # simply absent". Everything else in the journal — `stale` flags,
+    # `potd`, `loose` — is measured and never shown as a section. So a
+    # league can settle hundreds of bets into the shadow books and put
+    # nothing at all on the page, and a per-SPORT total cannot tell that
+    # apart from a healthy record.
+    books: dict = {}
+    try:
+        from engine.ledger import BOOK_SECTIONS
+        shown = {c: key for key, _, cats in BOOK_SECTIONS for c in cats}
+        for r in conn.execute(
+                "SELECT sport, category, status, COUNT(*) n FROM bets "
+                "GROUP BY sport, category, status"):
+            books.setdefault(str(r["sport"]), {}).setdefault(
+                str(r["category"]), {})[str(r["status"])] = r["n"]
+    except Exception as exc:                                  # noqa: BLE001
+        shown = {}
+        out.append(f"  book breakdown unavailable — "
+                   f"{type(exc).__name__}: {exc}")
+
     SETTLED = ("won", "lost", "push", "void")
     for sport in sorted(by_sport):
         st = by_sport[sport]
@@ -250,6 +276,29 @@ def grading() -> list:
         out.append(f"  {sport:5} {done:5d} settled  |  {openn:5d} open"
                    + (f"   ({', '.join(f'{k} {st[k]}' for k in SETTLED if st.get(k))})"
                       if done else ""))
+        # The books, and whether each one reaches the Record page.
+        mine_books = books.get(sport) or {}
+        if mine_books:
+            on_page = 0
+            for cat in sorted(mine_books):
+                st = mine_books[cat]
+                done = sum(st.get(k, 0) for k in SETTLED)
+                sec = shown.get(cat)
+                where = (f"Record page \u2192 {sec}" if sec
+                         else "shadow book, never on the Record page")
+                if sec and done:
+                    on_page += done
+                out.append(f"          {cat:10} {done:6d} settled  "
+                           f"{st.get('open', 0):5d} open   {where}")
+            # ONLY WHEN THERE IS SOMETHING TO MISPLACE. A league that has
+            # graded nothing at all is the `HAS NEVER GRADED` case below;
+            # saying its graded rows are in the wrong book would be
+            # describing rows that do not exist.
+            if done and not on_page:
+                out.append(f"       !! NOTHING {sport.upper()} HAS SETTLED "
+                           f"REACHES THE RECORD PAGE \u2014 every graded row is "
+                           f"in a shadow book, so the page shows this league "
+                           f"no record at all")
         days = slates.get(sport) or []
         if days:
             out.append(f"          {len(days)} slate(s) journaled, "

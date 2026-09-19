@@ -422,9 +422,10 @@ def test_the_live_check_runs_inside_the_daily_paste():
 
 
 # --- GRADING: a book that can never close a bet ------------------------------
-def _grading(counts, stuck=()):
+def _grading(counts, stuck=(), category="main"):
     """`counts` is (sport, status, n); `stuck` is (sport, reason) rows as
-    `ledger.why_open` would return them."""
+    `ledger.why_open` would return them. `category` names the book the
+    rows land in — the Record page keeps three and ignores the rest."""
     import sqlite3
     from engine import ledger
     conn = sqlite3.connect(":memory:")
@@ -432,10 +433,11 @@ def _grading(counts, stuck=()):
     # A `date` column, because the check reports which slates were
     # journaled and a fixture without one exercises its error path
     # instead of its answer.
-    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT, date TEXT)")
+    conn.execute("CREATE TABLE bets (sport TEXT, status TEXT, date TEXT, "
+                 "category TEXT)")
     for sport, status, n in counts:
-        conn.executemany("INSERT INTO bets VALUES (?,?,'2026-09-17')",
-                         [(sport, status)] * n)
+        conn.executemany("INSERT INTO bets VALUES (?,?,'2026-09-17',?)",
+                         [(sport, status, category)] * n)
     real_j, real_h = homecheck._journal_ro, homecheck._history_ro
     real_w = ledger.why_open
     homecheck._journal_ro = lambda: (conn, "")
@@ -515,6 +517,50 @@ def test_the_history_db_is_opened_read_only():
     assert "db.DEFAULT_DB" in body, "not the history database's own path"
     assert "db.connect(" not in body, \
         "db.connect() creates the schema on first use in a process"
+
+
+def test_each_book_says_whether_it_reaches_the_record_page():
+    """Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
+    likely bets." The 2026-09-19 run: `cfb 446 settled`. Both true — the
+    Record page keeps three books and `stale` is not one of them."""
+    out = _grading([("cfb", "won", 156), ("cfb", "lost", 171),
+                    ("cfb", "void", 119)], category="stale")
+    assert "shadow book, never on the Record page" in out, out
+    assert "stale" in out and "446 settled" in out, out
+
+
+def test_a_league_whose_whole_record_is_a_shadow_book_is_shouted_about():
+    """446 settled and a blank Record page is the exact complaint, and a
+    per-sport total cannot tell it from a healthy league."""
+    out = _grading([("cfb", "won", 156), ("cfb", "lost", 171)],
+                   category="stale")
+    assert "NOTHING CFB HAS SETTLED REACHES THE RECORD PAGE" in out, out
+
+
+def test_a_book_that_is_on_the_page_is_not_shouted_about():
+    out = _grading([("mlb", "won", 21), ("mlb", "lost", 11)],
+                   category="main")
+    assert "Record page \u2192 edge" in out, out
+    assert "REACHES THE RECORD PAGE" not in out, out
+
+
+def test_a_league_that_has_graded_nothing_is_not_told_its_rows_are_misfiled():
+    """The NFL case: 0 settled in any book. Saying its graded rows are
+    in the wrong place describes rows that do not exist — the
+    never-graded shout is the true one."""
+    out = _grading([("nfl", "open", 13)], category="main")
+    assert "NOTHING NFL HAS SETTLED REACHES" not in out, out
+    assert "HAS NEVER GRADED A BET" in out, out
+
+
+def test_the_sections_come_from_the_ledger_not_a_copy():
+    """`BOOK_SECTIONS` is what the Record page itself renders from. A
+    second list here would say a book is on the page after the page
+    stopped showing it."""
+    import inspect
+    body = inspect.getsource(homecheck.grading).split('"""')[-1]
+    assert "BOOK_SECTIONS" in body, \
+        "the section map is hand-written rather than read from the ledger"
 
 
 def test_how_many_slates_were_journaled_is_printed():
