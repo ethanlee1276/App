@@ -200,6 +200,70 @@ def test_every_reason_the_doctor_can_print_has_advice():
         assert f'"{reason}":' in lp, f"{reason} has no advice line"
 
 
+
+# --- a game that has not kicked off is not a stuck bet ----------------
+def _nfl_prop(conn, game_day, week="2026-W03"):
+    """An NFL player prop journaled under a WEEK LABEL, with the real
+    calendar day of its game stamped beside it."""
+    conn.execute(
+        "INSERT INTO bets (game_day,sport,date,player,market,side,line,odds,"
+        "book,hit_prob,edge,stake_units,stake_dollars,ts,status,category) "
+        "VALUES (?,'nfl',?,?,'rush_yds','OVER',45.5,-110,'DK',0.55,0.04,"
+        "1.0,0,'now','open','main')",
+        (game_day, week, f"P{game_day}"))
+    conn.commit()
+
+
+def test_a_bet_on_a_game_that_has_not_been_played_is_not_stuck():
+    """THE 143. Ethan, 2026-09-19: 143 NFL bets filed under "day barely
+    ingested", and the re-ingest command beside them named 09-20 and
+    09-21 — this weekend's games. The day IS barely ingested; the games
+    are tomorrow. A week label carries no date, so every NFL bet was
+    handed a fake age of "old enough"."""
+    conn = _conn()
+    today = _dt.date(2026, 9, 19)
+    _nfl_prop(conn, "2026-09-20")          # tomorrow
+    _nfl_prop(conn, "2026-09-21")          # Sunday
+    hist = hist_db.connect(":memory:")
+    assert ledger.why_open(conn, hist, today.isoformat()) == []
+
+
+def test_a_bet_on_a_game_already_played_is_still_reported():
+    """And the guard must not swallow the real ones — that would trade
+    a false alarm for a silent stranding, which is worse."""
+    conn = _conn()
+    today = _dt.date(2026, 9, 19)
+    _nfl_prop(conn, "2026-09-07", week="2026-W01")
+    hist = hist_db.connect(":memory:")
+    rows = ledger.why_open(conn, hist, today.isoformat())
+    assert len(rows) == 1, rows
+    assert rows[0]["reason"] == "no results ingested", rows
+    assert rows[0]["age_days"] == 12, rows
+
+
+def test_the_age_of_a_week_labelled_bet_is_its_real_age():
+    """It used to be the stuck window itself, which is how a bet from
+    the future read as old."""
+    conn = _conn()
+    _nfl_prop(conn, "2026-09-14", week="2026-W02")
+    hist = hist_db.connect(":memory:")
+    rows = ledger.why_open(conn, hist, "2026-09-19")
+    assert rows and rows[0]["age_days"] == 5, rows
+
+
+def test_a_week_bet_with_no_game_day_still_gets_looked_at():
+    """The fallback matters: a row stamped before `game_day` existed
+    must not become invisible to the doctor."""
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO bets (sport,date,player,market,side,line,odds,book,"
+        "hit_prob,edge,stake_units,stake_dollars,ts,status,category) "
+        "VALUES ('nfl','2026-W01','Old','rush_yds','OVER',45.5,-110,'DK',"
+        "0.55,0.04,1.0,0,'now','open','main')")
+    conn.commit()
+    hist = hist_db.connect(":memory:")
+    assert len(ledger.why_open(conn, hist, "2026-09-19")) == 1
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

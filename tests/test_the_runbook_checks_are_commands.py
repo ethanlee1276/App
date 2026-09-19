@@ -532,18 +532,36 @@ def test_the_history_db_is_opened_read_only():
 def test_each_book_says_whether_it_reaches_the_record_page():
     """Ethan, 2026-09-18: "CFB still hasn't graded any edge bets or most
     likely bets." The 2026-09-19 run: `cfb 446 settled`. Both true — the
-    Record page keeps three books and `stale` is not one of them."""
+    Record page kept three books and `stale` was not one of them.
+
+    RE-ANCHORED THE SAME DAY, because the second half stopped being
+    true: a sport's scope now draws the shadow books under "Also
+    tracked, never staked". `stale` still says where it lands; what it
+    no longer says is "never"."""
     out = _grading([("cfb", "won", 156), ("cfb", "lost", 171),
                     ("cfb", "void", 119)], category="stale")
-    assert "shadow book, never on the Record page" in out, out
+    assert "also tracked, never staked" in out, out
     assert "stale" in out and "446 settled" in out, out
+
+
+def test_a_book_with_no_renderer_anywhere_is_still_named():
+    """The label has to keep working for a category nobody wired up —
+    that is the case it exists for."""
+    out = _grading([("mlb", "won", 4), ("mlb", "lost", 6)],
+                   category="a_book_nobody_drew")
+    assert "shadow book, never on the Record page" in out, out
 
 
 def test_a_league_whose_whole_record_is_a_shadow_book_is_shouted_about():
     """446 settled and a blank Record page is the exact complaint, and a
-    per-sport total cannot tell it from a healthy league."""
+    per-sport total cannot tell it from a healthy league.
+
+    RE-ANCHORED 2026-09-19: `stale` reaches the page now, so the shout
+    needs a book that genuinely does not. The guard is unchanged and
+    still worth keeping — it fires the day a new book is journaled
+    before anything is written to draw it."""
     out = _grading([("cfb", "won", 156), ("cfb", "lost", 171)],
-                   category="stale")
+                   category="a_book_nobody_drew")
     assert "NOTHING CFB HAS SETTLED REACHES THE RECORD PAGE" in out, out
 
 
@@ -836,6 +854,36 @@ def test_the_edge_check_cuts_by_grade():
     assert "GROUP BY grade" in body, body
     assert "stale_verdict" in body, "the promotion ladder belongs beside it"
 
+
+
+# --- the check knows which books the page actually draws --------------
+def test_every_book_the_page_draws_is_named_as_drawn():
+    """Ethan, 2026-09-19, hours after the UFC card was wired to render:
+    "NOTHING UFC HAS SETTLED REACHES THE RECORD PAGE". The map behind
+    that line was the three headline sections only, so every other
+    category printed "never on the Record page" — true that morning,
+    false by the afternoon. A check that keeps asserting a fixed bug is
+    worse than one that never noticed it."""
+    body = _fn_src("grading")
+    assert "SHADOW_SECTIONS as _SHADOW" in body, \
+        "the shadow books are reported as unreachable again"
+    assert 'shown.setdefault("ufc"' in body, body
+    assert 'shown.setdefault("potd"' in body, body
+
+
+def test_no_category_the_ledger_journals_is_left_unmapped():
+    """Every category with a renderer must map to one, or the check
+    tells the reader a book is invisible when it is on the page."""
+    from engine import ledger as _l
+    drawn = {c for _k, _l2, cs in _l.BOOK_SECTIONS for c in cs}
+    drawn |= {c for _k, _l2, cs in _l.SHADOW_SECTIONS for c in cs}
+    drawn |= {"potd", "ufc"}
+    # `predmarket` rides in SHADOW_SECTIONS; nothing else should be
+    # journaled without a home. If this list grows, the renderer and
+    # this map both need the new book.
+    journaled = {"main", "paper", "likely", "longshot", "longshot_watch",
+                 "stale", "form", "loose", "predmarket", "potd", "ufc"}
+    assert journaled <= drawn, f"no renderer for: {sorted(journaled - drawn)}"
 
 if __name__ == "__main__":
     fails = ran = 0

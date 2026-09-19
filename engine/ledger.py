@@ -3476,7 +3476,35 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
                 age = older_than
                 real_age = False
         else:
-            age = older_than
+            # A WEEK LABEL IS NOT A DATE — BUT `game_day` BESIDE IT IS.
+            #
+            # This used to read `age = older_than`, which makes every
+            # week-labelled bet old enough to be called stuck, including
+            # one whose game has not kicked off. The game branch below
+            # grew its own guard when that bit ("a week that has not
+            # been PLAYED is the calendar working"); the PROP branch
+            # never got one, so a player prop on an unplayed week fell
+            # through to the thin-day test and was reported as "day
+            # barely ingested" — which it is, because the games are
+            # tomorrow.
+            #
+            # Ethan, 2026-09-19: 143 NFL bets under that heading, and
+            # the re-ingest command printed beside them named 09-20 and
+            # 09-21 — this weekend's games, a day and two days in the
+            # FUTURE. Nothing was stuck. The whole block was the doctor
+            # not knowing what day it was.
+            #
+            # `game_day` is stamped on every journal row for exactly
+            # this reason, so the age is now the real one and the
+            # week-label fudge is gone. A bet whose game has not been
+            # played is younger than the window and never reaches the
+            # reasons below.
+            gd = b["game_day"] if "game_day" in b.keys() else None
+            try:
+                age = (today_d - _dt.date.fromisoformat(str(gd))).days
+                real_age = True
+            except (TypeError, ValueError):
+                age = older_than
         if age < older_than:
             continue
         where, wargs = _hist_where(b)

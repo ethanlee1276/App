@@ -504,6 +504,23 @@ def grading() -> list:
     try:
         from engine.ledger import BOOK_SECTIONS
         shown = {c: key for key, _, cats in BOOK_SECTIONS for c in cats}
+        # THE OTHER BOOKS THE PAGE DRAWS, since 2026-09-19. This map
+        # was the three headline sections only, so every other category
+        # printed "never on the Record page" — which was true that
+        # morning and stopped being true the same afternoon. A check
+        # that keeps asserting a fixed bug is worse than one that never
+        # noticed it: Ethan read "NOTHING UFC HAS SETTLED REACHES THE
+        # RECORD PAGE" hours after the UFC card was wired to draw.
+        try:
+            from engine.ledger import SHADOW_SECTIONS as _SHADOW
+            shown.update({c: f"{key} (also tracked, never staked)"
+                          for key, _l, cats in _SHADOW for c in cats})
+        except ImportError:
+            pass
+        # Two books with a section of their own rather than a slot in
+        # either map — see `recPotdSection` and `recUfcSection`.
+        shown.setdefault("potd", "Pick of the Day")
+        shown.setdefault("ufc", "the UFC card")
         for r in conn.execute(
                 "SELECT sport, category, status, COUNT(*) n FROM bets "
                 "GROUP BY sport, category, status"):
