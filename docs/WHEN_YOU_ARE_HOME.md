@@ -672,7 +672,8 @@ file — and this prints both side by side.
 ```
   generated_at 2026-09-19T00:29:05  (11.2h old)   !! STALE
   record_epoch 2026-08-06  — rows before this date are NOT in the public record
-  cfb   by_sport settled   294  open   13  |  books: likely 285, main 8, longshots 1
+  cfb   by_sport settled     0  open    0  |  books W-L: likely 246, main 8
+  mlb   by_sport settled   743  open    2  |  books W-L: edge …, likely … (+9 push)
 ```
 
 **What to look for, in order.**
@@ -683,9 +684,20 @@ file — and this prints both side by side.
   wrong.
 * **`the export is the gap, not the journal`** — the journal has graded
   rows into a rendered book and the file carries none of them.
-* **`journal N graded, file M`** — a partial export.
+* **`journal N W-L, file M`** — a partial export. Both numbers count
+  WON AND LOST ONLY. A push is settled but not graded: `book_records`
+  keeps it in its own `push` field and leaves it out of the ROI
+  denominator, so it is printed beside the book as `(+N push)` rather
+  than counted here. The two sides once counted differently and the
+  check reported nine phantom missing MLB rows on 2026-09-19.
 * **`record_epoch`** — rows dated before it are excluded from the public
   record by design. Rule this out before chasing anything else.
+* **`by_sport settled 0` beside a full book** is NORMAL for a league on
+  probation. `by_sport` is the staked Edge book (`performance` filters
+  `stake_units > 0`); a probation league is journaled and graded at a
+  zero stake, so its record lives entirely in the other books. College
+  football read exactly that all season. The page draws those books —
+  since 2026-09-19 it stopped calling such a league empty.
 
 ---
 

@@ -220,11 +220,18 @@ def record() -> list:
     for sp in sorted(set(tracked) | set(by_sport) | set(books)):
         entry = (by_sport.get(sp) or {}).get("overall") or {}
         mine = books.get(sp) or {}
+        # W-L, NOT SETTLED. `book_records` counts pushes in their own
+        # `push` field, so `w + l` is the GRADED count and a pushed bet
+        # is deliberately outside it — the ROI denominator excludes it
+        # too. The number is labelled here because the reconciliation
+        # below has to count the same thing, and once did not.
         shown = ", ".join(
-            f"{k} {(b.get('w', 0) + b.get('l', 0))}" for k, b in sorted(mine.items())
+            f"{k} {(b.get('w', 0) + b.get('l', 0))}"
+            + (f" (+{b['push']} push)" if b.get("push") else "")
+            for k, b in sorted(mine.items())
         ) or "(no book sections)"
         out.append(f"  {sp:5} by_sport settled {entry.get('settled', 0):5}  "
-                   f"open {entry.get('open', 0):4}  |  books: {shown}")
+                   f"open {entry.get('open', 0):4}  |  books W-L: {shown}")
         if conn is None:
             continue
         # THE JOURNAL'S OWN ANSWER, beside it. A league the journal has
@@ -235,9 +242,20 @@ def record() -> list:
             from engine.ledger import BOOK_SECTIONS, RECORD_EPOCH
             cats = tuple(c for _k, _l, cs in BOOK_SECTIONS for c in cs)
             marks = ",".join("?" * len(cats))
+            # WON AND LOST ONLY, to match the `w + l` printed above.
+            #
+            # This counted pushes too, and the sum it was compared
+            # against never could. Ethan's run on 2026-09-19 therefore
+            # reported "journal 1733 graded, file 1724 — 9 row(s) did
+            # not reach the page" for the MLB, and all nine rows were on
+            # the page: they were his pushed bets, sitting in the
+            # `push` field the comparison did not read. A check that
+            # invents a discrepancy is worse than no check — it sends
+            # the next reader hunting an export bug that is not there,
+            # which is exactly what it did.
             n = conn.execute(
                 f"SELECT COUNT(*) FROM bets WHERE sport=? AND date >= ? "
-                f"AND status IN ('won','lost','push') "
+                f"AND status IN ('won','lost') "
                 f"AND category IN ({marks})",
                 (sp, RECORD_EPOCH, *cats)).fetchone()[0]
         except Exception as exc:                              # noqa: BLE001
@@ -252,8 +270,8 @@ def record() -> list:
         elif n:
             drawn = sum(b.get("w", 0) + b.get("l", 0) for b in mine.values())
             if drawn < n:
-                out.append(f"       !! journal {n} graded, file {drawn} — "
-                           f"{n - drawn} row(s) did not reach the page")
+                out.append(f"       !! journal {n} W-L, file {drawn} — "
+                           f"{n - drawn} graded row(s) did not reach the page")
     if conn is not None:
         conn.close()
     return out

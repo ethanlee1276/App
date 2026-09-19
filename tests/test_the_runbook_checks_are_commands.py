@@ -682,8 +682,11 @@ def test_a_league_the_file_carries_is_not_shouted_about():
 def test_a_partial_export_says_how_many_rows_were_lost():
     out = _record(_doc(book_records={"cfb": {"likely": {"w": 100, "l": 94}}}),
                   graded=[("cfb", 294)])
-    assert "journal 294 graded, file 194" in out, out
-    assert "100 row(s) did not reach the page" in out, out
+    # Re-worded 2026-09-19. Both numbers are W-L now, not settled: the
+    # journal side used to count pushes against a file count that never
+    # could, and reported nine phantom missing MLB rows for it.
+    assert "journal 294 W-L, file 194" in out, out
+    assert "100 graded row(s) did not reach the page" in out, out
 
 
 def test_a_stale_export_is_named_as_stale():
