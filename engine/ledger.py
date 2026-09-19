@@ -6940,8 +6940,79 @@ BOOK_SECTIONS = (
     ("longshots", "Long Shots", ("longshot",)),
 )
 
+#: THE OTHER BOOKS, so a league's scope can show every bet it placed.
+#:
+#: Ethan, 2026-09-19: "i want all bets shown on the record page that had
+#: been placed and cfb isnt showing that." College football's journal
+#: holds 210 rows under `stale` on top of the three books above, and a
+#: sport's scope drew none of them: the panels that render these buckets
+#: — `recStaleSection`, `recFormSection`, `recLooseSection` — are written
+#: `scoped ? "" : X`, whole-journal only, because their payloads have no
+#: per-sport cut. So the rows existed, were graded, and appeared nowhere
+#: a reader could scope to.
+#:
+#: These are SHADOW BOOKS and stay shadow books. Nothing here is in the
+#: headline: `performance` defaults to BOOK = ("main","paper"), so the
+#: P&L, the curve and the verdict cannot see them. What changes is only
+#: that a league's own page admits they exist.
+#:
+#: `potd` and `ufc` are deliberately absent — `recPotdSection` already
+#: takes `potd_by_sport[scope]` and `recUfcSection` draws the UFC card,
+#: both on the sport's own scope. Listing them here would print one
+#: book's record twice on one screen, which is the failure the ROI
+#: comment in `book_records` was written for.
+SHADOW_SECTIONS = (
+    ("stale", "Stale-line flags", ("stale",)),
+    ("form", "Form sampler", ("form",)),
+    ("loose", "Looser gates", ("loose",)),
+    ("longshot_watch", "Long-shot watch", ("longshot_watch",)),
+    ("predmarket", "Prediction desk", ("predmarket",)),
+)
 
-def book_records(conn, since: str | None = None) -> dict:
+
+def journaled_counts(conn, since: str | None = None) -> dict:
+    """``{"all": {settled, open}, "by_sport": {sp: {settled, open}}}``.
+
+    WHAT THE SCOPE CHIPS COUNT, and the reason this exists rather than
+    the chips reading a book.
+
+    Their own comment promises "rows journaled in that scope, open and
+    settled together", and it was computed from `overall`, which is
+    `performance(...)` — the EDGE book, staked. Every other book was
+    outside it. So college football's chip read 0 beside a page holding
+    246 graded Most Likely rows and 210 stale-line flags, and UFC's read
+    0 beside eighteen graded fights. Ethan, 2026-09-19: "i want all bets
+    shown on the record page that had been placed."
+
+    Counted here with NO category filter and NO stake filter, so the
+    promise the chips make is the query that answers them, and the
+    sports still sum to "All bets" because both come from this one scan.
+
+    VOIDS ARE EXCLUDED. A voided bet was refunded — no result, no stake
+    at risk — and every panel on the page leaves it out, so counting it
+    in the badge would put a number on the chip that nothing under it
+    adds up to. The 119 college voids are the case that made this worth
+    stating.
+    """
+    win = " AND date >= ?" if since else ""
+    args: tuple = (since,) if since else ()
+    out: dict = {}
+    tot = {"settled": 0, "open": 0}
+    for r in conn.execute(
+            "SELECT sport, "
+            "SUM(status IN ('won','lost','push')) s, "
+            "SUM(status='open') o "
+            "FROM bets WHERE status IN ('won','lost','push','open')"
+            + win + " GROUP BY sport", args):
+        if not r["sport"]:
+            continue
+        out[r["sport"]] = {"settled": r["s"] or 0, "open": r["o"] or 0}
+        tot["settled"] += r["s"] or 0
+        tot["open"] += r["o"] or 0
+    return {"all": tot, "by_sport": out}
+
+
+def book_records(conn, since: str | None = None, sections=None) -> dict:
     """``{sport: {section: {label, n, w, l, push, net_u, roi, markets}}}``.
 
     One scan, grouped by sport × category × market, so the Record page
@@ -6950,11 +7021,18 @@ def book_records(conn, since: str | None = None) -> dict:
     homers/touchdowns/hits/rebounds words, never retyped). Sections a
     sport has never journaled are simply absent, and markets ride inside
     their section sorted by volume so the busiest line leads.
+
+    ``sections`` picks WHICH books to report and defaults to the three
+    the Record page leads with. Pass ``SHADOW_SECTIONS`` for the
+    quarantined ones instead — same scan, same arithmetic, a different
+    slice — rather than writing a second copy of this ROI math, which is
+    the one place a push must stay out of the denominator.
     """
+    sections = BOOK_SECTIONS if sections is None else tuple(sections)
     win = " AND date >= ?" if since else ""
     args: tuple = (since,) if since else ()
-    cat_to_sec = {c: key for key, _, cats in BOOK_SECTIONS for c in cats}
-    labels = {key: label for key, label, _ in BOOK_SECTIONS}
+    cat_to_sec = {c: key for key, _, cats in sections for c in cats}
+    labels = {key: label for key, label, _ in sections}
     out: dict = {}
     for r in conn.execute(
             "SELECT sport, category, market, COUNT(*) n, "
@@ -7091,6 +7169,16 @@ def export_json(conn, path) -> None:
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.
         "book_records": book_records(conn, since=since),
+        # THE SAME SCAN, THE QUARANTINED BOOKS. Per sport, so a league's
+        # scope can account for every row it placed instead of only the
+        # three books it leads with — Ethan, 2026-09-19, on college
+        # football's 210 stale rows appearing nowhere he could scope to.
+        # Never pooled into any headline: see SHADOW_SECTIONS.
+        "shadow_books": book_records(conn, since=since,
+                                     sections=SHADOW_SECTIONS),
+        # The scope chips' counts — every book, no stake filter, so the
+        # badge matches what the scope draws. See `journaled_counts`.
+        "journaled": journaled_counts(conn, since=since),
         "stale_flags": stale_report(conn, since=since),
         # Per sport, with the bar it has to clear — see `stale_verdict`.
         "stale_verdicts": stale_verdict(conn, since=since),

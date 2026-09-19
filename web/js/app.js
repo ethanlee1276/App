@@ -11568,10 +11568,16 @@ function marketWord(k) {
    the shipped market_words — never retyped here (the splits table
    already paid for that lesson once). Scoped pages show the sport's
    own books; the all-sports view pools them. */
-function recBookSections(br, scope) {
+function recBookSections(br, scope, opts) {
   if (!br) return "";
-  const ORDER = [["edge", "Edge bets"], ["likely", "Most Likely"],
-                 ["longshots", "Long Shots"]];
+  // The heading and the book order are arguments so the SHADOW books
+  // can reuse this whole function — the pooling loop, the thin-sample
+  // note, the per-market tables and, above all, the ROI that keeps a
+  // push out of its denominator. A second copy of that arithmetic is
+  // how one book ends up with two different ROIs on one screen.
+  const O = opts || {};
+  const ORDER = O.order || [["edge", "Edge bets"], ["likely", "Most Likely"],
+                            ["longshots", "Long Shots"]];
   let books;
   if (scope && scope !== "all" && scope !== "intel") {
     books = br[scope];
@@ -11613,11 +11619,46 @@ function recBookSections(br, scope) {
   }).join("");
   if (!cards) return "";
   return `
-    <div class="section-title">Records by book
-      <span class="sub">— every kind of pick keeps its own record spot:
-      the staked edge bets, the Most Likely paper book, the long shots —
-      and how each market inside them did</span></div>
+    <div class="section-title">${escapeHtml(O.title || "Records by book")}
+      <span class="sub">${O.sub || `— every kind of pick keeps its own
+      record spot: the staked edge bets, the Most Likely paper book, the
+      long shots — and how each market inside them did`}</span></div>
     <div class="rec-buckets">${cards}</div>`;
+}
+
+/* EVERY OTHER BOOK THIS LEAGUE HAS, on the league's own page.
+
+   Ethan, 2026-09-19: "i want all bets shown on the record page that had
+   been placed and cfb isnt showing that."
+
+   College football's journal held 210 rows under `stale` on top of the
+   246 Most Likely and 8 edge bets — graded, dated, real prices — and a
+   reader who tapped CFB saw none of them. The panels that draw these
+   buckets are written `scoped ? "" : X`, whole-journal only, because
+   `stale_flags`, `form_sampler` and `loose_sampler` have no per-sport
+   cut to draw. So the rows were not hidden by a decision; they were
+   hidden by the shape of a payload.
+
+   `shadow_books` is the same scan as `book_records` over the categories
+   in `ledger.SHADOW_SECTIONS`, keyed by sport. These stay OUT of the
+   headline — `performance` defaults to ("main","paper"), so the P&L,
+   the curve and the verdict cannot see them, and the subtitle says so
+   rather than leaving a reader to add the numbers up wrong.
+
+   Scoped only. On "All bets" the dedicated panels above already draw
+   each of these buckets with its hit rate and its promotion verdict,
+   and printing the same W-L twice on one screen is the failure the ROI
+   comment in `book_records` exists for. */
+function recShadowBooks(sb, scope) {
+  return recBookSections(sb, scope, {
+    order: [["stale", "Stale-line flags"], ["form", "Form sampler"],
+            ["loose", "Looser gates"], ["longshot_watch", "Long-shot watch"],
+            ["predmarket", "Prediction desk"]],
+    title: "Also tracked, never staked",
+    sub: `— every other pick journaled for this league, kept deliberately
+      out of the P&L above: they are measurements, not money. Each one
+      earns its way into the record on its own graded run.`,
+  });
 }
 
 function recSplitsSection(o, booksDrawn) {
@@ -13518,11 +13559,15 @@ let _recordScope = null;          // null = follow the sport you are on
    The books carry no stake filter — `book_records` counts wins and
    losses per category — so they are the honest test of whether a league
    has a record worth rendering. */
-function recordHasSomething(o, books, own) {
+function recordHasSomething(o, books, own, shadow) {
   if ((o || {}).settled || (o || {}).open) return true;
   if ((own || {}).settled || (own || {}).open) return true;
-  return Object.values(books || {}).some(
-    (b) => ((b || {}).w || 0) + ((b || {}).l || 0) > 0);
+  // `shadow` rides here rather than in its own clause because it is the
+  // same shape and the same question: a league whose ONLY rows are
+  // stale-line flags has still placed bets, and since 2026-09-19 the
+  // page draws them under "Also tracked, never staked".
+  return [books, shadow].some((m) => Object.values(m || {}).some(
+    (b) => ((b || {}).w || 0) + ((b || {}).l || 0) > 0));
 }
 
 /* THE BOOK A SCOPE OWNS THAT NEITHER `by_sport` NOR `book_records` CAN
@@ -13571,14 +13616,31 @@ function recordScopeHTML(d, scope) {
      Summed, it only ever climbs, the sports add up to All bets, and the
      open/settled split is still one line below on the panel itself. */
   const journaled = (o) => ((o || {}).settled || 0) + ((o || {}).open || 0);
-  const parts = [btn("all", "All bets", journaled(d.overall))];
+  /* AND THE SOURCE IS `journaled`, NOT `overall` — 2026-09-19.
+     Everything above stayed true and was measuring the wrong pool.
+     `overall` is `performance(...)`: the EDGE book, staked. Every other
+     book a league keeps was outside it, so college football's chip read
+     0 beside a page holding 246 graded Most Likely rows and 210
+     stale-line flags, and UFC's read 0 beside eighteen graded fights.
+     Ethan: "i want all bets shown on the record page that had been
+     placed and cfb isnt showing that."
+
+     `ledger.journaled_counts` is one scan with no category filter and
+     no stake filter, which is what the sentence above always promised.
+     "All bets" and the sports come from that same scan, so they still
+     add up. The fallback to `overall` is for a file published before
+     this key existed — the first load after a deploy, where the old
+     narrow number beats a row of zeros. */
+  const jc = d.journaled || {};
+  const parts = [btn("all", "All bets",
+                     journaled(jc.all || d.overall))];
   parts.push(btn("intel", "Prediction Market", null));
   for (const sp of tracked) {
     const r = (d.by_sport || {})[sp] || {};
     // A sport with nothing journaled is still listed. Hiding it would
     // make "no bets yet" and "no such board" look identical.
     parts.push(btn(sp, (SPORT_META[sp] || {}).name || sp.toUpperCase(),
-                   journaled(r.overall)));
+                   journaled((jc.by_sport || {})[sp] || r.overall)));
   }
   return `<div class="rec-scopes">${parts.join("")}</div>`;
 }
@@ -14750,7 +14812,8 @@ async function renderRecord() {
     return;
   }
   if (scoped && !recordHasSomething(o, (d.book_records || {})[scope],
-                                    recordOwnBook(d, scope))) {
+                                    recordOwnBook(d, scope),
+                                    (d.shadow_books || {})[scope])) {
     // THE EMPTY STATE, AND ONLY WHAT HAS SOMETHING TO SAY ABOUT THIS
     // SPORT. This used to append the whole learning ladder under the
     // slate, on the argument that an empty journal is not an empty
@@ -14987,6 +15050,9 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
      + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))
+     // SCOPED ONLY, and the inverse guard is deliberate: on "All bets"
+     // the panels above already draw these buckets in full.
+     + (scoped ? recShadowBooks(d.shadow_books, scope) : "")
      // Polymarket's flags are not wagers in this ledger — they are graded
      // by their own report card. Folding a flag rate into a betting P&L
      // would make both numbers mean nothing.

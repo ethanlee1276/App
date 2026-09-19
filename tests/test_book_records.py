@@ -84,7 +84,11 @@ def test_the_export_carries_it_and_the_page_renders_it():
     with open(os.path.join(ROOT, "web", "js", "app.js"),
               encoding="utf-8") as f:
         js = f.read()
-    assert "function recBookSections(br, scope)" in js
+    # `opts` added 2026-09-19 so the SHADOW books reuse this function
+    # whole — the pooling loop, the thin-sample note and the ROI that
+    # keeps a push out of its denominator. Two copies of that
+    # arithmetic is how one book gets two ROIs on one screen.
+    assert "function recBookSections(br, scope, opts)" in js
     assert "recBookSections(d.book_records, scope)" in js
     at = js.index("function recBookSections")
     body = js[at:js.index("\nfunction ", at + 10)]

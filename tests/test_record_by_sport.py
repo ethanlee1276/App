@@ -167,8 +167,19 @@ def test_every_scope_chip_counts_the_same_thing():
     fn = js[js.index("function recordScopeHTML(d, scope)"):]
     fn = fn[:fn.index("\n}")]
     assert "const journaled = (o) => ((o || {}).settled || 0) + ((o || {}).open || 0);" in fn
-    assert "journaled(d.overall)" in fn, "the All bets chip counts something else"
-    assert "journaled(r.overall)" in fn, "a sport chip counts something else"
+    # Re-anchored 2026-09-19, and the invariant got STRONGER, not weaker.
+    # The chips used to count `overall`, which is `performance(...)` —
+    # the edge book, staked. They added up, but to the wrong pool: a
+    # probation league read 0 with a page full of graded rows under it.
+    # `ledger.journaled_counts` is ONE filterless scan, so "All bets"
+    # and the sports are now the same quantity by construction, which is
+    # what the docstring above always claimed.
+    assert "journaled(jc.all || d.overall)" in fn, \
+        "the All bets chip counts something else"
+    assert "journaled((jc.by_sport || {})[sp] || r.overall)" in fn, \
+        "a sport chip counts something else"
+    assert "const jc = d.journaled || {};" in fn, \
+        "the chips are back on a single book"
     # The prose below names the shape it is banning, and a grep that
     # reads comments would be satisfied by a comment. Code only.
     code = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", fn, flags=re.S))
