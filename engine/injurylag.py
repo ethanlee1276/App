@@ -73,6 +73,17 @@ MAX_QUOTES = 5_000
 #: never going to matter.
 MOVING_STATUSES = ("out", "doubtful", "questionable")
 
+#: One filing's quotes, in one bounded read.
+#:
+#: Named at module level so `tests/test_query_plans.py` can put THIS
+#: string through EXPLAIN QUERY PLAN rather than a copy of it. A test
+#: that checks a query it wrote itself proves only that the test is
+#: indexed.
+QUOTE_SQL = ("SELECT taken_at, line FROM odds_history "
+             "WHERE sport=? AND taken_at BETWEEN ? AND ? "
+             "AND player=? AND line IS NOT NULL "
+             "LIMIT ?")
+
 
 def _parse(ts) -> _dt.datetime | None:
     """A timestamp from either store, or None. Never raises: these are
@@ -223,10 +234,7 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
         lo = (seen - _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
         hi = (seen + _dt.timedelta(hours=WINDOW_HOURS)).isoformat(sep=" ")
         quotes = hist_conn.execute(
-            "SELECT taken_at, line FROM odds_history "
-            "WHERE sport=? AND taken_at BETWEEN ? AND ? "
-            "AND player=? AND line IS NOT NULL "
-            "LIMIT ?",
+            QUOTE_SQL,
             (ev["sport"], lo, hi, ev["player"], MAX_QUOTES)).fetchall()
         got = classify(ev["first_seen"] or ev["posted_at"],
                        [(q2["taken_at"], q2["line"]) for q2 in quotes])

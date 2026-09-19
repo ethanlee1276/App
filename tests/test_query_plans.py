@@ -85,6 +85,35 @@ def test_season_bound_history_read_uses_an_index():
         "the query already paid to read")
 
 
+def test_the_injury_quote_lookup_searches_on_the_time_column():
+    """THE THIRTEEN MINUTES. Ethan, 2026-09-19: the first run of
+    `homecheck.py data` on the droplet was still going after thirteen
+    minutes and had to be killed.
+
+    `odds_history`'s primary key leads (sport, taken_at, ...), and the
+    lookup asked for `sport=? AND player=?` — `taken_at` sits between the
+    two columns named, so that is not a prefix of the index and SQLite
+    scanned the table. Once per injury filing, a few thousand filings,
+    over months of quotes.
+
+    This reads `injurylag.QUOTE_SQL` itself rather than a copy, because a
+    test that checks a query it wrote proves only that the test is
+    indexed."""
+    from engine import injurylag
+    conn = connect(":memory:")
+    hits = _searches(_plan(conn, injurylag.QUOTE_SQL,
+                           ("nfl", "2026-09-13 12:00:00",
+                            "2026-09-15 12:00:00", "A Back",
+                            injurylag.MAX_QUOTES)))
+    assert hits, ("odds_history is a full table SCAN — this is the read "
+                  "that took thirteen minutes on the droplet")
+    terms = hits.get("odds_history", "")
+    assert "taken_at" in terms, (
+        f"matched only on {terms!r} — without taken_at the index stops at "
+        f"sport, which on this table is no index at all")
+
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
