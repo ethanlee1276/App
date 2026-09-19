@@ -196,7 +196,8 @@ class _Spy:
     """
 
     def __init__(self, filings, quotes=(), ever=False):
-        self.filings, self.quotes = list(filings), list(quotes)
+        self.filings = list(filings)
+        self.quotes = quotes if isinstance(quotes, dict) else list(quotes)
         self.ever = ever          # does the name probe find him at all?
         self.asked = []
 
@@ -206,7 +207,11 @@ class _Spy:
         if "FROM injury_events" in flat:
             return _Rows(self.filings)
         if "BETWEEN" in flat:
-            return _Rows(self.quotes)
+            q = self.quotes
+            # A dict lets one pass carry filings of DIFFERENT shapes,
+            # which is what the reconciliation test needs.
+            return _Rows(list(q.get(args[3], ())) if isinstance(q, dict)
+                         else q)
         return _Rows([{"1": 1}] if self.ever else [])
 
     def quote_reads(self):
@@ -441,6 +446,63 @@ class _Ready(_Spy):
         if "sqlite_master" in sql:
             return _Rows([{"1": 1}])
         return super().execute(sql, args)
+
+
+
+def test_every_filing_lands_in_exactly_one_bucket():
+    """THE COLUMNS HAVE TO ADD UP. Ethan, 2026-09-19: mlb printed 18
+    filings over buckets summing to 16. The missing two were quoted
+    inside the window but on ONE SIDE of the filing, so `classify`
+    refused them — correctly — and the report dropped them silently.
+
+    A report whose own numbers do not reconcile teaches the reader to
+    distrust all of it, which is the opposite of what a measurement is
+    for."""
+    def q(*pairs):
+        return [{"taken_at": t, "line": v} for t, v in pairs]
+    spy = _Spy(
+        [_filing(player="Measured"), _filing(player="OneSided"),
+         _filing(player="NeverQuoted")],
+        quotes={
+            "measured": q(("2026-09-14T11:00:00Z", 62.5),
+                          ("2026-09-14T13:00:00Z", 55.5)),
+            "onesided": q(("2026-09-14T13:00:00Z", 55.5)),
+            "neverquoted": (),
+        })
+    got = il.measure(spy)["nfl"]
+    assert got["filings"] == 3, got
+    assert got["usable"] == 1, got
+    assert got["one_sided"] == 1, got
+    assert got["never_quoted"] == 1, got
+    total = (got["usable"] + got["one_sided"]
+             + got["never_quoted"] + got["quoted_elsewhen"])
+    assert total == got["filings"], got
+
+
+def test_the_report_prints_the_one_sided_count():
+    """MUTATION, 2026-09-19: counting the third bucket and not showing it
+    left the printed columns still failing to add up, which is the whole
+    complaint."""
+    spy = _Spy([_filing()], quotes=[{"taken_at": "2026-09-14T13:00:00Z",
+                                     "line": 55.5}])
+    out = il.report(_Ready(spy))
+    assert "1 quoted on one side only" in out, out
+
+
+def test_the_report_leaves_the_third_bucket_out_when_it_is_empty():
+    """A column of zeros is noise on a line already carrying two
+    numbers."""
+    out = il.report(_Ready(_Spy([_filing()], quotes=[], ever=True)))
+    assert "one side only" not in out, out
+
+
+def test_a_one_sided_filing_never_buys_a_name_probe():
+    """We already know we quote him — the probe answers a question this
+    filing has just answered."""
+    spy = _Spy([_filing()], quotes=[{"taken_at": "2026-09-14T13:00:00Z",
+                                     "line": 55.5}])
+    il.measure(spy)
+    assert spy.name_probes() == [], spy.asked
 
 
 

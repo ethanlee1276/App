@@ -271,6 +271,15 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
             got = classify(ev["first_seen"] or ev["posted_at"],
                            [(q2["taken_at"], q2["line"]) for q2 in quotes])
             out.setdefault(ev["sport"], []).append(got)
+            if got is None:
+                # QUOTED INSIDE THE WINDOW, BUT ONLY ON ONE SIDE of the
+                # filing, so there is no before-price to compare against
+                # and `classify` refuses it. Counted, because on
+                # 2026-09-19 mlb printed 18 filings over buckets summing
+                # to 16 and the missing two were exactly these — a report
+                # whose own columns do not reconcile is a report that
+                # teaches the reader to distrust all of it.
+                blind.setdefault(ev["sport"], [0, 0, 0])[2] += 1
             continue
         # NOTHING IN THE WINDOW — AND WHICH KIND OF NOTHING MATTERS.
         # "we never quote this man" and "we quote him, but never near the
@@ -280,11 +289,12 @@ def measure(hist_conn, sport: str | None = None, since: str | None = None,
         # wrong place twice.
         ever = hist_conn.execute(NAME_SQL, (ev["sport"], name)).fetchone()
         out.setdefault(ev["sport"], []).append(None)
-        blind.setdefault(ev["sport"], [0, 0])[0 if ever is None else 1] += 1
+        blind.setdefault(ev["sport"], [0, 0, 0])[0 if ever is None else 1] += 1
     res = {}
     for sp, rows in out.items():
         s = summarise(rows)
-        s["never_quoted"], s["quoted_elsewhen"] = blind.get(sp, (0, 0))
+        (s["never_quoted"], s["quoted_elsewhen"],
+         s["one_sided"]) = blind.get(sp, (0, 0, 0))
         res[sp] = s
     return res
 
@@ -356,10 +366,13 @@ def report(hist_conn, sport: str | None = None, since: str | None = None) -> str
             # true of a name mismatch, a coverage gap and a timing gap
             # alike — and on 2026-09-19 it was the first of those in every
             # sport, with nothing on the page to say so.
-            never, elsewhen = s.get("never_quoted", 0), s.get("quoted_elsewhen", 0)
+            never = s.get("never_quoted", 0)
+            elsewhen = s.get("quoted_elsewhen", 0)
+            one = s.get("one_sided", 0)
             lines.append(
                 f"        {never} never quoted by any book · {elsewhen} "
-                f"quoted, but never within {WINDOW_HOURS}h of the news")
+                f"quoted, but never within {WINDOW_HOURS}h of the news"
+                + (f" · {one} quoted on one side only" if one else ""))
             if never >= elsewhen:
                 lines.append(
                     "        the books do not price these men, or we spell "
