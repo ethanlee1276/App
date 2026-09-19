@@ -1,0 +1,400 @@
+"""The Lab — the walk-forward harnesses, published instead of printed.
+
+Half a dozen backtests have always replayed the PRODUCTION pricer over
+stored history. Every one of them printed to a terminal and vanished,
+which meant the only evidence that accrues faster than a forward record
+was invisible from a phone. This runs them on a weekly clock, normalizes
+them into one shape, and publishes ``web/data/backtest.json``.
+
+The tests below mostly guard HONESTY, because the numbers involved are
+the easiest in betting to fool yourself with:
+
+* **Basis.** A prop priced against a naive baseline measures predictive
+  skill, not an edge over a book. Basis travels with every row.
+* **Refusals are reported, not swallowed.** ``engine.gamebets`` refuses
+  to price a league whose scoring baseline was never registered rather
+  than borrow another league's variance. That refusal reaches the page
+  as the honest gap it is.
+* **Coverage is stated per sport**, including the sports that have no
+  harness at all — a gap named is information, a gap omitted is a lie
+  of composition.
+"""
+
+import json
+import os
+import random
+import sys
+import tempfile
+import datetime as _dt
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine import db, lab
+
+# These tests price synthetic slates and assert on what comes out. The
+# selection haircut reads a store fitted from the REAL journal at settle
+# time, so on a live laptop a −0.35 shift empties the board and this file
+# fails for a reason that has nothing to do with what it tests. Switched
+# off here, deliberately and visibly — see engine/selectionfit.set_enabled.
+from engine import selectionfit as _sf                          # noqa: E402
+_sf.set_enabled(False)
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _seeded(n_players=12, n_games=40, real_lines=True, market="total_bases"):
+    """A history deep enough for a real walk-forward, optionally with a
+    harvested close on every game (stored normalized, as the feed does)."""
+    conn = db.connect(":memory:")
+    rng = random.Random(11)
+    rows, odds = [], []
+    for p in range(n_players):
+        name = f"Bat {p}"
+        for g in range(n_games):
+            date = f"2026-05-{g + 1:02d}" if g < 31 else f"2026-06-{g - 30:02d}"
+            rows.append({"sport": "mlb", "season": 2026, "period": date,
+                         "game_id": f"g{g}", "player": name, "team": "BOS",
+                         "opponent": "NYY", "position": "OF", "home": 1,
+                         "market": market,
+                         "value": max(0, int(rng.gauss(1.6, 1.3)))})
+            if real_lines:
+                odds.append({"sport": "mlb", "taken_at": date + "T22:00:00",
+                             "event_id": f"e{g}", "home": "BOS", "away": "NYY",
+                             # The odds feed normalizes names; the join
+                             # depends on it (engine.mlb.backtest._norm_name).
+                             "player": name.lower(), "market": market,
+                             "book": "dk", "line": 1.5, "over_odds": -115,
+                             "under_odds": -105})
+    db.upsert_player_logs(conn, rows)
+    if odds:
+        db.upsert_odds_history(conn, odds)
+    return conn
+
+
+def _quiet(*a, **k):
+    pass
+
+
+# --- the harness actually runs -----------------------------------------------
+def test_a_real_walk_forward_produces_real_numbers():
+    conn = _seeded()
+    out = lab.mlb_props(conn, markets=("total_bases",), log=_quiet)
+    assert out, "a 40-game history should replay"
+    m = out[0]
+    assert m["n"] > 100
+    assert m["mae"] and m["brier"]
+    assert m["bins"] and all(b["n"] for b in m["bins"])
+    # Skill is the number that matters, and it needs its own sample bar.
+    assert m["skill"] and "base_rate" in m["skill"]
+
+
+def test_harvested_closes_make_the_basis_market_relative():
+    m = lab.mlb_props(_seeded(real_lines=True), markets=("total_bases",),
+                      log=_quiet)[0]
+    assert m["basis"] == "book"
+    assert m["used_real_lines"] == m["total_priced"]
+    assert "book" in m["segments"]
+
+
+def test_without_harvested_closes_the_basis_says_naive():
+    """The distinction the whole page hangs on: beating a trailing average
+    is not beating a sportsbook."""
+    m = lab.mlb_props(_seeded(real_lines=False), markets=("total_bases",),
+                      log=_quiet)[0]
+    assert m["basis"] == "naive"
+    assert m["used_real_lines"] == 0
+
+
+def test_a_thin_history_replays_nothing_rather_than_something():
+    conn = _seeded(n_players=2, n_games=4)
+    assert lab.mlb_props(conn, markets=("total_bases",), log=_quiet) == []
+
+
+# --- coverage, stated honestly -----------------------------------------------
+def test_every_sport_appears_with_what_it_has_or_why_it_has_nothing():
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    for sport in ("mlb", "nfl", "cfb", "nba", "wnba", "ufc"):
+        s = out["sports"][sport]
+        for half in ("props", "game_lines"):
+            block = s[half]
+            assert block.get("markets") or block.get("unavailable"), \
+                f"{sport}.{half} is neither a result nor a stated reason"
+
+
+def test_a_league_with_no_registered_variance_says_so():
+    """engine.gamebets refuses to price a league whose scoring baseline was
+    never registered, rather than quietly borrowing another league's — so
+    the page reports a refusal, not an empty table."""
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    for sport in ("nba", "wnba"):
+        why = out["sports"][sport]["game_lines"]["unavailable"]
+        assert "scoring baseline" in why and sport in why
+
+
+def test_the_sports_with_no_prop_harness_are_named_not_omitted():
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    for sport in ("nba", "wnba", "ufc"):
+        assert out["sports"][sport]["props"]["unavailable"]
+    # CFB is NOT in that club any more — engine.cfbtdfit is its
+    # walk-forward harness. On a seeded DB with no college logs the row
+    # is the harness's own honest gap, not "no harness".
+    assert "college" in out["sports"]["cfb"]["props"]["unavailable"]
+
+
+def test_the_basis_caveat_ships_with_the_data():
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    note = out["basis_note"].lower()
+    assert "naive" in note and "not an edge" in note
+
+
+# --- the weekly clock --------------------------------------------------------
+def test_it_runs_once_a_week_and_can_be_forced():
+    """The once-a-week gate, and nothing else.
+
+    `nfl=False` is load-bearing and used to be implicit. The NFL prop
+    replay bailed instantly while it defaulted to the CURRENT season,
+    because an unplayed season has no weekly stats — so "fast: nothing
+    replays" was true by accident. It falls back a season now, which is
+    the point of the fallback and makes four real walk-forwards out of
+    these four calls. This test is about the gate; the replay has its
+    own.
+    """
+    p = os.path.join(tempfile.mkdtemp(), "backtest.json")
+    # A history deep enough to REPLAY — two players and four games
+    # measured nothing, and since 2026-09-14 a page that measured
+    # nothing is not a run: the gate would (correctly) report the lab
+    # due again on the second call. The gate under test here is the
+    # weekly one, and it needs a page with answers on it to hold.
+    conn = _seeded()
+    kw = {"hconn": conn, "log": _quiet, "path": p, "nfl": False}
+    assert lab.run_if_due(**kw) == "ok"
+    assert lab.run_if_due(**kw) == "already"
+    assert lab.run_if_due(force=True, **kw) == "ok"
+    later = _dt.date.today() + _dt.timedelta(days=lab.LAB_EVERY_DAYS)
+    assert lab.run_if_due(today=later, **kw) == "ok"
+
+
+def test_a_broken_harness_never_takes_the_settle_pass_down():
+    """The settle pass must never fail because a backtest did."""
+    class _Exploding:
+        def execute(self, *a, **k):
+            raise RuntimeError("db is on fire")
+
+        def close(self):
+            pass
+
+    p = os.path.join(tempfile.mkdtemp(), "backtest.json")
+    # `nfl=False` for the same reason the gate test above carries it: the
+    # NFL replay used to bail instantly on an unplayed current season and
+    # now falls back a real one. What is under test is that an exploding
+    # connection cannot take the settle pass down, not how long a
+    # walk-forward takes.
+    assert lab.run_if_due(hconn=_Exploding(), log=_quiet, path=p,
+                          nfl=False) in ("ok", "failed")
+
+
+def test_the_published_path_is_absolute():
+    """The launcher does not run from the repo root; a relative default
+    would write the page's data into whatever directory was current."""
+    assert lab.LAB_PATH.is_absolute()
+    assert lab.LAB_PATH.parts[-2:] == ("data", "backtest.json")
+
+
+# --- the page ----------------------------------------------------------------
+def test_the_lab_is_wired_into_the_site():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert 'id="view-lab"' in html and 'data-sport="lab"' in html
+    assert 'if (name === "lab") renderLab();' in app
+    assert '"record", "lab"' in app            # a standalone page, like The Book
+    # Through paidFetch since 2026-08-22 — backtest.json is in
+    # gate.PAID_FILES, so the public copy is a sealed stub that a paying
+    # subscriber was being served.
+    assert 'paidFetch("backtest.json")' in app
+
+
+def test_the_page_refuses_to_headline_a_thin_or_naive_roi():
+    """The two ways a backtest ROI lies: too few bets, or priced against a
+    baseline nobody could have bet. Both must reach the reader."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "LAB_ROI_MIN_BETS = 100" in app
+    # The whole function, not a fixed byte window — a window measures how
+    # long the comments are, which is not a property worth pinning.
+    i = app.index("function labPropCard")
+    card = app[i:app.index("\nfunction ", i + 1)]
+    assert "noise, not a result" in card
+    assert "NOT an edge over a book" in card
+    # A muted tone on both, so the colour never says "result" either.
+    # Tone is taken from whatever the HEADLINE shows — which on a mixed
+    # basis is the book-priced segment, not the blend.
+    assert '(naive || thin) ? "" : toneOf(headline.roi)' in card
+
+
+def test_the_page_calls_out_a_hedging_model():
+    """Perfect calibration with no sharpness is the failure that looks like
+    success — a model answering "about average" to everything."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # The whole function, not a fixed byte window from its start — a window
+    # measures how long the comments are, and this one broke the first time
+    # the card grew an explanatory block.
+    i = app.index("function labPropCard")
+    j = app.index("\nfunction ", i + 1)
+    assert "hedging, not" in app[i:j]
+
+
+def test_the_maintenance_pass_runs_the_lab():
+    """Ethan's standing rule: anything needed every run gets automated. A
+    backtest you have to remember to run is a backtest that stops running."""
+    src = open(os.path.join(ROOT, "engine", "maintenance.py"),
+               encoding="utf-8").read()
+    # Out of process since 2026-09-02: the pass calls `_run_lab`, which
+    # runs `python3 -m engine.lab --auto`, and --auto is `run_if_due`.
+    assert "_run_lab(log)" in src
+    import inspect
+    from engine import maintenance as _m
+    assert "engine.lab" in inspect.getsource(_m._run_lab)
+    assert '"--auto"' in inspect.getsource(_m._run_lab)
+    assert "run_if_due(hconn=hconn, log=print)" in inspect.getsource(lab.main)
+
+
+# --- a page that measured nothing is not a run --------------------------------
+_EMPTY_PAGE = {"sports": {
+    "nfl": {"props": {"unavailable": "skipped"},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}},
+    "mlb": {"props": {"unavailable": "no ingested game logs deep enough "
+                                     "to replay yet"},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}}}}
+_FULL_PAGE = {"sports": {
+    "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
+            "game_lines": {"unavailable": "no harvested closing lines "
+                                          "stored for this sport"}}}}
+
+
+def _page(doc, today):
+    return dict(doc, generated_at=f"{today.isoformat()}T10:45:52")
+
+
+def test_a_page_that_measured_nothing_is_due_again_whatever_its_date():
+    """Ethan, 2026-09-14: The Lab read "not replayed yet" for every sport
+    for four days, stamped 2026-09-10, on a box holding four NFL seasons.
+    The page was a seeded test fixture with a fresh stamp, and the weekly
+    gate honoured the stamp. A page with no measurement on it is not the
+    week's run; a page with one still is."""
+    from pathlib import Path
+    today = _dt.date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "web" / "data" / "backtest.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps(_page(_EMPTY_PAGE, today)))
+        assert lab._due(p, today), \
+            "a page that replayed nothing, stamped today, held the lab off"
+        assert lab.replayed_sports(_page(_EMPTY_PAGE, today)) == []
+        p.write_text(json.dumps(_page(_FULL_PAGE, today)))
+        assert not lab._due(p, today), "a real run today was re-run"
+        assert lab.replayed_sports(_FULL_PAGE) == ["mlb"]
+        later = today + _dt.timedelta(days=lab.LAB_EVERY_DAYS)
+        assert lab._due(p, later), "the weekly cadence itself is gone"
+
+
+def test_the_due_check_reads_the_private_page_not_the_sealed_stub():
+    """With the paywall on, the public backtest.json is a sealed stub with
+    no sports in it. Read THAT as "measured nothing" and the lab re-runs
+    every night on a box whose private page is full."""
+    from pathlib import Path
+    today = _dt.date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        public = Path(tmp) / "web" / "data" / "backtest.json"
+        public.parent.mkdir(parents=True)
+        private = Path(tmp) / "data" / "built" / "backtest.json"
+        private.parent.mkdir(parents=True)
+        stub = {"generated_at": f"{today.isoformat()}T10:45:52",
+                "locked_reason": "subscribe"}
+        public.write_text(json.dumps(stub))
+        private.write_text(json.dumps(_page(_FULL_PAGE, today)))
+        assert not lab._due(public, today), \
+            "the sealed stub was read as a page that measured nothing"
+
+
+def test_a_section_that_measured_nothing_keeps_the_last_one_that_did():
+    """`backtest_lab.py --no-nfl`, a locked database, an unstarted season:
+    each used to publish its reason over last week's numbers. The
+    measurement stays, dated; a present measurement is never displaced;
+    a previous reason never replaces a present one."""
+    prev = {"generated_at": "2026-09-03T02:10:00", "sports": {
+        "nfl": {"props": {"markets": [{"market": "rec_yds", "n": 900}],
+                          "season": 2025},
+                "game_lines": {"unavailable": "old reason"}},
+        "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
+                "game_lines": {"markets": [{"market": "total"}]}}}}
+    out = {"generated_at": "2026-09-14T13:04:01", "sports": {
+        "nfl": {"props": {"unavailable": "skipped"},
+                "game_lines": {"unavailable": "no harvested closing lines"}},
+        "mlb": {"props": {"markets": [{"market": "total_bases", "n": 41}]},
+                "game_lines": {"unavailable": "database is locked"}}}}
+    kept = lab.carry_forward(out, prev)
+    assert kept == ["nfl/props", "mlb/game_lines"], kept
+    nfl = out["sports"]["nfl"]["props"]
+    assert nfl["markets"][0]["n"] == 900 and nfl["season"] == 2025
+    assert nfl["carried_from"] == "2026-09-03", "the kept section is undated"
+    assert nfl["carry_reason"] == "skipped"
+    # A present measurement is never displaced by an older one.
+    assert out["sports"]["mlb"]["props"]["markets"][0]["n"] == 41
+    # A previous REASON never replaces a present one.
+    assert out["sports"]["nfl"]["game_lines"] == \
+        {"unavailable": "no harvested closing lines"}
+    # The date survives a second carry: it is the measurement's, not the
+    # last carry's.
+    again = {"generated_at": "2026-09-21T02:00:00",
+             "sports": {"nfl": {"props": {"unavailable": "skipped"},
+                                "game_lines": {}}}}
+    assert lab.carry_forward(again, dict(out, generated_at="2026-09-14T13:04:01")) \
+        == ["nfl/props"]
+    assert again["sports"]["nfl"]["props"]["carried_from"] == "2026-09-03"
+
+
+def test_the_page_says_a_kept_section_is_kept_and_when():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("function labCarried(")
+    j = app.index("function labGameTable(")
+    body = app[i:j]
+    assert "carried_from" in body and "carry_reason" in body
+    assert "Replayed ${escapeHtml(section.carried_from)}" in body
+    k = app.index("async function renderLab(")
+    assert app[k:k + 3000].count("labCarried(") == 2, \
+        "both the props and the game-lines section must say when they are kept"
+
+
+# --- the usage ripple against the close, on the page weekly ------------------
+def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
+    """Ethan, 2026-09-14 (Pacheco): the pricing half waits on a
+    measurement against closes. It runs inside the weekly Lab so the
+    verdict lands on the page without anyone running anything."""
+    out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
+    assert out["sports"]["nfl"]["ripple"] == {"unavailable": "skipped"}
+    import inspect
+    src = inspect.getsource(lab.build)
+    assert '"ripple": ripple_section(hconn, log=log) if nfl else' in src
+
+    class _Exploding:
+        def execute(self, *a, **k):
+            raise RuntimeError("db is on fire")
+    got = lab.ripple_section(_Exploding(), log=_quiet)
+    assert "unavailable" in got and "on fire" in got["unavailable"]
+
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "function labRippleHTML(" in app
+    k = app.index("async function renderLab(")
+    assert "${labRippleHTML(s.ripple)}" in app[k:k + 4000]
+    i = app.index("function labRippleHTML(")
+    assert "prices\n      nothing until a market clears" in app[i:i + 800] \
+        or "prices" in app[i:i + 800] and "clears here" in app[i:i + 800]
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
