@@ -501,6 +501,37 @@ def board_notes(sport: str, markets=BOARD_MARKETS) -> dict:
     return out
 
 
+def clipped(sport: str, market: str) -> bool:
+    """Was this fit held back by `MAX_ADOPTED` rather than measured low?
+
+    TWO CASES REACHED THE SAME 0.5 AND NOTHING COULD TELL THEM APART:
+
+      * never measured — `shrink_for` answers None, the caller falls back
+        to `betting.MARKET_SHRINK`, and the board is pricing on a guess.
+        That is the condition that cost 7.64 units on twelve NFL rows in
+        August 2026 (tasks #73/#74);
+      * measured, and the fit wanted MORE than the ceiling allows, so
+        `_adopted_shrink` clamped it down to 0.5.
+
+    The second is a substantive finding — this model's disagreement with
+    the close HAS held up, and the cap is what is limiting the price —
+    and it arrived at the same number as the first, which is the total
+    absence of information. Measured 2026-09-19 on the droplet: MLB
+    spread and total both sit at 0.5 over 16,520 graded games, and every
+    football market sits at or near 0.
+
+    The store keeps `slope` beside `shrink` for exactly this, so the two
+    are separable; nothing was asking.
+    """
+    entry = measured(sport, market)
+    if entry is None:
+        return False                   # never measured is not clipped
+    try:
+        return float(entry["slope"]) > float(entry["shrink"]) + 1e-9
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def note_for(sport: str, market: str) -> str | None:
     """One line for the card explaining a measured haircut, or None.
 
@@ -526,6 +557,19 @@ def note_for(sport: str, market: str) -> str | None:
         return (f"Measured on our own record: {shrink:.0%} of a "
                 f"disagreement with the close has held up over {n} graded "
                 f"games, so that is all this price keeps")
+    # AT OR ABOVE THE CEILING, AND THE CEILING IS WHY. The rule above —
+    # "only speak when the measurement changed something" — is right
+    # about a fit that LANDED on the flat prior and wrong about one that
+    # was CLAMPED to it. A clamped fit is the strongest thing this
+    # module can say (the disagreement held up better than the board
+    # will act on) and it was the one case that said nothing at all,
+    # while reading identically to a market nobody has measured.
+    if clipped(sport, market):
+        return (f"Measured on our own record: over {n} graded games this "
+                f"model's disagreement with the close held up better than "
+                f"the {MAX_ADOPTED:.0%} this board will act on, so the "
+                f"price keeps {shrink:.0%} — the cap is what limits it, "
+                f"not the measurement")
     return None
 
 
