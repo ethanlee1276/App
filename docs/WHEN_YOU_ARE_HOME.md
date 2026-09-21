@@ -15,6 +15,79 @@ as they are done.
 
 ---
 
+## PARKED 2026-09-21 — three read-only checks, whenever there is a quiet minute
+
+Ethan, home that evening: *"save all of this to pick up later. the main
+thing i wanna work on is … Zenos Record."* So nothing here is due; the
+three below just tell me what the box measured, and each has its own
+section further down.
+
+```bash
+cd /srv/qellys && python3 homecheck.py bench     # did benching WNBA help or hurt the record
+cd /srv/qellys && python3 homecheck.py sizing    # what the likelihood board should be staking
+cd /srv/qellys && python3 homecheck.py shelves   # which markets the record says to stop
+```
+
+Paste all three back together when convenient. None of them writes.
+
+---
+
+## ZENO'S RECORD. Setting it up (one-time, two minutes)
+
+Ethan, 2026-09-21: *"implement my juice reel record on the site … a spot
+on the record page called "Zenos Record" … a page for "Zenos Picks" …
+just for me so my record can show on the site for everyone. no one else
+should be able to log in and show this data."*
+
+**What is built.** `Zeno's Record` on the Record page and a `Zeno's
+Picks` tab, both read from record.json's `zeno` block, both public. The
+store is `data/zeno.db` — separate from the model's journal on purpose,
+because these are settled by the BOOK and never re-graded. The only
+write path is an owner token; there is no per-account path at all.
+
+**What is not built, and cannot be from here.** FanDuel, DraftKings and
+theScore Bet have no API for a customer's bets; Juice Reel has them
+because you linked your sportsbook logins to Juice Reel, and this site
+will not hold those logins. So the source is **an export from Juice
+Reel**, and I have not seen one yet. The importer reads CSV or JSON and
+guesses common headers; the first real file locks it down.
+
+**1. Set the owner token** (prompts, never in history — same as every
+other secret):
+
+```bash
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_OWNER_TOKEN
+sudo systemctl restart qellys
+```
+
+Pick something long and random (`openssl rand -hex 24` is fine). Without
+it every import answers 503 — closed, not open.
+
+**2. Import an export, on the box:**
+
+```bash
+cd /srv/qellys && python3 -m engine.zeno import ~/juicereel.csv
+```
+
+or from your phone / laptop, without SSH:
+
+```bash
+curl -sS -X POST https://qellys.com/api/zeno/import \
+  -H "X-Owner-Token: $QB_OWNER_TOKEN" -H "X-Zeno-Source: juicereel" \
+  --data-binary @juicereel.csv
+```
+
+Either prints `N added · N updated · N unchanged · N skipped`. Re-running
+the same file is a no-op; a ticket that was open and is now settled is
+UPDATED, never duplicated. If it prints `headers not recognised`, paste
+that line back to me — that is the sample I need.
+
+**3. Look:** `curl -sS https://qellys.com/api/zeno | head -c 600`, or
+just open the Record page. The block lands in record.json on the next
+build.
+
+---
+
 ## TIMING. Why these take longer than they read (read first)
 
 Ethan, 2026-09-16, after running seven of these back to back: *"these

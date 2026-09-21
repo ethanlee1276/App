@@ -505,6 +505,12 @@
         <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
           The Lab</button>
+        <!-- Zeno's own tickets: a person's real record is proof, so it
+             folds here with the receipts rather than joining the nightly
+             six above, which were sized to a phone screen on 2026-08-31. -->
+        <button class="nav-btn sb-item" data-view="zeno" data-hint="Zeno’s own sportsbook bets — the record is public, tail what’s open">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4 6.7 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>
+          Zeno’s Picks</button>
         <button class="sport-btn sb-item" data-sport="methodology" data-kind="tool"
                 title="How every number on the board is made">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
@@ -876,6 +882,17 @@
       <!-- The render's goal + balance-over-time (2026-08-11), powered by
            the user's OWN My Bets log — never a held balance. -->
       <div id="bk-journal"></div>
+    </section>
+
+    <!-- Zeno's Picks — Ethan's own open sportsbook tickets, to tail.
+         Read from record.json's `zeno` block; written only by the owner
+         token (engine/zeno.py). Public like the Record page. -->
+    <section class="view" id="view-zeno">
+      <div class="section-title">Zeno’s Picks
+        <span class="sub">— the bets Zeno actually has riding at FanDuel, DraftKings and
+        theScore Bet, with the line and price he got. Tail what you like; the record is below.</span>
+      </div>
+      <div id="zeno-body"></div>
     </section>
 
     <!-- Live — every open journaled bet, tracked as the games run -->

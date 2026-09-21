@@ -1834,6 +1834,7 @@ const FEATURES = [
 
   ["The receipts", "How you check whether any of it works",
    [["Track record", "Every settled pick at the price we found it, graded in public, with a profit calendar and the verdict in units.", "record"],
+    ["Zeno’s Picks", "Zeno’s own tickets at FanDuel, DraftKings and theScore Bet — the record as the books settled it, and what he has riding now to tail.", "zeno"],
     ["By product", "Edge bets and Most Likely kept in separate books, so a good month on one cannot flatter the other.", null],
     ["Calibration", "When we say 60%, does it land 60% of the time — plotted, not claimed.", null],
     ["What it learned", "What the model changed its mind about, and on what evidence.", null],
@@ -14869,6 +14870,137 @@ function recordVerdictHTML(src, scopeLabel) {
    absent entry and draws nothing, the same rule the paper book follows. */
 const POTD_MIN_N = 20;
 
+/* ============================================================
+   ZENO'S RECORD — Ethan's own sportsbook bets (engine/zeno.py).
+
+   Ethan, 2026-09-21: "add a spot on the record page called Zenos Record
+   … it will track all my bets on FanDuel and DraftKings and theScore Bet
+   … This would be just for me so my record can show on the site for
+   everyone."
+
+   DOLLARS, NOT UNITS. These were placed in money and the book settled
+   them in money; a unit is a house convention for the model's books and
+   would put a number here that nobody bet. ROI is profit over dollars at
+   risk, pushes and voids out of the denominator — the record page's own
+   rule. A parlay is one ticket, however many legs. */
+function zenoMoney(x) {
+  const v = Number(x || 0);
+  return `${v < 0 ? MINUS : ""}$${Math.abs(v).toFixed(2)}`;
+}
+
+function zenoTallyLine(t) {
+  if (!t || (!t.settled && !t.open)) return "";
+  const n = t.settled || 0;
+  const roi = t.roi == null ? null : t.roi * 100;
+  return n
+    ? `<b style="font-size:var(--fs-lg)">${t.wins}-${t.losses}${
+        t.pushes ? `-${t.pushes}` : ""}</b>
+       <span style="color:${t.profit >= 0 ? "var(--good)" : "var(--bad)"};font-weight:700">
+         ${t.profit >= 0 ? "+" : ""}${zenoMoney(t.profit)}</span>
+       ${roi == null ? "" : `<span style="color:${roi >= 0 ? "var(--good)" : "var(--bad)"}">
+         ${roi >= 0 ? "+" : ""}${roi.toFixed(1)}% ROI</span>`}
+       <span style="color:var(--text-mute)">· ${zenoMoney(t.staked)} risked
+       · ${n} settled${t.open ? `, ${t.open} riding` : ""}</span>`
+    : `<span style="color:var(--text-mute)">Nothing settled yet${
+        t.open ? ` — ${plural(t.open, "ticket")} riding` : ""}.</span>`;
+}
+
+function zenoTicketRow(r, showResult) {
+  const legs = Array.isArray(r.legs) && r.legs.length
+    ? `<div style="font-size:var(--fs-xs);color:var(--text-mute);margin-top:2px">${
+        r.legs.map((l) => escapeHtml(String(l))).join(" · ")}</div>` : "";
+  const when = String(r.event_at || r.placed_at || "").slice(5, 16).replace("T", " ");
+  const tone = r.result === "won" ? "var(--good)" : r.result === "lost" ? "var(--bad)" : "var(--text-mute)";
+  return `<div style="display:flex;gap:8px;align-items:baseline;padding:6px 0;
+       border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
+    <span style="width:74px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(when)}</span>
+    <span style="flex:1;min-width:0">${escapeHtml(r.selection || "")}
+      <span style="color:var(--text-mute)">${r.event ? escapeHtml(r.event) + " · " : ""}${
+        escapeHtml(r.book_name || r.book || "")} · ${r.odds == null ? "—" : american(r.odds)}
+        · ${zenoMoney(r.stake)}</span>${legs}</span>
+    ${showResult
+      ? `<span style="font-weight:700;color:${tone}">${escapeHtml(String(r.result || "").toUpperCase())}${
+          r.profit == null ? "" : ` <span style="font-weight:500">${r.profit >= 0 ? "+" : ""}${zenoMoney(r.profit)}</span>`}</span>`
+      : `<button type="button" class="btn-ghost zeno-copy" data-text="${escapeHtml(
+          `${r.selection}${r.event ? " (" + r.event + ")" : ""} ${r.odds == null ? "" : american(r.odds)} · ${r.book_name || r.book}`)}"
+          style="font-size:var(--fs-xs)">Copy</button>`}
+  </div>`;
+}
+
+function recZenoSection(z, scope) {
+  if (!z || !z.overall) return "";
+  /* A BROKEN STORE IS NOT A QUIET DAY. `block_or_empty` never fails the
+     export, but an empty block that came from a failure carries `error`,
+     and drawing nothing for it would make the two indistinguishable on
+     the one page whose job is being checkable. */
+  if (z.error) return `
+    <div class="section-title"><span class="st-ico">${icon("star", 15)}</span>Zeno’s Record</div>
+    <div class="card"><p class="list-note">${icon("warn")} Zeno’s record could not be read at the
+      last build (${escapeHtml(String(z.error))}). The tickets are safe; the page will fill on
+      the next build.</p></div>`;
+  const t = scope ? (z.by_sport || {})[scope] : z.overall;
+  if (!t || (!t.settled && !t.open)) return "";
+  const rows = (z.recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
+  const books = Object.values(z.by_book || {}).filter((b) => b.settled);
+  return `
+    <div class="section-title"><span class="st-ico">${icon("star", 15)}</span>Zeno’s Record
+      <span class="sub">— Zeno’s own tickets at FanDuel, DraftKings and theScore Bet, settled by
+        the book, not by our model. ${scope ? escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports"}
+        · <a href="#zeno" data-view="zeno">what’s riding now →</a></span></div>
+    <div class="card" style="border-left:3px solid var(--brand)">
+      <div>${zenoTallyLine(t)}</div>
+      ${!scope && books.length > 1 ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${books.map((b) => `${escapeHtml(b.name)} ${b.wins}-${b.losses}${b.pushes ? "-" + b.pushes : ""} ${
+          b.profit >= 0 ? "+" : ""}${zenoMoney(b.profit)}`).join(" · ")}</div>` : ""}
+      ${rows.length ? `<div style="margin-top:8px">${rows.map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
+      <p style="margin:8px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
+        Real money at real books. Every result here is the sportsbook’s own settlement — nothing is
+        re-graded or re-priced by this site — and every ticket is the full ticket: a parlay counts once,
+        win or lose. Pushes and voids are refunded and stay out of the ROI.</p>
+    </div>`;
+}
+
+async function renderZeno() {
+  const host = document.getElementById("zeno-body");
+  if (!host) return;
+  const d = await loadRecordOnce();
+  const z = (d || {}).zeno;
+  if (z && z.error) {
+    host.innerHTML = `<div class="card"><p class="list-note">${icon("warn")} Zeno’s record could
+      not be read at the last build (${escapeHtml(String(z.error))}). The tickets are safe.</p></div>`;
+    return;
+  }
+  if (!z || !z.overall) {
+    host.innerHTML = `<div class="card"><p class="list-note">Nothing here yet — the first
+      import will fill this page.</p></div>`;
+    return;
+  }
+  const open = z.open || [];
+  host.innerHTML = `
+    <div class="card" style="border-left:3px solid var(--brand)">
+      <div>${zenoTallyLine(z.overall) || `<span style="color:var(--text-mute)">No tickets yet.</span>`}</div>
+      <p style="margin:6px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
+        The record, in dollars, as the books settled it. Full receipts on the
+        <a href="#record" data-view="record">Record</a> page.</p>
+    </div>
+    <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Riding now
+      <span class="sub">— ${open.length ? `${plural(open.length, "open ticket")}, ${zenoMoney(z.overall.open_stake)} at risk` : "nothing open right now"}</span></div>
+    ${open.length ? `<div class="card" style="padding:0 14px">${open.map((r) => zenoTicketRow(r, false)).join("")}</div>`
+      : `<div class="card"><p class="list-note">Nothing riding. Check back before the next slate.</p></div>`}
+    ${(z.recent || []).length ? `
+    <div class="section-title"><span class="st-ico">${icon("check", 15)}</span>Last settled
+      <span class="sub">— newest first</span></div>
+    <div class="card" style="padding:0 14px">${z.recent.slice(0, 20).map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
+    <p style="margin:10px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
+      "Copy" puts the selection, price and book on your clipboard to paste into your own app.
+      Prices move; what you get may not be what Zeno got.${z.last_import ? ` Last synced ${escapeHtml(String(z.last_import).replace("T", " ").slice(0, 16))} UTC.` : ""}</p>`;
+  host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.text || ""); b.textContent = "Copied"; }
+    catch (e) { b.textContent = "Copy failed"; }
+    setTimeout(() => { b.textContent = "Copy"; }, 1500);
+  }));
+}
+
 function recPotdSection(rep, scope, recent) {
   if (!rep || (!rep.settled && !rep.open)) return "";
   const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
@@ -15077,6 +15209,11 @@ async function renderRecord() {
      An absent entry (a league with nothing in this book yet) renders
      nothing, exactly as before. */
   const receipts = calendar
+    /* ZENO'S RECORD — a person's real tickets, beside the model's picks
+       and never inside them. Its own store, its own block, its own card:
+       two provenances that shared a number would make both worthless.
+       Scoped to a league when that league has rows; pooled on "All". */
+    + recZenoSection(d.zeno, scope)
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
                      scope, d.potd_recent || [])
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
@@ -32403,7 +32540,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -32455,7 +32592,10 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "ed
 // entitlement), so the wall was hiding a page that leaks nothing and
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
-                   "signup", "streak", "messages"];
+                   "signup", "streak", "messages",
+                   // Zeno's own bets are public like the Record — a
+                   // person's real tickets are the proof, not the product.
+                   "zeno"];
 
 function wallBlocked(name) {
   return document.body.classList.contains("walled")
@@ -32630,6 +32770,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
   if (name === "record") renderRecord();
+  if (name === "zeno") renderZeno();
   if (name === "lab") renderLab();
   if (name === "intel") renderIntel();
   if (name === "fantasy") renderFantasy();

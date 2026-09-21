@@ -763,8 +763,13 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # nothing, and an invited friend reading what was sent is the
     # acquisition funnel working. Back link confirmed by the same
     # generic `name !== "paywall" && name !== "checkout"` branch.
+    # "zeno" added 2026-09-21: Ethan's own sportsbook tickets, public like
+    # the Record — a person's real bets are the proof, not the product,
+    # and the page carries none of the model's picks. Back link reaches
+    # it through the same generic `name !== "paywall" && name !==
+    # "checkout"` branch as Record.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup", "streak", "messages"}, (
+                      "signup", "streak", "messages", "zeno"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

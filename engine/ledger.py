@@ -8004,6 +8004,9 @@ def _benched_settled(conn, since: str | None = None) -> int:
     return n
 
 
+from . import zeno as _zeno                                      # noqa: E402
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -8151,6 +8154,12 @@ def export_json(conn, path) -> None:
         # number. This line exists so the export still says how much of
         # that pool was staked on paper.
         "paper": performance(conn, category="paper", since=since),
+        # ZENO'S RECORD — Ethan's own sportsbook tickets, from its own
+        # store and never from this journal. Two provenances, two rows
+        # on the page, never one number. Public like the rest of this
+        # file; the only write path is the owner token. Never fails the
+        # export: a missing store is an empty block. See engine/zeno.py.
+        "zeno": _zeno.block_or_empty(),
         "paper_mode": paper_mode(conn),
         # `paper_recent` — the hundred paper rows themselves — was dropped
         # on 2026-08-20 along with the Record page panel that was its only

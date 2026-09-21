@@ -891,6 +891,8 @@ class Handler(BaseHTTPRequestHandler):
             code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
                                      self.headers.get("X-Profile-Pin") or "")
             return self._send(code, json.dumps(body).encode(), ".json")
+        if parsed.path in ("/api/zeno", "/api/zeno/"):
+            return self._zeno_get()
         if self._entity_page(parsed.path):
             return
         return self._static(parsed.path)
@@ -1011,6 +1013,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._draft_plan(body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
+        if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
+            return self._zeno_import()
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -1811,6 +1815,68 @@ class Handler(BaseHTTPRequestHandler):
     # decides everything else. Entitlement-gated with the paywall on:
     # the validation's own 404-vs-409 answers would otherwise let a
     # signed-out prober map the board one name at a time.
+
+    # --- Zeno's Record: Ethan's own sportsbook tickets --------------------
+    def _zeno_get(self):
+        """The public block, read fresh from the store.
+
+        record.json carries the same block and is what the page draws
+        from; this answers a reader who wants it newer than the last
+        build — an import lands here the moment it is made."""
+        from engine import zeno as Z
+        try:
+            return self._send(200, json.dumps(Z.block_or_empty()).encode(),
+                              ".json")
+        except Exception as exc:                             # noqa: BLE001
+            return self._send(500, json.dumps(
+                {"error": f"{type(exc).__name__}: {exc}"}).encode(), ".json")
+
+    def _zeno_import(self):
+        """THE ONE WAY IN, and it is a secret rather than an account.
+
+        Ethan, 2026-09-21: "This would be just for me … no one else
+        should be able to log in and show this data." There is no
+        per-account path to this store at all — not a role, not a flag,
+        nothing that could be misconfigured into letting a second person
+        through. The bearer of `QB_OWNER_TOKEN` writes; nobody else can,
+        because nothing else exists.
+
+        FAILS CLOSED. No token configured on the box means 503 to every
+        caller, never an open door. A wrong token is 403 with no hint
+        which half was wrong. The body is capped like every other POST.
+        """
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            return self._send(503, b'{"error":"owner import is not '
+                                   b'configured on this server"}', ".json")
+        if not ok:
+            return self._send(403, b'{"error":"not the owner"}', ".json")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            self.close_connection = length > MAX_PROFILE_BYTES
+            return self._send(413, b'{"error":"import payload too large or '
+                                   b'empty"}', ".json")
+        text = self.rfile.read(length).decode("utf-8", "replace")
+        try:
+            rows, unknown = Z.parse_text(text)
+        except ValueError as exc:
+            return self._send(400, json.dumps(
+                {"error": f"could not parse the export: {exc}"}).encode(),
+                ".json")
+        source = (self.headers.get("X-Zeno-Source") or "juicereel").strip()[:40]
+        conn = Z.connect()
+        try:
+            got = Z.import_rows(conn, rows, source=source)
+        finally:
+            conn.close()
+        got["unknown_headers"] = unknown
+        return self._send(200, json.dumps(got).encode(), ".json")
 
     def _tailfade_get(self, path: str):
         if path != "me":

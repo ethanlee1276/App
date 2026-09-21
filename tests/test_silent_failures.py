@@ -149,6 +149,14 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # stopping the bets Ethan asked for because a query threw is a
         # surprise he did not agree to.
         "live_verdict",
+        # ZENO'S RECORD, 2026-09-21, caught by this sweep the hour it was
+        # written. Its empty block IS what a quiet day produces — no
+        # tickets yet — so the failure block now carries `error` naming
+        # the exception, the export prints a warning line, and both pages
+        # draw "could not be read" rather than "nothing here yet". Never
+        # fails the export: one person's tickets must not take the
+        # model's record down with them.
+        "block_or_empty",
     }
 
     def broad(h):

@@ -121,7 +121,9 @@ def test_the_pages_that_stay_open_are_named_once():
     # nothing and exists to pull people in. #wall-back reaches it
     # through the same generic branch as Record and the streak.
     assert set(open_) == {"paywall", "checkout", "record", "account",
-                          "discord", "signup", "streak", "messages"}, open_
+                          "discord", "signup", "streak", "messages",
+                          # Zeno's own tickets: public like the Record.
+                          "zeno"}, open_
 
 
 def test_every_open_page_is_a_real_view():
