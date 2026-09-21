@@ -89,7 +89,11 @@ def test_every_league_with_a_likelihood_board_is_staked():
         r = _rows(conn)[0]
         assert r["category"] == ledger.LIKELY_LIVE_CATEGORY, (sport, dict(r))
         assert r["stake_dollars"] > 0, (sport, dict(r))
-        assert ledger.performance(conn, sport)["open"] == 0, sport
+        # IN THE HEADLINE SINCE 2026-09-21 — this asserted `== 0` until
+        # Ethan asked for the staked rows to join the record they were
+        # already spending money into. See
+        # `test_a_staked_likely_bet_DOES_reach_the_headline_record_now`.
+        assert ledger.performance(conn, sport)["open"] == 1, sport
 
 
 def test_the_whole_boards_settled_count_survives_the_per_market_loop():
@@ -183,6 +187,81 @@ def test_the_section_stops_promising_no_money_once_money_is_on_it():
     assert "REAL money" in staked_half, staked_half[:300]
     assert "no money" not in staked_half, staked_half[:300]
     assert "at no risk" not in staked_half, staked_half[:300]
+
+
+# --- the staked rows are in the record now ------------------------------
+_REC = ("INSERT INTO bets (ts, sport, game_day, date, player, market, side,"
+        " line, odds, hit_prob, grade, stake_units, stake_dollars, status,"
+        " category, pnl_units) VALUES ('t','nfl','2026-09-14','2026-09-14',"
+        "?,'rec_yds','OVER',40.5,-110,0.6,'A',1.0,10.0,'won',?,?)")
+
+
+def test_the_headline_book_is_every_category_that_is_real_money():
+    """Ethan, 2026-09-21: "put real money on the most likely paper bets
+    and add all that to the record". It had been staking real dollars
+    since 2026-09-19 from OUTSIDE the number those dollars moved — a
+    money record that leaves money out."""
+    assert ledger.LIKELY_LIVE_CATEGORY in ledger.BOOK, ledger.BOOK
+    # The literal in BOOK and the constant fifteen hundred lines below
+    # it cannot drift apart.
+    assert "likely_live" == ledger.LIKELY_LIVE_CATEGORY
+
+
+def test_the_paper_half_of_that_board_stays_out():
+    """`likely` rows were never staked. Counting a bet nobody placed
+    would overstate the record in the direction that flatters it — the
+    line is the money, not the book."""
+    assert "likely" not in ledger.BOOK, ledger.BOOK
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1)
+    conn.execute(_REC, ("A", "likely", 0.1))
+    conn.commit()
+    assert ledger.performance(conn)["settled"] == 0
+
+
+def test_a_staked_likelihood_row_moves_the_headline():
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1)
+    conn.execute(_REC, ("A", ledger.LIKELY_LIVE_CATEGORY, 0.25))
+    conn.commit()
+    p = ledger.performance(conn)
+    assert p["settled"] == 1 and abs(p["net_units"] - 0.25) < 1e-9, p
+
+
+def test_every_readout_of_the_record_counts_the_same_book():
+    """THE FAILURE THIS IS WRITTEN AGAINST. Four places hard-coded
+    ('main','paper') beside `BOOK` — the equity curve, the era split,
+    the profit calendar's tap and the restatement. Widening the headline
+    without them would have drawn a chart that disagreed with the total
+    printed above it, and the chart is the more convincing of the two,
+    so the disagreement would have read as the headline lying."""
+    conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1)
+    conn.execute(_REC, ("A", "main", 1.0))
+    conn.execute(_REC, ("B", ledger.LIKELY_LIVE_CATEGORY, 0.25))
+    conn.execute(_REC, ("C", "likely", 0.1))          # paper: counted nowhere
+    conn.commit()
+    head = ledger.performance(conn)
+    assert head["settled"] == 2, head["settled"]
+    curve = ledger.pnl_curve(conn)
+    assert curve and curve[0]["n"] == 2, curve
+    assert abs(curve[-1]["cum_u"] - head["net_units"]) < 1e-9, (curve, head)
+    assert len(ledger.settled_on(conn, "2026-09-14")) == 2
+    assert ledger.era_report(conn)["eras"][-1]["settled"] == 2
+    assert ledger.restated_performance(conn)["settled"] == 2
+
+
+def test_the_sections_still_keep_the_two_books_apart():
+    """In the headline TOTAL, on its own LINE. Folding it into "Edge
+    bets" would move the one number in this project that has been kept
+    honest the longest, and nothing on the page could tell the two
+    samples apart."""
+    edge = next(cats for key, _l, cats in ledger.BOOK_SECTIONS
+                if key == "edge")
+    assert ledger.LIKELY_LIVE_CATEGORY not in edge, edge
+    live = next(cats for key, _l, cats in ledger.BOOK_SECTIONS
+                if key == "likely_live")
+    assert live == (ledger.LIKELY_LIVE_CATEGORY,)
 
 
 def _render_likely(lk):
@@ -334,24 +413,37 @@ def test_the_stake_is_flat_and_smaller_than_the_book_that_earned_it():
 
 
 # --- and the edge book cannot feel any of it ---------------------------
-def test_a_staked_likely_bet_never_reaches_the_headline_record():
-    """THE INVARIANT. `performance` is the number on the front of this
-    project. A signal at z 0.75 must not be able to move it."""
+def test_a_staked_likely_bet_DOES_reach_the_headline_record_now():
+    """REVERSED 2026-09-21, ON PURPOSE AND BY THE OWNER.
+
+    This asserted the opposite for two days: "a signal at z 0.75 must
+    not be able to move `performance`". That was the right rule while
+    the board was paper. It stopped being right on 2026-09-19, when the
+    board started staking real dollars — because from that moment the
+    headline was a record of SOME of the money, and a money record that
+    leaves money out is the one thing this page exists not to be.
+
+    Ethan, 2026-09-21: "put real money on the most likely paper bets and
+    add all that to the record."
+
+    Kept as a reversal rather than deleted, because the old rule was
+    argued for in these words and whoever meets this next is owed the
+    argument AND the fact that it was overruled deliberately."""
     conn = _conn()
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1)
     before = ledger.performance(conn, "mlb")
     ledger.log_most_likely(conn, _board("mlb", n=5))
     after = ledger.performance(conn, "mlb")
-    assert after["open"] == before["open"], (before, after)
-    assert after["settled"] == before["settled"], (before, after)
+    assert after["open"] > before["open"], (before["open"], after["open"])
 
 
-def test_the_headline_book_is_still_only_main_and_paper():
-    src = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "engine", "ledger.py"),
-        encoding="utf-8").read()
-    assert ledger.LIKELY_LIVE_CATEGORY not in src[
-        src.index("def performance("):src.index("def performance(") + 3000], \
-        "the staked book has been let into the headline"
+def test_the_headline_book_is_the_money_and_only_the_money():
+    """The other half of that reversal, and the line that did NOT move:
+    `likely` rows were never staked, and counting a bet nobody placed
+    would overstate the record in the direction that flatters it."""
+    assert ledger.LIKELY_LIVE_CATEGORY in ledger.BOOK, ledger.BOOK
+    assert "likely" not in ledger.BOOK, ledger.BOOK
+    assert "longshot" not in ledger.BOOK, ledger.BOOK
 
 
 def test_the_staked_book_has_its_own_section_not_a_shared_one():

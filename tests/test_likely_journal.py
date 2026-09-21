@@ -75,8 +75,13 @@ def test_rows_land_in_their_own_book_and_never_in_the_headline():
     else:
         assert got["stake_dollars"] == 0.0, got
     assert got["status"] == "open"
-    assert ledger.performance(conn, sport)["open"] == 0, \
-        "a likelihood row reached the headline book"
+    # IN THE HEADLINE IF IT IS STAKED, and only then. This asserted
+    # `== 0` for every league until 2026-09-21, when Ethan asked for the
+    # staked rows to join the record they were already spending real
+    # money into. The paper half is still out, and that is the line.
+    want = 1 if ledger.likely_is_staked(sport) else 0
+    assert ledger.performance(conn, sport)["open"] == want, \
+        (sport, got["category"])
 
 
 def test_the_headline_record_is_untouched():

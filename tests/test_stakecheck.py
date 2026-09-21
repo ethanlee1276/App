@@ -555,10 +555,18 @@ def test_the_default_matches_how_the_ledger_itself_scores_the_record():
     # our paper record and normal money record"). This test is what forced
     # the two to move together instead of quietly disagreeing about which
     # rows are the record — which is the whole reason it exists.
-    scope = "category IN ('main','paper') AND stake_units > 0"
-    assert scope in src, "stakecheck no longer scores what the ledger scores"
-    assert "BOOK = (\"main\", \"paper\")" in led
+    # READ FROM `ledger.BOOK`, NOT RETYPED. It was a literal until
+    # 2026-09-21, when the book widened again — the staked likelihood
+    # rows joined the record they were already spending money into —
+    # and this test failed exactly as designed. The fix is for
+    # stakecheck to take the list from the ledger rather than for the
+    # literal here to be edited to match.
+    assert "from engine.ledger import BOOK" in src, \
+        "stakecheck has its own copy of what the record is again"
+    assert "AND stake_units > 0" in src
     assert "AND category IN ({marks}) AND stake_units > 0" in led
+    from engine import ledger as _led
+    assert _led.LIKELY_LIVE_CATEGORY in _led.BOOK, _led.BOOK
 
 
 def test_a_zero_stake_row_is_not_a_bet():

@@ -109,15 +109,25 @@ def test_the_two_rois_are_different_numbers_on_the_same_page():
         "the sport headline is the edge book alone"
 
 
-def test_no_headline_reader_admits_the_likely_book_by_default():
+def test_no_headline_reader_admits_the_PAPER_likely_book_by_default():
     """The property the two tests above rest on, stated at the source so
-    a future default cannot quietly widen."""
+    a future default cannot quietly widen.
+
+    NARROWED 2026-09-21, from "the likely book" to "the PAPER likely
+    book". The staked half joined `BOOK` that day at Ethan's call — it
+    had been spending real dollars from outside the record those dollars
+    moved. The paper half did not and must not: those rows were never
+    staked, and counting a bet nobody placed overstates the record in
+    the direction that flatters it."""
     import inspect
     for fn in (ledger.performance, ledger.pnl_curve, ledger.recent_settled,
-               ledger.calibration, ledger.calibration_splits, ledger.era_report):
+               ledger.calibration, ledger.calibration_splits,
+               ledger.era_report):
         src = inspect.getsource(fn)
-        assert "'likely'" not in src and '"likely"' not in src, fn.__name__
-    assert ledger.BOOK == ("main", "paper"), ledger.BOOK
+        for lit in ("'likely'", '"likely"'):
+            assert lit not in src, fn.__name__
+    assert "likely" not in ledger.BOOK, ledger.BOOK
+    assert ledger.LIKELY_LIVE_CATEGORY in ledger.BOOK, ledger.BOOK
 
 
 if __name__ == "__main__":

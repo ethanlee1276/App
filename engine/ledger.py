@@ -5004,7 +5004,24 @@ def _book_breakeven(bets) -> float | None:
 #: them would put money through the bankroll that was never at risk. Every
 #: dollar figure below therefore stays real-money-only, and the payload
 #: says which is which rather than leaving the reader to assume.
-BOOK = ("main", "paper")
+#: THE HEADLINE RECORD'S BOOKS — every category that is real money.
+#:
+#: `likely_live` joined on 2026-09-21. Ethan: "I wanna raise stake and
+#: put real money on the most likely paper bets and add all that to the
+#: record". It had been staking real dollars since 2026-09-19 and
+#: sitting outside the number those dollars moved, which made the
+#: headline a record of SOME of the money — and a money record that
+#: leaves money out is the one thing this page exists not to be.
+#:
+#: `likely` is NOT here and must not join it. Those rows are paper: they
+#: were never staked, and counting a bet nobody placed would overstate
+#: the record in the direction that flatters it. The line is the money,
+#: not the book.
+#:
+#: Written as a literal rather than `LIKELY_LIVE_CATEGORY`, which is
+#: defined fifteen hundred lines below this. A test pins the two
+#: together so they cannot drift apart.
+BOOK = ("main", "paper", "likely_live")
 
 
 #: LEAGUES BENCHED FROM THE RECORD, and the book their rows go to.
@@ -5432,10 +5449,11 @@ def era_report(conn) -> dict:
         start, end = e["start"], starts[i + 1] if i + 1 < len(starts) else None
         # The whole book, same as the headline — an era is a period of
         # the model's life, and paper mode did not start a new model.
-        where = ("category IN ('main','paper') AND stake_units > 0")
+        where = (f"category IN ({','.join('?' * len(BOOK))}) "
+                 f"AND stake_units > 0")
         _b, _ba = off_record_sql()
         where += _b
-        args: list = list(_ba)
+        args: list = list(BOOK) + list(_ba)
         if start:
             where += " AND date >= ?"
             args.append(start)
@@ -5526,9 +5544,9 @@ def pnl_curve(conn, sport: str | None = None,
          f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
          "FROM bets "
          "WHERE status IN ('won','lost','push') "
-         "AND category IN ('main','paper') "
+         f"AND category IN ({','.join('?' * len(BOOK))}) "
          "AND stake_units > 0")
-    args: list = []
+    args: list = list(BOOK)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -5680,7 +5698,7 @@ def recent_settled(conn, limit: int = 30,
 
 
 def settled_on(conn, date: str, sport: str | None = None,
-               categories: tuple = ("main", "paper")) -> list[dict]:
+               categories: tuple = BOOK) -> list[dict]:
     """Every settled pick on one slate date — the profit calendar's tap.
 
     Ethan, 2026-09-05: "a profit calendar on record page ... tap a day to
@@ -6056,8 +6074,8 @@ def restated_performance(conn, sport: str | None = None,
     from .staking import kelly_units
     q = ("SELECT sport, status, odds, hit_prob, grade FROM bets "
          "WHERE status IN ('won','lost','push') "
-         "AND category IN ('main','paper')")
-    args: list = []
+         f"AND category IN ({','.join('?' * len(BOOK))})")
+    args: list = list(BOOK)
     if sport:
         q += " AND sport=?"
         args.append(sport)

@@ -79,7 +79,7 @@ def _rows(db: str, sport: str | None, since: str | None,
     read it: 1,787 of 2,582 bets priced at +200 and longer, which is a
     home-run board, not a betting record.
 
-    `ledger.py` scores the record as `category IN ('main','paper') AND
+    `ledger.py` scores the record as `category IN ledger.BOOK AND
     stake_units > 0`, and that is the default here. Nothing else is a bet.
 
     THE BOOK WIDENED ON 2026-08-13 and this followed it deliberately, not
@@ -104,7 +104,16 @@ def _rows(db: str, sport: str | None, since: str | None,
         q += " AND category=? AND stake_units > 0"
         args_pre = [category]
     elif not measurement:
-        q += " AND category IN ('main','paper') AND stake_units > 0"
+        # WIDENED WITH THE LEDGER ON 2026-09-21, when the staked
+        # likelihood rows joined the headline (Ethan: "put real money on
+        # the most likely paper bets and add all that to the record").
+        # Read from `ledger.BOOK` rather than retyped: the two scoring
+        # the same money differently is the exact failure
+        # `test_the_default_matches_how_the_ledger_itself_scores_the_record`
+        # exists to catch, and it caught this.
+        from engine.ledger import BOOK as _BOOK
+        q += (f" AND category IN ({','.join(repr(c) for c in _BOOK)})"
+              " AND stake_units > 0")
         args_pre = []
     else:
         args_pre = []
