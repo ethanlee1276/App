@@ -853,6 +853,118 @@ def exchange(fetch=None) -> list:
     return out
 
 
+def bench() -> list:
+    """BENCH. What benching a league did to the record it left.
+
+    Ethan, 2026-09-21: "Are roi and record should be better now that
+    wnba is removed" — and the honest answer was that nobody had
+    measured it. WNBA came off the record page because he asked for it,
+    not because it was shown to be losing. If it was winning, benching
+    it made the headline WORSE, and there was no way to see that.
+
+    THE COMPARISON IS THE POINT, not WNBA's number on its own. A
+    benched league's ROI read beside nothing is a number without a
+    verdict; read beside the book with and without it, it says plainly
+    what the bench bought or cost.
+
+    FEWER BETS IS NOT A BETTER RECORD, which is why the settled counts
+    are printed as loudly as the ROI. A book that improved by shedding
+    a third of its sample has a prettier number and a weaker claim, and
+    a check that showed only the ROI would be selling the first while
+    hiding the second.
+
+    UNITS, NOT DOLLARS. `bench_existing` zeroes `stake_dollars` when it
+    moves a row — that is what takes the league off the money — so a
+    benched league's dollar ROI has no denominator left and is not
+    reconstructible. Units, wins, losses and `pnl_units` are untouched,
+    and units are the honest measure of a book anyway.
+    """
+    from engine import ledger
+    out = ["BENCH — what the bench did to the record it left"]
+    benched = tuple(ledger.BENCHED_SPORTS)
+    if not benched:
+        return out + ["  no league is benched — nothing to measure"]
+    out.append(f"  benched: {', '.join(benched)}   "
+               f"(units only; benched dollars are zeroed by design)")
+    conn, why = _journal_ro()
+    if conn is None:
+        return out + [f"  {why}"]
+
+    BOOK = ledger.BOOK
+    BENCH = (ledger.BENCH_CATEGORY,)
+
+    def line(tag, p):
+        roi = p.get("roi")
+        return (f"  {tag:24} {p['settled']:5d} settled  "
+                f"{p['wins']}-{p['losses']}"
+                + (f"-{p['pushes']}" if p.get("pushes") else "")
+                + f"  {p['net_units']:+8.2f}u  "
+                + (f"ROI {roi * 100:+6.2f}%" if roi is not None
+                   else "ROI    —   ")
+                + f"  ({p.get('units_staked', 0):.1f}u staked)")
+
+    try:
+        now = ledger.performance(conn)
+        was = ledger.performance(conn, category=BOOK + BENCH,
+                                 exclude_sports=())
+        out.append("")
+        out.append("  THE EDGE BOOK — the headline, with and without them")
+        out.append(line("now (benched out)", now))
+        out.append(line("with them back in", was))
+        # The verdict, said rather than left to be worked out.
+        if not was["settled"]:
+            # AN EMPTY BOOK IS NOT AN UNCHANGED ONE. Printing "ROI
+            # unchanged by 0.00 points" over nothing reads as a measured
+            # finding, and this check exists because an unmeasured claim
+            # was being taken for one.
+            out.append("       → nothing has settled in either book yet "
+                       "— the bench has not cost or saved anything "
+                       "that can be measured")
+        elif now.get("roi") is not None and was.get("roi") is not None:
+            pts = (now["roi"] - was["roi"]) * 100
+            lost = was["settled"] - now["settled"]
+            verb = "better" if pts > 0 else ("worse" if pts < 0 else "unchanged")
+            out.append(f"       → the bench made the headline ROI {verb} "
+                       f"by {abs(pts):.2f} points, on {lost} fewer settled "
+                       f"bets")
+            if pts < 0:
+                out.append("       !! IT IS WINNING. Benching cost the "
+                           "record rather than saved it — emptying "
+                           "`ledger.BENCHED_SPORTS` puts it back")
+
+        out.append("")
+        out.append("  EACH BENCHED LEAGUE, ON ITS OWN")
+        for sp in benched:
+            out.append(line(sp + " (edge)",
+                            ledger.performance(conn, sp, category=BENCH)))
+            # The other books it still writes to, graded and unpublished.
+            for cat, label in (("likely", "most likely"),
+                               ("likely_live", "most likely (staked)"),
+                               ("potd", "pick of the day"),
+                               ("longshot", "long shots"),
+                               ("stale", "stale flags"),
+                               ("form", "form sampler"),
+                               ("loose", "looser gates")):
+                p = ledger.performance(conn, sp, category=cat)
+                if p["settled"] or p["open"]:
+                    out.append(line(f"{sp} {label}", p))
+
+        out.append("")
+        out.append("  EVERY LEAGUE, so a benched one is compared rather "
+                   "than assumed")
+        for sp in ledger.TRACKED_SPORTS:
+            off = ledger.is_benched(sp)
+            p = ledger.performance(conn, sp,
+                                   category=BENCH if off else BOOK)
+            if p["settled"] or p["open"]:
+                out.append(line(sp + (" (benched)" if off else ""), p))
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  unavailable — {type(exc).__name__}: {exc}")
+    finally:
+        conn.close()
+    return out
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -866,6 +978,8 @@ CHECKS = {
     "record": (record, "RECORD: what the published record.json holds", True),
     "edge": (edge, "EDGE: does the staked book make money, and which "
                    "selector earned it", True),
+    "bench": (bench, "BENCH: what benching a league did to the record it "
+                     "left", True),
     "data": (data, "DATA: what we store, whether a model reads it, and "
                    "how fast we are on injury news", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "

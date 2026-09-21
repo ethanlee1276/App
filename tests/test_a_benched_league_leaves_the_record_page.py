@@ -499,6 +499,92 @@ def test_the_page_is_TOLD_which_leagues_are_benched():
     assert "paper" in said and "graded" in said, said[:200]
 
 
+# --- and it can be checked, which is the point of benching -------------
+def _boxed(rows):
+    """A journal at `ledger.DEFAULT_DB`, so `homecheck` reads THIS one.
+
+    Repointed rather than passed, because `homecheck._journal_ro` takes
+    the path from the module — and the whole reason it does is that it
+    opens `mode=ro`, so a check can never take the write lock off the
+    settler. A test that handed it a connection would not be testing the
+    thing that matters.
+    """
+    import homecheck
+    real = ledger.DEFAULT_DB
+    db = Path(tempfile.mkdtemp()) / "l.db"
+    conn = _ledger(db)
+    # The journal's unique key is (sport, date, player, market, category),
+    # so each row needs its own player — two losses for one league are
+    # two bets, not one written twice.
+    for i, (sport, status, pnl, cat) in enumerate(rows):
+        conn.execute(_INS, (PAST + "T00:00:00", sport, PAST, f"P{i}",
+                            "pts", "OVER", 20.5,
+                            -110, 1.0, 10.0, status, cat, 1, pnl))
+    conn.commit()
+    conn.close()
+    ledger.DEFAULT_DB = db
+    try:
+        return "\n".join(homecheck.bench())
+    finally:
+        ledger.DEFAULT_DB = real
+
+
+def test_the_check_says_plainly_that_benching_HELPED_when_it_did():
+    got = _boxed([("nfl", "won", 0.9, "main"), ("nfl", "lost", -1.0, "main"),
+                  ("wnba", "lost", -1.0, ledger.BENCH_CATEGORY),
+                  ("wnba", "lost", -1.0, ledger.BENCH_CATEGORY)])
+    assert "better" in got, got
+    assert "worse" not in got, got
+    # AND THE PRICE OF IT, as loudly as the improvement. A book that
+    # improved by shedding a third of its sample has a prettier number
+    # and a weaker claim, and a check that printed only the ROI would be
+    # selling the first while hiding the second.
+    assert "2 fewer settled bets" in got, got
+
+
+def test_the_check_can_tell_us_we_were_WRONG():
+    """THE ONE THAT MATTERS. WNBA was benched because Ethan asked, not
+    because it was shown to be losing — nobody had measured it. If it
+    was winning, the bench cost the record, and a check that could only
+    confirm the decision would be worth nothing."""
+    got = _boxed([("nfl", "lost", -1.0, "main"), ("nfl", "lost", -1.0, "main"),
+                  ("wnba", "won", 0.9, ledger.BENCH_CATEGORY),
+                  ("wnba", "won", 0.9, ledger.BENCH_CATEGORY)])
+    assert "worse" in got, got
+    assert "IT IS WINNING" in got, got
+    assert "BENCHED_SPORTS" in got, "it does not say how to undo it"
+
+
+def test_an_empty_book_is_not_reported_as_an_unchanged_one():
+    """"ROI unchanged by 0.00 points" over nothing reads as a measured
+    finding, and this check exists precisely because an unmeasured claim
+    was being taken for one."""
+    got = _boxed([])
+    assert "unchanged" not in got, got
+    assert "nothing has settled" in got, got
+
+
+def test_the_check_is_registered_and_runs_with_the_rest():
+    import homecheck
+    assert "bench" in homecheck.CHECKS, sorted(homecheck.CHECKS)
+    fn, desc, auto = homecheck.CHECKS["bench"]
+    assert fn is homecheck.bench
+    assert auto is True, "it is read-only, so `all` should carry it"
+    assert "bench" in desc.lower()
+
+
+def test_the_check_never_takes_the_write_lock():
+    """`homecheck`'s docstring promises every subcommand is safe to run
+    mid-cycle. `ledger.connect()` runs migrations on a process's first
+    connection — writes, on the file the refresher and settler are both
+    holding — so this check has to go through the read-only opener."""
+    import inspect
+    import homecheck
+    src = inspect.getsource(homecheck.bench)
+    assert "_journal_ro()" in src, src[:300]
+    assert "ledger.connect(" not in src, "it opens the journal writable"
+
+
 # --- and it is shown, not vanished -------------------------------------
 def test_the_bench_has_NO_heading_on_the_record():
     """IT HAD ONE, FOR ABOUT AN HOUR. The first cut showed the bench

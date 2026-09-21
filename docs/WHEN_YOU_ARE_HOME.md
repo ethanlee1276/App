@@ -833,6 +833,60 @@ EDGE — does the staked book make money, per sport
 
 ---
 
+## BENCH. What did benching a league do to the record it left? (read-only, seconds)
+
+Ethan, 2026-09-21, the day WNBA came off the Record page: *"Are roi and
+record should be better now that wnba is removed"* — and the honest
+answer was that nobody had measured it. WNBA was benched because he
+asked for it, not because it was shown to be losing. **If it was
+winning, the bench cost the record rather than saved it, and nothing on
+the page would ever say so.** This is the check that can.
+
+```bash
+cd /srv/qellys && python3 homecheck.py bench
+```
+
+```
+BENCH — what the bench did to the record it left
+  benched: wnba   (units only; benched dollars are zeroed by design)
+
+  THE EDGE BOOK — the headline, with and without them
+  now (benched out)          412 settled  210-198    +6.40u  ROI  +1.55%  (412.0u staked)
+  with them back in          498 settled  244-251    -2.10u  ROI  -0.42%  (498.0u staked)
+       → the bench made the headline ROI better by 1.97 points, on 86 fewer settled bets
+
+  EACH BENCHED LEAGUE, ON ITS OWN
+  wnba (edge)                 86 settled   34-53     -8.50u  ROI  -9.88%  (86.0u staked)
+  wnba most likely           241 settled  120-121    -4.20u  ROI  -1.74%  (24.1u staked)
+
+  EVERY LEAGUE, so a benched one is compared rather than assumed
+  mlb                        743 settled  412-331   +15.90u  ROI  +2.14%  (743.0u staked)
+  wnba (benched)              86 settled   34-53     -8.50u  ROI  -9.88%  (86.0u staked)
+```
+
+**What to look for.**
+
+* **`IT IS WINNING`** — printed when the bench made the headline ROI
+  WORSE. That is the finding this check exists for, because it is the
+  one nothing else on the page can tell you. Emptying
+  `ledger.BENCHED_SPORTS` puts the league straight back.
+* **`N fewer settled bets`** — printed as loudly as the ROI, and it is
+  the cost. A book that improved by shedding a third of its sample has
+  a prettier number and a weaker claim. Read the two together or not at
+  all.
+* **`nothing has settled in either book yet`** — the bench has not
+  bought or cost anything that can be measured. Not the same as
+  "unchanged", and deliberately not printed as a 0.00.
+* **units, never dollars.** Benching a row zeroes its `stake_dollars` —
+  that is what takes the league off the money — so a benched league's
+  dollar ROI has no denominator left. Units, wins, losses and P&L are
+  untouched, and units are the honest measure of a book anyway.
+* **the per-league table at the bottom** is there so a benched league
+  is compared rather than assumed. −9.9% is a verdict beside mlb's
+  +2.1% and a shrug on its own.
+
+---
+
 ## GRADING. Is every league's book actually settling? (read-only, seconds)
 
 Ethan, 2026-09-18: *"CFB still hasn't graded any edge bets or most likely
