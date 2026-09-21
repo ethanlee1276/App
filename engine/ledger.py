@@ -7988,6 +7988,22 @@ def book_records(conn, since: str | None = None, sections=None) -> dict:
     return out
 
 
+def _benched_settled(conn, since: str | None = None) -> int:
+    """How many settled, staked rows the bench keeps off this record.
+
+    Scoped per league on purpose — a scoped read is never filtered, so
+    this is the one call that can still see them.
+    """
+    n = 0
+    for sp in BENCHED_SPORTS:
+        try:
+            n += performance(conn, sp, category=BOOK + (BENCH_CATEGORY,),
+                             since=since)["settled"]
+        except Exception:                                     # noqa: BLE001
+            continue
+    return n
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -8027,6 +8043,23 @@ def export_json(conn, path) -> None:
             # picks before this date are journaled and still train the
             # model" is a fact a reader can weigh. "Some" is not.
             "hidden_settled": max(0, allp["settled"] - scoped["settled"]),
+            # AND WHAT THE BENCH TAKES OUT, counted the same way and for
+            # the same reason the line above exists: "exported beside the
+            # scoped one so the page can show what it is leaving out
+            # rather than quietly leaving it out."
+            #
+            # A benched league's rows are journaled, graded, and absent
+            # from every figure on this page. That is what was asked for
+            # and it is the right call for the league — but a public
+            # betting record that silently drops a league is the one
+            # shape this project cannot ship, because every other
+            # exclusion on this page is disclosed and a reader has no
+            # way to tell which kind they are looking at.
+            #
+            # A COUNT, NOT THE ROWS. No league is named, no bet is
+            # shown, nothing here is scoped to: Ethan, 2026-09-21, "I
+            # don't want wnba Past bet or new bet on the record page."
+            "benched_settled": _benched_settled(conn, since),
         },
         "overall": scoped,
         "mlb": performance(conn, "mlb", since=since),

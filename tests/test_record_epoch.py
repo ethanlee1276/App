@@ -316,9 +316,18 @@ def test_the_note_is_drawn_under_the_numbers_it_qualifies():
 
 def test_nothing_hidden_draws_nothing():
     """A permanent notice about zero bets is noise pretending to be
-    candour."""
+    candour.
+
+    WIDENED 2026-09-21: the note now covers two exclusions, the epoch's
+    and the bench's, and either one alone has to be enough to draw it.
+    Guarding on `hidden` only would have gone quiet about a benched
+    league on any record with nothing before the epoch — which is the
+    state this record reaches the moment the epoch stops moving."""
     body = _fn(_js(), "function recEpochHTML(")
-    assert "if (!ep || !hidden || !o.settled) return \"\";" in body
+    assert 'if (!ep || (!hidden && !benched) || !o.settled) return "";' in body
+    # Both halves still have to be real numbers off the payload.
+    assert "at.hidden_settled" in body
+    assert "at.benched_settled" in body
 
 
 def test_the_note_is_not_hidden_behind_the_why_collapse():

@@ -11385,19 +11385,34 @@ function recEpochHTML(d, src) {
   const at = (src || d || {}).all_time || {};
   const o = at.overall || {};
   const hidden = at.hidden_settled || 0;
+  /* AND THE BENCH, DISCLOSED THE SAME WAY. A league whose board is
+     being rebuilt is off this page entirely — asked for, and right for
+     the league — but every other exclusion here is disclosed, and a
+     reader has no way to tell a record that leaves nothing out from one
+     that leaves a losing league out. A count, not the rows: no league
+     is named and no bet is shown. */
+  const benched = at.benched_settled || 0;
   const cov = (d || {}).clv_coverage || {};
-  if (!ep || !hidden || !o.settled) return "";
+  if (!ep || (!hidden && !benched) || !o.settled) return "";
   const roi = `${(o.roi || 0) >= 0 ? "+" : ""}${((o.roi || 0) * 100).toFixed(1)}%`;
+  const left = hidden + benched;
   return `<details class="rec-epoch">
     <summary>Record shown from ${escapeHtml(formatGameDate(ep) || ep)} —
-      ${hidden} earlier settled pick${hidden === 1 ? "" : "s"} ${
-      hidden === 1 ? "is" : "are"} not in these numbers</summary>
-    <div>Those picks are still journaled, still graded and still train the
+      ${left} settled pick${left === 1 ? "" : "s"} ${
+      left === 1 ? "is" : "are"} not in these numbers</summary>
+    <div>${hidden ? `${hidden} of them settled before that date. ` : ""}Those
+      picks are still journaled, still graded and still train the
       model — nothing was deleted, and the samplers and calibration on this
       page still read every one of them. What changed on that date is the
       model, not the bookkeeping: the boards before it ran on gates that no
       longer exist, so their record is a fact about a system that is not
       picking tonight.
+      ${benched ? `<br><br>A further <strong>${benched}</strong> settled
+        pick${benched === 1 ? " is" : "s are"} from a league whose model is
+        being rebuilt. That board is still published and still graded on its
+        own page, at no risk, and none of it is counted here — so these
+        numbers are the record of what this site is betting now, not of
+        everything it has ever run.` : ""}
       <br><br>All-time${at.curve_from
         ? `, from the first journaled pick on ${escapeHtml(
             formatGameDate(at.curve_from) || at.curve_from)}`

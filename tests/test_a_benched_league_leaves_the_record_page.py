@@ -456,6 +456,18 @@ def test_the_record_page_cannot_tell_wnba_exists():
     # skipped a league would be worth less, not more.
     before.pop("forecast_log", None)
     after.pop("forecast_log", None)
+    # AND ONE MORE, WHICH IS THE RULE RATHER THAN A HOLE IN IT.
+    # `all_time.benched_settled` is a COUNT of the rows this page is not
+    # counting — no league, no bet, nothing to scope to. It has to move
+    # when benched rows are added, because a disclosure that stayed at
+    # zero while rows piled up behind it would be the quiet this whole
+    # file is written against. Everything else in `all_time` must not
+    # move, and that is asserted rather than exempted.
+    assert (before["all_time"]["benched_settled"]
+            < after["all_time"]["benched_settled"]), "the count did not move"
+    for blob in (before, after):
+        blob["all_time"] = {k: v for k, v in blob["all_time"].items()
+                            if k != "benched_settled"}
     if before != after:
         moved = sorted(k for k in set(before) | set(after)
                        if before.get(k) != after.get(k))
@@ -583,6 +595,45 @@ def test_the_check_never_takes_the_write_lock():
     src = inspect.getsource(homecheck.bench)
     assert "_journal_ro()" in src, src[:300]
     assert "ledger.connect(" not in src, "it opens the journal writable"
+
+
+# --- the record says what it leaves out --------------------------------
+def test_the_record_discloses_how_many_bets_the_bench_keeps_out():
+    """OFF THE PAGE IS NOT THE SAME AS UNSAID.
+
+    Every other exclusion on this page is disclosed — `hidden_settled`
+    exists so the record "can show what it is leaving out rather than
+    quietly leaving it out", in its own comment. The bench had no such
+    line, so a reader could not tell a record that leaves nothing out
+    from one that leaves a losing league out. On a page selling picks,
+    those are not the same claim.
+
+    A COUNT, AND ONLY A COUNT. No league named, no bet shown, nothing
+    scoped to — Ethan, 2026-09-21: "I don't want wnba Past bet or new
+    bet on the record page."
+    """
+    conn = _ledger()
+    _settled(conn, "nfl")
+    _settled(conn, "wnba")
+    _settled(conn, "wnba", category=ledger.BENCH_CATEGORY)
+    got = _exported(conn)
+    assert got["overall"]["settled"] == 1, got["overall"]["settled"]
+    assert got["all_time"]["benched_settled"] == 2, got["all_time"]
+    # Still no league, no row, nowhere to click.
+    assert "wnba" not in got["by_sport"]
+    assert "wnba" not in got["tracked_sports"]
+
+
+def test_the_page_prints_that_number_rather_than_shipping_it_unread():
+    """A disclosure nothing renders is not a disclosure."""
+    src = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    i = src.index("function recEpochHTML")
+    body = src[i:src.index("function recTile")]
+    assert "benched_settled" in body, "the export ships it and nothing reads it"
+    # It has to survive the early return, or a record with no pre-epoch
+    # rows would print nothing at all about the bench.
+    assert "!hidden && !benched" in body, body[:600]
+    assert "still graded" in body, body[:600]
 
 
 # --- and it is shown, not vanished -------------------------------------
