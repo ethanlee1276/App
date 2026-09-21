@@ -417,8 +417,13 @@ def owner_token_ok(presented) -> bool | None:
 #: tolerant because the sample has not been seen yet, and a header it
 #: does not recognise is REPORTED by `parse_csv` rather than ignored.
 HEADERS = {
-    "book": ("sportsbook", "book", "site", "operator"),
-    "external_id": ("id", "bet id", "ticket", "ticket id", "bet_id", "ref"),
+    "book": ("sportsbook", "book", "site", "operator", "sportsbook name"),
+    # Juice Reel's export names the TICKET `juice_bet_id` and each LEG
+    # `bet_leg_id`, one row per leg — so a three-leg parlay is three rows
+    # sharing a ticket id. `group_legs` folds them back into one ticket.
+    "external_id": ("id", "bet id", "ticket", "ticket id", "bet_id", "ref",
+                    "juice_bet_id", "juice bet id"),
+    "leg_id": ("bet_leg_id", "bet leg id", "leg id", "leg_id"),
     "placed_at": ("placed", "placed at", "date placed", "date", "bet date",
                   "timestamp", "created"),
     "event_at": ("event date", "game date", "start", "event time", "kickoff"),
@@ -457,6 +462,49 @@ def parse_csv(text: str) -> tuple[list[dict], list[str]]:
     return rows, unknown
 
 
+def group_legs(rows: list[dict]) -> list[dict]:
+    """One ticket per `external_id`, its legs folded into `legs`.
+
+    A PARLAY IS ONE BET. An export with one row per leg would otherwise
+    arrive as N tickets sharing an id — the store's dedupe would keep
+    the first and drop the rest, which at least never triple-counts the
+    stake but loses every leg but one. Rows with no id, or an id used by
+    one row only, pass through untouched.
+    """
+    by_id: dict = {}
+    order: list = []
+    for r in rows:
+        k = str(r.get("external_id") or "").strip()
+        if not k:
+            order.append(("", r))
+            continue
+        if k not in by_id:
+            by_id[k] = []
+            order.append((k, None))
+        by_id[k].append(r)
+    out = []
+    for k, single in order:
+        if single is not None:
+            out.append(single)
+            continue
+        legs = by_id[k]
+        if len(legs) == 1:
+            out.append(legs[0])
+            continue
+        head = dict(legs[0])
+        names = [str(l.get("selection") or l.get("bet") or "").strip()
+                 for l in legs]
+        head["legs"] = [n for n in names if n]
+        head["selection"] = (f"{len(legs)}-leg parlay: "
+                             + " / ".join(head["legs"])[:160])
+        # The ticket's money and result are the same on every leg row —
+        # the first carries them. A market of "parlay" so the page can
+        # tell it from a straight.
+        head["market"] = head.get("market") or "parlay"
+        out.append(head)
+    return out
+
+
 def parse_text(text: str) -> tuple[list[dict], list[str]]:
     """JSON (a list of tickets, or {"bets": [...]}) or CSV — whichever
     the export turns out to be."""
@@ -465,8 +513,9 @@ def parse_text(text: str) -> tuple[list[dict], list[str]]:
         data = json.loads(s)
         if isinstance(data, dict):
             data = data.get("bets") or data.get("rows") or data.get("data") or []
-        return [r for r in data if isinstance(r, dict)], []
-    return parse_csv(s)
+        return group_legs([r for r in data if isinstance(r, dict)]), []
+    rows, unknown = parse_csv(s)
+    return group_legs(rows), unknown
 
 
 # --- CLI -------------------------------------------------------------------

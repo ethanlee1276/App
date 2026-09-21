@@ -173,6 +173,28 @@ def test_a_juice_reel_shaped_csv_maps_its_headers_and_reports_the_rest():
     assert r["stake"] == 50.0 and r["result"] == "open"
 
 
+def test_one_row_per_leg_folds_back_into_one_ticket():
+    """Juice Reel exports a ticket as one row PER LEG sharing a
+    `juice_bet_id`. Three rows, one parlay: the stake is counted once,
+    every leg is kept, and a straight bet passes through untouched."""
+    text = ("juice_bet_id,bet_leg_id,Sportsbook,Date Placed,Selection,Odds,"
+            "Wager,Payout,Result\n"
+            "900,1,FanDuel,2026-09-18,Yankees ML,+600,10,0,Lost\n"
+            "900,2,FanDuel,2026-09-18,Judge HR,+600,10,0,Lost\n"
+            "900,3,FanDuel,2026-09-18,Over 8.5,+600,10,0,Lost\n"
+            "901,4,FanDuel,2026-09-19,Bills ML,-150,30,50,Won\n")
+    rows, unknown = zeno.parse_text(text)
+    assert unknown == [], unknown
+    assert len(rows) == 2, [r.get("selection") for r in rows]
+    parlay = next(r for r in rows if r["external_id"] == "900")
+    assert parlay["legs"] == ["Yankees ML", "Judge HR", "Over 8.5"], parlay
+    assert parlay["selection"].startswith("3-leg parlay"), parlay["selection"]
+    conn = _store()
+    zeno.import_rows(conn, rows)
+    o = zeno.block(conn)["overall"]
+    assert o["settled"] == 2 and o["losses"] == 1 and o["staked"] == 40.0, o
+
+
 def test_a_json_export_is_read_too():
     rows, unknown = zeno.parse_text(json.dumps(
         {"bets": [{"book": "draftkings", "selection": "x", "stake": 5}]}))
