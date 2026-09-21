@@ -194,7 +194,13 @@ def normalize(row: dict) -> dict | None:
     """One bet in the store's shape, or None if it is not a bet."""
     sel = str(row.get("selection") or row.get("bet") or "").strip()
     stake = _num(row.get("stake"))
-    if not sel or stake is None or stake <= 0:
+    # A free play risked nothing; the export says so in its own column.
+    actual = _num(row.get("risk_actual"))
+    if actual is not None and actual >= 0 and str(row.get("risk_actual")).strip():
+        stake = actual
+    if not sel or stake is None or stake < 0:
+        return None
+    if stake == 0 and actual is None:
         return None
     legs = row.get("legs")
     if isinstance(legs, str):
@@ -219,6 +225,11 @@ def normalize(row: dict) -> dict | None:
         "legs": legs if isinstance(legs, list) and legs else None,
         "settled_at": str(row.get("settled_at") or "").strip() or None,
     }
+    # PROFIT ON THE ROW, PAYOUT NOT: the payout is the stake back plus the
+    # signed profit. A loss's profit is negative and lands on zero.
+    profit = _num(row.get("profit"))
+    if out["payout"] is None and profit is not None and out["result"] != "open":
+        out["payout"] = round(max(0.0, out["stake"] + profit), 2)
     # A settled ticket with no payout on the row: the result implies it.
     if out["payout"] is None:
         if out["result"] == "lost":
@@ -416,6 +427,16 @@ def owner_token_ok(presented) -> bool | None:
 #: fields. Juice Reel's own export is the one this is for; the list is
 #: tolerant because the sample has not been seen yet, and a header it
 #: does not recognise is REPORTED by `parse_csv` rather than ignored.
+#: JUICE REEL'S OWN NAMES, read off a third party's parser of the same
+#: export (FeeTheDeveloper/runner_sports-site, lib/juice-reel/normalize.ts)
+#: before the first real file was seen: ticket fields `juice_bet_id`,
+#: `sportsbook`, `books_bet_id`, `risk_amount`, `max_potential_win`,
+#: `bet_result`, `amount_won_or_lost`, `odds_american`, `number_of_legs`,
+#: `date_placed`, `date_settled`, `date_synced`; leg fields `bet_leg_id`,
+#: `leg_type`, `bet_on`, `bet_on_spread_total_number`, `leg_sport`,
+#: `leg_league`. Two of them are traps: `amount_won_or_lost` is PROFIT,
+#: not the payout, and `if_freeplay_then_amount_actually_at_risk` is the
+#: real stake on a free play, which is zero.
 HEADERS = {
     "book": ("sportsbook", "book", "site", "operator", "sportsbook name"),
     # Juice Reel's export names the TICKET `juice_bet_id` and each LEG
@@ -425,21 +446,45 @@ HEADERS = {
                     "juice_bet_id", "juice bet id"),
     "leg_id": ("bet_leg_id", "bet leg id", "leg id", "leg_id"),
     "placed_at": ("placed", "placed at", "date placed", "date", "bet date",
-                  "timestamp", "created"),
-    "event_at": ("event date", "game date", "start", "event time", "kickoff"),
-    "sport": ("sport", "league"),
-    "event": ("event", "game", "match", "matchup"),
-    "market": ("market", "bet type", "type", "category"),
+                  "timestamp", "created", "date_placed"),
+    "event_at": ("event date", "game date", "start", "event time", "kickoff",
+                 "event_date", "event_start", "game_date"),
+    "sport": ("sport", "league", "leg_sport", "leg_league", "leg sport"),
+    "event": ("event", "game", "match", "matchup", "event_name", "event name"),
+    "market": ("market", "bet type", "type", "category", "leg_type", "leg type"),
     "selection": ("selection", "bet", "pick", "description", "wager name",
-                  "name"),
-    "line": ("line", "handicap", "spread", "total"),
-    "odds": ("odds", "price", "american odds", "american"),
-    "stake": ("stake", "wager", "risk", "amount", "bet amount", "risked"),
-    "payout": ("payout", "return", "returned", "to win", "won amount",
-               "payout amount", "profit"),
-    "result": ("result", "status", "outcome", "settled", "w/l"),
-    "settled_at": ("settled at", "settled date", "date settled", "graded"),
+                  "name", "bet_on", "bet on"),
+    "line": ("line", "handicap", "spread", "total",
+             "bet_on_spread_total_number"),
+    "odds": ("odds", "price", "american odds", "american", "odds_american",
+             "odds american"),
+    "stake": ("stake", "wager", "risk", "amount", "bet amount", "risked",
+              "risk_amount", "risk amount"),
+    # The stake that was ACTUALLY at risk, when the row says it differs —
+    # Juice Reel fills this for free plays. Takes precedence over `stake`.
+    "risk_actual": ("if_freeplay_then_amount_actually_at_risk",
+                    "amount actually at risk", "actual risk"),
+    "payout": ("payout", "return", "returned", "won amount",
+               "payout amount"),
+    # PROFIT, NOT PAYOUT — signed, and the stake has to be added back.
+    # Mapping this onto `payout` would have scored every win at a
+    # fraction of what it returned and every loss as returning nothing
+    # AND losing the stake again.
+    "profit": ("profit", "amount_won_or_lost", "amount won or lost",
+               "net", "p&l", "pnl"),
+    "result": ("result", "status", "outcome", "settled", "w/l",
+               "bet_result", "bet result"),
+    "settled_at": ("settled at", "settled date", "date settled", "graded",
+                   "date_settled"),
     "legs": ("legs", "selections", "parlay legs"),
+}
+
+#: Columns the export carries that the store has no use for. Named so
+#: they are not reported as unrecognised every import — that line is for
+#: the headers that would change what gets stored.
+IGNORED_HEADERS = {
+    "books_bet_id", "max_potential_win", "number_of_legs", "date_synced",
+    "is_odds_boosted", "clv_percent", "leg_vig", "to win",
 }
 
 
@@ -454,7 +499,7 @@ def parse_csv(text: str) -> tuple[list[dict], list[str]]:
         hit = next((k for k, names in HEADERS.items() if lf in names), None)
         if hit and hit not in lut.values():
             lut[f] = hit
-        else:
+        elif lf not in IGNORED_HEADERS and not hit:
             unknown.append(f)
     rows = []
     for rec in rdr:

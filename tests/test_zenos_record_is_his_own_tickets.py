@@ -195,6 +195,50 @@ def test_one_row_per_leg_folds_back_into_one_ticket():
     assert o["settled"] == 2 and o["losses"] == 1 and o["staked"] == 40.0, o
 
 
+_JR = ("juice_bet_id,bet_leg_id,sportsbook,books_bet_id,risk_amount,"
+       "max_potential_win,bet_result,amount_won_or_lost,odds_american,"
+       "number_of_legs,date_placed,date_settled,date_synced,is_odds_boosted,"
+       "clv_percent,if_freeplay_then_amount_actually_at_risk,leg_type,bet_on,"
+       "bet_on_spread_total_number,leg_sport,leg_league,leg_vig\n"
+       "500,1,FanDuel,FD-1,50,95.45,Win,45.45,-110,1,2026-09-20T18:00:00Z,"
+       "2026-09-21T03:00:00Z,2026-09-21T03:05:00Z,false,1.2,,spread,"
+       "Chiefs -3.5,-3.5,Football,NFL,4.5\n"
+       "501,2,DraftKings,DK-7,25,0,Loss,-25,+105,1,2026-09-19T12:00:00Z,"
+       "2026-09-19T23:00:00Z,2026-09-19T23:05:00Z,false,,,player_prop,"
+       "Mahomes o275.5 pass yds,275.5,Football,NFL,4.8\n"
+       "502,3,FanDuel,FD-9,20,140,Loss,0,+600,2,2026-09-18T12:00:00Z,"
+       "2026-09-19T03:00:00Z,,false,,0,moneyline,Yankees ML,,Baseball,MLB,\n"
+       "502,4,FanDuel,FD-9,20,140,Loss,0,+600,2,2026-09-18T12:00:00Z,"
+       "2026-09-19T03:00:00Z,,false,,0,total,Over 8.5,8.5,Baseball,MLB,\n")
+
+
+def test_juice_reels_own_column_names_import_correctly():
+    """Their names, read off a third party's parser before any real file
+    was seen. Two traps in it: `amount_won_or_lost` is PROFIT, not the
+    payout, and `if_freeplay_then_amount_actually_at_risk` is the true
+    stake on a free play — zero."""
+    rows, unknown = zeno.parse_text(_JR)
+    assert unknown == [], f"a Juice Reel column was not recognised: {unknown}"
+    assert len(rows) == 3, [r.get("external_id") for r in rows]
+    conn = _store()
+    got = zeno.import_rows(conn, rows, "juicereel")
+    assert got["added"] == 3, got
+    win = conn.execute("SELECT * FROM zeno_bets WHERE key='fanduel:500'").fetchone()
+    assert win["result"] == "won" and win["stake"] == 50.0
+    assert win["payout"] == 95.45, dict(win)        # 50 back + 45.45 profit
+    assert win["odds"] == -110 and win["line"] == -3.5
+    assert win["sport"] == "football" and win["market"] == "spread"
+    loss = conn.execute("SELECT * FROM zeno_bets WHERE key='draftkings:501'").fetchone()
+    assert loss["result"] == "lost" and loss["payout"] == 0.0, dict(loss)
+    free = conn.execute("SELECT * FROM zeno_bets WHERE key='fanduel:502'").fetchone()
+    assert free["stake"] == 0.0, "a free play risked nothing"
+    assert json.loads(free["legs"]) == ["Yankees ML", "Over 8.5"], dict(free)
+    o = zeno.block(conn)["overall"]
+    # The free play risked nothing and returned nothing; it is settled
+    # but it neither adds to the dollars at risk nor to the profit.
+    assert o["staked"] == 75.0 and o["profit"] == 20.45, o
+
+
 def test_a_json_export_is_read_too():
     rows, unknown = zeno.parse_text(json.dumps(
         {"bets": [{"book": "draftkings", "selection": "x", "stake": 5}]}))
