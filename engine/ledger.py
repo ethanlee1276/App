@@ -340,6 +340,41 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN team TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        # WHICH WITNESS SAID THE PRICE WAS WRONG — "exchange", "sharp",
+        # "market" or "model" (`potd.evidence`).
+        #
+        # THE JOURNAL RECORDED FIFTY-SEVEN COLUMNS AND NOT THIS ONE.
+        # `raw_prob`, `cal_temp`, `cal_bias`, `closing_odds`,
+        # `fair_consensus`, `move_delta`, `velo_delta`, `opp_zone_rate` —
+        # every signal somebody thought to store, and never the one that
+        # says what the bet was selected ON. So "are the sharp-anchored
+        # rows carrying the book, and the model rows dragging CLV to
+        # -0.12?" could not be asked of the record at all, by any query,
+        # and the Edge book's 828 settled rows cannot answer it.
+        #
+        # This module has already learned the lesson three times and
+        # written it down each time: `cal_temp` exists because "you
+        # cannot measure a signal you do not store"; `shrink_in_force`
+        # because "a row that does not remember what priced it cannot be
+        # re-judged"; `move_delta` because movement was called "purely
+        # informational" for months while it was rejecting picks. This is
+        # the fourth.
+        #
+        # ONLY THE BOOKS THAT PRICE AGAINST A FAIR WRITE IT, and that
+        # boundary is deliberate rather than another forgotten column
+        # (see `game_day`, which eight of eleven inserts omitted). A
+        # witness is the answer to "whose number says this price is
+        # wrong", and a long shot, a prediction market, a form pick or a
+        # UFC card is not selected that way. Stamping them "model" would
+        # be inventing a fact about how they were chosen. The rule is
+        # pinned in tests/test_the_journal_remembers_its_witness.py.
+        #
+        # IT ONLY PAYS FORWARD: nothing retro-fills the rows already
+        # settled, it makes the question answerable from here on.
+        conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -751,9 +786,10 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "park_hr, wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
             "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
             "fair_consensus, consensus_books, move_delta, move_steam, "
-            "move_first_sharp, velo_delta, tto_proj, opp_zone_rate) "
+            "move_first_sharp, velo_delta, tto_proj, opp_zone_rate, "
+            "evidence) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             # `date` is the SETTLE KEY and stays whatever the sport files
             # its results under; `game_day` is the calendar. For every
             # daily sport they are the same string. For the NFL the first
@@ -810,7 +846,12 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # it". movecheck.py reads exactly this pair.
              r.get("move_delta"), r.get("move_steam"),
              r.get("move_first_sharp"), r.get("velo_delta"),
-             r.get("tto_proj"), r.get("opp_zone_rate")))
+             r.get("tto_proj"), r.get("opp_zone_rate"),
+             # WHICH WITNESS SAID THE PRICE WAS WRONG. See the
+             # migration note on the column: fifty-seven things were
+             # journalled and never the one that says what the bet
+             # was selected ON.
+             evidence_for(r)))
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     # Recommended game bets journal too (sharp-anchor picks live or die by
@@ -857,8 +898,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, rest_days, body_clock, lead_min, "
-            "wind_out, roofed) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
+            "wind_out, roofed, evidence) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?, ?)",
             (game_day_for(r, date),
              now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
@@ -881,7 +922,13 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # The weather this game was priced under. A total in a
              # fifteen-mile wind is the most-cited effect in football
              # betting and the miner had no column to convict it in.
-             *_wx.get(r.get("team") or r.get("home") or "", (None, None))))
+             *_wx.get(r.get("team") or r.get("home") or "", (None, None)),
+             # THE WITNESS, ON THE GAME BETS TOO. `log_recommendations`
+             # writes the Edge book through TWO inserts, props and
+             # game bets, and stamping only the first is precisely
+             # how `game_day` came to be missing from eight inserts
+             # of eleven.
+             evidence_for(r)))
         n += cur.rowcount
     conn.commit()
     return n
@@ -1172,8 +1219,9 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
-            "grade, stake_units, stake_dollars, lead_min, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+            "grade, stake_units, stake_dollars, lead_min, status, category, "
+            "evidence) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -1209,7 +1257,12 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # against kickoff windows by hand. A measurement book that
              # cannot say when its rows were taken cannot defend its own
              # calibration.
-             _lead_min(r, kick), category))
+             _lead_min(r, kick), category,
+             # The witness behind this row's fair. A likelihood
+             # row ranked on the market's number and one a sharp
+             # book anchored are different bets with the same
+             # shape, and the record could not tell them apart.
+             evidence_for(r)))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()
@@ -1300,15 +1353,20 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     cur = conn.execute(
         "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
         "side, line, book, odds, projection, hit_prob, edge, confidence, "
-        "grade, stake_units, stake_dollars, lead_min, status, category) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?)",
+        "grade, stake_units, stake_dollars, lead_min, status, category, "
+        "evidence) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
         (game_day_for(pick, date), now, sport, row_date, player, market,
          side, float(line), pick.get("book", ""), odds,
          pick.get("projection"), pick.get("model_prob"),
          None if pick.get("implied_prob") is None
          else round(float(pick["model_prob"]) - float(pick["implied_prob"]), 4),
          None, "Pick of the Day", POTD_STAKE, 0.0,
-         _lead_min(pick, _kickoff_map(payload)), POTD_CATEGORY))
+         _lead_min(pick, _kickoff_map(payload)), POTD_CATEGORY,
+         # The witness behind the fair this pick was priced
+         # against. `potd.evidence` chose the tier the card
+         # printed, so record and card cannot disagree.
+         evidence_for(pick)))
     _stamp_team(conn, cur, pick)
     conn.commit()
     return cur.rowcount or 0
@@ -1445,6 +1503,26 @@ def read_only(path: str | Path | None = None) -> sqlite3.Connection:
     module reaches for the journal and should not have to name it."""
     from .db import read_only as _read_only
     return _read_only(path if path is not None else DEFAULT_DB)
+
+
+def evidence_for(row: dict) -> str:
+    """Which witness backed this bet's fair, for the journal.
+
+    `potd.evidence` IS THE RULE and is not restated here. It reads
+    `exchange_fair`, `sharp_anchored`/`sharp_fair` and `prob_source` off
+    the row the card was built from, so a journalled tier can never
+    disagree with the tier the reader was shown — which is the whole
+    value of storing it.
+
+    Never raises, and the guard is deliberately broad: this runs inside
+    the insert loop for every bet on every board, and a row shaped
+    unexpectedly must cost its own label, not the night's journal.
+    """
+    try:
+        from . import potd as _potd
+        return str(_potd.evidence(row or {}) or "")
+    except Exception:                                         # noqa: BLE001
+        return ""
 
 
 def relock_potd(payload: dict, most_likely=None, conn=None,
@@ -6450,6 +6528,16 @@ LIKELY_LIVE_GRADE = "Likely (staked)"
 #: THE HEADLINE IS STILL UNTOUCHED: `performance` defaults to BOOK =
 #: ("main","paper") and neither of these is in it.
 LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
+
+#: The books whose rows are SELECTED by disagreeing with a fair, and so
+#: the books for which "which witness said so" is a question with an
+#: answer. The Edge book (`BOOK`) is the one `performance` reports and
+#: the one this was added for.
+#:
+#: Sits beside `LIKELY_BOOKS` because it is the same kind of statement —
+#: which categories a rule covers — and because a second list of
+#: category names living somewhere else is how the two drift apart.
+WITNESSED_BOOKS = BOOK + (POTD_CATEGORY,) + LIKELY_BOOKS
 
 
 def likely_is_staked(sport) -> bool:
