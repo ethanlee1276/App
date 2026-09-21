@@ -42,6 +42,7 @@ Run directly:
 `python3 tests/test_the_days_pick_is_decided_once_not_re_decided_hourly.py`
 """
 
+import datetime as _dt
 import json
 import os
 import sys
@@ -58,12 +59,38 @@ from engine import potd                                       # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 
+#: The college Saturday this file is about, AS AN INSTANT RATHER THAN AS
+#: A DATE ON THE PAGE.
+#:
+#: NOT COSMETIC. `carry` only holds a card decided on the same calendar
+#: day as the one replacing it, and `disqualify`'s first refusal is "the
+#: game is not today" — so every claim here is about a board whose rows,
+#: whose card and whose clock agree on the day. Written as `2026-09-19`
+#: in three places and read off the wall clock in a fourth, this file
+#: passed on the day it was committed and started failing at the next
+#: midnight with `{'the game is not today': 2}` — a green suite that
+#: expires, which is the same class of bug as a test that reads a live
+#: store: its verdict depended on machine state rather than on the code.
+#:
+#: NAIVE UTC, which is what the builds pass: `rules.clock_says_started`
+#: subtracts it from a naive kickoff instant and raises on an aware one,
+#: so an aware stamp here would exercise a shape production never makes.
+#: Same convention as tests/test_the_days_pick_is_for_a_game_today.py.
+#:
+#: Afternoon, so `slate_day`'s Eastern conversion cannot slide the day
+#: backwards off a stamp near UTC midnight.
+NOW = _dt.datetime(2026, 9, 19, 18, 0)
+#: DERIVED, never spelled. A date written out by hand next to a clock
+#: read from `NOW` is how the two drifted apart in the first place.
+DAY = potd.slate_day(NOW)
+YESTERDAY = (_dt.date.fromisoformat(DAY) - _dt.timedelta(days=1)).isoformat()
 
-def _card(hour, open_n, pick=None, sport="cfb"):
+
+def _card(hour, open_n, pick=None, sport="cfb", day=DAY):
     """A card as `build` writes one, at a given hour of one day."""
-    return {"sport": sport, "date": "2026-09-19",
-            "decided_at": f"2026-09-19T{hour:02d}:00:00Z",
-            "generated_at": f"2026-09-19T{hour:02d}:00:00Z",
+    return {"sport": sport, "date": day,
+            "decided_at": f"{day}T{hour:02d}:00:00Z",
+            "generated_at": f"{day}T{hour:02d}:00:00Z",
             "open_candidates": open_n, "considered": 29,
             "pick": pick}
 
@@ -147,8 +174,7 @@ def test_an_equal_reading_keeps_the_one_already_on_screen():
 def test_yesterdays_card_is_not_todays_judgement():
     """`date` is a WEEK LABEL for football, so the day comparison is
     `decided_at`'s — the one field both cards state, in UTC."""
-    old = _card(14, 30, _bet())
-    old["decided_at"] = "2026-09-18T14:00:00Z"
+    old = _card(14, 30, _bet(), day=YESTERDAY)
     assert potd.carry(_card(9, 2, _near()), old)["open_candidates"] == 2
 
 
@@ -168,7 +194,7 @@ def test_a_carried_card_says_so_and_keeps_the_builds_own_clock():
     repo keeps paying for. `generated_at` stays honest about the build
     that published it; `carried` explains the gap."""
     got = potd.carry(_card(18, 4, _near()), _card(14, 12, _near()))
-    assert got["generated_at"] == "2026-09-19T18:00:00Z", got
+    assert got["generated_at"] == f"{DAY}T18:00:00Z", got
     assert "14:00" in got["carried"], got["carried"]
     assert "12" in got["carried"], got["carried"]
 
@@ -181,9 +207,15 @@ def test_a_card_that_was_not_carried_carries_no_excuse():
 def test_the_card_records_when_it_was_decided_and_what_was_open():
     """`carry` compares two cards, so both numbers have to be ON the
     card — computed and not placed is this codebase's oldest bug."""
-    card = potd.build([], "cfb", "2026-09-19")
+    card = potd.build([], "cfb", DAY, now=NOW)
     assert card["decided_at"].endswith("Z"), card["decided_at"]
     assert card["open_candidates"] == 0, card
+    # AND IT IS THE CLOCK THE CARD WAS JUDGED ON. `build` stamped these
+    # off the wall clock while deciding the day from `now`, so a card
+    # built on an injected clock claimed a different day from the slate
+    # it had just judged — and `carry` compares cards BY this day.
+    assert card["decided_at"][:10] == DAY, card["decided_at"]
+    assert card["generated_at"] == card["decided_at"], card
 
 
 def test_the_started_count_comes_off_the_census_by_a_shared_name():
@@ -202,14 +234,14 @@ def test_the_started_count_comes_off_the_census_by_a_shared_name():
     # Everything the earlier refusals ask for, so the row reaches the
     # clock — `live` is the scoreboard's own flag and the same one
     # `rules.game_has_started` refuses a journal write on.
-    started = {"game_date": "2026-09-19", "market": "moneyline",
+    started = {"game_date": DAY, "market": "moneyline",
                "bet_type": "moneyline", "team": "TOL", "odds": -122,
                "book": "fanduel", "sharp_anchored": True,
                "sharp_fair": 0.55, "implied_prob": 0.55, "live": True}
     assert potd.disqualify(dict(started, live=False),
-                           today="2026-09-19") != potd.STARTED, \
+                           NOW, today=DAY) != potd.STARTED, \
         "the fixture never reaches the clock — an earlier bar refused it"
-    assert potd.disqualify(started, today="2026-09-19") == potd.STARTED
+    assert potd.disqualify(started, NOW, today=DAY) == potd.STARTED
 
 
 def test_open_candidates_excludes_exactly_the_started_ones():
@@ -221,12 +253,11 @@ def test_open_candidates_excludes_exactly_the_started_ones():
     mutation that BITES is the census key hand-spelled, or mis-spelled,
     in `build` — and only a board that actually contains a started game
     can tell. Two rows, one on the clock: the count must be one."""
-    day = "2026-09-19"
-    base = {"game_date": day, "market": "moneyline", "bet_type": "moneyline",
+    base = {"game_date": DAY, "market": "moneyline", "bet_type": "moneyline",
             "team": "TOL", "odds": -122, "book": "fanduel",
             "sharp_anchored": True, "sharp_fair": 0.55, "implied_prob": 0.55}
     card = potd.build([dict(base, live=True), dict(base, team="OSU")],
-                      "cfb", day)
+                      "cfb", DAY, now=NOW)
     assert card["considered"] == 2, card
     assert card["census"].get(potd.STARTED) == 1, card["census"]
     assert card["open_candidates"] == 1, card
@@ -261,14 +292,14 @@ def test_a_previous_card_is_found_and_an_absent_one_costs_nothing():
 def test_attach_consults_the_previous_card():
     """The rule has to be ON THE PATH the builds call, or it is a
     function nobody runs."""
-    board = {"date": "2026-09-19", "sport": "cfb", "most_likely": []}
-    potd.attach(board, "cfb", prev=_card(14, 12, _bet()))
+    board = {"date": DAY, "sport": "cfb", "most_likely": []}
+    potd.attach(board, "cfb", now=NOW, prev=_card(14, 12, _bet()))
     assert board["pick_of_the_day"]["pick"] == _bet(), board["pick_of_the_day"]
 
 
 def test_attach_still_works_with_no_previous_board_on_disk():
-    board = {"date": "2026-09-19", "sport": "cfb", "most_likely": []}
-    note = potd.attach(board, "cfb", built_dir=tempfile.mkdtemp())
+    board = {"date": DAY, "sport": "cfb", "most_likely": []}
+    note = potd.attach(board, "cfb", now=NOW, built_dir=tempfile.mkdtemp())
     assert board["pick_of_the_day"]["pick"] is None
     assert "pick of the day" in note.lower(), note
 

@@ -1239,11 +1239,25 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     # row in the league this gate was written for.
     today = slate_day(now)
     pick, near, census = choose(rows, now, today=today)
+    # THE CLOCK THIS CARD WAS JUDGED ON, read once and taken from `now`
+    # when a caller supplied one — the same shape `top_pick` below
+    # already uses.
+    #
+    # `now` decides the two things that make this card what it is: which
+    # day it is for (`slate_day` above) and which games have already
+    # kicked off (`choose`). Stamping it off the wall clock instead put
+    # the card's own timestamp on a different day from the slate it
+    # judged, for any caller that injects a clock — and `carry` compares
+    # two cards BY that stamp's calendar day, so a replay or a test
+    # would silently never carry and the rule would look broken while
+    # being right. Read once, so the two stamps cannot land a second
+    # apart across a tick.
+    stamp = (now or _dt.datetime.now(_dt.timezone.utc)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
     out = {
         "sport": sport,
         "date": date,
-        "generated_at": _dt.datetime.now(_dt.timezone.utc)
-        .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": stamp,
         "considered": len(rows),
         "census": census,
         # THE BAND AS STATED TO A READER — see `effective_max_odds`.
@@ -1266,8 +1280,7 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         # `open_candidates` is what makes two readings comparable: the
         # rows that were still placeable when each was taken. `carry`
         # below refuses to let a smaller reading overwrite a larger one.
-        "decided_at": _dt.datetime.now(_dt.timezone.utc)
-        .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "decided_at": stamp,
         "open_candidates": max(0, len(rows) - int(census.get(STARTED, 0))),
     }
     if pick is not None:
