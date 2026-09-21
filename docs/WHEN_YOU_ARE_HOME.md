@@ -45,12 +45,37 @@ store is `data/zeno.db` — separate from the model's journal on purpose,
 because these are settled by the BOOK and never re-graded. The only
 write path is an owner token; there is no per-account path at all.
 
-**What is not built, and cannot be from here.** FanDuel, DraftKings and
-theScore Bet have no API for a customer's bets; Juice Reel has them
-because you linked your sportsbook logins to Juice Reel, and this site
-will not hold those logins. So the source is **an export from Juice
-Reel**, and I have not seen one yet. The importer reads CSV or JSON and
-guesses common headers; the first real file locks it down.
+**How it syncs.** Juice Reel has an API (juicereel.com/api-docs) and
+every bets endpoint takes *"Owner only: Client ID + secret"* — for the
+account that owns the app, the two keys are the whole credential. The
+settle pass pulls `/oauth2/bets/changed` every cycle and imports what
+moved, so a bet placed this afternoon is on the page by the next build.
+The CSV import below stays as the fallback.
+
+**Getting the two keys (once).** In Juice Reel, create an API
+application — look for "Developer" / "API" / "Create an application" in
+the web app while logged in, or under the app's settings. Request the
+scopes `bets.open.read` and `bets.settled.read`. It gives you a client
+ID and a client secret. Store them like every other key (each prompts;
+paste at the prompt, never in chat):
+
+```bash
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_JUICEREEL_CLIENT_ID
+sudo ./deploy/setenv.sh QB_JUICEREEL_CLIENT_SECRET
+sudo systemctl restart qellys
+```
+
+Prove they work, then pull the whole history once:
+
+```bash
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^QB_JUICEREEL | xargs) python3 -m engine.juicereel check
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^QB_JUICEREEL | xargs) python3 -m engine.juicereel sync --full
+```
+
+`check` prints `ok — connected as 'Zenos_Props'`. `sync --full` prints
+`N changed → N added …`. From then on the build does it by itself; the
+log line `Juice Reel sync:` in the settle pass says so every cycle, and
+`Juice Reel sync skipped:` names the reason when it cannot.
 
 **1. Set the owner token** (prompts, never in history — same as every
 other secret):

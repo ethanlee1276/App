@@ -8723,6 +8723,20 @@ def settle_now(day: str | None = None) -> None:
     try:
         from engine import losspatterns
         lp = losspatterns.refresh(lconn)
+        # AND ZENO'S OWN TICKETS, pulled from Juice Reel before the record
+        # is exported so a bet placed this afternoon is on the page by the
+        # next build. Never fatal: a Juice Reel outage or a bad key prints
+        # and leaves the record as it was. See engine/juicereel.py.
+        try:
+            from engine import juicereel as _jr
+            from engine import zeno as _zn
+            _zc = _zn.connect()
+            try:
+                print(_jr.line(_jr.sync(_zc)))
+            finally:
+                _zc.close()
+        except Exception as _exc:  # noqa: BLE001
+            print(f"  ⚠️  Juice Reel sync skipped: {_exc}")
         # AND THE SHELF BREAKER, on the same grades and in the same
         # breath. A market whose whole settled record is clear of the
         # noise band on the losing side stops being staked on the next
