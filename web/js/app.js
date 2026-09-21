@@ -12400,13 +12400,41 @@ function recLikelySection(lk, scope) {
       <span class="rl-proc">${d.w}/${d.n}</span>
       <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>
     </div>`).join("");
+  /* WHETHER THERE IS MONEY ON THIS BOOK, ASKED BEFORE A WORD OF IT IS
+     WRITTEN. Every sentence below used to be the paper version, hard
+     coded — "ZERO dollars behind it", "nothing here is a position",
+     "real money stays off until the ROI column has earned it" — and it
+     kept saying so after 2026-09-19, when four leagues’ boards started
+     staking 0.25u a row for real. A page that tells a reader no money is
+     on a book while money is on it is the worst thing this section can
+     do, and it was doing it to Ethan, who owns the account. */
+  const live = (lk.staked_sports || []);
+  const money = lk.staked || (!spName && live.length > 0);
+  const stake = lk.stake_units || 0.25;
+  const whose = spName ? escapeHtml(spName)
+                       : live.map((x) => x.toUpperCase()).join(", ");
   return `
-    <div class="section-title">Most Likely — the paper record${
+    <div class="section-title">Most Likely — ${
+      money ? "staked" : "the paper record"}${
       spName ? ` · ${escapeHtml(spName)}` : ""}
-      <span class="sub">— journaled nightly at no risk, graded like every other
-      bet${spName ? `. ${escapeHtml(spName)} rows only — every number in this
+      <span class="sub">— ${money
+        ? `${stake}u a row of real money on ${whose}, graded like every other
+           bet`
+        : "journaled nightly at no risk, graded like every other bet"}${
+      spName ? `. ${escapeHtml(spName)} rows only — every number in this
       section is that league’s own` : ""}</span></div>
-    ${recDisclosure("What this is and what it is not", `The board claims to
+    ${recDisclosure("What this is and what it is not", money ? `The board
+      claims to rank who actually hits. ${whose} ${live.length > 1 ? "carry"
+      : "carries"} ${stake}u of REAL money a row, staked from 2026-09-19 at
+      Ethan’s call and BELOW the bar this book set for itself — knowingly, and
+      it is named here rather than left to be discovered. ${!spName ? `The
+      other leagues in this section are still paper, so the pooled numbers
+      below mix the two; scope to a league to see one book at a time. ` : ""}Two
+      separate questions are still being asked: whether the probability we
+      printed was true, and whether betting it at the price shown makes money.
+      A board can be perfectly calibrated and still lose to the vig — that is
+      the expected outcome, not a contradiction — and the ROI column, not the
+      hit column, is the one that settles it.` : `The board claims to
       rank who actually hits, and until it has a settled record that claim rests
       on a backtest. So the top of it is written down every night at a nominal
       stake with ZERO dollars behind it, and graded on the same pass as
@@ -12425,9 +12453,10 @@ function recLikelySection(lk, scope) {
                                   : "inside the noise band")
                       : "nothing settled yet",
                 { lead: true, tone: cal.n && cal.real && cal.gap < 0 ? "bad" : "" })}
-      ${recTile("Paper ROI",
+      ${recTile(money ? "ROI" : "Paper ROI",
                 lk.settled ? (lk.roi >= 0 ? "+" : "") + (lk.roi * 100).toFixed(1) + "%" : "—",
-                "at the price shown · no money staked",
+                money ? `at the price shown · ${stake}u a row on ${whose}`
+                      : "at the price shown · no money staked",
                 { tone: toneOf(lk.roi) })}
       ${recTile("Settled", `${lk.wins}-${lk.losses}`,
                 `${lk.open} open · ${lk.needed} needed for a verdict`)}

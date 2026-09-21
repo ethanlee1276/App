@@ -92,6 +92,203 @@ def test_every_league_with_a_likelihood_board_is_staked():
         assert ledger.performance(conn, sport)["open"] == 0, sport
 
 
+def test_the_whole_boards_settled_count_survives_the_per_market_loop():
+    """THE BUG THAT HID EVERY OTHER ONE. `p["enough"]` read a bare `n`
+    set at the calibration query and read ninety lines and three loops
+    later — and the by-market loop rebound it to whichever shelf came
+    last out of GROUP BY. So Ethan's NFL board, 160 settled against a
+    bar of 100, reported `enough: False` because its last shelf was a
+    two-row spread, and the page answered him with "100 needed before
+    this can say anything" on a board that had cleared the bar weeks
+    earlier. The verdict it withheld was the sentence that says real
+    money is on this book."""
+    conn = _conn()
+    big, small = "anytime_td", "spread"          # `small` sorts last
+    for i in range(120):
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            " odds, hit_prob, stake_units, stake_dollars, status, category,"
+            " pnl_units) VALUES ('t','nfl','2026-09-01',?,?,'OVER',0.5,-150,"
+            "0.66,0.1,0.0,?,'likely',?)",
+            (f"A{i}", big, "won" if i % 3 else "lost",
+             0.066 if i % 3 else -0.1))
+    for i in range(2):
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            " odds, hit_prob, stake_units, stake_dollars, status, category,"
+            " pnl_units) VALUES ('t','nfl','2026-09-01',?,?,'OVER',0.5,-110,"
+            "0.66,0.1,0.0,'won','likely',0.09)", (f"Z{i}", small))
+    conn.commit()
+    r = ledger.likely_report(conn, sport="nfl")
+    assert r["calibration"]["n"] == 122, r["calibration"]["n"]
+    assert r["enough"] is True, (
+        "the board's own count was overwritten by a shelf's")
+    assert "needed before this can say anything" not in r["verdict"], \
+        r["verdict"]
+    # …and the per-market counts are still each market's own, which is
+    # the thing the rename must not have broken.
+    assert r["by_market"][big]["n"] == 120
+    assert r["by_market"][small]["n"] == 2
+
+
+def test_the_page_is_told_which_leagues_carry_money_and_how_much():
+    """The section's copy is written from these. `likely_is_staked(None)`
+    is False, so the POOLED report said "no money staked" over a book
+    that has had real dollars in it since 2026-09-19 — the pooled view
+    is a mix and has to be able to say so instead of picking the
+    comfortable half."""
+    conn = _conn()
+    pooled = ledger.likely_report(conn)
+    assert pooled["staked_sports"] == [
+        sp for sp in ledger.LIKELY_LIVE_SPORTS if not ledger.is_benched(sp)]
+    assert pooled["stake_units"] == ledger.LIKELY_LIVE_STAKE
+    assert ledger.likely_report(conn, sport="nfl")["staked_sports"] == ["nfl"]
+    assert ledger.likely_report(conn, sport="ufc")["staked_sports"] == []
+
+
+def test_the_section_stops_promising_no_money_once_money_is_on_it():
+    """THE COPY FOLLOWS THE MONEY, and for two days it did not. Every
+    sentence in this section was the paper one, hard coded — "ZERO
+    dollars behind it", "nothing here is a position", "real money stays
+    off until the ROI column has earned it" — and it kept saying so
+    while four leagues staked 0.25u a row. Telling a reader no money is
+    on a book while money is on it is the worst thing this section can
+    do."""
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "web", "js", "app.js"),
+              encoding="utf-8") as fh:
+        src = fh.read()
+    i = src.index("function recLikelySection")
+    body = src[i:src.index("function recLikelyGameLines")]
+    # COMMENTS OUT FIRST. The note above this function quotes the paper
+    # copy in order to explain why it is now on a branch, and a scan
+    # that counted the quotation would find the claim in the staked half
+    # and fail — which is exactly what it did. The same trap caught the
+    # Pick-of-the-Day copy test earlier the same day.
+    body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+    assert "lk.staked_sports" in body, \
+        "the section does not ask whether money is on the book"
+    # The paper claims must sit on the branch that is only reached when
+    # nothing is staked — never printed unconditionally.
+    for claim in ("ZERO dollars behind it", "no money staked",
+                  "nothing here\n      is a position"):
+        assert claim in body, claim
+    # …and the staked branch, which runs from the disclosure call to the
+    # paper branch that follows it, must not repeat any of them.
+    start = body.index("recDisclosure")
+    end = body.index("ZERO dollars behind it")
+    staked_half = body[start:end]
+    assert "staked from 2026-09-19" in staked_half, staked_half[:300]
+    assert "REAL money" in staked_half, staked_half[:300]
+    assert "no money" not in staked_half, staked_half[:300]
+    assert "at no risk" not in staked_half, staked_half[:300]
+
+
+def _render_likely(lk):
+    """Run `recLikelySection` for real and return the HTML.
+
+    TEXT MATCHING WAS NOT ENOUGH, and a mutation run proved it: replacing
+    the whole money test with `const money = false` left every
+    source-scan assertion passing, because the staked copy was still IN
+    the file — on a branch nothing could reach. The only way to hold a
+    page to what it SAYS is to make it say it.
+    """
+    import json
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        return None                       # node absent: caller skips
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "web", "js", "app.js"),
+              encoding="utf-8") as fh:
+        src = fh.read()
+    body = src[src.index("function recLikelySection"):
+               src.index("function recLikelyGameLines")]
+    harness = """
+const SPORT_META = {nfl: {name: "NFL"}};
+const escapeHtml = (x) => String(x == null ? "" : x);
+const toneOf = () => "";
+const marketWord = (m) => m;
+const recDisclosure = (t, b) => `<disclosure>${t}|${b}</disclosure>`;
+const recTile = (label, value, sub) => `<tile>${label}|${value}|${sub}</tile>`;
+const recLikelyGameLines = () => "";
+""" + body + """
+process.stdout.write(recLikelySection(JSON.parse(process.argv[2]), "all"));
+"""
+    path = os.path.join(tempfile.mkdtemp(), "render.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(harness)
+    out = subprocess.run(["node", path, json.dumps(lk)],
+                         capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-600:]
+    return out.stdout
+
+
+def _payload(**kw):
+    lk = {"sport": "nfl", "settled": 160, "open": 3, "wins": 113,
+          "losses": 47, "roi": 0.095, "needed": 100, "enough": True,
+          "verdict": "v", "bands": [], "by_market": {},
+          "calibration": {"n": 160, "claimed": 0.654, "actual": 0.706,
+                          "gap": 0.052, "real": False},
+          "staked": True, "staked_sports": ["nfl"], "stake_units": 0.25}
+    lk.update(kw)
+    return lk
+
+
+def test_the_page_SAYS_there_is_money_on_a_staked_board():
+    """THE SENTENCE ETHAN WAS READING WAS FALSE. On 2026-09-21 his NFL
+    Most Likely section said "THE PAPER RECORD", "no money staked" and
+    "real money stays off until the ROI column has earned it" — while
+    that board had been staking 0.25u a row of real money since
+    2026-09-19. He then asked to "make this real and not paper", which
+    is the page's copy talking, not the ledger.
+
+    A page that tells its owner no money is on a book while money is on
+    it is the worst thing this section can do."""
+    got = _render_likely(_payload())
+    if got is None:
+        return                             # no node on this box
+    for lie in ("no money staked", "ZERO dollars", "the paper record",
+                "at no risk", "nothing here is a position",
+                "real money stays off"):
+        assert lie not in got, f"{lie!r} still printed over a staked book"
+    assert "0.25u" in got, got[:400]
+    assert "REAL money" in got, got[:400]
+    # The tile LABEL too, not only its subtitle. "Paper ROI" over a
+    # number earned with real dollars is the same false sentence in
+    # two words instead of six.
+    assert "<tile>ROI|" in got, got[:400]
+    assert "Paper ROI" not in got, got[:400]
+    assert "2026-09-19" in got, "it does not say when the money went on"
+
+
+def test_the_page_still_says_PAPER_when_nothing_is_staked():
+    """The other half, so the fix is a branch and not a rewrite: a book
+    with no money on it must still make the paper promise, in full."""
+    got = _render_likely(_payload(sport="ufc", staked=False,
+                                 staked_sports=[]))
+    if got is None:
+        return
+    assert "no money staked" in got, got[:400]
+    assert "ZERO dollars" in got, got[:400]
+    assert "REAL money" not in got, got[:400]
+
+
+def test_the_POOLED_section_cannot_call_a_mixed_book_paper():
+    """`likely_is_staked(None)` is False, so the pooled view took the
+    paper branch over a book that pools four staked leagues with the
+    unstaked ones. It has to say it is a mix rather than pick the
+    comfortable half."""
+    got = _render_likely(_payload(sport="", staked=False,
+                                 staked_sports=["mlb", "nfl", "cfb", "nba"]))
+    if got is None:
+        return
+    assert "no money staked" not in got, got[:500]
+    assert "MLB" in got and "NFL" in got, got[:500]
+    assert "still paper" in got, "it does not say the pool is mixed"
+
+
 def test_a_BENCHED_leagues_board_came_back_off_the_money():
     """WNBA LEFT THE LIST ABOVE ON 2026-09-21. Ethan: "remove wnba from
     the record so it's not hurting us. Make it all paper." It had been

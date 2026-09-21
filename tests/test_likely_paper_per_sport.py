@@ -196,11 +196,19 @@ def test_the_page_reads_the_scoped_report_and_never_filters_the_pooled_one():
 
 
 def test_the_section_title_names_the_league_it_is_showing():
+    """RE-ANCHORED 2026-09-21, when the title stopped being one string.
+    It now picks between "staked" and "the paper record" depending on
+    whether real money is on that league's board — it had been printing
+    the paper word over four staked leagues since 2026-09-19 — and the
+    league name has to survive both branches."""
     i = APP.index("function recLikelySection(")
     block = APP[i:APP.index("\nfunction ", i + 1)]
-    title = block[block.index("Most Likely — the paper record"):]
-    assert "spName" in title[:200], \
+    title = block[block.index("Most Likely — "):]
+    assert "spName" in title[:300], \
         "a scoped section is headed as though it were the pooled record"
+    head = title[:300]
+    assert "the paper record" in head and "staked" in head, \
+        "the title no longer says which of the two this league is"
 
 
 def test_the_game_lines_lede_is_told_which_cut_it_is_describing():

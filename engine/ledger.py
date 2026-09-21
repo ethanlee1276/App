@@ -7069,7 +7069,14 @@ def likely_report(conn, since: str | None = None,
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
             "FROM bets WHERE 1=1 " + graded + win + sw
             + " GROUP BY market", wargs + sargs):
-        n, stake = r["n"], r["s"]
+        # `mn`, NOT `n`. This loop used to rebind the whole board's
+        # settled count — set 90 lines up from the calibration query and
+        # read 90 lines down by `p["enough"]` — to whichever market
+        # happened to come last out of GROUP BY. So a 160-row NFL board
+        # whose last shelf was a 2-row spread reported `enough: False`,
+        # and the page answered a reader who had long since cleared the
+        # bar with "100 needed before this can say anything".
+        mn, stake = r["n"], r["s"]
         roi = (r["u"] / stake) if stake else 0.0
         # HOW MUCH OF THAT ROI IS THE SAMPLE TALKING, for each shelf.
         #
@@ -7088,9 +7095,9 @@ def likely_report(conn, since: str | None = None,
         # of the per-bet results over sqrt(n), and at a flat unit the
         # worst case per bet is bounded, so 2/sqrt(n) is the honest
         # order of magnitude without storing every gain.
-        band = round(2.0 / (n ** 0.5), 4) if n else None
+        band = round(2.0 / (mn ** 0.5), 4) if mn else None
         p["by_market"][r["market"]] = {
-            "n": n, "w": r["w"],
+            "n": mn, "w": r["w"],
             "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
             "actual": round(r["actual"], 4) if r["actual"] is not None else None,
             "roi": round(roi, 4),
@@ -7160,12 +7167,27 @@ def likely_report(conn, since: str | None = None,
                                  sport=sport, since=since)
     p["sport"] = sport or ""
     p["needed"] = LIKELY_VERDICT_N
-    p["enough"] = n >= LIKELY_VERDICT_N
+    # READ FROM `calibration`, WHICH CANNOT BE SHADOWED. The bare `n`
+    # this used travelled ninety lines through three loops to get here,
+    # and one of them rebound it. A value that has to survive that
+    # distance to be right should not be a local.
+    p["enough"] = (cal.get("n") or 0) >= LIKELY_VERDICT_N
     # Whether THIS league's board is playing for money, so the verdict
     # can say so. A page that reports a book's record without saying
     # whether it is staked is describing two different things with one
     # sentence.
     p["staked"] = likely_is_staked(sport)
+    # WHICH LEAGUES, AND AT WHAT SIZE — because the page's copy is
+    # written from this and the POOLED report has no sport to ask about.
+    # `likely_is_staked(None)` is False, so the pooled section read "no
+    # money staked" over a book that has had real dollars in it since
+    # 2026-09-19. The pooled view is a mix, and it has to be able to say
+    # so rather than pick the comfortable half.
+    p["staked_sports"] = ([sport] if sport and p["staked"]
+                          else [] if sport
+                          else [sp for sp in LIKELY_LIVE_SPORTS
+                                if not is_benched(sp)])
+    p["stake_units"] = LIKELY_LIVE_STAKE
     p["verdict"] = _likely_verdict(p)
     return p
 
