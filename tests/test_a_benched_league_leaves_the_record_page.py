@@ -36,8 +36,26 @@ MONEY MOVES IN TWO PLACES, NOT ONE. The Edge book is the headline, but
 likelihood board since 2026-09-19. "Make it all paper" means no WNBA
 money anywhere.
 
+OFF THE PAGE ENTIRELY, NOT JUST OUT OF THE TOTAL. The first cut of this
+showed the bench under its own Record-page heading, on the argument that
+a league whose rows stop appearing is misleading quiet. Ethan,
+2026-09-21, after seeing it: *"I don't want wnba Past bet or new bet on
+the record page. I only want it as paper bets."* So the heading is gone
+and the league is absent from that page — past rows and new ones.
+
+IT IS NOT DELETED AND NOT UNGRADED. Every row stays in the journal, is
+still settled, still carries its CLV, and is still readable at the
+terminal — `homecheck.py record` scopes to it — which is how we find
+out whether the model got better. What stopped is publishing it.
+
+`test_the_record_page_cannot_tell_wnba_exists` is the whole rule in one
+assertion, and the only one that can catch a POOLED figure quietly
+carrying these rows: a number has no league name in it, so nothing that
+reads the payload for the word can see the leak. It exports twice and
+requires the two payloads to be identical.
+
 Run directly:
-`python3 tests/test_a_benched_league_leaves_the_headline.py`
+`python3 tests/test_a_benched_league_leaves_the_record_page.py`
 """
 
 import datetime as dt
@@ -269,7 +287,7 @@ def test_it_runs_wherever_the_ledger_OPENS_not_by_hand():
 
 
 # --- the books the bench cannot re-categorise --------------------------
-def test_the_pick_of_the_day_pool_drops_the_bench_but_the_cut_keeps_it():
+def test_the_pick_of_the_day_pool_drops_the_bench_and_a_scope_still_reads_it():
     """`potd` is the key the day-lock, the relock and the live tracker
     all query by, so those rows cannot be moved without breaking "the
     first qualifying pick is the day's pick". They come out of the
@@ -312,7 +330,14 @@ def test_the_pooled_most_likely_report_drops_the_bench_too():
     _settled(conn, "nfl", category="likely")
     assert ledger.likely_report(conn)["settled"] == 1
     assert ledger.likely_report(conn)["calibration"]["n"] == 1
-    assert ledger.likely_report(conn, sport="wnba")["settled"] == 1
+    # THE WHOLE SCOPED REPORT, not just its headline count: the bands,
+    # the calibration and the receipts are the part anyone would read to
+    # judge whether the model got better, and they come from this
+    # function's own queries rather than from `performance`.
+    mine = ledger.likely_report(conn, sport="wnba")
+    assert mine["settled"] == 1, mine["settled"]
+    assert mine["calibration"]["n"] == 1, mine["calibration"]
+    assert [r["sport"] for r in mine["recent"]] == ["wnba"], mine["recent"]
 
 
 def test_the_page_is_SERVED_a_pooled_pick_of_the_day_without_the_bench():
@@ -330,31 +355,165 @@ def test_the_page_is_SERVED_a_pooled_pick_of_the_day_without_the_bench():
     assert got["potd"]["settled"] == 1, got["potd"]["settled"]
     assert [r["sport"] for r in got["potd_recent"]] == ["nfl"], \
         got["potd_recent"]
-    # Shown, not vanished: the per-sport cut still carries it.
-    assert got["potd_by_sport"]["wnba"]["settled"] == 1
+    # AND NOT UNDER ITS OWN LABEL EITHER. The first cut shipped the
+    # per-sport cut on the argument that a labelled row is honest rather
+    # than hidden; Ethan wanted the league off the page, so the pooled
+    # figure and the per-sport cut both drop it.
+    assert "wnba" not in got["potd_by_sport"], got["potd_by_sport"]
+    assert "nfl" in got["potd_by_sport"]
 
 
-def test_the_unscoped_headline_is_not_quietly_filtered_by_sport():
-    """The Edge book takes the bench by MOVING its rows, which is what
-    also zeroes the dollars. If `performance` filtered it by sport
-    instead, a benched row would keep its stake and its category and
-    only be hidden — and every droplet query, export and settle pass
-    that reads the table directly would still see it on the record."""
+def test_the_edge_book_MOVES_its_rows_rather_than_only_hiding_them():
+    """THE PAGE FILTER IS NOT THE WHOLE BENCH, and this is what the
+    difference test cannot see.
+
+    Hiding a row at read time leaves its category and its stake standing
+    in the table, so it stays on the money book for the settle pass, the
+    bankroll curve and every `sqlite3` query anyone runs on the droplet.
+    The Edge book therefore MOVES its rows, which is also the only thing
+    that zeroes the dollars. Asked with `exclude_sports=()` — the true
+    unfiltered total — because with the page filter on, a row that was
+    merely hidden and a row that was properly moved look identical."""
     conn = _ledger()
     _settled(conn, "wnba")
-    assert ledger.performance(conn)["settled"] == 1, \
-        "a benched row was hidden from the headline rather than moved"
+    raw = dict(exclude_sports=())
+    assert ledger.performance(conn, **raw)["settled"] == 1
     ledger.bench_existing(conn)
-    assert ledger.performance(conn)["settled"] == 0
+    assert ledger.performance(conn, **raw)["settled"] == 0, \
+        "the row was hidden from the page but left on the money book"
+    got = conn.execute(
+        "SELECT category, stake_dollars FROM bets").fetchone()
+    assert got["category"] == ledger.BENCH_CATEGORY, dict(got)
+    assert got["stake_dollars"] == 0.0, dict(got)
+
+
+# --- the whole rule, in one assertion ----------------------------------
+#: Every book a benched league can have rows in, with the category the
+#: production writer really files it under. Hand-listed rather than read
+#: off a constant on purpose: the point of the test below is to fail
+#: when a NEW book appears and nobody taught it about the bench, and a
+#: list derived from the code would quietly grow to match the code.
+#: `main` and `paper` are in here deliberately, even though a benched
+#: league's fresh Edge rows never reach them and `bench_existing` sweeps
+#: the old ones at every open. That sweep runs inside a try/except that
+#: warns and carries on rather than refusing to open the ledger, so
+#: "the sweep did not run" is a state this page has to survive — and it
+#: is the state the droplet is in for the seconds before the first open.
+_ALL_BOOKS = ("benched", "main", "paper", "potd", "likely", "likely_live",
+              "longshot", "longshot_watch", "stale", "form", "loose",
+              "predmarket")
+
+
+def _seed(conn, sport):
+    """One settled row and one open row in every book, for one league."""
+    for cat in _ALL_BOOKS:
+        conn.execute(_INS, (PAST + "T00:00:00", sport, PAST, f"{sport} X",
+                            "pts", "OVER", 20.5, -110, 1.0, 10.0, "lost",
+                            cat, 12, -1.0))
+        conn.execute(_INS, (PAST + "T00:00:00", sport, SOON, f"{sport} Y",
+                            "pts", "OVER", 20.5, -110, 1.0, 10.0, "open",
+                            cat, None, None))
+    conn.commit()
+
+
+def _exported(conn):
+    import json
+    out = Path(tempfile.mkdtemp()) / "record.json"
+    ledger.export_json(conn, out)
+    got = json.loads(out.read_text(encoding="utf-8"))
+    got.pop("generated_at", None)      # the one field that always differs
+    return got
+
+
+def test_the_record_page_cannot_tell_wnba_exists():
+    """THE WHOLE RULE, AND THE ONLY SHAPE THAT CAN PROVE IT.
+
+    Ethan: "I don't want wnba Past bet or new bet on the record page."
+
+    Scanning the payload for the word would pass while a POOLED total
+    silently carried these rows — a number has no league name in it, and
+    a pooled total quietly counting a league nobody can see is exactly
+    the kind of quiet this repo keeps being fixed for. So the test is a
+    difference instead: export a journal, add a full set of WNBA rows to
+    every book, export again, and require the two payloads to be
+    IDENTICAL. Any figure that moves, any key that appears, any receipt
+    that shows up, fails this.
+
+    It fails for a book that does not exist yet, too: `_ALL_BOOKS` is
+    hand-listed, so a new one has to be added here deliberately.
+    """
+    conn = _ledger()
+    _seed(conn, "nfl")
+    before = _exported(conn)
+    _seed(conn, "wnba")
+    after = _exported(conn)
+    # ONE EXEMPTION, AND IT IS NOT A BET. `forecast_log` is the sealed
+    # chain's integrity readout — {ok, n, head, broken_at} — and `n`
+    # counts what the chain has SEALED, with no league, player or price
+    # in it. A benched league's picks are still published on its own
+    # board and still sealed, which is the point of sealing: the chain
+    # says nobody rewrote a claim afterwards, and a chain that quietly
+    # skipped a league would be worth less, not more.
+    before.pop("forecast_log", None)
+    after.pop("forecast_log", None)
+    if before != after:
+        moved = sorted(k for k in set(before) | set(after)
+                       if before.get(k) != after.get(k))
+        raise AssertionError(
+            f"the record page changed when WNBA rows were added: {moved}")
+
+
+def test_the_same_journal_still_knows_every_one_of_those_rows():
+    """THE OTHER HALF, and the reason the test above is not just a
+    deletion passing as a feature. The bench is not published; it is
+    still kept, still graded and still readable at the terminal, which
+    is how anyone finds out whether the model got better."""
+    conn = _ledger()
+    _seed(conn, "wnba")
+    n = conn.execute(
+        "SELECT COUNT(*) FROM bets WHERE sport='wnba'").fetchone()[0]
+    assert n == len(_ALL_BOOKS) * 2, n
+    graded = conn.execute(
+        "SELECT COUNT(*) FROM bets WHERE sport='wnba' AND status='lost'"
+    ).fetchone()[0]
+    assert graded == len(_ALL_BOOKS), graded
+
+
+def test_the_page_is_TOLD_which_leagues_are_benched():
+    """Absence alone is ambiguous, and the page was about to resolve it
+    the wrong way: the Pick-of-the-Day line falls back to "No settled
+    Picks of the Day yet in this league" when a record is missing, and
+    on a benched league that is false — there are settled picks, they
+    are on paper. So the export names the benched leagues and the board
+    says the true thing."""
+    conn = _ledger()
+    got = _exported(conn)
+    assert got["benched_sports"] == ["wnba"], got["benched_sports"]
+    assert "wnba" not in got["tracked_sports"], got["tracked_sports"]
+    src = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert "benched_sports" in src, \
+        "the page cannot tell 'none yet' from 'not published'"
+    # The claim the page makes has to be the one the journal keeps.
+    i = src.index("benched_sports")
+    said = src[i:i + 500]
+    assert "paper" in said and "graded" in said, said[:200]
 
 
 # --- and it is shown, not vanished -------------------------------------
-def test_the_bench_has_its_own_heading_on_the_record():
+def test_the_bench_has_NO_heading_on_the_record():
+    """IT HAD ONE, FOR ABOUT AN HOUR. The first cut showed the bench
+    under "Benched — no money, still graded", on the argument that a
+    league whose rows stop appearing is misleading quiet. Ethan saw it
+    and said what he actually wanted: "I don't want wnba Past bet or new
+    bet on the record page. I only want it as paper bets."
+
+    Kept as a test rather than deleted with the code, because the
+    argument for showing it is a good one and the next person to have it
+    should find the answer here instead of shipping it again."""
     keys = [k for k, _label, _cats in ledger.SHADOW_SECTIONS]
-    assert ledger.BENCH_CATEGORY in keys, keys
-    label = next(l for k, l, _c in ledger.SHADOW_SECTIONS
-                 if k == ledger.BENCH_CATEGORY)
-    assert "money" in label.lower() and "graded" in label.lower(), label
+    assert ledger.BENCH_CATEGORY not in keys, keys
+    assert ledger.BENCH_CATEGORY not in [
+        c for _k, _l, cats in ledger.SHADOW_SECTIONS for c in cats]
 
 
 def test_the_bench_is_reversible_by_emptying_one_tuple():

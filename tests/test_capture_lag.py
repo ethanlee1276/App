@@ -192,8 +192,11 @@ def _graded_journal():
         ("mlb", "won", 350, 0.24, "Play"),
         # A vig-eaten old pick today's Kelly refuses: excluded.
         ("mlb", "lost", -110, 0.50, "B+"),
-        # Another sport, to prove the scope filter.
-        ("wnba", "won", -110, 0.58, "A"),
+        # Another sport, to prove the scope filter. NOT a benched one:
+        # since 2026-09-21 a benched league is out of every POOLED figure,
+        # so `restated_performance(conn)` would drop this row and the
+        # counts below would be testing the bench instead of the scope.
+        ("nba", "won", -110, 0.58, "A"),
     ]
     for i, (sport, status, odds, p, grade) in enumerate(rows):
         conn.execute(
@@ -223,8 +226,12 @@ def test_the_restated_record_resizes_without_touching_history():
 
 
 def test_the_restated_record_scopes_per_sport():
+    """Scoped to the league the fixture puts one row in. It was `wnba`
+    until 2026-09-21; a SCOPED read still answers for a benched league —
+    that is pinned in `test_a_benched_league_leaves_the_record_page` —
+    but asking the bench here would test two rules at once."""
     conn = _graded_journal()
-    r = ledger.restated_performance(conn, "wnba")
+    r = ledger.restated_performance(conn, "nba")
     assert (r["wins"], r["losses"]) == (1, 0)
 
 

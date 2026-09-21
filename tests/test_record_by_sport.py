@@ -138,8 +138,16 @@ def test_the_export_carries_every_sport():
     path = os.path.join(tempfile.mkdtemp(), "record.json")
     ledger.export_json(conn, path)
     blob = json.loads(open(path).read())
-    assert set(blob["by_sport"]) == set(ledger.TRACKED_SPORTS)
-    assert blob["tracked_sports"] == list(ledger.TRACKED_SPORTS)
+    # EVERY TRACKED SPORT EXCEPT A BENCHED ONE. Ethan, 2026-09-21: "I
+    # don't want wnba Past bet or new bet on the record page." These two
+    # keys are what the page's scope selector is built from, so a league
+    # listed here is a league a reader can click to.
+    on_page = [sp for sp in ledger.TRACKED_SPORTS
+               if not ledger.is_benched(sp)]
+    assert set(blob["by_sport"]) == set(on_page)
+    assert blob["tracked_sports"] == on_page
+    for sp in ledger.BENCHED_SPORTS:
+        assert sp not in blob["by_sport"], sp
     for sp, r in blob["by_sport"].items():
         assert r["sport"] == sp
         assert "overall" in r and "calibration" in r and "curve" in r

@@ -58,6 +58,14 @@ def _rows(conn, category: str, since: str | None):
          "FROM bets WHERE status IN ('won','lost','push') "
          "AND category=? AND stake_units > 0")
     args: list = [category]
+    # BENCHED LEAGUES ARE NOT ON THIS BOARD EITHER. Every row here is
+    # rendered with its league in the first column, so this is the one
+    # Record-page section where leaving a benched league in would put the
+    # word on the page rather than only inside a total.
+    from .ledger import off_record_sql
+    _b, _ba = off_record_sql()
+    q += _b
+    args += list(_ba)
     if since:
         q += " AND date >= ?"
         args.append(since)

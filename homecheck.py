@@ -596,10 +596,25 @@ def grading() -> list:
             # saying its graded rows are in the wrong book would be
             # describing rows that do not exist.
             if done and not on_page:
-                out.append(f"       !! NOTHING {sport.upper()} HAS SETTLED "
-                           f"REACHES THE RECORD PAGE \u2014 every graded row is "
-                           f"in a shadow book, so the page shows this league "
-                           f"no record at all")
+                # A BENCHED LEAGUE IS THE INTENDED CASE, NOT THE BUG.
+                # Ethan, 2026-09-21: "I don't want wnba Past bet or new
+                # bet on the record page." Every graded row being off
+                # the page is what he asked for, and a check that keeps
+                # shouting about a thing somebody decided on teaches
+                # whoever reads it to skip the line that matters.
+                try:
+                    from engine.ledger import is_benched as _benched
+                except ImportError:                     # pragma: no cover
+                    _benched = lambda _s: False         # noqa: E731
+                if _benched(sport):
+                    out.append(f"          benched \u2014 kept off the Record "
+                               f"page on purpose, still graded here "
+                               f"({done} settled)")
+                else:
+                    out.append(f"       !! NOTHING {sport.upper()} HAS SETTLED "
+                               f"REACHES THE RECORD PAGE \u2014 every graded "
+                               f"row is in a shadow book, so the page shows "
+                               f"this league no record at all")
         days = slates.get(sport) or []
         if days:
             out.append(f"          {len(days)} slate(s) journaled, "

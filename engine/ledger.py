@@ -2303,8 +2303,9 @@ def stale_report(conn, since: str | None = None) -> dict:
     measured CLV never cashes and the signal stays display-only."""
     # The headline was windowed and the hit-rate row was not, so one
     # panel disagreed with itself (2026-08-24 six-day review).
-    win = " AND date >= ?" if since else ""
-    wargs: tuple = (since,) if since else ()
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
     p = performance(conn, category="stale", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
@@ -2366,8 +2367,9 @@ def stale_verdict(conn, since: str | None = None,
     "promote" is a separate change, made with this number in hand.
     """
     import math as _math
-    win = " AND date >= ?" if since else ""
-    wargs: tuple = (since,) if since else ()
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
     rows = conn.execute(
         "SELECT sport, "
         "  COUNT(*) AS n, "
@@ -2512,8 +2514,9 @@ def log_form_picks(conn, result: dict, team_form: dict,
 def form_report(conn, since: str | None = None) -> dict:
     """The form sampler's scoreboard: does backing hot teams at real prices
     make money? Mirrors stale_report; graded nightly with everything else."""
-    win = " AND date >= ?" if since else ""
-    wargs: tuple = (since,) if since else ()
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
     p = performance(conn, category="form", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
@@ -4927,6 +4930,8 @@ def clv_coverage(conn, category: str = "main",
     """
     out: dict = {}
     for sp in TRACKED_SPORTS:
+        if is_benched(sp):
+            continue
         # Windowed with the record: this prints "N of M settled picks
         # have a close", and an M that disagrees with the settled count
         # above it reads as one of the two numbers being wrong.
@@ -5066,6 +5071,40 @@ def bench_existing(conn) -> dict:
     return moved
 
 
+def off_record_sql(column: str = "sport") -> tuple[str, tuple]:
+    """The SQL tail that keeps a benched league out of a pooled figure.
+
+    ``(" AND LOWER(sport) NOT IN (?)", ("wnba",))``, or ``("", ())`` when
+    nothing is benched — so a query it is appended to is byte-identical
+    to what it was before any of this existed.
+
+    ONE FRAGMENT, APPENDED TO THE WINDOW EVERY POOLED REPORT ALREADY
+    BUILDS. The Record page's sections are eight functions with two to
+    five queries each, and threading a filter through some of them and
+    not the rest is how a page ends up showing one set of leagues in its
+    totals and another in its rows — which is the failure
+    `likely_report`'s own comment warns about, four hundred lines down.
+
+    READ-SIDE ON PURPOSE. The Edge book takes the bench by MOVING its
+    rows, which is also what zeroes their dollars. No other book is
+    re-categorised, because `potd` is the key the day-lock, the relock
+    and the live tracker all query by, `longshot_watch` is written by a
+    promotion scan that reads `longshot`, and the settler routes on
+    `GRADED_ELSEWHERE`. Renaming those would not bench a league; it
+    would break the machinery that grades it — and the bench is only
+    worth anything if the picks keep being graded.
+
+    It is also why this covers rows placed BEFORE the bench with no
+    migration at all: the filter is on the league, never on what a row
+    happens to be filed as.
+    """
+    if not BENCHED_SPORTS:
+        return "", ()
+    marks = ",".join("?" * len(BENCHED_SPORTS))
+    return (f" AND LOWER({column}) NOT IN ({marks})",
+            tuple(sp.lower() for sp in BENCHED_SPORTS))
+
+
 def is_benched(sport) -> bool:
     """Is this league's record benched — picks made, no money, not in the
     headline?"""
@@ -5088,7 +5127,7 @@ def book_for(sport, paper: bool) -> str:
 def performance(conn, sport: str | None = None,
                 category: str | tuple[str, ...] = BOOK,
                 since: str | None = None,
-                exclude_sports: tuple[str, ...] = ()) -> dict:
+                exclude_sports: tuple[str, ...] | None = None) -> dict:
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
     # Counting them would inflate the W-L column with wagers nobody could
@@ -5100,17 +5139,23 @@ def performance(conn, sport: str | None = None,
     args: list = list(cats)
     if sport:
         q += " AND sport=?"; args.append(sport)
-    # A BENCHED LEAGUE LEAVES THE POOLED FIGURE, for the books whose
-    # category is load-bearing elsewhere and so cannot be rewritten.
-    # The Edge book takes the bench by re-categorising — that is what
-    # also zeroes its dollars — but `potd` is the key the day-lock, the
-    # relock and the live tracker all query by, so moving those rows
-    # would break the "first qualifying pick is the day's pick" rule
-    # rather than bench it. Asked here instead, where every pooled read
-    # already passes. A SCOPED read is never filtered: `sport="wnba"`
-    # means somebody asked for the bench, and answering it empty is the
-    # silent-disappearance this whole change is written against.
-    ex = tuple(str(x).lower() for x in exclude_sports) if not sport else ()
+    # A BENCHED LEAGUE LEAVES EVERY POOLED FIGURE, and it is the DEFAULT
+    # here rather than an argument each caller remembers to pass. This
+    # function is the arithmetic under a dozen Record-page sections, and
+    # "an option the callers opt into" is the same shape as `game_day`,
+    # which eight inserts of eleven forgot. Ethan, 2026-09-21: "I don't
+    # want wnba Past bet or new bet on the record page." See
+    # `off_record_sql` for why the bench is read-side.
+    #
+    # A SCOPED READ IS NEVER FILTERED. `sport="wnba"` is somebody asking
+    # for the bench by name — at the terminal, or from `homecheck.py
+    # record` — and that is the only way anyone finds out whether the
+    # model got better. Pass `exclude_sports=()` for the true unfiltered
+    # total; `None` means "the benched leagues", read live, so emptying
+    # that tuple puts a league back without restarting anything.
+    ex = () if sport else tuple(
+        str(x).lower() for x in
+        (BENCHED_SPORTS if exclude_sports is None else exclude_sports))
     exq = (f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
            if ex else "")
     q += exq; args += list(ex)
@@ -5251,11 +5296,18 @@ def performance(conn, sport: str | None = None,
         # journal, so `performance(conn, "mlb")` reported football's open
         # bets as baseball's. Invisible while one board was live, and
         # exactly wrong the moment six are.
+        # THE BENCH COMES OUT OF THIS ONE TOO, and it was the last leak
+        # — a perfectly shaped one. Every settled figure in this dict
+        # read clean while the open count beside them still carried the
+        # league, so a section would have printed "0 settled · 2 open"
+        # for a league the page is not supposed to know exists.
         "open": conn.execute(
             f"SELECT COUNT(*) FROM bets WHERE status='open' "
             f"AND category IN ({marks})"
-            + (" AND sport=?" if sport else "") + " AND stake_units > 0",
-            (tuple(cats) + (sport,)) if sport else tuple(cats)).fetchone()[0],
+            + (" AND sport=?" if sport else "") + exq
+            + " AND stake_units > 0",
+            ((tuple(cats) + (sport,)) if sport else tuple(cats))
+            + tuple(ex)).fetchone()[0],
         "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
         # CLV coverage, because an average over 44% of the book is not a
@@ -5381,7 +5433,9 @@ def era_report(conn) -> dict:
         # The whole book, same as the headline — an era is a period of
         # the model's life, and paper mode did not start a new model.
         where = ("category IN ('main','paper') AND stake_units > 0")
-        args: list = []
+        _b, _ba = off_record_sql()
+        where += _b
+        args: list = list(_ba)
         if start:
             where += " AND date >= ?"
             args.append(start)
@@ -5478,6 +5532,15 @@ def pnl_curve(conn, sport: str | None = None,
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    else:
+        # THE CURVE HAS TO MATCH THE HEADLINE ABOVE IT, benched leagues
+        # included. `performance` drops them; a curve that did not would
+        # draw a line the number beside it disagrees with — and per the
+        # note below, the curve is the more convincing of the two, so the
+        # disagreement would read as the headline lying.
+        _b, _ba = off_record_sql()
+        q += _b
+        args += list(_ba)
     # The curve has to start where the headline starts, or the page shows
     # a running total that disagrees with the number above it — and the
     # curve is the more convincing of the two, so the disagreement would
@@ -5567,7 +5630,7 @@ def recent_settled(conn, limit: int = 30,
                    category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
                    since: str | None = None,
-                   exclude_sports: tuple[str, ...] = ()) -> list[dict]:
+                   exclude_sports: tuple[str, ...] | None = None) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
@@ -5593,11 +5656,13 @@ def recent_settled(conn, limit: int = 30,
     if sport:
         q += " AND sport=?"
         args.append(sport)
-    # THE RECEIPTS MATCH THE TOTAL ABOVE THEM. `performance` takes the
-    # same argument, and a list that still showed a benched league's
-    # losses under a total that no longer counted them would read as a
-    # bug in the arithmetic.
-    ex = tuple(str(x).lower() for x in exclude_sports) if not sport else ()
+    # THE RECEIPTS MATCH THE TOTAL ABOVE THEM, by the same default and
+    # for the same reason: a list still showing a benched league's
+    # losses under a total that no longer counts them reads as a bug in
+    # the arithmetic. Scoped reads are untouched — see `performance`.
+    ex = () if sport else tuple(
+        str(x).lower() for x in
+        (BENCHED_SPORTS if exclude_sports is None else exclude_sports))
     if ex:
         q += f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
         args += list(ex)
@@ -5996,6 +6061,12 @@ def restated_performance(conn, sport: str | None = None,
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    else:
+        # The same rule as `performance`, which this is the re-sized
+        # twin of: pooled leaves the bench out, scoped answers in full.
+        _b, _ba = off_record_sql()
+        q += _b
+        args += list(_ba)
     # Same window as the record it sits beside. This line's whole job is
     # to be COMPARED with the headline — "the same nights, priced by the
     # model we have now" — and two lines drawn over different nights are
@@ -6520,8 +6591,9 @@ def longshot_report(conn, since: str | None = None) -> dict:
     # "record shown from <epoch>" disclosure, the exact headline/panel
     # disagreement the 2026-08-23 "EVERYTHING" pass was for. Found in the
     # 2026-08-24 six-day review.
-    win = " AND date >= ?" if since else ""
-    wargs: tuple = (since,) if since else ()
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
     p = performance(conn, category="longshot", since=since)
     row = conn.execute(
         "SELECT COUNT(*) AS n, AVG(hit_prob) AS model_p, "
@@ -6549,9 +6621,13 @@ def longshot_report(conn, since: str | None = None) -> dict:
         # Open picks are not windowed: a pick is open NOW whatever day
         # it was journaled, and hiding pre-epoch open bets would make the
         # count disagree with the settle loop that still owes them.
+        # …but NOT the bench. This is the one place the window and the
+        # league filter part company, and riding them on the same string
+        # is exactly how this count kept a benched league after every
+        # other figure had dropped it.
         "open": conn.execute(
             "SELECT COUNT(*) FROM bets WHERE category='longshot_watch' "
-            "AND status='open'").fetchone()[0],
+            "AND status='open'" + _bench, _bargs).fetchone()[0],
     }
     # Which long-shot markets carry the bucket, and at what price. Average
     # odds matter here in a way they don't for the main record: a +250
@@ -6923,25 +6999,20 @@ def likely_report(conn, since: str | None = None,
     Attaching money is gated on the SECOND, and the verdict says which
     test the numbers currently answer.
     """
-    win = " AND date >= ?" if since else ""
-    wargs: tuple = (since,) if since else ()
+    # A SCOPED READ STILL ANSWERS IN FULL. `sport="wnba"` is somebody
+    # asking for the bench — at the terminal, or from `homecheck.py
+    # record` — and that is the only way anyone finds out whether the
+    # model got better. It is the POOLED report the Record page renders,
+    # and only that one, the bench comes out of.
+    _bench, _bargs = ("", ()) if sport else off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
     # ONE FILTER, APPENDED TO EVERY QUERY IN THIS FUNCTION. Threading it
     # through some of them and not others is how a page ends up printing
     # one sport's calibration beside every sport's ROI.
     sw = " AND sport=?" if sport else ""
     sargs: tuple = (sport,) if sport else ()
-    # THE BENCH, IN THE SAME FILTER. A benched league's Most Likely rows
-    # keep their own category — `likely_category` is what the live
-    # tracker and the board's own reader ask by — so they come out of the
-    # POOLED report here instead, the way `performance` does it. A scoped
-    # report (`sport="wnba"`) is untouched and still answers in full:
-    # the bench is shown, not hidden.
-    if not sport and BENCHED_SPORTS:
-        sw += (" AND LOWER(sport) NOT IN "
-               f"({','.join('?' * len(BENCHED_SPORTS))})")
-        sargs = sargs + tuple(s_.lower() for s_ in BENCHED_SPORTS)
-    p = performance(conn, sport=sport, category=LIKELY_BOOKS, since=since,
-                    exclude_sports=() if sport else BENCHED_SPORTS)
+    p = performance(conn, sport=sport, category=LIKELY_BOOKS, since=since)
     graded = ("AND status IN ('won','lost') AND category IN "
               "('likely','likely_live')")
 
@@ -7078,9 +7149,13 @@ def likely_report(conn, since: str | None = None,
             "actual": round(r["actual"], 4) if r["actual"] is not None else None,
             "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
 
+    # `sw` carries the SPORT scope; `_bench` carries the leagues that are
+    # off the page. They are separate here because this query skips the
+    # date window that `win` — which carries the bench for every other
+    # query in this function — is glued to.
     p["open"] = conn.execute(
         "SELECT COUNT(*) FROM bets WHERE category IN ('likely','likely_live') "
-        "AND status='open'" + sw, sargs).fetchone()[0]
+        "AND status='open'" + sw + _bench, sargs + _bargs).fetchone()[0]
     p["recent"] = recent_settled(conn, limit=15, category=LIKELY_BOOKS,
                                  sport=sport, since=since)
     p["sport"] = sport or ""
@@ -7740,11 +7815,6 @@ SHADOW_SECTIONS = (
     ("form", "Form sampler", ("form",)),
     ("loose", "Looser gates", ("loose",)),
     ("longshot_watch", "Long-shot watch", ("longshot_watch",)),
-    # THE BENCH, ON THE PAGE. A league whose rows simply stopped
-    # appearing would be the misleading quiet this project keeps being
-    # fixed for — and the bench is a claim we should be held to: we said
-    # the model was not good enough, and this is where that gets checked.
-    (BENCH_CATEGORY, "Benched — no money, still graded", (BENCH_CATEGORY,)),
     ("predmarket", "Prediction desk", ("predmarket",)),
 )
 
@@ -7782,10 +7852,11 @@ def journaled_counts(conn, since: str | None = None) -> dict:
     adds up to. The 119 college voids are the case that made this worth
     stating.
     """
-    win = " AND date >= ?" if since else ""
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
     cats = RECOMMENDED_CATEGORIES
     marks = ",".join("?" * len(cats))
-    args: tuple = tuple(cats) + ((since,) if since else ())
+    args: tuple = tuple(cats) + ((since,) if since else ()) + _bargs
     out: dict = {}
     tot = {"settled": 0, "open": 0}
     for r in conn.execute(
@@ -7820,8 +7891,9 @@ def book_records(conn, since: str | None = None, sections=None) -> dict:
     the one place a push must stay out of the denominator.
     """
     sections = BOOK_SECTIONS if sections is None else tuple(sections)
-    win = " AND date >= ?" if since else ""
-    args: tuple = (since,) if since else ()
+    _bench, _bargs = off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    args: tuple = ((since,) if since else ()) + _bargs
     cat_to_sec = {c: key for key, _, cats in sections for c in cats}
     labels = {key: label for key, label, _ in sections}
     out: dict = {}
@@ -7939,30 +8011,27 @@ def export_json(conn, path) -> None:
         "likely_by_sport": {
             sp: rep for sp, rep in
             ((sp, likely_report(conn, since=since, sport=sp))
-             for sp in TRACKED_SPORTS)
+             for sp in TRACKED_SPORTS if not is_benched(sp))
             if rep.get("settled") or rep.get("open")},
         # THE PICK OF THE DAY'S OWN BOOK, pooled and per sport. Ethan,
         # 2026-09-15: "it will have its own spot on the record page so
         # we can see how it's doing." One row a day per sport, flat
         # stake, so the pooled figure and the per-sport cut are both
         # readable as a plain record rather than a rate.
-        # POOLED, LESS THE BENCH. WNBA's Picks of the Day are still
-        # made, still journaled and still graded — `potd_by_sport` below
-        # shows them under their own label — but they are out of the
-        # figure the page leads the section with. Ethan, 2026-09-21:
-        # "remove wnba from the record so it's not hurting us."
-        "potd": performance(conn, category=POTD_CATEGORY, since=since,
-                            exclude_sports=BENCHED_SPORTS),
+        # LESS THE BENCH, pooled AND per sport — Ethan, 2026-09-21: "I
+        # don't want wnba Past bet or new bet on the record page." The
+        # picks are still made and still graded; the page just does not
+        # carry them. See `off_record_sql`.
+        "potd": performance(conn, category=POTD_CATEGORY, since=since),
         "potd_by_sport": {
             sp: rep for sp, rep in
             ((sp, performance(conn, sp, POTD_CATEGORY, since=since))
-             for sp in TRACKED_SPORTS)
+             for sp in TRACKED_SPORTS if not is_benched(sp))
             if rep.get("settled") or rep.get("open")},
         # The receipts under it: every settled pick, newest first, so the
         # section can show the run rather than only its total.
         "potd_recent": recent_settled(conn, POTD_RECENT_LIMIT,
-                                      category=POTD_CATEGORY, since=since,
-                                      exclude_sports=BENCHED_SPORTS),
+                                      category=POTD_CATEGORY, since=since),
         # Per sport × per book × per market — the Record page's section
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.
@@ -8026,9 +8095,23 @@ def export_json(conn, path) -> None:
         # untouched. "we will keep all the other data that we dont
         # display for ourselves" is exactly right, and the database is
         # where that data lives.
+        # A BENCHED LEAGUE HAS NO ENTRY AND NO CHIP. These two lines are
+        # what the Record page's scope selector is built from, so a key
+        # here is a league a reader can click to — which is the whole of
+        # what Ethan asked to stop: "I don't want wnba Past bet or new
+        # bet on the record page."
         "by_sport": {sp: sport_report(conn, sp, since=since)
-                     for sp in TRACKED_SPORTS},
-        "tracked_sports": list(TRACKED_SPORTS),
+                     for sp in TRACKED_SPORTS if not is_benched(sp)},
+        "tracked_sports": [sp for sp in TRACKED_SPORTS
+                           if not is_benched(sp)],
+        # …AND WHICH LEAGUES THOSE ARE, so a board page can say the true
+        # thing instead of the default one. WNBA's Pick-of-the-Day line
+        # falls back to "No settled Picks of the Day yet in this league"
+        # when its record is absent, and for a benched league that
+        # sentence is simply false — there are settled picks; they are
+        # on paper. A page that cannot tell "none yet" from "not
+        # published" will pick the wrong one every time.
+        "benched_sports": list(BENCHED_SPORTS),
         "calibration": calibration(conn, since=since),
         # The same chart scoped to the CURRENT model era — the all-time
         # chart is dominated by picks from gates that no longer exist.
@@ -8074,7 +8157,8 @@ def export_json(conn, path) -> None:
         "restated": {"overall": restated_performance(conn, since=since),
                      "by_sport": {sp: restated_performance(conn, sp,
                                                            since=since)
-                                  for sp in TRACKED_SPORTS}},
+                                  for sp in TRACKED_SPORTS
+                                  if not is_benched(sp)}},
         "account_health": account_health(conn, since=since),
         # How much of the record has a real closing line behind it — the
         # honest prerequisite for anything that wants to reason from CLV.

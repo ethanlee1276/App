@@ -2629,6 +2629,18 @@ async function renderPickOfTheDay() {
     const line = document.getElementById("potd-record");
     if (!line) return;
     const r = ((rec || {}).potd_by_sport || {})[state.sport];
+    /* A BENCHED LEAGUE HAS A RECORD; IT IS JUST NOT PUBLISHED, and the
+       fallback below would have called that "none yet" — a false
+       sentence, on the line whose whole job is being checkable. Ethan,
+       2026-09-21: "I don’t want wnba Past bet or new bet on the record
+       page. I only want it as paper bets." Saying so here is the honest
+       reading of that: the picks keep coming, on paper. */
+    if (((rec || {}).benched_sports || []).includes(state.sport)) {
+      line.textContent = `${league} Picks of the Day are on paper while `
+        + "the model is rebuilt — still made, still graded, kept off the "
+        + "record.";
+      return;
+    }
     if (!r || !r.settled) {
       line.textContent = "No settled Picks of the Day yet in this league — "
         + "the record starts with the first one to grade.";
