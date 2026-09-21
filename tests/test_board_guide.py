@@ -95,7 +95,13 @@ def test_every_board_names_the_journal_that_actually_writes_it():
     # The main book is category 'main' unless paper mode is on, and
     # log_recommendations is the only thing that writes it.
     src = inspect.getsource(ledger.log_recommendations)
-    assert 'category = "paper" if paper else "main"' in src
+    assert "category = book_for(sport, paper)" in src
+    # ASKED OF THE FUNCTION, NOT OF THE LINE. `book_for` was extracted on
+    # 2026-09-21 because that category is chosen once and written by TWO
+    # inserts, and a string match on one of them proved nothing about the
+    # other. It still answers 'main' for a league on the record.
+    assert ledger.book_for("nfl", False) == "main"
+    assert ledger.book_for("nfl", True) == "paper"
     assert got["recommendations"]["journal"] == "main"
 
 
@@ -106,7 +112,7 @@ def test_only_the_board_that_stakes_money_says_it_does():
     call. The claim is now per league, which is what it always should
     have been — one flag was telling every reader the same thing about
     five different books."""
-    for sport in ("nfl", "cfb", "wnba", "mlb"):
+    for sport in ("nfl", "cfb", "mlb"):
         got = {b["key"]: b for b in boards.guide(sport)}
         assert got["recommendations"]["money"] is True, sport
         # Staked from 2026-09-19 in every league that has this board.
@@ -115,6 +121,26 @@ def test_only_the_board_that_stakes_money_says_it_does():
         # The long-shot book was NOT part of that call and must not have
         # been swept along with it.
         assert got["long_shots"]["money"] is False, sport
+
+
+def test_a_benched_leagues_guide_stops_promising_money():
+    """WNBA LEFT THIS LOOP ON 2026-09-21. Ethan: "remove wnba from the
+    record so it's not hurting us. Make it all paper." Its likelihood
+    board came off `LIKELY_LIVE_SPORTS`, so the page must no longer tell
+    a reader that board is staked — the guide is the copy beside the
+    picks, and copy that outlives the code it describes is the exact
+    failure this file was written to catch."""
+    got = {b["key"]: b for b in boards.guide("wnba")}
+    assert got["most_likely"]["money"] is False
+    assert got["most_likely"]["journal"] == "likely"
+    # And the Edge board, which is where the sentence "the only board
+    # that stakes real money" was printed under every league's picks.
+    assert got["recommendations"]["money"] is False
+    assert got["recommendations"]["journal"] == ledger.BENCH_CATEGORY
+    assert "real money" not in got["recommendations"]["trust"]
+    assert "no dollar risk" in boards.summary_line(got["recommendations"])
+    # The bench is no money, not no picks: the board is still there.
+    assert "recommendations" in got
 
 
 def test_the_guide_reads_the_ledgers_own_list_of_staked_leagues():

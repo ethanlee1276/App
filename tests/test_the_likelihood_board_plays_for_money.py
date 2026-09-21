@@ -83,13 +83,30 @@ def test_every_league_with_a_likelihood_board_is_staked():
     name. The football seasons are two and three weeks old, so for most
     of these this is not a thin edge staked anyway — it is a board with
     no settled record at all, staked from the start."""
-    for sport in ("nfl", "cfb", "nba", "wnba", "mlb"):
+    for sport in ("nfl", "cfb", "nba", "mlb"):
         conn = _conn()
         ledger.log_most_likely(conn, _board(sport))
         r = _rows(conn)[0]
         assert r["category"] == ledger.LIKELY_LIVE_CATEGORY, (sport, dict(r))
         assert r["stake_dollars"] > 0, (sport, dict(r))
         assert ledger.performance(conn, sport)["open"] == 0, sport
+
+
+def test_a_BENCHED_leagues_board_came_back_off_the_money():
+    """WNBA LEFT THE LIST ABOVE ON 2026-09-21. Ethan: "remove wnba from
+    the record so it's not hurting us. Make it all paper." It had been
+    staked here since 2026-09-19, so "all paper" had to reach this board
+    as well — the Edge book is the headline, but it is not the only
+    place this site was putting dollars on that league.
+
+    The board still RUNS. It is journaled, graded and readable at its own
+    scope; what stopped is the money."""
+    conn = _conn()
+    ledger.log_most_likely(conn, _board("wnba"))
+    r = _rows(conn)[0]
+    assert r["category"] == "likely", dict(r)
+    assert r["stake_dollars"] == 0.0, dict(r)
+    assert r["stake_units"] > 0, "the board stopped measuring, not just paying"
 
 
 def test_a_league_with_no_likelihood_board_is_not_staked():

@@ -375,6 +375,16 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
     except sqlite3.OperationalError:
         pass
+    # THE BENCH, APPLIED WHEREVER THE LEDGER OPENS. Idempotent, and a
+    # sweep rather than a command for the reason `seal_forecasts` is one:
+    # a manual step gets run on one machine and forgotten on the next.
+    # Never fatal — a benched league still in the headline is wrong, but
+    # a ledger that will not open is worse.
+    try:
+        bench_existing(conn)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  benched leagues not applied ({type(exc).__name__}: "
+              f"{exc}) — WNBA rows may still be in the headline record")
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -762,7 +772,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     # book has to answer "what would this have returned", and a stake of
     # zero cannot. `category` is what makes it costless, not the size.
     paper = str(get_cfg(conn, "paper_mode") or "0") == "1"
-    category = "paper" if paper else "main"
+    benched = is_benched(sport)
+    category = book_for(sport, paper)
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
     kick = _kickoff_map(result)
     n = 0
@@ -802,7 +813,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # Zero dollars in paper mode, and it must be zero rather than
              # small: `performance` sums this column for the dollar P&L,
              # and a paper book that moves the dollar line is not paper.
-             0.0 if paper else round(stake_units * unit_dollars, 2),
+             0.0 if (paper or benched) else round(stake_units * unit_dollars, 2),
              category,
              # Which doubleheader leg this bet belongs to — the settler
              # grades against that game's stat line, not a coin flip.
@@ -898,13 +909,17 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, rest_days, body_clock, lead_min, "
-            "wind_out, roofed, evidence) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?, ?)",
+            "wind_out, roofed, evidence, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)",
             (game_day_for(r, date),
              now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
-             r.get("grade"), stake_units, round(stake_units * unit_dollars, 2),
+             r.get("grade"), stake_units,
+             # NO DOLLARS ON A BENCHED LEAGUE. The units stay as
+             # sized — that is what keeps the bench measurable —
+             # and only the money stops.
+             0.0 if benched else round(stake_units * unit_dollars, 2),
              r.get("game_number") if r.get("doubleheader") else None,
              # Fatigue, for the side this bet is about. A short week or a
              # 10am body clock is a spread's business at least as much as a
@@ -928,7 +943,13 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # game bets, and stamping only the first is precisely
              # how `game_day` came to be missing from eight inserts
              # of eleven.
-             evidence_for(r)))
+             evidence_for(r),
+             # THE BOOK, WRITTEN OUT. This insert named no category
+             # at all and leaned on the schema's `DEFAULT 'main'`,
+             # so a bench applied only at the props loop above would
+             # have left every game bet on a benched league going
+             # straight to the headline.
+             category))
         n += cur.rowcount
     conn.commit()
     return n
@@ -4981,9 +5002,93 @@ def _book_breakeven(bets) -> float | None:
 BOOK = ("main", "paper")
 
 
+#: LEAGUES BENCHED FROM THE RECORD, and the book their rows go to.
+#:
+#: Ethan, 2026-09-21: *"Stop recording WNBA on the record and make it
+#: paper till we make the model better and remove wnba from the record
+#: so it's not hurting us."*
+#:
+#: PAPER IS NOT WHAT HE WANTED, and that is the whole reason this exists.
+#: `paper_mode` is one global switch, not a per-league one — and `BOOK`
+#: above is ("main", "paper"), because on 2026-08-13 he asked for the two
+#: to be combined: "Combine our paper record and normal money record."
+#: So filing a league as paper stops the DOLLARS and leaves every unit,
+#: win, loss and ROI point of it sitting in the headline. It would not
+#: have removed WNBA from the number it was hurting.
+#:
+#: A benched league goes to a category OUTSIDE `BOOK`, which is what
+#: takes it out of `performance` — and it is still shown, under its own
+#: heading in `SHADOW_SECTIONS`, because a league that silently
+#: disappears from a record page is the misleading kind of quiet this
+#: project keeps having to fix. Its picks are still made, still
+#: journaled, still graded: the bench is where we find out whether the
+#: model got better.
+#:
+#: REVERSIBLE BY EMPTYING THE TUPLE. Nothing else has to move.
+BENCH_CATEGORY = "benched"
+BENCHED_SPORTS = ("wnba",)
+
+
+def bench_existing(conn) -> dict:
+    """Move every benched league's Edge rows out of the headline book.
+
+    ``{sport: moved}`` — idempotent, so running it twice moves nothing
+    the second time.
+
+    A SWEEP RATHER THAN A ONE-OFF COMMAND, for the reason
+    `seal_forecasts` is one: a manual step is a step that gets run on one
+    machine and forgotten on the next. This is called from the migration
+    path, so any ledger that opens is already benched.
+
+    THE SEALED FORECAST LOG IS NOT TOUCHED AND DOES NOT BREAK. It keeps
+    its own copy of `category` and `verify_forecast_log` recomputes from
+    that copy, so the chain stays green; `seal_forecasts` joins on
+    `bet_id` and will not re-seal a row it has already sealed. What the
+    log records is what was CLAIMED at the time — that these were
+    main-book picks — which remains true and is the whole point of it.
+    This table records what was decided afterwards. The two answer
+    different questions and are supposed to be able to differ.
+
+    OPEN ROWS MOVE TOO. A bet still running on a benched league would
+    otherwise settle into the headline days after the league left it.
+    """
+    moved: dict = {}
+    for sport in BENCHED_SPORTS:
+        marks = ",".join("?" * len(BOOK))
+        cur = conn.execute(
+            f"UPDATE bets SET category=?, stake_dollars=0.0 "
+            f"WHERE sport=? AND category IN ({marks})",
+            (BENCH_CATEGORY, sport, *BOOK))
+        if cur.rowcount:
+            moved[sport] = cur.rowcount
+    if moved:
+        conn.commit()
+    return moved
+
+
+def is_benched(sport) -> bool:
+    """Is this league's record benched — picks made, no money, not in the
+    headline?"""
+    return str(sport or "").lower() in BENCHED_SPORTS
+
+
+def book_for(sport, paper: bool) -> str:
+    """The category a fresh Edge-book row belongs to.
+
+    ONE ANSWER FOR EVERY WRITER. `log_recommendations` files props and
+    game bets through two separate inserts, and a bench honoured by one
+    of them is not a bench — the same shape as `game_day`, which eight
+    inserts of eleven forgot.
+    """
+    if is_benched(sport):
+        return BENCH_CATEGORY
+    return "paper" if paper else "main"
+
+
 def performance(conn, sport: str | None = None,
                 category: str | tuple[str, ...] = BOOK,
-                since: str | None = None) -> dict:
+                since: str | None = None,
+                exclude_sports: tuple[str, ...] = ()) -> dict:
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
     # Counting them would inflate the W-L column with wagers nobody could
@@ -4995,6 +5100,20 @@ def performance(conn, sport: str | None = None,
     args: list = list(cats)
     if sport:
         q += " AND sport=?"; args.append(sport)
+    # A BENCHED LEAGUE LEAVES THE POOLED FIGURE, for the books whose
+    # category is load-bearing elsewhere and so cannot be rewritten.
+    # The Edge book takes the bench by re-categorising — that is what
+    # also zeroes its dollars — but `potd` is the key the day-lock, the
+    # relock and the live tracker all query by, so moving those rows
+    # would break the "first qualifying pick is the day's pick" rule
+    # rather than bench it. Asked here instead, where every pooled read
+    # already passes. A SCOPED read is never filtered: `sport="wnba"`
+    # means somebody asked for the bench, and answering it empty is the
+    # silent-disappearance this whole change is written against.
+    ex = tuple(str(x).lower() for x in exclude_sports) if not sport else ()
+    exq = (f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
+           if ex else "")
+    q += exq; args += list(ex)
     # `date >= ?` across mixed date formats, which needs stating exactly
     # because the obvious summary of it is wrong. NFL journals week
     # labels ("2026-W1") and everything else journals ISO days, and a
@@ -5019,6 +5138,7 @@ def performance(conn, sport: str | None = None,
     uargs: list = list(cats)
     if sport:
         uq += " AND sport=?"; uargs.append(sport)
+    uq += exq; uargs += list(ex)
     if since:
         uq += " AND date >= ?"; uargs.append(since)
     unstaked = conn.execute(uq, uargs).fetchone()[0]
@@ -5446,7 +5566,8 @@ def receipts(conn, since: str | None = None) -> list[dict]:
 def recent_settled(conn, limit: int = 30,
                    category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
-                   since: str | None = None) -> list[dict]:
+                   since: str | None = None,
+                   exclude_sports: tuple[str, ...] = ()) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
@@ -5472,6 +5593,14 @@ def recent_settled(conn, limit: int = 30,
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    # THE RECEIPTS MATCH THE TOTAL ABOVE THEM. `performance` takes the
+    # same argument, and a list that still showed a benched league's
+    # losses under a total that no longer counted them would read as a
+    # bug in the arithmetic.
+    ex = tuple(str(x).lower() for x in exclude_sports) if not sport else ()
+    if ex:
+        q += f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
+        args += list(ex)
     rows = conn.execute(q + " ORDER BY date DESC, id DESC LIMIT ?",
                         (*args, limit)).fetchall()
     out = []
@@ -6498,7 +6627,12 @@ LIKELY_VERDICT_N = 100
 #: anyway", it is a board with no settled record at all being staked from
 #: the start. `homecheck.py record` prints each league's n, ROI and z so
 #: that is visible rather than assumed.
-LIKELY_LIVE_SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
+#: WNBA LEFT THIS LIST ON 2026-09-21, benched with the rest of its
+#: record (see `BENCHED_SPORTS`). "Make it all paper" means no WNBA money
+#: anywhere, and this board stakes 0.25u of real dollars — leaving it
+#: here would have kept baseball-sized money on the one league Ethan
+#: asked to stop paying for.
+LIKELY_LIVE_SPORTS = ("mlb", "nfl", "cfb", "nba")
 
 #: Flat, and SMALLER than the stale book's promoted stake (0.5u).
 #:
@@ -6541,7 +6675,14 @@ WITNESSED_BOOKS = BOOK + (POTD_CATEGORY,) + LIKELY_BOOKS
 
 
 def likely_is_staked(sport) -> bool:
-    """Is this league's likelihood board playing for money?"""
+    """Is this league's likelihood board playing for money?
+
+    A BENCHED LEAGUE NEVER IS, asked here rather than trusted to the list
+    above: two places that have to be edited together are two places one
+    of them gets edited alone.
+    """
+    if is_benched(sport):
+        return False
     return str(sport or "").lower() in LIKELY_LIVE_SPORTS
 
 
@@ -6789,7 +6930,18 @@ def likely_report(conn, since: str | None = None,
     # one sport's calibration beside every sport's ROI.
     sw = " AND sport=?" if sport else ""
     sargs: tuple = (sport,) if sport else ()
-    p = performance(conn, sport=sport, category=LIKELY_BOOKS, since=since)
+    # THE BENCH, IN THE SAME FILTER. A benched league's Most Likely rows
+    # keep their own category — `likely_category` is what the live
+    # tracker and the board's own reader ask by — so they come out of the
+    # POOLED report here instead, the way `performance` does it. A scoped
+    # report (`sport="wnba"`) is untouched and still answers in full:
+    # the bench is shown, not hidden.
+    if not sport and BENCHED_SPORTS:
+        sw += (" AND LOWER(sport) NOT IN "
+               f"({','.join('?' * len(BENCHED_SPORTS))})")
+        sargs = sargs + tuple(s_.lower() for s_ in BENCHED_SPORTS)
+    p = performance(conn, sport=sport, category=LIKELY_BOOKS, since=since,
+                    exclude_sports=() if sport else BENCHED_SPORTS)
     graded = ("AND status IN ('won','lost') AND category IN "
               "('likely','likely_live')")
 
@@ -7588,6 +7740,11 @@ SHADOW_SECTIONS = (
     ("form", "Form sampler", ("form",)),
     ("loose", "Looser gates", ("loose",)),
     ("longshot_watch", "Long-shot watch", ("longshot_watch",)),
+    # THE BENCH, ON THE PAGE. A league whose rows simply stopped
+    # appearing would be the misleading quiet this project keeps being
+    # fixed for — and the bench is a claim we should be held to: we said
+    # the model was not good enough, and this is where that gets checked.
+    (BENCH_CATEGORY, "Benched — no money, still graded", (BENCH_CATEGORY,)),
     ("predmarket", "Prediction desk", ("predmarket",)),
 )
 
@@ -7789,7 +7946,13 @@ def export_json(conn, path) -> None:
         # we can see how it's doing." One row a day per sport, flat
         # stake, so the pooled figure and the per-sport cut are both
         # readable as a plain record rather than a rate.
-        "potd": performance(conn, category=POTD_CATEGORY, since=since),
+        # POOLED, LESS THE BENCH. WNBA's Picks of the Day are still
+        # made, still journaled and still graded — `potd_by_sport` below
+        # shows them under their own label — but they are out of the
+        # figure the page leads the section with. Ethan, 2026-09-21:
+        # "remove wnba from the record so it's not hurting us."
+        "potd": performance(conn, category=POTD_CATEGORY, since=since,
+                            exclude_sports=BENCHED_SPORTS),
         "potd_by_sport": {
             sp: rep for sp, rep in
             ((sp, performance(conn, sp, POTD_CATEGORY, since=since))
@@ -7798,7 +7961,8 @@ def export_json(conn, path) -> None:
         # The receipts under it: every settled pick, newest first, so the
         # section can show the run rather than only its total.
         "potd_recent": recent_settled(conn, POTD_RECENT_LIMIT,
-                                      category=POTD_CATEGORY, since=since),
+                                      category=POTD_CATEGORY, since=since,
+                                      exclude_sports=BENCHED_SPORTS),
         # Per sport × per book × per market — the Record page's section
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.

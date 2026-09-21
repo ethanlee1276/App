@@ -56,6 +56,18 @@ def _likely_staked(sport) -> bool:
     return likely_is_staked(sport)
 
 
+def _benched(sport) -> bool:
+    """Is this league benched — picks still made, no money, off the
+    headline record?
+
+    Read from the ledger for the reason `_likely_staked` is: a second
+    list of benched leagues is a second thing to forget, and the copy
+    beside the picks is where forgetting it shows.
+    """
+    from .ledger import is_benched
+    return is_benched(sport)
+
+
 def _likely_measured(sport: str) -> str:
     """The likelihood board's evidence sentence, in the sport's OWN
     numbers. The first cut had one sentence — the NFL's — and every
@@ -183,9 +195,20 @@ def guide(sport: str = "nfl") -> list[dict]:
                 f"closes — indistinguishable from a coin flip. Judge "
                 f"this board by the Record page's settled rows, not by "
                 f"how confident it sounds."),
-            "journal": "main",
-            "money": True,
+            "journal": "benched" if _benched(sport) else "main",
+            "money": not _benched(sport),
+            # THE COPY FOLLOWS THE MONEY. This read "the only board that
+            # stakes real money" for every league; on a benched one that
+            # is the page telling a reader the opposite of what the
+            # journal does, which is the failure this file exists to
+            # catch. Benched 2026-09-21 — Ethan: "remove wnba from the
+            # record so it's not hurting us. Make it all paper."
             "trust": (
+                "Benched while the model is rebuilt: these picks are "
+                "still made and still graded, at no dollar risk and "
+                "outside the headline record, so you can watch whether "
+                "they come good before anyone bets them."
+                if _benched(sport) else
                 "The only board that stakes real money, and the one with "
                 "the least evidence behind it. Treat it as unproven until "
                 "the Record page has settled rows, not as the headline it "

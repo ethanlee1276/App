@@ -243,7 +243,13 @@ def test_paper_mode_changes_only_the_category_and_the_dollars():
     import inspect
     from engine import ledger
     src = inspect.getsource(ledger.log_recommendations)
-    assert 'category = "paper" if paper else "main"' in src
+    # ASKED OF THE FUNCTION RATHER THAN THE LINE. That literal moved on
+    # 2026-09-21 when the choice was extracted into `book_for` — one
+    # category chosen once for the TWO inserts that write this book. The
+    # claim being audited is unchanged, so it is asserted directly.
+    assert "category = book_for(sport, paper)" in src
+    assert ledger.book_for("nfl", True) == "paper"
+    assert ledger.book_for("nfl", False) == "main"
     assert "stake_units" in src
 
 
