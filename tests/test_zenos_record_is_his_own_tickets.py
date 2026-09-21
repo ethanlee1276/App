@@ -351,6 +351,32 @@ def test_over_the_wire_only_the_owner_writes_and_everyone_reads():
         site.stop()
 
 
+# --- the box ---------------------------------------------------------------
+def test_the_cli_refuses_to_create_a_root_owned_store():
+    """The service runs as `qellys` under ProtectSystem=strict. A store
+    this command creates as root is readable the day it is made and never
+    writable again: every later import 500s and the page reads "could
+    not be read". The box already carries 6,098 root-owned cache files
+    from exactly this mistake, so the CLI refuses and prints the right
+    command rather than trusting the runbook to be read."""
+    import pwd
+    real_uid, real_pw = os.geteuid, pwd.getpwuid
+    d = Path(tempfile.mkdtemp())
+    try:
+        os.geteuid = lambda: 0                     # pretend to be root
+        pwd.getpwuid = lambda _u: type("P", (), {"pw_name": "qellys"})()
+        why = zeno._root_trap(d / "z.db")
+        assert why and "sudo -u qellys" in why, why
+        assert zeno._cli(["import", str(d / "nope.csv")]) == 2
+        # Root into root's own directory is fine — that is not the trap.
+        pwd.getpwuid = lambda _u: type("P", (), {"pw_name": "root"})()
+        assert zeno._root_trap(d / "z.db") is None
+    finally:
+        os.geteuid, pwd.getpwuid = real_uid, real_pw
+    # And not root at all: nothing to say.
+    assert zeno._root_trap(d / "z.db") is None or os.geteuid() == 0
+
+
 # --- the page --------------------------------------------------------------
 def _js():
     return (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")

@@ -63,18 +63,25 @@ sudo systemctl restart qellys
 Pick something long and random (`openssl rand -hex 24` is fine). Without
 it every import answers 503 — closed, not open.
 
-**2. Import an export, on the box:**
+**2. Import an export.** Two ways; the first needs no SSH at all.
+
+From your laptop, with the file next to you:
 
 ```bash
-cd /srv/qellys && python3 -m engine.zeno import ~/juicereel.csv
-```
-
-or from your phone / laptop, without SSH:
-
-```bash
+export QB_OWNER_TOKEN='paste-the-token-here'
 curl -sS -X POST https://qellys.com/api/zeno/import \
   -H "X-Owner-Token: $QB_OWNER_TOKEN" -H "X-Zeno-Source: juicereel" \
   --data-binary @juicereel.csv
+```
+
+Or on the box — **as the service user, never as root.** The service runs
+as `qellys` under a locked-down filesystem, and a store created by root
+is one it can read the day it is made and never write again. The
+command refuses to run as root and prints this line if you forget:
+
+```bash
+scp juicereel.csv you@qellys.com:/tmp/juicereel.csv      # from the laptop
+cd /srv/qellys && sudo -u qellys python3 -m engine.zeno import /tmp/juicereel.csv
 ```
 
 Either prints `N added · N updated · N unchanged · N skipped`. Re-running

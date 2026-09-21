@@ -470,6 +470,28 @@ def parse_text(text: str) -> tuple[list[dict], list[str]]:
 
 
 # --- CLI -------------------------------------------------------------------
+def _root_trap(path=None) -> str | None:
+    """The reason not to run this import as this user, or None."""
+    try:
+        import pwd
+    except ImportError:                      # not a POSIX box: nothing to check
+        return None
+    if os.geteuid() != 0:
+        return None
+    p = Path(path or DB_PATH)
+    parent = p.parent if p.parent.exists() else p.parent.parent
+    try:
+        owner = pwd.getpwuid(parent.stat().st_uid).pw_name
+    except (OSError, KeyError):
+        return None
+    if owner == "root":
+        return None
+    return (f"  refusing to import as root: {parent} belongs to {owner}, and a "
+            f"store created here as root is one the service can never write.\n"
+            f"  run it as the service user instead:\n"
+            f"    sudo -u {owner} python3 -m engine.zeno import <file>")
+
+
 def _cli(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="python3 -m engine.zeno")
@@ -480,6 +502,17 @@ def _cli(argv=None) -> int:
     sub.add_parser("show", help="print the record block")
     a = ap.parse_args(argv)
     if a.cmd == "import":
+        # NEVER AS ROOT INTO SOMEBODY ELSE'S DIRECTORY. The service runs
+        # as `qellys` under ProtectSystem=strict; a store this command
+        # creates as root is one the service can read the day it is made
+        # and never write again — every later import 500s and the page
+        # says "could not be read". The box already carries 6,098
+        # root-owned cache files from exactly this mistake. Refuse, and
+        # print the command that does it right.
+        problem = _root_trap()
+        if problem:
+            print(problem)
+            return 2
         text = Path(a.file).read_text(encoding="utf-8")
         rows, unknown = parse_text(text)
         conn = connect()
