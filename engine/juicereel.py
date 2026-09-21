@@ -271,7 +271,10 @@ def sync(conn, opener=None, state_path=None) -> dict:
         bets, newest = fetch_changed(cid, sec, since, opener)
     except urllib.error.HTTPError as exc:
         out["why"] = (f"Juice Reel answered {exc.code}"
-                      + (" — the client id or secret is wrong"
+                      + (" — either the client id or secret is wrong, or "
+                         "the application is still awaiting Juice Reel's "
+                         "review (credentials are issued at once but stay "
+                         "inactive until it completes)"
                          if exc.code in (401, 403) else ""))
         return out
     except Exception as exc:                                  # noqa: BLE001
@@ -323,8 +326,13 @@ def _cli(argv=None) -> int:
             me = _get("/oauth2/me", {}, *creds)
         except urllib.error.HTTPError as exc:
             print(f"  Juice Reel answered {exc.code} — "
-                  + ("wrong client id or secret" if exc.code in (401, 403)
-                     else exc.reason))
+                  + ("either the client id or secret is wrong, or the "
+                     "application is still awaiting Juice Reel's review. "
+                     "Ethan's first check on 2026-09-21 was this exact "
+                     "401, seconds after submitting the form that says "
+                     "credentials stay inactive until review completes; "
+                     "re-run when Juice Reel says it is approved."
+                     if exc.code in (401, 403) else exc.reason))
             return 1
         print(f"  ok — connected as {me.get('displayName')!r} (id {me.get('id')})")
         return 0

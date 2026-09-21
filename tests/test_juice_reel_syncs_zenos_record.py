@@ -251,6 +251,10 @@ def test_a_wrong_key_is_named_and_a_dead_network_is_survived():
         raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
     got = jr.sync(conn, opener=denied, state_path=Path(tempfile.mkdtemp()) / "s")
     assert not got["ok"] and "401" in got["why"] and "secret" in got["why"], got
+    # AND THE OTHER MEANING. Juice Reel issues keys at once and keeps them
+    # inactive until review; that 401 is indistinguishable from a typo, and
+    # Ethan's first check returned it seconds after submitting the form.
+    assert "review" in got["why"], got["why"]
 
     def dead(url, headers):
         raise OSError("connection refused")
