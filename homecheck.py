@@ -1041,6 +1041,59 @@ def sizing() -> list:
     return out
 
 
+def shelves() -> list:
+    """SHELVES. Which markets the record says to stop staking.
+
+    Ethan, 2026-09-21: "what makes people the most money without losing
+    the most money alongside increasing and boosting our ROI record."
+
+    A FLAT STAKE CANNOT MOVE ROI. The only thing that raises the
+    percentage is taking fewer, better bets, and this is the table that
+    says which ones to stop taking. See `engine/shelfstop.py` for the
+    two bars a shelf has to fail before it is cut.
+    """
+    from engine import shelfstop
+    out = ["SHELVES — which markets the record says to stop staking",
+           f"  two bars: {shelfstop.MIN_N}+ settled, two standard errors "
+           f"clear of zero on the losing side, AND surviving",
+           f"  false-discovery control at q<{shelfstop.FDR_ALPHA} over "
+           f"every shelf judged"]
+    conn, why = _journal_ro()
+    if conn is None:
+        return out + [f"  {why}"]
+    try:
+        d = shelfstop.decide(shelfstop.measure(conn))
+        rows = sorted(d["shelves"], key=lambda r: (r["z"] is None, r["z"]))
+        if not rows:
+            return out + ["  nothing settled in the money book yet"]
+        out.append(f"  {d['tested']} of {len(rows)} shelves had enough rows "
+                   f"to judge")
+        out.append("")
+        out.append("   sport market            n     ROI       z    verdict")
+        for r in rows:
+            z = "   —  " if r["z"] is None else f"{r['z']:+6.2f}"
+            mark = {"stop": " <<< STOP", "review": " (watch)"}.get(
+                r["verdict"], "")
+            out.append(f"   {r['sport']:5} {r['market']:15} {r['n']:5} "
+                       f"{r['roi'] * 100:+7.2f}%  {z}  {r['verdict']}{mark}")
+        if d["stopped"]:
+            out.append("")
+            out.append("  STOPPED — these are refused on the next build:")
+            for x in d["stopped"]:
+                out.append(f"    {x['sport']} {x['market']}: {x['why']}")
+        else:
+            out.append("")
+            out.append("  nothing is stopped. A shelf losing on its own z "
+                       "but not past the control reads (watch) —")
+            out.append("  that is a shelf to look at, not one the record "
+                       "has convicted.")
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  unavailable \u2014 {type(exc).__name__}: {exc}")
+    finally:
+        conn.close()
+    return out
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -1058,6 +1111,8 @@ CHECKS = {
                      "left", True),
     "sizing": (sizing, "SIZING: what to stake on the likelihood board, and "
                        "what it buys", True),
+    "shelves": (shelves, "SHELVES: which markets the record says to stop "
+                         "staking", True),
     "data": (data, "DATA: what we store, whether a model reads it, and "
                    "how fast we are on injury news", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "

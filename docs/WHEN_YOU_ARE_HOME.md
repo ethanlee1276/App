@@ -833,6 +833,53 @@ EDGE — does the staked book make money, per sport
 
 ---
 
+## SHELVES. Which markets should we stop staking? (read-only, seconds)
+
+Ethan, 2026-09-21: *"what makes people the most money without losing the
+most money alongside increasing and boosting our ROI record."*
+
+**A flat stake cannot move ROI.** The only thing that raises the
+percentage is taking fewer, better bets — so this is the table that
+matters for the record, and `sizing` is the one that matters for the
+money. The Edge book is the board with the most real money and the
+least evidence behind it (`boards.EDGE_AUC` is 0.468, below a coin
+flip), and until today it was the only staked board with no breaker.
+
+```bash
+cd /srv/qellys && python3 homecheck.py shelves
+```
+
+```
+   sport market            n     ROI       z    verdict
+   nfl   receptions      214   -18.40%   -3.91  stop <<< STOP
+   mlb   total_bases     216    -4.10%   -2.11  review (watch)
+   nfl   rec_yds         341   +10.40%   +2.44  run
+   cfb   moneyline        41    +2.10%     —    run
+```
+
+**What to look for.**
+
+* **`STOP`** — refused on the next build, through the same veto every
+  board already consults. The pick is still priced and still shown; it
+  stops being staked until the record turns.
+* **`(watch)`** — past two standard errors on its own, but NOT once
+  every shelf tested is counted. Sixty shelves at z −2 throws up more
+  than one of these by chance every run, so a shelf here is one to look
+  at, never one the record has convicted. The distinction is
+  Benjamini-Hochberg, the same control the blind-spot miner runs under.
+* **an em dash in the z column** — under 80 settled rows, never judged.
+  `pass_td 2 bets −22.20%` is a real line from a 2026-09-16 run, and
+  acting on it is the error this repo has made more than any other.
+* **nothing stopped** is the expected reading most nights and is not a
+  broken check. The bar is deliberately hard to clear in both
+  directions: a false stop costs the edge on a shelf whose edge is
+  indistinguishable from zero, which is approximately nothing, and
+  failing to stop a losing shelf costs money every night.
+* The decision is re-made every settle pass beside the blind-spot
+  miner, so a shelf that crosses the bar tonight is refused tomorrow.
+
+---
+
 ## SIZING. What should the likelihood board be staking? (read-only, seconds)
 
 Ethan, 2026-09-21: *"we need to figure out what unit sizes and money

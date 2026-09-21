@@ -8723,6 +8723,21 @@ def settle_now(day: str | None = None) -> None:
     try:
         from engine import losspatterns
         lp = losspatterns.refresh(lconn)
+        # AND THE SHELF BREAKER, on the same grades and in the same
+        # breath. A market whose whole settled record is clear of the
+        # noise band on the losing side stops being staked on the next
+        # build — the Edge book's version of the breaker the likelihood
+        # board has had since it was staked. See engine/shelfstop.py.
+        try:
+            from engine import shelfstop as _ss
+            _dec = _ss.refresh(lconn)
+            _stp = _dec.get("stopped") or []
+            print(f"  shelf breaker: {len(_stp)} stopped of "
+                  f"{_dec.get('tested', 0)} judged"
+                  + (" — " + ", ".join(f"{x['sport']} {x['market']}"
+                                       for x in _stp[:6]) if _stp else ""))
+        except Exception as _exc:  # noqa: BLE001
+            print(f"  ⚠️  shelf breaker skipped: {_exc}")
         # ALWAYS REPORTED, including zero. This printed only when
         # something closed, so the night the main-only check demoted all
         # four standing closures the line simply vanished — and a mining

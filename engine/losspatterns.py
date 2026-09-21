@@ -1030,6 +1030,21 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
             scope = f"{sport} {f['market']}" if f.get("market") else sport
             return (f"The record shows a blind spot here: {scope}, "
                     f"{f['value']} — {f.get('reading', 'ran hot')}")
+    # A SHELF THE RECORD SAYS IS LOSING enforces through this same gate,
+    # for the same reason the lab does. `shelfstop` is a different
+    # question — not "this slice of features misses" but "this market
+    # has not paid over its whole settled record" — and it arrives here
+    # rather than at each board's own gate because four engines call
+    # this veto today and a fifth will be written. A rule added at four
+    # of five call sites is the shape `game_day` took when eight inserts
+    # of eleven forgot it.
+    try:
+        from . import shelfstop
+        shelf = shelfstop.blocked(sport, market)
+        if shelf:
+            return shelf
+    except Exception:                              # noqa: BLE001
+        pass
     # The hypothesis lab's confirmed closures enforce through this same
     # gate — multi-dimension slices the single-dim miner never tests,
     # proposed by the LLM and convicted by the same statistics. One door,
