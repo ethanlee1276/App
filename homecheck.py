@@ -965,6 +965,82 @@ def bench() -> list:
     return out
 
 
+def sizing() -> list:
+    """SIZING. What to stake on the likelihood board, and what it buys.
+
+    Ethan, 2026-09-21: *"we need to figure out what unit sizes and money
+    sizes makes the most sense and make the most money and highest roi
+    on the most likley bets."*
+
+    THE FIRST COLUMN ANSWERS HALF OF IT BY BEING CONSTANT. A flat stake
+    cannot change ROI — net over staked scales together — so the replay
+    below prints the same percentage on every row, deliberately. Size
+    decides the money and the drawdown. Which rows get taken decides the
+    percentage, and that is `live_verdict`'s job, not this one.
+
+    The recommendation and every input behind it come from
+    `engine.likelysize`; this prints them so a stake on the board can be
+    traced to the rows that set it.
+    """
+    from engine import likelysize as size
+    from engine import ledger
+    out = ["SIZING — what to stake on the likelihood board",
+           "  a flat stake cannot change ROI; it changes the money and "
+           "the drawdown"]
+    conn, why = _journal_ro()
+    if conn is None:
+        return out + [f"  {why}"]
+    try:
+        live = [sp for sp in ledger.LIKELY_LIVE_SPORTS
+                if not ledger.is_benched(sp)]
+        if not live:
+            return out + ["  no league's board is staked"]
+        for sp in live:
+            rows = size._rows(conn, sp)
+            m = size.measure(rows)
+            rec = size.recommend(m)
+            out.append("")
+            out.append(f"  {sp.upper()}  —  {m['n']} settled across "
+                       f"{m['slates']} slates (paper rows included: same "
+                       f"picks, and ROI does not care what they cost)")
+            if not m["n"]:
+                out.append("        nothing staked has settled yet; the "
+                           f"stake holds at the floor of {size.FLOOR_U}u")
+                continue
+            out.append(f"        hit {m['hit']:.1%} · ROI {m['roi']:+.2%} "
+                       f"· average payout {m['b']:.2f} per unit")
+            out.append(f"        NOW {size.FLOOR_U}u  →  "
+                       f"RECOMMENDED {rec['units']}u")
+            # Wrapped by hand: this is the sentence that justifies real
+            # money, and a 300-character line in a terminal is not read.
+            words, line = rec["why"].split(), "       "
+            for w in words:
+                if len(line) + len(w) + 1 > 76:
+                    out.append(line)
+                    line = "       "
+                line += " " + w
+            out.append(line)
+            out.append("")
+            out.append("        if it kept doing what it has done:")
+            out.append("          size     net       ROI      worst run   "
+                       "one bad night")
+            for r in size.replay(rows, sorted({0.25, 0.5, rec["units"],
+                                               1.0, 2.0})):
+                out.append(
+                    f"          {r['units']:>4}u  {r['net_units']:+8.2f}u  "
+                    f"{r['roi'] * 100:+6.2f}%  {r['max_drawdown_u']:+8.2f}u   "
+                    f"{r['if_a_slate_all_lost_u']:+8.1f}u")
+            out.append(f"        the last column is the biggest slate "
+                       f"this board has had ({m['slate_max']} rows) "
+                       f"losing in full \u2014")
+            out.append("        the loss the ROI column cannot show you.")
+    except Exception as exc:                                  # noqa: BLE001
+        out.append(f"  unavailable — {type(exc).__name__}: {exc}")
+    finally:
+        conn.close()
+    return out
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -980,6 +1056,8 @@ CHECKS = {
                    "selector earned it", True),
     "bench": (bench, "BENCH: what benching a league did to the record it "
                      "left", True),
+    "sizing": (sizing, "SIZING: what to stake on the likelihood board, and "
+                       "what it buys", True),
     "data": (data, "DATA: what we store, whether a model reads it, and "
                    "how fast we are on injury news", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "

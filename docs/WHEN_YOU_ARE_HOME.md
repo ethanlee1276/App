@@ -833,6 +833,67 @@ EDGE — does the staked book make money, per sport
 
 ---
 
+## SIZING. What should the likelihood board be staking? (read-only, seconds)
+
+Ethan, 2026-09-21: *"we need to figure out what unit sizes and money
+sizes makes the most sense and make the most money and highest roi on
+the most likley bets."*
+
+**A flat stake cannot change ROI.** Net units over units staked scale
+together, so staking 2u a row instead of 0.25u on a board returning
++9.5% returns +9.5% on eight times the money — eight times the profit,
+eight times the drawdown, the same number on the page. "Most money" and
+"highest ROI" are two different requests and only the first is a sizing
+question. The replay below prints the same percentage on every row on
+purpose.
+
+```bash
+cd /srv/qellys && python3 homecheck.py sizing
+```
+
+```
+  NFL  —  160 settled across 12 slates (paper rows included: same picks,
+          and ROI does not care what they cost)
+        hit 70.6% · ROI +9.50% · average payout 0.55 per unit
+        NOW 0.25u  →  RECOMMENDED 0.62u
+        measured +9.5% on 160 settled; one standard error below is +4.0%;
+        full Kelly on that at an average 0.55 payout is 7.3% of bankroll; a
+        quarter of it is 1.81u, divided by 2.9 bets riding at once (measured
+        2.1, inflated for 12 slates) = 0.62u
+
+        if it kept doing what it has done:
+          size     net       ROI      worst run   one bad night
+          0.25u    +3.80u   +9.50%     -2.47u        -7.5u
+          0.62u    +9.42u   +9.50%     -6.13u       -18.6u
+           1.0u   +15.20u   +9.50%     -9.87u       -30.0u
+           2.0u   +30.40u   +9.50%    -19.75u       -60.0u
+```
+
+**What to look for.**
+
+* **the ROI column never moves.** That is the answer to half the
+  question, printed rather than argued. What moves the percentage is
+  which rows get taken — `live_verdict` stopping a band that is not
+  paying — not how much is on them.
+* **`one bad night`** is the biggest slate this board has ever had,
+  losing in full. A slate is bet all at once, so if the model is wrong
+  in a correlated way that is the loss, and it is the one the ROI column
+  cannot show you. Read it before reading the net column.
+* **`N settled, 100 needed before the stake moves`** — the same bar the
+  board's own verdict waits for. A stake says more than a verdict does,
+  so it does not move on less.
+* **`one standard error below is …`** — the stake is sized on what the
+  record can prove, not on what it printed. A board that got lucky
+  shrinks back on its own as the bound catches up, with nobody having to
+  notice.
+* **`the board is wide for this bankroll`** — even the minimum stake
+  puts more than 12u on one night. That is a finding about the board's
+  width, not about its edge.
+* Nothing here writes. The stake it recommends is what
+  `ledger.likely_stake_for` already uses on the next build.
+
+---
+
 ## BENCH. What did benching a league do to the record it left? (read-only, seconds)
 
 Ethan, 2026-09-21, the day WNBA came off the Record page: *"Are roi and

@@ -6909,10 +6909,21 @@ def likely_stake_for(conn, sport, model_prob) -> float:
     v = live_verdict(conn, sport)
     if v["verdict"] == "stop":
         return 0.0
+    # THE SIZE IS READ OFF THE RECORD, NOT TYPED IN. Ethan, 2026-09-21:
+    # "we need to figure out what unit sizes and money sizes makes the
+    # most sense". A constant cannot answer that — it was 0.25u because
+    # 0.25u was a cautious number on the day the board was staked, and
+    # it would still have been 0.25u after a thousand settled rows said
+    # otherwise. `likelysize` sizes on the lower bound of the measured
+    # edge, divided by the measured same-slate correlation and held
+    # under a one-night exposure cap, so the stake grows as the evidence
+    # does and shrinks on its own if the board turns.
+    from . import likelysize as _size
+    base = _size.staked_units(conn, sport)
     try:
         p = float(model_prob)
     except (TypeError, ValueError):
-        return LIKELY_LIVE_STAKE
+        return base
     for b in v["bands"]:
         if b["lo"] <= p < b["hi"] and b["verdict"] == "stop":
             # ONE BAND CUT, THE REST LEFT ALONE. On the day this shipped
@@ -6921,7 +6932,7 @@ def likely_stake_for(conn, sport, model_prob) -> float:
             # band the worst. Pulling the whole board for that would
             # throw away the part that was working.
             return 0.0
-    return LIKELY_LIVE_STAKE
+    return base
 
 
 def likely_category(sport) -> str:
