@@ -1853,6 +1853,9 @@ main { view-transition-name: page; }
 }
 .status-badge.live .live-dot { background: var(--warn); }
 .live-dot.sm { width: 6px; height: 6px; }
+/* A held game: the dot stops pulsing, because the game has. */
+.live-dot.paused { animation: none; opacity: .55; }
+.status-badge.hold { background: rgba(255, 255, 255, .08); color: var(--text); }
 @keyframes livePulse {
   0%   { box-shadow: none; }
   70%  { box-shadow: none; }

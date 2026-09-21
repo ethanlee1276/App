@@ -195,6 +195,13 @@ class LiveStatus:
     period: str = ""             # "Q3", "Top 5th", "HALFTIME", "F/10"
     clock: str = ""              # "10:32" (NFL) or "" (MLB)
     detail: str = ""             # freeform, e.g. "2nd & 7 at DEN 45"
+    # WHY THE CLOCK IS NOT RUNNING, when it is not: "Delayed — Lightning",
+    # "Halftime", "Suspended", "End of 3rd". Empty while play is live.
+    # ESPN keeps `state: "in"` through a weather delay, so without this a
+    # card kept drawing the last down and distance for an hour as if the
+    # ball were about to be snapped (Ethan, 2026-09-21, an NFL game
+    # "just sat there thinking it was in the middle of a play").
+    hold: str = ""
     start_time: str = ""         # ISO or human, for scheduled games
     outs: Optional[int] = None            # MLB: 0-2
     bases: Optional[list] = None          # MLB: occupied bases, e.g. [2] or [1, 3]

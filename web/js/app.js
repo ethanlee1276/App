@@ -5822,7 +5822,9 @@ function gameCard(g) {
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
   let badge = "";
-  if (isLive) {
+  if (isLive && liveHoldWord(live)) {
+    badge = liveHoldBadgeHTML(live);
+  } else if (isLive) {
     badge = `<div class="status-badge live"><span class="live-dot"></span>LIVE
       <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span>${
       // The card's door leads to the play-by-play while the game is on
@@ -5837,7 +5839,9 @@ function gameCard(g) {
   // repeats them.
   // NFL live: the down & distance line.
   let liveDetail = "";
-  if (isLive && mlb) {
+  if (isLive && liveHoldWord(live)) {
+    liveDetail = liveHoldDetailHTML(live);
+  } else if (isLive && mlb) {
     liveDetail = `<div class="live-detail count">${countStrip(live)}</div>`;
   } else if (isLive && live.detail) {
     liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
@@ -36706,6 +36710,8 @@ function liveCardHTML({ sport, g, bets }) {
   let situation = escapeHtml(lv.period || "");
   if (mlb && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
   if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
+  // A held game says why, in place of a clock that is not moving.
+  if (liveHoldWord(lv)) situation += ` · ${escapeHtml(liveHoldWord(lv))}`;
   // The render's line grid (Ethan, 2026-08-11): SPREAD | TOTAL | ML as
   // columns with one row per team. Only real numbers render — the slate
   // carries the line and both moneylines, but not per-side juice, so a
@@ -38310,7 +38316,10 @@ async function renderPbpPage() {
   if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
   if (league === "mlb" && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
   if (lv.detail && league !== "mlb") situation += ` · ${escapeHtml(lv.detail)}`;
-  const stateWord = lv.state === "live" ? `${icon("dot", 10)} LIVE`
+  if (liveHoldWord(lv)) situation += ` · ${escapeHtml(liveHoldWord(lv))}`;
+  const stateWord = lv.state === "live" && liveHoldWord(lv)
+      ? liveHoldWord(lv).split(/\s[\u2014-]\s/)[0].toUpperCase()
+    : lv.state === "live" ? `${icon("dot", 10)} LIVE`
     : lv.state === "final" ? "FINAL" : "SCHEDULED";
   // The league's board, when the visitor is standing on it: faces, the
   // park's facts, the weather, the live win-probability track.
@@ -38722,6 +38731,30 @@ async function renderSweatZone() {
       <span class="sub">— the likelihood board’s rows with the same live number, tracked
       separately: flat stake, no dollar exposure, its own book on the Record page.</span></div>
     <div class="card sw-list">${likelyPicks.map(row).join("")}</div>` : ""}`;
+}
+
+/* WHY THE CLOCK IS STOPPED, when it is. ESPN keeps a game "in" through a
+   weather delay, halftime or a suspension, and the feed freezes the
+   clock and the down where play stopped — so a card that reads only the
+   state kept drawing "2nd & 7 · 4:12" through an hour-long NFL delay as
+   if the snap were seconds away (Ethan, 2026-09-21). `live.hold` is the
+   build's word for it; these two helpers are the ONLY way the page
+   should draw a held game, so the board card, the live tab and the game
+   page cannot disagree about it. */
+function liveHoldWord(live) {
+  const h = (live || {}).hold;
+  return h ? String(h) : "";
+}
+function liveHoldBadgeHTML(live) {
+  const h = liveHoldWord(live);
+  if (!h) return "";
+  const word = h.split(/\s[\u2014-]\s/)[0].toUpperCase();
+  return `<div class="status-badge live hold" title="${escapeHtml(h)}"><span class="live-dot paused"></span>${
+    escapeHtml(word)}<span class="per">${escapeHtml(live.period || "")}</span></div>`;
+}
+function liveHoldDetailHTML(live) {
+  const h = liveHoldWord(live);
+  return h ? `<div class="live-detail hold"><span class="live-dot sm paused"></span>${escapeHtml(h)}</div>` : "";
 }
 
 async function renderLiveBoard() {

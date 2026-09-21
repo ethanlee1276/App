@@ -116,6 +116,49 @@ def _state(espn_state: str) -> str:
     return {"pre": "scheduled", "in": "live", "post": "final"}.get(espn_state, "scheduled")
 
 
+#: ESPN status names under which the game is "in" but the clock is NOT
+#: running. Each maps to the word the card leads with; the feed's own
+#: `detail` ("Delayed - Lightning") is appended when it says more.
+#:
+#: ESPN keeps `type.state: "in"` through every one of these, so a reader
+#: that looks only at the state draws the last down and distance for the
+#: whole delay as though the ball were about to be snapped — which is
+#: exactly what the live tab did through an NFL weather delay on
+#: 2026-09-21 (Ethan: "it just sat there thinking it was in the middle
+#: of a play").
+HOLD_STATUSES = {
+    "STATUS_DELAYED": "Delayed",
+    "STATUS_RAIN_DELAY": "Rain delay",
+    "STATUS_SUSPENDED": "Suspended",
+    "STATUS_HALFTIME": "Halftime",
+    "STATUS_END_PERIOD": "End of period",
+    "STATUS_END_OF_HALF": "End of half",
+    "STATUS_END_OF_REGULATION": "End of regulation",
+}
+
+
+def hold_for(stype: dict) -> str:
+    """Why the clock is stopped, or "" while play is live."""
+    name = str((stype or {}).get("name") or "").upper()
+    word = HOLD_STATUSES.get(name, "")
+    if not word:
+        # A delay the name did not spell out but the prose did — "Delayed"
+        # in shortDetail with a plain STATUS_IN_PROGRESS has been seen.
+        prose = str((stype or {}).get("shortDetail") or "").strip()
+        if prose.lower().startswith(("delay", "suspend", "rain delay")):
+            word = prose
+        else:
+            return ""
+    detail = str((stype or {}).get("detail") or "").strip()
+    # "End of period" reads better as ESPN's own "End of 3rd".
+    if name in ("STATUS_END_PERIOD", "STATUS_END_OF_HALF") and detail:
+        return detail
+    if detail and detail.lower() != word.lower() and \
+            not detail.lower().startswith(word.lower()):
+        return f"{word} \u2014 {detail}"
+    return detail if detail.lower().startswith(word.lower()) else word
+
+
 # "at DEN 45", "DEN 45", "MID 50", "at BUF 3". The side is a 2-5 letter
 # abbreviation and the yard is 1-50; anything else is not a spot.
 #
@@ -260,6 +303,7 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
         stype = status.get("type", {})
         state = _state(stype.get("state", "pre"))
         period = stype.get("shortDetail", "") if state != "live" else ""
+        hold = hold_for(stype) if state == "live" else ""
         sit = comp.get("situation", {}) or {}
         # Where the ball is, and who has it. Both are drawn on the card art
         # and both fail open: a spot that will not parse leaves `yard_line`
@@ -276,8 +320,13 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
         live = LiveStatus(
             state=state, home_score=hs, away_score=as_,
             period=(f"Q{status.get('period')}" if state == "live" and status.get("period") else period),
-            clock=status.get("displayClock", "") if state == "live" else "",
-            detail=sit.get("downDistanceText", ""),
+            # NO CLOCK AND NO DOWN THROUGH A HOLD. The feed freezes both
+            # where the game stopped, and a frozen "2nd & 7 · 4:12" reads
+            # as a live one. The hold word is what the card shows instead.
+            clock=(status.get("displayClock", "")
+                   if state == "live" and not hold else ""),
+            detail=("" if hold else sit.get("downDistanceText", "")),
+            hold=hold,
             start_time=ev.get("date", ""),
             yard_line=yard,
             possession=(by_id.get(str(sit.get("possession", "")), "")

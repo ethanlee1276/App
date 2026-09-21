@@ -176,6 +176,11 @@ def _row(r: dict, league: str = "") -> dict:
     # would not parse leaves them None. Writing the keys anyway would
     # hand the front end `null` to tell apart from "this sport has no
     # such thing", which are different facts.
+    # ONLY WHEN THE CLOCK IS STOPPED FOR A REASON. Absent means play is
+    # live; a key that was always there would make "" and "no delay" the
+    # same fact the page has to tell apart.
+    if getattr(st, "hold", ""):
+        live["hold"] = st.hold
     if st.yard_line is not None:
         live["yard_line"] = st.yard_line
     if st.possession:
