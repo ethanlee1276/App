@@ -4326,6 +4326,15 @@ function trackerBetText(r) {
   return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
 }
 
+/* BOTH HALVES OF THE MOST LIKELY BOOK. The board journals to `likely`
+   on paper and to `likely_live` where it stakes real money (MLB since
+   2026-09-19); every split between the edge book and this one reads
+   both, or a staked Most Likely bet is drawn as an edge bet. The
+   ledger's LIKELY_BOOKS, spelled once for the page. */
+function isLikelyBook(c) {
+  return c === "likely" || c === "likely_live";
+}
+
 function renderLivePicks() {
   buzzOnSettle([...(((state.data || {}).live_picks) || []),
                 ...(((state.data || {}).live_potd) || [])]);
@@ -4639,8 +4648,9 @@ function renderLivePicks() {
      edge bet — a read on who hits, flat-staked, no dollar exposure — so
      mixing the two in one list would make the count on the edge panel
      wrong and the likelihood rows look like bets we sized. */
-  const edge = rows.filter((r) => r.category !== "likely");
-  const likely = rows.filter((r) => r.category === "likely");
+  const edge = rows.filter((r) => !isLikelyBook(r.category));
+  const likely = rows.filter((r) => isLikelyBook(r.category));
+  const likelyStaked = likely.some((r) => r.category === "likely_live");
   /* ---- AN OPEN BET IS A DOOR TOO -------------------------------
             Ethan, 2026-08-23, with the list circled: "I should be able
             too click on these bets and it pulls up the bar graphs of the
@@ -4677,7 +4687,7 @@ function renderLivePicks() {
               r.category !== "likely" && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
-            ${r.category !== "likely" && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
+            ${!isLikelyBook(r.category) && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
@@ -4746,7 +4756,10 @@ function renderLivePicks() {
         same feed the game cards read; every bet settles officially against ingested
         final results overnight.`)
   + panel(likely, "Open Most Likely bets",
-    `the likelihood board’s rows, tracked the same way — a read on who hits,
+    likelyStaked
+      ? `the likelihood board’s rows, tracked the same way — a read on who hits,
+      staked with real money on this league and graded on its own book.`
+      : `the likelihood board’s rows, tracked the same way — a read on who hits,
       journaled at a flat stake with no dollar exposure, graded on its own book.`,
     `No open ${escapeHtml(leagueNow)} Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.`,
     `${plural(likely.length, "Most Likely row")} on today’s card. These are ranked by measured
@@ -39161,8 +39174,8 @@ async function renderSweatZone() {
   /* SPLIT THE SAME WAY THE TRACKER BELOW IS (Ethan, 2026-09-05): edge
      bets and Most Likely rows are different products and get different
      headers, even though the number that moves is computed identically. */
-  const edgePicks = picks.filter((p) => p.category !== "likely");
-  const likelyPicks = picks.filter((p) => p.category === "likely");
+  const edgePicks = picks.filter((p) => !isLikelyBook(p.category));
+  const likelyPicks = picks.filter((p) => isLikelyBook(p.category));
   host.innerHTML = `
     <div class="section-title">The sweat
       <span class="sub">— every journaled edge bet with its live win chance, from what’s

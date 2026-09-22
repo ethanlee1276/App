@@ -720,7 +720,8 @@ def live() -> list:
         potd = board.get("live_potd") or []
         date = str(board.get("date") or "")
         n_live = sum(1 for r in rows if r.get("phase") == "live")
-        n_likely = sum(1 for r in rows if r.get("category") == "likely")
+        from engine.ledger import LIKELY_BOOKS as _LB
+        n_likely = sum(1 for r in rows if r.get("category") in _LB)
         out.append(f"  {sport:4} board date {(date or '(none)'):12} | "
                    f"{len(rows):3d} tracked ({n_live} live, {n_likely} likely)"
                    f" | {len(potd)} pick of the day")

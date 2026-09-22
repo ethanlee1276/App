@@ -37,9 +37,11 @@ def _fn(name):
 
 # --- the feeds ---------------------------------------------------------------
 def test_the_tracker_selects_likely_rows():
+    # Re-anchored 2026-09-22: the books are the shared tracker's, which
+    # carry both halves of the Most Likely book (TRACKER_CATEGORIES).
     i = BUILD.index("_where = (")
     seg = BUILD[i:i + 200]
-    assert "'likely'" in seg, seg
+    assert "for c in _TRK" in seg, seg
 
 
 def test_the_cross_sport_count_stays_edge_only():
@@ -49,15 +51,15 @@ def test_the_cross_sport_count_stays_edge_only():
     i = BUILD.index("_all_open = _lpc.execute(")
     seg = BUILD[i:i + 300]
     assert "category IN ('main','longshot')" in seg and "'likely'" not in seg
-    assert '_edge_shown = sum(1 for r in rows if r.get("category") != "likely")' in BUILD
+    assert 'if r.get("category") not in _lp_ledger.LIKELY_BOOKS)' in BUILD
     assert 'max(0, _all_open - _edge_shown)' in BUILD, \
         "the subtraction still removes the likely rows from the elsewhere count"
 
 
 def test_the_sweat_selects_likely_rows():
-    i = SWEAT.index("where = (")
+    i = SWEAT.index("cats = (")
     seg = SWEAT[i:i + 200]
-    assert "'likely'" in seg, seg
+    assert "tuple(ledger.LIKELY_BOOKS)" in seg and "for c in cats" in seg, seg
 
 
 def test_a_likely_row_is_journaled_under_that_category():
@@ -72,8 +74,8 @@ def test_a_likely_row_is_journaled_under_that_category():
 # --- the page ----------------------------------------------------------------
 def test_the_tracker_draws_two_panels():
     body = _fn("renderLivePicks")
-    assert 'rows.filter((r) => r.category !== "likely")' in body
-    assert 'rows.filter((r) => r.category === "likely")' in body
+    assert 'rows.filter((r) => !isLikelyBook(r.category))' in body
+    assert 'rows.filter((r) => isLikelyBook(r.category))' in body
     assert "Open edge bets" in body and "Open Most Likely bets" in body
     assert 'panel(edge, "Open edge bets"' in body, "the edge panel is never rendered"
     assert 'panel(likely, "Open Most Likely bets"' in body, "the likely panel is never rendered"
@@ -84,7 +86,7 @@ def test_a_likely_row_never_prints_a_stake_or_a_riding_warning():
     moved off the bar" on a likelihood row would present it as a bet."""
     body = _fn("renderLivePicks")
     assert 'r.category !== "likely" && r.stake_units > 0' in body
-    assert 'r.category !== "likely" && offBoard(r)' in body
+    assert '!isLikelyBook(r.category) && offBoard(r)' in body
 
 
 def test_each_panel_has_its_own_empty_state():
@@ -98,8 +100,8 @@ def test_each_panel_has_its_own_empty_state():
 
 def test_the_sweat_splits_the_same_way():
     body = _fn("renderSweatZone")
-    assert 'picks.filter((p) => p.category !== "likely")' in body
-    assert 'picks.filter((p) => p.category === "likely")' in body
+    assert 'picks.filter((p) => !isLikelyBook(p.category))' in body
+    assert 'picks.filter((p) => isLikelyBook(p.category))' in body
     assert "The sweat — Most Likely" in body
     assert "likelyPicks.map(row)" in body, "the likely list is split off and never drawn"
 

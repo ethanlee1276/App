@@ -223,6 +223,7 @@ def draw_bets(sport="nfl", rows=(), potd=(), elsewhere=0):
     const _els = {{ "live-picks": {{ innerHTML: "" }} }};
     const document = {{ getElementById: (id) => _els[id] || null }};
     {_fn("trackerBetText")}
+    {_fn("isLikelyBook")}
     {_fn("renderLivePicks")}
     renderLivePicks();
     console.log(JSON.stringify(_els["live-picks"].innerHTML));

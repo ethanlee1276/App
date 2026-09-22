@@ -245,8 +245,12 @@ def build(today: str | None = None, quiet: bool = True,
     # recommendation map on player and market, and every analyzed prop is
     # on that list whether or not it was recommended. The page splits the
     # two by the `category` every row already carries.
-    where = ("status='open' AND sport='mlb' "
-             "AND category IN ('main','longshot','likely')")
+    # BOTH HALVES OF THE MOST LIKELY BOOK (2026-09-22), read off the
+    # ledger: the staked half journals as `likely_live`, and a retyped
+    # ('main','longshot','likely') left every staked row off the sweat.
+    cats = ("main", "longshot") + tuple(ledger.LIKELY_BOOKS)
+    where = ("status='open' AND sport='mlb' AND category IN ("
+             + ",".join(f"'{c}'" for c in cats) + ")")
     dates = (day,
              (_dt.date.fromisoformat(day) - _dt.timedelta(days=1)).isoformat(),
              (_dt.date.fromisoformat(day) + _dt.timedelta(days=1)).isoformat())

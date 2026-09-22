@@ -562,7 +562,7 @@ def main() -> None:
     _tk = _stg.start("live-pick tracker (boxscores)")
     try:
         from engine import ledger as _lp_ledger
-        from engine.livepicks import assemble_live_picks
+        from engine.livepicks import assemble_live_picks, TRACKER_CATEGORIES as _TRK
         from engine.mlb.livestats import (parse_live_stats, parse_situation,
                                           current_pitchers)
         from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
@@ -596,8 +596,16 @@ def main() -> None:
         # zero dollar exposure) and were never selected here, so the Live
         # tab could not show them at all. The page splits the two by
         # category; the cross-sport count below stays edge-only.
-        _where = ("status='open' AND sport='mlb' "
-                  "AND category IN ('main','longshot','likely')")
+        # THE BOOKS ARE THE SHARED TRACKER'S, NOT A RETYPED TUPLE. This
+        # listed ('main','longshot','likely') when the Most Likely board
+        # started staking on 2026-09-19 and its rows moved to
+        # `likely_live` — so every staked MLB Most Likely bet vanished
+        # from the Live tab, and baseball is the league that stakes it.
+        # engine/livepicks was fixed on 2026-09-21; this copy was not.
+        # Ethan, 2026-09-22: "the most likely bets for mlb are not
+        # showing in the live tab." Derived now, like the tracker's own.
+        _where = ("status='open' AND sport='mlb' AND category IN ("
+                  + ",".join(f"'{c}'" for c in _TRK) + ")")
         open_today = [dict(r) for r in _lpc.execute(
             f"SELECT {_cols} FROM bets WHERE {_where} AND date=?", (args.date,))]
         _near = [_shift_day(args.date, d) for d in (-1, 1)]
@@ -711,7 +719,8 @@ def main() -> None:
         # counts only edge bets: likely rows are on the tracker now, and
         # subtracting them too would understate "open on other boards" by
         # exactly their number.
-        _edge_shown = sum(1 for r in rows if r.get("category") != "likely")
+        _edge_shown = sum(1 for r in rows
+                          if r.get("category") not in _lp_ledger.LIKELY_BOOKS)
         result["open_elsewhere"] = max(0, _all_open - _edge_shown)
         if result["live_picks"]:
             n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")

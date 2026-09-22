@@ -144,7 +144,9 @@ def test_the_leftover_count_is_everything_not_shown():
     # alone, so subtracting every shown row would understate "open on
     # other boards" by exactly the number of likelihood rows on the card.
     assert "_all_open - _edge_shown" in b
-    assert 'r.get("category") != "likely"' in b
+    # Both halves of the Most Likely book since 2026-09-22 — the staked
+    # half journals as `likely_live` and is no edge bet either.
+    assert 'if r.get("category") not in _lp_ledger.LIKELY_BOOKS)' in b
     assert "_all_open - len(rows)" not in b, "the likely rows are subtracted again"
     assert "AND date != ?" not in b
 

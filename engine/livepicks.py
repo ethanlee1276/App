@@ -925,7 +925,7 @@ def attach_tracker(result: dict, sport: str, conn=None,
     if not rows and not potd:
         return ""
     n_live = sum(1 for r in rows if r["phase"] == "live")
-    n_likely = sum(1 for r in rows if r.get("category") == "likely")
+    n_likely = sum(1 for r in rows if r.get("category") in LIKELY_BOOKS)
     note = (f"{len(rows)} on this card ({n_live} live"
             + (f", {n_likely} likely" if n_likely else "") + ")")
     if potd:
