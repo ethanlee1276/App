@@ -15118,9 +15118,14 @@ const POTD_MIN_N = 20;
    would put a number here that nobody bet. ROI is profit over dollars at
    risk, pushes and voids out of the denominator — the record page's own
    rule. A parlay is one ticket, however many legs. */
+/* Dollars, grouped: "$2,140.00", not "$2140.00" — a book's page prints
+   a season's risk, and four digits with no comma read as a typo. The
+   count-up keeps the comma where it finds one (countAt). The grouping
+   is written out here and in mbMoney rather than shared: three test
+   harnesses lift each formatter on its own. */
 function zenoMoney(x) {
   const v = Number(x || 0);
-  return `${v < 0 ? MINUS : ""}$${Math.abs(v).toFixed(2)}`;
+  return `${v < 0 ? MINUS : ""}$${Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
 function zenoTallyLine(t) {
@@ -17698,7 +17703,7 @@ function mbMoney(v, sign) {
   // let through, and it printed "$Infinity".
   const raw = Number(v);
   const n = Number.isFinite(raw) ? raw : 0;
-  const s = "$" + Math.abs(n).toFixed(2);
+  const s = "$" + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");   // grouped, like zenoMoney
   if (!sign) return s;
   return n > 0 ? "+" + s : n < 0 ? "−" + s : s;
 }

@@ -106,7 +106,7 @@ def test_the_ribbon_serves_a_persons_book_under_its_own_label():
     if got is None:
         print("  SKIP node not installed"); return
     assert '<span class="hd-eyebrow">Zeno · his own book</span>' in got["zeno"]
-    assert "+4.1% ROI · $2140.00 risked · 38 settled · 2 open" in got["zeno"], "the ROI rides the sub-line"
+    assert "+4.1% ROI · $2,140.00 risked · 38 settled · 2 open" in got["zeno"], "the ROI rides the sub-line, the dollars grouped"
     assert '<span class="hd-eyebrow">You · logged by hand</span>' in got["you"], "the same tile, your label"
     assert "−12.5% ROI · $100.00 risked · 5 settled · 2 open" in got["you"]
     assert "2-2-1" in got["you"] and "−$12.50" in got["you"]

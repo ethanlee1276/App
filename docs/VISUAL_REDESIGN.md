@@ -507,7 +507,13 @@ surface.
   `tests/test_the_record_is_one_record.py`,
   `tests/test_zeno_and_my_bets_read_like_the_book.py` and
   `tests/test_the_paywall_shows_the_one_record.py`.
-* **Still open.** The desktop rail's Key insights card and the
-  sub-tabbed zones the deck does not adopt sit below it; a later pass
-  can retire what nobody opens. Zeno's tile and tickets appear once
-  Juice Reel data lands.
+* **Still open (2026-09-22, after slice Q).** The desktop rail's
+  Key insights card and the sub-tabbed zones the deck does not adopt
+  sit below it; a later pass can retire what nobody opens. Zeno's tile
+  and tickets appear once Juice Reel data lands. The Fantasy rooms'
+  tables, the Players search cards, the Why page's calculators and the
+  UFC method bar keep their own layouts — they are not rows. The home
+  performance panel is the render's; under sample data rendercheck
+  reads it as drift, and on the droplet it is fed. Every push in this
+  pass was gated, crawled at 390 and 1280, and mutation-tested;
+  docs/VISUAL_REDESIGN.md slice 13 is the record of it.
