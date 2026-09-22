@@ -7453,6 +7453,13 @@ body.has-deck #rail-live { display: none; }
 .gp-panel-title { font-weight: 800; letter-spacing: .02em; margin-bottom: 8px; }
 .gp-panel-sub { color: var(--text-mute); font-weight: 400; font-size: var(--fs-sm); }
 .gp-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
+/* The game page's section chips (2026-09-22): a sticky row under the
+   hero that scrolls to a section — the books' segmented-markets idea
+   without hiding anything behind a tab. Sections land under the row. */
+.gp-jump { position: sticky; top: var(--topbar-h); z-index: 5; margin: 12px 0 14px;
+  padding: 8px 0; background: var(--bg); }
+.gp-jump .chip { cursor: pointer; font: inherit; }
+[id^="gp-sec-"] { scroll-margin-top: calc(var(--topbar-h) + 58px); }
 @media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
 .gp-lines .lb-table { border-top: none; padding-top: 0; }
 

@@ -9799,6 +9799,19 @@ function stadiumPanel(g) {
   </div>`;
 }
 
+/* The game page's sections as a chip row that scrolls to each one —
+   the segmented-markets convention every book's event page uses
+   (Popular / Game lines / Player props), done as jumps rather than
+   tabs so nothing on the page is hidden behind a tab nobody opens.
+   Only sections the page drew get a chip; one section needs no row. */
+function gpJumpHTML(jumps) {
+  const list = (jumps || []).filter(Boolean);
+  if (list.length < 2) return "";
+  return `<nav class="std-chips gp-jump" aria-label="Sections of this game">${
+    list.map(([id, label]) => `<button type="button" class="chip" data-jump="${escapeAttr(id)}">${
+      escapeHtml(label)}</button>`).join("")}</nav>`;
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -10060,10 +10073,19 @@ function renderGamePage() {
       </div>
     </div>
 
-    ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
+    ${gpJumpHTML([
+      linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
+      simCard ? ["gp-sec-replay", "Replay"] : null,
+      shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
+      likelies.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
+      betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
+      ["gp-sec-props", shown.length ? `Props · ${shown.length}` : "Props"],
+      shots.length ? ["gp-sec-shots", `Long shots · ${shots.length}`] : null,
+    ])}
+    ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
-    ${simCard}
-    ${shapeCard}
+    ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
+    ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 
     <div class="stats gp-stats">
       <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
@@ -10078,14 +10100,14 @@ function renderGamePage() {
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
-    ${likelies.length ? `<div class="section-title">Most likely to hit
+    ${likelies.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
         <span class="sub">— ranked by how often they land, not by how good the
         price is; kept in its own book, never in the headline record</span></div>
-      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
+      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div></div>` : ""}
 
-    ${betsShown.length ? `<div class="section-title">Game bets
+    ${betsShown.length ? `<div id="gp-sec-bets"><div class="section-title">Game bets
         <span class="sub">— moneyline, spread and totals from the team model</span></div>
-      <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div>` : ""}
+      <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div></div>` : ""}
 
     ${/* THE PRICED GAME MARKETS THIS GAME WAS TURNED DOWN ON. The props
           below have carried this line since they had one; the game
@@ -10106,7 +10128,7 @@ function renderGamePage() {
       <button class="btn ghost" id="gp-showbets" type="button"
         >Show ${bets.length - betsShown.length} anyway</button></p>` : ""}
 
-    ${shown.length ? [...byMarket.keys()].map((k) => `
+    <div id="gp-sec-props">${shown.length ? [...byMarket.keys()].map((k) => `
         <div class="section-title">${escapeHtml(k)}
           <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
         <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
@@ -10115,11 +10137,11 @@ function renderGamePage() {
           <div class="es-sub">Either the model passes on everything here, or books haven’t
           posted prices for it yet.</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
-            Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}
+            Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}</div>
 
-    ${shots.length ? `<div class="section-title">Long shots
+    ${shots.length ? `<div id="gp-sec-shots"><div class="section-title">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
-      <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div>` : ""}
+      <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div></div>` : ""}
 
     ${props.length > shown.length ? `<p class="list-note" style="margin-top:14px">
       ${plural(props.length - shown.length, "more analyzed prop", "more analyzed props")}
@@ -10137,6 +10159,11 @@ function renderGamePage() {
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", () => switchView("recommended"));
+  host.querySelectorAll(".gp-jump [data-jump]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const el = document.getElementById(b.dataset.jump);
+      if (el) el.scrollIntoView({ behavior: state.quiet ? "auto" : "smooth", block: "start" });
+    }));
   // THE DOOR TO THE PLAY-BY-PLAY, for a game in progress or just over,
   // drawn only once its id has been found in the league's fast
   // scoreboard — a button that opens on "no game selected" is the fake

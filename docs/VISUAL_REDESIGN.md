@@ -189,6 +189,12 @@ surface.
   units / dollars / ROI toggle on the verdict — the record is kept in
   units on purpose (the site holds no money), and a dollar view would
   need the reader's own unit size from the Bankroll page; parked.
+* **Slice 8 — the game page's section chips, SHIPPED 2026-09-22.**
+  Every book's event page segments its markets; ours stays one page
+  (nothing hidden behind a tab) and gains a sticky chip row under the
+  hero — Lines & insights · Replay · Team shapes · Most likely · Game
+  bets · Props · Long shots — drawn only for sections the page has,
+  each chip scrolling to its section (`gpJumpHTML`).
 * **Still open.** The desktop rail's Key insights card and the old
   sub-tabbed zones live on under the fold; a later pass can retire
   what nobody unfolds. Zeno's tile and tickets appear once Juice Reel
