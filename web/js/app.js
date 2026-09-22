@@ -14582,12 +14582,17 @@ function labPropCard(m, note) {
       : m.basis === "book"
         ? "priced against real harvested closes — market-relative"
         : "vs a naive baseline line — NOT an edge over a book";
+  /* v5: THE BOOK'S ROW, not a six-column table. Measured at 390 on a
+     mixed-basis card the table ran 56px past the phone; the row says
+     the same things — what it was priced against, bets, won, win rate,
+     ROI, net — with the ROI where a reader looks for it. */
   const seg = Object.entries(m.segments || {}).map(([basis, g]) =>
-    `<tr><td>${basis === "book" ? "vs real book lines" : "vs naive baseline"}</td>
-      <td class="num">${g.n_bets}</td><td class="num">${g.wins}</td>
-      <td class="num">${g.win_rate != null ? (g.win_rate * 100).toFixed(1) + "%" : "—"}</td>
-      <td class="num ${toneOf(g.roi)}">${g.roi >= 0 ? "+" : ""}${(g.roi * 100).toFixed(1)}%</td>
-      <td class="num ${toneOf(g.net)}">${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u</td></tr>`).join("");
+    `<div class="hd-row lab-row">
+      <span class="hd-what"><b>${basis === "book" ? "vs real book lines" : "vs naive baseline"}</b>
+        <span>${g.n_bets.toLocaleString()} bets · ${g.wins.toLocaleString()} won${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
+      <span class="hd-state"><b class="${toneOf(g.roi)}">${g.roi >= 0 ? "+" : ""}${(g.roi * 100).toFixed(1)}% ROI</b>
+        <span class="hd-vs">${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u</span></span>
+    </div>`).join("");
   return `<div class="card lab-card">
     <div class="lab-head"><strong>${escapeHtml(m.label)}</strong>
       <span class="chip ${naive ? "warn" : outcomes ? "" : "good"}">${naive ? "naive lines" : outcomes ? "outcomes only" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
@@ -14615,10 +14620,7 @@ function labPropCard(m, note) {
     ${naive && m.n_bets ? `<div class="warning">${icon("warn")} ${escapeHtml(note || "")}</div>` : ""}
     ${outcomes ? `<div class="ls-note">${escapeHtml(m.basis_note || "Graded against outcomes only — predictive skill, not an edge over a book.")}</div>` : ""}
     ${labBins(m)}
-    ${seg ? `<table class="agate"><thead><tr><th>Priced against</th>
-      <th class="num">Bets</th><th class="num">Won</th><th class="num">Win%</th>
-      <th class="num">ROI</th><th class="num">Net</th></tr></thead>
-      <tbody>${seg}</tbody></table>` : ""}
+    ${seg ? `<div class="lab-rows"><div class="lab-rows-head">Priced against</div>${seg}</div>` : ""}
   </div>`;
 }
 
@@ -14645,38 +14647,41 @@ function labRippleHTML(rp) {
       book’s number by more than the book allowed? The card’s note prices
       nothing until a market clears here.</span></div>`;
   if (!rp.markets) return `${head}<p class="mini" style="padding:4px 0">${escapeHtml(rp.unavailable || "not measured")}</p>`;
+  /* v5: the book's row. The table ran 114px past a 390px phone and
+     named its markets by their keys ("rush_yds"). Each market is a
+     row now: its name, the counts and the judged bets under it, the
+     reason as a sentence; the verdict chip, the residual over the
+     close and its label on the right. */
   const rows = Object.keys(rp.markets).map((mk) => {
     const m = rp.markets[mk];
     const resid = m.resid_mean != null
       ? `${m.resid_mean >= 0 ? "+" : ""}${m.resid_mean.toFixed(1)}${m.resid_se != null ? ` ± ${m.resid_se.toFixed(1)}` : ""}` : "—";
-    const bets = m.bets != null ? `${m.bets}${m.roi != null ? ` · ${(m.roi >= 0 ? "+" : "")}${(m.roi * 100).toFixed(1)}%` : ""}` : "—";
+    const bets = m.bets != null ? ` · ${m.bets} bets judged${m.roi != null ? ` at ${(m.roi >= 0 ? "+" : "")}${(m.roi * 100).toFixed(1)}%` : ""}` : "";
     const v = String(m.verdict || "");
-    return `<tr><td>${escapeHtml(mk)}</td><td class="num">${m.n || 0}</td>
-      <td class="num">${m.n_measured || 0}</td><td class="num">${resid}</td>
-      <td class="num">${bets}</td>
-      <td class="${v === "clears" ? "pos" : ""}"><b>${escapeHtml(v)}</b>${m.reason ? ` <span class="mini">— ${escapeHtml(m.reason)}</span>` : ""}</td></tr>`;
+    return `<div class="hd-row lab-row">
+      <span class="hd-what"><b>${escapeHtml(marketWord(mk))}</b>
+        <span>${m.n || 0} absence rows · ${m.n_measured || 0} measured${bets}</span>${
+        m.reason ? `<span class="lab-reason">${escapeHtml(m.reason)}</span>` : ""}</span>
+      <span class="hd-state"><span class="hd-chip${v === "clears" ? " good" : ""}">${escapeHtml(v || "—")}</span>
+        <b>${resid}</b><span class="hd-vs">actual − close</span></span>
+    </div>`;
   }).join("");
-  return `${head}<table class="agate"><thead><tr><th>Market</th>
-    <th class="num">Absence rows</th><th class="num">Measured</th>
-    <th class="num">Actual − close</th><th class="num">Bets · ROI (judged)</th><th>Verdict</th>
-    </tr></thead><tbody>${rows}</tbody></table>
+  return `${head}<div class="hd-card lab-rows">${rows}</div>
     ${rp.measured_at ? `<div class="mini" style="opacity:.7">Measured ${escapeHtml(String(rp.measured_at).slice(0, 10))}</div>` : ""}`;
 }
 
+/* v5: the book's row — the market by name, games priced and the
+   projection error against the close under it; the ROI on the right
+   with its bets and win rate. The table ran 14px past a phone. */
 function labGameTable(games) {
-  const rows = (games.markets || []).map((g) => `<tr>
-    <td>${escapeHtml(g.market)}</td>
-    <td class="num">${g.games_priced.toLocaleString()}</td>
-    <td class="num">${g.mae != null ? g.mae.toFixed(2) : "—"}</td>
-    <td class="num">${g.n_bets}</td>
-    <td class="num">${g.win_rate != null ? (g.win_rate * 100).toFixed(1) + "%" : "—"}</td>
-    <td class="num ${toneOf(g.roi)}">${g.roi != null ? (g.roi >= 0 ? "+" : "") + (g.roi * 100).toFixed(1) + "%" : "—"}</td>
-  </tr>`).join("");
+  const rows = (games.markets || []).map((g) => `<div class="hd-row lab-row">
+    <span class="hd-what"><b>${escapeHtml(marketWord(g.market))}</b>
+      <span>${g.games_priced.toLocaleString()} games priced${g.mae != null ? ` · MAE ${g.mae.toFixed(2)} vs close` : ""}</span></span>
+    <span class="hd-state"><b class="${toneOf(g.roi)}">${g.roi != null ? (g.roi >= 0 ? "+" : "") + (g.roi * 100).toFixed(1) + "% ROI" : "—"}</b>
+      <span class="hd-vs">${g.n_bets} bets${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
+  </div>`).join("");
   if (!rows) return `<p class="mini" style="padding:4px 0">${escapeHtml(games.unavailable || "")}</p>`;
-  return `<table class="agate"><thead><tr><th>Market</th>
-    <th class="num">Games priced</th><th class="num">MAE vs close</th>
-    <th class="num">Bets</th><th class="num">Win%</th><th class="num">ROI</th>
-    </tr></thead><tbody>${rows}</tbody></table>`;
+  return `<div class="hd-card lab-rows">${rows}</div>`;
 }
 
 async function renderLab() {

@@ -7049,6 +7049,15 @@ body.has-deck #rail-live { display: none; }
 .watch-item:nth-child(5) > .hd-edge { animation-delay: calc(var(--dur-fast) * 1.2); }
 .watch-item:nth-child(n+6) > .hd-edge { animation-delay: calc(var(--dur-fast) * 1.5); }
 .hd-p.flat { color: var(--text-mute); border-color: var(--border-soft); background: transparent; }
+/* v5: the Lab's rows — the priced-against segments, the game lines
+   and the usage ripple, each the book's row in place of a table that
+   ran past a phone. The ROI takes its tone; a reason is a sentence. */
+.lab-rows { margin-top: 12px; }
+.lab-rows-head { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em; padding-bottom: 2px; }
+.lab-row .hd-state b.pos { color: var(--good); }
+.lab-row .hd-state b.neg { color: var(--bad); }
+.lab-row .hd-what .lab-reason { font-family: var(--font-sans); color: var(--text-dim); }
 .watch-why { padding: 2px 14px 12px 44px; }
 .hd-chip.warn { color: var(--warn); }
 /* v5: a ticket row — Zeno's, or your own on My Bets: the stake beside

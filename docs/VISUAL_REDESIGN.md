@@ -531,6 +531,13 @@ surface.
     +90.9%" off one settled pick — the one place on the site a 1-0
     book wore a percentage. Under the engine's own floor it leads
     with the record and says how far the sample has to go.
+  * *The Lab's wide tables are the book's rows.* Measured with a full
+    backtest at 390, the usage ripple ran 114px past the phone, a
+    mixed-basis card's "priced against" table 56px and the game lines
+    14px, and two of them named markets by their keys ("rush_yds").
+    Each is the book's row now — the market in words, the counts under
+    it, the ROI or the verdict on the right. The calibration table
+    fits a phone and stays a table.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -541,8 +548,9 @@ surface.
   `tests/test_a_quiet_trending_page_is_one_slate.py`,
   `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`,
   `tests/test_one_slate_one_size.py`,
-  `tests/test_the_long_shots_watch_is_the_books_row.py` and
-  `tests/test_the_masthead_will_not_call_a_thin_book.py`.
+  `tests/test_the_long_shots_watch_is_the_books_row.py`,
+  `tests/test_the_masthead_will_not_call_a_thin_book.py` and
+  `tests/test_the_labs_wide_tables_are_the_books_rows.py`.
 * **Still open (2026-09-22, after slice T).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile
