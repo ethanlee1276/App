@@ -1063,6 +1063,40 @@ function emptySlate(mark, title, note) {
     ${note ? `<div class="es-sub">${escapeHtml(note)}</div>` : ""}</div>`;
 }
 
+/* v5: AN EMPTY BOARD IS NOT AN APOLOGY. Ethan, 2026-09-22: "feel like
+   a real sportsbook app made by a real company." Before a price lands
+   the slate already holds the card — how many games, when the first
+   one starts — so the board says that, in the deck's own words
+   (deckFirstWord), and offers the two pages that are never empty: the
+   live board and the record. Nothing here is invented: no games, no
+   facts; every game started, no kickoff. */
+function boardEmptyFacts() {
+  const d = state.data || {};
+  const games = (d.games || []).filter((g) => g && (g.away || g.home));
+  if (!games.length) return "";
+  const notStarted = (g) => !g.live || ["scheduled", "pre", "upcoming"].includes(String(g.live.state || "scheduled"));
+  const kick = games.filter(notStarted).map((g) => g.kickoff).filter(Boolean).sort()[0];
+  const first = kick ? formatKickoff(kick) : "";
+  const facts = [`${plural(games.length, "game")} on the card`];
+  if (first) facts.push(`${deckFirstWord(state.sport)} ${first}`);
+  return `<div class="es-facts">${facts.map((f) => `<span class="es-fact">${escapeHtml(f)}</span>`).join("")}</div>`;
+}
+function boardEmptyDoors() {
+  return `<div class="es-doors">
+    <button type="button" class="btn es-door" data-es-view="live">Live now</button>
+    <button type="button" class="btn es-door" data-es-tool="record">The record</button></div>`;
+}
+function bindEmptyDoors(host) {
+  if (!host) return;
+  host.querySelectorAll("[data-es-view]").forEach((b) =>
+    b.addEventListener("click", () => switchView(b.dataset.esView, true)));
+  host.querySelectorAll("[data-es-tool]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const src = document.querySelector(`#sidebar [data-sport="${b.dataset.esTool}"]`);
+      if (src) src.click();
+    }));
+}
+
 function panelEmpty(text, mark) {
   return `<div class="panel-empty"><span class="pe-ico">${
     icon(mark || "dash", 14)}</span><p>${escapeHtml(text)}</p></div>`;
@@ -6249,8 +6283,9 @@ function renderTonight() {
     host.innerHTML = `${tonightChipsHTML("sport", state.sport)}<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <h3>${noMarketHeading()}</h3>
-      <p>${noMarketExplainer()}</p></div>`;
+      <p>${noMarketExplainer()}</p>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
     bindTonightChips(host);
+    bindEmptyDoors(host);
     return;
   }
   /* The Picks page in the redesign's shape (2026-09-22, Figma frame D):
@@ -6263,21 +6298,30 @@ function renderTonight() {
   const edgeRow = (r) => deckPickRow(r, { door: propAttrs(r),
     number: r.has_market === false ? null
       : { big: signedPct(r.edge), small: "edge", tone: r.edge >= 0 ? "var(--good)" : "var(--bad)" } });
+  /* v5: the page opens with its name, like every page (markPageTitles),
+     so the two boards' titles are section heads at one weight; on a
+     wide screen the boards sit side by side (.tn-cols), Most likely on
+     the left, the edge bets on the right; a phone reads them in that
+     order, stacked. */
   host.innerHTML = `
     ${tonightChipsHTML("sport", state.sport)}
+    <div class="section-title">Tonight’s bets
+      <span class="sub">— the pick of the day, who is likeliest to hit, and what we stake</span></div>
     ${potdHeroHTML(d)}
-    ${ml.length ? `<div class="section-title">Most likely to hit tonight
+    <div class="tn-cols">
+    ${ml.length ? `<section class="tn-col"><div class="section-title">Most likely to hit tonight
       <span class="sub">— ranked by probability, not by price · the full board
       is under Top Picks</span></div>
     ${boardGuide("most_likely")}
-    <div class="hd-card tn-rows">${ml.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div>` : ""}
-    <div class="section-title${ml.length ? " minor" : ""}">Our edge bets
+    <div class="hd-card tn-rows">${ml.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div></section>` : ""}
+    <section class="tn-col"><div class="section-title">Our edge bets
       <span class="sub">— every pick that clears the bar, journaled and staked.
       ${plural(n, "bet")}.</span></div>
     ${boardGuide("recommendations")}
     ${props.length ? `<div class="hd-card tn-rows">${props.map(edgeRow).join("")}</div>
     <details class="tn-full"><summary>Every edge card, with the reasoning</summary>
-      <div class="cards">${props.map(cardHTML).join("")}</div></details>` : ""}
+      <div class="cards">${props.map(cardHTML).join("")}</div></details>` : ""}</section>
+    </div>
     ${bets.length ? `<div class="section-title minor">Game lines</div>
       <div class="cards">${bets.map(gameBetCard).join("")}</div>` : ""}
     ${shots.length ? `<div class="section-title minor">Long shots
@@ -7967,7 +8011,8 @@ function renderLikely() {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">Nothing to rank yet</div>
-      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div></div>`;
+      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
+    bindEmptyDoors(note);
     return;
   }
   const rankOnly = rows.filter((r) => !r.bettable).length;
@@ -16017,7 +16062,8 @@ function renderEdgeBoard() {
       beats the model’s probability — including small edges and long odds that
       don’t clear the Recommended bar. Expected value is honest math, not a
       guarantee: a +5% EV bet still loses often; the edge shows up over
-      hundreds of bets.</p></div>`;
+      hundreds of bets.</p>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
+    bindEmptyDoors(host);
     return;
   }
   /* "18 positively-priced bets" sounds like a finding and is arithmetic. On

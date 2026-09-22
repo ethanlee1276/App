@@ -424,8 +424,23 @@ surface.
     the record and Zeno left alone — before this the whole deck
     re-landed every 20 seconds of a live night. Reduced motion skips
     the count and hides the ping.
-  Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py` and
-  `tests/test_the_numbers_count_up_and_the_dot_pings.py`.
+  * *An empty board carries the card.* Most afternoons every board is
+    empty, and the empty state was a headline and a paragraph. It now
+    carries what the slate already holds — how many games are on the
+    card, when the first one not yet started begins, in the deck's own
+    word for the sport — and two doors to the pages that are never
+    empty, the live board and the record (`boardEmptyFacts`,
+    `boardEmptyDoors`). Nothing invented: no games, no facts; every
+    game started, no kickoff. On the Picks page, the Most Likely page
+    and the Edge Board.
+  * *The Picks page in two columns.* It opens with its name like every
+    page, so its two boards read under section heads of one weight;
+    on a wide screen they sit side by side (`.tn-cols`), the full
+    cards stacking in a half-width column; a phone reads them
+    stacked.
+  Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
+  `tests/test_the_numbers_count_up_and_the_dot_pings.py` and
+  `tests/test_an_empty_board_carries_the_card.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

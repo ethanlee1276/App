@@ -930,6 +930,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   margin-top: 7px; max-width: var(--measure); margin-inline: 0; line-height: var(--lh-body); }
 .empty-slate code { background: var(--fill-subtle); padding: 2px 6px;
   border-radius: var(--radius-sm); }
+/* v5: the empty board's facts (mono chips — a count and a clock) and
+   its two doors (boardEmptyFacts, boardEmptyDoors). */
+.empty-slate .es-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.empty-slate .es-fact { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim);
+  padding: 4px 9px; border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); }
+.empty-slate .es-doors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 /* NOTHING HERE YET, INSIDE A PANEL — the third size.
 
    Ethan asked for the empty states to be made consistent (2026-08-23).
@@ -7010,6 +7016,13 @@ body.has-deck #rail-live { display: none; }
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .hd-row.openable:hover .hd-what b { color: var(--brand-2); }
 .tn-rows { margin-bottom: 18px; }
+/* v5: the Picks page's two boards, side by side on a wide screen. */
+.tn-cols { display: grid; gap: 0 24px; align-items: start; }
+@media (min-width: 1100px) {
+  .tn-cols { grid-template-columns: 1fr 1fr; }
+  .tn-cols > .tn-col:only-child { grid-column: 1 / -1; }
+  .tn-cols .tn-full .cards { grid-template-columns: 1fr; }
+}
 .tn-full { margin: -8px 0 18px; }
 .tn-full > summary { cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm);
   font-weight: 700; padding: 8px 0; list-style: none; }
