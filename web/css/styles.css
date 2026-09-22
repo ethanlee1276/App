@@ -8459,6 +8459,9 @@ button.rc-day b { font-size: var(--fs-sm); }
 .rank-scroll.rank-more {
   -webkit-mask-image: var(--mask-more-x);
   mask-image: var(--mask-more-x); }
+/* The wrapper wrapTables() puts round every other table: sideways
+   scroll and the fade, without the ranking tables' height cap. */
+.tbl-scroll { max-height: none; margin-top: 0; }
 
 /* Team leaders — ESPN's three header cards, the same three facts. */
 .tld { display: grid; gap: 10px; margin-top: 12px;

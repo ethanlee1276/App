@@ -348,6 +348,12 @@ surface.
     title in every view `page-title` (and un-marks any other), so every
     page opens with its name. The Live panel's trailing note is a
     caveat (`list-note`) and folds with the rest.
+  * *Every table scrolls sideways, with the fade.* Six of thirty tables
+    had the stat tables' scroll-and-fade wrapper by hand; the Lab's
+    six-column usage table was clipped at a phone's edge mid-word.
+    `wrapTables()` wraps the rest on every render, reusing the wrapper
+    so the delegated fade rides along, minus the ranking tables' height
+    cap.
   * *A caveat folds to two lines.* `.list-note` ("a caveat under content
     that IS there") and the empty state's sub-line: past 160 characters
     a note keeps its first two lines and the rest waits behind the same

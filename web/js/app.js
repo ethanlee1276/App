@@ -32647,8 +32647,28 @@ function markPageTitles(root) {
   });
 }
 
+/* EVERY TABLE SCROLLS SIDEWAYS, WITH THE FADE. The Lab's usage-ripple
+   table ran six columns and was clipped at a phone's edge mid-word
+   ("BETS · ROI (J") — the defect the stat tables already fixed with
+   `.rank-scroll` and its "more to the right" mask, applied only to the
+   six tables wrapped by hand. Any table drawn without the wrapper gets
+   one here; the delegated sync already watches `.rank-scroll`, so the
+   fade rides along. `tbl-scroll` lifts the rank wrapper's height cap
+   and top margin, which belong to the long ranking tables and not to a
+   five-row calibration. Idempotent: a wrapped table is left alone. */
+function wrapTables(root) {
+  (root || document).querySelectorAll("table").forEach((table) => {
+    if (table.closest(".rank-scroll")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "rank-scroll tbl-scroll";
+    table.replaceWith(wrap);
+    wrap.appendChild(table);
+  });
+}
+
 function enhanceSectionSubs(root) {
   markPageTitles(root);
+  wrapTables(root);
   (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
     const title = sub.parentElement;
     if (!title || title.dataset.subEnhanced) return;
