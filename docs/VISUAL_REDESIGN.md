@@ -514,6 +514,11 @@ surface.
     Standings note, on a payload with no season field, began "has
     no scoring rankings of its own yet" with its subject missing;
     it says "This season" when the build carries no year.
+  * *One slate, one size.* Six empty slates are built with a heading
+    and a paragraph rather than the slate's classes — the Tonight and
+    Edge boards among them — and rendered at the display heading's
+    size and weight over a full-colour paragraph. The stylesheet
+    gives both shapes the class-built type; the markup is untouched.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -521,8 +526,9 @@ surface.
   `tests/test_the_record_is_one_record.py`,
   `tests/test_zeno_and_my_bets_read_like_the_book.py`,
   `tests/test_the_paywall_shows_the_one_record.py`,
-  `tests/test_a_quiet_trending_page_is_one_slate.py` and
-  `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`.
+  `tests/test_a_quiet_trending_page_is_one_slate.py`,
+  `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`
+  and `tests/test_one_slate_one_size.py`.
 * **Still open (2026-09-22, after slice Q).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile
