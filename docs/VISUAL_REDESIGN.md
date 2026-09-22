@@ -271,7 +271,27 @@ surface.
   proxies the real toggle, so the theme is still switched in one
   place); desktop keeps its toggle. The bar now carries the drawer,
   the mark, alerts, messages, the freshness chip and the account.
-* **Still open.** The desktop rail's Key insights card and the old
-  sub-tabbed zones live on under the fold; a later pass can retire
-  what nobody unfolds. Zeno's tile and tickets appear once Juice Reel
-  data lands.
+* **Slice 10 — v3, SHIPPED 2026-09-22.** Ethan: "Build it all and I'll
+  look at it then." On the phone the league strip is a carousel of
+  crests (the code in a circle, the active one ringed in gold; it still
+  wraps, never scrolls). The stadium card's three-market cells are
+  pills. A pick row carries the price in a grey pill beside our number
+  in a green one, and the sub-line names the game and the book only.
+  A live card on the home draws the win-probability bar when the fast
+  scoreboard priced one, and says who leads and by how much. The
+  record is a ribbon — hit-rate ring, W-L, the headline number, units,
+  and the last five as form dots from the record's own rows — for the
+  model and for Zeno. A riding tray floats above the tab bar on phones
+  while journaled bets are in play (hidden on the Live tab it points
+  at). The Pick of the Day card is the home's hero, on the venue render
+  its team's colours pick, its headline in Bodoni. Everything drawn is
+  a number the board already held; nothing is drawn otherwise. Pinned
+  by `tests/test_v3_looks_like_a_book_and_like_us.py`. Two things the
+  first render caught: Chromium resolves a `url()` that reaches CSS
+  through a custom property against the stylesheet, so the hero's art
+  travels as an absolute URL (`absoluteSrc`); and an unpriced pick
+  used to print the word "undefined" on the hero's sub-line.
+* **Still open.** The desktop rail's Key insights card and the
+  sub-tabbed zones the deck does not adopt sit below it; a later pass
+  can retire what nobody opens. Zeno's tile and tickets appear once
+  Juice Reel data lands.

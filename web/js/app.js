@@ -2561,13 +2561,21 @@ async function renderPickOfTheDay() {
      a card can outlive the build that made it. Saying so is the whole
      point — an old read presented as a fresh one is the failure this
      page keeps being fixed for. */
+  /* v3: the card is the home's hero banner, on the same venue render
+     the stadium strip would give this pick's team — the family by sport,
+     the colour by the team's own kit (venueVariant). No family (UFC),
+     no art, and the card reads as it did. */
+  const potdFam = VENUE_FAMILY[state.sport];
+  const potdTeam = activeTeams()[pick.team] || activeTeams()[pick.player];
+  const potdArt = potdFam ? absoluteSrc(venueSrc(`img/venues/variants/${potdFam}-${venueVariant(potdTeam)}.jpg`)) : "";
+  const potdStyle = `border-left:3px solid ${accent};margin-bottom:12px${potdArt ? `;--potd-art:url(${potdArt})` : ""}`;
   const carriedNote = got.carried ? escapeHtml(got.carried) : "";
   const relockNote = got.relocked
     || (pick.off_board
         ? "shown from the journal at the price it was locked at"
         : (pick.locked ? "locked earlier today — the board still agrees" : ""));
   host.innerHTML = `
-    <div class="card" style="border-left:3px solid ${accent};margin-bottom:12px">
+    <div class="card potd-hero${potdArt ? " has-art" : ""}" style="${potdStyle}">
       <div class="player">${iconMark("target")}${head}</div>
       ${potdCallStrip(got)}
       ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
@@ -2580,8 +2588,8 @@ async function renderPickOfTheDay() {
         <span style="flex:1;min-width:0">
           <strong style="font-size:var(--fs-lg)">${text}</strong>
           <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
-            ${american(pick.odds)}${pick.book ? ` at ${escapeHtml(pick.book)}` : ""}${
-              pays ? ` · pays ${pays}u on 1u` : ""}${matchup ? ` · ${matchup}` : ""}</span>
+            ${[pick.odds != null ? american(pick.odds) + (pick.book ? ` at ${escapeHtml(pick.book)}` : "") : escapeHtml(pick.book || ""),
+               pays ? `pays ${pays}u on 1u` : "", matchup].filter(Boolean).join(" · ")}</span>
         </span>
       </div>
       ${fair != null ? (pick.evidence === "model" ? `
@@ -5718,6 +5726,15 @@ const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
 // more; it is the standing description of what is being served on
 // purpose. The probe says so rather than nagging. */
 const VENUE_MATCHED = new Set(["steel", "red", "gold", "green", "blue", "violet"]);
+
+// A url() that reaches CSS through a custom property is resolved by
+// Chromium against the stylesheet, not the page — so `img/venues/…`
+// would become `css/img/venues/…` and paint nothing. Art that rides a
+// variable travels as an absolute URL; anywhere without a page base
+// (a node harness) gets the path back unchanged.
+function absoluteSrc(rel) {
+  try { return new URL(rel, document.baseURI).href; } catch (e) { return rel; }
+}
 
 function venueVariant(team) {
   // First team colour with real chroma decides the lighting; neutral
@@ -32785,6 +32802,7 @@ function _switchViewNow(name, push, dir) {
   if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
     _boardReturn = { view: leaving, y: window.scrollY };
   state.view = name;
+  if (typeof ridingTraySync === "function") ridingTraySync();
   // A thread is a FULL message page (Ethan's render, 2026-08-26): while
   // one is open the site footer leaves, and it must come back the
   // moment any other view does.
@@ -39490,12 +39508,20 @@ function deckGameHTML(x) {
   const row = (abbr, score) => `<div class="hd-team"><span>${teamMarkIn(x.sport, abbr, 22)}<em>${
     escapeHtml(teamNameIn(x.sport, abbr))}</em></span><b>${score != null ? score : "–"}</b></div>`;
   const sit = [lv.period, lv.clock].filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+  // v3: the thin win-probability bar every book's live card carries —
+  // drawn only when the fast scoreboard read the clock and priced one
+  // (livescore_build._win_prob returns None otherwise), never a coin flip.
+  const wp = lv.win_prob && lv.win_prob.home_win_prob != null ? lv.win_prob : null;
+  const homePct = wp ? Math.round(wp.home_win_prob * 100) : null;
+  const wpBar = wp ? `<div class="hd-wp" title="${escapeAttr(`${g.away} ${100 - homePct}% · ${g.home} ${homePct}% to win — ${wp.basis || "score and clock"}`)}">
+      <i style="width:${homePct}%"></i></div>` : "";
+  const lead = wp ? ` · ${escapeHtml(wp.leader || (homePct >= 50 ? g.home : g.away))}&nbsp;${Math.max(homePct, 100 - homePct)}%&nbsp;to&nbsp;win` : "";
   return `<button type="button" class="hd-game" data-lsport="${escapeAttr(x.sport)}">
     <div class="hd-game-top"><span class="hd-lg">${escapeHtml(LEAGUE_LABEL[x.sport] || String(x.sport).toUpperCase())}</span>
       <span class="hd-live${hold ? " hold" : ""}"><i class="live-dot${hold ? " paused" : ""}"></i>${
         hold ? escapeHtml(hold) : "LIVE"}</span></div>
-    ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
-    <div class="hd-game-foot"><span class="mono">${sit}</span>${
+    ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}${wpBar}
+    <div class="hd-game-foot"><span class="mono">${sit}${lead}</span>${
       x.riding ? `<span class="hd-riding">${x.riding} riding</span>` : ""}</div>
   </button>`;
 }
@@ -39547,17 +39573,21 @@ function deckPickRow(r, opts) {
   const label = r.pick_label || [r.player, r.side, r.line, r.market_label || r.market]
     .filter((s) => s != null && s !== "").join(" ");
   const where = r.matchup || (r.team && r.opponent ? `${r.team} vs ${r.opponent}` : "");
-  const sub = [where, r.odds != null ? american(r.odds) : "", r.book || ""]
+  // v3: the price sits in its own pill beside our number, the way every
+  // book's row reads — so the sub-line names the game and the book only.
+  const sub = [where, r.book || ""]
     .filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+  const price = r.odds != null ? `<span class="hd-o">${american(r.odds)}</span>` : "";
   const p = Number(r.model_prob);
-  const prob = o.number
-    ? `<div class="hd-prob"><b${o.number.tone ? ` style="color:${o.number.tone}"` : ""}>${o.number.big}</b><span>${o.number.small}</span></div>`
+  const num = o.number
+    ? `<span class="hd-p"${o.number.tone ? ` style="color:${o.number.tone};border-color:${o.number.tone}"` : ""} title="${escapeAttr(o.number.small || "")}">${o.number.big}</span>`
     : isFinite(p) && p > 0 && p < 1
-      ? `<div class="hd-prob"><b>${Math.round(p * 100)}%</b><span>to hit</span></div>` : "";
+      ? `<span class="hd-p" title="chance to hit">${Math.round(p * 100)}%</span>` : "";
+  const nums = price || num ? `<div class="hd-num">${price}${num}</div>` : "";
   const door = o.door || "";
   const tag = door ? "button" : "div";
   return `<${tag} class="hd-row${door ? " openable" : ""}"${door ? ` type="button"${door}` : ""}>
-    <div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${prob}</${tag}>`;
+    <div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${nums}</${tag}>`;
 }
 
 /* The Pick of the Day as a hero card — only on a day the desk said BET.
@@ -39587,18 +39617,34 @@ async function deckRecordHTML() {
   const sign = (v) => (v >= 0 ? "+" : MINUS);
   const tone = (v) => (v >= 0 ? "var(--good)" : "var(--bad)");
   const wl = (t) => `${t.wins}-${t.losses}${t.pushes ? `-${t.pushes}` : ""}`;
-  const tile = (k, big, color, sub) => `<div class="hd-stat"><span class="hd-eyebrow">${k}</span>
-    <b style="color:${color}">${big}</b><span>${sub}</span></div>`;
+  /* v3: the ribbon every tracker leads with — a ring for the hit rate,
+     the W-L, the headline number, and the last five as form dots. The
+     dots are the record's own recent rows (status / result), newest
+     first; the ring is wins over decisions, pushes out. */
+  const dots = (rows, key) => (rows || []).slice(0, 5).map((r) => {
+    const s = String((r || {})[key] || "").toLowerCase();
+    const w = s === "won", l = s === "lost";
+    return `<i class="${w ? "w" : l ? "l" : "p"}">${w ? "W" : l ? "L" : "P"}</i>`;
+  }).join("");
+  const rate = (t) => ((t.wins || 0) + (t.losses || 0)) ? (t.wins || 0) / ((t.wins || 0) + (t.losses || 0)) : 0;
+  const ring = (r) => { const pc = Math.max(0, Math.min(100, Math.round(r * 100)));
+    return `<span class="hd-ring" style="--pc:${pc}" title="${pc}% of decisions won"><i>${pc}%</i></span>`; };
+  const tile = (k, rec, big, color, sub, form, r) => `<div class="hd-ribbon">${ring(r)}
+    <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
+      <span class="hd-big">${rec} <b style="color:${color}">${big}</b></span><span>${sub}</span></div>
+    ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
   const tiles = [];
   if (ov.settled) {
     const roi = Number(ov.roi || 0);
-    tiles.push(tile("Model", `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
-                    `${wl(ov)} · ${ov.settled} settled`));
+    const u = Number(ov.net_units || 0);
+    tiles.push(tile("Model · graded in public", wl(ov), `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
+                    `${sign(u)}${Math.abs(u).toFixed(1)}u · ${ov.settled} settled`, dots(rec.recent, "status"), rate(ov)));
   }
   if (zo.settled) {
     const pr = Number(zo.profit || 0);
-    tiles.push(tile("Zeno", `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
-                    `${wl(zo)} · ${zo.settled} settled`));
+    tiles.push(tile("Zeno · his own book", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+                    `${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
+                    dots(z.recent, "result"), rate(zo)));
   }
   const record = tiles.length
     ? `${deckHead("The record", "#record", "record", "Results")}
@@ -39641,6 +39687,34 @@ function deckFill(host, sec, html) {
   s.hidden = !html;
 }
 
+/* The riding tray (v3): our bet slip. Every book floats a pill above
+   its tab bar with the slip's count; ours carries the bets in play,
+   the first one's progress, and a door to the Live tab — hidden on the
+   Live tab itself, which is where it points. Phones only (CSS). */
+function renderRidingTray(riding) {
+  const tray = document.getElementById("riding-tray");
+  if (!tray) return;
+  const n = (riding || []).length;
+  tray.dataset.n = String(n);
+  if (!n) { tray.innerHTML = ""; ridingTraySync(); return; }
+  const first = riding[0];
+  const prog = first.current != null && first.line != null && first.market !== "moneyline"
+    ? `${first.current} / ${first.line}` : "";
+  tray.innerHTML = `<span class="rt-dot"></span><b>${plural(n, "bet")} riding</b>
+    <span class="rt-sub">${trackerBetText(first)}${prog ? ` · ${escapeHtml(prog)}` : ""}</span>
+    <span class="rt-go">Live &#8594;</span>`;
+  tray.onclick = () => switchView("live", true);
+  ridingTraySync();
+}
+
+function ridingTraySync() {
+  const tray = document.getElementById("riding-tray");
+  if (!tray) return;
+  const shown = Number(tray.dataset.n) > 0 && !["live", "pbp"].includes(state.view);
+  tray.hidden = !shown;
+  document.body.classList.toggle("has-tray", shown);
+}
+
 async function renderHomeDeck() {
   const host = document.getElementById("home-deck");
   if (!host) return;
@@ -39653,6 +39727,7 @@ async function renderHomeDeck() {
   const rows = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])]);
   const riding = deckRidingRows(rows);
   deckFill(host, "riding", deckRidingHTML(riding));
+  renderRidingTray(riding);
   const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
   deckFill(host, "live", live);
   deckFill(host, "record", rest.record);

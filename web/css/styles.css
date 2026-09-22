@@ -271,6 +271,10 @@
      a raw one in a rule is a colour nobody can find again. */
   --grad-potd-sweep: linear-gradient(100deg, transparent 35%,
     color-mix(in srgb, var(--bad) 16%, transparent) 50%, transparent 65%);
+  /* The Pick of the Day hero: its venue render fades into the panel
+     under the headline. */
+  --grad-potd-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel) 25%, transparent),
+    var(--panel) 62%);
   /* The "more below" fade for scroll rails — a mask, so the color is
      alpha only and no theme ever has to restate it. */
   --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
@@ -6021,6 +6025,22 @@ body.has-rail .shell {
      seventh league wrapping to a second line instead of squeezing six
      into an unreadable one. */
   .sportbar-in .sport-btn { flex: 1 1 auto; min-width: 48px; }
+  /* v3 (2026-09-22): the strip as a carousel of crests — a circle with
+     the code, the name beneath, the active one ringed in gold. It still
+     wraps and never scrolls (test_league_strip). */
+  .sportbar-in { padding: 6px 8px 2px; }
+  .sportbar-in .sport-btn { display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .1em; }
+  .sportbar-in .sport-btn::before { content: attr(data-sport); width: 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center; border: var(--hairline) solid var(--border); background: var(--panel);
+    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .04em;
+    text-transform: uppercase;
+    /* The active ring is an inset outline, so the crest never changes
+       size and the hairline stays the only border weight. */
+    outline: 2px solid transparent; outline-offset: -2px;
+    transition: outline-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+  .sportbar-in .sport-btn.active::before { outline-color: var(--gold); color: var(--text);
+    box-shadow: var(--glow); }
 }
 
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
@@ -6701,12 +6721,13 @@ body.has-rail .shell {
 .gc-mkts { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 2px 8px;
   margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--border-soft);
   text-align: center; }
-.gc-mk { display: grid; gap: 2px; min-width: 0; }
+.gc-mk { display: grid; gap: 2px; min-width: 0; padding: 5px 6px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); background: var(--bg); }
 .gc-mk i { font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs);
   font-weight: 800; letter-spacing: .1em; text-transform: uppercase; min-height: 13px; }
 .gc-mk b { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; color: var(--text);
   white-space: nowrap; }
-.gc-mk-teams { text-align: left; }
+.gc-mk-teams { text-align: left; border: 0; background: transparent; padding-left: 0; }
 .gc-mk-teams b { font-family: var(--font-sans); font-weight: 700; color: var(--text-dim); }
 .rec-riding a { color: var(--brand-2); }
 .hero-games .game-sub, .hero-games .game-when, .hero-games .starters {
@@ -6774,9 +6795,9 @@ body.has-deck #rail-live { display: none; }
 .hd-team span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .hd-team em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hd-team b { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 600; }
-.hd-game-foot { margin-top: 10px; color: var(--text-mute); font-size: var(--fs-xs); }
-.hd-game-foot .mono { font-family: var(--font-mono); }
-.hd-riding { color: var(--brand-2); font-weight: 800; }
+.hd-game-foot { margin-top: 10px; gap: 8px; align-items: baseline; color: var(--text-mute); font-size: var(--fs-xs); }
+.hd-game-foot .mono { font-family: var(--font-mono); min-width: 0; }
+.hd-riding { color: var(--brand-2); font-weight: 800; white-space: nowrap; flex: 0 0 auto; }
 .hd-quiet { display: flex; align-items: center; gap: 10px; padding: 14px;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text-dim); font-size: var(--fs-sm); }
@@ -6799,17 +6820,44 @@ body.has-deck #rail-live { display: none; }
 .hd-chip.good { color: var(--good); }
 .hd-chip.bad { color: var(--bad); }
 .hd-state b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; }
-.hd-prob { flex: 0 0 auto; text-align: right; }
-.hd-prob b { display: block; color: var(--good); font-family: var(--font-mono);
-  font-size: var(--fs-lg); font-weight: 600; }
-.hd-prob span { color: var(--text-mute); font-size: var(--fs-2xs); }
-.hd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.hd-stat { padding: 12px 14px; border: var(--hairline) solid var(--border-soft);
-  border-radius: var(--radius-lg); background: var(--panel); }
-.hd-stat .hd-eyebrow { color: var(--text-mute); }
-.hd-stat b { display: block; margin: 4px 0 2px; font-family: var(--font-mono);
-  font-size: var(--fs-xl); font-weight: 600; }
-.hd-stat span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
+/* v3: the price in its own pill beside our number. */
+.hd-num { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.hd-o { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 5px 9px; background: var(--bg); }
+.hd-p { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; color: var(--good);
+  border: var(--hairline) solid color-mix(in oklab, var(--good) 40%, transparent); border-radius: var(--radius);
+  padding: 5px 9px; background: color-mix(in oklab, var(--good) 8%, transparent); }
+/* v3: the record as a ribbon — hit-rate ring, W-L, the number, form dots. */
+.hd-stats { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.hd-ribbon { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+.hd-ring {
+  --pc: 0;
+  --grad-ring: conic-gradient(var(--good) 0 calc(var(--pc) * 1%), var(--border) calc(var(--pc) * 1%) 100%);
+  width: 56px; height: 56px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;
+  background: var(--grad-ring); }
+.hd-ring i { width: 44px; height: 44px; border-radius: 50%; background: var(--panel); display: grid;
+  place-items: center; font-style: normal; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.hd-rw { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hd-rw .hd-eyebrow { color: var(--text-mute); }
+.hd-big { font-family: var(--font-mono); font-size: var(--fs-lg); }
+.hd-rw > span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
+.hd-form { display: flex; gap: 4px; flex: 0 0 auto; }
+.hd-form i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-style: normal; font-size: var(--fs-2xs); font-weight: 800; color: var(--brand-ink); background: var(--good); }
+.hd-form i.l { background: var(--bad); }
+.hd-form i.p { background: var(--text-mute); }
+/* v3: the live card's win-probability bar (home share filled). */
+.hd-wp { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
+.hd-wp i { display: block; height: 100%; background: var(--good); }
+/* v3: the Pick of the Day as the home's hero, on its venue render. */
+.potd-hero {
+  --potd-art: none;
+  position: relative; overflow: hidden; background-size: cover; background-position: center; }
+.potd-hero.has-art { padding-top: 84px; background-image: var(--grad-potd-fade), var(--potd-art); }
+.potd-hero strong { font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }
+/* v3: the riding tray exists only where the tab bar does (phone block). */
+.riding-tray { display: none; }
 
 .hd-row.openable { width: 100%; border-left: 0; border-right: 0; border-bottom: 0;
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -6947,6 +6995,19 @@ body.has-deck #rail-live { display: none; }
     display: inline-grid; place-items: center; background: var(--bad);
     color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
   .tb-badge[hidden] { display: none; }
+  /* v3: the riding tray, floating above the bar. */
+  .riding-tray { position: fixed; left: 16px; right: 16px; z-index: 54;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border: var(--hairline) solid var(--brand); border-radius: 999px; background: var(--panel);
+    color: var(--text); font: inherit; font-size: var(--fs-sm); font-weight: 700; text-align: left;
+    cursor: pointer; box-shadow: var(--glow-soft); }
+  .riding-tray[hidden] { display: none; }
+  .rt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex: 0 0 auto; }
+  .rt-sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-xs); color: var(--text-dim); }
+  .rt-go { color: var(--brand-2); flex: 0 0 auto; }
+  body.has-tray { padding-bottom: 150px; }
   .tb-item[aria-expanded="true"] { color: var(--brand-2); }
 
   /* ---- The More sheet (2026-09-22, from the approved Figma mock) ----

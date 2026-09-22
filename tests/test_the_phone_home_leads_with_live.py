@@ -208,7 +208,7 @@ def test_the_picks_page_is_the_same_rows_with_doors():
     assert 'const tag = door ? "button" : "div";' in row, "a row is a button exactly when it opens something"
     # The rows serve every width, so their styles live outside the phone block.
     phone_at = CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))
-    for sel in (".hd-row {", ".hd-card {", ".hd-strip {", ".hd-stat {", ".hd-row.openable {", ".tn-full {"):
+    for sel in (".hd-row {", ".hd-card {", ".hd-strip {", ".hd-ribbon {", ".hd-num {", ".hd-row.openable {", ".tn-full {"):
         assert sel in CSS[:phone_at], sel
 
 

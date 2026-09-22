@@ -74,6 +74,14 @@ def render(payload, sport="mlb", top=None):
     const betMark = () => "";
     const ridingAttrs = () => "";
     const liveTrackerRows = (r) => r;
+    // v3 (2026-09-22): the card is drawn on its venue render; the art
+    // helpers are the page's, stubbed here — this harness tests the
+    // words, not the picture.
+    const VENUE_FAMILY = {{ mlb: "baseball", nfl: "football" }};
+    const activeTeams = () => ({{}});
+    const venueSrc = (s) => s;
+    const venueVariant = () => "steel";
+    {_fn("absoluteSrc")}
     {_fn("potdLiveRow")}
     {_fn("potdLiveStrip")}
     {_fn("potdCallStrip")}
