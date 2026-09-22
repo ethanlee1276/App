@@ -448,10 +448,22 @@ surface.
     bets queued to ride (`liveQuietLine`) — then the feed's reason
     and the doors. The doors everywhere are the never-empty pages
     minus the one you are on (`boardEmptyDoors(here)`).
+  * *One record.* Ethan, 2026-09-22: "we want both records and all
+    that shit combined so we can display 1 roi." The ledger exports
+    the whole journal as one book (`POOLED_BOOKS`, `pooled_report`:
+    the edge board and the Most Likely board, on every scope), the
+    site seats it where the edge book sat on load
+    (`adoptPooledRecord`) so the verdict, the deck's ribbon, the
+    sidebar's running ROI, the paywall's proof, the calendar, the
+    curve and the receipts read one number, and the verdict draws
+    the two books side by side beneath it (`verdictBooksHTML`), each
+    with its own line, diagram and reading. The paper share is
+    counted and said.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
-  `tests/test_an_empty_board_carries_the_card.py` and
-  `tests/test_the_live_page_rests_like_the_deck.py`.
+  `tests/test_an_empty_board_carries_the_card.py`,
+  `tests/test_the_live_page_rests_like_the_deck.py` and
+  `tests/test_the_record_is_one_record.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

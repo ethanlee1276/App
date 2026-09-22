@@ -3397,9 +3397,36 @@ async function loadRecordOnce() {
   if (_recordCache !== null) return _recordCache;
   try {
     const res = await boardFetch("data/record.json?t=" + (Date.now() / 60000 | 0));
-    _recordCache = res.ok ? await res.json() : {};
+    _recordCache = res.ok ? adoptPooledRecord(await res.json()) : {};
   } catch (e) { _recordCache = {}; }
   return _recordCache;
+}
+
+/* ONE RECORD. Ethan, 2026-09-22: "we want both records and all that
+   shit combined so we can display 1 roi." The file carries the edge
+   book as `overall` and, since that day, the whole journal — the edge
+   board and the Most Likely board as one — as `pooled`
+   (ledger.pooled_report). Every surface that says "the record" reads
+   `overall`, so the pooled book is moved into that seat here, once,
+   and the edge book keeps a seat of its own (`edge`; the edge board
+   alone as `edge_board`, so the verdict's two cards add up to the one
+   number). Per sport too. A file from before this carries no
+   `pooled` and is left exactly as it was; a record already adopted is
+   left alone. */
+function adoptPooledRecord(rec) {
+  const lift = (s) => {
+    if (!s || !s.pooled || !s.pooled.overall || s.edge) return s;
+    s.edge = { overall: s.overall, curve: s.curve, recent: s.recent };
+    s.edge_board = s.pooled.edge || null;   // the edge board alone (EDGE_BOOKS), for the verdict's card
+    s.overall = s.pooled.overall;
+    s.curve = s.pooled.curve || s.curve;
+    s.recent = s.pooled.recent || s.recent;
+    return s;
+  };
+  if (!rec) return rec;
+  lift(rec);
+  Object.values(rec.by_sport || {}).forEach(lift);
+  return rec;
 }
 
 /* WHO a bet belongs to, as one mark — the rule every board reads from.
@@ -14922,8 +14949,16 @@ function moneySplitHTML(o) {
   return `<p class="rv-split">${body}</p>`;
 }
 
-function recordVerdictHTML(src, scopeLabel) {
+function recordVerdictHTML(src, scopeLabel, lk) {
   const o = (src && src.overall) || {};
+  /* v5: ONE NUMBER, TWO BOOKS. When the record is pooled (adoptPooledRecord)
+     `o` is the whole journal and `edge` the edge board alone (EDGE_BOOKS —
+     not the old headline book, which also held the staked Most Likely rows
+     and would count them twice beside `lk`); `lk` is the Most Likely
+     board's own report. The tiles are the one number; the two books read
+     side by side beneath it, and they add up to it. */
+  const pooled = !!(src && src.edge && src.edge.overall);
+  const edge = pooled ? (src.edge_board || src.edge.overall) : o;
   const cal = src && src.calibration;
   const buckets = ((cal || {}).buckets || []).filter((b) => b.n > 0);
   const need = src.min_graded || 30;
@@ -14999,8 +15034,9 @@ function recordVerdictHTML(src, scopeLabel) {
 
   return `<section class="card rv-card">
     <div class="section-title">The verdict
-      <span class="sub">— ${escapeHtml(scopeLabel)}, everything journaled at
-      its real price and graded in public</span></div>
+      <span class="sub">— ${escapeHtml(scopeLabel)}, ${pooled
+        ? "the edge board and the Most Likely board as one book, " : ""}everything
+      journaled at its real price and graded in public</span></div>
     <div class="rv-tiles">
       ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
              `${o.open || 0} open · ${settled} settled`)}
@@ -15033,10 +15069,45 @@ function recordVerdictHTML(src, scopeLabel) {
         against the ${need} this page needs before a rate means anything.
         The numbers above are real and they are not yet a verdict — judge the
         process by CLV until the count catches up.</p>`
+      : pooled ? verdictBooksHTML(edge, lk, chart, lines)
       : `<div class="rv-read">${chart}
           <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
         </div>`}
   </section>`;
+}
+
+/* THE TWO BOOKS UNDER THE ONE NUMBER. Ethan, 2026-09-22: "we can show 2
+   different model charts and shit side by side for most likely and edge
+   bets … but the most likely and edge record will be combined." Each
+   card is that book's own line — W-L, units, ROI — its reliability
+   diagram, and its reading: the edge board's is the verdict's own
+   sentences (calibration, Brier, CLV), the Most Likely board's is the
+   engine's verdict string. The Most Likely diagram is drawn from the
+   report's claimed-probability bands, with the same two-standard-error
+   band the edge diagram carries, so the two pictures are read the same
+   way. Nothing here is a number the page did not already hold. */
+function verdictBooksHTML(edge, lk, chart, lines) {
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const line = (b) => {
+    const n = ((b || {}).wins || 0) + ((b || {}).losses || 0);
+    return n ? `${b.wins || 0}\u2011${b.losses || 0}${b.pushes ? `\u2011${b.pushes}` : ""}
+      · ${sign(b.net_units || 0, 2)}u · ${sign((b.roi || 0) * 100)}% ROI`
+      : "nothing settled yet";
+  };
+  const likelyBuckets = ((lk || {}).bands || []).map((b) => {
+    const ci = b.n ? 2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n) : 0;
+    return { predicted: b.claimed, actual: b.actual, n: b.n, ci,
+             in_band: Math.abs(b.actual - b.claimed) <= ci };
+  });
+  const likelyChart = likelyBuckets.length >= 2 ? reliabilityDiagram(likelyBuckets) : "";
+  return `<div class="rv-books">
+    <div class="rv-book"><span class="hd-eyebrow">Edge bets</span>
+      <div class="rv-book-line">${line(edge)}</div>${chart}
+      <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div></div>
+    <div class="rv-book"><span class="hd-eyebrow">Most likely</span>
+      <div class="rv-book-line">${lk ? line(lk) : "no rows yet"}</div>${likelyChart}
+      <div class="rv-says">${lk && lk.verdict ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
+  </div>`;
 }
 
 /* THE PICK OF THE DAY'S OWN SPOT ON THE RECORD PAGE.
@@ -15240,7 +15311,7 @@ async function renderRecord() {
   let d = null, pmv = null;
   try {
     const res = await boardFetch("data/record.json?t=" + Date.now());
-    if (res.ok) d = await res.json();
+    if (res.ok) d = adoptPooledRecord(await res.json());
   } catch (e) {}
   /* THROUGH THE ENTITLED ENDPOINT FIRST. `predmarkets.json` is a wholly
      paid file — gate.PAID_FILES — so the copy Caddy serves off disk is a
@@ -15362,14 +15433,15 @@ async function renderRecord() {
      Scoped panels get nothing: the measurement is computed over the whole
      main book, and slicing it per sport would print a number that was
      never calculated. See docs/THE_INFORMATION_TEST.md. */
-  const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend, d.overall);
+  const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend, (d.edge || d).overall);
   /* THE VERDICT LEADS. Everything below it is the working; this is the
      answer, and a first-time reader should not have to assemble it from
      six panels. Scoped correctly by construction — `src` is already the
      scoped object, so a per-sport verdict cannot quietly print the
      combined number. */
   const verdict = recordVerdictHTML(src, scope === "all"
-    ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase()));
+    ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase()),
+    scoped ? (d.likely_by_sport || {})[scope] : d.likely);
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.

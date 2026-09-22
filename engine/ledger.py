@@ -5022,6 +5022,11 @@ def _book_breakeven(bets) -> float | None:
 #: defined fifteen hundred lines below this. A test pins the two
 #: together so they cannot drift apart.
 BOOK = ("main", "paper", "likely_live")
+#: The rows journaled at a nominal stake with no dollars behind them —
+#: the paper book, and the Most Likely board where it is not staked.
+#: `performance` counts them as `paper_bets`, so a record that pools
+#: them can say how much of itself was ever at risk (moneySplitHTML).
+PAPER_BOOKS = ("paper", "likely")
 
 
 #: LEAGUES BENCHED FROM THE RECORD, and the book their rows go to.
@@ -5302,7 +5307,7 @@ def performance(conn, sport: str | None = None,
         "net_dollars": round(net_d, 2),
         "money_bets": sum(1 for b in bets
                           if b["status"] != "push" and (b["pnl_dollars"] or 0)),
-        "paper_bets": sum(1 for b in bets if b["category"] == "paper"),
+        "paper_bets": sum(1 for b in bets if b["category"] in PAPER_BOOKS),
         "avg_price": avg_price,
         "returned_units": round(returned_u, 2),
         "best_streak": best_streak,
@@ -5494,11 +5499,15 @@ def era_report(conn) -> dict:
 
 
 def pnl_curve(conn, sport: str | None = None,
-              since: str | None = None) -> list[dict]:
+              since: str | None = None,
+              category: tuple[str, ...] = BOOK) -> list[dict]:
     """Cumulative settled P&L by slate date — the Record page's equity curve.
 
     One point per date with anything settled: that day's net units, the
-    running total, and how many bets graded."""
+    running total, and how many bets graded. `category` is the book the
+    curve is drawn over: the edge book by default, the whole journal for
+    the pooled record (POOLED_BOOKS)."""
+    cats = tuple(category)
     # Everything a DATE RANGE needs to state its own record, so the site
     # never has to fall back on all-time numbers under a windowed chart.
     #
@@ -5544,9 +5553,9 @@ def pnl_curve(conn, sport: str | None = None,
          f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
          "FROM bets "
          "WHERE status IN ('won','lost','push') "
-         f"AND category IN ({','.join('?' * len(BOOK))}) "
+         f"AND category IN ({','.join('?' * len(cats))}) "
          "AND stake_units > 0")
-    args: list = list(BOOK)
+    args: list = list(cats)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -6757,6 +6766,42 @@ LIKELY_LIVE_GRADE = "Likely (staked)"
 #: ("main","paper") and neither of these is in it.
 LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
 
+#: THE WHOLE JOURNAL, ONE RECORD. Ethan, 2026-09-22: "we want both
+#: records and all that shit combined so we can display 1 roi." BOOK
+#: already holds the staked Most Likely rows (likely_live, since
+#: 2026-09-19); the paper ones (likely) were the last book outside it,
+#: and the Record page led with two headline records because of it.
+#: This is the headline's book now — every row the site journals at a
+#: real price — and `pooled_report` is how it reaches the site, which
+#: seats it where the edge book sat (app.js adoptPooledRecord) and keeps
+#: the edge book beside it, so the two still read side by side. Nothing
+#: about how either book is graded changes; only which rows the top
+#: number counts, and the paper share is said next to it.
+POOLED_BOOKS = BOOK + ("likely",)
+#: The edge board on its own — the rows the edge board journals, staked
+#: or paper — for the verdict's side-by-side. BOOK also carries the
+#: staked Most Likely rows, which the Most Likely report counts too, so
+#: two cards built from BOOK and LIKELY_BOOKS would count those rows
+#: twice and fail to add up to the one number above them. These two do:
+#: EDGE_BOOKS + LIKELY_BOOKS is POOLED_BOOKS, row for row.
+EDGE_BOOKS = ("main", "paper")
+
+
+def pooled_report(conn, sport: str | None = None,
+                  since: str | None = None) -> dict:
+    """The headline record over POOLED_BOOKS — the same three pieces the
+    edge book exports (overall, curve, recent), so the site can seat it
+    where the edge book sat and every surface reads one number — and
+    the edge board alone (`edge`, EDGE_BOOKS) for the verdict's card."""
+    return {
+        "books": list(POOLED_BOOKS),
+        "overall": performance(conn, sport, category=POOLED_BOOKS, since=since),
+        "edge": performance(conn, sport, category=EDGE_BOOKS, since=since),
+        "curve": pnl_curve(conn, sport, since=since, category=POOLED_BOOKS),
+        "recent": recent_settled(conn, RECENT_LIMIT, category=POOLED_BOOKS,
+                                 sport=sport, since=since),
+    }
+
 #: The books whose rows are SELECTED by disagreeing with a fair, and so
 #: the books for which "which witness said so" is a question with an
 #: answer. The Edge book (`BOOK`) is the one `performance` reports and
@@ -7662,6 +7707,7 @@ def sport_report(conn, sport: str,
     return {
         "sport": sport,
         "overall": perf,
+        "pooled": pooled_report(conn, sport, since=since),
         "all_time": {
             "overall": everything,
             "hidden_settled": max(0, everything["settled"] - perf["settled"]),
@@ -8065,6 +8111,7 @@ def export_json(conn, path) -> None:
             "benched_settled": _benched_settled(conn, since),
         },
         "overall": scoped,
+        "pooled": pooled_report(conn, since=since),
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),

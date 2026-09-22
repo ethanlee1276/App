@@ -6461,6 +6461,18 @@ body.has-rail .shell {
   max-width: var(--measure-wide); }
 .rv-split b { color: var(--text); font-weight: 700; }
 
+/* v5: THE TWO BOOKS UNDER THE ONE NUMBER (verdictBooksHTML). The tiles
+   above are the pooled book; these are each book's own line, diagram
+   and reading — side by side from 900px, stacked on a phone, the
+   diagram scaling to its column. */
+.rv-books { display: grid; gap: 14px; margin-top: 18px; }
+@media (min-width: 900px) { .rv-books { grid-template-columns: 1fr 1fr; } }
+.rv-book { min-width: 0; padding: 12px 14px; border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); background: var(--panel-2); }
+.rv-book-line { font-family: var(--font-mono); font-size: var(--fs-sm); margin: 4px 0 10px;
+  font-variant-numeric: tabular-nums; }
+.rv-book svg { display: block; max-width: 100%; height: auto; margin-bottom: 10px; }
+
 @media (max-width: 900px) {
   /* Five across is unreadable on a phone; two rows of the same tiles is
      the same information at a size a thumb can read. */
