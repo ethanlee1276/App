@@ -7037,6 +7037,19 @@ body.has-deck #rail-live { display: none; }
 .hd-game-line { color: var(--text-dim); }
 .hd-stake { color: var(--good); font-size: var(--fs-sm); font-weight: 700; }
 .hd-vs { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-mute); white-space: nowrap; }
+/* v5: the Long Shots watch — most likely to score — is the Edge Board's
+   row. Each row sits in its own .watch-item (the door's reasoning folds
+   under it), so the hairline between rows and the rise are addressed
+   through the item. A price not worth taking wears the EV pill in grey. */
+.watch-item + .watch-item > .hd-row { border-top: var(--hairline) solid var(--border-soft); }
+.watch-item > .hd-edge { animation: rise var(--dur-slow) var(--ease-out) both; }
+.watch-item:nth-child(2) > .hd-edge { animation-delay: calc(var(--dur-fast) * .3); }
+.watch-item:nth-child(3) > .hd-edge { animation-delay: calc(var(--dur-fast) * .6); }
+.watch-item:nth-child(4) > .hd-edge { animation-delay: calc(var(--dur-fast) * .9); }
+.watch-item:nth-child(5) > .hd-edge { animation-delay: calc(var(--dur-fast) * 1.2); }
+.watch-item:nth-child(n+6) > .hd-edge { animation-delay: calc(var(--dur-fast) * 1.5); }
+.hd-p.flat { color: var(--text-mute); border-color: var(--border-soft); background: transparent; }
+.watch-why { padding: 2px 14px 12px 44px; }
 .hd-chip.warn { color: var(--warn); }
 /* v5: a ticket row — Zeno's, or your own on My Bets: the stake beside
    the price, both mono and quiet; the profit in the result's colour. */

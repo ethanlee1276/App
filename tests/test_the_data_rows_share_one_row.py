@@ -16,8 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "web" / "js" / "app.js").read_text()
 CSS = (ROOT / "web" / "css" / "styles.css").read_text()
+# watchlistHTML left this list 2026-09-22: it draws the book's row (hd-row),
+# the other shared row — tests/test_the_long_shots_watch_is_the_books_row.py.
 ROWS = ("predBoardHTML", "renderInjuryWatch", "renderUFC", "renderBestBets", "renderLivePicks", "marketBestHTML",
-        "censusFunnelHTML", "watchlistHTML", "renderRestWatch", "renderIncentives", "renderSleeperPanel",
+        "censusFunnelHTML", "renderRestWatch", "renderIncentives", "renderSleeperPanel",
         "renderTeamForm", "recProseSection", "learningCoverageHTML")
 
 
@@ -43,7 +45,10 @@ def test_each_pages_variant_is_a_word():
     assert '<div class="rec-row mid tall line${r.phase === "upcoming" ? " dim" : ""}${door ? " openable" : ""}"${door}>' in _fn("renderLivePicks"), \
         "the tracker row keeps to one line, and its door joins the one class attribute"
     assert not re.search(r'<(div|span)\s+class="[^"]*"[^>]*?\sclass="', APP), "a tag with two class attributes — the browser keeps the first and drops the row"
-    assert 'class="drow rec-row mid nowrap${detail ? " watch-door" : ""}"' in _fn("watchlistHTML"), "the watch row had two style attributes before; now one class"
+    # Re-anchored 2026-09-22: the watch row is the Edge Board's row now
+    # (tests/test_the_long_shots_watch_is_the_books_row.py); still one
+    # class attribute, and the door still rides in it.
+    assert 'class="ls-row drow hd-row hd-edge${detail ? " watch-door" : ""}"' in _fn("watchlistHTML"), "the watch row had two style attributes before; now one class"
     assert 'class="drow ffrow-door rec-row mid nowrap"' in _fn("renderSleeperPanel")
     assert '<div class="rec-row top tall line${door ? " openable" : ""}"${door || ""}>' in _fn("marketBestHTML")
     assert ".watch-door { cursor: pointer; }" in CSS

@@ -519,6 +519,13 @@ surface.
     Edge boards among them — and rendered at the display heading's
     size and weight over a full-colour paragraph. The stylesheet
     gives both shapes the class-built type; the markup is untouched.
+  * *The Long Shots watch is the book's row.* Rendered on the sample
+    board at 390, "Most likely to score tonight" crushed five columns
+    into one line, the price and the EV overprinting each other. It
+    is the Edge Board's row now — rank, face, name over its reason,
+    the chart against the 0.5 line, the price pill and the EV pill
+    (grey when the price is not worth taking), ours against the
+    book's beneath — and it wraps on a phone the way that row does.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -527,8 +534,9 @@ surface.
   `tests/test_zeno_and_my_bets_read_like_the_book.py`,
   `tests/test_the_paywall_shows_the_one_record.py`,
   `tests/test_a_quiet_trending_page_is_one_slate.py`,
-  `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`
-  and `tests/test_one_slate_one_size.py`.
+  `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`,
+  `tests/test_one_slate_one_size.py` and
+  `tests/test_the_long_shots_watch_is_the_books_row.py`.
 * **Still open (2026-09-22, after slice T).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile

@@ -8568,8 +8568,18 @@ function watchlistHTML(watch, mlb) {
   if (!watch || !watch.length) return "";
   const rows = watch.map((r, i) => {
     const ev = (r.ev_per_unit * 100).toFixed(0);
-    const evColor = r.ev_per_unit > 0 ? "var(--good)" : "var(--text-mute)";
-    const spark = likelySpark(r, { line: 0.5, w: 64, h: 22 });
+    const evTxt = `${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV`;
+    // v5: THE BOOK'S ROW, the Edge Board's own — rank, the face, the
+    // name over its reason, the chart against the 0.5 line, then the
+    // price in the grey pill and the EV in the green one (grey when
+    // the price is not worth taking), with ours against the book's
+    // beneath. It wraps on a phone the way that row does; the old row
+    // kept to one line and crushed five columns into 390px.
+    const vals = r.recent_values || [];
+    const spark = vals.length >= 3
+      ? `<span class="edge-spark" title="${mlb ? "Home runs" : "Touchdowns"}, last ${vals.length} games">${
+          likelySpark(r, { line: 0.5, w: 92, h: 34 })}</span>`
+      : `<span class="edge-spark"></span>`;
     // THE WHOLE CHAIN, not one sentence. This list ranks who is most
     // likely to score, which is the thing the model is measurably good
     // at (AUC 0.721 over 22,099 graded NFL player-weeks, 0.675 over
@@ -8581,21 +8591,19 @@ function watchlistHTML(watch, mlb) {
     const caveats = (r.caveats || [])
       .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
     const detail = why || caveats
-      ? `<div class="watch-why" hidden style="padding:2px 14px 12px 44px">
+      ? `<div class="watch-why" hidden>
            ${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
       : "";
     return `<div class="watch-item">
-      <div class="drow rec-row mid nowrap${detail ? " watch-door" : ""}"${detail ? ' data-watch-toggle role="button" tabindex="0" aria-expanded="false"' : ""}>
-      <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
-        <strong>${escapeHtml(r.player)}</strong>
-        <span style="opacity:.55;font-size:.85em"> ${teamName(r.team)} vs ${teamName(r.opponent)}
+      <div class="ls-row drow hd-row hd-edge${detail ? " watch-door" : ""}"${detail ? ' data-watch-toggle role="button" tabindex="0" aria-expanded="false"' : ""}>
+      <span class="hd-rank">${i + 1}</span>
+      <span class="pick-id">${playerAvatar(r.player, r.team, { size: 30, headshot: r.headshot })}</span>
+      <span class="hd-what"><b>${escapeHtml(r.player)}</b>
+        <span>${escapeHtml(teamName(r.team))} vs ${escapeHtml(teamName(r.opponent))}
           · ${escapeHtml(r.primary_reason || "")}${detail ? " ▾" : ""}</span></span>
-      <span class="mini" style="flex:0 0 auto" title="${mlb ? "Home runs" : "Touchdowns"}, last ${(r.recent_values || []).length} games">${spark}</span>
-      <span style="min-width:96px;text-align:right;opacity:.85;font-size:.9em">
-        ${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span>
-      <span style="min-width:56px;text-align:right">${american(r.odds)}</span>
-      <span style="min-width:64px;text-align:right;color:${evColor};font-size:.9em">${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV</span>
+      ${spark}
+      <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p${r.ev_per_unit > 0 ? "" : " flat"}">${evTxt}</span></span>
+        <span class="hd-vs">${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span></span>
       </div>${detail}</div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
