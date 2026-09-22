@@ -175,6 +175,20 @@ def test_the_site_seats_the_pooled_book_where_the_edge_book_sat():
     assert "recEdgePanel(d.edge_now, d.edge_trend, (d.edge || d).overall)" in rr, "the edge measurement stays over the edge book"
 
 
+def test_every_reader_of_the_record_file_seats_the_pooled_book():
+    """Four readers, one rule. The home's performance panel and the Why
+    page read the file raw and kept quoting the edge book under a ribbon
+    that had moved on — two records on one home, which is the thing Ethan
+    asked to end. Every fetch of record.json adopts, within a few lines."""
+    reads = [m.start() for m in re.finditer(r'boardFetch\("/?data/record\.json', APP)]
+    assert len(reads) >= 4, "the loader, the Record page, the paywall, the home panel and the Why page"
+    for i in reads:
+        window = APP[i:i + 600]
+        assert "adoptPooledRecord(" in window, "a reader of the record file that does not adopt the pooled book:\n" + window[:200]
+    assert "_perfCache = adoptPooledRecord(await r.json());" in _fn("renderHomePerf")
+    assert "rec = adoptPooledRecord(await res.json());" in _fn("renderWhy")
+
+
 def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     v = _fn("recordVerdictHTML")
     assert "function recordVerdictHTML(src, scopeLabel, lk)" in v

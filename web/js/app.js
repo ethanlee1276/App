@@ -32645,7 +32645,7 @@ async function renderWhy() {
   let rec = null;
   try {
     const res = await boardFetch("data/record.json?t=" + Date.now());
-    if (res.ok) rec = await res.json();
+    if (res.ok) rec = adoptPooledRecord(await res.json());   // the same record as every other page
   } catch (e) {}
   const o = rec && rec.overall;
   const proc = (o && o.process) || {};
@@ -36396,7 +36396,10 @@ async function renderHomePerf() {
       // Revalidate-don't-redownload, like the other record.json read.
       const r = await boardFetch("data/record.json", { cache: "no-cache" });
       if (!r.ok) throw new Error(String(r.status));
-      _perfCache = await r.json();
+      // The pooled book, like the ribbon this panel sits under
+      // (adoptPooledRecord) — two records on one home would be the
+      // thing Ethan asked to end, 2026-09-22.
+      _perfCache = adoptPooledRecord(await r.json());
     }
   } catch (e) { host.innerHTML = ""; return; }
   // SPORT-SCOPED (Ethan, 2026-08-17): "when you on a specific sport …
