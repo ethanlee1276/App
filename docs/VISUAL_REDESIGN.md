@@ -529,13 +529,17 @@ surface.
   `tests/test_a_quiet_trending_page_is_one_slate.py`,
   `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`
   and `tests/test_one_slate_one_size.py`.
-* **Still open (2026-09-22, after slice Q).** The desktop rail's
+* **Still open (2026-09-22, after slice T).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile
   and tickets appear once Juice Reel data lands. The Fantasy rooms'
   tables, the Players search cards, the Why page's calculators and the
-  UFC method bar keep their own layouts — they are not rows. The home
-  performance panel is the render's; under sample data rendercheck
-  reads it as drift, and on the droplet it is fed. Every push in this
-  pass was gated, crawled at 390 and 1280, and mutation-tested;
+  UFC method bar keep their own layouts — they are not rows. The empty
+  states were swept last (the slate is one shape at one size, with the
+  doors, on every board); the pages whose feeds this machine cannot
+  reach — Injuries, Weather, Rosters and Standings with data — were
+  checked only empty and want a look on the droplet, as do the four
+  rendercheck screens that need a fed board (the Fantasy calendar and
+  the player profile at both widths). Every push in this pass was
+  gated, crawled at 390 and 1280, and mutation-tested;
   docs/VISUAL_REDESIGN.md slice 13 is the record of it.
