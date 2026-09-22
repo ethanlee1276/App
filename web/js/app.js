@@ -12532,14 +12532,14 @@ function recLikelySection(lk, scope) {
   const cal = lk.calibration || {};
   const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
   const bands = (lk.bands || []).map((b) => `
-    <div class="rl-row ${b.actual >= b.claimed ? "won" : "lost"}">
+    <div class="rl-row rl-cal ${b.actual >= b.claimed ? "won" : "lost"}">
       <span class="rl-date">${(b.lo * 100).toFixed(0)}–${(b.hi * 100).toFixed(0)}%</span>
       <span class="rl-main">said ${pct(b.claimed)} · hit <strong>${pct(b.actual)}</strong></span>
       <span class="rl-proc">${b.n} settled</span>
       <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(1)}%</span>
     </div>`).join("");
   const markets = Object.entries(lk.by_market || {}).map(([m, d]) => `
-    <div class="rl-row ${d.actual >= d.claimed ? "won" : "lost"}">
+    <div class="rl-row rl-cal ${d.actual >= d.claimed ? "won" : "lost"}">
       <span class="rl-date">${escapeHtml(marketWord(m))}</span>
       <span class="rl-main">said ${pct(d.claimed)} · hit <strong>${pct(d.actual)}</strong></span>
       <span class="rl-proc">${d.w}/${d.n}</span>
@@ -12643,7 +12643,7 @@ function recLikelyGameLines(lk, sp) {
     const markets = by[sp] || {};
     return Object.keys(markets).sort().map((m) => {
       const d = markets[m] || {};
-      return `<div class="rl-row ${d.actual >= d.claimed ? "won" : "lost"}">
+      return `<div class="rl-row rl-cal ${d.actual >= d.claimed ? "won" : "lost"}">
         <span class="rl-date">${escapeHtml(sp.toUpperCase())}</span>
         <span class="rl-main">${escapeHtml(marketWord(m))} — said ${pct1(d.claimed)}
           · hit <strong>${pct1(d.actual)}</strong></span>

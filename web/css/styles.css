@@ -2324,6 +2324,23 @@ select.calc-in { width: auto; font-weight: 600; }
 .hero-title { font-size: var(--fs-lg); color: var(--text); margin-top: 4px; }
 .hero-title .sub { color: var(--text-dim); }
 
+/* THE PAGE TITLE IS A TITLE. Thirty of the forty views open with a
+   `.section-title` and its `.sub` — "Track Record", "Fantasy Football",
+   "The Lab" — drawn as the same small tracked caps every section head
+   inside the page uses, so a page opened the way a paragraph does.
+   Ethan, 2026-09-22: "all the pages are cluttered and confusing." The
+   first title in a view is now the page's name in the display face, at
+   the hero's size, with its purpose in a plain line beneath; the
+   section heads under it keep the caps, so the two levels read as two.
+   The why? apparatus is untouched: a long sub still folds behind it. */
+.view > .section-title:first-child {
+  font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight);
+  text-transform: none; letter-spacing: -.01em; color: var(--text); font-weight: 700;
+  margin-bottom: 12px; align-items: baseline; }
+.view > .section-title:first-child .sub { font-size: var(--fs-sm); color: var(--text-mute);
+  line-height: var(--lh-body); }
+.view > .section-title:first-child .why-toggle { align-self: center; }
+
 
 /* --- Progressive disclosure on section explanations -------------------
    The reasoning stays available and is never deleted; it just stops
@@ -2996,6 +3013,13 @@ select.calc-in { width: auto; font-weight: 600; }
   border-left: 3px solid transparent;
 }
 .rl-row:last-child { border-bottom: none; }
+/* FOUR CELLS, FOUR COLUMNS. The calibration rows (a probability band or
+   a market, said · hit, the sample, the ROI) have no icon and no book
+   cell, so on the six-column grid above their first cell landed in the
+   20px icon track and "45–60%" printed over "said 54.1%" (Ethan's
+   desktop, 2026-09-22). The phone's area layout below already seats
+   them by name and is restated there so this rule does not outrank it. */
+.rl-row.rl-cal { grid-template-columns: 112px minmax(0, 1fr) 90px 72px; }
 .rl-row.won { border-left-color: color-mix(in srgb, var(--good) 65%, transparent); }
 .rl-row.lost { border-left-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .rl-row.push { border-left-color: var(--border); }
@@ -4251,6 +4275,7 @@ body.pk-open { overflow: hidden; }
                          ".    date proc odds .";
     row-gap: 3px; padding: 10px 12px 10px 11px;
   }
+  .rl-row.rl-cal { grid-template-columns: 20px auto minmax(0, 1fr) auto 72px; }
   .rl-icon { grid-area: icon; }
   .rl-main { grid-area: main; white-space: normal; }
   .rl-pnl { grid-area: pnl; }
@@ -7091,6 +7116,13 @@ body.has-deck #rail-live { display: none; }
   /* The crest strip above the deck is the league picker; the games
      row's own league select was it again. */
   #home-deck #games-sport { display: none; }
+  /* THE ROOM INDEX, TWO ABREAST. Ethan asked for every room named and
+     described (2026-09-10) and the cards are that; one card per row on
+     a phone put eight of them down a whole screen before the first
+     number (his 2026-09-22 screenshots). Two columns keep every word
+     and halve the wall. */
+  .room-index { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .room-card { padding: 9px 10px; }
   #home-deck[hidden] { display: none; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's

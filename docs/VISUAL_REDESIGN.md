@@ -325,9 +325,29 @@ surface.
     phone home.
   Pinned by `tests/test_the_phone_says_nothing_twice.py` and
   `tests/test_the_phone_home_leads_with_live.py`; the drawer file's
-  browser probe now measures the sheet. Next: every other page (Ethan:
-  "Fantasy, the record page, all the other pages are still the same …
-  cluttered and confusing").
+  browser probe now measures the sheet.
+* **Slice 12 — every other page (in progress).** Ethan: "Fantasy, the
+  record page, all the other pages are still the same … cluttered and
+  confusing and hard to read all the data." The pages are surveyed at
+  390 and 1280 with fixtures built through the engine (a 70-bet record,
+  a usage board); the shared pieces ship first, then each page.
+  * *A page opens with its name.* Thirty of the forty views open with
+    a `.section-title` and its `.sub`, drawn as the same small tracked
+    caps every section head inside the page uses. The first title in a
+    view is now the page's name in the display face at the hero's size,
+    its purpose in a plain line beneath; the section heads under it
+    keep the caps, so two levels read as two. The why? fold is untouched.
+  * *Record: the calibration rows overlapped on desktop* — four cells on
+    a six-column grid. They carry `rl-cal` and their own columns.
+  * *Fantasy: the room index sits two abreast on phones.* Every room
+    stays named and described (Ethan, 2026-09-10); eight cards no longer
+    fill a screen before the first number.
+  Pinned by `tests/test_the_page_opens_with_its_name.py`. What stays as
+  it is, on purpose: the legal footer (the preservation test carries
+  the owner's rule that the honesty copy keeps its prominence), the
+  record's zero-count league chips ("no bets yet" must not look like
+  "no such board"), and wrapping sub-tab rows (a scrolling tab row is
+  the draggable bar Ethan caught on 2026-08-18).
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once
