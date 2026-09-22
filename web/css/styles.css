@@ -9784,6 +9784,9 @@ input:-webkit-autofill:focus {
   padding: 16px 0 14px;
   border-top: var(--hairline); border-bottom: var(--hairline); }
 .pw-results .pw-stats { margin: 0; }
+/* v5: the ribbon leads the strip; two tiles beneath it, not four. */
+.pw-results .rec-ribbons { margin: 0 0 12px; text-align: left; }
+.pw-results .pw-stats-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pw-results .pw-stat b { font-size: var(--fs-2xl); }
 .pw-results-note { margin: 12px 0 0; color: var(--text-mute);
   font-size: var(--fs-2xs); line-height: var(--lh-body); }

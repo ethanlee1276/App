@@ -21347,20 +21347,32 @@ function pwResultsHTML(rec) {
   const stat = (value, label, tone) =>
     `<div class="pw-stat"><b${tone ? ` class="${tone}"` : ""}>${value}</b>
        <span>${label}</span></div>`;
+  /* v5: THE SITE'S OWN RIBBON, on the page that asks for money. Ethan,
+     the day the record was pooled: "i also want the paywall site to show
+     this as well" — (no date here: test_paywall_proof reads every
+     figure in this function as a claim) —
+     the ring, the W-L, the ROI, the units, the settled count and the
+     last five, drawn by the same builder as the home and the Record
+     page (recordRibbonsHTML) from the same pooled record. The model's
+     tile only: Zeno's book is his, not the product. The tiles beneath
+     carry what the ribbon does not say: the win rate against the
+     break-even our prices require — or the bar alone, while the sample
+     cannot carry a rate — and how much was staked to earn the number. */
+  const ribbon = recordRibbonsHTML({}, o, (rec && rec.recent) || []);
   return `<div class="pw-results">
-    <div class="pw-stats">
-      ${stat(o.settled, `graded ${o.settled === 1 ? "pick" : "picks"}`)}
-      ${stat(`${o.wins}–${o.losses}${o.pushes ? "–" + o.pushes : ""}`, "record")}
-      ${stat(`${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u`,
-             "net, flat stakes", net >= 0 ? "pos" : "neg")}
+    ${ribbon ? `<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>` : ""}
+    <div class="pw-stats pw-stats-two">
       ${/* The bar the prices we took actually require is a fact about
             those prices and true at any sample size, so it is what the
-            fourth tile carries until a win rate means something. */""}
+            tile carries until a win rate means something. */""}
       ${o.settled >= PROOF_RATE_FLOOR
         ? stat(pct(o.win_rate || 0),
                `win rate · ${pct(o.breakeven || 0)} needed at our prices`)
         : stat(pct(o.breakeven || 0),
                "needed at the prices we took, to break even")}
+      ${stat(`${(o.units_staked || 0).toFixed(1)}u`,
+             `staked to earn ${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u, flat units`,
+             net >= 0 ? "pos" : "neg")}
     </div>
     <p class="pw-results-note">${o.settled < PROOF_RATE_FLOOR
       ? `A sample of ${o.settled} proves nothing, and it is shown anyway
@@ -22206,7 +22218,11 @@ async function renderPaywall() {
     // reuse the cached body — the record only moves when a cycle
     // grades something. Same trade fetchAllLive documents.
     const r = await boardFetch("/data/record.json", { cache: "no-cache" });
-    if (r.ok) rec = await r.json();
+    // The same record every other surface shows — the pooled book
+    // (adoptPooledRecord). This read the file raw and kept quoting the
+    // edge book after the site had moved on; Ethan, 2026-09-22: "make
+    // sure we are updating the paywall site too with the new info."
+    if (r.ok) rec = adoptPooledRecord(await r.json());
   } catch (e) { /* the shop still renders without the proof strip */ }
   /* NO CODE BOX ON THE PLANS PAGE. Ethan, 2026-09-09, with a screenshot
      of it circled: "removing where it lets you put the promo codes in on
@@ -22223,6 +22239,7 @@ async function renderPaywall() {
      walled. What is gone is being asked for a code at the moment of
      paying, which is where the two get confused. */
   host.innerHTML = paywallHTML(rec, _pwStatus);
+  sweepRings(host);                 // the ribbon's ring sweeps in and its numbers count
 }
 
 let _pwStatus = null;

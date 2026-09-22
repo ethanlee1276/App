@@ -467,12 +467,18 @@ surface.
     or Copy. Ten settled in view, the rest folded. Your logged bets
     keep their cards and actions with the deck's pills in the head;
     the bulk import moves under the list.
+  * *The paywall shows the one record.* It read the record file raw
+    and kept quoting the edge book; it adopts the pooled record now
+    and leads its results strip with the same ribbon (the model's
+    tile only), the win rate against the break-even and the units
+    staked beneath it.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
   `tests/test_the_live_page_rests_like_the_deck.py`,
-  `tests/test_the_record_is_one_record.py` and
-  `tests/test_zeno_and_my_bets_read_like_the_book.py`.
+  `tests/test_the_record_is_one_record.py`,
+  `tests/test_zeno_and_my_bets_read_like_the_book.py` and
+  `tests/test_the_paywall_shows_the_one_record.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once
