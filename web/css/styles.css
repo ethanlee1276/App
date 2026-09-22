@@ -6714,6 +6714,9 @@ body.has-rail .shell {
    Bottom tab bar, the LIVE NOW board, and the phone home order:
    performance first, then the stadiums two-up, then the picks. */
 .tabbar { display: none; }
+/* The More sheet is the tab bar's fifth slot, so it exists only where
+   the bar does (the phone block below). */
+.more-sheet, .more-scrim { display: none; }
 
 .lb-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
 .lb-chip { display: inline-flex; align-items: center; gap: 7px;
@@ -6840,6 +6843,50 @@ body.has-rail .shell {
     display: inline-grid; place-items: center; background: var(--bad);
     color: #fff; font-size: var(--fs-2xs); font-weight: 800; }
   .tb-badge[hidden] { display: none; }
+  .tb-item[aria-expanded="true"] { color: var(--brand-2); }
+
+  /* ---- The More sheet (2026-09-22, from the approved Figma mock) ----
+     A bottom sheet over a scrim, above the tab bar (58 over 56), holding
+     every destination that is not on the bar as pills grouped Bet ·
+     Follow · Research · Proof. The sidebar's phone drawer keeps its
+     hamburger; this is the thumb's way in. `hidden` gates display so a
+     closed sheet is not in the tab order; `body.more-open` runs the
+     slide, one frame after the sheet is unhidden. */
+  .more-scrim { display: block; position: fixed; inset: 0; z-index: 57;
+    background: rgba(0, 0, 0, .62); opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-base) var(--ease-out); }
+  .more-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 58;
+    max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 10px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--panel);
+    border-top: var(--hairline) solid var(--border);
+    transform: translateY(103%); will-change: transform;
+    transition: transform var(--dur-base) var(--ease-out); }
+  .more-scrim[hidden], .more-sheet[hidden] { display: none; }
+  body.more-open .more-scrim { opacity: 1; pointer-events: auto; }
+  body.more-open .more-sheet { transform: translateY(0); }
+  .more-handle { width: 40px; height: 4px; border-radius: 999px;
+    background: var(--border); margin: 0 auto 8px; }
+  .more-search { display: flex; align-items: center; gap: 10px; width: 100%;
+    margin: 4px 0 2px; padding: 11px 14px; min-height: 44px;
+    border: var(--hairline) solid var(--border); border-radius: var(--radius);
+    background: var(--bg); color: var(--text-dim); cursor: pointer;
+    font: inherit; font-size: var(--fs-sm); text-align: left; }
+  .more-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
+  .more-group { margin-top: 16px; }
+  .more-group h3 { margin: 0 0 8px; color: var(--text-mute);
+    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+    text-transform: uppercase; }
+  .more-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .more-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 40px;
+    border: var(--hairline) solid var(--border); border-radius: 999px;
+    background: var(--bg); color: var(--text); cursor: pointer;
+    font: inherit; font-size: var(--fs-sm); font-weight: 700; padding: 8px 14px; }
+  .more-pill.active { background: var(--grad-brand); border-color: transparent;
+    color: var(--brand-ink); }
+  .more-pill b { font-family: var(--font-mono); font-size: var(--fs-2xs);
+    font-weight: 800; min-width: 16px; padding: 0 5px; border-radius: 999px;
+    background: var(--bad); color: #fff; text-align: center; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's
      five buttons are the drawer's visible exits, and every one of them

@@ -277,7 +277,9 @@ def test_the_phone_tab_points_at_tonights_bets():
     views = re.findall(r'data-view="([a-z]+)"', bar)
     assert "tonight" in views, f"no Tonight tab: {views}"
     assert "edge" not in views, "the phone still leads with the Edge Board"
-    assert "Tonight</button>" in bar
+    # Labelled "Picks" since the 2026-09-22 redesign Ethan approved — the
+    # same page, under the name a new reader would look for.
+    assert "Picks</button>" in bar
 
 
 def test_the_tonight_page_exists_and_draws_the_charts():

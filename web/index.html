@@ -1329,11 +1329,19 @@
     </p>
   </footer>
 
-  <!-- The phone tab bar (Ethan's mobile render, 2026-08-11): Home,
-       Live, My Bets raised in the middle, Props, and Menu — which opens
-       the same drawer, so every other destination stays two taps away.
-       The render's center slot was the bet slip; ours is My Bets, the
-       honest version of that job. Phones only (CSS). -->
+  <!-- The phone tab bar. Five destinations, phones only (CSS):
+       Home · Picks · Live (raised) · Results · More.
+
+       Redrawn 2026-09-22 from the Figma mock Ethan approved ("I like
+       what you sent"): the site "feels so cluttered and confusing and
+       you get lost". Picks is the tonight page under its plain name.
+       Search moved into the More sheet below — the fifth slot is the
+       sheet's handle, because the sheet is where a new reader finds
+       everything else the site offers, grouped the way the sidebar
+       groups it (Bet · Follow · Research · Proof). The sidebar itself is
+       untouched: desktop keeps it, and the phone hamburger still opens
+       it. The sheet is built from the sidebar's own buttons at load, so
+       the two can never disagree about what exists. -->
   <!-- The parlay slip's dock — the sportsbook pattern: picks collect in
        a bar pinned to the bottom of the screen and expand into the
        ticket. Filled and shown by app.js; empty slip, no bar. -->
@@ -1345,7 +1353,7 @@
       Home</button>
     <button class="tb-item nav-btn" data-view="tonight" data-hint="tonight’s bets, with the charts">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-7"/></svg>
-      Tonight</button>
+      Picks</button>
     <button class="tb-item tb-center nav-btn" data-view="live" data-hint="live scores and open bets"
             title="What’s happening right now">
       <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
@@ -1355,23 +1363,27 @@
             title="Every pick journaled and graded in public">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
       Results</button>
-    <!-- Ethan, 2026-08-22: "The search button is now gone. Maybe we put
-         it on the bottom bar where the menu button is, then move the menu
-         button too be like three bars on the top left."
-
-         It WAS gone, and not hidden — the top bar's icon row had grown
-         past the space it had and the icons were overflowing their
-         container to the left, sliding underneath the wordmark. Search
-         was the first one off the edge.
-
-         So the drawer moves to a hamburger at top left, where a drawer
-         belongs and where nothing has to compete for the space, and its
-         slot down here goes to search — which is a destination, which is
-         what this bar is for. -->
-    <button class="tb-item" id="tb-search" aria-label="Search for a player">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
-      Search</button>
+    <button class="tb-item" id="tb-more" aria-label="Everything else"
+            aria-expanded="false" aria-controls="more-sheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      More</button>
   </nav>
+
+  <!-- The More sheet: the tab bar's fifth slot. Empty in the markup —
+       app.js fills it from the sidebar's buttons (MORE_GROUPS), so a
+       destination added to the sidebar shows up here without a second
+       edit, and one hidden there (the wall, a feature switched off) is
+       hidden here too. Search leads it: the one thing that used to own a
+       tab-bar slot keeps its id, so the binding and the tests that pin
+       "search works on the phone" hold. -->
+  <div class="more-scrim" id="more-scrim" hidden></div>
+  <div class="more-sheet" id="more-sheet" role="dialog" aria-label="Everything else" hidden>
+    <div class="more-handle" aria-hidden="true"></div>
+    <button class="more-search" id="tb-search" aria-label="Search for a player">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      Search a player</button>
+    <div id="more-groups"></div>
+  </div>
 
   <script src="js/teams.js"></script>
   <script src="js/teams_mlb.js"></script>

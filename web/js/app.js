@@ -32688,6 +32688,7 @@ function _switchViewNow(name, push, dir) {
   // up arrives here after it did — see WALL_OPEN above.
   if (wallBlocked(name)) { name = "paywall"; dir = 0; }
   if (noTourViews().includes(name)) tourHide();
+  if (document.body.classList.contains("more-open")) moreSheetOpen(false);
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
@@ -38961,8 +38962,12 @@ function tourSteps() {
 
 /* Whether the tour shows itself on this visit. Pure, so it can be tested
    for every combination without a browser. */
-function tourDue({ stored, hash, isStatic, view, standalone, wall }) {
+function tourDue({ stored, hash, isStatic, view, standalone, wall, coarse }) {
   if (stored === "done" || stored === "later" || isStatic) return false;
+  // Never on a phone (2026-09-22): the five-tab bar and the More sheet
+  // are the tour — a card over them is the clutter Ethan asked to lose.
+  // "Show me around" in Settings still opens it by hand.
+  if (coarse) return false;
   const h = String(hash || "");
   if (h && h !== "#" && h !== "#recommended") return false;   // a deep link
   if ((wall || []).includes(view)) return false;              // the paywall
@@ -38977,7 +38982,7 @@ function tourMaybe() {
   catch (e) {}
   if (!tourDue({ stored, hash: location.hash, isStatic: state.static,
                  view: state.view, standalone: STANDALONE_MODES,
-                 wall: noTourViews() })) return;
+                 wall: noTourViews(), coarse: isPhone() })) return;
   clearTimeout(_tourTimer);
   _tourTimer = setTimeout(() => {
     _tourTimer = null;
@@ -39170,6 +39175,127 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    already being watched earns a buzz — a page opened to a row already
    won has nothing to announce, and neither does a row that arrives
    settled. Pure in what it returns. */
+/* ---------------- The More sheet (2026-09-22) ----------------------------
+   The tab bar's fifth slot. Ethan approved the Figma mock — five tabs,
+   and everything else behind "More" as pills grouped the way a bettor
+   thinks: what to bet, who to follow, what to read, and the proof. The
+   pills are built from the SIDEBAR's own buttons, so this list names
+   destinations, never labels or handlers: a pill's text is the
+   sidebar button's text, and tapping it taps that button. A destination
+   the sidebar hides (the wall, a switched-off feature) has no pill. */
+const MORE_GROUPS = [
+  ["Bet", ["view:likely", "view:edge", "view:longshots", "subtab:gamebets",
+           "view:scanner", "view:futures"]],
+  ["Follow", ["view:zeno", "view:alerts", "sport:mybets", "view:streak",
+              "view:bankroll"]],
+  ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
+                "view:weather", "view:trending", "sport:fantasy", "sport:intel",
+                "sport:memes"]],
+  ["Proof", ["sport:record", "sport:lab", "sport:methodology", "sport:status",
+             "sport:why", "sport:features", "sport:about"]],
+];
+const TAB_BAR_VIEWS = ["recommended", "tonight", "live"];
+const TAB_BAR_TOOLS = ["record"];
+
+/* "view:edge" → the sidebar button that opens the Edge Board. */
+function moreSelector(ref) {
+  const [kind, name] = String(ref).split(":");
+  const attr = kind === "view" ? "data-view" : kind === "sport" ? "data-sport" : "data-subtab";
+  return `#sidebar [${attr}="${name}"]`;
+}
+
+/* Every destination the sidebar offers, as "kind:name" — the set the
+   phone must not lose. Toggles and social links are not destinations. */
+function sidebarDestinations(root) {
+  const out = [];
+  (root || document).querySelectorAll("#sidebar button[data-view], #sidebar button[data-sport], #sidebar button[data-subtab]")
+    .forEach((b) => {
+      if (b.dataset.view) out.push(`view:${b.dataset.view}`);
+      else if (b.dataset.subtab) out.push(`subtab:${b.dataset.subtab}`);
+      else if (b.dataset.kind === "tool") out.push(`sport:${b.dataset.sport}`);
+    });
+  return out;
+}
+
+function isPhone() {
+  return !!(window.matchMedia && matchMedia("(max-width: 760px)").matches);
+}
+
+function morePillLabel(src) {
+  const c = src.cloneNode(true);
+  c.querySelectorAll("svg, .sb-badge").forEach((n) => n.remove());
+  return c.textContent.replace(/\s+/g, " ").trim();
+}
+
+function moreSheetBuild() {
+  const host = document.getElementById("more-groups");
+  if (!host) return;
+  host.innerHTML = "";
+  MORE_GROUPS.forEach(([title, refs]) => {
+    const pills = [];
+    refs.forEach((ref) => {
+      const src = document.querySelector(moreSelector(ref));
+      if (!src || src.hidden) return;
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "more-pill";
+      pill.dataset.ref = ref;
+      pill.textContent = morePillLabel(src);
+      const badge = src.querySelector(".sb-badge");
+      if (badge && !badge.hidden && badge.textContent.trim()) {
+        const b = document.createElement("b");
+        b.textContent = badge.textContent.trim();
+        pill.appendChild(b);
+      }
+      if (src.classList.contains("active") || src.getAttribute("aria-selected") === "true")
+        pill.classList.add("active");
+      pill.addEventListener("click", () => { moreSheetOpen(false); src.click(); });
+      pills.push(pill);
+    });
+    if (!pills.length) return;
+    const g = document.createElement("div");
+    g.className = "more-group";
+    const h = document.createElement("h3");
+    h.textContent = title;
+    const wrap = document.createElement("div");
+    wrap.className = "more-pills";
+    pills.forEach((p) => wrap.appendChild(p));
+    g.appendChild(h); g.appendChild(wrap);
+    host.appendChild(g);
+  });
+}
+
+let _moreCloser = null;
+function moreSheetOpen(on) {
+  const sheet = document.getElementById("more-sheet");
+  const scrim = document.getElementById("more-scrim");
+  const btn = document.getElementById("tb-more");
+  if (!sheet || !scrim) return;
+  clearTimeout(_moreCloser);
+  if (on) {
+    moreSheetBuild();                       // fresh badges and the lit pill
+    sheet.hidden = false; scrim.hidden = false;
+    void sheet.offsetHeight;                // unhide, then slide
+    document.body.classList.add("more-open");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+    return;
+  }
+  document.body.classList.remove("more-open");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+  _moreCloser = setTimeout(() => { sheet.hidden = true; scrim.hidden = true; }, 260);
+}
+
+function moreSheetInit() {
+  const btn = document.getElementById("tb-more");
+  const scrim = document.getElementById("more-scrim");
+  if (!btn) return;
+  btn.addEventListener("click", () => moreSheetOpen(!document.body.classList.contains("more-open")));
+  if (scrim) scrim.addEventListener("click", () => moreSheetOpen(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("more-open")) moreSheetOpen(false);
+  });
+}
+
 const SETTLE_BUZZ = { cleared: "win", won_pending: "win", busted: "loss", lost_pending: "loss", dead: "loss" };
 let _trackStatus = null;
 function settleChanges(prev, rows) {
@@ -39208,7 +39334,8 @@ function buzzOnSettle(rows) {
   const navSearch = document.getElementById("nav-search");
   if (navSearch) navSearch.addEventListener("click", goSearch);
   const tbSearch = document.getElementById("tb-search");
-  if (tbSearch) tbSearch.addEventListener("click", goSearch);
+  if (tbSearch) tbSearch.addEventListener("click", () => { moreSheetOpen(false); goSearch(); });
+  moreSheetInit();
   window.addEventListener("resize", () => {
     if (typeof syncStripArrows === "function") syncStripArrows();
   });

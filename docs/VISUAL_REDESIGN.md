@@ -45,9 +45,33 @@ IBM Plex Mono (numbers). The numbers on the frames are placeholders
   Methodology, Status, About).
 * The first-run tutorial popup goes; the structure is the tutorial.
 
+## Going back
+
+Before any of this shipped, the site as it stood was pushed as branch
+`backup/pre-redesign-2026-09-22` (commit `e5454319`; the git proxy
+refuses tags, so it is a branch). To restore the whole site:
+
+    git fetch origin backup/pre-redesign-2026-09-22
+    git checkout -B claude/sports-betting-app-vhgmho origin/backup/pre-redesign-2026-09-22
+    git push -u origin claude/sports-betting-app-vhgmho
+
+The droplet's timer deploys it within five minutes. Data (the ledger,
+Zeno's book) is not in git and is untouched either way.
+
 ## Status
 
-Mock built; awaiting Ethan's reaction before any code. When a
-direction is chosen, the build order is: tokens/fonts → tab bar and
-More sheet → Home → Picks/Live filters → retire the sidebar on phones.
-Desktop (1280) keeps the sidebar; it is not the cluttered surface.
+Ethan approved the mock ("I like what you sent"). Build order: tab bar
+and More sheet → Home → Picks/Live filters → retire the sidebar on
+phones. Desktop (1280) keeps the sidebar; it is not the cluttered
+surface.
+
+* **Slice 1 — SHIPPED 2026-09-22.** The five-tab bar (Home · Picks ·
+  Live · Results · More; Picks is the tonight page renamed) and the
+  More sheet, built at open from the sidebar's own buttons via
+  `MORE_GROUPS` in app.js — pills grouped Bet · Follow · Research ·
+  Proof, search at the top. The tour card no longer auto-opens on
+  phones. Pinned by `tests/test_the_phone_tab_bar_ends_in_more.py`,
+  which also proves no sidebar destination is unreachable from the
+  sheet.
+* **Slice 2 — next.** The phone home in the mock's order: Live now
+  strip → Riding → Tonight's picks → The record → Zeno's picks.
