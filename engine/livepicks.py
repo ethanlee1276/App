@@ -16,6 +16,7 @@ recommendations, and (optionally) live per-player stats.
 
 from __future__ import annotations
 
+from .ledger import LIKELY_BOOKS
 from .sources.oddsapi import normalize_name
 
 #: Where `livescore_build` writes `live_{league}.json` every twelve seconds
@@ -633,7 +634,19 @@ TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
 #: should also show in the live page ... one for edge bets, and one for
 #: most likley bets." The watchlist ('longshot_watch') stays out: it is a
 #: calibration sample, often 100+ names, and would bury the bets placed.
-TRACKER_CATEGORIES = ("main", "longshot", "likely")
+#:
+#: BOTH HALVES OF THE MOST LIKELY BOOK, READ OFF THE LEDGER. On
+#: 2026-09-19 the board started staking real money and its rows moved
+#: to `likely_live`; this tuple still said `likely`, so every staked
+#: most-likely bet vanished from the Live tab at first pitch. MLB — the
+#: league staked longest — showed none at all; the NFL showed only the
+#: rows the breaker had demoted back to paper. Ethan, 2026-09-21: "Seems
+#: like we are not showing all most likely bets when the bets are live."
+#: It is the same one-tuple omission the Pick of the Day note below
+#: describes, and the cure is the same: the list is DERIVED from
+#: `ledger.LIKELY_BOOKS` rather than retyped, so the next half of that
+#: book cannot be forgotten here.
+TRACKER_CATEGORIES = ("main", "longshot") + tuple(LIKELY_BOOKS)
 
 #: THE PICK OF THE DAY IS NOT IN THE LIST ABOVE, and it is tracked all
 #: the same — separately, under `live_potd`, because it is not an open
@@ -895,7 +908,11 @@ def attach_tracker(result: dict, sport: str, conn=None,
                 "SELECT COUNT(*) FROM bets WHERE status='open' "
                 "AND category IN ('main','longshot') "
                 "AND stake_units > 0").fetchone()[0]
-            edge_shown = sum(1 for r in rows if r.get("category") != "likely")
+            # EDGE ROWS ARE EVERYTHING NOT IN THE MOST LIKELY BOOK — both
+            # halves of it. Counting `likely_live` as edge here made the
+            # "open elsewhere" figure go negative and clamp to zero.
+            edge_shown = sum(1 for r in rows
+                             if r.get("category") not in LIKELY_BOOKS)
             result["open_elsewhere"] = max(0, all_open - edge_shown)
         finally:
             if own:

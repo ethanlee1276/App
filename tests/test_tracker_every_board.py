@@ -161,6 +161,11 @@ def test_open_bets_are_this_sports_open_rows_in_the_tracked_categories():
          category="likely", stake=0.1)
     _bet(conn, "nfl", "2026-W01", "Amon-Ra St. Brown", "anytime_td",
          category="longshot", odds=180)
+    # THE STAKED HALF OF THE MOST LIKELY BOOK, which the tracker did not
+    # ask for from 2026-09-19 until 2026-09-21 — every staked most-likely
+    # bet was invisible on the Live tab at first pitch.
+    _bet(conn, "nfl", "2026-W01", "Isiah Pacheco", "rush_yds", line=55.5,
+         category="likely_live", stake=0.25)
     _bet(conn, "nfl", "2026-W01", "Sam LaPorta", "receptions",
          category="longshot_watch")               # the calibration sample
     _bet(conn, "nfl", "2026-W01", "Patrick Mahomes", "pass_yds",
@@ -168,9 +173,25 @@ def test_open_bets_are_this_sports_open_rows_in_the_tracked_categories():
     _bet(conn, "mlb", "2026-W01", "Aaron Judge", "home_runs")   # other sport
     today, near = open_bets_for(conn, "nfl", "2026-W01")
     assert sorted(r["player"] for r in today) == \
-        ["Amon-Ra St. Brown", "Jahmyr Gibbs", "Travis Kelce"], today
+        ["Amon-Ra St. Brown", "Isiah Pacheco", "Jahmyr Gibbs", "Travis Kelce"], today
     assert {r["category"] for r in today} == set(TRACKER_CATEGORIES)
     assert near == [], "a week label has no neighbours to ask for"
+
+
+def test_the_tracker_reads_every_half_of_the_most_likely_book_by_derivation():
+    """ONE TUPLE, TWICE NOW. The Pick of the Day vanished from the Live
+    tab because this list did not name its book; the staked most-likely
+    rows vanished the same way when `likely_live` was added to the
+    ledger and not here. So the list is DERIVED from `ledger.LIKELY_BOOKS`
+    rather than retyped, and this pins both the fact and the derivation.
+    Ethan, 2026-09-21: "Seems like we are not showing all most likely
+    bets when the bets are live."
+    """
+    assert set(ledger.LIKELY_BOOKS) <= set(TRACKER_CATEGORIES), (
+        ledger.LIKELY_BOOKS, TRACKER_CATEGORIES)
+    src = (ROOT / "engine" / "livepicks.py").read_text(encoding="utf-8")
+    line = next(l for l in src.splitlines() if l.startswith("TRACKER_CATEGORIES ="))
+    assert "LIKELY_BOOKS" in line, f"retyped, not derived: {line}"
 
 
 def test_an_iso_card_also_asks_the_neighbouring_days():
@@ -220,12 +241,16 @@ def test_the_elsewhere_count_is_every_open_edge_bet_minus_the_edge_rows_shown():
     _bet(conn, "nfl", "2026-W01", "Travis Kelce", "rec_yds", line=60.5)
     _bet(conn, "nfl", "2026-W01", "Jahmyr Gibbs", "rush_yds", line=70.5,
          category="likely", stake=0.1)
+    # …and the STAKED half of that book is a most-likely row too, not an
+    # edge row. Counted as edge it made this figure go negative.
+    _bet(conn, "nfl", "2026-W01", "Isiah Pacheco", "rush_yds", line=55.5,
+         category="likely_live", stake=0.25)
     _bet(conn, "mlb", "2026-09-05", "Aaron Judge", "home_runs", odds=300,
          category="longshot")
     _bet(conn, "cfb", "2026-09-06", "UGA", "moneyline", odds=-200)
     result = _board()
     attach_tracker(result, "nfl", conn=conn, progress={})
-    assert len(result["live_picks"]) == 2
+    assert len(result["live_picks"]) == 3
     assert result["open_elsewhere"] == 2, result["open_elsewhere"]
 
 

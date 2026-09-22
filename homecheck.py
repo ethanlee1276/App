@@ -693,8 +693,9 @@ def live() -> list:
     `journal: 101 open` — a 62-row gap, and not one row missing: 59 of
     those are `stale`, the shadow book that measures line-staleness at a
     zero stake, and the Live tab has never drawn it. `TRACKER_CATEGORIES`
-    is main/longshot/likely, plus the Pick of the Day on its own key, and
-    nothing else. So every line now says whether it is a book the tab
+    is main/longshot plus both halves of the Most Likely book (`likely`
+    and `likely_live` — the staked half was missing until 2026-09-21),
+    plus the Pick of the Day on its own key, and nothing else. So every line now says whether it is a book the tab
     draws, and the arithmetic is printed rather than left to be done from
     memory.
 
