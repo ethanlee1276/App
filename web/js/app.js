@@ -39540,11 +39540,14 @@ async function deckRecordHTML() {
 
 const HOME_FOLD_KEY = "qb.home.fold";
 
-/* The board under the deck folds by default; the choice is remembered.
-   When the deck has nothing to draw there is nothing to fold under, so
-   the class comes off and the board shows as it always did. */
+/* The board under the deck stays OPEN unless the reader folds it; the
+   choice is remembered. Ethan, 2026-09-22, on the folded-by-default
+   version: "I don't like how you got rid of my stadiums and I don't like
+   how I can't see the most likely to hit picks and edge picks on the
+   main page." When the deck has nothing to draw there is nothing to
+   fold under, so the class comes off regardless. */
 function homeFolded() {
-  try { return localStorage.getItem(HOME_FOLD_KEY) !== "open"; } catch (e) { return true; }
+  try { return localStorage.getItem(HOME_FOLD_KEY) === "folded"; } catch (e) { return false; }
 }
 
 function applyHomeFold(deckShown) {

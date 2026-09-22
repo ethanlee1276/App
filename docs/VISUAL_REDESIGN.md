@@ -104,6 +104,15 @@ surface.
 * **Type.** The site already ships the mock's faces (Archivo Narrow,
   Bodoni Moda, IBM Plex Mono, self-hosted in web/fonts), so no font
   change was needed; the mock was drawn in them on purpose.
+* **Ethan's reaction, 2026-09-22:** "I don't like it … I don't like how
+  you got rid of my stadiums and I don't like how I can't see the most
+  likely to hit picks and edge picks on the main page." Two fixes:
+  the fold now ships OPEN (nothing hidden unless the reader folds it),
+  and a v2 mock — section "Mock · v2" (`8:939`; E phone `8:286`, F
+  desktop `8:568`, StadiumCard component `8:256`) — puts the stadium
+  strip, Most likely to hit (five rows, Pick of the Day first) and
+  Edge picks (four rows) on the home at both widths, nothing folded.
+  Awaiting his reaction before it is built.
 * **Still open.** The desktop rail's Key insights card and the old
   sub-tabbed zones live on under the fold; a later pass can retire
   what nobody unfolds. Zeno's tile and tickets appear once Juice Reel

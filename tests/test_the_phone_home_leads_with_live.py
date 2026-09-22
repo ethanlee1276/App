@@ -96,7 +96,8 @@ def test_the_deck_is_the_first_thing_on_the_home_view_and_the_board_folds_under_
     fold = _fn("applyHomeFold")
     assert 'document.body.classList.toggle("home-folded", !!deckShown && homeFolded());' in fold, \
         "nothing to fold under when the deck is empty"
-    assert 'localStorage.getItem(HOME_FOLD_KEY) !== "open"' in _fn("homeFolded"), "folded until opened"
+    assert 'localStorage.getItem(HOME_FOLD_KEY) === "folded"' in _fn("homeFolded"), \
+        "open until folded — Ethan wants the stadiums and the pick boards on the main page"
 
 
 def test_the_order_is_live_riding_tonight_record_zeno():
