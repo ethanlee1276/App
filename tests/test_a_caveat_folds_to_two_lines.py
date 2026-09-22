@@ -25,7 +25,8 @@ def _fn(name):
 
 def test_long_caveats_fold_and_short_ones_do_not():
     body = _fn("enhanceNotes")
-    assert 'querySelectorAll(".list-note, .es-sub")' in body
+    assert 'querySelectorAll(".list-note, .es-sub, .mb-safety")' in body, "the My Bets safety card is six lines before the first control"
+
     assert "if (text.length <= NOTE_FOLD_CHARS) return;" in body
     assert "const NOTE_FOLD_CHARS = 160;" in APP
     assert 'note.classList.add("note-folded");' in body
@@ -53,7 +54,8 @@ def test_it_runs_with_the_sub_enhancer_on_every_render():
 
 
 def test_the_folded_note_is_two_lines():
-    assert ".note-folded { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }" in CSS
+    assert ".note-folded, .mb-safety.note-folded { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }" in CSS, \
+        "the safety card's own display: block, declared later, would beat a single-class clamp"
     assert ".note-more { display: inline-block;" in CSS
 
 

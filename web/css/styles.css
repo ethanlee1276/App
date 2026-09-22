@@ -964,6 +964,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   max-width: var(--measure); text-align: left;
 }
 .list-note b, .list-note strong { color: var(--text-dim); }
+/* The scanner's empty section, as one row: name, then the reason in
+   the empty-panel voice. See scanSection(). */
+.scan-empty { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
+  padding: 10px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.scan-empty b { color: var(--text); font-size: var(--fs-sm); font-weight: 700; flex: 0 0 auto; }
+.scan-empty .panel-empty { flex: 1 1 240px; padding: 0; }
 
 /* A drawn mark on a text baseline. */
 .ico-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px;
@@ -2371,7 +2377,9 @@ select.calc-in { width: auto; font-weight: 600; }
    explanation wherever it appears. */
 /* The folded caveat: two lines, then the same amber "more" the why?
    apparatus uses. See enhanceNotes(). */
-.note-folded { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* `.mb-safety.note-folded` too: the safety card's own `display: block`
+   is declared later in this sheet and would beat the clamp. */
+.note-folded, .mb-safety.note-folded { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .note-more { display: inline-block; margin: 2px 0 10px; }
 .section-title .sub:not(.sub-collapsed) {
   border-left: 2px solid var(--brand); padding: 6px 0 6px 13px;

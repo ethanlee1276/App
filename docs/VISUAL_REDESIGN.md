@@ -354,6 +354,10 @@ surface.
     `wrapTables()` wraps the rest on every render, reusing the wrapper
     so the delegated fade rides along, minus the ranking tables' height
     cap.
+  * *Line Shopping: an empty section says it once.* Six heads and six
+    boxes around nothing on a quiet board; now one row each, the name
+    and the reason. With rows, nothing changes. My Bets' safety card
+    joins the caveat fold.
   * *A caveat folds to two lines.* `.list-note` ("a caveat under content
     that IS there") and the empty state's sub-line: past 160 characters
     a note keeps its first two lines and the rest waits behind the same

@@ -16076,12 +16076,23 @@ function scanPairRow(p, extra) {
   </div>`;
 }
 
+/* AN EMPTY SECTION SAYS IT ONCE. On a quiet board every one of the
+   scanner's six sections drew a section head, its sub, and a card
+   holding one sentence saying there was nothing in it — six heads and
+   six boxes around nothing, a screen and a half on a phone before the
+   sentence at the bottom that says what the page is for (Ethan,
+   2026-09-22: "cluttered"). With rows, the full head and its card
+   draw as before. Without, the section is one row: its name and the
+   reason, in the empty-panel voice, no box. */
 function scanSection(title, sub, rows, rowFn, emptyText) {
+  if (!rows.length) {
+    return `<div class="scan-empty" title="${escapeAttr(sub)}"><b>${title}</b>
+      <span class="panel-empty">${escapeHtml(emptyText)}</span></div>`;
+  }
   return `<div class="section-title">${title}
       <span class="sub">— ${sub}</span></div>
     <div class="card" style="padding:0">
-      ${rows.length ? rows.map(rowFn).join("")
-        : panelEmpty(emptyText)}
+      ${rows.map(rowFn).join("")}
     </div>`;
 }
 
@@ -32703,7 +32714,7 @@ function enhanceSectionSubs(root) {
 const NOTE_FOLD_CHARS = 160;
 
 function enhanceNotes(root) {
-  (root || document).querySelectorAll(".list-note, .es-sub").forEach((note) => {
+  (root || document).querySelectorAll(".list-note, .es-sub, .mb-safety").forEach((note) => {
     if (note.dataset.noteEnhanced) return;
     const text = (note.textContent || "").trim();
     if (text.length <= NOTE_FOLD_CHARS) return;
