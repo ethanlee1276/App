@@ -342,8 +342,15 @@ surface.
   * *Fantasy: the room index sits two abreast on phones.* Every room
     stays named and described (Ethan, 2026-09-10); eight cards no longer
     fill a screen before the first number.
-  Pinned by `tests/test_the_page_opens_with_its_name.py`. What stays as
-  it is, on purpose: the legal footer (the preservation test carries
+  * *A caveat folds to two lines.* `.list-note` ("a caveat under content
+    that IS there") and the empty state's sub-line: past 160 characters
+    a note keeps its first two lines and the rest waits behind the same
+    amber "more" the why? apparatus uses (`enhanceNotes`, run with the
+    sub enhancer on every render). `.ls-note` — on an empty likelihood
+    board, the whole answer — is never folded.
+  Pinned by `tests/test_the_page_opens_with_its_name.py` and
+  `tests/test_a_caveat_folds_to_two_lines.py`. What stays as it is, on
+  purpose: the legal footer (the preservation test carries
   the owner's rule that the honesty copy keeps its prominence), the
   record's zero-count league chips ("no bets yet" must not look like
   "no such board"), and wrapping sub-tab rows (a scrolling tab row is

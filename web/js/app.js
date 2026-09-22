@@ -32649,6 +32649,39 @@ function enhanceSectionSubs(root) {
     });
     sub.before(btn);
   });
+  enhanceNotes(root);
+}
+
+/* A CAVEAT FOLDS TO TWO LINES. `.list-note` is "a caveat under content
+   that IS there" (tests/test_empty_states.py) and `.es-sub` is the
+   sentence under an empty state's headline; nineteen of them run past
+   three lines on a phone, and Ethan's read of the pages (2026-09-22)
+   was "hard to read all the data" — the data was under the caveats.
+   Past 160 characters a note keeps its first two lines and the rest
+   waits behind the same amber apparatus as why?. Nothing is deleted.
+   `.ls-note` is not folded: on an empty likelihood board it is the
+   whole answer, and a folded answer is a hidden one. */
+const NOTE_FOLD_CHARS = 160;
+
+function enhanceNotes(root) {
+  (root || document).querySelectorAll(".list-note, .es-sub").forEach((note) => {
+    if (note.dataset.noteEnhanced) return;
+    const text = (note.textContent || "").trim();
+    if (text.length <= NOTE_FOLD_CHARS) return;
+    note.dataset.noteEnhanced = "1";
+    note.classList.add("note-folded");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "why-toggle note-more";
+    btn.textContent = "more";
+    btn.setAttribute("aria-expanded", "false");
+    btn.addEventListener("click", () => {
+      const folded = note.classList.toggle("note-folded");
+      btn.setAttribute("aria-expanded", String(!folded));
+      btn.textContent = folded ? "more" : "less";
+    });
+    note.after(btn);
+  });
 }
 
 function watchSectionSubs() {
