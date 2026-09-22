@@ -7023,6 +7023,11 @@ body.has-deck #rail-live { display: none; }
 .hd-stake { color: var(--good); font-size: var(--fs-sm); font-weight: 700; }
 .hd-vs { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-mute); white-space: nowrap; }
 .hd-chip.warn { color: var(--warn); }
+/* v5: a ticket row — Zeno's, or your own on My Bets: the stake beside
+   the price, both mono and quiet; the profit in the result's colour. */
+.hd-ticket .hd-stake { color: var(--text-dim); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs); }
+.hd-ticket .hd-pl { font-family: var(--font-mono); font-size: var(--fs-sm); }
+.mbc-head .hd-chip { flex: 0 0 auto; }
 .hd-pick .pick-moved { display: block; margin-top: 3px; }
 /* A sentence, not a figure: the reason and the price-moved note read in
    the sans, where the deck's own sub-lines (a price, a book) are mono. */

@@ -467,6 +467,10 @@ def _render(kind, z, scope=""):
         return None
     src = _js()
     body = src[src.index("function zenoMoney"):src.index("function recPotdSection")]
+    # v5: the page opens with the ribbon, which lives with the deck; the
+    # sweep is a browser's business.
+    r = src.index("function recordRibbonsHTML(")
+    body += "\n" + src[r:src.index("\nfunction ", r + 10)] + "\nconst sweepRings=()=>{};\n"
     harness = """
 const MINUS="\\u2212", SPORT_META={nfl:{name:"NFL"}};
 const escapeHtml=(x)=>String(x==null?"":x), icon=()=>"", american=(o)=>(o>0?"+":"")+o;

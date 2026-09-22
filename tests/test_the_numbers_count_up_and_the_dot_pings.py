@@ -104,7 +104,10 @@ def test_the_ribbon_hands_its_two_numbers_to_the_counter():
     assert '"(prefers-reduced-motion: reduce)").matches) return;' in body, "reduced motion: the number is simply there"
     assert 'querySelectorAll("[data-count]:not([data-counted])")' in body and 'el.dataset.counted = "1";' in body, \
         "once per element"
-    assert 'getPropertyValue("--dur-slow")' in body and "COUNT_STEPS_OF_SLOW" in body, "the duration comes from the ladder"
+    assert 'getPropertyValue("--dur-slow")' in body and "const COUNT_STEPS_OF_SLOW = 3;" in body, \
+        "the duration comes from the ladder, and the step count is declared inside — a boot landing on My Bets met it in its dead zone"
+    assert "const COUNT_NUM = " in _fn("countAt") and not re.search(r"^const COUNT_(NUM|STEPS_OF_SLOW)", APP, re.M), \
+        "no top-level const for the counter: the file's tail is not initialised when a synchronous boot render runs"
     assert "setTimeout(() => { el.textContent = final; }, dur + 120);" in body, "a throttled tab still ends on the number"
     assert "el.textContent = countAt(final, 0);" in body, "the first paint is zero, or there is nothing to count from"
     assert ".hd-big, .hd-ring i { font-variant-numeric: tabular-nums; }" in CSS, "a counting number holds its width"

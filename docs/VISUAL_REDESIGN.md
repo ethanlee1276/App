@@ -459,11 +459,20 @@ surface.
     the two books side by side beneath it (`verdictBooksHTML`), each
     with its own line, diagram and reading. The paper share is
     counted and said.
+  * *Zeno's page and My Bets.* Both open with the ribbon under their
+    own label (Zeno's book; "You · logged by hand", from your own
+    settled bets, the ROI on the sub-line). A ticket is the book's
+    row everywhere it appears (`zenoTicketRow`): selection, then
+    game · book · time; price and stake pills; result pill and profit,
+    or Copy. Ten settled in view, the rest folded. Your logged bets
+    keep their cards and actions with the deck's pills in the head;
+    the bulk import moves under the list.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
-  `tests/test_the_live_page_rests_like_the_deck.py` and
-  `tests/test_the_record_is_one_record.py`.
+  `tests/test_the_live_page_rests_like_the_deck.py`,
+  `tests/test_the_record_is_one_record.py` and
+  `tests/test_zeno_and_my_bets_read_like_the_book.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

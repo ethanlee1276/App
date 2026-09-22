@@ -15167,25 +15167,25 @@ function zenoTallyLine(t) {
 }
 
 function zenoTicketRow(r, showResult) {
+  /* v5: the deck's row — the selection, then the game, the book and the
+     time beneath it; the price and the stake as pills; on the right a
+     settled ticket's result pill and profit, an open ticket's Copy. */
   const legs = Array.isArray(r.legs) && r.legs.length
-    ? `<div style="font-size:var(--fs-xs);color:var(--text-mute);margin-top:2px">${
-        r.legs.map((l) => escapeHtml(String(l))).join(" · ")}</div>` : "";
+    ? `<span class="hd-legs">${r.legs.map((l) => escapeHtml(String(l))).join(" · ")}</span>` : "";
   const when = String(r.event_at || r.placed_at || "").slice(5, 16).replace("T", " ");
-  const tone = r.result === "won" ? "var(--good)" : r.result === "lost" ? "var(--bad)" : "var(--text-mute)";
-  return `<div style="display:flex;gap:8px;align-items:baseline;padding:6px 0;
-       border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
-    <span style="width:74px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(when)}</span>
-    <span style="flex:1;min-width:0">${escapeHtml(r.selection || "")}
-      <span style="color:var(--text-mute)">${r.event ? escapeHtml(r.event) + " · " : ""}${
-        escapeHtml(r.book_name || r.book || "")} · ${r.odds == null ? "—" : american(r.odds)}
-        · ${zenoMoney(r.stake)}</span>${legs}</span>
-    ${showResult
-      ? `<span style="font-weight:700;color:${tone}">${escapeHtml(String(r.result || "").toUpperCase())}${
-          r.profit == null ? "" : ` <span style="font-weight:500">${r.profit >= 0 ? "+" : ""}${zenoMoney(r.profit)}</span>`}</span>`
-      : `<button type="button" class="btn-ghost zeno-copy" data-text="${escapeHtml(
-          `${r.selection}${r.event ? " (" + r.event + ")" : ""} ${r.odds == null ? "" : american(r.odds)} · ${r.book_name || r.book}`)}"
-          style="font-size:var(--fs-xs)">Copy</button>`}
-  </div>`;
+  const won = r.result === "won", lost = r.result === "lost";
+  const sub = [r.event ? escapeHtml(String(r.event)) : "", escapeHtml(r.book_name || r.book || ""),
+               escapeHtml(when)].filter(Boolean).join(" · ");
+  const price = r.odds == null ? "" : `<span class="hd-o">${american(r.odds)}</span>`;
+  const state = showResult
+    ? `<span class="hd-chip ${won ? "good" : lost ? "bad" : ""}">${escapeHtml(String(r.result || "").toUpperCase())}</span>${
+        r.profit == null ? "" : `<b class="hd-pl" style="color:${r.profit >= 0 ? "var(--good)" : "var(--bad)"}">${
+          r.profit >= 0 ? "+" : ""}${zenoMoney(r.profit)}</b>`}`
+    : `<button type="button" class="btn-ghost zeno-copy" data-text="${escapeHtml(
+        `${r.selection}${r.event ? " (" + r.event + ")" : ""} ${r.odds == null ? "" : american(r.odds)} · ${r.book_name || r.book}`)}">Copy</button>`;
+  return `<div class="hd-row hd-ticket"><div class="hd-what"><b>${escapeHtml(r.selection || "")}</b><span>${sub}</span>${legs}</div>
+    <div class="hd-num">${price}<span class="hd-stake">${zenoMoney(r.stake)}</span></div>
+    <div class="hd-state">${state}</div></div>`;
 }
 
 function recZenoSection(z, scope) {
@@ -15213,7 +15213,7 @@ function recZenoSection(z, scope) {
       ${!scope && books.length > 1 ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${books.map((b) => `${escapeHtml(b.name)} ${b.wins}-${b.losses}${b.pushes ? "-" + b.pushes : ""} ${
           b.profit >= 0 ? "+" : ""}${zenoMoney(b.profit)}`).join(" · ")}</div>` : ""}
-      ${rows.length ? `<div style="margin-top:8px">${rows.map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
+      ${rows.length ? `<div class="hd-card">${rows.map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
       <p style="margin:8px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
         Real money at real books. Every result here is the sportsbook’s own settlement — nothing is
         re-graded or re-priced by this site — and every ticket is the full ticket: a parlay counts once,
@@ -15237,24 +15237,31 @@ async function renderZeno() {
     return;
   }
   const open = z.open || [];
+  const settled = z.recent || [];
+  /* v5: the page opens with his ribbon — the deck's and the Record page's
+     own tile (recordRibbonsHTML) — then what is riding and what settled
+     as the book's rows, ten settled in view and the rest one tap away. */
+  const ribbon = recordRibbonsHTML({ zeno: z }, {}, []);
+  const FOLD = 10;
   host.innerHTML = `
-    <div class="card" style="border-left:3px solid var(--brand)">
-      <div>${zenoTallyLine(z.overall) || `<span style="color:var(--text-mute)">No tickets yet.</span>`}</div>
-      <p style="margin:6px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
-        The record, in dollars, as the books settled it. Full receipts on the
-        <a href="#record" data-view="record">Record</a> page.</p>
-    </div>
+    ${ribbon ? `<div class="hd-stats rec-ribbons">${ribbon}</div>`
+             : `<div class="card"><p class="list-note">No tickets yet.</p></div>`}
+    <p class="list-note">The record, in dollars, as the books settled it. Full receipts on the
+      <a href="#record" data-view="record">Record</a> page.</p>
     <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Riding now
       <span class="sub">— ${open.length ? `${plural(open.length, "open ticket")}, ${zenoMoney(z.overall.open_stake)} at risk` : "nothing open right now"}</span></div>
-    ${open.length ? `<div class="card" style="padding:0 14px">${open.map((r) => zenoTicketRow(r, false)).join("")}</div>`
+    ${open.length ? `<div class="hd-card">${open.map((r) => zenoTicketRow(r, false)).join("")}</div>`
       : `<div class="card"><p class="list-note">Nothing riding. Check back before the next slate.</p></div>`}
-    ${(z.recent || []).length ? `
+    ${settled.length ? `
     <div class="section-title"><span class="st-ico">${icon("check", 15)}</span>Last settled
       <span class="sub">— newest first</span></div>
-    <div class="card" style="padding:0 14px">${z.recent.slice(0, 20).map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
-    <p style="margin:10px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
+    <div class="hd-card">${settled.slice(0, FOLD).map((r) => zenoTicketRow(r, true)).join("")}</div>
+    ${settled.length > FOLD ? `<details class="tn-full"><summary>${plural(settled.length - FOLD, "more settled ticket")}</summary>
+      <div class="hd-card">${settled.slice(FOLD).map((r) => zenoTicketRow(r, true)).join("")}</div></details>` : ""}` : ""}
+    <p class="list-note">
       "Copy" puts the selection, price and book on your clipboard to paste into your own app.
       Prices move; what you get may not be what Zeno got.${z.last_import ? ` Last synced ${escapeHtml(String(z.last_import).replace("T", " ").slice(0, 16))} UTC.` : ""}</p>`;
+  sweepRings(host);
   host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.text || ""); b.textContent = "Copied"; }
     catch (e) { b.textContent = "Copy failed"; }
@@ -18064,9 +18071,23 @@ function renderMyBets() {
   const st = mbStats(bets);
   const books = mbByBook(bets);
   const pcolor = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
-  const tile = (k, v, sub, color) => `<div class="tile"><div class="k">${k}</div>
-    <div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div>${
-      sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
+  /* v5: YOUR OWN RIBBON. The four stat tiles were the site's old
+     vocabulary; the record is a ribbon everywhere else (the deck, the
+     Record page, Zeno's page), so it is one here — the same tile, under
+     your own label, drawn from your own settled bets: the ring is wins
+     over decisions, the number is profit in dollars, the dots are your
+     last five. Nothing settled yet, no ribbon; what is at risk is said
+     beneath it either way. */
+  const ribbon = (() => {
+    const recent = bets.filter((b) => ["win", "loss", "push"].includes(b.result)).slice(0, 5)
+      .map((b) => ({ result: b.result === "win" ? "won" : b.result === "loss" ? "lost" : "push" }));
+    const you = { overall: { settled: st.settled, wins: st.wins, losses: st.losses, pushes: st.pushes,
+                             profit: st.profit, staked: st.staked, open: st.pending, roi: st.roi },
+                  recent, label: "You · logged by hand" };
+    const html = recordRibbonsHTML({ zeno: you }, {}, []);
+    return `${html ? `<div class="hd-stats rec-ribbons">${html}</div>` : ""}${
+      st.pending ? `<p class="list-note">${mbMoney(st.atRisk)} at risk on ${plural(st.pending, "open bet")}.</p>` : ""}`;
+  })();
 
   const today = new Date().toISOString().slice(0, 10);
   const form = `
@@ -18126,6 +18147,7 @@ function renderMyBets() {
   const resultTag = { win: ["WON", "var(--good)"], loss: ["LOST", "var(--bad)"],
                       push: ["PUSH", "var(--text-mute)"],
                       pending: ["OPEN", "var(--warn)"] };
+  const chipTone = { win: "good", loss: "bad", push: "", pending: "warn" };   // v5: the card's pill, the deck's tones
   // Status chips + sport filter (Ethan's My Bets render, 2026-08-11).
   // "Open/Won/Lost" as top-level tabs, sports as a dropdown, and each
   // bet as a card with its stake and what it stands to return.
@@ -18173,8 +18195,8 @@ function renderMyBets() {
         data-mbid="${escapeAttr(b.id || "")}">
       <div class="mbc-head">
         <span class="mbc-title">${legs ? `${legs.length}-leg parlay` : escapeHtml(b.desc || "")}</span>
-        <b class="mbc-odds">${escapeHtml(oddsTxt(b.odds))}</b>
-        <b class="mbc-tag" style="color:${color}">${label}</b></div>
+        <span class="hd-o">${escapeHtml(oddsTxt(b.odds))}</span>
+        <span class="hd-chip ${chipTone[b.result] || "warn"}">${label}</span></div>
       ${legs ? `<ul class="mbc-legs">${legs.map((l) =>
         `<li>${escapeHtml(l)}</li>`).join("")}</ul>` : ""}
       <div class="mbc-sub">${escapeHtml(b.book || "")}${b.sport ? ` · ${escapeHtml(b.sport)}` : ""} · ${escapeHtml(b.date || "")}</div>
@@ -18228,35 +18250,7 @@ function renderMyBets() {
     </div>
     ${acctStripHTML()}
     ${form}
-    <details class="card mb-import">
-      <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
-      <p class="mb-import-note">The free version of bet syncing: every book (and Juice
-      Reel itself) can export your bet history as a spreadsheet/CSV. Choose the file or
-      paste the rows — columns are matched by their header names (date, bet, odds,
-      stake/risk, result…), in any order. Rows without a book column are filed under the
-      Book selected in the form above. Re-importing the same export is safe: bets you
-      already logged are skipped, not doubled. Nothing uploads.</p>
-      <div class="mb-form-row">
-        <label class="btn mb-io" style="cursor:pointer">Choose CSV<input type="file"
-          accept=".csv,.txt,.tsv,text/csv,text/plain,text/tab-separated-values"
-          style="display:none" onchange="mbBulkFile(this)"></label>
-        <span style="color:var(--text-mute);font-size:var(--fs-sm)">or paste rows below,
-          then Preview:</span>
-      </div>
-      <textarea id="mb-bulk-text" rows="4" spellcheck="false"
-        placeholder="Date,Bet,Odds,Risk,Result&#10;2026-08-09,Yankees ML,-125,25,Won"></textarea>
-      <div class="mb-form-row">
-        <button class="btn" type="button" onclick="mbBulkPaste()">Preview</button>
-      </div>
-      <div id="mb-bulk-preview"></div>
-    </details>
-    <div class="stats">
-      ${tile("Net profit", mbMoney(st.profit, true), `${st.settled} settled ${pluralWord(st.settled, "bet")}`, pcolor(st.profit))}
-      ${tile("ROI", st.roi == null ? "—" : (100 * st.roi).toFixed(1) + "%", "profit ÷ staked")}
-      ${tile("Record", `${st.wins}–${st.losses}${st.pushes ? `–${st.pushes}` : ""}`,
-             st.winPct == null ? "no decisions yet" : (100 * st.winPct).toFixed(0) + "% win")}
-      ${tile("At risk", mbMoney(st.atRisk), `${st.pending} pending`)}
-    </div>
+    ${ribbon}
     ${(() => {
       if (st.settled < 3) return "";
       const takes = mbTakeaways(bets);
@@ -18331,10 +18325,33 @@ function renderMyBets() {
         <div class="es-title">No bets logged yet</div>
         <div class="es-sub">Add the first bet you placed at a book above. It stays on this
         device, tracks your P&L by book, and is separate from the model’s own record.</div></div>`}
+    <details class="card mb-import">
+      <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
+      <p class="mb-import-note">The free version of bet syncing: every book (and Juice
+      Reel itself) can export your bet history as a spreadsheet/CSV. Choose the file or
+      paste the rows — columns are matched by their header names (date, bet, odds,
+      stake/risk, result…), in any order. Rows without a book column are filed under the
+      Book selected in the form above. Re-importing the same export is safe: bets you
+      already logged are skipped, not doubled. Nothing uploads.</p>
+      <div class="mb-form-row">
+        <label class="btn mb-io" style="cursor:pointer">Choose CSV<input type="file"
+          accept=".csv,.txt,.tsv,text/csv,text/plain,text/tab-separated-values"
+          style="display:none" onchange="mbBulkFile(this)"></label>
+        <span style="color:var(--text-mute);font-size:var(--fs-sm)">or paste rows below,
+          then Preview:</span>
+      </div>
+      <textarea id="mb-bulk-text" rows="4" spellcheck="false"
+        placeholder="Date,Bet,Odds,Risk,Result&#10;2026-08-09,Yankees ML,-125,25,Won"></textarea>
+      <div class="mb-form-row">
+        <button class="btn" type="button" onclick="mbBulkPaste()">Preview</button>
+      </div>
+      <div id="mb-bulk-preview"></div>
+    </details>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       This is a manual log for the bets YOU place — not the model’s picks (those are on the
       Record page) and not gambling advice. Data lives only in this browser; clearing your
       browser data erases it, so Export now and then if you want a backup.</p>`;
+  sweepRings(host);
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
@@ -39974,8 +39991,11 @@ function recordRibbonsHTML(rec, ov, recent) {
   }
   if (zo.settled) {
     const pr = Number(zo.profit || 0);
-    tiles.push(tile("Zeno · his own book", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
-                    `${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
+    /* v5: the same tile serves a person's own book — Zeno's, or the
+       reader's hand-logged bets on My Bets — under its own label. */
+    const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
+    tiles.push(tile(z.label || "Zeno · his own book", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+                    `${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
                     dots(z.recent, "result"), rate(zo)));
   }
   return tiles.join("");
@@ -40138,6 +40158,7 @@ async function renderHomeDeck(opts) {
    paint, or there is nothing to sweep from. Reduced motion zeroes the
    duration and the ring is simply full. */
 function sweepRings(host) {
+  if (typeof requestAnimationFrame !== "function") return;   // a test harness, not a browser
   requestAnimationFrame(() => requestAnimationFrame(() => {
     (host || document).querySelectorAll(".hd-ring[data-pc]").forEach((el) => {
       el.style.setProperty("--pc", el.dataset.pc);
@@ -40152,9 +40173,12 @@ function sweepRings(host) {
    with the same decimals and the same thousands commas, everything
    around it (sign, $, %, "ROI") untouched. At t >= 1 it is the final
    text, byte for byte, so nothing ever ends on a rounding artefact. */
-const COUNT_NUM = /\d[\d,]*(?:\.\d+)?/;
 function countAt(final, t) {
   if (!(t < 1)) return final;
+  /* Declared here, not at the top level: a boot landing on a page that
+     counts (My Bets renders synchronously) reaches this file's tail
+     before its top-level `const`s exist — test_app_loads, 2026-09-22. */
+  const COUNT_NUM = /\d[\d,]*(?:\.\d+)?/;
   const m = COUNT_NUM.exec(final);
   if (!m) return final;
   const raw = m[0];
@@ -40173,8 +40197,8 @@ function countAt(final, t) {
    number is simply there. The timeout is the safety net countUp() has:
    a background tab throttles rAF, and a ribbon must never be left
    mid-count. */
-const COUNT_STEPS_OF_SLOW = 3;
 function countNumbers(host) {
+  const COUNT_STEPS_OF_SLOW = 3;   // inside, for the same reason as countAt's pattern
   if (typeof requestAnimationFrame !== "function") return;
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const slow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-slow")) || 280;
