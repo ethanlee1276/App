@@ -480,6 +480,13 @@ surface.
     book-report sections drew their rows inline, each a little
     different; they share `.rec-row` now (a word per variant), the
     hairline token, the page's small size.
+  * *Every other data row shares it.* The Predict board, the injury
+    watch, the UFC edge rows (no longer a 640px scroll on a phone),
+    the best-bets stubs, the live tracker's rows, the market-best
+    list, the census funnel, the watchlists, rest watch, incentives,
+    the Sleeper panel, team form, the prose entries, the learning
+    coverage and the Why page's table cells: `.rec-row` and the
+    hairline token; no raw rgba hairline is left in the app.
   * *The paywall shows the one record.* It read the record file raw
     and kept quoting the edge book; it adopts the pooled record now
     and leads its results strip with the same ribbon (the model's

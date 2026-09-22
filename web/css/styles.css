@@ -7054,6 +7054,22 @@ body.has-deck #rail-live { display: none; }
 .rec-block { padding: 12px 14px; border-top: var(--hairline) solid var(--border-soft); }
 .rec-block.chart { padding: 14px 14px 4px; }
 .rec-cards { display: flex; gap: 18px; flex-wrap: wrap; }
+/* …and the data rows on every other page share it: the Predict board,
+   the injury watch, the UFC edge rows, the live tracker's rows, the
+   watchlists, rest watch, incentives, the Sleeper panel, team form. */
+.rec-row.top { align-items: flex-start; }
+.rec-row.thin { padding: 4px 0; gap: 10px; }
+.rec-row.between { justify-content: space-between; }
+.rec-row.nowrap { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.rec-entry { padding: 12px 14px; border-bottom: var(--hairline) solid var(--border-soft); }
+/* A row that keeps to one line: its columns squeeze (the live
+   tracker's, the best-bets stubs, the market-best list, the funnel)
+   rather than wrap, the way they always did. */
+.rec-row.line { flex-wrap: nowrap; }
+/* The Why page's side-by-side table, in the same hairline. */
+.vs-cell { padding: 8px 12px; border-bottom: var(--hairline) solid var(--border-soft); }
+.vs-cell.mute { color: var(--text-mute); }
+.watch-door { cursor: pointer; }
 .rec-note { padding: 10px 14px; margin: 0; font-size: var(--fs-xs); color: var(--text-mute);
   border-top: var(--hairline) solid var(--border-soft); }
 .scan-stake-row { display: flex; align-items: center; gap: 8px; }

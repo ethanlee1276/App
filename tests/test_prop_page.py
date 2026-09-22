@@ -415,7 +415,9 @@ def test_an_open_bet_on_the_live_tab_is_a_door():
     fn = APP[APP.index("function renderLivePicks("):]
     fn = fn[:fn.index("\n}\n") + 2]
     assert "ridingAttrs(r)" in fn, "the open-bet rows are still inert"
-    assert 'class="${door ? "openable" : ""}"' in fn, (
+    # v5: the row's class is the shared row's, and the door joins it —
+    # one class attribute, `openable` on the end when there is a door.
+    assert '${door ? " openable" : ""}"${door}>' in fn, (
         "a row that opens something has to say so — no cursor, no hover, "
         "no focus ring is a door nobody finds")
 

@@ -3611,9 +3611,7 @@ function marketBestHTML(sig) {
   const row = (r) => {
     const door = r.player ? propAttrs(r) : gameBetAttrs(r);
     const edge = r.edge != null ? signedPct(r.edge) : "—";
-    return `<div class="${door ? "openable" : ""}"${door || ""}
-        style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
-               border-bottom:1px solid rgba(255,255,255,.05)">
+    return `<div class="rec-row top tall line${door ? " openable" : ""}"${door || ""}>
       <span class="chip" style="flex-shrink:0;min-width:96px">${escapeHtml(
         marketWord(r.market || r.bet_type))}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(marketBestLabel(r))}
@@ -3949,8 +3947,7 @@ async function renderBestBets() {
         recommendations. They’re the signal families the site paper-tracks in quarantined
         Record buckets — each has a fixed promotion bar, and none is money tonight.</p>
         ${signals.map((s) => `
-          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 4px;
-                      border-bottom:1px solid rgba(255,255,255,.05);opacity:.75">
+          <div class="rec-row top thin dim line">
             <span class="chip" style="min-width:50px;text-align:center;flex-shrink:0">${s.tag}</span>
             <span style="flex:1;min-width:0;font-size:var(--fs-sm)">${escapeHtml(s.label)}
               <span style="display:block;color:var(--text-mute);font-size:var(--fs-xs)">${escapeHtml(s.why)}</span></span>
@@ -4144,9 +4141,7 @@ function censusFunnelHTML() {
   // WNBA board showing "26 props analyzed" above "no real book price 761"
   // looks like 761 of 26, when it is really 787 built → 26 priced → 0 clear.
   const PRE = ["no_history", "no_real_price"];
-  const line = ([k, v]) => `<div style="display:flex;justify-content:space-between;
-      gap:10px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);
-      font-size:var(--fs-sm)">
+  const line = ([k, v]) => `<div class="rec-row thin flush between line">
     <span style="color:var(--text-mute)">${escapeHtml(names[k] || k)}</span>
     <span style="font-weight:700">${v}</span></div>`;
   const live = Object.entries(gc).filter(([k, v]) => typeof v === "number"
@@ -4671,9 +4666,7 @@ function renderLivePicks() {
             reimplemented so the next list to grow rows like these has one
             function to reach for instead of a fourth variation. */
   const rowHTML = (r) => ((door, placed) => `
-        <div class="${door ? "openable" : ""}"${door}
-             style="display:flex;gap:12px;align-items:center;padding:11px 14px;
-                    border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
+        <div class="rec-row mid tall line${r.phase === "upcoming" ? " dim" : ""}${door ? " openable" : ""}"${door}>
           ${r.phase === "live" ? `<span class="live-dot" style="flex-shrink:0"></span>`
             : `<span style="width:8px;flex-shrink:0"></span>`}
           <span class="pick-id">${betMark(r, 28)}</span>
@@ -4784,8 +4777,7 @@ async function renderTeamForm() {
     : `sampler journals the hot side’s moneyline in every hot-vs-cold matchup `
       + `at the real price — grades on the Record page`;
   const row = (r, tone) => `
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-                padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.05)">
+    <div class="rec-row mid flush">
       <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:150px">
         ${teamMark(r.team, 18)} <strong>${escapeHtml(teamName(r.team))}</strong></span>
       <span style="white-space:nowrap">${r.w}-${r.l}</span>
@@ -4859,8 +4851,7 @@ function renderIncentives() {
     "needs a push": "var(--warn)", "long shot": "var(--bad)",
     "missed": "var(--text-mute)" }[s] || "var(--text-mute)");
   const body = rows.length ? rows.map((r) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml(r.team || "")}</span>
       <span style="flex:1;min-width:150px;font-weight:600">${escapeHtml(r.player || "")}</span>
       <span style="min-width:130px">${(r.total ?? 0).toLocaleString()} of ${(r.threshold ?? 0).toLocaleString()} ${escapeHtml(r.stat_label || "")}</span>
@@ -5042,8 +5033,7 @@ function renderRestWatch() {
     : s.status.startsWith("clinched") ? "var(--good)"
     : s.status === "eliminated" ? "var(--text-mute)" : "var(--text)";
   const body = rows.length ? rows.map(([t, s]) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml(t)}</span>
       <span style="min-width:80px;font-variant-numeric:tabular-nums">${s.wins}-${s.losses}${s.ties ? `-${s.ties}` : ""}</span>
       <span style="flex:1;min-width:130px">${escapeHtml(s.status)}</span>
@@ -5179,8 +5169,7 @@ async function renderInjuryWatch() {
   }
 
   const body = fresh.length ? fresh.map((r) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml(r.abbr)}</span>
       <span style="min-width:140px"><b>${escapeHtml(r.player)}</b>${
         r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span>
@@ -5199,8 +5188,7 @@ async function renderInjuryWatch() {
       entries are already in every number here.</span></div>
     <div class="card" style="padding:0">${body}
       ${injuryLayerNote()}
-      <p style="padding:10px 14px;margin:0;font-size:var(--fs-sm);color:var(--text-mute);
-          border-top:1px solid rgba(255,255,255,.05)">
+      <p class="rec-note">
         ${older ? `${older} longer-term entr${older === 1 ? "y" : "ies"} on these teams · ` : ""}
         <a href="#injuries" style="color:var(--brand)">full league board →</a></p></div>`;
   // The rooms were grouped before this async fill landed — re-judge, so
@@ -8597,10 +8585,7 @@ function watchlistHTML(watch, mlb) {
            ${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
       : "";
     return `<div class="watch-item">
-      <div class="drow"${detail ? ' data-watch-toggle role="button" tabindex="0"' +
-          ` aria-expanded="false" style="cursor:pointer"` : ""}
-        style="display:flex;align-items:center;gap:12px;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
+      <div class="drow rec-row mid nowrap${detail ? " watch-door" : ""}"${detail ? ' data-watch-toggle role="button" tabindex="0" aria-expanded="false"' : ""}>
       <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
         <strong>${escapeHtml(r.player)}</strong>
@@ -13132,7 +13117,7 @@ function recProseSection(pz, sport) {
     const note = sport ? ((e.by_sport || {})[sport] || missing) : e.overall;
     const when = e.date || e.week_of || "";
     return `
-      <div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+      <div class="rec-entry">
         <div style="font-weight:600;margin-bottom:4px">${escapeHtml(e.headline || "")}
           <span style="opacity:.45;font-weight:400;font-size:.85em"> · ${escapeHtml(when)}</span></div>
         <p style="margin:0;font-size:.9em;line-height:1.5">${escapeHtml(note || "")}</p>
@@ -13180,7 +13165,7 @@ function learningCoverageHTML(cov, sport) {
     const body = pending.length
       ? pending.map(([mk, m]) => `<div style="padding:2px 0 2px 12px">${escapeHtml(mk)} · ${escapeHtml(m.note || m.state || "")}</div>`).join("")
       : `<div style="padding:2px 0 2px 12px">no graded bets with a stated probability yet — the ladder starts with its first settled pick</div>`;
-    lines.push(`<div style="padding:6px 14px;font-size:.85em;color:var(--text-mute);border-top:1px solid rgba(255,255,255,.05)"><div>${head}</div>${body}</div>`);
+    lines.push(`<div class="rec-note"><div>${head}</div>${body}</div>`);
   });
   if (!lines.length) return "";
   return `<div style="padding:4px 0 2px"><div class="mini" style="padding:6px 14px 2px;opacity:.75">Where each sport stands — the same floors for every league</div>${lines.join("")}</div>`;
@@ -17227,8 +17212,7 @@ function predBoardHTML(kx, d) {
       differently, in probability points. Two live markets can’t both be right;
       no opinion of ours is in this table.</span></div>
     <div class="card kx-table" style="padding:0">
-      ${div.map((r) => `<div class="drow" style="display:flex;gap:12px;align-items:baseline;
-          padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+      ${div.map((r) => `<div class="rec-row">
         <span style="flex:1;min-width:150px"><b>${escapeHtml(r.title || r.matchup || "")}</b>
           <span style="opacity:.55;font-size:.85em"> ${escapeHtml((r.sport || "").toUpperCase())}</span></span>
         <span style="min-width:110px;text-align:right">Kalshi ${(100 * (r.prob || 0)).toFixed(0)}%</span>
@@ -31100,10 +31084,7 @@ function renderSleeperPanel(d, ctx) {
      Enter. The delegated keydown below makes that true, and picks up the
      calendar cells that have been claiming the same role since August. */
   const rowHTML = (r) => `
-    <div class="drow ffrow-door" data-dossier="${escapeAttr(r.name)}"
-        role="button" tabindex="0"
-        style="display:flex;align-items:center;gap:12px;padding:8px 16px;
-        border-bottom:1px solid rgba(255,255,255,.05)">
+    <div class="drow ffrow-door rec-row mid nowrap" data-dossier="${escapeAttr(r.name)}" role="button" tabindex="0">
       <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <strong>${escapeHtml(r.name)}</strong>${injTag("nfl", r.name)}
@@ -31663,11 +31644,9 @@ async function renderUFC() {
       return `<div class="section-title">Fight-by-fight edge board
           <span class="sub">— every priced bout: the model’s number vs the market’s, and
           the verdict. Bet rows are journaled in the UFC record.</span></div>
-        <div class="card" style="padding:0;overflow-x:auto;overflow-y:hidden">
+        <div class="hd-card">
           ${rows.map((r) => `
-            <div class="ufc-edge-row" style="display:flex;gap:12px;align-items:center;padding:10px 14px;
-                        border-bottom:1px solid rgba(255,255,255,.05);min-width:640px;
-                        ${r._pick ? "" : "opacity:.72"}">
+            <div class="ufc-edge-row rec-row mid tall${r._pick ? "" : " dim"}">
               <span style="min-width:74px;text-align:center;font-weight:800;flex-shrink:0;
                     color:${r._pick ? "var(--good)" : "var(--text-mute)"}">${r._pick ? "BET" : "PASS"}</span>
               <span style="flex:1;min-width:0"><strong>${escapeHtml(r.fight)}</strong>
@@ -32668,8 +32647,8 @@ async function renderWhy() {
     <p style="color:var(--text-body);font-size:.92em;margin:0">${body}</p></div>`;
 
   const vsRow = (them, us) => `<tr>
-    <td style="padding:8px 12px;color:var(--text-mute);border-bottom:1px solid rgba(255,255,255,.05)">${them}</td>
-    <td style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05)">${us}</td></tr>`;
+    <td class="vs-cell mute">${them}</td>
+    <td class="vs-cell">${us}</td></tr>`;
 
   host.innerHTML = `
     <p style="font-size:1.06em;max-width:none;line-height:1.6;margin:0 0 4px"><strong>See the math. Know if it’s working. Stay in the game.</strong>
