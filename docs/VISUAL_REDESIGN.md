@@ -408,7 +408,24 @@ surface.
     overrides the stylesheet's note that entrance motion was retired —
     Ethan's instruction is newer, and the stagger is a fraction of the
     one that was retired.
-  Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`.
+  * *Motion, the rest.* A ribbon's ring label and headline number
+    count up to themselves (`countAt`, `countNumbers`: three
+    `--dur-slow`, once per element, the same decimals and commas on
+    the way, ending byte for byte on the final text; a throttled tab
+    is caught by a timeout; the digits are tabular so nothing
+    jitters). The live dot pings — the one perpetual animation §3.4
+    permits, which the NEW LOOK had left as a square that never
+    moved; a held game's dot and its ping both stop. The form dots
+    pop in newest first after the sweep; the ribbons rise with the
+    rows, the second a beat behind; the pick rows and game cards
+    answer a press like the buttons. And the live clock's redraw of
+    the home deck is *still* (`renderHomeDeck({ still })`): the riding
+    rows and the strip refilled in place, no skeleton, no entrance,
+    the record and Zeno left alone — before this the whole deck
+    re-landed every 20 seconds of a live night. Reduced motion skips
+    the count and hides the ping.
+  Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py` and
+  `tests/test_the_numbers_count_up_and_the_dot_pings.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

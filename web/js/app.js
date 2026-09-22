@@ -39818,10 +39818,10 @@ function recordRibbonsHTML(rec, ov, recent) {
   }).join("");
   const rate = (t) => ((t.wins || 0) + (t.losses || 0)) ? (t.wins || 0) / ((t.wins || 0) + (t.losses || 0)) : 0;
   const ring = (r) => { const pc = Math.max(0, Math.min(100, Math.round(r * 100)));
-    return `<span class="hd-ring" style="--pc:0" data-pc="${pc}" title="${pc}% of decisions won"><i>${pc}%</i></span>`; };
+    return `<span class="hd-ring" style="--pc:0" data-pc="${pc}" title="${pc}% of decisions won"><i data-count>${pc}%</i></span>`; };
   const tile = (k, rec, big, color, sub, form, r) => `<div class="hd-ribbon">${ring(r)}
     <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
-      <span class="hd-big">${rec} <b style="color:${color}">${big}</b></span><span>${sub}</span></div>
+      <span class="hd-big">${rec} <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
     ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
   const tiles = [];
   if (ov.settled) {
@@ -39944,13 +39944,18 @@ function placeSlip() {
   });
 }
 
-async function renderHomeDeck() {
+async function renderHomeDeck(opts) {
+  /* v5 motion: the live clock's redraw (armDeckLive) is `still` — the
+     riding rows and the strip refilled in place, no skeleton, no
+     entrance, the record and Zeno left as they are; a score moving
+     must not re-land the whole deck. A visit to the page is the full
+     render, and everything rises once. */
+  const still = !!(opts && opts.still);
   const host = document.getElementById("home-deck");
   if (!host) return;
   clearTimeout(_deckTimer);
-  deckSkeleton(host);
-  deckAdopt(host);
-  placeSlip();
+  host.classList.toggle("hd-still", still);
+  if (!still) { deckSkeleton(host); deckAdopt(host); placeSlip(); }
   host.hidden = false;
   document.body.classList.add("has-deck");        // the rail's Live now card is the strip, twice
   const d = state.data || {};
@@ -39958,23 +39963,29 @@ async function renderHomeDeck() {
   const riding = deckRidingRows(rows);
   deckFill(host, "riding", deckRidingHTML(riding));
   renderRidingTray(riding);
-  const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
-  deckFill(host, "live", live);
-  deckFill(host, "record", rest.record);
-  deckFill(host, "zeno", rest.zeno);
+  if (still) {
+    deckFill(host, "live", await deckLiveHTML(riding, rows));
+  } else {
+    const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
+    deckFill(host, "live", live);
+    deckFill(host, "record", rest.record);
+    deckFill(host, "zeno", rest.zeno);
+  }
   host.querySelectorAll(".hd-game").forEach((b) => b.addEventListener("click", () => {
     _liveChipSport = state.sport;
     _liveChip = LIVE_FEEDS[b.dataset.lsport] ? b.dataset.lsport : "all";
     switchView("live", true);
   }));
-  host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
+  if (!still) host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.text || ""); b.textContent = "Copied"; }
     catch (e) { b.textContent = "Copy failed"; }
     setTimeout(() => { b.textContent = "Copy"; }, 1500);
   }));
   _deckStamp = fastLiveStamp(_deckFast.games.map((x) => x.g));
-  sweepRings(host);
-  sweepRings(document.getElementById("rail-slip"));
+  if (!still) {
+    sweepRings(host);
+    sweepRings(document.getElementById("rail-slip"));
+  }
   armDeckLive();
 }
 
@@ -39990,6 +40001,55 @@ function sweepRings(host) {
       el.style.setProperty("--pc", el.dataset.pc);
     });
   }));
+  countNumbers(host);
+}
+
+/* v5 motion: a ribbon's number counts up to itself. countAt is the pure
+   half — the string the element shows at progress t (0..1): the first
+   numeric run in the final text, scaled by an ease-out cube, re-formatted
+   with the same decimals and the same thousands commas, everything
+   around it (sign, $, %, "ROI") untouched. At t >= 1 it is the final
+   text, byte for byte, so nothing ever ends on a rounding artefact. */
+const COUNT_NUM = /\d[\d,]*(?:\.\d+)?/;
+function countAt(final, t) {
+  if (!(t < 1)) return final;
+  const m = COUNT_NUM.exec(final);
+  if (!m) return final;
+  const raw = m[0];
+  const decimals = raw.includes(".") ? raw.length - raw.indexOf(".") - 1 : 0;
+  const target = parseFloat(raw.replace(/,/g, ""));
+  if (!isFinite(target)) return final;
+  const p = Math.max(0, t);
+  const cur = target * (1 - Math.pow(1 - p, 3));
+  let s = cur.toFixed(decimals);
+  if (raw.includes(",")) s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return final.slice(0, m.index) + s + final.slice(m.index + raw.length);
+}
+
+/* The driver: every [data-count] the host holds, once, over three
+   --dur-slow (the ring's sweep is one). Reduced motion skips it — the
+   number is simply there. The timeout is the safety net countUp() has:
+   a background tab throttles rAF, and a ribbon must never be left
+   mid-count. */
+const COUNT_STEPS_OF_SLOW = 3;
+function countNumbers(host) {
+  if (typeof requestAnimationFrame !== "function") return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const slow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-slow")) || 280;
+  const dur = slow * COUNT_STEPS_OF_SLOW;
+  (host || document).querySelectorAll("[data-count]:not([data-counted])").forEach((el) => {
+    el.dataset.counted = "1";
+    const final = el.textContent;
+    const t0 = performance.now();
+    el.textContent = countAt(final, 0);
+    const step = (now) => {
+      const t = (now - t0) / dur;
+      el.textContent = countAt(final, t);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    setTimeout(() => { el.textContent = final; }, dur + 120);   // a throttled tab still ends on the number
+  });
 }
 
 /* The live strip follows the scoreboard on its own clock, redrawing
@@ -40004,7 +40064,7 @@ function armDeckLive() {
     _deckFast.at = 0;
     const fast = await fetchFastLiveAll();
     const now = fastLiveStamp(fast.map((x) => x.g));
-    if (now !== _deckStamp) { renderHomeDeck(); return; }
+    if (now !== _deckStamp) { renderHomeDeck({ still: true }); return; }
     armDeckLive();
   }, DECK_LIVE_EVERY_MS);
 }

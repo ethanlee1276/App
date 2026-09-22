@@ -1761,11 +1761,11 @@ svg[data-scrub] { touch-action: pan-y; }
 .btn:active, .chip[role="button"]:active, .sport-btn:active, .nav-btn:active,
 .mbc-chip:active, .mbc-view:active, .al-cat:active, .rec-scope:active,
 .pm-view:active, .qt-chip:active, .tb-item:active,
-.ffcal-card:active, .plan-btn:active {
+.ffcal-card:active, .plan-btn:active, .ml-row:active, .hd-game:active {
   transform: scale(.972);
 }
 .btn, .sport-btn, .nav-btn, .mbc-chip, .mbc-view, .al-cat, .rec-scope,
-.pm-view, .qt-chip, .tb-item, .ffcal-card, .plan-btn {
+.pm-view, .qt-chip, .tb-item, .ffcal-card, .plan-btn, .ml-row, .hd-game {
   transition: transform var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out),
@@ -1809,6 +1809,7 @@ main { view-transition-name: page; }
   .mbc-view:active, .al-cat:active, .rec-scope:active,
   .pm-view:active, .qt-chip:active, .tb-item:active, .ffcal-card:active,
   .plan-btn:active { transform: none; }
+  .ml-row:active, .hd-game:active { transform: none; }
   .reveal { opacity: 1; transform: none; }
   .reveal.in { transition: none; }
   .tilt { transition: none; }
@@ -1886,18 +1887,28 @@ main { view-transition-name: page; }
 
 .live-dot {
   width: 6px; height: 6px; border-radius: 0; background: var(--warn);
-  box-shadow: none;
-  animation: livePulse 1.4s ease-out infinite; flex-shrink: 0;
+  box-shadow: none; position: relative;
+  animation: livePulse 1.4s var(--ease-out) infinite; flex-shrink: 0;
 }
+/* v5 motion: the one perpetual animation on the page (§3.4), made
+   visible again — the NEW LOOK zeroed its glow, which left it a square
+   that never moved. Now a copy of the dot leaves it, growing and fading,
+   every 1.4s: a ping, no shadow, no border. A game in progress is the
+   one state on the page that is changing while you read it. */
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit;
+  animation: livePing 1.4s var(--ease-out) infinite; }
+@keyframes livePing { from { transform: scale(1); opacity: .6; } to { transform: scale(3); opacity: 0; } }
+/* A held game's dot has stopped (.paused, below); so has its ping. */
+.live-dot.paused::after { display: none; }
 .status-badge.live .live-dot { background: var(--warn); }
 .live-dot.sm { width: 6px; height: 6px; }
 /* A held game: the dot stops pulsing, because the game has. */
 .live-dot.paused { animation: none; opacity: .55; }
 .status-badge.hold { background: rgba(255, 255, 255, .08); color: var(--text); }
 @keyframes livePulse {
-  0%   { box-shadow: none; }
-  70%  { box-shadow: none; }
-  100% { box-shadow: none; }
+  0%   { opacity: 1; }
+  70%  { opacity: .45; }
+  100% { opacity: 1; }
 }
 
 .game-card.is-live { border-color: rgba(251, 44, 70, .55); }
@@ -1922,7 +1933,7 @@ main { view-transition-name: page; }
 }
 .live-ribbon .live-dot { background: #fff; }
 
-@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .live-dot::after { animation: none; } .live-dot::after { display: none; } }
 
 /* The live count sits inline in the footer, breathing room around it.
    The bases moved onto the park art; what is left here is the count and
@@ -6923,12 +6934,31 @@ body.has-deck #rail-live { display: none; }
 .hd-rw { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .hd-rw .hd-eyebrow { color: var(--text-mute); }
 .hd-big { font-family: var(--font-mono); font-size: var(--fs-lg); }
+/* v5 motion: the numbers count up (countUp), so they hold their width
+   while they do. */
+.hd-big, .hd-ring i { font-variant-numeric: tabular-nums; }
+/* The headline number wraps whole or not at all — never "ROI" alone on a line. */
+.hd-big b { white-space: nowrap; }
 .hd-rw > span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
 .hd-form { display: flex; gap: 4px; flex: 0 0 auto; }
 .hd-form i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
   font-style: normal; font-size: var(--fs-2xs); font-weight: 800; color: var(--brand-ink); background: var(--good); }
 .hd-form i.l { background: var(--bad); }
 .hd-form i.p { background: var(--text-mute); }
+/* v5 motion: the ribbon rises with the rows, the second a beat behind;
+   its five form dots pop in one after another, newest first, inside
+   --dur-base each — the whole ribbon has settled with the ring's sweep. */
+.hd-ribbon { animation: rise var(--dur-slow) var(--ease-out) both; }
+.hd-ribbon + .hd-ribbon { animation-delay: calc(var(--dur-fast) * .6); }
+@keyframes popIn { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+.hd-form i { animation: popIn var(--dur-base) var(--ease-out) both; animation-delay: var(--dur-slow); }
+.hd-form i:nth-child(2) { animation-delay: calc(var(--dur-slow) + var(--dur-fast) * .5); }
+.hd-form i:nth-child(3) { animation-delay: calc(var(--dur-slow) + var(--dur-fast) * 1); }
+.hd-form i:nth-child(4) { animation-delay: calc(var(--dur-slow) + var(--dur-fast) * 1.5); }
+.hd-form i:nth-child(5) { animation-delay: calc(var(--dur-slow) + var(--dur-fast) * 2); }
+/* The live clock's redraw (renderHomeDeck({ still })) lands nothing:
+   the rows it refills are simply there. */
+.hd-still .hd-row, .hd-still .hd-ribbon, .hd-still .hd-form i { animation: none; }
 /* v5: the desktop's slip column — the deck's riding, record and Zeno
    sections, moved into the rail on a wide screen (placeSlip). */
 .rail-slip .hd-sec { margin-bottom: 14px; }

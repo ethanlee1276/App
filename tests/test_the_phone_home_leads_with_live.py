@@ -174,7 +174,8 @@ def test_the_strip_reads_the_fast_scoreboards_never_the_boards():
     assert "liveHoldWord(lv)" in game and 'live-dot${hold ? " paused" : ""}' in game, \
         "a delayed game says so on the home too"
     arm = _fn("armDeckLive")
-    assert "if (now !== _deckStamp) { renderHomeDeck(); return; }" in arm, "redraw only when a score moved"
+    assert "if (now !== _deckStamp) { renderHomeDeck({ still: true }); return; }" in arm, \
+        "redraw only when a score moved, and in place (test_the_numbers_count_up_and_the_dot_pings)"
 
 
 def test_every_printed_number_is_an_earned_one():
