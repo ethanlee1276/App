@@ -422,7 +422,58 @@ def _exported(conn):
     ledger.export_json(conn, out)
     got = json.loads(out.read_text(encoding="utf-8"))
     got.pop("generated_at", None)      # the one field that always differs
+    # AND THE SECOND CLOCK, ONE LEVEL DOWN, which the pop above never
+    # reached because it is nested rather than top-level: the
+    # `loss_patterns` block carries the miner's own `generated` stamp at
+    # second resolution.
+    #
+    # The difference test below exports twice in a row, so whenever those
+    # two calls straddled a second boundary the payloads differed on the
+    # clock alone and the failure was reported as
+    # "the record page changed when WNBA rows were added: ['loss_patterns']"
+    # — a benched-league leak that was not there. Exporting an UNCHANGED
+    # journal twice, 1.2s apart, reproduces it with no WNBA row involved
+    # at all, which is how it was pinned.
+    #
+    # That is also why it was invisible when run by hand: standalone the
+    # two exports land inside the same second, and the file passes 31/31.
+    # Under `run_tests.py` — several files at a time, one vCPU — they do
+    # not, so this went red only in the suite, only sometimes, and blamed
+    # the code under test. A wall clock has no league, player or price in
+    # it, so dropping it costs the assertion nothing.
+    if isinstance(got.get("loss_patterns"), dict):
+        got["loss_patterns"].pop("generated", None)
     return got
+
+
+def test_two_exports_of_one_unchanged_journal_are_identical():
+    """THE GUARD ON THE TEST BELOW, not on the ledger.
+
+    The difference test only means something if the payload is a
+    function of the JOURNAL. Every clock in it is a false positive
+    waiting for a slow box, and it reads as the leak this file exists to
+    catch, which is the worst way to fail: it accuses the code under
+    test. `loss_patterns.generated` did exactly that — red in the suite,
+    green by hand, because a parallel run is slow enough to cross a
+    second between the two exports.
+
+    So: export, cross a second deliberately, export again, and require
+    the two to match with nothing added to the journal in between. This
+    fails on the next nested timestamp instead of leaving it to a loaded
+    machine to find.
+    """
+    import time
+    conn = _ledger()
+    _seed(conn, "nfl")
+    first = _exported(conn)
+    time.sleep(1.1)                    # deliberately straddle a second
+    second = _exported(conn)
+    if first != second:
+        moved = sorted(k for k in set(first) | set(second)
+                       if first.get(k) != second.get(k))
+        raise AssertionError(
+            "the export moved while the journal stood still — a clock, "
+            f"not a bet: {moved}")
 
 
 def test_the_record_page_cannot_tell_wnba_exists():
