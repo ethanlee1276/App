@@ -507,14 +507,22 @@ surface.
     lost its radius: a rounded one-sided hairline curved down at both
     ends and read, on Streak, Alerts, Prediction Market and Rocket
     Radar, as the top of a card whose sides had vanished.
+  * *The Players board and the Standings note say it whole.* With no
+    props priced the Players page drew a centred box of prose — the
+    one empty state on the site that was not the slate, so no mark,
+    no title and none of the doors; it is the slate now. The
+    Standings note, on a payload with no season field, began "has
+    no scoring rankings of its own yet" with its subject missing;
+    it says "This season" when the build carries no year.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
   `tests/test_the_live_page_rests_like_the_deck.py`,
   `tests/test_the_record_is_one_record.py`,
   `tests/test_zeno_and_my_bets_read_like_the_book.py`,
-  `tests/test_the_paywall_shows_the_one_record.py` and
-  `tests/test_a_quiet_trending_page_is_one_slate.py`.
+  `tests/test_the_paywall_shows_the_one_record.py`,
+  `tests/test_a_quiet_trending_page_is_one_slate.py` and
+  `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`.
 * **Still open (2026-09-22, after slice Q).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile

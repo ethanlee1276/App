@@ -10590,10 +10590,10 @@ async function renderPlayers() {
          an empty quote in it, on a page nobody had searched. Say the
          true thing instead: profiles are prop cards, and this league
          has none priced tonight. */
-      host.innerHTML = `<div class="empty">No priced props on the
-        ${escapeHtml(String(state.sport || "").toUpperCase())} board tonight,
-        so there are no player profiles to draw — they are built from the
-        board’s prop cards. The page fills as soon as a slate prices.</div>`;
+      host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
+        <div class="es-title">No priced props on the ${escapeHtml(String(state.sport || "").toUpperCase())} board tonight</div>
+        <div class="es-sub">Player profiles are built from the board’s prop cards, so there
+        are none to draw until a slate prices. The page fills as soon as one does.</div></div>`;
       return;
     }
     /* SAY THE SCOPE. The search looks only at the league whose tab is
@@ -24592,15 +24592,20 @@ function unitRankingsHTML(ur, d) {
    is not this season's. */
 function unitRankingsWaitHTML(d) {
   const season = d.season || "";
+  // v5: a payload without a season wrote " has no scoring rankings of
+  // its own yet" — a sentence with its subject missing, on any board
+  // built before the season field landed. Say "this season" instead.
+  const who = season ? String(season) : "this season";
+  const Who = season ? String(season) : "This season";
   const why = d.season_wait
-    ? `The ${season} season hasn’t kicked off${
+    ? `The ${season ? `${season} ` : ""}season hasn’t kicked off${
         d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
         Scoring rankings start with the first finals.`
     : d.feed_error
-      ? `${season} has no scoring rankings of its own yet — the league feed
+      ? `${Who} has no scoring rankings of its own yet — the league feed
          was unreachable on the last build, and fewer than four teams have
          a finished game on file.`
-      : `${season} has no scoring rankings of its own yet — fewer than four
+      : `${Who} has no scoring rankings of its own yet — fewer than four
          teams have a finished game on file. They start with the first
          finals.`;
   const shapes = (state.data || {}).team_shapes || {};
@@ -24647,7 +24652,7 @@ function unitRankingsWaitHTML(d) {
     <div class="section-title">Team rankings
       <span class="sub">— scoring offense and defense${fallback
         ? ` · ranked on the ${escapeHtml(String(shapeSeason))} season’s finished
-           games until ${escapeHtml(String(season))} has its first`
+           games until ${escapeHtml(who)} has its first`
         : ", from finished games"}</span></div>
     <p class="rail-quiet" style="margin:0 0 ${fallback ? "6px" : "22px"}">${why}</p>
     ${fallback}`;
