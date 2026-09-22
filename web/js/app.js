@@ -15426,12 +15426,20 @@ async function renderRecord() {
     </div>
     ${edgePanel}
   `;
+  /* THE PAGE LEADS WITH THE RIBBONS (v5): the scope in view as a ring,
+     a W-L and a headline number with its last five, and Zeno's book
+     beside it — the account header every tracker opens with. Above the
+     rooms, so every room reads under the same number; the receipts
+     room still begins with the calendar (test_record_spine). */
+  const ribbons = recordRibbonsHTML(d, o, src.recent);
   host.innerHTML = scopeBar
+    + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>` : "")
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
     + `<p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
+  sweepRings(host);
   // The calendar's days are doors to their bets; a day left open on the
   // last render (a range chip, a month arrow) is reopened.
   host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
@@ -36610,6 +36618,7 @@ function syncRail() {
   const home = state.view === "recommended";
   document.body.classList.toggle("has-rail", home);
   rail.style.display = home ? "" : "none";
+  placeSlip();
 }
 
 /* The strip's working controls — the render's row, with real handles.
@@ -39784,12 +39793,16 @@ function potdHeroHTML(d) {
 /* The record tiles and Zeno's open tickets. A tile prints only when the
    book has settled something — "+0.0% over 0" is a number nobody
    earned. */
-async function deckRecordHTML() {
-  let rec = null;
-  try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
-  if (!rec) return {};
-  const ov = rec.overall || {};
-  const z = rec.zeno || {};
+/* THE RIBBONS, ONE BUILDER. The deck's record tiles and the Record page's
+   own lead are the same picture — a ring for the hit rate, the W-L, the
+   headline number, the last five as form dots — so they come from one
+   function (v5, 2026-09-22: Ethan, "I didn't see any redesigns to the
+   record page"). `ov` and `recent` are the scope in view (the page hands
+   a league's own overall and rows); Zeno's book is pooled, because it is
+   his and not the model's. Returns the tiles' HTML, or "" over nothing. */
+function recordRibbonsHTML(rec, ov, recent) {
+  ov = ov || {};
+  const z = (rec || {}).zeno || {};
   const zo = z.overall || {};
   const sign = (v) => (v >= 0 ? "+" : MINUS);
   const tone = (v) => (v >= 0 ? "var(--good)" : "var(--bad)");
@@ -39815,7 +39828,7 @@ async function deckRecordHTML() {
     const roi = Number(ov.roi || 0);
     const u = Number(ov.net_units || 0);
     tiles.push(tile("Model · graded in public", wl(ov), `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
-                    `${sign(u)}${Math.abs(u).toFixed(1)}u · ${ov.settled} settled`, dots(rec.recent, "status"), rate(ov)));
+                    `${sign(u)}${Math.abs(u).toFixed(1)}u · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
   }
   if (zo.settled) {
     const pr = Number(zo.profit || 0);
@@ -39823,9 +39836,18 @@ async function deckRecordHTML() {
                     `${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
                     dots(z.recent, "result"), rate(zo)));
   }
-  const record = tiles.length
+  return tiles.join("");
+}
+
+async function deckRecordHTML() {
+  let rec = null;
+  try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
+  if (!rec) return {};
+  const z = rec.zeno || {};
+  const tiles = recordRibbonsHTML(rec, rec.overall, rec.recent);
+  const record = tiles
     ? `${deckHead("The record", "#record", "record", "Results")}
-       <div class="hd-stats">${tiles.join("")}</div>` : "";
+       <div class="hd-stats">${tiles}</div>` : "";
   const open = z.open || [];
   const zeno = open.length
     ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
@@ -39858,7 +39880,9 @@ function deckAdopt(host) {
 }
 
 function deckFill(host, sec, html) {
-  const s = host.querySelector(`.hd-sec[data-sec="${sec}"]`);
+  // A section placeSlip() has moved into the rail is still the deck's.
+  const s = host.querySelector(`.hd-sec[data-sec="${sec}"]`)
+    || document.querySelector(`#rail-slip .hd-sec[data-sec="${sec}"]`);
   if (!s) return;
   s.innerHTML = html || "";
   s.hidden = !html;
@@ -39892,12 +39916,41 @@ function ridingTraySync() {
   document.body.classList.toggle("has-tray", shown);
 }
 
+/* THE DESKTOP'S SLIP COLUMN. A book keeps what you have going on the
+   right: on a wide screen with the rail, the deck's riding rows, the
+   record ribbons and Zeno's tickets live in the rail beside the feed,
+   and below 1280px — where the rail drops under the page — they return
+   to the deck in its own order, so a phone never sees them move. The
+   sections are the same elements either way: the deck fills them by
+   name, and sweepRings finds their rings wherever they sit. */
+const SLIP_SECTIONS = ["riding", "record", "zeno"];
+const SLIP_MQ = "(min-width: 1280px)";
+function placeSlip() {
+  const rail = document.getElementById("rail-slip");
+  const deck = document.getElementById("home-deck");
+  if (!rail || !deck) return;
+  const wide = document.body.classList.contains("has-rail")
+    && window.matchMedia && window.matchMedia(SLIP_MQ).matches;
+  SLIP_SECTIONS.forEach((k) => {
+    const s = document.querySelector(`.hd-sec[data-sec="${k}"]`);
+    if (!s) return;
+    if (wide) {
+      if (s.parentElement !== rail) rail.appendChild(s);
+    } else if (s.parentElement !== deck) {
+      const after = HOME_DECK_ORDER.slice(HOME_DECK_ORDER.indexOf(k) + 1)
+        .map((n) => deck.querySelector(`.hd-sec[data-sec="${n}"]`)).find(Boolean);
+      deck.insertBefore(s, after || null);
+    }
+  });
+}
+
 async function renderHomeDeck() {
   const host = document.getElementById("home-deck");
   if (!host) return;
   clearTimeout(_deckTimer);
   deckSkeleton(host);
   deckAdopt(host);
+  placeSlip();
   host.hidden = false;
   document.body.classList.add("has-deck");        // the rail's Live now card is the strip, twice
   const d = state.data || {};
@@ -39921,6 +39974,7 @@ async function renderHomeDeck() {
   }));
   _deckStamp = fastLiveStamp(_deckFast.games.map((x) => x.g));
   sweepRings(host);
+  sweepRings(document.getElementById("rail-slip"));
   armDeckLive();
 }
 
@@ -40183,6 +40237,8 @@ function buzzOnSettle(rows) {
     });
   });
   syncRail();
+  // The slip column follows the viewport across the rail's breakpoint.
+  if (window.matchMedia) window.matchMedia(SLIP_MQ).addEventListener("change", placeSlip);
 
   /* THE WALL GOES UP BEFORE ANYTHING ELSE IS WORTH LOOKING AT.
      Ethan, 2026-08-20: "the site should immeditly show a page showing

@@ -388,6 +388,18 @@ surface.
     grade; the bet with its game and reason beneath; the price in the
     grey pill and the number in the green one; the riding position and
     the on-deck hitter keep their own chips. Same fields, doors, chart.
+  * *The Record page leads with its ribbons.* The deck's record tiles
+    and the page's own lead come from one builder
+    (`recordRibbonsHTML`): the scope in view as a ring, a W-L and a
+    headline number with its last five, Zeno's book beside it, above
+    the rooms so every room reads under the same number. The receipts
+    room still begins with the calendar; the ring sweeps in here too.
+  * *The desktop has a slip column.* On a wide screen with the rail,
+    the deck's riding rows, the record ribbons and Zeno's tickets live
+    in the rail beside the feed (`placeSlip`); below 1280px they return
+    to the deck in its order, so a phone never sees them move. Not a
+    bet slip — the site never takes a bet (Ethan's August render:
+    "Obv don't include the betslip thing").
   * *Motion, first pieces.* Rows rise 6px over `--dur-slow`, staggered
     by a third of `--dur-fast` to the sixth row (the whole list lands
     inside half a second; the live strip, which redraws on a clock, is

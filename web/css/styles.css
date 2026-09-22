@@ -6929,6 +6929,17 @@ body.has-deck #rail-live { display: none; }
   font-style: normal; font-size: var(--fs-2xs); font-weight: 800; color: var(--brand-ink); background: var(--good); }
 .hd-form i.l { background: var(--bad); }
 .hd-form i.p { background: var(--text-mute); }
+/* v5: the desktop's slip column — the deck's riding, record and Zeno
+   sections, moved into the rail on a wide screen (placeSlip). */
+.rail-slip .hd-sec { margin-bottom: 14px; }
+.rail-slip .hd-sec[hidden] { display: none; }
+/* In a 280px column the ribbon stacks: the ring and the words on one
+   row, the form dots under them; the record never breaks mid-number. */
+.rail-slip .hd-ribbon { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; }
+.rail-slip .hd-form { grid-column: 1 / -1; margin-top: 8px; }
+.rail-slip .hd-big { white-space: nowrap; }
+/* v5: the Record page's lead — the deck's ribbons above the rooms. */
+.rec-ribbons { margin: 8px 0 16px; }
 /* v3: the live card's win-probability bar (home share filled). */
 .hd-wp { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
 .hd-wp i { display: block; height: 100%; background: var(--good); }

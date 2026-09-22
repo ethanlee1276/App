@@ -178,10 +178,13 @@ def test_the_strip_reads_the_fast_scoreboards_never_the_boards():
 
 
 def test_every_printed_number_is_an_earned_one():
-    rec = _fn("deckRecordHTML")
+    # v5: the tiles come from recordRibbonsHTML, shared with the Record page
+    rec = _fn("recordRibbonsHTML")
     assert "if (ov.settled) {" in rec and "if (zo.settled) {" in rec, "no tile over nothing"
-    assert "rec.overall || {}" in rec and "rec.zeno || {}" in rec
-    assert "zenoTicketRow(r, false)" in rec, "Zeno's open tickets are the record page's own rows"
+    assert "ov = ov || {};" in rec and ".zeno || {}" in rec
+    deck = _fn("deckRecordHTML")
+    assert "recordRibbonsHTML(rec, rec.overall, rec.recent)" in deck
+    assert "zenoTicketRow(r, false)" in deck, "Zeno's open tickets are the record page's own rows"
     assert "function deckTonightHTML(" not in APP, \
         "the deck adopts the board's Pick of the Day card and shelves; it does not redraw them thinner"
     row = _fn("deckPickRow")

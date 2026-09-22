@@ -64,7 +64,7 @@ def test_rows_rise_briefly_and_the_live_strip_does_not():
 
 
 def test_the_ring_sweeps_in_from_zero():
-    rec = _fn("deckRecordHTML")
+    rec = _fn("recordRibbonsHTML")
     assert 'style="--pc:0" data-pc="${pc}"' in rec, "drawn at zero, handed its number"
     sweep = _fn("sweepRings")
     assert "requestAnimationFrame(() => requestAnimationFrame(() => {" in sweep, "one frame paints the zero; the second moves it"
