@@ -371,6 +371,26 @@ surface.
   record's zero-count league chips ("no bets yet" must not look like
   "no such board"), and wrapping sub-tab rows (a scrolling tab row is
   the draggable bar Ethan caught on 2026-08-18).
+* **Slice 13 — v5, the content (in progress, 2026-09-22).** Ethan: "I
+  didn't see any redesigns to the record page or the section for the
+  most likely bets on each page or the section for the edge bets on
+  each page … keep working until all that is completely different …
+  feel like a real sportsbook app made by a real company … more
+  animations and more design features."
+  * *Most Likely rows, everywhere.* The shelf row (home, the Most
+    Likely page, the game page) reads like the deck's: name, the game
+    and the book beneath, the price in a grey pill and our number in a
+    green one, same door. The Most Likely page's shelves lead with rows
+    and keep every card one tap away.
+  * *Motion, first pieces.* Rows rise 6px over `--dur-slow`, staggered
+    by a third of `--dur-fast` to the sixth row (the whole list lands
+    inside half a second; the live strip, which redraws on a clock, is
+    left still). The ribbon's hit-rate ring sweeps in from zero
+    (`@property --pc`, `sweepRings`). Reduced motion zeroes both. This
+    overrides the stylesheet's note that entrance motion was retired —
+    Ethan's instruction is newer, and the stagger is a fraction of the
+    one that was retired.
+  Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

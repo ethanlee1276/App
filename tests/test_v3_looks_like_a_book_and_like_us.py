@@ -94,7 +94,8 @@ def test_the_record_is_a_ribbon_with_a_ring_and_form_dots_from_its_own_rows():
     assert ".hd-ribbon {" in CSS and ".hd-ring {" in CSS and ".hd-form i.l { background: var(--bad); }" in CSS
     assert "  --grad-ring: conic-gradient(var(--good) 0 calc(var(--pc) * 1%), var(--border) calc(var(--pc) * 1%) 100%);" in CSS, \
         "the arc is a token declared on the ring, where --pc lives"
-    assert "  --pc: 0;" in CSS and "background: var(--grad-ring); }" in CSS
+    assert "  --pc: 0;" in CSS and "  background: var(--grad-ring);" in CSS
+    # v5: the ring rule ends with the sweep's transition (test_the_rows_look_like_a_book_everywhere)
 
 
 def test_the_riding_tray_is_our_slip_phones_only_and_never_on_the_live_tab():

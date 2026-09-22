@@ -1641,6 +1641,22 @@ svg[data-scrub] { touch-action: pan-y; }
    permitted. */
 .reveal, .reveal.in { opacity: 1; transform: none; transition: none; }
 
+/* THE ROWS RISE, BRIEFLY. The note above retired a 16px stagger across
+   forty cards that took most of a second; Ethan, 2026-09-22, asking for
+   a site that "feels like a real sportsbook app … more animations":
+   the pick rows and the deck's rows take a 6px rise over --dur-slow,
+   staggered by a third of --dur-fast up to the sixth row — the whole
+   list has landed inside half a second, and a list read in a hurry is
+   never waiting on it. Not the live strip, which redraws on a clock.
+   Reduced motion zeroes the duration (the universal block below). */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ml-rows > .ml-row, .hd-card > .hd-row { animation: rise var(--dur-slow) var(--ease-out) both; }
+.ml-rows > .ml-row:nth-child(2), .hd-card > .hd-row:nth-child(2) { animation-delay: calc(var(--dur-fast) * .3); }
+.ml-rows > .ml-row:nth-child(3), .hd-card > .hd-row:nth-child(3) { animation-delay: calc(var(--dur-fast) * .6); }
+.ml-rows > .ml-row:nth-child(4), .hd-card > .hd-row:nth-child(4) { animation-delay: calc(var(--dur-fast) * .9); }
+.ml-rows > .ml-row:nth-child(5), .hd-card > .hd-row:nth-child(5) { animation-delay: calc(var(--dur-fast) * 1.2); }
+.ml-rows > .ml-row:nth-child(n+6), .hd-card > .hd-row:nth-child(n+6) { animation-delay: calc(var(--dur-fast) * 1.5); }
+
 /* pointer tilt on stadium cards */
 /* NO will-change here. On the base class it promoted EVERY stadium
    card into its own compositor layer, each holding a decoded venue
@@ -2031,10 +2047,10 @@ main { view-transition-name: page; }
 .ml-row .ml-who .k { display: block; color: var(--text-dim);
   font-size: var(--fs-xs); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
-.ml-row .ml-pct { flex: 0 0 auto; font-family: var(--font-mono);
-  font-weight: 800; font-size: var(--fs-sm); color: var(--good);
-  background: rgba(70, 167, 88, .12); padding: 3px 9px;
-  border-radius: 999px; }
+/* v5: the number is the deck's green pill (`.hd-p`, on the same span),
+   beside the price in its grey one; this rule only seats them. */
+.ml-row .ml-pct { flex: 0 0 auto; }
+.ml-row .hd-num { flex: 0 0 auto; }
 .likely-top .shelf-head { position: static; background: none; padding-top: 0; }
 .likely-top .shelf-title { font-size: var(--fs-md); }
 .likely-top-more { margin: 2px 0 26px; }
@@ -6889,11 +6905,15 @@ body.has-deck #rail-live { display: none; }
 .hd-stats { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .hd-ribbon { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+/* Registered, so the arc's share can transition — an unregistered custom
+   property snaps. See sweepRings(). */
+@property --pc { syntax: "<number>"; inherits: false; initial-value: 0; }
 .hd-ring {
   --pc: 0;
   --grad-ring: conic-gradient(var(--good) 0 calc(var(--pc) * 1%), var(--border) calc(var(--pc) * 1%) 100%);
   width: 56px; height: 56px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;
-  background: var(--grad-ring); }
+  background: var(--grad-ring);
+  transition: --pc var(--dur-slow) var(--ease-out); }
 .hd-ring i { width: 44px; height: 44px; border-radius: 50%; background: var(--panel); display: grid;
   place-items: center; font-style: normal; font-family: var(--font-mono); font-size: var(--fs-xs); }
 .hd-rw { flex: 1; min-width: 0; display: grid; gap: 2px; }

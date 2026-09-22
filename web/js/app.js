@@ -8053,15 +8053,21 @@ function likelyRow(r) {
   const mark = game ? likelyGameMark(r, 30)
     : playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
                                        headshot: r.headshot });
+  /* THE BOOK'S ROW (v5, 2026-09-22). Ethan: "the section for the most
+     likely bets on each page" still drew the old row — the price
+     folded into the grey sub-line, the number a green blob. It now
+     reads the way the Picks page and the home deck read: name, the
+     game and the book beneath; on the right the price in a grey pill
+     and our number in a green one. Same door, same fields. */
   return `<button class="ml-row" type="button"${likelyOpen(r)}
       title="${game ? "Open this game — the margin chart and the reasons"
                     : "Open this pick — the bar graph, the logs and the versus block"}">
     ${mark}
     <span class="ml-who"><b>${escapeHtml(game ? (r.pick_label || r.player) : r.player)}</b>
-      <span class="k">${escapeHtml(label)}${r.odds != null
-        ? ` · ${american(r.odds)}` : ""}${r.book
+      <span class="k">${escapeHtml(label)}${r.book
         ? ` · ${escapeHtml(r.book)}` : ""}</span></span>
-    <span class="ml-pct">${pct}</span>
+    <span class="hd-num">${r.odds != null
+        ? `<span class="hd-o">${american(r.odds)}</span>` : ""}<span class="ml-pct hd-p">${pct}</span></span>
   </button>`;
 }
 
@@ -8087,7 +8093,11 @@ function likelyShelf(sh) {
       <div class="shelf-meta">${auc} ${note}</div>
     </div>
     <div class="shelf-sub mini">${escapeHtml(sh.blurb)}</div>
-    <div class="cards">${rows.map(likelyCard).join("")}</div>
+    <div class="ml-rows">${rows.map(likelyRow).join("")}</div>
+    <details class="tn-full">
+      <summary>Open the ${rows.length} card${rows.length === 1 ? "" : "s"} — the bar graph, the logs, the reasons</summary>
+      <div class="cards">${rows.map(likelyCard).join("")}</div>
+    </details>
   </section>`;
 }
 
@@ -39797,7 +39807,7 @@ async function deckRecordHTML() {
   }).join("");
   const rate = (t) => ((t.wins || 0) + (t.losses || 0)) ? (t.wins || 0) / ((t.wins || 0) + (t.losses || 0)) : 0;
   const ring = (r) => { const pc = Math.max(0, Math.min(100, Math.round(r * 100)));
-    return `<span class="hd-ring" style="--pc:${pc}" title="${pc}% of decisions won"><i>${pc}%</i></span>`; };
+    return `<span class="hd-ring" style="--pc:0" data-pc="${pc}" title="${pc}% of decisions won"><i>${pc}%</i></span>`; };
   const tile = (k, rec, big, color, sub, form, r) => `<div class="hd-ribbon">${ring(r)}
     <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
       <span class="hd-big">${rec} <b style="color:${color}">${big}</b></span><span>${sub}</span></div>
@@ -39912,7 +39922,22 @@ async function renderHomeDeck() {
     setTimeout(() => { b.textContent = "Copy"; }, 1500);
   }));
   _deckStamp = fastLiveStamp(_deckFast.games.map((x) => x.g));
+  sweepRings(host);
   armDeckLive();
+}
+
+/* THE RING SWEEPS IN. A ribbon's hit-rate ring is drawn at zero and
+   handed its number one frame later, so the registered `--pc` property
+   transitions the arc from nothing to the record (CSS: @property --pc,
+   .hd-ring's transition). Two frames, not one: the first lets the zero
+   paint, or there is nothing to sweep from. Reduced motion zeroes the
+   duration and the ring is simply full. */
+function sweepRings(host) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    (host || document).querySelectorAll(".hd-ring[data-pc]").forEach((el) => {
+      el.style.setProperty("--pc", el.dataset.pc);
+    });
+  }));
 }
 
 /* The live strip follows the scoreboard on its own clock, redrawing
