@@ -98,6 +98,77 @@ bettingapps.com on the ESPN Bet → theScore Bet home; pikkit.com
 listing; actionnetwork.com FAQ and PRO reviews; symphony-solutions.com,
 altenar.com, crustlab.com, gammastack.com sportsbook-UX guides.
 
+## The sportsbook look, and ours (research round two, 2026-09-22)
+
+Ethan: "look at all the Sportsbook app design … we want our app to
+look kind of like a sportsbook app but also like our own." Read across
+the Dribbble sports-betting-app tag (LazyInterface, Pickolab's SiBet,
+Hexagon's Betswipe, Ronas IT's betting concepts, Excellent Webworld,
+Roohi Koohi), the Behance case studies (BetFlowX, Mobet, WOONA,
+BetGo), the Figma community kits (PlayStake, Betlio, Bidibet, the
+ui8 sports-bet kit) and the shipped apps (FanDuel, DraftKings,
+bet365, theScore Bet). This sandbox cannot open Dribbble or Behance
+pages, so the shots were read through their published descriptions
+and the kits' component lists, and checked against the shipped apps.
+
+**The genre's vocabulary — what every shot has:**
+
+1. **A dark base and ONE accent.** Near-black or deep navy, one
+   electric colour for the brand (green, blue, red-and-yellow, purple;
+   gold reads "premium"), and semantic green/red kept for up/down and
+   win/loss only. Layered surfaces: page → panel → card, 1px hairlines,
+   12–16px radii, a soft glow on the accent.
+2. **A hero banner** at the top of the home — gradient card, imagery,
+   one bold headline, one pill CTA — then a **league carousel** of
+   circular icons (active one filled with the accent).
+3. **The match card**: crests, kickoff chip or LIVE chip, and the three
+   markets as chunky **odds pills** (bold tabular numbers, a filled
+   "selected" state, a flash on a price move), with a "+N markets"
+   chevron to the event page.
+4. **Live**: a pulsing red dot, big tabular score, period/clock, a
+   thin progress or win-probability bar.
+5. **The bet slip** as a bottom sheet or a floating pill with a count;
+   **five bottom tabs**, often a raised centre.
+6. **Type**: a geometric or condensed sans for headings, tabular
+   numerals for every price, uppercase micro-labels with tracking.
+7. **Analytics everywhere**: rings, sparklines, form dots (W L W), win
+   probability meters; profile pages lead with a big P&L, an ROI chip,
+   W-L-P and a curve.
+8. **Motion**: odds flash green/red, numbers count up, skeleton
+   loaders, tab indicators that slide — all short.
+
+**What is already ours and stays:** black and gold; Bodoni Moda for
+the wordmark and display lines (the "book" voice no sportsbook has);
+Archivo Narrow and IBM Plex Mono; the stadium renders as the card art
+(no book has a venue on a card); "Priced by a model. Graded in
+public."; the record as the hero number; probabilities beside prices;
+no balance, no slip, no order ticket — a Riding tray is our slip.
+
+**What v3 borrows, in our clothes:** the hero banner (the Pick of the
+Day on its stadium art); a league carousel of crests on the phone home;
+odds pills on the match card (informational — one style, no "selected"
+state, because nothing here is placed); the LIVE chip and win-prob bar
+already shipped; a floating Riding tray above the tab bar when bets
+are in play; form dots and an ROI ring on the record ribbon; the
+price-move flash the ticks already do.
+
+Sources: dribbble.com/tags/sports-betting-app and the shots named
+above; behance.net sports-betting-app searches; figma.com/community
+(PlayStake, "Sport betting app UI", "Sports bet mobile app UI-kit",
+"Betting app UI"); ui8.net sports-bet kit; altenar.com sportsbook UX
+trends; symphony-solutions.com, gammastack.com, prometteursolutions.com,
+crustlab.com UX guides; deucescracked.com, rg.org, sportsbookreview.com
+app comparisons; uxdesign.cc on deceptive sportsbook patterns (what
+not to copy: urgency banners, fake scarcity, buried odds).
+
+**The v3 prototype** lives in `docs/mocks/home-v3-phone.html` and
+`docs/mocks/home-v3-desktop.html` — real HTML on the site's own
+stylesheet, fonts and venue art (the Figma connector hit its plan's
+call limit mid-build, so this round was drawn in the medium itself).
+Open either file in a browser, or render both with Playwright at 390
+and 1280. Awaiting Ethan's reaction before any of it is coded into the
+site.
+
 ## Going back
 
 Before any of this shipped, the site as it stood was pushed as branch
