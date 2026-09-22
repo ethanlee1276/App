@@ -918,8 +918,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
  * else's illustration at somebody else's weight. Night Form's answer is the
  * same as its answer everywhere: rule it off, set it left, let the words
  * carry it, and draw the mark at the size of the text it sits beside. */
+/* v5: NO RADIUS. The slate is ruled off by a top hairline only; a
+   radius on a one-sided border curves the rule down at both ends,
+   and on the Streak, Alerts, Prediction Market and Rocket Radar
+   pages that read as the top of a card whose sides had vanished. */
 .empty-slate { text-align: left; padding: 26px 0 30px; margin: 6px 0 4px;
-  border-top: var(--hairline) solid var(--border); background: none; border-radius: var(--radius-sm);
+  border-top: var(--hairline) solid var(--border); background: none; border-radius: 0;
   grid-column: 1 / -1; }
 .empty-slate .es-icon { color: var(--text-faint); line-height: 1;
   display: block; margin-bottom: 12px; }
@@ -6544,7 +6548,7 @@ body.has-rail .shell {
 .lt-bad { color: var(--bad); }
 
 /* ---------------- Soft radii for the system's shared shapes ---------------- */
-.card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }
+.card, .controls, .stats .tile, .btn { border-radius: var(--radius); }
 .btn { border-color: var(--border); }
 .btn:hover { background: var(--grad-brand); border-color: transparent; color: var(--brand-ink); }
 

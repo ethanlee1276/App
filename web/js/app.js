@@ -10338,10 +10338,21 @@ function renderTrending() {
         : `<span style="opacity:.55">pass — didn’t clear the gates</span>` },
   ];
   const host = document.getElementById("trending");
+  // v5: a quiet board is one slate, not three boxes each saying "No
+  // movers." around 24px of nothing. The slate takes the same doors
+  // as every other empty board (enhanceEmpties). With rows, a column
+  // that has none says so in the empty-panel voice, on the baseline.
+  if (!cols.some((c) => c.rows.length)) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">Nothing moving yet</div>
+      <div class="es-sub">Risers, fallers and the biggest edges come off tonight’s board
+      once it stands. A quiet page is a quiet slate, not a broken one.</div></div>`;
+    return;
+  }
   host.innerHTML = cols.map((c) => `
     <div class="trend-col">
       <h3>${c.title}</h3><div class="colsub">${c.sub}</div>
-      ${c.rows.length ? c.rows.map((r, i) => trendRow(r, i, c)).join("") : `<div class="empty" style="padding:24px">No movers.</div>`}
+      ${c.rows.length ? c.rows.map((r, i) => trendRow(r, i, c)).join("") : panelEmpty("No movers on tonight’s board.", "signal")}
     </div>`).join("");
   revealChildren(host);
 }

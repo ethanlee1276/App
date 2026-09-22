@@ -500,13 +500,21 @@ surface.
     and leads its results strip with the same ribbon (the model's
     tile only), the win rate against the break-even and the units
     staked beneath it.
+  * *A quiet Trending page is one slate.* It drew three cards each
+    holding "No movers." in 24px of nothing; without a mover anywhere
+    it is one empty slate with the board's doors, and with rows a
+    column that has none says so on the baseline. The slate itself
+    lost its radius: a rounded one-sided hairline curved down at both
+    ends and read, on Streak, Alerts, Prediction Market and Rocket
+    Radar, as the top of a card whose sides had vanished.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
   `tests/test_the_live_page_rests_like_the_deck.py`,
   `tests/test_the_record_is_one_record.py`,
-  `tests/test_zeno_and_my_bets_read_like_the_book.py` and
-  `tests/test_the_paywall_shows_the_one_record.py`.
+  `tests/test_zeno_and_my_bets_read_like_the_book.py`,
+  `tests/test_the_paywall_shows_the_one_record.py` and
+  `tests/test_a_quiet_trending_page_is_one_slate.py`.
 * **Still open (2026-09-22, after slice Q).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile
