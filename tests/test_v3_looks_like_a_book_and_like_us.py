@@ -41,18 +41,19 @@ PHONE = PHONE[:PHONE.index("\n}\n") + 3]
 
 
 def test_the_league_strip_is_a_carousel_of_crests_on_phones_and_still_wraps():
-    assert ".sportbar-in .sport-btn::before { content: attr(data-sport);" in PHONE, "the crest is the code, from the button's own attribute"
-    assert "border-radius: 50%" in PHONE
+    # v4 (2026-09-22): the crest is the sport's glyph (leagueCrests) and
+    # the code is said once, beneath it — see test_the_phone_says_nothing_twice.py.
+    assert ".sportbar-in .sport-btn .crest { width: 44px; height: 44px; border-radius: 50%;" in PHONE
     # The ring is an inset outline: 2px stays a stripe weight for borders
     # (tests/test_hairlines.py), and the crest keeps its size when active.
     assert "outline: 2px solid transparent; outline-offset: -2px;" in PHONE
-    assert ".sportbar-in .sport-btn.active::before { outline-color: var(--gold);" in PHONE
+    assert ".sportbar-in .sport-btn.active .crest { outline-color: var(--gold);" in PHONE
     assert "box-shadow: var(--glow); }" in PHONE, "the glow is the token's"
     # It still wraps: the base rule is untouched and nothing in the phone block scrolls it.
     base = CSS[CSS.index(".sportbar-in {"):]
     base = base[:base.index("}")]
     assert "flex-wrap: wrap" in base and "overflow" not in base
-    assert "overflow" not in PHONE[PHONE.index(".sportbar-in { padding: 6px 8px 2px; }"):PHONE.index(".sportbar-in .sport-btn.active::before")]
+    assert "overflow" not in PHONE[PHONE.index(".sportbar-in { padding: 6px 8px 2px; }"):PHONE.index(".sportbar-in .sport-btn.active .crest")]
 
 
 def test_odds_cells_are_pills_and_the_team_column_is_not():

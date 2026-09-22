@@ -291,6 +291,24 @@ surface.
   through a custom property against the stylesheet, so the hero's art
   travels as an absolute URL (`absoluteSrc`); and an unpriced pick
   used to print the word "undefined" on the hero's sub-line.
+* **Slice 11 — v4, the shell (in progress, 2026-09-22).** Ethan, with
+  three screenshots of his phone: "there's a lot of repeats … it still
+  kinda looks like the same old website." The repeats he circled, and
+  what each became:
+  * *The crest said its code twice.* The circle now holds the sport's
+    glyph (football, baseball, basketball, the cage — `LEAGUE_GLYPH`,
+    built by `leagueCrests()` at boot) and the code is the label
+    beneath it, once. Desktop keeps its text tabs.
+  * *The More sheet was thirty identical pills.* Rows in two columns,
+    each carrying the sidebar button's own icon — a map, not a wall.
+  * *Record was in the sheet and on the tab bar.* The sheet's Proof
+    group no longer lists it; Results is the bar's.
+  * *The home's Riding section repeated the tray.* Hidden on phones,
+    where the tray floats; the desktop deck keeps it.
+  Pinned by `tests/test_the_phone_says_nothing_twice.py`. Next in this
+  slice: the phone drawer goes (the sheet is the one way in), the home
+  deck takes the prototype's order with the hero first, and the Pick of
+  the Day becomes the prototype's hero.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

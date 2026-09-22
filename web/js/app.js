@@ -426,6 +426,28 @@ function closeMoreMenu() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+/* THE CREST IS A GLYPH, THE LABEL IS THE CODE. v3 drew the league code
+   inside the circle and again beneath it — Ethan, 2026-09-22, circling
+   the strip on his phone: "a lot of repeats." Every book's league row is
+   a picture over a word, so the circle holds the sport's own mark and
+   the button's text stays the code, once. The crest is inert markup
+   (aria-hidden, no text), so the button's name and every reader of its
+   textContent are unchanged; desktop hides it and keeps its text tabs. */
+const LEAGUE_GLYPH = { nfl: "football", cfb: "football", mlb: "baseball",
+                       nba: "basketball", wnba: "basketball", ufc: "octagon" };
+function leagueCrests() {
+  document.querySelectorAll('.sportbar-in .sport-btn[data-kind="league"]').forEach((b) => {
+    if (b.querySelector(".crest")) return;
+    const g = LEAGUE_GLYPH[b.dataset.sport];
+    if (!g) return;
+    const s = document.createElement("span");
+    s.className = "crest";
+    s.setAttribute("aria-hidden", "true");
+    s.innerHTML = icon(g, 22);
+    b.prepend(s);
+  });
+}
+
 function initMoreMenu() {
   const wrap = document.getElementById("sport-more");
   const btn = document.getElementById("more-toggle");
@@ -949,6 +971,13 @@ const ICON_PATHS = {
   // not, and it is the one mark that says which sport this card is.
   football: '<ellipse cx="8" cy="8" rx="6.6" ry="4" transform="rotate(-30 8 8)"/>'
           + '<path d="M5.8 10.2l4.4-4.4M6.9 8.4l1.1 1.1M9.1 6.2l1.1 1.1"/>',
+  // The league crests (2026-09-22): a ball's seams, a ball's panels, the
+  // cage. Drawn like the football above — one stroke weight, 16 units.
+  baseball: '<circle cx="8" cy="8" r="6.4"/>'
+          + '<path d="M4.2 3.4c1.6 1.4 2.4 3 2.4 4.6s-.8 3.2-2.4 4.6M11.8 3.4c-1.6 1.4-2.4 3-2.4 4.6s.8 3.2 2.4 4.6"/>',
+  basketball: '<circle cx="8" cy="8" r="6.4"/>'
+          + '<path d="M1.6 8h12.8M8 1.6v12.8M3.5 3.5c2.6 2.6 2.6 6.4 0 9M12.5 3.5c-2.6 2.6-2.6 6.4 0 9"/>',
+  octagon: '<path d="M5.4 1.6h5.2l3.8 3.8v5.2l-3.8 3.8H5.4l-3.8-3.8V5.4z"/>',
   // Two for the batted-ball tiles (Ethan's park render, 2026-09-06): how
   // hard it was hit and at what angle it left. A dial with a needle, and
   // a ray off a baseline with the angle's own arc between them — both
@@ -35886,6 +35915,7 @@ applySport();
 updateUnitNote();
 initialView();
 watchSectionSubs();
+leagueCrests();
 initMobileMenu();
 initMoreMenu();
 initHeaderTuck();
@@ -39296,7 +39326,9 @@ const MORE_GROUPS = [
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],
-  ["Proof", ["sport:record", "sport:lab", "sport:methodology", "sport:status",
+  // Record is the tab bar's Results; listing it here too was one of
+  // the repeats Ethan photographed (2026-09-22).
+  ["Proof", ["sport:lab", "sport:methodology", "sport:status",
              "sport:why", "sport:features", "sport:about"]],
 ];
 const TAB_BAR_VIEWS = ["recommended", "tonight", "live"];
@@ -39351,6 +39383,10 @@ function moreSheetBuild() {
       pill.className = "more-pill";
       pill.dataset.ref = ref;
       pill.textContent = morePillLabel(src);
+      // The sidebar's own mark, so the sheet reads as a map rather than
+      // a wall of thirty identical pills (Ethan, 2026-09-22).
+      const ico = src.querySelector(".sb-ico");
+      if (ico) pill.prepend(ico.cloneNode(true));
       const badge = src.querySelector(".sb-badge");
       if (badge && !badge.hidden && badge.textContent.trim()) {
         const b = document.createElement("b");

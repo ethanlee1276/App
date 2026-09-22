@@ -6004,6 +6004,7 @@ body.has-rail .shell {
    and still fit the 344px a 360px Android leaves. Narrower than that and
    `flex-wrap` puts them on two rows, which is the safe failure — a
    clipped chip is not. */
+.sportbar-in .sport-btn .crest { display: none; }   /* phones draw it (below) */
 .sportbar-in .sport-btn { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent;
   background: none; color: var(--text-mute); cursor: pointer; font: inherit;
   font-size: var(--fs-md); font-weight: 800; letter-spacing: .05em;
@@ -6031,15 +6032,17 @@ body.has-rail .shell {
   .sportbar-in { padding: 6px 8px 2px; }
   .sportbar-in .sport-btn { display: flex; flex-direction: column; align-items: center; gap: 5px;
     padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .1em; }
-  .sportbar-in .sport-btn::before { content: attr(data-sport); width: 44px; height: 44px; border-radius: 50%;
+  /* The crest holds the sport's glyph (leagueCrests); the code is the
+     label beneath it, once. */
+  .sportbar-in .sport-btn .crest { width: 44px; height: 44px; border-radius: 50%;
     display: grid; place-items: center; border: var(--hairline) solid var(--border); background: var(--panel);
-    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .04em;
-    text-transform: uppercase;
+    color: var(--text-dim);
     /* The active ring is an inset outline, so the crest never changes
        size and the hairline stays the only border weight. */
     outline: 2px solid transparent; outline-offset: -2px;
     transition: outline-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
-  .sportbar-in .sport-btn.active::before { outline-color: var(--gold); color: var(--text);
+  .sportbar-in .sport-btn .crest svg { width: 22px; height: 22px; }
+  .sportbar-in .sport-btn.active .crest { outline-color: var(--gold); color: var(--text);
     box-shadow: var(--glow); }
 }
 
@@ -7046,18 +7049,25 @@ body.has-deck #rail-live { display: none; }
   .more-group h3 { margin: 0 0 8px; color: var(--text-mute);
     font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
     text-transform: uppercase; }
-  .more-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-  .more-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 40px;
-    border: var(--hairline) solid var(--border); border-radius: 999px;
-    background: var(--bg); color: var(--text); cursor: pointer;
-    font: inherit; font-size: var(--fs-sm); font-weight: 700; padding: 8px 14px; }
+  /* Rows in two columns, each with the sidebar's own mark — a map, not
+     a wall of thirty identical pills (Ethan, 2026-09-22). */
+  .more-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .more-pill { display: flex; align-items: center; gap: 10px; min-height: 44px; min-width: 0;
+    border: var(--hairline) solid var(--border); border-radius: var(--radius);
+    background: var(--bg); color: var(--text); cursor: pointer; text-align: left;
+    font: inherit; font-size: var(--fs-sm); font-weight: 700; padding: 8px 12px; }
+  .more-pill svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--brand-2); }
   .more-pill.active { background: var(--grad-brand); border-color: transparent;
     color: var(--brand-ink); }
+  .more-pill.active svg { color: inherit; }
   .more-pill b { font-family: var(--font-mono); font-size: var(--fs-2xs);
     font-weight: 800; min-width: 16px; padding: 0 5px; border-radius: 999px;
     background: var(--bad); color: #fff; text-align: center; }
 
   #home-deck { display: block; margin: 0 0 18px; }
+  /* The tray above the tab bar already says what is riding; the deck's
+     Riding section under it was the same rows twice (Ethan, 2026-09-22). */
+  #home-deck .hd-sec[data-sec="riding"] { display: none; }
   #home-deck[hidden] { display: none; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's
