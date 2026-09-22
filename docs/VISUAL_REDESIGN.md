@@ -83,5 +83,17 @@ surface.
   scoreboard on a 20-second clock and redraws only when a score moved.
   The old zones sit unchanged under it. Pinned by
   `tests/test_the_phone_home_leads_with_live.py`.
-* **Slice 3 — next.** Sport chips as filter pills on Picks and Live;
-  fold the old home zones under the deck on phones; then the desktop.
+* **Slice 3 — SHIPPED 2026-09-22.** The Picks page (the tonight view)
+  in frame D's shape at every width: league scope pills, the Pick of
+  the Day hero (BET days only), Most likely rows with their chance,
+  edge rows with their edge — every row a door to the prop page — and
+  the board's full cards under one fold. One row function
+  (`deckPickRow`) and one hero (`potdHeroHTML`) serve the deck and the
+  page.
+* **Slice 4 — SHIPPED 2026-09-22.** The deck is the home at every
+  width: one column on a phone, a two-column grid on desktop with the
+  live strip across the top. The board as it was folds under the deck's
+  "Everything on tonight's board" door on both (remembered; unfolds
+  itself when the deck has nothing to draw). The desktop rail's Live
+  now card yields to the strip.
+* **Next.** Bug sweep across every view at 390 and 1280; polish.

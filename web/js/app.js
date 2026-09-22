@@ -6178,18 +6178,31 @@ function renderTonight() {
     bindTonightChips(host);
     return;
   }
+  /* The Picks page in the redesign's shape (2026-09-22, Figma frame D):
+     the Pick of the Day as a hero, then rows a thumb can scan — Most
+     likely with its chance, the edge bets with their edge — each row a
+     door to the prop page, which is where the reasoning lives. The
+     board's full cards stay on the page under one fold for the reader
+     who wants them without leaving; game lines and long shots keep
+     their cards, there are few. */
+  const edgeRow = (r) => deckPickRow(r, { door: propAttrs(r),
+    number: r.has_market === false ? null
+      : { big: signedPct(r.edge), small: "edge", tone: r.edge >= 0 ? "var(--good)" : "var(--bad)" } });
   host.innerHTML = `
     ${tonightChipsHTML("sport", state.sport)}
+    ${potdHeroHTML(d)}
     ${ml.length ? `<div class="section-title">Most likely to hit tonight
       <span class="sub">— ranked by probability, not by price · the full board
       is under Top Picks</span></div>
     ${boardGuide("most_likely")}
-    <div class="ml-rows">${ml.map(likelyRow).join("")}</div>` : ""}
+    <div class="hd-card tn-rows">${ml.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div>` : ""}
     <div class="section-title${ml.length ? " minor" : ""}">Our edge bets
       <span class="sub">— every pick that clears the bar, journaled and staked.
       ${plural(n, "bet")}.</span></div>
     ${boardGuide("recommendations")}
-    <div class="cards">${props.map(cardHTML).join("")}</div>
+    ${props.length ? `<div class="hd-card tn-rows">${props.map(edgeRow).join("")}</div>
+    <details class="tn-full"><summary>Every edge card, with the reasoning</summary>
+      <div class="cards">${props.map(cardHTML).join("")}</div></details>` : ""}
     ${bets.length ? `<div class="section-title minor">Game lines</div>
       <div class="cards">${bets.map(gameBetCard).join("")}</div>` : ""}
     ${shots.length ? `<div class="section-title minor">Long shots
@@ -39312,8 +39325,9 @@ function moreSheetInit() {
    (ours and Zeno's), then Zeno's open tickets. Everything the deck
    prints is read from the same payloads the zones under it read — the
    fast scoreboards, the tracker rows, the board, record.json — and a
-   section with nothing to say is not drawn. Phones only: the desktop
-   home keeps its layout. */
+   section with nothing to say is not drawn. Every width: a phone reads
+   it as one column, a desktop as a grid (CSS), and the board as it was
+   folds under it on both. */
 const HOME_DECK_ORDER = ["live", "riding", "tonight", "record", "zeno"];
 const DECK_LIVE_EVERY_MS = 20000;
 const DECK_BOOK_LABEL = { main: "Edge", likely: "Most Likely", likely_live: "Most Likely",
@@ -39436,15 +39450,41 @@ function deckRidingHTML(riding) {
     <div class="hd-card">${riding.slice(0, 4).map(row).join("")}</div></section>`;
 }
 
-function deckPickRow(r) {
+/* One pick as a row: what, where and at what price, and one number on
+   the right. The number is the model's chance unless `opts.number`
+   names another (the Picks page prints an edge bet's edge). `opts.door`
+   is the attribute string that opens it (likelyOpen / propAttrs), so a
+   row is a button exactly when the board's own card would be. */
+function deckPickRow(r, opts) {
+  const o = opts || {};
   const label = r.pick_label || [r.player, r.side, r.line, r.market_label || r.market]
     .filter((s) => s != null && s !== "").join(" ");
-  const sub = [r.matchup || "", r.odds != null ? american(r.odds) : "", r.book || ""]
+  const where = r.matchup || (r.team && r.opponent ? `${r.team} vs ${r.opponent}` : "");
+  const sub = [where, r.odds != null ? american(r.odds) : "", r.book || ""]
     .filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
   const p = Number(r.model_prob);
-  const prob = isFinite(p) && p > 0 && p < 1
-    ? `<div class="hd-prob"><b>${Math.round(p * 100)}%</b><span>to hit</span></div>` : "";
-  return `<div class="hd-row"><div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${prob}</div>`;
+  const prob = o.number
+    ? `<div class="hd-prob"><b${o.number.tone ? ` style="color:${o.number.tone}"` : ""}>${o.number.big}</b><span>${o.number.small}</span></div>`
+    : isFinite(p) && p > 0 && p < 1
+      ? `<div class="hd-prob"><b>${Math.round(p * 100)}%</b><span>to hit</span></div>` : "";
+  const door = o.door || "";
+  const tag = door ? "button" : "div";
+  return `<${tag} class="hd-row${door ? " openable" : ""}"${door ? ` type="button"${door}` : ""}>
+    <div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${prob}</${tag}>`;
+}
+
+/* The Pick of the Day as a hero card — only on a day the desk said BET.
+   A NO BET day has no hero: the verdict is the card, and it lives on
+   the home zone that explains it. */
+function potdHeroHTML(d) {
+  const potd = (d || {}).pick_of_the_day;
+  const pick = potd && typeof potd === "object" ? potd.pick : null;
+  const call = ((potd || {}).verdict || {}).call;
+  if (!(pick && pick.player && (call == null || String(call) === "bet"))) return "";
+  return `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${
+    deckPickRow({ player: pick.player, side: pick.side, line: pick.line,
+                  market_label: pick.market_label || pick.market,
+                  team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}</div>`;
 }
 
 function deckTonightHTML(d) {
@@ -39457,14 +39497,9 @@ function deckTonightHTML(d) {
   const likely = (d.board_shelves || []).flatMap((sh) => sh.rows || [])
     .filter(showableLikelyRow).filter((r) => !same(r)).slice(0, 3);
   if (!showPotd && !likely.length) return "";
-  const potdRow = showPotd ? deckPickRow({
-    player: pick.player, side: pick.side, line: pick.line,
-    market_label: pick.market_label || pick.market,
-    matchup: pick.team && pick.opponent ? `${pick.team} vs ${pick.opponent}` : "",
-    model_prob: pick.model_prob }) : "";
   return `<section class="hd-sec" data-sec="tonight">${deckHead("Tonight’s picks", "#tonight", "tonight", "Picks")}
-    ${showPotd ? `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${potdRow}</div>` : ""}
-    ${likely.length ? `<div class="hd-card">${likely.map(deckPickRow).join("")}</div>` : ""}</section>`;
+    ${showPotd ? potdHeroHTML(d) : ""}
+    ${likely.length ? `<div class="hd-card">${likely.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div>` : ""}</section>`;
 }
 
 /* The record tiles and Zeno's open tickets. A tile prints only when the
@@ -39503,19 +39538,46 @@ async function deckRecordHTML() {
   return { record, zeno };
 }
 
+const HOME_FOLD_KEY = "qb.home.fold";
+
+/* The board under the deck folds by default; the choice is remembered.
+   When the deck has nothing to draw there is nothing to fold under, so
+   the class comes off and the board shows as it always did. */
+function homeFolded() {
+  try { return localStorage.getItem(HOME_FOLD_KEY) !== "open"; } catch (e) { return true; }
+}
+
+function applyHomeFold(deckShown) {
+  document.body.classList.toggle("home-folded", !!deckShown && homeFolded());
+  const b = document.querySelector("#home-deck .hd-fold");
+  if (b) {
+    const folded = document.body.classList.contains("home-folded");
+    b.setAttribute("aria-expanded", folded ? "false" : "true");
+    b.innerHTML = folded ? "Everything on tonight’s board &#9662;" : "Less &#9652;";
+  }
+}
+
 async function renderHomeDeck() {
   const host = document.getElementById("home-deck");
   if (!host) return;
   clearTimeout(_deckTimer);
-  if (!isPhone()) { host.hidden = true; host.innerHTML = ""; return; }
   const d = state.data || {};
   const rows = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])]);
   const riding = deckRidingRows(rows);
   const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
   if (state.view !== "recommended" && !document.getElementById("view-recommended").classList.contains("active")) return;
   const sections = { live, riding: deckRidingHTML(riding), tonight: deckTonightHTML(d), ...rest };
-  host.innerHTML = HOME_DECK_ORDER.map((k) => sections[k] || "").join("");
-  host.hidden = !host.innerHTML.trim();
+  const body = HOME_DECK_ORDER.map((k) => sections[k] || "").join("");
+  const any = !!body.trim();
+  host.innerHTML = any ? `${body}<button type="button" class="hd-fold" aria-expanded="false"></button>` : "";
+  host.hidden = !any;
+  document.body.classList.toggle("has-deck", any);   // the rail's Live now card is the strip, twice
+  applyHomeFold(any);
+  const fold = host.querySelector(".hd-fold");
+  if (fold) fold.addEventListener("click", () => {
+    try { localStorage.setItem(HOME_FOLD_KEY, homeFolded() ? "open" : "folded"); } catch (e) {}
+    applyHomeFold(true);
+  });
   host.querySelectorAll(".hd-game").forEach((b) => b.addEventListener("click", () => {
     _liveChipSport = state.sport;
     _liveChip = LIVE_FEEDS[b.dataset.lsport] ? b.dataset.lsport : "all";
@@ -39535,7 +39597,7 @@ async function renderHomeDeck() {
    dashboard uses — so a quiet night costs nothing. */
 function armDeckLive() {
   clearTimeout(_deckTimer);
-  if (state.view !== "recommended" || !isPhone()) return;
+  if (state.view !== "recommended") return;
   _deckTimer = setTimeout(async () => {
     _deckTimer = null;
     if (state.view !== "recommended") return;

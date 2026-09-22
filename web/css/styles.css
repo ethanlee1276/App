@@ -6717,7 +6717,87 @@ body.has-rail .shell {
 /* The More sheet is the tab bar's fifth slot, so it exists only where
    the bar does (the phone block below). */
 .more-sheet, .more-scrim { display: none; }
-#home-deck { display: none; }
+#home-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0 0 18px; }
+#home-deck[hidden] { display: none; }
+#home-deck .hd-sec[data-sec="live"], #home-deck .hd-fold { grid-column: 1 / -1; }
+.hd-fold { justify-self: start; margin: -4px 0 6px; padding: 8px 0; border: 0;
+  background: transparent; color: var(--brand-2); cursor: pointer;
+  font: inherit; font-size: var(--fs-sm); font-weight: 700; }
+body.home-folded #view-recommended > :not(#home-deck) { display: none; }
+body.has-deck #rail-live { display: none; }
+/* ---- The deck's pieces (2026-09-22, from the approved mock) ----------
+   Section heads with a door on the right, the live strip and its cards,
+   pick/bet rows, stat tiles. The phone home deck is built from them and
+   so is the Picks page at every width; only the deck itself is gated to
+   phones (#home-deck, above). */
+.hd-sec { margin: 0 0 18px; }
+.hd-head { display: flex; justify-content: space-between; align-items: baseline;
+  margin: 0 0 10px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: .12em; text-transform: uppercase; }
+.hd-head a { color: var(--brand-2); text-decoration: none; font-weight: 700;
+  letter-spacing: .02em; text-transform: none; }
+.hd-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.hd-game { flex: 0 0 232px; scroll-snap-align: start; text-align: left; padding: 12px 14px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
+  background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.hd-game-top, .hd-game-foot, .hd-team { display: flex; justify-content: space-between;
+  align-items: center; gap: 8px; }
+.hd-lg { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; }
+.hd-live { display: inline-flex; align-items: center; gap: 5px; color: var(--bad);
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; }
+.hd-live.hold { color: var(--brand-2); }
+.hd-team { margin-top: 8px; font-size: var(--fs-md); font-weight: 700; }
+.hd-team span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.hd-team em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hd-team b { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 600; }
+.hd-game-foot { margin-top: 10px; color: var(--text-mute); font-size: var(--fs-xs); }
+.hd-game-foot .mono { font-family: var(--font-mono); }
+.hd-riding { color: var(--brand-2); font-weight: 800; }
+.hd-quiet { display: flex; align-items: center; gap: 10px; padding: 14px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
+  background: var(--panel); color: var(--text-dim); font-size: var(--fs-sm); }
+.hd-card { padding: 4px 14px; border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-lg); background: var(--panel); }
+.hd-potd { padding: 12px 14px 4px; border-color: var(--brand); }
+.hd-eyebrow { display: block; color: var(--brand-2); font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .12em; text-transform: uppercase; }
+.hd-row { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 0; border-top: var(--hairline) solid var(--border-soft); }
+.hd-row:first-child, .hd-potd .hd-row { border-top: 0; }
+.hd-what { flex: 1; min-width: 0; }
+.hd-what b { display: block; font-size: var(--fs-sm); font-weight: 700; }
+.hd-what span { display: block; margin-top: 2px; color: var(--text-mute);
+  font-family: var(--font-mono); font-size: var(--fs-xs); }
+.hd-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
+.hd-chip { padding: 3px 8px; border: var(--hairline) solid var(--border-soft); border-radius: 999px;
+  color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; }
+.hd-chip.good { color: var(--good); }
+.hd-chip.bad { color: var(--bad); }
+.hd-state b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; }
+.hd-prob { flex: 0 0 auto; text-align: right; }
+.hd-prob b { display: block; color: var(--good); font-family: var(--font-mono);
+  font-size: var(--fs-lg); font-weight: 600; }
+.hd-prob span { color: var(--text-mute); font-size: var(--fs-2xs); }
+.hd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hd-stat { padding: 12px 14px; border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-lg); background: var(--panel); }
+.hd-stat .hd-eyebrow { color: var(--text-mute); }
+.hd-stat b { display: block; margin: 4px 0 2px; font-family: var(--font-mono);
+  font-size: var(--fs-xl); font-weight: 600; }
+.hd-stat span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
+
+.hd-row.openable { width: 100%; border-left: 0; border-right: 0; border-bottom: 0;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hd-row.openable:hover .hd-what b { color: var(--brand-2); }
+.tn-rows { margin-bottom: 18px; }
+.tn-full { margin: -8px 0 18px; }
+.tn-full > summary { cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm);
+  font-weight: 700; padding: 8px 0; list-style: none; }
+.tn-full > summary::before { content: "▸ "; color: var(--brand-2); }
+.tn-full[open] > summary::before { content: "▾ "; }
+.tn-full > .cards { margin-top: 10px; }
 
 .lb-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
 .lb-chip { display: inline-flex; align-items: center; gap: 7px;
@@ -6889,68 +6969,9 @@ body.has-rail .shell {
     font-weight: 800; min-width: 16px; padding: 0 5px; border-radius: 999px;
     background: var(--bad); color: #fff; text-align: center; }
 
-  /* ---- The phone home deck (2026-09-22, from the approved mock) ----
-     Live now → Riding → Tonight's picks → The record → Zeno's picks,
-     each a labelled section with a door on the right. */
   #home-deck { display: block; margin: 0 0 18px; }
   #home-deck[hidden] { display: none; }
-  .hd-sec { margin: 0 0 18px; }
-  .hd-head { display: flex; justify-content: space-between; align-items: baseline;
-    margin: 0 0 10px; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 800;
-    letter-spacing: .12em; text-transform: uppercase; }
-  .hd-head a { color: var(--brand-2); text-decoration: none; font-weight: 700;
-    letter-spacing: .02em; text-transform: none; }
-  .hd-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
-    padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
-  .hd-game { flex: 0 0 232px; scroll-snap-align: start; text-align: left; padding: 12px 14px;
-    border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
-    background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
-  .hd-game-top, .hd-game-foot, .hd-team { display: flex; justify-content: space-between;
-    align-items: center; gap: 8px; }
-  .hd-lg { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; }
-  .hd-live { display: inline-flex; align-items: center; gap: 5px; color: var(--bad);
-    font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; }
-  .hd-live.hold { color: var(--brand-2); }
-  .hd-team { margin-top: 8px; font-size: var(--fs-md); font-weight: 700; }
-  .hd-team span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-  .hd-team em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hd-team b { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 600; }
-  .hd-game-foot { margin-top: 10px; color: var(--text-mute); font-size: var(--fs-xs); }
-  .hd-game-foot .mono { font-family: var(--font-mono); }
-  .hd-riding { color: var(--brand-2); font-weight: 800; }
-  .hd-quiet { display: flex; align-items: center; gap: 10px; padding: 14px;
-    border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
-    background: var(--panel); color: var(--text-dim); font-size: var(--fs-sm); }
-  .hd-card { padding: 4px 14px; border: var(--hairline) solid var(--border-soft);
-    border-radius: var(--radius-lg); background: var(--panel); }
-  .hd-potd { padding: 12px 14px 4px; border-color: var(--brand); }
-  .hd-eyebrow { display: block; color: var(--brand-2); font-size: var(--fs-2xs); font-weight: 800;
-    letter-spacing: .12em; text-transform: uppercase; }
-  .hd-row { display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    padding: 10px 0; border-top: var(--hairline) solid var(--border-soft); }
-  .hd-row:first-child, .hd-potd .hd-row { border-top: 0; }
-  .hd-what { flex: 1; min-width: 0; }
-  .hd-what b { display: block; font-size: var(--fs-sm); font-weight: 700; }
-  .hd-what span { display: block; margin-top: 2px; color: var(--text-mute);
-    font-family: var(--font-mono); font-size: var(--fs-xs); }
-  .hd-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
-  .hd-chip { padding: 3px 8px; border: var(--hairline) solid var(--border-soft); border-radius: 999px;
-    color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
-    text-transform: uppercase; }
-  .hd-chip.good { color: var(--good); }
-  .hd-chip.bad { color: var(--bad); }
-  .hd-state b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; }
-  .hd-prob { flex: 0 0 auto; text-align: right; }
-  .hd-prob b { display: block; color: var(--good); font-family: var(--font-mono);
-    font-size: var(--fs-lg); font-weight: 600; }
-  .hd-prob span { color: var(--text-mute); font-size: var(--fs-2xs); }
-  .hd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .hd-stat { padding: 12px 14px; border: var(--hairline) solid var(--border-soft);
-    border-radius: var(--radius-lg); background: var(--panel); }
-  .hd-stat .hd-eyebrow { color: var(--text-mute); }
-  .hd-stat b { display: block; margin: 4px 0 2px; font-family: var(--font-mono);
-    font-size: var(--fs-xl); font-weight: 600; }
-  .hd-stat span:last-child { color: var(--text-dim); font-size: var(--fs-xs); }
+  .hd-fold { width: 100%; text-align: left; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's
      five buttons are the drawer's visible exits, and every one of them

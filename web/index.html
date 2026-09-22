@@ -672,6 +672,12 @@
            from the same data the zones below read. Phones only (CSS);
            the desktop home is unchanged. -->
       <div id="home-deck" hidden></div>
+      <!-- Everything below the deck is the board as it was — quick
+           tools, the stadiums, the charts, the cards, regrouped into
+           sub-tabs by subtabbedDOM at load. It folds under the deck's
+           "Everything on tonight's board" door: body.home-folded hides
+           every child of this view except the deck, whatever the
+           sub-tab machinery has moved where. -->
       <!-- ORDER: the picks come first.
            Measured on an iPhone 13, the old order put "Tonight's picks" at
            1030px — 1.6 full screens below the fold — on the page that gets

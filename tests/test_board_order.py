@@ -178,14 +178,14 @@ def test_nothing_new_slipped_in_above_the_picks():
                # rather than the rule being bent.
                "potd-zone",
                # home-deck (2026-09-22, the redesign Ethan approved with
-               # "live first" as the home screen's job). PHONES ONLY —
-               # `#home-deck { display: none }` outside the phone block,
-               # and hidden when it has nothing to draw. Where it draws,
+               # "live first" as the home screen's job). Hidden when it
+               # has nothing to draw. Where it draws,
                # it IS the picks, moved up: the live games with our bets
                # on them, the bets riding, tonight's picks with the Pick
                # of the Day first. The fold cost is spent on exactly the
-               # thing this list exists to protect, and the zones below
-               # it are unchanged — the desktop measures as before.
+               # thing this list exists to protect. The zones below it
+               # keep their order and now fold under it (.home-rest — a
+               # class, so nothing new is counted here).
                "home-deck"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]

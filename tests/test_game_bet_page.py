@@ -287,10 +287,13 @@ def test_the_tonight_page_exists_and_draws_the_charts():
     assert 'id="tonight-body"' in HTML
     assert "function renderTonight(" in APP
     i = APP.index("function renderTonight(")
-    block = APP[i:i + 2200]
+    block = APP[i:APP.index("\nfunction ", i + 10)]
     # It reuses the board's own cards rather than a phone-shaped copy —
-    # a second renderer is a second place for the two to drift.
+    # a second renderer is a second place for the two to drift. Since
+    # the 2026-09-22 redesign the scan rows come first and the edge
+    # cards sit under one fold on the same page, still drawn by cardHTML.
     assert "cardHTML" in block and "gameBetCard" in block
+    assert '<details class="tn-full">' in block
 
 
 def test_tonight_is_recommended_only():
