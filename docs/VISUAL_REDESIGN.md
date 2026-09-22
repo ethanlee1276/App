@@ -177,6 +177,18 @@ surface.
   is idempotent so subtabbedDOM's regrouping cannot pull one back.
   Verified in Chromium at 390 and 1280 with a board fixture: every
   section drawn in order, no page errors.
+* **Slice 6 — the three-market row, SHIPPED 2026-09-22.** Every
+  stadium card carries spread · ML · total for both teams in aligned
+  columns (`gameMarketsHTML`), the "6-pack" every book's card uses,
+  read from the board's own fields; "—" for a market the board did not
+  price, nothing on a finished game. The sub-line under the matchup
+  stops repeating the spread and total where the row draws.
+* **Slice 7 — Open / Settled on the Record page, SHIPPED 2026-09-22.**
+  One line under the verdict says how many bets are riding and points
+  at the Live tab, from the same journal's count. Not done: a
+  units / dollars / ROI toggle on the verdict — the record is kept in
+  units on purpose (the site holds no money), and a dollar view would
+  need the reader's own unit size from the Bankroll page; parked.
 * **Still open.** The desktop rail's Key insights card and the old
   sub-tabbed zones live on under the fold; a later pass can retire
   what nobody unfolds. Zeno's tile and tickets appear once Juice Reel

@@ -37,7 +37,7 @@ def _receipts():
 ORDER = [
     "const receipts = calendar",
     "recLikelySection(scoped ?",
-    "+ verdict + unstaked + small",
+    "+ verdict + ridingNote + unstaked + small",
     "recBookSections(d.book_records, scope)",
     "recAnalytics(src.curve",
     "recSplitsSection(o, !!scoped)",
@@ -83,7 +83,7 @@ def test_the_notes_qualify_the_verdict_not_the_curve():
     the headline; they sat under the process row, a screen away from the
     number they qualify."""
     body = _receipts()
-    assert body.index("+ verdict + unstaked + small") < body.index("recBookSections(")
+    assert body.index("+ verdict + ridingNote + unstaked + small") < body.index("recBookSections(")
     assert "${unstaked}" not in body and "${small}" not in body, "a note is drawn twice"
 
 

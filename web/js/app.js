@@ -5755,8 +5755,36 @@ window.vpFall = (el) => {
   else { el.remove(); }
 };
 
+/* The three markets in columns — spread, moneyline, total — for both
+   teams: the "6-pack" every book's game card carries (research in
+   docs/VISUAL_REDESIGN.md). Drawn only from fields the board already put
+   on the game; a market the board did not price prints "—"; a finished
+   game prints nothing, its lines being history. */
+function gameMarketsHTML(g, opts) {
+  const o = opts || {};
+  if (o.isFinal) return "";
+  const hasSp = g.spread != null && isFinite(Number(g.spread));
+  const hasT = g.total != null && isFinite(Number(g.total));
+  const hasML = g.away_ml != null || g.home_ml != null;
+  if (!hasSp && !hasT && !hasML) return "";
+  const fav = g.favorite || (hasSp && Number(g.spread) < 0 ? g.home : g.away);
+  const sp = (side) => !hasSp ? "—"
+    : `${side === fav ? MINUS : "+"}${Math.abs(Number(g.spread)).toFixed(1)}`;
+  const ml = (v) => v == null ? "—" : american(v);
+  const cell = (k, away, home) => `<span class="gc-mk"><i>${k}</i><b>${away}</b><b>${home}</b></span>`;
+  return `<div class="gc-mkts" aria-label="Lines: ${escapeHtml(g.away)} then ${escapeHtml(g.home)}">
+    <span class="gc-mk gc-mk-teams"><i></i><b>${escapeHtml(g.away)}</b><b>${escapeHtml(g.home)}</b></span>
+    ${cell(o.mlb ? "Run line" : "Spread", sp(g.away), sp(g.home))}
+    ${cell("ML", ml(g.away_ml), ml(g.home_ml))}
+    ${cell("Total", hasT ? `O ${Number(g.total).toFixed(1)}` : "—", hasT ? `U ${Number(g.total).toFixed(1)}` : "—")}
+  </div>`;
+}
+
 function gameCard(g) {
   const mlb = state.sport === "mlb";
+  // The market row carries the spread and the total in columns, so the
+  // sub-line under the name stops repeating them where the row draws.
+  const mkts = gameMarketsHTML(g, { mlb, isFinal: (g.live || {}).state === "final" });
   const nba = state.sport === "nba" || state.sport === "wnba";
   const cfb = state.sport === "cfb";
   const w = g.weather || {};
@@ -5791,15 +5819,15 @@ function gameCard(g) {
   if (cfb) {
     const bits = [];
     if (g.attention_tier) bits.push(`${esc(g.attention_tier)} attention`);
-    if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
-    if (g.spread != null) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
+    if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
+    if (!mkts && g.spread != null) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
     if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
-    sub = bits.join(" · ") || "line not posted yet";
+    sub = bits.join(" · ") || (mkts ? "" : "line not posted yet");
   } else if (nba) {
     const bits = [];
-    if (g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
-    if (g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
-    sub = bits.join(" · ") || "lines post closer to tip-off";
+    if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
+    if (!mkts && g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
+    sub = bits.join(" · ") || (mkts ? "" : "lines post closer to tip-off");
   } else if (mlb) {
     // The park name moved up to the card's venue line (fidelity pass) —
     // repeating it here printed "Coors Field" twice on one card.
@@ -5810,14 +5838,14 @@ function gameCard(g) {
        board, the rail, the long shots) never rendered at all. One
        unposted number blanked the page. Found 2026-08-25 by opening
        /mlb in Chromium and reading the console. */
-    const bits = g.total != null ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
+    const bits = !mkts && g.total != null ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
-    sub = bits.join(" · ") || "line not posted yet";
+    sub = bits.join(" · ") || (mkts ? "" : "line not posted yet");
   } else {
-    const favTxt = (g.favorite && g.spread != null)
+    const favTxt = (!mkts && g.favorite && g.spread != null)
       ? `${esc(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
-    const ouTxt = g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
+    const ouTxt = mkts ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
@@ -5955,7 +5983,8 @@ function gameCard(g) {
         <div class="gc-name">${ranked("away")}${escapeHtml(teamName(g.away))} @ ${ranked("home")}${escapeHtml(teamName(g.home))}</div>
         ${venue}
         ${starters}
-        <div class="game-sub">${sub}</div>
+        ${sub ? `<div class="game-sub">${sub}</div>` : ""}
+        ${mkts}
         ${whenLabel(g.date, g.kickoff) ? `<div class="game-when">${icon('calendar')} ${escapeHtml(whenLabel(g.date, g.kickoff))}</div>` : ""}
         ${isLive && !mlb ? liveDetail : ""}
       </div>
@@ -15226,6 +15255,14 @@ async function renderRecord() {
      still lead a sport's numbers (09-01, 09-05) — they sit under the
      verdict on every scope, pooled on "All bets". */
   const calendar = recCalendarHTML(src.curve);
+  /* Open / Settled, the way every book's My Bets splits it (research in
+     docs/VISUAL_REDESIGN.md). This page is the settled half; the open
+     half lives on the Live tab with its progress, and the count here is
+     the same journal's, so the two never disagree. */
+  const ridingNote = o.open
+    ? `<p class="list-note rec-riding">${iconMark("dot", 10)}${plural(o.open, "bet")} riding right now —
+       ${o.open === 1 ? "it is" : "they are"} on the <a href="#live" data-view="live">Live tab</a> with
+       ${o.open === 1 ? "its" : "their"} progress, and ${o.open === 1 ? "lands" : "land"} here once settled.</p>` : "";
   /* THE PAPER BOOK, ON EVERY SCOPE. This read `scoped ? "" : ...`, so
      the entire Most Likely record vanished the moment a reader pressed a
      league — Ethan, 2026-09-10: "the most likley paper bets for nfl are
@@ -15245,7 +15282,7 @@ async function renderRecord() {
                      scope, d.potd_recent || [])
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)
-    + verdict + unstaked + small
+    + verdict + ridingNote + unstaked + small
     + recBookSections(d.book_records, scope) + `
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recSplitsSection(o, !!scoped)}

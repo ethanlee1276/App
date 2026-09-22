@@ -6695,6 +6695,20 @@ body.has-rail .shell {
   letter-spacing: .12em; text-transform: uppercase; }
 .gc-name { margin-top: 7px; font-size: var(--fs-md); font-weight: 700; }
 .gc-venue { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* The three markets in columns (2026-09-22): the team column, then
+   spread · ML · total for both sides — the shape every book's card
+   uses, read from the board's own fields. */
+.gc-mkts { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 2px 8px;
+  margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--border-soft);
+  text-align: center; }
+.gc-mk { display: grid; gap: 2px; min-width: 0; }
+.gc-mk i { font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; min-height: 13px; }
+.gc-mk b { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; color: var(--text);
+  white-space: nowrap; }
+.gc-mk-teams { text-align: left; }
+.gc-mk-teams b { font-family: var(--font-sans); font-weight: 700; color: var(--text-dim); }
+.rec-riding a { color: var(--brand-2); }
 .hero-games .game-sub, .hero-games .game-when, .hero-games .starters {
   justify-content: center; text-align: center; }
 .hero-games .wind-wrap { justify-content: center; }
