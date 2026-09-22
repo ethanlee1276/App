@@ -7058,6 +7058,17 @@ body.has-deck #rail-live { display: none; }
 .lab-row .hd-state b.pos { color: var(--good); }
 .lab-row .hd-state b.neg { color: var(--bad); }
 .lab-row .hd-what .lab-reason { font-family: var(--font-sans); color: var(--text-dim); }
+/* v5: the Fantasy standings and lineup, the book's rows. A chip inside
+   the name stays inline (`.hd-what span` blocks every other span);
+   the slot is a fixed-width label so the names line up down the card;
+   your team sits on the panel's lifted fill. */
+.ff-rows { margin-top: 6px; }
+.ff-row .hd-what b .hd-chip, .ff-row .hd-what b .rank-none { display: inline-block; margin: 0 0 0 6px;
+  font-family: var(--font-sans); vertical-align: 1px; }
+.ff-row .hd-what b .rank-none { margin-left: 0; }
+.ld-slot { flex: 0 0 52px; font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .06em; color: var(--text-mute); }
+.ff-row.ld-mine { background: var(--panel-2); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
 .watch-why { padding: 2px 14px 12px 44px; }
 .hd-chip.warn { color: var(--warn); }
 /* v5: a ticket row — Zeno's, or your own on My Bets: the stake beside

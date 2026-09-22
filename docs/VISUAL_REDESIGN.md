@@ -538,6 +538,15 @@ surface.
     Each is the book's row now — the market in words, the counts under
     it, the ROI or the verdict on the right. The calibration table
     fits a phone and stays a table.
+  * *The Fantasy standings and lineup are rows.* Rendered at 390 with
+    a real-shaped league, the standings lost the points-against column
+    behind any long team name and the lineup lost both point columns
+    and printed Sleeper's slot key "SUPER_FLEX". Each is the book's
+    row now: the whole team name with points for and against under it
+    and the record on the right, yours marked; the slot in words, the
+    player and his position, the projection over its PPR base. The
+    rank board stays the pinned-column grid it was designed as, and
+    the profile's game log fits once it carries its real columns.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -549,8 +558,9 @@ surface.
   `tests/test_the_players_board_and_the_standings_note_say_it_whole.py`,
   `tests/test_one_slate_one_size.py`,
   `tests/test_the_long_shots_watch_is_the_books_row.py`,
-  `tests/test_the_masthead_will_not_call_a_thin_book.py` and
-  `tests/test_the_labs_wide_tables_are_the_books_rows.py`.
+  `tests/test_the_masthead_will_not_call_a_thin_book.py`,
+  `tests/test_the_labs_wide_tables_are_the_books_rows.py` and
+  `tests/test_the_fantasy_standings_and_lineup_are_rows.py`.
 * **Still open (2026-09-22, after slice T).** The desktop rail's
   Key insights card and the sub-tabbed zones the deck does not adopt
   sit below it; a later pass can retire what nobody opens. Zeno's tile

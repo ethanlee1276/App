@@ -25123,21 +25123,24 @@ function ffStandingsHTML(d) {
   // Matched on the ROSTER id, which the payload knows for certain, rather
   // than on an owner id the client would have to have kept.
   const mine = d.me_roster_id;
+  /* v5: THE BOOK'S ROW. As a table the points-against column ran off a
+     390px phone behind any team name longer than two words, and
+     fantasy team names are rarely shorter. Each team is a row now:
+     the rank, the whole name, points for and against under it, the
+     record on the right. Yours is marked. */
   return `
     <div class="section-title">Standings
       <span class="sub">— your league’s own table, as it stands</span></div>
-    <div class="card">
-      <div class="rank-scroll"><table class="rank-table"><thead><tr>
-        <th>#</th><th class="rank-name">Team</th><th>W-L-T</th>
-        <th>PF</th><th>PA</th></tr></thead><tbody>
-        ${rows.map((t) => `<tr${mine != null && t.roster_id === mine
-            ? ' class="ld-mine"' : ""}>
-          <td>${t.rank}</td>
-          <td class="rank-name">${escapeHtml(t.team)}</td>
-          <td>${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}</td>
-          <td>${t.points_for}</td>
-          <td class="rank-none">${t.points_against}</td></tr>`).join("")}
-      </tbody></table></div>
+    <div class="hd-card ff-rows">
+      ${rows.map((t) => {
+        const me = mine != null && t.roster_id === mine;
+        return `<div class="hd-row ff-row${me ? " ld-mine" : ""}">
+          <span class="hd-rank">${t.rank}</span>
+          <span class="hd-what"><b>${escapeHtml(t.team)}${me ? ' <span class="hd-chip">you</span>' : ""}</b>
+            <span>PF ${t.points_for} · PA ${t.points_against}</span></span>
+          <span class="hd-state"><b>${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}</b></span>
+        </div>`;
+      }).join("")}
     </div>`;
 }
 
@@ -25196,19 +25199,22 @@ function ffLineupHTML(d) {
         own settings, not a generic ranking</span></div>
     <div class="card">
       <div class="ld-total">${L.total ?? 0} projected points</div>
-      <div class="rank-scroll"><table class="rank-table"><thead><tr>
-        <th>Slot</th><th class="rank-name">Player</th><th>Pos</th>
-        <th>Proj</th><th>PPR base</th>
-        </tr></thead><tbody>
-        ${starters.map((s) => `<tr>
-          <td class="rank-name">${escapeHtml(s.slot)}</td>
-          <td class="rank-name">${s.player ? escapeHtml(s.player)
+      ${/* v5: THE BOOK'S ROW, the way a lineup reads in the apps it is
+            set in: the slot, the player with his position under him,
+            the projection on the right with the PPR base beneath it.
+            As a table both point columns ran off a 390px phone, and
+            the slot printed Sleeper's key ("SUPER_FLEX"). */ ""}
+      <div class="ff-rows">
+        ${starters.map((s) => `<div class="hd-row ff-row">
+          <span class="ld-slot">${escapeHtml(MOCK_SLEEPER_SLOT[s.slot] || s.slot)}</span>
+          <span class="hd-what"><b>${s.player ? escapeHtml(s.player)
             : '<span class="rank-none">\u2014 nobody eligible</span>'}${
-            s.thin ? ' <span class="chip warn">thin sample</span>' : ""}</td>
-          <td>${escapeHtml(s.position || "")}</td>
-          <td>${s.points ?? "\u2014"}</td>
-          <td class="rank-none">${s.base_ppr ?? "\u2014"}</td></tr>`).join("")}
-      </tbody></table></div>
+            s.thin ? ' <span class="hd-chip warn">thin sample</span>' : ""}</b>
+            <span>${escapeHtml(s.position || "")}</span></span>
+          <span class="hd-state"><b>${s.points ?? "\u2014"}</b>
+            <span class="hd-vs">PPR base ${s.base_ppr ?? "\u2014"}</span></span>
+        </div>`).join("")}
+      </div>
       ${ldSwapsHTML(L)}
       ${L.exact === false ? `<p class="rank-help">${icon("warn")} Scored from
         the PPR baseline with your league\u2019s differences applied where we
