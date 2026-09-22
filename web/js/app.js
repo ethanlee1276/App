@@ -39722,6 +39722,7 @@ function moreSheetFoot() {
 }
 
 let _moreCloser = null;
+let _moreScrollY = 0;                     // where the page was when the sheet opened (the body is pinned there)
 function moreSheetOpen(on) {
   const sheet = document.getElementById("more-sheet");
   const scrim = document.getElementById("more-scrim");
@@ -39732,11 +39733,20 @@ function moreSheetOpen(on) {
     moreSheetBuild();                       // fresh badges and the lit pill
     sheet.hidden = false; scrim.hidden = false;
     void sheet.offsetHeight;                // unhide, then slide
+    // Pin the page where it is: iOS scrolls a body under a fixed
+    // sheet whatever overflow says, so the body goes position: fixed
+    // (CSS body.more-open) at its current offset, and comes back to it.
+    _moreScrollY = window.scrollY || 0;
+    document.body.style.top = `-${_moreScrollY}px`;
     document.body.classList.add("more-open");
+    sheet.scrollTop = 0;
     if (btn) btn.setAttribute("aria-expanded", "true");
     return;
   }
+  const wasOpen = document.body.classList.contains("more-open");
   document.body.classList.remove("more-open");
+  document.body.style.top = "";
+  if (wasOpen) window.scrollTo(0, _moreScrollY);   // the page is where it was
   if (btn) btn.setAttribute("aria-expanded", "false");
   _moreCloser = setTimeout(() => { sheet.hidden = true; scrim.hidden = true; }, 260);
 }

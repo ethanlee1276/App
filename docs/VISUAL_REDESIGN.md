@@ -487,6 +487,14 @@ surface.
     the Sleeper panel, team form, the prose entries, the learning
     coverage and the Why page's table cells: `.rec-row` and the
     hairline token; no raw rgba hairline is left in the app.
+  * *The tab you are on says so.* The active tab's icon lifts and a
+    dot lands under its label, on `--dur-base`; the centre disc keeps
+    still; More counts as on while its sheet is open.
+  * *The More sheet holds the page still.* Ethan, from his phone:
+    "I'm able to swipe the page behind it and not the actual menu."
+    The body is pinned in place (position fixed at its offset) while
+    the sheet is open and put back on close; the sheet scrolls itself
+    and never chains to the page; the scrim takes no gesture.
   * *The paywall shows the one record.* It read the record file raw
     and kept quoting the edge book; it adopts the pooled record now
     and leads its results strip with the same ribbon (the model's
