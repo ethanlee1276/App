@@ -51,6 +51,7 @@ def _node(js):
         return None
     prog = f"""
       {_const("HOME_DECK_ORDER")}
+      {_const("HOME_DECK_ADOPTS")}
       {_fn("deckLiveGames")}
       {_fn("deckRidingRows")}
       {_fn("deckFirstWord")}
@@ -68,48 +69,65 @@ def _node(js):
     return json.loads(out.stdout.strip())
 
 
-def test_the_deck_is_the_first_thing_on_the_home_view_and_the_board_folds_under_it():
+def test_the_deck_is_the_first_thing_on_the_home_view_and_adopts_the_board():
+    """Home v2 (2026-09-22): the deck ARRANGES the home. It owns Live
+    now, Riding, The record and Zeno's picks, and adopts the stadium
+    strip, the Pick of the Day card, the Most Likely shelves, Best
+    bets and the quick tools — same renderers, same information, the
+    mock's order. Nothing folds: Ethan, on the folded version, "I don't
+    like how you got rid of my stadiums and I don't like how I can't
+    see the most likely to hit picks and edge picks on the main page."
+    """
     view = HTML[HTML.index('id="view-recommended"'):]
     view = re.sub(r"<!--.*?-->", "", view, flags=re.S)
     first = re.search(r"<(div|section|p|h\d)\b[^>]*>", view[view.index(">") + 1:])
     assert first and 'id="home-deck"' in first.group(0), first.group(0) if first else None
     assert '<div id="home-deck" hidden></div>' in view
-    # The fold hides every child of the view but the deck — a structural
-    # rule, because subtabbedDOM regroups the zones into panels at load
-    # and a wrapper div in the markup broke its insertBefore (measured
-    # 2026-09-22: four page errors and the crash note on every load).
-    assert "body.home-folded #view-recommended > :not(#home-deck) { display: none; }" in CSS
-    assert 'class="home-rest"' not in HTML
-    assert "body.has-deck #rail-live { display: none; }" in CSS, "the rail's Live now is the strip, twice"
-    assert 'document.body.classList.toggle("has-deck", any);' in _fn("renderHomeDeck")
-    # Desktop: a grid with the live strip and the door spanning it. Phone: one column.
+    got = _node("return HOME_DECK_ADOPTS;")
+    if got is not None:
+        assert list(got) == ["games", "likely", "edge", "tools"], got
+        assert got["games"] == ["games-head", "slate-horizon", "games-outer"], "the stadium strip, whole"
+        assert got["likely"] == ["potd-zone", "likely-top"] and got["edge"] == ["best-bets"] \
+            and got["tools"] == ["quick-tools"]
+        for ids in got.values():
+            for z in ids:
+                assert f'id="{z}"' in view, z
+    adopt = _fn("deckAdopt")
+    assert "if (el && el.parentElement !== s) s.appendChild(el);" in adopt, \
+        "moved once; a redraw finds them already home"
+    skel = _fn("deckSkeleton")
+    assert "if (host.dataset.built) return;" in skel, "built once, so adopted zones survive a redraw"
+    deck = _fn("renderHomeDeck")
+    assert "deckSkeleton(host);" in deck and "deckAdopt(host);" in deck
+    assert "isPhone()" not in deck, "the deck is the home at every width"
+    for gone in ("home-folded", "hd-fold", "HOME_FOLD_KEY", "applyHomeFold"):
+        assert gone not in APP and gone not in CSS, gone
+    assert "qb.home.fold" not in (ROOT / "rendercheck.py").read_text()
+    # Desktop: every section spans the row but The record and Zeno's picks; phone: one column.
     assert "#home-deck { display: grid; grid-template-columns: 1fr 1fr;" in CSS
-    assert '#home-deck .hd-sec[data-sec="live"], #home-deck .hd-fold { grid-column: 1 / -1; }' in CSS
+    assert "#home-deck .hd-sec { grid-column: 1 / -1; min-width: 0; }" in CSS
+    assert '#home-deck .hd-sec[data-sec="record"], #home-deck .hd-sec[data-sec="zeno"] { grid-column: auto; }' in CSS
+    assert '#home-deck .hd-sec[data-sec="likely"]:not(:has(#potd-zone > *, #likely-top > *))' in CSS, \
+        "an adopted section with nothing drawn takes no room"
     phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
     assert "#home-deck { display: block;" in phone
-    assert "#home-deck[hidden] { display: none; }" in phone
     home = _fn("renderRecommended")
     assert "renderHomeDeck();" in home[:300], "drawn before the zones below it"
-    deck = _fn("renderHomeDeck")
-    assert "isPhone()" not in deck, "the deck is the home at every width now"
-    assert "applyHomeFold(any);" in deck
-    fold = _fn("applyHomeFold")
-    assert 'document.body.classList.toggle("home-folded", !!deckShown && homeFolded());' in fold, \
-        "nothing to fold under when the deck is empty"
-    assert 'localStorage.getItem(HOME_FOLD_KEY) === "folded"' in _fn("homeFolded"), \
-        "open until folded — Ethan wants the stadiums and the pick boards on the main page"
 
 
 def test_the_order_is_live_riding_tonight_record_zeno():
     got = _node("return HOME_DECK_ORDER;")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got == ["live", "riding", "tonight", "record", "zeno"], got
+    assert got == ["live", "riding", "games", "likely", "edge", "record", "zeno", "tools"], got
+    skel = _fn("deckSkeleton")
+    assert "host.innerHTML = HOME_DECK_ORDER.map((k) =>" in skel
+    assert '`<section class="hd-sec" data-sec="${k}" hidden></section>`' in skel
+    fill = _fn("deckFill")
+    assert "s.hidden = !html;" in fill, "an owned section with nothing to say is not drawn"
     deck = _fn("renderHomeDeck")
-    assert 'const body = HOME_DECK_ORDER.map((k) => sections[k] || "").join("");' in deck
-    assert "const any = !!body.trim();" in deck and "host.hidden = !any;" in deck, "five empty sections is no deck at all"
-    for k in ("live", "riding", "tonight", "record", "zeno"):
-        assert f'data-sec="{k}"' in APP, k
+    for k in ("riding", "live", "record", "zeno"):
+        assert f'deckFill(host, "{k}",' in deck, k
 
 
 def test_live_games_only_ours_first_and_the_quiet_night_says_what_it_knows():
@@ -162,10 +180,8 @@ def test_every_printed_number_is_an_earned_one():
     assert "if (ov.settled) {" in rec and "if (zo.settled) {" in rec, "no tile over nothing"
     assert "rec.overall || {}" in rec and "rec.zeno || {}" in rec
     assert "zenoTicketRow(r, false)" in rec, "Zeno's open tickets are the record page's own rows"
-    tonight = _fn("deckTonightHTML")
-    assert 'String(call) === "bet"' in tonight, "a NO BET day has no Pick of the Day hero"
-    assert ".filter(showableLikelyRow)" in tonight, "the board's own gate"
-    assert 'if (!showPotd && !likely.length) return "";' in tonight
+    assert "function deckTonightHTML(" not in APP, \
+        "the deck adopts the board's Pick of the Day card and shelves; it does not redraw them thinner"
     row = _fn("deckPickRow")
     assert "isFinite(p) && p > 0 && p < 1" in row, "a certainty is not a forecast"
     riding = _fn("deckRidingHTML")
@@ -194,19 +210,6 @@ def test_the_picks_page_is_the_same_rows_with_doors():
     phone_at = CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))
     for sel in (".hd-row {", ".hd-card {", ".hd-strip {", ".hd-stat {", ".hd-row.openable {", ".tn-full {"):
         assert sel in CSS[:phone_at], sel
-    deck = _fn("deckTonightHTML")
-    assert "potdHeroHTML(d)" in deck, "one hero, drawn by one function"
-
-
-def test_the_render_instrument_measures_the_board_with_the_fold_open():
-    """rendercheck's Dashboard claims are about the board under the deck
-    (quick tools, the perf grid). Folded, they measured DRIFT on a
-    page that was fine — so the instrument opens the fold first."""
-    src = (ROOT / "rendercheck.py").read_text()
-    assert "localStorage.setItem('qb.home.fold', 'open')" in src
-    assert src.index("qb.home.fold") < src.index("await p.goto(`http://127.0.0.1:${PORT}/${s.url}`"), \
-        "set before the page boots, not after"
-    assert 'const HOME_FOLD_KEY = "qb.home.fold";' in APP, "the same key the page reads"
 
 
 if __name__ == "__main__":

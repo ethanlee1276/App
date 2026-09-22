@@ -39328,7 +39328,19 @@ function moreSheetInit() {
    section with nothing to say is not drawn. Every width: a phone reads
    it as one column, a desktop as a grid (CSS), and the board as it was
    folds under it on both. */
-const HOME_DECK_ORDER = ["live", "riding", "tonight", "record", "zeno"];
+const HOME_DECK_ORDER = ["live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
+/* The zones the deck ADOPTS from the board — moved into its sections,
+   not redrawn: the same renderers keep writing into them by id, so
+   the stadium strip, the Pick of the Day card, the Most Likely
+   shelves, Best bets and the quick tools arrive in the home's new
+   order with every field they had. (Ethan, 2026-09-22, on a thinner
+   version: "I don't like how you got rid of my stadiums.") */
+const HOME_DECK_ADOPTS = {
+  games: ["games-head", "slate-horizon", "games-outer"],
+  likely: ["potd-zone", "likely-top"],
+  edge: ["best-bets"],
+  tools: ["quick-tools"],
+};
 const DECK_LIVE_EVERY_MS = 20000;
 const DECK_BOOK_LABEL = { main: "Edge", likely: "Most Likely", likely_live: "Most Likely",
                           longshot: "Long Shot", potd: "Pick of the Day" };
@@ -39432,7 +39444,7 @@ async function deckLiveHTML(riding, rows) {
     inner = `<div class="hd-quiet"><i class="live-dot paused"></i>${
       escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</div>`;
   }
-  return `<section class="hd-sec" data-sec="live">${deckHead("Live now", "#live", "live", "Live")}${inner}</section>`;
+  return `${deckHead("Live now", "#live", "live", "Live")}${inner}`;
 }
 
 function deckRidingHTML(riding) {
@@ -39446,8 +39458,8 @@ function deckRidingHTML(riding) {
     return `<div class="hd-row"><div class="hd-what"><b>${trackerBetText(r)}</b><span>${sub}</span></div>
       <div class="hd-state"><span class="hd-chip ${tone}">${word}</span>${prog}</div></div>`;
   };
-  return `<section class="hd-sec" data-sec="riding">${deckHead("Riding", "#live", "live", "Live")}
-    <div class="hd-card">${riding.slice(0, 4).map(row).join("")}</div></section>`;
+  return `${deckHead("Riding", "#live", "live", "Live")}
+    <div class="hd-card">${riding.slice(0, 4).map(row).join("")}</div>`;
 }
 
 /* One pick as a row: what, where and at what price, and one number on
@@ -39487,21 +39499,6 @@ function potdHeroHTML(d) {
                   team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}</div>`;
 }
 
-function deckTonightHTML(d) {
-  const potd = d.pick_of_the_day;
-  const pick = potd && typeof potd === "object" ? potd.pick : null;
-  const call = ((potd || {}).verdict || {}).call;
-  const showPotd = !!(pick && pick.player && (call == null || String(call) === "bet"));
-  const same = (r) => pick && r.player === pick.player && r.market === pick.market
-    && String(r.line) === String(pick.line);
-  const likely = (d.board_shelves || []).flatMap((sh) => sh.rows || [])
-    .filter(showableLikelyRow).filter((r) => !same(r)).slice(0, 3);
-  if (!showPotd && !likely.length) return "";
-  return `<section class="hd-sec" data-sec="tonight">${deckHead("Tonight’s picks", "#tonight", "tonight", "Picks")}
-    ${showPotd ? potdHeroHTML(d) : ""}
-    ${likely.length ? `<div class="hd-card">${likely.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div>` : ""}</section>`;
-}
-
 /* The record tiles and Zeno's open tickets. A tile prints only when the
    book has settled something — "+0.0% over 0" is a number nobody
    earned. */
@@ -39529,58 +39526,62 @@ async function deckRecordHTML() {
                     `${wl(zo)} · ${zo.settled} settled`));
   }
   const record = tiles.length
-    ? `<section class="hd-sec" data-sec="record">${deckHead("The record", "#record", "record", "Results")}
-       <div class="hd-stats">${tiles.join("")}</div></section>` : "";
+    ? `${deckHead("The record", "#record", "record", "Results")}
+       <div class="hd-stats">${tiles.join("")}</div>` : "";
   const open = z.open || [];
   const zeno = open.length
-    ? `<section class="hd-sec" data-sec="zeno">${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
-       <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div></section>` : "";
+    ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
+       <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div>` : "";
   return { record, zeno };
 }
 
-const HOME_FOLD_KEY = "qb.home.fold";
-
-/* The board under the deck stays OPEN unless the reader folds it; the
-   choice is remembered. Ethan, 2026-09-22, on the folded-by-default
-   version: "I don't like how you got rid of my stadiums and I don't like
-   how I can't see the most likely to hit picks and edge picks on the
-   main page." When the deck has nothing to draw there is nothing to
-   fold under, so the class comes off regardless. */
-function homeFolded() {
-  try { return localStorage.getItem(HOME_FOLD_KEY) === "folded"; } catch (e) { return false; }
+/* The deck's skeleton: one <section> per HOME_DECK_ORDER entry, built
+   once and kept, so the zones it adopts are not destroyed by a redraw
+   and the owned sections can be refilled one at a time. */
+function deckSkeleton(host) {
+  if (host.dataset.built) return;
+  host.innerHTML = HOME_DECK_ORDER.map((k) =>
+    `<section class="hd-sec" data-sec="${k}" hidden></section>`).join("");
+  host.dataset.built = "1";
 }
 
-function applyHomeFold(deckShown) {
-  document.body.classList.toggle("home-folded", !!deckShown && homeFolded());
-  const b = document.querySelector("#home-deck .hd-fold");
-  if (b) {
-    const folded = document.body.classList.contains("home-folded");
-    b.setAttribute("aria-expanded", folded ? "false" : "true");
-    b.innerHTML = folded ? "Everything on tonight’s board &#9662;" : "Less &#9652;";
+/* Move each adopted zone into its section — idempotent, so a redraw
+   after subtabbedDOM has regrouped the board finds them already home. */
+function deckAdopt(host) {
+  for (const [sec, ids] of Object.entries(HOME_DECK_ADOPTS)) {
+    const s = host.querySelector(`.hd-sec[data-sec="${sec}"]`);
+    if (!s) continue;
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && el.parentElement !== s) s.appendChild(el);
+    });
+    s.hidden = false;
   }
+}
+
+function deckFill(host, sec, html) {
+  const s = host.querySelector(`.hd-sec[data-sec="${sec}"]`);
+  if (!s) return;
+  s.innerHTML = html || "";
+  s.hidden = !html;
 }
 
 async function renderHomeDeck() {
   const host = document.getElementById("home-deck");
   if (!host) return;
   clearTimeout(_deckTimer);
+  deckSkeleton(host);
+  deckAdopt(host);
+  host.hidden = false;
+  document.body.classList.add("has-deck");        // the rail's Live now card is the strip, twice
   const d = state.data || {};
   const rows = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])]);
   const riding = deckRidingRows(rows);
+  deckFill(host, "riding", deckRidingHTML(riding));
   const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
-  if (state.view !== "recommended" && !document.getElementById("view-recommended").classList.contains("active")) return;
-  const sections = { live, riding: deckRidingHTML(riding), tonight: deckTonightHTML(d), ...rest };
-  const body = HOME_DECK_ORDER.map((k) => sections[k] || "").join("");
-  const any = !!body.trim();
-  host.innerHTML = any ? `${body}<button type="button" class="hd-fold" aria-expanded="false"></button>` : "";
-  host.hidden = !any;
-  document.body.classList.toggle("has-deck", any);   // the rail's Live now card is the strip, twice
-  applyHomeFold(any);
-  const fold = host.querySelector(".hd-fold");
-  if (fold) fold.addEventListener("click", () => {
-    try { localStorage.setItem(HOME_FOLD_KEY, homeFolded() ? "open" : "folded"); } catch (e) {}
-    applyHomeFold(true);
-  });
+  deckFill(host, "live", live);
+  deckFill(host, "record", rest.record);
+  deckFill(host, "zeno", rest.zeno);
   host.querySelectorAll(".hd-game").forEach((b) => b.addEventListener("click", () => {
     _liveChipSport = state.sport;
     _liveChip = LIVE_FEEDS[b.dataset.lsport] ? b.dataset.lsport : "all";

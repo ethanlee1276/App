@@ -6717,16 +6717,22 @@ body.has-rail .shell {
 /* The More sheet is the tab bar's fifth slot, so it exists only where
    the bar does (the phone block below). */
 .more-sheet, .more-scrim { display: none; }
+/* The home deck (2026-09-22, Home v2): a labelled stack in the mock's
+   order at every width — one column on a phone, and on desktop a grid
+   where every section spans the row except The record and Zeno's
+   picks, which share one. Adopted zones keep their own titles; an
+   adopted section with nothing drawn in it takes no room. */
 #home-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0 0 18px; }
 #home-deck[hidden] { display: none; }
-#home-deck .hd-sec[data-sec="live"], #home-deck .hd-fold { grid-column: 1 / -1; }
+#home-deck .hd-sec { grid-column: 1 / -1; min-width: 0; }
+#home-deck .hd-sec[data-sec="record"], #home-deck .hd-sec[data-sec="zeno"] { grid-column: auto; }
+#home-deck .hd-sec[hidden] { display: none; }
+#home-deck .hd-sec[data-sec="likely"]:not(:has(#potd-zone > *, #likely-top > *)),
+#home-deck .hd-sec[data-sec="edge"]:not(:has(#best-bets > *)),
+#home-deck .hd-sec[data-sec="tools"]:not(:has(#quick-tools > *)) { display: none; }
 /* A bare link inside a card ("Full receipts on the Record page") took the
    browser's blue — the one colour this palette never uses. */
 .card a:not([class]), .list-note a:not([class]) { color: var(--brand-2); }
-.hd-fold { justify-self: start; margin: -4px 0 6px; padding: 8px 0; border: 0;
-  background: transparent; color: var(--brand-2); cursor: pointer;
-  font: inherit; font-size: var(--fs-sm); font-weight: 700; }
-body.home-folded #view-recommended > :not(#home-deck) { display: none; }
 body.has-deck #rail-live { display: none; }
 /* ---- The deck's pieces (2026-09-22, from the approved mock) ----------
    Section heads with a door on the right, the live strip and its cards,
@@ -6974,7 +6980,6 @@ body.has-deck #rail-live { display: none; }
 
   #home-deck { display: block; margin: 0 0 18px; }
   #home-deck[hidden] { display: none; }
-  .hd-fold { width: 100%; text-align: left; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's
      five buttons are the drawer's visible exits, and every one of them

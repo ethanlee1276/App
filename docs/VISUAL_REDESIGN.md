@@ -45,6 +45,59 @@ IBM Plex Mono (numbers). The numbers on the frames are placeholders
   Methodology, Status, About).
 * The first-run tutorial popup goes; the structure is the tutorial.
 
+## What the big apps do (research, 2026-09-22)
+
+Ethan: "Use other sport book apps and websites … on what layouts work
+best for organizations and ease of use without loosing information."
+Read from reviews and the vendors' own pages (FanDuel, DraftKings,
+theScore Bet / ESPN Bet, Action Network, Pikkit, and the sportsbook-UX
+guides from Symphony, Altenar, CrustLab and GammaStack). The
+conventions they share:
+
+1. **A fixed five-tab bar** that never moves: Home · Sports (A–Z) ·
+   Live · My Bets · Account/More. Ours: Home · Picks · Live · Results ·
+   More — same shape; "Picks" is our Sports, "Results" is our My Bets.
+2. **Home opens with a quick-link row** of circular icons (Live Now,
+   promos, then league icons) and everything else below is a short,
+   labelled stack: Live now → featured/popular games → trending →
+   promos. Nothing on the home is a table; every section has a "See
+   all" door. Ours: the league strip + the deck.
+3. **A game card shows the three markets in columns** (spread · ML ·
+   total, the "6-pack") and tapping anywhere else opens the game page,
+   where markets are segmented into tabs (Popular / Game lines / Player
+   props). Ours: the stadium card carries the line in its sub-line;
+   the game page has the rooms.
+4. **My Bets is Open / Settled** with a bet card of selection, price,
+   stake → to win, a status chip and, in play, live progress. Ours:
+   Riding rows and the record page.
+5. **Pick trackers (Action, Pikkit) put the record on the profile** —
+   W-L, units, ROI, win rate, CLV, with a units/$/ROI toggle — and the
+   pick card carries the bettor, the legs, the combined price, the unit
+   size and a one-tap Tail/Copy that names the book with the best
+   price. Ours: the record tiles, Zeno's tickets with Copy.
+6. **Don't overload the home; keep the menu flat.** Progressive
+   disclosure: the essentials first, the detail one tap away, clear
+   labels (Live, Upcoming, Popular), personalisation (favourite teams
+   first). The one thing every guide warns against is HIDING
+   information to look clean — "without losing information" is the
+   brief, and the fold failed it.
+
+What that implies for Qellys, and what v2 does: the home is a labelled
+stack in the mock's order, built by ARRANGING the board's own zones
+rather than redrawing them thinner. The deck owns Live now, Riding,
+The record and Zeno's picks (new content) and adopts the stadium
+strip, the Pick of the Day card, the Most Likely shelves, Best bets
+and the quick tools from the board — same renderers, same information,
+new order. No fold. Stats, the performance chart, the cards grid and
+the watchlists follow below in their rooms.
+
+Sources: wsn.com and oddsscanner.com FanDuel app reviews; sailgp.com
+and oddsassist.com DraftKings app reviews; frontofficesports.com and
+bettingapps.com on the ESPN Bet → theScore Bet home; pikkit.com
+(bet-tracker, copy-bets, following-leaderboard) and the App Store
+listing; actionnetwork.com FAQ and PRO reviews; symphony-solutions.com,
+altenar.com, crustlab.com, gammastack.com sportsbook-UX guides.
+
 ## Going back
 
 Before any of this shipped, the site as it stood was pushed as branch
@@ -112,7 +165,18 @@ surface.
   desktop `8:568`, StadiumCard component `8:256`) — puts the stadium
   strip, Most likely to hit (five rows, Pick of the Day first) and
   Edge picks (four rows) on the home at both widths, nothing folded.
-  Awaiting his reaction before it is built.
+  Ethan: "keep going" — built as slice 5 (below), with the stadium
+  cards carrying the site's own venue renders.
+* **Slice 5 — Home v2, SHIPPED 2026-09-22.** The deck arranges the
+  home in the mock's order at every width: Live now → Riding → Tonight's games (the
+  stadium strip, adopted) → Most likely (the Pick of the Day card and
+  the Most Likely shelves, adopted) → Edge picks (Best bets, adopted)
+  → The record → Zeno's picks → Tools (adopted). The fold is gone.
+  `HOME_DECK_ADOPTS` in app.js names what moves; the deck's skeleton is
+  built once so a redraw never destroys an adopted zone, and adoption
+  is idempotent so subtabbedDOM's regrouping cannot pull one back.
+  Verified in Chromium at 390 and 1280 with a board fixture: every
+  section drawn in order, no page errors.
 * **Still open.** The desktop rail's Key insights card and the old
   sub-tabbed zones live on under the fold; a later pass can retire
   what nobody unfolds. Zeno's tile and tickets appear once Juice Reel
