@@ -1395,6 +1395,12 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
       Search a player</button>
     <div id="more-groups"></div>
+    <!-- The theme switch lives here on phones (2026-09-22): one fewer
+         control in a top bar that had five. It proxies #theme-toggle,
+         which stays the one place the theme is switched. -->
+    <div class="more-foot">
+      <button type="button" class="more-pill" id="more-theme"></button>
+    </div>
   </div>
 
   <script src="js/teams.js"></script>

@@ -195,6 +195,11 @@ surface.
   hero — Lines & insights · Replay · Team shapes · Most likely · Game
   bets · Props · Long shots — drawn only for sections the page has,
   each chip scrolling to its section (`gpJumpHTML`).
+* **Slice 9 — the phone top bar loses a control, SHIPPED 2026-09-22.**
+  The theme switch moves into the More sheet on phones (a button that
+  proxies the real toggle, so the theme is still switched in one
+  place); desktop keeps its toggle. The bar now carries the drawer,
+  the mark, alerts, messages, the freshness chip and the account.
 * **Still open.** The desktop rail's Key insights card and the old
   sub-tabbed zones live on under the fold; a later pass can retire
   what nobody unfolds. Zeno's tile and tickets appear once Juice Reel

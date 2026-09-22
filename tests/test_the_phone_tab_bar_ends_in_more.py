@@ -188,6 +188,24 @@ def test_the_tour_never_opens_on_a_phone():
     assert 'matchMedia("(max-width: 760px)").matches' in _fn("isPhone")
 
 
+def test_the_theme_switch_moves_into_the_sheet_on_phones():
+    """One fewer control in a top bar that had five. The sheet's button
+    proxies the real toggle, so the theme is still switched in one place."""
+    sheet = HTML[HTML.index('id="more-sheet"'):]
+    sheet = sheet[:sheet.index("</div>\n\n")]
+    assert 'id="more-theme"' in sheet
+    phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
+    assert "#theme-toggle { display: none; }" in phone
+    assert "#theme-toggle { display: none; }" not in CSS[:CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))], \
+        "desktop keeps its toggle"
+    init = _fn("moreSheetInit")
+    assert 'const real = document.getElementById("theme-toggle");' in init
+    assert "if (real) real.click(); else toggleTheme();" in init
+    build = _fn("moreSheetBuild")
+    assert 'theme.textContent = `Switch to ${cur === "dark" ? "light" : "dark"} mode`;' in build, \
+        "the button says where it goes, not where it is"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

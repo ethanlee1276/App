@@ -39317,6 +39317,11 @@ function morePillLabel(src) {
 function moreSheetBuild() {
   const host = document.getElementById("more-groups");
   if (!host) return;
+  const theme = document.getElementById("more-theme");
+  if (theme) {
+    const cur = document.documentElement.getAttribute("data-theme") || "dark";
+    theme.textContent = `Switch to ${cur === "dark" ? "light" : "dark"} mode`;
+  }
   host.innerHTML = "";
   MORE_GROUPS.forEach(([title, refs]) => {
     const pills = [];
@@ -39378,6 +39383,12 @@ function moreSheetInit() {
   if (!btn) return;
   btn.addEventListener("click", () => moreSheetOpen(!document.body.classList.contains("more-open")));
   if (scrim) scrim.addEventListener("click", () => moreSheetOpen(false));
+  const theme = document.getElementById("more-theme");
+  if (theme) theme.addEventListener("click", () => {
+    const real = document.getElementById("theme-toggle");
+    if (real) real.click(); else toggleTheme();
+    moreSheetBuild();
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && document.body.classList.contains("more-open")) moreSheetOpen(false);
   });

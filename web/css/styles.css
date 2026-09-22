@@ -6978,6 +6978,10 @@ body.has-deck #rail-live { display: none; }
     font: inherit; font-size: var(--fs-sm); text-align: left; }
   .more-search svg { width: 18px; height: 18px; flex: 0 0 auto; }
   .more-group { margin-top: 16px; }
+  .more-foot { margin-top: 18px; padding-top: 14px; border-top: var(--hairline) solid var(--border-soft); }
+  /* The theme switch moves into the sheet on phones — one fewer control
+     in a top bar that had five (2026-09-22). */
+  #theme-toggle { display: none; }
   .more-group h3 { margin: 0 0 8px; color: var(--text-mute);
     font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
     text-transform: uppercase; }
