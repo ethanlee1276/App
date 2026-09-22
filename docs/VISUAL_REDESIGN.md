@@ -73,5 +73,15 @@ surface.
   phones. Pinned by `tests/test_the_phone_tab_bar_ends_in_more.py`,
   which also proves no sidebar destination is unreachable from the
   sheet.
-* **Slice 2 — next.** The phone home in the mock's order: Live now
-  strip → Riding → Tonight's picks → The record → Zeno's picks.
+* **Slice 2 — SHIPPED 2026-09-22.** The phone home deck (`#home-deck`,
+  first thing in the home view, phones only): Live now strip (fast
+  scoreboards only, our bets' games first, a held game says so) →
+  Riding (tracker rows in play, with progress) → Tonight's picks (Pick
+  of the Day hero only on a BET day, then the Most Likely shelves'
+  first three) → The record (model ROI and Zeno's profit, tiles only
+  over settled bets) → Zeno's open tickets. The strip follows the
+  scoreboard on a 20-second clock and redraws only when a score moved.
+  The old zones sit unchanged under it. Pinned by
+  `tests/test_the_phone_home_leads_with_live.py`.
+* **Slice 3 — next.** Sport chips as filter pills on Picks and Live;
+  fold the old home zones under the deck on phones; then the desktop.

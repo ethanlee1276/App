@@ -366,8 +366,12 @@ def test_the_tracker_never_prints_a_journal_key_as_a_name():
     an abbreviation. Printing either verbatim reads as a name — which is
     what the row did before the marks landed beside it."""
     js = _read("web", "js", "app.js")
-    i = js.index("const betTxt = (r) =>")
+    # Hoisted to trackerBetText on 2026-09-22 so the phone home deck's
+    # Riding rows and the Live tab print the same ticket; the Live tab
+    # binds it as `betTxt`.
+    i = js.index("function trackerBetText(r)")
     body = js[i:i + 1200]
+    assert "const betTxt = trackerBetText;" in js
     assert 'r.market === "total"' in body, "the game total still prints its key"
     assert "market_label" in body
     assert body.count("teamName(r.player)") >= 3, \

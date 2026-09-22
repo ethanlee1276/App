@@ -176,7 +176,17 @@ def test_nothing_new_slipped_in_above_the_picks():
                # down — the same case #top-picks was moved on in
                # August, and the reason that precedent is quoted here
                # rather than the rule being bent.
-               "potd-zone"}
+               "potd-zone",
+               # home-deck (2026-09-22, the redesign Ethan approved with
+               # "live first" as the home screen's job). PHONES ONLY —
+               # `#home-deck { display: none }` outside the phone block,
+               # and hidden when it has nothing to draw. Where it draws,
+               # it IS the picks, moved up: the live games with our bets
+               # on them, the bets riding, tonight's picks with the Pick
+               # of the Day first. The fold cost is spent on exactly the
+               # thing this list exists to protect, and the zones below
+               # it are unchanged — the desktop measures as before.
+               "home-deck"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

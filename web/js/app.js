@@ -4200,6 +4200,33 @@ function liveTrackerRows(rows) {
   });
 }
 
+/* One bet, as a sentence — the Live tab's rows and the phone home deck's
+   Riding rows print the same ticket, so they read from one function.
+   (Hoisted out of renderLivePicks on 2026-09-22 for the deck.) A game
+   total's `player` holds the journal key "AWAY@HOME" and a team market's
+   an abbreviation — neither is a name to print; the matchup sits on the
+   line below every row. */
+function trackerBetText(r) {
+  const ml = r.market === "moneyline";
+  if (ml) return `${escapeHtml(teamName(r.player))} Moneyline`;
+  if (r.market === "total")
+    return `${escapeHtml(r.market_label)} ${escapeHtml(r.side)} ${r.line}`;
+  if (r.market === "spread") {
+    // Every journaled spread carries side OVER — the signed number is
+    // what states the direction, so print that instead of the word.
+    // THE NUMBER IS THE ONE HE TOOK. The journal stores a spread
+    // NEGATED so the over grader applies unchanged (ledger: "margin >
+    // -spread — so actual = margin, line = -spread"): a KC −3.5 ticket
+    // is line 3.5, and printing the stored figure read "KC +3.5" on
+    // every favourite the Live tab ever showed.
+    const took = -r.line;
+    return `${escapeHtml(teamName(r.player))} ${took > 0 ? "+" : ""}${took} ${escapeHtml(r.market_label)}`;
+  }
+  if (r.market === "team_total")
+    return `${escapeHtml(teamName(r.player))} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+  return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
+}
+
 function renderLivePicks() {
   buzzOnSettle([...(((state.data || {}).live_picks) || []),
                 ...(((state.data || {}).live_potd) || [])]);
@@ -4279,25 +4306,7 @@ function renderLivePicks() {
      total's holds the journal key "AWAY@HOME" — neither is a name to
      print. The matchup already sits on the line below every row, so a
      total says what it is and lets the row underneath say which game. */
-  const betTxt = (r) => {
-    if (ml(r)) return `${escapeHtml(teamName(r.player))} Moneyline`;
-    if (r.market === "total")
-      return `${escapeHtml(r.market_label)} ${escapeHtml(r.side)} ${r.line}`;
-    if (r.market === "spread") {
-      // Every journaled spread carries side OVER — the signed number is
-      // what states the direction, so print that instead of the word.
-      // THE NUMBER IS THE ONE HE TOOK. The journal stores a spread
-      // NEGATED so the over grader applies unchanged (ledger: "margin >
-      // -spread — so actual = margin, line = -spread"): a KC −3.5 ticket
-      // is line 3.5, and printing the stored figure read "KC +3.5" on
-      // every favourite the Live tab ever showed.
-      const took = -r.line;
-      return `${escapeHtml(teamName(r.player))} ${took > 0 ? "+" : ""}${took} ${escapeHtml(r.market_label)}`;
-    }
-    if (r.market === "team_total")
-      return `${escapeHtml(teamName(r.player))} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
-    return `${escapeHtml(r.player)} ${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}`;
-  };
+  const betTxt = trackerBetText;
   // What the board recommends at the CURRENT prices — so a journaled bet
   // whose pick has since dropped off (line moved, gate re-closed) can say
   // so instead of looking like a contradiction with Tonight's Picks.
@@ -6507,6 +6516,7 @@ async function renderDayCard() {
 
 function renderRecommended() {
   renderDayCard();
+  renderHomeDeck();
   const host = document.getElementById("cards");
   // When the whole slate is empty, the empty-slate banner already explains it.
   if (!(state.data.games || []).length && !(state.data.recommendations || []).length) {
@@ -39294,6 +39304,247 @@ function moreSheetInit() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && document.body.classList.contains("more-open")) moreSheetOpen(false);
   });
+}
+
+/* ---------------- The phone home deck (2026-09-22) ----------------------
+   Ethan approved the Figma mock: the phone home leads with what is
+   live, then what we have riding, then tonight's picks, then the record
+   (ours and Zeno's), then Zeno's open tickets. Everything the deck
+   prints is read from the same payloads the zones under it read — the
+   fast scoreboards, the tracker rows, the board, record.json — and a
+   section with nothing to say is not drawn. Phones only: the desktop
+   home keeps its layout. */
+const HOME_DECK_ORDER = ["live", "riding", "tonight", "record", "zeno"];
+const DECK_LIVE_EVERY_MS = 20000;
+const DECK_BOOK_LABEL = { main: "Edge", likely: "Most Likely", likely_live: "Most Likely",
+                          longshot: "Long Shot", potd: "Pick of the Day" };
+let _deckFast = { at: 0, games: [] };
+let _deckTimer = null;
+let _deckStamp = "";
+
+/* Live games only, the ones with our bets on them first. `list` is
+   [{sport, g}] from the fast scoreboards; `riding` the tracker's live
+   rows, which belong to `sport` (the loaded board's league). */
+function deckLiveGames(list, riding, sport) {
+  const on = (g) => (riding || []).filter((r) => r.game
+    && r.game.home === g.home && r.game.away === g.away).length;
+  return (list || [])
+    .filter((x) => x && x.g && (x.g.live || {}).state === "live")
+    .map((x) => ({ ...x, riding: x.sport === sport ? on(x.g) : 0 }))
+    .sort((a, b) => b.riding - a.riding);
+}
+
+function deckRidingRows(rows) {
+  return (rows || []).filter((r) => r.phase === "live");
+}
+
+function deckFirstWord(sport) {
+  return { mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", ufc: "First bout" }[sport]
+    || "Kickoff";
+}
+
+/* The quiet-night line. Every clause is a fact we hold; a missing one
+   is left out rather than guessed. */
+function deckQuietLine({ league, sport, first, queued }) {
+  const bits = [`No ${league} games live.`];
+  if (first) bits.push(`${deckFirstWord(sport)} ${first}.`);
+  if (queued) bits.push(`${queued} bet${queued === 1 ? "" : "s"} queued.`);
+  return bits.join(" ");
+}
+
+function deckStateWord(r) {
+  const s = (r || {}).status;
+  if (s === "cleared" || s === "won_pending") return ["Won", "good"];
+  if (s === "busted" || s === "lost_pending" || s === "dead") return ["Gone", "bad"];
+  if (s === "push_pending") return ["Push", ""];
+  return ["Tracking", ""];
+}
+
+/* The fast scoreboards only — a few KB per league, never the boards
+   (the MLB board is 8MB, and the Live tab pays that for its odds grid;
+   a home strip that shows scores does not). */
+async function fetchFastLiveAll() {
+  if (Date.now() - _deckFast.at < 15000) return _deckFast.games;
+  const out = [];
+  await Promise.all(Object.entries(LIVE_FAST).map(async ([sport, url]) => {
+    try {
+      const r = await boardFetch(url, { cache: "no-store" });
+      if (!r.ok) return;
+      const d = await r.json();
+      (d.games || []).forEach((g) => out.push({ sport, g }));
+    } catch (e) {}
+  }));
+  _deckFast = { at: Date.now(), games: out };
+  return out;
+}
+
+function deckHead(title, href, view, link) {
+  return `<div class="hd-head"><span>${title}</span>
+    <a href="${href}" data-view="${view}">${link} &#8594;</a></div>`;
+}
+
+function deckGameHTML(x) {
+  const g = x.g, lv = g.live || {};
+  const hold = liveHoldWord(lv);
+  const row = (abbr, score) => `<div class="hd-team"><span>${teamMarkIn(x.sport, abbr, 22)}<em>${
+    escapeHtml(teamNameIn(x.sport, abbr))}</em></span><b>${score != null ? score : "–"}</b></div>`;
+  const sit = [lv.period, lv.clock].filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+  return `<button type="button" class="hd-game" data-lsport="${escapeAttr(x.sport)}">
+    <div class="hd-game-top"><span class="hd-lg">${escapeHtml(LEAGUE_LABEL[x.sport] || String(x.sport).toUpperCase())}</span>
+      <span class="hd-live${hold ? " hold" : ""}"><i class="live-dot${hold ? " paused" : ""}"></i>${
+        hold ? escapeHtml(hold) : "LIVE"}</span></div>
+    ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
+    <div class="hd-game-foot"><span class="mono">${sit}</span>${
+      x.riding ? `<span class="hd-riding">${x.riding} riding</span>` : ""}</div>
+  </button>`;
+}
+
+async function deckLiveHTML(riding, rows) {
+  const fast = await fetchFastLiveAll();
+  const live = deckLiveGames(fast, riding, state.sport);
+  const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  let inner;
+  if (live.length) {
+    inner = `<div class="hd-strip">${live.map(deckGameHTML).join("")}</div>`;
+  } else {
+    const next = fast.filter((x) => x.sport === state.sport && (x.g.live || {}).state === "scheduled")
+      .map((x) => (x.g.live || {}).start_time).filter(Boolean).sort()[0];
+    let first = next ? pbpTime(next) : "";
+    if (!first) {
+      const kick = ((state.data || {}).games || []).map((g) => g.kickoff).filter(Boolean).sort()[0];
+      first = kick ? formatKickoff(kick) : "";
+    }
+    const queued = (rows || []).filter((r) => r.phase === "upcoming").length;
+    inner = `<div class="hd-quiet"><i class="live-dot paused"></i>${
+      escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</div>`;
+  }
+  return `<section class="hd-sec" data-sec="live">${deckHead("Live now", "#live", "live", "Live")}${inner}</section>`;
+}
+
+function deckRidingHTML(riding) {
+  if (!riding.length) return "";
+  const row = (r) => {
+    const [word, tone] = deckStateWord(r);
+    const sub = [r.odds != null ? american(r.odds) : "", r.book || "", DECK_BOOK_LABEL[r.category] || ""]
+      .filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+    const prog = r.current != null && r.line != null && r.market !== "moneyline"
+      ? `<b class="mono">${escapeHtml(String(r.current))} / ${escapeHtml(String(r.line))}</b>` : "";
+    return `<div class="hd-row"><div class="hd-what"><b>${trackerBetText(r)}</b><span>${sub}</span></div>
+      <div class="hd-state"><span class="hd-chip ${tone}">${word}</span>${prog}</div></div>`;
+  };
+  return `<section class="hd-sec" data-sec="riding">${deckHead("Riding", "#live", "live", "Live")}
+    <div class="hd-card">${riding.slice(0, 4).map(row).join("")}</div></section>`;
+}
+
+function deckPickRow(r) {
+  const label = r.pick_label || [r.player, r.side, r.line, r.market_label || r.market]
+    .filter((s) => s != null && s !== "").join(" ");
+  const sub = [r.matchup || "", r.odds != null ? american(r.odds) : "", r.book || ""]
+    .filter(Boolean).map((s) => escapeHtml(String(s))).join(" · ");
+  const p = Number(r.model_prob);
+  const prob = isFinite(p) && p > 0 && p < 1
+    ? `<div class="hd-prob"><b>${Math.round(p * 100)}%</b><span>to hit</span></div>` : "";
+  return `<div class="hd-row"><div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${prob}</div>`;
+}
+
+function deckTonightHTML(d) {
+  const potd = d.pick_of_the_day;
+  const pick = potd && typeof potd === "object" ? potd.pick : null;
+  const call = ((potd || {}).verdict || {}).call;
+  const showPotd = !!(pick && pick.player && (call == null || String(call) === "bet"));
+  const same = (r) => pick && r.player === pick.player && r.market === pick.market
+    && String(r.line) === String(pick.line);
+  const likely = (d.board_shelves || []).flatMap((sh) => sh.rows || [])
+    .filter(showableLikelyRow).filter((r) => !same(r)).slice(0, 3);
+  if (!showPotd && !likely.length) return "";
+  const potdRow = showPotd ? deckPickRow({
+    player: pick.player, side: pick.side, line: pick.line,
+    market_label: pick.market_label || pick.market,
+    matchup: pick.team && pick.opponent ? `${pick.team} vs ${pick.opponent}` : "",
+    model_prob: pick.model_prob }) : "";
+  return `<section class="hd-sec" data-sec="tonight">${deckHead("Tonight’s picks", "#tonight", "tonight", "Picks")}
+    ${showPotd ? `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${potdRow}</div>` : ""}
+    ${likely.length ? `<div class="hd-card">${likely.map(deckPickRow).join("")}</div>` : ""}</section>`;
+}
+
+/* The record tiles and Zeno's open tickets. A tile prints only when the
+   book has settled something — "+0.0% over 0" is a number nobody
+   earned. */
+async function deckRecordHTML() {
+  let rec = null;
+  try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
+  if (!rec) return {};
+  const ov = rec.overall || {};
+  const z = rec.zeno || {};
+  const zo = z.overall || {};
+  const sign = (v) => (v >= 0 ? "+" : MINUS);
+  const tone = (v) => (v >= 0 ? "var(--good)" : "var(--bad)");
+  const wl = (t) => `${t.wins}-${t.losses}${t.pushes ? `-${t.pushes}` : ""}`;
+  const tile = (k, big, color, sub) => `<div class="hd-stat"><span class="hd-eyebrow">${k}</span>
+    <b style="color:${color}">${big}</b><span>${sub}</span></div>`;
+  const tiles = [];
+  if (ov.settled) {
+    const roi = Number(ov.roi || 0);
+    tiles.push(tile("Model", `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
+                    `${wl(ov)} · ${ov.settled} settled`));
+  }
+  if (zo.settled) {
+    const pr = Number(zo.profit || 0);
+    tiles.push(tile("Zeno", `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+                    `${wl(zo)} · ${zo.settled} settled`));
+  }
+  const record = tiles.length
+    ? `<section class="hd-sec" data-sec="record">${deckHead("The record", "#record", "record", "Results")}
+       <div class="hd-stats">${tiles.join("")}</div></section>` : "";
+  const open = z.open || [];
+  const zeno = open.length
+    ? `<section class="hd-sec" data-sec="zeno">${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
+       <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div></section>` : "";
+  return { record, zeno };
+}
+
+async function renderHomeDeck() {
+  const host = document.getElementById("home-deck");
+  if (!host) return;
+  clearTimeout(_deckTimer);
+  if (!isPhone()) { host.hidden = true; host.innerHTML = ""; return; }
+  const d = state.data || {};
+  const rows = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])]);
+  const riding = deckRidingRows(rows);
+  const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
+  if (state.view !== "recommended" && !document.getElementById("view-recommended").classList.contains("active")) return;
+  const sections = { live, riding: deckRidingHTML(riding), tonight: deckTonightHTML(d), ...rest };
+  host.innerHTML = HOME_DECK_ORDER.map((k) => sections[k] || "").join("");
+  host.hidden = !host.innerHTML.trim();
+  host.querySelectorAll(".hd-game").forEach((b) => b.addEventListener("click", () => {
+    _liveChipSport = state.sport;
+    _liveChip = LIVE_FEEDS[b.dataset.lsport] ? b.dataset.lsport : "all";
+    switchView("live", true);
+  }));
+  host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.text || ""); b.textContent = "Copied"; }
+    catch (e) { b.textContent = "Copy failed"; }
+    setTimeout(() => { b.textContent = "Copy"; }, 1500);
+  }));
+  _deckStamp = fastLiveStamp(_deckFast.games.map((x) => x.g));
+  armDeckLive();
+}
+
+/* The live strip follows the scoreboard on its own clock, redrawing
+   only when a score, period or count moved — the same stamp the
+   dashboard uses — so a quiet night costs nothing. */
+function armDeckLive() {
+  clearTimeout(_deckTimer);
+  if (state.view !== "recommended" || !isPhone()) return;
+  _deckTimer = setTimeout(async () => {
+    _deckTimer = null;
+    if (state.view !== "recommended") return;
+    _deckFast.at = 0;
+    const fast = await fetchFastLiveAll();
+    const now = fastLiveStamp(fast.map((x) => x.g));
+    if (now !== _deckStamp) { renderHomeDeck(); return; }
+    armDeckLive();
+  }, DECK_LIVE_EVERY_MS);
 }
 
 const SETTLE_BUZZ = { cleared: "win", won_pending: "win", busted: "loss", lost_pending: "loss", dead: "loss" };

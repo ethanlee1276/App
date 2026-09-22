@@ -253,8 +253,13 @@ def test_a_spread_prints_the_number_he_took():
     market-line comparison all speak in the number he took."""
     body = APP[APP.index("function renderLivePicks() {"):]
     body = body[:body.index("\n}\n")]
-    i = body.index('if (r.market === "spread") {')
-    assert "const took = -r.line;" in body[i:i + 900], "betTxt prints the stored line"
+    # The sentence lives in trackerBetText since 2026-09-22 (shared with
+    # the phone home deck); the tab binds it as betTxt.
+    assert "const betTxt = trackerBetText;" in body
+    txt = APP[APP.index("function trackerBetText(r)"):]
+    txt = txt[:txt.index("\n}\n")]
+    i = txt.index('if (r.market === "spread") {')
+    assert "const took = -r.line;" in txt[i:i + 900], "betTxt prints the stored line"
     j = body.index('if (r.current != null && r.market === "spread")')
     spread = body[j:j + 1200]
     assert "covering ${spreadTxt}" in spread and "needs ${Math.ceil(need)} more" in spread
