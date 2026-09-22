@@ -126,6 +126,40 @@ def test_the_riding_section_yields_to_the_tray_on_phones():
     assert 'deckFill(host, "riding", deckRidingHTML(riding));' in _fn("renderHomeDeck")
 
 
+# --- one menu ----------------------------------------------------------------
+def test_the_phone_has_one_menu_and_the_bar_loses_the_bell():
+    """The third screenshot: the drawer open beside a tab bar whose
+    fifth slot opens a sheet with the same list. On phones the drawer
+    stays shut and the hamburger is gone; the bell went with it, since
+    Injuries & News is a row in the sheet. Both are the tablet's still
+    (761–900px has no tab bar), so the rules live in the phone block
+    and nowhere wider."""
+    assert "  .menu-toggle { display: none; }" in SHEET
+    assert "  #nav-bell { display: none; }" in SHEET
+    wide = CSS[:CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))]
+    assert "#nav-bell { display: none" not in wide, "the desktop lost its bell"
+    assert "@media (max-width: 900px)" in wide and ".menu-toggle { display: grid;" in wide, "the tablet lost its hamburger"
+
+
+def test_the_drawers_footer_rides_into_the_sheet_as_proxies():
+    """No control lost with the drawer: the two switches click the real
+    switch through and read its state back; the social links are the
+    real anchors cloned with the href igMount gave them, ids dropped so
+    the page keeps one of each."""
+    assert 'id="more-switches"' in HTML and 'id="more-social"' in HTML
+    foot = _fn("moreSheetFoot")
+    assert '["hcm-toggle", "pz-toggle"].forEach' in foot
+    assert 'const on = real.getAttribute("aria-checked") === "true";' in foot, "the proxy's state is read from the switch, not kept"
+    assert 'b.setAttribute("aria-checked", on ? "true" : "false");' in foot
+    assert 'b.addEventListener("click", () => { real.click(); moreSheetFoot(); });' in foot, "the proxy must click the real switch and re-read"
+    assert 'if (!real || !words || words.hidden) return;' in foot, "a switch the sidebar hides is hidden here too"
+    assert '["nav-ig", "nav-dc"].forEach' in foot
+    assert 'if (!real || real.hidden) return;' in foot, "a link the server never sent stays hidden"
+    assert 'a.removeAttribute("id");' in foot, "two elements with one id"
+    assert "moreSheetFoot();" in _fn("moreSheetBuild"), "the footer is not rebuilt with the sheet"
+    assert '.more-switch[aria-checked="true"] i { color: var(--good); }' in SHEET
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

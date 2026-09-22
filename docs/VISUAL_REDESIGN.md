@@ -305,10 +305,20 @@ surface.
     group no longer lists it; Results is the bar's.
   * *The home's Riding section repeated the tray.* Hidden on phones,
     where the tray floats; the desktop deck keeps it.
-  Pinned by `tests/test_the_phone_says_nothing_twice.py`. Next in this
-  slice: the phone drawer goes (the sheet is the one way in), the home
-  deck takes the prototype's order with the hero first, and the Pick of
-  the Day becomes the prototype's hero.
+  * *Two menus.* The hamburger drawer and the More sheet held the same
+    list. On phones the hamburger is hidden and the drawer never
+    opens; the sheet is the one way in, and the drawer's footer — the
+    High Confidence and Parlay Mode switches, the Instagram and
+    Discord links — rides into the sheet as proxies of the real
+    controls (`moreSheetFoot`). The drawer stays the tablet's menu
+    (761–900px, where there is no tab bar). The bell left the phone
+    bar with it: Injuries & News is a row in the sheet.
+  Pinned by `tests/test_the_phone_says_nothing_twice.py`; the drawer
+  file's browser probe now measures the sheet. Next in this slice: the
+  home deck takes the prototype's order with the hero first, the Pick
+  of the Day becomes the prototype's hero, and then every other page
+  (Ethan: "Fantasy, the record page, all the other pages are still the
+  same … cluttered and confusing").
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

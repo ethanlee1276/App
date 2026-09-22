@@ -39409,6 +39409,54 @@ function moreSheetBuild() {
     g.appendChild(h); g.appendChild(wrap);
     host.appendChild(g);
   });
+  moreSheetFoot();
+}
+
+/* THE DRAWER'S FOOTER, IN THE SHEET. On phones the sidebar no longer
+   slides in (2026-09-22: two menus was the repeat Ethan photographed),
+   so the two switches and the social links that lived in its footer
+   would have had no phone at all. Each row here PROXIES the real
+   control — the switch is #hcm-toggle / #pz-toggle clicked through, the
+   link is #nav-ig / #nav-dc cloned with whatever href igMount gave it —
+   so there is still one place each is wired and one place each is
+   switched. Rebuilt on every open, so the state read is the state. */
+function moreSheetFoot() {
+  const sw = document.getElementById("more-switches");
+  if (sw) {
+    sw.innerHTML = "";
+    ["hcm-toggle", "pz-toggle"].forEach((id) => {
+      const real = document.getElementById(id);
+      const words = real && real.closest(".sb-hcm");
+      if (!real || !words || words.hidden) return;
+      const on = real.getAttribute("aria-checked") === "true";
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "more-pill more-switch";
+      b.setAttribute("role", "switch");
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.dataset.for = id;
+      const ico = words.querySelector("svg");
+      if (ico) b.appendChild(ico.cloneNode(true));
+      b.appendChild(document.createTextNode(((words.querySelector("b") || {}).textContent || "").trim()));
+      const st = document.createElement("i");
+      st.textContent = on ? "On" : "Off";
+      b.appendChild(st);
+      b.addEventListener("click", () => { real.click(); moreSheetFoot(); });
+      sw.appendChild(b);
+    });
+  }
+  const so = document.getElementById("more-social");
+  if (so) {
+    so.innerHTML = "";
+    ["nav-ig", "nav-dc"].forEach((id) => {
+      const real = document.getElementById(id);
+      if (!real || real.hidden) return;
+      const a = real.cloneNode(true);
+      a.removeAttribute("id");
+      a.className = "more-pill";
+      so.appendChild(a);
+    });
+  }
 }
 
 let _moreCloser = null;

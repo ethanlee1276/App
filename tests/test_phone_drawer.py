@@ -197,25 +197,19 @@ def test_the_scrim_is_painted_before_the_drawer():
         "the scrim now comes after the drawer in the DOM"
 
 
-def test_the_phone_opens_the_drawer_from_the_hamburger():
-    """THIS USED TO SAY THE OPPOSITE. At ≤760px the hamburger was
-    `display: none !important` and the tab bar's Menu reached the drawer
-    by clicking that hidden button — a control nobody could see driving
-    the one they could.
+def test_the_phone_has_one_menu_and_it_is_the_sheet():
+    """THIS HAS SAID THREE THINGS. First that the hamburger was hidden
+    at ≤760px and the tab bar's Menu drove it by a synthetic click (a
+    control nobody could see driving the one they could). Then, from
+    2026-08-22, that it must be visible — Ethan: "move the menu button
+    too be like three bars on the top left." And now, 2026-09-22, that
+    it is hidden again — because the tab bar's fifth slot became More,
+    and a phone with a hamburger AND a More sheet holding the same
+    list was the repeat Ethan photographed that day.
 
-    Ethan reversed it on 2026-08-22, and for a concrete reason: the top
-    bar's icon row had grown past its space and was clipping its own
-    earliest icons, so the search button silently stopped existing. "Maybe
-    we put it on the bottom bar where the menu button is, then move the
-    menu button too be like three bars on the top left." The drawer has
-    room up there and the tab bar's fifth slot became a destination, which
-    is what a tab bar is for.
-
-    What this file still guards is unchanged: the phone must have exactly
-    one way in and it must not be hidden."""
-    # EVERY ≤760px block, joined. There are a dozen in this sheet and the
-    # browser applies all of them; taking the first found one about
-    # something else entirely and concluded the hamburger was unstyled.
+    What this file still guards is unchanged: the phone must have
+    exactly one way in and it must not be hidden. The one way in is the
+    sheet; the drawer is the tablet's (761–900px, no tab bar there)."""
     import re as _re
     parts, at = [], 0
     while True:
@@ -238,16 +232,37 @@ def test_the_phone_opens_the_drawer_from_the_hamburger():
     assert parts, "no ≤760px block"
     block = "\n".join(parts)
     rules = _re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", block)
-    assert rules, "the phone block says nothing about the hamburger"
-    assert any("display: grid" in r for r in rules), (
-        "the hamburger is hidden on phones again, and the tab bar no "
-        "longer has a Menu button to fall back on — the phone would have "
-        "no way into the drawer at all")
+    assert rules and any("display: none" in r for r in rules), \
+        "the hamburger is shown on phones again — two menus"
+    assert not any("display: grid" in r for r in rules)
+    # Nothing clicks the hidden button on the phone's behalf: the sheet
+    # opens itself, from the tab bar's own More.
+    assert 'getElementById("tb-menu")' not in APP
+    assert 'id="tb-more"' in HTML and 'id="tb-search"' in HTML
+    init = APP[APP.index("function moreSheetInit("):]
+    init = init[:init.index("\n}")]
+    assert 'getElementById("tb-more")' in init and "moreSheetOpen(" in init
+    # And the drawer's footer — the two switches and the social links —
+    # rides into the sheet as proxies, so no phone control is lost.
+    foot = APP[APP.index("function moreSheetFoot("):]
+    foot = foot[:foot.index("\n}")]
+    for needle in ('["hcm-toggle", "pz-toggle"]', "real.click(); moreSheetFoot();",
+                   '["nav-ig", "nav-dc"]', 'a.removeAttribute("id");'):
+        assert needle in foot, needle
 
-    # And nothing clicks a hidden button on its behalf any more.
-    assert 'getElementById("tb-menu")' not in APP, (
-        "the tab bar still proxies to the toggle; that slot is Search now")
-    assert 'id="tb-search"' in HTML
+
+def test_the_sheet_carries_the_drawers_paint_guards():
+    """The 2026-08-19 finding, applied to the phone's menu that
+    replaced the drawer: a promoted layer is ordered by z-index only
+    against another promoted layer, and among equals the last painted
+    wins. So the sheet is promoted, outranks its scrim, and comes after
+    it in the document — the same three guards the drawer carries."""
+    sheet = _rule(".more-sheet { display: block; position: fixed;")
+    scrim = _rule(".more-scrim { display: block; position: fixed;")
+    assert _z(sheet) > _z(scrim), "the sheet does not outrank its scrim"
+    assert "will-change: transform" in sheet, "the sheet is not promoted; z-index stops being binding"
+    assert HTML.index('id="more-scrim"') < HTML.index('id="more-sheet"'), "the scrim comes after the sheet"
+    assert "backdrop-filter" not in scrim
 
 
 # --------------------------------------------------------------------------
@@ -325,7 +340,7 @@ out.ordering = await p.evaluate(() => {
     if (cs.position === 'fixed' || cs.position === 'sticky') return 'position';
     return '';
   };
-  const a = document.getElementById('scrim'), b = document.getElementById('sidebar');
+  const a = document.getElementById('more-scrim'), b = document.getElementById('more-sheet');
   const walls = [];
   for (let el = a.parentElement; el && el !== document.documentElement;
        el = el.parentElement) {
@@ -338,44 +353,42 @@ out.ordering = await p.evaluate(() => {
            walls };
 });
 
-// `#menu-toggle`, NOT `#tb-menu`. This probe tapped the tab bar's Menu
-// button, which was removed when that slot became Search — and the
-// static half of this very file asserts it is gone
-// (`getElementById("tb-menu") not in APP`). So the two halves disagreed
-// and the browser half timed out for thirty seconds waiting for a
-// control the other half requires to be absent. The hamburger is what
-// opens the drawer on a phone now, and the test above this one already
-// says it must be visible there.
-await p.locator('#menu-toggle').tap();
+// `#tb-more`: the tab bar's fifth slot is the phone's one menu
+// (2026-09-22). This probe has tapped `#tb-menu` (removed when that
+// slot became Search) and `#menu-toggle` (hidden on phones since the
+// sheet arrived) — each time the static half of this file said one
+// thing and the browser half waited thirty seconds for the other.
+await p.locator('#tb-more').tap();
 await p.waitForTimeout(900);                   // past the slide
 
-const r = await p.locator('#sidebar').boundingBox();
+const r = await p.locator('#more-sheet').boundingBox();
 out.rect = r;
 out.open = await p.evaluate(() => {
-  const sb = document.getElementById('sidebar');
-  return { cls: document.body.classList.contains('menu-open'),
+  const sb = document.getElementById('more-sheet');
+  return { cls: document.body.classList.contains('more-open'),
            bg: getComputedStyle(sb).backgroundColor,
-           scrim: getComputedStyle(document.getElementById('scrim')).display,
-           aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') };
+           scrim: getComputedStyle(document.getElementById('more-scrim')).display,
+           aria: document.getElementById('tb-more').getAttribute('aria-expanded') };
 });
-// Inset, so the panel's own border and the page beyond it are excluded.
-out.face = await faceOf({ x: r.x + 6, y: r.y + 24,
-                          width: Math.max(40, r.width - 14),
-                          height: Math.min(460, r.height - 48) });
+// The sheet's own top band — padding and the handle's margin — before
+// the first row, so the colour asked for is the panel's, not a row's.
+out.face = await faceOf({ x: r.x + 6, y: r.y + 2, width: Math.max(40, r.width - 12), height: 18 });
 // The browser's own hit-test, which is the finger's question: can a nav
 // row in there actually be tapped, or does something intercept it?
 try {
-  await p.locator('#sidebar .sport-btn').first().click({ trial: true, timeout: 4000 });
+  await p.locator('#more-sheet .more-pill').first().click({ trial: true, timeout: 4000 });
   out.reachable = true;
 } catch (e) { out.reachable = String(e).slice(0, 160); }
 
-await p.locator('#menu-toggle').tap();
+await p.touchscreen.tap(195, 60);              // the scrim, above the sheet
 await p.waitForTimeout(900);
-out.closed = await p.evaluate(() => ({
-  cls: document.body.classList.contains('menu-open'),
-  scrim: getComputedStyle(document.getElementById('scrim')).display,
-  left: Math.round(document.getElementById('sidebar').getBoundingClientRect().right),
-  aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') }));
+out.closed = await p.evaluate(() => {
+  const sh = document.getElementById('more-sheet');
+  return { cls: document.body.classList.contains('more-open'),
+           scrim: getComputedStyle(document.getElementById('more-scrim')).display,
+           gone: sh.hidden || sh.getBoundingClientRect().top >= innerHeight - 1,
+           aria: document.getElementById('tb-more').getAttribute('aria-expanded') };
+});
 console.log(JSON.stringify(out));
 await b.close();
 """
@@ -411,10 +424,11 @@ def _run_probe():
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
 
-def test_the_drawer_actually_paints_where_it_says_it_is():
+def test_the_sheet_actually_paints_where_it_says_it_is():
     """The assertion the DOM could not make. Every DOM fact was correct
     while Ethan's recording was failing — class on, transform at zero,
-    rect at left 0 — and the drawer was still invisible."""
+    rect at left 0 — and the drawer was still invisible. The phone's
+    menu is the sheet now (2026-09-22) and the question is the same."""
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -425,39 +439,38 @@ def test_the_drawer_actually_paints_where_it_says_it_is():
 
     o = out["ordering"]
     assert o["siblings"], \
-        "the scrim and the drawer are no longer siblings — z-index stops comparing them"
+        "the scrim and the sheet are no longer siblings — z-index stops comparing them"
     assert o["order"] == "scrim-first", \
-        "the drawer now comes BEFORE the scrim; among equals the scrim would win"
+        "the sheet now comes BEFORE the scrim; among equals the scrim would win"
     assert not o["walls"], (
-        "something between the drawer and the root builds a stacking context, "
+        "something between the sheet and the root builds a stacking context, "
         f"so its z-index no longer outranks the scrim's: {o['walls']}")
-    assert out["open"]["cls"], "tapping the tab bar's Menu did not open the drawer"
+    assert out["open"]["cls"], "tapping the tab bar's More did not open the sheet"
     assert out["open"]["scrim"] == "block", "no scrim while open"
-    assert out["open"]["aria"] == "true", "aria-expanded did not follow the drawer"
+    assert out["open"]["aria"] == "true", "aria-expanded did not follow the sheet"
     assert round(out["rect"]["x"]) == 0, \
-        f"the drawer is not at the left edge: x={out['rect']['x']}"
+        f"the sheet is not at the left edge: x={out['rect']['x']}"
 
     want = [int(n) for n in re.findall(r"\d+", out["open"]["bg"])[:3]]
     got = out["face"]["modal"]
     assert got == want, (
-        "THE DRAWER IS OPEN AND SOMETHING ELSE IS PAINTED OVER IT.\n"
+        "THE SHEET IS OPEN AND SOMETHING ELSE IS PAINTED OVER IT.\n"
         f"  the panel's background is rgb{tuple(want)}\n"
         f"  the pixels in its own rectangle are mostly rgb{tuple(got)}\n"
         "  This is Ethan's 2026-08-19 recording. Check that nothing new "
         "promotes the scrim (backdrop-filter, filter, opacity, transform) "
-        "and that the drawer still carries will-change: transform.")
+        "and that the sheet still carries will-change: transform.")
     assert out["face"]["share"] > 0.25, \
-        (f"only {out['face']['share']:.0%} of the drawer's rectangle is its own "
+        (f"only {out['face']['share']:.0%} of the sheet's band is its own "
          "background — it is mostly covered by something")
 
     assert out["reachable"] is True, \
-        f"a nav row inside the open drawer cannot be tapped: {out['reachable']}"
+        f"a row inside the open sheet cannot be tapped: {out['reachable']}"
 
-    assert not out["closed"]["cls"], "a second tap on Menu did not close the drawer"
+    assert not out["closed"]["cls"], "a tap on the scrim did not close the sheet"
     assert out["closed"]["scrim"] == "none", \
-        "THE SCRIM OUTLIVED THE DRAWER — this is the stuck-blurred-screen half"
-    assert out["closed"]["left"] <= 0, \
-        f"the drawer did not slide back off screen: right edge {out['closed']['left']}"
+        "THE SCRIM OUTLIVED THE SHEET — this is the stuck-blurred-screen half"
+    assert out["closed"]["gone"], "the sheet did not slide back off screen"
     assert not out["errs"], f"page errors: {out['errs']}"
 
 

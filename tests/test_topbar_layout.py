@@ -97,19 +97,23 @@ def test_the_drawer_opens_from_the_top_left():
         "the hamburger is hidden on phones again")
 
 
-def test_the_hamburger_is_visible_on_a_phone():
-    """It was `display: none !important` at ≤760px, and the tab bar
-    reached the drawer by clicking it anyway — a hidden control driving
-    the visible one."""
-    decls = _decls()
-    block = _media("760px")
-    # EVERY .menu-toggle rule in the block, not the first — there is a
-    # nested @media for 380px that only resizes it, and taking the first
-    # match found that one.
-    hits = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", block)
+def test_the_hamburger_is_the_tablets_and_the_phone_has_one_menu():
+    """Two histories, one rule. It was `display: none !important` at
+    ≤760px while the tab bar reached the drawer by clicking it anyway —
+    a hidden control driving the visible one — so it came back on
+    2026-08-22. Then the tab bar's fifth slot became More (2026-09-22)
+    and the phone had two menus holding the same list, which Ethan
+    photographed. So: hidden on phones, where the sheet is the menu and
+    nothing clicks the hidden button on its behalf; shown between 761
+    and 900px, where there is no tab bar and the drawer is the menu."""
+    hits = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("760px"))
     assert hits, "the phone block says nothing about the hamburger"
-    assert any("display: grid" in h for h in hits), (
-        "the hamburger is not shown on phones: %r" % hits)
+    assert any("display: none" in h for h in hits), "the phone has two menus again: %r" % hits
+    assert not any("display: grid" in h for h in hits)
+    tablet = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("900px"))
+    assert any("display: grid" in h for h in tablet), "the tablet band lost its only menu"
+    assert 'getElementById("menu-toggle")' not in _code() or ".click()" not in _code()[_code().index('getElementById("menu-toggle")'):][:600]
+    assert 'id="tb-more"' in _markup()
 
 
 def test_the_tab_bar_ends_with_search_not_menu():
