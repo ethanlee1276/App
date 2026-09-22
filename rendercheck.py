@@ -326,6 +326,13 @@ for (const s of PLAN) {
                 errs: [] };
   const p = await b.newPage({ viewport: { width: WIDTH, height: 1200 } });
   p.on('pageerror', e => out.errs.push(e.message.slice(0, 140)));
+  // The home deck (2026-09-22) folds the board under itself by default,
+  // and this instrument measures the BOARD — quick tools, the perf grid —
+  // so it opens the fold before the page boots, the way a reader who
+  // tapped "Everything on tonight's board" once would find it.
+  await p.addInitScript(() => {
+    try { localStorage.setItem('qb.home.fold', 'open'); } catch (e) {}
+  });
   try {
     // `domcontentloaded`, NOT `networkidle`. The real app handler serves
     // live endpoints the board polls on a timer, so the network never goes

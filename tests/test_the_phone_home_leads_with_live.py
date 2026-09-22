@@ -197,6 +197,17 @@ def test_the_picks_page_is_the_same_rows_with_doors():
     assert "potdHeroHTML(d)" in deck, "one hero, drawn by one function"
 
 
+def test_the_render_instrument_measures_the_board_with_the_fold_open():
+    """rendercheck's Dashboard claims are about the board under the deck
+    (quick tools, the perf grid). Folded, they measured DRIFT on a
+    page that was fine — so the instrument opens the fold first."""
+    src = (ROOT / "rendercheck.py").read_text()
+    assert "localStorage.setItem('qb.home.fold', 'open')" in src
+    assert src.index("qb.home.fold") < src.index("await p.goto(`http://127.0.0.1:${PORT}/${s.url}`"), \
+        "set before the page boots, not after"
+    assert 'const HOME_FOLD_KEY = "qb.home.fold";' in APP, "the same key the page reads"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
