@@ -284,7 +284,7 @@ surface.
   model and for Zeno. A riding tray floats above the tab bar on phones
   while journaled bets are in play (hidden on the Live tab it points
   at). The Pick of the Day card is the home's hero, on the venue render
-  its team's colours pick, its headline in Bodoni. Everything drawn is
+  its team's colours pick, its headline in the display face (Ethan's render set that token to Archivo Narrow; the prototype showed Bodoni — one token to flip if he prefers it). Everything drawn is
   a number the board already held; nothing is drawn otherwise. Pinned
   by `tests/test_v3_looks_like_a_book_and_like_us.py`. Two things the
   first render caught: Chromium resolves a `url()` that reaches CSS
@@ -313,12 +313,21 @@ surface.
     controls (`moreSheetFoot`). The drawer stays the tablet's menu
     (761–900px, where there is no tab bar). The bell left the phone
     bar with it: Injuries & News is a row in the sheet.
-  Pinned by `tests/test_the_phone_says_nothing_twice.py`; the drawer
-  file's browser probe now measures the sheet. Next in this slice: the
-  home deck takes the prototype's order with the hero first, the Pick
-  of the Day becomes the prototype's hero, and then every other page
-  (Ethan: "Fantasy, the record page, all the other pages are still the
-  same … cluttered and confusing").
+  * *The home in the old order, with the old headers.* The deck now
+    leads with the Pick of the Day as the prototype's hero (gold
+    eyebrow, the verdict as a pill, the bet in the display face over the venue
+    render, the price line in mono — CSS on the card's own pieces, no
+    field lost), then Live now, Riding, tonight's games, Most likely,
+    Edge, the record, Zeno, tools. Every home section wears the deck's
+    head; the adopted zones' old titles ("Qellys’ top picks — who’s
+    most likely to hit…") keep their words one line down, quieter. The
+    games row's league select, the crest strip again, is hidden on the
+    phone home.
+  Pinned by `tests/test_the_phone_says_nothing_twice.py` and
+  `tests/test_the_phone_home_leads_with_live.py`; the drawer file's
+  browser probe now measures the sheet. Next: every other page (Ethan:
+  "Fantasy, the record page, all the other pages are still the same …
+  cluttered and confusing").
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

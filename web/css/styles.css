@@ -6764,7 +6764,18 @@ body.has-rail .shell {
 #home-deck .hd-sec { grid-column: 1 / -1; min-width: 0; }
 #home-deck .hd-sec[data-sec="record"], #home-deck .hd-sec[data-sec="zeno"] { grid-column: auto; }
 #home-deck .hd-sec[hidden] { display: none; }
-#home-deck .hd-sec[data-sec="likely"]:not(:has(#potd-zone > *, #likely-top > *)),
+/* ONE HEAD FOR EVERY HOME SECTION. The adopted zones brought their own
+   titles in the old page's voice ("Qellys’ top picks — who’s most likely
+   to hit · ranked by probability, not by price"), which is the old site
+   showing through the new order (Ethan, 2026-09-22: "it still kinda
+   looks like the same old website"). On the home they wear the deck's
+   head; the sub-line keeps its words, one line down and quieter. */
+#home-deck .section-title { display: block; margin: 0 0 10px; color: var(--text-dim);
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+#home-deck .section-title .sub { display: block; margin-top: 2px; color: var(--text-mute);
+  font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0; text-transform: none; }
+#home-deck .hd-sec[data-sec="hero"]:not(:has(#potd-zone > *)),
+#home-deck .hd-sec[data-sec="likely"]:not(:has(#likely-top > *)),
 #home-deck .hd-sec[data-sec="edge"]:not(:has(#best-bets > *)),
 #home-deck .hd-sec[data-sec="tools"]:not(:has(#quick-tools > *)) { display: none; }
 /* A bare link inside a card ("Full receipts on the Record page") took the
@@ -6856,8 +6867,16 @@ body.has-deck #rail-live { display: none; }
 .potd-hero {
   --potd-art: none;
   position: relative; overflow: hidden; background-size: cover; background-position: center; }
-.potd-hero.has-art { padding-top: 84px; background-image: var(--grad-potd-fade), var(--potd-art); }
-.potd-hero strong { font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }
+.potd-hero.has-art { padding-top: 124px; background-image: var(--grad-potd-fade), var(--potd-art); }
+/* The prototype's hero: a gold eyebrow, the verdict as a pill, the bet
+   in Bodoni, the price line in mono. The card's own pieces, dressed —
+   the markup and every field are the ones test_potd_card pins. */
+.potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--brand-2); }
+.potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;
+  margin-top: 6px; padding: 5px 11px; border-radius: 999px; }
+.potd-hero .potd-bet { font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }
+.potd-hero .potd-bet + span { font-family: var(--font-mono); }
 /* v3: the riding tray exists only where the tab bar does (phone block). */
 .riding-tray { display: none; }
 
@@ -7069,6 +7088,9 @@ body.has-deck #rail-live { display: none; }
   /* The tray above the tab bar already says what is riding; the deck's
      Riding section under it was the same rows twice (Ethan, 2026-09-22). */
   #home-deck .hd-sec[data-sec="riding"] { display: none; }
+  /* The crest strip above the deck is the league picker; the games
+     row's own league select was it again. */
+  #home-deck #games-sport { display: none; }
   #home-deck[hidden] { display: none; }
   body { padding-bottom: 84px; }        /* room for the bar */
   /* The open drawer stays UNDER the tab bar (56 over 50) — the bar's

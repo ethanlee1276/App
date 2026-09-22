@@ -2615,7 +2615,7 @@ async function renderPickOfTheDay() {
       <div class="${door ? "openable" : ""}"${door} style="display:flex;gap:11px;align-items:center;margin-top:7px">
         <span class="pick-id">${betMark(pick, 30)}</span>
         <span style="flex:1;min-width:0">
-          <strong style="font-size:var(--fs-lg)">${text}</strong>
+          <strong class="potd-bet">${text}</strong>
           <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
             ${[pick.odds != null ? american(pick.odds) + (pick.book ? ` at ${escapeHtml(pick.book)}` : "") : escapeHtml(pick.book || ""),
                pays ? `pays ${pays}u on 1u` : "", matchup].filter(Boolean).join(" · ")}</span>
@@ -39497,15 +39497,16 @@ function moreSheetInit() {
 }
 
 /* ---------------- The phone home deck (2026-09-22) ----------------------
-   Ethan approved the Figma mock: the phone home leads with what is
-   live, then what we have riding, then tonight's picks, then the record
-   (ours and Zeno's), then Zeno's open tickets. Everything the deck
+   Ethan approved the Figma mock, then the v3 prototype: the home leads
+   with the Pick of the Day as a hero on its venue render, then what is
+   live, then what we have riding, then tonight's games and picks, then
+   the record (ours and Zeno's), then Zeno's open tickets. Everything the deck
    prints is read from the same payloads the zones under it read — the
    fast scoreboards, the tracker rows, the board, record.json — and a
    section with nothing to say is not drawn. Every width: a phone reads
    it as one column, a desktop as a grid (CSS), and the board as it was
    folds under it on both. */
-const HOME_DECK_ORDER = ["live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
+const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely
@@ -39513,8 +39514,9 @@ const HOME_DECK_ORDER = ["live", "riding", "games", "likely", "edge", "record", 
    order with every field they had. (Ethan, 2026-09-22, on a thinner
    version: "I don't like how you got rid of my stadiums.") */
 const HOME_DECK_ADOPTS = {
+  hero: ["potd-zone"],
   games: ["games-head", "slate-horizon", "games-outer"],
-  likely: ["potd-zone", "likely-top"],
+  likely: ["likely-top"],
   edge: ["best-bets"],
   tools: ["quick-tools"],
 };

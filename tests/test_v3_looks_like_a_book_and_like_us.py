@@ -132,9 +132,9 @@ def test_the_pick_of_the_day_is_a_hero_on_its_own_venue_render():
     assert 'matchup].filter(Boolean).join(" · ")' in potd, "no leading separator when the price is missing"
     assert '<div class="card potd-hero${potdArt ? " has-art" : ""}"' in potd
     assert "--potd-art:url(${potdArt})" in potd
-    assert ".potd-hero.has-art { padding-top: 84px; background-image: var(--grad-potd-fade), var(--potd-art); }" in CSS
+    assert ".potd-hero.has-art { padding-top: 124px; background-image: var(--grad-potd-fade), var(--potd-art); }" in CSS
     assert "  --potd-art: none;" in CSS and "  --grad-potd-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel) 25%, transparent)," in CSS
-    assert ".potd-hero strong { font-family: var(--font-display);" in CSS, "the headline in the book's voice"
+    assert ".potd-hero .potd-bet { font-family: var(--font-display);" in CSS, "the headline in the book's voice"
 
 
 if __name__ == "__main__":

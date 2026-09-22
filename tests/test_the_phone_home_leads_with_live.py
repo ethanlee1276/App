@@ -1,4 +1,4 @@
-"""The phone home leads with what is live.
+"""The home leads with the Pick of the Day, then what is live.
 
 Ethan, 2026-09-22, choosing the home screen's job for the redesign:
 "Live first." The Figma mock he approved orders the phone home Live now
@@ -85,9 +85,10 @@ def test_the_deck_is_the_first_thing_on_the_home_view_and_adopts_the_board():
     assert '<div id="home-deck" hidden></div>' in view
     got = _node("return HOME_DECK_ADOPTS;")
     if got is not None:
-        assert list(got) == ["games", "likely", "edge", "tools"], got
+        assert list(got) == ["hero", "games", "likely", "edge", "tools"], got
+        assert got["hero"] == ["potd-zone"], "the Pick of the Day is the hero (v4, the prototype's order)"
         assert got["games"] == ["games-head", "slate-horizon", "games-outer"], "the stadium strip, whole"
-        assert got["likely"] == ["potd-zone", "likely-top"] and got["edge"] == ["best-bets"] \
+        assert got["likely"] == ["likely-top"] and got["edge"] == ["best-bets"] \
             and got["tools"] == ["quick-tools"]
         for ids in got.values():
             for z in ids:
@@ -107,7 +108,8 @@ def test_the_deck_is_the_first_thing_on_the_home_view_and_adopts_the_board():
     assert "#home-deck { display: grid; grid-template-columns: 1fr 1fr;" in CSS
     assert "#home-deck .hd-sec { grid-column: 1 / -1; min-width: 0; }" in CSS
     assert '#home-deck .hd-sec[data-sec="record"], #home-deck .hd-sec[data-sec="zeno"] { grid-column: auto; }' in CSS
-    assert '#home-deck .hd-sec[data-sec="likely"]:not(:has(#potd-zone > *, #likely-top > *))' in CSS, \
+    assert '#home-deck .hd-sec[data-sec="hero"]:not(:has(#potd-zone > *)),' in CSS \
+        and '#home-deck .hd-sec[data-sec="likely"]:not(:has(#likely-top > *)),' in CSS, \
         "an adopted section with nothing drawn takes no room"
     phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
     assert "#home-deck { display: block;" in phone
@@ -115,11 +117,11 @@ def test_the_deck_is_the_first_thing_on_the_home_view_and_adopts_the_board():
     assert "renderHomeDeck();" in home[:300], "drawn before the zones below it"
 
 
-def test_the_order_is_live_riding_tonight_record_zeno():
+def test_the_order_is_hero_live_riding_tonight_record_zeno():
     got = _node("return HOME_DECK_ORDER;")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got == ["live", "riding", "games", "likely", "edge", "record", "zeno", "tools"], got
+    assert got == ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"], got
     skel = _fn("deckSkeleton")
     assert "host.innerHTML = HOME_DECK_ORDER.map((k) =>" in skel
     assert '`<section class="hd-sec" data-sec="${k}" hidden></section>`' in skel
@@ -210,6 +212,44 @@ def test_the_picks_page_is_the_same_rows_with_doors():
     phone_at = CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))
     for sel in (".hd-row {", ".hd-card {", ".hd-strip {", ".hd-ribbon {", ".hd-num {", ".hd-row.openable {", ".tn-full {"):
         assert sel in CSS[:phone_at], sel
+
+
+def test_every_home_section_wears_the_decks_head_and_the_league_select_yields():
+    """v4 (2026-09-22): the adopted zones' own titles were the old page's
+    voice inside the new order. On the home they wear the deck's head;
+    the sub-line keeps its words. And the games row's league select was
+    the crest strip again, so the phone home hides it."""
+    assert "#home-deck .section-title { display: block; margin: 0 0 10px; color: var(--text-dim);" in CSS
+    i = CSS.index("#home-deck .section-title {")
+    rule = CSS[i:CSS.index("}", i)]
+    assert "text-transform: uppercase" in rule and "letter-spacing: .12em" in rule
+    sub = CSS[CSS.index("#home-deck .section-title .sub {"):]
+    sub = sub[:sub.index("}")]
+    assert "display: block" in sub and "text-transform: none" in sub, "the sub-line is kept, one line down"
+    phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
+    assert "#home-deck #games-sport { display: none; }" in phone
+    wide = CSS[:CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))]
+    assert "#games-sport { display: none" not in wide, "the desktop's Game Lines room keeps its select"
+
+
+def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
+    """Eyebrow, verdict pill, the headline in the display face, mono
+    price line — CSS on the card's own pieces. The headline's inline
+    size is gone, because an inline style beat the token's size and the
+    hero read as a card. (The display token is Ethan's render's Archivo
+    Narrow; the prototype showed Bodoni — one token to flip.)"""
+    potd = APP[APP.index("async function renderPickOfTheDay("):]
+    potd = potd[:potd.index("\nfunction ", 10)]
+    assert '<strong class="potd-bet">${text}</strong>' in potd
+    assert 'style="font-size:var(--fs-lg)">${text}' not in potd
+    assert ".potd-hero .player { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;" in CSS
+    # Named by the strip's two states, so test_potd_verdict's anchor on
+    # the strip's own rule (`.potd-call {`) stays the first in the sheet.
+    assert ".potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;" in CSS, \
+        "a pill, not a bar: the card is a flex column and stretches its items"
+    assert ".potd-hero .potd-bet { font-family: var(--font-display); font-size: var(--fs-2xl);" in CSS
+    assert ".potd-hero .potd-bet + span { font-family: var(--font-mono); }" in CSS
+    assert ".potd-hero.has-art { padding-top: 124px;" in CSS, "the art has room to be seen"
 
 
 if __name__ == "__main__":
