@@ -7038,6 +7038,24 @@ body.has-deck #rail-live { display: none; }
 .hd-scan .hd-what { flex: 1 1 120px; min-width: 120px; }
 .hd-scan .hd-state .hd-warn { color: var(--warn); }
 .hd-scan .pick-id { flex: 0 0 auto; }
+/* v5: THE RECORD'S ROOMS IN ONE ROW. The learning, calibration, era,
+   loss-pattern, Pick of the Day, long-shot and book-report sections
+   each drew their rows with their own inline flex and a raw rgba
+   border; they share this row now — the hairline, the small size, the
+   wrap on a phone — and a room's few variants are a word each. */
+.rec-row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; padding: 7px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
+.rec-row.mid { align-items: center; }
+.rec-row.tall { padding: 10px 14px; }
+.rec-row.tight { gap: 8px; padding: 4px 0; border-bottom: 0; border-top: var(--hairline) solid var(--border-soft); }
+.rec-row.flush { padding-left: 0; padding-right: 0; }
+.rec-row.dim { opacity: .75; }
+.rec-row.mute { color: var(--text-mute); font-size: var(--fs-xs); }
+.rec-block { padding: 12px 14px; border-top: var(--hairline) solid var(--border-soft); }
+.rec-block.chart { padding: 14px 14px 4px; }
+.rec-cards { display: flex; gap: 18px; flex-wrap: wrap; }
+.rec-note { padding: 10px 14px; margin: 0; font-size: var(--fs-xs); color: var(--text-mute);
+  border-top: var(--hairline) solid var(--border-soft); }
 .scan-stake-row { display: flex; align-items: center; gap: 8px; }
 .scan-stake { width: 90px; background: transparent; color: inherit; font: inherit;
   border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 4px 8px; }

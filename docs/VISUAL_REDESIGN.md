@@ -475,6 +475,11 @@ surface.
     state as the pill.
   * *Doors on every empty board.* The section enhancer adds the three
     doors to every board page's empty state (`enhanceEmpties`), once.
+  * *The Record page's rooms read in one row.* The learning,
+    calibration, era, loss-pattern, Pick of the Day, long-shot and
+    book-report sections drew their rows inline, each a little
+    different; they share `.rec-row` now (a word per variant), the
+    hairline token, the page's small size.
   * *The paywall shows the one record.* It read the record file raw
     and kept quoting the edge book; it adopts the pooled record now
     and leads its results strip with the same ribbon (the model's

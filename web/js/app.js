@@ -12303,8 +12303,7 @@ function recEraSection(er) {
       `${s.toUpperCase()} ${d.w}-${d.l} (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)`)
       .join(" · ");
     return `
-      <div style="display:flex;gap:12px;align-items:center;padding:10px 14px;
-                  border-bottom:1px solid rgba(255,255,255,.05)${isCurrent ? "" : ";opacity:.75"}">
+      <div class="rec-row mid tall${isCurrent ? "" : " dim"}">
         <span style="flex:1;min-width:0">
           <strong>${escapeHtml(e.label)}</strong>
           ${isCurrent ? `<span class="chip" style="margin-left:6px">running now</span>` : ""}
@@ -12769,7 +12768,7 @@ function recLongshotSection(ls) {
          · actually hit <strong>${(ls.actual_hit_rate * 100).toFixed(1)}%</strong>.
          Model above books AND actual above implied = the board finds real value.</div>` : "";
   const watch = ls.watch && (ls.watch.graded || ls.watch.open)
-    ? `<div style="opacity:.7;font-size:.9em;padding:8px 14px;border-top:1px solid rgba(128,128,128,.15)">
+    ? `<div class="rec-note">
          Watchlist sample — <b>closed, no longer growing</b>. This tracked every
          real-priced homer on the slate to tune the model, at a couple of hundred rows a
          night, and it was more journal than the picks it was meant to inform.
@@ -12840,8 +12839,7 @@ function calBucketRows(buckets) {
       : `<span style="color:var(--warn)">${icon('warn')} off by ${(off * 100).toFixed(0)} pts (n=${b.n})</span>`;
     const bar = (v, color) => `<span style="display:inline-block;height:8px;border-radius:4px;
         width:${Math.max(2, v * 100)}px;background:${color};vertical-align:middle"></span>`;
-    return `<div style="display:flex;gap:12px;align-items:center;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+    return `<div class="rec-row mid">
       <span style="min-width:78px;opacity:.7">${b.lo}–${b.hi}%</span>
       <span style="flex:1;min-width:220px">
         ${bar(b.predicted, "var(--brand)")} <span style="font-size:.8em;opacity:.65">said ${(b.predicted * 100).toFixed(0)}%</span>
@@ -12959,8 +12957,8 @@ function calScoreBlock(cal) {
         means the gap between us and the market is concentrated in the
         confident calls rather than spread across the book. Log loss is the
         one that punishes those, so it is the one to believe.</p>` : "";
-  return `<div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,.06)">
-    <div style="display:flex;gap:18px;flex-wrap:wrap">${cards}${ece}</div>
+  return `<div class="rec-block">
+    <div class="rec-cards">${cards}${ece}</div>
     <p style="margin:10px 0 0;font-size:.85em;opacity:.62">Lower is better for both.
       Scored against the de-vigged closing price on the same bets — if we can’t
       out-forecast the close on our own selections, the edge story is fiction.
@@ -12982,8 +12980,7 @@ function calSplitRow(label, c) {
   const ece = c.ece == null ? "—" : (c.ece * 100).toFixed(1) + " pts";
   const tone = c.ece == null ? "" : c.ece <= 0.03 ? "var(--good)"
     : c.ece <= 0.07 ? "var(--warn)" : "var(--bad)";
-  return `<div style="display:flex;gap:12px;align-items:baseline;padding:6px 0;
-      border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em">
+  return `<div class="rec-row flush">
     <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
                  white-space:nowrap">${escapeHtml(label)}</span>
     <span style="opacity:.5;font-variant-numeric:tabular-nums">n=${c.n}</span>
@@ -13218,8 +13215,7 @@ function recSelfTuningSection(st, sport) {
   const tone = (m) => m.at_boundary ? "var(--bad)"
     : Math.abs(m.temperature - 1) > 0.05 ? "var(--warn)" : "var(--good)";
   const rows = markets.map((m) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml((m.sport || "").toUpperCase())}</span>
       <span style="flex:1;min-width:120px">${escapeHtml(m.market)}</span>
       <span style="font-variant-numeric:tabular-nums" title="Temperature: >1 pulls probabilities toward 50% (the model ran hot), <1 pushes them out (it ran shy)">T ${(m.temperature ?? 1).toFixed(2)}</span>
@@ -13254,8 +13250,7 @@ function recSelfTuningSection(st, sport) {
     return `<span style="opacity:.55;font-size:.92em">${escapeHtml(txt)}</span>`;
   };
   const weightRows = weights.map((w) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml((w.sport || "").toUpperCase())}</span>
       <span style="flex:1;min-width:120px">${escapeHtml(w.market || "")}</span>
       <span style="font-variant-numeric:tabular-nums" title="The recency dial: 0 is the hand-tuned spec curve, positive leans on recent form, negative on the long run. ±1.0 is the end of the family, not the end of a search range. Moves only when the record beats the spec by a real margin.">dial ${(w.r ?? 0) >= 0 ? "+" : ""}${(w.r ?? 0).toFixed(1)}</span>
@@ -13295,8 +13290,7 @@ function recSelfTuningSection(st, sport) {
       title="Walk-forward ${escapeHtml(label)}, memory off → on: ${escapeHtml(verdict)} by ${Math.abs(gain).toFixed(5)}. Lower is better. Each bet’s correction knew only that player’s EARLIER games, so this is out-of-sample at every row. The memory switches on only when it wins by at least 0.0005.">${before.toFixed(4)} → ${after.toFixed(4)}</span>`;
   };
   const playerRows = players.map((p) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml((p.sport || "").toUpperCase())}</span>
       <span style="min-width:100px">${escapeHtml(p.market || "")}</span>
       <span style="flex:1;min-width:140px;color:${p.adopted ? "var(--warn)" : "var(--good)"}">${escapeHtml(p.reading || "")}</span>
@@ -13315,8 +13309,7 @@ function recSelfTuningSection(st, sport) {
     <div class="card" style="padding:0">${playerRows}</div>`;
   const trendRows = trendEntries.flatMap(([sp, mkts]) =>
     Object.entries(mkts).map(([mk, t]) => `
-      <div style="display:flex;gap:12px;align-items:baseline;padding:6px 14px;
-          border-bottom:1px solid rgba(255,255,255,.05);font-size:.86em;flex-wrap:wrap">
+      <div class="rec-row">
         <span class="chip">${escapeHtml(sp.toUpperCase())}</span>
         <span style="flex:1;min-width:120px">${escapeHtml(mk)}</span>
         <span style="font-variant-numeric:tabular-nums">ECE ${((t.first || {}).ece ?? 0).toFixed(3)}
@@ -13390,8 +13383,7 @@ function recLossPatternsSection(lp, sport) {
   const tone = (f) => f.action === "close" ? "var(--bad)"
     : (f.gap_pts ?? 0) > 0 ? "var(--warn)" : "var(--text-mute)";
   const rows = findings.map((f) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:7px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span class="chip">${escapeHtml((f.sport || "").toUpperCase())}</span>
       <span style="min-width:100px">${escapeHtml(f.market || "all markets")}</span>
       <span style="flex:1;min-width:140px;font-weight:600">${escapeHtml(f.value || "")}</span>
@@ -13499,8 +13491,7 @@ function recHypothesisLab(hl, sport) {
   const glyph = (h) => h.status === "confirmed" ? icon("check")
     : h.status === "rejected" ? icon("cross") : icon("dash");
   const rows = hyps.map((h) => `
-    <div style="display:flex;gap:12px;align-items:baseline;padding:8px 14px;
-        border-bottom:1px solid rgba(255,255,255,.05);font-size:.88em;flex-wrap:wrap">
+    <div class="rec-row">
       <span style="color:${tone(h)}">${glyph(h)}</span>
       <span class="chip">${escapeHtml((h.sport || "").toUpperCase())}</span>
       <span style="min-width:90px">${escapeHtml(h.market || "all markets")}</span>
@@ -13514,8 +13505,7 @@ function recHypothesisLab(hl, sport) {
         ? `<span class="chip" style="color:var(--bad)">vetoing picks</span>` : ""}
     </div>`).join("");
   const watch = sport ? "" : (hl.watchlist || []).map((w) => `
-    <div style="padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.05);
-        font-size:.85em;color:var(--text-mute)">· ${escapeHtml(w)}</div>`).join("");
+    <div class="rec-row mute">· ${escapeHtml(w)}</div>`).join("");
   // The sport's own record count and the floor a claim needs, so "no
   // hypothesis yet" says how far the sport is from one (Ethan,
   // 2026-09-14: "I also don't see anything about nfl in the hypothesis
@@ -13711,7 +13701,7 @@ function recCalibrationSection(cal, era) {
     }))}">${svg}</div>`;
   const diagram = relWrap(cal.buckets, reliabilityDiagram(cal.buckets));
   const diagramBlock = !diagram ? "" : `
-    <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+    <div class="rec-block chart">
       ${diagram}
       <p style="margin:8px auto 10px;max-width:420px;font-size:.83em;opacity:.6;text-align:center">
         Each dot is one probability bucket; its area is how many bets sit in it, and
@@ -13725,8 +13715,7 @@ function recCalibrationSection(cal, era) {
   // graded, give it its own chart.
   const eraN = (era || {}).n || 0;
   const eraNote = eraN >= 50 ? "" : `
-    <p style="padding:10px 14px;margin:0;font-size:.85em;color:var(--text-mute);
-              border-top:1px solid rgba(255,255,255,.06)">
+    <p class="rec-note">
       Era note: ${cal.n - eraN} of these ${cal.n} graded picks predate the model re-tune${
       (era || {}).since ? ` (${escapeHtml(era.since)})` : ""} — the misses above were mostly
       earned by gates that no longer exist. The current model gets its own chart here once
@@ -13743,7 +13732,7 @@ function recCalibrationSection(cal, era) {
     <details class="rec-epoch rec-fold">
       <summary>Open the current model’s own buckets, chart and scores</summary>
       <div class="card" style="padding:0">${calBucketRows(era.buckets)}
-        <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+        <div class="rec-block chart">
           ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>
     </details>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
@@ -15295,8 +15284,7 @@ function recPotdSection(rep, scope, recent) {
         record so far, not a claim about what it will do — it needs about ${POTD_MIN_N}
         before the number means much.</div>` : ""}
       ${rows.length ? `<div style="margin-top:8px">
-        ${rows.map((r) => `<div style="display:flex;gap:8px;align-items:baseline;
-             padding:4px 0;border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-sm)">
+        ${rows.map((r) => `<div class="rec-row flush tight">
           <span style="width:64px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(String(r.date || "").slice(5))}</span>
           <span style="flex:1;min-width:0">${escapeHtml(r.player || "")}
             <span style="color:var(--text-mute)">${escapeHtml(String(r.market || ""))}
@@ -16484,8 +16472,7 @@ async function renderBookReport() {
         that moves first and wrong.</span></div>
       <div class="card" style="padding:0">
         ${ranked.map((b, i) => `
-          <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 14px;
-              border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+          <div class="rec-row mid">
             <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
             <span style="min-width:120px;font-weight:700">${escapeHtml(b.book)}</span>
             <span class="rb-bar" style="flex:1;min-width:120px"><i style="width:${
