@@ -42,6 +42,11 @@ def _fn(name):
     return _strip(APP[i:min(ends)])
 
 
+def _const(name):
+    i = APP.index(f"const {name} = ")
+    return APP[i:APP.index(";\n", i) + 1]
+
+
 def _node(js):
     node = shutil.which("node")
     if not node:
@@ -53,7 +58,10 @@ def _node(js):
       {_fn("formatKickoff")}
       {_fn("deckFirstWord")}
       const tzTime = (d) => d.toISOString();
+      {_fn("firstStartOnCard")}
       {_fn("boardEmptyFacts")}
+      {_const("EMPTY_DOORS")}
+      {_fn("boardEmptyDoors")}
       let state = {{ sport: "nfl", data: null }};
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -94,17 +102,24 @@ def test_the_facts_are_the_cards_own_and_nothing_else():
     assert _facts(got["mlb"])[1].startswith("First pitch "), "the deck's own word for the sport"
 
 
-def test_the_doors_open_the_two_pages_that_are_never_empty():
-    doors = _fn("boardEmptyDoors")
-    assert '<button type="button" class="btn es-door" data-es-view="live">Live now</button>' in doors
-    assert '<button type="button" class="btn es-door" data-es-tool="record">The record</button>' in doors
+def test_the_doors_open_the_pages_that_are_never_empty_minus_this_one():
+    got = _node("""return { tonight: boardEmptyDoors("tonight"), live: boardEmptyDoors("live"),
+                            likely: boardEmptyDoors("likely"), none: boardEmptyDoors() };""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    door = lambda kind, k, label: f'<button type="button" class="btn es-door" data-es-{kind}="{k}">{label}</button>'
+    assert door("view", "live", "Live now") in got["tonight"] and door("tool", "record", "The record") in got["tonight"]
+    assert 'data-es-view="tonight"' not in got["tonight"], "the Picks page does not point at itself"
+    assert door("view", "tonight", "Tonight’s picks") in got["live"] and 'data-es-view="live"' not in got["live"]
+    assert got["likely"].count('class="btn es-door"') == 3 and got["none"].count('class="btn es-door"') == 3, \
+        "every door from a page that is none of them"
     bind = _fn("bindEmptyDoors")
     assert "switchView(b.dataset.esView, true)" in bind
     assert 'document.querySelector(`#sidebar [data-sport="${b.dataset.esTool}"]`)' in bind and "if (src) src.click();" in bind, \
         "the record is a tool page: its own sidebar button opens it, the way the More sheet does"
-    for fn, host in (("renderTonight", "host"), ("renderLikely", "note"), ("renderEdgeBoard", "host")):
+    for fn, host, key in (("renderTonight", "host", "tonight"), ("renderLikely", "note", "likely"), ("renderEdgeBoard", "host", "edge")):
         body = _fn(fn)
-        i = body.index("${boardEmptyFacts()}${boardEmptyDoors()}</div>")
+        i = body.index('${boardEmptyFacts()}${boardEmptyDoors("%s")}</div>' % key)
         assert f"bindEmptyDoors({host});" in body[i:i + 200], f"{fn}: the doors are drawn but not wired"
     assert ".empty-slate .es-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }" in CSS
     assert ".empty-slate .es-fact { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim);" in CSS

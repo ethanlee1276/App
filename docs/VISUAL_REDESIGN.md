@@ -438,9 +438,20 @@ surface.
     on a wide screen they sit side by side (`.tn-cols`), the full
     cards stacking in a half-width column; a phone reads them
     stacked.
+  * *Six crests, one row.* The tablet rule gave each league button
+    10px a side, so five crests took the first row and UFC sat alone
+    on a second; the phone block narrows it to 4px and the six share
+    a row at 360px and up, the 44px crest still the tap target.
+  * *The Live page rests like the deck.* With nothing on it opens
+    with the deck's quiet card — the paused dot, no league live, the
+    sport in view's next start if the card holds one still ahead, the
+    bets queued to ride (`liveQuietLine`) — then the feed's reason
+    and the doors. The doors everywhere are the never-empty pages
+    minus the one you are on (`boardEmptyDoors(here)`).
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
-  `tests/test_the_numbers_count_up_and_the_dot_pings.py` and
-  `tests/test_an_empty_board_carries_the_card.py`.
+  `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
+  `tests/test_an_empty_board_carries_the_card.py` and
+  `tests/test_the_live_page_rests_like_the_deck.py`.
 * **Still open.** The desktop rail's Key insights card and the
   sub-tabbed zones the deck does not adopt sit below it; a later pass
   can retire what nobody opens. Zeno's tile and tickets appear once

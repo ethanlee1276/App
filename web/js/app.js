@@ -1070,21 +1070,27 @@ function emptySlate(mark, title, note) {
    (deckFirstWord), and offers the two pages that are never empty: the
    live board and the record. Nothing here is invented: no games, no
    facts; every game started, no kickoff. */
+/* The first start still ahead on the card, formatted — or nothing:
+   a game that has begun is not a time to promise. */
+function firstStartOnCard() {
+  const notStarted = (g) => g && (!g.live || ["scheduled", "pre", "upcoming"].includes(String(g.live.state || "scheduled")));
+  const kick = ((state.data || {}).games || []).filter(notStarted).map((g) => g.kickoff).filter(Boolean).sort()[0];
+  return kick ? formatKickoff(kick) : "";
+}
 function boardEmptyFacts() {
   const d = state.data || {};
   const games = (d.games || []).filter((g) => g && (g.away || g.home));
   if (!games.length) return "";
-  const notStarted = (g) => !g.live || ["scheduled", "pre", "upcoming"].includes(String(g.live.state || "scheduled"));
-  const kick = games.filter(notStarted).map((g) => g.kickoff).filter(Boolean).sort()[0];
-  const first = kick ? formatKickoff(kick) : "";
+  const first = firstStartOnCard();
   const facts = [`${plural(games.length, "game")} on the card`];
   if (first) facts.push(`${deckFirstWord(state.sport)} ${first}`);
   return `<div class="es-facts">${facts.map((f) => `<span class="es-fact">${escapeHtml(f)}</span>`).join("")}</div>`;
 }
-function boardEmptyDoors() {
-  return `<div class="es-doors">
-    <button type="button" class="btn es-door" data-es-view="live">Live now</button>
-    <button type="button" class="btn es-door" data-es-tool="record">The record</button></div>`;
+/* The doors: the pages that are never empty, minus the one you are on. */
+const EMPTY_DOORS = [["tonight", "Tonight’s picks", "view"], ["live", "Live now", "view"], ["record", "The record", "tool"]];
+function boardEmptyDoors(here) {
+  return `<div class="es-doors">${EMPTY_DOORS.filter(([k]) => k !== here).map(([k, label, kind]) =>
+    `<button type="button" class="btn es-door" data-es-${kind}="${k}">${label}</button>`).join("")}</div>`;
 }
 function bindEmptyDoors(host) {
   if (!host) return;
@@ -6283,7 +6289,7 @@ function renderTonight() {
     host.innerHTML = `${tonightChipsHTML("sport", state.sport)}<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <h3>${noMarketHeading()}</h3>
-      <p>${noMarketExplainer()}</p>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
+      <p>${noMarketExplainer()}</p>${boardEmptyFacts()}${boardEmptyDoors("tonight")}</div>`;
     bindTonightChips(host);
     bindEmptyDoors(host);
     return;
@@ -8011,7 +8017,7 @@ function renderLikely() {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">Nothing to rank yet</div>
-      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
+      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
     bindEmptyDoors(note);
     return;
   }
@@ -16062,7 +16068,7 @@ function renderEdgeBoard() {
       beats the model’s probability — including small edges and long odds that
       don’t clear the Recommended bar. Expected value is honest math, not a
       guarantee: a +5% EV bet still loses often; the edge shows up over
-      hundreds of bets.</p>${boardEmptyFacts()}${boardEmptyDoors()}</div>`;
+      hundreds of bets.</p>${boardEmptyFacts()}${boardEmptyDoors("edge")}</div>`;
     bindEmptyDoors(host);
     return;
   }
@@ -39039,6 +39045,21 @@ function liveHoldDetailHTML(live) {
   return h ? `<div class="live-detail hold"><span class="live-dot sm paused"></span>${escapeHtml(h)}</div>` : "";
 }
 
+/* The Live page's quiet line: no league is live; the sport in view's
+   next start, if the card holds one still ahead; the journaled bets
+   waiting on it. Each clause is dropped when there is nothing behind it. */
+function liveQuietLine() {
+  const d = state.data || {};
+  const first = firstStartOnCard();
+  const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  const queued = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])])
+    .filter((r) => r.phase === "upcoming").length;
+  const bits = ["No games live in any league we model."];
+  if (first) bits.push(`${league} ${deckFirstWord(state.sport).toLowerCase()} ${first}.`);
+  if (queued) bits.push(`${queued} bet${queued === 1 ? "" : "s"} queued.`);
+  return bits.join(" ");
+}
+
 async function renderLiveBoard() {
   const host = document.getElementById("live-board");
   if (!host) return;
@@ -39071,11 +39092,14 @@ async function renderLiveBoard() {
     // a guess dressed as a fact — see `liveFeedWhy`. The gap under the
     // sentence moves to whichever paragraph ends up last.
     const why = liveFeedWhyHTML(_liveChip, _liveFeedState, Date.now());
+    /* v5: the quiet state is the deck's — one line behind the dot,
+       the card's next start and the bets queued to ride when it comes
+       (liveQuietLine) — then the doors, minus this page. */
     host.innerHTML = `<div class="section-title">Live now
         <span class="sub">— every game in progress across the sports we model</span></div>
-      <p class="rail-quiet" style="margin:0 0 ${why ? 6 : 22}px">No games in progress
-      right now — the board below tracks tonight’s open bets as they start.</p>
-      ${why}`;
+      <div class="hd-quiet lv-quiet"><i class="live-dot paused"></i>${escapeHtml(liveQuietLine())}</div>
+      ${why}${boardEmptyDoors("live")}`;
+    bindEmptyDoors(host);
     return;
   }
   /* SHELVED BY LEAGUE ON "ALL". Ethan, 2026-09-01, from this very tab:

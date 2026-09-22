@@ -6618,7 +6618,9 @@ body.has-rail .shell {
      and deliberately sets no padding: it sits EARLIER in the file at the
      same specificity, so a padding declared there would be overwritten
      here and read as broken for no visible reason. One box model per
-     element, declared in the block that wins. */
+     element, declared in the block that wins — except under 760px,
+     where the buttons carry crests and the phone block AFTER this one
+     narrows the padding so six of them share a row (v5, below). */
   .sportbar-in .sport-btn { min-height: 44px; padding: 0 10px; }
 
   /* THE BAR SHRINKS FROM HERE, not from 760. Drawer mode starts at this
@@ -6877,6 +6879,7 @@ body.has-deck #rail-live { display: none; }
   letter-spacing: .02em; text-transform: none; }
 .hd-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
   padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.hd-quiet.lv-quiet { margin: 0 0 18px; }   /* the Live page's own quiet card */
 .hd-game { flex: 0 0 232px; scroll-snap-align: start; text-align: left; padding: 12px 14px;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
@@ -7091,6 +7094,15 @@ body.has-deck #rail-live { display: none; }
    per-team SPREAD | TOTAL | ML grid (.lb-table, later in this file). */
 
 @media (max-width: 760px) {
+  /* SIX CRESTS, ONE ROW. Ethan, 2026-09-22, on the phone strip: "it
+     still kinda looks like the same old website." Five crests shared
+     the first row and UFC sat alone on a second, because the 900px
+     block above gives each button 10px a side: 6 × 64 is more than a
+     390 phone has. At 4px a side the six are 312px, inside a 360
+     phone's 344 — one row, every league in reach, the 44px crest the
+     tap target it always was. Later in the file than the 900px rule
+     on purpose: same specificity, and the last one wins. */
+  .sportbar-in .sport-btn { padding: 0 4px; }
   /* ONE WAY IN. The hamburger came back to the top left on 2026-08-22
      (Ethan: "three bars on the top left that will pull open the menu")
      and the tab bar's fifth slot became More on 2026-09-22 — which left
