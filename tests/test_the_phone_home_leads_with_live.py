@@ -233,11 +233,13 @@ def test_every_home_section_wears_the_decks_head_and_the_league_select_yields():
 
 
 def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
-    """Eyebrow, verdict pill, the headline in the display face, mono
-    price line — CSS on the card's own pieces. The headline's inline
-    size is gone, because an inline style beat the token's size and the
-    hero read as a card. (The display token is Ethan's render's Archivo
-    Narrow; the prototype showed Bodoni — one token to flip.)"""
+    """Eyebrow, verdict pill, the headline in Bodoni, mono price line —
+    CSS on the card's own pieces. The headline's inline size is gone,
+    because an inline style beat the token's size and the hero read as a
+    card. Bodoni rides its own token: Ethan's August render set the
+    display face to Archivo Narrow, and he chose Bodoni for this one
+    headline (2026-09-22), so nothing else that reads --font-display
+    moves."""
     potd = APP[APP.index("async function renderPickOfTheDay("):]
     potd = potd[:potd.index("\nfunction ", 10)]
     assert '<strong class="potd-bet">${text}</strong>' in potd
@@ -247,7 +249,11 @@ def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
     # the strip's own rule (`.potd-call {`) stays the first in the sheet.
     assert ".potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;" in CSS, \
         "a pill, not a bar: the card is a flex column and stretches its items"
-    assert ".potd-hero .potd-bet { font-family: var(--font-display); font-size: var(--fs-2xl);" in CSS
+    assert ".potd-hero .potd-bet { font-family: var(--font-headline); font-size: var(--fs-2xl);" in CSS
+    block = CSS.index("NEW LOOK — 2026-08-11")
+    assert '--font-headline: "Bodoni Moda",' in CSS[:block], "the headline token is Bodoni, declared once in the base tokens"
+    light = CSS.index(':root[data-theme="light"]', block)   # the light block AFTER the new-look tokens, not the first in the sheet
+    assert "--font-headline:" not in CSS[block:light], "the new-look block must not override it the way it overrides --font-display"
     assert ".potd-hero .potd-bet + span { font-family: var(--font-mono); }" in CSS
     assert ".potd-hero.has-art { padding-top: 124px;" in CSS, "the art has room to be seen"
 

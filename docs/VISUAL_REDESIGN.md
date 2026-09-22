@@ -284,7 +284,7 @@ surface.
   model and for Zeno. A riding tray floats above the tab bar on phones
   while journaled bets are in play (hidden on the Live tab it points
   at). The Pick of the Day card is the home's hero, on the venue render
-  its team's colours pick, its headline in the display face (Ethan's render set that token to Archivo Narrow; the prototype showed Bodoni — one token to flip if he prefers it). Everything drawn is
+  its team's colours pick, its headline in Bodoni by its own token, `--font-headline` (Ethan's render set `--font-display` to Archivo Narrow; he chose Bodoni for this headline on 2026-09-22). Everything drawn is
   a number the board already held; nothing is drawn otherwise. Pinned
   by `tests/test_v3_looks_like_a_book_and_like_us.py`. Two things the
   first render caught: Chromium resolves a `url()` that reaches CSS
@@ -315,7 +315,7 @@ surface.
     bar with it: Injuries & News is a row in the sheet.
   * *The home in the old order, with the old headers.* The deck now
     leads with the Pick of the Day as the prototype's hero (gold
-    eyebrow, the verdict as a pill, the bet in the display face over the venue
+    eyebrow, the verdict as a pill, the bet in Bodoni over the venue
     render, the price line in mono — CSS on the card's own pieces, no
     field lost), then Live now, Riding, tonight's games, Most likely,
     Edge, the record, Zeno, tools. Every home section wears the deck's

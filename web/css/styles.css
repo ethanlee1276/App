@@ -294,6 +294,14 @@
                BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Bodoni Moda", "Iowan Old Style", "Palatino Linotype",
                   Palatino, Georgia, serif;
+  /* THE HERO'S HEADLINE. Ethan's August render set --font-display to
+     Archivo Narrow (the NEW LOOK block below); the v3 prototype showed
+     the Pick of the Day's bet in Bodoni and he chose it (2026-09-22:
+     "Switch the hero headline to Bodoni"). Its own token, so nothing
+     else that reads --font-display moves. Bodoni ships 700 and 900
+     here, and the headline asks for 700. */
+  --font-headline: "Bodoni Moda", "Iowan Old Style", "Palatino Linotype",
+                   Palatino, Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Tighter corners. A 10px radius on every panel is the house style of
@@ -6912,7 +6920,7 @@ body.has-deck #rail-live { display: none; }
   text-transform: uppercase; color: var(--brand-2); }
 .potd-hero .potd-call.is-bet, .potd-hero .potd-call.is-pass { display: inline-flex; align-self: flex-start;
   margin-top: 6px; padding: 5px 11px; border-radius: 999px; }
-.potd-hero .potd-bet { font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }
+.potd-hero .potd-bet { font-family: var(--font-headline); font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 700; }
 .potd-hero .potd-bet + span { font-family: var(--font-mono); }
 /* v3: the riding tray exists only where the tab bar does (phone block). */
 .riding-tray { display: none; }
