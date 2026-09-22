@@ -96,4 +96,15 @@ surface.
   "Everything on tonight's board" door on both (remembered; unfolds
   itself when the deck has nothing to draw). The desktop rail's Live
   now card yields to the strip.
-* **Next.** Bug sweep across every view at 390 and 1280; polish.
+* **Bug sweep — 2026-09-22.** A Playwright crawl of every view in
+  `VIEW_ORDER` at 390 and 1280 (with the tour dismissed): no uncaught
+  errors, no console errors, no horizontal overflow, every view draws
+  text, the More sheet opens and a pill navigates and closes it. One
+  find fixed: bare links inside cards took the browser's blue.
+* **Type.** The site already ships the mock's faces (Archivo Narrow,
+  Bodoni Moda, IBM Plex Mono, self-hosted in web/fonts), so no font
+  change was needed; the mock was drawn in them on purpose.
+* **Still open.** The desktop rail's Key insights card and the old
+  sub-tabbed zones live on under the fold; a later pass can retire
+  what nobody unfolds. Zeno's tile and tickets appear once Juice Reel
+  data lands.

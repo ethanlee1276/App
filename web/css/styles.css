@@ -6720,6 +6720,9 @@ body.has-rail .shell {
 #home-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 0 0 18px; }
 #home-deck[hidden] { display: none; }
 #home-deck .hd-sec[data-sec="live"], #home-deck .hd-fold { grid-column: 1 / -1; }
+/* A bare link inside a card ("Full receipts on the Record page") took the
+   browser's blue — the one colour this palette never uses. */
+.card a:not([class]), .list-note a:not([class]) { color: var(--brand-2); }
 .hd-fold { justify-self: start; margin: -4px 0 6px; padding: 8px 0; border: 0;
   background: transparent; color: var(--brand-2); cursor: pointer;
   font: inherit; font-size: var(--fs-sm); font-weight: 700; }
