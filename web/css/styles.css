@@ -7241,6 +7241,20 @@ body.has-deck #rail-live { display: none; }
   .rt-go { color: var(--brand-2); flex: 0 0 auto; }
   body.has-tray { padding-bottom: 150px; }
   .tb-item[aria-expanded="true"] { color: var(--brand-2); }
+  /* v5 motion: THE TAB YOU ARE ON SAYS SO. Ethan, 2026-09-22: "more
+     animations and more design features … feel like a real sportsbook
+     app." The active tab's icon lifts a hair and a dot lands under its
+     label — the ride is --dur-base on the workhorse curve, and the
+     universal reduced-motion block zeroes it. Not the centre disc,
+     which is already raised; the More tab counts as on while its sheet
+     is open. */
+  .tb-item > svg { transition: transform var(--dur-base) var(--ease-out); }
+  .tb-item.active > svg { transform: translateY(-2px); }
+  .tb-item::after { content: ""; position: absolute; left: 50%; bottom: -1px; width: 4px; height: 4px;
+    margin-left: -2px; border-radius: 50%; background: currentColor; transform: scale(0);
+    transition: transform var(--dur-base) var(--ease-out); }
+  .tb-item.active::after, .tb-item[aria-expanded="true"]::after { transform: scale(1); }
+  .tb-center::after { display: none; }
 
   /* ---- The More sheet (2026-09-22, from the approved Figma mock) ----
      A bottom sheet over a scrim, above the tab bar (58 over 56), holding
@@ -7249,17 +7263,25 @@ body.has-deck #rail-live { display: none; }
      hamburger; this is the thumb's way in. `hidden` gates display so a
      closed sheet is not in the tab order; `body.more-open` runs the
      slide, one frame after the sheet is unhidden. */
-  .more-scrim { display: block; position: fixed; inset: 0; z-index: 57;
+  .more-scrim { display: block; position: fixed; inset: 0; z-index: 57; touch-action: none;
     background: rgba(0, 0, 0, .62); opacity: 0; pointer-events: none;
     transition: opacity var(--dur-base) var(--ease-out); }
   .more-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 58;
     max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;   /* a swipe past the sheet's end stays in the sheet */
     padding: 10px 16px calc(24px + env(safe-area-inset-bottom, 0px));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--panel);
     border-top: var(--hairline) solid var(--border);
     transform: translateY(103%); will-change: transform;
     transition: transform var(--dur-base) var(--ease-out); }
   .more-scrim[hidden], .more-sheet[hidden] { display: none; }
+  /* THE PAGE HOLDS STILL UNDER THE SHEET. Ethan, 2026-09-22, from his
+     phone: "when I'm in this menu I'm able to swipe the page behind it
+     and not the actual menu." iOS ignores overflow: hidden on the body
+     for touch, so the body is pinned in place instead — position fixed
+     at the scroll offset it had (moreSheetOpen sets `top`), put back
+     to the same offset on close. The sheet scrolls itself. */
+  body.more-open { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; }
   body.more-open .more-scrim { opacity: 1; pointer-events: auto; }
   body.more-open .more-sheet { transform: translateY(0); }
   .more-handle { width: 40px; height: 4px; border-radius: 999px;
