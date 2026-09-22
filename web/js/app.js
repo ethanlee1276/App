@@ -14408,13 +14408,36 @@ async function renderStandingRecord() {
   }
   const roi = o.roi || 0;
   const neg = roi < 0;
+  /* UNDER THE SAMPLE FLOOR THE ROI IS NOT PRINTED. The Record page
+     will not call a book this thin (recordVerdictHTML) and the wall
+     prints no rate off it (PROOF_RATE_FLOOR); rendered on a 1-0 book
+     this masthead read "Running ROI +90.9%" in the rail of every
+     page — the one number on the site that flattered by accident.
+     The record leads instead, with how far the sample has to go. The
+     floor is the engine's own, carried in the payload. */
+  const need = rec.min_graded || _recMinGraded;
+  const thin = o.settled < need;
+  const wl = `${o.wins || 0}-${o.losses || 0}-${o.pushes || 0}`;
+  if (thin) {
+    el.innerHTML = `
+    <span class="lbl">Record</span>
+    <b>${wl}</b>
+    <span>${o.settled} settled · ${need} needed before the ROI means anything${o.open ? ` · ${o.open} open` : ""}</span>
+    <span>Every pick journaled at its real book price and graded in public.</span>`;
+    const brief = document.getElementById("mb-rec");
+    if (brief) {
+      brief.textContent = `${o.wins || 0}-${o.losses || 0}${o.pushes ? `-${o.pushes}` : ""}  ·  ${o.settled} of ${need}`;
+      brief.classList.toggle("neg", false);
+    }
+    return;
+  }
   el.innerHTML = `
     <span class="lbl">Running ROI</span>
     <b class="${neg ? "neg" : ""}">${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%</b>
     <span>${(o.net_units >= 0 ? "+" : "")}${(o.net_units || 0).toFixed(2)}u on
       ${(o.units_staked || 0).toFixed(1)}u staked</span>
     <span class="lbl">Record</span>
-    <b class="${neg ? "neg" : ""}">${o.wins || 0}-${o.losses || 0}-${o.pushes || 0}</b>
+    <b class="${neg ? "neg" : ""}">${wl}</b>
     <span>${o.settled} settled${o.open ? ` · ${o.open} open` : ""}</span>
     <span>Every pick journaled at its real book price and graded in public.</span>`;
   // The one-line version carries the same claim. Filled from the same
