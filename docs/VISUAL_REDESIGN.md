@@ -342,6 +342,12 @@ surface.
   * *Fantasy: the room index sits two abreast on phones.* Every room
     stays named and described (Ethan, 2026-09-10); eight cards no longer
     fill a screen before the first number.
+  * *The name reaches nested titles.* Live, Picks and the game pages
+    render their title inside a body wrapper, where the first-child
+    rule could not see it; the sub enhancer now marks the first real
+    title in every view `page-title` (and un-marks any other), so every
+    page opens with its name. The Live panel's trailing note is a
+    caveat (`list-note`) and folds with the rest.
   * *A caveat folds to two lines.* `.list-note` ("a caveat under content
     that IS there") and the empty state's sub-line: past 160 characters
     a note keeps its first two lines and the rest waits behind the same

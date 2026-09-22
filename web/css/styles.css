@@ -2333,13 +2333,13 @@ select.calc-in { width: auto; font-weight: 600; }
    the hero's size, with its purpose in a plain line beneath; the
    section heads under it keep the caps, so the two levels read as two.
    The why? apparatus is untouched: a long sub still folds behind it. */
-.view > .section-title:first-child {
+.view > .section-title:first-child, .section-title.page-title {
   font-family: var(--font-display); font-size: var(--fs-2xl); line-height: var(--lh-tight);
   text-transform: none; letter-spacing: -.01em; color: var(--text); font-weight: 700;
   margin-bottom: 12px; align-items: baseline; }
-.view > .section-title:first-child .sub { font-size: var(--fs-sm); color: var(--text-mute);
+.view > .section-title:first-child .sub, .section-title.page-title .sub { font-size: var(--fs-sm); color: var(--text-mute);
   line-height: var(--lh-body); }
-.view > .section-title:first-child .why-toggle { align-self: center; }
+.view > .section-title:first-child .why-toggle, .section-title.page-title .why-toggle { align-self: center; }
 
 
 /* --- Progressive disclosure on section explanations -------------------

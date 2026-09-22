@@ -25,7 +25,7 @@ def _rule(opener):
 
 
 def test_the_first_title_in_a_view_is_the_pages_name():
-    rule = _rule(".view > .section-title:first-child {")
+    rule = _rule(".view > .section-title:first-child, .section-title.page-title {")
     assert "font-family: var(--font-display)" in rule
     assert "font-size: var(--fs-2xl)" in rule, "the hero's size, not a kicker's"
     assert "text-transform: none" in rule and "color: var(--text)" in rule
@@ -37,14 +37,35 @@ def test_the_section_heads_under_it_keep_the_caps():
     blocks = re.findall(r"\.section-title\s*\{([^}]*)\}", body)
     assert any("uppercase" in b for b in blocks), "the inner heads lost the caps — two levels became one"
     # and the page title rule is a descendant rule, not a fourth `.section-title {`
-    assert body.count(".view > .section-title:first-child {") == 1
+    assert body.count(".view > .section-title:first-child, .section-title.page-title {") == 1
 
 
 def test_the_sub_stays_a_plain_line_and_the_why_still_folds_it():
-    sub = _rule(".view > .section-title:first-child .sub {")
+    sub = _rule(".view > .section-title:first-child .sub, .section-title.page-title .sub {")
     assert "font-size: var(--fs-sm)" in sub and "color: var(--text-mute)" in sub
     assert ".section-title .sub.sub-collapsed { display: none; }" in CSS
-    assert ".view > .section-title:first-child .why-toggle { align-self: center; }" in CSS
+    assert ".view > .section-title:first-child .why-toggle, .section-title.page-title .why-toggle { align-self: center; }" in CSS
+
+
+def test_a_title_inside_a_body_wrapper_is_still_the_pages_name():
+    """Live, Picks and the game pages render their title inside a body
+    div, where `.view > :first-child` cannot see it. The enhancer marks
+    the first real title in every view and un-marks any other."""
+    body = APP[APP.index("function markPageTitles("):]
+    body = body[:body.index("\n}\n")]
+    assert 'view.querySelector(".section-title:not(.minor):not(.subhead)")' in body
+    assert 'if (t !== first) t.classList.remove("page-title");' in body, "a page with a redrawn title would carry two names"
+    assert 'if (first) first.classList.add("page-title");' in body
+    subs = APP[APP.index("function enhanceSectionSubs("):]
+    subs = subs[:subs.index("\n}\n")]
+    assert "markPageTitles(root);" in subs, "not run on every render"
+
+
+def test_the_live_panels_trailing_note_is_a_caveat():
+    """The note under the Live tab's open bets was a bare styled
+    paragraph, so the caveat fold could not see it."""
+    assert '<p class="list-note" style="padding:8px 14px 10px;margin:0">${foot}</p>' in APP
+    assert 'font-size:var(--fs-xs);color:var(--text-mute)">${foot}</p>' not in APP
 
 
 def test_most_views_actually_open_this_way():

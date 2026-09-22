@@ -4637,7 +4637,7 @@ function renderLivePicks() {
     <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
       ${list.length ? list.map(rowHTML).join("")
         : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${empty}</p>`}
-      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">${foot}</p>
+      <p class="list-note" style="padding:8px 14px 10px;margin:0">${foot}</p>
     </div>`;
   };
   /* THE DAY'S PICK, LED WITH.
@@ -32629,7 +32629,26 @@ async function renderWhy() {
    ============================================================ */
 const SUB_COLLAPSE_CHARS = 90;   // one line is fine; a paragraph is not
 
+/* THE PAGE'S FIRST TITLE IS ITS NAME. The stylesheet's `.view >
+   .section-title:first-child` reached the thirty views whose title is
+   the view's own first child and missed the ones that render theirs
+   inside a body wrapper — Live, Picks, the game pages. So the enhancer
+   marks it: the first section title in each view that is not a minor
+   or sub-head carries `page-title`, and no other title in that view
+   does. Runs with the sub enhancer, so a page that redraws its title
+   keeps its name. */
+function markPageTitles(root) {
+  (root || document).querySelectorAll(".view").forEach((view) => {
+    const first = view.querySelector(".section-title:not(.minor):not(.subhead)");
+    view.querySelectorAll(".section-title.page-title").forEach((t) => {
+      if (t !== first) t.classList.remove("page-title");
+    });
+    if (first) first.classList.add("page-title");
+  });
+}
+
 function enhanceSectionSubs(root) {
+  markPageTitles(root);
   (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
     const title = sub.parentElement;
     if (!title || title.dataset.subEnhanced) return;
