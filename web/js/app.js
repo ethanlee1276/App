@@ -3678,35 +3678,38 @@ async function renderBestBets() {
      says separately how many are riding — because "3 picks tonight"
      when one of them is un-bettable is the kind of small lie this whole
      page exists not to tell. */
+  /* THE BOOK'S ROWS (v5, 2026-09-22). Ethan: "the section for the edge
+     bets on each page" still drew inline-styled rows. The three rows in
+     this box — a pick, a riding position, an on-deck hitter — now share
+     the deck's row: rank, mark, grade; the bet with its game and reason
+     beneath; on the right the number in the green pill and the stake
+     under it. A riding row keeps its dot, its RIDING grade and its
+     price-moved note (tests/test_ridingrow.py); nothing is ranked that
+     was not. */
   const ridingRow = ({ b, cur }) => ((door) => `
-    <div class="${door ? "openable" : ""}"${door}
-         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
-                border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="opacity:.45;min-width:18px;font-weight:700">·</span>
-      <span class="grade riding" style="flex-shrink:0">RIDING</span>
-      <span style="flex:1;min-width:0"><strong>${b.market === "moneyline"
+    <div class="hd-row hd-pick riding ${door ? "openable" : ""}"${door}>
+      <span class="hd-rank">·</span>
+      <span class="grade riding">RIDING</span>
+      <span class="hd-what"><strong>${b.market === "moneyline"
           ? `${escapeHtml(teamName(b.player))} Moneyline`
           : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
         ${ridingWhen(b)}
         <span class="pick-moved">${icon("warn", 12)} ${ridingMoveCopy(b, cur)}</span>
       </span>
-      <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
-        ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
+      <span class="hd-state"><span class="hd-chip">riding</span>${
+        b.stake_units > 0 ? `<b>${Number(b.stake_units).toFixed(2)}u</b>` : ""}</span>
     </div>`)(ridingAttrs(b));
 
   const pickRow = (p, i) => `
-    <div class="${p.open ? "openable" : ""}"${p.open || ""}
-         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
-                border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="opacity:.45;min-width:18px;font-weight:700">${i + 1}</span>
+    <div class="hd-row hd-pick ${p.open ? "openable" : ""}"${p.open || ""}>
+      <span class="hd-rank">${i + 1}</span>
       ${p.id ? `<span class="pick-id">${p.id}</span>` : ""}
-      <span class="grade ${gradeClass(p.grade)}" style="flex-shrink:0">${escapeHtml(p.grade || "")}</span>
-      <span style="flex:1;min-width:0"><strong>${escapeHtml(p.label)}</strong>
-        ${p.game ? `<span style="display:block;font-size:var(--fs-sm);margin-top:2px">${(SPORT_META[state.sport] || {}).logo || ""} ${escapeHtml(p.game)}</span>` : ""}
-        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${escapeHtml(p.why)}</span></span>
-      <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
-        ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:var(--fs-sm);font-weight:700">${
-          stakeText(p.stake)}</span>` : ""}</span>
+      <span class="grade ${gradeClass(p.grade)}">${escapeHtml(p.grade || "")}</span>
+      <span class="hd-what"><b>${escapeHtml(p.label)}</b>
+        ${p.game ? `<span class="hd-game-line">${(SPORT_META[state.sport] || {}).logo || ""} ${escapeHtml(p.game)}</span>` : ""}
+        <span>${escapeHtml(p.why)}</span></span>
+      <span class="hd-state"><span class="hd-p">${escapeHtml(p.metric)}</span>${
+        p.stake > 0 ? `<b class="hd-stake">${stakeText(p.stake)}</b>` : ""}</span>
     </div>`;
 
   /* ============================================================
@@ -3733,19 +3736,16 @@ async function renderBestBets() {
   const earlyRows = allRecs.filter((r) => r.early)
     .sort((a, b) => (b.quality || 0) - (a.quality || 0));
   const earlyRow = (r) => `
-    <div class="openable"${propAttrs(r) || ""}
-         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
-                border-bottom:1px solid rgba(255,255,255,.05)">
-      <span class="grade ${gradeClass(r.grade)}" style="flex-shrink:0">${escapeHtml(r.grade || "")}</span>
-      <span style="flex:1;min-width:0"><strong>${escapeHtml(
-          `${r.player} ${r.side} ${r.line} ${r.market_label}`)} ${american(r.odds)}
-          (${escapeHtml(r.book || "")})</strong>
-        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
-          quality ${r.quality}/100${r.lineup_slot
+    <div class="hd-row hd-pick openable"${propAttrs(r) || ""}>
+      <span class="hd-rank">·</span>
+      <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade || "")}</span>
+      <span class="hd-what"><b>${escapeHtml(
+          `${r.player} ${r.side} ${r.line} ${r.market_label}`)}</b>
+        <span>${american(r.odds)}${r.book ? ` at ${escapeHtml(r.book)}` : ""} · quality ${r.quality}/100${r.lineup_slot
             ? ` · projected batting ${r.lineup_slot}` : ""} · every gate cleared
           but the card</span></span>
-      <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${signedPct(r.edge)}</span>
-        <span style="display:block;color:var(--warn);font-size:var(--fs-2xs);font-weight:700">LINEUP PENDING</span></span>
+      <span class="hd-state"><span class="hd-p">${signedPct(r.edge)}</span>
+        <span class="hd-chip warn">LINEUP PENDING</span></span>
     </div>`;
   const earlyBlock = earlyRows.length ? `
     <div class="section-title minor">On deck — waiting on lineups</div>
@@ -15980,20 +15980,18 @@ function edgeRowHTML(r, i) {
         gamelogBars(r.vals, { line: r.line, side: r.side, w: 92, h: 34,
                               stroke: teamPrimary(r.team) })}</span>`
     : `<span class="edge-spark"></span>`;
-  return `<div class="ls-row drow ${r.open ? "openable" : ""}"${r.open || ""}
-       style="display:flex;align-items:center;gap:14px;
-       padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
-    <span style="opacity:.5;min-width:20px">${i + 1}</span>
-    <span class="pick-id" style="flex-shrink:0">${r.mark || ""}</span>
-    <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
-      <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(r.sub)}</span></span>
+  /* THE BOOK'S ROW (v5): rank, the face, the bet with its sub-line, the
+     chart, then the price in the grey pill and the EV in the green one,
+     with "ours vs the price" and the grade beneath them. Same fields,
+     same door, same chart against the same line. */
+  return `<div class="ls-row drow hd-row hd-edge ${r.open ? "openable" : ""}"${r.open || ""}>
+    <span class="hd-rank">${i + 1}</span>
+    <span class="pick-id">${r.mark || ""}</span>
+    <span class="hd-what"><b>${escapeHtml(r.label)}</b>
+      <span>${escapeHtml(r.sub)}</span></span>
     ${spark}
-    <span style="min-width:64px;text-align:right">${oddsTxt(r.odds)}</span>
-    <span style="min-width:120px;text-align:right;opacity:.8">
-      ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
-    <span style="min-width:70px;text-align:right;color:var(--good)">
-      +${evPct}% EV</span>
-    <span style="min-width:86px;text-align:right;opacity:.75">${r.rec ? `${icon('check')} ` : ""}${escapeHtml(r.grade || "")}</span>
+    <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p">+${evPct}% EV</span></span>
+      <span class="hd-vs">${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%${r.rec ? ` · ${icon('check')}` : " ·"} ${escapeHtml(r.grade || "")}</span></span>
   </div>`;
 }
 

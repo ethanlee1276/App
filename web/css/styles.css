@@ -1224,6 +1224,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 @media (max-width: 700px) {
   .ls-row.drow { flex-wrap: wrap; }
   .edge-spark { order: 9; }
+  /* v5: the deck's row shrinks its text column to nothing before it
+     wraps; give the bet a floor so the pills and the chart drop under it. */
+  .hd-edge .hd-what { flex: 1 1 150px; min-width: 150px; }
+  .hd-edge .hd-state { align-items: flex-start; }
 }
 
 /* minmax(0, 1fr), not 1fr: a bare 1fr is minmax(AUTO, 1fr), so a track
@@ -1650,12 +1654,12 @@ svg[data-scrub] { touch-action: pan-y; }
    never waiting on it. Not the live strip, which redraws on a clock.
    Reduced motion zeroes the duration (the universal block below). */
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.ml-rows > .ml-row, .hd-card > .hd-row { animation: rise var(--dur-slow) var(--ease-out) both; }
-.ml-rows > .ml-row:nth-child(2), .hd-card > .hd-row:nth-child(2) { animation-delay: calc(var(--dur-fast) * .3); }
-.ml-rows > .ml-row:nth-child(3), .hd-card > .hd-row:nth-child(3) { animation-delay: calc(var(--dur-fast) * .6); }
-.ml-rows > .ml-row:nth-child(4), .hd-card > .hd-row:nth-child(4) { animation-delay: calc(var(--dur-fast) * .9); }
-.ml-rows > .ml-row:nth-child(5), .hd-card > .hd-row:nth-child(5) { animation-delay: calc(var(--dur-fast) * 1.2); }
-.ml-rows > .ml-row:nth-child(n+6), .hd-card > .hd-row:nth-child(n+6) { animation-delay: calc(var(--dur-fast) * 1.5); }
+.ml-rows > .ml-row, .hd-card > .hd-row, .card > .hd-pick, .card > .hd-edge { animation: rise var(--dur-slow) var(--ease-out) both; }
+.ml-rows > .ml-row:nth-child(2), .hd-card > .hd-row:nth-child(2), .card > .hd-pick:nth-child(2), .card > .hd-edge:nth-child(2) { animation-delay: calc(var(--dur-fast) * .3); }
+.ml-rows > .ml-row:nth-child(3), .hd-card > .hd-row:nth-child(3), .card > .hd-pick:nth-child(3), .card > .hd-edge:nth-child(3) { animation-delay: calc(var(--dur-fast) * .6); }
+.ml-rows > .ml-row:nth-child(4), .hd-card > .hd-row:nth-child(4), .card > .hd-pick:nth-child(4), .card > .hd-edge:nth-child(4) { animation-delay: calc(var(--dur-fast) * .9); }
+.ml-rows > .ml-row:nth-child(5), .hd-card > .hd-row:nth-child(5), .card > .hd-pick:nth-child(5), .card > .hd-edge:nth-child(5) { animation-delay: calc(var(--dur-fast) * 1.2); }
+.ml-rows > .ml-row:nth-child(n+6), .hd-card > .hd-row:nth-child(n+6), .card > .hd-pick:nth-child(n+6), .card > .hd-edge:nth-child(n+6) { animation-delay: calc(var(--dur-fast) * 1.5); }
 
 /* pointer tilt on stadium cards */
 /* NO will-change here. On the base class it promoted EVERY stadium
@@ -6884,7 +6888,7 @@ body.has-deck #rail-live { display: none; }
   padding: 10px 0; border-top: var(--hairline) solid var(--border-soft); }
 .hd-row:first-child, .hd-potd .hd-row { border-top: 0; }
 .hd-what { flex: 1; min-width: 0; }
-.hd-what b { display: block; font-size: var(--fs-sm); font-weight: 700; }
+.hd-what b, .hd-what strong { display: block; font-size: var(--fs-sm); font-weight: 700; }
 .hd-what span { display: block; margin-top: 2px; color: var(--text-mute);
   font-family: var(--font-mono); font-size: var(--fs-xs); }
 .hd-state { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
@@ -6945,6 +6949,22 @@ body.has-deck #rail-live { display: none; }
 /* v3: the riding tray exists only where the tab bar does (phone block). */
 .riding-tray { display: none; }
 
+/* v5: the Best bets box and the Edge Board draw the deck's row. Rank and
+   grade lead, the bet and its reason fill, the pills sit right; the
+   riding position and the on-deck hitter keep their own chips. */
+.hd-pick, .hd-edge { padding: 12px 14px; gap: 10px; align-items: flex-start; }
+.hd-pick:first-child, .hd-edge:first-child, .card > p + .hd-pick { border-top: 0; }
+.hd-rank { flex: 0 0 18px; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); padding-top: 2px; }
+.hd-pick .grade, .hd-edge .grade { flex: 0 0 auto; }
+.hd-pick .pick-id, .hd-edge .pick-id { flex: 0 0 auto; }
+.hd-game-line { color: var(--text-dim); }
+.hd-stake { color: var(--good); font-size: var(--fs-sm); font-weight: 700; }
+.hd-vs { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-mute); white-space: nowrap; }
+.hd-chip.warn { color: var(--warn); }
+.hd-pick .pick-moved { display: block; margin-top: 3px; }
+/* A sentence, not a figure: the reason and the price-moved note read in
+   the sans, where the deck's own sub-lines (a price, a book) are mono. */
+.hd-pick .hd-what span { font-family: var(--font-sans); }
 .hd-row.openable { width: 100%; border-left: 0; border-right: 0; border-bottom: 0;
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .hd-row.openable:hover .hd-what b { color: var(--brand-2); }

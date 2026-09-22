@@ -382,6 +382,12 @@ surface.
     and the book beneath, the price in a grey pill and our number in a
     green one, same door. The Most Likely page's shelves lead with rows
     and keep every card one tap away.
+  * *Edge rows, everywhere.* The Best bets box on the home — a pick, a
+    riding position, an on-deck hitter — and the Edge Board's row were
+    inline-styled rows. They share the deck's row now: rank, mark,
+    grade; the bet with its game and reason beneath; the price in the
+    grey pill and the number in the green one; the riding position and
+    the on-deck hitter keep their own chips. Same fields, doors, chart.
   * *Motion, first pieces.* Rows rise 6px over `--dur-slow`, staggered
     by a third of `--dur-fast` to the sixth row (the whole list lands
     inside half a second; the live strip, which redraws on a clock, is

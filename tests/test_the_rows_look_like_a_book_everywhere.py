@@ -57,7 +57,7 @@ def test_the_row_pills_are_the_decks_and_the_old_blob_is_gone():
 def test_rows_rise_briefly_and_the_live_strip_does_not():
     body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
     assert "@keyframes rise { from { opacity: 0; transform: translateY(6px); }" in body
-    assert ".ml-rows > .ml-row, .hd-card > .hd-row { animation: rise var(--dur-slow) var(--ease-out) both; }" in body
+    assert ".ml-rows > .ml-row, .hd-card > .hd-row, .card > .hd-pick, .card > .hd-edge { animation: rise var(--dur-slow) var(--ease-out) both; }" in body
     assert "animation-delay: calc(var(--dur-fast) * 1.5)" in body, "the stagger is capped"
     assert ".hd-game { animation" not in body and ".hd-strip > .hd-game" not in body, "the live strip redraws on a clock; a rise there would flicker"
     assert re.search(r"\*,\s*\*::before[^{]*\{[^}]*animation-duration", body), "reduced motion must zero it"
