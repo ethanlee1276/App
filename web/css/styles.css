@@ -7028,6 +7028,19 @@ body.has-deck #rail-live { display: none; }
 .hd-ticket .hd-stake { color: var(--text-dim); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs); }
 .hd-ticket .hd-pl { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .mbc-head .hd-chip { flex: 0 0 auto; }
+/* v5: the scanner's rows in the book's row (hd-scan): the right column
+   is a number over its detail; a pair's two legs read on the sub-line. */
+.hd-scan .hd-pl { font-family: var(--font-mono); font-size: var(--fs-sm); }
+.hd-scan .hd-state span { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
+/* The right column yields: its detail wraps inside half the row, so the
+   bet and its legs keep a readable column on a phone. */
+.hd-scan .hd-state { flex: 0 1 auto; min-width: 0; max-width: 52%; }
+.hd-scan .hd-what { flex: 1 1 120px; min-width: 120px; }
+.hd-scan .hd-state .hd-warn { color: var(--warn); }
+.hd-scan .pick-id { flex: 0 0 auto; }
+.scan-stake-row { display: flex; align-items: center; gap: 8px; }
+.scan-stake { width: 90px; background: transparent; color: inherit; font: inherit;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
 .hd-pick .pick-moved { display: block; margin-top: 3px; }
 /* A sentence, not a figure: the reason and the price-moved note read in
    the sans, where the deck's own sub-lines (a price, a book) are mono. */

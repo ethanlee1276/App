@@ -36,7 +36,7 @@ def test_with_rows_nothing_changes():
     body = _fn("scanSection")
     after = body[body.index("return `<div class=\"section-title\">"):]
     assert '<span class="sub">— ${sub}</span></div>' in after
-    assert '<div class="card" style="padding:0">' in after and "rows.map(rowFn).join" in after
+    assert '<div class="hd-card">' in after and "rows.map(rowFn).join" in after   # v5: the book's card
     assert "panelEmpty(" not in body, "the empty branch is the row now, not a panel inside a card"
 
 

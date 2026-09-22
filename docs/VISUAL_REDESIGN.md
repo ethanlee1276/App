@@ -467,6 +467,14 @@ surface.
     or Copy. Ten settled in view, the rest folded. Your logged bets
     keep their cards and actions with the deck's pills in the head;
     the bulk import moves under the list.
+  * *The Market Scanner rests like the deck.* Six "nothing here" rows
+    become one quiet card with the doors when every section is empty;
+    the stake box appears only with a split to size; every row — stale
+    line, plus-money prop, arb, middle, low hold, sharp anchor, steam —
+    is the book's row, a pair's legs on the sub-line, a steam alert's
+    state as the pill.
+  * *Doors on every empty board.* The section enhancer adds the three
+    doors to every board page's empty state (`enhanceEmpties`), once.
   * *The paywall shows the one record.* It read the record file raw
     and kept quoting the edge book; it adopts the pooled record now
     and leads its results strip with the same ribbon (the model's
