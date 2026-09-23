@@ -192,6 +192,22 @@ set the page says "Ask isn't switched on for this site yet".
   needs a lookup costs one more round (at most 3 rounds, 6 lookups);
   the usage report counts them in its `lookups` column. It can only
   answer from seasons that database holds.
+- **Every feed the site pulls (2026-09-23).** Ethan: *"make sure the AI
+  chat is pulling live data and all that shit that we usually access and
+  have keys for."* It also reads the league's own standings (with the
+  projected seeds and each team's close-game record), rosters and depth
+  charts with recent signings, the news headlines, the book report card,
+  Kalshi and Polymarket prices, the live market feed (edges appearing and
+  dying, line moves), our open bets live, the day's top pick across every
+  league, NFL play-by-play efficiency (EPA, pass rate over expected,
+  pace), the fantasy desk, the UFC card live, a player's injury history,
+  each pick's line since it opened, and MLB starters, parks and umpires.
+  Every question also carries when each board was built, so it can say
+  how fresh a number is. The live ones (scores, the market feed, our live
+  bets, prediction markets, news) are never served from the answer cache.
+- **Keys:** Ask spends none. The odds feed, CFBD and Kalshi are pulled by
+  the refresher on its own schedule and budget, and Ask reads what the
+  refresher wrote, so a busy chat can't burn the Odds API quota.
 - **Limits:** subscribers only, 8 questions a minute per IP
   (server.RATE_ASK_PER_MIN).
 

@@ -167,9 +167,11 @@ PAID_DIR = None
 LEDGER_DB = None
 #: A lookup whose answer is stale within minutes is never served from the
 #: answer cache.
-NO_CACHE_TOOLS = {"live_scores"}
+#: Lookups whose answer is stale in minutes: an answer that used one is never remembered.
+NO_CACHE_TOOLS = {"live_scores", "market_moves", "news", "our_picks_live", "prediction_markets"}
 SLATE_GAMES = 16
-PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day")
+PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day",
+              "top_pick_today")
 RECORD_WINDOWS = {"today": 0, "yesterday": 1, "last_7_days": 7, "last_30_days": 30, "season": None}
 LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb")
 
@@ -204,11 +206,15 @@ SYSTEM = (
     "this week, or is in another sport.\n"
     "Your facts: the board summary below; the facts sent with the question (rows from "
     "every league's board tonight that match it, with their recent games and form; "
-    "their games with lines, weather and rest; our record; the injury board); and your "
-    "tools, which read our history database (every stored final score with its spread "
-    "and total, every stored player game log), every league's board tonight (the slate, "
-    "our picks and parlays, each book's price and how lines have moved), the injury "
-    "board, our live scoreboard, our futures simulation and our public record. When the "
+    "their games with lines, weather and rest; our record; the injury board; data_as_of, "
+    "when each board was built); and your tools, which read everything the site "
+    "publishes, refreshed all day: our history database (every stored final score with "
+    "its spread and total, every stored player game log, play-by-play efficiency, injury "
+    "designations), every league's board tonight (the slate with starters, weather and "
+    "parks, our picks and parlays, our open bets live, each book's price and how lines "
+    "have moved), the live market feed, the live scoreboard, the league's own standings, "
+    "rosters and depth charts, headlines, Kalshi and Polymarket prices, the sportsbook "
+    "report card, the fantasy desk, our futures simulation and our public record. When the "
     "question is about the past, such as a team's record, two teams' meetings, or how "
     "a player has done lately or against a team, look it up with the tools before you "
     "answer. For a question about the whole league (the best or worst at something, "
@@ -231,8 +237,9 @@ SYSTEM = (
     f"At most {WORDS} words, plain words a first-time bettor understands, no headings; "
     "for a list (a slate, picks, a ranking) short lines, at most 8. "
     "Never tell the reader to bet or how much; a stake on a row is our model's, not "
-    "advice. You cannot see the internet or the news; scores come only from the "
-    "live_scores lookup, and you say how old they are."
+    "advice. You cannot browse the internet: news comes only from the news lookup "
+    "(headlines, not articles), scores only from live_scores, and for anything live you "
+    "say how old it is."
 )
 
 
@@ -258,6 +265,20 @@ TABLE_SORTS = {
 }
 
 
+#: What team_efficiency ranks by: {stat: (words, which way is better)}. None
+#: is a style, not a grade: rank 1 is the most of it.
+EFFICIENCY = {
+    "off_epa": ("offense EPA per play", "high"),
+    "def_epa": ("EPA per play allowed on defense", "low"),
+    "pass_epa": ("EPA per pass play", "high"),
+    "rush_epa": ("EPA per run play", "high"),
+    "proe": ("pass rate over expected", None),
+    "pace": ("seconds per snap in neutral situations", "low"),
+    "plays_per_game": ("plays per game", None),
+}
+
+FANTASY_VIEWS = ("usage", "buy_sell", "waivers", "streamers", "trending", "ranks", "moves")
+
 def _stat_menu() -> str:
     """Every stat player_leaders can rank, by league — read from the logs'
     own market list, so a stat added there is offered here."""
@@ -271,6 +292,19 @@ def _stat_menu() -> str:
 _ANY_SPORT = {"type": "string", "enum": list(LEAGUES) + ["ufc", "all"],
               "description": "The league, or all of them."}
 TOOLS = [
+    _tool("book_report",
+          "Which sportsbooks price sharpest, measured from our own line snapshots: each book's early-price "
+          "error against the closing line and how often it moves first. For which book is sharpest, which "
+          "is softest, who moves first.",
+          {}),
+    _tool("fantasy",
+          "The NFL fantasy desk: usage (target and carry shares, recent change), buy_sell (buy-low and "
+          "sell-high by expected points), waivers (risers and who inherits an injured player's work), "
+          "streamers (the week's best spots by position), trending (most added and dropped), ranks, and "
+          "moves (recent signings and trades).",
+          {"view": {"type": "string", "enum": list(FANTASY_VIEWS)},
+           "player": {"type": "string", "description": "Optional: one player."},
+           "position": {"type": "string", "description": "Optional: QB, RB, WR, TE."}}, "view"),
     _tool("futures",
           "Our season simulation for one league: each team's record, projected wins and range, and its "
           "chances of the playoffs, the division, the conference and the title. With no team: the likeliest "
@@ -302,8 +336,22 @@ TOOLS = [
           {"query": {"type": "string", "description": "The player or pick."}, "sport": _SPORT_ARG}, "query"),
     _tool("live_scores",
           "Our live scoreboard: games in progress with the score, period and clock (and the home side's win "
-          "chance where we read one), then finals, then later games. Say how old it is.",
-          {"sport": _SPORT_ARG, "team": {"type": "string", "description": "Optional: one team."}}),
+          "chance where we read one), then finals, then later games; sport ufc gives tonight's bouts, round "
+          "and clock, and winners. Say how old it is.",
+          {"sport": {**_SPORT_ARG, "enum": list(LEAGUES) + ["ufc"]},
+           "team": {"type": "string", "description": "Optional: one team."}}),
+    _tool("market_moves",
+          "The live market feed from the last day, newest first: edges appearing and dying on our board, "
+          "prop lines and prices moving, props getting priced when lineups drop, and stale lines at one "
+          "book. For what just moved, any new edges, steam.",
+          {"sport": _ANY_SPORT, "player": {"type": "string", "description": "Optional: one player."},
+           "kind": {"type": "string", "enum": ["edge_appeared", "edge_died", "line_move", "price_move",
+                                               "released", "stale_line"]}}),
+    _tool("news",
+          "The latest headlines we carry for a league, newest first: the title, publisher and time, never the "
+          "article. For what is the news, any update on a team or player.",
+          {"sport": {**_ANY_SPORT, "enum": list(LEAGUES) + ["ufc", "all"]},
+           "query": {"type": "string", "description": "Optional: a team or player the headline names."}}),
     _tool("odds_calc",
           "Arithmetic on American odds, done exactly: each price's decimal odds, implied chance, profit and "
           "payout on a stake; with two or more, the parlay; with exactly two, the hold and the fair chances "
@@ -312,10 +360,16 @@ TOOLS = [
            "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
-          "long_shots, game_lines (spreads, totals, moneylines), parlays (our tickets) or pick_of_the_day — "
-          "on one league's board or all of them, best first.",
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (our tickets), pick_of_the_day (each "
+          "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
+          "one league's board or all of them, best first.",
           {"kind": {"type": "string", "enum": list(PICK_KINDS)}, "sport": _ANY_SPORT,
            "limit": {"type": "integer"}}, "kind"),
+    _tool("our_picks_live",
+          "Our open bets right now, in every league: each one's stat so far, whether it is still alive, its "
+          "live chance to win against its pregame chance, and our parlays' live chances. For how are our "
+          "picks doing, are we winning tonight.",
+          {"sport": _ANY_SPORT}),
     _tool("our_record",
           "Our public record: all bets, a league's, the Most Likely board with its calibration, the best and "
           "worst markets; a window (today, yesterday, last_7_days, last_30_days, season); and with bets the "
@@ -346,6 +400,12 @@ TOOLS = [
            "season": {"type": "integer", "description": "Optional: a season year."},
            "limit": {"type": "integer", "description": "Optional: how many players (default 10)."}},
           "stat"),
+    _tool("prediction_markets",
+          "Prediction-market prices we carry: Kalshi (the exchange's chance, the sportsbooks' de-vigged "
+          "chance for the same outcome, and our model's) and Polymarket. For what Kalshi or Polymarket says, "
+          "exchange odds on a game or a title.",
+          {"query": {"type": "string", "description": "Optional: a team, game or market."},
+           "sport": _ANY_SPORT}),
     _tool("prop_hit_rate",
           "How often a player has gone over (or under) a line in one stat: last 5, last 10, this season, "
           "every stored game, and against one team, with his average. With no line, tonight's line on our "
@@ -354,6 +414,13 @@ TOOLS = [
            "side": {"type": "string", "enum": ["over", "under"]},
            "opponent": {"type": "string", "description": "Optional: one team."}, "sport": _SPORT_ARG},
           ("player", "stat")),
+    _tool("roster",
+          "A team's current roster in depth-chart order, with each player's number, position, status and "
+          "injury, and its recent signings and trades; or, with only a player, the team he is on. For who "
+          "starts, the backup, the depth chart, who they signed.",
+          {"team": {"type": "string"}, "player": {"type": "string"},
+           "position": {"type": "string", "description": "Optional: one position, like QB or CB."},
+           "sport": _SPORT_ARG}),
     _tool("schedule",
           "When a team plays next: its game on tonight's board with the lines, then the fixtures we hold, "
           "and its last result.",
@@ -362,6 +429,22 @@ TOOLS = [
           "Tonight's games on one league's board or every league's: the matchup, kickoff, spread, total, "
           "moneylines and weather, and the score of any that has started. sport ufc gives the fight card.",
           {"sport": _ANY_SPORT}),
+    _tool("standings",
+          "The league's current standings from the league's own feed: every team's record by division or "
+          "conference, win percentage, points for and against per game, home and away records, streak and "
+          "last 10, the projected playoff seeds, and for one team its record in close games (clutch, "
+          "reliability as favorite, comebacks as underdog, chokes). For standings, who leads the division, "
+          "playoff picture.",
+          {"sport": _SPORT_ARG, "team": {"type": "string", "description": "Optional: one team."},
+           "group": {"type": "string", "description": "Optional: a division or conference, like NFC North."}}),
+    _tool("team_efficiency",
+          "Football efficiency from play-by-play (NFL, and college where stored): EPA per play on offense, "
+          "allowed on defense, per pass and per run, pass rate over expected and pace, with ranks and the "
+          "league average. With team: that team's profile. Without: the league ranked by one stat. last_n "
+          "limits it to each team's latest weeks.",
+          {"sport": {"type": "string", "enum": ["nfl", "cfb"]}, "team": {"type": "string"},
+           "sort": {"type": "string", "enum": list(EFFICIENCY)}, "order": {"type": "string", "enum": ["best", "worst"]},
+           "season": {"type": "integer"}, "last_n": {"type": "integer"}, "limit": {"type": "integer"}}),
     _tool("team_history",
           "A team's final scores from our history database, in any league we cover, whether "
           "or not it plays tonight. With opponent: every stored meeting of the two, newest "
@@ -538,8 +621,23 @@ def game_facts(board: dict, g: dict) -> dict:
             out[k] = g[k]
     w = g.get("weather") or {}
     if isinstance(w, dict) and w:
-        out["weather"] = {k: w[k] for k in ("dome", "temp_f", "wind_mph", "rain", "snow")
-                          if w.get(k) is not None}
+        out["weather"] = {k: w[k] for k in ("dome", "temp_f", "wind_mph", "wind_dir", "precip_chance", "rain", "snow")
+                          if w.get(k) not in (None, "")}
+    pitchers = g.get("pitchers") or {}
+    if isinstance(pitchers, dict) and pitchers:
+        out["probable_starters"] = {str(g.get(side) or side): _slim(p, ("name", "throws", "xera", "k_rate"))
+                                    for side, p in pitchers.items() if isinstance(p, dict) and p.get("name")}
+    if g.get("lineups_confirmed") is not None:
+        out["lineups_confirmed"] = bool(g["lineups_confirmed"])
+    if g.get("park_name"):
+        out["park"] = g["park_name"]
+    f = g.get("factors")
+    if isinstance(f, dict) and f:
+        out["park_factors"] = _slim(f, ("hr", "run", "k"))
+    if g.get("plate_umpire"):
+        out["plate_umpire"] = g["plate_umpire"]
+        if g.get("ump_k_factor") is not None:
+            out["umpire_strikeout_factor"] = g["ump_k_factor"]
     plays = ((g.get("stadium") or {}) if isinstance(g.get("stadium"), dict) else {}).get("plays")
     if plays:
         out["stadium_note"] = str(plays)[:240]
@@ -1259,8 +1357,8 @@ def slate(boards: dict, sport: str = "", data_dir=None, prefer: str = "") -> dic
         games = []
         for g in [g for g in b.get("games") or [] if isinstance(g, dict)][:SLATE_GAMES]:
             row = game_facts(b, g)
-            row.pop("stadium_note", None)
-            row.pop("rest", None)
+            for k in ("stadium_note", "rest", "park_factors", "umpire_strikeout_factor"):
+                row.pop(k, None)
             now = live.get((str(g.get("away") or ""), str(g.get("home") or "")))
             if now and now.get("state") not in ("pre", ""):
                 row["now"] = {k: now[k] for k in ("state", "score", "period", "clock", "detail") if k in now}
@@ -1300,6 +1398,20 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
                 if isinstance(r, dict)]
         return {"sport": "ufc", "kind": "picks", "rows": rows[:_limit(limit)]} if rows else \
             {"found": False, "note": "no UFC picks on our board"}
+    if kind == "top_pick_today":
+        top = _paid("day_top_pick.json", data_dir)
+        p = top.get("pick")
+        if not isinstance(p, dict) or not p:
+            return {"found": False, "note": top.get("note") or "no top pick across the leagues today"}
+        out = {"kind": kind, "league": top.get("sport") or p.get("sport"), "pick": compact(p),
+               "as_of": top.get("generated_at"), "leagues_compared": top.get("leagues_seen")}
+        for k in ("verdict", "note"):
+            if isinstance(top.get(k), str) and top[k]:
+                out[k] = top[k]
+        beat = [{"league": r.get("sport"), **compact(r)} for r in top.get("runners_up") or [] if isinstance(r, dict)]
+        if beat:
+            out["runners_up"] = beat
+        return out
     rows = []
     for s in _board_leagues(boards, sport, prefer):
         b = boards[s]
@@ -1309,6 +1421,8 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
                 for t in (block.get("tickets") if isinstance(block, dict) else None) or []:
                     if isinstance(t, dict):
                         rows.append((0, _ticket(t, s, pool)))
+            continue
+        if kind == "top_pick_today":
             continue
         if kind == "pick_of_the_day":
             p = b.get("pick_of_the_day")
@@ -1352,6 +1466,9 @@ def line_shop(boards: dict, query: str, sport: str = "", prefer: str = "") -> di
             if same:
                 best = max(same, key=lambda x: x[key])
                 row["best_price_at_this_line"] = {"book": best.get("book"), "odds": best[key]}
+            tape = _line_tape(r.get("line_series"))
+            if len(tape) > 1:
+                row["line_since_open"] = tape
             mv = r.get("line_move")
             if isinstance(mv, dict):
                 row["line_move"] = {k: mv[k] for k in ("open", "current", "delta", "open_odds", "current_odds",
@@ -1509,10 +1626,16 @@ def injuries(team: str = "", player: str = "", sport: str = "", data_dir=None, p
                                         if r.get(k) not in (None, "")}})
         if out and (team or player or not sport):
             break
-    if not out:
+    past = injury_history(player, sport) if player else []
+    if not out and not past:
         return {"found": False, "note": "nothing on the injury board for that"
                 + (f" ({team or player})" if team or player else ""), "as_of": data.get("generated_at")}
-    return {"as_of": data.get("generated_at"), "count": len(out), "rows": out[:30]}
+    res = {"as_of": data.get("generated_at"), "count": len(out), "rows": out[:30]}
+    if not out:
+        res["note"] = "not on the injury board now"
+    if past:
+        res["designations_we_have_seen"] = past
+    return res
 
 
 def schedule(boards: dict, team: str, sport: str = "", prefer: str = "") -> dict:
@@ -1690,6 +1813,447 @@ def odds_calc(odds, stake=100) -> dict:
     return out
 
 
+# -- everything else the site publishes ---------------------------------------------
+# Ethan, 2026-09-23: "make sure the AI chat is pulling live data and all
+# that shit that we usually access and have keys for." Every feed below is
+# one the refresher already pulls with the site's own keys and writes to
+# disk; a question reads the newest write, and nothing here fetches.
+#
+#   standings, division, clutch record  -> standings          (standings_*.json, the league's own table)
+#   who is on the team, depth, moves     -> roster             (rosters_*.json)
+#   what is the news                     -> news               (news.json, headlines only)
+#   which book is sharpest               -> book_report        (bookreport.json)
+#   the Kalshi / Polymarket price        -> prediction_markets (kalshi.json, predmarkets.json)
+#   what just moved, a new edge          -> market_moves       (feed.json, live)
+#   how are our bets doing right now     -> our_picks_live     (every board's live_picks, sweat.json)
+#   EPA, pace, pass rate over expected   -> team_efficiency    (team_weeks)
+#   fantasy usage, waivers, buy low      -> fantasy            (fantasy.json, rosters_nfl.json)
+FEED_ROWS = 12
+TAPE_POINTS = 6
+
+
+def _web(data_dir) -> Path:
+    return Path(data_dir or ROOT / "web" / "data")
+
+
+def _slim(row: dict, keep=None) -> dict:
+    """A row's plain facts: scalars only, blanks dropped, in ``keep``'s order when given."""
+    if not isinstance(row, dict):
+        return {}
+    keys = keep if keep is not None else list(row)
+    return {k: _n(row[k]) for k in keys
+            if isinstance(row.get(k), (str, int, float, bool)) and row.get(k) != "" and not str(k).startswith("_")}
+
+
+def _says(query: str, *texts) -> bool:
+    """Does any text name the query: the whole of it, or a word of it long enough to mean something."""
+    q = _norm(query).strip()
+    if not q:
+        return True
+    hay = " " + " ".join(_norm(t) for t in texts) + " "
+    return f" {q} " in hay or any(f" {w} " in hay for w in q.split() if len(w) >= 4)
+
+
+def _ago_min(ts, now: float | None = None) -> int | None:
+    try:
+        return max(0, round(((now or time.time()) - float(ts)) / 60))
+    except (TypeError, ValueError):
+        return None
+
+
+def standings(sport: str = "", team: str = "", group: str = "", data_dir=None, prefer: str = "") -> dict:
+    """The league's own standings: records by division, home and away, streaks; one team's clutch numbers."""
+    from engine import teamdex as T
+    s = _league(sport, prefer)
+    t = _load_json(_web(data_dir) / f"standings_{s}.json")
+    groups = [g for g in t.get("groups") or [] if isinstance(g, dict) and g.get("teams")]
+    if not groups:
+        out = {"found": False, "note": t.get("note") or f"no {s.upper()} standings on file"}
+        if t.get("first_games"):
+            out["first_games"] = t["first_games"]
+        return out
+    codes = _codes_for(team, s) if team else set()
+    keep = ("rank", "record", "pct", "games", "pf_per_game", "pa_per_game", "diff", "home", "away",
+            "streak_label", "last10_label")
+    shown = []
+    for g in groups:
+        label = str(g.get("label") or " ".join(str(g.get(k) or "") for k in ("conference", "division"))).strip()
+        rows = [r for r in g["teams"] if isinstance(r, dict)]
+        if team:
+            rows = [r for r in rows if r.get("team") in codes or _says(team, T.label(r.get("team"), s))]
+        elif group and not _says(group, label):
+            continue
+        if rows:
+            shown.append({"group": label, "teams": [{"team": T.label(r.get("team"), s), **_slim(r, keep)}
+                                                    for r in rows]})
+    if not shown:
+        return {"found": False, "note": f"no {s.upper()} team or group matching {team or group}"}
+    out = {"sport": s, "season": t.get("season"), "as_of": t.get("generated_at"),
+           "source": "the league's own standings" if t.get("source") == "league" else "counted from our stored games",
+           "groups": shown}
+    if t.get("order_note"):
+        out["order"] = t["order_note"]
+    pressure = t.get("pressure") or {}
+    for code in codes:
+        p = (pressure.get("teams") or {}).get(code)
+        if isinstance(p, dict):
+            out["under_pressure"] = {"season": pressure.get("season_used"),
+                                     **_slim(p, ("record", "clutch", "one_score_games", "reliability", "fav_games",
+                                                 "comeback", "dog_games", "choke"))}
+            break
+    if not team and not group:
+        seeds = []
+        for c in t.get("projected_seeds") or []:
+            if isinstance(c, dict):
+                seeds.append({"conference": c.get("conference"),
+                              "seeds": [f"{x.get('seed')}. {T.label(x.get('team'), s)} {x.get('record', '')}".strip()
+                                        for x in c.get("seeds") or [] if isinstance(x, dict)]})
+        if seeds:
+            out["projected_playoff_seeds"] = seeds
+    if (t.get("bracket") or {}).get("started"):
+        out["playoffs_started"] = True
+    return out
+
+
+def roster(team: str = "", player: str = "", position: str = "", sport: str = "", data_dir=None,
+           prefer: str = "") -> dict:
+    """A team's roster in depth-chart order with each player's status, or the team a player is on."""
+    from engine import teamdex as T
+    if not team and not player:
+        return {"error": "name a team or a player"}
+    keep = ("position", "depth_pos", "depth_order", "number", "status", "injury", "age", "years_exp", "college")
+    pos = str(position or "").strip().upper()
+    for s in _leagues(sport, prefer):
+        data = _load_json(_web(data_dir) / f"rosters_{s}.json")
+        teams = {k: v for k, v in (data.get("teams") or {}).items() if isinstance(v, dict)}
+        if not teams:
+            continue
+        if player and not team:
+            found = [{"team": T.label(code, s), "player": p.get("player"), **_slim(p, keep)}
+                     for code, tm in teams.items() for p in tm.get("players") or []
+                     if isinstance(p, dict) and _norm(player).strip() in _norm(p.get("player"))]
+            if found:
+                return {"sport": s, "as_of": data.get("generated_at"), "players": found[:5]}
+            continue
+        codes = _codes_for(team, s)
+        code = next((c for c in codes if c in teams), None)
+        if code is None:
+            code = next((c for c in teams if _says(team, T.label(c, s))), None)
+        if code is None:
+            continue
+        players = [p for p in teams[code].get("players") or [] if isinstance(p, dict)]
+        if player:
+            players = [p for p in players if _norm(player).strip() in _norm(p.get("player"))]
+        out = {"sport": s, "team": T.label(code, s), "as_of": data.get("generated_at"),
+               "count": teams[code].get("count", len(players))}
+        if pos:
+            players = [p for p in players if pos in (str(p.get("position") or "").upper(),
+                                                    str(p.get("depth_pos") or "").upper())]
+        elif not player and len(players) > 30:
+            # A whole football roster runs past what a lookup carries, so it
+            # arrives as its depth chart: the top two at each position, and
+            # everyone who is out, by name.
+            top, seen = [], {}
+            for p in players:
+                k = str(p.get("depth_pos") or p.get("position") or "")
+                seen[k] = seen.get(k, 0) + 1
+                if seen[k] <= 2:
+                    top.append(p)
+            out["unavailable"] = [f"{p.get('player')} ({p.get('position')}, {p.get('status') or 'out'})"
+                                  for p in players if p.get("unavailable")][:15]
+            out["shown"] = "the top two at each position"
+            players = top
+        out["players"] = [{"player": p.get("player"), **_slim(p, keep)} for p in players]
+        moves = [_slim(m) for m in ((data.get("transactions") or {}).get("moves") or [])
+                 if isinstance(m, dict) and {m.get("from"), m.get("to")} & (codes | {code})]
+        if moves:
+            out["recent_moves"] = moves[:8]
+        return out
+    return {"found": False, "note": f"no roster on file for {team or player}"}
+
+
+def news(sport: str = "", query: str = "", data_dir=None, prefer: str = "") -> dict:
+    """The latest headlines we carry, newest first — titles and their publishers, never the article."""
+    data = _load_json(_web(data_dir) / "news.json")
+    by = data.get("sports") or {}
+    leagues = [sport] if sport and sport != "all" else [s for s in [prefer, *LEAGUES, "ufc"] if s in by]
+    rows = []
+    for s in dict.fromkeys(leagues):
+        for r in by.get(s) or []:
+            if isinstance(r, dict) and _says(query, r.get("title")):
+                rows.append({"league": s, **_slim(r, ("title", "source", "published"))})
+    rows.sort(key=lambda r: str(r.get("published") or ""), reverse=True)
+    if not rows:
+        return {"found": False, "note": "no headline we carry mentions that" if query else "no headlines on file",
+                "as_of": data.get("generated_at")}
+    return {"as_of": data.get("generated_at"), "headlines_only": True, "rows": rows[:FEED_ROWS]}
+
+
+def book_report(data_dir=None) -> dict:
+    """Which sportsbooks price sharpest: early-price error against the close, and who moves first."""
+    data = _load_json(_web(data_dir) / "bookreport.json")
+    books = [b for b in data.get("books") or [] if isinstance(b, dict)]
+    if not books:
+        return {"found": False, "note": "no book report on file yet"}
+    out = {"as_of": data.get("generated_at"),
+           "books": [{"book": b.get("book"), "early_price_error_pts": b.get("mae_pts"),
+                      "moves_first_rate": b.get("lead_rate"), "snapshots": b.get("n"),
+                      "ranked": bool(b.get("ranked"))} for b in books[:15]],
+           "how": str(data.get("note") or "")[:400]}
+    vs = data.get("vs_list") or {}
+    if isinstance(vs, dict):
+        for k in ("measured_sharpest", "asserted_but_not", "sharp_but_unnamed"):
+            if vs.get(k):
+                out[k] = vs[k]
+    return out
+
+
+def prediction_markets(query: str = "", sport: str = "", data_dir=None) -> dict:
+    """Kalshi and Polymarket prices: the exchange's chance, the books' de-vigged chance, our model's."""
+    kal = _paid("kalshi.json", data_dir)
+    rows, teams = [], {}
+    for r in kal.get("rows") or []:
+        if not isinstance(r, dict):
+            continue
+        lg = str(r.get("sport") or "")
+        if sport and sport != "all" and lg != sport:
+            continue
+        if query and lg in LEAGUES and lg not in teams:
+            teams[lg] = _codes_for(query, lg) | _caps(query)     # "Lions" is DET in a matchup
+        if query and not (_says(query, r.get("title"), r.get("matchup"), r.get("subtitle"))
+                          or teams.get(lg, _caps(query)) & set(str(r.get("matchup") or "").split("@"))):
+            continue
+        row = _slim(r, ("title", "subtitle", "sport", "matchup"))
+        for k, name in (("prob", "kalshi_yes_price"), ("book_p", "books_chance"), ("book_gap_pts", "kalshi_minus_books_pts"),
+                        ("model_p", "our_model_chance"), ("edge_pts", "our_edge_pts"), ("volume_24h", "volume_24h"),
+                        ("spread_cents", "spread_cents")):
+            if r.get(k) is not None:
+                row[name] = r[k]
+        if r.get("rec"):
+            row["our_side"] = r.get("rec_side")
+        rows.append(row)
+    poly = []
+    pm = _paid("predmarkets.json", data_dir)
+    for m in pm.get("markets") or []:
+        if isinstance(m, dict) and (not query or _says(query, m.get("question"))):
+            poly.append({"question": m.get("question"), "polymarket_yes_price": m.get("yes"),
+                         "volume_24h": m.get("vol24"), "ends": m.get("end_date")})
+    if not rows and not poly:
+        return {"found": False, "note": "no Kalshi or Polymarket market we carry matches that"}
+    out = {"as_of": kal.get("generated_at") or pm.get("generated_at")}
+    if rows:
+        out["kalshi"] = rows[:FEED_ROWS]
+    if poly:
+        out["polymarket"] = poly[:8]
+    return out
+
+
+def market_moves(sport: str = "", player: str = "", kind: str = "", data_dir=None) -> dict:
+    """The live feed, newest first: edges appearing and dying, line and price moves, props priced."""
+    f = _paid("feed.json", data_dir)
+    rows = []
+    for e in f.get("events") or []:
+        if not isinstance(e, dict):
+            continue
+        if sport and sport != "all" and e.get("sport") != sport:
+            continue
+        if kind and e.get("kind") != kind:
+            continue
+        if player and not _says(player, e.get("player"), " ".join(str(x) for x in e.get("players") or [])):
+            continue
+        row = {k: v for k, v in _slim(e).items() if k not in ("id", "headshot", "qid")}
+        if isinstance(e.get("players"), list):
+            row["players"] = [str(x) for x in e["players"][:4]]
+        rows.append(row)
+    if not rows:
+        return {"found": False, "note": "nothing on the live feed for that in the last day",
+                "as_of": f.get("generated_at")}
+    return {"as_of": f.get("generated_at"), "rows": rows[:FEED_ROWS]}
+
+
+def our_picks_live(boards: dict, sport: str = "", data_dir=None, prefer: str = "") -> dict:
+    """Our open bets right now: each one's stat so far, whether it is still alive, its live chance."""
+    keep = ("player", "market_label", "side", "line", "odds", "phase", "status", "current", "still_in",
+            "live_prob", "pregame_prob", "opp_left", "opp_unit")
+    out = []
+    for s in _board_leagues(boards, sport, prefer):
+        b = boards[s]
+        for key, top in (("live_potd", True), ("live_picks", False)):
+            for r in b.get(key) or []:
+                if not isinstance(r, dict) or r.get("status") == "unmapped":
+                    continue
+                row = {"league": s, **_slim(r, keep)}
+                g = r.get("game") or {}
+                if isinstance(g, dict) and g.get("home"):
+                    row["game"] = f"{g.get('away', '')} @ {g.get('home', '')}"
+                    row["game_state"] = g.get("state")
+                if top:
+                    row["pick_of_the_day"] = True
+                if all(row != o for o in out):
+                    out.append(row)
+    res: dict = {}
+    if out:
+        res["bets"] = out[:20]
+    sw = _paid("sweat.json", data_dir)
+    tickets = []
+    for t in sw.get("parlays") or []:
+        if isinstance(t, dict):
+            tickets.append({**_slim(t, ("book", "n_legs", "stake_units", "pregame_joint", "live_joint")),
+                            "legs": [_slim(x, ("player", "market", "side", "line", "status", "live_prob"))
+                                     for x in t.get("legs") or [] if isinstance(x, dict)]})
+    if tickets:
+        res["parlays"] = tickets[:4]
+        res["parlays_as_of"] = sw.get("generated_at")
+    if not res:
+        return {"found": False, "note": "none of our bets is open right now"
+                + (f" in the {sport.upper()}" if sport and sport != "all" else "")}
+    return res
+
+
+def team_efficiency(sport: str = "", team: str = "", sort: str = "off_epa", order: str = "best", season=None,
+                    last_n=None, limit=None, prefer: str = "") -> dict:
+    """Play-by-play efficiency: EPA per play on offense and defense, pass and run, PROE, pace."""
+    from engine import teamdex as T
+    from engine import teamprofiles as TP
+    if sort not in EFFICIENCY:
+        return {"error": "sort is one of: " + ", ".join(EFFICIENCY)}
+    s = sport if sport in ("nfl", "cfb") else "nfl"
+    conn = _history()
+    if conn is None:
+        return {"error": "our history database is not available"}
+    try:
+        n = int(last_n) if last_n not in (None, "") else None
+        profiles = TP.season_profiles(conn, int(season) if season not in (None, "") else None, n, sport=s,
+                                      min_weeks=1 if n else TP.MIN_WEEKS)
+        held = [r[0] for r in conn.execute("SELECT DISTINCT season FROM team_weeks WHERE sport=? ORDER BY season",
+                                           (s,)).fetchall()]
+    except (TypeError, ValueError):
+        return {"error": "season and last_n are whole numbers"}
+    finally:
+        conn.close()
+    if not profiles:
+        return {"found": False, "note": f"no {s.upper()} play-by-play efficiency stored"
+                + (f" for {season}" if season else ""), "seasons_we_hold": held}
+    ranks: dict = {}
+    for stat, (_words, better) in EFFICIENCY.items():
+        pool = sorted((t for t, p in profiles.items() if p.get(stat) is not None),
+                      key=lambda t: profiles[t][stat], reverse=better != "low")
+        ranks[stat] = {t: i + 1 for i, t in enumerate(pool)}
+    base = TP.league_baseline(profiles)
+    yr = next(iter(profiles.values())).get("season")
+    head = {"sport": s, "season": yr, "teams": len(profiles), "window": f"last {n} weeks" if n else "the season"}
+    if team:
+        codes = _codes_for(team, s)
+        code = next((c for c in codes if c in profiles), None) or next(
+            (c for c in profiles if _says(team, T.label(c, s))), None)
+        if code is None:
+            return {"found": False, "note": f"no efficiency stored for {team} in {yr}"}
+        p = profiles[code]
+        return {**head, "team": T.label(code, s), "weeks": p.get("weeks"),
+                "stats": {stat: {"value": p.get(stat), "rank": ranks[stat].get(code), "league_average": base.get(stat),
+                                 "means": words} for stat, (words, _b) in EFFICIENCY.items() if p.get(stat) is not None}}
+    words, better = EFFICIENCY[sort]
+    order_ = sorted(ranks[sort], key=ranks[sort].get)
+    if order == "worst" and better:
+        order_.reverse()
+    return {**head, "ranked_by": words, "order": order if better else "most first",
+            "league_average": base.get(sort),
+            "rows": [{"rank": ranks[sort][t], "team": T.label(t, s), "value": profiles[t][sort],
+                      "weeks": profiles[t].get("weeks")} for t in order_[:_limit(limit)]]}
+
+
+def fantasy(view: str = "usage", player: str = "", position: str = "", data_dir=None) -> dict:
+    """The NFL fantasy desk: usage shares, buy-low and sell-high, waiver risers, streamers, trending adds, ranks."""
+    if view not in FANTASY_VIEWS:
+        return {"error": "view is one of: " + ", ".join(FANTASY_VIEWS)}
+    f = _paid("fantasy.json", data_dir)
+    pos = str(position or "").strip().upper()
+
+    def pick(rows) -> list[dict]:
+        out = []
+        for r in rows or []:
+            if not isinstance(r, dict):
+                continue
+            if player and not _says(player, r.get("player"), r.get("name"), r.get("hurt")):
+                continue
+            if pos and str(r.get("position") or r.get("pos") or "").upper() not in (pos, ""):
+                continue
+            out.append(_slim(r))
+        return out[:FEED_ROWS]
+
+    if view == "moves":
+        data = _load_json(_web(data_dir) / "rosters_nfl.json")
+        body = {"moves": pick((data.get("transactions") or {}).get("moves"))}
+        stamp = data.get("generated_at")
+    elif view == "usage":
+        body, stamp = {"usage": pick(f.get("usage"))}, f.get("generated_at")
+    elif view in ("buy_sell", "waivers", "trending"):
+        block = f.get(view) or {}
+        body = {k: pick(v) for k, v in block.items() if isinstance(v, list)} if isinstance(block, dict) else {}
+        stamp = f.get("generated_at")
+    elif view == "streamers":
+        block = f.get("streamers") or {}
+        body = {k: pick(v)[:5] for k, v in block.items() if isinstance(v, list) and (not pos or k.upper() == pos)} \
+            if isinstance(block, dict) else {}
+        stamp = f.get("generated_at")
+    else:
+        body = {"ranks": pick((f.get("ranks") or {}).get("rows"))}
+        stamp = f.get("generated_at")
+    body = {k: v for k, v in body.items() if v}
+    if not body:
+        return {"found": False, "note": f"nothing on the fantasy desk's {view.replace('_', ' ')} for that"}
+    return {"view": view, "season": f.get("season"), "as_of": stamp, **body}
+
+
+def _ufc_live(data_dir) -> dict:
+    blob = _load_json(_web(data_dir) / "ufc_live.json")
+    bouts = []
+    for b in blob.get("bouts") or []:
+        if not isinstance(b, dict):
+            continue
+        names = [str(x.get("name") or "") for x in b.get("fighters") or [] if isinstance(x, dict)]
+        st = b.get("status") or {}
+        row = {"bout": " vs ".join(names), "state": st.get("state"), "detail": st.get("detail")}
+        if st.get("live"):
+            row["round"], row["clock"] = st.get("round"), st.get("clock")
+        won = [str(x.get("name")) for x in b.get("fighters") or [] if isinstance(x, dict) and x.get("winner")]
+        if won:
+            row["winner"] = won[0]
+        bouts.append({k: v for k, v in row.items() if v not in (None, "")})
+    if not bouts:
+        return {"found": False, "note": blob.get("note") or "no UFC card on our live feed right now"}
+    return {"scoreboards": [{"sport": "ufc", "event": blob.get("event"), "as_of": blob.get("generated_at"),
+                             "bouts": bouts[:SLATE_GAMES]}]}
+
+
+def _line_tape(series, now: float | None = None) -> list[dict]:
+    """A pick's line since it opened, as a handful of points: the open, the now, and even steps between."""
+    pts = [p for p in series or [] if isinstance(p, dict) and p.get("line") is not None]
+    if len(pts) > TAPE_POINTS:
+        step = (len(pts) - 1) / (TAPE_POINTS - 1)
+        pts = [pts[i] for i in sorted({round(i * step) for i in range(TAPE_POINTS)})]
+    return [{"minutes_ago": _ago_min(p.get("ts"), now), **_slim(p, ("line", "odds", "book", "books"))} for p in pts]
+
+
+def injury_history(player: str, sport: str = "") -> list[dict]:
+    """Every designation we have seen for one player, newest first: when it posted and when we first saw it."""
+    if not str(player or "").strip():
+        return []
+    conn = _history()
+    if conn is None:
+        return []
+    try:
+        q = "SELECT sport, player, team, status, injury, posted_at, first_seen FROM injury_events WHERE player LIKE ?"
+        args: list = [f"%{str(player).strip()}%"]
+        if sport:
+            q += " AND sport=?"
+            args.append(sport)
+        rows = conn.execute(q + " ORDER BY first_seen DESC LIMIT 8", args).fetchall()
+    finally:
+        conn.close()
+    return [_slim(dict(r)) for r in rows]
+
+
 def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> dict:
     """One lookup, answered from our data. Never raises: a failed lookup is a
     sentence the model can pass on, not a failed question."""
@@ -1719,7 +2283,7 @@ def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> 
         if name == "schedule":
             return schedule(boards, arg("team"), sport, prefer)
         if name == "live_scores":
-            return live_scores(sport, arg("team"), data_dir, prefer)
+            return _ufc_live(data_dir) if sport == "ufc" else live_scores(sport, arg("team"), data_dir, prefer)
         if name == "futures":
             return futures(sport, arg("team"), a.get("limit"), data_dir, prefer)
         if name == "our_record":
@@ -1732,6 +2296,25 @@ def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> 
         if name == "player_leaders":
             return player_leaders(sport, arg("stat"), arg("by") or "total", a.get("season"),
                                   a.get("limit"), prefer)
+        if name == "standings":
+            return standings(sport, arg("team"), arg("group"), data_dir, prefer)
+        if name == "roster":
+            return roster(arg("team"), arg("player"), arg("position"), sport, data_dir, prefer)
+        if name == "news":
+            return news(sport, arg("query"), data_dir, prefer)
+        if name == "book_report":
+            return book_report(data_dir)
+        if name == "prediction_markets":
+            return prediction_markets(arg("query"), sport, data_dir)
+        if name == "market_moves":
+            return market_moves(sport, arg("player"), arg("kind"), data_dir)
+        if name == "our_picks_live":
+            return our_picks_live(boards, sport, data_dir, prefer)
+        if name == "team_efficiency":
+            return team_efficiency(sport, arg("team"), arg("sort") or "off_epa", arg("order") or "best",
+                                   a.get("season"), a.get("last_n"), a.get("limit"), prefer)
+        if name == "fantasy":
+            return fantasy(arg("view") or "usage", arg("player"), arg("position"), data_dir)
     except Exception as exc:                                          # noqa: BLE001
         return {"error": f"the lookup failed ({type(exc).__name__})"}
     return {"error": f"there is no lookup called {name}"}
@@ -1788,6 +2371,25 @@ def tool_source(name: str, args, result: dict) -> dict | None:
         label = "Our record"
     elif name == "player_leaders":
         label = f"{result['sport'].upper()} {result['season']} leaders, {result['stat']}"
+    elif name == "standings":
+        label = f"{result['sport'].upper()} standings"
+    elif name == "roster":
+        label = f"{result['team']}, roster" if result.get("team") else "Rosters"
+    elif name == "news":
+        label = "Headlines"
+    elif name == "book_report":
+        label = "Book report card"
+    elif name == "prediction_markets":
+        label = "Kalshi and Polymarket prices"
+    elif name == "market_moves":
+        label = "Live market feed"
+    elif name == "our_picks_live":
+        label = "Our bets, live"
+    elif name == "team_efficiency":
+        label = (f"{result['team']}, efficiency" if result.get("team")
+                 else f"{result['sport'].upper()} {result['season']} efficiency, by {result['ranked_by']}")
+    elif name == "fantasy":
+        label = f"Fantasy desk, {str(result.get('view', '')).replace('_', ' ')}"
     else:
         return None
     return {"label": label, "prop": ""} if label else None
@@ -1809,6 +2411,17 @@ def clean_history(history) -> list[dict]:
     return out
 
 
+def data_as_of(boards: dict, data_dir: Path) -> dict:
+    """When each league's board was built and when the refresher last ran, so
+    the model can say how fresh a number is instead of implying it is live."""
+    out = {s: _ex.board_stamp(b) for s, b in sorted(boards.items())}
+    beat = _load_json(Path(data_dir) / "heartbeat.json")
+    if beat.get("at"):
+        out["site_refreshed"] = str(beat["at"])
+    out["asked_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    return out
+
+
 def build_request(board: dict, question: str, history=None, pick: str = "",
                   data_dir: Path | None = None, boards: dict | None = None) -> dict:
     """Everything one call sends, apart from the model, the tools and the
@@ -1827,7 +2440,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         if focus is not None:
             focus_league = s
             break
-    facts: dict = {"rows_matching_the_question": rows}
+    facts: dict = {"rows_matching_the_question": rows, "data_as_of": data_as_of(boards, data_dir)}
     sources: list[dict] = []
     if focus is not None:
         f = detailed(focus)

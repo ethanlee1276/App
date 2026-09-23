@@ -174,7 +174,8 @@ def test_the_question_decides_which_of_our_data_rides_along():
     assert AB.intents("Kelce over 6.5?") == set()
     d = _data_dir()
     plain = AB.build_request(BOARD, "Kelce over 6.5?", data_dir=d)
-    assert set(_facts(plain)) == {"rows_matching_the_question", "games"}, "a player's game, nothing else"
+    assert set(_facts(plain)) == {"rows_matching_the_question", "games", "data_as_of"}, \
+        "a player's game and how fresh the boards are, nothing else"
     rec = _facts(AB.build_request(BOARD, "How has your record been lately?", data_dir=d))
     assert "our_record" in rec and "injury_board" not in rec and "games" not in rec
     inj = _facts(AB.build_request(BOARD, "Is Kelce playing?", data_dir=d))
