@@ -24,7 +24,12 @@ open is where they are standing, not what they may ask about:
     `player_history` (any player's latest games and season averages,
     or every game he has played against one team; a UFC fighter's
     record) and `tonight_board` (any league's board tonight, for a
-    team named by nickname or city). They read engine/teamdex.py,
+    team named by nickname or city). Two more read the WHOLE LEAGUE —
+    Ethan, 2026-09-23: "I can't even ask it who has the worst defense in
+    the league": `league_table` (every team in a season ranked by points
+    allowed, points scored, differential, win rate, cover rate or overs)
+    and `player_leaders` (a season's leaders in any stat we log, by total
+    or per game). They read engine/teamdex.py,
     engine/statlogs.py and engine/playersearch.py — the same lookups
     the Teams and Players pages make — so a name resolves the way the
     search box resolves it. At most MAX_TOOL_ROUNDS rounds of at most
@@ -140,6 +145,8 @@ LEAGUE_WORDS = {"nfl": r"\bnfl\b", "cfb": r"\b(?:cfb|college football|ncaaf?)\b"
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS = 6
 MAX_TOOL_CHARS = 6000
+LEAGUE_ROWS = 10
+LEAGUE_ROWS_MAX = 40
 H2H_GAMES = 12
 TEAM_SEASONS = 3
 TEAM_RECENT = 8
@@ -189,8 +196,11 @@ SYSTEM = (
     "and total, every stored player game log) and any league's board tonight. When the "
     "question is about the past, such as a team's record, two teams' meetings, or how "
     "a player has done lately or against a team, look it up with the tools before you "
-    "answer. Call several at once when you need several things, and pass the sport "
-    "when you know it.\n"
+    "answer. For a question about the whole league (the best or worst at something, "
+    "standings, a ranking, who leads a stat) use league_table or player_leaders; never "
+    "ask the reader to name teams for it. The league is the one the question or the "
+    "conversation is about, else the one the reader has open. Call several tools at "
+    "once when you need several things, and pass the sport when you know it.\n"
     "Use ONLY the facts you are given and the tools return. Do not add statistics, "
     "injuries, news, odds or any number that is not in them. If after looking they do "
     "not cover the question, say plainly that our data has nothing on it, say which "
@@ -216,9 +226,42 @@ _SPORT_ARG = {"type": "string", "enum": list(LEAGUES),
 _OPP_ARG = {"type": "string",
             "description": "Optional: the other team, by name, nickname, city or abbreviation."}
 
+#: What a league table ranks by: {sort: (row field, higher is better, words)}.
+TABLE_SORTS = {
+    "points_allowed": ("allowed_per_game", False, "points allowed per game"),
+    "points_scored": ("points_per_game", True, "points scored per game"),
+    "point_diff": ("point_diff", True, "point differential per game"),
+    "win_pct": ("win_pct", True, "win percentage"),
+    "ats_cover_pct": ("ats_cover_pct", True, "against-the-spread cover rate"),
+    "over_pct": ("over_pct", True, "share of games that went over the total"),
+}
+
+
+def _stat_menu() -> str:
+    """Every stat player_leaders can rank, by league — read from the logs'
+    own market list, so a stat added there is offered here."""
+    from engine import statlogs as SL
+    return "; ".join(f"{s.upper()}: " + ", ".join(label for _, label in m)
+                     for s, m in SL.SPORT_MARKETS.items())
+
+
 #: Sorted by name and never changed per request: the tools are the front of
 #: the cached prefix, and a byte of difference there re-bills all of it.
 TOOLS = [
+    _tool("league_table",
+          "Every team in one league for one season, ranked, from our stored final scores: "
+          "for any question about the whole league, such as the best or worst defense "
+          "(points_allowed), the best offense (points_scored), standings (win_pct), who "
+          "covers the spread most (ats_cover_pct) or whose games go over (over_pct). "
+          "order best puts the best first (for points_allowed, the fewest allowed); order "
+          "worst puts the worst first. The latest stored season unless you pass another; "
+          "each row says how many games it rests on, and early in a season you say so.",
+          {"sport": _SPORT_ARG,
+           "sort": {"type": "string", "enum": list(TABLE_SORTS)},
+           "order": {"type": "string", "enum": ["best", "worst"]},
+           "season": {"type": "integer", "description": "Optional: a season year."},
+           "limit": {"type": "integer", "description": "Optional: how many teams (default 10)."}},
+          "sort"),
     _tool("player_history",
           "One player's games from our history database, in any league we cover and any "
           "stored season, whether or not he plays tonight; for a UFC fighter, his record and "
@@ -229,6 +272,18 @@ TOOLS = [
           {"player": {"type": "string", "description": "The name as the reader wrote it."},
            "opponent": _OPP_ARG,
            "sport": {**_SPORT_ARG, "enum": list(LEAGUES) + ["ufc"]}}, "player"),
+    _tool("player_leaders",
+          "A league's leaders in one stat for one season, from our stored player game logs: "
+          "who has the most rushing yards, home runs, points and so on. by total ranks season "
+          "totals; by per_game ranks averages among players with at least half the games of "
+          "the busiest. The latest stored season unless you pass another. Stats we hold: "
+          + _stat_menu() + ".",
+          {"sport": _SPORT_ARG,
+           "stat": {"type": "string", "description": "The stat, by its name above."},
+           "by": {"type": "string", "enum": ["total", "per_game"]},
+           "season": {"type": "integer", "description": "Optional: a season year."},
+           "limit": {"type": "integer", "description": "Optional: how many players (default 10)."}},
+          "stat"),
     _tool("team_history",
           "A team's final scores from our history database, in any league we cover, whether "
           "or not it plays tonight. With opponent: every stored meeting of the two, newest "
@@ -824,6 +879,145 @@ def player_history(player: str, opponent: str = "", sport: str = "", prefer: str
         conn.close()
 
 
+def _league(sport: str, prefer: str) -> str:
+    return sport if sport in LEAGUES else (prefer if prefer in LEAGUES else LEAGUES[0])
+
+
+def _limit(n) -> int:
+    try:
+        return max(1, min(int(n or LEAGUE_ROWS), LEAGUE_ROWS_MAX))
+    except (TypeError, ValueError):
+        return LEAGUE_ROWS
+
+
+def _season_of(seasons: list, asked) -> int:
+    try:
+        return int(asked) if asked and int(asked) in seasons else seasons[0]
+    except (TypeError, ValueError):
+        return seasons[0]
+
+
+def _ranks(rows: list[dict], key: str, higher: bool) -> list[dict]:
+    """Rank 1 is the best at ``key``; equal values share a rank, and a row
+    with no value (no lines to cover, say) goes last, unranked."""
+    have = sorted([r for r in rows if r.get(key) is not None],
+                  key=lambda r: (-r[key] if higher else r[key], r.get("team") or r.get("player") or ""))
+    last, rank = None, 0
+    for i, r in enumerate(have, 1):
+        if last is None or abs(r[key] - last) > 1e-9:
+            rank, last = i, r[key]
+        r["rank"] = rank
+    return have + [r for r in rows if r.get(key) is None]
+
+
+def league_table(sport: str = "", sort: str = "points_allowed", order: str = "best", season=None,
+                 limit=None, prefer: str = "") -> dict:
+    """Every team in a league's season, ranked by one measure."""
+    from engine import teamdex as T
+    if sort not in TABLE_SORTS:
+        return {"error": "sort by one of: " + ", ".join(TABLE_SORTS)}
+    s = _league(sport, prefer)
+    conn = _history()
+    if conn is None:
+        return {"error": "our history database is not available"}
+    try:
+        seasons = [r[0] for r in conn.execute(
+            "SELECT DISTINCT season FROM games WHERE sport=? AND home_score IS NOT NULL "
+            "ORDER BY season DESC", (s,))]
+        if not seasons:
+            return {"found": False, "note": f"no stored {s.upper()} games"}
+        year = _season_of(seasons, season)
+        table = T.season_table(conn, s, year)
+    finally:
+        conn.close()
+    rows = []
+    for team, a in table.items():
+        g = a.get("games") or 0
+        if not g:
+            continue
+        ats, ou = a["ats_w"] + a["ats_l"], a["over"] + a["under"]
+        rows.append({**_team_line(a), "team": T.label(team, s),
+                     "win_pct": round((a["wins"] + a["ties"] / 2) / g, 3),
+                     "point_diff": a.get("point_diff"),
+                     "ats_cover_pct": round(a["ats_w"] / ats, 3) if ats else None,
+                     "over_pct": round(a["over"] / ou, 3) if ou else None})
+    field, higher, words = TABLE_SORTS[sort]
+    ranked = _ranks(rows, field, higher)
+    if order == "worst":
+        ranked = [r for r in ranked if r.get("rank")][::-1] + [r for r in ranked if not r.get("rank")]
+    keep = [{k: r[k] for k in ("rank", "team", "games", "record", "points_per_game", "allowed_per_game",
+                                 "point_diff", "against_the_spread", "over_under") if r.get(k) is not None}
+            for r in ranked[:_limit(limit)]]
+    return {"sport": s, "season": year, "seasons_we_hold": f"{min(seasons)}-{max(seasons)}"
+            if len(seasons) > 1 else str(seasons[0]),
+            "ranked_by": words, "order": "worst first" if order == "worst" else "best first",
+            "teams_ranked": len(rows), "most_games_played": max((r["games"] for r in rows), default=0),
+            "rows": keep}
+
+
+def _market(stat: str, markets) -> tuple | None:
+    """A stat as typed ("rushing yards", "rush_yds", "HR") → its (id, label)."""
+    want = _norm(stat).strip()
+    if not want:
+        return None
+    alias = {"hr": "home runs", "hrs": "home runs", "tds": "anytime td", "touchdowns": "anytime td",
+             "points": "pts", "rebounds": "reb", "assists": "ast", "threes": "fg3m", "3s": "fg3m",
+             "k": "strikeouts", "ks": "strikeouts"}
+    want = alias.get(want, want)
+    for mid, label in markets:
+        if want in (_norm(mid).strip(), _norm(label).strip(), _norm(mid.replace("_", " ")).strip()):
+            return mid, label
+    for mid, label in markets:
+        words = _norm(label).split()
+        if all(w in words or any(x.startswith(w) for x in words) for w in want.split()):
+            return mid, label
+    return None
+
+
+def player_leaders(sport: str = "", stat: str = "", by: str = "total", season=None, limit=None,
+                   prefer: str = "") -> dict:
+    """A league's season leaders in one stat, by total or per game."""
+    from engine import statlogs as SL
+    s = _league(sport, prefer)
+    markets = SL.SPORT_MARKETS.get(s) or ()
+    m = _market(stat, markets)
+    if not m:
+        return {"error": f"the {s.upper()} stats we hold are: " + ", ".join(label for _, label in markets)}
+    mid, label = m
+    conn = _history()
+    if conn is None:
+        return {"error": "our history database is not available"}
+    try:
+        seasons = [r[0] for r in conn.execute(
+            "SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND market=? ORDER BY season DESC",
+            (s, mid))]
+        if not seasons:
+            return {"found": False, "note": f"no stored {s.upper()} {label} logs"}
+        year = _season_of(seasons, season)
+        rows = [dict(r) for r in conn.execute(
+            "SELECT player, COUNT(DISTINCT game_id) AS games, SUM(value) AS total, AVG(value) AS avg "
+            "FROM player_game_logs WHERE sport=? AND season=? AND market=? GROUP BY player",
+            (s, year, mid))]
+        most = max((r["games"] for r in rows), default=0)
+        floor = max(1, -(-most // 2)) if by == "per_game" else 1
+        pool = [r for r in rows if r["games"] >= floor]
+        pool.sort(key=lambda r: (-(r["avg"] if by == "per_game" else r["total"]), r["player"]))
+        top = pool[:_limit(limit)]
+        for r in top:
+            t = conn.execute("SELECT team FROM player_game_logs WHERE sport=? AND season=? AND player=? "
+                             "ORDER BY period DESC LIMIT 1", (s, year, r["player"])).fetchone()
+            r["team"] = t["team"] if t else ""
+    finally:
+        conn.close()
+    return {"sport": s, "season": year, "stat": label,
+            "ranked_by": ("per game, among players with at least %d games" % floor) if by == "per_game"
+            else "season total",
+            "players_ranked": len(pool), "most_games_played": most,
+            "rows": [{"rank": i, "player": r["player"], "team": r["team"], "games": r["games"],
+                      "total": _n(round(float(r["total"]), 1)), "per_game": _n(round(float(r["avg"]), 1))}
+                     for i, r in enumerate(top, 1)]}
+
+
 def _split(query: str) -> list[str]:
     """"Lions @ Jets" → ["Lions", "Jets"]."""
     parts = re.split(r"\s+(?:@|at|vs\.?|v\.?|versus|and|or)\s+|,|/", str(query or ""))
@@ -877,6 +1071,12 @@ def run_tool(name: str, args, boards: dict, prefer: str = "") -> dict:
             return player_history(arg("player"), arg("opponent"), sport, prefer)
         if name == "tonight_board":
             return tonight_board(boards, arg("query"), sport, prefer)
+        if name == "league_table":
+            return league_table(sport, arg("sort") or "points_allowed", arg("order") or "best",
+                                a.get("season"), a.get("limit"), prefer)
+        if name == "player_leaders":
+            return player_leaders(sport, arg("stat"), arg("by") or "total", a.get("season"),
+                                  a.get("limit"), prefer)
     except Exception as exc:                                          # noqa: BLE001
         return {"error": f"the lookup failed ({type(exc).__name__})"}
     return {"error": f"there is no lookup called {name}"}
@@ -908,6 +1108,10 @@ def tool_source(name: str, args, result: dict) -> dict | None:
         label = f"{result.get('player')}, game logs" + (f" vs {result['opponent']}" if result.get("opponent") else "")
     elif name == "tonight_board":
         label = " and ".join(f"{b['sport'].upper()} board" for b in result.get("boards") or [])
+    elif name == "league_table":
+        label = f"{result['sport'].upper()} {result['season']} table, by {result['ranked_by']}"
+    elif name == "player_leaders":
+        label = f"{result['sport'].upper()} {result['season']} leaders, {result['stat']}"
     else:
         return None
     return {"label": label, "prop": ""} if label else None

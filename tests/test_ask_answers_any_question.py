@@ -81,6 +81,10 @@ def _history():
             rows.append(dict(sport="nfl", season=season, period=wk, game_id=f"G{season}{wk}",
                              player="Jahmyr Gibbs", team="DET", opponent=opp, position="RB",
                              home=home, market=market, value=value))
+    for season, wk, opp, yds in ((2025, "017", "GB", 50.0), (2025, "009", "GB", 70.0)):
+        rows.append(dict(sport="nfl", season=season, period=wk, game_id=f"G{season}{wk}",
+                         player="David Montgomery", team="DET", opponent=opp, position="RB",
+                         home=1 if wk == "017" else 0, market="rush_yds", value=yds))
     for d, opp, hits in (("2026-08-01", "BOS", 2.0), ("2026-08-02", "BOS", 0.0), ("2026-08-03", "TB", 1.0)):
         rows.append(dict(sport="mlb", season=2026, period=d, game_id=f"M{d}", player="Aaron Judge",
                          team="NYY", opponent=opp, position="RF", home=1, market="hits", value=hits))
@@ -213,6 +217,56 @@ def test_tonight_on_any_league_s_board():
     assert none["found"] is False and none["leagues_with_a_board_tonight"] == ["mlb", "nfl"]
 
 
+# --- the whole league ------------------------------------------------------------------
+def test_who_has_the_worst_defense_in_the_league():
+    """Ethan, 2026-09-23: "I can't even ask it who has the worst defense in
+    the league." It asked him to name two teams. 2025 in the fixture: the
+    Jets allowed 30 in their one game, the Packers 29 a game, the Lions 20,
+    the Bears 17."""
+    worst = AB.league_table("nfl", "points_allowed", "worst")
+    assert worst["season"] == 2025 and worst["seasons_we_hold"] == "2024-2025", "the latest stored season"
+    assert [r["team"] for r in worst["rows"]] == ["New York Jets", "Green Bay Packers",
+                                                  "Detroit Lions", "Chicago Bears"]
+    assert worst["rows"][0]["allowed_per_game"] == 30.0 and worst["rows"][0]["games"] == 1, \
+        "each row says how many games it rests on"
+    assert worst["order"] == "worst first" and worst["ranked_by"] == "points allowed per game"
+    best = AB.league_table("nfl", "points_allowed", "best")
+    assert [(r["rank"], r["team"]) for r in best["rows"]][:2] == [(1, "Chicago Bears"), (2, "Detroit Lions")]
+    assert worst["rows"][0]["rank"] == 4, "the worst is ranked last, not first"
+    offense = AB.league_table("nfl", "points_scored", "best", season=2024, limit=1)
+    assert offense["season"] == 2024 and len(offense["rows"]) == 1
+    standings = AB.league_table("", "win_pct", prefer="nfl")
+    assert standings["sport"] == "nfl", "no league named: the one the reader has open"
+    assert [(r["team"], r["record"]) for r in standings["rows"]][:2] == \
+        [("Chicago Bears", "1-0"), ("Detroit Lions", "3-1")], "1-0 is 1.000, ahead of 3-1"
+    assert AB.league_table("nfl", "defense")["error"].startswith("sort by one of")
+    assert AB.league_table("nba", "points_allowed")["found"] is False, "a league with no games says so"
+
+
+def test_who_leads_the_league_in_a_stat():
+    lead = AB.player_leaders("nfl", "rushing yards")
+    assert lead["stat"] == "Rushing Yards" and lead["season"] == 2025
+    assert [(r["player"], r["total"], r["games"]) for r in lead["rows"]] == \
+        [("Jahmyr Gibbs", 407, 4), ("David Montgomery", 120, 2)]
+    per = AB.player_leaders("nfl", "rush_yds", "per_game")
+    assert per["ranked_by"] == "per game, among players with at least 2 games"
+    assert per["rows"][0]["per_game"] == 101.8
+    assert AB.player_leaders("mlb", "hits")["rows"][0]["player"] == "Aaron Judge"
+    assert AB.player_leaders("nfl", "sacks")["error"].startswith("the NFL stats we hold are:"), \
+        "a stat we do not log is named as such, with the ones we do"
+
+
+def test_his_question_from_the_mlb_tab_ranks_the_nfl():
+    f = Script([("league_table", {"sport": "nfl", "sort": "points_allowed", "order": "worst"})],
+               "The Jets, allowing 30 a game.")
+    out = AB.ask(MLB, "Who has the worst defense in the league?", client=f, boards=BOARDS,
+                 history=[{"role": "user", "text": "How has the lions done recently"},
+                          {"role": "assistant", "text": "The Lions are 1-1 so far."}])
+    got = json.loads(f.calls[1]["messages"][-1]["content"][0]["content"])
+    assert got["rows"][0]["team"] == "New York Jets" and out["lookups"] == 1
+    assert out["sources"][0]["label"] == "NFL 2025 table, by points allowed per game"
+
+
 # --- every league's board, whichever is open ----------------------------------------
 def test_a_row_on_another_league_s_board_is_found_with_its_league():
     req = AB.build_request(MLB, "Josh Allen passing yards?", boards=BOARDS)
@@ -238,7 +292,9 @@ def test_the_model_is_told_to_look_things_up_and_never_to_decline_over_a_schedul
                  "our data has nothing on it", "Never tell the reader to bet or how much"):
         assert rule in AB.SYSTEM, rule
     assert [t["name"] for t in AB.TOOLS] == sorted(t["name"] for t in AB.TOOLS) == \
-        ["player_history", "team_history", "tonight_board"]
+        ["league_table", "player_history", "player_leaders", "team_history", "tonight_board"]
+    assert "never ask the reader to name teams for it" in " ".join(AB.SYSTEM.split()), \
+        "a whole-league question is answered, not bounced back (Ethan, 2026-09-23)"
     assert json.dumps(AB.TOOLS) == json.dumps(AB.TOOLS), "one fixed definition, cached with the system"
 
 

@@ -180,7 +180,9 @@ set the page says "Ask isn't switched on for this site yet".
   league's board rides along, and the model can look things up in
   data/history.db, the same database the Teams and Players pages read:
   two teams' past meetings, a team's seasons and latest results, any
-  player's latest games or his games against one team. A question that
+  player's latest games or his games against one team, a whole league's
+  table (best or worst defense, offense, standings, covers, overs) and a
+  season's stat leaders. A question that
   needs a lookup costs one more round (at most 3 rounds, 6 lookups);
   the usage report counts them in its `lookups` column. It can only
   answer from seasons that database holds.
