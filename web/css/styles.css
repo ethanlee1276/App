@@ -11155,8 +11155,17 @@ body.ask-open .footer { display: none; }
   body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 }
 /* The room measures its own way clear of the tab bar, so the padding the
-   page keeps for the bar would only be a band of scroll under it. */
-body.ask-open { padding-bottom: 0; }
+   page keeps for the bar would only be a band of scroll under it.
+
+   BUT THE PAGE MUST STILL BE A SCREEN TALL. Ethan, 2026-09-23, a
+   screenshot from his phone: "when you're on this page it puts this weird
+   black bar down at the bottom" — the tab bar standing 55px off the
+   bottom edge with bare page under it. Measured: with the padding gone
+   the document was 760px on an 844px screen, and his iPhone set the fixed
+   tab bar's bottom by the page's rather than the screen's — no other page
+   is ever shorter than a screen, so no other page showed it. A page one
+   screen tall puts the bar back on the edge and still does not scroll. */
+body.ask-open { padding-bottom: 0; min-height: 100vh; }
 body.ask-open #view-ask { padding-bottom: 0; }
 /* The keyboard is up (askKeyboard): the room is a fixed layer over the part
    of the screen the keys leave, its top and height set from the visual

@@ -103,6 +103,8 @@ const probe = () => p.evaluate(() => {
   const r = document.getElementById('ask-room').getBoundingClientRect();
   const f = document.getElementById('ask-form').getBoundingClientRect();
   return { typing: document.body.classList.contains('ask-typing'), top: Math.round(r.top), bottom: Math.round(r.bottom),
+    page: Math.round(document.documentElement.getBoundingClientRect().height), screen: window.innerHeight,
+    scroll: document.scrollingElement.scrollHeight - window.innerHeight,
     form: Math.round(f.bottom), tab: getComputedStyle(document.querySelector('.tabbar')).display,
     pos: getComputedStyle(document.getElementById('ask-room')).position };
 });
@@ -151,7 +153,10 @@ def test_with_an_iphones_keyboard_up_the_box_rests_on_the_keys():
         srv.shutdown()
     assert proc.returncode == 0, proc.stderr[-1500:]
     out = json.loads(proc.stdout.strip().splitlines()[-1])
-    assert out["before"]["pos"] == "static" and not out["before"]["typing"]
+    before = out["before"]
+    assert before["pos"] == "static" and not before["typing"]
+    assert before["page"] >= before["screen"] and before["scroll"] == 0, \
+        f"the page must be a screen tall and not scroll — shorter, and his iPhone lifts the tab bar: {before}"
     up = out["up"]
     assert up["typing"] and up["pos"] == "fixed" and up["tab"] == "none", up
     assert (up["top"], up["bottom"]) == (0, 508), f"the room is not the part the keys leave: {up}"

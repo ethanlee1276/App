@@ -39,7 +39,9 @@ def test_the_footer_leaves_and_the_league_row_stays_as_text_tabs():
     gold — on a phone too, instead of the crest carousel."""
     assert "body.ask-open .footer { display: none; }" in CSS
     assert "body.ask-open .sportbar {" not in CSS and "body.ask-open .footer, body.ask-open .sportbar" not in CSS
-    assert "body.ask-open { padding-bottom: 0; }" in CSS, "no band of scroll under the room"
+    assert "body.ask-open { padding-bottom: 0; min-height: 100vh; }" in CSS, \
+        "no band of scroll under the room, and never shorter than a screen: on his iPhone a page " \
+        "shorter than the screen stood the tab bar 55px off the bottom edge (2026-09-23)"
     assert "body.ask-open #view-ask { padding-bottom: 0; }" in CSS
     phone = CSS[CSS.index("body.ask-open .footer { display: none; }"):]
     phone = phone[:phone.index("\n}\n")]
