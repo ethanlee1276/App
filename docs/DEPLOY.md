@@ -176,6 +176,14 @@ set the page says "Ask isn't switched on for this site yet".
   sudo -u qellys python3 -m engine.askbot usage      # last 7 days
   sudo -u qellys python3 -m engine.askbot usage 30
   ```
+- **What it can answer:** any league, whichever tab is open. Every
+  league's board rides along, and the model can look things up in
+  data/history.db, the same database the Teams and Players pages read:
+  two teams' past meetings, a team's seasons and latest results, any
+  player's latest games or his games against one team. A question that
+  needs a lookup costs one more round (at most 3 rounds, 6 lookups);
+  the usage report counts them in its `lookups` column. It can only
+  answer from seasons that database holds.
 - **Limits:** subscribers only, 8 questions a minute per IP
   (server.RATE_ASK_PER_MIN).
 

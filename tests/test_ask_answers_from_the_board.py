@@ -371,7 +371,8 @@ def test_the_endpoint_is_gated_checked_and_honest_about_being_off():
     body = SERVER[SERVER.index("    def _ask(self, body):"):SERVER.index("    def _receipts_csv(self):")]
     assert body.index('self._rate_limited(RATE_ASK_PER_MIN, "ask")') < body.index("self._entitled(conn, who)") \
         < body.index("AB.configured()") < body.index("AB.ask(payload, question, history, pick,")
-    assert 'board_name=board, data_dir=WEB / "data")' in body, "the cache key and our data files"
+    assert 'board_name=board,' in body and 'data_dir=WEB / "data", boards=boards)' in body, \
+        "the cache key, our data files and every league's board"
     assert '"sources", "cached")}' in body
     assert "return self._send(401 if not who else 402," in body and '"configured":false' in body
     assert "GATE_.full_board_file(board) is None" in body, "the board name is resolved, never joined"

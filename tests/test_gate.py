@@ -927,6 +927,11 @@ NOT_A_BOARD_WRITER = {
     "engine/moments.py": "READS the board via gate.board_source; its only "
                          "writes are its own state file — events reach the "
                          "public path through feed.publish -> gate.publish",
+    "engine/askbot.py": "names every league's board so Ask can READ them "
+                        "(the server resolves each through "
+                        "gate.full_board_file); its only writes are its "
+                        "answer cache and usage log under data/, which "
+                        "tests/test_ask_answers_any_question.py pins",
 }
 
 

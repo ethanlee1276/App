@@ -3435,14 +3435,17 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         return self._send(200, json.dumps(out).encode(), ".json")
 
     def _ask(self, body):
-        """Ask Qellys: one question about a board, answered from it.
+        """Ask Qellys: any sports question, answered from our data.
 
         GATED like the explainer, and for the same reasons: the answer
         restates paid rows, and every call spends money — so a stranger
         gets 401 and a lapsed account 402 before anything is read or
         spent. The board is named the way the page names it, resolved
         through `gate.full_board_file`, so an unknown name is a 400 and
-        never a path. See engine/askbot.py for what the model is shown.
+        never a path. It is the league the reader has OPEN, not a limit:
+        every league's board rides along (askbot.BOARD_FILES, through the
+        same resolver), and the history lookups read the rest. See
+        engine/askbot.py for what the model is shown.
         """
         if self._rate_limited(RATE_ASK_PER_MIN, "ask"):
             return
@@ -3471,12 +3474,18 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if not AB.configured():
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
-        payload = GATE_.full_board(board)
+        payload = AB.board_at(GATE_.full_board_file(board))
         if payload is None:
             return self._send(404, b'{"error":"no such board"}', ".json")
+        boards = {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = payload if name == board else (AB.board_at(path) if path else None)
+            if got:
+                boards[league] = got
         try:
-            out = AB.ask(payload, question, history, pick,
-                         board_name=board, data_dir=WEB / "data")
+            out = AB.ask(payload, question, history, pick, board_name=board,
+                         data_dir=WEB / "data", boards=boards)
         except EX.NotConfigured:
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")

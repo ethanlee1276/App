@@ -1832,7 +1832,7 @@ const STALE_LOUD_MS = 12 * 60 * 60 * 1000;
 const FEATURES = [
   ["The boards", "What we publish every day, in every league",
    [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
-    ["Ask Qellys", "Ask about a player, a game or a bet on tonight’s board, and get an answer written from our own numbers — it says so when the board has nothing on it, and never tells you to bet.", "ask"],
+    ["Ask Qellys", "Ask about any team, player or game in any sport we cover — tonight’s boards, or every past game we have stored, like how two teams have done against each other — and get an answer written from our own numbers. It says so when they have nothing on it, and never tells you to bet.", "ask"],
     ["Top Picks", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
     ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
@@ -34827,18 +34827,20 @@ function renderAsk() {
     ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
       <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
     <div class="ask-log" id="ask-log" aria-live="polite">${empty
-      ? `<div class="ask-hello"><b>Ask about tonight’s board.</b> A player, a game, a bet — the
-          answer comes from our own numbers and says so when the board has nothing on it.</div>`
-      : a.turns.map(askTurnHTML).join("")}${a.busy ? `<div class="ask-turn bot wait"><p>Reading the board…</p></div>` : ""}</div>
+      ? `<div class="ask-hello"><b>Ask about any team, player or game.</b> Tonight’s boards in every
+          sport, and every past game we have stored — how a team has done against another, how a
+          player has done lately. The answer comes from our own numbers and says so when they have
+          nothing on it.</div>`
+      : a.turns.map(askTurnHTML).join("")}${a.busy ? `<div class="ask-turn bot wait"><p>Looking it up…</p></div>` : ""}</div>
     ${empty ? `<div class="ask-suggest">${(a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST).map((s) =>
       `<button type="button" class="rec-bf" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>` : ""}
     <form class="ask-form" id="ask-form">
-      <textarea id="ask-input" rows="2" maxlength="400" placeholder="Ask about a player, a game or a bet"
+      <textarea id="ask-input" rows="2" maxlength="400" placeholder="Ask about any player, team, game or bet"
         aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
       <button class="btn primary" type="submit"${a.busy ? " disabled" : ""}>Ask</button>
     </form>
-    <p class="ask-note">Answers are written by an AI from the numbers on our board and nothing
-      else. They are a reading of the board, not advice to bet.${a.turns.length
+    <p class="ask-note">Answers are written by an AI from our boards and our stored game history
+      and nothing else. They are a reading of our numbers, not advice to bet.${a.turns.length
       ? ` <button type="button" class="ask-reset" data-ask-reset>Start over</button>` : ""}</p>`;
   const log = host.querySelector("#ask-log");
   if (log) log.scrollTop = log.scrollHeight;

@@ -326,39 +326,58 @@ def opponents(conn, sport: str, team: str) -> list[dict]:
             for t, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
+def _game_row(g: dict, team: str) -> dict:
+    """One final as ``team`` saw it: its score, its line, its cover."""
+    h, a = _num(g["home_score"]), _num(g["away_score"])
+    at_home = g["home"] == team
+    mine, theirs = (h, a) if at_home else (a, h)
+    cover = _ats(h - a, g["spread"])
+    return {
+        "season": g["season"], "period": g["period"], "date": g["date"],
+        "home": g["home"], "away": g["away"],
+        "home_score": h, "away_score": a,
+        "at_home": at_home, "points_for": mine, "points_against": theirs,
+        "margin": round(mine - theirs, 1),
+        "result": "W" if mine > theirs else "L" if mine < theirs else "T",
+        "spread": _num(g["spread"]), "total": _num(g["total"]),
+        # SIGNED FOR THE TEAM BEING LOOKED UP, not for the home side.
+        # A page that shows the Rams and prints Seattle's number is
+        # correct arithmetic answering somebody else's question.
+        "line": (None if _num(g["spread"]) is None
+                 else (_num(g["spread"]) if at_home
+                       else -_num(g["spread"]))),
+        "covered": (None if cover is None else "push" if cover == "push"
+                    else ((cover == "home") == at_home)),
+        "ou": _ou(h + a, g["total"]),
+    }
+
+
 def head_to_head(conn, sport: str, team: str, opp: str) -> dict:
     """Every meeting, newest first, and what each one settled at."""
     games, acc = [], _blank()
     for g in _finals(conn, sport,
                      "((home=? AND away=?) OR (home=? AND away=?))",
                      (team, opp, opp, team)):
-        h, a = _num(g["home_score"]), _num(g["away_score"])
-        at_home = g["home"] == team
-        mine, theirs = (h, a) if at_home else (a, h)
-        _add(acc, mine, theirs, at_home, g)
-        cover = _ats(h - a, g["spread"])
-        ou = _ou(h + a, g["total"])
-        games.append({
-            "season": g["season"], "period": g["period"], "date": g["date"],
-            "home": g["home"], "away": g["away"],
-            "home_score": h, "away_score": a,
-            "at_home": at_home, "points_for": mine, "points_against": theirs,
-            "margin": round(mine - theirs, 1),
-            "result": "W" if mine > theirs else "L" if mine < theirs else "T",
-            "spread": _num(g["spread"]), "total": _num(g["total"]),
-            # SIGNED FOR THE TEAM BEING LOOKED UP, not for the home side.
-            # A page that shows the Rams and prints Seattle's number is
-            # correct arithmetic answering somebody else's question.
-            "line": (None if _num(g["spread"]) is None
-                     else (_num(g["spread"]) if at_home
-                           else -_num(g["spread"]))),
-            "covered": (None if cover is None else "push" if cover == "push"
-                        else ((cover == "home") == at_home)),
-            "ou": ou,
-        })
+        row = _game_row(g, team)
+        _add(acc, row["points_for"], row["points_against"], row["at_home"], g)
+        games.append(row)
     return {"sport": sport, "team": team, "opponent": opp,
             "name": label(team, sport), "opponent_name": label(opp, sport),
             "games": games, "summary": _finish(acc)}
+
+
+def results(conn, sport: str, team: str, limit: int | None = None) -> list[dict]:
+    """A team's finals, newest first, each the way ``head_to_head``
+    prints a meeting, plus who it was against. Ask Qellys reads a
+    team's latest games from here (engine/askbot.py)."""
+    out = []
+    for g in _finals(conn, sport, "(home=? OR away=?)", (team, team)):
+        row = _game_row(g, team)
+        row["opponent"] = g["away"] if row["at_home"] else g["home"]
+        out.append(row)
+        if limit and len(out) >= limit:
+            break
+    return out
 
 
 #: WHICH LINE LEADS A POSITION. A quarterback's row is about passing
