@@ -31,6 +31,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path set above)
 
 from engine import potd                                       # noqa: E402
 
@@ -41,10 +43,9 @@ ET = ZoneInfo("America/New_York")
 
 
 def _et(minutes):
-    """(date, "HH:MM") in Eastern, `minutes` from now — relative, because
-    a fixture pinned to a date is a test that expires."""
-    t = dt.datetime.now(ET) + dt.timedelta(minutes=minutes)
-    return t.strftime("%Y-%m-%d"), t.strftime("%H:%M")
+    """(date, "HH:MM") in Eastern, `minutes` from now, held on today's
+    slate — see tests/_slate_clock.py for the nightly 9pm failure."""
+    return _kickoff(minutes)
 
 
 def _row(**kw):

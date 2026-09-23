@@ -30,6 +30,8 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path set above)
 
 from engine import gate, ledger, potd                         # noqa: E402
 
@@ -37,8 +39,7 @@ ET = ZoneInfo("America/New_York")
 
 
 def _et(minutes):
-    t = dt.datetime.now(ET) + dt.timedelta(minutes=minutes)
-    return t.strftime("%Y-%m-%d"), t.strftime("%H:%M")
+    return _kickoff(minutes)          # held on today's slate: tests/_slate_clock.py
 
 
 def _conn():
@@ -280,7 +281,15 @@ def test_what_the_page_shows_and_what_the_record_counts_never_diverge():
     # (`ledger.game_row_keys`), so a total row without one cannot be
     # recorded at all — which is what the first cut of this fixture hit.
     # `likely.from_game_bet` stamps it on every real game row.
-    d, k = _et(180)
+    # TOMORROW AT 3PM, JUDGED AT NOON THAT DAY. "Three hours from now"
+    # is tomorrow after 9pm Eastern, and the selector rightly refuses a
+    # game that is not today — which failed this test every night from 9
+    # to midnight. A game a day off, with the card read on its own day,
+    # is today to the selector and still hours away on the real clock
+    # the journal below reads.
+    game_day = (dt.datetime.now(ET) + dt.timedelta(days=1)).date()
+    d, k = game_day.isoformat(), "15:00"
+    judged = dt.datetime.combine(game_day, dt.time(12, 0), tzinfo=ET)
     board_row = {"kind": "game", "player": "Over 3.5", "team": "AAA",
                  "opponent": "BBB", "market": "total", "matchup": "BBB @ AAA",
                  "market_label": "Total", "side": "OVER", "line": 3.5,
@@ -296,7 +305,8 @@ def test_what_the_page_shows_and_what_the_record_counts_never_diverge():
                  "model_prob": 0.52, "implied_prob": 0.50, "rank_auc": 0.71,
                  "bettable": True, "injury_status": "",
                  "game_date": d, "kickoff": k}
-    shown = potd.build([board_row], "nfl", "2026-W02")
+    shown = potd.build([board_row], "nfl", "2026-W02",               # the engine's clock: naive UTC
+                       now=judged.astimezone(dt.timezone.utc).replace(tzinfo=None))
     pick = shown["pick"]
     assert pick is not None and pick["below_bar"] == "", \
         "the selector took it, so the page shows it"

@@ -24,6 +24,8 @@ import tempfile
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path set above)
 
 import potd_report as R                                       # noqa: E402
 from engine import potd                                       # noqa: E402
@@ -39,7 +41,7 @@ def _row(**kw):
     report over rows the selector now refuses before any other bar. A
     spread keeps a printable name in `player`, which several assertions
     below read."""
-    t = dt.datetime.now(ET) + dt.timedelta(minutes=180)
+    d, k = _kickoff(180)              # held on today's slate: tests/_slate_clock.py
     r = {"kind": "game", "player": "AAA", "team": "AAA",
          "opponent": "BBB", "market": "spread",
          "market_label": "Spread", "side": "+3.5", "line": 3.5,
@@ -47,7 +49,7 @@ def _row(**kw):
          # 0.60 was +14.5% EV, refused by `potd.MAX_EV` since 2026-09-16.
          "sharp_fair": 0.55, "model_prob": 0.58, "implied_prob": 0.5238,
          "rank_auc": 0.71, "bettable": True, "injury_status": "",
-         "game_date": t.strftime("%Y-%m-%d"), "kickoff": t.strftime("%H:%M")}
+         "game_date": d, "kickoff": k}
     r.update(kw)
     return r
 

@@ -41,6 +41,8 @@ import sys
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path set above)
 
 from engine import likely, potd                               # noqa: E402
 
@@ -48,8 +50,7 @@ ET = ZoneInfo("America/New_York")
 
 
 def _when():
-    t = dt.datetime.now(ET) + dt.timedelta(minutes=180)
-    return t.strftime("%Y-%m-%d"), t.strftime("%H:%M")
+    return _kickoff(180)              # held on today's slate: tests/_slate_clock.py
 
 
 def _card(market="spread", **kw):

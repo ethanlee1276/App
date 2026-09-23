@@ -11898,6 +11898,73 @@ function recCurveChart(curve, opts = {}) {
 let _recRange = "all";
 window._recSetRange = (k) => { _recRange = k; renderRecord(); };
 
+/* THE RECORD'S WINDOWS — one list, one state, two places to set it.
+   Ethan's product audit, 2026-09-23, item 5: "allow users to open
+   Lifetime → 90 Days → 30 Days". The running P&L has had range chips
+   since 08-11; since this audit the same `_recRange` also moves the
+   headline ribbon at the top of the page, so the chart and the
+   number over it can never be reading different windows. Everything
+   is cut from the curve the scope in view already ships (each day's
+   w, l, n, stake at risk and units), so every sport has its windows
+   and the engine runs no extra scan. Declarations, not a const: the
+   page can render before this line has run. */
+function recRanges() {
+  return [["all", Infinity, "Lifetime"], ["3m", 90, "90 days"],
+          ["1m", 30, "30 days"], ["1w", 7, "7 days"]];
+}
+
+/* The windows this curve can fill. A chip only exists when it would
+   show a different window than the whole record. */
+function recRangesFor(curve) {
+  const all = recRanges();
+  if (!curve || curve.length < 2) return all.slice(0, 1);
+  const spanDays = (new Date(curve[curve.length - 1].date)
+                    - new Date(curve[0].date)) / 864e5;
+  return all.filter(([k, d]) => k === "all" || spanDays > d);
+}
+
+function recRangeKey(avail) {
+  return avail.some(([k]) => k === _recRange) ? _recRange : "all";
+}
+
+/* The first calendar day inside a window, or "" for the whole record.
+   Guard the Date math: Infinity days (the whole record) must never
+   reach toISOString — an invalid Date throws and, because the page is
+   one template literal, one throw blanks every section of it. */
+function recRangeFrom(avail, rk) {
+  const days = (avail.find(([k]) => k === rk) || [null, Infinity])[1];
+  return isFinite(days) ? new Date(Date.now() - days * 864e5).toISOString().slice(0, 10) : "";
+}
+
+/* A window's headline in the shape `performance` exports, from the
+   curve's own days on or after `from` — or null when the curve cannot
+   say (an older payload without w/l) or nothing settled in it. The
+   net is the running total's own difference, the way the chart
+   rebases it: each day's units are rounded, and summing them drifts
+   a few hundredths off the record. */
+function recRangeTotals(curve, from) {
+  const all = curve || [];
+  const rows = all.filter((p) => p && p.date >= from);
+  if (!rows.length || !rows.every((p) => p.w != null)) return null;
+  const sum = (f) => rows.reduce((a, p) => a + (Number(p[f]) || 0), 0);
+  const wins = sum("w"), losses = sum("l"), settled = sum("n"), staked = sum("staked");
+  const i = all.indexOf(rows[0]);
+  const last = Number(rows[rows.length - 1].cum_u);
+  const net = Number.isFinite(last)
+    ? +(last - (i > 0 ? Number(all[i - 1].cum_u) || 0 : 0)).toFixed(2)
+    : +sum("day_u").toFixed(2);
+  if (!settled) return null;
+  return { settled, wins, losses, pushes: Math.max(0, settled - wins - losses),
+           net_units: net, units_staked: staked, roi: staked ? net / staked : 0 };
+}
+
+function recordWindowHTML(avail, rk) {
+  if (avail.length < 2) return "";
+  return `<div class="rec-windows" role="group" aria-label="Time window">${avail.map(([k, , label]) =>
+    `<button type="button" class="rec-win${k === rk ? " active" : ""}" data-win="${k}"
+      aria-pressed="${k === rk ? "true" : "false"}">${label}</button>`).join("")}</div>`;
+}
+
 /* Splits — ONE table with a switcher, not four stacked (2026-08-17,
    Ethan: "its very cluttered"). With a real journal the market table
    alone runs 14+ rows, and four tables of headers made the page read
@@ -12165,18 +12232,12 @@ function recRecentSection(recent, settled) {
 }
 function recAnalytics(curve, o, eras) {
   if (!curve || curve.length < 2) return recCurveChart(curve);
-  const spanDays = (new Date(curve[curve.length - 1].date)
-                    - new Date(curve[0].date)) / 864e5;
-  const RANGES = [["1w", 7], ["1m", 30], ["3m", 91], ["all", Infinity]];
-  // A chip only exists when it would show a different window than ALL.
-  const avail = RANGES.filter(([k, d]) => k === "all" || spanDays > d);
-  let rk = avail.some(([k]) => k === _recRange) ? _recRange : "all";
-  const days = (avail.find(([k]) => k === rk) || [null, Infinity])[1];
-  // Guard the Date math: Infinity days (the ALL window) must never reach
-  // toISOString — an invalid Date throws and, because the page is one
-  // template literal, one throw blanks every section of the Record page.
-  const rows = !isFinite(days) ? curve : curve.filter((p) =>
-    p.date >= new Date(Date.now() - days * 864e5).toISOString().slice(0, 10));
+  // The page's one window (recRanges): the same list and state the
+  // headline ribbon reads, so the two never disagree.
+  const avail = recRangesFor(curve);
+  const rk = recRangeKey(avail);
+  const from = recRangeFrom(avail, rk);
+  const rows = from ? curve.filter((p) => p.date >= from) : curve;
   if (!rows.length) {
     return `<div class="section-title"><span class="st-ico">${icon("rising", 15)}</span>Running P&amp;L
         <span class="sub">— every settled pick, by slate date</span>
@@ -14053,6 +14114,12 @@ function recordOwnBook(d, scope) {
   return scope === "ufc" ? ((d || {}).ufc_record || null) : null;
 }
 
+function recWinDate(iso) {
+  const t = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  return Number.isFinite(t.getTime())
+    ? t.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : String(iso);
+}
+
 function recordScopeHTML(d, scope) {
   const tracked = d.tracked_sports || [];
   const btn = (key, label, n) => `<button class="rec-scope${
@@ -14456,6 +14523,8 @@ function bindRecordScopes(host) {
       _recordScope = b.dataset.scope;
       renderRecord();
     }));
+  host.querySelectorAll(".rec-win").forEach((b) =>
+    b.addEventListener("click", () => window._recSetRange(b.dataset.win || "all")));
 }
 
 /* §9 — the standing record line under the masthead.
@@ -15666,9 +15735,30 @@ async function renderRecord() {
      beside it — the account header every tracker opens with. Above the
      rooms, so every room reads under the same number; the receipts
      room still begins with the calendar (test_record_spine). */
-  const ribbons = recordRibbonsHTML(d, o, src.recent);
-  host.innerHTML = scopeBar
+  /* THE WINDOW (audit item 5): the headline reads the page's range —
+     Lifetime, or the last 90 / 30 / 7 days of the scope in view —
+     cut from that scope's own curve. The running P&L follows the
+     same state; every other room stays the whole record, and the
+     note under the ribbon says so. A window with nothing settled
+     keeps the whole record on the ribbon and says that instead. */
+  const avail = recRangesFor(src.curve);
+  const rk = recRangeKey(avail);
+  const from = recRangeFrom(avail, rk);
+  const winDays = (avail.find(([k]) => k === rk) || [])[1];
+  const winO = from ? recRangeTotals(src.curve, from) : null;
+  const ribbons = winO
+    ? recordRibbonsHTML(d, { ...winO, label: `Model · last ${winDays} days` },
+        (src.recent || []).filter((r) => String((r || {}).date || "") >= from))
+    : recordRibbonsHTML(d, o, src.recent);
+  const winBar = recordWindowHTML(avail, rk);
+  const winNote = !from ? "" : winO
+    ? `<p class="rec-win-note">The headline and the running P&amp;L are the last ${winDays} days,
+        from ${escapeHtml(recWinDate(from))}. Everything else here is the whole record.</p>`
+    : `<p class="rec-win-note">Nothing settled in the last ${winDays} days — the
+        headline is the whole record.</p>`;
+  host.innerHTML = scopeBar + winBar
     + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>` : "")
+    + winNote
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
     + `<p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
       · settles automatically as results are ingested each day.</p>`;
@@ -40211,7 +40301,7 @@ function recordRibbonsHTML(rec, ov, recent) {
   if (ov.settled) {
     const roi = Number(ov.roi || 0);
     const u = Number(ov.net_units || 0);
-    tiles.push(tile("Model · graded in public", wl(ov), `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
+    tiles.push(tile(ov.label || "Model · graded in public", wl(ov), `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
                     `${sign(u)}${Math.abs(u).toFixed(1)}u · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
   }
   if (zo.settled) {

@@ -37,6 +37,8 @@ import sys
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path set above)
 
 from engine import likely, potd                               # noqa: E402
 
@@ -44,8 +46,7 @@ ET = ZoneInfo("America/New_York")
 
 
 def _et(minutes):
-    t = dt.datetime.now(ET) + dt.timedelta(minutes=minutes)
-    return t.strftime("%Y-%m-%d"), t.strftime("%H:%M")
+    return _kickoff(minutes)          # held on today's slate: tests/_slate_clock.py
 
 
 def _row(prob, **kw):

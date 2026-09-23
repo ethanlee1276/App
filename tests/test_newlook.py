@@ -619,7 +619,12 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # ALL window can never reach toISOString (Invalid Date blanks the page).
     fn = APP[APP.index("function recAnalytics("):]
     fn = fn[:fn.index("\nfunction recEraSection")]
-    assert "isFinite(days)" in fn
+    # The window's first day comes from recRangeFrom since 2026-09-23 —
+    # the headline reads the same window (audit item 5) — and the guard
+    # lives there now.
+    assert "const from = recRangeFrom(avail, rk);" in fn
+    rf = APP[APP.index("function recRangeFrom("):]
+    assert "isFinite(days) ?" in rf[:rf.index("\n}")]
     assert "rows.reduce((a, p) => a + p.w, 0)" in fn
     # Live board: SPREAD | TOTAL | ML as columns, no invented -110 juice
     # (the form placeholder elsewhere may SAY -110; the live grid never

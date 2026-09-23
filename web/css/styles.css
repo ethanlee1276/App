@@ -4977,6 +4977,17 @@ body.pk-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 .rec-scope.active .rec-scope-n { opacity: .9; }
+/* The headline's windows (audit item 5): a quieter row than the
+   scopes above it — it changes the headline and the chart, not the
+   page. */
+.rec-windows { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.rec-win { padding: 5px 12px; min-height: 30px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-mute);
+  font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; }
+.rec-win:hover { color: var(--text); border-color: var(--brand-2); }
+.rec-win.active { color: var(--text); border-color: var(--brand-2);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); }
+.rec-win-note { margin: -4px 0 14px; color: var(--text-mute); font-size: var(--fs-xs); }
 
 @media (pointer: coarse) { .rec-scope { min-height: 42px; } }
 
