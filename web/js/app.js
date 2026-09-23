@@ -34773,7 +34773,10 @@ function sendPanelHTML(r) {
    page ("Ask") stays attached until it is cleared. */
 const ASK_SUGGEST = ["What’s the best bet on tonight’s board?",
                      "Who is most likely to hit tonight?",
-                     "Why do we like the Pick of the Day?"];
+                     "How has our record been lately?"];
+/* Asked from a prop page: the three questions a reader has about one bet.
+   Fixed wording on purpose — the same words are the same cached answer. */
+const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?", "What could go wrong?"];
 let _ask = null;
 
 function askState() {
@@ -34805,8 +34808,14 @@ function askErrorText(status, body) {
 
 function askTurnHTML(t) {
   const paras = String(t.text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  /* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
+     model, as chips — a prop's chip opens its page (the document-level
+     [data-prop] door), the rest just name what was read. */
+  const src = (t.sources || []).filter((s) => s && s.label).slice(0, 8);
   return `<div class="ask-turn ${t.role === "user" ? "me" : t.error ? "err" : "bot"}">${
-    paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}</div>`;
+    paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${src.length ? `<div class="ask-src">${
+    src.map((s) => `<span class="ask-chip"${s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
+      escapeHtml(s.label)}</span>`).join("")}</div>` : ""}</div>`;
 }
 
 function renderAsk() {
@@ -34821,7 +34830,7 @@ function renderAsk() {
       ? `<div class="ask-hello"><b>Ask about tonight’s board.</b> A player, a game, a bet — the
           answer comes from our own numbers and says so when the board has nothing on it.</div>`
       : a.turns.map(askTurnHTML).join("")}${a.busy ? `<div class="ask-turn bot wait"><p>Reading the board…</p></div>` : ""}</div>
-    ${empty ? `<div class="ask-suggest">${ASK_SUGGEST.map((s) =>
+    ${empty ? `<div class="ask-suggest">${(a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST).map((s) =>
       `<button type="button" class="rec-bf" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>` : ""}
     <form class="ask-form" id="ask-form">
       <textarea id="ask-input" rows="2" maxlength="400" placeholder="Ask about a player, a game or a bet"
@@ -34866,7 +34875,7 @@ async function askSend(text) {
     });
     let body = {};
     try { body = await res.json(); } catch (e) { body = {}; }
-    turn = res.ok && body.text ? { role: "assistant", text: body.text }
+    turn = res.ok && body.text ? { role: "assistant", text: body.text, sources: body.sources || [] }
       : { role: "assistant", text: askErrorText(res.status, body), error: true };
   } catch (e) {
     turn = { role: "assistant", text: askErrorText(0, null), error: true };

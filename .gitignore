@@ -103,6 +103,11 @@ data/*.backup
 # clone. Same reasoning as the UFC dossiers below.
 data/llm_spend.json
 data/sim_gate_failures.json
+# The explainer's and Ask's answer caches and Ask's usage log
+# (engine/explainer.py, engine/askbot.py): per-build, per-box.
+data/explain_cache.json
+data/ask_cache.json
+data/ask_usage.json
 # Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
 # symlink is not a directory to git — so `node_modules/` alone let a symlink
 # named node_modules be committed, pointing at a scratchpad path that exists

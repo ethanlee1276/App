@@ -198,8 +198,9 @@ RATE_READ_PER_MIN = 300
 #: The explainer costs real money per uncached call, so its own bucket
 #: is tighter than the read ceiling: a page's worth of taps a minute.
 RATE_EXPLAIN_PER_MIN = 20
-#: Ask Qellys (engine/askbot.py) is never cached — every question is a
-#: call — so it is tighter still: a conversation's pace, not a scraper's.
+#: Ask Qellys (engine/askbot.py): only an opening question is cached (a
+#: follow-up carries its conversation), so it is tighter still — a
+#: conversation's pace, not a scraper's.
 RATE_ASK_PER_MIN = 8
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
@@ -3474,14 +3475,15 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if payload is None:
             return self._send(404, b'{"error":"no such board"}', ".json")
         try:
-            out = AB.ask(payload, question, history, pick)
+            out = AB.ask(payload, question, history, pick,
+                         board_name=board, data_dir=WEB / "data")
         except EX.NotConfigured:
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
         except EX.Unavailable as exc:
             err = {"error": "ask unavailable", "detail": str(exc)[:200]}
             return self._send(503, json.dumps(err).encode(), ".json")
-        keep = {k: out[k] for k in ("text", "refused", "matched", "focused")}
+        keep = {k: out[k] for k in ("text", "refused", "matched", "focused", "sources", "cached")}
         return self._send(200, json.dumps(keep).encode(), ".json")
 
     def _receipts_csv(self):

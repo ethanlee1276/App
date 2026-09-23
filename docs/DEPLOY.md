@@ -159,12 +159,25 @@ costs one call per rebuild however many people tap it.
 ## Ask Qellys rides on the same key
 
 The Ask page (engine/askbot.py, POST /api/ask) uses the same package and
-the same ANTHROPIC_API_KEY — nothing new to install. It uses
-QB_ASK_MODEL if you set one, else QB_EXPLAIN_MODEL, else claude-opus-5.
-Every question is a call (answers are not cached), so it has its own,
-tighter rate limit (server.RATE_ASK_PER_MIN) and is subscribers-only.
-Until the key is set the page says "Ask isn't switched on for this site
-yet".
+the same ANTHROPIC_API_KEY — nothing new to install. Until the key is
+set the page says "Ask isn't switched on for this site yet".
+
+- **Model:** Claude Sonnet 5 at low effort by default (turned down from
+  Opus on 2026-09-23). Set `QB_ASK_MODEL` to change it, e.g.
+  `sudo ./deploy/setenv.sh QB_ASK_MODEL claude-haiku-4-5` for the cheapest,
+  or `claude-opus-5` for the most careful. It no longer follows
+  QB_EXPLAIN_MODEL.
+- **Cost:** an opening question is answered once per board build and then
+  served from data/ask_cache.json for free; the night's summary rides in
+  the prompt cache. Every call and cache hit is logged by day with an
+  estimated dollar figure:
+
+  ```bash
+  sudo -u qellys python3 -m engine.askbot usage      # last 7 days
+  sudo -u qellys python3 -m engine.askbot usage 30
+  ```
+- **Limits:** subscribers only, 8 questions a minute per IP
+  (server.RATE_ASK_PER_MIN).
 
 ## When you are home and want the chores list
 
