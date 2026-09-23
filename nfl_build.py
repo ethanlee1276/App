@@ -480,7 +480,7 @@ def main() -> None:
     carry_report: dict = {}
     try:
         slate = build_slate(args.season, args.week, carry=args.carry,
-                            report=carry_report)
+                            report=carry_report, qb_backups=True)
         _mem("build_slate", args.memtrace)
     except DataUnavailable as exc:
         print("\n⚠️  Full projections need weekly player stats.\n")
@@ -583,11 +583,12 @@ def main() -> None:
 
     _mem("injuries + resets", args.memtrace)
     qb_notes = None
+    depth_qb1 = None
     if args.depth:
         try:
             from engine.sources.depthcharts import (load_depth_charts,
                                                     refine_injury_roles,
-                                                    qb_dependency)
+                                                    qb_dependency, qb1_map)
             rows = load_depth_charts(args.season)
             all_inj = [i for g in slate.games for i in g.injuries]
             dres = refine_injury_roles(all_inj, rows, args.week)
@@ -598,6 +599,7 @@ def main() -> None:
             # The QB-dependency watch: a new QB1 or a dinged incumbent
             # stamps a warning on that team's pass-catcher props.
             qb_notes = qb_dependency(rows, args.week, all_inj)
+            depth_qb1 = qb1_map(rows, args.week)
             if qb_notes:
                 print(f"\nQB watch: {len(qb_notes)} team(s) flagged.")
                 for t, n in sorted(qb_notes.items()):
@@ -606,6 +608,25 @@ def main() -> None:
             print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
 
     _mem("depth charts", args.memtrace)
+    # A STARTING QUARTERBACK OUT OR BENCHED (engine/qbchange). Always run:
+    # with no change it still drops the backup quarterbacks the slate was
+    # built with, so nobody's second-stringer is priced as a starter.
+    qb_changes: dict = {}
+    try:
+        from engine import qbchange as _qbc
+        qb_changes = _qbc.changes(carry_report.get("qb") or {},
+                                  [i for g in slate.games for i in g.injuries], depth_qb1)
+        _qb_applied = _qbc.apply_to_slate(slate, qb_changes)
+        if qb_changes:
+            print(f"\nQB changes: {len(qb_changes)} team(s) starting someone else.")
+            for t, ch in sorted(qb_changes.items()):
+                print(f"  · {t}: {_qbc.headline(ch)} ({ch['tier']})")
+        # The card says it now; the old one-line watch stays for a
+        # starter who is only questionable.
+        if qb_notes:
+            qb_notes = {t: n for t, n in qb_notes.items() if t not in qb_changes}
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\n⚠️  QB change check skipped: {exc}")
     real_odds = False
     odds_status = {"checked": bool(args.odds or args.cached_odds
                                    or args.board_odds), "matched": 0,
@@ -1205,6 +1226,10 @@ def main() -> None:
             pass                   # never cost the board a freshness note
         result["odds_status"] = odds_status
         result["injury_status"] = injury_status
+        # Every team starting someone other than its starter, for the page
+        # and for Ask (engine/qbchange.card).
+        result["qb_changes"] = [_qbc.card(ch) for _t, ch in sorted(qb_changes.items())] \
+            if qb_changes else []
         # The measured market haircut, on the BOARD and not only on the
         # cards it produced — see `engine.gamecal.board_notes`. The NFL
         # spread and moneyline are both measured at no edge, so this is

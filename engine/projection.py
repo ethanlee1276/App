@@ -130,6 +130,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                                measured_context=bool(context), sport=sport)
     weather = evaluate_weather(game.weather)
     injury = evaluate_injuries(prop, game.injuries)
+    # HIS STARTING QUARTERBACK OUT (engine/qbchange): the measured part
+    # moves the number, and every row of that team carries the card.
+    from .qbchange import effect as _qb_effect
+    _qb_mult, _qb_why, injury.qb_card = _qb_effect(prop, game)
+    if _qb_mult != 1.0:
+        injury.multiplier *= _qb_mult
+        injury.reasons.append(_qb_why)
 
     weather_mult = weather.multipliers.get(prop.market, 1.0)
 

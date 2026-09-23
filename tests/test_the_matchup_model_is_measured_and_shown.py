@@ -225,7 +225,7 @@ def test_the_page_draws_it_under_the_pick_coloured_for_its_side():
     assert "Model: their passing yards allowed moves this projection +5%" in over
     assert "The model leaves this one out" in td and none == ""
     for where in ("${matchupCardHTML(r)}${reasons ?", "${matchupCardHTML(r)}\n    ${why ?",
-                  'const mu = matchupCardHTML({ ...r, side: r.side || "YES" });',
+                  'const mu = qbCardHTML(r.qb_card) + matchupCardHTML({ ...r, side: r.side || "YES" });',
                   '${matchupCardHTML({ ...r, side: r.side || "YES" })}', "${r.matchup_card ? `<div class=\"section-title minor\">Matchup"):
         assert where in APP, where
     assert ".mu-rank.good { color: var(--good);" in CSS and ".mu-rank.bad { color: var(--bad);" in CSS

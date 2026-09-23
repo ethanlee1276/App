@@ -540,7 +540,11 @@ RANKED_ROLES = {"WR": "wr", "RB": "rb"}
 
 
 def role_for(position: str, rank: int, default: str) -> str:
-    """His role on his team: "wr2" for the second receiver by volume."""
+    """His role on his team: "wr2" for the second receiver by volume, and
+    "backup" for a team's second quarterback (built only with
+    ``qb_backups`` — see engine/qbchange)."""
+    if position == "QB" and rank > 1:
+        return "backup"
     stem = RANKED_ROLES.get(position)
     return f"{stem}{rank}" if stem else default
 
@@ -584,7 +588,7 @@ class PlayerSpec:
 
 
 def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
-                         per_team: int = 3) -> list[PlayerSpec]:
+                         per_team: int = 3, qb_backups: bool = False) -> list[PlayerSpec]:
     """Auto-pick this week's likely prop players: the highest-volume skill guys
     on each participating team from the season so far."""
     prior = [r for r in _regular_season(rows) if 0 < int(_f(r, "week", default=0)) < upto_week]
@@ -611,7 +615,7 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
         for pos, markets in POSITION_MARKETS.items():
             cands = [(k, v) for k, v in agg.items() if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
-            take = 1 if pos in ("QB",) else per_team
+            take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
                     specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
@@ -624,7 +628,7 @@ MIN_LOGS = 3
 
 
 def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
-                 teams: set[str], per_team: int = 3) -> list[PlayerSpec]:
+                 teams: set[str], per_team: int = 3, qb_backups: bool = False) -> list[PlayerSpec]:
     """Who to build props for when the current season has no volume yet.
 
     Same ranking as ``top_players_for_week`` — highest opportunity volume
@@ -657,11 +661,39 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
             cands = [(k, v) for k, v in agg.items()
                      if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
-            take = 1 if pos in ("QB",) else per_team
+            take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
                     specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
     return specs
+
+
+def one_quarterback_each(specs: list[PlayerSpec], team_of) -> list[PlayerSpec]:
+    """At most one starter and one backup at quarterback per team, the first
+    in the list winning (the current season's ranking comes first).
+
+    FOUND 2026-09-23 with the QB-change work: `_merge_specs` adds a
+    prior-season spec for any (player, market) the current season does not
+    cover, which is right for a receiver with no games yet and wrong for a
+    position with one job. A team whose starter changed since last season
+    got TWO starters — six teams on a 2025 week-10 rebuild, Jameis Winston
+    (last season's numbers, the Giants' third quarterback) beside Jaxson
+    Dart among them."""
+    slots: dict = {}
+    out = []
+    for sp in specs:
+        if sp.position == "QB":
+            slot = slots.setdefault(team_of(sp.player), {})
+            role = "backup" if sp.usage_role == "backup" else "starter"
+            if slot.get(role, sp.player) != sp.player:
+                continue
+            if role == "backup" and slot.get("starter") == sp.player:
+                continue
+            if role == "starter" and slot.get("backup") == sp.player:
+                continue
+            slot[role] = sp.player
+        out.append(sp)
+    return out
 
 
 def _merge_specs(primary: list[PlayerSpec],
@@ -678,7 +710,8 @@ def _merge_specs(primary: list[PlayerSpec],
 
 def build_slate(season: int, week: int, upto_week: int | None = None,
                 specs: list[PlayerSpec] | None = None,
-                carry: bool = False, report: dict | None = None) -> Slate:
+                carry: bool = False, report: dict | None = None,
+                qb_backups: bool = False) -> Slate:
     """Assemble a real Slate for a season/week.
 
     Requires weekly stats (for game logs and defense profiles). Since nflverse
@@ -738,10 +771,15 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
                 pos_means[market] = _carry.positional_means(prior_stats, market)
 
     if specs is None:
-        specs = top_players_for_week(stats, participating, upto_week)
+        # ``qb_backups``: each team's SECOND quarterback by volume too, as
+        # role "backup". engine/qbchange keeps his props only where the
+        # starter is out or benched and drops them everywhere else — the
+        # injury report is read after the slate is built, so the man who
+        # actually starts has to exist on it before anyone knows.
+        specs = top_players_for_week(stats, participating, upto_week, qb_backups=qb_backups)
         if carry and index:
             specs = _merge_specs(specs, _carry_specs(
-                prior_stats, roster, participating))
+                prior_stats, roster, participating, qb_backups=qb_backups))
 
     # WHERE EACH MAN PLAYS NOW — the current roster, every status. See
     # `roster_teams`. Unreachable is an empty map, and the stat rows
@@ -826,6 +864,8 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if url:
             headshots.setdefault(
                 _s(r, "player_display_name", "player_name", "full_name"), url)
+
+    specs = one_quarterback_each(specs, team_of)
 
     carried_report: dict = {}
     props: list[Prop] = []
@@ -963,5 +1003,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     if report is not None:
         report["carried"] = carried_report
         report["carried_n"] = len(carried_report)
+        # WHO EACH TEAM'S QUARTERBACKS ARE, and what they have thrown —
+        # engine/qbchange reads it once the injuries are in.
+        from ..qbchange import quarterbacks as _quarterbacks
+        report["qb"] = _quarterbacks(specs, stats, prior_stats, upto_week, team_of)
 
     return Slate(date=f"{season}-W{week:02d}", teams=teams, games=games, props=props)

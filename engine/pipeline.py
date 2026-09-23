@@ -127,6 +127,7 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         # WHAT THE DEFENCE GIVES UP TO HIM, and what the model did with it
         # (engine/defensevs.py, Ethan 2026-09-23) — drawn under the pick.
         "matchup_card": getattr(getattr(proj, "matchup", None), "card", None),
+        "qb_card": getattr(getattr(proj, "injury", None), "qb_card", None),
         "checks": decision.checks,
         "headline": headline(rec),
         "summary": summary(rec),
@@ -919,6 +920,18 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                         _info_only(spread, _NFL_NO_ANCHOR)
                     out.append(spread)
     out.sort(key=order_key, reverse=True)
+    # A STARTING QUARTERBACK OUT (engine/qbchange): every card of that game
+    # says so. The book's price already carries it (engine/nflinfo: the
+    # close prices a QB change fully); our own rating is built from games
+    # the starter played, and the card must not let that pass unsaid.
+    from .qbchange import game_note as _qb_note, card as _qb_card
+    by_pair = {frozenset((g.home, g.away)): g for g in games}
+    for d in out:
+        g = by_pair.get(frozenset((d.get("home"), d.get("away"))))
+        chs = getattr(g, "qb_changes", None) or {}
+        if chs:
+            d["warnings"] = list(d.get("warnings") or []) + [_qb_note(ch) for ch in chs.values()]
+            d["qb_cards"] = [_qb_card(ch) for ch in chs.values()]
     return out
 
 

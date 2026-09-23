@@ -404,8 +404,13 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     if opponent.defense.ratings:
         from . import defensevs as DV
         card = DV.effect(opponent.defense.team, opponent.defense.ratings, pos, "anytime_td")[2]
+    # His starting quarterback out: shown on the touchdown row, never priced
+    # (touchdowns behind a new quarterback measured as noise — engine/qbfit).
+    from .qbchange import effect as _qb_effect
+    qb_card = _qb_effect(prop, game)[2]
     return prob, {
         "matchup_card": card,
+        "qb_card": qb_card,
         "reasons": reasons, "caveats": caveats,
         "opportunities": rz.opportunities,
         "primary_reason": reasons[0] if not def_reasons else def_reasons[0],
@@ -551,6 +556,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
             "matchup_card": info.get("matchup_card"),
+            "qb_card": info.get("qb_card"),
             # THE WHOLE CHAIN, not one line of it. This list answers "who
             # is most likely to score", which is the question the model is
             # measurably GOOD at — it ranks a scorer above a non-scorer
@@ -617,6 +623,7 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
         )
         if pick:
             pick.matchup_card = info.get("matchup_card")
+            pick.qb_card = info.get("qb_card")
             pick.game_date = getattr(game, "date", "")
             pick.game_kickoff = getattr(game, "kickoff", "")
             # THE PAGE, on the value picks too. `build_pick` prices; it

@@ -24,6 +24,9 @@ class InjuryEffect:
     multiplier: float
     reasons: list[str] = field(default_factory=list)
     player_concern: str = ""     # non-empty if the prop's player is dinged
+    #: His team's starting quarterback is out or benched (engine/qbchange):
+    #: the card under the pick. None when his quarterback is playing.
+    qb_card: dict | None = None
 
 
 def player_injury_status(prop: Prop, injuries: list[Injury]) -> str:

@@ -47,6 +47,7 @@ def _node(js):
       const reasonLI = (x) => `<li>${{escapeHtml(x)}}</li>`;
       // The matchup card has its own file (test_the_matchup_model_is_measured_and_shown.py).
       const matchupCardHTML = (r) => r.matchup_card ? '<div class="mu-card"></div>' : "";
+      const qbCardHTML = (c) => c ? '<div class="mu-card qb-card"></div>' : "";
       {_fn("watchlistHTML")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """

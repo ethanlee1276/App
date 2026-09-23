@@ -254,6 +254,10 @@ SYSTEM = (
     "defences to target. Use fantasy_points for projections and start/sit (PPR unless "
     "the reader says half-PPR or standard), defense_vs_position for matchups against a "
     "position, and the fantasy desk for usage, waivers, streamers, trending and ranks. "
+    "A team starting someone other than its usual quarterback (starting_qb_out, a "
+    "row's qb_change) changes everything around it: whenever a question touches that "
+    "team, its players or its game, say who is out and who starts, and what our model "
+    "did with it.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -597,7 +601,20 @@ def compact(row: dict) -> dict:
         if k in ("reasons", "warnings") and isinstance(v, list):
             v = [str(x) for x in v[:4]]
         out[k] = v
+    qb = row.get("qb_card")
+    if isinstance(qb, dict) and qb.get("headline"):
+        out["qb_change"] = qb_line(qb)
     return out
+
+
+def qb_line(card: dict) -> str:
+    """A starting quarterback out (engine/qbchange.card) as one sentence."""
+    return ". ".join(x for x in (card.get("headline"), card.get("detail"), card.get("note")) if x)
+
+
+def _qb_changes(board: dict, teams=None) -> list[str]:
+    return [qb_line(c) for c in (board or {}).get("qb_changes") or []
+            if isinstance(c, dict) and c.get("headline") and (teams is None or c.get("team") in teams)]
 
 
 def detailed(row: dict) -> dict:
@@ -810,6 +827,9 @@ def game_facts(board: dict, g: dict) -> dict:
                 rest[str(g.get(side))] = r
     if rest:
         out["rest"] = rest
+    qbs = _qb_changes(board, {g.get("home"), g.get("away")})
+    if qbs:
+        out["starting_qb_out"] = qbs
     return out
 
 
@@ -849,6 +869,9 @@ def board_summary(board: dict, boards: dict | None = None) -> dict:
         "most_likely": [compact(r) for r in likely[:SUMMARY_EACH]],
         "games": [_game_label(g) for g in (b.get("games") or [])[:20] if isinstance(g, dict)],
     }
+    qbs = _qb_changes(b)
+    if qbs:
+        out["starting_qb_out"] = qbs
     if boards and len(boards) > 1:
         out["every_league_tonight"] = {
             s: {"games": len([g for g in x.get("games") or [] if isinstance(g, dict)]),

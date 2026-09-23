@@ -5388,6 +5388,7 @@ function gameBetCard(r) {
       ${confMeter(r)}
       ${gameBetChart(r)}
       <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}${slipChip(r)}</div>
+      ${(r.qb_cards || []).map(qbCardHTML).join("")}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -7331,6 +7332,22 @@ function muNum(x) {
   return String(Number(Number(x).toFixed(1)));
 }
 
+/* A STARTING QUARTERBACK OUT (engine/qbchange.card). Ethan, 2026-09-23:
+   "there is a lot of starting qbs out in the nfl right now so I wanna make
+   sure the models notice that and we show that ... under the card like
+   the other shit." Who is out, who starts, the replacement's sample
+   against the starter's, and what the model did with it — the measured
+   drop where there is one, "shown for you" where there is not. */
+function qbCardHTML(c) {
+  if (!c || !c.starter) return "";
+  return `<div class="mu-card qb-card">
+    <div class="mu-head">QB change<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
+    <div class="mu-line"><b>${escapeHtml(c.headline || "")}</b></div>
+    ${c.detail ? `<div class="mu-line">${escapeHtml(c.detail)}</div>` : ""}
+    ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
+  </div>`;
+}
+
 function matchupCardHTML(r) {
   const c = r && r.matchup_card;
   if (!c || !c.opponent || c.rank == null) return "";
@@ -7507,7 +7524,7 @@ function cardHTML(r) {
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${booksStripHTML(r)}
-      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${qbCardHTML(r.qb_card)}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
             it afterwards, and that is the order the argument runs in.
@@ -7885,7 +7902,7 @@ function likelyCard(r) {
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
     ${scriptLine}${rippleLine(r)}
-    ${matchupCardHTML(r)}
+    ${qbCardHTML(r.qb_card)}${matchupCardHTML(r)}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
     ${bet}${lean}${cal}${evTxt}
   </article>`;
@@ -8778,7 +8795,7 @@ function watchlistHTML(watch, mlb) {
       .slice(0, 6).map((x) => reasonLI(x)).join("");
     const caveats = (r.caveats || [])
       .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
-    const mu = matchupCardHTML({ ...r, side: r.side || "YES" });
+    const mu = qbCardHTML(r.qb_card) + matchupCardHTML({ ...r, side: r.side || "YES" });
     const detail = why || caveats || mu
       ? `<div class="watch-why" hidden>
            ${mu}${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
@@ -8896,7 +8913,7 @@ function longShotCard(r) {
       ${propAnalysis(r)}
       <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
       <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>
-      ${matchupCardHTML({ ...r, side: r.side || "YES" })}
+      ${qbCardHTML(r.qb_card)}${matchupCardHTML({ ...r, side: r.side || "YES" })}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${caveats}
     </article>`;
@@ -9849,6 +9866,10 @@ function renderPropPage() {
         <span class="sub">— his games against ${escapeHtml(teamName(r.opponent || ""))}
         and any other club he has faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
+
+    ${r.qb_card ? `<div class="section-title minor">Quarterback
+        <span class="sub">— his team is not starting its usual one.</span></div>
+      ${qbCardHTML(r.qb_card)}` : ""}
 
     ${r.matchup_card ? `<div class="section-title minor">Matchup
         <span class="sub">— what ${escapeHtml(r.matchup_card.opponent || r.opponent || "")}
