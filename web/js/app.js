@@ -34936,8 +34936,75 @@ function askBotState(mode) {
   if (room) room.dataset.bot = mode;
 }
 
-function askParas(text) {
-  return String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+/* LAID OUT, NOT RUN TOGETHER. Ethan, 2026-09-23, a top-ten answer circled:
+   "Everything we ask is all jumbled up in one paragraph so it makes it hard
+   to read." Only blank lines used to split an answer, so a ranking written
+   one team to a line arrived as one run-on block. Now each line keeps its
+   break, lines starting "1." or "- " become a real numbered or bulleted
+   list, and **bold** is bold. A ranking crammed onto one line ("1. Bills …
+   2. Panthers … 3. …") is split back into its items. Everything is escaped
+   first; only these three shapes ever become markup. */
+const ASK_ITEM = /^\s*(?:(\d{1,2})[.)]|[-•*–])\s+/;
+
+function askUncram(line) {
+  // "1. A 2. B 3. C" on one line: split where the numbers run 1, 2, 3 …
+  // Ties skip numbers (4, 4, 4, then 7), so each must only be larger, by a little.
+  const at = [];
+  const re = /(^|\s)(\d{1,2})[.)]\s+(?=\S)/g;
+  let m, last = 0;
+  while ((m = re.exec(line))) {
+    const n = Number(m[2]);
+    if (at.length ? n > last && n <= last + 4 : n === 1) { at.push(m.index + m[1].length); last = n; }
+  }
+  if (at.length < 3 || at[0] > 0 && !/[:\-–—]\s*$/.test(line.slice(0, at[0]))) return [line];
+  const cut = [line.slice(0, at[0])].concat(at.map((a, i) => line.slice(a, at[i + 1])));
+  return cut.map((x) => x.trim()).filter(Boolean);
+}
+
+function askInline(text) {
+  return String(text).split(/\*\*(.+?)\*\*/g)
+    .map((t, i) => ({ t: i % 2 ? t : t.replace(/\*\*/g, ""), b: i % 2 === 1 }))
+    .filter((r) => r.t);
+}
+
+function askBlocks(text) {
+  const out = [];
+  String(text || "").replace(/\r/g, "").split(/\n\s*\n/).forEach((chunk) => {
+    let cur = null;
+    chunk.split("\n").flatMap(askUncram).forEach((raw) => {
+      const line = raw.replace(/^\s*#{1,6}\s+/, "").trim();
+      if (!line) return;
+      const m = line.match(ASK_ITEM);
+      const tag = !m ? "p" : m[1] ? "ol" : "ul";
+      if (!cur || cur.tag !== tag) {
+        cur = { tag, rows: [] };
+        out.push(cur);
+      }
+      const body = m ? line.slice(m[0].length) : line;
+      const runs = askInline(/^#/.test(raw.trim()) ? `**${body.replace(/\*\*/g, "")}**` : body);
+      if (runs.length) cur.rows.push({ runs, n: m && m[1] ? Number(m[1]) : 0 });
+    });
+  });
+  return out.filter((b) => b.rows.length);
+}
+
+function askRunsHTML(runs) {
+  return runs.map((r) => r.b ? `<strong>${escapeHtml(r.t)}</strong>` : escapeHtml(r.t)).join("");
+}
+
+function askBlockOpen(b) {
+  return b.tag === "p" ? "<p>" : `<${b.tag} class="ask-list">`;
+}
+
+// A ranked item carries its own number, so a tie (4, 4, 4, 7) reads as written.
+function askItemOpen(r) {
+  return r.n ? `<li value="${r.n}">` : "<li>";
+}
+
+function askBodyHTML(text) {
+  return askBlocks(text).map((b) => askBlockOpen(b) + (b.tag === "p"
+    ? b.rows.map((r) => askRunsHTML(r.runs)).join("<br>")
+    : b.rows.map((r) => askItemOpen(r) + askRunsHTML(r.runs) + "</li>").join("")) + `</${b.tag}>`).join("");
 }
 
 /* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
@@ -34963,7 +35030,7 @@ function askTurnHTML(t, live = false) {
     return `<div class="ask-row bot">${askAva(true)}<div class="ask-turn bot typing" id="ask-typing"></div></div>`;
   }
   return `<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}<div class="ask-turn ${who}">${
-    askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${askSourcesHTML(t)}</div></div>`;
+    askBodyHTML(t.text)}${askSourcesHTML(t)}</div></div>`;
 }
 
 /* TYPED, NOT DROPPED IN. Ethan, 2026-09-23: "We should add the 3 dots that
@@ -34993,26 +35060,56 @@ function askTypeOut() {
     }, 1300);
     bub.classList.remove("typing");
     bub.removeAttribute("id");
-    bub.innerHTML = askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("") + askSourcesHTML(t);
+    bub.innerHTML = askBodyHTML(t.text) + askSourcesHTML(t);
     log.removeAttribute("aria-busy");
     log.scrollTop = log.scrollHeight;
   };
   if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
-  const paras = askParas(t.text).map((p) => p.split(/(\s+)/).filter(Boolean));
-  let pi = 0, wi = 0, p = null;
+  // Written into the same shape it will end in: each line or list item
+  // appears when its turn comes, and a bold run is bold as it is typed.
+  const rows = [];
+  askBlocks(t.text).forEach((b, bi) => b.rows.forEach((r, i) => rows.push({ b, bi, i, runs: r.runs, n: r.n })));
+  let ri = 0, ui = 0, wi = 0, words = null, host = null, into = null, block = null, blockAt = -1;
   askBotState("talking");
   log.setAttribute("aria-busy", "true");        // one announcement when it is whole, not one per word
   const step = () => {
     if (!bub.isConnected || _askTyping !== t) return;          // re-rendered: it is showing whole
-    if (pi >= paras.length) { done(); return; }
-    if (!p) { p = document.createElement("p"); bub.appendChild(p); }
+    if (ri >= rows.length) { done(); return; }
+    const row = rows[ri];
+    if (!host) {
+      if (row.bi !== blockAt) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = askBlockOpen(row.b) + `</${row.b.tag}>`;
+        block = bub.appendChild(tmp.firstChild);
+        blockAt = row.bi;
+      }
+      if (row.b.tag === "p") {
+        if (row.i) block.appendChild(document.createElement("br"));
+        host = block;
+      } else {
+        host = block.appendChild(document.createElement("li"));
+        if (row.n) host.value = row.n;
+      }
+      ui = 0;
+      words = null;
+    }
+    if (!words) {
+      const run = row.runs[ui];
+      into = host.appendChild(run.b ? document.createElement("strong") : document.createTextNode(""));
+      words = run.t.split(/(\s+)/).filter(Boolean);
+      wi = 0;
+    }
     const low = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-    let word = paras[pi][wi++];
-    if (/^\s+$/.test(word) && wi < paras[pi].length) word += paras[pi][wi++];
-    p.textContent += word;
+    let word = words[wi++];
+    if (/^\s+$/.test(word) && wi < words.length) word += words[wi++];
+    if (into.nodeType === 3) into.data += word; else into.textContent += word;
     if (low) log.scrollTop = log.scrollHeight;
-    if (wi >= paras[pi].length) { pi += 1; wi = 0; p = null; }
-    setTimeout(step, /[.!?]["’”)]?\s*$/.test(word) ? ASK_SENTENCE_MS : ASK_WORD_MS);
+    if (wi >= words.length) {
+      words = null;
+      ui += 1;
+      if (ui >= row.runs.length) { ri += 1; host = null; }
+    }
+    setTimeout(step, /[.!?:]["’”)]?\s*$/.test(word) || !host ? ASK_SENTENCE_MS : ASK_WORD_MS);
   };
   step();
 }

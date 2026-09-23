@@ -11263,6 +11263,13 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
   overflow-wrap: anywhere; }
 .ask-turn p { margin: 0 0 8px; }
 .ask-turn p:last-child { margin-bottom: 0; }
+.ask-turn .ask-list { margin: 0 0 8px; padding-left: 1.5em; }
+.ask-turn .ask-list:last-child { margin-bottom: 0; }
+.ask-turn .ask-list li { margin: 0 0 4px; padding-left: 2px; }
+.ask-turn .ask-list li:last-child { margin-bottom: 0; }
+.ask-turn ol.ask-list li::marker { color: var(--brand-2); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ask-turn ul.ask-list li::marker { color: var(--brand-2); }
+.ask-turn strong { color: var(--text); font-weight: 600; }
 .ask-turn.me { background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 4px; }
 .ask-turn.bot { background: var(--panel-2); color: var(--text); border-bottom-left-radius: 4px; }
 .ask-turn.err { color: var(--text-mute); border: var(--hairline) dashed var(--border); border-bottom-left-radius: 4px; }
