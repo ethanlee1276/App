@@ -6435,8 +6435,6 @@ function renderTonight() {
   bindTonightChips(host);
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
-  host.querySelectorAll("[data-open]").forEach((b) =>
-    b.addEventListener("click", () => openFrom(b.dataset.open)));
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
@@ -7667,6 +7665,25 @@ function openFrom(spec) {
   if (kind === "player") return openPlayerRoute(target);
 }
 
+/* EVERY [data-open] ROW OPENS, WHEREVER IT IS DRAWN — ONE LISTENER.
+   Ethan, 2026-09-23, on the Most Likely page: "it's not letting me click
+   on any of these props and pull up the charts". The v5 row (likelyRow,
+   2026-09-22) is a <button data-open>, and each page that drew one had
+   to bind it itself: the home preview and the one-league Tonight did,
+   the Most Likely page — the one that draws the most of them — did not,
+   and neither did your own league's block on Tonight-every-league. The
+   site-wide card handler below reads data-prop and deliberately skips
+   buttons, so nothing else caught them: the rows were dead taps.
+
+   One delegate, so a page cannot forget. The per-page copies are gone,
+   so a row opens once. Tonight-every-league's OTHER leagues still take
+   their own capture-phase handler first (switch the board, then open),
+   which stops the event before it reaches this one. */
+document.addEventListener("click", (e) => {
+  const row = e.target.closest && e.target.closest("[data-open]");
+  if (row) openFrom(row.dataset.open);
+});
+
 /* THE MODEL'S OWN NUMBER ON A MARKET-RANKED ROW. A football moneyline
    ranks on the book's de-vigged number (likely.GAME_RANK_MARKET), so the
    hero tile on that card is the market's figure and says so. This is
@@ -8142,8 +8159,6 @@ function renderLikelyTop() {
   if (all) all.addEventListener("click", () => switchView("likely", true));
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
-  host.querySelectorAll("[data-open]").forEach((b) =>
-    b.addEventListener("click", () => openFrom(b.dataset.open)));
   revealChildren(host);
 }
 
@@ -8211,6 +8226,7 @@ function renderLikely() {
       const el = document.getElementById(b.dataset.jump);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
+  // The rows open through the one [data-open] listener (see openFrom).
   revealChildren(host);
 }
 

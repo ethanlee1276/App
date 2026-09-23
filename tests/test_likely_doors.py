@@ -55,7 +55,14 @@ def test_the_shelf_row_opens_the_same_pick():
     js = _js()
     row = _fn(js, "likelyRow")
     assert "${likelyOpen(r)}" in row and 'data-goto="likely"' not in row
-    assert js.count('host.querySelectorAll("[data-open]")') == 2
+    # ONE LISTENER, NOT ONE PER PAGE. This line used to pin TWO per-page
+    # bindings (the home preview and Tonight) — and the Most Likely page,
+    # which draws the most of these rows, had none, so every row on it
+    # was a dead tap (Ethan, 2026-09-23: "it's not letting me click on
+    # any of these props and pull up the charts"). tests/
+    # test_every_open_row_opens.py drives the listener itself.
+    assert js.count('host.querySelectorAll("[data-open]")') == 0
+    assert js.count('e.target.closest("[data-open]")') == 1
     assert "function openFrom(spec)" in js
     opn = _fn(js, "openFrom")
     assert "openProp(target)" in opn and "openPlayerRoute(target)" in opn
