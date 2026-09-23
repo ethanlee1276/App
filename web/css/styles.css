@@ -9605,6 +9605,7 @@ button.rc-day b { font-size: var(--fs-sm); }
 #stalebar[hidden] { display: none; }
 #stalebar .ic { color: var(--warn); flex: none; margin-top: 2px; }
 #stalebar b { color: var(--warn); }
+#stalebar a { color: var(--brand-2); }
 @media (max-width: 760px) { #stalebar { margin: 0 12px 12px; } }
 
 /* ── Links the design system never claimed ─────────────────────────────

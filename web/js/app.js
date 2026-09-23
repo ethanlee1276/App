@@ -2140,6 +2140,57 @@ addEventListener("unhandledrejection", (e) => {
 addEventListener("offline", refreshStaleBar);
 addEventListener("online", refreshStaleBar);
 
+/* A BOARD THAT IS NOT TODAY'S SAYS SO, in the banner, not the corner.
+
+   Audit item 2 (Ethan's product audit, 2026-09-23): the public page
+   read "Sample data" in a corner badge over a slate dated August 17,
+   thirty-six days old, on a site that calls itself real-time. "This
+   thing isn't active" is the conclusion a visitor draws, and nothing
+   on the page argued otherwise. Two cases, each named in the bar:
+
+     * a DEMO board — built from the sample slate, not from live
+       data. Example games and prices; never a pick.
+     * an OLD SLATE — a real board whose newest game is a week or
+       more behind today, even though the build that carried it is
+       fresh. The build-age check below cannot see this: a build
+       that re-publishes last month's games is a fresh build.
+
+   A board with no source at all (the "not built" slate, a locked
+   board) is neither; it has its own empty state. The standalone and
+   reference pages carry their own data and are not about this board. */
+function slateNotice(d) {
+  if (!d) return null;
+  try {
+    if (STANDALONE_MODES.includes(state.view) || REFERENCE_VIEWS.includes(state.view)) return null;
+  } catch (e) { return null; }
+  const src = String(d.generated_from || "");
+  if (src && !boardIsReal(src)) return { kind: "demo" };
+  if (!src || d.status === "offseason") return null;
+  const dates = (d.games || []).map((g) => String((g && g.date) || "").slice(0, 10))
+    .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).sort();
+  if (!dates.length) return null;
+  const newest = dates[dates.length - 1];
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  const days = Math.round((Date.parse(today) - Date.parse(newest)) / 86400000);
+  // A week, not a day or two: a football board holds Sunday's games
+  // until the next week's schedule lands, and that is not stale.
+  return days >= 7 ? { kind: "old", newest, days } : null;
+}
+
+function slateNoticeHTML(n) {
+  if (n.kind === "demo") {
+    return `${icon("warn", 15)}
+      <span><b>Demo board.</b> These are example games and prices, shown to
+      demonstrate the site — not today’s slate, and nothing here is a pick.
+      The public record is real: <a href="#record">every graded pick, at the
+      price it was taken</a>.</span>`;
+  }
+  return `${icon("warn", 15)}
+    <span><b>This board’s games are from ${escapeHtml(formatGameDate(n.newest))} —
+    ${n.days} days ago.</b> It is the newest slate this league has published,
+    so nothing below is today’s. The <a href="#record">record</a> is current.</span>`;
+}
+
 function renderStaleBar(ageMs, ago) {
   _staleArgs = [ageMs, ago];
   const host = document.getElementById("stalebar");
@@ -2190,7 +2241,19 @@ function renderStaleBar(ageMs, ago) {
       reload.</span>`;
     return;
   }
+  // A demo board outranks the age: its numbers were never live at all.
+  const notice = slateNotice(state.data);
+  if (notice && notice.kind === "demo") {
+    host.hidden = false;
+    host.innerHTML = slateNoticeHTML(notice);
+    return;
+  }
   const bad = ageMs != null && ageMs > STALE_LOUD_MS;
+  if (!bad && notice) {
+    host.hidden = false;
+    host.innerHTML = slateNoticeHTML(notice);
+    return;
+  }
   host.hidden = !bad;
   if (!bad) { host.innerHTML = ""; return; }
   host.innerHTML = `${icon("warn", 15)}
@@ -2323,10 +2386,12 @@ function renderDataSource(d) {
   const src = String(d.generated_from || "");
   const live = boardIsReal(src);
   el.className = `data-source ${live ? "live" : "sample"}`;
-  el.innerHTML = `<span class="src-dot"></span>${live ? "Live data" : "Sample data"}`;
+  // "Demo", not "Sample" (audit item 2, 2026-09-23): a visitor read
+  // "Sample data" in the corner as a label, not as a warning.
+  el.innerHTML = `<span class="src-dot"></span>${live ? "Live data" : "Demo data"}`;
   el.title = live
     ? (d.built_at ? `Real data · built ${d.built_at.replace("T", " ")}` : "Real live data")
-    : "Illustrative sample data — these are not real games or real prices";
+    : "Demo — example games and prices, not today’s board";
 }
 
 /* A league whose tuning was fitted somewhere else does not get to bet on
