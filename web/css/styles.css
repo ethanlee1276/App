@@ -11289,7 +11289,11 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 }
 @keyframes askDot { 0%, 60%, 100% { opacity: .4; transform: none; } 30% { opacity: 1; transform: translateY(-5px); } }
 @keyframes askCaret { 50% { opacity: 0; } }
-.ask-src { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.ask-src { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 8px; }
+.ask-turn .ask-src:first-of-type { padding-top: 10px; border-top: var(--hairline) solid var(--border-soft); }
+.ask-src-h { flex-basis: 100%; margin-bottom: 1px; font-size: var(--fs-2xs); font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); }
+.ask-src-h em { margin-left: 6px; font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .ask-chip { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); color: var(--text-mute);
   border: var(--hairline) solid var(--border); }
 .ask-chip[data-prop] { cursor: pointer; color: var(--text-dim); border-color: var(--brand-2); }

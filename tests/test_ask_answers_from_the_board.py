@@ -226,16 +226,17 @@ def test_the_request_is_the_rules_the_cached_summary_the_history_and_the_sources
     assert len(last.split("\n\nFacts for this question:\n")[0]) == AB.MAX_QUESTION
     focus = _facts(req)["the_pick_this_was_asked_from"]
     assert focus["player"] == "Josh Allen" and focus["recent_games"][0] == {"vs": "NE", "value": 262}
-    assert req["sources"][0] == {"label": "Josh Allen UNDER 259.5 Passing Yards",
-                                 "prop": "Josh Allen|pass_yds|UNDER|259.5"}
-    assert {"label": "BUF @ KC", "prop": ""} in req["sources"]
+    assert req["sources"][0] == {"label": "Josh Allen · Under 259.5 Passing Yards",
+                                 "prop": "Josh Allen|pass_yds|UNDER|259.5", "kind": "pick"}
+    assert {"label": "BUF @ KC, lines and weather", "prop": ""} in req["sources"]
     for rule in ("Use ONLY the facts", "our data has nothing on it", "Never tell the reader to bet or how much",
                  "Lead with the direct answer in one sentence", f"At most {AB.WORDS} words"):
         assert rule in AB.SYSTEM, rule
     long = AB.clean_history([{"role": "user", "text": "q" * 5000}] * 20)
     assert len(long) == AB.MAX_TURNS and all(len(m["content"]) == AB.MAX_TURN_CHARS for m in long)
     gb = AB.build_request(BOARD, "Chiefs -2.5?")
-    assert {"label": "Chiefs -2.5", "prop": ""} in gb["sources"], "a game line is named, not a prop door"
+    assert {"label": "Chiefs -2.5", "prop": "", "kind": "pick"} in gb["sources"], \
+        "a game line is one of tonight's picks, named, not a prop door"
 
 
 # --- what it costs --------------------------------------------------------------
@@ -318,7 +319,10 @@ def test_an_answer_a_refusal_and_a_failure():
     try:
         out = AB.ask(BOARD, "Kelce?", client=Fake())
         assert out["text"] == "Allen's under is our bet tonight." and out["refused"] is False
-        assert out["matched"] == 1 and out["sources"][0]["label"].startswith("Travis Kelce")
+        assert out["matched"] == 1 and not [s for s in out["sources"] if s.get("kind") == "pick"], \
+            "a row the answer never talks about is a fact for the model, not a chip (Ethan, 2026-09-23)"
+        said = AB.ask(BOARD, "Kelce?", client=Fake(text="Travis Kelce's over is our lean."))
+        assert [s["label"] for s in said["sources"] if s.get("kind") == "pick"][0].startswith("Travis Kelce ·")
         refused = AB.ask(BOARD, "Kelce?", client=Fake(text="", stop="refusal"))
         assert refused["refused"] is True and refused["text"] == "Ask declined to answer that one."
         for bad in (Fake(text=None), types.SimpleNamespace(messages=types.SimpleNamespace(
@@ -392,7 +396,7 @@ def test_the_page_shows_where_each_answer_came_from():
     assert 'data-ask-pick="${escapeAttr(propId(r))}"' in APP, "the prop page's Ask button"
     src = APP[APP.index("function askSourcesHTML("):]
     src = src[:src.index("\n}\n")]
-    assert '` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"`' in src, "a source prop is a door"
+    assert 'data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"' in src, "a pick chip is a door"
     turn = APP[APP.index("function askTurnHTML("):]
     turn = turn[:turn.index("\n}\n")]
     assert "askSourcesHTML(t)" in turn, "every answer carries its chips"

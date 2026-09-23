@@ -44,7 +44,7 @@ def _node(js):
         return None
     esc = APP[APP.index("function escapeHtml("):]
     esc = esc[:esc.index("\n}\n") + 2]
-    fmt = APP[APP.index("const ASK_ITEM"):APP.index("/* WHERE THE ANSWER CAME FROM")]
+    fmt = APP[APP.index("const ASK_ITEM"):APP.index("/* UNDER AN ANSWER, TWO LABELLED ROWS")]
     prog = esc + fmt + f"\nconsole.log(JSON.stringify((() => {{ {js} }})()));"
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)

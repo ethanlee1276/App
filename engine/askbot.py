@@ -124,6 +124,10 @@ MAX_TOKENS = 4000
 MAX_MATCHED = 10
 #: Rows matched only by a team code, at most (sent without their game logs).
 MAX_WEAK = 5
+#: Tonight's rows shown under an answer, as doors to their pick pages.
+MAX_PICK_CHIPS = 3
+#: Everything else under an answer: the lookups, pages and sections it read.
+MAX_READ_CHIPS = 6
 SUMMARY_EACH = 6
 RECENT_GAMES = 8
 MAX_GAMES = 3
@@ -603,12 +607,39 @@ def _caps(question: str) -> set[str]:
     return set(re.findall(r"\b[A-Z]{2,4}\b", str(question or "")))
 
 
-def _hits(board: dict, question: str) -> list[tuple]:
+def asked_in_full(boards, question: str) -> set[str]:
+    """The players a question names in full, on any of these boards."""
+    q = _norm(question)
+    out = set()
+    for b in boards:
+        for _lst, r in _rows(b):
+            full = _norm(r.get("player")).strip()
+            if len(full.split()) >= 2 and f" {full} " in q:
+                out.add(full)
+    return out
+
+
+def _namesake(r: dict, matched: list[str], asked: set[str]) -> bool:
+    """Reached only through a surname it shares with a player the question
+    names in full: "Josh Allen" is not a question about Nick or Keenan Allen
+    (Ethan, 2026-09-23, a Josh Allen answer carrying both as chips)."""
+    full = _norm(r.get("player")).strip()
+    if not full or full in asked or len(full.split()) < 2:
+        return False
+    last = full.split()[-1]
+    return matched == [last] and any(a.split()[-1] == last for a in asked)
+
+
+def _hits(board: dict, question: str, asked: set[str] | None = None) -> list[tuple]:
     q = _norm(question)
     caps = _caps(question)
+    asked = asked_in_full([board], question) if asked is None else asked
     hits = []
     for lst, r in _rows(board):
-        best = max([len(n) for n in _names(r) if f" {n} " in q] or [0])
+        matched = [n for n in _names(r) if f" {n} " in q]
+        if _namesake(r, matched, asked):
+            continue
+        best = max([len(n) for n in matched] or [0])
         if not best and caps & _codes(r):
             best = 1                                # a team code: the weakest match
         if best:
@@ -627,6 +658,53 @@ def _hits(board: dict, question: str) -> list[tuple]:
                 continue
         out.append(h)
     return out[:MAX_MATCHED]
+
+
+def chip_label(r: dict) -> str:
+    """A row as a reader says it: "Josh Allen · Over 149.5 Passing Yards",
+    "Josh Allen · Anytime TD" — not "Josh Allen yes Anytime TD"."""
+    if r.get("pick_label"):
+        return str(r["pick_label"]).strip()
+    side = str(r.get("side") or "").strip()
+    what = str(r.get("market_label") or r.get("market") or "").strip()
+    line = r.get("line")
+    if side.upper() in ("OVER", "UNDER"):
+        bet = f"{side.title()} {_n(line) if line is not None else ''} {what}"
+    elif side.upper() in ("YES", "NO"):
+        bet = what if side.upper() == "YES" else f"No {what}"
+    else:
+        bet = " ".join(str(x) for x in (side, line, what) if x not in (None, ""))
+    bet = " ".join(bet.split())
+    return f"{r['player']} · {bet}" if r.get("player") and bet else str(r.get("player") or bet)
+
+
+def shown_sources(sources: list[dict], answer: str, about: dict) -> list[dict]:
+    """What goes under an answer: first what it read (lookups, web pages,
+    games, sections), then at most MAX_PICK_CHIPS of tonight's rows — only
+    ones the question named outright, for a player the answer talks about,
+    or the pick the conversation was opened from. Every other row the
+    question's words touched was a fact for the model, not a thing to show."""
+    a = " " + re.sub(r"'s?(?= )", "", _norm(answer)) + " "          # "Kelce's" names Kelce
+    read = [s for s in sources if s.get("kind") != "pick"][:MAX_READ_CHIPS]
+    picks = []
+    # A surname names a player only when no other chip's player shares it.
+    for s in sources:
+        if s.get("kind") != "pick":
+            continue
+        who, strong = about.get(s["label"], ("", False))
+        if who is None:                                  # the pick this was asked from
+            keep = True
+        elif not strong:
+            keep = False
+        elif not who:                                    # a game line the question named
+            keep = True
+        else:
+            last = who.split()[-1]
+            keep = f" {who} " in a or (len(last) >= 4 and f" {last} " in a
+                                       and len({w for w, _st in about.values() if w and w.split()[-1] == last}) == 1)
+        if keep:
+            picks.append(s)
+    return read + picks[:MAX_PICK_CHIPS]
 
 
 def _shown(hit: tuple) -> dict:
@@ -783,9 +861,10 @@ def _hits_all(boards: dict, question: str, prefer: str) -> list[tuple]:
     """(score, list, row, league) across every league's board, best first,
     the reader's own league first on a tie."""
     order = _order(boards, prefer)
+    asked = asked_in_full([boards[s] for s in order], question)
     hits = []
     for i, s in enumerate(order):
-        hits += [(h[0], i, h[1], h[2], s) for h in _hits(boards[s], question)]
+        hits += [(h[0], i, h[1], h[2], s) for h in _hits(boards[s], question, asked)]
     hits.sort(key=lambda h: (-h[0], h[1]))
     out, weak = [], 0
     for score, _, lst, r, s in hits:
@@ -2477,12 +2556,15 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         f = detailed(focus)
         f.update(_ex.facts_for(focus))
         facts["the_pick_this_was_asked_from"] = f
-    for lst, r in [(None, focus)] * (focus is not None) + [(h[1], h[2]) for h in hits]:
-        label = (r.get("pick_label") or " ".join(str(x) for x in (r.get("player"), r.get("side"),
-                 r.get("line"), r.get("market_label") or r.get("market")) if x not in (None, ""))).strip()
+    about: dict = {}
+    for lst, r, strong in ([(None, focus, True)] * (focus is not None)
+                           + [(h[1], h[2], h[0] > 1) for h in hits]):
+        label = chip_label(r)
         prop = _ex.pick_id(r) if r.get("player") and r.get("line") is not None and lst != "game_bets" else ""
         if label and all(s["label"] != label for s in sources):
-            sources.append({"label": label, "prop": prop})
+            sources.append({"label": label, "prop": prop, "kind": "pick"})
+            about[label] = (None if lst is None and focus is not None and r is focus
+                            else _norm(r.get("player")).strip(), strong)
     # The games: the open league's by any team code the question types, any
     # other league's only through the rows it matched there.
     games: list[tuple] = []
@@ -2498,7 +2580,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         games = [(sport, g) for g in boards[sport].get("games") or [] if isinstance(g, dict)][:12]
     if games:
         facts["games"] = [game_facts(boards[s], g) for s, g in games]
-        sources += [{"label": _game_label(g), "prop": ""} for _, g in games]
+        sources += [{"label": f"{_game_label(g)}, lines and weather", "prop": ""} for _, g in games]
     if "record" in want:
         named = [s for s, rx in LEAGUE_WORDS.items() if re.search(rx, question.lower())]
         rec = record_facts(_load_json(data_dir / "record.json"), (named or [sport])[0])
@@ -2535,7 +2617,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
     messages = clean_history(history) + [{"role": "user", "content":
         f"{question}\n\nFacts for this question:\n" + json.dumps(facts, sort_keys=True, separators=(",", ":"))}]
     return {"system": system, "messages": messages, "matched": len(rows),
-            "focused": focus is not None, "sources": sources[:8], "sections": sorted(facts),
+            "focused": focus is not None, "sources": sources[:8], "about": about, "sections": sorted(facts),
             "boards": boards, "league": sport, "data_dir": data_dir}
 
 
@@ -2793,7 +2875,7 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
         if hit:
             log_usage(model, cached=True)
             return {**base, "text": hit["text"], "refused": bool(hit.get("refused")), "cached": True,
-                    "sources": hit.get("sources") or base["sources"]}
+                    "sources": hit.get("sources") or shown_sources(base["sources"], hit["text"], req["about"])}
     if client is None:
         if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
             raise _ex.NotConfigured("ANTHROPIC_API_KEY is not set")
@@ -2814,12 +2896,14 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
     finally:
         if rounds:
             log_usage(model, rounds)
-    base["sources"] = ([s for s in looked if s.get("url")] + [s for s in looked if not s.get("url")]
-                       + [s for s in base["sources"] if s not in looked])[:8]
+    merged = ([s for s in looked if s.get("url")] + [s for s in looked if not s.get("url")]
+              + [s for s in base["sources"] if s not in looked])
     base["lookups"] = made
     if getattr(response, "stop_reason", "") == "refusal":
+        base["sources"] = shown_sources(merged, "", req["about"])
         return {**base, "text": "Ask declined to answer that one.", "refused": True, "cached": False}
     text = answer_text(response)
+    base["sources"] = shown_sources(merged, text, req["about"])
     if not text:
         raise _ex.Unavailable("the answer had no text")
     if key and not (req.get("used", set()) & NO_CACHE_TOOLS):     # a live score is stale in minutes

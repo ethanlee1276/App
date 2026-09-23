@@ -35086,20 +35086,37 @@ function askBodyHTML(text) {
     : b.rows.map((r) => askItemOpen(r) + askRunsHTML(r.runs) + "</li>").join("")) + `</${b.tag}>`).join("");
 }
 
-/* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
-   model, and the lookups it made, as chips — a prop's chip opens its page
-   (the document-level [data-prop] door), the rest name what was read. */
-/* A page the answer found on the web is a link to that page: citing it is
-   the condition of showing the answer at all (Ethan, 2026-09-23, "Yeah add
-   it" to web search). Only an http(s) address becomes a link. */
+/* UNDER AN ANSWER, TWO LABELLED ROWS. Ethan, 2026-09-23, a Josh Allen
+   answer with ten chips circled under it: "What exactly are we showing
+   here, this is just cluttered garbage and we are not explaining what this
+   is." The chips were every board row the question's words touched —
+   Nick Allen's hits among them — in one unlabelled pile.
+
+   Now: SOURCES, what the answer read (a lookup, a web page, a game's lines,
+   the injury board); and ON TONIGHT'S BOARD, at most three of tonight's
+   picks for the player or game the answer is about, each a door to its
+   pick page. The server chooses which (engine/askbot.shown_sources); a
+   saved answer from before carries its chips unmarked, so a chip with a
+   pick id counts as a pick here too.
+
+   A web page is a link to that page: citing it is the condition of
+   showing the answer at all. Only an http(s) address becomes a link. */
 function askSourcesHTML(t) {
-  const src = (t.sources || []).filter((s) => s && s.label).slice(0, 8);
+  const src = (t.sources || []).filter((s) => s && s.label);
+  const isPick = (s) => s.kind === "pick" || !!s.prop;
+  const read = src.filter((s) => !isPick(s)).slice(0, 6);
+  const picks = src.filter(isPick).slice(0, 3);
   const chip = (s) => /^https?:\/\//i.test(String(s.url || ""))
     ? `<a class="ask-chip web" href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer"${
       s.title ? ` title="${escapeAttr(s.title)}"` : ""}>${escapeHtml(s.label)} ↗</a>`
-    : `<span class="ask-chip"${s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
-      escapeHtml(s.label)}</span>`;
-  return src.length ? `<div class="ask-src">${src.map(chip).join("")}</div>` : "";
+    : s.prop
+    ? `<span class="ask-chip pick" data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link">${
+      escapeHtml(s.label)} ›</span>`
+    : `<span class="ask-chip${isPick(s) ? " pick" : ""}">${escapeHtml(s.label)}</span>`;
+  const row = (head, list, cls) => list.length
+    ? `<div class="ask-src${cls}"><span class="ask-src-h">${head}</span>${list.map(chip).join("")}</div>` : "";
+  return row("Sources", read, "")
+    + row("On tonight’s board <em>tap one for our full read</em>", picks, " ask-src-picks");
 }
 
 function askTurnHTML(t, live = false) {
