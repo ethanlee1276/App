@@ -44,8 +44,9 @@ def test_a_section_of_its_own_under_the_hero():
 
 def test_the_preview_is_the_ask_page_and_invents_no_answer():
     ask = _fn("pwAskHTML")
-    demo = ask[ask.index('<div class="pw-ask-demo" aria-hidden="true">'):ask.index('<ul class="pw-ask-points">')]
-    assert 'askIcon("robot", 22)' in demo and "ASK_AVA" in demo
+    demo = ask[ask.index('<div class="pw-ask-demo" aria-hidden="true"'):ask.index('<ul class="pw-ask-points">')]
+    assert 'qbotHTML("head", "pw-ask-bar-bot")' in demo and "askAva(true)" in demo, "the mascot, thinking"
+    assert '<div class="pw-ask-demo" aria-hidden="true" data-bot="thinking">' in ask
     assert '<div class="ask-turn me">How have the Lions done against the Packers?</div>' in demo
     bots = re.findall(r'<div class="ask-turn bot[^"]*">(.*?)</div></div>', demo)
     assert bots == ['<span class="ask-dots"><i></i><i></i><i></i></span>'], \

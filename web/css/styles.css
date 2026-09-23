@@ -279,6 +279,8 @@
      alpha only and no theme ever has to restate it. */
   --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
   --mask-more-x: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  /* The Ask mascot's floor: the render's glow ends in a line, so it fades. */
+  --mask-foot: linear-gradient(to bottom, #000 86%, transparent);
   /* The stub pages' big numeral, filled with the brand ramp. */
   --grad-brand: linear-gradient(180deg, var(--brand-2), var(--brand));
   /* The draft room's hero strip. A token rather than a rule, because a
@@ -9863,6 +9865,10 @@ input:-webkit-autofill:focus {
 @media (max-width: 760px) { .pw-ask-grid { grid-template-columns: minmax(0, 1fr); } }
 .pw-ask-demo { display: flex; flex-direction: column; gap: 12px; padding: 14px; pointer-events: none;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+.pw-ask-scene { display: block; max-width: 760px; margin: 0 auto 4px; }
+.pw-ask-scene img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg);
+  border: var(--hairline) solid var(--border-soft); }
+.pw-ask-bar-bot { width: 30px; }
 .pw-ask-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; color: var(--gold);
   border-bottom: var(--hairline) solid var(--border-soft); }
 .pw-ask-bar b { color: var(--text); font-size: var(--fs-lg); }
@@ -11185,12 +11191,50 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 .ask-pill { display: inline-block; align-self: flex-start; padding: 4px 12px; border-radius: var(--radius-sm);
   border: var(--hairline) solid var(--gold); color: var(--gold); font-size: var(--fs-sm); font-weight: 700;
   letter-spacing: .04em; }
-.ask-ava { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
-  overflow: hidden; background: var(--panel-2); border: var(--hairline) solid var(--brand-2); }
-.ask-ava img { width: 22px; height: 22px; object-fit: contain; }
+/* The mascot (qbotHTML): the render, and its face drawn over it, one box. */
+.qbot { position: relative; display: inline-block; flex-shrink: 0; }
+.qbot picture, .qbot img, .qbot .qbot-face { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* The render's black is a shade darker than the page's, which drew a faint
+   box round the robot: lightening it against the page's own colour (inside
+   the box, since the float makes it its own layer) leaves only the robot.
+   The floor glow ends in a line in the render; it fades out instead. */
+.qbot-body { width: 118px; aspect-ratio: 860 / 1480; background: var(--bg); }
+.qbot-body img { mix-blend-mode: lighten; -webkit-mask-image: var(--mask-foot); mask-image: var(--mask-foot); }
+:root[data-theme="light"] .qbot-body { border-radius: var(--radius-lg); background: #0B0A08; }
+.qbot-head { width: 40px; aspect-ratio: 1; border-radius: 50%; overflow: hidden;
+  border: var(--hairline) solid var(--brand-2); background: #0B0A08; }
+.ask-ava { width: 32px; }
+.ask-head-bot { width: 36px; }
+.qbot-eye, .qbot-mouth, .qbot-look { transform-box: fill-box; transform-origin: 50% 50%; }
+.qbot-mouth { transform-origin: 50% 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .qbot.live .qbot-eye { animation: qbBlink 5.2s ease-in-out infinite; }
+  .qbot-body.live { animation: qbFloat 3.6s ease-in-out infinite; }
+  [data-bot="listening"] .qbot.live .qbot-look { transform: translate(-8px, 18px); }
+  [data-bot="thinking"] .qbot.live .qbot-look { animation: qbLook 2.2s ease-in-out infinite; }
+  [data-bot="thinking"] .qbot.live .qbot-mouth { transform: scale(.55, .3); }
+  [data-bot="thinking"] .qbot-head.live { animation: qbBob 1.1s ease-in-out infinite; }
+  [data-bot="talking"] .qbot.live .qbot-mouth { animation: qbTalk .26s ease-in-out infinite alternate; }
+  [data-bot="talking"] .qbot-head.live { animation: qbNod 1.4s ease-in-out infinite; }
+  [data-bot="happy"] .qbot.live { animation: qbHop .5s ease-out 2; }
+}
+@keyframes qbBlink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.1); } }
+@keyframes qbFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes qbLook { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-18px, -12px); }
+  60% { transform: translate(18px, -12px); } }
+@keyframes qbBob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(-5deg); } }
+@keyframes qbTalk { from { transform: scaleY(.25); } to { transform: scaleY(1.05); } }
+@keyframes qbNod { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(3deg); } }
+@keyframes qbHop { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-5px) rotate(-4deg); }
+  70% { transform: translateY(0) rotate(2deg); } }
 .ask-log { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px; padding: 16px 2px 12px; }
 .ask-empty { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 6px 2px 8px; }
+/* The words on the left, the robot standing beside them. */
+.ask-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.ask-hero-words { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.ask-hero-bot { margin: -8px -4px -10px 0; }
+@media (min-width: 761px) { .ask-hero-bot { width: 150px; } }
 .ask-title { margin: 0; color: var(--text); font-size: clamp(var(--fs-4xl), 11.5vw, 60px); font-weight: 700;
   line-height: 1; letter-spacing: -.01em; }
 .ask-sub { margin: -4px 0 4px; display: flex; flex-direction: column; gap: 2px;

@@ -22111,11 +22111,16 @@ function pwAskHTML() {
     <h2 class="pw-h2" id="pw-ask-h">Meet <em>Ask Qellys.</em></h2>
     <p class="pw-h2sub">Your AI betting assistant. Ask about any team, player or game in
       any sport we cover, and get a straight answer written from our own numbers.</p>
+    <picture class="pw-ask-scene"><source type="image/webp"
+        srcset="img/ask/qbot-scene@640.webp 640w, img/ask/qbot-scene.webp 960w" sizes="(max-width: 760px) 100vw, 760px">
+      <img src="img/ask/qbot-scene.jpg" srcset="img/ask/qbot-scene@640.jpg 640w, img/ask/qbot-scene.jpg 960w"
+        sizes="(max-width: 760px) 100vw, 760px" width="960" height="600" loading="lazy" decoding="async"
+        alt="The Ask Qellys robot at a laptop, surrounded by questions it answers"></picture>
     <div class="pw-ask-grid">
-      <div class="pw-ask-demo" aria-hidden="true">
-        <div class="pw-ask-bar">${askIcon("robot", 22)}<b>Ask <em>Qellys</em></b></div>
+      <div class="pw-ask-demo" aria-hidden="true" data-bot="thinking">
+        <div class="pw-ask-bar">${qbotHTML("head", "pw-ask-bar-bot")}<b>Ask <em>Qellys</em></b></div>
         <div class="ask-row me"><div class="ask-turn me">How have the Lions done against the Packers?</div></div>
-        <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"><i></i><i></i><i></i></span></div></div>
+        <div class="ask-row bot">${askAva(true)}<div class="ask-turn bot wait"><span class="ask-dots"><i></i><i></i><i></i></span></div></div>
         <div class="pw-ask-try">${PW_ASK_TRY.map((q) => `<span>${escapeHtml(q)}</span>`).join("")}</div>
         <div class="pw-ask-box"><span class="pw-ask-clip">${askIcon("clip", 18)}</span>
           <span class="pw-ask-ph">Ask about a player, a game or a bet…</span>
@@ -34865,7 +34870,65 @@ function askErrorText(status, body) {
    (body.ask-open); the league row stays as text tabs, as Ethan's render
    draws it. The one line of the footer that must stay — not advice, 21+,
    the helpline — rides in the intro card. */
-const ASK_AVA = `<span class="ask-ava" aria-hidden="true"><img src="logo-qb.png" alt="" width="152" height="152"></span>`;
+/* THE MASCOT. Ethan, 2026-09-23, with two renders of a crowned robot:
+   "the chat bot mascot we should use too. Make it animated and stuff so
+   the chat feels alive like you're talking to the actual bot."
+
+   The renders are pictures, so the robot's FACE is drawn over its screen
+   instead: a patch of the screen's own black (#0A0602, sampled) feathered
+   over the painted eyes and mouth, and new ones on top in the render's
+   glow — two arcs and a half-moon, in the render's own pixel coordinates,
+   tilted 9.7° the way its head is. Drawn, they can move:
+
+     idle       blinks now and then; the big one floats
+     listening  looks down at the box while you type
+     thinking   looks around, mouth pursed, head bobbing (and the dots)
+     talking    mouth moving while the answer types itself out
+     happy      a little hop when it finishes
+
+   The state is one attribute on the room (data-bot), and only the robots
+   marked .live act on it: the big one, the header's, the newest answer's.
+   Every face gets its own filter ids; nothing moves under reduced motion. */
+const QBOT_BOX = { body: "60 20 860 1480", head: "140 25 760 760" };   // each file's crop of the render
+const QBOT_SIZE = { body: [480, 826], head: [192, 192] };
+let _qbotN = 0;
+
+function qbotFace(box) {
+  const n = ++_qbotN;
+  return `<svg class="qbot-face" viewBox="${box}" aria-hidden="true" focusable="false">
+    <defs><filter id="qbg${n}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="12"
+      result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="qbf${n}" x="-20%" y="-30%" width="140%" height="160%"><feGaussianBlur stdDeviation="16"/></filter></defs>
+    <g transform="rotate(9.7 544 556)">
+      <rect x="318" y="460" width="470" height="236" rx="100" fill="#0A0602" filter="url(#qbf${n})"/>
+      <g class="qbot-look" filter="url(#qbg${n})">
+        <path class="qbot-eye" fill="none" stroke="#FFD867" stroke-width="36" stroke-linecap="round"
+          d="M353 589 C 359 509, 463 509, 469 589"/>
+        <path class="qbot-eye" fill="none" stroke="#FFD867" stroke-width="36" stroke-linecap="round"
+          d="M620 589 C 626 509, 730 509, 736 589"/>
+        <path class="qbot-mouth" fill="#FFD867" d="M508 607 H 604 Q 604 660 556 660 Q 508 660 508 607 Z"/>
+      </g>
+    </g></svg>`;
+}
+
+function qbotHTML(kind, cls = "") {
+  const file = kind === "head" ? "qbot-head" : "qbot";
+  const [w, h] = QBOT_SIZE[kind];
+  return `<span class="qbot qbot-${kind}${cls ? ` ${cls}` : ""}" aria-hidden="true"><picture>
+    <source type="image/webp" srcset="img/ask/${file}.webp"><img src="img/ask/${file}.jpg" alt=""
+      width="${w}" height="${h}" decoding="async"></picture>${qbotFace(QBOT_BOX[kind])}</span>`;
+}
+
+/* The robot beside an answer — its head, round. */
+function askAva(live = false) {
+  return qbotHTML("head", `ask-ava${live ? " live" : ""}`);
+}
+
+/* Which face the room wears: see the mascot's note above. */
+function askBotState(mode) {
+  const room = document.getElementById("ask-room");
+  if (room) room.dataset.bot = mode;
+}
 
 function askParas(text) {
   return String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -34881,13 +34944,13 @@ function askSourcesHTML(t) {
     escapeHtml(s.label)}</span>`).join("")}</div>` : "";
 }
 
-function askTurnHTML(t) {
+function askTurnHTML(t, live = false) {
   const who = t.role === "user" ? "me" : t.error ? "err" : "bot";
   // The answer about to be typed out arrives as an empty bubble; askTypeOut fills it.
   if (t === _askTyping) {
-    return `<div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot typing" id="ask-typing"></div></div>`;
+    return `<div class="ask-row bot">${askAva(true)}<div class="ask-turn bot typing" id="ask-typing"></div></div>`;
   }
-  return `<div class="ask-row ${who}">${who === "me" ? "" : ASK_AVA}<div class="ask-turn ${who}">${
+  return `<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}<div class="ask-turn ${who}">${
     askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${askSourcesHTML(t)}</div></div>`;
 }
 
@@ -34911,6 +34974,11 @@ function askTypeOut() {
   if (!t || !bub || !log) return;
   const done = () => {
     if (_askTyping === t) _askTyping = null;
+    askBotState("happy");                          // a hop when it finishes, then back to idle
+    setTimeout(() => {
+      const room = document.getElementById("ask-room");
+      if (room && room.dataset.bot === "happy") room.dataset.bot = "idle";
+    }, 1300);
     bub.classList.remove("typing");
     bub.removeAttribute("id");
     bub.innerHTML = askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("") + askSourcesHTML(t);
@@ -34920,6 +34988,7 @@ function askTypeOut() {
   if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
   const paras = askParas(t.text).map((p) => p.split(/(\s+)/).filter(Boolean));
   let pi = 0, wi = 0, p = null;
+  askBotState("talking");
   log.setAttribute("aria-busy", "true");        // one announcement when it is whole, not one per word
   const step = () => {
     if (!bub.isConnected || _askTyping !== t) return;          // re-rendered: it is showing whole
@@ -35061,16 +35130,20 @@ function renderAsk() {
   const empty = !a.turns.length;
   const sug = a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST;
   const title = `<span class="ask-pill">AI</span>`;
-  host.innerHTML = `<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room">
-    ${empty ? "" : `<div class="ask-head">${title}
+  const mood = a.busy ? "thinking" : _askTyping ? "talking" : "idle";
+  // The newest answer's robot is the one that reacts; older ones hold still.
+  const lastBot = a.turns.map((t) => t.role !== "user").lastIndexOf(true);
+  host.innerHTML = `<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room" data-bot="${mood}">
+    ${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot live")}${title}
       <b class="ask-title-sm">Ask <em>Qellys</em></b>
       <button type="button" class="ask-new" data-ask-reset>New chat</button>
     </div>`}
     <div class="ask-log" id="ask-log" aria-live="polite">${empty ? `
-      <div class="ask-empty">${title}
+      <div class="ask-empty"><div class="ask-hero"><div class="ask-hero-words">${title}
         <h2 class="ask-title">Ask <em>Qellys</em></h2>
         <p class="ask-sub"><span>Your AI betting assistant.</span>
-          <span>Any team, any player, any sport, answered from our numbers.</span></p>
+          <span>Any team, any player, any sport, answered from our numbers.</span></p></div>
+        ${qbotHTML("body", "ask-hero-bot live")}</div>
         <div class="ask-intro"><span class="ask-intro-ic">${askIcon("robot", 34)}</span>
           <div><b>Ask about any team, player or game.</b>
             <p>Tonight’s boards in every sport and every past game we have stored — the answer
@@ -35079,8 +35152,8 @@ function renderAsk() {
         <div class="ask-suggest">${sug.map((s, n) =>
           `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}"><span class="ask-sug-ic">${
             askIcon(ASK_SUGGEST_ICONS[n % ASK_SUGGEST_ICONS.length], 26)}</span><span>${escapeHtml(s)}</span></button>`).join("")}</div>
-      </div>` : a.turns.map(askTurnHTML).join("")}${a.busy ? `
-      <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"
+      </div>` : a.turns.map((t, i) => askTurnHTML(t, i === lastBot && !a.busy)).join("")}${a.busy ? `
+      <div class="ask-row bot">${askAva(true)}<div class="ask-turn bot wait"><span class="ask-dots"
         aria-hidden="true"><i></i><i></i><i></i></span><span class="ask-sr">Looking it up…</span></div></div>` : ""}</div>
     <div class="ask-dock">
       ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
@@ -35106,11 +35179,17 @@ function renderAsk() {
     // The keyboard takes a moment to arrive and to leave; ask again once it has.
     input.addEventListener("focus", () => { askKeyboard(); setTimeout(askKeyboard, 350); });
     input.addEventListener("blur", () => setTimeout(askKeyboard, 120));
-    // The box grows with what is typed, to five lines, and Send wakes up.
+    // The box grows with what is typed, to five lines, and Send wakes up —
+    // and the robot looks down at what you are writing.
     input.addEventListener("input", () => {
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
       if (send) send.disabled = a.busy || !input.value.trim();
+      if (!a.busy && !_askTyping) askBotState(input.value.trim() ? "listening" : "idle");
+    });
+    input.addEventListener("blur", () => {
+      const room = document.getElementById("ask-room");
+      if (room && room.dataset.bot === "listening") room.dataset.bot = "idle";
     });
   }
   const clip = host.querySelector("[data-ask-clip]");

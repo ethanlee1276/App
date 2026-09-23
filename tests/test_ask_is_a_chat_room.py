@@ -54,11 +54,12 @@ def test_the_footer_leaves_and_the_league_row_stays_as_text_tabs():
 
 def test_one_column_the_conversation_then_the_composer():
     r = _fn("renderAsk")
-    order = ['<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room">', 'class="ask-log" id="ask-log"',
+    order = ['<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room" data-bot="${mood}">', 'class="ask-log" id="ask-log"',
              '<div class="ask-dock">', '<form class="ask-form" id="ask-form">']
     at = [r.index(s) for s in order]
     assert at == sorted(at), "the conversation, then the composer"
-    assert '${empty ? "" : `<div class="ask-head">${title}' in r, "a conversation folds the title into one line"
+    assert '${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot live")}${title}' in r, \
+        "a conversation folds the title into one line, the robot's head leading it"
     assert 'data-ask-reset>New chat</button>' in r, "starting over is the header's button"
     assert 'rows="1"' in r and '<button class="ask-send" type="submit" aria-label="Send" disabled>' in r
     assert "askRoomSize();" in r and "setTimeout(askRoomSize, 400);" in r
@@ -85,8 +86,9 @@ def test_the_room_is_measured_clear_of_the_tab_bar_and_the_keyboard():
 
 def test_bubbles_an_avatar_a_typing_row_and_a_send_that_wakes():
     turn = _fn("askTurnHTML")
-    assert '<div class="ask-row ${who}">${who === "me" ? "" : ASK_AVA}' in turn, "Ask's turns carry its avatar"
-    assert 'src="logo-qb.png"' in APP[APP.index("const ASK_AVA"):][:200]
+    assert '<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}' in turn, "Ask's turns carry its avatar"
+    assert 'return qbotHTML("head", `ask-ava${live ? " live" : ""}`);' in _fn("askAva"), \
+        "the avatar is the mascot's head (tests/test_ask_mascot.py)"
     assert re.search(r"\.ask-row\.me \{[^}]*justify-content: flex-end;", CSS)
     assert re.search(r"\.ask-turn\.me \{[^}]*background: var\(--brand\); color: var\(--brand-ink\);", CSS)
     assert re.search(r"\.ask-turn\.bot \{[^}]*background: var\(--panel-2\);", CSS)
@@ -137,7 +139,7 @@ def test_the_empty_room_is_ethans_render():
     cards with icons side by side, and the box with a paperclip, a divider
     and a gold send button with a paper plane."""
     r = _fn("renderAsk")
-    empty = r[r.index('<div class="ask-empty">'):r.index("a.turns.map(askTurnHTML)")]
+    empty = r[r.index('<div class="ask-empty">'):r.index("a.turns.map((t, i) =>")]
     order = ["${title}", '<h2 class="ask-title">Ask <em>Qellys</em></h2>',
              "<span>Your AI betting assistant.</span>", '<div class="ask-intro">', 'askIcon("robot", 34)',
              "<b>Ask about any team, player or game.</b>", '<div class="ask-suggest">']
