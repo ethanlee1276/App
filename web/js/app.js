@@ -33119,6 +33119,39 @@ async function boardStamp(file) {
   }
 }
 
+/* THE CODE RUNNING, AND EACH LEAGUE'S LAST REBUILD (2026-09-23). Ethan:
+   "the same most likely pics that we had earlier are the same ones that
+   are there now … make sure all of our new changes are taking effect."
+   A build that fails or runs out of time keeps the last good board on
+   purpose (launch.refresh_nfl, "kept last board"), so a stuck board and a
+   quiet slate look the same on every page but this one. The heartbeat has
+   carried the commit and each board's last run since August; --boards
+   read them over SSH and nothing on the site did. */
+const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB"],
+  ["nba", "NBA"], ["wnba", "WNBA"], ["ufc", "UFC"]];
+
+function buildsCardHTML(hb) {
+  if (!hb) return "";
+  const runs = hb.boards || {};
+  const now = Date.now() / 1000;
+  const rows = BUILD_LEAGUES.filter(([k]) => runs[k]).map(([k, label]) => {
+    const r = runs[k];
+    const when = r.at_epoch ? `${ageText(now - r.at_epoch)} ago` : "time unknown";
+    return `<div class="st-row"><span class="st-k">${escapeHtml(label)}</span>
+      <span class="st-v ${r.ok ? "st-good" : "st-bad"}">${r.ok
+        ? `rebuilt ${escapeHtml(when)}` : `build failed ${escapeHtml(when)}`}</span>
+      <span class="st-sub">${r.ok ? "" : escapeHtml(String(r.note || "kept the last good board"))}</span></div>`;
+  }).join("");
+  return `<div class="section-title">Model builds
+      <span class="sub">— the code running, and each league’s last rebuild on it.</span></div>
+    <div class="card st-card">
+      <div class="st-row"><span class="st-k">Code running</span>
+        <span class="st-v ${hb.commit ? "st-good" : "st-off"}">${escapeHtml(hb.commit || "unknown")}</span>
+        <span class="st-sub">${hb.auto_update ? "updates itself" : ""}</span></div>
+      ${rows}
+    </div>`;
+}
+
 async function renderStatus() {
   const host = document.getElementById("status-body");
   if (!host) return;
@@ -33168,6 +33201,7 @@ async function renderStatus() {
        it has not completed a cycle since it started.`;
   host.innerHTML = `
     <div class="about-lede"><p>${beat} ${cycle}</p></div>
+    ${buildsCardHTML(hb)}
     <div class="section-title">Every published board</div>
     <div class="card st-card">${STATUS_BOARDS.map((b, i) => row(b, stamps[i])).join("")}</div>
     <div class="section-title">Tonight’s feeds

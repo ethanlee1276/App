@@ -15,6 +15,25 @@ as they are done.
 
 ---
 
+## LIVE. Did today's model work reach the board? (read-only, seconds)
+
+Ethan, 2026-09-23: *"the same most likely pics that we had earlier are
+the same ones that are there now."* From here the site cannot be
+reached, so the answer is on the box. **From the phone first:** the
+Status page now has a **Model builds** section — the code the site is
+running and each league's last rebuild on it. If NFL says *build failed*,
+the line after it is the reason, and the board you are reading is the
+last one that built. For the whole picture:
+
+```bash
+cd /srv/qellys && python3 launch.py --boards
+cat data/autoupdate.json
+sudo journalctl -u qellys --since "6 hours ago" | grep -E "NFL|kept the last board|timed out|Traceback" | tail -40
+```
+
+Want: `autoupdate.json` naming the latest commit, and NFL rebuilt after
+it. Paste all three outputs back.
+
 ## INPUTS. Is every input the models read actually moving a number? (read-only, seconds)
 
 Ethan, 2026-09-23: *"do another scan and make sure all the models aren't

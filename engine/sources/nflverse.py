@@ -382,6 +382,14 @@ def face_for(headshots: dict, player: str) -> str:
     return ""
 
 
+def _rows_by_player(rows) -> dict:
+    """{name: [his rows]} in file order, keyed as every per-player reader keys a row."""
+    out: dict = {}
+    for r in rows or ():
+        out.setdefault(_s(r, "player_display_name", "player_name", "full_name"), []).append(r)
+    return out
+
+
 def _regular_season(rows: list[dict]) -> list[dict]:
     return [r for r in rows if _s(r, "season_type", "game_type", default="REG") in ("REG", "")]
 
@@ -602,6 +610,10 @@ class PlayerSpec:
     #: position (a tight end and a receiver both hold receiving yards), so
     #: the position travels with the spec rather than being looked up.
     position: str = ""
+    #: The team he was ranked on: this season's stat rows, or the roster
+    #: for a carried spec. `one_quarterback_each` lets a quarterback who
+    #: played for a team claim its starter before one who played elsewhere.
+    team: str = ""
 
 
 def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
@@ -628,14 +640,16 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
         a["games"] += 1
 
     specs: list[PlayerSpec] = []
-    for team in teams:
+    # Sorted: a set's order changes with every process, and the order of
+    # this list decides ties downstream (one_quarterback_each).
+    for team in sorted(teams):
         for pos, markets in POSITION_MARKETS.items():
             cands = [(k, v) for k, v in agg.items() if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
             take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
-                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
+                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos, team))
     return specs
 
 
@@ -673,7 +687,7 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
         a["vol"] += _f(r, "attempts") + _f(r, "carries") + _f(r, "targets")
 
     specs: list[PlayerSpec] = []
-    for team in teams:
+    for team in sorted(teams):
         for pos, markets in POSITION_MARKETS.items():
             cands = [(k, v) for k, v in agg.items()
                      if k[0] == team and k[1] == pos]
@@ -681,7 +695,7 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
             take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
-                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
+                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos, team))
     return specs
 
 
@@ -695,11 +709,24 @@ def one_quarterback_each(specs: list[PlayerSpec], team_of) -> list[PlayerSpec]:
     position with one job. A team whose starter changed since last season
     got TWO starters — six teams on a 2025 week-10 rebuild, Jameis Winston
     (last season's numbers, the Giants' third quarterback) beside Jaxson
-    Dart among them."""
+    Dart among them.
+
+    A QUARTERBACK WHO PLAYED FOR THE TEAM CLAIMS IT FIRST. Found the same
+    day by running one build twice: a quarterback ranked on his OLD team's
+    rows but filed under his new one (a trade, a release) took the new
+    team's starter slot whenever his old team happened to come first in a
+    set's order — which changes with every process. Rebuilt 2025 week 3
+    under six hash seeds, Cincinnati's starter was Joe Flacco (Cleveland's
+    weeks 1-2) four times and Joe Burrow twice, and the receivers' QB-
+    change drop went with it. Specs ranked on the team they are filed
+    under now claim first; the rest keep their order after them."""
+    here = [sp.position == "QB" and bool(sp.team) and sp.team == team_of(sp.player) for sp in specs]
     slots: dict = {}
-    out = []
-    for sp in specs:
-        if sp.position == "QB":
+    keep = set()
+    for first in (True, False):
+        for i, sp in enumerate(specs):
+            if sp.position != "QB" or here[i] != first:
+                continue
             slot = slots.setdefault(team_of(sp.player), {})
             role = "backup" if sp.usage_role == "backup" else "starter"
             if slot.get(role, sp.player) != sp.player:
@@ -709,8 +736,8 @@ def one_quarterback_each(specs: list[PlayerSpec], team_of) -> list[PlayerSpec]:
             if role == "starter" and slot.get("backup") == sp.player:
                 continue
             slot[role] = sp.player
-        out.append(sp)
-    return out
+            keep.add(i)
+    return [sp for i, sp in enumerate(specs) if sp.position != "QB" or i in keep]
 
 
 def _merge_specs(primary: list[PlayerSpec],
@@ -787,6 +814,17 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             for market in MARKET_COLUMNS:
                 pos_means[market] = _carry.positional_means(prior_stats, market)
 
+    # EACH PLAYER'S ROWS, ONCE. Every per-player read below filtered the
+    # whole season by name — per player, per market — and on 2026-09-23
+    # that was 80 of a build's 108 seconds here, several times that on
+    # the droplet's one core, under a 600-second ceiling whose miss keeps
+    # yesterday's board (launch.refresh_nfl, "kept last board"). Ethan:
+    # "the same most likely pics that we had earlier are the same ones
+    # that are there now." Handing each reader only that player's rows is
+    # the same answer: every one of them keys a row by this same name.
+    stats_of = _rows_by_player(stats)
+    prior_of = _rows_by_player(prior_stats)
+
     if specs is None:
         # ``qb_backups``: each team's SECOND quarterback by volume too, as
         # role "backup". engine/qbchange keeps his props only where the
@@ -824,9 +862,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if now_team:
             return now_team
         best: tuple | None = None
-        for r in stats:
-            if _s(r, "player_display_name", "player_name", "full_name") != player:
-                continue
+        for r in stats_of.get(player, ()):
             team = _s(r, "recent_team", "team")
             if not team:
                 continue
@@ -891,10 +927,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         team = team_of(spec.player)
         if team not in opponent_of:
             continue
-        logs = player_game_logs(stats, spec.player, spec.market, upto_week)
+        mine, mine_before = stats_of.get(spec.player, []), prior_of.get(spec.player, [])
+        logs = player_game_logs(mine, spec.player, spec.market, upto_week)
         carried = None
         if carry and index and len(logs) < MIN_LOGS:
-            carried = _carry.carry_for(index, prior_stats, spec.player,
+            carried = _carry.carry_for(index, mine_before, spec.player,
                                        spec.market,
                                        pos_means.get(spec.market, {}))
         thin = None
@@ -902,7 +939,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             # A rookie, or last season lost to injury: one or two games
             # and no carry. Built from them, pulled toward the position
             # (engine/carry.py, THIN SAMPLES — weeks 2-3 only).
-            thin = _carry.thin_for(logs, prior_stats, spec.player, spec.market,
+            thin = _carry.thin_for(logs, mine_before, spec.player, spec.market,
                                    spec.position or position_of(spec.market),
                                    pos_means.get(spec.market, {}), upto_week)
         if carried is None and thin is None and len(logs) < MIN_LOGS:
@@ -960,7 +997,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             # anchor has to come from the season the logs came from —
             # otherwise compute_form shrinks toward a career average of 0.
             career_avg=career_average(
-                prior_stats if carried is not None else stats,
+                mine_before if carried is not None else mine,
                 spec.player, spec.market),
             vs_opponent_avg=None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
@@ -1009,9 +1046,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # carry. Thin logs top up from there now — regular season only,
         # the same slice the yardage carry reads — capped where the
         # blend stops trusting bigger samples anyway.
-        td_logs = td_game_logs(stats, p.player, upto_week)
+        td_logs = td_game_logs(stats_of.get(p.player, []), p.player, upto_week)
         if carry and prior_stats and len(td_logs) < _TD_THIN:
-            prior_td = td_game_logs(_regular_season(prior_stats),
+            prior_td = td_game_logs(_regular_season(prior_of.get(p.player, [])),
                                     p.player, 99)
             td_logs = td_logs + prior_td[:TD_CARRY_GAMES - len(td_logs)]
         td_props.append(Prop(
