@@ -251,7 +251,8 @@ def weather(boards: dict) -> list[str]:
             book = wind / FORECAST_WIND_SCALE if fc else wind
             if book >= 8 or pc >= 0.3 or w.get("rain") or w.get("snow"):
                 lines.append(f"    {g.get('away')} @ {g.get('home')}: {wind:.0f} mph"
-                             + (f" forecast (≈{book:.0f} game-book)" if fc else "")
+                             + ((" forecast" + ("" if FORECAST_WIND_SCALE == 1.0 else
+                                               f" (≈{book:.0f} game-book)")) if fc else "")
                              + f", {float(w.get('temp_f') or 0):.0f}°F"
                              + (f", {pc:.0%} precipitation" if pc else ""))
         moved: dict = {}

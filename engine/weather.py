@@ -29,7 +29,7 @@ games say, and what changed:
 Receivers and tight ends are one group; a back's receiving is his own. The
 wind multipliers were measured on the reported wind at kickoff, and the
 board reads Open-Meteo's forecast for the kickoff hour (engine/nflwx.py),
-which reads ×0.714 of it — converted before banding (FORECAST_WIND_SCALE).
+which reads on the same scale where it matters (FORECAST_WIND_SCALE).
 College reads the same table: its games are too few to measure alone.
 """
 
@@ -80,15 +80,23 @@ TD_FREEZE: dict = {}
 TD_RAIN = {"pass": 0.811}
 TD_SNOW: dict = {}
 
-#: THE FORECAST READS LOW. The effects above were measured on the wind the
-#: game book reports at kickoff; the board reads Open-Meteo's forecast for
-#: the kickoff hour, and over 492 outdoor games 2023-2025 the forecast read
-#: ×0.714 of the reported wind (median ratio; mean gap −2.2 mph, the same
-#: band only 57% of the time — `python3 wxfit.py --scale` on the droplet,
-#: 2026-09-23). So a forecast is read on the game book's scale before it is
-#: banded: a 10 mph forecast is a 14 mph game-book wind. A played game's
-#: reported wind (the backtest's) is already on it.
-FORECAST_WIND_SCALE = 0.714
+#: THE FORECAST'S OWN NUMBER, measured twice the same night. The effects
+#: above were measured on the wind the game book reports at kickoff; the
+#: board reads Open-Meteo's forecast for the kickoff hour. Over 492 outdoor
+#: games 2023-2025 (`python3 wxfit.py --scale`, Ethan's droplet, 2026-09-23)
+#: the median forecast/reported RATIO was 0.714, and for an hour the board
+#: divided by it. The by-range table the same command then printed said
+#: that was a calm-day artifact — a game book writes "Wind: 6 mph" when
+#: the forecast said 2 — and wrong where it matters:
+#:
+#:     forecast   0-4   4-7   7-10   10-13   13+
+#:     reported     6     7      9      10    14     (median)
+#:
+#: and a converted forecast landed in the reported wind's band 49% of the
+#: time against 57% as it stands. So a forecast is banded as it reads;
+#: the conversion stays a named number so the check can say if it ever
+#: should not be 1.0 (wxfit.py --scale prints the scale that fits best).
+FORECAST_WIND_SCALE = 1.0
 
 #: Below this forecast chance it is a dry day — the measured base, dry
 #: at kickoff, holds the games that were given a small chance and stayed dry.
@@ -135,7 +143,8 @@ def book_wind(w: Weather) -> float:
 def _wind_words(w: Weather) -> str:
     raw, book = float(w.wind_mph or 0.0), book_wind(w)
     if getattr(w, "forecast", False):
-        return f"Wind {raw:.0f} mph forecast (≈{book:.0f} on the game-book scale the effect was measured on)"
+        return (f"Wind {raw:.0f} mph forecast" + ("" if FORECAST_WIND_SCALE == 1.0 else
+                f" (≈{book:.0f} on the game-book scale the effect was measured on)"))
     return f"Wind {raw:.0f} mph"
 
 

@@ -15,27 +15,26 @@ as they are done.
 
 ---
 
-## AFTER THE WIND FIX — two read-only checks (a minute)
+## AFTER THE WIND FIX — one read-only check (a minute)
 
-Tonight's answers (Ethan's droplet, 2026-09-23 night): the box ran
-`11d0df55`; the trade-tape indexes took the wallet history from 233 s to
-8.5 s; college 2026 closes 0 → 44; wiring clean on all four leagues; 13 of
-14 outdoor NFL games forecast (the 14th was Ravens-Cowboys in Rio, a
-neutral site — now forecast at the Maracanã); baseball's short starts and
-short games measured KEEP, every one (`engine/exitfit.py`); the WNBA
-confirmed the hoops rule on our own data. And the forecast reads ×0.714
-of the game book's wind, so every forecast is now converted before it is
-banded (`engine/weather.FORECAST_WIND_SCALE`). Once the box shows the
-commit after `11d0df55` and an NFL build has run:
+Tonight's answers (Ethan's droplet, 2026-09-23 night): the trade-tape
+indexes took the wallet history from 233 s to 8.5 s; college 2026 closes
+0 → 44; wiring clean on all four leagues; all 14 outdoor NFL games
+forecast (Rio found at the Maracanã); baseball's short starts and short
+games measured KEEP, every one (`engine/exitfit.py`); the WNBA confirmed
+the hoops rule on our own data. The wind scale took two runs: the median
+ratio said ×0.714, the by-range table said the forecast is on the game
+book's scale where it matters, and converting made the bands agree less
+(49% vs 57%) — so the board reads the forecast as it is. The check now
+measures the cut itself:
 
 ```bash
-cd /srv/qellys && python3 homecheck.py weather
-cd /srv/qellys && python3 wxfit.py --scale
+cd /srv/qellys && cat data/autoupdate.json; echo; python3 wxfit.py --scale | tail -8
 ```
 
-Want: NFL "14 of them forecast", each windy game reading "N mph forecast
-(≈M game-book)", and the scale check ending "the same — nothing to
-change" with its by-range table. Paste both.
+Want: the newest commit, then the table of "measured / board" cuts per
+forecast range and a last line ending "nothing to change". If it says
+CHANGE with a number, paste it.
 
 ## NEXT TIME HOME — 2026-09-23 night — ANSWERED (above)
 

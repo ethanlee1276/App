@@ -354,6 +354,49 @@ def shipped(props: dict, tds: dict) -> dict:
     }
 
 
+def effect_by_forecast(pairs, table: dict, scale: float = 1.0) -> list[dict]:
+    """What a forecast in each range is worth, against what the board gives it.
+
+    ``table`` is engine/weather.WIND. For every (reported, forecast) pair
+    the multiplier the MEASUREMENT says (the band of the reported wind) and
+    the one the BOARD applies (the band of the forecast ÷ ``scale``); per
+    forecast range and market, their means. The board is right where the
+    two agree — whatever the scale of the two winds.
+    """
+    rows = []
+    for lo, hi in ((0, 4), (4, 7), (7, 10), (10, 13), (13, 99)):
+        cell = [(a, b) for a, b in pairs if lo <= b < hi]
+        if not cell:
+            continue
+        row = {"forecast": f"{lo}-{hi if hi < 99 else ''}", "n": len(cell), "markets": {}}
+        for key, bands in table.items():
+            truth = sum(bands.get(band(a), 1.0) for a, _b in cell) / len(cell)
+            board = sum(bands.get(band(b / scale), 1.0) for _a, b in cell) / len(cell)
+            row["markets"][key] = (round(truth, 3), round(board, 3))
+        rows.append(row)
+    return rows
+
+
+def miss_at(pairs, table: dict, scale: float) -> float:
+    """Mean squared gap between the board's multiplier (the forecast ÷
+    ``scale`` banded) and the measured one (the reported wind banded),
+    pair by pair, over every market in ``table``."""
+    err = sum((bands.get(band(a), 1.0) - bands.get(band(b / scale), 1.0)) ** 2
+              for a, b in pairs for bands in table.values())
+    return round(err / max(1, len(pairs) * max(1, len(table))), 6)
+
+
+#: A scale has to beat the board's by more than this to be worth a change.
+SCALE_TOLERANCE = 0.00005
+
+
+def best_scale(pairs, table: dict) -> tuple[float, float]:
+    """(scale, miss): the single forecast ÷ scale, 0.60 to 1.40, that puts
+    the board's multiplier closest to the measured one."""
+    return min(((k / 100, miss_at(pairs, table, k / 100)) for k in range(60, 141, 2)),
+               key=lambda t: (t[1], abs(t[0] - 1.0)))
+
+
 def scale(pairs) -> dict:
     """Does the forecast read wind on the scale the bands were measured on?
 
