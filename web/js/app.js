@@ -34943,11 +34943,17 @@ function askParas(text) {
 /* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
    model, and the lookups it made, as chips — a prop's chip opens its page
    (the document-level [data-prop] door), the rest name what was read. */
+/* A page the answer found on the web is a link to that page: citing it is
+   the condition of showing the answer at all (Ethan, 2026-09-23, "Yeah add
+   it" to web search). Only an http(s) address becomes a link. */
 function askSourcesHTML(t) {
   const src = (t.sources || []).filter((s) => s && s.label).slice(0, 8);
-  return src.length ? `<div class="ask-src">${src.map((s) => `<span class="ask-chip"${
-    s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
-    escapeHtml(s.label)}</span>`).join("")}</div>` : "";
+  const chip = (s) => /^https?:\/\//i.test(String(s.url || ""))
+    ? `<a class="ask-chip web" href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer"${
+      s.title ? ` title="${escapeAttr(s.title)}"` : ""}>${escapeHtml(s.label)} ↗</a>`
+    : `<span class="ask-chip"${s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
+      escapeHtml(s.label)}</span>`;
+  return src.length ? `<div class="ask-src">${src.map(chip).join("")}</div>` : "";
 }
 
 function askTurnHTML(t, live = false) {

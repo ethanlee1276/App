@@ -310,7 +310,9 @@ def test_his_question_asked_from_the_mlb_tab_looks_the_meetings_up():
                  board_name="mlb_recommendations.json")
     assert out["text"].startswith("The Lions are 4-0") and out["lookups"] == 1 and not out["refused"]
     assert len(f.calls) == 2
-    assert all(c["tools"] == AB.TOOLS for c in f.calls), "the tools ride on every round"
+    assert all(c["tools"][:len(AB.TOOLS)] == AB.TOOLS for c in f.calls), "the tools ride on every round"
+    assert all(c["tools"][len(AB.TOOLS):] == f.calls[0]["tools"][len(AB.TOOLS):] for c in f.calls), \
+        "and the web search, when on, is the same bytes every round"
     assert "tool_choice" not in f.calls[0], "the first round may look things up"
     second = f.calls[1]["messages"]
     assert second[-2]["role"] == "assistant" and second[-2]["content"][1]["name"] == "team_history"

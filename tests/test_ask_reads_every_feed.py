@@ -396,7 +396,7 @@ def test_every_question_says_how_fresh_the_boards_are():
     assert fresh["nfl"] == "2026-09-23T12:00:00" and fresh["mlb"] == "2026-09-23T11:30:00"
     assert fresh["site_refreshed"] == "2026-09-23T12:01:00" and fresh["asked_at"]
     system = " ".join(req["system"][0]["text"].split())
-    assert "data_as_of" in system and "news comes only from the news lookup" in system
+    assert "data_as_of" in system and "News comes from the news lookup first" in system
 
 
 def test_every_new_lookup_is_offered_answers_and_names_its_source():
@@ -409,7 +409,7 @@ def test_every_new_lookup_is_offered_answers_and_names_its_source():
         res = _run(name, **args)
         assert "error" not in res and res.get("found") is not False, (name, res)
         assert AB.tool_source(name, args, res)["label"], name
-    assert AB.NO_CACHE_TOOLS == {"live_scores", "market_moves", "news", "our_picks_live", "prediction_markets"}
+    assert AB.NO_CACHE_TOOLS >= {"live_scores", "market_moves", "news", "our_picks_live", "prediction_markets"}
 
 
 if __name__ == "__main__":

@@ -208,6 +208,25 @@ set the page says "Ask isn't switched on for this site yet".
 - **Keys:** Ask spends none. The odds feed, CFBD and Kalshi are pulled by
   the refresher on its own schedule and budget, and Ask reads what the
   refresher wrote, so a busy chat can't burn the Odds API quota.
+- **Web search (2026-09-23, Ethan: "Yeah add it").** When our data has
+  nothing on a question (breaking news, a trade, an injury update, a
+  league we don't store) Ask searches the web through the same
+  ANTHROPIC_API_KEY; there is no other key. Odds, lines, picks,
+  probabilities and our record still come only from our data. The pages it
+  used show under the answer as links, and a web answer is never served
+  from the cache. FanDuel's and DraftKings' sites are left out of it.
+  - **Cost:** $10 per 1,000 searches plus the tokens the results add. At
+    most 3 searches per call and **300 a day** across the site; the usage
+    report has a `searches` column and folds a cent a search into `~usd`.
+  - **Change the daily cap, or turn it off:**
+
+    ```bash
+    sudo ./deploy/setenv.sh QB_ASK_WEB_DAILY 100   # or 0 for off
+    sudo systemctl restart qellys
+    ```
+  - If an admin has switched web search off in the Claude Console
+    (Settings → Privacy), Ask answers without it and logs one line saying
+    so; turn it back on there and restart the service.
 - **Limits:** subscribers only, 8 questions a minute per IP
   (server.RATE_ASK_PER_MIN).
 

@@ -145,6 +145,28 @@ LEAGUE_WORDS = {"nfl": r"\bnfl\b", "cfb": r"\b(?:cfb|college football|ncaaf?)\b"
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS = 6
 MAX_TOOL_CHARS = 6000
+#: A search the API paused mid-turn is resumed at most this many times.
+MAX_CONTINUATIONS = 2
+
+#: WEB SEARCH. Ethan, 2026-09-23, asked whether Ask should reach past our
+#: own data for the news and moves we don't store: "Yeah add it". It runs on
+#: Anthropic's side at $10 per 1,000 searches on top of the tokens, so it is
+#: capped per call and per day (QB_ASK_WEB_DAILY; 0 turns it off), and the
+#: prompt keeps every number a bettor acts on coming from our data.
+WEB_SEARCH_USD = 0.01
+WEB_MAX_USES = 3
+WEB_DAILY_CAP = 300
+#: The standing rule is that we never scrape the books; their pages stay out
+#: of the search too, so their prices cannot pass for ours.
+WEB_BLOCKED = ("fanduel.com", "draftkings.com")
+#: Models new enough for the search version that filters results in code
+#: before they reach the context (Claude 4.6 and later); others get the basic one.
+WEB_DYNAMIC_MODELS = ("claude-sonnet-5", "claude-opus-5", "claude-fable-5", "claude-opus-4-8", "claude-opus-4-7",
+                      "claude-opus-4-6", "claude-sonnet-4-6")
+WEB_SOURCES = 4
+#: Set when the organisation has search switched off in the Claude Console:
+#: Ask then answers without it until the service restarts.
+_WEB = {"off": False}
 LEAGUE_ROWS = 10
 LEAGUE_ROWS_MAX = 40
 H2H_GAMES = 12
@@ -168,7 +190,7 @@ LEDGER_DB = None
 #: A lookup whose answer is stale within minutes is never served from the
 #: answer cache.
 #: Lookups whose answer is stale in minutes: an answer that used one is never remembered.
-NO_CACHE_TOOLS = {"live_scores", "market_moves", "news", "our_picks_live", "prediction_markets"}
+NO_CACHE_TOOLS = {"live_scores", "market_moves", "news", "our_picks_live", "prediction_markets", "web_search"}
 SLATE_GAMES = 16
 PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day",
               "top_pick_today")
@@ -222,9 +244,15 @@ SYSTEM = (
     "ask the reader to name teams for it. The league is the one the question or the "
     "conversation is about, else the one the reader has open. Call several tools at "
     "once when you need several things, and pass the sport when you know it.\n"
-    "Use ONLY the facts you are given and the tools return. Do not add statistics, "
-    "injuries, news, odds or any number that is not in them. If after looking they do "
-    "not cover the question, say plainly that our data has nothing on it, say which "
+    "Use ONLY the facts you are given, the tools return and web_search finds. Do not add "
+    "statistics, injuries, news, odds or any number that is not in them. Look in our "
+    "data first; when it has nothing on the question (breaking news, a trade or signing, "
+    "an injury update, a coaching change, a result or a league we do not store, "
+    "background), search the web with web_search. Numbers a bettor acts on (odds, lines, "
+    "prices, picks, probabilities, our record) come only from our data, never from a web "
+    "page: when a site's odds differ from ours, give ours. Say when a fact came from the "
+    "web, and never pass off a site's pick or prediction as ours. If after looking nothing "
+    "covers the question, say plainly that our data has nothing on it, say which "
     "seasons we do hold when that is why, and name the closest thing we have. You may "
     "explain how betting works in general terms (odds, spreads, totals, moneylines, "
     "parlays, the vig, closing line value, units); any payout, implied chance, parlay "
@@ -237,8 +265,8 @@ SYSTEM = (
     f"At most {WORDS} words, plain words a first-time bettor understands, no headings; "
     "for a list (a slate, picks, a ranking) short lines, at most 8. "
     "Never tell the reader to bet or how much; a stake on a row is our model's, not "
-    "advice. You cannot browse the internet: news comes only from the news lookup "
-    "(headlines, not articles), scores only from live_scores, and for anything live you "
+    "advice. News comes from the news lookup first, then web_search for the story; "
+    "scores for games in our leagues come only from live_scores; for anything live you "
     "say how old it is."
 )
 
@@ -1422,8 +1450,6 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
                     if isinstance(t, dict):
                         rows.append((0, _ticket(t, s, pool)))
             continue
-        if kind == "top_pick_today":
-            continue
         if kind == "pick_of_the_day":
             p = b.get("pick_of_the_day")
             if isinstance(p, dict) and p:
@@ -2557,16 +2583,18 @@ def estimate_usd(model: str, usage: dict) -> float | None:
     i, o = p
     return round((usage.get("in", 0) * i + usage.get("out", 0) * o
                   + usage.get("cache_read", 0) * i * 0.1
-                  + usage.get("cache_write", 0) * i * 1.25) / 1e6, 6)
+                  + usage.get("cache_write", 0) * i * 1.25) / 1e6
+                 + usage.get("web_searches", 0) * WEB_SEARCH_USD, 6)
 
 
 def log_usage(model: str, response=None, cached: bool = False, today: str | None = None) -> None:
     """Add one question to today's line in the usage log. ``response`` may be
     a list — a question that looked something up is one call per round."""
     rounds = list(response) if isinstance(response, (list, tuple)) else [response] * (response is not None)
-    got = {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0}
+    got = {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "web_searches": 0}
     for r in rounds:
         u = getattr(r, "usage", None)
+        got["web_searches"] += int(getattr(getattr(u, "server_tool_use", None), "web_search_requests", 0) or 0)
         got["in"] += int(getattr(u, "input_tokens", 0) or 0)
         got["out"] += int(getattr(u, "output_tokens", 0) or 0)
         got["cache_read"] += int(getattr(u, "cache_read_input_tokens", 0) or 0)
@@ -2583,7 +2611,7 @@ def log_usage(model: str, response=None, cached: bool = False, today: str | None
             d["calls"] += 1
             d["lookup_rounds"] = d.get("lookup_rounds", 0) + max(0, len(rounds) - 1)
             for k, v in got.items():
-                d[k] += v
+                d[k] = d.get(k, 0) + v
             usd = estimate_usd(model, got)
             if usd is not None:
                 d["usd"] = round(d["usd"] + usd, 6)
@@ -2601,13 +2629,57 @@ def _client():
     return anthropic.Anthropic()
 
 
+def web_daily_cap() -> int:
+    try:
+        return int(os.environ.get("QB_ASK_WEB_DAILY", "").strip() or WEB_DAILY_CAP)
+    except ValueError:
+        return WEB_DAILY_CAP
+
+
+def searches_today(today: str | None = None) -> int:
+    day = today or _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    with _LOCK:
+        d = (_read(USAGE_PATH).get("days") or {}).get(day) or {}
+    return int(d.get("web_searches", 0) or 0)
+
+
+def web_tool(model: str) -> dict | None:
+    """The web search tool for this model, or None: switched off, or today's searches spent.
+    Built once per question, so every round sends the same bytes and the cache holds."""
+    cap = web_daily_cap()
+    if _WEB["off"] or cap <= 0 or searches_today() >= cap:
+        return None
+    dynamic = str(model or "").startswith(WEB_DYNAMIC_MODELS)
+    return {"type": "web_search_20260209" if dynamic else "web_search_20250305", "name": "web_search",
+            "max_uses": WEB_MAX_USES, "blocked_domains": list(WEB_BLOCKED),
+            "user_location": {"type": "approximate", "country": "US", "timezone": "America/New_York"}}
+
+
+def _web_refused(exc) -> bool:
+    """The 400 an organisation with search switched off in the Claude Console gets."""
+    return getattr(exc, "status_code", None) == 400 and "web search" in str(exc).lower()
+
+
 def _call(client, model: str, req: dict, last: bool = False):
     """One round. The tools ride on every round, the last one told it may
     not use them — tool_choice leaves the tools-and-system cache alone."""
+    web = None if _WEB["off"] else req.get("web")
     kw = dict(model=model, max_tokens=MAX_TOKENS, system=req["system"], messages=req["messages"],
-              tools=TOOLS)
+              tools=TOOLS + [web] if web else TOOLS)
     if last:
         kw["tool_choice"] = {"type": "none"}
+    try:
+        return _send(client, model, kw)
+    except Exception as exc:                                            # noqa: BLE001 — re-raised below
+        if not (web and _web_refused(exc)):
+            raise
+        _WEB["off"] = True
+        print("  ask: web search is switched off for this organisation in the Claude Console; "
+              "answering without it")
+        return _send(client, model, {**kw, "tools": TOOLS})
+
+
+def _send(client, model: str, kw: dict):
     extra = {"output_config": {"effort": "low"}} if model in LOW_EFFORT_MODELS else {}
     if model in FALLBACK_FOR and hasattr(getattr(client, "beta", None), "messages"):
         try:
@@ -2630,11 +2702,19 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
     Returns (last response, the lookups' source chips, lookups made)."""
     messages = list(req["messages"])
     sources: list[dict] = []
-    made = 0
+    made = paused = 0
     req.setdefault("used", set())
     for n in range(MAX_TOOL_ROUNDS + 1):
         response = _call(client, model, {**req, "messages": messages}, last=n == MAX_TOOL_ROUNDS)
         rounds.append(response)
+        while getattr(response, "stop_reason", "") == "pause_turn" and paused < MAX_CONTINUATIONS:
+            # A long search the API paused: hand the turn back as it came and it resumes.
+            paused += 1
+            _web_seen(response, req, sources)
+            messages = messages + [{"role": "assistant", "content": list(response.content)}]
+            response = _call(client, model, {**req, "messages": messages}, last=n == MAX_TOOL_ROUNDS)
+            rounds.append(response)
+        _web_seen(response, req, sources)
         uses = [b for b in getattr(response, "content", None) or [] if getattr(b, "type", "") == "tool_use"]
         if getattr(response, "stop_reason", "") != "tool_use" or not uses or n == MAX_TOOL_ROUNDS:
             return response, sources, made
@@ -2655,6 +2735,30 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
         messages = messages + [{"role": "assistant", "content": list(response.content)},
                                {"role": "user", "content": results}]
     return response, sources, made
+
+
+def _web_seen(response, req: dict, sources: list) -> None:
+    """Note a round that searched the web, and keep the pages its answer cites."""
+    for b in getattr(response, "content", None) or []:
+        kind = getattr(b, "type", "")
+        if kind == "server_tool_use" and getattr(b, "name", "") == "web_search":
+            req["used"].add("web_search")
+        for c in (getattr(b, "citations", None) or []) if kind == "text" else []:
+            url = str(getattr(c, "url", "") or "")
+            if getattr(c, "type", "") != "web_search_result_location" or not re.match(r"https?://", url):
+                continue
+            host = re.sub(r"^www\.", "", url.split("/")[2]) if url.count("/") >= 2 else url
+            chip = {"label": host, "url": url, "title": str(getattr(c, "title", "") or "")[:120], "prop": ""}
+            if all(s.get("url") != url for s in sources) and sum(1 for s in sources if s.get("url")) < WEB_SOURCES:
+                sources.append(chip)
+
+
+def answer_text(response) -> str:
+    """The answer: the text after the last search or lookup, not the "let me look that up" before it."""
+    blocks = list(getattr(response, "content", None) or [])
+    last = max((i for i, b in enumerate(blocks) if getattr(b, "type", "") != "text"), default=-1)
+    after = "".join(getattr(b, "text", "") for b in blocks[last + 1:] if getattr(b, "type", "") == "text").strip()
+    return after or "".join(getattr(b, "text", "") for b in blocks if getattr(b, "type", "") == "text").strip()
 
 
 def ask(board: dict, question: str, history=None, pick: str = "", client=None,
@@ -2695,6 +2799,7 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
     except ImportError:
         errors = ()
     rounds: list = []
+    req["web"] = web_tool(model)
     try:
         response, looked, made = converse(client, model, req, rounds)
     except errors as exc:                               # typed, most specific first
@@ -2704,12 +2809,12 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
     finally:
         if rounds:
             log_usage(model, rounds)
-    base["sources"] = (looked + [s for s in base["sources"] if s not in looked])[:8]
+    base["sources"] = ([s for s in looked if s.get("url")] + [s for s in looked if not s.get("url")]
+                       + [s for s in base["sources"] if s not in looked])[:8]
     base["lookups"] = made
     if getattr(response, "stop_reason", "") == "refusal":
         return {**base, "text": "Ask declined to answer that one.", "refused": True, "cached": False}
-    text = "".join(getattr(b, "text", "") for b in getattr(response, "content", None) or []
-                   if getattr(b, "type", "") == "text").strip()
+    text = answer_text(response)
     if not text:
         raise _ex.Unavailable("the answer had no text")
     if key and not (req.get("used", set()) & NO_CACHE_TOOLS):     # a live score is stale in minutes
@@ -2719,15 +2824,16 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
 
 def usage_report(days: int = 7) -> str:
     log = _read(USAGE_PATH).get("days") or {}
-    lines = ["day         calls  cached  lookups  in_tok   out_tok  cache_rd  ~usd"]
+    lines = ["day         calls  cached  lookups  searches  in_tok   out_tok  cache_rd  ~usd"]
     total = 0.0
     for day in sorted(log)[-days:]:
         d = log[day]
         total += d.get("usd") or 0
         lines.append(f"{day}  {d.get('calls', 0):5}  {d.get('cached', 0):6}  {d.get('lookup_rounds', 0):7}  "
-                     f"{d.get('in', 0):7}  "
+                     f"{d.get('web_searches', 0):8}  {d.get('in', 0):7}  "
                      f"{d.get('out', 0):7}  {d.get('cache_read', 0):8}  {d.get('usd', 0):.4f}")
-    lines.append(f"total ~${total:.4f} over {min(days, len(log))} day(s); model {model_name()}")
+    lines.append(f"total ~${total:.4f} over {min(days, len(log))} day(s); model {model_name()}; "
+                 f"web search {'off' if web_daily_cap() <= 0 else f'up to {web_daily_cap()} a day'}")
     return "\n".join(lines)
 
 

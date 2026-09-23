@@ -321,7 +321,7 @@ def test_every_lookup_is_offered_and_the_prompt_uses_them():
         assert n in names, n
     system = " ".join(AB.SYSTEM.split())
     assert "any payout, implied chance, parlay price or hold comes from odds_calc" in system
-    assert "scores only from live_scores" in system
+    assert "scores for games in our leagues come only from live_scores" in system
     assert "You may explain how betting works in general terms" in system
     assert AB.NO_CACHE_TOOLS >= {"live_scores"}
 

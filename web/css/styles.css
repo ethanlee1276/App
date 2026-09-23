@@ -11286,6 +11286,8 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 .ask-chip { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); color: var(--text-mute);
   border: var(--hairline) solid var(--border); }
 .ask-chip[data-prop] { cursor: pointer; color: var(--text-dim); border-color: var(--brand-2); }
+a.ask-chip.web { color: var(--text-dim); text-decoration: none; }
+a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .ask-dock { position: relative; flex-shrink: 0; padding-top: 12px;
   border-top: var(--hairline) solid var(--border-soft); }
 .ask-focus { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 5px 6px 5px 12px;
