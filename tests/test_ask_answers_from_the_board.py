@@ -379,7 +379,13 @@ def test_the_endpoint_is_gated_checked_and_honest_about_being_off():
 
 
 def test_the_page_shows_where_each_answer_came_from():
-    assert 'data-view="ask"' in HTML and 'id="view-ask"' in HTML and '["Research", ["view:ask", ' in APP
+    assert 'data-view="ask"' in HTML and 'id="view-ask"' in HTML
+    # The tab bar's fifth slot (Ethan, 2026-09-23: "It should be where the menu button is").
+    assert 'const TAB_BAR_VIEWS = ["recommended", "tonight", "live", "ask"];' in APP
+    bar = HTML[HTML.index('<nav class="tabbar"'):]
+    bar = bar[:bar.index("</nav>")]
+    assert bar.rstrip().endswith("Ask</button>") and 'data-view="ask"' in bar
+    assert '"view:ask"' not in APP[APP.index("const MORE_GROUPS"):][:900], "not in the sheet as well"
     assert 'if (name === "ask") renderAsk();' in APP
     assert 'data-ask-pick="${escapeAttr(propId(r))}"' in APP, "the prop page's Ask button"
     turn = APP[APP.index("function askTurnHTML("):]

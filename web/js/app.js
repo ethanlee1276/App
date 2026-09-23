@@ -36590,6 +36590,12 @@ function initMobileMenu() {
   const btn = document.getElementById("menu-toggle");
   if (!btn) return;
   btn.addEventListener("click", () => {
+    // Phones: the sheet, the one menu (Ethan, 2026-09-23). The drawer below is the tablet's.
+    if (isPhone()) {
+      btn.setAttribute("aria-controls", "more-sheet");
+      moreSheetOpen(!document.body.classList.contains("more-open"));
+      return;
+    }
     // The drawer is position:fixed, so the page does NOT need anchoring
     // to the top before it opens. The scrollTo(0) that used to sit here
     // was a leftover from the in-flow dropdown era, and by the 08-17
@@ -40401,7 +40407,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
 const MORE_GROUPS = [
   ["Picks", ["view:likely", "view:longshots", "view:zeno"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
-  ["Research", ["view:ask", "view:injuries", "view:players", "view:rosters", "view:standings",
+  ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],
   ["My Book", ["sport:mybets", "view:alerts", "view:streak", "view:bankroll"]],
@@ -40410,7 +40416,7 @@ const MORE_GROUPS = [
   ["Proof", ["sport:lab", "sport:methodology", "sport:status",
              "sport:why", "sport:features", "sport:about"]],
 ];
-const TAB_BAR_VIEWS = ["recommended", "tonight", "live"];
+const TAB_BAR_VIEWS = ["recommended", "tonight", "live", "ask"];
 const TAB_BAR_TOOLS = ["record"];
 
 /* "view:edge" → the sidebar button that opens the Edge Board. */
@@ -40543,7 +40549,7 @@ let _moreScrollY = 0;                     // where the page was when the sheet o
 function moreSheetOpen(on) {
   const sheet = document.getElementById("more-sheet");
   const scrim = document.getElementById("more-scrim");
-  const btn = document.getElementById("tb-more");
+  const btn = document.getElementById("menu-toggle");   // the phone's hamburger
   if (!sheet || !scrim) return;
   clearTimeout(_moreCloser);
   if (on) {
@@ -40569,10 +40575,9 @@ function moreSheetOpen(on) {
 }
 
 function moreSheetInit() {
-  const btn = document.getElementById("tb-more");
+  // The hamburger opens it (initMobileMenu, on phones); this wires the
+  // ways out and the theme proxy.
   const scrim = document.getElementById("more-scrim");
-  if (!btn) return;
-  btn.addEventListener("click", () => moreSheetOpen(!document.body.classList.contains("more-open")));
   if (scrim) scrim.addEventListener("click", () => moreSheetOpen(false));
   const theme = document.getElementById("more-theme");
   if (theme) theme.addEventListener("click", () => {

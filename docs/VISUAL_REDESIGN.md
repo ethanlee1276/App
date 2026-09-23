@@ -194,7 +194,7 @@ surface.
   More sheet, built at open from the sidebar's own buttons via
   `MORE_GROUPS` in app.js — pills grouped Bet · Follow · Research ·
   Proof, search at the top. The tour card no longer auto-opens on
-  phones. Pinned by `tests/test_the_phone_tab_bar_ends_in_more.py`,
+  phones. Pinned by `tests/test_the_phone_tab_bar_ends_in_ask.py`,
   which also proves no sidebar destination is unreachable from the
   sheet.
 * **Slice 2 — SHIPPED 2026-09-22.** The phone home deck (`#home-deck`,

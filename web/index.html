@@ -1431,13 +1431,19 @@
             title="Every pick journaled and graded in public">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
       Results</button>
-    <button class="tb-item" id="tb-more" aria-label="Everything else"
-            aria-expanded="false" aria-controls="more-sheet">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-      More</button>
+    <!-- ASK, WHERE MORE WAS. Ethan, 2026-09-23, circling the fifth slot on
+         his phone: "we are hiding the ask [Qellys] button in the menu. It
+         should be where the menu button is then move the 3 bar menu back
+         up too the top left." The menu is the hamburger's now (#menu-toggle
+         opens #more-sheet on phones); this slot is Ask Qellys. -->
+    <button class="tb-item nav-btn" data-view="ask" data-hint="ask about tonight’s board"
+            title="Ask about a player, a game or a bet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5M12 16h.01"/></svg>
+      Ask</button>
   </nav>
 
-  <!-- The More sheet: the tab bar's fifth slot. Empty in the markup —
+  <!-- The More sheet: the phone's one menu, opened by the hamburger at the
+       top left since 2026-09-23 (the tab bar's fifth slot before). Empty in the markup —
        app.js fills it from the sidebar's buttons (MORE_GROUPS), so a
        destination added to the sidebar shows up here without a second
        edit, and one hidden there (the wall, a feature switched off) is

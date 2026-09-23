@@ -7252,15 +7252,16 @@ body.has-deck #rail-live { display: none; }
      tap target it always was. Later in the file than the 900px rule
      on purpose: same specificity, and the last one wins. */
   .sportbar-in .sport-btn { padding: 0 4px; }
-  /* ONE WAY IN. The hamburger came back to the top left on 2026-08-22
-     (Ethan: "three bars on the top left that will pull open the menu")
-     and the tab bar's fifth slot became More on 2026-09-22 — which left
-     the phone with two menus holding the same list, the repeat Ethan
-     photographed the same day. The sheet is the phone's menu; the
-     drawer is the tablet's (761–900px, where there is no tab bar), and
-     the hamburger shows only there. Nothing clicks this hidden button
-     on the phone's behalf: the sheet opens itself (moreSheetInit). */
-  .menu-toggle { display: none; }
+  /* ONE WAY IN, AT THE TOP LEFT. The hamburger came back to the top
+     left on 2026-08-22 (Ethan: "three bars on the top left that will
+     pull open the menu"); the tab bar's fifth slot became More on
+     2026-09-22 and the hamburger hid, so the phone would not have two
+     menus holding the same list. On 2026-09-23 Ethan moved it back —
+     "It should be where the menu button is then move the 3 bar menu back
+     up too the top left" — with Ask in the fifth slot. Still one menu:
+     on a phone the hamburger opens the SHEET (initMobileMenu), never the
+     drawer, which stays the tablet's (761–900px). */
+  .menu-toggle { display: grid; width: 40px; height: 40px; }
   /* Injuries & News is a row in the sheet; the bell was a second door
      to it, in a bar that had five controls. */
   #nav-bell { display: none; }
@@ -7361,13 +7362,15 @@ body.has-deck #rail-live { display: none; }
   .more-scrim { display: block; position: fixed; inset: 0; z-index: 57; touch-action: none;
     background: rgba(0, 0, 0, .62); opacity: 0; pointer-events: none;
     transition: opacity var(--dur-base) var(--ease-out); }
-  .more-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 58;
-    max-height: 82vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  /* FROM THE LEFT since 2026-09-23: it opens from the hamburger at the
+     top left, so it arrives from that side, full height, over the bar. */
+  .more-sheet { display: block; position: fixed; top: 0; left: 0; bottom: 0; z-index: 58;
+    width: min(86vw, 360px); overflow-y: auto; -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;   /* a swipe past the sheet's end stays in the sheet */
-    padding: 10px 16px calc(24px + env(safe-area-inset-bottom, 0px));
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--panel);
-    border-top: var(--hairline) solid var(--border);
-    transform: translateY(103%); will-change: transform;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0; background: var(--panel);
+    border-right: var(--hairline) solid var(--border);
+    transform: translateX(-103%); will-change: transform;
     transition: transform var(--dur-base) var(--ease-out); }
   .more-scrim[hidden], .more-sheet[hidden] { display: none; }
   /* THE PAGE HOLDS STILL UNDER THE SHEET. Ethan, 2026-09-22, from his
@@ -7378,9 +7381,9 @@ body.has-deck #rail-live { display: none; }
      to the same offset on close. The sheet scrolls itself. */
   body.more-open { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; }
   body.more-open .more-scrim { opacity: 1; pointer-events: auto; }
-  body.more-open .more-sheet { transform: translateY(0); }
-  .more-handle { width: 40px; height: 4px; border-radius: 999px;
-    background: var(--border); margin: 0 auto 8px; }
+  body.more-open .more-sheet { transform: translateX(0); }
+  /* A bottom sheet's drag handle means nothing on a side drawer. */
+  .more-handle { display: none; }
   .more-search { display: flex; align-items: center; gap: 10px; width: 100%;
     margin: 4px 0 2px; padding: 11px 14px; min-height: 44px;
     border: var(--hairline) solid var(--border); border-radius: var(--radius);

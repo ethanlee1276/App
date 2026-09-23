@@ -1,12 +1,17 @@
-"""The phone tab bar is five destinations and the fifth is More.
+"""The phone tab bar is five destinations and the fifth is Ask.
 
 Ethan, 2026-09-22, on the Figma mock: "I like what you sent." The mock
 put Home · Picks · Live · Results · More on the bar and everything else
-behind More as pills grouped Bet · Follow · Research · Proof. Two things
-here must never drift: the phone must not LOSE a destination the sidebar
-has (the sheet is built from the sidebar's own buttons, and this test
-checks the map covers them), and the tour card must not come back on a
-phone, where the bar and the sheet are the tour.
+behind More as pills grouped by the sidebar's groups. Then, 2026-09-23,
+circling that fifth slot: "we are hiding the ask Qelly button in the
+menu. It should be where the menu button is then move the 3 bar menu
+back up too the top left." So the fifth slot is Ask Qellys and the same
+sheet opens from the hamburger at the top left.
+
+Two things here must never drift: the phone must not LOSE a destination
+the sidebar has (the sheet is built from the sidebar's own buttons, and
+this test checks the map plus the bar covers them), and the tour card
+must not come back on a phone, where the bar and the sheet are the tour.
 """
 import json
 import os
@@ -93,17 +98,17 @@ def _sidebar_destinations():
     return out
 
 
-def test_five_tabs_and_the_fifth_is_more():
+def test_five_tabs_and_the_fifth_is_ask():
     bar = _bar()
     items = re.findall(r'<button class="tb-item[^"]*"', bar)
     assert len(items) == 5, items
     views = re.findall(r'data-view="([a-z]+)"', bar)
-    assert views == ["recommended", "tonight", "live"], views
+    assert views == ["recommended", "tonight", "live", "ask"], views
+    assert bar.rstrip().endswith("Ask</button>"), "Ask is the fifth slot, where More was"
     assert 'data-sport="record" data-kind="tool"' in bar
-    assert 'id="tb-more"' in bar and "More</button>" in bar
+    assert 'id="tb-more"' not in bar and "More</button>" not in bar, "the menu is the hamburger's now"
     assert "Picks</button>" in bar, "the tonight page under its plain name"
     assert 'id="tb-search"' not in bar, "search moved into the sheet"
-    assert 'aria-controls="more-sheet"' in bar
 
 
 def test_search_kept_its_id_inside_the_sheet():
@@ -113,8 +118,14 @@ def test_search_kept_its_id_inside_the_sheet():
     assert 'id="more-groups"' in sheet
     assert HTML.index('id="more-scrim"') < HTML.index('id="more-sheet"')
     body = _fn("moreSheetInit")
-    assert 'getElementById("tb-more")' in body
+    assert 'getElementById("tb-more")' not in body
     assert 'scrim.addEventListener("click", () => moreSheetOpen(false))' in body
+    menu = APP[APP.index("function initMobileMenu("):]
+    menu = menu[:menu.index('document.body.classList.toggle("menu-open")')]
+    assert "if (isPhone()) {" in menu and \
+        'moreSheetOpen(!document.body.classList.contains("more-open"));\n      return;' in menu, \
+        "on a phone the hamburger opens the sheet, and never the drawer"
+    assert 'const btn = document.getElementById("menu-toggle");' in _fn("moreSheetOpen")
     assert 'e.key === "Escape"' in body
 
 
@@ -161,11 +172,14 @@ def test_a_pill_is_the_sidebar_button_it_stands_for():
 def test_the_sheet_opens_over_the_bar_and_closes_on_any_view_change():
     assert ".more-sheet, .more-scrim { display: none; }" in CSS
     phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
-    assert ".more-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 58;" in phone
+    assert ".more-sheet { display: block; position: fixed; top: 0; left: 0; bottom: 0; z-index: 58;" in phone, \
+        "from the left, full height — it opens from the hamburger at the top left"
     assert ".more-scrim { display: block; position: fixed; inset: 0; z-index: 57;" in phone
     assert ".tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;" in phone
     assert ".more-scrim[hidden], .more-sheet[hidden] { display: none; }" in phone
-    assert "body.more-open .more-sheet { transform: translateY(0); }" in phone
+    assert "transform: translateX(-103%);" in phone
+    assert "body.more-open .more-sheet { transform: translateX(0); }" in phone
+    assert ".menu-toggle { display: grid; width: 40px; height: 40px; }" in phone, "the hamburger shows on phones"
     op = _fn("moreSheetOpen")
     assert "moreSheetBuild();" in op, "rebuilt on open — fresh badges, the lit pill"
     assert "sheet.hidden = false; scrim.hidden = false;" in op

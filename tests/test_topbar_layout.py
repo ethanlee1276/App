@@ -97,23 +97,28 @@ def test_the_drawer_opens_from_the_top_left():
         "the hamburger is hidden on phones again")
 
 
-def test_the_hamburger_is_the_tablets_and_the_phone_has_one_menu():
-    """Two histories, one rule. It was `display: none !important` at
+def test_the_hamburger_is_the_phones_way_into_the_sheet_and_the_tablets_drawer():
+    """Three histories, one rule. It was `display: none !important` at
     ≤760px while the tab bar reached the drawer by clicking it anyway —
     a hidden control driving the visible one — so it came back on
     2026-08-22. Then the tab bar's fifth slot became More (2026-09-22)
-    and the phone had two menus holding the same list, which Ethan
-    photographed. So: hidden on phones, where the sheet is the menu and
-    nothing clicks the hidden button on its behalf; shown between 761
-    and 900px, where there is no tab bar and the drawer is the menu."""
+    and it hid again so the phone would not have two menus. Then Ethan,
+    2026-09-23: "move the 3 bar menu back up too the top left", with Ask
+    in the fifth slot. So: shown on phones, where it opens the sheet and
+    returns before the drawer's toggle; shown between 761 and 900px,
+    where there is no tab bar and it opens the drawer. One menu either way."""
     hits = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("760px"))
     assert hits, "the phone block says nothing about the hamburger"
-    assert any("display: none" in h for h in hits), "the phone has two menus again: %r" % hits
-    assert not any("display: grid" in h for h in hits)
+    assert any("display: grid" in h for h in hits), "the hamburger is hidden on phones: %r" % hits
+    assert not any("display: none" in h for h in hits)
     tablet = re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", _media("900px"))
     assert any("display: grid" in h for h in tablet), "the tablet band lost its only menu"
     assert 'getElementById("menu-toggle")' not in _code() or ".click()" not in _code()[_code().index('getElementById("menu-toggle")'):][:600]
-    assert 'id="tb-more"' in _markup()
+    assert 'id="tb-more"' not in _markup(), "the fifth slot is Ask now"
+    code = _code()
+    menu = code[code.index("function initMobileMenu("):]
+    menu = menu[:menu.index('document.body.classList.toggle("menu-open")')]
+    assert "if (isPhone()) {" in menu and "moreSheetOpen(" in menu and "return;" in menu
 
 
 def test_the_tab_bar_ends_with_search_not_menu():

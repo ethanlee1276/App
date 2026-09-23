@@ -129,12 +129,17 @@ def test_the_riding_section_yields_to_the_tray_on_phones():
 # --- one menu ----------------------------------------------------------------
 def test_the_phone_has_one_menu_and_the_bar_loses_the_bell():
     """The third screenshot: the drawer open beside a tab bar whose
-    fifth slot opens a sheet with the same list. On phones the drawer
-    stays shut and the hamburger is gone; the bell went with it, since
-    Injuries & News is a row in the sheet. Both are the tablet's still
-    (761–900px has no tab bar), so the rules live in the phone block
-    and nowhere wider."""
-    assert "  .menu-toggle { display: none; }" in SHEET
+    fifth slot opened a sheet with the same list. On phones the drawer
+    stays shut; the bell went too, since Injuries & News is a row in the
+    sheet. Since 2026-09-23 the hamburger is back at the top left on
+    phones (Ethan: "move the 3 bar menu back up too the top left") —
+    and it opens the SHEET, never the drawer, so there is still one menu.
+    The drawer and the bell are the tablet's (761–900px, no tab bar)."""
+    assert "  .menu-toggle { display: grid; width: 40px; height: 40px; }" in SHEET
+    menu = APP[APP.index("function initMobileMenu("):]
+    menu = menu[:menu.index('document.body.classList.toggle("menu-open")')]
+    assert "if (isPhone()) {" in menu and "moreSheetOpen(" in menu and "return;" in menu, \
+        "the phone's hamburger must open the sheet and stop before the drawer"
     assert "  #nav-bell { display: none; }" in SHEET
     wide = CSS[:CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))]
     assert "#nav-bell { display: none" not in wide, "the desktop lost its bell"

@@ -207,9 +207,14 @@ def test_the_phone_has_one_menu_and_it_is_the_sheet():
     and a phone with a hamburger AND a More sheet holding the same
     list was the repeat Ethan photographed that day.
 
+    Then, 2026-09-23, back at the top left — Ethan: "move the 3 bar
+    menu back up too the top left", with Ask taking the tab bar's fifth
+    slot. On a phone it opens the SHEET.
+
     What this file still guards is unchanged: the phone must have
     exactly one way in and it must not be hidden. The one way in is the
-    sheet; the drawer is the tablet's (761–900px, no tab bar there)."""
+    sheet, opened by the hamburger; the drawer is the tablet's
+    (761–900px, no tab bar there)."""
     import re as _re
     parts, at = [], 0
     while True:
@@ -232,16 +237,16 @@ def test_the_phone_has_one_menu_and_it_is_the_sheet():
     assert parts, "no ≤760px block"
     block = "\n".join(parts)
     rules = _re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", block)
-    assert rules and any("display: none" in r for r in rules), \
-        "the hamburger is shown on phones again — two menus"
-    assert not any("display: grid" in r for r in rules)
-    # Nothing clicks the hidden button on the phone's behalf: the sheet
-    # opens itself, from the tab bar's own More.
+    assert rules and any("display: grid" in r for r in rules), \
+        "the hamburger is hidden on phones — the phone has no visible way in"
+    assert not any("display: none" in r for r in rules)
+    # One menu: on a phone the hamburger opens the sheet and returns
+    # before the drawer's toggle ever runs.
     assert 'getElementById("tb-menu")' not in APP
-    assert 'id="tb-more"' in HTML and 'id="tb-search"' in HTML
-    init = APP[APP.index("function moreSheetInit("):]
-    init = init[:init.index("\n}")]
-    assert 'getElementById("tb-more")' in init and "moreSheetOpen(" in init
+    assert 'id="tb-more"' not in HTML and 'id="tb-search"' in HTML
+    menu = APP[APP.index("function initMobileMenu("):]
+    menu = menu[:menu.index('document.body.classList.toggle("menu-open")')]
+    assert "if (isPhone()) {" in menu and "moreSheetOpen(" in menu and "return;" in menu
     # And the drawer's footer — the two switches and the social links —
     # rides into the sheet as proxies, so no phone control is lost.
     foot = APP[APP.index("function moreSheetFoot("):]
@@ -353,12 +358,12 @@ out.ordering = await p.evaluate(() => {
            walls };
 });
 
-// `#tb-more`: the tab bar's fifth slot is the phone's one menu
-// (2026-09-22). This probe has tapped `#tb-menu` (removed when that
-// slot became Search) and `#menu-toggle` (hidden on phones since the
-// sheet arrived) — each time the static half of this file said one
-// thing and the browser half waited thirty seconds for the other.
-await p.locator('#tb-more').tap();
+// `#menu-toggle`: the hamburger at the top left opens the phone's one
+// menu, the sheet (2026-09-23). This probe has tapped `#tb-menu`
+// (removed when that slot became Search) and `#tb-more` (the fifth
+// slot until Ask took it) — each time the static half of this file
+// said one thing and the browser half waited for the other.
+await p.locator('#menu-toggle').tap();
 await p.waitForTimeout(900);                   // past the slide
 
 const r = await p.locator('#more-sheet').boundingBox();
@@ -368,7 +373,7 @@ out.open = await p.evaluate(() => {
   return { cls: document.body.classList.contains('more-open'),
            bg: getComputedStyle(sb).backgroundColor,
            scrim: getComputedStyle(document.getElementById('more-scrim')).display,
-           aria: document.getElementById('tb-more').getAttribute('aria-expanded') };
+           aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') };
 });
 // The sheet's own top band — padding and the handle's margin — before
 // the first row, so the colour asked for is the panel's, not a row's.
@@ -380,14 +385,14 @@ try {
   out.reachable = true;
 } catch (e) { out.reachable = String(e).slice(0, 160); }
 
-await p.touchscreen.tap(195, 60);              // the scrim, above the sheet
+await p.touchscreen.tap(380, 420);             // the scrim, right of the sheet
 await p.waitForTimeout(900);
 out.closed = await p.evaluate(() => {
   const sh = document.getElementById('more-sheet');
   return { cls: document.body.classList.contains('more-open'),
            scrim: getComputedStyle(document.getElementById('more-scrim')).display,
-           gone: sh.hidden || sh.getBoundingClientRect().top >= innerHeight - 1,
-           aria: document.getElementById('tb-more').getAttribute('aria-expanded') };
+           gone: sh.hidden || sh.getBoundingClientRect().right <= 1,
+           aria: document.getElementById('menu-toggle').getAttribute('aria-expanded') };
 });
 console.log(JSON.stringify(out));
 await b.close();
@@ -445,7 +450,7 @@ def test_the_sheet_actually_paints_where_it_says_it_is():
     assert not o["walls"], (
         "something between the sheet and the root builds a stacking context, "
         f"so its z-index no longer outranks the scrim's: {o['walls']}")
-    assert out["open"]["cls"], "tapping the tab bar's More did not open the sheet"
+    assert out["open"]["cls"], "tapping the hamburger did not open the sheet"
     assert out["open"]["scrim"] == "block", "no scrim while open"
     assert out["open"]["aria"] == "true", "aria-expanded did not follow the sheet"
     assert round(out["rect"]["x"]) == 0, \
