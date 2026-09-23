@@ -11371,3 +11371,6 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   color: var(--text-mute); white-space: nowrap; }
 .ml-tag.up { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .ml-tag.down { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+
+/* The pick page's shopped-number line (shoppedLineNote). */
+.pp-shopped { color: var(--text-mute); font-size: var(--fs-sm); margin: 6px 0 10px; line-height: var(--lh-snug); }

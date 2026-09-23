@@ -7385,7 +7385,10 @@ function matchupCardHTML(r) {
   const m = c.model || {};
   const move = m.applied != null ? Math.round((Number(m.applied) - 1) * 100) : 0;
   const model = m.reads
-    ? `Model: their ${escapeHtml(m.reads)} allowed moves this projection ${move > 0 ? "+" : ""}${move}%`
+    ? `Model: their ${escapeHtml(m.reads)} allowed moves this projection ${move > 0 ? "+" : ""}${move}%${
+        m.games != null && m.season_weight != null && m.season_weight < 0.5
+          ? ` — after ${m.games} game${m.games === 1 ? "" : "s"}, ${Math.round(m.season_weight * 100)}% of that rating is this season and the rest is last season’s, at the measured pull`
+          : ""}`
     : "Shown for you. The model leaves this one out: over four seasons it did not predict this bet.";
   return `<div class="mu-card">
     <div class="mu-head">Matchup vs ${escapeHtml(c.opponent)}
@@ -9429,6 +9432,28 @@ function openProp(id) {
    says how big; this says who against, where, and in what weather —
    which is the difference between "he went under twice" and "he went
    under twice against the two best defenses he has seen". */
+/* THE NUMBER WAS SHOPPED, and the page says so (2026-09-23, Ethan on
+   Garrett Wilson UNDER 79.5 at −233 beside a defence ranked softest:
+   "why is it offering an under prop"). An under takes the HIGHEST line
+   any book posts (engine/odds.best_under_line — the cushion is what the
+   −233 pays for), an over the lowest; the chart and the hit rate then
+   read against that number. A reader comparing it with the defence needs
+   the market's centre beside it. */
+function shoppedLineNote(r) {
+  const lines = ((r && r.all_lines) || []).map((l) => Number(l && l.line)).filter(Number.isFinite);
+  const line = Number(r && r.line);
+  if (lines.length < 2 || !Number.isFinite(line)) return "";
+  const sorted = [...lines].sort((a, b) => a - b);
+  const centre = sorted[Math.floor(sorted.length / 2)];
+  const counting = Math.abs(centre) < 20;
+  if (Math.abs(line - centre) < (counting ? 0.5 : 1)) return "";
+  const over = String(r.side || "OVER").toUpperCase() === "OVER";
+  const edge = over ? line <= sorted[0] : line >= sorted[sorted.length - 1];
+  return `<p class="pp-shopped">Shopped number: this is the ${over ? "over" : "under"} at ${line}${
+    edge ? `, the ${over ? "lowest" : "highest"} number any book posts` : ""} (${oddsTxt(r.odds)});
+    the market’s centre is ${centre}. The chart and the hit rate below read against ${line}.</p>`;
+}
+
 function propLogRows(r, logs, line, over, n) {
   const won = (v) => (over ? v > line : v < line);
   const sport = state.sport;
@@ -9441,6 +9466,7 @@ function propLogRows(r, logs, line, over, n) {
     if (g.wind != null) extra.push(`${g.wind} mph wind`);
     if (g.park) extra.push(String(g.park));
     if (g.park_hr != null) extra.push(`park ${Number(g.park_hr).toFixed(2)}× HR`);
+    if (g.partial) extra.push(`left early${g.snaps != null ? ` · ${Math.round(g.snaps * 100)}% of snaps` : ""}`);
     return `<div class="pp-log">
       <span class="pp-when">${escapeHtml(when)}</span>
       <span class="pp-opp">${g.home ? "vs" : "@"} ${escapeHtml(
@@ -9912,6 +9938,7 @@ function renderPropPage() {
               metrics also fill the row instead of wrapping one onto a
               second line by itself. */""}
       </div>
+      ${shoppedLineNote(r)}
       ${propAnalysis(r)}
     </article>
 

@@ -153,7 +153,9 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         "logs": [
             {**_log_wind(prop, g, sport),
              "week": g.week, "opponent": g.opponent,
-             "value": g.value, "home": g.home}
+             "value": g.value, "home": g.home,
+             **({"snaps": round(float(g.snaps), 2)} if getattr(g, "snaps", None) is not None else {}),
+             **({"partial": True} if getattr(g, "partial", False) else {})}
             for g in prop.logs
         ],
         "form": {

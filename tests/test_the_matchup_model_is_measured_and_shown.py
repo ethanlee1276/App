@@ -99,7 +99,8 @@ def test_the_effect_its_card_and_its_words():
     assert why.startswith("Soft matchup — DET allow the 2nd-most passing yards (329 a game)")
     assert card["text"] == ("DET allow 218.5 receiving yards to WRs a game, the 1st-most (league 10), over 2 games; "
                             "1.0 TDs to WRs a game (14th-most)"), "the card is his own position's, with TDs beside it"
-    assert card["model"] == {"reads": "passing yards", "applied": round(f, 3)}
+    assert {k: card["model"][k] for k in ("reads", "applied")} == {"reads": "passing yards", "applied": round(f, 3)}
+    assert set(card["model"]) == {"reads", "applied", "games", "season_weight", "strength"}
     f, why, card = D.effect("DET", rating, "WR", "anytime_td")
     assert (f, why) == (1.0, "") and card["model"]["reads"] is None and "leaves it out" in card["model"]["note"]
     assert card["stat"] == "TDs to WRs" and card["also"]["stat"] == "receiving yards to WRs"

@@ -326,7 +326,14 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
     factor = _clamp(1.0 + b * (float(r["factor"]) - 1.0), lo, hi)
     words = STATS[stat][2]
     if card:
-        card["model"] = {"reads": words, "applied": round(factor, 3)}
+        # …and how much of that is THIS season: n/(n+SHRINK_GAMES) of the
+        # rating is these games, the rest last season's — so a card
+        # reading "1st-most over 2 games" beside "+5%" explains itself
+        # (Ethan, 2026-09-23: "the lions rank 31 out of 32 … why an under").
+        n = int(r.get("games") or 0)
+        card["model"] = {"reads": words, "applied": round(factor, 3), "games": n,
+                         "season_weight": round(n / (n + SHRINK_GAMES), 2) if n else 0.0,
+                         "strength": b}
     reason = ""
     if factor >= 1.03:
         reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "

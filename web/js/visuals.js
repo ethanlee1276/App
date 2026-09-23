@@ -1423,6 +1423,21 @@ function propAnalysis(r, opts = {}) {
   const labels = (opts.labels && opts.labels.length >= n
     ? opts.labels.slice(0, n).map(String).reverse()
     : null) || labelsOf(r.logs);
+  // A GAME HE LEFT EARLY is drawn as one (2026-09-23, Garrett Wilson's 0
+  // vs CLE — 19 snaps, 39%): a hollow bar, the share in its tip, the
+  // count in the caption. It stays in the count and in the number — the
+  // bet would have settled on it, and measured 2022-2025 the blend is
+  // centred WITH it in (engine/models.GameLog.partial).
+  const partialOf = (src) => Array.isArray(src) && src.length >= n
+    ? Array.from({ length: n }, (_, i) => {           // oldest -> newest, as the bars are
+        const g = src[n - 1 - i];
+        return (g && g.partial) ? (g.snaps != null ? Number(g.snaps) : true) : false;
+      })
+    : null;
+  const partial = partialOf(r.logs);
+  const early = partial ? partial.filter(Boolean).length : 0;
+  const earlyTip = (i) => partial && partial[i]
+    ? ` — left early${typeof partial[i] === "number" ? ` (${Math.round(partial[i] * 100)}% of snaps)` : ""}` : "";
   // TYPE THAT DOES NOT FIT IS NOT A LABEL. Ten clubs under ten bars on a
   // phone is 28 viewBox units per name, and "@SDP" set to fill that
   // leaves under two units of gutter — legible in the abstract, a smear
@@ -1469,9 +1484,9 @@ function propAnalysis(r, opts = {}) {
       ? (downLabY > H - B + FS * 0.4 ? yt - 5 : downLabY)
       : yt - 5;
     return `<rect x="${bx(i).toFixed(1)}" y="${(down ? y0 : y0 - h).toFixed(1)}"
-        width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
-        data-tip="${escapeAttr(labels ? `${labels[i]} — ${v}`
-          : `Game ${i + 1} — ${v}`)}" style="pointer-events:all;cursor:pointer"/>
+        width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"${partial && partial[i] ? ' fill-opacity=".35" stroke="var(--text-mute)" stroke-dasharray="3 2"' : ""}
+        data-tip="${escapeAttr(labels ? `${labels[i]} — ${v}` + earlyTip(i)
+          : `Game ${i + 1} — ${v}` + earlyTip(i))}" style="pointer-events:all;cursor:pointer"/>
       <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${labY.toFixed(1)}"
         text-anchor="middle" font-size="${FS}" fill="${c}"
         paint-order="stroke" stroke="var(--panel)" stroke-width="3"
@@ -1533,7 +1548,7 @@ function propAnalysis(r, opts = {}) {
     </div>
     <div class="pa-chart">
       <div class="pa-head"><span>${escapeHtml(
-          opts.head || `LAST ${n} GAMES vs PROP LINE`)}</span>
+          opts.head || `LAST ${n} GAMES vs PROP LINE`)}${early ? ` · ${early} LEFT EARLY` : ""}</span>
         <span class="pa-legend"><i class="ok"></i>${escapeHtml(
           (opts.legend || ["OVER", "UNDER"])[0])}<i class="no"></i>${escapeHtml(
           (opts.legend || ["OVER", "UNDER"])[1])}</span></div>

@@ -56,6 +56,16 @@ class GameLog:
     # week — see engine/carry.py, and reset.apply_to_slate which excludes
     # carried games from the post-reset window for exactly that reason.
     prior: bool = False
+    # His share of the offence's snaps that game (0-1) when the snap-count
+    # feed knows it, and whether the game was PARTIAL — under half his own
+    # usual share, a game he left hurt (engine/sources/nflverse.stamp_snaps).
+    # Kept IN the blend on purpose: measured 2022-2025, a projection with
+    # the partial game in lands exactly half of later outcomes above it
+    # (.50) and without it runs high (.46; the very next game .38) — a
+    # game a player left hurt predicts a quieter stretch. The flag is for
+    # the page, so a 0 reads as "left after 19 snaps", not as a game.
+    snaps: Optional[float] = None
+    partial: bool = False
 
 
 @dataclass

@@ -390,6 +390,56 @@ def _rows_by_player(rows) -> dict:
     return out
 
 
+#: A game under this share of the player's own usual snap share is PARTIAL
+#: — the rule measured on 2022-2025 (engine/models.GameLog.partial).
+PARTIAL_SHARE = 0.5
+
+
+def snap_table(season: int, prior_season: int | None = None) -> dict:
+    """{(normalised name, season, week): offence snap share} for one or two
+    seasons; {} for a season the feed cannot answer (never fatal)."""
+    from .oddsapi import normalize_name
+    out: dict = {}
+    for s in (season, prior_season):
+        if s is None:
+            continue
+        try:
+            rows = load_snap_counts(s)
+        except DataUnavailable:
+            continue
+        for r in rows:
+            if _s(r, "game_type", default="REG") not in ("REG", ""):
+                continue
+            wk = int(_f(r, "week", default=0))
+            pct = _f(r, "offense_pct", default=-1.0)
+            if wk <= 0 or pct < 0:
+                continue
+            if pct > 1.0:
+                pct /= 100.0
+            out[(normalize_name(_s(r, "player", "player_name")), s, wk)] = pct
+    return out
+
+
+def stamp_snaps(logs, player: str, season: int, table: dict) -> None:
+    """Put each log's snap share on it and flag the partial games (a share
+    under PARTIAL_SHARE of the player's own median, which must itself be
+    a starter's, 0.5 or more). In place."""
+    if not table or not logs:
+        return
+    from .oddsapi import normalize_name
+    key = normalize_name(player)
+    for g in logs:
+        g.snaps = table.get((key, season - 1 if getattr(g, "prior", False) else season, g.week))
+    known = sorted(g.snaps for g in logs if g.snaps is not None)
+    if not known:
+        return
+    med = known[len(known) // 2]
+    if med < 0.5:
+        return
+    for g in logs:
+        g.partial = g.snaps is not None and g.snaps < PARTIAL_SHARE * med
+
+
 def _regular_season(rows: list[dict]) -> list[dict]:
     return [r for r in rows if _s(r, "season_type", "game_type", default="REG") in ("REG", "")]
 
@@ -824,6 +874,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     # the same answer: every one of them keys a row by this same name.
     stats_of = _rows_by_player(stats)
     prior_of = _rows_by_player(prior_stats)
+    # Snap shares, so a game a player left hurt is marked on his logs
+    # (Ethan, 2026-09-23, Garrett Wilson's 0 vs CLE — 19 snaps, 39%).
+    snaps = snap_table(season, season - 1 if carry else None)
 
     if specs is None:
         # ``qb_backups``: each team's SECOND quarterback by volume too, as
@@ -958,6 +1011,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             baseline = _recent_mean(logs)
         if baseline <= 0:
             continue
+        stamp_snaps(logs, spec.player, season, snaps)
         pos = spec.position or position_of(spec.market)
         # A market that is not his position's own is built only when he
         # actually does it: a back's catches, a receiver's catches, a
@@ -1051,6 +1105,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             prior_td = td_game_logs(_regular_season(prior_of.get(p.player, [])),
                                     p.player, 99)
             td_logs = td_logs + prior_td[:TD_CARRY_GAMES - len(td_logs)]
+        stamp_snaps(td_logs, p.player, season, snaps)
         td_props.append(Prop(
             player=p.player, team=p.team, opponent=p.opponent,
             position=pos, market=ANYTIME_TD,

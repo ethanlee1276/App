@@ -319,10 +319,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # note about the player, not a claim about the number. The cool-off
     # line used to end "(projection shaded -7%)" and that sentence would
     # be a lie the moment the shade stopped being applied above.
+    left = [g for g in prop.logs[:3] if getattr(g, "partial", False)]
+    early = (f" (one of them a game he left early, {round(100 * left[0].snaps)}% of the snaps)"
+             if left and left[0].snaps is not None else " (one of them a game he left early)" if left else "")
     if form.trend == "up":
-        reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form")
+        reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form{early}")
     elif form.trend == "down":
-        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form")
+        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form{early}")
 
     # THE CHAIN, in the order the code multiplied it. The usage bridge is
     # recorded as a step rather than folded into the base so the reader can
