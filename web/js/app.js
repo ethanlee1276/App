@@ -20932,6 +20932,78 @@ function campHTML(camp) {
     </div>`;
 }
 
+/* ---- COUNTS, NEVER PEOPLE (engine/analytics.py) ----------------------
+   Ethan's product audit, 2026-09-23, item 14: where do subscribers come
+   from, which page converts them, how many open the Record. OFF unless
+   the server says `analytics: true` on /api/billing/status, and until it
+   has answered nothing leaves this page: events wait in a short queue
+   that is thrown away if the answer is no. What goes out is an event
+   name, a page's own view name and a coarse bucket for where the visit
+   came from (direct · search · social · referral · campaign) — never a
+   URL, a referrer, an id or anything else about the reader. */
+const AN_QUEUE_MAX = 20;
+const AN_NOT_FROM = ["paywall", "plans", "checkout", "account", "discord"];
+const AN_SEARCH = ["google.", "bing.com", "duckduckgo.com", "search.yahoo.com", "ecosia.org",
+  "search.brave.com", "yandex.", "baidu.com"];
+const AN_SOCIAL = ["instagram.com", "facebook.com", "fb.com", "t.co", "twitter.com", "x.com", "tiktok.com",
+  "reddit.com", "youtube.com", "discord.com", "snapchat.com", "threads.net", "linkedin.com"];
+let _anQueue = [];
+let _anSrc = "";
+let _anFrom = "";
+let _anVisited = false;
+let _anLanded = false;          // the first page counts even though state.view already names it
+
+function anSource() {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("utm_source") || q.get("utm_campaign")) return "campaign";
+    const host = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, "") : "";
+    if (!host || host === location.hostname.replace(/^www\./, "")) return "direct";
+    const is = (list) => list.some((d) => host === d || host.endsWith(`.${d}`) || (d.endsWith(".") && host.includes(d)));
+    if (is(AN_SEARCH)) return "search";
+    if (is(AN_SOCIAL)) return "social";
+    return "referral";
+  } catch (e) { return ""; }
+}
+
+function anSend(e, page) {
+  _anSrc = _anSrc || anSource();
+  try {
+    fetch("/api/event", { method: "POST", credentials: "same-origin", keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ e, page: String(page || "").slice(0, 32), src: _anSrc }) }).catch(() => {});
+  } catch (err) { /* a count is never worth an error */ }
+}
+
+function track(e, page) {
+  if (_pwStatus && typeof _pwStatus.analytics === "boolean") {   // the server has answered
+    if (_pwStatus.analytics) anSend(e, page);
+    return;
+  }
+  if (_anQueue.length < AN_QUEUE_MAX) _anQueue.push([e, page]);
+}
+
+// The server has answered: send what waited, or drop it. One visit a tab.
+function anFlush() {
+  if (!_pwStatus || typeof _pwStatus.analytics !== "boolean") return;
+  const waiting = _anQueue;
+  _anQueue = [];
+  if (!_pwStatus.analytics) return;
+  if (!_anVisited) {
+    _anVisited = true;
+    let counted = false;
+    try { counted = sessionStorage.getItem("qb.visit") === "1"; sessionStorage.setItem("qb.visit", "1"); } catch (e) { /* counted once in memory */ }
+    if (!counted) anSend("visit", state.view);
+  }
+  // A bare address shows the default page without ever switching to it,
+  // so the page a visit lands on is counted here when nothing else did.
+  if (!_anLanded) {
+    _anLanded = true;
+    anSend("view", state.view);
+  }
+  waiting.forEach(([e, p]) => anSend(e, p));
+}
+
 /* ============================================================
    ACCOUNTS — one name, every device.
 
@@ -22948,6 +23020,7 @@ async function paywallCheck() {
     // which distinguishes "no answer" from "no wall".
     if (!r.ok) return document.body.classList.contains("walled");
     _pwStatus = await r.json();
+    anFlush();
     igMount();
   } catch (e) { return document.body.classList.contains("walled"); }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
@@ -23357,6 +23430,7 @@ window.coPay = async function (btn) {
   const say = (t) => { if (note) note.textContent = t; };
   const plan = btn.dataset.plan || (_coPlan || PLANS[0]).id;
   const was = btn.textContent;
+  track("checkout_click", _anFrom);
   btn.disabled = true;
   btn.textContent = "Opening secure checkout…";
   say("");
@@ -33804,6 +33878,11 @@ function _switchViewNow(name, push, dir) {
     _boardReturn = { view: leaving, y: window.scrollY };
   state.view = name;
   if (typeof ridingTraySync === "function") ridingTraySync();
+  if (name !== leaving || !_anLanded) {
+    _anLanded = true;
+    track("view", name);
+    if (!AN_NOT_FROM.includes(name)) _anFrom = name;       // the page a checkout click came from
+  }
   // A thread is a FULL message page (Ethan's render, 2026-08-26): while
   // one is open the site footer leaves, and it must come back the
   // moment any other view does.
@@ -35356,6 +35435,7 @@ async function askSend(text) {
   const history = a.turns.filter((t) => !t.error).slice(-6).map((t) => ({ role: t.role, text: t.text }));
   a.turns.push({ role: "user", text: question });
   a.busy = true;
+  track("ask", state.sport);
   renderAsk();
   const asked = Date.now();
   let turn = null;

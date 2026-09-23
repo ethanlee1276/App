@@ -230,6 +230,31 @@ set the page says "Ask isn't switched on for this site yet".
 - **Limits:** subscribers only, 8 questions a minute per IP
   (server.RATE_ASK_PER_MIN).
 
+## Analytics: built, switched off until you say yes
+
+Your product audit's item 14: where subscribers come from, which page
+converts them, how many open the Record, who comes back after a day and
+after a week. `engine/analytics.py` counts that as daily totals only (no
+cookie, no id, no IP, no URL), and it is **off**: while off the page sends
+nothing and the server stores nothing, so the Privacy Policy's "We run no
+analytics" stays true.
+
+Turning it on changes what the policy has to say, so the two go together.
+The wording is drafted in `docs/AUDIT_2026-09-23.md`, item 14. Once you
+approve it, Claude updates `web/privacy.html`, and after that deploy:
+
+```bash
+sudo ./deploy/setenv.sh QB_ANALYTICS 1
+sudo systemctl restart qellys
+```
+
+Then, any time:
+
+```bash
+sudo -u qellys python3 -m engine.analytics report       # last 7 days
+sudo -u qellys python3 -m engine.analytics report 30
+```
+
 ## When you are home and want the chores list
 
 ```bash

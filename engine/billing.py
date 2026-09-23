@@ -958,6 +958,8 @@ def apply_event(conn, event: dict) -> bool:
         uid = user_for_customer(conn, event.get("customer_id"))
     if uid is None:
         return False
+    was = conn.execute("SELECT status, period_end FROM subscriptions WHERE user_id=?",
+                       (int(uid),)).fetchone()
     conn.execute(
         "INSERT INTO subscriptions (user_id, customer_id, subscription_id, "
         "status, period_end, plan, updated_at) VALUES (?,?,?,?,?,?,?) "
@@ -975,6 +977,14 @@ def apply_event(conn, event: dict) -> bool:
          str(event.get("status") or "none"), event.get("period_end"),
          event.get("plan"), time.time()))
     conn.commit()
+    # A trial, a subscription, a conversion, a cancellation or a renewal,
+    # counted (no account attached) when analytics is switched on; a no-op
+    # otherwise. See engine/analytics.py.
+    from engine import analytics as AN
+    kind = AN.transition(was[0] if was else None, was[1] if was else None,
+                         event.get("status"), event.get("period_end"))
+    if kind:
+        AN.record(kind)
     return True
 
 

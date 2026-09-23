@@ -202,6 +202,9 @@ RATE_EXPLAIN_PER_MIN = 20
 #: follow-up carries its conversation), so it is tighter still — a
 #: conversation's pace, not a scraper's.
 RATE_ASK_PER_MIN = 8
+#: Analytics counts (engine/analytics.py, off unless QB_ANALYTICS=1): a page
+#: sends a handful a minute; this bounds what a script could add to a count.
+RATE_EVENT_PER_MIN = 60
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
 #: Auth is different: nobody legitimately signs in twenty times a minute.
@@ -1035,6 +1038,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                                # noqa: BLE001
                 return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
             return self._ask(body)
+        if parsed.path in ("/api/event", "/api/event/"):
+            return self._event()
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
         if not parsed.path.startswith("/api/profile/"):
@@ -1597,6 +1602,46 @@ class Handler(BaseHTTPRequestHandler):
         if self._is_https():
             bits.append("Secure")
         return [("Set-Cookie", "; ".join(bits))]
+
+    def _event(self):
+        """One count for the analytics (engine/analytics.py). 204 whatever
+        happens: switched off, an unknown event or a bad body all store
+        nothing, and a page never waits on or reacts to a count.
+
+        Only the page's own events are accepted here; a subscription event
+        is counted where Stripe's word arrives, never on a page's say-so.
+        Nothing about the caller is kept: `who` is read off the request
+        (visitor, member, subscriber) and only the word is counted."""
+        from engine import analytics as AN
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        if not AN.enabled():
+            return self._send(204, b"", ".json")
+        if self._rate_limited(RATE_EVENT_PER_MIN, "event"):
+            return                                      # the limiter has answered 429
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if not isinstance(got, dict) or got.get("e") not in AN.CLIENT_EVENTS:
+            return self._send(204, b"", ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            kind = "visitor"
+            if who:
+                from engine import gate
+                kind = "subscriber" if gate.enabled() and self._entitled(conn, who) else "member"
+                if got["e"] == "visit":
+                    AN.seen(conn, who["id"])
+        finally:
+            conn.close()
+        AN.record(got["e"], str(got.get("page") or ""), str(got.get("src") or ""), kind)
+        return self._send(204, b"", ".json")
 
     def _account(self, conn):
         """The signed-in account for this request, or None."""
@@ -2538,6 +2583,10 @@ class Handler(BaseHTTPRequestHandler):
             # for.
             out["trial_days"] = BI.TRIAL_DAYS
             out["trial_plan"] = BI.TRIAL_PLAN
+            # WHETHER THE PAGE MAY COUNT ANYTHING. Off unless QB_ANALYTICS=1
+            # (engine/analytics.py), and while off the page sends nothing.
+            from engine import analytics as AN
+            out["analytics"] = AN.enabled()
             # NO PROMO CODES HERE. This endpoint is public — it renders
             # the plans page before anybody signs in — so anything in it
             # is readable by anyone who opens the network tab. A promo
