@@ -1366,9 +1366,10 @@
   <div id="qb-slip" hidden></div>
   <!-- The riding tray (v3, 2026-09-22): our bet slip. A floating pill
        above the tab bar on phones while journaled bets are in play,
-       filled by app.js from the tracker; hidden on the Live tab, which
-       is where it points. -->
-  <button type="button" id="riding-tray" class="riding-tray" hidden aria-label="Bets riding — open the Live tab"></button>
+       filled by app.js from the tracker. On the dashboard only, with
+       an × to close it (Ethan, 2026-09-23). Two buttons inside, not
+       one: a button cannot hold another. -->
+  <div id="riding-tray" class="riding-tray" hidden role="region" aria-label="Bets riding"></div>
 
   <nav class="tabbar" id="tabbar" aria-label="Quick navigation">
     <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">

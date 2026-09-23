@@ -40125,8 +40125,22 @@ function deckFill(host, sec, html) {
 
 /* The riding tray (v3): our bet slip. Every book floats a pill above
    its tab bar with the slip's count; ours carries the bets in play,
-   the first one's progress, and a door to the Live tab — hidden on the
-   Live tab itself, which is where it points. Phones only (CSS). */
+   the first one's progress, and a door to the Live tab. Phones only
+   (CSS).
+
+   ON THE DASHBOARD ONLY, AND IT CLOSES. Ethan, 2026-09-23, with it
+   circled over the Record page's calibration rows: "I don't like
+   this at all. Only show it on the main dashboard page, and put a
+   little x on it so people can close it out." It floated over every
+   page but Live, on top of whatever the reader was reading. Closed,
+   it stays closed for the rest of the visit (sessionStorage, so a
+   new visit brings it back); the Live tab is still one tap away on
+   the tab bar, with its own count. */
+function ridingTrayClosed() {
+  if (window._qbTrayClosed) return true;
+  try { return sessionStorage.getItem("qb.trayClosed") === "1"; } catch (e) { return false; }
+}
+
 function renderRidingTray(riding) {
   const tray = document.getElementById("riding-tray");
   if (!tray) return;
@@ -40136,17 +40150,24 @@ function renderRidingTray(riding) {
   const first = riding[0];
   const prog = first.current != null && first.line != null && first.market !== "moneyline"
     ? `${first.current} / ${first.line}` : "";
-  tray.innerHTML = `<span class="rt-dot"></span><b>${plural(n, "bet")} riding</b>
-    <span class="rt-sub">${trackerBetText(first)}${prog ? ` · ${escapeHtml(prog)}` : ""}</span>
-    <span class="rt-go">Live &#8594;</span>`;
-  tray.onclick = () => switchView("live", true);
+  tray.innerHTML = `<button type="button" class="rt-open" aria-label="${plural(n, "bet")} riding — open the Live tab">
+      <span class="rt-dot"></span><b>${plural(n, "bet")} riding</b>
+      <span class="rt-sub">${trackerBetText(first)}${prog ? ` · ${escapeHtml(prog)}` : ""}</span>
+      <span class="rt-go">Live &#8594;</span></button>
+    <button type="button" class="rt-x" aria-label="Close">&times;</button>`;
+  tray.querySelector(".rt-open").onclick = () => switchView("live", true);
+  tray.querySelector(".rt-x").onclick = () => {
+    window._qbTrayClosed = true;
+    try { sessionStorage.setItem("qb.trayClosed", "1"); } catch (e) {}
+    ridingTraySync();
+  };
   ridingTraySync();
 }
 
 function ridingTraySync() {
   const tray = document.getElementById("riding-tray");
   if (!tray) return;
-  const shown = Number(tray.dataset.n) > 0 && !["live", "pbp"].includes(state.view);
+  const shown = Number(tray.dataset.n) > 0 && state.view === "recommended" && !ridingTrayClosed();
   tray.hidden = !shown;
   document.body.classList.toggle("has-tray", shown);
 }

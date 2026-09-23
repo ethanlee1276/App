@@ -552,6 +552,11 @@ surface.
     beside the rows that already carry it, under a link to insights
     that do not exist. The rail keeps the slip column, the prediction
     desk and Live now; the game page's own Key insights panel stays.
+  * *The riding tray is the dashboard's, and it closes.* Ethan, with it
+    circled over the Record page: "Only show it on the main dashboard
+    page, and put a little x on it so people can close it out." It
+    shows on the dashboard alone now, and an × closes it for the rest
+    of the visit; the Live tab keeps its own count on the tab bar.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -565,8 +570,9 @@ surface.
   `tests/test_the_long_shots_watch_is_the_books_row.py`,
   `tests/test_the_masthead_will_not_call_a_thin_book.py`,
   `tests/test_the_labs_wide_tables_are_the_books_rows.py`,
-  `tests/test_the_fantasy_standings_and_lineup_are_rows.py` and
-  `tests/test_the_rails_key_insights_card_is_retired.py`.
+  `tests/test_the_fantasy_standings_and_lineup_are_rows.py`,
+  `tests/test_the_rails_key_insights_card_is_retired.py` and
+  `tests/test_the_riding_tray_is_the_dashboards_and_closes.py`.
 * **Still open (2026-09-22, after slice T).** The desktop rail's
   Key insights card was retired on Ethan's word (2026-09-22) — it
   repeated the top picks' own first reasons; the sub-tabbed zones the

@@ -7279,6 +7279,16 @@ body.has-deck #rail-live { display: none; }
   .rt-sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-xs); color: var(--text-dim); }
   .rt-go { color: var(--brand-2); flex: 0 0 auto; }
+  /* The pill is two buttons now: the door to Live, and the × that
+     closes it. The door takes the row; the × keeps a thumb-sized
+     target at the right end. */
+  .riding-tray { padding-right: 6px; }
+  .rt-open { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0;
+    border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .rt-x { flex: 0 0 auto; width: 32px; height: 32px; display: grid; place-items: center; padding: 0;
+    border: 0; border-radius: 50%; background: var(--fill-subtle); color: var(--text-mute);
+    font: inherit; font-size: var(--fs-lg); line-height: 1; cursor: pointer; }
+  .rt-x:active { color: var(--text); }
   body.has-tray { padding-bottom: 150px; }
   .tb-item[aria-expanded="true"] { color: var(--brand-2); }
   /* v5 motion: THE TAB YOU ARE ON SAYS SO. Ethan, 2026-09-22: "more

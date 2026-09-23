@@ -103,9 +103,10 @@ def test_the_riding_tray_is_our_slip_phones_only_and_never_on_the_live_tab():
     tray = _fn("renderRidingTray")
     assert "tray.dataset.n = String(n);" in tray
     assert "${trackerBetText(first)}" in tray, "the Live tab's sentence, not a second one"
-    assert 'tray.onclick = () => switchView("live", true);' in tray
+    # Two buttons since 2026-09-23 (tests/test_the_riding_tray_is_the_dashboards_and_closes.py).
+    assert 'tray.querySelector(".rt-open").onclick = () => switchView("live", true);' in tray
     sync = _fn("ridingTraySync")
-    assert 'const shown = Number(tray.dataset.n) > 0 && !["live", "pbp"].includes(state.view);' in sync
+    assert 'const shown = Number(tray.dataset.n) > 0 && state.view === "recommended" && !ridingTrayClosed();' in sync
     assert 'document.body.classList.toggle("has-tray", shown);' in sync
     router = _fn("_switchViewNow")
     i = router.index("state.view = name;")
