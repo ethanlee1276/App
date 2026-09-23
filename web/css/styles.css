@@ -11115,9 +11115,18 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    between the top bar and the tab bar — askRoomSize() replaces the rough
    height below with the measured one — holding a header, the
    conversation (the only thing that scrolls) and the composer. The footer
-   and the league strip leave while it is open: Ask answers for every
-   league, and the one footer line that must stay rides under the box. */
-body.ask-open .footer, body.ask-open .sportbar { display: none; }
+   leaves while it is open; the one footer line that must stay rides in
+   the intro card. Ethan's render (same day) set the rest: see renderAsk. */
+body.ask-open .footer { display: none; }
+/* The league row stays, as the render draws it: text tabs, the open one
+   underlined in gold — the desktop strip's own look, on a phone too. */
+@media (max-width: 760px) {
+  body.ask-open .sportbar-in { padding: 0 8px; }
+  body.ask-open .sportbar-in .sport-btn { display: block; padding: 10px 2px 9px; font-size: var(--fs-sm);
+    border-bottom: 2px solid transparent; }
+  body.ask-open .sportbar-in .sport-btn .crest { display: none; }
+  body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+}
 /* The room measures its own way clear of the tab bar, so the padding the
    page keeps for the bar would only be a band of scroll under it. */
 body.ask-open { padding-bottom: 0; }
@@ -11126,28 +11135,42 @@ body.ask-open #view-ask { padding-bottom: 0; }
   height: calc(100dvh - var(--topbar-h) - 90px); min-height: 300px; }
 .ask-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 12px; flex-shrink: 0;
   border-bottom: var(--hairline) solid var(--border-soft); }
-.ask-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.ask-id b { color: var(--text); font-size: var(--fs-lg); }
-.ask-id span { color: var(--text-mute); font-size: var(--fs-xs); }
+.ask-title-sm { flex: 1; min-width: 0; color: var(--text); font-size: var(--fs-2xl); font-weight: 700; }
+.ask-title-sm em, .ask-title em { font-style: normal; color: var(--gold); }
 .ask-new { flex-shrink: 0; padding: 7px 13px; border-radius: 999px; cursor: pointer;
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text-dim);
   font: inherit; font-size: var(--fs-xs); font-weight: 700; }
+.ask-pill { display: inline-block; align-self: flex-start; padding: 4px 12px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--gold); color: var(--gold); font-size: var(--fs-sm); font-weight: 700;
+  letter-spacing: .04em; }
 .ask-ava { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
   overflow: hidden; background: var(--panel-2); border: var(--hairline) solid var(--brand-2); }
 .ask-ava img { width: 22px; height: 22px; object-fit: contain; }
-.ask-ava.big { width: 64px; height: 64px; }
-.ask-ava.big img { width: 46px; height: 46px; }
 .ask-log { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px; padding: 16px 2px 12px; }
-.ask-empty { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 8px 4px; text-align: center; }
-.ask-empty h3 { margin: 4px 0 0; color: var(--text); font-size: var(--fs-xl); }
-.ask-empty p { margin: 0; max-width: 34em; color: var(--text-dim); font-size: var(--fs-sm); }
-.ask-suggest { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.ask-sug { padding: 12px 14px; text-align: left; cursor: pointer; border-radius: var(--radius-lg);
-  border: var(--hairline) solid var(--border-soft); background: var(--panel); color: var(--text);
-  font: inherit; font-size: var(--fs-sm); }
+.ask-empty { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 6px 2px 8px; }
+.ask-title { margin: 0; color: var(--text); font-size: clamp(var(--fs-4xl), 11.5vw, 60px); font-weight: 700;
+  line-height: 1; letter-spacing: -.01em; }
+.ask-sub { margin: -4px 0 4px; display: flex; flex-direction: column; gap: 2px;
+  color: var(--text-dim); font-size: var(--fs-xl); }
+.ask-intro { display: flex; gap: 14px; align-items: flex-start; padding: 18px 16px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+.ask-intro-ic { flex-shrink: 0; color: var(--gold); padding-top: 2px; }
+.ask-intro b { display: block; margin-bottom: 4px; color: var(--text); font-size: var(--fs-lg); }
+.ask-intro p { margin: 0; color: var(--text-dim); font-size: var(--fs-md); }
+.ask-intro .ask-fine { margin-top: 8px; color: var(--text-mute); font-size: var(--fs-xs); }
+.ask-help { white-space: nowrap; }
+.ask-suggest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ask-sug { display: flex; align-items: center; gap: 10px; padding: 14px 12px; text-align: left; cursor: pointer;
+  border-radius: var(--radius-lg); border: var(--hairline) solid var(--border-soft); background: var(--panel);
+  color: var(--text); font: inherit; font-size: var(--fs-sm); }
 .ask-sug:hover { border-color: var(--brand-2); }
+.ask-sug-ic { flex-shrink: 0; display: grid; color: var(--gold); }
+/* A phone's third of a row is too narrow for an icon beside the words:
+   the icon goes on top, and the three still sit side by side. */
+@media (max-width: 560px) {
+  .ask-sug { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 10px; }
+}
 .ask-row { display: flex; align-items: flex-end; gap: 8px; }
 .ask-row.me { justify-content: flex-end; }
 .ask-turn { max-width: 82%; padding: 10px 14px; border-radius: var(--radius-lg); font-size: var(--fs-md);
@@ -11177,20 +11200,37 @@ body.ask-open #view-ask { padding-bottom: 0; }
 .ask-chip { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); color: var(--text-mute);
   border: var(--hairline) solid var(--border); }
 .ask-chip[data-prop] { cursor: pointer; color: var(--text-dim); border-color: var(--brand-2); }
-.ask-dock { flex-shrink: 0; padding-top: 8px; }
+.ask-dock { position: relative; flex-shrink: 0; padding-top: 12px;
+  border-top: var(--hairline) solid var(--border-soft); }
 .ask-focus { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 5px 6px 5px 12px;
   border: var(--hairline) solid var(--brand-2); border-radius: 999px; font-size: var(--fs-xs);
   background: color-mix(in oklab, var(--brand) 12%, transparent); }
 .ask-x { border: none; background: transparent; color: var(--text-mute); cursor: pointer;
   font-size: var(--fs-md); min-width: 28px; min-height: 28px; }
-.ask-form { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px;
+.ask-form { display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 6px;
   border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); background: var(--panel); }
-.ask-form:focus-within { border-color: var(--brand); }
+.ask-form:focus-within { border-color: var(--gold); }
+.ask-clip { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; padding: 0 8px 0 4px;
+  border: 0; border-right: var(--hairline) solid var(--border); background: none; color: var(--text-dim);
+  cursor: pointer; box-sizing: content-box; }
+.ask-clip[aria-expanded="true"] { color: var(--gold); }
 .ask-form textarea { flex: 1; min-width: 0; min-height: 38px; max-height: 132px; padding: 9px 0; resize: none;
-  border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-md); }
+  border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-lg); }
 .ask-form textarea:focus-visible { outline: none; }
-.ask-send { flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer;
-  display: grid; place-items: center; background: var(--brand); color: var(--brand-ink); }
-.ask-send:disabled { cursor: default; background: var(--panel-2); color: var(--text-mute); }
-.ask-note { margin: 6px 0 0; text-align: center; color: var(--text-mute); font-size: var(--fs-2xs); }
-.ask-help { white-space: nowrap; }
+.ask-send { flex-shrink: 0; width: 46px; height: 46px; border-radius: var(--radius); border: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--gold); color: var(--brand-ink); }
+/* Gold whether or not there is anything to send yet, as the render draws
+   it; an empty box just has nothing for it to do. */
+.ask-send:disabled { cursor: default; }
+.ask-attach { position: absolute; left: 0; right: 0; bottom: calc(100% - 4px); z-index: 5; max-height: 320px;
+  overflow-y: auto; padding: 8px; border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+  background: var(--panel-2); }
+.ask-attach[hidden] { display: none; }
+.ask-attach-h { padding: 6px 8px 8px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; }
+.ask-attach-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 8px; border: 0; border-top: var(--hairline) solid var(--border-soft); background: none;
+  color: var(--text); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.ask-attach-row b { flex-shrink: 0; color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.ask-attach-row:hover { background: var(--panel); }
+.ask-attach-none { margin: 0; padding: 4px 8px 8px; color: var(--text-mute); font-size: var(--fs-sm); }

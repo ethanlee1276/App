@@ -400,7 +400,7 @@ def test_the_page_shows_where_each_answer_came_from():
     assert "sources: body.sources || []" in send
     assert ".filter((t) => !t.error).slice(-6)" in send
     assert 'const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?",' in APP
-    assert "(a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST)" in APP
+    assert "const sug = a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST;" in APP
     gi = (ROOT / ".gitignore").read_text()
     for f in ("data/ask_cache.json", "data/ask_usage.json", "data/explain_cache.json"):
         assert f in gi, f

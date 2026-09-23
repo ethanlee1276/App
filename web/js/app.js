@@ -34778,13 +34778,6 @@ const ASK_SUGGEST = ["What’s the best bet on tonight’s board?",
 /* Asked from a prop page: the three questions a reader has about one bet.
    Fixed wording on purpose — the same words are the same cached answer. */
 const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?", "What could go wrong?"];
-/* One question about the past, in the open league — Ask reads the stored
-   history too, and the empty room should say so by example. */
-const ASK_SUGGEST_PAST = {
-  nfl: "How have the Lions done against the Packers?", cfb: "How has Michigan done against Ohio State?",
-  mlb: "How has Aaron Judge hit lately?", nba: "How have the Celtics done against the Knicks?",
-  wnba: "How has A’ja Wilson played lately?",
-};
 let _ask = null;
 
 function askState() {
@@ -34819,13 +34812,11 @@ function askErrorText(status, body) {
    actual ai chat room." One column pinned between the top bar and the tab
    bar (askRoomSize measures it, as msgThreadSize does for a message
    thread): a header, the conversation — the only thing that scrolls — and
-   the composer at the foot. The site footer and the league strip leave
-   while it is open (body.ask-open); Ask answers for every league anyway.
-   The one line of the footer that must stay — not advice, 21+, the
-   helpline — rides under the composer. */
+   the composer at the foot. The site footer leaves while it is open
+   (body.ask-open); the league row stays as text tabs, as Ethan's render
+   draws it. The one line of the footer that must stay — not advice, 21+,
+   the helpline — rides in the intro card. */
 const ASK_AVA = `<span class="ask-ava" aria-hidden="true"><img src="logo-qb.png" alt="" width="152" height="152"></span>`;
-const ASK_SEND = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"
-  fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function askParas(text) {
   return String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
@@ -34914,8 +34905,9 @@ function askRoomSize() {
   }
   const top = el.getBoundingClientRect().top + (keyboard ? 0 : window.scrollY);
   el.style.height = `${Math.max(300, Math.floor(bottom - top - 8))}px`;
+  // A conversation opens on its newest message; the empty room on its title.
   const log = document.getElementById("ask-log");
-  if (log) log.scrollTop = log.scrollHeight;
+  if (log) log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;
 }
 
 window.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
@@ -34923,38 +34915,100 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
 }
 
+/* ETHAN'S RENDER, 2026-09-23: "Here is a render of what the Qellys chat
+   room need[s] to look like." Its parts, top to bottom: an "AI" pill, the
+   title with Qellys in gold, "Your AI betting assistant." and a line under
+   it; a card with a robot that says what Ask is; three question cards with
+   icons, side by side; and at the foot, across a hairline, the box with a
+   paperclip, a divider and a gold send button with a paper plane. Once a
+   conversation starts the title folds into one line above it.
+
+   THE PAPERCLIP ATTACHES ONE OF TONIGHT'S PICKS — the same attachment a
+   prop page's Ask button makes — so it is a working control and not a
+   drawing of one. The render's second line still read "Questions about
+   tonight's board"; it says what Ask does now. The footer line that must
+   stay (not advice, 21+, the helpline) moved into the intro card, since
+   the render has nothing under the box. */
+const ASK_ICONS = {
+  robot: `<path d="M12 3.2v2.6"/><circle cx="12" cy="2.4" r=".9" fill="currentColor" stroke="none"/>
+    <rect x="4.6" y="6.4" width="14.8" height="12.2" rx="4"/><path d="M2.6 11.2v3.6M21.4 11.2v3.6"/>
+    <circle cx="9.3" cy="11.7" r="1.25" fill="currentColor" stroke="none"/>
+    <circle cx="14.7" cy="11.7" r="1.25" fill="currentColor" stroke="none"/><path d="M9.6 15.2c1.4.9 3.4.9 4.8 0"/>`,
+  bars: `<rect x="4" y="13" width="4" height="7.5" rx="1" fill="currentColor" stroke="none"/>
+    <rect x="10" y="8.6" width="4" height="11.9" rx="1" fill="currentColor" stroke="none"/>
+    <rect x="16" y="3.6" width="4" height="16.9" rx="1" fill="currentColor" stroke="none"/>`,
+  doc: `<rect x="5" y="3" width="14" height="18" rx="2.6"/><path d="M8.6 8h6.8M8.6 12h6.8M8.6 16h4.4"/>`,
+  trend: `<path d="M3 17.2l6-6 4 4 8-8"/><path d="M15.2 7.2H21v5.8"/>`,
+  clip: `<path d="M20.4 11.6l-8.1 8.1a5 5 0 01-7.1-7.1l8.4-8.4a3.3 3.3 0 014.7 4.7l-8.4 8.4a1.7 1.7 0 01-2.4-2.4l7.7-7.7"/>`,
+  plane: `<path d="M21.6 2.4 2.7 9.9l7.4 3.2 3.2 7.4z" fill="currentColor" stroke="none"/>`,
+};
+function askIcon(name, size = 24) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor"
+    stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${
+    ASK_ICONS[name] || ""}</svg>`;
+}
+const ASK_SUGGEST_ICONS = ["bars", "doc", "trend"];
+
+/* The picks the paperclip offers: tonight's props on the open league's
+   board, likeliest first — the Over / Under page's own list. */
+function askAttachable() {
+  return propsRows(state.data).slice(0, 12).map((r) => ({
+    id: propId(r),
+    label: `${r.player || ""} ${r.side || ""} ${r.line ?? ""} ${r.market_label || ""}`.replace(/\s+/g, " ").trim(),
+    pct: r.hit_prob == null ? "" : `${Math.round(Number(r.hit_prob) * 100)}%`,
+  }));
+}
+
+/* Filled when the paperclip is tapped, not when the room is drawn: the room
+   can be drawn before tonight's board has arrived. */
+function askAttachHTML() {
+  const picks = askAttachable();
+  return `<div class="ask-attach-h">Ask about one of tonight’s picks</div>${picks.length
+    ? picks.map((p) => `<button type="button" class="ask-attach-row" data-ask-attach="${escapeAttr(p.id)}"
+        data-ask-label="${escapeAttr(p.label)}"><span>${escapeHtml(p.label)}</span>${
+        p.pct ? `<b>${escapeHtml(p.pct)}</b>` : ""}</button>`).join("")
+    : `<p class="ask-attach-none">Nothing on tonight’s board to attach yet.</p>`}`;
+}
+
 function renderAsk() {
   const host = document.getElementById("ask-body");
   if (!host) return;
   const a = askState();
   const empty = !a.turns.length;
-  const sug = (a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST)
-    .concat(a.pick ? [] : [ASK_SUGGEST_PAST[state.sport] || ASK_SUGGEST_PAST.nfl]);
-  host.innerHTML = `<div class="ask-room" id="ask-room">
-    <div class="ask-head">${ASK_AVA}
-      <div class="ask-id"><b>Ask Qellys</b><span>Any team, any player, any sport</span></div>
-      ${empty ? "" : `<button type="button" class="ask-new" data-ask-reset>New chat</button>`}
-    </div>
+  const sug = a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST;
+  const title = `<span class="ask-pill">AI</span>`;
+  host.innerHTML = `<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room">
+    ${empty ? "" : `<div class="ask-head">${title}
+      <b class="ask-title-sm">Ask <em>Qellys</em></b>
+      <button type="button" class="ask-new" data-ask-reset>New chat</button>
+    </div>`}
     <div class="ask-log" id="ask-log" aria-live="polite">${empty ? `
-      <div class="ask-empty">${ASK_AVA.replace('class="ask-ava"', 'class="ask-ava big"')}
-        <h3>What do you want to know?</h3>
-        <p>Ask about any team, player or game. Tonight’s boards in every sport, and every past game
-          we have stored, answered from our own numbers.</p>
-        <div class="ask-suggest">${sug.map((s) =>
-          `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>
+      <div class="ask-empty">${title}
+        <h2 class="ask-title">Ask <em>Qellys</em></h2>
+        <p class="ask-sub"><span>Your AI betting assistant.</span>
+          <span>Any team, any player, any sport, answered from our numbers.</span></p>
+        <div class="ask-intro"><span class="ask-intro-ic">${askIcon("robot", 34)}</span>
+          <div><b>Ask about any team, player or game.</b>
+            <p>Tonight’s boards in every sport and every past game we have stored — the answer
+              comes from our own numbers and says so when they have nothing on it.</p>
+            <p class="ask-fine">Not betting advice. <span class="ask-help">21+ · 1-800-GAMBLER</span></p></div></div>
+        <div class="ask-suggest">${sug.map((s, n) =>
+          `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}"><span class="ask-sug-ic">${
+            askIcon(ASK_SUGGEST_ICONS[n % ASK_SUGGEST_ICONS.length], 26)}</span><span>${escapeHtml(s)}</span></button>`).join("")}</div>
       </div>` : a.turns.map(askTurnHTML).join("")}${a.busy ? `
       <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"
         aria-hidden="true"><i></i><i></i><i></i></span><span class="ask-sr">Looking it up…</span></div></div>` : ""}</div>
     <div class="ask-dock">
       ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
         <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
+      <div class="ask-attach" id="ask-attach" role="dialog" aria-label="Attach a pick" hidden></div>
       <form class="ask-form" id="ask-form">
-        <textarea id="ask-input" rows="1" maxlength="400" placeholder="Ask about any player, team, game or bet"
+        <button type="button" class="ask-clip" data-ask-clip aria-label="Attach one of tonight’s picks"
+          aria-controls="ask-attach" aria-expanded="false">${askIcon("clip", 22)}</button>
+        <textarea id="ask-input" rows="1" maxlength="400" placeholder="Ask about a player, a game or a bet…"
           aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
-        <button class="ask-send" type="submit" aria-label="Send" disabled>${ASK_SEND}</button>
+        <button class="ask-send" type="submit" aria-label="Send" disabled>${askIcon("plane", 22)}</button>
       </form>
-      <p class="ask-note">AI answers from our boards and our stored game history, not betting
-        advice. <span class="ask-help">21+ · 1-800-GAMBLER</span></p>
     </div>
   </div>`;
   const form = host.querySelector("#ask-form");
@@ -34972,6 +35026,22 @@ function renderAsk() {
       if (send) send.disabled = a.busy || !input.value.trim();
     });
   }
+  const clip = host.querySelector("[data-ask-clip]");
+  const sheet = host.querySelector("#ask-attach");
+  const attachOpen = (open) => {
+    if (!sheet || !clip) return;
+    if (open) {
+      sheet.innerHTML = askAttachHTML();
+      sheet.querySelectorAll("[data-ask-attach]").forEach((b) => b.addEventListener("click", () => {
+        a.pick = b.dataset.askAttach || "";
+        a.pickLabel = b.dataset.askLabel || "";
+        askSave(); renderAsk();
+      }));
+    }
+    sheet.hidden = !open;
+    clip.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  if (clip) clip.addEventListener("click", (e) => { e.stopPropagation(); attachOpen(sheet.hidden); });
   askRoomSize();
   setTimeout(askRoomSize, 400);        // again once the view's slide-in has settled
   askTypeOut();
@@ -34983,6 +35053,24 @@ function renderAsk() {
     a.pick = ""; a.pickLabel = ""; askSave(); renderAsk();
   }));
 }
+
+/* The attach list closes on a tap anywhere else, or Escape. */
+document.addEventListener("click", (e) => {
+  const sheet = document.getElementById("ask-attach");
+  if (!sheet || sheet.hidden || sheet.contains(e.target)) return;
+  sheet.hidden = true;
+  const clip = document.querySelector("[data-ask-clip]");
+  if (clip) clip.setAttribute("aria-expanded", "false");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const sheet = document.getElementById("ask-attach");
+  if (sheet && !sheet.hidden) {
+    sheet.hidden = true;
+    const clip = document.querySelector("[data-ask-clip]");
+    if (clip) { clip.setAttribute("aria-expanded", "false"); clip.focus(); }
+  }
+});
 
 async function askSend(text) {
   const a = askState();
