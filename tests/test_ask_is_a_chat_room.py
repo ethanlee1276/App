@@ -60,8 +60,7 @@ def test_one_column_the_conversation_then_the_composer():
     assert 'data-ask-reset>New chat</button>' in r, "starting over is the header's button"
     assert 'rows="1"' in r and '<button class="ask-send" type="submit" aria-label="Send" disabled>' in r
     assert "askRoomSize();" in r and "setTimeout(askRoomSize, 400);" in r
-    css = CSS[CSS.index(".ask-room {"):]
-    assert "display: flex; flex-direction: column;" in css[:200]
+    assert re.search(r"(?m)^\.ask-room \{ display: flex; flex-direction: column;", CSS)
     assert re.search(r"\.ask-log \{[^}]*flex: 1; min-height: 0; overflow-y: auto;", CSS), "only the log scrolls"
     assert re.search(r"\.ask-dock \{[^}]*flex-shrink: 0;[^}]*border-top: var\(--hairline\)", CSS), \
         "the composer never scrolls away, across a hairline"
@@ -74,11 +73,12 @@ def test_the_room_is_measured_clear_of_the_tab_bar_and_the_keyboard():
     size = _fn("askRoomSize")
     assert 'document.querySelector(".tabbar")' in size
     assert '[...tab.querySelectorAll("*")]' in size, "the raised Live button stands proud of the bar"
-    assert "window.innerHeight - vv.height > 120" in size, "a keyboard, and the tab bar under it"
+    assert 'document.body.classList.contains("ask-typing")) return;' in size, \
+        "with a keyboard up, askKeyboard sizes it (tests/test_ask_keyboard.py)"
     assert 'log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;' in size, \
         "a conversation opens on its newest message, the empty room on its title"
     assert 'window.visualViewport.addEventListener("resize"' in APP
-    assert 'window.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });' in APP
+    assert 'window.addEventListener("resize", () => { if (state.view === "ask") { askKeyboard(); askRoomSize(); } });' in APP
 
 
 def test_bubbles_an_avatar_a_typing_row_and_a_send_that_wakes():

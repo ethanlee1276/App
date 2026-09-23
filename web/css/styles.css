@@ -11131,6 +11131,12 @@ body.ask-open .footer { display: none; }
    page keeps for the bar would only be a band of scroll under it. */
 body.ask-open { padding-bottom: 0; }
 body.ask-open #view-ask { padding-bottom: 0; }
+/* The keyboard is up (askKeyboard): the room is a fixed layer over the part
+   of the screen the keys leave, its top and height set from the visual
+   viewport; the tab bar steps aside rather than riding up over the page. */
+body.ask-typing .ask-room { position: fixed; left: 0; right: 0; z-index: 62; max-width: none; margin: 0;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; background: var(--bg); }
+body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 .ask-room { display: flex; flex-direction: column; max-width: 780px; margin: 0 auto;
   height: calc(100dvh - var(--topbar-h) - 90px); min-height: 300px; }
 .ask-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 12px; flex-shrink: 0;

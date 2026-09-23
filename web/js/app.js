@@ -33754,6 +33754,7 @@ function _switchViewNow(name, push, dir) {
   document.body.classList.toggle("msg-thread-open",
     name === "messages" && !!_msgThread);
   document.body.classList.toggle("ask-open", name === "ask");    // the chat room: no footer
+  if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
   // Entering view slides in from the direction of travel between tabs.
@@ -34888,31 +34889,66 @@ function askTypeOut() {
 }
 
 /* The room's height: the measured space from its own top to the highest
-   thing on the tab bar (the raised Live button stands 14px proud of it) —
-   or to the keyboard, when one is up and the tab bar is under it. */
+   thing on the tab bar (the raised Live button stands 14px proud of it).
+   While the keyboard is up, askKeyboard sizes it instead. */
 function askRoomSize() {
   const el = document.getElementById("ask-room");
-  if (!el || state.view !== "ask") return;
-  const vv = window.visualViewport;
-  const vh = (vv && vv.height) || window.innerHeight;
-  const keyboard = !!vv && window.innerHeight - vv.height > 120;
+  if (!el || state.view !== "ask" || document.body.classList.contains("ask-typing")) return;
   const tab = document.querySelector(".tabbar");
-  let bottom = vh;
-  if (!keyboard && tab && getComputedStyle(tab).display !== "none") {
+  let bottom = window.innerHeight;
+  if (tab && getComputedStyle(tab).display !== "none") {
     bottom = Math.min(tab.getBoundingClientRect().top,
       ...[...tab.querySelectorAll("*")].filter((x) => x.offsetParent !== null)
         .map((x) => x.getBoundingClientRect().top));
   }
-  const top = el.getBoundingClientRect().top + (keyboard ? 0 : window.scrollY);
+  const top = el.getBoundingClientRect().top + window.scrollY;
   el.style.height = `${Math.max(300, Math.floor(bottom - top - 8))}px`;
   // A conversation opens on its newest message; the empty room on its title.
   const log = document.getElementById("ask-log");
   if (log) log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;
 }
 
-window.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
+/* THE KEYBOARD. Ethan, 2026-09-23, a screenshot from his phone: "Fix how
+   every time I click on the keyboard it makes the screen do this" — the
+   box shoved up under the clock, a screen of nothing under it and the tab
+   bar floating over the keys. An iPhone does not shrink the page for its
+   keyboard: it scrolls the page to reach the box, and the fixed tab bar
+   rides up with what is left of the view. The old sizing then measured
+   the room from where the scroll had left it and made it taller still.
+
+   So while the keyboard is up the room takes the part of the screen the
+   keyboard leaves — the visual viewport, tracked through its own resize
+   and scroll events — as a fixed layer over the page, the way a chat app
+   does: the conversation above, the box sitting on the keys, the tab bar
+   out of the way. When the keyboard goes, the room goes back into the
+   page and is measured the ordinary way. */
+function askKeyboard() {
+  const vv = window.visualViewport;
+  const room = document.getElementById("ask-room");
+  const input = document.getElementById("ask-input");
+  if (!room || state.view !== "ask") {
+    document.body.classList.remove("ask-typing");
+    return;
+  }
+  const up = !!vv && !!input && document.activeElement === input
+    && window.innerHeight - vv.height > 120;
+  const was = document.body.classList.contains("ask-typing");
+  document.body.classList.toggle("ask-typing", up);
+  if (up) {
+    room.style.top = `${Math.round(vv.offsetTop)}px`;
+    room.style.height = `${Math.floor(vv.height)}px`;
+    const log = document.getElementById("ask-log");
+    if (log && !was && !room.classList.contains("is-empty")) log.scrollTop = log.scrollHeight;
+  } else if (was) {
+    room.style.top = "";
+    askRoomSize();
+  }
+}
+
+window.addEventListener("resize", () => { if (state.view === "ask") { askKeyboard(); askRoomSize(); } });
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
+  window.visualViewport.addEventListener("resize", () => { if (state.view === "ask") askKeyboard(); });
+  window.visualViewport.addEventListener("scroll", () => { if (state.view === "ask") askKeyboard(); });
 }
 
 /* ETHAN'S RENDER, 2026-09-23: "Here is a render of what the Qellys chat
@@ -35019,6 +35055,9 @@ function renderAsk() {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askSend(input.value); }
     });
+    // The keyboard takes a moment to arrive and to leave; ask again once it has.
+    input.addEventListener("focus", () => { askKeyboard(); setTimeout(askKeyboard, 350); });
+    input.addEventListener("blur", () => setTimeout(askKeyboard, 120));
     // The box grows with what is typed, to five lines, and Send wakes up.
     input.addEventListener("input", () => {
       input.style.height = "auto";
@@ -35042,6 +35081,7 @@ function renderAsk() {
     clip.setAttribute("aria-expanded", open ? "true" : "false");
   };
   if (clip) clip.addEventListener("click", (e) => { e.stopPropagation(); attachOpen(sheet.hidden); });
+  askKeyboard();                       // a redraw mid-typing keeps the room above the keys, or lets it go
   askRoomSize();
   setTimeout(askRoomSize, 400);        // again once the view's slide-in has settled
   askTypeOut();
