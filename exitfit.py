@@ -66,19 +66,13 @@ def main(argv=None) -> int:
     else:
         from engine.hoops import NBA, WNBA
         tune = WNBA if sport == "wnba" else NBA
-        minutes = X.minutes_projection(tune)
-        project = None
     for label, value_m, usage_m, floor, window in PLANS[sport]:
         series = _series(conn, sport, value_m, usage_m)
         if sport != "mlb":
-            if value_m == "min":
-                project = minutes
-            else:
-                # Points as the board prices them: the kept games' rate per
-                # minute times their minutes base.
-                def project(values, usage, _m=minutes):
-                    base, tm = _m(usage, usage), sum(usage)
-                    return None if base is None or not tm else sum(values) / tm * base
+            # Points as the board prices them: the rate over every game,
+            # the minutes base over the kept ones.
+            project = (X.minutes_projection(tune) if value_m == "min"
+                       else X.points_projection(tune))
         res = X.measure(series, project, floor, window)
         print("\n".join(X.lines(f"{sport} {label} — {len(series)} players", res)))
         print()

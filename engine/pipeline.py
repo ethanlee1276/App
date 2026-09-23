@@ -1439,6 +1439,10 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             # prior the model needs a number for. The card and the journal
             # both read it; see engine/models.Weather.
             "measured": bool(getattr(w, "measured", False)),
+            "precip_chance": float(getattr(w, "precip_chance", 0.0) or 0.0),
+            # A forecast reads ×0.714 of the game book's wind
+            # (engine/weather.FORECAST_WIND_SCALE); the checks read this.
+            "forecast": bool(getattr(w, "forecast", False)),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, results),

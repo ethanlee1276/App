@@ -156,6 +156,7 @@ def weather_of_dict(w: dict, checked: bool) -> Weather:
         rain=likely and temp > 32.0,
         snow=likely and temp <= 32.0,
         measured=True,
+        forecast=True,
     )
 
 

@@ -30,10 +30,16 @@ WHAT THE GAMES SAID:
     above). One whose only early exits are OLDER is not — those games
     only drag his minutes down (.56 above with them, .49 without, both
     leagues, every season). engine/nba/minutes.role_minutes.
-  * MLB: measured on the box's own history (`python3 exitfit.py mlb` —
-    starters' strikeouts and outs by outs recorded, hitters' hits and
-    total bases by plate appearances) before any rule; until then every
-    start and game stays in, the NFL's answer.
+  * MLB, measured on the box's own history 2021-2026 (`python3 exitfit.py
+    mlb`, Ethan's droplet, 2026-09-23): IN, every one. A starter's short
+    outing kept vs dropped — strikeouts .484 / .457 above when it is
+    older, .477 / .376 when recent; outs .523 / .478 older (mean miss
+    −0.16 / −0.66, RMSE 4.13 / 4.17), .561 / .387 recent; hitters' short
+    games the same way for hits and total bases. A start cut short
+    predicts the next one, as a game left hurt does in football.
+  * The WNBA on the same box, 2021-2026, confirms the hoops rule on our
+    own data: older exits kept .587 above, left out .510 (RMSE 6.49 →
+    6.34), every season; a recent one kept .469, dropped .351.
   * College football publishes no snap counts, so a game he left and a
     quiet game cannot be told apart; every game stays in, the NFL's
     measured answer.
@@ -86,8 +92,9 @@ RULES = ("all", "old", "none")
 
 def measure(series: dict, project, min_median: float, window: int = 20) -> dict:
     """``series`` is ``{player: [(season, period, usage, value), ...]}`` in
-    date order; ``project(values, usage)`` gives the projection from
-    newest-first lists. Returns ``{(cell, rule): {n, above, bias, rmse,
+    date order; ``project(values, usage, keep)`` gives the projection from
+    newest-first lists and the indexes the rule keeps (hoops' per-minute
+    rate reads every game, its minutes only the kept). Returns ``{(cell, rule): {n, above, bias, rmse,
     per}}`` with cell "clean", "old" (early exits only past the last
     RECENT) or "recent"."""
     acc: dict = defaultdict(lambda: {"err": [], "season": []})
@@ -105,7 +112,7 @@ def measure(series: dict, project, min_median: float, window: int = 20) -> dict:
                 keep = keep_rule(usage, min_median, rule)
                 if len(keep) < MIN_PRIOR:
                     keep = list(range(len(usage)))
-                proj = project([values[j] for j in keep], [usage[j] for j in keep])
+                proj = project(values, usage, keep)
                 if proj is None:
                     continue
                 a = acc[(cell, rule)]
@@ -133,7 +140,8 @@ def form_projection(weights=None, prior_games: float = 0.0):
     from .form import compute_form
     from .models import GameLog
 
-    def project(values, _usage):
+    def project(values, _usage, keep):
+        values = [values[j] for j in keep]
         if not values:
             return None
         logs = [GameLog(week=len(values) - j, opponent="", value=float(v))
@@ -150,8 +158,19 @@ def minutes_projection(tune):
     """The hoops minutes base (engine/nba/minutes.base_minutes)."""
     from .nba.minutes import base_minutes
 
-    def project(values, _usage):
-        return base_minutes(values, tune)
+    def project(values, _usage, keep):
+        return base_minutes([values[j] for j in keep], tune)
+    return project
+
+
+def points_projection(tune):
+    """Hoops points as the board prices them (engine/nba/pipeline): the
+    per-minute rate over EVERY game times the minutes base over the kept."""
+    from .nba.minutes import base_minutes
+
+    def project(values, usage, keep):
+        base, tm = base_minutes([usage[j] for j in keep], tune), sum(usage)
+        return None if base is None or not tm else sum(values) / tm * base
     return project
 
 

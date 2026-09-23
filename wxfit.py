@@ -111,12 +111,17 @@ def main() -> None:
     args = ap.parse_args()
     if args.scale:
         got = F.scale(wind_pairs(N.load_schedules(), range(2023, 2026)))
+        rows = got.pop("by_forecast", [])
         print("forecast wind against the reported wind, 2023-2025 outdoor games:", got)
+        for r in rows:
+            print(f"  forecast {r['forecast']:<6} mph  n {r['n']:<4} reported median "
+                  f"{r['reported_median']:.0f}  same band once converted {r['same_band_converted']:.0%}")
         r = got.get("median_ratio")
         if r is not None:
-            print("same scale — the bands hold" if 0.85 <= r <= 1.15 else
-                  f"DIFFERENT SCALE — the forecast reads ×{r:.2f} the reported wind; "
-                  f"the bands need reading on the forecast's scale")
+            ships = W.FORECAST_WIND_SCALE
+            print(f"the board converts at ×{ships:.3f}: "
+                  + ("the same — nothing to change" if abs(r - ships) <= 0.03 else
+                     f"MEASURED ×{r:.3f} NOW — engine/weather.FORECAST_WIND_SCALE is behind"))
         return
     a, _, b = args.seasons.partition("-")
     seasons = range(int(a), int(b or a) + 1)

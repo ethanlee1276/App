@@ -368,7 +368,24 @@ def scale(pairs) -> dict:
         return {"n": 0}
     ratios = sorted(b / a for a, b in pairs if a > 0)
     mid = ratios[len(ratios) // 2] if ratios else None
-    return {"n": len(pairs),
-            "median_ratio": round(mid, 3) if mid is not None else None,
-            "mean_gap": round(sum(b - a for a, b in pairs) / len(pairs), 2),
-            "same_band": round(sum(1 for a, b in pairs if band(a) == band(b)) / len(pairs), 3)}
+    out = {"n": len(pairs),
+           "median_ratio": round(mid, 3) if mid is not None else None,
+           "mean_gap": round(sum(b - a for a, b in pairs) / len(pairs), 2),
+           "same_band": round(sum(1 for a, b in pairs if band(a) == band(b)) / len(pairs), 3)}
+    # By forecast range: the median reported wind behind each, and how
+    # often the converted forecast lands in the reported wind's band — so a
+    # ratio that holds at 6 mph and not at 14 shows, rather than averaging
+    # away.
+    if mid:
+        rows = []
+        for lo, hi in ((0, 4), (4, 7), (7, 10), (10, 13), (13, 99)):
+            cell = [(a, b) for a, b in pairs if lo <= b < hi]
+            if cell:
+                rep = sorted(a for a, _b in cell)
+                rows.append({"forecast": f"{lo}-{hi if hi < 99 else ''}", "n": len(cell),
+                             "reported_median": rep[len(rep) // 2],
+                             "same_band_converted": round(sum(1 for a, b in cell
+                                                              if band(a) == band(b / mid)) / len(cell), 2)})
+        out["by_forecast"] = rows
+        out["same_band_converted"] = round(sum(1 for a, b in pairs if band(a) == band(b / mid)) / len(pairs), 3)
+    return out

@@ -28,8 +28,8 @@ games say, and what changed:
 
 Receivers and tight ends are one group; a back's receiving is his own. The
 wind multipliers were measured on the reported wind at kickoff, and the
-board reads Open-Meteo's forecast for the kickoff hour (engine/nflwx.py) —
-WHEN_YOU_ARE_HOME.md carries the check that the two read on one scale.
+board reads Open-Meteo's forecast for the kickoff hour (engine/nflwx.py),
+which reads ×0.714 of it — converted before banding (FORECAST_WIND_SCALE).
 College reads the same table: its games are too few to measure alone.
 """
 
@@ -80,6 +80,16 @@ TD_FREEZE: dict = {}
 TD_RAIN = {"pass": 0.811}
 TD_SNOW: dict = {}
 
+#: THE FORECAST READS LOW. The effects above were measured on the wind the
+#: game book reports at kickoff; the board reads Open-Meteo's forecast for
+#: the kickoff hour, and over 492 outdoor games 2023-2025 the forecast read
+#: ×0.714 of the reported wind (median ratio; mean gap −2.2 mph, the same
+#: band only 57% of the time — `python3 wxfit.py --scale` on the droplet,
+#: 2026-09-23). So a forecast is read on the game book's scale before it is
+#: banded: a 10 mph forecast is a 14 mph game-book wind. A played game's
+#: reported wind (the backtest's) is already on it.
+FORECAST_WIND_SCALE = 0.714
+
 #: Below this forecast chance it is a dry day — the measured base, dry
 #: at kickoff, holds the games that were given a small chance and stayed dry.
 PRECIP_FLOOR = 0.3
@@ -114,6 +124,19 @@ def _band_txt(b: str) -> str:
 
 def _pct(m: float) -> str:
     return f"{(m - 1.0) * 100:+.0f}%".replace("-", "−")
+
+
+def book_wind(w: Weather) -> float:
+    """The wind on the scale the bands were measured on."""
+    wind = float(w.wind_mph or 0.0)
+    return wind / FORECAST_WIND_SCALE if getattr(w, "forecast", False) else wind
+
+
+def _wind_words(w: Weather) -> str:
+    raw, book = float(w.wind_mph or 0.0), book_wind(w)
+    if getattr(w, "forecast", False):
+        return f"Wind {raw:.0f} mph forecast (≈{book:.0f} on the game-book scale the effect was measured on)"
+    return f"Wind {raw:.0f} mph"
 
 
 def precip(w: Weather) -> tuple[str | None, float]:
@@ -156,7 +179,7 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
         return WeatherEffect(mult, reasons)
 
     markets = _markets_for(position)
-    wind = float(w.wind_mph or 0.0)
+    wind = book_wind(w)
     b = wind_band(wind)
     if b != "calm":
         hit = []
@@ -167,14 +190,14 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
                 hit.append(f"{_LABEL[m]} {_pct(f)}")
         who = _WHO.get(_GROUP.get(str(position or "").upper(), ""), "")
         if hit:
-            reasons.append(f"Wind {wind:.0f} mph — measured in {_band_txt(b)} mph games "
+            reasons.append(f"{_wind_words(w)} — measured in {_band_txt(b)} mph games "
                            f"(2016-2025): {', '.join(hit)}")
         else:
-            reasons.append(f"Wind {wind:.0f} mph — no clear effect measured on "
+            reasons.append(f"{_wind_words(w)} — no clear effect measured on "
                            f"{who or 'these'} markets at {_band_txt(b)} mph; left alone")
     avoid_deep = wind >= 25
     if avoid_deep:
-        reasons.append(f"Wind {wind:.0f} mph — deep-passing markets are "
+        reasons.append(f"{_wind_words(w)} — deep-passing markets are "
                        f"avoided entirely at 25+ (hard rule, not a haircut)")
 
     kind, p = precip(w)
@@ -219,13 +242,12 @@ def td_multiplier(w: Weather | None, position: str) -> tuple[float, list[str]]:
     kind = "pass" if str(position or "").upper() in ("WR", "TE") else "rush"
     what = "receiving touchdowns" if kind == "pass" else "rushing touchdowns"
     mult, reasons = 1.0, []
-    wind = float(w.wind_mph or 0.0)
-    b = wind_band(wind)
+    b = wind_band(book_wind(w))
     if b != "calm":
         f = TD_WIND.get(kind, {}).get(b)
         if f:
             mult *= f
-            reasons.append(f"Wind {wind:.0f} mph — {what} {_pct(f)} beyond what the "
+            reasons.append(f"{_wind_words(w)} — {what} {_pct(f)} beyond what the "
                            f"total already prices (measured, {_band_txt(b)} mph)")
     p_kind, p = precip(w)
     if p_kind:

@@ -228,9 +228,10 @@ def weather(boards: dict) -> list[str]:
     console (nflverse.build_slate's ``games``) — and this is the one-line
     check that it now reaches the board.
     """
+    from .weather import FORECAST_WIND_SCALE
     lines = ["WEATHER — did the kickoff forecast reach the games and the numbers",
              "  expect every outdoor game forecast inside 16 days of kickoff, and rows moved "
-             "wherever a game is at 8+ mph or rain is 30%+ likely"]
+             "wherever a game is at 8+ mph on the game-book scale or rain is 30%+ likely"]
     for sport, board in boards.items():
         if not isinstance(board, dict):
             lines.append(f"  {sport}: {board}")
@@ -245,9 +246,13 @@ def weather(boards: dict) -> list[str]:
         for g in read:
             w = g.get("weather") or {}
             wind, pc = float(w.get("wind_mph") or 0), float(w.get("precip_chance") or 0)
-            if wind >= 8 or pc >= 0.3 or w.get("rain") or w.get("snow"):
-                lines.append(f"    {g.get('away')} @ {g.get('home')}: {wind:.0f} mph, "
-                             f"{float(w.get('temp_f') or 0):.0f}°F"
+            # College's stamped dicts are forecasts by construction.
+            fc = bool(w.get("forecast") or g.get("weather_checked"))
+            book = wind / FORECAST_WIND_SCALE if fc else wind
+            if book >= 8 or pc >= 0.3 or w.get("rain") or w.get("snow"):
+                lines.append(f"    {g.get('away')} @ {g.get('home')}: {wind:.0f} mph"
+                             + (f" forecast (≈{book:.0f} game-book)" if fc else "")
+                             + f", {float(w.get('temp_f') or 0):.0f}°F"
                              + (f", {pc:.0%} precipitation" if pc else ""))
         moved: dict = {}
         for r in board.get("recommendations") or []:

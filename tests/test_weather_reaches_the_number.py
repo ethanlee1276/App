@@ -133,6 +133,69 @@ def test_the_card_says_which_way_the_weather_cuts():
     assert signed["UNDER"] and signed["UNDER"][0].endswith("— with this side"), signed
 
 
+# ---- the forecast is read on the scale the effect was measured on ----------
+def test_a_forecast_is_converted_before_it_is_banded_and_a_reading_is_not():
+    """Ethan's droplet, 2026-09-23, `python3 wxfit.py --scale`: over 492
+    outdoor games 2023-2025 Open-Meteo's kickoff-hour forecast read ×0.714
+    of the wind the game book reported, the same band only 57% of the time.
+    The bands were measured on the game book's."""
+    assert W.FORECAST_WIND_SCALE == 0.714
+    fc = W.evaluate_weather(Weather(wind_mph=10.0, temp_f=58.0, measured=True, forecast=True), "WR")
+    assert fc.multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["12-18"]
+    assert fc.reasons[0].startswith("Wind 10 mph forecast (≈14 on the game-book scale the effect was measured on)")
+    played = W.evaluate_weather(_wind(10.0), "WR")
+    assert played.multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["8-12"], "a reported wind is already on it"
+    assert W.evaluate_weather(Weather(wind_mph=18.0, measured=True, forecast=True), "WR").avoid_deep is True
+    from engine.touchdowns import weather_td_multiplier
+    g = Game(home="CHI", away="GB", weather=Weather(wind_mph=9.0, measured=True, forecast=True))
+    assert weather_td_multiplier(g, "WR")[0] == W.TD_WIND["pass"]["12-18"]
+
+
+def test_the_deep_ball_block_reads_the_same_scale():
+    from engine.betting import evaluate_prop
+    from engine.projection import build_projection
+    from engine.rules import apply_rules
+    g = Game(home="CHI", away="GB", weather=Weather(wind_mph=19.0, measured=True, forecast=True))
+    logs = [GameLog(week=w, opponent="x", value=v) for w, v in enumerate((70, 64, 75, 68, 72, 66), 1)]
+    p = Prop(player="P", team="CHI", opponent="GB", position="WR", market=REC_YDS, logs=logs,
+             career_avg=69.0, vs_opponent_avg=None, lines=[SportsbookLine("DK", 55.5, -110, -110)], usage_role="wr1")
+    pr = build_projection(p, g, Team(abbr="GB", name="GB", defense=DefenseProfile(team="GB")))
+    dec = apply_rules(evaluate_prop(p, pr, game=g), p, g)
+    assert dec.recommend is False
+    assert any("27 mph on the game-book scale" in x for x in dec.warnings), dec.warnings
+    calm = Game(home="CHI", away="GB", weather=_wind(19.0))
+    assert not any("deep-passing" in x for x in apply_rules(evaluate_prop(p, pr, game=calm), p, calm).warnings)
+
+
+def test_forecasts_are_flagged_where_they_are_stamped_and_neutral_sites_find_their_venue():
+    from engine import nflwx
+    from engine.cfb.props import weather_of_dict
+    got = {}
+    def fc(lat, lon, date, kickoff):
+        got["at"] = (round(lat, 1), round(lon, 1))
+        return {"temp_f": 75, "wind_mph": 6, "wind_dir": "E", "precip_chance": 0.1}
+    rio = Game(home="DAL", away="BAL", weather=Weather(), date="2026-09-27", kickoff="20:30",
+               neutral_site=True, venue="Maracana Stadium")
+    assert nflwx.attach([rio], forecast=fc) == 1 and got["at"] == (-22.9, -43.2), "Rio, not Dallas"
+    assert rio.weather.forecast is True and rio.weather.measured is True
+    nowhere = Game(home="DAL", away="BAL", weather=Weather(), date="2026-09-27", kickoff="20:30",
+                   neutral_site=True, venue="Somewhere Unmapped")
+    assert nflwx.attach([nowhere], forecast=fc) == 0 and nowhere.weather.measured is False
+    assert weather_of_dict({"temp_f": 60, "wind_mph": 9}, True).forecast is True
+    from engine.sources import nflverse as nv
+    assert 'venue=_s(r, "stadium")' in open(nv.__file__, encoding="utf-8").read()
+
+
+def test_the_board_and_the_check_carry_the_forecast_flag():
+    from engine.pipeline import _game_to_dict
+    g = Game(home="CHI", away="GB", weather=Weather(wind_mph=10.0, measured=True, forecast=True, precip_chance=0.4))
+    w = _game_to_dict(g)["weather"]
+    assert w["forecast"] is True and w["precip_chance"] == 0.4
+    from engine import inputcheck
+    lines = inputcheck.weather({"nfl": {"games": [{"home": "CHI", "away": "GB", "weather": w}], "recommendations": []}})
+    assert "GB @ CHI: 10 mph forecast (≈14 game-book), 65°F, 40% precipitation" in lines[3], lines
+
+
 # ---- touchdowns: on top of the book total ---------------------------------
 def test_touchdowns_cut_the_pass_catchers_and_not_a_quarterbacks_own_score():
     from engine.touchdowns import weather_td_multiplier
@@ -193,8 +256,10 @@ def test_what_ships_is_the_fits_shape_and_nothing_hand_set_is_left():
         assert all(v < 1.0 for v in bands.values())
     assert not any(k[0] == "rush_yds" for k in got["wind"]), "the rushing lift is gone"
     assert got["freeze"] == {} and got["td_snow"] == {}
-    assert F.scale([(10, 11), (20, 18), (5, 5)]) == {"n": 3, "median_ratio": 1.0, "mean_gap": -0.33,
-                                                     "same_band": 1.0}
+    got = F.scale([(10, 11), (20, 18), (5, 5)])
+    assert {k: got[k] for k in ("n", "median_ratio", "mean_gap", "same_band")} == \
+        {"n": 3, "median_ratio": 1.0, "mean_gap": -0.33, "same_band": 1.0}
+    assert got["same_band_converted"] == 1.0 and [r["forecast"] for r in got["by_forecast"]] == ["4-7", "10-13", "13-"]
 
 
 def test_the_droplet_check_reads_the_board():

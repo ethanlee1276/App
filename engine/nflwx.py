@@ -63,12 +63,44 @@ def _default_forecast(lat, lon, date, kickoff):
 def coords_for(team: str):
     """The stadium the HOME team plays in, or None.
 
-    Neutral sites are not resolved and that is honest rather than lazy:
-    the schedule's `location` column says "Neutral" without saying where,
-    so a London or Munich game keeps the prior instead of being given
-    New Jersey's weather.
+    A neutral site never takes the home team's stadium — a London or
+    Munich game given New Jersey's weather would be invented. It finds
+    its own through `venue_coords`, or keeps the prior.
     """
     return STADIUM_COORDS.get(str(team or "").upper())
+
+
+#: The international sites the schedule names at a neutral game, keyed by
+#: a word of the schedule's own `stadium` text (nflverse, 2019-2026:
+#: "Maracana Stadium", "Tottenham Stadium", "Allianz Arena", "FC Bayern
+#: Munich Stadium", "Estadio Banorte" — the Azteca renamed …). 2026-09-23:
+#: Ravens at Cowboys in Rio was the one outdoor game on the week-3 board
+#: without a forecast, because the location column says only "Neutral".
+NEUTRAL_VENUES = (
+    ("maracana", (-22.912, -43.230)),
+    ("tottenham", (51.604, -0.066)),
+    ("wembley", (51.556, -0.280)),
+    ("allianz", (48.219, 11.625)),
+    ("bayern", (48.219, 11.625)),
+    ("deutsche bank park", (50.069, 8.646)),
+    ("frankfurt", (50.069, 8.646)),
+    ("olympiastadion", (52.515, 13.239)),
+    ("corinthians", (-23.545, -46.474)),
+    ("neo quimica", (-23.545, -46.474)),
+    ("azteca", (19.303, -99.150)),
+    ("banorte", (19.303, -99.150)),
+    ("bernabeu", (40.453, -3.688)),
+    ("croke", (53.361, -6.251)),
+    ("stade de france", (48.924, 2.360)),
+    ("melbourne cricket", (-37.820, 144.983)),
+)
+
+
+def venue_coords(name: str):
+    """A neutral site's coordinates from the schedule's stadium name, or None."""
+    import unicodedata
+    key = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower()
+    return next((c for word, c in NEUTRAL_VENUES if word in key), None)
 
 
 def attach(games, forecast=None) -> int:
@@ -92,9 +124,8 @@ def attach(games, forecast=None) -> int:
                                 measured=True)
             stamped += 1
             continue
-        if getattr(g, "neutral_site", False):
-            continue                       # see coords_for
-        coords = coords_for(getattr(g, "home", ""))
+        coords = (venue_coords(getattr(g, "venue", "")) if getattr(g, "neutral_site", False)
+                  else coords_for(getattr(g, "home", "")))
         if not coords:
             continue
         when = getattr(g, "kickoff", "") or ""
@@ -130,6 +161,7 @@ def attach(games, forecast=None) -> int:
             rain=likely and temp > FREEZING_F,
             snow=likely and temp <= FREEZING_F,
             measured=True,
+            forecast=True,
         )
         stamped += 1
     return stamped

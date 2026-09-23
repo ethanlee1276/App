@@ -174,6 +174,7 @@ def build_games(season: int, week: int) -> list[Game]:
             home_rest=int(_f(r, "home_rest", default=0)),
             away_rest=int(_f(r, "away_rest", default=0)),
             neutral_site=_s(r, "location").lower() == "neutral",
+            venue=_s(r, "stadium"),
         ))
     return games
 

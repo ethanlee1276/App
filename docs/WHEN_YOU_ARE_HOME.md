@@ -15,7 +15,29 @@ as they are done.
 
 ---
 
-## NEXT TIME HOME — 2026-09-23 night, in this order
+## AFTER THE WIND FIX — two read-only checks (a minute)
+
+Tonight's answers (Ethan's droplet, 2026-09-23 night): the box ran
+`11d0df55`; the trade-tape indexes took the wallet history from 233 s to
+8.5 s; college 2026 closes 0 → 44; wiring clean on all four leagues; 13 of
+14 outdoor NFL games forecast (the 14th was Ravens-Cowboys in Rio, a
+neutral site — now forecast at the Maracanã); baseball's short starts and
+short games measured KEEP, every one (`engine/exitfit.py`); the WNBA
+confirmed the hoops rule on our own data. And the forecast reads ×0.714
+of the game book's wind, so every forecast is now converted before it is
+banded (`engine/weather.FORECAST_WIND_SCALE`). Once the box shows the
+commit after `11d0df55` and an NFL build has run:
+
+```bash
+cd /srv/qellys && python3 homecheck.py weather
+cd /srv/qellys && python3 wxfit.py --scale
+```
+
+Want: NFL "14 of them forecast", each windy game reading "N mph forecast
+(≈M game-book)", and the scale check ending "the same — nothing to
+change" with its by-range table. Paste both.
+
+## NEXT TIME HOME — 2026-09-23 night — ANSWERED (above)
 
 Ethan, leaving again: *"start doing all that shit and save the codes for
 me too run when I'm back home."* Everything below is copy-paste. Only

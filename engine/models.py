@@ -123,6 +123,12 @@ class Weather:
     rain: bool = False
     snow: bool = False
     measured: bool = False
+    #: A FORECAST, not a reading. Open-Meteo's kickoff-hour wind reads
+    #: ×0.714 of the wind the game book reports (engine/weather.py
+    #: FORECAST_WIND_SCALE), and the weather effects were measured on the
+    #: game book's — so the model converts a forecast before banding it,
+    #: and the card keeps showing the forecast's own number.
+    forecast: bool = False
 
 
 @dataclass
@@ -340,6 +346,9 @@ class Game:
     home_rest: int = 0
     away_rest: int = 0
     neutral_site: bool = False
+    #: The schedule's stadium name — how a neutral site (Rio, London,
+    #: Munich) finds its own weather (engine/nflwx.venue_coords).
+    venue: str = ""
     # Moneyline: American odds per side (0 = not offered) and a team strength
     # rating in net points/game vs league average (0 = average). Drives the
     # game-level moneyline model in engine/gamebets.py.
