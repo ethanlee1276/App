@@ -428,6 +428,9 @@
              claim tests at 0.468, a coin flip, and it is the only one
              that stakes money. A menu that led with it was pointing
              people at the weakest thing on the site. -->
+        <button class="nav-btn sb-item" data-view="props" data-hint="every prop, both sides — over and under side by side">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="8" height="14" rx="2"/><rect x="13" y="5" width="8" height="14" rx="2"/></svg>
+          Over / Under</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="where we think the price is wrong — the only board we stake">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Value Bets</button>
@@ -1014,6 +1017,15 @@
     </section>
 
     <!-- Edge Board -->
+    <!-- Over / Under: both sides of every priced prop (Ethan, 2026-09-23).
+         Not "Player Props": Most Likely is props too (test_board_shelves). -->
+    <section class="view" id="view-props">
+      <div class="section-title">Over / Under
+        <span class="sub">— every prop we price tonight, over and under side by side</span>
+      </div>
+      <div id="props-body"></div>
+    </section>
+
     <section class="view" id="view-edge">
       <div class="section-title">Edge Board
         <span class="sub">— every bet priced better than the book’s number, sorted by expected value.

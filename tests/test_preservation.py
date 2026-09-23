@@ -124,7 +124,8 @@ def test_every_routable_view_is_actually_drawn_by_the_router():
     # Drawn by the shared board render rather than a per-view call: these
     # are the sport boards, and `load()` fills them all at once.
     SHARED = {"recommended", "live", "edge", "scanner", "longshots",
-              "futures", "trending", "players", "prop", "game"}
+              "futures", "trending", "players", "prop", "game",
+              "props"}   # Over / Under (2026-09-23): renderProps runs in renderAll
 
     i = APP.index("const VIEW_ORDER = [")
     literal = APP[i:APP.index("]", i)]

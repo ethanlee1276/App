@@ -1835,6 +1835,7 @@ const FEATURES = [
     ["Top Picks", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
     ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
+    ["Over / Under", "Every prop we price tonight with both sides side by side — the book’s price and our chance for the over and the under, as cards or a list.", "props"],
     ["Value Bets", "The edge board: where we think the price is wrong. The only board we stake money on, and the only one whose ROI is quoted in money.", "edge"],
     ["Game Lines", "Moneylines, spreads and totals with the model’s number beside the book’s — and the book actually posting each side named on the card.", "futures"],
     ["Best price per book", "Odds shopping on every card: the best number available for the side taken, book by book, so you never bet a worse price than exists.", null],
@@ -2162,7 +2163,7 @@ addEventListener("online", refreshStaleBar);
    the plans page was noise (seen in the first render). */
 function slateNotice(d) {
   if (!d) return null;
-  const boardViews = ["recommended", "tonight", "likely", "edge", "longshots", "live",
+  const boardViews = ["recommended", "tonight", "likely", "props", "edge", "longshots", "live",
     "scanner", "game", "prop", "trending", "players", "futures"];
   if (!boardViews.includes(state.view)) return null;
   const src = String(d.generated_from || "");
@@ -3151,6 +3152,7 @@ function renderAll() {
   // depends on, which is exactly what a test caught it as.
   renderTonight();
   renderEdgeBoard();
+  renderProps();
   renderScanner();
   renderLongShots();
   renderLikely();
@@ -16507,6 +16509,148 @@ function edgeRowHTML(r, i) {
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p">+${evPct}% EV</span></span>
       <span class="hd-vs">${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%${r.rec ? ` · ${icon('check')}` : " ·"} ${escapeHtml(r.grade || "")}</span></span>
   </div>`;
+}
+
+/* ============================================================
+   OVER / UNDER — EVERY PROP, BOTH SIDES
+   ============================================================
+   Ethan, 2026-09-23, holding up Rithmm: "I like how they have the over
+   and under props shown side by side with a card view and a list view
+   you can switch between."
+
+   Every prop we price tonight, one row per player, market and line —
+   not only the side we would take. Each side carries the book's price
+   and our chance:
+
+     * OUR SIDE is the row's own side, price and hit_prob, outlined.
+     * THE OTHER SIDE is the same book at the same line when that book
+       posted it, else the best price at that line across the books the
+       row carries (`all_lines`), named in its title. Its chance is the
+       rest of ours — ONLY on a half-point line, where a push cannot
+       happen; on a whole number the two do not sum to one, and a
+       number we did not compute is not drawn.
+
+   Nothing here is a new claim: the same rows, prices and probabilities
+   the prop page already shows, laid out the way a book lays out a
+   market. Cards or a list, remembered per browser. */
+let _propsView = null;       // "cards" | "list"
+let _propsMarket = "";
+
+function propsViewMode() {
+  if (_propsView) return _propsView;
+  let v = "";
+  try { v = localStorage.getItem("qb.propsView") || ""; } catch (e) {}
+  _propsView = v === "list" ? "list" : "cards";
+  return _propsView;
+}
+
+function ouHalfLine(line) {
+  const n = Number(line);
+  return Number.isFinite(n) && Math.abs(Math.abs(n % 1) - 0.5) < 1e-9;
+}
+
+function ouSides(r) {
+  const ours = String((r || {}).side || "").toUpperCase() === "UNDER" ? "under" : "over";
+  const other = ours === "over" ? "under" : "over";
+  const at = ((r || {}).all_lines || []).filter((l) =>
+    l && Number(l.line) === Number(r.line) && l[`${other}_odds`] != null);
+  const same = at.find((l) => l.book === r.book);
+  const best = same || at.slice().sort((a, b) =>
+    (mbDecimal(b[`${other}_odds`]) || 0) - (mbDecimal(a[`${other}_odds`]) || 0))[0] || null;
+  const p = Number(r.hit_prob);
+  const known = r.hit_prob != null && Number.isFinite(p);
+  return {
+    ours,
+    [ours]: { odds: r.odds, book: r.book || "", prob: known ? p : null, ours: true },
+    [other]: { odds: best ? best[`${other}_odds`] : null, book: best ? best.book : "",
+               prob: known && ouHalfLine(r.line) ? 1 - p : null, ours: false },
+  };
+}
+
+function propsRows(d) {
+  const seen = new Set();
+  return ((d || {}).recommendations || []).filter((r) => {
+    if (!r || !r.player || r.line == null || r.has_market === false) return false;
+    const k = `${r.player}|${r.market}|${r.line}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).sort((a, b) => (Number(b.hit_prob) || 0) - (Number(a.hit_prob) || 0));
+}
+
+function ouSideHTML(label, s) {
+  const pct = s.prob == null ? "—" : `${(s.prob * 100).toFixed(0)}%`;
+  const title = s.odds == null ? "No price posted on this side at this line"
+    : `${s.book ? `${s.book} · ` : ""}${s.ours ? "our side — the chance is the model’s"
+      : s.prob == null ? "no push-free line, so no chance drawn" : "the chance is the rest of ours"}`;
+  return `<span class="ou-side${s.ours ? " ours" : ""}" title="${escapeAttr(title)}">
+      <span class="ou-lab">${label}</span>
+      <span class="ou-odds">${s.odds == null ? "—" : escapeHtml(oddsTxt(s.odds))}</span>
+      <span class="ou-pct">${pct}</span></span>`;
+}
+
+function ouMarketLine(r) {
+  return `${escapeHtml(r.market_label || marketWord(r.market))} <b>${escapeHtml(String(r.line))}</b>${
+    r.projection != null && Number.isFinite(Number(r.projection))
+      ? ` <span class="ou-proj">proj ${Number(r.projection).toFixed(1)}</span>` : ""}`;
+}
+
+function ouCardHTML(r) {
+  const s = ouSides(r);
+  return `<article class="card ou-card"${propAttrs(r)}>
+    <div class="ou-head">${betMark(r, 36)}<div class="ou-who"><b>${escapeHtml(r.player)}</b>
+      <span>${escapeHtml(teamName(r.team))}${r.opponent ? ` vs ${escapeHtml(teamName(r.opponent))}` : ""}</span></div></div>
+    <div class="ou-mk">${ouMarketLine(r)}</div>
+    <div class="ou-sides">${ouSideHTML("Over", s.over)}${ouSideHTML("Under", s.under)}</div>
+  </article>`;
+}
+
+function ouRowHTML(r) {
+  const s = ouSides(r);
+  return `<div class="ou-row"${propAttrs(r)}>${betMark(r, 30)}
+    <span class="ou-who"><b>${escapeHtml(r.player)}</b><span>${ouMarketLine(r)}</span></span>
+    <span class="ou-sides">${ouSideHTML("O", s.over)}${ouSideHTML("U", s.under)}</span></div>`;
+}
+
+function renderProps() {
+  const host = document.getElementById("props-body");
+  if (!host) return;
+  const rows = propsRows(state.data);
+  if (!rows.length) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
+      <h3>${noMarketHeading()}</h3><p>${noMarketExplainer()}</p></div>`;
+    return;
+  }
+  const count = {};
+  rows.forEach((r) => { const m = r.market_label || marketWord(r.market); count[m] = (count[m] || 0) + 1; });
+  const markets = Object.keys(count).sort((a, b) => count[b] - count[a]);
+  if (_propsMarket && !count[_propsMarket]) _propsMarket = "";
+  const shown = _propsMarket ? rows.filter((r) => (r.market_label || marketWord(r.market)) === _propsMarket) : rows;
+  const mode = propsViewMode();
+  const chip = (m, label) => `<button type="button" class="rec-bf${_propsMarket === m ? " active" : ""}"
+      data-ou-mk="${escapeAttr(m)}" aria-pressed="${_propsMarket === m ? "true" : "false"}">${escapeHtml(label)}</button>`;
+  const vbtn = (v, label) => `<button type="button" class="ou-view${mode === v ? " active" : ""}"
+      data-ouv="${v}" aria-pressed="${mode === v ? "true" : "false"}">${label}</button>`;
+  host.innerHTML = `<div class="ou-bar">
+      <div class="rec-bf-group" role="group" aria-label="Market">${chip("", `All ${rows.length}`)}${
+        markets.length > 1 ? markets.map((m) => chip(m, `${m} ${count[m]}`)).join("") : ""}</div>
+      <div class="ou-views" role="group" aria-label="View">${vbtn("cards", "Cards")}${vbtn("list", "List")}</div>
+    </div>
+    <p class="ou-note">The book’s price and our chance on both sides. Our side is outlined;
+      the other side’s chance is the rest of ours, drawn only on half-point lines, where a
+      push can’t happen. Tap any prop for the charts and the reasons.</p>
+    ${mode === "list"
+      ? `<div class="hd-card ou-list">${shown.map(ouRowHTML).join("")}</div>`
+      : `<div class="ou-grid">${shown.map(ouCardHTML).join("")}</div>`}`;
+  host.querySelectorAll("[data-ou-mk]").forEach((b) => b.addEventListener("click", () => {
+    _propsMarket = b.dataset.ouMk || "";
+    renderProps();
+  }));
+  host.querySelectorAll("[data-ouv]").forEach((b) => b.addEventListener("click", () => {
+    _propsView = b.dataset.ouv === "list" ? "list" : "cards";
+    try { localStorage.setItem("qb.propsView", _propsView); } catch (e) {}
+    renderProps();
+  }));
 }
 
 function renderEdgeBoard() {
@@ -33445,7 +33589,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -40112,7 +40256,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
   ["Picks", ["view:likely", "view:longshots", "view:zeno"]],
-  ["Odds", ["view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
+  ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],

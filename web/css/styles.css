@@ -11066,3 +11066,44 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 @media (prefers-reduced-motion: reduce) {
   .potd-live-strip::after { animation: none; opacity: 0; }
 }
+
+/* ---- Player Props: both sides, side by side (2026-09-23) ---------------
+   A card grid or a list, the same two side cells in each: the label,
+   the book's price, our chance. Our side is outlined in the brand. */
+.ou-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 0 0 10px; }
+.ou-views { display: inline-flex; border: var(--hairline) solid var(--border); border-radius: 999px;
+  padding: 2px; gap: 2px; }
+.ou-view { min-height: 30px; padding: 4px 14px; border: none; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--text-mute); font-family: var(--font-sans);
+  font-size: var(--fs-xs); font-weight: 700; }
+.ou-view.active { background: color-mix(in oklab, var(--brand) 18%, transparent); color: var(--text); }
+.ou-note { margin: 0 0 12px; color: var(--text-mute); font-size: var(--fs-xs); }
+.ou-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ou-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; cursor: pointer; }
+.ou-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ou-who { display: flex; flex-direction: column; min-width: 0; line-height: var(--lh-tight); }
+.ou-who b { font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ou-who span { color: var(--text-dim); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.ou-mk { font-size: var(--fs-sm); color: var(--text-dim); }
+.ou-mk b { color: var(--text); font-family: var(--font-mono); }
+.ou-proj { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-xs); }
+.ou-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ou-side { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.ou-side.ours { border-color: var(--brand-2);
+  background: color-mix(in oklab, var(--brand) 12%, transparent); }
+.ou-lab { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-mute); }
+.ou-side.ours .ou-lab { color: var(--text); }
+.ou-odds { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); }
+.ou-pct { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--good); }
+.ou-list { padding: 0; }
+.ou-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.ou-row:last-child { border-bottom: none; }
+.ou-row:hover { background: var(--fill-hover); }
+.ou-row .ou-who { flex: 1; }
+.ou-row .ou-sides { flex: 0 0 auto; grid-template-columns: 64px 64px; gap: 6px; }
+.ou-row .ou-side { padding: 5px 4px; }
