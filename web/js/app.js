@@ -22094,15 +22094,21 @@ const PW_SPORTS = [
    under the hero, a card at the head of the feature grid, a line on the
    plan and a chip in the breadth row.
 
-   THE PREVIEW IS BUILT FROM THE ASK PAGE'S OWN PARTS — the AI pill, the
-   title, a reader's question in its bubble, Ask's typing dots, the box
-   with its paperclip and gold send — and it shows NO ANSWER. An answer
-   written for a sales page would be numbers nobody computed, on the one
-   page where every other number is graded in public. The questions are
-   real ones Ask can take; the four points under it are what it does. It
-   is a picture, not a control: aria-hidden, and nothing in it takes a
-   tap. */
-const PW_ASK_TRY = ["How has Aaron Judge hit against the Red Sox?", "What’s the best bet on tonight’s board?"];
+   THE PREVIEW IS BUILT FROM THE ASK PAGE'S OWN PARTS — the robot, the
+   title, a reader's question in its bubble, Ask's typing dots — and it
+   shows NO ANSWER. An answer written for a sales page would be numbers
+   nobody computed, on the one page where every other number is graded in
+   public. The four points beside it are what it does.
+
+   A PICTURE OF THE FEATURE, NOT A WAY INTO IT. Ethan, the same day: "I
+   don't want people to be able to access the chat bot from the paywall
+   page, I just wanted to display that it's a feature." Nobody could — the
+   wall sends a visitor's every route to Ask back here (WALL_OPEN) and the
+   server answers /api/ask to subscribers only — but the first preview
+   carried the message box, its send button and two question chips, which
+   is a chat that LOOKS open. Those are gone; what is left is a scene and
+   a line saying it comes with every plan. aria-hidden, no controls, and
+   nothing in it takes a tap. */
 
 function pwAskHTML() {
   const point = (text) => `<li>${iconMark("check", 14)}<span>${escapeHtml(text)}</span></li>`;
@@ -22121,10 +22127,7 @@ function pwAskHTML() {
         <div class="pw-ask-bar">${qbotHTML("head", "pw-ask-bar-bot")}<b>Ask <em>Qellys</em></b></div>
         <div class="ask-row me"><div class="ask-turn me">How have the Lions done against the Packers?</div></div>
         <div class="ask-row bot">${askAva(true)}<div class="ask-turn bot wait"><span class="ask-dots"><i></i><i></i><i></i></span></div></div>
-        <div class="pw-ask-try">${PW_ASK_TRY.map((q) => `<span>${escapeHtml(q)}</span>`).join("")}</div>
-        <div class="pw-ask-box"><span class="pw-ask-clip">${askIcon("clip", 18)}</span>
-          <span class="pw-ask-ph">Ask about a player, a game or a bet…</span>
-          <span class="pw-ask-send">${askIcon("plane", 18)}</span></div>
+        <div class="pw-ask-incl">${iconMark("lock", 13)}<span>Included with every plan</span></div>
       </div>
       <ul class="pw-ask-points">
         ${point("Any sport, any team, any player — not just who plays tonight")}

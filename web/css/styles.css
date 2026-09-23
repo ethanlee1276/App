@@ -9873,16 +9873,11 @@ input:-webkit-autofill:focus {
   border-bottom: var(--hairline) solid var(--border-soft); }
 .pw-ask-bar b { color: var(--text); font-size: var(--fs-lg); }
 .pw-ask-bar em { font-style: normal; color: var(--gold); }
-.pw-ask-try { display: flex; flex-wrap: wrap; gap: 6px; }
-.pw-ask-try span { padding: 6px 10px; border-radius: 999px; border: var(--hairline) solid var(--border-soft);
-  color: var(--text-dim); font-size: var(--fs-xs); }
-.pw-ask-box { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 10px; color: var(--text-mute);
-  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); font-size: var(--fs-sm); }
-.pw-ask-clip { display: grid; padding-right: 10px; color: var(--text-dim);
-  border-right: var(--hairline) solid var(--border); }
-.pw-ask-ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pw-ask-send { flex-shrink: 0; width: 36px; height: 36px; display: grid; place-items: center;
-  border-radius: var(--radius); background: var(--gold); color: var(--brand-ink); }
+/* A line, not a box: the preview carries no message box, so it cannot be
+   mistaken for a chat the page lets you use. */
+.pw-ask-incl { display: flex; align-items: center; justify-content: center; gap: 6px; padding-top: 10px;
+  border-top: var(--hairline) solid var(--border-soft); color: var(--text-mute); font-size: var(--fs-xs); }
+.pw-ask-incl svg { color: var(--gold); }
 .pw-ask-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .pw-ask-points li { display: flex; align-items: flex-start; gap: 10px; color: var(--text); font-size: var(--fs-md); }
 .pw-ask-points li svg { flex-shrink: 0; margin-top: 3px; color: var(--gold); }

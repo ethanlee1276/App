@@ -13,7 +13,10 @@ page." Four places, each where a visitor deciding whether to pay looks:
     summary carries it too;
   * a CHIP in the breadth row, wearing the same mark as its card.
 
-And what it sells is sold: /api/ask answers subscribers only.
+It is a picture of the feature, not a way into it (Ethan, same day: "I
+don't want people to be able to access the chat bot from the paywall
+page"): no message box in the preview, no link to Ask on the page, Ask
+kept behind the wall — and /api/ask answers subscribers only.
 """
 import re
 from pathlib import Path
@@ -53,8 +56,10 @@ def test_the_preview_is_the_ask_page_and_invents_no_answer():
         f"Ask's side of the preview is its typing dots and nothing else: {bots}"
     assert re.search(r"\d+-\d+|\d+%|\d+\.\d", demo.replace("Ask about a player", "")) is None, \
         "no score, record or percentage appears in the preview"
-    assert 'askIcon("clip", 18)' in demo and 'askIcon("plane", 18)' in demo
     assert "<button" not in demo and "<textarea" not in demo and "<input" not in demo, "a picture, not a control"
+    for looks_open in ('askIcon("clip"', 'askIcon("plane"', "Ask about a player", "pw-ask-box", "pw-ask-try"):
+        assert looks_open not in demo, f"{looks_open}: the preview must not look like a chat you can type in"
+    assert '<div class="pw-ask-incl">${iconMark("lock", 13)}<span>Included with every plan</span></div>' in demo
     assert re.search(r"\.pw-ask-demo \{[^}]*pointer-events: none;", CSS)
     points = re.findall(r'point\("([^"]+)"\)', ask)
     assert len(points) == 4 and any("never tells you to bet" in p for p in points), points
@@ -75,6 +80,23 @@ def test_the_first_card_the_plan_line_and_the_chip():
     chips = dict(re.findall(r'\["([^"]+)",\s*"([^"]+)"\]',
                             re.search(r"const PW_SPORTS = \[(.*?)\n\];", APP, re.S).group(1)))
     assert chips.get("Ask Qellys AI") == first.group(1), "the chip and its card wear one mark"
+
+
+def test_the_paywall_shows_ask_and_opens_no_door_to_it():
+    """Ethan, 2026-09-23: "I don't want people to be able to access the chat
+    bot from the paywall page, I just wanted to display that it's a
+    feature." Nothing on the page leads into Ask, and the wall turns every
+    other route to it back to the paywall."""
+    for fn in ("paywallHTML", "pwAskHTML"):
+        body = _fn(fn)
+        for door in ('href="#ask"', "data-view=\"ask\"", 'switchView("ask"', "data-ask", "<textarea", "<input"):
+            assert door not in body, f"{fn} opens a way into Ask: {door}"
+    wall = re.search(r"const WALL_OPEN = \[(.*?)\];", APP, re.S).group(1)
+    assert '"ask"' not in wall, "Ask must stay behind the wall"
+    blocked = _fn("wallBlocked")
+    assert 'document.body.classList.contains("walled")' in blocked and "!WALL_OPEN.includes(name)" in blocked
+    assert "if (wallBlocked(name)) name = \"paywall\";" in _fn("switchView"), "a walled route to Ask lands on the paywall"
+    assert "body.walled .sidebar, body.walled .tabbar," in CSS, "and the tab bar with its Ask button is gone"
 
 
 def test_what_the_shop_sells_is_behind_the_subscription():
