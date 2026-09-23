@@ -9681,6 +9681,7 @@ function chainHTML(r) {
           c.base.sample_games != null
             ? ` · ${c.base.sample_games} game${c.base.sample_games === 1 ? "" : "s"} of his own`
             : ""}</span>` : ""}
+        ${chainShrinkHTML(c.base, r.position, decimals)}
         ${c.base.form_mean != null && Math.abs(c.base.form_mean - c.base.value) > 1e-9
           ? `<span class="ch-why ch-quiet">The recency blend would have said ${
               Number(c.base.form_mean).toFixed(decimals)}; for a rare event that
@@ -9704,6 +9705,21 @@ function chainHTML(r) {
         each one in this order and you get the projection above — that is the
         whole model, not a summary of it.</p>
     </div>`;
+}
+
+/* A THIN SAMPLE'S PULL, said where the number starts (2026-09-23). A
+   rookie or a player back from a lost season is projected from one or two
+   games pulled toward his position's typical number (engine/carry.thin_for,
+   measured on 2023-2025 weeks 2-3), and the base line above read as though
+   those games alone made it. */
+function chainShrinkHTML(base, position, decimals) {
+  if (!base || base.shrunk_to == null) return "";
+  const n = Number(base.sample_games), k = Number(base.shrink_k);
+  const pull = n > 0 && k > 0 ? Math.round(k / (n + k) * 100) : null;
+  const who = position ? `the typical ${escapeHtml(String(position).toUpperCase())}` : "a longer record’s rate";
+  return `<span class="ch-why">Only ${n} game${n === 1 ? "" : "s"} of his own${
+    pull != null ? `, so the blend is pulled ${pull}%` : ", so the blend is pulled"} toward ${
+    Number(base.shrunk_to).toFixed(decimals)} — ${who} — as measured for samples this thin.</span>`;
 }
 
 const CHAIN_WINDOWS = {

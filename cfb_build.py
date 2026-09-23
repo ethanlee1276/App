@@ -1365,6 +1365,14 @@ def main() -> None:
                                  _iso(day - datetime.timedelta(days=1)))
     ingest_results(conn, [g for g in history if g["completed"]])
     ingest_results(conn, [g for g in games if g["completed"]])
+    # …and each finished game's close, from the lines this build has been
+    # recording all season (engine/lineledger.closes_into_games): the
+    # published closes stop at last season, so 2026 read zero.
+    try:
+        from engine import lineledger as _ll
+        _ll.closes_into_games(conn, "cfb", [g for g in history + games if g["completed"]])
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  cfb closes from the tape: skipped — {type(exc).__name__}: {exc}")
     upcoming = cfbdata.load_range(_iso(day + datetime.timedelta(days=1)),
                                   _iso(day + datetime.timedelta(days=NEIGHBOUR_DAYS)))
     prev, nxt = cfbcontext.neighbours(history, upcoming)

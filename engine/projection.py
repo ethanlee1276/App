@@ -372,5 +372,9 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         chain=chain.build(base_val, base_src, steps, mean,
                           weights=dict(form_weights or WINDOW_WEIGHTS),
                           sample_games=form.sample_games,
-                          shrunk_to=form.shrunk_to),
+                          shrunk_to=form.shrunk_to,
+                          # How hard: the k in n/(n+k), so the pick page
+                          # can say "pulled 33% toward the typical WR" for
+                          # a thin sample (engine/carry.thin_for).
+                          shrink_k=(prop.form_prior_games or None) if form.shrunk_to is not None else None),
     )

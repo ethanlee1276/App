@@ -87,7 +87,7 @@ def _run(script):
            # claim, and on a refused row the shown probability is a
            # statement about the price instead.
            + "\n".join(_fn(n) for n in (
-               "chainProduct", "chainCloses", "chainStepRow", "chainHTML",
+               "chainProduct", "chainCloses", "chainStepRow", "chainShrinkHTML", "chainHTML",
                "checksHTML", "shrinkArtefact", "compsHTML"))
            + "\n" + script)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:

@@ -127,6 +127,24 @@ three games but ranked top-three by volume is almost always a fringe man
 mean over-projects by 60%; the real starters who missed a game are 4-15
 a market, too few to measure. Week 4 on stands as it was.
 
+RE-MEASURED ON FOUR SEASONS the same night (2022-2025, 2021 fetched as
+2022's prior), because the question was "should a starter back from a
+missed game stay on the board past week 3":
+
+    weeks 2-3, k=1     pass .22  rec yds .68  catches .63  rush .78 ×0.98
+    week 4+, a real role (per-game volume at a starter's level):
+                  n    own games       k=1          pooled with last season
+    rec_yds      22    1.07 ×0.82    0.99 ×0.88    1.07 ×0.80
+    receptions   22    0.97 ×0.64    0.90 ×0.70    0.95 ×0.63
+    rush_yds     13    0.48 ×0.83    0.50 ×0.92    0.55 ×0.77
+    pass_yds      5    0.30 ×0.84    0.24 ×0.87    0.38 ×0.84
+
+The early rule holds with a fourth season in it. The late case does not
+earn a rule: a receiver back with one or two games misses by his whole
+average and produces 12-36% LESS than those games say, under every
+construction tried — building him would put a confident, inflated number
+on the Most Likely board. He waits for his third game, as before.
+
 Standard library only. Reads the same cached nflverse feeds as the rest.
 """
 

@@ -122,6 +122,43 @@ def test_the_build_prints_and_publishes_it():
     assert 'result["thin"] = ' in src and "Built {len(thin)} player(s) on one or two games" in src
 
 
+def test_the_pick_page_says_the_pull_where_the_number_starts():
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    from engine.models import Prop, GameLog, SportsbookLine, Game, Weather, Team, DefenseProfile
+    from engine.projection import build_projection
+    p = Prop(player="Rookie", team="KC", opponent="DEN", position="WR", market=REC_YDS,
+             logs=[GameLog(2, "x", 30.0), GameLog(1, "x", 60.0)], career_avg=45.0, vs_opponent_avg=None,
+             lines=[SportsbookLine("proxy", 44.5, -110, -110)], usage_role="wr2",
+             form_prior=36.0, form_prior_n=17, form_prior_games=1.0)
+    base = build_projection(p, Game(home="KC", away="DEN", weather=Weather()),
+                            Team(abbr="DEN", name="DEN", defense=DefenseProfile(team="DEN"))).chain["base"]
+    assert base["shrunk_to"] == 36.0 and base["shrink_k"] == 1.0 and base["sample_games"] == 2
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed")
+        return
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "${chainShrinkHTML(c.base, r.position, decimals)}" in app
+    def fn(name):
+        i = app.index(f"function {name}(")
+        return app[i:app.index("\n}\n", i) + 2]
+    prog = (fn("escapeHtml") + fn("chainShrinkHTML")
+            + f"\nconsole.log(JSON.stringify([chainShrinkHTML({json.dumps(base)}, 'wr', 1), chainShrinkHTML({{}}, 'WR', 1)]));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    said, none = json.loads(out.stdout)
+    assert "Only 2 games of his own, so the blend is pulled 33% toward 36.0 — the typical WR" in said and none == ""
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

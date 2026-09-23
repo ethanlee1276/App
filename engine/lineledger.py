@@ -216,3 +216,76 @@ def record_note(conn, sport: str, games, now: _dt.datetime | None = None) -> str
             f"games, so the anchor cannot be measured")
     return (f"  {league} line ledger: {n} row(s) stored free — "
             f"{shopped} shopped, {tail}.")
+
+
+def closes_into_games(conn, sport: str, games) -> dict:
+    """Write each FINISHED game's last pre-kickoff line from this tape into
+    the games table, where the models and the grading read closes.
+
+    WHY (Ethan's droplet, 2026-09-23): college closes read
+    ``[(2022, 951), (2023, 939), (2024, 861), (2025, 860), (2026, 0)]``.
+    Every past season comes from cfbfastR's cfb_line_odds.csv, whose newest
+    row is 2026-01-20 — it publishes after a season, not during one. The
+    2026 closes were never missing; `record` has written every college game
+    line the build paid for since this module shipped. Nothing copied them
+    to where `gamecal`, `cfbtdfit` and the settle read.
+
+    Only snapshots taken BEFORE kickoff count (a line priced during the game
+    is not a close), only the shopped field (`BEST_BOOK`), and only where
+    the game has no close yet — a published close beats our own tape.
+    ``games`` are the build's own dicts: ``completed``, ``kickoff`` (ISO),
+    ``date``, ``home``, ``away``, ``game_id``, ``season``.
+    Returns {"games", "spread", "total", "ml"}.
+    """
+    import json as _json
+    out = {"games": 0, "spread": 0, "total": 0, "ml": 0}
+    for g in games or []:
+        if not g.get("completed") or not g.get("kickoff"):
+            continue
+        try:
+            kick = _dt.datetime.fromisoformat(str(g["kickoff"]).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if kick.tzinfo is None:
+            continue
+        cut = kick.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00Z")
+        home, away = g.get("home") or "", g.get("away") or ""
+        event_id = f"{str(g.get('date') or '')[:10]}-{away}@{home}"
+        last: dict = {}
+        for r in conn.execute(
+                "SELECT market, player, line, over_odds FROM odds_history WHERE sport=? AND "
+                "event_id=? AND book=? AND market IN ('spread','total','moneyline') AND taken_at<? "
+                "ORDER BY taken_at", (sport, event_id, BEST_BOOK, cut)):
+            last[(r[0], r[1])] = (r[2], r[3])
+        if not last:
+            continue
+        key = (sport, g.get("season") or 0, g.get("date") or "", g["game_id"])
+        wrote = False
+        for market, player, column in (("spread", home, "spread"), ("total", TOTAL_KEY, "total")):
+            got = last.get((market, player))
+            if got is None or got[0] is None:
+                continue
+            cur = conn.execute(
+                f"UPDATE games SET {column}=? WHERE sport=? AND season=? AND period=? AND game_id=? "
+                f"AND {column} IS NULL", (float(got[0]), *key))
+            out[column] += cur.rowcount
+            wrote = wrote or cur.rowcount > 0
+        hm, am = last.get(("moneyline", home)), last.get(("moneyline", away))
+        if hm and am and hm[1] and am[1]:
+            row = conn.execute("SELECT extra FROM games WHERE sport=? AND season=? AND period=? "
+                               "AND game_id=?", key).fetchone()
+            if row is not None:
+                try:
+                    extra = _json.loads(row[0] or "{}") or {}
+                except ValueError:
+                    extra = {}
+                if "ml" not in extra:
+                    extra["ml"] = [int(hm[1]), int(am[1])]
+                    extra["ml_source"] = "tape"
+                    conn.execute("UPDATE games SET extra=? WHERE sport=? AND season=? AND period=? "
+                                 "AND game_id=?", (_json.dumps(extra, separators=(",", ":")), *key))
+                    out["ml"] += 1
+                    wrote = True
+        out["games"] += int(wrote)
+    conn.commit()
+    return out

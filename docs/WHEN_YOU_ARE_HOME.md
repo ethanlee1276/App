@@ -15,7 +15,73 @@ as they are done.
 
 ---
 
-## LIVE. Did today's model work reach the board? (read-only, seconds)
+## NEXT TIME HOME — 2026-09-23 night, in this order
+
+Ethan, leaving again: *"start doing all that shit and save the codes for
+me too run when I'm back home."* Everything below is copy-paste. Only
+step 2 changes anything (it adds two database indexes, with the site
+stopped for about a minute). Paste every output back.
+
+**1. Which code is running** (want the newest commit on the branch):
+
+```bash
+cd /srv/qellys && cat data/autoupdate.json; echo
+```
+
+**2. The prediction-market indexes** — the build ran 248 s against a
+180-second kill, 207 s of it adding up 3.9 million trades from 144,039
+wallets with no index that carries the dollars
+(`engine/predmarket.BUILD_INDEXES`). Site down about a minute:
+
+```bash
+cd /srv/qellys && sudo systemctl stop qellys && sudo -u qellys python3 -c "from engine import predmarket as pm; pm.build_indexes()"; sudo systemctl start qellys
+sudo -u qellys timeout 300 python3 pm_build.py --out /tmp/pm.json | grep -E "wallet history|recent tape|Wrote"
+```
+
+Want: "wallet history" a few seconds after "recent tape", not ~200.
+
+**3. This season's college closes, backfilled.** The published closes stop
+at the 2025 season (cfbfastR's newest row is 2026-01-20), so 2026 read
+zero. Every college build now copies each finished game's last pre-kickoff
+line from our own tape (`engine/lineledger.closes_into_games`) for the
+last fourteen days; this does the whole season once:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, lineledger as L; from engine.sources import cfbdata as C; c=db.connect(); print(L.closes_into_games(c, 'cfb', C.load_range('2026-08-22', '2026-09-23')))"
+python3 -c "from engine import db; c=db.connect(); print([tuple(r) for r in c.execute(\"SELECT season, COUNT(total) FROM games WHERE sport='cfb' GROUP BY season\")])"
+```
+
+Want: the first line counting games, spreads and totals written; the
+second showing 2026 above zero. It can only fill games the build saw a
+book line for, so early-August games may stay empty.
+
+**4. Every number still traces to its model** (all leagues, full boards):
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs | grep -E "wiring|LOOK"
+```
+
+Want: every league "every step and card reaches the number" and nothing
+under LOOK AT THESE.
+
+**5. SATURDAY ONLY — are college receptions priced?** On the one-game
+Wednesday slate none were, and the cache showed books posting receptions
+about half as often as receiving yards. On a full Saturday this says
+whether it is the books or a matching bug:
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
+```
+
+Want: `receptions … priced` above 0%.
+
+## LIVE. Did today's model work reach the board? (read-only, seconds) — ANSWERED 2026-09-23
+
+Answered from the phone that evening: the Status page's Model builds
+section showed every league rebuilding on the new code, and the full run
+confirmed the NFL board (609 props, 52 thin-sample players, Nabers and
+Malachi Fields on it, the lineup step moving 13 rows). Kept for the
+commands, which still answer the same question after any push.
 
 Ethan, 2026-09-23: *"the same most likely pics that we had earlier are
 the same ones that are there now."* From here the site cannot be
