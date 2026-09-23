@@ -230,13 +230,50 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
           f"· tape {stored:,}")
 
 
+#: This build's own ceiling, under the launcher's 180-second kill
+#: (launch._run_build). Ethan's droplet, 2026-09-23: killed at 180 s every
+#: cycle for six hours, so the page kept a morning board and the tape kept
+#: nothing. Past this the optional network steps — settling old flags,
+#: the leaderboard's wallets — are skipped and the last published copy of
+#: them stands, so the core (markets, the tape, the flow feed) always
+#: ships. Every step prints its clock, so `python3 pm_build.py --out
+#: /tmp/pm.json` by hand says where the time goes.
+BUDGET_S = 140
+_T0 = [time.monotonic()]
+
+
+def _lap(step: str) -> None:
+    print(f"  pm {step:<16} {time.monotonic() - _T0[0]:6.1f}s", flush=True)
+
+
+def _over() -> bool:
+    return time.monotonic() - _T0[0] > BUDGET_S
+
+
+class _OverBudget(Exception):
+    """Raised to skip a step the time budget has no room for."""
+
+
+def _last_published(path: Path) -> dict:
+    """The previous build's page, for the parts this one skipped."""
+    for p in (gate._full_dir_for(path) / path.name, path):
+        try:
+            if p is not None and Path(p).is_file():
+                return json.loads(Path(p).read_text())
+        except Exception:                          # noqa: BLE001
+            continue
+    return {}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/predmarkets.json")
     args = ap.parse_args()
 
+    _T0[0] = time.monotonic()
     out_dir = Path(args.out).parent
     build_kalshi(out_dir / "kalshi.json", out_dir)
+    _lap("kalshi board")
 
     try:
         markets = pm.parse_markets(pm.fetch_markets())
@@ -250,6 +287,7 @@ def main() -> None:
         trades += pm.parse_trades(pm.fetch_big_trades())
     except DataUnavailable:
         pass
+    _lap("polymarket pull")
 
     conn = connect()
     new_trades = pm.store_trades(conn, trades)
@@ -267,10 +305,14 @@ def main() -> None:
     # Validation loop: persist every flag, settle the ones whose markets
     # resolved, and publish the report card. An ungraded flag is decoration.
     new_flags = pm.store_flags(conn, feed)
-    try:
-        settled = pm.resolve_flags(conn)
-    except Exception:
-        settled = 0
+    _lap("tape + flow")
+    settled = 0
+    if not _over():
+        try:
+            settled = pm.resolve_flags(conn)
+        except Exception:
+            settled = 0
+        _lap("settle flags")
     validation = pm.flag_report(conn)
     # THE WEIGHTS, REFIT AGAINST THE FLAGS THAT RESOLVED. Every number in
     # `score_trade` was a professional estimate and could never be
@@ -293,13 +335,16 @@ def main() -> None:
         w["name"] = names.get(w["wallet"], "")
     for r in validation.get("recent", []):
         r["name"] = names.get(r["wallet"], "")
-    conn.close()
+    _lap("validation")
 
     # Top traders by realized P&L (Polymarket's own leaderboard), each with
     # their latest trades. Falls back to our tape's most-active wallets if
     # the leaderboard endpoint is unreachable.
     top_traders, traders_note = [], ""
+    last = _last_published(Path(args.out)) if _over() else {}
     try:
+        if last.get("top_traders"):
+            raise _OverBudget
         leaders, window_label = [], ""
         for window, label in pm.LEADERBOARD_WINDOWS:
             try:
@@ -313,6 +358,8 @@ def main() -> None:
             raise DataUnavailable("no leaderboard window answered")
         by_wallet, pnl_by_wallet = {}, {}
         for ld in leaders:
+            if _over():
+                break           # the wallets fetched so far; the rest wait a cycle
             try:
                 by_wallet[ld["wallet"]] = pm.parse_trades(
                     pm.fetch_wallet_trades(ld["wallet"]))
@@ -328,6 +375,8 @@ def main() -> None:
         top_traders = pm.build_top_traders(leaders, by_wallet, pnl_by_wallet)
         traders_note = (f"ranked by realized profit over {window_label} "
                         f"(Polymarket leaderboard)")
+    except _OverBudget:
+        top_traders, traders_note = last["top_traders"], last.get("traders_note", "")
     except (DataUnavailable, ValueError) as exc:
         ranked = sorted(history.items(), key=lambda kv: -kv[1]["usd"])[:10]
         top_traders = pm.build_top_traders(
@@ -338,11 +387,19 @@ def main() -> None:
 
     # Display board: live prices only — a settled market pinned at 0/100¢
     # (finished esports series etc.) is clutter, not information.
+    _lap("top traders")
     display_markets = [m for m in markets if 0.02 <= m["yes"] <= 0.98]
     # Same tape the Kalshi board carries, off pm_snaps rather than
     # kalshi_snapshots. Only the rows that ship get one — attaching a day
     # of history to markets the board drops is work nobody reads.
+    #
+    # BEFORE the connection closes. It used to run after `conn.close()`,
+    # every per-row read raised "Cannot operate on a closed database",
+    # `_attach_tape` swallows a row's failure by design — and no
+    # Polymarket market ever shipped its chart.
     _attach_tape(conn, display_markets[:50], pm.price_series, "slug")
+    conn.close()
+    _lap("price tape")
 
     out = {
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),

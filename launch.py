@@ -862,6 +862,12 @@ def refresh_nfl(quiet: bool = False) -> bool:
 #: its floor, a hand-run `launch.py` still rebuilds everything.
 PREDMARKETS_EVERY_S = 600
 FANTASY_EVERY_S = 900
+#: A FAILED prediction-market build waits this long before the next try.
+#: Ethan's droplet, 2026-09-23: pm_build timed out at 180 s on EVERY cycle
+#: for at least six hours, because only a success stamped the floor above —
+#: 180 of each 599-second cycle spent on a build that was killed, on a
+#: one-core box already at a load of 3, and the sports boards waited on it.
+PREDMARKETS_FAIL_BACKOFF_S = 1800
 
 
 def _due(stamp: str, every_s: int) -> bool:
@@ -889,9 +895,15 @@ def refresh_predmarkets(quiet: bool = False) -> bool:
     anyway on a healthy nine-minute cycle."""
     if quiet and not _due(".pm_built", PREDMARKETS_EVERY_S):
         return True                         # fresh enough — see the floors above
+    if quiet and not _due(".pm_failed", PREDMARKETS_FAIL_BACKOFF_S):
+        _LAST_BUILD_NOTE[0] = ("backing off after a failed build — next try "
+                               f"{PREDMARKETS_FAIL_BACKOFF_S // 60} min after it")
+        return False
     ok, tail = _run_build(["pm_build.py", "--out", "web/data/predmarkets.json"])
     if ok:
         _stamp(".pm_built")
+    else:
+        _stamp(".pm_failed")
     if not quiet:
         print(f"  PM   markets: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))

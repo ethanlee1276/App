@@ -190,6 +190,9 @@ def test_the_wiring_check_passes_a_good_board_and_names_every_break():
 def test_homecheck_prints_it():
     src = open(os.path.join(ROOT, "engine", "inputcheck.py"), encoding="utf-8").read()
     assert "w = wiring(board)" in src and 'flagged += [f"{sport} wiring: {x}"' in src
+    hc = open(os.path.join(ROOT, "homecheck.py"), encoding="utf-8").read()
+    body = hc[hc.index("def inputs("):hc.index("CHECKS = {")]
+    assert "_board(sport, full=True)" in body, "the light copy drops the chains the wiring check reads"
 
 
 def test_the_rows_the_page_and_ask_carry_it():

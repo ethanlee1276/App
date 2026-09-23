@@ -59,9 +59,12 @@ def head() -> list:
     return [f"HEAD: {out}"]
 
 
-def _board(sport: str):
+def _board(sport: str, full: bool = False):
     """This league's published board, through the same three lookups
-    every other droplet tool uses.
+    every other droplet tool uses. ``full`` skips the light copy, which
+    drops each row's chain (lightboard.DROP_ROW) — the wiring check needs
+    every one of them (Ethan's run, 2026-09-23: "wiring: 32 rows checked"
+    of 609).
 
     `launch.BOARD_FILES` because a board is NOT named after its league
     (the NFL writes `recommendations.json`), `lightboard.light_path`
@@ -71,7 +74,8 @@ def _board(sport: str):
     """
     import launch
     from engine import gate, lightboard
-    path = gate.board_source(lightboard.light_path(launch.BOARD_FILES[sport]))
+    name = launch.BOARD_FILES[sport]
+    path = gate.board_source(name if full else lightboard.light_path(name))
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -1111,7 +1115,7 @@ def inputs() -> list:
     boards = {}
     for sport in launch.BOARD_FILES:
         try:
-            boards[sport] = _board(sport)
+            boards[sport] = _board(sport, full=True)
         except Exception as exc:                              # noqa: BLE001
             boards[sport] = f"unreadable — {type(exc).__name__}: {exc}"
     return inputcheck.report(boards)
