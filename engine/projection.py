@@ -124,7 +124,8 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         from .formfit import weights_for
         form_weights = weights_for(sport, prop.market)
     form = compute_form(prop.logs, prop.career_avg, prop.vs_opponent_avg,
-                        weights=form_weights)
+                        weights=form_weights, prior=prop.form_prior,
+                        prior_n=prop.form_prior_n, prior_games=prop.form_prior_games)
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game,
                                measured_context=bool(context), sport=sport)

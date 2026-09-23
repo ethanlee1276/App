@@ -885,6 +885,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     specs = one_quarterback_each(specs, team_of)
 
     carried_report: dict = {}
+    thin_report: dict = {}
     props: list[Prop] = []
     for spec in specs:
         team = team_of(spec.player)
@@ -896,9 +897,20 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             carried = _carry.carry_for(index, prior_stats, spec.player,
                                        spec.market,
                                        pos_means.get(spec.market, {}))
-        if carried is None and len(logs) < MIN_LOGS:
+        thin = None
+        if carried is None and len(logs) < MIN_LOGS and carry and pos_means:
+            # A rookie, or last season lost to injury: one or two games
+            # and no carry. Built from them, pulled toward the position
+            # (engine/carry.py, THIN SAMPLES — weeks 2-3 only).
+            thin = _carry.thin_for(logs, prior_stats, spec.player, spec.market,
+                                   spec.position or position_of(spec.market),
+                                   pos_means.get(spec.market, {}), upto_week)
+        if carried is None and thin is None and len(logs) < MIN_LOGS:
             continue  # not enough history to project
-        if carried is not None:
+        if thin is not None:
+            baseline = thin["baseline"]
+            thin_report[spec.player] = thin
+        elif carried is not None:
             # Order matters and is not the sort order: a carried week 17
             # is OLDER than a current week 1, and compute_form reads the
             # list positionally. Current games first, always.
@@ -954,6 +966,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
             usage_role=spec.usage_role,
             headshot=face_for(headshots, spec.player),
+            form_prior=thin["anchor"] if thin and thin["weight"] < 1.0 else None,
+            form_prior_n=_carry.THIN_ANCHOR_GAMES if thin else 0,
+            form_prior_games=_carry.THIN_PRIOR_GAMES if thin else 0.0,
         ))
 
     # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
@@ -1020,6 +1035,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     if report is not None:
         report["carried"] = carried_report
         report["carried_n"] = len(carried_report)
+        report["thin"] = thin_report
         # WHO EACH TEAM'S QUARTERBACKS ARE, and what they have thrown —
         # engine/qbchange reads it once the injuries are in.
         from ..qbchange import quarterbacks as _quarterbacks

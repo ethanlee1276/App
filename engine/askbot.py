@@ -2398,9 +2398,22 @@ def _fantasy_rows(boards: dict):
                 yield r
 
 
+def _fantasy_roster() -> dict:
+    """{name: {"team", "position"}} — the published NFL rosters, everyone on them."""
+    from engine import statlogs as SL
+    return {pl["player"]: pl for pl in SL._roster_players("nfl", ROSTER_DIR)}
+
+
 def _fantasy_name(conn, boards: dict, name: str) -> tuple:
     """The one NFL player a typed name means: (name or None, other candidates).
-    A surname two players share is not a guess — the model is handed both."""
+    A surname two players share is not a guess — the model is handed both.
+
+    A misspelling is forgiven the way the Players page forgives it
+    (engine/playersearch.rank, best tier only). Ethan, 2026-09-23: "who do
+    i start in fantasy malachi fields or malik nabers" came back "no NFL
+    player by that name" — the name reached this as "Malachi Field", and
+    every word had to match whole. The rosters are in the pool too, so a
+    man who has not played yet is known to exist rather than unheard of."""
     q = _norm(name).strip()
     pool = {_norm(r["player"]).strip(): r["player"] for r in _fantasy_rows(boards)}
     if conn is not None:
@@ -2408,11 +2421,21 @@ def _fantasy_name(conn, boards: dict, name: str) -> tuple:
                 "SELECT DISTINCT player FROM player_game_logs WHERE sport='nfl' AND market='fp_ppr' AND "
                 "season >= (SELECT MAX(season) - 1 FROM player_game_logs WHERE sport='nfl')"):
             pool.setdefault(_norm(p).strip(), p)
+    for p in _fantasy_roster():
+        pool.setdefault(_norm(p).strip(), p)
     if q in pool:
         return pool[q], []
     words = q.replace("'s", "").split()
     hits = sorted({v for k, v in pool.items() if words and all(f" {w} " in f" {k} " for w in words)})
-    return (hits[0], []) if len(hits) == 1 else (None, hits[:5])
+    if hits:
+        return (hits[0], []) if len(hits) == 1 else (None, hits[:5])
+    from engine.playersearch import rank
+    tiers = {v: t for v in pool.values() for t in [rank(v, name)] if t is not None}
+    if not tiers:
+        return None, []
+    best = min(tiers.values())
+    top = sorted(v for v, t in tiers.items() if t == best)
+    return (top[0], []) if len(top) == 1 else (None, top[:5])
 
 
 def _fantasy_season(conn, player: str) -> dict:
@@ -2459,6 +2482,11 @@ def fantasy_points(boards: dict, players: list, scoring: str = "ppr") -> dict:
                 continue
             rows = [r for r in _fantasy_rows(boards) if r.get("player") == name]
             season = _fantasy_season(conn, name)
+            if not rows and not season.get("games"):
+                ro = _fantasy_roster().get(name) or {}
+                unsure[typed] = (f"{name} ({' '.join(x for x in (ro.get('team'), ro.get('position')) if x)}) "
+                                 "is on the roster with no NFL game logged yet: nothing to project from")
+                continue
             pos = next((str(r.get("position") or "").upper() for r in rows if r.get("position")), "") \
                 or season.get("position", "")
             if pos not in FANTASY_PARTS:

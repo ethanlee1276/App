@@ -89,8 +89,43 @@ WHAT IS AND IS NOT DETECTABLE ACROSS AN OFFSEASON
   season has no snaps until it has games. Under-detection, never false
   detection, exactly as in ``reset.py``.
 
-Rookies need no special case: a player with no prior-season logs simply
-gets no carry and does not reach the board.
+Rookies DID need a case, and it was the one that went unseen. A player
+with no carry — a rookie, or anyone with fewer than ``MIN_PRIOR_GAMES``
+last season (a torn ACL in week 4) — was dropped until his third game.
+See THIN SAMPLES below.
+
+THIN SAMPLES (Ethan, 2026-09-23: "some players are not showing up for nfl
+like we are missing players")
+--------------------------------------------------------------------------
+The 2026 week 3 board had no Malik Nabers (four 2025 games, then the knee)
+and no Malachi Fields, Carnell Tate, Jeremiyah Love, KC Concepcion — 23
+players among their teams' top three by volume, every one of them with
+real games this season, each off the board because he had one or two of
+them and no carry.
+
+Measured on 2023-2025, weeks 2-3, every such player in
+``top_players_for_week`` (``thin_for``): his next game against his own
+one or two, pulled toward the positional mean by ``n/(n+k)``:
+
+    market       n     k=0 own          k=1               carried players
+    pass_yds     34    rel .29  ×1.16   rel .24  ×1.13    rel .23
+    rec_yds     233    rel .68  ×1.07   rel .67  ×1.06    rel .61
+    receptions  233    rel .66  ×1.01   rel .63  ×1.02    rel .53
+    rush_yds     97    rel .76  ×1.23   rel .77  ×1.00    rel .58-.63
+
+(rel = mean absolute error over the mean; ×y/p = actual over projected.)
+k=1 is as good or better everywhere and takes the rookie backs' 23% under-
+projection out, so ``THIN_PRIOR_GAMES`` is 1.0. They predict a little
+worse than a carried season and nowhere near worse enough to hide them,
+so they are BUILT, the card says what the number stands on, and — like an
+offseason mover — they are not STAKED on the edge board while that is all
+there is (``STAKE_ON_THIN``).
+
+EARLY SEASON ONLY (``THIN_UPTO_WEEK``). From week 4 a player still under
+three games but ranked top-three by volume is almost always a fringe man
+(6.3 receiving yards a game, n 115), whom the pull toward the positional
+mean over-projects by 60%; the real starters who missed a game are 4-15
+a market, too few to measure. Week 4 on stands as it was.
 
 Standard library only. Reads the same cached nflverse feeds as the rest.
 """
@@ -130,6 +165,19 @@ DISCARD_ON_RESET = False
 #: settled bets before it can say anything at all — so this is the stretch
 #: where caution is cheapest.
 STAKE_ON_RESET = False
+
+#: The k in ``n/(n+k)`` for a thin sample — one or two games this season
+#: and no carry. Fitted on 2023-2025 weeks 2-3; see THIN SAMPLES above.
+THIN_PRIOR_GAMES = 1.0
+#: The latest board week the thin rule builds for (weeks 2 and 3).
+THIN_UPTO_WEEK = 3
+#: Games that stand behind the positional anchor, for compute_form's
+#: "a prior measured over almost nothing is not a prior" check: it is the
+#: mean of qualified players' season means, each over MIN_PRIOR_GAMES or
+#: more, so at least a season.
+THIN_ANCHOR_GAMES = 17
+#: Shown, not staked — the same answer, for the same reason, as a mover.
+STAKE_ON_THIN = False
 
 #: Kinds of offseason reset, reusing reset.py's vocabulary so a reader sees
 #: one set of labels across both rules.
@@ -337,6 +385,29 @@ def carry_for(index: dict, prior_rows: list[dict], player: str, market: str,
     }
 
 
+def thin_for(logs: list, prior_rows: list[dict], player: str, market: str,
+             position: str, pos_means: dict[str, float], upto_week: int) -> dict | None:
+    """The early-season build for a player with one or two games and no
+    carry, or None. ``baseline`` is his own mean pulled toward the
+    positional mean by n/(n+THIN_PRIOR_GAMES); ``anchor`` is what
+    compute_form shrinks the projection toward, the same way."""
+    n = len(logs)
+    if n < 1 or upto_week > THIN_UPTO_WEEK:
+        return None
+    own = sum(g.value for g in logs) / n
+    anchor = pos_means.get(position)
+    w = n / (n + THIN_PRIOR_GAMES) if anchor else 1.0
+    return {
+        "games": n,
+        "prior_games": len(carried_logs(prior_rows, player, market)) if prior_rows else 0,
+        "weight": w,
+        "own_mean": own,
+        "anchor": anchor,
+        "baseline": w * own + (1.0 - w) * (anchor or own),
+        "position": position,
+    }
+
+
 def shrunk_mean(carry: dict) -> float:
     """The carried baseline after the fitted pull toward the positional mean."""
     anchor = carry.get("anchor")
@@ -385,5 +456,25 @@ def decorate(recommendations: list[dict], report: dict) -> int:
                     "Not staked while that is the only sample there is. It "
                     "stays on the board so the number is visible, but a bet "
                     "wants evidence about the job he holds now")
+        n += 1
+    thin = report.get("thin") or {}
+    for r in recommendations:
+        entry = thin.get(r.get("player"))
+        if not entry:
+            continue
+        games, pg = entry.get("games", 0), entry.get("prior_games", 0)
+        why = ("none last season" if not pg
+               else f"{pg} last season, too few to carry")
+        pull = 1.0 - entry.get("weight", 1.0)
+        r.setdefault("warnings", []).append(
+            f"Only {games} game{'' if games == 1 else 's'} this season ({why}): projected from "
+            + (f"{'it' if games == 1 else 'them'}, pulled {pull:.0%} toward the typical "
+               f"{entry.get('position') or 'player'}" if pull > 0 else f"{'it' if games == 1 else 'them'}"))
+        r["thin"] = {k: entry.get(k) for k in ("games", "prior_games", "weight", "position")}
+        if not STAKE_ON_THIN and r.get("recommended"):
+            r["recommended"] = False
+            r["thin"]["held_back"] = True
+            r["warnings"].append("Not staked on so few games. It stays on the board so the number "
+                                 "is visible")
         n += 1
     return n

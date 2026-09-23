@@ -497,6 +497,11 @@ def main() -> None:
             print(f"  {moved} of them changed team or head coach in the "
                   f"offseason; flagged on the card, not discarded "
                   f"(see engine/carry.py for why).")
+    if carry_report.get("thin"):
+        thin = carry_report["thin"]
+        print(f"Built {len(thin)} player(s) on one or two games and no carry (rookies, "
+              f"last season lost to injury): "
+              + ", ".join(sorted(thin)[:8]) + (" …" if len(thin) > 8 else ""))
 
     # THE BOARD MUST RECORD WHETHER §7 ACTUALLY RAN, not just whether it
     # was asked to. Found by the Phase 3 rehearsal, 2026-08-20: building
@@ -1026,9 +1031,12 @@ def main() -> None:
 
     # …and say when the number came from last season at all. A carried
     # projection that reads like a played one is this feature's whole risk.
-    if carry_report.get("carried"):
+    if carry_report.get("carried") or carry_report.get("thin"):
         from engine import carry as _carry
         _carry.decorate(result["recommendations"], carry_report)
+        result["thin"] = {p: {"games": e["games"], "prior_games": e["prior_games"],
+                              "weight": round(e["weight"], 3), "position": e["position"]}
+                          for p, e in (carry_report.get("thin") or {}).items()}
         result["carried"] = {
             p: {"season": e["season"], "games": e["games"],
                 "weight": round(e["weight"], 3), "position": e["position"],

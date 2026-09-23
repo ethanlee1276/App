@@ -24,6 +24,11 @@ from engine import db as _db                                     # noqa: E402
 
 _TMP = Path(tempfile.mkdtemp())
 os.environ["QB_ASK_WEB_DAILY"] = "0"
+# The roster the fantasy lookup reads is the box's own published file;
+# a test reads an empty folder instead (and one test writes its own).
+from engine import statlogs as _SL                               # noqa: E402
+_SL.ROSTER_DIR = str(_TMP)
+_SL._ROSTER.clear()
 
 
 def _logs():
@@ -41,6 +46,7 @@ def _logs():
         add("Josh Allen", "BUF", "MIA", "QB", wk, pass_yds=250.0, pass_td=2.0, rush_yds=30.0, rush_td=0.5,
             fp_ppr=24.0)
         add("Keenan Allen", "CHI", "MIN", "WR", wk, rec_yds=50.0, receptions=5.0, rec_td=0.0, fp_ppr=10.0)
+        add("Malachi Fields", "NYG", "DAL", "WR", wk, rec_yds=28.0, receptions=3.0, rec_td=0.0, fp_ppr=5.8)
         # what each defence gave up to tight ends: DET a lot, GB little
         add(f"TE {opp}", "XX", opp, "TE", wk, rec_yds={"DET": 90.0, "CHI": 50.0, "GB": 20.0}[opp],
             receptions=5.0, rec_td=1.0 if opp == "DET" else 0.0,
@@ -102,6 +108,33 @@ def test_a_shared_surname_is_asked_about_not_guessed():
     assert [p["player"] for p in got["players"]] == ["Chris Olave"]
     assert got["unsure"]["Allen"] == ["Josh Allen", "Keenan Allen"]
     assert AB.fantasy_points(BOARDS, ["Nobody Atall"])["found"] is False
+
+
+def test_a_misspelt_name_is_the_player_it_nearly_spells():
+    """Ethan, 2026-09-23: "Who do i start in fantasy malachi fields or malik
+    nabers" → "I can't find a 'Malachi Field'". The Players page's own
+    forgiving match, best tier only."""
+    got = AB.fantasy_points(BOARDS, ["Malachi Field", "chris olav"])
+    assert [p["player"] for p in got["players"]] == ["Chris Olave", "Malachi Fields"], got
+    assert "unsure" not in got
+
+
+def test_a_rostered_player_with_no_game_is_known_not_unheard_of():
+    import json as _json
+    from engine import statlogs as SL
+    d = Path(tempfile.mkdtemp())
+    (d / "rosters_nfl.json").write_text(_json.dumps({"teams": {"TEN": {"players": [
+        {"player": "Carnell Tate", "position": "WR"}]}}}))
+    was, SL.ROSTER_DIR = SL.ROSTER_DIR, str(d)
+    SL._ROSTER.clear()
+    try:
+        got = AB.fantasy_points(BOARDS, ["carnell tate"])
+    finally:
+        SL.ROSTER_DIR = was
+        SL._ROSTER.clear()
+    assert got["found"] is False
+    assert got["unsure"]["carnell tate"] == \
+        "Carnell Tate (TEN WR) is on the roster with no NFL game logged yet: nothing to project from"
 
 
 def test_defences_against_a_position_are_ranked_from_the_logs():

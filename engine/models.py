@@ -188,6 +188,13 @@ class Prop:
     # official headshot URL when a data source provides one (nflverse
     # weekly stats carry headshot_url); the UI falls back to an SVG avatar
     headshot: str = ""
+    # A THIN SAMPLE'S ANCHOR (engine/carry.thin_for): the rate a one- or
+    # two-game log is pulled toward, how many games stand behind it, and
+    # the k in n/(n+k). build_projection hands them to compute_form. Off
+    # (None) for every prop that has a real sample.
+    form_prior: Optional[float] = None
+    form_prior_n: int = 0
+    form_prior_games: float = 0.0
 
 
 @dataclass
