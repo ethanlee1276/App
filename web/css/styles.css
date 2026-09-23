@@ -7778,8 +7778,6 @@ body.has-deck #rail-live { display: none; }
 .mbc.push { border-left: 3px solid var(--border); }
 .mbc-head { display: flex; align-items: baseline; gap: 10px; }
 .mbc-title { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
-.mbc-odds { color: var(--brand-2); }
-.mbc-tag { font-size: var(--fs-xs); letter-spacing: .06em; }
 .mbc-legs { margin: 6px 0 0; padding-left: 18px; color: var(--text-body);
   font-size: var(--fs-sm); }
 .mbc-legs li { margin: 2px 0; }
