@@ -11350,3 +11350,16 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .ask-attach-row b { flex-shrink: 0; color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .ask-attach-row:hover { background: var(--panel); }
 .ask-attach-none { margin: 0; padding: 4px 8px 8px; color: var(--text-mute); font-size: var(--fs-sm); }
+
+/* ASK QELLYS ON THE DESKTOP BAR (2026-09-23): the gold pill, first thing
+   right of the wordmark's side, so the assistant is one click from every
+   page. The phone keeps its tab-bar slot; this hides where that shows. */
+.tb-ask { display: inline-flex; align-items: center; gap: 7px; height: 34px;
+  padding: 0 14px; border-radius: 999px; border: var(--hairline) solid var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand);
+  font-weight: 700; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
+.tb-ask svg { width: 16px; height: 16px; }
+.tb-ask:hover, .tb-ask.active, .tb-ask[aria-current="page"] {
+  background: var(--brand); color: #141414; }
+.sb-item.sb-ask { color: var(--brand); }
+@media (max-width: 760px) { .tb-ask { display: none; } }
