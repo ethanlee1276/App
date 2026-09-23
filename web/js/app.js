@@ -22055,6 +22055,7 @@ function paywallHTML(rec, status) {
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
       <p class="pw-sub">Professional sports intelligence. Real-time edges.
         Every call graded in public.</p>
+      ${pwHeroCtaHTML(trialOK ? trialDays : 0)}
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -22654,6 +22655,26 @@ async function renderDiscord() {
     host.innerHTML = discordPageHTML(_pwStatus, welcome);
   } catch (e) { /* the first draw stands */ }
 }
+
+/* THE HERO'S TWO DOORS. Ethan's product audit, 2026-09-23, item 7: a
+   visitor's first screen should carry two buttons — the trial and
+   the record. The trial button TAKES YOU TO THE PLAN CARD rather than
+   straight into checkout: that card is where "card required, becomes
+   $X a month on day N" is said before the click, and a hero button
+   that skipped it would be the silent conversion the card exists to
+   refuse. With no trial on offer it says what it does: the plans. */
+function pwHeroCtaHTML(trialDays) {
+  return `<div class="pw-cta">
+    <button class="btn primary pw-cta-go" type="button" onclick="pwToPlans()">${
+      trialDays > 0 ? `Start ${trialDays} days free` : "See the plans"}</button>
+    <a class="btn ghost pw-cta-rec" href="#record">See the record</a>
+  </div>`;
+}
+
+window.pwToPlans = function () {
+  const el = document.querySelector(".pw-plans");
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+};
 
 window.pwSignIn = function () {
   _switchViewNow("account", false, 0);

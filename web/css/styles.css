@@ -9835,6 +9835,9 @@ input:-webkit-autofill:focus {
   letter-spacing: -.01em; line-height: var(--lh-tight); margin: 0; }
 .pw-h1 em { font-style: normal; color: var(--brand-2); }
 .pw-sub { font-size: var(--fs-xl); font-weight: 700; margin: 12px 0 0; }
+/* The hero's two doors (audit item 7): the trial, then the record. */
+.pw-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 18px 0 4px; }
+.pw-cta .btn { min-height: 44px; padding: 10px 20px; font-size: var(--fs-md); text-decoration: none; }
 .pw-lede { color: var(--text-mute); max-width: var(--measure-tight); margin: 10px auto 0;
   line-height: var(--lh-snug); }
 .pw-sports { display: flex; flex-wrap: wrap; justify-content: center;
