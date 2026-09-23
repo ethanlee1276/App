@@ -51,6 +51,7 @@ STEP_LABELS = {
     "statcast": "Contact quality",
     "ump": "Plate umpire",
     "rare": "Rare-event damping",
+    "coherence": "Kept possible with his other lines",
 }
 
 #: Where the multiplying starts.
@@ -95,6 +96,21 @@ def build(base_value, base_source: str, steps: list, mean,
         "steps": [s for s in steps if s],
         "mean": round(float(mean), 4),
     }
+
+
+def adjust(chain: dict, key: str, old_mean, new_mean, why: str = "") -> None:
+    """A step applied AFTER the chain was built — e.g. MLB's hits / total
+    bases / home runs coherence (engine/mlb/pipeline) — so the chain keeps
+    reaching the number that ships. Found by inputcheck.wiring on the
+    droplet, 2026-09-23: 44 MLB rows whose steps multiplied to 2.70 while
+    the row showed 2.50, because the reconcile moved the mean and wrote
+    only a reason."""
+    if not chain or not old_mean:
+        return
+    s = step(key, float(new_mean) / float(old_mean), why)
+    if s:
+        chain.setdefault("steps", []).append(s)
+    chain["mean"] = round(float(new_mean), 4)
 
 
 def product(chain: dict) -> float:

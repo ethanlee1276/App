@@ -400,16 +400,39 @@ def recent_tape(conn, hours: int = 24, now: float | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def wallet_history(conn) -> dict[str, dict]:
-    """{wallet: {"first_ts": int, "n": int, "usd": float}} from OUR tape."""
+def wallet_history(conn, wallets=None) -> dict[str, dict]:
+    """{wallet: {"first_ts": int, "n": int, "usd": float}} from OUR tape.
+
+    ``wallets`` limits it to those wallets — the ones the flow feed is
+    about to score. The whole-tape GROUP BY reads every trade ever
+    recorded, row by row for its dollars, on every build; on the droplet
+    (2026-09-23) pm_build printed its pull at 6.5 s and then nothing for
+    five minutes. Per wallet it walks idx_pm_trades_wallet instead."""
     ensure_tables(conn)
     out = {}
-    for r in conn.execute(
+    if wallets is None:
+        rows = conn.execute(
             "SELECT wallet, MIN(ts) AS first_ts, COUNT(*) AS n, "
-            "SUM(usd) AS usd FROM pm_trades GROUP BY wallet"):
+            "SUM(usd) AS usd FROM pm_trades GROUP BY wallet")
+    else:
+        ws = sorted({w for w in wallets if w})
+        rows = []
+        for i in range(0, len(ws), 500):
+            chunk = ws[i:i + 500]
+            rows += conn.execute(
+                "SELECT wallet, MIN(ts) AS first_ts, COUNT(*) AS n, SUM(usd) AS usd "
+                f"FROM pm_trades WHERE wallet IN ({','.join('?' * len(chunk))}) GROUP BY wallet",
+                chunk).fetchall()
+    for r in rows:
         out[r["wallet"]] = {"first_ts": int(r["first_ts"]), "n": int(r["n"]),
                             "usd": float(r["usd"] or 0)}
     return out
+
+
+def wallets_seen(conn) -> int:
+    """How many wallets the tape has ever recorded (off the wallet index)."""
+    ensure_tables(conn)
+    return int(conn.execute("SELECT COUNT(DISTINCT wallet) FROM pm_trades").fetchone()[0])
 
 
 # --- scoring (pure) ---------------------------------------------------------

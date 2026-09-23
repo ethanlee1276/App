@@ -227,6 +227,32 @@ def test_the_rows_the_page_and_ask_carry_it():
     assert none == "" and "Teammate out" in html and "Isiah Pacheco just ruled out ahead of him at RB" in html
 
 
+def test_mlb_s_coherence_step_keeps_its_chain_reaching_the_number():
+    """The droplet's first full wiring run, 2026-09-23: 44 MLB rows whose
+    steps multiplied to 2.70 while the row showed 2.50 — the hits / total
+    bases / home runs reconcile moved the mean after the chain was built."""
+    from engine import chain as CH
+    ch = CH.build(2.0, "form", [CH.step("park", 1.35)], 2.70)
+    CH.adjust(ch, "coherence", 2.70, 2.50, "TB kept at or above hits")
+    assert ch["mean"] == 2.5 and ch["steps"][-1]["key"] == "coherence" and CH.closes(ch)
+    assert CH.STEP_LABELS["coherence"]
+    src = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"), encoding="utf-8").read()
+    assert '_adjust(r.chain, "coherence", r.mean, hr_new, note)' in src
+    assert '_adjust(t.chain, "coherence", t.mean, tb_new, note)' in src
+
+
+def test_the_tape_scores_only_the_wallets_it_needs():
+    from engine import predmarket as pm
+    from engine.db import connect
+    conn = connect(":memory:")
+    pm.store_trades(conn, [{"venue": "polymarket", "tx": f"t{i}", "ts": 1000 + i, "wallet": w, "slug": "s",
+                            "title": "", "outcome": "", "side": "BUY", "price": 0.5, "size": 10, "usd": 5.0}
+                           for i, w in enumerate(["a", "a", "b", "c"])])
+    full = pm.wallet_history(conn)
+    some = pm.wallet_history(conn, wallets=["a", "c", "zz"])
+    assert some == {k: full[k] for k in ("a", "c")} and pm.wallets_seen(conn) == 3
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

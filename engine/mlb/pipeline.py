@@ -870,10 +870,13 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             # exists to remove — a 1e-5 violation, but the sim's inverter
             # checks the box to 1e-9 and correctly called those triples
             # impossible.
+            from ..chain import adjust as _adjust
             if abs(hr_new - r.mean) > 1e-9:
+                _adjust(r.chain, "coherence", r.mean, hr_new, note)
                 r.mean = hr_new
                 r.reasons.append(f"Coherence: {note}")
             if abs(tb_new - t.mean) > 1e-9:
+                _adjust(t.chain, "coherence", t.mean, tb_new, note)
                 t.mean = tb_new
                 t.reasons.append(f"Coherence: {note}")
     # The HR market-sum devig (script §2.1), measured once per game off

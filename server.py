@@ -816,7 +816,14 @@ class Handler(BaseHTTPRequestHandler):
                     "    then use the https://…ts.net link it prints. docs/PHONE.md has details.\n")
             self.close_connection = True
             return
-        super().handle_one_request()
+        # A phone that closes the page mid-download resets the socket;
+        # that is the reader leaving, not a fault. It printed a full
+        # Traceback into the journal (19:19, 2026-09-23), and a real one
+        # is found by grepping for exactly that word.
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
 
     def _rate_limited(self, limit: int, bucket: str = "read") -> bool:
         """True when this caller is over the ceiling.

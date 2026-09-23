@@ -292,13 +292,18 @@ def main() -> None:
     conn = connect()
     new_trades = pm.store_trades(conn, trades)
     pm.store_snapshot(conn, markets)
-    history = pm.wallet_history(conn)
-    names = pm.wallet_names(conn)
-    total_trades = conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0]
-
+    _lap("store")
     # Score the last 24h of RECORDED tape, not just this pull's thin slice —
     # big trades are a few per hour, and the tape accumulates them.
-    feed = pm.build_flow_feed(pm.recent_tape(conn), markets, history)
+    tape = pm.recent_tape(conn)
+    _lap("recent tape")
+    history = pm.wallet_history(conn, wallets=[t["wallet"] for t in tape])
+    _lap("wallet history")
+    names = pm.wallet_names(conn)
+    total_trades = conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0]
+    seen = pm.wallets_seen(conn)
+    _lap("tape counts")
+    feed = pm.build_flow_feed(tape, markets, history)
     for f in feed:
         f["name"] = names.get(f["wallet"], "")
 
@@ -383,7 +388,7 @@ def main() -> None:
             [{"wallet": w, "name": names.get(w, ""), "pnl": 0.0}
              for w, _ in ranked], {})
         traders_note = (f"leaderboard unreachable ({exc}) — showing our "
-                        f"tape's most-active wallets instead")
+                        f"tape's most-active wallets of the last day instead")
 
     # Display board: live prices only — a settled market pinned at 0/100¢
     # (finished esports series etc.) is clutter, not information.
@@ -410,11 +415,11 @@ def main() -> None:
         "top_traders": top_traders,
         "traders_note": traders_note,
         "tape": {"stored_total": total_trades, "new_this_pull": new_trades,
-                 "wallets_seen": len(history)},
+                 "wallets_seen": seen},
     }
     gate.publish(out, Path(args.out))
     print(f"Polymarket: {len(markets)} markets, {new_trades} new trade(s) "
-          f"recorded ({total_trades:,} on tape, {len(history):,} wallets), "
+          f"recorded ({total_trades:,} on tape, {seen:,} wallets), "
           f"{len(feed)} flow flag(s) ≥ ${pm.FEED_FLOOR_USD:,}; "
           f"{new_flags} flag(s) stored, {settled} settled, "
           f"{validation.get('graded', 0)} graded all-time. Wrote {args.out}")
