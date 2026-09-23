@@ -15,6 +15,27 @@ as they are done.
 
 ---
 
+## INPUTS. Is every input the models read actually moving a number? (read-only, seconds)
+
+Ethan, 2026-09-23: *"do another scan and make sure all the models aren't
+being affected by issues where data isn't being used or being pulled."*
+
+The scan from here found three in the NFL (odds bought for markets no
+position was built for, every receiver labelled "wr1", passing TDs with
+no matchup) and fixed them. It could not see MLB, NBA, WNBA or college,
+because their feeds do not reach this sandbox — this reads every
+league's LIVE board on the box and asks the same questions of each:
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs
+```
+
+Per league and market: the share of rows each step of the model (matchup,
+weather, park, umpire, player memory …) actually moved, whether any row
+has a real book price, and whether a position's roles all say the same
+thing. Anything under **LOOK AT THESE** is an input wired in and moving
+nothing. Paste the whole output back.
+
 ## PARKED 2026-09-21 — three read-only checks, whenever there is a quiet minute
 
 Ethan, home that evening: *"save all of this to pick up later. the main

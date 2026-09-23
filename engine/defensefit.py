@@ -30,6 +30,7 @@ from __future__ import annotations
 import math
 
 from engine import defensevs as D
+from engine import passtd as _passtd
 
 #: Markets measured: (market, groups it applies to, stat column(s) of the player, form floor)
 MARKETS = {
@@ -38,7 +39,13 @@ MARKETS = {
     "rush_yds": (("RB",), ("rushing_yards",), 15.0),
     "pass_yds": (("QB",), ("passing_yards",), 150.0),
     "anytime_td": (("WR", "TE", "RB"), ("receiving_tds", "rushing_tds"), 0.0),
+    # Added 2026-09-23: the passing-touchdown prop had no matchup at all
+    # (its rows came out of the chain untouched by any defence).
+    "pass_td": (("QB",), ("passing_tds",), 0.5),
 }
+#: A quarterback must be the one throwing: this many attempts a game in
+#: his earlier games to be measured on passing touchdowns.
+PASS_TD_MIN_ATTEMPTS = 20.0
 MIN_PRIOR_GAMES = 3
 FIRST_WEEK = 4
 #: A touchdown rate this many games' worth of the position's own rate.
@@ -91,6 +98,14 @@ def samples(rows: list[dict], shrink: float, prior: dict | None = None, legacy: 
                     if touches < TD_MIN_TOUCHES:
                         continue
                     e = (sum(vals) + TD_PRIOR_GAMES * pos_td[g]) / (len(vals) + TD_PRIOR_GAMES)
+                elif market == "pass_td":
+                    # The expectation is the board's own passing-TD
+                    # projection (engine/passtd), most recent game first.
+                    if sum(_f(p, "attempts") for p in prev) / len(prev) < PASS_TD_MIN_ATTEMPTS:
+                        continue
+                    e = _passtd.projection(vals[::-1])
+                    if e < floor:
+                        continue
                 else:
                     e = sum(vals) / len(vals)
                     if e < floor:

@@ -146,6 +146,8 @@ def stat_for(position: str, market: str) -> str | None:
         return {"QB": None, "WR": "wr_td", "TE": "te_td", "RB": "rb_td"}[g]
     if market == "pass_yds":
         return "qb_pass_yds" if g == "QB" else None
+    if market == "pass_td":
+        return "qb_pass_td" if g == "QB" else None
     if market == "rush_yds":
         return "rb_rush_yds" if g == "RB" else None
     if market == "rec_yds":
@@ -167,6 +169,13 @@ def stat_for(position: str, market: str) -> str | None:
 #:   * touchdowns to receivers and tight ends: nothing tried predicted them
 #:     (−0.39% and −0.12% by position, −0.42% and −0.11% by pass defence),
 #:     so the model leaves them alone. The matchup is still SHOWN;
+#:   * passing touchdowns (measured 2026-09-23, when the scan found the
+#:     market had no matchup at all): neither the defence's passing
+#:     touchdowns allowed (b 0.16 ± 0.16; held out +0.17%, +0.16%, −2.10%,
+#:     −0.02% for 2022-2025) nor its passing yards allowed (b 0.23 ± 0.33;
+#:     +0.07%, +0.04%, −1.33%, −0.19%) predicted a quarterback's
+#:     touchdowns beyond the board's own projection (engine/passtd). No
+#:     TRANSFER, so the model leaves it alone; the card still shows it;
 #:   * everything else uses its own position's rating.
 MODEL_STAT = {
     ("rec_yds", "WR"): "qb_pass_yds", ("receptions", "WR"): "qb_pass_yds",
@@ -247,8 +256,12 @@ def effect(team: str, rating: dict, position: str, market: str) -> tuple[float, 
     where nothing predicted, it is 1.0 and the card says so."""
     show = stat_for(position, market)
     g = GROUP_OF.get(str(position or "").upper())
-    also = (stat_for(position, "anytime_td") if market != "anytime_td"
-            else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))
+    if g == "QB":
+        # A quarterback's two markets sit under each other.
+        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds"}.get(market)
+    else:
+        also = (stat_for(position, "anytime_td") if market != "anytime_td"
+                else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))
     card = matchup_card(team, rating, show, also) if show else None
     stat = model_stat(position, market)
     b = transfer(position, market)

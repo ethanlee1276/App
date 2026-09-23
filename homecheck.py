@@ -25,6 +25,7 @@ a reading one.
     python3 homecheck.py grading       # GRADING: is every league's book settling?
     python3 homecheck.py record        # RECORD: does the page's file carry every league?
     python3 homecheck.py exchange      # KX-2: what the Kalshi tickers look like
+    python3 homecheck.py inputs        # INPUTS: does every model input move a number?
     python3 homecheck.py head          # which commit this box is running
     python3 homecheck.py all           # every read-only check, in order
 
@@ -1096,6 +1097,26 @@ def shelves() -> list:
     return out
 
 
+def inputs() -> list:
+    """INPUTS. Does every input the models read move a number on the live
+    board? (read-only)
+
+    Ethan, 2026-09-23: "make sure all the models aren't being affected by
+    issues where data isn't being used or being pulled." Every league's
+    published board, through `_board`, into `engine.inputcheck`: per
+    market, the share of rows each chain step moved, and the dead ones.
+    """
+    import launch
+    from engine import inputcheck
+    boards = {}
+    for sport in launch.BOARD_FILES:
+        try:
+            boards[sport] = _board(sport)
+        except Exception as exc:                              # noqa: BLE001
+            boards[sport] = f"unreadable — {type(exc).__name__}: {exc}"
+    return inputcheck.report(boards)
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -1117,6 +1138,8 @@ CHECKS = {
                          "staking", True),
     "data": (data, "DATA: what we store, whether a model reads it, and "
                    "how fast we are on injury news", True),
+    "inputs": (inputs, "INPUTS: does every model input move a number on "
+                       "the live boards", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

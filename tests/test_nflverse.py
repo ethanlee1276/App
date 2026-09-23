@@ -264,24 +264,36 @@ def test_every_market_a_position_gets_can_be_placed_at_a_position():
     market any position is given must resolve to a position. A sixth
     market added tomorrow is covered by this without anybody editing it.
     """
-    from engine.sources.nflverse import _POSITION_OF, POSITION_MARKETS
+    from engine.sources.nflverse import POSITION_MARKETS, position_of, top_players_for_week
+    rows = []
+    for pos, name in (("QB", "Q"), ("RB", "R"), ("WR", "W"), ("TE", "T")):
+        for wk in (1, 2, 3):
+            rows.append({"season_type": "REG", "week": str(wk), "recent_team": "BUF", "position": pos,
+                         "player_display_name": name, "attempts": "30" if pos == "QB" else "0",
+                         "carries": "15" if pos == "RB" else "0", "targets": "8" if pos in ("WR", "TE") else "0"})
+    specs = top_players_for_week(rows, {"BUF"}, 4)
+    got = {(s.position, s.market) for s in specs}
     for position, markets in POSITION_MARKETS.items():
         for market, _role in markets:
-            assert _POSITION_OF.get(market) == position, (market, position)
+            assert (position, market) in got, (position, market)
+            assert position_of(market), market
+    # A market two positions hold says whose OWN market it is.
+    assert position_of("rec_yds") == "WR" and position_of("receptions") == "TE"
 
 
 def test_the_position_lookup_is_derived_and_not_a_second_copy():
     """A literal here is the defect itself: two tables that must agree,
     one of which nobody remembers to edit. This module's own
     `resolve_market_keys` note already carries the lesson — "THE SECOND
-    COPY OF THIS MAP WAS THE BUG"."""
+    COPY OF THIS MAP WAS THE BUG". The spec carries the table row it was
+    made from (2026-09-23: a market can belong to two positions)."""
     import os
     import re
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "engine", "sources", "nflverse.py"),
                encoding="utf-8").read()
     code = re.sub(r"#.*$", "", src, flags=re.M)
-    assert "_POSITION_OF[spec.market]" in code
+    assert "pos = spec.position or position_of(spec.market)" in code
     # No hand-written market->position literal anywhere in the CODE.
     assert not re.search(r"\{\s*PASS_YDS:\s*\"QB\"", code), \
         "the second copy of the map is back"

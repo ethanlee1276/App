@@ -484,14 +484,6 @@ def build_defense_profiles(rows: list[dict], upto_week: int,
 
 # --- slate assembly ---------------------------------------------------------
 # Default markets to build per position when auto-selecting players.
-#: Which position a market belongs to — the inverse of the table below,
-#: built once so the two can never disagree. See the outage note at its
-#: only use in `build_slate`.
-def _position_of() -> dict:
-    return {market: pos for pos, markets in POSITION_MARKETS.items()
-            for market, _role in markets}
-
-
 POSITION_MARKETS = {
     # A QUARTERBACK HAS TWO MARKETS, not one. Passing touchdowns were
     # missing from this table, so no `Prop` existed for a quote to
@@ -499,13 +491,76 @@ POSITION_MARKETS = {
     # odds key was added (engine/passtd.py). The role string is the same
     # — he is the starter for both.
     "QB": [(PASS_YDS, "starter"), (PASS_TD, "starter")],
-    "RB": [(RUSH_YDS, "rb1")],
-    "WR": [(REC_YDS, "wr1")],
-    "TE": [(RECEPTIONS, "te")],
+    # EVERY MARKET THE BOOK IS ALREADY PAID FOR, 2026-09-23. Each position
+    # had ONE market here since the first nflverse commit — a receiver got
+    # receiving yards, a tight end catches, a back rushing yards — while
+    # the odds request (sources.oddsapi.ODDS_TO_MARKET) has bought all four
+    # stat markets for every player on every event call. So a receiver's
+    # catches line, a tight end's yards and a back's receiving line were
+    # paid for and thrown away on every pull, and the defence-vs-position
+    # ratings measured for exactly those pairings (engine/defensevs
+    # TRANSFER: TE yards 0.79, TE catches 0.86, RB catches 0.47) had
+    # nothing to act on. Ethan, 2026-09-23: "make sure all the models
+    # aren't being affected by issues where data isn't being used or
+    # being pulled."
+    #
+    # MEASURED BEFORE ADDED, on one walk-forward for all of them
+    # (2022-2025 box scores, each team's top three by volume, projected
+    # from earlier games only, scored against a trailing-average line):
+    # ranking AUC WR catches 0.599, RB catches 0.605, RB receiving yards
+    # 0.556, TE receiving yards 0.544 — against 0.556 / 0.575 / 0.565 for
+    # the three markets the board already carried. Each ranks as well as
+    # what was already on the page. The calibrations, grading and ranking
+    # figures are per market and were always fitted on every position's
+    # rows (engine/ingest `nfl_usage_rows`). QB rushing yards measured
+    # 0.536, the weakest of all, and stays off.
+    #
+    # The FIRST market in each list is the position's own; the others
+    # carry a volume floor (SECONDARY_FLOOR) so a third back with one
+    # catch a game does not get a line nobody hangs.
+    "RB": [(RUSH_YDS, "rb1"), (RECEPTIONS, "rb1"), (REC_YDS, "rb1")],
+    "WR": [(REC_YDS, "wr1"), (RECEPTIONS, "wr1")],
+    "TE": [(RECEPTIONS, "te"), (REC_YDS, "te")],
 }
 
-#: Built at import, after the table above exists.
-_POSITION_OF = _position_of()
+#: The least a player's recent average may be, for a market that is not
+#: his position's own, before a prop is built on it — the college board's
+#: floors (engine/cfb/props._MIN_MEAN), the same question in the same
+#: sport.
+SECONDARY_FLOOR = {REC_YDS: 12.0, RECEPTIONS: 1.5}
+
+#: Positions whose role says WHERE he ranks on his team — "wr2", "rb1".
+#: The table's role is only the default; the depth order comes from the
+#: volume ranking that picks him. Until 2026-09-23 every receiver on the
+#: board was "wr1" and every back "rb1", so the injury rule for an
+#: opponent's slot corner (engine/injuries: a "wr2" or "slot" receiver)
+#: could never fire, and the fallback matchup could not tell a number
+#: one receiver from a number three.
+RANKED_ROLES = {"WR": "wr", "RB": "rb"}
+
+
+def role_for(position: str, rank: int, default: str) -> str:
+    """His role on his team: "wr2" for the second receiver by volume."""
+    stem = RANKED_ROLES.get(position)
+    return f"{stem}{rank}" if stem else default
+
+
+def position_of(market: str) -> str:
+    """The position whose OWN market this is (its first in the table), else
+    the first that carries it — for a spec that did not say."""
+    for pos, markets in POSITION_MARKETS.items():
+        if markets[0][0] == market:
+            return pos
+    for pos, markets in POSITION_MARKETS.items():
+        if any(m == market for m, _r in markets):
+            return pos
+    return ""
+
+
+def is_secondary(position: str, market: str) -> bool:
+    """True for a market that is not the position's own (its first)."""
+    own = (POSITION_MARKETS.get(position) or [(None, "")])[0][0]
+    return market != own and market in SECONDARY_FLOOR
 
 
 def _round_half(x: float) -> float:
@@ -522,6 +577,10 @@ class PlayerSpec:
     player: str
     market: str
     usage_role: str
+    #: The table row the spec was made from. A market no longer names one
+    #: position (a tight end and a receiver both hold receiving yards), so
+    #: the position travels with the spec rather than being looked up.
+    position: str = ""
 
 
 def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
@@ -553,9 +612,9 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
             cands = [(k, v) for k, v in agg.items() if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
             take = 1 if pos in ("QB",) else per_team
-            for (_t, _p, name), _v in cands[:take]:
+            for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
-                    specs.append(PlayerSpec(name, market, role))
+                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
     return specs
 
 
@@ -599,9 +658,9 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
                      if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
             take = 1 if pos in ("QB",) else per_team
-            for (_t, _p, name), _v in cands[:take]:
+            for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
-                    specs.append(PlayerSpec(name, market, role))
+                    specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos))
     return specs
 
 
@@ -793,6 +852,12 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             baseline = _recent_mean(logs)
         if baseline <= 0:
             continue
+        pos = spec.position or position_of(spec.market)
+        # A market that is not his position's own is built only when he
+        # actually does it: a back's catches, a receiver's catches, a
+        # tight end's yards — see SECONDARY_FLOOR.
+        if is_secondary(pos, spec.market) and baseline < SECONDARY_FLOOR[spec.market]:
+            continue
         line = _round_half(baseline) - 0.5  # a touch under baseline, like a book
         # DERIVED FROM `POSITION_MARKETS`, NOT A SECOND COPY OF IT.
         #
@@ -810,10 +875,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # the tell I should have read first: it reads `player_game_logs`
         # and never touches the slate.
         #
-        # Inverted from the one table so a third market cannot diverge
-        # again — this file's own `resolve_market_keys` note already says
-        # it: "THE SECOND COPY OF THIS MAP WAS THE BUG."
-        pos = _POSITION_OF[spec.market]
+        # Carried on the spec from the one table, so a market cannot
+        # diverge again — this file's own `resolve_market_keys` note
+        # already says it: "THE SECOND COPY OF THIS MAP WAS THE BUG." Since
+        # 2026-09-23 a market can belong to more than one position, so the
+        # spec says which row made it (`PlayerSpec.position`).
         props.append(Prop(
             player=spec.player,
             team=team,

@@ -121,6 +121,11 @@ def _defense_factor(defense: DefenseProfile, prop: Prop) -> tuple[float, str]:
             return defense.vs_slot, "vs slot receivers"
         if role in {"te"}:
             return defense.vs_te, "vs tight ends"
+        # A third receiver by volume (sources/nflverse.role_for, since
+        # 2026-09-23 — every receiver used to be "wr1"). Box scores carry
+        # no alignment, so it reads the same receiver rating as the others.
+        if role.startswith("wr") or prop.position == "WR":
+            return defense.vs_wr2, "vs receivers"
         return defense.vs_rb_recv, "vs pass-catching backs"
     return 1.0, ""
 

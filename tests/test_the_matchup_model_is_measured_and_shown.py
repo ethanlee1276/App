@@ -108,6 +108,13 @@ def test_the_effect_its_card_and_its_words():
     assert abs(D.effect("DET", rating, "RB", "anytime_td")[0] - (1 + 0.45 * -0.1)) < 1e-9
     assert D.effect("DET", _rating(qb_pass_yds=(3.0, 1, 999.0)), "QB", "pass_yds")[0] == 1.25, "clamped"
     assert D.effect("DET", {}, "WR", "rec_yds") == (1.0, "", None)
+    # Passing touchdowns: measured 2026-09-23, nothing predicted them, so
+    # the card shows the defence and the number is left alone.
+    qb = _rating(qb_pass_td=(1.3, 1, 2.4), qb_pass_yds=(1.1, 3, 260.0))
+    f, why, card = D.effect("DET", qb, "QB", "pass_td")
+    assert (f, why) == (1.0, "") and card["stat"] == "passing TDs" and "leaves it out" in card["model"]["note"]
+    assert card["also"]["stat"] == "passing yards", "a quarterback's two markets sit under each other"
+    assert D.effect("DET", qb, "QB", "pass_yds")[2]["also"]["stat"] == "passing TDs"
     saved = dict(D.TRANSFER)
     try:
         D.TRANSFER.pop(("rec_yds", "WR"))
