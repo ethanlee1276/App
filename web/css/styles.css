@@ -11289,6 +11289,20 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
 }
 @keyframes askDot { 0%, 60%, 100% { opacity: .4; transform: none; } 30% { opacity: 1; transform: translateY(-5px); } }
 @keyframes askCaret { 50% { opacity: 0; } }
+/* The matchup under a pick (matchupCardHTML): what the defence gives up to
+   his position, where it ranks, and what the model did with it. */
+.mu-card { margin: 8px 0; padding: 8px 10px; border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); font-size: var(--fs-xs); color: var(--text-dim); }
+.mu-head { margin-bottom: 4px; font-weight: 600; color: var(--text); }
+.mu-sub { margin-left: 4px; font-weight: 400; color: var(--text-mute); }
+.mu-line { margin: 2px 0; }
+.mu-line b { color: var(--text); font-variant-numeric: tabular-nums; }
+.mu-avg { color: var(--text-mute); }
+.mu-rank { margin-left: 4px; padding: 0 6px; border-radius: 999px; border: var(--hairline) solid var(--border);
+  color: var(--text-mute); white-space: nowrap; }
+.mu-rank.good { color: var(--good); border-color: var(--good); }
+.mu-rank.bad { color: var(--bad); border-color: var(--bad); }
+.mu-model { margin-top: 5px; color: var(--text-mute); }
 .ask-src { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 8px; }
 .ask-turn .ask-src:first-of-type { padding-top: 10px; border-top: var(--hairline) solid var(--border-soft); }
 .ask-src-h { flex-basis: 100%; margin-bottom: 1px; font-size: var(--fs-2xs); font-weight: 600;

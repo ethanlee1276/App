@@ -210,6 +210,8 @@ class LongShot:
     form: dict = field(default_factory=dict)
     all_lines: list = field(default_factory=list)
     recent_values: list = field(default_factory=list)
+    #: What the defence gives up to his position (engine/defensevs), for the card.
+    matchup_card: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -228,6 +230,7 @@ class LongShot:
             "primary_reason": self.primary_reason,
             "reasons": self.reasons, "caveats": self.caveats,
             "matchup": f"{self.team} vs {self.opponent}",
+            "matchup_card": self.matchup_card,
             "vig": round(self.vig, 4), "vig_source": self.vig_source,
             "vig_listed": self.vig_listed,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,

@@ -78,6 +78,10 @@ class DefenseProfile:
     pressure_rate: float = 0.22  # share of dropbacks pressured
     rush_rank: int = 16          # 1 = toughest vs run, 32 = weakest
     pass_rank: int = 16
+    #: engine/defensevs.ratings for this defence — what it gives up per game
+    #: to each position, ranked and shrunk. Empty where nothing was measured,
+    #: and then the matchup falls back to the vs_* numbers above.
+    ratings: dict = field(default_factory=dict)
 
 
 @dataclass

@@ -45,6 +45,8 @@ def _node(js):
       const likelySpark = (r, o) => `<svg data-w="${{o.w}}" data-h="${{o.h}}" data-line="${{o.line}}"></svg>`;
       const playerAvatar = (p, t, o) => `<i class="avatar" data-size="${{o.size}}">${{p}}</i>`;
       const reasonLI = (x) => `<li>${{escapeHtml(x)}}</li>`;
+      // The matchup card has its own file (test_the_matchup_model_is_measured_and_shown.py).
+      const matchupCardHTML = (r) => r.matchup_card ? '<div class="mu-card"></div>' : "";
       {_fn("watchlistHTML")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """

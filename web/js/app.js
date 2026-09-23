@@ -7311,6 +7311,55 @@ function envChip(r) {
    transactions wire, not off ESPN's page — so we stand down when one is
    already on the card rather than printing the same fact twice in two
    wordings. */
+/* THE MATCHUP, UNDER THE PICK. Ethan, 2026-09-23: top and bottom defences
+   against each position were winning him bets — the Lions giving up big
+   receiving days — and he wanted the model following it and the picks
+   showing it. `matchup_card` comes from engine/defensevs.effect: what this
+   defence gives up per game to the player's position, where that ranks
+   (1st = gives up the most), a second line beside it (touchdowns under a
+   yards bet, yards under a touchdown bet), and what the model did with it
+   — which rating it reads and by how much it moved the projection, or
+   that it left this one out because over four seasons it did not
+   predict this bet. The rank is coloured for the pick's own side: a soft
+   defence helps an over and hurts an under. */
+const MU_EDGE = 8;           // a top-8 or bottom-8 defence is worth a colour
+
+function muOrd(n) {
+  const v = n % 100;
+  return `${n}${v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th")}`;
+}
+
+function muNum(x) {
+  return String(Number(Number(x).toFixed(1)));
+}
+
+function matchupCardHTML(r) {
+  const c = r && r.matchup_card;
+  if (!c || !c.opponent || c.rank == null) return "";
+  const over = /^(OVER|YES)$/i.test(String(r.side || "OVER"));
+  const tone = (rank, of) => {
+    const soft = rank <= MU_EDGE, tough = rank > (of || 32) - MU_EDGE;
+    if (!soft && !tough) return "";
+    return (soft === over) ? " good" : " bad";
+  };
+  // Touchdowns keep their decimal: "1.0 TDs a game", never "1 TDs".
+  const n = (x) => /TD/.test(x.stat) ? Number(x.per_game).toFixed(1) : muNum(x.per_game);
+  const line = (x, avg) => `<div class="mu-line"><b>${n(x)}</b> ${escapeHtml(x.stat)} a game${
+      avg != null ? ` <span class="mu-avg">(avg ${muNum(avg)})</span>` : ""}
+      <span class="mu-rank${tone(x.rank, x.of)}">${muOrd(x.rank)}-most of ${x.of}</span></div>`;
+  const m = c.model || {};
+  const move = m.applied != null ? Math.round((Number(m.applied) - 1) * 100) : 0;
+  const model = m.reads
+    ? `Model: their ${escapeHtml(m.reads)} allowed moves this projection ${move > 0 ? "+" : ""}${move}%`
+    : "Shown for you. The model leaves this one out: over four seasons it did not predict this bet.";
+  return `<div class="mu-card">
+    <div class="mu-head">Matchup vs ${escapeHtml(c.opponent)}
+      <span class="mu-sub">this season, ${c.games} game${c.games === 1 ? "" : "s"}</span></div>
+    ${line(c, c.league)}${c.also ? line(c.also) : ""}
+    <div class="mu-model">${model}</div>
+  </div>`;
+}
+
 function pickInjuryNote(r) {
   const inj = injFind(state.sport, r.player);
   if (!inj) return "";
@@ -7460,7 +7509,7 @@ function cardHTML(r) {
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${booksStripHTML(r)}
-      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
             it afterwards, and that is the order the argument runs in.
@@ -7819,6 +7868,7 @@ function likelyCard(r) {
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
     ${scriptLine}${rippleLine(r)}
+    ${matchupCardHTML(r)}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
     ${bet}${lean}${cal}${evTxt}
   </article>`;
@@ -8712,9 +8762,10 @@ function watchlistHTML(watch, mlb) {
       .slice(0, 6).map((x) => reasonLI(x)).join("");
     const caveats = (r.caveats || [])
       .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
-    const detail = why || caveats
+    const mu = matchupCardHTML({ ...r, side: r.side || "YES" });
+    const detail = why || caveats || mu
       ? `<div class="watch-why" hidden>
-           ${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
+           ${mu}${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
       : "";
     return `<div class="watch-item">
       <div class="ls-row drow hd-row hd-edge${detail ? " watch-door" : ""}"${detail ? ' data-watch-toggle role="button" tabindex="0" aria-expanded="false"' : ""}>
@@ -8829,6 +8880,7 @@ function longShotCard(r) {
       ${propAnalysis(r)}
       <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
       <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>
+      ${matchupCardHTML({ ...r, side: r.side || "YES" })}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${caveats}
     </article>`;
@@ -9781,6 +9833,11 @@ function renderPropPage() {
         <span class="sub">— his games against ${escapeHtml(teamName(r.opponent || ""))}
         and any other club he has faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
+
+    ${r.matchup_card ? `<div class="section-title minor">Matchup
+        <span class="sub">— what ${escapeHtml(r.matchup_card.opponent || r.opponent || "")}
+        give up to his position, and what the model did with it.</span></div>
+      ${matchupCardHTML(r)}` : ""}
 
     ${reasons ? `<div class="section-title minor">Why this pick</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}

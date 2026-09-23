@@ -447,65 +447,37 @@ def career_average(rows: list[dict], player: str, market: str) -> float:
 
 
 # --- defensive profiles (yards allowed vs league average) -------------------
-def _mean(xs: list[float]) -> float:
-    return sum(xs) / len(xs) if xs else 0.0
+def build_defense_profiles(rows: list[dict], upto_week: int,
+                           prior_rows: list[dict] | None = None) -> dict[str, DefenseProfile]:
+    """What each defence gives up, per game, to each position (engine/defensevs.py).
 
-
-def build_defense_profiles(rows: list[dict], upto_week: int) -> dict[str, DefenseProfile]:
-    """Aggregate what each defense allows per game, relative to league average.
-
-    A value > 1.0 means the defense is more generous than average (good for the
-    offense). Built from weekly box scores keyed on ``opponent_team``.
+    A value > 1.0 means the defence is more generous than average (good for
+    the offence). Built from weekly box scores keyed on ``opponent_team``,
+    walk-forward (weeks before ``upto_week``), shrunk toward LAST season's
+    rating when ``prior_rows`` (last season's weekly rows) are given and
+    toward the league average when not — the version that predicted best,
+    measured by engine/defensefit.py. The full per-stat ratings ride on the
+    profile as ``ratings`` for the matchup model and the pick cards; the
+    vs_* numbers are the same ratings, kept for everything that reads them.
     """
-    rows = [r for r in _regular_season(rows) if 0 < int(_f(r, "week", default=0)) < upto_week]
-
-    # allowed[team][bucket] = list of per-player-week values conceded
-    buckets = ("qb_pass", "wr_rec", "te_rec", "rb_rush", "rb_recv")
-    allowed: dict[str, dict[str, list[float]]] = {}
-
-    for r in rows:
-        deff = _s(r, "opponent_team", "opponent")
-        if not deff:
-            continue
-        pos = _s(r, "position", "position_group").upper()
-        d = allowed.setdefault(deff, {b: [] for b in buckets})
-        if pos == "QB":
-            d["qb_pass"].append(_f(r, "passing_yards"))
-        if pos == "WR":
-            d["wr_rec"].append(_f(r, "receiving_yards"))
-        if pos == "TE":
-            d["te_rec"].append(_f(r, "receiving_yards"))
-        if pos == "RB":
-            d["rb_rush"].append(_f(r, "rushing_yards"))
-            d["rb_recv"].append(_f(r, "receiving_yards"))
-
-    # League averages per bucket (mean of each team's mean-allowed).
-    team_means = {
-        team: {b: _mean(vals[b]) for b in buckets}
-        for team, vals in allowed.items()
-    }
-    league = {b: _mean([tm[b] for tm in team_means.values()]) for b in buckets}
-
-    def factor(team: str, b: str) -> float:
-        base = league[b]
-        return (team_means[team][b] / base) if base > 0 else 1.0
-
-    # Rank teams by rush yards allowed to RBs (1 = toughest, 32 = softest).
-    rush_order = sorted(team_means, key=lambda t: team_means[t]["rb_rush"])
-    rush_rank = {t: i + 1 for i, t in enumerate(rush_order)}
-
+    from engine import defensevs as DV
+    prior = DV.ratings(prior_rows, 99) if prior_rows else None
+    rated = DV.ratings(rows, upto_week, prior=prior)
     profiles = {}
-    for team in team_means:
-        wr = factor(team, "wr_rec")
+    for team, r in rated.items():
+        f = lambda s: float(r[s]["factor"])                           # noqa: E731
+        of = r["rb_rush_yds"]["of"]
         profiles[team] = DefenseProfile(
             team=team,
-            vs_qb=factor(team, "qb_pass"),
-            vs_wr1=wr, vs_wr2=wr, vs_slot=wr,   # no alignment split in box scores
-            vs_te=factor(team, "te_rec"),
-            vs_rb_rush=factor(team, "rb_rush"),
-            vs_rb_recv=factor(team, "rb_recv"),
-            rush_rank=rush_rank.get(team, 16),
-            pass_rank=16,
+            vs_qb=f("qb_pass_yds"),
+            vs_wr1=f("wr_rec_yds"), vs_wr2=f("wr_rec_yds"), vs_slot=f("wr_rec_yds"),   # no alignment in box scores
+            vs_te=f("te_rec_yds"),
+            vs_rb_rush=f("rb_rush_yds"),
+            vs_rb_recv=f("rb_rec_yds"),
+            # 1 = toughest (gives up the least), as these always meant.
+            rush_rank=of - r["rb_rush_yds"]["rank"] + 1,
+            pass_rank=of - r["qb_pass_yds"]["rank"] + 1,
+            ratings=r,
         )
     return profiles
 
@@ -676,7 +648,13 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if not carry:
             raise
         stats = []
-    defenses = build_defense_profiles(stats, upto_week)
+    # Last season is where each defence's rating starts (engine/defensevs):
+    # two games of this season are a signal and mostly noise.
+    try:
+        last_season = load_weekly_stats(season - 1)
+    except DataUnavailable:
+        last_season = None
+    defenses = build_defense_profiles(stats, upto_week, last_season)
 
     participating = {g.home for g in games} | {g.away for g in games}
     opponent_of = {}

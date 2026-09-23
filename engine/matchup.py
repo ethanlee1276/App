@@ -58,6 +58,10 @@ TOTAL_CLAMP = (0.95, 1.05)
 class MatchupEffect:
     multiplier: float
     reasons: list[str] = field(default_factory=list)
+    #: What goes under the pick: the defence, what it gives up to this
+    #: position and where that ranks, and what the model did with it
+    #: (engine/defensevs.matchup_card). None where nothing was measured.
+    card: dict | None = None
 
 
 #: How much of a defence's own yards-allowed rating actually reaches an
@@ -139,20 +143,33 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
     teamcontext prices the opponent."""
     mult = 1.0
     reasons: list[str] = []
+    card = None
 
-    factor, note = _defense_factor(defense, prop)
-    # Shrunk to the share that actually transfers before the clamp sees
-    # it — see DEFENSE_TRANSFER. The clamp stays where it was and now
-    # almost never binds, which is the point: it was catching an
-    # over-applied factor rather than bounding a reasonable one.
-    transfer = DEFENSE_TRANSFER.get(prop.market, DEFENSE_TRANSFER_DEFAULT)
-    factor = 1.0 + transfer * (factor - 1.0)
-    factor = clamp(factor, 0.80, 1.25)
-    mult *= factor
-    if factor >= 1.06:
-        reasons.append(f"Favorable defensive matchup — opponent {note} ({factor - 1:+.0%} vs avg)")
-    elif factor <= 0.94:
-        reasons.append(f"Tough defensive matchup — opponent {note} ({factor - 1:+.0%} vs avg)")
+    if defense.ratings:
+        # Ethan, 2026-09-23: top and bottom defences against each position
+        # were winning him bets. The measured version of that, card and all
+        # (engine/defensevs.effect; defensefit.py for the numbers).
+        from . import defensevs as DV
+        factor, reason, card = DV.effect(defense.team, defense.ratings, prop.position, prop.market)
+        mult *= factor
+        if reason:
+            reasons.append(reason)
+    else:
+        # No per-game ratings (a hand-built slate, college): the old
+        # yards-allowed numbers at the old measured transfer.
+        factor, note = _defense_factor(defense, prop)
+        # Shrunk to the share that actually transfers before the clamp sees
+        # it — see DEFENSE_TRANSFER. The clamp stays where it was and now
+        # almost never binds, which is the point: it was catching an
+        # over-applied factor rather than bounding a reasonable one.
+        transfer = DEFENSE_TRANSFER.get(prop.market, DEFENSE_TRANSFER_DEFAULT)
+        factor = 1.0 + transfer * (factor - 1.0)
+        factor = clamp(factor, 0.80, 1.25)
+        mult *= factor
+        if factor >= 1.06:
+            reasons.append(f"Favorable defensive matchup — opponent {note} ({factor - 1:+.0%} vs avg)")
+        elif factor <= 0.94:
+            reasons.append(f"Tough defensive matchup — opponent {note} ({factor - 1:+.0%} vs avg)")
 
     # Game script from the spread. A team favored by a lot leans on the run
     # late (helps RB rush), while a big underdog throws more (helps pass game).
@@ -161,7 +178,7 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
 
     if measured_context:
         # PROE and pace are being priced for real; stop guessing at them.
-        return MatchupEffect(multiplier=mult, reasons=reasons)
+        return MatchupEffect(multiplier=mult, reasons=reasons, card=card)
 
     if prop.market == RUSH_YDS:
         # MEASURED AND NOT APPLIED. The idea is sound football — a
@@ -227,4 +244,4 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
                 f"Game total {game.total:.0f} — measured, a higher total "
                 f"means FEWER rushing yards, not more (×{pace:.2f})")
 
-    return MatchupEffect(multiplier=mult, reasons=reasons)
+    return MatchupEffect(multiplier=mult, reasons=reasons, card=card)

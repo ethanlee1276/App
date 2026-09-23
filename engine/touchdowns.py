@@ -282,8 +282,18 @@ def script_td_multiplier(game: Game, team: str,
 
 
 def defense_td_multiplier(opponent: Team, position: str) -> tuple[float, list[str]]:
-    """How generous the defence is to this position, from its profile."""
+    """How generous the defence is to this position, from its profile.
+
+    With per-game ratings (engine/defensevs), the MEASURED version: a back
+    against touchdowns allowed to backs, at the measured strength; a
+    receiver or tight end against nothing, because no defensive number
+    predicted their touchdowns over four seasons (defensefit.py). This used
+    to lend them the YARDS rating at full strength."""
     d = opponent.defense
+    if d.ratings:
+        from . import defensevs as DV
+        mult, reason, _card = DV.effect(d.team, d.ratings, position, "anytime_td")
+        return mult, [reason] if reason else []
     reasons: list[str] = []
     if position == "RB":
         val = d.vs_rb_rush
@@ -390,7 +400,12 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     if samples < TD_THIN_GAMES:
         caveats.append(f"Thin touchdown history ({samples} games) — position baseline used")
 
+    card = None
+    if opponent.defense.ratings:
+        from . import defensevs as DV
+        card = DV.effect(opponent.defense.team, opponent.defense.ratings, pos, "anytime_td")[2]
     return prob, {
+        "matchup_card": card,
         "reasons": reasons, "caveats": caveats,
         "opportunities": rz.opportunities,
         "primary_reason": reasons[0] if not def_reasons else def_reasons[0],
@@ -535,6 +550,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
+            "matchup_card": info.get("matchup_card"),
             # THE WHOLE CHAIN, not one line of it. This list answers "who
             # is most likely to score", which is the question the model is
             # measurably GOOD at — it ranks a scorer above a non-scorer
@@ -600,6 +616,7 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             hold_override=c.get("hold"),
         )
         if pick:
+            pick.matchup_card = info.get("matchup_card")
             pick.game_date = getattr(game, "date", "")
             pick.game_kickoff = getattr(game, "kickoff", "")
             # THE PAGE, on the value picks too. `build_pick` prices; it

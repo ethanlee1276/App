@@ -124,6 +124,9 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         # which left the card able to state a projection and unable to
         # show its arithmetic. See engine/chain.py.
         "chain": proj.chain,
+        # WHAT THE DEFENCE GIVES UP TO HIM, and what the model did with it
+        # (engine/defensevs.py, Ethan 2026-09-23) — drawn under the pick.
+        "matchup_card": getattr(getattr(proj, "matchup", None), "card", None),
         "checks": decision.checks,
         "headline": headline(rec),
         "summary": summary(rec),
