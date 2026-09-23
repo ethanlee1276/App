@@ -95,6 +95,10 @@ class Projection:
     chain: dict = field(default_factory=dict)
 
 
+#: The bound on matchup × weather × injuries, per sport (see build_projection).
+CAP_BOUNDS = {"nfl": (0.85, 1.18), "cfb": (0.70, 1.40)}
+
+
 def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                      context: dict | None = None, sport: str = "nfl",
                      form_weights: dict | None = None,
@@ -123,7 +127,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                         weights=form_weights)
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game,
-                               measured_context=bool(context))
+                               measured_context=bool(context), sport=sport)
     weather = evaluate_weather(game.weather)
     injury = evaluate_injuries(prop, game.injuries)
 
@@ -131,9 +135,19 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
 
     # Hand-tuned total multiplier, bounded so no single factor runs away with
     # the projection. Kept tight because sportsbook lines are efficient.
+    #
+    # WIDER FOR COLLEGE, 2026-09-23. College's matchup is MEASURED
+    # (engine/cfb/defensefit) and college defences spread far wider than
+    # the NFL's — the best pass defence gives up half what the worst does.
+    # At ×0.85-×1.18 this bound bit on a quarter of college passing rows
+    # and threw away most of what the rating measured: held-out 2025 +7.50%
+    # of squared error removed unbounded, +5.35% under this cap; 2023
+    # +1.75% against +0.89%. At ×0.70-×1.40 it keeps it (+7.43%, +1.63%),
+    # and rushing is the same either way.
+    cap_lo, cap_hi = CAP_BOUNDS.get(sport, CAP_BOUNDS["nfl"])
     rule_mult = clamp(
         matchup.multiplier * weather_mult * injury.multiplier,
-        0.85, 1.18,
+        cap_lo, cap_hi,
     )
 
     # Measured team tendency — pace, pass rate, offensive efficiency. Kept
@@ -207,7 +221,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
             chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
             chain.step("weather", weather_mult, "; ".join(weather.reasons)),
             chain.step("injury", injury.multiplier, "; ".join(injury.reasons)),
-            chain.cap_step(raw_mult, total_mult, 0.85, 1.18),
+            chain.cap_step(raw_mult, total_mult, cap_lo, cap_hi),
         ]
 
     # THE RECENCY SHADE IS OBSERVED AND NO LONGER APPLIED — MEASURED

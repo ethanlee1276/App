@@ -247,15 +247,17 @@ def test_a_prop_whose_game_is_not_on_the_slate_never_ships():
         assert slate.game_for(p) is not None
 
 
-def test_defence_is_league_average_rather_than_invented():
-    """`DefenseProfile` is nflverse-shaped and college has no equivalent
-    ingest. A plausible-looking number here would put a matchup
-    multiplier on every card that no measurement stands behind — and
-    the walk-forward AUC is measured against a neutral defence, so this
-    is also what keeps the live board and the measurement in agreement."""
-    from engine.models import DefenseProfile
+def test_a_defence_with_nothing_measured_stays_neutral():
+    """Until 2026-09-23 every college defence was league average by rule,
+    because nothing measured stood behind a college matchup. Something
+    does now (engine/cfb/defense.py, tests/test_cfb_matchup_model.py), so
+    the rule is narrower: a school with no rating — this fixture has no
+    stored games to rate — is neutral, never invented. It carries its
+    name for the card."""
     for team in _slate().teams.values():
-        assert team.defense == DefenseProfile(team=team.abbr)
+        d = team.defense
+        assert d.ratings == {} and (d.vs_qb, d.vs_wr1, d.vs_rb_rush) == (1.0, 1.0, 1.0)
+        assert d.label, "the school's name, not its code, goes on the card"
 
 
 # --- and it is the shared evaluation, not a college copy --------------

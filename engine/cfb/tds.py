@@ -11,9 +11,9 @@ what college actually gives us:
                  × player's share of team volume, against his position's
                    baseline share of team touchdowns
                  × game script (the spread, priced per position)
-                 × opponent's scoring generosity (points allowed per
-                   game vs the FBS average — no per-position defense
-                   profiles exist here)
+                 × what the opponent gives up to HIS position
+                   (engine/cfb/defense, since 2026-09-23 — its overall
+                   points allowed is context only: the total prices it)
                  × weather (our own kickoff forecast layer)
 
 then P(scores) = 1 − e^(−rate), priced against the book's Yes quote
@@ -54,6 +54,7 @@ from ..longshots import (CFB_TD_ODDS, prob_at_least_one, in_odds_window,
                          scorer_form)
 from ..sources.oddsapi import best_scorer_price
 from ..statmath import clamp
+from .. import defensevs as DV
 
 # FBS scoring baselines, MEASURED rather than recalled. Both numbers here
 # were 8-12% high: over 6,266 scored team-games the mean is 26.70 points,
@@ -978,6 +979,20 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     # `td_game_logs`. A board with no logs on disk gets an empty map and
     # each row shows exactly what it can prove.
     logs_by_player = td_game_logs(conn)
+    # WHAT EACH DEFENCE GIVES UP TO EACH POSITION (engine/cfb/defense),
+    # read once. The team's overall scoring record adds nothing once the
+    # book's total is in (defense_multiplier, measured three times); what
+    # it gives up to backs, receivers and tight ends does, on top of the
+    # total, in every held-out season for backs and receivers
+    # (defensevs.TRANSFER_CFB). Empty in week one: neutral, and no card.
+    dratings: dict = {}
+    try:
+        from .defense import ratings as _defense_ratings
+        first = min((str(x.get("date") or "")[:10] for x in games or [] if x.get("date")), default="")
+        dratings = _defense_ratings(conn, int(season), before=first or None)
+    except Exception as exc:                                  # noqa: BLE001
+        census["defense_ratings_error"] = f"{type(exc).__name__}: {exc}"
+    census["defenses_rated"] = len(dratings)
     for gi, player_quotes in (quotes_by_game or {}).items():
         try:
             g = games[int(gi)]
@@ -1084,8 +1099,15 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 td_reason = [f"Scores {td_mean:.2f} TD/game over "
                              f"{u['games']} logged game(s) — measured, "
                              f"blended with the role share"]
-            # 1.0 by measurement, not by omission — see defense_multiplier.
-            d_mult, d_reasons = defense_multiplier(conn, opp, season)
+            # The team's scoring record: context only, 1.0 by measurement
+            # (defense_multiplier). What it gives up to HIS position: the
+            # measured college transfer, and the card under the pick.
+            _unused, d_reasons = defense_multiplier(conn, opp, season)
+            opp_name = g.get("away_name" if is_home else "home_name") or opp
+            d_mult, d_why, mu_card = DV.effect(opp, dratings.get(opp) or {}, pos, "anytime_td",
+                                               sport="cfb", label=str(opp_name))
+            if d_why:
+                d_reasons = [d_why] + d_reasons
             s_mult, s_reasons = script_multiplier(spread_home, is_home, pos)
             w_mult, w_reasons = weather_multiplier(g.get("weather"), pos)
             rate = clamp(team_tds * base * d_mult * s_mult * w_mult,
@@ -1188,6 +1210,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         # had it backwards.
                         "reasons": reasons,
                         "caveats": caveats,
+                        "matchup_card": mu_card,
                         "game_date": g.get("date", ""),
                         "kickoff": g.get("kickoff", ""),
                     })
@@ -1213,6 +1236,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 data_quality=_usage_quality(usage_why.get((usage_team, norm))),
                 hold_override=fairs.get(norm))
             if pick:
+                pick.matchup_card = mu_card
                 pick.game_date = g.get("date", "")
                 pick.game_kickoff = g.get("kickoff", "")
                 # …and on the picks, for the same reason the NFL's got

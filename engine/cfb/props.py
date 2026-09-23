@@ -154,15 +154,16 @@ def _weather_of(game: dict) -> Weather:
     )
 
 
-def _game_objects(games: list[dict]) -> tuple[dict, list]:
+def _game_objects(games: list[dict], ratings: dict | None = None) -> tuple[dict, list]:
     """``({abbr: Team}, [Game])`` for tonight's college slate.
 
-    Defence is LEAGUE AVERAGE on purpose. `DefenseProfile`'s fields are
-    nflverse-shaped (vs_wr1, pressure_rate, a 1-32 rush rank) and college
-    has no equivalent ingest; filling them with plausible numbers would
-    put a matchup multiplier on every card that no measurement stands
-    behind. The neutral profile is what the walk-forward AUC was measured
-    under, so the live board and the measurement price the same model.
+    Defence WAS league average on purpose: `DefenseProfile`'s vs_* fields
+    are nflverse-shaped and nothing measured stood behind a college one.
+    Since 2026-09-23 it carries ``ratings`` — what each defence gives up
+    per game to each position, from our own college logs
+    (engine/cfb/defense.py) — at the strengths measured for college
+    (defensevs.TRANSFER_CFB, `python3 cfbdefensefit.py`). A school with no
+    rating (week one, an FCS opponent) keeps the neutral profile.
     """
     teams: dict[str, Team] = {}
     out: list[Game] = []
@@ -173,7 +174,8 @@ def _game_objects(games: list[dict]) -> tuple[dict, list]:
         for abbr, name in ((home, g.get("home_name") or home),
                            (away, g.get("away_name") or away)):
             teams.setdefault(abbr, Team(abbr=abbr, name=str(name),
-                                        defense=DefenseProfile(team=abbr)))
+                                        defense=DefenseProfile(team=abbr, label=str(name),
+                                                               ratings=(ratings or {}).get(abbr) or {})))
         live = g.get("live") or {}
         game = Game(
             home=home, away=away, weather=_weather_of(g),
@@ -467,7 +469,17 @@ def build_slate(conn, games: list[dict], date: str, season: int,
                 census: dict | None = None,
                 current: dict | None = None) -> Slate:
     """Tonight's college slate, ready for `pipeline.price_props`."""
-    teams, game_objs = _game_objects(games)
+    ratings: dict = {}
+    try:
+        from .defense import ratings as _defense_ratings
+        ratings = _defense_ratings(conn, int(season), before=str(date)[:10])
+    except Exception as exc:                                  # noqa: BLE001
+        # A matchup is a refinement; a board without one is still a board.
+        if census is not None:
+            census["defense_ratings_error"] = f"{type(exc).__name__}: {exc}"
+    if census is not None:
+        census["defenses_rated"] = len(ratings)
+    teams, game_objs = _game_objects(games, ratings)
     props = build_props(conn, games, season, census=census, current=current)
     # A prop whose game is not on the slate would raise out of
     # `Slate.game_for` mid-loop and take the whole board with it.

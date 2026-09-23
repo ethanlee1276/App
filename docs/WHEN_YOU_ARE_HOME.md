@@ -36,6 +36,25 @@ has a real book price, and whether a position's roles all say the same
 thing. Anything under **LOOK AT THESE** is an input wired in and moving
 nothing. Paste the whole output back.
 
+## CFB. The college closing lines and the college matchup (read-only, a few minutes)
+
+The college scan (2026-09-23) found every college closing spread, total
+and moneyline being "attached" and written to nothing — the ingest looked
+each game up by ESPN's number and then wrote to that number instead of
+the stored row. The nightly maintenance re-fills them by itself once this
+deploys (it re-runs the fill whenever the table holds too few, and it has
+been holding none). Then re-measure the college matchup on the box's own
+data and paste it back:
+
+```bash
+cd /srv/qellys && python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT season, COUNT(total) FROM games WHERE sport='cfb' GROUP BY season\").fetchall())"
+cd /srv/qellys && python3 cfbdefensefit.py
+```
+
+The first line should show hundreds of totals per season (it was zero).
+The second prints, per market, what `engine/defensevs.TRANSFER_CFB` ships
+against what this box's data measures.
+
 ## PARKED 2026-09-21 — three read-only checks, whenever there is a quiet minute
 
 Ethan, home that evening: *"save all of this to pick up later. the main

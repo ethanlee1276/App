@@ -184,11 +184,27 @@ MODEL_STAT = {
 }
 
 
-def model_stat(position: str, market: str) -> str | None:
+#: COLLEGE, measured 2026-09-23 (`python3 cfbdefensefit.py`,
+#: engine/cfb/defensefit.py): 2022-2025 FBS-against-FBS games from our own
+#: logs, each season held out in turn, the same fit as the NFL's. THE RULE
+#: that chose each entry: a rating is used where its held-out gain is
+#: positive on average AND in at least three of the four seasons, and
+#: where two ratings qualify, the larger average wins. College differs
+#: from the NFL in the way that matters most: what a defence gives up to
+#: the receiver's OWN position predicts him in college (WR catches positive
+#: in all four seasons), where in the NFL only overall pass defence did.
+#: A college quarterback's rushing reads the run defence.
+MODEL_STAT_CFB = {
+    ("rush_yds", "QB"): "rb_rush_yds",
+}
+
+
+def model_stat(position: str, market: str, sport: str = "nfl") -> str | None:
     """The rating the projection multiplies by for this position and market, or None."""
     g = GROUP_OF.get(str(position or "").upper())
-    if (market, g) in MODEL_STAT:
-        return MODEL_STAT[(market, g)]
+    table = MODEL_STAT_CFB if sport == "cfb" else MODEL_STAT
+    if (market, g) in table:
+        return table[(market, g)]
     return stat_for(position, market)
 
 
@@ -209,8 +225,32 @@ TRANSFER = {
 }
 
 
-def transfer(position: str, market: str) -> float:
-    return TRANSFER.get((market, GROUP_OF.get(str(position or "").upper())), 0.0)
+#: College transfers (see MODEL_STAT_CFB). Held-out gain = share of squared
+#: error removed against the player's own form, per held-out season
+#: 2022 / 2023 / 2024 / 2025. The touchdown rows are what the rating adds
+#: ON TOP of the book's implied team total, because the college touchdown
+#: board is built from that total (engine/cfb/tds) — and the defence's
+#: overall scoring record measured nothing beyond it (tds.defense_multiplier);
+#: what a defence gives up to one POSITION does.
+TRANSFER_CFB = {
+    ("pass_yds", "QB"): 0.82,     # n 2,974   +1.87 +1.37 +5.02 +7.28   mean +3.89%
+    ("rush_yds", "RB"): 0.87,     # n 8,084   +2.51 +3.37 +2.27 +0.11   mean +2.07%
+    ("rush_yds", "QB"): 0.16,     # n 2,864   +0.15 −0.08 +0.03 +0.17   mean +0.07%  (run defence)
+    ("rec_yds", "WR"): 0.35,      # n 11,790  −0.11 +0.35 +0.36 +0.27   mean +0.22%  (pass defence +0.21%)
+    ("rec_yds", "TE"): 0.29,      # n 2,967   −0.15 +0.69 +0.39 +0.42   mean +0.34%
+    ("rec_yds", "RB"): 0.35,      # n 1,950   +0.01 −0.68 +0.50 +1.85   mean +0.42%
+    ("receptions", "WR"): 0.28,   # n 11,557  +0.15 +0.33 +0.08 +0.12   mean +0.17%
+    ("receptions", "TE"): 0.18,   # n 3,057   −0.09 +0.39 +0.07 +0.19   mean +0.14%
+    ("receptions", "RB"): 0.22,   # n 2,717   +0.19 −0.35 +0.20 +0.42   mean +0.12%
+    ("anytime_td", "RB"): 0.44,   # n 9,233   beyond the total +0.37 +0.25 +0.18 +0.81
+    ("anytime_td", "WR"): 0.48,   # n 10,782  beyond the total +0.08 +0.24 +0.36 +0.28
+    ("anytime_td", "TE"): 0.21,   # n 2,475   beyond the total −0.08 +0.16 +0.09 +0.30
+}
+
+
+def transfer(position: str, market: str, sport: str = "nfl") -> float:
+    table = TRANSFER_CFB if sport == "cfb" else TRANSFER
+    return table.get((market, GROUP_OF.get(str(position or "").upper())), 0.0)
 
 
 def _ord(n: int) -> str:
@@ -242,19 +282,30 @@ def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) ->
     return card
 
 
+#: Bounds on one defence's factor. College's is the projection's college cap
+#: (engine/projection.CAP_BOUNDS), for the reason written there.
+FACTOR_BOUNDS = {"nfl": (0.80, 1.25), "cfb": (0.70, 1.40)}
+
+
 def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def effect(team: str, rating: dict, position: str, market: str) -> tuple[float, str, dict | None]:
+def effect(team: str, rating: dict, position: str, market: str, sport: str = "nfl",
+           label: str = "") -> tuple[float, str, dict | None]:
     """(multiplier, reason, card) for one prop against this defence.
 
     The card shows what the defence gives up to the player's OWN position in
     this market, with a second line beside it (touchdowns under a yards
     prop, yards under a touchdown prop). The multiplier reads what was
     MEASURED to predict it (MODEL_STAT) at the measured strength (TRANSFER);
-    where nothing predicted, it is 1.0 and the card says so."""
-    show = stat_for(position, market)
+    where nothing predicted, it is 1.0 and the card says so.
+
+    ``sport`` picks the measured tables (college has its own, MODEL_STAT_CFB
+    and TRANSFER_CFB); ``label`` is the defence as a reader names it, for a
+    league whose codes are not names (college's "espn:333")."""
+    name = label or team
+    show = stat_for(position, market) or model_stat(position, market, sport)
     g = GROUP_OF.get(str(position or "").upper())
     if g == "QB":
         # A quarterback's two markets sit under each other.
@@ -262,25 +313,26 @@ def effect(team: str, rating: dict, position: str, market: str) -> tuple[float, 
     else:
         also = (stat_for(position, "anytime_td") if market != "anytime_td"
                 else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))
-    card = matchup_card(team, rating, show, also) if show else None
-    stat = model_stat(position, market)
-    b = transfer(position, market)
+    card = matchup_card(name, rating, show, also) if show else None
+    stat = model_stat(position, market, sport)
+    b = transfer(position, market, sport)
     r = (rating or {}).get(stat) if stat else None
     if not r or not b:
         if card:
             card["model"] = {"reads": None, "applied": 1.0,
                              "note": "shown for you; it has not predicted this bet, so the model leaves it out"}
         return 1.0, "", card
-    factor = _clamp(1.0 + b * (float(r["factor"]) - 1.0), 0.80, 1.25)
+    lo, hi = FACTOR_BOUNDS.get(sport, FACTOR_BOUNDS["nfl"])
+    factor = _clamp(1.0 + b * (float(r["factor"]) - 1.0), lo, hi)
     words = STATS[stat][2]
     if card:
         card["model"] = {"reads": words, "applied": round(factor, 3)}
     reason = ""
     if factor >= 1.03:
-        reason = (f"Soft matchup — {team} allow the {_ord(r['rank'])}-most {words} "
+        reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
                   f"({num(r['pg'])} a game) (×{factor:.2f})")
     elif factor <= 0.97:
         best = r["of"] - r["rank"] + 1
-        reason = (f"Tough matchup — {team} allow the {_ord(best)}-fewest {words} "
+        reason = (f"Tough matchup — {name} allow the {_ord(best)}-fewest {words} "
                   f"({num(r['pg'])} a game) (×{factor:.2f})")
     return factor, reason, card

@@ -1024,6 +1024,14 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
             "season": r["season"], "period": r["period"], "extra": extra,
+            # THE STORED KEY, for the write. The map is looked up by the
+            # mirror's numeric id, and until 2026-09-23 the UPDATE below
+            # used that looked-up id too — which matches no stored row.
+            # Every college spread, total and moneyline was counted as
+            # attached and written to nothing (2024: 904 counted, 0 in
+            # the table), so every consumer of `games.spread/total` for
+            # college read NULL.
+            "game_id": str(r["game_id"]),
         }
         # BOTH KEYS, for the reason `cfb_games_for` is aliased the same
         # way: the row is STORED as away@home (ab20781) and the mirror's
@@ -1052,11 +1060,12 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
         for column in ("spread", "total"):
             if column not in quote:
                 continue
-            conn.execute(
+            cur = conn.execute(
                 f"UPDATE games SET {column}=? WHERE sport='cfb' AND "
                 f"season=? AND period=? AND game_id=?",
-                (quote[column], game["season"], game["period"], game_id))
-            result[column] += 1
+                (quote[column], game["season"], game["period"], game["game_id"]))
+            # Counted by what the table took, not by what was attempted.
+            result[column] += cur.rowcount
         if quote.get("ml"):
             # MERGED, NOT REPLACED. `extra` already carries the neutral
             # -site flag `engine.cfb.ratings` holds its home-field fit
@@ -1065,12 +1074,12 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
             # take both out and nothing would say so.
             merged = dict(game["extra"])
             merged["ml"] = [int(quote["ml"][0]), int(quote["ml"][1])]
-            conn.execute(
+            cur = conn.execute(
                 "UPDATE games SET extra=? WHERE sport='cfb' AND season=? "
                 "AND period=? AND game_id=?",
                 (_json.dumps(merged, separators=(",", ":")), game["season"],
-                 game["period"], game_id))
-            result["ml"] += 1
+                 game["period"], game["game_id"]))
+            result["ml"] += cur.rowcount
         result["games"] += 1
     conn.commit()
     db.log_ingest(conn, "cfb", "closing_lines", str(seasons or "all"),

@@ -82,6 +82,9 @@ class DefenseProfile:
     #: to each position, ranked and shrunk. Empty where nothing was measured,
     #: and then the matchup falls back to the vs_* numbers above.
     ratings: dict = field(default_factory=dict)
+    #: The defence as a reader names it, where its code is not a name
+    #: (college: "espn:333" is Alabama). Empty = the code reads fine.
+    label: str = ""
 
 
 @dataclass

@@ -89,6 +89,28 @@ def test_the_closing_lines_map_resolves_both_names_too():
     assert body.count("games[") >= 2, "only one key is written"
 
 
+def test_the_closing_lines_are_written_to_the_stored_row():
+    """Joining was fixed; WRITING was not. The UPDATE used the id the map
+    was looked up by — the mirror's numeric one — which is no stored row,
+    so every college spread, total and moneyline was counted as attached
+    and landed nowhere (2024: 904 counted, 0 in the table). Found by the
+    2026-09-23 model scan."""
+    from engine.sources import cfblines
+    conn = _conn()
+    real = cfblines.fetch_lines
+    cfblines.fetch_lines = lambda games, seasons: {
+        "lines": {ESPN_ID: {"spread": -6.5, "total": 55.5, "ml": [-240, 195]}}}
+    try:
+        res = ingest.ingest_cfb_lines(conn, [2024], quiet=True)
+    finally:
+        cfblines.fetch_lines = real
+    row = conn.execute("SELECT spread, total, extra FROM games WHERE game_id=?", (STORED,)).fetchone()
+    assert (row["spread"], row["total"]) == (-6.5, 55.5), "the line reached the game"
+    extra = json.loads(row["extra"])
+    assert extra["ml"] == [-240, 195] and extra["home_name"] == "Home", "merged, not replaced"
+    assert (res["spread"], res["total"], res["ml"]) == (1, 1, 1), "counted by what the table took"
+
+
 def test_a_game_with_no_numeric_id_still_stores_under_its_own_key():
     """The alias is additive. A row whose extra carries no espn id — an
     older backfill — must not vanish from the map."""

@@ -137,7 +137,7 @@ def _ord(n: int) -> str:
 
 
 def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
-                     measured_context: bool = False) -> MatchupEffect:
+                     measured_context: bool = False, sport: str = "nfl") -> MatchupEffect:
     """``measured_context`` says the caller is ALSO pricing engine.teamcontext
     (NFL Phase 2). Two of the adjustments below are hand-tuned stand-ins for
     exactly what that layer measures — the spread-derived game script
@@ -155,7 +155,8 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
         # were winning him bets. The measured version of that, card and all
         # (engine/defensevs.effect; defensefit.py for the numbers).
         from . import defensevs as DV
-        factor, reason, card = DV.effect(defense.team, defense.ratings, prop.position, prop.market)
+        factor, reason, card = DV.effect(defense.team, defense.ratings, prop.position, prop.market,
+                                         sport=sport, label=getattr(defense, "label", ""))
         mult *= factor
         if reason:
             reasons.append(reason)
@@ -183,6 +184,22 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
 
     if measured_context:
         # PROE and pace are being priced for real; stop guessing at them.
+        return MatchupEffect(multiplier=mult, reasons=reasons, card=card)
+    if sport == "cfb":
+        # THE SCRIPT AND TOTAL RULES BELOW WERE FITTED ON THE NFL, and
+        # college ran them since the college board first priced props.
+        # Measured on college 2022-2025 (engine/cfb/defensefit, each
+        # season held out) they made the numbers WORSE: passing yards
+        # −1.13% of squared error removed (worse in all four seasons),
+        # WR yards −0.45% and catches −0.42% (all four), TE yards −0.56%
+        # and catches −0.80%. College totals sit near 53 against the
+        # NFL's 44.6 baseline, so the total rule was a flat ×0.95 on
+        # nearly every college rushing line. A college-fitted script term
+        # adds nothing on the same rows (passing +0.36%, mixed; WR yards
+        # −0.02%). The one place the rule looked helpful — quarterback
+        # rushing, +0.83% — is a flat ×0.95, and a flat level beats it
+        # (college production runs 7-9% under season-to-date form in
+        # every market): that is a calibration question, not the total.
         return MatchupEffect(multiplier=mult, reasons=reasons, card=card)
 
     if prop.market == RUSH_YDS:
