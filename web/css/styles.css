@@ -11363,3 +11363,11 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   background: var(--brand); color: #141414; }
 .sb-item.sb-ask { color: var(--brand); }
 @media (max-width: 760px) { .tb-ask { display: none; } }
+
+/* The model's own reasons on a Most Likely row (likelyTagsHTML). */
+.ml-tags { display: flex; font-style: normal; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ml-tag { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em; padding: 1px 7px;
+  border-radius: 999px; border: var(--hairline) solid var(--border-soft);
+  color: var(--text-mute); white-space: nowrap; }
+.ml-tag.up { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.ml-tag.down { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }

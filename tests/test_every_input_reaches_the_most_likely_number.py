@@ -253,6 +253,38 @@ def test_the_tape_scores_only_the_wallets_it_needs():
     assert some == {k: full[k] for k in ("a", "c")} and pm.wallets_seen(conn) == 3
 
 
+def test_a_most_likely_row_says_why_the_model_moved_it():
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed")
+        return
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "${likelyTagsHTML(r)}</span></span>" in app
+    esc = app[app.index("function escapeHtml("):]
+    esc = esc[:esc.index("\n}\n") + 2]
+    fn = app[app.index("function likelyTagsHTML("):]
+    fn = fn[:fn.index("\n}\n") + 2]
+    rows = [{"player": "Jauan Jennings", "mate_card": {"applied": 1.107, "out": ["Ricky Pearsall"], "headline": "h"}},
+            {"player": "Zach Ertz", "qb_card": {"applied": 0.912, "headline": "Stroud out"}},
+            {"player": "Malik Nabers", "mate_card": {"applied": 1.0, "out": ["X"], "headline": "shown only"}},
+            {"player": "Kareem Hunt", "kind": "game"}]
+    prog = (esc + "const escapeAttr = escapeHtml;\nconst state = {data: {thin: {'Malik Nabers': {games: 2}}}};\n" + fn
+            + f"\nconsole.log(JSON.stringify({json.dumps(rows)}.map(likelyTagsHTML)));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    got = json.loads(out.stdout)
+    assert "Pearsall out +11%" in got[0] and "ml-tag up" in got[0]
+    assert "QB change −9%" in got[1] and "ml-tag down" in got[1]
+    assert "out" not in got[2] and "2 games in" in got[2], "shown-only is not a chip; a thin sample is"
+    assert got[3] == ""
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

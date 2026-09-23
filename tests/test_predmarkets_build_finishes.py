@@ -118,6 +118,19 @@ def test_a_failed_build_backs_off_instead_of_retrying_every_cycle():
     assert body.index('_due(".pm_failed"') < body.index("_run_build(")
 
 
+def test_the_by_hand_indexes_make_the_wallet_query_index_only():
+    conn = connect(":memory:")
+    pm.ensure_tables(conn)
+    assert pm.build_indexes(conn) and len(pm.BUILD_INDEXES) == 2
+    plan = " ".join(str(tuple(r)) for r in conn.execute(
+        "EXPLAIN QUERY PLAN SELECT wallet, MIN(ts), COUNT(*), SUM(usd) FROM pm_trades "
+        "WHERE wallet IN ('a','b') GROUP BY wallet"))
+    assert "COVERING INDEX idx_pm_trades_wallet_usd" in plan, plan
+    src = (ROOT / "engine" / "predmarket.py").read_text()
+    body = src[src.index("def ensure_tables("):src.index("def ensure_tables(") + 1500]
+    assert "idx_pm_trades_wallet_usd" not in body, "never built inside a timed build"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

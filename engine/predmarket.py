@@ -429,6 +429,42 @@ def wallet_history(conn, wallets=None) -> dict[str, dict]:
     return out
 
 
+#: THE INDEXES THAT MAKE THE FLOW FEED FAST, built once by hand and never
+#: inside a build. Ethan's droplet, 2026-09-23: 3.9 million trades from
+#: 144,039 wallets, and `wallet_history` — even scoped to the last day's
+#: wallets — took 207 of a 248-second build, because idx_pm_trades_wallet
+#: carries no dollars and every trade was a table lookup. With `usd` in the
+#: index the query never leaves it; `ts` gives the day's tape its own.
+#: Not in `ensure_tables`: building them over millions of rows inside a
+#: build with a 180-second kill would be rolled back and retried forever.
+#:     sudo -u qellys python3 -c "from engine import predmarket as pm; pm.build_indexes()"
+BUILD_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_pm_trades_wallet_usd ON pm_trades (wallet, ts, usd)",
+    "CREATE INDEX IF NOT EXISTS idx_pm_trades_ts ON pm_trades (ts)",
+)
+
+
+def build_indexes(conn=None) -> list[str]:
+    """Create BUILD_INDEXES (a minute or two on the droplet). Returns what ran."""
+    import time as _t
+    from .db import connect
+    own = conn is None
+    conn = conn or connect()
+    done = []
+    try:
+        ensure_tables(conn)
+        for sql in BUILD_INDEXES:
+            t0 = _t.monotonic()
+            conn.execute(sql)
+            conn.commit()
+            done.append(f"{sql.split(' ON ')[0].split()[-1]} {_t.monotonic() - t0:.1f}s")
+            print("  " + done[-1], flush=True)
+    finally:
+        if own:
+            conn.close()
+    return done
+
+
 def wallets_seen(conn) -> int:
     """How many wallets the tape has ever recorded (off the wallet index)."""
     ensure_tables(conn)

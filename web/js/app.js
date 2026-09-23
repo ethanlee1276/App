@@ -8336,6 +8336,38 @@ function likelyGameMark(r, size) {
     : teamMark(r.team, size);
 }
 
+/* WHY THE MODEL MOVED THIS ROW, on the row itself (2026-09-23). Ethan:
+   "make sure the website is confirming those changes by showing" them.
+   The day's model work — a starting QB out, a teammate out at his
+   position, a rookie projected from his first games — was on the card
+   under a tap and nowhere on the list you scan. Only what MOVED the number
+   gets a chip (applied ≠ 1); a card the model only shows stays under the
+   tap, where its note says so. */
+function likelyTagsHTML(r) {
+  if (!r || r.kind === "game") return "";
+  const pct = (x) => `${x > 1 ? "+" : "−"}${Math.abs(Math.round((x - 1) * 100))}%`;
+  const tags = [];
+  const qb = r.qb_card, mate = r.mate_card;
+  if (qb && qb.headline) {
+    const a = Number(qb.applied);
+    tags.push([`QB change${a && a !== 1 ? ` ${pct(a)}` : ""}`, a && a < 1 ? "down" : "",
+               qb.headline]);
+  }
+  if (mate && Number(mate.applied) && Number(mate.applied) !== 1) {
+    const who = (mate.out || [])[0] || "Teammate";
+    tags.push([`${who.split(" ").slice(-1)[0]} out ${pct(Number(mate.applied))}`,
+               Number(mate.applied) > 1 ? "up" : "down", mate.headline || ""]);
+  }
+  const thin = ((state.data || {}).thin || {})[r.player];
+  if (thin && thin.games) {
+    tags.push([`${thin.games} game${thin.games === 1 ? "" : "s"} in`, "",
+               "Projected from this season’s first games — shown, not staked"]);
+  }
+  if (!tags.length) return "";
+  return `<span class="ml-tags">${tags.map(([t, tone, why]) =>
+    `<span class="ml-tag${tone ? " " + tone : ""}" title="${escapeAttr(why)}">${escapeHtml(t)}</span>`).join("")}</span>`;
+}
+
 function likelyRow(r) {
   const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
   const game = r.kind === "game";
@@ -8359,7 +8391,7 @@ function likelyRow(r) {
     ${mark}
     <span class="ml-who"><b>${escapeHtml(game ? (r.pick_label || r.player) : r.player)}</b>
       <span class="k">${escapeHtml(label)}${r.book
-        ? ` · ${escapeHtml(r.book)}` : ""}</span></span>
+        ? ` · ${escapeHtml(r.book)}` : ""}${likelyTagsHTML(r)}</span></span>
     <span class="hd-num">${r.odds != null
         ? `<span class="hd-o">${american(r.odds)}</span>` : ""}<span class="ml-pct hd-p">${pct}${probTierHTML(r)}</span></span>
   </button>`;
