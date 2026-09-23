@@ -205,6 +205,15 @@ set the page says "Ask isn't switched on for this site yet".
   Every question also carries when each board was built, so it can say
   how fresh a number is. The live ones (scores, the market feed, our live
   bets, prediction markets, news) are never served from the answer cache.
+- **Fantasy (2026-09-23, Ethan: "users should be able too ask the Qellys
+  chat about fantasy questions too").** Two lookups beside the fantasy
+  desk: `fantasy_points` (start/sit — up to six players' projected points
+  this week in PPR, half-PPR or standard, from the NFL board's own
+  projections plus expected touchdowns, with the season average, the
+  week-to-week swing and the matchup line) and `defense_vs_position`
+  (what every defence gives up per game to QBs, RBs, WRs or TEs, from the
+  stored game logs). The prompt says start/sit advice is welcome and is
+  not a bet; the rule against telling anyone to bet stands.
 - **Keys:** Ask spends none. The odds feed, CFBD and Kalshi are pulled by
   the refresher on its own schedule and budget, and Ask reads what the
   refresher wrote, so a busy chat can't burn the Odds API quota.

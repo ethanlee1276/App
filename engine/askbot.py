@@ -87,6 +87,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import math
 import os
 import re
 import threading
@@ -248,6 +249,15 @@ SYSTEM = (
     "ask the reader to name teams for it. The league is the one the question or the "
     "conversation is about, else the one the reader has open. Call several tools at "
     "once when you need several things, and pass the sport when you know it.\n"
+    "Fantasy football questions are welcome: who to start, start/sit between players, "
+    "flex calls, projected points, waiver pickups, streamers, trade value, which "
+    "defences to target. Use fantasy_points for projections and start/sit (PPR unless "
+    "the reader says half-PPR or standard), defense_vs_position for matchups against a "
+    "position, and the fantasy desk for usage, waivers, streamers, trending and ranks. "
+    "For a start/sit you may say who you would start: lead with that, then each "
+    "player's projected points on its own line, and mention a big weekly swing "
+    "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
+    "not a bet.\n"
     "Use ONLY the facts you are given, the tools return and web_search finds. Do not add "
     "statistics, injuries, news, odds or any number that is not in them. Look in our "
     "data first; when it has nothing on the question (breaking news, a trade or signing, "
@@ -315,6 +325,25 @@ EFFICIENCY = {
 }
 
 FANTASY_VIEWS = ("usage", "buy_sell", "waivers", "streamers", "trending", "ranks", "moves")
+#: Fantasy scoring, points per unit. Interceptions, fumbles, two-point
+#: tries and return yards are not projected, and every answer says so.
+FANTASY_SCORING = {
+    "ppr": {"receptions": 1.0, "rec_yds": 0.1, "rush_yds": 0.1, "pass_yds": 0.04, "pass_td": 4.0, "td": 6.0},
+    "half": {"receptions": 0.5, "rec_yds": 0.1, "rush_yds": 0.1, "pass_yds": 0.04, "pass_td": 4.0, "td": 6.0},
+    "standard": {"receptions": 0.0, "rec_yds": 0.1, "rush_yds": 0.1, "pass_yds": 0.04, "pass_td": 4.0, "td": 6.0},
+}
+FANTASY_POSITIONS = ("QB", "RB", "WR", "TE")
+#: Most players one start/sit lookup compares.
+FANTASY_PLAYERS_MAX = 6
+#: The stat markets a projection is built from, and what each player
+#: position scores in: a receiver's passing yards are zero, not unknown.
+FANTASY_PARTS = {"QB": ("pass_yds", "pass_td", "rush_yds"),
+                 "RB": ("rush_yds", "rec_yds", "receptions"),
+                 "WR": ("rec_yds", "receptions", "rush_yds"),
+                 "TE": ("rec_yds", "receptions")}
+#: Fewest games a defence must have played before its rank is shown alone;
+#: under it the table reads last season too, and says so.
+FPA_MIN_GAMES = 3
 
 def _stat_menu() -> str:
     """Every stat player_leaders can rank, by league — read from the logs'
@@ -334,14 +363,30 @@ TOOLS = [
           "error against the closing line and how often it moves first. For which book is sharpest, which "
           "is softest, who moves first.",
           {}),
+    _tool("defense_vs_position",
+          "NFL defences against one position, from our stored game logs: the fantasy points (PPR) and "
+          "the yards, catches and touchdowns each defence has given up per game to QBs, RBs, WRs or TEs "
+          "this season, ranked (1 = gives up the most). For the best and worst matchups, which defences "
+          "to target or avoid in fantasy, or how one defence does against a position.",
+          {"position": {"type": "string", "enum": list(FANTASY_POSITIONS)},
+           "team": {"type": "string", "description": "Optional: one defence."}}, "position"),
     _tool("fantasy",
           "The NFL fantasy desk: usage (target and carry shares, recent change), buy_sell (buy-low and "
           "sell-high by expected points), waivers (risers and who inherits an injured player's work), "
           "streamers (the week's best spots by position), trending (most added and dropped), ranks, and "
-          "moves (recent signings and trades).",
+          "moves (recent signings and trades). For projected points and start/sit use fantasy_points; for "
+          "matchups against a position use defense_vs_position.",
           {"view": {"type": "string", "enum": list(FANTASY_VIEWS)},
            "player": {"type": "string", "description": "Optional: one player."},
            "position": {"type": "string", "description": "Optional: QB, RB, WR, TE."}}, "view"),
+    _tool("fantasy_points",
+          "This week's projected fantasy points for up to six NFL players, side by side, highest first: "
+          "our board's own projection for each stat (matchup, weather and injuries already in it), his "
+          "expected touchdowns, his season average and week-to-week swing, his opponent and that "
+          "defence's matchup line. For who to start, start/sit between players, flex calls, or how many "
+          "points a player should score. Scoring is PPR unless the reader says half-PPR or standard.",
+          {"players": {"type": "array", "items": {"type": "string"}, "description": "One to six players."},
+           "scoring": {"type": "string", "enum": list(FANTASY_SCORING)}}, "players"),
     _tool("futures",
           "Our season simulation for one league: each team's record, projected wins and range, and its "
           "chances of the playoffs, the division, the conference and the title. With no team: the likeliest "
@@ -2315,6 +2360,196 @@ def fantasy(view: str = "usage", player: str = "", position: str = "", data_dir=
     return {"view": view, "season": f.get("season"), "as_of": stamp, **body}
 
 
+_FANTASY_LOG_MARKETS = ("rec_yds", "receptions", "rush_yds", "pass_yds", "pass_td", "rush_td", "rec_td", "fp_ppr")
+_FANTASY_BOARD_LISTS = ("recommendations", "most_likely", "long_shots", "longshot_watch")
+
+
+def _fantasy_rows(boards: dict):
+    for lst in _FANTASY_BOARD_LISTS:
+        for r in ((boards or {}).get("nfl") or {}).get(lst) or []:
+            if isinstance(r, dict) and r.get("player"):
+                yield r
+
+
+def _fantasy_name(conn, boards: dict, name: str) -> tuple:
+    """The one NFL player a typed name means: (name or None, other candidates).
+    A surname two players share is not a guess — the model is handed both."""
+    q = _norm(name).strip()
+    pool = {_norm(r["player"]).strip(): r["player"] for r in _fantasy_rows(boards)}
+    if conn is not None:
+        for (p,) in conn.execute(
+                "SELECT DISTINCT player FROM player_game_logs WHERE sport='nfl' AND market='fp_ppr' AND "
+                "season >= (SELECT MAX(season) - 1 FROM player_game_logs WHERE sport='nfl')"):
+            pool.setdefault(_norm(p).strip(), p)
+    if q in pool:
+        return pool[q], []
+    words = q.replace("'s", "").split()
+    hits = sorted({v for k, v in pool.items() if words and all(f" {w} " in f" {k} " for w in words)})
+    return (hits[0], []) if len(hits) == 1 else (None, hits[:5])
+
+
+def _fantasy_season(conn, player: str) -> dict:
+    """His latest season's per-game means for every scoring part, and his PPR swing."""
+    if conn is None:
+        return {}
+    got = conn.execute(
+        "SELECT season, position, market, COUNT(*) n, AVG(value) a, AVG(value*value) aa FROM player_game_logs "
+        "WHERE sport='nfl' AND player=? AND season=(SELECT MAX(season) FROM player_game_logs WHERE sport='nfl' "
+        "AND player=?) AND market IN (%s) GROUP BY season, position, market" % ",".join("?" * len(_FANTASY_LOG_MARKETS)),
+        (player, player, *_FANTASY_LOG_MARKETS)).fetchall()
+    out: dict = {}
+    for r in got:
+        out["season"], out["position"] = r["season"], (r["position"] or "").upper()
+        out[r["market"]] = float(r["a"] or 0.0)
+        if r["market"] == "fp_ppr":
+            out["games"] = int(r["n"] or 0)
+            out["swing"] = max(0.0, float(r["aa"] or 0.0) - float(r["a"] or 0.0) ** 2) ** 0.5
+    return out
+
+
+def fantasy_points(boards: dict, players: list, scoring: str = "ppr") -> dict:
+    """This week's projected fantasy points for up to six NFL players, side by side, highest first.
+
+    Each stat is the board's own projection where the board carries the
+    player in that market (matchup, weather and injuries already in it),
+    else his season average from the game logs, and every part says which.
+    Rushing and receiving touchdowns come from our touchdown model's chance
+    to score where the board priced one (a Poisson count at that chance),
+    else his season rate."""
+    rates = FANTASY_SCORING.get(str(scoring or "ppr").lower().replace("-", "").replace("halfppr", "half"))
+    if not rates:
+        return {"error": "scoring is one of: " + ", ".join(FANTASY_SCORING)}
+    names = [str(p).strip() for p in (players or []) if str(p or "").strip()][:FANTASY_PLAYERS_MAX]
+    if not names:
+        return {"error": "name at least one player"}
+    conn = _history()
+    try:
+        out, unsure = [], {}
+        for typed in names:
+            name, others = _fantasy_name(conn, boards, typed)
+            if not name:
+                unsure[typed] = others or "no NFL player by that name in our data"
+                continue
+            rows = [r for r in _fantasy_rows(boards) if r.get("player") == name]
+            season = _fantasy_season(conn, name)
+            pos = next((str(r.get("position") or "").upper() for r in rows if r.get("position")), "") \
+                or season.get("position", "")
+            if pos not in FANTASY_PARTS:
+                unsure[typed] = f"{name} is not a QB, RB, WR or TE in our data"
+                continue
+            parts, pts, fresh = {}, 0.0, 0
+            for m in FANTASY_PARTS[pos]:
+                row = next((r for r in rows if r.get("market") == m and isinstance(r.get("projection"), (int, float))), None)
+                if row is not None:
+                    v, src = float(row["projection"]), "this week"
+                    fresh += 1
+                elif m in season:
+                    v, src = season[m], "season average"
+                else:
+                    continue
+                parts[m] = {"value": round(v, 1 if m != "pass_td" else 2), "from": src}
+                pts += v * rates["pass_td" if m == "pass_td" else m]
+            td = next((r for r in rows if r.get("market") == "anytime_td"
+                       and isinstance(r.get("model_prob") or r.get("hit_prob"), (int, float))), None)
+            if td is not None:
+                p = min(0.95, max(0.0, float(td.get("model_prob") or td.get("hit_prob"))))
+                lam = -math.log(1.0 - p)
+                tds = {"expected": round(lam, 2), "from": f"our touchdown model, {round(100 * p)}% to score"}
+            else:
+                lam = season.get("rush_td", 0.0) + season.get("rec_td", 0.0)
+                tds = {"expected": round(lam, 2), "from": "his season rate"}
+            pts += lam * rates["td"]
+            main = next((r for r in rows if r.get("market") == FANTASY_PARTS[pos][0]), None) or (rows[0] if rows else {})
+            entry = {"player": name, "team": main.get("team"), "position": pos, "opponent": main.get("opponent"),
+                     "projected_points": round(pts, 1), "parts": parts, "touchdowns": tds}
+            if season.get("games"):
+                entry["season"] = {"season": season.get("season"), "games": season["games"],
+                                   "ppr_per_game": round(season.get("fp_ppr", 0.0), 1),
+                                   "weekly_swing_ppr": round(season.get("swing", 0.0), 1)}
+            card = main.get("matchup_card")
+            if isinstance(card, dict) and card.get("text"):
+                entry["matchup"] = card["text"]
+            if main.get("injury_status"):
+                entry["injury"] = main.get("injury_status")
+            if not fresh:
+                entry["note"] = "not on this week's board: season averages only"
+            out.append(entry)
+    finally:
+        if conn is not None:
+            conn.close()
+    if not out:
+        return {"found": False, "unsure": unsure,
+                "note": "no player matched; when a name fits several, ask which one"}
+    out.sort(key=lambda e: -e["projected_points"])
+    res = {"scoring": {"ppr": "PPR", "half": "half-PPR", "standard": "standard"}[
+               next(k for k, v in FANTASY_SCORING.items() if v is rates)],
+           "players": out,
+           "how": "each stat × the scoring, plus expected touchdowns × 6 (passing touchdowns × 4); not "
+                  "counted: interceptions, fumbles, two-point tries, return yards. weekly_swing_ppr is his "
+                  "own week-to-week spread: a big one is a boom-or-bust start."}
+    if unsure:
+        res["unsure"] = unsure
+    return res
+
+
+def defense_vs_position(position: str, team: str = "") -> dict:
+    """What every NFL defence gives up per game to one position, from the stored game logs, ranked."""
+    pos = str(position or "").strip().upper()
+    if pos not in FANTASY_POSITIONS:
+        return {"error": "position is one of: " + ", ".join(FANTASY_POSITIONS)}
+    conn = _history()
+    if conn is None:
+        return {"found": False, "note": "no history database on this server"}
+    try:
+        top = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport='nfl' AND market='fp_ppr'").fetchone()[0]
+        if top is None:
+            return {"found": False, "note": "no NFL game logs stored"}
+        got = conn.execute(
+            "SELECT season, period, opponent, market, SUM(value) v FROM player_game_logs WHERE sport='nfl' "
+            "AND position=? AND season IN (?, ?) AND market IN (%s) GROUP BY season, period, opponent, market"
+            % ",".join("?" * len(_FANTASY_LOG_MARKETS)), (pos, top, top - 1, *_FANTASY_LOG_MARKETS)).fetchall()
+    finally:
+        conn.close()
+    games: dict = {}
+    for r in got:
+        if r["opponent"]:
+            games.setdefault(r["season"], {}).setdefault(r["opponent"], {}).setdefault(r["period"], {})[r["market"]] = \
+                float(r["v"] or 0.0)
+    now = games.get(top) or {}
+    counts = sorted(len(g) for g in now.values())
+    seasons = [top] if counts and counts[len(counts) // 2] >= FPA_MIN_GAMES else [top - 1, top]
+    per: dict = {}
+    for se in seasons:
+        for d, wk in (games.get(se) or {}).items():
+            per.setdefault(d, []).extend(wk.values())
+    if not per:
+        return {"found": False, "note": f"no {pos} game logs stored for {top}"}
+    shown = {"QB": ("pass_yds", "pass_td", "rush_yds"), "RB": ("rush_yds", "rec_yds", "receptions"),
+             "WR": ("rec_yds", "receptions", "rec_td"), "TE": ("rec_yds", "receptions", "rec_td")}[pos]
+    table = []
+    for d, gl in per.items():
+        n = len(gl)
+        row = {"defense": d, "games": n, "ppr_allowed": round(sum(g.get("fp_ppr", 0.0) for g in gl) / n, 1)}
+        for m in shown:
+            row[m] = round(sum(g.get(m, 0.0) for g in gl) / n, 2 if m.endswith("_td") else 1)
+        if pos == "RB":
+            row["tds"] = round(sum(g.get("rush_td", 0.0) + g.get("rec_td", 0.0) for g in gl) / n, 2)
+        table.append(row)
+    table.sort(key=lambda r: -r["ppr_allowed"])
+    for i, r in enumerate(table, 1):
+        r["rank"] = i
+    res = {"position": pos, "season": "-".join(str(x) for x in seasons), "of": len(table),
+           "league_avg_ppr": round(sum(r["ppr_allowed"] for r in table) / len(table), 1),
+           "ranked": "1 = gives up the most", "most_generous": table[:8], "stingiest": table[-5:][::-1]}
+    if len(seasons) > 1:
+        res["note"] = f"{top} is only a few weeks old, so {top - 1} is read with it"
+    if team:
+        codes = _codes_for(team, "nfl")
+        mine = [r for r in table if r["defense"] in codes]
+        res["team"] = mine[0] if mine else f"no {pos} games stored against {team}"
+    return res
+
+
 def _ufc_live(data_dir) -> dict:
     blob = _load_json(_web(data_dir) / "ufc_live.json")
     bouts = []
@@ -2425,6 +2660,12 @@ def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> 
                                    a.get("season"), a.get("last_n"), a.get("limit"), prefer)
         if name == "fantasy":
             return fantasy(arg("view") or "usage", arg("player"), arg("position"), data_dir)
+        if name == "fantasy_points":
+            names = a.get("players") if isinstance(a.get("players"), list) else [arg("players")]
+            return fantasy_points(boards, [str(x)[:MAX_ARG] for x in names if str(x or "").strip()],
+                                  arg("scoring") or "ppr")
+        if name == "defense_vs_position":
+            return defense_vs_position(arg("position"), arg("team"))
     except Exception as exc:                                          # noqa: BLE001
         return {"error": f"the lookup failed ({type(exc).__name__})"}
     return {"error": f"there is no lookup called {name}"}
@@ -2500,6 +2741,10 @@ def tool_source(name: str, args, result: dict) -> dict | None:
                  else f"{result['sport'].upper()} {result['season']} efficiency, by {result['ranked_by']}")
     elif name == "fantasy":
         label = f"Fantasy desk, {str(result.get('view', '')).replace('_', ' ')}"
+    elif name == "fantasy_points":
+        label = "Fantasy projections, " + ", ".join(p["player"] for p in result.get("players") or [])[:80]
+    elif name == "defense_vs_position":
+        label = f"Defences vs {result.get('position')}s, {result.get('season')}"
     else:
         return None
     return {"label": label, "prop": ""} if label else None

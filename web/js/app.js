@@ -35410,6 +35410,7 @@ function renderAsk() {
           <div><b>Ask about any team, player or game.</b>
             <p>Tonight’s boards in every sport and every past game we have stored — the answer
               comes from our own numbers and says so when they have nothing on it.</p>
+            <p>Fantasy too: who to start, projected points, waiver pickups and the matchups to target.</p>
             <p class="ask-fine">Not betting advice. <span class="ask-help">21+ · 1-800-GAMBLER</span></p></div></div>
         <div class="ask-suggest">${sug.map((s, n) =>
           `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}"><span class="ask-sug-ic">${
