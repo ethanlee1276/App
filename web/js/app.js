@@ -18011,6 +18011,39 @@ function mbTakeaways(bets) {
   return takes.slice(0, 3);
 }
 
+/* THIS MONTH. Ethan's product audit, 2026-09-23, item 16: My Book as
+   a retention engine — "this month" was the one read it named that
+   the page did not give (the leak and the market that carries you are
+   the takeaways above; the sport and price tables are the best
+   markets). One line under your ribbon: this calendar month's record,
+   profit and ROI, and last month beside it.
+   Grouped on the bet's own date, the day you logged it for. */
+function mbMonth(bets, today) {
+  const ym = String(today || "").slice(0, 7);
+  const [y, m] = ym.split("-").map(Number);
+  const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);   // January → last December
+  const of = (k) => mbStats((bets || []).filter((b) => String((b || {}).date || "").slice(0, 7) === k));
+  return { ym, prev, cur: of(ym), last: of(prev) };
+}
+
+function mbMonthName(ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+}
+
+function mbMonthHTML(bets, today) {
+  const { ym, prev, cur: c, last: l } = mbMonth(bets, today);
+  if (!c.n && !l.settled) return "";
+  const tone = (v) => v > 0 ? "good" : v < 0 ? "bad" : "";
+  const rec = c.settled
+    ? `<b>${c.wins}-${c.losses}${c.pushes ? `-${c.pushes}` : ""}</b> · <b class="${tone(c.profit)}">${mbMoney(c.profit, true)}</b>${
+        c.roi == null ? "" : ` · ${c.roi >= 0 ? "+" : MINUS}${Math.abs(c.roi * 100).toFixed(1)}% ROI`}`
+    : "nothing settled yet";
+  // What is still open is the line above's to say ("at risk on …").
+  return `<p class="mb-month"><span class="hd-eyebrow">${mbMonthName(ym)}</span> ${rec}${
+    l.settled ? `<span class="mb-month-prev">${mbMonthName(prev)} ${mbMoney(l.profit, true)}</span>` : ""}</p>`;
+}
+
 /* Mutations. Global because the page rebuilds its own innerHTML, so a
    captured closure would go stale on the first re-render. */
 window.mbAdd = function () {
@@ -18621,6 +18654,7 @@ function renderMyBets() {
     ${acctStripHTML()}
     ${form}
     ${ribbon}
+    ${mbMonthHTML(bets, today)}
     ${(() => {
       if (st.settled < 3) return "";
       const takes = mbTakeaways(bets);

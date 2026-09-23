@@ -5420,6 +5420,12 @@ body.pk-open { overflow: hidden; }
 .mb-safety b { color: var(--text); }
 .mb-form { margin-bottom: 18px; }
 /* The one-line reads: verdict weight, list rhythm. */
+/* This month (audit item 16): one line under your ribbon. */
+.mb-month { margin: -2px 0 14px; color: var(--text-dim); font-size: var(--fs-sm); }
+.mb-month .hd-eyebrow { display: inline; margin-right: 6px; }
+.mb-month b.good { color: var(--good); }
+.mb-month b.bad { color: var(--bad); }
+.mb-month-prev { margin-left: 10px; color: var(--text-mute); }
 .mb-takes { display: block; margin-bottom: 14px; }
 .mb-takes ul { margin: 0; padding-left: 20px; }
 .mb-takes li { font-size: var(--fs-md); font-weight: 600; }
