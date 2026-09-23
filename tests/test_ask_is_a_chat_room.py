@@ -83,6 +83,38 @@ def test_bubbles_an_avatar_a_typing_row_and_a_send_that_wakes():
     assert "input.style.height = `${Math.min(input.scrollHeight, 132)}px`;" in r, "the box grows, to five lines"
 
 
+def test_it_thinks_in_dots_and_then_types_the_answer_out():
+    """Ethan, 2026-09-23: "We should add the 3 dots that wiggle when the chat
+    bot is thinking and typing too to make it feel more real." """
+    r = _fn("renderAsk")
+    wait = r[r.index('<div class="ask-turn bot wait">'):]
+    wait = wait[:wait.index("</div></div>")]
+    assert '<span class="ask-sr">Looking it up…</span>' in wait, "only the dots show; the words are for screen readers"
+    assert "askTypeOut();" in r, "every render hands the newest answer to the typist"
+    assert re.search(r"\.ask-sr \{[^}]*clip-path: inset\(50%\)", CSS)
+    assert re.search(r"@keyframes askDot \{.*translateY\(-5px\)", CSS), "a hop you can see"
+    send = _fn("askSend")
+    assert "const beat = ASK_THINK_MS - (Date.now() - asked);" in send, "the dots show even for a cached answer"
+    assert "if (!turn.error) _askTyping = turn;" in send, "an error is a sentence, not a performance"
+    assert send.index("_askTyping = turn") < send.index("a.turns.push(turn)")
+    think = int(re.search(r"const ASK_THINK_MS = (\d+);", APP).group(1))
+    assert 400 <= think <= 1200, think
+    turn = _fn("askTurnHTML")
+    assert 'if (t === _askTyping) {' in turn and 'class="ask-turn bot typing" id="ask-typing"' in turn
+    typer = _fn("askTypeOut")
+    assert 'matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }' in typer
+    assert 'log.setAttribute("aria-busy", "true");' in typer and 'log.removeAttribute("aria-busy");' in typer, \
+        "a screen reader hears the answer once, whole"
+    assert "if (!bub.isConnected || _askTyping !== t) return;" in typer, "a re-render shows it whole instead"
+    assert "askSourcesHTML(t)" in typer[typer.index("const done"):typer.index("if (window.matchMedia")], \
+        "the source chips arrive when the typing ends"
+    assert "ASK_SENTENCE_MS : ASK_WORD_MS" in typer, "a beat longer after each sentence"
+    assert "if (low) log.scrollTop = log.scrollHeight;" in typer, "it follows the words unless you scrolled up"
+    anim = CSS[CSS.index("@media (prefers-reduced-motion: no-preference) {\n  .ask-dots i"):]
+    anim = anim[:anim.index("\n}\n")]
+    assert ".ask-turn.typing p:last-child::after { animation: askCaret" in anim, "the caret blinks only with motion allowed"
+
+
 def test_the_empty_room_asks_and_offers_questions_including_one_about_the_past():
     r = _fn("renderAsk")
     assert "<h3>What do you want to know?</h3>" in r

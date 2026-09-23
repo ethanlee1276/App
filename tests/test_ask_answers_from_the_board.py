@@ -389,9 +389,12 @@ def test_the_page_shows_where_each_answer_came_from():
     assert '"view:ask"' not in APP[APP.index("const MORE_GROUPS"):][:900], "not in the sheet as well"
     assert 'if (name === "ask") renderAsk();' in APP
     assert 'data-ask-pick="${escapeAttr(propId(r))}"' in APP, "the prop page's Ask button"
+    src = APP[APP.index("function askSourcesHTML("):]
+    src = src[:src.index("\n}\n")]
+    assert '` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"`' in src, "a source prop is a door"
     turn = APP[APP.index("function askTurnHTML("):]
     turn = turn[:turn.index("\n}\n")]
-    assert '` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"`' in turn, "a source prop is a door"
+    assert "askSourcesHTML(t)" in turn, "every answer carries its chips"
     send = APP[APP.index("async function askSend("):]
     send = send[:send.index("\n}\n")]
     assert "sources: body.sources || []" in send

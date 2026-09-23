@@ -34827,17 +34827,73 @@ const ASK_AVA = `<span class="ask-ava" aria-hidden="true"><img src="logo-qb.png"
 const ASK_SEND = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"
   fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-function askTurnHTML(t) {
-  const paras = String(t.text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  /* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
-     model, and the lookups it made, as chips — a prop's chip opens its page
-     (the document-level [data-prop] door), the rest name what was read. */
+function askParas(text) {
+  return String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+}
+
+/* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
+   model, and the lookups it made, as chips — a prop's chip opens its page
+   (the document-level [data-prop] door), the rest name what was read. */
+function askSourcesHTML(t) {
   const src = (t.sources || []).filter((s) => s && s.label).slice(0, 8);
+  return src.length ? `<div class="ask-src">${src.map((s) => `<span class="ask-chip"${
+    s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
+    escapeHtml(s.label)}</span>`).join("")}</div>` : "";
+}
+
+function askTurnHTML(t) {
   const who = t.role === "user" ? "me" : t.error ? "err" : "bot";
+  // The answer about to be typed out arrives as an empty bubble; askTypeOut fills it.
+  if (t === _askTyping) {
+    return `<div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot typing" id="ask-typing"></div></div>`;
+  }
   return `<div class="ask-row ${who}">${who === "me" ? "" : ASK_AVA}<div class="ask-turn ${who}">${
-    paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${src.length ? `<div class="ask-src">${
-    src.map((s) => `<span class="ask-chip"${s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
-      escapeHtml(s.label)}</span>`).join("")}</div>` : ""}</div></div>`;
+    askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${askSourcesHTML(t)}</div></div>`;
+}
+
+/* TYPED, NOT DROPPED IN. Ethan, 2026-09-23: "We should add the 3 dots that
+   wiggle when the chat bot is thinking and typing too to make it feel more
+   real." While the question is out, a bubble of three bouncing dots and
+   nothing else; when the answer lands it writes itself out a word at a
+   time behind a caret, a beat longer after each sentence, and its source
+   chips arrive when it finishes. Only the newest answer, only once — a
+   re-render mid-sentence just shows it whole — and never for a reader who
+   has asked for reduced motion. */
+const ASK_THINK_MS = 700;         // the dots stay at least this long, even for a cached answer
+const ASK_WORD_MS = 24;
+const ASK_SENTENCE_MS = 110;
+let _askTyping = null;
+
+function askTypeOut() {
+  const t = _askTyping;
+  const bub = document.getElementById("ask-typing");
+  const log = document.getElementById("ask-log");
+  if (!t || !bub || !log) return;
+  const done = () => {
+    if (_askTyping === t) _askTyping = null;
+    bub.classList.remove("typing");
+    bub.removeAttribute("id");
+    bub.innerHTML = askParas(t.text).map((p) => `<p>${escapeHtml(p)}</p>`).join("") + askSourcesHTML(t);
+    log.removeAttribute("aria-busy");
+    log.scrollTop = log.scrollHeight;
+  };
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
+  const paras = askParas(t.text).map((p) => p.split(/(\s+)/).filter(Boolean));
+  let pi = 0, wi = 0, p = null;
+  log.setAttribute("aria-busy", "true");        // one announcement when it is whole, not one per word
+  const step = () => {
+    if (!bub.isConnected || _askTyping !== t) return;          // re-rendered: it is showing whole
+    if (pi >= paras.length) { done(); return; }
+    if (!p) { p = document.createElement("p"); bub.appendChild(p); }
+    const low = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    let word = paras[pi][wi++];
+    if (/^\s+$/.test(word) && wi < paras[pi].length) word += paras[pi][wi++];
+    p.textContent += word;
+    if (low) log.scrollTop = log.scrollHeight;
+    if (wi >= paras[pi].length) { pi += 1; wi = 0; p = null; }
+    setTimeout(step, /[.!?]["’”)]?\s*$/.test(word) ? ASK_SENTENCE_MS : ASK_WORD_MS);
+  };
+  step();
 }
 
 /* The room's height: the measured space from its own top to the highest
@@ -34888,7 +34944,7 @@ function renderAsk() {
           `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>
       </div>` : a.turns.map(askTurnHTML).join("")}${a.busy ? `
       <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"
-        aria-hidden="true"><i></i><i></i><i></i></span>Looking it up…</div></div>` : ""}</div>
+        aria-hidden="true"><i></i><i></i><i></i></span><span class="ask-sr">Looking it up…</span></div></div>` : ""}</div>
     <div class="ask-dock">
       ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
         <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
@@ -34918,6 +34974,7 @@ function renderAsk() {
   }
   askRoomSize();
   setTimeout(askRoomSize, 400);        // again once the view's slide-in has settled
+  askTypeOut();
   host.querySelectorAll("[data-ask-q]").forEach((b) => b.addEventListener("click", () => askSend(b.dataset.askQ)));
   host.querySelectorAll("[data-ask-reset]").forEach((b) => b.addEventListener("click", () => {
     a.turns = []; askSave(); renderAsk();
@@ -34936,6 +34993,7 @@ async function askSend(text) {
   a.turns.push({ role: "user", text: question });
   a.busy = true;
   renderAsk();
+  const asked = Date.now();
   let turn = null;
   try {
     const res = await fetch("/api/ask", {
@@ -34950,6 +35008,9 @@ async function askSend(text) {
   } catch (e) {
     turn = { role: "assistant", text: askErrorText(0, null), error: true };
   }
+  const beat = ASK_THINK_MS - (Date.now() - asked);
+  if (beat > 0) await new Promise((r) => setTimeout(r, beat));
+  if (!turn.error) _askTyping = turn;
   a.turns.push(turn);
   a.busy = false;
   askSave();
