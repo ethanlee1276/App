@@ -151,7 +151,8 @@ def test_live_games_only_ours_first_and_the_quiet_night_says_what_it_knows():
                  .map((s) => deckStateWord({ status: s })) };""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["live"] == [["nfl", "GB", 2], ["nfl", "KC", 0], ["mlb", "LAD", 0]], got["live"]
+    assert got["live"] == [["nfl", "GB", 2], ["nfl", "KC", 0]], \
+        "the league you are on only: no baseball on the NFL page (Ethan, 2026-09-23)"
     assert got["rows"] == [1, 2]
     assert got["quietFull"] == "No MLB games live. First pitch 7:05 PM ET. 3 bets queued."
     assert got["quietOne"] == "No NFL games live. 1 bet queued."

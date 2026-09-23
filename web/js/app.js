@@ -41366,12 +41366,18 @@ let _deckStamp = "";
 /* Live games only, the ones with our bets on them first. `list` is
    [{sport, g}] from the fast scoreboards; `riding` the tracker's live
    rows, which belong to `sport` (the loaded board's league). */
+/* THE LEAGUE YOU ARE ON, ONLY (Ethan, 2026-09-23, a screenshot of the
+   NFL home with Nationals–Tigers and Blue Jays–Orioles in its Live now
+   strip: "we shouldn't have live mlb games showing on the nfl page").
+   Every league's scoreboard is still fetched — the Live tab is where
+   they all sit together — and a quiet NFL night now says "No NFL games
+   live. Kickoff …" instead of drawing baseball under an NFL header. */
 function deckLiveGames(list, riding, sport) {
   const on = (g) => (riding || []).filter((r) => r.game
     && r.game.home === g.home && r.game.away === g.away).length;
   return (list || [])
-    .filter((x) => x && x.g && (x.g.live || {}).state === "live")
-    .map((x) => ({ ...x, riding: x.sport === sport ? on(x.g) : 0 }))
+    .filter((x) => x && x.g && x.sport === sport && (x.g.live || {}).state === "live")
+    .map((x) => ({ ...x, riding: on(x.g) }))
     .sort((a, b) => b.riding - a.riding);
 }
 
