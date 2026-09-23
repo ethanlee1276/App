@@ -36411,6 +36411,20 @@ function hcmPaint() {
   btn.classList.toggle("on", on);
   const state = btn.querySelector(".sb-hcm-state");
   if (state) state.textContent = on ? "On" : "Off";
+  paintFilterCount();
+}
+
+/* The Filters heading says how many are on, so a switch folded out of
+   sight can never be the silent reason picks are missing (audit item
+   10, 2026-09-23). Reads the same two stores the switches write. */
+function paintFilterCount() {
+  const el = document.getElementById("sb-filters-n");
+  if (!el) return;
+  let n = 0;
+  try { if (localStorage.getItem("qb_hcm") === "1") n++; } catch (e) {}
+  try { if (localStorage.getItem("qb_pz") === "1") n++; } catch (e) {}
+  el.hidden = !n;
+  el.textContent = n ? `${n} on` : "";
 }
 
 function initHcm() {
@@ -36457,6 +36471,7 @@ function initPz() {
     btn.classList.toggle("on", on);
     const s = btn.querySelector(".sb-hcm-state");
     if (s) s.textContent = on ? "On" : "Off";
+    paintFilterCount();
   };
   btn.addEventListener("click", () => {
     try { localStorage.setItem(PZ_KEY, pzOn() ? "0" : "1"); } catch (e) {}
@@ -39705,14 +39720,16 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    destinations, never labels or handlers: a pill's text is the
    sidebar button's text, and tapping it taps that button. A destination
    the sidebar hides (the wall, a switched-off feature) has no pill. */
+/* The audit's groups (Ethan's product audit, 2026-09-23, item 1):
+   Picks · Odds · Research · My Book, then Proof. Every destination
+   the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
-  ["Bet", ["view:likely", "view:edge", "view:longshots", "subtab:gamebets",
-           "view:scanner", "view:futures"]],
-  ["Follow", ["view:zeno", "view:alerts", "sport:mybets", "view:streak",
-              "view:bankroll"]],
+  ["Picks", ["view:likely", "view:longshots", "view:zeno"]],
+  ["Odds", ["view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],
+  ["My Book", ["sport:mybets", "view:alerts", "view:streak", "view:bankroll"]],
   // Record is the tab bar's Results; listing it here too was one of
   // the repeats Ethan photographed (2026-09-22).
   ["Proof", ["sport:lab", "sport:methodology", "sport:status",

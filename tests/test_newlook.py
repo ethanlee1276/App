@@ -180,8 +180,12 @@ def test_the_library_folds_and_remembers():
     # fold, and back to four the same day: Ethan, "We dont want features
     # like that hidden from the user." They lead the drawer as tiles now
     # (.sb-apps), behind nothing.
+    # Renamed 2026-09-23 (the product audit): Betting is Odds, Library
+    # is Research — same fold ids — and the two switches fold under a
+    # fifth head, Filters, which carries its own class beside these.
     assert sb.count('class="sb-label sb-fold"') == 4, \
-        "the foldable heads changed — Betting, Library, My Book, Proof"
+        "the foldable heads changed — Odds, Research, My Book, Proof"
+    assert sb.count('class="sb-label sb-fold sb-filters-head"') == 1
     for fold in ('data-fold="library"', 'data-fold="proof"'):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="false"' in seg[:220], \

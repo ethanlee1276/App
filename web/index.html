@@ -408,8 +408,12 @@
            heading" — and opening Betting would also put the value board
            back level with the two the measurements support, which the
            2026-08-30 reorder below argues at length against. -->
+      <!-- Named ODDS since 2026-09-23 (Ethan's product audit, item 1:
+           Picks · Odds · Research · My Book). The fold id stays
+           "research" so every reader's remembered choice
+           (qb_sb_folds) survives the rename. -->
       <button class="sb-label sb-fold" data-head="research" data-fold="research"
-              type="button" aria-expanded="false">Betting
+              type="button" aria-expanded="false">Odds
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <div class="sb-group" data-group="research" hidden>
@@ -438,8 +442,10 @@
           Futures</button>
       </div>
 
+      <!-- RESEARCH since 2026-09-23 (audit item 1); the id stays
+           "library" for the same reason. -->
       <button class="sb-label sb-fold" data-head="library" data-fold="library"
-              type="button" aria-expanded="false">Library
+              type="button" aria-expanded="false">Research
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <!-- Ships [hidden] so the fold holds before app.js runs — the CSS
@@ -534,6 +540,20 @@
       </div>
     </div>
 
+    <!-- FILTERS, FOLDED (2026-09-23, Ethan's product audit, item 10):
+         "Those feel like internal application controls … settings
+         leaking into the landing experience." The two switches were
+         two large cards at the foot of every page's menu. They fold
+         under one heading now, shut by default, and the heading
+         says how many are on (paintFilterCount) — so a filter that
+         is hiding picks can never be out of sight. On phones they
+         stay in the More sheet (moreSheetFoot), unchanged. -->
+    <button class="sb-label sb-fold sb-filters-head" data-head="filters" data-fold="filters"
+            type="button" aria-expanded="false">Filters
+      <span class="sb-filters-n" id="sb-filters-n" hidden></span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="sb-group sb-filters" data-group="filters" hidden>
     <!-- High Confidence Mode — a REAL filter, not a marketing toggle: on,
          the board and Top Picks show A-grade picks only (quality ≥ 80,
          the same bands the journal grades by). -->
@@ -562,6 +582,7 @@
         <span class="knob" aria-hidden="true"></span><span class="sb-hcm-state">Off</span>
       </button>
     </div>
+    </div><!-- /.sb-filters -->
 
     <!-- The four footer chips (Why Us / Method / Status / About) moved
          up into the Proof group as full rows, 2026-08-25 — six

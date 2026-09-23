@@ -6308,6 +6308,16 @@ body.has-rail .shell {
 .sb-hcm-switch.on .knob::after { transform: translateX(18px); background: #fff; }
 .sb-hcm-switch.on { color: var(--text); }
 
+/* The Filters fold (audit item 10): the heading takes the cards' old
+   foot-of-the-column margin, and the cards inside sit flush. The
+   count is the one thing on the heading that must be seen. */
+.sb-filters-head { margin-top: auto; }
+.sb-filters { gap: 10px; }
+.sb-filters .sb-hcm { margin-top: 0; }
+.sb-filters-n { margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  background: var(--brand); color: var(--brand-ink); font-size: var(--fs-2xs);
+  letter-spacing: .04em; }
+.sb-filters-n[hidden] { display: none; }
 .sb-foot { display: flex; flex-direction: column; gap: 10px; padding: 2px 6px 0; }
 .standing { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
   color: var(--text-mute); font-size: var(--fs-2xs); font-family: var(--font-mono);

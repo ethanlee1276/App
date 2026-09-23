@@ -126,7 +126,7 @@ def test_the_sheet_loses_no_sidebar_destination():
                titles: MORE_GROUPS.map(([t]) => t) };""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["titles"] == ["Bet", "Follow", "Research", "Proof"]
+    assert got["titles"] == ["Picks", "Odds", "Research", "My Book", "Proof"]  # the audit's groups, 2026-09-23
     on_bar = {f"view:{v}" for v in got["views"]} | {f"sport:{t}" for t in got["tools"]}
     bar = _bar()
     for v in got["views"]:
