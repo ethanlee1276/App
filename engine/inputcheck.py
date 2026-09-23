@@ -215,3 +215,48 @@ def wiring(board: dict, fits=None) -> dict:
                     bad.append(f"{m.get('player')} {m.get('market')}: shows {m['model_prob']:.3f}, "
                                f"its prop row says {float(own):.3f}")
     return {"checked": n, "bad": bad}
+
+
+# ---- weather: did the forecast reach the games, and the numbers?
+def weather(boards: dict) -> list[str]:
+    """``boards`` is {sport: board dict} (football). Per league: outdoor games
+    with a real forecast against those left on the prior, and the prop rows
+    whose weather step moved.
+
+    Ethan, 2026-09-23: "it doesn't seem like the model is tracking the
+    weather". Until that day it was not — the NFL forecast stopped at the
+    console (nflverse.build_slate's ``games``) — and this is the one-line
+    check that it now reaches the board.
+    """
+    lines = ["WEATHER — did the kickoff forecast reach the games and the numbers",
+             "  expect every outdoor game forecast inside 16 days of kickoff, and rows moved "
+             "wherever a game is at 8+ mph or rain is 30%+ likely"]
+    for sport, board in boards.items():
+        if not isinstance(board, dict):
+            lines.append(f"  {sport}: {board}")
+            continue
+        games = board.get("games") or []
+        dome = [g for g in games if (g.get("weather") or {}).get("dome")]
+        outdoor = [g for g in games if g not in dome]
+        read = [g for g in outdoor if (g.get("weather") or {}).get("measured") or g.get("weather_checked")]
+        lines.append(f"  {sport}: {len(games)} games — {len(dome)} indoors, {len(outdoor)} outdoors, "
+                     f"{len(read)} of them forecast" + ("" if len(read) == len(outdoor)
+                                                       else f"  ({len(outdoor) - len(read)} on the prior)"))
+        for g in read:
+            w = g.get("weather") or {}
+            wind, pc = float(w.get("wind_mph") or 0), float(w.get("precip_chance") or 0)
+            if wind >= 8 or pc >= 0.3 or w.get("rain") or w.get("snow"):
+                lines.append(f"    {g.get('away')} @ {g.get('home')}: {wind:.0f} mph, "
+                             f"{float(w.get('temp_f') or 0):.0f}°F"
+                             + (f", {pc:.0%} precipitation" if pc else ""))
+        moved: dict = {}
+        for r in board.get("recommendations") or []:
+            for s in (r.get("chain") or {}).get("steps") or []:
+                if s.get("key") == "weather" and abs(float(s.get("mult") or 1.0) - 1.0) > 1e-4:
+                    moved.setdefault(r.get("market"), []).append(float(s["mult"]))
+        if moved:
+            lines.append("    rows the weather moved: " + " · ".join(
+                f"{m} {len(v)} (×{min(v):.2f}–×{max(v):.2f})" for m, v in sorted(moved.items())))
+        else:
+            lines.append("    no row moved by weather on this board")
+    return lines

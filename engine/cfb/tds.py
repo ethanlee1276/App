@@ -727,23 +727,14 @@ def defense_multiplier(conn, opponent: str, season: int
 
 def weather_multiplier(weather: dict | None, pos: str
                        ) -> tuple[float, list[str]]:
-    """Same thresholds as the NFL's, read off our own forecast layer."""
+    """The NFL's measured table (engine/weather.td_multiplier), read off our
+    own forecast layer — college's forecast games are too few to measure
+    alone. A dict without a wind reading is a game the forecast did not
+    answer, and moves nothing."""
+    from ..weather import td_multiplier
+    from .props import weather_of_dict
     w = weather or {}
-    if w.get("dome"):
-        return 1.0, ["Indoors — weather is not a factor"]
-    mult, reasons = 1.0, []
-    wind = float(w.get("wind_mph") or 0)
-    temp = w.get("temp_f")
-    if wind >= 20 and pos in ("WR", "TE", "QB"):
-        mult *= 0.93
-        reasons.append(f"Wind {wind:.0f} mph — passing touchdowns suppressed")
-    if float(w.get("precip_chance") or 0) >= 0.6:
-        mult *= 0.97
-        reasons.append("Rain likely — modest drag on the passing game")
-    if temp is not None and float(temp) <= 20:
-        mult *= 0.96
-        reasons.append(f"{float(temp):.0f}°F — cold suppresses scoring")
-    return mult, reasons
+    return td_multiplier(weather_of_dict(w, w.get("dome") or w.get("wind_mph") is not None), pos)
 
 
 #: Watch-list price sanity — same reasoning as the NFL's TD_WATCH_ODDS:

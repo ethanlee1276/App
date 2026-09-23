@@ -480,7 +480,7 @@ def main() -> None:
     carry_report: dict = {}
     try:
         slate = build_slate(args.season, args.week, carry=args.carry,
-                            report=carry_report, qb_backups=True)
+                            report=carry_report, qb_backups=True, games=games)
         _mem("build_slate", args.memtrace)
     except DataUnavailable as exc:
         print("\n⚠️  Full projections need weekly player stats.\n")

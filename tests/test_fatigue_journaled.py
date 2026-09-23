@@ -60,11 +60,17 @@ def _journal(res):
     is the only game whose props carry a stake, and since 2026-09-14 the
     journal refuses a row on a game under way (`ledger.in_play_reason`,
     tests/test_no_bets_in_play.py). The flags are cleared here so the
-    dimension test still has a row to read; the rule has its own file."""
+    dimension test still has a row to read; the rule has its own file.
+    So is a zero stake: since the measured wind (2026-09-23) cut the
+    16 mph Buffalo game's passing, that slate's one staked prop has no
+    edge left, and the journal records no 0.00u bet — its own rule too."""
     import copy
     res = copy.deepcopy(res)
     for r in (res.get("recommendations") or []) + (res.get("game_bets") or []):
         r["live"] = r["started"] = False
+    for r in res.get("recommendations") or []:
+        if not float(r.get("stake_units") or 0):
+            r["stake_units"] = 0.5
     conn = ledger.connect(":memory:")
     ledger.log_recommendations(conn, res, only_recommended=False)
     return conn

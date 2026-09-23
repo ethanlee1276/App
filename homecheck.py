@@ -26,6 +26,7 @@ a reading one.
     python3 homecheck.py record        # RECORD: does the page's file carry every league?
     python3 homecheck.py exchange      # KX-2: what the Kalshi tickers look like
     python3 homecheck.py inputs        # INPUTS: does every model input move a number?
+    python3 homecheck.py weather       # WEATHER: did the forecast reach the games and numbers?
     python3 homecheck.py head          # which commit this box is running
     python3 homecheck.py all           # every read-only check, in order
 
@@ -1121,6 +1122,19 @@ def inputs() -> list:
     return inputcheck.report(boards)
 
 
+def weather() -> list:
+    """WEATHER. Did the kickoff forecast reach the football games and the
+    numbers? (read-only)"""
+    from engine import inputcheck
+    boards = {}
+    for sport in ("nfl", "cfb"):
+        try:
+            boards[sport] = _board(sport, full=True)
+        except Exception as exc:                              # noqa: BLE001
+            boards[sport] = f"unreadable — {type(exc).__name__}: {exc}"
+    return inputcheck.weather(boards)
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -1144,6 +1158,8 @@ CHECKS = {
                    "how fast we are on injury news", True),
     "inputs": (inputs, "INPUTS: does every model input move a number on "
                        "the live boards", True),
+    "weather": (weather, "WEATHER: did the forecast reach the football games "
+                         "and the numbers", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

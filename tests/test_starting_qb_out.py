@@ -167,7 +167,7 @@ def test_game_cards_and_ask_say_it():
     assert A.board_summary(board)["starting_qb_out"][0].startswith("C.J. Stroud")
     assert "say who is out and who starts" in " ".join(A.SYSTEM.split())
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
-    assert "report=carry_report, qb_backups=True)" in build and 'result["qb_changes"] = ' in build
+    assert "report=carry_report, qb_backups=True, games=games)" in build and 'result["qb_changes"] = ' in build
 
 
 def test_the_card_draws_under_the_pick():

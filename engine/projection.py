@@ -129,7 +129,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
 
     matchup = evaluate_matchup(prop, opponent_team.defense, game,
                                measured_context=bool(context), sport=sport)
-    weather = evaluate_weather(game.weather)
+    weather = evaluate_weather(game.weather, prop.position)
     injury = evaluate_injuries(prop, game.injuries)
     # WHO PLAYS AROUND HIM, measured (Ethan, 2026-09-23: "we also need our
     # model to adjust accordingly to all the data"): his starting
@@ -157,11 +157,16 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # of squared error removed unbounded, +5.35% under this cap; 2023
     # +1.75% against +0.89%. At ×0.70-×1.40 it keeps it (+7.43%, +1.63%),
     # and rushing is the same either way.
+    #
+    # WEATHER SITS OUTSIDE IT SINCE 2026-09-23, measured (engine/wxfit.py,
+    # ten seasons) the way the lineup step is: the cap exists to stop
+    # hand-tuned dials compounding, and it was clipping a measured 18 mph
+    # cut on a receiver facing a good pass defence back to ×0.85.
     cap_lo, cap_hi = CAP_BOUNDS.get(sport, CAP_BOUNDS["nfl"])
     rule_mult = clamp(
-        matchup.multiplier * weather_mult * injury.multiplier,
+        matchup.multiplier * injury.multiplier,
         cap_lo, cap_hi,
-    )
+    ) * weather_mult
 
     # Measured team tendency — pace, pass rate, offensive efficiency. Kept
     # OUTSIDE rule_mult's clamp on purpose: that clamp exists to stop the
@@ -229,12 +234,12 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         reasons.append(f"Learned model adjustment ×{learned:.2f} (trained on historical data)")
     else:
         total_mult = rule_mult
-        raw_mult = matchup.multiplier * weather_mult * injury.multiplier
+        raw_mult = matchup.multiplier * injury.multiplier
         mult_steps = [
             chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
             chain.step("weather", weather_mult, "; ".join(weather.reasons)),
             chain.step("injury", injury.multiplier, "; ".join(injury.reasons)),
-            chain.cap_step(raw_mult, total_mult, cap_lo, cap_hi),
+            chain.cap_step(raw_mult, clamp(raw_mult, cap_lo, cap_hi), cap_lo, cap_hi),
         ]
 
     # THE RECENCY SHADE IS OBSERVED AND NO LONGER APPLIED — MEASURED

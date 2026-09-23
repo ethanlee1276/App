@@ -805,7 +805,7 @@ def _merge_specs(primary: list[PlayerSpec],
 def build_slate(season: int, week: int, upto_week: int | None = None,
                 specs: list[PlayerSpec] | None = None,
                 carry: bool = False, report: dict | None = None,
-                qb_backups: bool = False) -> Slate:
+                qb_backups: bool = False, games: list[Game] | None = None) -> Slate:
     """Assemble a real Slate for a season/week.
 
     Requires weekly stats (for game logs and defense profiles). Since nflverse
@@ -819,9 +819,16 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     against a floor of ``MIN_LOGS``, so without it the prop board is empty
     until week 4. See engine/carry.py for what was measured before it was
     built. ``report`` is filled in with what was carried, for the cards.
+
+    ``games`` is the week's list when the caller already has one — the
+    build passes the one `nfl_build.show_games` stamped with the kickoff
+    forecast (engine/nflwx.py). Until 2026-09-23 this re-read the schedule
+    instead, so every outdoor game the projections and the published
+    cards saw was the 60°F / 6 mph prior and the forecast reached only
+    the console.
     """
     upto_week = upto_week or week
-    games = build_games(season, week)
+    games = games if games else build_games(season, week)
     if not games:
         raise DataUnavailable(f"No scheduled games found for {season} week {week}.")
 

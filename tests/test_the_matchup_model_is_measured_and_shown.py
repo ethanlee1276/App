@@ -87,8 +87,23 @@ def _rating(**factors):
     base = {s: {"pg": 10.0, "league": 10.0, "raw": 1.0, "factor": 1.0, "rank": 16, "of": 32, "games": 2}
             for s in D.STATS}
     for s, (f, rank, pg) in factors.items():
-        base[s] = {**base[s], "factor": f, "rank": rank, "pg": pg}
+        # A rating whose games point the way its factor does (raw on the
+        # factor's side of 1.0); the disagreeing case is its own test below.
+        base[s] = {**base[s], "factor": f, "rank": rank, "pg": pg, "raw": f}
     return base
+
+
+def test_a_rating_that_is_mostly_last_season_says_so():
+    """The week-3 build printed "Tough matchup — MIN allow the 29th-fewest
+    passing yards (289.5 a game) (×0.96)" — 74 of 357 matchup lines
+    contradicted themselves, the rank being this season's two games and the
+    factor mostly last season's."""
+    rating = _rating(qb_pass_yds=(0.94, 4, 289.5))
+    rating["qb_pass_yds"]["raw"] = 1.31
+    f, why, _card = D.effect("MIN", rating, "WR", "rec_yds")
+    assert f < 0.97
+    assert why == (f"Tough matchup (×{f:.2f}) — 86% of MIN's rating is last season, when they were "
+                   f"stingy with passing yards; 2 games into this one they allow 289.5 a game, the 4th-most"), why
 
 
 def test_the_effect_its_card_and_its_words():

@@ -132,6 +132,33 @@ def _proxy_line(values: list[float]) -> float:
     return max(0.5, _round_half(base) - 0.5)
 
 
+def weather_of_dict(w: dict, checked: bool) -> Weather:
+    """A stamped forecast dict as the engine's Weather, or an honest blank.
+
+    The chance of rain comes through since 2026-09-23 (engine/weather.py
+    applies rain at the forecast's own chance); it was dropped here, so a
+    college prop never saw it.
+    """
+    w = w or {}
+    if w.get("dome"):
+        return Weather(dome=True, measured=True)
+    if not checked:
+        return Weather()
+    temp = float(w.get("temp_f", 65.0))
+    precip = float(w.get("precip_chance") or 0.0)
+    likely = precip >= 0.6
+    return Weather(
+        dome=False,
+        temp_f=temp,
+        wind_mph=float(w.get("wind_mph", 5.0)),
+        wind_dir=str(w.get("wind_dir") or ""),
+        precip_chance=precip,
+        rain=likely and temp > 32.0,
+        snow=likely and temp <= 32.0,
+        measured=True,
+    )
+
+
 def _weather_of(game: dict) -> Weather:
     """The kickoff forecast `engine.cfb.wx` stamped, or an honest blank.
 
@@ -140,18 +167,7 @@ def _weather_of(game: dict) -> Weather:
     keeps ``weather_checked`` False and arrives here as an unmeasured
     mild day, which every consumer checks before showing or journaling.
     """
-    w = game.get("weather") or {}
-    if w.get("dome"):
-        return Weather(dome=True, measured=True)
-    if not game.get("weather_checked"):
-        return Weather()
-    return Weather(
-        dome=False,
-        temp_f=float(w.get("temp_f", 65.0)),
-        wind_mph=float(w.get("wind_mph", 5.0)),
-        wind_dir=str(w.get("wind_dir") or ""),
-        measured=True,
-    )
+    return weather_of_dict(game.get("weather") or {}, bool(game.get("weather_checked")))
 
 
 def _game_objects(games: list[dict], ratings: dict | None = None) -> tuple[dict, list]:

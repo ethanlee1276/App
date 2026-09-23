@@ -126,7 +126,8 @@
         "wind_dir": "NW",
         "precip_chance": 0.1,
         "rain": false,
-        "snow": false
+        "snow": false,
+        "measured": true
       },
       "injuries": [
         {
@@ -179,7 +180,8 @@
         "wind_dir": "",
         "precip_chance": 0.0,
         "rain": false,
-        "snow": false
+        "snow": false,
+        "measured": true
       },
       "injuries": [],
       "home_ml": 135,
@@ -225,7 +227,8 @@
         "wind_dir": "SW",
         "precip_chance": 0.2,
         "rain": false,
-        "snow": false
+        "snow": false,
+        "measured": true
       },
       "injuries": [
         {

@@ -197,25 +197,14 @@ def historical_td_rate(prop: Prop) -> tuple[float, int]:
 
 
 def weather_td_multiplier(game: Game, position: str) -> tuple[float, list[str]]:
-    """Weather only suppresses scoring when it's genuinely severe."""
-    w = game.weather
-    reasons: list[str] = []
-    if w is None or w.dome:
-        return 1.0, ["Indoors — weather is not a factor"]
-    mult = 1.0
-    if w.wind_mph >= 20 and position in ("WR", "TE", "QB"):
-        mult *= 0.93
-        reasons.append(f"Wind {w.wind_mph:.0f} mph — passing touchdowns suppressed")
-    if w.snow:
-        mult *= 0.94
-        reasons.append("Snow — scoring environment degraded, run-leaning script")
-    elif w.rain:
-        mult *= 0.97
-        reasons.append("Rain — modest drag on the passing game")
-    if w.temp_f <= 20:
-        mult *= 0.96
-        reasons.append(f"{w.temp_f:.0f}°F — cold suppresses scoring")
-    return mult, reasons
+    """The measured table (engine/weather.td_multiplier, engine/wxfit.py):
+    touchdowns per point of the book's implied total, since the rate here
+    starts from that total and the total already carries part of the
+    weather. Until 2026-09-23 a hand-set 20 mph cut applied to quarterbacks
+    too — whose anytime touchdown is a rushing one, which wind does not
+    measurably touch."""
+    from .weather import td_multiplier
+    return td_multiplier(game.weather, position)
 
 
 def script_td_multiplier(game: Game, team: str,

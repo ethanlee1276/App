@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
-                      blowout_prob, GRADE_STAKE)
+                      blowout_prob, role_minutes, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
                    approval_gate, required_edge, break_even, ev_per_unit,
                    _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
@@ -42,7 +42,12 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     label = MARKET_LABELS.get(stat, stat)
     minutes = prop.get("minutes") or []
     values = prop.get("values") or []
-    base = base_minutes(minutes, tune)
+    # His ROLE's minutes: an older game he left early is out of the base
+    # and the stability read when his last five are clean; a recent one
+    # stays (engine/nba/minutes.role_minutes, measured). The per-minute
+    # rate keeps every game — what he did in the minutes he played.
+    role, left_out = role_minutes(minutes)
+    base = base_minutes(role, tune)
     rate = _rate_per_min(minutes, values)
     if base is None or rate is None:
         return {"kind": "skip", "why": "thin sample — under 3 usable games"}
@@ -52,8 +57,8 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # rate, so if the minutes are a coin flip there is nothing here to
     # price and computing an edge from it only makes the fiction look
     # numerate.
-    stability = usage_stability(minutes)
-    volatile = stability_blocks(minutes, tune)
+    stability = usage_stability(role)
+    volatile = stability_blocks(role, tune)
     if volatile:
         return {"kind": "skip", "why": volatile, "player": prop["player"],
                 "market": label}
@@ -85,6 +90,23 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     lay_m, lay_note = layoff_adjustment(prop.get("days_off"), stat)
     proj = round(rate * proj_min * pmult * env_m * lay_m, 2)
     context_notes = [n for n in (env_note, lay_note) if n]
+    from ..exitfit import exits as _exits, RECENT as _RECENT
+    from .minutes import EXIT_ROLE_MINUTES
+    _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)
+    early_exits = {"kept": [float(minutes[i]) for i in _ex if i not in left_out],
+                   "left_out": [float(minutes[i]) for i in left_out]}
+    if left_out:
+        context_notes.append(
+            f"{len(left_out)} older game{'s' if len(left_out) > 1 else ''} he left early "
+            f"({', '.join(f'{minutes[i]:.0f}' for i in left_out)} min) left out of his minutes — "
+            f"measured, they only dragged the base down")
+    elif early_exits["kept"]:
+        recent = [i for i in _ex if i < _RECENT]
+        context_notes.append(
+            f"Left early {'in his last game' if not recent[0] else f'{recent[0] + 1} games ago'} "
+            f"({minutes[recent[0]]:.0f} min) — kept: a recent early exit predicts a "
+            f"quieter game (measured)" if recent else
+            "Early exits kept in his minutes")
 
     over_odds, under_odds = int(prop["over_odds"]), int(prop["under_odds"])
     line = float(prop["line"])
@@ -187,6 +209,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "ev": ev_per_unit(p_final, odds), "hold": hold,
         "minutes_grade": grade, "stake_mult": GRADE_STAKE[grade],
         "proj_minutes": proj_min, "base_minutes": base,
+        "early_exits": early_exits,
         "projection": proj, "sd": round(sd_for(stat, proj, tune), 2),
         "blowout_prob": blowout_prob(spread, tune=tune),
         "league": tune.key,

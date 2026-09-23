@@ -49,6 +49,8 @@ class _W:
         self.rain = kw.get("rain", False)
         self.snow = kw.get("snow", False)
         self.precip_chance = kw.get("precip_chance", 0.0)
+        # A forecast reading: an unmeasured prior moves nothing (engine/weather.py).
+        self.measured = kw.get("measured", True)
 
 
 class _G:

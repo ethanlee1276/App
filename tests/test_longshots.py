@@ -144,7 +144,7 @@ def test_scoreless_backup_is_not_rated_like_a_starter():
 def test_severe_weather_suppresses_passing_touchdowns():
     clear, _ = _nfl("WR", 0.28, -7.0, 51.0)
     windy, _ = _nfl("WR", 0.28, -7.0, 51.0,
-                    weather=Weather(dome=False, wind_mph=25, temp_f=18))
+                    weather=Weather(dome=False, wind_mph=25, temp_f=18, measured=True))
     assert windy < clear
 
 

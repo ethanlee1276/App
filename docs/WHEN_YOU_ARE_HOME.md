@@ -75,6 +75,52 @@ cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
 
 Want: `receptions … priced` above 0%.
 
+**6. Weather reaches the games and the numbers** (read-only, seconds).
+Until tonight the NFL forecast stopped at the build's console — every
+outdoor game a projection or a card saw was the 60°F / 6 mph prior — and
+the wind bands were hand-set. Both are fixed; this says the forecast is
+landing on the live board:
+
+```bash
+cd /srv/qellys && python3 homecheck.py weather
+```
+
+Want: every outdoor NFL game "forecast" (none "on the prior") once the
+next NFL build has run, and "rows the weather moved" wherever a game is
+listed at 8+ mph or 30%+ precipitation. If every outdoor game is on the
+prior, the box cannot reach Open-Meteo — paste `grep -i "Weather:"
+/var/log/qellys/*.log | tail -3` or the build's journal line.
+
+**7. Does the forecast read wind on the scale the bands were measured
+on?** (fetches ~75 small files from Open-Meteo, about a minute; writes
+nothing). The bands were measured on the wind the game book reports at
+kickoff; the board reads Open-Meteo's forecast for the kickoff hour. This
+compares the two over 2023-2025:
+
+```bash
+cd /srv/qellys && python3 wxfit.py --scale
+```
+
+Want: "same scale — the bands hold". If it says DIFFERENT SCALE, paste
+it: the bands get read on the forecast's scale.
+
+**8. Games a player left early — baseball, on our own history**
+(read-only, a minute or two). The NFL keeps a game a player left hurt and
+names it (measured); basketball now drops an OLDER early exit from the
+minutes base when his last five are clean and keeps a recent one
+(measured on four seasons of both leagues). Baseball has not been
+measured yet — a starter pulled after an inning, a hitter's one-at-bat
+game — and our own database holds every start's outs and every game's
+plate appearances:
+
+```bash
+cd /srv/qellys && python3 exitfit.py mlb; python3 exitfit.py wnba
+```
+
+Paste both. For each market it shows how centred the next game's
+projection is ("above" near 0.50) with the short games kept, dropped when
+old, and dropped always. The rule that centres it goes in next.
+
 ## LIVE. Did today's model work reach the board? (read-only, seconds) — ANSWERED 2026-09-23
 
 Answered from the phone that evening: the Status page's Model builds

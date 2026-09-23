@@ -829,6 +829,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
         if r.startswith("Game script:") and ("volume up" in r or "volume down" in r):
             helps = ("volume up" in r) == (side == "OVER")
             reasons[i] = r + (" — with this side" if helps else " — against this side")
+        # The weather bullet, the same way (2026-09-23): a measured wind or
+        # rain cut helps an UNDER and argues against an OVER, and the words
+        # "receiving yards −8%" cannot tell the page which.
+        elif (r.startswith(("Wind ", "Rain ", "Snow ")) and "measured" in r
+              and "−" in r and "left alone" not in r):
+            reasons[i] = r + (" — with this side" if side == "UNDER" else " — against this side")
     # And the grade's own script note said the same thing a second time
     # in different words, under a green tick. One sentence per fact: the
     # numbered bullet above carries it; the note only runs when there is

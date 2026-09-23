@@ -335,11 +335,26 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
                          "season_weight": round(n / (n + SHRINK_GAMES), 2) if n else 0.0,
                          "strength": b}
     reason = ""
-    if factor >= 1.03:
-        reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
-                  f"({num(r['pg'])} a game) (×{factor:.2f})")
-    elif factor <= 0.97:
-        best = r["of"] - r["rank"] + 1
-        reason = (f"Tough matchup — {name} allow the {_ord(best)}-fewest {words} "
-                  f"({num(r['pg'])} a game) (×{factor:.2f})")
+    # THE SENTENCE AGREES WITH ITSELF (2026-09-23). The rank is THIS
+    # season's games and the factor is mostly LAST season's early on, so
+    # a September board printed "Tough matchup — MIN allow the 29th-fewest
+    # passing yards (289.5 a game) (×0.96)" — 74 of 357 matchup lines on
+    # the week-3 build. Where this season points the other way, the line
+    # says what the number stands on.
+    soft = factor >= 1.03
+    if soft or factor <= 0.97:
+        n = int(r.get("games") or 0)
+        now_soft = float(r.get("raw") or 1.0) >= 1.0
+        if now_soft == soft:
+            reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
+                      f"({num(r['pg'])} a game) (×{factor:.2f})" if soft else
+                      f"Tough matchup — {name} allow the {_ord(r['of'] - r['rank'] + 1)}-fewest "
+                      f"{words} ({num(r['pg'])} a game) (×{factor:.2f})")
+        else:
+            last = round(100 * (1 - n / (n + SHRINK_GAMES))) if n else 100
+            reason = (f"{'Soft' if soft else 'Tough'} matchup (×{factor:.2f}) — {last}% of "
+                      f"{name}'s rating is last season, when they were "
+                      f"{'generous' if soft else 'stingy'} with {words}; {n} game"
+                      f"{'' if n == 1 else 's'} into this one they allow {num(r['pg'])} a game, "
+                      f"the {_ord(r['rank'])}-most")
     return factor, reason, card

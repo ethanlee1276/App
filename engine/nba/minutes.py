@@ -47,7 +47,7 @@ GRADE_STAKE = {"A": 1.0, "B": 0.75, "C": 0.5, "D": 0.0}
 def base_minutes(recent_minutes: list[float],
                  tune: LeagueTuning = NBA) -> float | None:
     """Weighted current-role minutes, most recent first. The caller feeds
-    only current-role games with early-exit/blowout games excluded.
+    `role_minutes` — his minutes with an OLD early exit left out (below).
 
     The windows are NESTED — last 5, then games 6-10, then the rest. A spec
     that says "last 5 at 40% and last 10 at 30%" is describing overlapping
@@ -65,6 +65,32 @@ def base_minutes(recent_minutes: list[float],
             num += w * (sum(vals) / len(vals))
             den += w
     return round(num / den, 2) if den else None
+
+
+#: A GAME HE LEFT EARLY — under half of his usual minutes, for a player
+#: whose usual is at least this. This docstring promised since the file
+#: was written that "early-exit/blowout games" were excluded, and nothing
+#: excluded them. MEASURED 2026-09-23 (engine/exitfit.py, 2022-2025 WNBA
+#: and NBA box scores, the minutes base as built) before any was:
+#:
+#:     the next game's minutes     share ABOVE the base   mean miss
+#:     WNBA  only older exits (n 2334)  kept .562  left out .494   +0.62 / -0.43
+#:     NBA   only older exits (n 15646) kept .553  left out .493   +0.67 / -0.30
+#:     WNBA  an exit in the last five  kept .456  left out .338   -1.09 / -3.52
+#:     NBA   an exit in the last five  kept .491  left out .360   -0.23 / -3.07
+#:
+#: every season the same way. A RECENT early exit is information — he is
+#: still limited — and stays, with every older one beside it; older exits,
+#: when the last five are clean, only drag the base down and go.
+EXIT_ROLE_MINUTES = 15.0
+
+
+def role_minutes(minutes: list[float]) -> tuple[list[float], list[int]]:
+    """``(minutes his role is read from, indexes left out)``, newest first."""
+    from ..exitfit import keep_rule
+    mins = [float(m) for m in (minutes or [])]
+    keep = keep_rule(mins, EXIT_ROLE_MINUTES, "old")
+    return [mins[i] for i in keep], [i for i in range(len(mins)) if i not in keep]
 
 
 def blowout_mult(spread: float, is_starter: bool, is_favorite: bool,
