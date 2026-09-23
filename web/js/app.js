@@ -21784,6 +21784,8 @@ function bestValuePlanId(plans) {
    difference. */
 const PLAN_FEATURES = [
   "Every sport: NFL, MLB, NBA, WNBA, CFB and UFC",
+  // Second, so the longer plans' four-line summary carries it too.
+  "Ask Qellys, the AI assistant — any team, player or game",
   "Daily picks, player props and parlay tickets",
   "Line movement, line shopping and the price tape",
   "The full fantasy suite — draft kit, mock draft, lineups, trades",
@@ -22084,8 +22086,50 @@ const PW_SPORTS = [
   ["NFL", "🏈"], ["MLB", "⚾"], ["NBA", "🏀"],
   ["WNBA", "🏀"], ["CFB", "🏈"], ["UFC", "🥊"],
   ["Fantasy", "🏆"], ["Prediction markets", "📈"],
-  ["Meme coins", "🪙"],
+  ["Meme coins", "🪙"], ["Ask Qellys AI", "🤖"],
 ];
+
+/* ASK QELLYS, SOLD WHERE IT IS BOUGHT. Ethan, 2026-09-23: "Also make sure
+   we display this feature on the paywall page." A section of its own
+   under the hero, a card at the head of the feature grid, a line on the
+   plan and a chip in the breadth row.
+
+   THE PREVIEW IS BUILT FROM THE ASK PAGE'S OWN PARTS — the AI pill, the
+   title, a reader's question in its bubble, Ask's typing dots, the box
+   with its paperclip and gold send — and it shows NO ANSWER. An answer
+   written for a sales page would be numbers nobody computed, on the one
+   page where every other number is graded in public. The questions are
+   real ones Ask can take; the four points under it are what it does. It
+   is a picture, not a control: aria-hidden, and nothing in it takes a
+   tap. */
+const PW_ASK_TRY = ["How has Aaron Judge hit against the Red Sox?", "What’s the best bet on tonight’s board?"];
+
+function pwAskHTML() {
+  const point = (text) => `<li>${iconMark("check", 14)}<span>${escapeHtml(text)}</span></li>`;
+  return `<section class="pw-ask" aria-labelledby="pw-ask-h">
+    <div class="pw-ask-head"><span class="ask-pill">AI</span></div>
+    <h2 class="pw-h2" id="pw-ask-h">Meet <em>Ask Qellys.</em></h2>
+    <p class="pw-h2sub">Your AI betting assistant. Ask about any team, player or game in
+      any sport we cover, and get a straight answer written from our own numbers.</p>
+    <div class="pw-ask-grid">
+      <div class="pw-ask-demo" aria-hidden="true">
+        <div class="pw-ask-bar">${askIcon("robot", 22)}<b>Ask <em>Qellys</em></b></div>
+        <div class="ask-row me"><div class="ask-turn me">How have the Lions done against the Packers?</div></div>
+        <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"><i></i><i></i><i></i></span></div></div>
+        <div class="pw-ask-try">${PW_ASK_TRY.map((q) => `<span>${escapeHtml(q)}</span>`).join("")}</div>
+        <div class="pw-ask-box"><span class="pw-ask-clip">${askIcon("clip", 18)}</span>
+          <span class="pw-ask-ph">Ask about a player, a game or a bet…</span>
+          <span class="pw-ask-send">${askIcon("plane", 18)}</span></div>
+      </div>
+      <ul class="pw-ask-points">
+        ${point("Any sport, any team, any player — not just who plays tonight")}
+        ${point("Head-to-heads, game logs and tonight’s lines, looked up for you")}
+        ${point("The sources under every answer, and a pick’s page one tap away")}
+        ${point("Says so when our data has nothing on it, and never tells you to bet")}
+      </ul>
+    </div>
+  </section>`;
+}
 
 function paywallHTML(rec, status) {
   /* Same reasoning as the sport chips above: these ten cards are what a
@@ -22238,8 +22282,12 @@ function paywallHTML(rec, status) {
            <span>${escapeHtml(label)}</span></span>`).join("")}</div>
     </section>
 
+    ${pwAskHTML()}
+
     <h2 class="pw-h2"><em>Everything</em> you need. All in one place.</h2>
     <div class="pw-feats">
+      ${feature("🤖", "Ask Qellys",
+        "An AI assistant for any team, player or game in any sport — tonight’s boards and every past game we have stored — answered from our own numbers, with the sources shown.")}
       ${feature("🎯", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
       ${feature("📊", "The model, shown working",

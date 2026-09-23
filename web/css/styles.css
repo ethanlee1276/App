@@ -9853,6 +9853,33 @@ input:-webkit-autofill:focus {
 .pw-h2sub { text-align: center; color: var(--text-mute); margin: 0 auto 18px;
   max-width: var(--measure-tight); }
 
+/* Ask Qellys on the paywall (pwAskHTML): the Ask page's own bubbles and
+   dots in a preview card, beside what it does. */
+.pw-ask { margin-top: 38px; }
+.pw-ask-head { display: flex; justify-content: center; margin-bottom: 10px; }
+.pw-ask .pw-h2 { margin-top: 0; }       /* the pill above it carries the section's gap */
+.pw-ask-grid { display: grid; gap: 18px; margin-top: 18px; align-items: center;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .pw-ask-grid { grid-template-columns: minmax(0, 1fr); } }
+.pw-ask-demo { display: flex; flex-direction: column; gap: 12px; padding: 14px; pointer-events: none;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+.pw-ask-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; color: var(--gold);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-ask-bar b { color: var(--text); font-size: var(--fs-lg); }
+.pw-ask-bar em { font-style: normal; color: var(--gold); }
+.pw-ask-try { display: flex; flex-wrap: wrap; gap: 6px; }
+.pw-ask-try span { padding: 6px 10px; border-radius: 999px; border: var(--hairline) solid var(--border-soft);
+  color: var(--text-dim); font-size: var(--fs-xs); }
+.pw-ask-box { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 10px; color: var(--text-mute);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); font-size: var(--fs-sm); }
+.pw-ask-clip { display: grid; padding-right: 10px; color: var(--text-dim);
+  border-right: var(--hairline) solid var(--border); }
+.pw-ask-ph { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-ask-send { flex-shrink: 0; width: 36px; height: 36px; display: grid; place-items: center;
+  border-radius: var(--radius); background: var(--gold); color: var(--brand-ink); }
+.pw-ask-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pw-ask-points li { display: flex; align-items: flex-start; gap: 10px; color: var(--text); font-size: var(--fs-md); }
+.pw-ask-points li svg { flex-shrink: 0; margin-top: 3px; color: var(--gold); }
 .pw-feats { display: grid; gap: 12px; margin-top: 18px;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .pw-feat { padding: 18px 16px; text-align: center; }
