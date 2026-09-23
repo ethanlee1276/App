@@ -73,6 +73,9 @@ def test_the_two_cases_and_everything_that_is_neither():
       };
       state.view = "fantasy"; out.standalone = slateNotice({ generated_from: "sample-slate" });
       state.view = "about"; out.reference = slateNotice({ generated_from: "sample-slate" });
+      state.view = "paywall"; out.paywall = slateNotice({ generated_from: "sample-slate" });
+      state.view = "record"; out.record = slateNotice({ generated_from: "sample-slate" });
+      state.view = "edge"; out.edge = slateNotice({ generated_from: "sample-slate" });
       out.demoHTML = slateNoticeHTML({ kind: "demo" });
       out.oldHTML = slateNoticeHTML(out.old);
       return out;""")
@@ -80,7 +83,9 @@ def test_the_two_cases_and_everything_that_is_neither():
         print("  SKIP node not installed"); return
     assert got["demo"] == {"kind": "demo"}, "a sample board is not called a demo"
     assert got["old"]["kind"] == "old" and got["old"]["days"] == 36, got["old"]
-    for k in ("today", "sunday", "tomorrow", "sched", "notBuilt", "offseason", "noGames", "standalone", "reference"):
+    assert got["edge"] == {"kind": "demo"}, "a board page lost the notice"
+    for k in ("today", "sunday", "tomorrow", "sched", "notBuilt", "offseason", "noGames", "standalone", "reference",
+              "paywall", "record"):
         assert got[k] is None, f"{k}: a notice where there is nothing wrong"
     assert "Demo board." in got["demoHTML"] and "not today’s slate" in got["demoHTML"] and "nothing here is a pick" in got["demoHTML"]
     assert 'href="#record"' in got["demoHTML"], "the record is the real thing — say where it is"

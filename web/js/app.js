@@ -2156,13 +2156,15 @@ addEventListener("online", refreshStaleBar);
        that re-publishes last month's games is a fresh build.
 
    A board with no source at all (the "not built" slate, a locked
-   board) is neither; it has its own empty state. The standalone and
-   reference pages carry their own data and are not about this board. */
+   board) is neither; it has its own empty state. ONLY ON THE PAGES
+   THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
+   reference pages show none of its games, and a demo warning over
+   the plans page was noise (seen in the first render). */
 function slateNotice(d) {
   if (!d) return null;
-  try {
-    if (STANDALONE_MODES.includes(state.view) || REFERENCE_VIEWS.includes(state.view)) return null;
-  } catch (e) { return null; }
+  const boardViews = ["recommended", "tonight", "likely", "edge", "longshots", "live",
+    "scanner", "game", "prop", "trending", "players", "futures"];
+  if (!boardViews.includes(state.view)) return null;
   const src = String(d.generated_from || "");
   if (src && !boardIsReal(src)) return { kind: "demo" };
   if (!src || d.status === "offseason") return null;
@@ -16030,9 +16032,18 @@ function recDisclosure(label, html) {
    (reading 'generated_from')", tonight-body 0 characters, no page error
    reported. Same shape as the shared game-bet link, one commit earlier,
    and the same cause — a render that assumes data it was not given. */
+/* NO EDGE. NO BET. (Ethan's product audit, 2026-09-23, item 19:
+   "Make that a visible product philosophy.") When the card was
+   priced against real book numbers and the model turned all of it
+   down, that IS the answer, and the heading says it in four words.
+   A board with nothing priced keeps its own heading — "no bet"
+   there would be a verdict the model never reached. */
 function noMarketHeading() {
-  return String((state.data || {}).generated_from || "") === "schedule-only"
-    ? "Not priced yet" : "Nothing clears the bar right now";
+  const d = state.data || {};
+  if (String(d.generated_from || "") === "schedule-only") return "Not priced yet";
+  const priced = (d.recommendations || []).some((r) => r && r.has_market)
+    || (d.game_bets || []).length > 0;
+  return priced ? "No edge. No bet." : "Nothing clears the bar right now";
 }
 
 /* Did the model price this card and turn all of it down?
@@ -21714,15 +21725,32 @@ function paywallHTML(rec, status) {
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
       <p class="pw-sub">Professional sports intelligence. Real-time edges.
         Every call graded in public.</p>
-      <p class="pw-lede">Qellys Book is one analytics platform for serious
-        bettors, fantasy players and market traders — the model’s
-        estimates, the reasoning behind each one, and a public record of
-        how they turned out.</p>
+      ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
+            audiences at once — "bettors, fantasy players and market
+            traders" — and the audit's question was which one this is.
+            A sports intelligence platform; the rest come with it. */""}
+      <p class="pw-lede">Qellys Book is a sports intelligence platform for
+        serious bettors — the model’s estimates, the reasoning behind each
+        one, the price we took, and a public record of how they turned out.
+        Fantasy and market tools come with it.</p>
       ${/* THE RECEIPTS, ABOVE THE PRICE. The hero promised "every call
             graded in public" and then showed nothing until below the
             plans, which is a claim asking to be taken on faith on the one
             page where it does not have to be. */""}
       ${pwResultsHTML(rec)}
+      ${/* DON'T TAKE OUR WORD FOR IT (audit item 4): the one claim on
+            this page a stranger can check, said as the four things that
+            make it checkable, with the door to the check itself. */""}
+      <div class="pw-verify">
+        <b class="pw-verify-h">Don’t take our word for it.</b>
+        <ul class="pw-verify-list">
+          <li>${iconMark("check", 13)}<span>Every pick is timestamped.</span></li>
+          <li>${iconMark("check", 13)}<span>Every price is recorded.</span></li>
+          <li>${iconMark("check", 13)}<span>Every result is graded.</span></li>
+          <li>${iconMark("check", 13)}<span>Every loss stays on the board.</span></li>
+        </ul>
+        <a class="pw-verify-go" href="#record">See the record — it’s free &#8594;</a>
+      </div>
       <div class="pw-sports">${PW_SPORTS.map(([label, mark]) =>
         // aria-hidden: the label is the next node, and a screen reader
         // announcing "American football NFL" is a stutter, not a help.

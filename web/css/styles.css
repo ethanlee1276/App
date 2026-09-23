@@ -9908,6 +9908,16 @@ input:-webkit-autofill:focus {
    and one line. Bordered top and bottom rather than boxed — a card here
    would read as another feature tile in a page already full of them,
    and these are the only figures on the page that are measurements. */
+/* Audit item 4: the four checkable facts under the receipts. */
+.pw-verify { margin: 18px auto 0; max-width: 760px; text-align: center; }
+.pw-verify-h { display: block; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.pw-verify-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap;
+  justify-content: center; gap: 6px 18px; color: var(--text-dim); font-size: var(--fs-sm); }
+.pw-verify-list li { display: inline-flex; align-items: center; gap: 6px; }
+.pw-verify-list .ico-mark { color: var(--good); }
+.pw-verify-go { display: inline-block; margin-top: 10px; color: var(--brand-2); font-weight: 700;
+  font-size: var(--fs-sm); text-decoration: none; }
+.pw-verify-go:hover { color: var(--text); }
 .pw-results { margin: 22px auto 4px; max-width: 760px;
   padding: 16px 0 14px;
   border-top: var(--hairline); border-bottom: var(--hairline); }

@@ -56,7 +56,9 @@ def test_the_two_that_were_caught_stay_guarded():
     # drift apart. The guard travelled with it and is asserted where it
     # now lives; the caller is checked below.
     for name, needle in (
-            ("noMarketHeading", "(state.data || {}).generated_from"),
+            # Same guard as its siblings since 2026-09-23, when it began
+            # reading the priced rows too (No edge. No bet.).
+            ("noMarketHeading", "const d = state.data || {};"),
             ("noMarketExplainer", "const d = state.data || {};"),
             ("findGameRow", "const d = state.data || {};"),
             ("renderScanner", "(state.data || {}).market_scan")):
