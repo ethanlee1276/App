@@ -3,8 +3,10 @@
 Every book's event page segments its markets (Popular / Game lines /
 Player props). Ours is one long page, and stays one — the research
 brief was ease of use "without losing information" — so the segments
-are a sticky row of chips under the hero that scroll to a section,
-drawn only for sections the page actually has. One section, no row.
+are a row of chips under the hero that scroll to a section, drawn only
+for sections the page actually has. One section, no row. It stays under
+the hero (Ethan, 2026-09-23: "fix how this bar follows the page when you
+scroll down") — it used to be sticky.
 """
 import json
 import os
@@ -82,9 +84,13 @@ def test_every_section_the_row_names_exists_on_the_page_and_the_chips_scroll():
     assert 'simCard ? ["gp-sec-replay", "Replay"] : null' in page, "no chip for a section that did not draw"
     assert 'host.querySelectorAll(".gp-jump [data-jump]")' in page
     assert 'el.scrollIntoView({ behavior: state.quiet ? "auto" : "smooth", block: "start" });' in page
-    assert ".gp-jump { position: sticky; top: var(--topbar-h);" in CSS
-    assert '[id^="gp-sec-"] { scroll-margin-top: calc(var(--topbar-h) + 58px); }' in CSS, \
-        "a section lands under the sticky row, not behind it"
+    rule = re.search(r"\.gp-jump \{([^}]*)\}", _strip(CSS)).group(1)
+    assert "sticky" not in rule and "fixed" not in rule, \
+        "the row stays under the hero — pinned, it rode down over every card (Ethan, 2026-09-23)"
+    assert not re.search(r"\.gp-jump[^{]*\{[^}]*position:\s*(sticky|fixed)", _strip(CSS)), \
+        "and no later rule pins it again"
+    assert '[id^="gp-sec-"] { scroll-margin-top: calc(var(--topbar-h) + 12px); }' in CSS, \
+        "a section lands just under the top bar"
 
 
 if __name__ == "__main__":
