@@ -98,7 +98,7 @@ def test_the_measured_drop_moves_a_receiver_and_the_card_goes_on_every_row():
     assert Q.EFFECT == {("rec_yds", "WR", "downgrade"): 0.897, ("receptions", "WR", "downgrade"): 0.912}
 
 
-def test_the_projection_prices_it_inside_the_injury_step():
+def test_the_projection_prices_it_in_the_lineup_step():
     from engine.projection import build_projection
     g = Game(home="HOU", away="TEN", weather=Weather())
     g.qb_changes = Q.changes(QB, [_inj("C.J. Stroud", "HOU", "OUT")])
@@ -107,8 +107,9 @@ def test_the_projection_prices_it_inside_the_injury_step():
                             Game(home="HOU", away="TEN", weather=Weather()), opp)
     now = build_projection(_prop("Nico Collins", "HOU", "WR", REC_YDS, "wr1"), g, opp)
     assert abs(now.mean / base.mean - 0.897) < 1e-6
-    step = {s["key"]: s for s in now.chain["steps"]}["injury"]
-    assert step["mult"] == 0.897 and "QB change" in step["why"]
+    steps = {s["key"]: s for s in now.chain["steps"]}
+    assert steps["lineup"]["mult"] == 0.897 and "QB change" in steps["lineup"]["why"]
+    assert steps["injury"]["mult"] == 1.0, "measured, so outside the hand-tuned cap"
     assert now.injury.qb_card["headline"] == "C.J. Stroud (OUT) — Davis Mills starts"
 
 
@@ -192,8 +193,8 @@ def test_the_card_draws_under_the_pick():
     html, none = json.loads(out.stdout)
     assert none == "" and "QB change" in html and "C.J. Stroud (OUT) — Davis Mills starts" in html
     assert "receivers lost 10%" in html
-    for place in ("${qbCardHTML(r.qb_card)}${matchupCardHTML(r)}", "(r.qb_cards || []).map(qbCardHTML)",
-                  "const mu = qbCardHTML(r.qb_card) + matchupCardHTML("):
+    for place in ("${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML(r)}", "(r.qb_cards || []).map(qbCardHTML)",
+                  "const mu = qbCardHTML(r.qb_card) + mateCardHTML(r.mate_card) + matchupCardHTML("):
         assert place in app, place
 
 

@@ -386,6 +386,21 @@ def _regular_season(rows: list[dict]) -> list[dict]:
     return [r for r in rows if _s(r, "season_type", "game_type", default="REG") in ("REG", "")]
 
 
+#: A quarterback's passing line is projected from games he QUARTERBACKED:
+#: this many attempts or more. Measured 2026-09-23 on 2022-2025
+#: (Ethan: "make sure all the data we use is actually being projected to
+#: the pick"): a replacement starter's average over every appearance —
+#: mostly relief snaps — ran 36% under what he then threw (RMSE 110.5
+#: yards); over his starts alone, 1.03 and 82.9. For regular starters with
+#: an early exit in their logs, 1.149 and 79.7 fell to 0.974 and 68.6.
+QB_START_ATTEMPTS = 15.0
+
+
+def quarterbacked(row: dict, market: str) -> bool:
+    """False for a passing row from a game he did not really play in."""
+    return market not in (PASS_YDS, PASS_TD) or _f(row, "attempts") >= QB_START_ATTEMPTS
+
+
 def player_game_logs(rows: list[dict], player: str, market: str,
                      upto_week: int) -> list[GameLog]:
     """Most-recent-first game logs for one player and market."""
@@ -397,6 +412,8 @@ def player_game_logs(rows: list[dict], player: str, market: str,
             continue
         wk = int(_f(r, "week", default=0))
         if wk <= 0 or wk >= upto_week:
+            continue
+        if not quarterbacked(r, market):
             continue
         out.append(GameLog(
             week=wk,
@@ -1007,5 +1024,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # engine/qbchange reads it once the injuries are in.
         from ..qbchange import quarterbacks as _quarterbacks
         report["qb"] = _quarterbacks(specs, stats, prior_stats, upto_week, team_of)
+        # THE DEPTH ORDER AT EACH POSITION, the one engine/matefit measured
+        # on — engine/teammates reads it once the injuries are in.
+        from ..teammates import depth_table as _depth_table
+        report["depth"] = _depth_table(stats, participating, upto_week)
 
     return Slate(date=f"{season}-W{week:02d}", teams=teams, games=games, props=props)

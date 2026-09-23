@@ -42,7 +42,7 @@ KNOWN = {
 }
 #: Steps that only speak when something happens: flat on a quiet night is
 #: normal, so these are reported, never flagged.
-SITUATIONAL = {"injury", "cap", "rare", "learned"}
+SITUATIONAL = {"injury", "cap", "rare", "learned", "lineup"}
 #: Fewest rows of a market before "moved nothing" means anything.
 MIN_ROWS = 20
 #: Positions whose role should say where he ranks (sources/nflverse.role_for).
@@ -130,6 +130,11 @@ def report(boards: dict) -> list[str]:
         for m in sorted(cen):
             for k, why in KNOWN.get((sport, m), {}).items():
                 lines.append(f"    known: {m} {STEP_LABELS.get(k, k).lower()} — {why}")
+        w = wiring(board)
+        if w["checked"]:
+            lines.append(f"    wiring: {w['checked']} rows checked — every step and card reaches the number"
+                         if not w["bad"] else f"    wiring: {len(w['bad'])} of {w['checked']} rows do not add up")
+            flagged += [f"{sport} wiring: {x}" for x in w["bad"][:12]]
     lines.append("")
     if flagged:
         lines.append("  LOOK AT THESE:")
@@ -137,3 +142,76 @@ def report(boards: dict) -> list[str]:
     else:
         lines.append("  nothing dead: every step that should move a number moved some")
     return lines
+
+
+# ---- wiring: does every number on the Most Likely board come from the adjusted projection?
+#: Rounding the board writes (projection to 0.1, probabilities to 4 places).
+TOL_PROJ = 0.051
+TOL_PROB = 0.0015
+
+
+def _key(r: dict, side_k="side", line_k="line") -> tuple:
+    return (str(r.get("player") or ""), str(r.get("market") or ""),
+            str(r.get(side_k) or "").lower(), None if r.get(line_k) is None else float(r.get(line_k)))
+
+
+def wiring(board: dict, fits=None) -> dict:
+    """Ethan, 2026-09-23: "make sure everything we pull, all the data we use
+    is actually being projected to the pick ... Most Likely is number one."
+
+    For every prop row: base × every step = the projection it shows, and the
+    "who plays around him" step equals what its QB and teammate cards say
+    was applied. For every Most Likely prop row: its projection is its prop
+    row's, and its probability is what that projection gives — the mixture
+    recomputed from it, or the prop row's own number. {"checked", "bad": [...]}"""
+    from .yardagefit import display_prob
+    recs = [r for r in (board or {}).get("recommendations") or [] if isinstance(r, dict)]
+    by = {_key(r): r for r in recs}
+    bad, n = [], 0
+    for r in recs:
+        ch = r.get("chain") or {}
+        base = (ch.get("base") or {}).get("value")
+        if base is None or r.get("projection") is None:
+            continue
+        n += 1
+        prod = float(base)
+        for s in ch.get("steps") or []:
+            prod *= float(s.get("mult", 1.0))
+        if abs(prod - float(r["projection"])) > max(TOL_PROJ, 0.01 * abs(prod)):
+            bad.append(f"{r.get('player')} {r.get('market')}: the steps multiply to {prod:.2f}, "
+                       f"the row shows {r['projection']}")
+        lu = next((s for s in ch.get("steps") or [] if s.get("key") == "lineup"), None)
+        want = 1.0
+        for c in (r.get("qb_card"), r.get("mate_card")):
+            if isinstance(c, dict):
+                want *= float(c.get("applied", 1.0))
+        got = float(lu["mult"]) if lu else 1.0
+        if abs(got - want) > 0.002:
+            bad.append(f"{r.get('player')} {r.get('market')}: its cards say ×{want:.3f} was applied, "
+                       f"the projection used ×{got:.3f}")
+    for m in (board or {}).get("most_likely") or []:
+        if not isinstance(m, dict) or m.get("kind") != "prop":
+            continue
+        n += 1
+        src = by.get(_key(m, "main_side", "main_line"))
+        if src is None:
+            bad.append(f"{m.get('player')} {m.get('market')}: on Most Likely with no prop row behind it")
+            continue
+        if m.get("projection") != src.get("projection"):
+            bad.append(f"{m.get('player')} {m.get('market')}: Most Likely projects {m.get('projection')}, "
+                       f"its prop row {src.get('projection')}")
+        if m.get("rung") == "main":
+            if m.get("prob_source") == "mixture":
+                p = display_prob(m["market"], src.get("projection"), m.get("line"),
+                                 src.get("recent_values"), fits=fits)
+                if p is not None:
+                    p = 1.0 - p if str(m.get("side") or "").lower() == "under" else p
+                    if abs(p - float(m["model_prob"])) > TOL_PROB:
+                        bad.append(f"{m.get('player')} {m.get('market')}: shows {m['model_prob']:.3f}, "
+                                   f"its projection gives {p:.3f}")
+            else:
+                own = src.get("raw_prob") if src.get("sharp_anchored") else src.get("hit_prob")
+                if own is not None and abs(float(own) - float(m["model_prob"])) > TOL_PROB:
+                    bad.append(f"{m.get('player')} {m.get('market')}: shows {m['model_prob']:.3f}, "
+                               f"its prop row says {float(own):.3f}")
+    return {"checked": n, "bad": bad}

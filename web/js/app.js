@@ -1856,7 +1856,7 @@ const FEATURES = [
    [["Player search", "Search any player across every league we cover — typos forgiven, recent searches remembered — and click him to open everything below on the card itself.", "players"],
     ["Player page", "Per prop: the bar graph, the game logs, current form, the game script, the line’s movement since it opened, every book’s price and what the pick had to survive. A searched player’s card and the prop page are the same page, not two.", "prop"],
     ["Past stats against a specific team", "The versus block on a player’s prop page: what this player has actually done against tonight’s opponent, game by game, from the logs on disk — laid out a game to a block, with a stat pill for each phase he played in.", null],
-    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection is not moved for it: that is a pricing change, and it waits on a measurement against closing lines.", null],
+    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection moves by what four seasons measured for the same spot (a back whose starter was just ruled out ran for 65% more than his own form); the card shows his own history beside it.", null],
     ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside his passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
     ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position.", "team"],
@@ -7348,6 +7348,20 @@ function qbCardHTML(c) {
   </div>`;
 }
 
+/* A TEAMMATE AT HIS POSITION OUT (engine/teammates.effect). Ethan,
+   2026-09-23: "we also need our model to adjust accordingly to all the
+   data" — the Next man up note used to say the projection had not moved;
+   now the measured change is in the number and this card says by how
+   much, or says it was not measured enough to price. */
+function mateCardHTML(c) {
+  if (!c || !c.headline) return "";
+  return `<div class="mu-card qb-card">
+    <div class="mu-head">Teammate out<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
+    <div class="mu-line"><b>${escapeHtml(c.headline)}</b></div>
+    ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
+  </div>`;
+}
+
 function matchupCardHTML(r) {
   const c = r && r.matchup_card;
   if (!c || !c.opponent || c.rank == null) return "";
@@ -7450,9 +7464,12 @@ function rippleCardHTML(r) {
   if (!notes.length) return "";
   const items = notes.map((n) => `<li>${escapeHtml(n.text || "")}${
     n.measured ? ` <span class="mini">(share ${(n.with * 100).toFixed(0)}% → ${(n.without * 100).toFixed(0)}% over ${n.n_without} game${n.n_without === 1 ? "" : "s"} without him)</span>` : ""}</li>`).join("");
+  const moved = r && r.mate_card && Number(r.mate_card.applied) !== 1;
   return `<div class="section-title minor">Next man up
-      <span class="sub">— a teammate at his position is ruled out. Measured from
-      the weekly stats; the projection above has not been moved for it.</span></div>
+      <span class="sub">— a teammate at his position is ruled out. His own history
+      when that teammate sat, from the weekly stats; ${moved
+        ? "the projection above carries the measured league-wide change (Teammate out)"
+        : "the projection above has not been moved for it"}.</span></div>
     <div class="card"><ul class="reasons">${items}</ul></div>`;
 }
 function rippleLine(r) {
@@ -7524,7 +7541,7 @@ function cardHTML(r) {
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${booksStripHTML(r)}
-      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${qbCardHTML(r.qb_card)}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML(r)}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
             it afterwards, and that is the order the argument runs in.
@@ -7902,7 +7919,7 @@ function likelyCard(r) {
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
     ${scriptLine}${rippleLine(r)}
-    ${qbCardHTML(r.qb_card)}${matchupCardHTML(r)}
+    ${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML(r)}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
     ${bet}${lean}${cal}${evTxt}
   </article>`;
@@ -8795,7 +8812,7 @@ function watchlistHTML(watch, mlb) {
       .slice(0, 6).map((x) => reasonLI(x)).join("");
     const caveats = (r.caveats || [])
       .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
-    const mu = qbCardHTML(r.qb_card) + matchupCardHTML({ ...r, side: r.side || "YES" });
+    const mu = qbCardHTML(r.qb_card) + mateCardHTML(r.mate_card) + matchupCardHTML({ ...r, side: r.side || "YES" });
     const detail = why || caveats || mu
       ? `<div class="watch-why" hidden>
            ${mu}${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
@@ -8913,7 +8930,7 @@ function longShotCard(r) {
       ${propAnalysis(r)}
       <div class="chips"><span class="chip stake">${stakeTxt}</span></div>
       <div class="ls-primary">${escapeHtml(r.primary_reason)}</div>
-      ${qbCardHTML(r.qb_card)}${matchupCardHTML({ ...r, side: r.side || "YES" })}
+      ${qbCardHTML(r.qb_card)}${mateCardHTML(r.mate_card)}${matchupCardHTML({ ...r, side: r.side || "YES" })}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${caveats}
     </article>`;
@@ -9866,6 +9883,10 @@ function renderPropPage() {
         <span class="sub">— his games against ${escapeHtml(teamName(r.opponent || ""))}
         and any other club he has faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
+
+    ${r.mate_card ? `<div class="section-title minor">Teammate out
+        <span class="sub">— someone at his position is ruled out, and what the model did with it.</span></div>
+      ${mateCardHTML(r.mate_card)}` : ""}
 
     ${r.qb_card ? `<div class="section-title minor">Quarterback
         <span class="sub">— his team is not starting its usual one.</span></div>

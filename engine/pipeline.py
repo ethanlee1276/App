@@ -128,6 +128,7 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         # (engine/defensevs.py, Ethan 2026-09-23) — drawn under the pick.
         "matchup_card": getattr(getattr(proj, "matchup", None), "card", None),
         "qb_card": getattr(getattr(proj, "injury", None), "qb_card", None),
+        "mate_card": getattr(getattr(proj, "injury", None), "mate_card", None),
         "checks": decision.checks,
         "headline": headline(rec),
         "summary": summary(rec),

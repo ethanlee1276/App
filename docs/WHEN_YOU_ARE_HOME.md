@@ -36,6 +36,14 @@ has a real book price, and whether a position's roles all say the same
 thing. Anything under **LOOK AT THESE** is an input wired in and moving
 nothing. Paste the whole output back.
 
+Since the second NFL pass (same day, *"make sure everything we pull … is
+actually being projected to the pick … Most Likely is number one"*) each
+league also prints a **wiring** line: every row's base × every step equals
+the projection it shows, the "who plays around him" step equals what its
+QB and teammate cards say was applied, and every Most Likely row's
+projection and probability come from its prop row. "every step and card
+reaches the number" is the answer to want; anything else is listed.
+
 ## CFB. The college closing lines and the college matchup (read-only, a few minutes)
 
 The college scan (2026-09-23) found every college closing spread, total

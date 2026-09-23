@@ -627,6 +627,18 @@ def main() -> None:
             qb_notes = {t: n for t, n in qb_notes.items() if t not in qb_changes}
     except Exception as exc:                                  # noqa: BLE001
         print(f"\n⚠️  QB change check skipped: {exc}")
+    # A TEAMMATE AT HIS POSITION RULED OUT (engine/teammates): the measured
+    # change reaches the projection, not only the card.
+    try:
+        from engine import teammates as _mates
+        _mates_out = _mates.stamp(slate, carry_report.get("depth") or {},
+                                  [i for g in slate.games for i in g.injuries],
+                                  reset_players=list(((reset_report or {}).get("reset") or {}).keys()))
+        if _mates_out:
+            print(f"\nTeammates out: {sum(len(v) for v in _mates_out.values())} ruled out across "
+                  f"{len(_mates_out)} team(s) — the players behind them are re-projected.")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\n⚠️  Teammate check skipped: {exc}")
     real_odds = False
     odds_status = {"checked": bool(args.odds or args.cached_odds
                                    or args.board_odds), "matched": 0,

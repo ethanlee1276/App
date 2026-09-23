@@ -46,6 +46,7 @@ STEP_LABELS = {
     "trend": "Recent-form shade",
     "context": "Team tendency",
     "player": "Player memory",
+    "lineup": "Who plays around him",
     "park": "Ballpark",
     "statcast": "Contact quality",
     "ump": "Plate umpire",

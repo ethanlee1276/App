@@ -257,7 +257,8 @@ SYSTEM = (
     "A team starting someone other than its usual quarterback (starting_qb_out, a "
     "row's qb_change) changes everything around it: whenever a question touches that "
     "team, its players or its game, say who is out and who starts, and what our model "
-    "did with it.\n"
+    "did with it. The same for a row's teammate_out: say who is out ahead of him and "
+    "how much the projection moved.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -604,6 +605,9 @@ def compact(row: dict) -> dict:
     qb = row.get("qb_card")
     if isinstance(qb, dict) and qb.get("headline"):
         out["qb_change"] = qb_line(qb)
+    mate = row.get("mate_card")
+    if isinstance(mate, dict) and mate.get("headline"):
+        out["teammate_out"] = ". ".join(x for x in (mate.get("headline"), mate.get("note")) if x)
     return out
 
 

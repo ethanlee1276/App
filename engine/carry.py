@@ -195,7 +195,7 @@ def carried_logs(rows: list[dict], player: str, market: str) -> list[GameLog]:
     checking ``prior`` is reading last September as though it were this
     one.
     """
-    from .sources.nflverse import MARKET_COLUMNS, _f, _s, _regular_season
+    from .sources.nflverse import MARKET_COLUMNS, _f, _s, _regular_season, quarterbacked
 
     cols = MARKET_COLUMNS[market]
     out = []
@@ -206,6 +206,8 @@ def carried_logs(rows: list[dict], player: str, market: str) -> list[GameLog]:
         wk = int(_f(r, "week", default=0))
         if wk <= 0:
             continue
+        if not quarterbacked(r, market):
+            continue            # a relief appearance is not a start (nflverse.QB_START_ATTEMPTS)
         out.append(GameLog(week=wk, opponent=_s(r, "opponent_team", "opponent"),
                            value=_f(r, *cols), home=True, prior=True))
     out.sort(key=lambda g: g.week, reverse=True)

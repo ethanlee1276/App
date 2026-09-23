@@ -130,13 +130,18 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                                measured_context=bool(context), sport=sport)
     weather = evaluate_weather(game.weather)
     injury = evaluate_injuries(prop, game.injuries)
-    # HIS STARTING QUARTERBACK OUT (engine/qbchange): the measured part
-    # moves the number, and every row of that team carries the card.
+    # WHO PLAYS AROUND HIM, measured (Ethan, 2026-09-23: "we also need our
+    # model to adjust accordingly to all the data"): his starting
+    # quarterback out (engine/qbchange) and a teammate at his position out
+    # (engine/teammates). Its own step, OUTSIDE the hand-tuned cap below —
+    # a back whose starter was just ruled out measured ×1.65, and a cap
+    # built to stop guesses compounding would have thrown most of it away.
     from .qbchange import effect as _qb_effect
+    from .teammates import effect as _mate_effect
     _qb_mult, _qb_why, injury.qb_card = _qb_effect(prop, game)
-    if _qb_mult != 1.0:
-        injury.multiplier *= _qb_mult
-        injury.reasons.append(_qb_why)
+    _mate_mult, _mate_why, injury.mate_card = _mate_effect(prop, game)
+    lineup_mult = _qb_mult * _mate_mult
+    lineup_why = [w for w in (_qb_why, _mate_why) if w]
 
     weather_mult = weather.multipliers.get(prop.market, 1.0)
 
@@ -284,7 +289,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     if player_mult is None:
         from .playerfit import mult_for
         player_mult = mult_for(sport, prop.market, prop.player)
-    mean = mean_base * total_mult * ctx_mult * player_mult
+    mean = mean_base * total_mult * ctx_mult * player_mult * lineup_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
@@ -294,6 +299,10 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                           + 0.5 * abs(ctx_mult - 1.0))
     if form.sample_games < 4:
         adj_std *= 1.20
+    # A role that grew grows its spread with it: a backup's own games are
+    # a small man's variance, and ×1.65 on the mean with his old spread
+    # would claim a certainty nothing measured.
+    adj_std *= lineup_mult
 
     if abs(player_mult - 1.0) >= 0.02:
         direction = "high" if player_mult < 1.0 else "low"
@@ -303,6 +312,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     reasons += matchup.reasons
     reasons += weather.reasons
     reasons += injury.reasons
+    reasons += lineup_why
 
     # Recent-form narrative. Both directions read the same way now: a
     # note about the player, not a claim about the number. The cool-off
@@ -348,6 +358,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                    "The record's own correction for players this blend "
                    "persistently misreads." if abs(player_mult - 1.0) >= 0.005
                    else "Nothing in the record says this blend misreads him."),
+        chain.step("lineup", lineup_mult, "; ".join(lineup_why)),
     ]
     return Projection(
         mean=mean,

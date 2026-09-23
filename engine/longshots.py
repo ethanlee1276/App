@@ -213,6 +213,7 @@ class LongShot:
     #: What the defence gives up to his position (engine/defensevs), for the card.
     matchup_card: dict | None = None
     qb_card: dict | None = None
+    mate_card: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -233,6 +234,7 @@ class LongShot:
             "matchup": f"{self.team} vs {self.opponent}",
             "matchup_card": self.matchup_card,
             "qb_card": self.qb_card,
+            "mate_card": self.mate_card,
             "vig": round(self.vig, 4), "vig_source": self.vig_source,
             "vig_listed": self.vig_listed,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,

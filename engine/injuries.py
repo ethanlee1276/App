@@ -27,6 +27,8 @@ class InjuryEffect:
     #: His team's starting quarterback is out or benched (engine/qbchange):
     #: the card under the pick. None when his quarterback is playing.
     qb_card: dict | None = None
+    #: A teammate at his position ruled out (engine/teammates): the card.
+    mate_card: dict | None = None
 
 
 def player_injury_status(prop: Prop, injuries: list[Injury]) -> str:
