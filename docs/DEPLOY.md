@@ -182,7 +182,13 @@ set the page says "Ask isn't switched on for this site yet".
   two teams' past meetings, a team's seasons and latest results, any
   player's latest games or his games against one team, a whole league's
   table (best or worst defense, offense, standings, covers, overs) and a
-  season's stat leaders. A question that
+  season's stat leaders. It also reads tonight's slate, our picks and
+  parlays, each book's price and the line moves, a player's hit rate
+  against a line, a team's betting splits (home, away, favorite,
+  underdog), the injury board, schedules, the live scoreboard (never
+  cached), the futures simulation, our record by window with the settled
+  bets themselves, and it does odds arithmetic with a calculator rather
+  than in its head. A question that
   needs a lookup costs one more round (at most 3 rounds, 6 lookups);
   the usage report counts them in its `lookups` column. It can only
   answer from seasons that database holds.

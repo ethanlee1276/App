@@ -119,7 +119,7 @@ PRICES = {"claude-sonnet-5": (2.0, 10.0), "claude-haiku-4-5": (1.0, 5.0),
 MAX_QUESTION = 400
 MAX_TURNS = 4
 MAX_TURN_CHARS = 800
-WORDS = 120
+WORDS = 150
 MAX_TOKENS = 4000
 MAX_MATCHED = 10
 #: Rows matched only by a team code, at most (sent without their game logs).
@@ -160,6 +160,19 @@ HISTORY_DB = None
 UFC_PATH = None
 ROSTER_DIR = None
 
+#: Where the lookups read what is not a board. None is the site's own:
+#: the gate's private copies for paid files (the server has checked the
+#: reader's subscription before any lookup runs), engine.ledger's database.
+PAID_DIR = None
+LEDGER_DB = None
+#: A lookup whose answer is stale within minutes is never served from the
+#: answer cache.
+NO_CACHE_TOOLS = {"live_scores"}
+SLATE_GAMES = 16
+PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day")
+RECORD_WINDOWS = {"today": 0, "yesterday": 1, "last_7_days": 7, "last_30_days": 30, "season": None}
+LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb")
+
 CACHE_PATH = Path(os.environ.get("QB_ASK_CACHE", "").strip() or (ROOT / "data" / "ask_cache.json"))
 USAGE_PATH = Path(os.environ.get("QB_ASK_USAGE", "").strip() or (ROOT / "data" / "ask_usage.json"))
 CACHE_MAX = 3000
@@ -193,7 +206,9 @@ SYSTEM = (
     "every league's board tonight that match it, with their recent games and form; "
     "their games with lines, weather and rest; our record; the injury board); and your "
     "tools, which read our history database (every stored final score with its spread "
-    "and total, every stored player game log) and any league's board tonight. When the "
+    "and total, every stored player game log), every league's board tonight (the slate, "
+    "our picks and parlays, each book's price and how lines have moved), the injury "
+    "board, our live scoreboard, our futures simulation and our public record. When the "
     "question is about the past, such as a team's record, two teams' meetings, or how "
     "a player has done lately or against a team, look it up with the tools before you "
     "answer. For a question about the whole league (the best or worst at something, "
@@ -204,21 +219,27 @@ SYSTEM = (
     "Use ONLY the facts you are given and the tools return. Do not add statistics, "
     "injuries, news, odds or any number that is not in them. If after looking they do "
     "not cover the question, say plainly that our data has nothing on it, say which "
-    "seasons we do hold when that is why, and name the closest thing we have.\n"
+    "seasons we do hold when that is why, and name the closest thing we have. You may "
+    "explain how betting works in general terms (odds, spreads, totals, moneylines, "
+    "parlays, the vig, closing line value, units); any payout, implied chance, parlay "
+    "price or hold comes from odds_calc, never from your own arithmetic.\n"
     "hit_prob, model_prob and win_prob are our model's chance the bet wins; fair_prob "
     "and implied_prob are what the price implies; edge is the gap. A row with "
     "recommended false or no stake is not one of our bets: say so. Our record is real "
     "and includes losses; quote it straight.\n"
     f"Lead with the direct answer in one sentence, then the one or two facts behind it. "
-    f"At most {WORDS} words, plain words a first-time bettor understands, no headings. "
+    f"At most {WORDS} words, plain words a first-time bettor understands, no headings; "
+    "for a list (a slate, picks, a ranking) short lines, at most 8. "
     "Never tell the reader to bet or how much; a stake on a row is our model's, not "
-    "advice. You cannot see the internet or live scores, and you say so if asked."
+    "advice. You cannot see the internet or the news; scores come only from the "
+    "live_scores lookup, and you say how old they are."
 )
 
 
-def _tool(name: str, what: str, props: dict, required: str) -> dict:
+def _tool(name: str, what: str, props: dict, required=()) -> dict:
+    need = [required] if isinstance(required, str) else list(required)
     return {"name": name, "description": what,
-            "input_schema": {"type": "object", "properties": props, "required": [required]}}
+            "input_schema": {"type": "object", "properties": props, "required": need}}
 
 
 _SPORT_ARG = {"type": "string", "enum": list(LEAGUES),
@@ -247,7 +268,20 @@ def _stat_menu() -> str:
 
 #: Sorted by name and never changed per request: the tools are the front of
 #: the cached prefix, and a byte of difference there re-bills all of it.
+_ANY_SPORT = {"type": "string", "enum": list(LEAGUES) + ["ufc", "all"],
+              "description": "The league, or all of them."}
 TOOLS = [
+    _tool("futures",
+          "Our season simulation for one league: each team's record, projected wins and range, and its "
+          "chances of the playoffs, the division, the conference and the title. With no team: the likeliest "
+          "title winners and the projected season-stat leaders. For who is favored to win it all, playoff "
+          "odds, win totals.",
+          {"sport": _SPORT_ARG, "team": {"type": "string", "description": "Optional: one team."},
+           "limit": {"type": "integer"}}, "sport"),
+    _tool("injuries",
+          "The injury board: one team's list, one player's status, or a league's. For is he playing, who is "
+          "out, injury news we hold.",
+          {"team": {"type": "string"}, "player": {"type": "string"}, "sport": _SPORT_ARG}),
     _tool("league_table",
           "Every team in one league for one season, ranked, from our stored final scores: "
           "for any question about the whole league, such as the best or worst defense "
@@ -262,6 +296,34 @@ TOOLS = [
            "season": {"type": "integer", "description": "Optional: a season year."},
            "limit": {"type": "integer", "description": "Optional: how many teams (default 10)."}},
           "sort"),
+    _tool("line_shop",
+          "Every book's price on one of tonight's picks, the best price on our side at our line, and how "
+          "the line has moved since it opened (steam, and whether the move is with our side or against it).",
+          {"query": {"type": "string", "description": "The player or pick."}, "sport": _SPORT_ARG}, "query"),
+    _tool("live_scores",
+          "Our live scoreboard: games in progress with the score, period and clock (and the home side's win "
+          "chance where we read one), then finals, then later games. Say how old it is.",
+          {"sport": _SPORT_ARG, "team": {"type": "string", "description": "Optional: one team."}}),
+    _tool("odds_calc",
+          "Arithmetic on American odds, done exactly: each price's decimal odds, implied chance, profit and "
+          "payout on a stake; with two or more, the parlay; with exactly two, the hold and the fair chances "
+          "as two sides of one market. Use it for any payout, implied chance, parlay price or vig.",
+          {"odds": {"type": "array", "items": {"type": "string"}, "description": "American odds, like -110 or +150."},
+           "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
+    _tool("our_picks",
+          "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (our tickets) or pick_of_the_day — "
+          "on one league's board or all of them, best first.",
+          {"kind": {"type": "string", "enum": list(PICK_KINDS)}, "sport": _ANY_SPORT,
+           "limit": {"type": "integer"}}, "kind"),
+    _tool("our_record",
+          "Our public record: all bets, a league's, the Most Likely board with its calibration, the best and "
+          "worst markets; a window (today, yesterday, last_7_days, last_30_days, season); and with bets the "
+          "settled bets themselves, newest first, filterable by result and by props or game lines.",
+          {"sport": {**_SPORT_ARG, "enum": list(LEAGUES) + ["ufc"]},
+           "window": {"type": "string", "enum": list(RECORD_WINDOWS)},
+           "bets": {"type": "boolean"}, "result": {"type": "string", "enum": ["won", "lost", "push"]},
+           "kind": {"type": "string", "enum": ["props", "lines"]}}),
     _tool("player_history",
           "One player's games from our history database, in any league we cover and any "
           "stored season, whether or not he plays tonight; for a UFC fighter, his record and "
@@ -284,6 +346,22 @@ TOOLS = [
            "season": {"type": "integer", "description": "Optional: a season year."},
            "limit": {"type": "integer", "description": "Optional: how many players (default 10)."}},
           "stat"),
+    _tool("prop_hit_rate",
+          "How often a player has gone over (or under) a line in one stat: last 5, last 10, this season, "
+          "every stored game, and against one team, with his average. With no line, tonight's line on our "
+          "board.",
+          {"player": {"type": "string"}, "stat": {"type": "string"}, "line": {"type": "number"},
+           "side": {"type": "string", "enum": ["over", "under"]},
+           "opponent": {"type": "string", "description": "Optional: one team."}, "sport": _SPORT_ARG},
+          ("player", "stat")),
+    _tool("schedule",
+          "When a team plays next: its game on tonight's board with the lines, then the fixtures we hold, "
+          "and its last result.",
+          {"team": {"type": "string"}, "sport": _SPORT_ARG}, "team"),
+    _tool("slate",
+          "Tonight's games on one league's board or every league's: the matchup, kickoff, spread, total, "
+          "moneylines and weather, and the score of any that has started. sport ufc gives the fight card.",
+          {"sport": _ANY_SPORT}),
     _tool("team_history",
           "A team's final scores from our history database, in any league we cover, whether "
           "or not it plays tonight. With opponent: every stored meeting of the two, newest "
@@ -293,6 +371,11 @@ TOOLS = [
           "or abbreviations.",
           {"team": {"type": "string", "description": "The team, as the reader wrote it."},
            "opponent": _OPP_ARG, "sport": _SPORT_ARG}, "team"),
+    _tool("team_trends",
+          "A team's betting splits from our stored finals: straight up, against the spread and over/under — "
+          "overall, home, away, as favorite and as underdog — this season, its last 10, and every stored game.",
+          {"team": {"type": "string"}, "sport": _SPORT_ARG,
+           "season": {"type": "integer", "description": "Optional: a season year."}}, "team"),
     _tool("tonight_board",
           "Tonight's rows on one league's board, or on every league's, for a team, player or "
           "game: our bets, props, the most-likely board, long shots, and the game's lines and "
@@ -1058,7 +1141,556 @@ def tonight_board(boards: dict, query: str, sport: str = "", prefer: str = "") -
             "leagues_with_a_board_tonight": sorted(boards)}
 
 
-def run_tool(name: str, args, boards: dict, prefer: str = "") -> dict:
+# ---- the bettor's lookups ------------------------------------------------------------
+# Ethan, 2026-09-23: "Think of other questions a user would want to ask about
+# sports and shit and add it. It's a sport betting ai so it should be able to
+# answer." What a bettor asks, and where our data already holds the answer:
+#
+#   what is on tonight, and at what line  -> slate           (every board, live state)
+#   what do you like / best bets / parlay -> our_picks       (every board's own lists)
+#   best price on it, has the line moved  -> line_shop       (each pick's books, line_move)
+#   how often does he go over this line   -> prop_hit_rate   (player_game_logs)
+#   how do they do ATS at home / as dogs  -> team_trends     (finals with their lines)
+#   is he playing, who is out             -> injuries        (web/data/injuries.json)
+#   when do they play next                -> schedule        (boards + stored fixtures)
+#   what is the score                     -> live_scores     (web/data/live_*.json)
+#   who wins the title, playoff odds      -> futures         (futures_*.json, paid)
+#   how did you do yesterday / this week  -> our_record      (record.json + the ledger)
+#   what does +150 pay, parlay odds, vig  -> odds_calc       (arithmetic, never guessed)
+
+
+
+def _paid(name: str, data_dir) -> dict:
+    """A paid file's private copy (the full board), else the public one."""
+    if PAID_DIR:
+        return _load_json(Path(PAID_DIR) / name)
+    try:
+        from engine import gate
+        got = gate.full_board(name)
+        if isinstance(got, dict) and got:
+            return got
+    except Exception:                                         # noqa: BLE001
+        pass
+    return _load_json(Path(data_dir or ROOT / "web" / "data") / name)
+
+
+def _codes_for(name: str, sport: str) -> set[str]:
+    """Every code a typed team could mean in one league, and itself."""
+    from engine import teamdex as T
+    if not name:
+        return set()
+    out = set(T.resolve(name, sport)[:2])
+    for part in _split(name):
+        out |= set(T.resolve(part, sport)[:1])
+    raw = name.strip()
+    if 2 <= len(raw) <= 4 and raw.upper() == raw:
+        out.add(raw)
+    return out
+
+
+def _board_leagues(boards: dict, sport: str, prefer: str) -> list[str]:
+    if sport and sport != "all":
+        return [sport] if sport in boards else []
+    return _order(boards, prefer)
+
+
+# -- live scores -------------------------------------------------------------------
+def _live_games(sport: str, data_dir) -> tuple[list[dict], str]:
+    got = _load_json(Path(data_dir or ROOT / "web" / "data") / f"live_{sport}.json")
+    rows = []
+    for g in got.get("games") or []:
+        lv = g.get("live") if isinstance(g, dict) else None
+        if not isinstance(lv, dict):
+            continue
+        home, away = str(g.get("home") or ""), str(g.get("away") or "")
+        row = {"game": f"{away} @ {home}", "state": lv.get("state") or ""}
+        if lv.get("home_score") is not None and lv.get("away_score") is not None:
+            row["score"] = f"{away} {_n(lv['away_score'])}, {home} {_n(lv['home_score'])}"
+        for k in ("period", "clock", "detail", "outs", "start_time"):
+            if lv.get(k) not in (None, ""):
+                row[k] = lv[k]
+        wp = lv.get("win_prob")
+        if isinstance(wp, dict) and wp.get("home") is not None:
+            row["home_win_prob"] = wp.get("home")
+        row["_names"] = " ".join(str(g.get(k) or "") for k in ("home", "away", "home_name", "away_name"))
+        row["_key"] = (away, home)
+        rows.append(row)
+    return rows, str(got.get("generated_at") or "")
+
+
+def live_scores(sport: str = "", team: str = "", data_dir=None, prefer: str = "") -> dict:
+    """The scoreboard now: live games first, then finals, then later games."""
+    leagues = [sport] if sport in LIVE_LEAGUES else [s for s in [prefer, *LIVE_LEAGUES] if s in LIVE_LEAGUES]
+    out = []
+    for s in dict.fromkeys(leagues):
+        games, stamp = _live_games(s, data_dir)
+        if team:
+            codes = _codes_for(team, s)
+            games = [g for g in games if set(g["_key"]) & codes or _norm(team).strip() in _norm(g["_names"])]
+        if not games:
+            continue
+        order = {"live": 0, "in": 0, "post": 1, "final": 1}
+        games.sort(key=lambda g: order.get(g["state"], 2))
+        out.append({"sport": s, "as_of": stamp,
+                    "games": [{k: v for k, v in g.items() if not k.startswith("_")} for g in games[:SLATE_GAMES]]})
+        if team:
+            break
+    if not out:
+        return {"found": False, "note": "our live scoreboard has no game for that right now"
+                + (f" ({team})" if team else "")}
+    return {"scoreboards": out}
+
+
+# -- tonight ------------------------------------------------------------------------
+def slate(boards: dict, sport: str = "", data_dir=None, prefer: str = "") -> dict:
+    """Tonight's games with their lines and conditions, and the score where one has started."""
+    if sport == "ufc":
+        card = _paid("ufc.json", data_dir)
+        fights = [r.get("fight") for r in (card.get("picks") or []) + (card.get("pass_list") or [])
+                  if isinstance(r, dict) and r.get("fight")]
+        if not fights:
+            return {"found": False, "note": "no UFC card on our board"}
+        return {"sport": "ufc", "event": card.get("event_date") or card.get("event") or "", "fights": fights}
+    leagues = _board_leagues(boards, sport, prefer)
+    out = []
+    for s in leagues:
+        b = boards[s]
+        live = {g["_key"]: g for g in _live_games(s, data_dir)[0]}
+        games = []
+        for g in [g for g in b.get("games") or [] if isinstance(g, dict)][:SLATE_GAMES]:
+            row = game_facts(b, g)
+            row.pop("stadium_note", None)
+            row.pop("rest", None)
+            now = live.get((str(g.get("away") or ""), str(g.get("home") or "")))
+            if now and now.get("state") not in ("pre", ""):
+                row["now"] = {k: now[k] for k in ("state", "score", "period", "clock", "detail") if k in now}
+            games.append(row)
+        if games:
+            out.append({"sport": s, "date": b.get("date") or "", "games": games})
+    if not out:
+        return {"found": False, "note": "no games on tonight's boards" + (f" for {sport.upper()}" if sport else ""),
+                "leagues_with_a_board_tonight": sorted(boards)}
+    return {"slates": out}
+
+
+def _ticket(t: dict, league: str, pool: str) -> dict:
+    legs = []
+    for l in t.get("legs") or []:
+        legs.append(" ".join(str(x) for x in (l.get("player") or l.get("team"), l.get("side"), l.get("line"),
+                                               l.get("market_label") or l.get("market"),
+                                               f"({l['odds']:+d})" if isinstance(l.get("odds"), int) else "")
+                             if x not in (None, "")))
+    out = {"league": league, "pool": pool, "grade": t.get("grade"), "legs": legs}
+    for k, name in (("likely_case_american", "price"), ("modeled_joint", "model_chance")):
+        if t.get(k) is not None:
+            out[name] = t[k]
+    return out
+
+
+def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None, data_dir=None,
+              prefer: str = "") -> dict:
+    """What our model has tonight, by kind, on one league's board or all of them."""
+    if kind not in PICK_KINDS:
+        return {"error": "kind is one of: " + ", ".join(PICK_KINDS)}
+    if sport == "ufc":
+        card = _paid("ufc.json", data_dir)
+        keep = ("fight", "division", "pick", "side", "odds", "book", "model_prob", "win_prob", "fair_prob",
+                "edge", "grade", "stake_units")
+        rows = [{k: r[k] for k in keep if r.get(k) not in (None, "")} for r in card.get("picks") or []
+                if isinstance(r, dict)]
+        return {"sport": "ufc", "kind": "picks", "rows": rows[:_limit(limit)]} if rows else \
+            {"found": False, "note": "no UFC picks on our board"}
+    rows = []
+    for s in _board_leagues(boards, sport, prefer):
+        b = boards[s]
+        if kind == "parlays":
+            for key, pool in (("parlays", "edge"), ("likely_parlays", "likely")):
+                block = b.get(key) or {}
+                for t in (block.get("tickets") if isinstance(block, dict) else None) or []:
+                    if isinstance(t, dict):
+                        rows.append((0, _ticket(t, s, pool)))
+            continue
+        if kind == "pick_of_the_day":
+            p = b.get("pick_of_the_day")
+            if isinstance(p, dict) and p:
+                rows.append((0, {"league": s, **compact(p)}))
+            continue
+        src = {"best_bets": [r for r in b.get("recommendations") or [] if isinstance(r, dict) and r.get("recommended")],
+               "most_likely": [r for r in b.get("most_likely") or [] if isinstance(r, dict)],
+               "long_shots": [r for r in b.get("long_shots") or [] if isinstance(r, dict)],
+               "game_lines": [r for r in b.get("game_bets") or [] if isinstance(r, dict)]}[kind]
+        for r in src:
+            key = {"best_bets": r.get("edge"), "most_likely": r.get("model_prob") or r.get("hit_prob"),
+                   "long_shots": r.get("edge"), "game_lines": r.get("win_prob") or r.get("edge")}[kind]
+            rows.append((-(float(key) if isinstance(key, (int, float)) else 0), {"league": s, **compact(r)}))
+    rows.sort(key=lambda x: x[0])
+    if not rows:
+        return {"found": False, "note": f"no {kind.replace('_', ' ')} on tonight's boards"
+                + (f" for {sport.upper()}" if sport and sport != "all" else "")}
+    return {"kind": kind, "count": len(rows), "rows": [r for _, r in rows[:_limit(limit)]]}
+
+
+def line_shop(boards: dict, query: str, sport: str = "", prefer: str = "") -> dict:
+    """Every book's price on a pick tonight, the best one on our side, and how the line has moved."""
+    if not query:
+        return {"error": "name the player or the pick"}
+    out = []
+    for s in _board_leagues(boards, sport, prefer):
+        for _score, _lst, r in _hits(boards[s], query):
+            books = [x for x in r.get("all_lines") or [] if isinstance(x, dict)]
+            if not books and not r.get("line_move"):
+                continue
+            side = str(r.get("side") or "").upper()
+            key = "over_odds" if side == "OVER" else "under_odds" if side == "UNDER" else ""
+            row = {"league": s, "pick": " ".join(str(x) for x in (r.get("player"), r.get("side"), r.get("line"),
+                                                                    r.get("market_label") or r.get("market"))
+                                                   if x not in (None, "")),
+                   "our_price": r.get("odds"), "our_book": r.get("book"),
+                   "books": [{k: x[k] for k in ("book", "line", "over_odds", "under_odds") if x.get(k) is not None}
+                             for x in books[:12]]}
+            same = [x for x in books if key and x.get(key) is not None and x.get("line") == r.get("line")]
+            if same:
+                best = max(same, key=lambda x: x[key])
+                row["best_price_at_this_line"] = {"book": best.get("book"), "odds": best[key]}
+            mv = r.get("line_move")
+            if isinstance(mv, dict):
+                row["line_move"] = {k: mv[k] for k in ("open", "current", "delta", "open_odds", "current_odds",
+                                                        "direction", "steam", "verdict", "moved_ago_min")
+                                    if mv.get(k) is not None}
+            out.append(row)
+            if len(out) >= 4:
+                break
+    if not out:
+        return {"found": False, "note": f"no priced pick on tonight's boards for {query}"}
+    return {"picks": out}
+
+
+# -- history, for bettors -----------------------------------------------------------------
+def _tally(vals: list[float], line: float, side: str) -> dict:
+    over = sum(1 for v in vals if v > line)
+    under = sum(1 for v in vals if v < line)
+    push = len(vals) - over - under
+    hit = over if side == "over" else under
+    decided = len(vals) - push
+    out = {"games": len(vals), "over": over, "under": under}
+    if push:
+        out["push"] = push
+    if decided:
+        out[f"{side}_hit_rate"] = round(hit / decided, 3)
+    if vals:
+        out["average"] = _n(round(sum(vals) / len(vals), 1))
+    return out
+
+
+def prop_hit_rate(boards: dict, player: str, stat: str, line=None, side: str = "over", opponent: str = "",
+                  sport: str = "", prefer: str = "") -> dict:
+    """How often a player has cleared a line: last 5, last 10, this season, every stored game, and against one team."""
+    from engine import statlogs as SL
+    from engine import teamdex as T
+    side = "under" if str(side or "").lower().startswith("u") else "over"
+    if not player:
+        return {"error": "no player named"}
+    hits = [h for h in _find_players(player, sport, prefer) if h.get("sport") in SL.SPORT_MARKETS]
+    if not hits:
+        return {"found": False, "note": f"no stored games for a player called {player}"}
+    s, name = hits[0]["sport"], hits[0]["player"]
+    m = _market(stat, SL.SPORT_MARKETS[s])
+    if not m:
+        return {"error": f"the {s.upper()} stats we hold are: " + ", ".join(l for _, l in SL.SPORT_MARKETS[s])}
+    mid, label = m
+    tonight = None
+    for r in (boards.get(s) or {}).get("recommendations") or []:
+        if isinstance(r, dict) and r.get("player") == name and r.get("market") == mid and r.get("line") is not None:
+            tonight = r
+            break
+    try:
+        ln = float(line) if line not in (None, "") else float(tonight["line"]) if tonight else None
+    except (TypeError, ValueError):
+        ln = None
+    if ln is None:
+        return {"error": f"give a line for {name}'s {label} (none on tonight's board)"}
+    conn = _history()
+    if conn is None:
+        return {"error": "our history database is not available"}
+    try:
+        rows = conn.execute("SELECT season, opponent, value FROM player_game_logs WHERE sport=? AND player=? "
+                            "AND market=? ORDER BY season DESC, period DESC", (s, name, mid)).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return {"found": False, "note": f"no stored {label} games for {name}"}
+    vals = [float(r["value"]) for r in rows]
+    season = rows[0]["season"]
+    out = {"player": name, "sport": s, "stat": label, "line": _n(ln), "side": side,
+           "last_5": _tally(vals[:5], ln, side), "last_10": _tally(vals[:10], ln, side),
+           f"season_{season}": _tally([float(r["value"]) for r in rows if r["season"] == season], ln, side),
+           "every_stored_game": _tally(vals, ln, side)}
+    if tonight is not None:
+        out["tonight"] = compact(tonight)
+    if opponent:
+        codes = _codes_for(opponent, s) | {opponent}
+        vs = [float(r["value"]) for r in rows if r["opponent"] in codes
+              or _norm(opponent).strip() in _norm(T.label(r["opponent"], s))]
+        out["against"] = {"opponent": opponent, **_tally(vs, ln, side)}
+    return out
+
+
+def _split_line(rows: list[dict]) -> dict:
+    if not rows:
+        return {"games": 0}
+    w = sum(r["result"] == "W" for r in rows)
+    l = sum(r["result"] == "L" for r in rows)
+    t = len(rows) - w - l
+    cw = sum(r.get("covered") is True for r in rows)
+    cl = sum(r.get("covered") is False for r in rows)
+    cp = sum(r.get("covered") == "push" for r in rows)
+    ov = sum(r.get("ou") == "over" for r in rows)
+    un = sum(r.get("ou") == "under" for r in rows)
+    op = sum(r.get("ou") == "push" for r in rows)
+    out = {"games": len(rows), "record": f"{w}-{l}" + (f"-{t}" if t else "")}
+    if cw + cl + cp:
+        out["ats"] = f"{cw}-{cl}" + (f"-{cp}" if cp else "")
+    if ov + un + op:
+        out["over_under"] = f"{ov} over, {un} under" + (f", {op} push" if op else "")
+    return out
+
+
+def _splits(rows: list[dict]) -> dict:
+    return {"overall": _split_line(rows),
+            "home": _split_line([r for r in rows if r["at_home"]]),
+            "away": _split_line([r for r in rows if not r["at_home"]]),
+            "as_favorite": _split_line([r for r in rows if (r.get("line") or 0) < 0]),
+            "as_underdog": _split_line([r for r in rows if (r.get("line") or 0) > 0])}
+
+
+def team_trends(team: str, sport: str = "", season=None, prefer: str = "") -> dict:
+    """A team's betting splits: straight up, against the spread and over/under — home, away, as favorite, as underdog."""
+    from engine import teamdex as T
+    if not team:
+        return {"error": "no team named"}
+    conn = _history()
+    if conn is None:
+        return {"error": "our history database is not available"}
+    try:
+        for s in _leagues(sport, prefer):
+            known = T.teams(conn, s)
+            mine = T.resolve(team, s, known) if known else []
+            if not mine:
+                continue
+            rows = T.results(conn, s, mine[0])
+            seasons = sorted({r["season"] for r in rows}, reverse=True)
+            year = _season_of(seasons, season)
+            return {"sport": s, "team": T.label(mine[0], s), "season": year,
+                    "this_season": _splits([r for r in rows if r["season"] == year]),
+                    "last_10": _split_line(rows[:10]),
+                    "every_stored_game": _splits(rows),
+                    "seasons_we_hold": f"{min(seasons)}-{max(seasons)}" if len(seasons) > 1 else str(seasons[0])}
+    finally:
+        conn.close()
+    return {"found": False, "note": f"no stored games for {team}"}
+
+
+def injuries(team: str = "", player: str = "", sport: str = "", data_dir=None, prefer: str = "") -> dict:
+    """The injury board: one team's list, one player's status, or a league's."""
+    data = _load_json(Path(data_dir or ROOT / "web" / "data") / "injuries.json")
+    by = data.get("sports") or {}
+    leagues = [sport] if sport else [s for s in [prefer, *LEAGUES, *sorted(by)] if s in by]
+    out = []
+    for s in dict.fromkeys(leagues):
+        codes = _codes_for(team, s) if team else set()
+        for r in by.get(s) or []:
+            if not isinstance(r, dict):
+                continue
+            if team and not (str(r.get("team") or "") in codes or _norm(team).strip() in _norm(r.get("team"))):
+                continue
+            if player and _norm(player).strip() not in _norm(r.get("player")):
+                continue
+            out.append({"league": s, **{k: r[k] for k in ("player", "team", "position", "status", "injury", "detail")
+                                        if r.get(k) not in (None, "")}})
+        if out and (team or player or not sport):
+            break
+    if not out:
+        return {"found": False, "note": "nothing on the injury board for that"
+                + (f" ({team or player})" if team or player else ""), "as_of": data.get("generated_at")}
+    return {"as_of": data.get("generated_at"), "count": len(out), "rows": out[:30]}
+
+
+def schedule(boards: dict, team: str, sport: str = "", prefer: str = "") -> dict:
+    """When a team plays next: tonight's board first, then the fixtures we hold."""
+    from engine import teamdex as T
+    if not team:
+        return {"error": "no team named"}
+    conn = _history()
+    try:
+        for s in _leagues(sport, prefer):
+            codes = _codes_for(team, s)
+            if not codes:
+                continue
+            b = boards.get(s) or {}
+            upcoming = []
+            for g in b.get("games") or []:
+                if isinstance(g, dict) and {str(g.get("home") or ""), str(g.get("away") or "")} & codes:
+                    upcoming.append({"on_tonights_board": True, **game_facts(b, g)})
+            if conn is not None:
+                marks = ",".join("?" * len(codes))
+                for r in conn.execute(
+                        f"SELECT season, period, date, home, away, spread, total FROM games WHERE sport=? "
+                        f"AND (home IN ({marks}) OR away IN ({marks})) AND (home_score IS NULL OR away_score IS NULL) "
+                        f"ORDER BY date, period LIMIT 5", (s, *codes, *codes)).fetchall():
+                    g = {"game": f"{r['away']} @ {r['home']}", "when": _when(r["season"], r["period"], r["date"], s)}
+                    if r["spread"] is not None:
+                        g["home_spread"] = _n(r["spread"])
+                    if r["total"] is not None:
+                        g["total"] = _n(r["total"])
+                    if all(g["game"] != u.get("game") for u in upcoming):
+                        upcoming.append(g)
+            last = T.results(conn, s, sorted(codes)[0], 1) if conn is not None else []
+            if upcoming or last:
+                out = {"sport": s, "team": T.label(sorted(codes)[0], s), "upcoming": upcoming[:6]}
+                if last:
+                    out["last_game"] = _final(last[0], s, lambda c: T.label(c, s))
+                return out
+    finally:
+        if conn is not None:
+            conn.close()
+    return {"found": False, "note": f"no upcoming games we hold for {team}"}
+
+
+def futures(sport: str = "", team: str = "", limit=None, data_dir=None, prefer: str = "") -> dict:
+    """Our season simulation: each team's projected wins and its chances of the playoffs, the division, the title."""
+    from engine import teamdex as T
+    s = _league(sport, prefer)
+    f = _paid(f"futures_{s}.json", data_dir)
+    teams = [t for t in f.get("teams") or [] if isinstance(t, dict)]
+    if not teams:
+        return {"found": False, "note": f"no {s.upper()} futures on our board"}
+    if team:
+        codes = _codes_for(team, s)
+        teams = [t for t in teams if t.get("team") in codes or _norm(team).strip() in _norm(T.label(t.get("team"), s))]
+    rows = []
+    for t in teams[:_limit(limit)]:
+        row = {"team": T.label(t.get("team"), s), "record": f"{t.get('wins', 0)}-{t.get('losses', 0)}"}
+        if t.get("proj_wins") is not None:
+            row["projected_wins"] = round(float(t["proj_wins"]), 1)
+            if t.get("proj_wins_lo") is not None and t.get("proj_wins_hi") is not None:
+                row["projected_range"] = f"{_n(round(float(t['proj_wins_lo']), 1))}-{_n(round(float(t['proj_wins_hi']), 1))}"
+        for k, name in (("p_playoffs", "playoffs"), ("p_division", "division"), ("p_conference", "conference"),
+                        ("p_title", "title")):
+            if t.get(k) is not None:
+                row[f"{name}_chance"] = round(float(t[k]), 3)
+        rows.append(row)
+    out = {"sport": s, "season": f.get("season"), "rows": rows}
+    if f.get("prior_weight") is not None:
+        out["share_resting_on_preseason_ratings"] = f["prior_weight"]
+    if not team:
+        totals = []
+        for mk in (f.get("season_totals") or [])[:4]:
+            ps = [{k: (round(p[k], 1) if isinstance(p.get(k), float) else p[k])
+                   for k in ("player", "team", "banked", "mean", "games_left") if p.get(k) is not None}
+                  for p in (mk.get("players") or [])[:3] if isinstance(p, dict)]
+            if ps:
+                totals.append({"stat": mk.get("label") or mk.get("market"), "projected_leaders": ps})
+        if totals:
+            out["season_totals"] = totals
+    return out
+
+
+def our_record(sport: str = "", window: str = "", bets: bool = False, result: str = "", kind: str = "",
+               data_dir=None) -> dict:
+    """Our public record: the headline, a window of days, the markets, and the settled bets themselves."""
+    rec = _load_json(Path(data_dir or ROOT / "web" / "data") / "record.json")
+    if not rec:
+        return {"error": "our record file is not available"}
+    s = sport if sport in LEAGUES or sport == "ufc" else ""
+    out = record_facts(rec, s)
+    if window in RECORD_WINDOWS:
+        src = ((rec.get("by_sport") or {}).get(s) or {}) if s else (rec.get("pooled") or rec)
+        curve = [p for p in src.get("curve") or [] if isinstance(p, dict)]
+        days = RECORD_WINDOWS[window]
+        today = _dt.date.today()
+        if days is None:
+            pts = curve
+        elif days == 1:
+            pts = [p for p in curve if str(p.get("date")) == (today - _dt.timedelta(days=1)).isoformat()]
+        elif days == 0:
+            pts = [p for p in curve if str(p.get("date")) == today.isoformat()]
+        else:
+            pts = [p for p in curve if str(p.get("date") or "") >= (today - _dt.timedelta(days=days)).isoformat()]
+        out[window] = ({"wins": sum(p.get("w") or 0 for p in pts), "losses": sum(p.get("l") or 0 for p in pts),
+                        "net_units": round(sum(float(p.get("day_u") or 0) for p in pts), 2),
+                        "days_with_bets": len(pts)} if pts else "no settled bets in that window")
+    if bets or result or kind:
+        try:
+            from engine import ledger as L
+            path = Path(LEDGER_DB or L.DEFAULT_DB)
+            if path.exists():
+                conn = L.connect(str(path))
+                try:
+                    since = None
+                    if window in RECORD_WINDOWS and RECORD_WINDOWS[window]:
+                        since = (_dt.date.today() - _dt.timedelta(days=RECORD_WINDOWS[window])).isoformat()
+                    page = L.settled_page(conn, s or None, kind if kind in ("props", "lines") else None,
+                                          result if result in ("won", "lost", "push") else None, since)
+                finally:
+                    conn.close()
+                out["settled_bets"] = [{k: r[k] for k in ("day", "sport", "player", "market", "side", "line", "odds",
+                                                          "status", "pnl_units", "closing_odds", "clv")
+                                        if r.get(k) is not None} for r in page["rows"][:12]]
+                out["settled_bets_matching"] = page["total"]
+        except Exception as exc:                              # noqa: BLE001
+            out["settled_bets_note"] = f"the bet list could not be read ({type(exc).__name__})"
+    return out
+
+
+def _american_to_decimal(a: float) -> float:
+    return 1 + (a / 100 if a > 0 else 100 / abs(a))
+
+
+def _decimal_to_american(d: float) -> int:
+    return round((d - 1) * 100) if d >= 2 else round(-100 / (d - 1))
+
+
+def odds_calc(odds, stake=100) -> dict:
+    """Payouts, implied chances and parlays from American odds — the arithmetic, done here, not guessed."""
+    vals = []
+    for o in (odds if isinstance(odds, list) else [odds])[:12]:
+        try:
+            a = float(str(o).replace("+", "").strip())
+        except ValueError:
+            return {"error": f"{o} is not American odds, like -110 or +150"}
+        if abs(a) < 100:
+            return {"error": f"{o} is not American odds: they are at least 100 either way"}
+        vals.append(a)
+    if not vals:
+        return {"error": "give one or more American odds"}
+    try:
+        st = float(stake) if stake not in (None, "") else 100.0
+    except (TypeError, ValueError):
+        st = 100.0
+    each = []
+    for a in vals:
+        d = _american_to_decimal(a)
+        each.append({"odds": f"{a:+.0f}", "decimal": round(d, 3), "implied_chance": round(1 / d, 4),
+                     "profit": round(st * (d - 1), 2), "payout": round(st * d, 2)})
+    out = {"stake": _n(st), "each": each}
+    if len(vals) > 1:
+        dec = 1.0
+        for a in vals:
+            dec *= _american_to_decimal(a)
+        out["parlay"] = {"legs": len(vals), "decimal": round(dec, 3), "odds": f"{_decimal_to_american(dec):+d}",
+                         "implied_chance": round(1 / dec, 4), "profit": round(st * (dec - 1), 2),
+                         "payout": round(st * dec, 2)}
+    if len(vals) == 2:
+        p1, p2 = 1 / _american_to_decimal(vals[0]), 1 / _american_to_decimal(vals[1])
+        # Only a pair that COULD be one market's two sides: the chances must
+        # add up to at least 1 (a book's margin), and not absurdly more.
+        if 1 <= p1 + p2 < 1.3:
+            out["as_two_sides_of_one_market"] = {"hold": round(p1 + p2 - 1, 4),
+                                                 "fair_chances": [round(p1 / (p1 + p2), 4), round(p2 / (p1 + p2), 4)]}
+    return out
+
+
+def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> dict:
     """One lookup, answered from our data. Never raises: a failed lookup is a
     sentence the model can pass on, not a failed question."""
     a = args if isinstance(args, dict) else {}
@@ -1071,6 +1703,29 @@ def run_tool(name: str, args, boards: dict, prefer: str = "") -> dict:
             return player_history(arg("player"), arg("opponent"), sport, prefer)
         if name == "tonight_board":
             return tonight_board(boards, arg("query"), sport, prefer)
+        if name == "slate":
+            return slate(boards, sport, data_dir, prefer)
+        if name == "our_picks":
+            return our_picks(boards, arg("kind") or "best_bets", sport, a.get("limit"), data_dir, prefer)
+        if name == "line_shop":
+            return line_shop(boards, arg("query"), sport, prefer)
+        if name == "prop_hit_rate":
+            return prop_hit_rate(boards, arg("player"), arg("stat"), a.get("line"), arg("side") or "over",
+                                 arg("opponent"), sport, prefer)
+        if name == "team_trends":
+            return team_trends(arg("team"), sport, a.get("season"), prefer)
+        if name == "injuries":
+            return injuries(arg("team"), arg("player"), sport, data_dir, prefer)
+        if name == "schedule":
+            return schedule(boards, arg("team"), sport, prefer)
+        if name == "live_scores":
+            return live_scores(sport, arg("team"), data_dir, prefer)
+        if name == "futures":
+            return futures(sport, arg("team"), a.get("limit"), data_dir, prefer)
+        if name == "our_record":
+            return our_record(sport, arg("window"), bool(a.get("bets")), arg("result"), arg("kind"), data_dir)
+        if name == "odds_calc":
+            return odds_calc(a.get("odds"), a.get("stake"))
         if name == "league_table":
             return league_table(sport, arg("sort") or "points_allowed", arg("order") or "best",
                                 a.get("season"), a.get("limit"), prefer)
@@ -1110,6 +1765,27 @@ def tool_source(name: str, args, result: dict) -> dict | None:
         label = " and ".join(f"{b['sport'].upper()} board" for b in result.get("boards") or [])
     elif name == "league_table":
         label = f"{result['sport'].upper()} {result['season']} table, by {result['ranked_by']}"
+    elif name == "slate":
+        label = "Tonight's slate" + (f", {' and '.join(x['sport'].upper() for x in result.get('slates') or [])}"
+                                     if result.get("slates") else ", UFC card")
+    elif name == "our_picks":
+        label = f"Our {str(result.get('kind', 'picks')).replace('_', ' ')} tonight"
+    elif name == "line_shop":
+        label = "Book prices and line moves"
+    elif name == "prop_hit_rate":
+        label = f"{result.get('player')}, {result.get('stat')} {result.get('side')} {result.get('line')} hit rates"
+    elif name == "team_trends":
+        label = f"{result.get('team')}, betting splits"
+    elif name == "injuries":
+        label = "Injury board"
+    elif name == "schedule":
+        label = f"{result.get('team')}, schedule"
+    elif name == "live_scores":
+        label = "Live scoreboard"
+    elif name == "futures":
+        label = f"{str(result.get('sport', '')).upper()} futures"
+    elif name == "our_record":
+        label = "Our record"
     elif name == "player_leaders":
         label = f"{result['sport'].upper()} {result['season']} leaders, {result['stat']}"
     else:
@@ -1216,7 +1892,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         f"{question}\n\nFacts for this question:\n" + json.dumps(facts, sort_keys=True, separators=(",", ":"))}]
     return {"system": system, "messages": messages, "matched": len(rows),
             "focused": focus is not None, "sources": sources[:8], "sections": sorted(facts),
-            "boards": boards, "league": sport}
+            "boards": boards, "league": sport, "data_dir": data_dir}
 
 
 # ---- the answer cache and the usage log -----------------------------------------
@@ -1342,6 +2018,7 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
     messages = list(req["messages"])
     sources: list[dict] = []
     made = 0
+    req.setdefault("used", set())
     for n in range(MAX_TOOL_ROUNDS + 1):
         response = _call(client, model, {**req, "messages": messages}, last=n == MAX_TOOL_ROUNDS)
         rounds.append(response)
@@ -1354,7 +2031,9 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
             if made > MAX_TOOL_CALLS:
                 out = {"error": "that is all the lookups one question gets; answer with what you have"}
             else:
-                out = run_tool(getattr(b, "name", ""), getattr(b, "input", None), req["boards"], req["league"])
+                out = run_tool(getattr(b, "name", ""), getattr(b, "input", None), req["boards"], req["league"],
+                               req.get("data_dir"))
+                req["used"].add(getattr(b, "name", ""))
                 src = tool_source(getattr(b, "name", ""), getattr(b, "input", None), out)
                 if src and src not in sources:
                     sources.append(src)
@@ -1379,7 +2058,14 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
     base = {"model": model, "matched": req["matched"], "focused": req["focused"],
             "sources": req["sources"], "lookups": 0}
     fresh = not clean_history(history)
-    key = answer_key(board_name, board, pick, question, req["boards"]) if fresh and board_name else ""
+    # The record file is in the key too: a record question asked again after
+    # the night's grading is a new question.
+    try:
+        graded = str(int((req["data_dir"] / "record.json").stat().st_mtime))
+    except OSError:
+        graded = ""
+    key = (answer_key(board_name, board, pick, question, req["boards"]) + "\t" + graded
+           if fresh and board_name else "")
     if key:
         hit = cached_answer(key)
         if hit:
@@ -1413,7 +2099,7 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
                    if getattr(b, "type", "") == "text").strip()
     if not text:
         raise _ex.Unavailable("the answer had no text")
-    if key:
+    if key and not (req.get("used", set()) & NO_CACHE_TOOLS):     # a live score is stale in minutes
         remember_answer(key, {"text": text, "refused": False, "sources": base["sources"]})
     return {**base, "text": text, "refused": False, "cached": False}
 

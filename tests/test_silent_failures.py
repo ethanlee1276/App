@@ -157,6 +157,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # fails the export: one person's tickets must not take the
         # model's record down with them.
         "block_or_empty",
+        # ASK'S LOOKUPS, 2026-09-23, caught by this sweep the hour the
+        # bettor's lookups landed. Its failure is `{"error": "the lookup
+        # failed (<exception>)"}`, which no quiet day produces — a quiet
+        # day answers `found: False` with a note — and the model is told
+        # to pass an error on as one. A lookup must never fail the whole
+        # question, so it does not raise.
+        "run_tool",
     }
 
     def broad(h):

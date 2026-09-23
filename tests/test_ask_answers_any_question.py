@@ -292,7 +292,9 @@ def test_the_model_is_told_to_look_things_up_and_never_to_decline_over_a_schedul
                  "our data has nothing on it", "Never tell the reader to bet or how much"):
         assert rule in AB.SYSTEM, rule
     assert [t["name"] for t in AB.TOOLS] == sorted(t["name"] for t in AB.TOOLS) == \
-        ["league_table", "player_history", "player_leaders", "team_history", "tonight_board"]
+        ["futures", "injuries", "league_table", "line_shop", "live_scores", "odds_calc", "our_picks",
+         "our_record", "player_history", "player_leaders", "prop_hit_rate", "schedule", "slate",
+         "team_history", "team_trends", "tonight_board"]
     assert "never ask the reader to name teams for it" in " ".join(AB.SYSTEM.split()), \
         "a whole-league question is answered, not bounced back (Ethan, 2026-09-23)"
     assert json.dumps(AB.TOOLS) == json.dumps(AB.TOOLS), "one fixed definition, cached with the system"
