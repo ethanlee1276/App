@@ -34890,7 +34890,10 @@ function askErrorText(status, body) {
      happy      a little hop when it finishes
 
    The state is one attribute on the room (data-bot), and only the robots
-   marked .live act on it: the big one, the header's, the newest answer's.
+   marked .live act on it: the big one in the empty room, and the newest
+   answer's. The header's holds still — Ethan, circling both heads on his
+   phone: "we only need this one to move, don't make the one [at] the top
+   move." One robot talking at a time is a conversation; two is a mirror.
    Every face gets its own filter ids; nothing moves under reduced motion. */
 const QBOT_BOX = { body: "60 20 860 1480", head: "140 25 760 760" };   // each file's crop of the render
 const QBOT_SIZE = { body: [480, 826], head: [192, 192] };
@@ -35137,7 +35140,7 @@ function renderAsk() {
   // The newest answer's robot is the one that reacts; older ones hold still.
   const lastBot = a.turns.map((t) => t.role !== "user").lastIndexOf(true);
   host.innerHTML = `<div class="ask-room${empty ? " is-empty" : ""}" id="ask-room" data-bot="${mood}">
-    ${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot live")}${title}
+    ${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot")}${title}
       <b class="ask-title-sm">Ask <em>Qellys</em></b>
       <button type="button" class="ask-new" data-ask-reset>New chat</button>
     </div>`}

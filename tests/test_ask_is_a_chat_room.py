@@ -58,7 +58,7 @@ def test_one_column_the_conversation_then_the_composer():
              '<div class="ask-dock">', '<form class="ask-form" id="ask-form">']
     at = [r.index(s) for s in order]
     assert at == sorted(at), "the conversation, then the composer"
-    assert '${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot live")}${title}' in r, \
+    assert '${empty ? "" : `<div class="ask-head">${qbotHTML("head", "ask-head-bot")}${title}' in r, \
         "a conversation folds the title into one line, the robot's head leading it"
     assert 'data-ask-reset>New chat</button>' in r, "starting over is the header's button"
     assert 'rows="1"' in r and '<button class="ask-send" type="submit" aria-label="Send" disabled>' in r

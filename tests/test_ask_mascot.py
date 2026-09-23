@@ -15,7 +15,8 @@ actual bot."
     listening (looks down at the box you are typing in), thinking (looks
     around, bobs), talking (mouth moving while the answer types out),
     happy (a hop when it finishes) — acted out only by the robots marked
-    live, and by none of them under reduced motion;
+    live (the big one in the empty room and the newest answer's; the
+    header's holds still), and by none of them under reduced motion;
   * WHERE IT STANDS: beside the title in the empty room, at the head of a
     conversation, beside the newest answer, and on the paywall.
 """
@@ -104,7 +105,9 @@ def test_five_moods_on_one_attribute():
 def test_where_it_stands():
     r = _fn("renderAsk")
     assert '${qbotHTML("body", "ask-hero-bot live")}' in r, "beside the title in the empty room"
-    assert 'qbotHTML("head", "ask-head-bot live")' in r, "at the head of a conversation"
+    assert 'qbotHTML("head", "ask-head-bot")' in r, "at the head of a conversation"
+    assert "ask-head-bot live" not in APP, \
+        "and holding still there: only the newest answer's robot moves (Ethan, 2026-09-23)"
     assert "a.turns.map((t, i) => askTurnHTML(t, i === lastBot && !a.busy))" in r, \
         "only the newest answer's robot reacts; older ones hold still"
     assert '<div class="ask-row bot">${askAva(true)}<div class="ask-turn bot wait">' in r, "the one thinking"
