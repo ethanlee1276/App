@@ -116,6 +116,88 @@ def test_the_status_page_names_the_code_and_each_league_s_last_build():
                                                      encoding="utf-8").read()
 
 
+def _launch():
+    os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
+    import launch
+    return launch
+
+
+def test_the_code_running_is_read_even_when_git_will_not_answer():
+    """Ethan's Status page, 2026-09-23: "Code running: unknown". The site
+    runs as `qellys` and the checkout is root's, so git refuses it
+    ("dubious ownership"); the files themselves are readable."""
+    L = _launch()
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, ".git", "refs", "heads"))
+    with open(os.path.join(d, ".git", "HEAD"), "w") as fh:
+        fh.write("ref: refs/heads/main\n")
+    with open(os.path.join(d, ".git", "refs", "heads", "main"), "w") as fh:
+        fh.write("c790076ef56a437ced062c92a8ad882b49b57a84\n")
+    assert L._commit_from_files(d) == "c790076e"
+    os.remove(os.path.join(d, ".git", "refs", "heads", "main"))
+    with open(os.path.join(d, ".git", "packed-refs"), "w") as fh:
+        fh.write("# pack-refs with: peeled\nd23232e8354f648694cdcc790ea3b5d479d0539a refs/heads/main\n")
+    assert L._commit_from_files(d) == "d23232e8", "a packed ref"
+    with open(os.path.join(d, ".git", "HEAD"), "w") as fh:
+        fh.write("8cf89a87968d049118a0e5d629930a5eceb79e3c\n")
+    assert L._commit_from_files(d) == "8cf89a87", "detached"
+    assert L._commit_from_files(tempfile.mkdtemp()) == ""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "_RUNNING_COMMIT.append(out if ok else _commit_from_files(ROOT))" in src
+
+
+def test_each_league_s_most_likely_and_edge_boards_are_counted_after_a_build():
+    L = _launch()
+    path = os.path.join(tempfile.mkdtemp(), "zz_status_counts_test.json")
+    with open(path, "w") as fh:
+        json.dump({"most_likely": [{}, {}, {}],
+                   "recommendations": [{"ev_per_unit": 0.04, "recommended": True},
+                                       {"ev_per_unit": 0.02, "has_market": False},
+                                       {"ev_per_unit": 0.003}, {"ev_per_unit": 0.06}],
+                   "game_bets": [{"ev_per_unit": 0.05, "grade": "B", "recommended": True},
+                                 {"ev_per_unit": 0.05, "grade": "Pass"}]}, fh)
+    assert L._board_counts(path) == {"most_likely": 3, "edge": 3, "staked": 2}
+    assert L._board_counts(path + ".missing") == {}
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _note_board("):src.index("def _note_board(") + 3000]
+    assert "_BOARD_RUNS[name].update(_board_counts(BOARD_FILES[name]))" in body
+
+
+def test_a_young_process_does_not_call_a_healthy_board_stale():
+    i = APP.index("function staleAfterMs(")
+    fn = APP[i:APP.index("\n}", i)]
+    assert "if (!_cycleMs) return STALE_FLOOR_MS * 2;" in fn
+
+
+def test_the_status_page_names_both_boards_under_each_league():
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed")
+        return
+    def fn(name):
+        i = APP.index(f"function {name}(")
+        return APP[i:APP.index("\n}\n", i) + 2]
+    lead = APP[APP.index("const BUILD_LEAGUES"):APP.index("function buildsCardHTML(")]
+    hb = {"commit": "d23232e8", "boards": {
+        "nfl": {"ok": True, "at_epoch": 0, "most_likely": 40, "edge": 3, "staked": 1},
+        "cfb": {"ok": False, "at_epoch": 0, "note": "timed out", "most_likely": 12, "edge": 0, "staked": 0},
+        "ufc": {"ok": True, "at_epoch": 0}}}
+    prog = (fn("escapeHtml") + "\nconst ageText = (s) => `${Math.round(s)}s`;\n" + lead + fn("buildsCardHTML")
+            + f"\nconsole.log(JSON.stringify(buildsCardHTML({json.dumps(hb)})));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    html = " ".join(json.loads(out.stdout).split())
+    assert "Most Likely board" in html and "40 picks" in html and "Edge board" in html and "3 bets" in html
+    assert "1 staked" in html and "nothing priced wrong" in html and "the last good board" in html
+    assert html.count("Most Likely board") == 2, "a board with no counts (UFC) gets no rows"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

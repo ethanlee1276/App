@@ -2907,6 +2907,8 @@ select.calc-in { width: auto; font-weight: 600; }
 .st-v { font-weight: 700; font-variant-numeric: tabular-nums; }
 .st-good { color: var(--good); }
 .st-bad { color: var(--bad); }
+.st-indent .st-k { padding-left: 14px; color: var(--text-mute); font-size: var(--fs-sm); }
+.st-indent .st-v { font-size: var(--fs-sm); }
 .st-off { color: var(--text-mute); }
 .st-sub { color: var(--text-mute); font-size: var(--fs-sm); text-align: right; }
 @media (max-width: 640px) {

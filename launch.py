@@ -228,19 +228,51 @@ def _slate_props(path: str) -> int:
     data/built/, paywall or not — that is the copy that knows.
     """
     try:
-        from engine import gate as _gate
-        src = path
-        full = _gate.full_board_file(os.path.basename(path))
-        # Only a full copy at least as fresh as the public file may
-        # answer for it: a writer that bypassed gate.publish would leave
-        # an older full copy behind, and an old count is a wrong count.
-        if full is not None and full.is_file() and os.path.isfile(path) \
-                and full.stat().st_mtime >= os.stat(path).st_mtime - 1:
-            src = full
-        with open(src) as fh:
+        with open(_full_copy(path)) as fh:
             return len(json.load(fh).get("recommendations") or [])
     except Exception:                                     # noqa: BLE001
         return 0
+
+
+def _full_copy(path: str) -> str:
+    """The full board beside a public one (data/built/), when it is at
+    least as fresh; else the public file itself."""
+    from engine import gate as _gate
+    full = _gate.full_board_file(os.path.basename(path))
+    # Only a full copy at least as fresh as the public file may
+    # answer for it: a writer that bypassed gate.publish would leave
+    # an older full copy behind, and an old count is a wrong count.
+    if full is not None and full.is_file() and os.path.isfile(path) \
+            and full.stat().st_mtime >= os.stat(path).st_mtime - 1:
+        return str(full)
+    return path
+
+
+def _board_counts(path: str) -> dict:
+    """What a member finds on a league's two boards after a build:
+    {"most_likely": rows on Most Likely, "edge": rows on the Edge board,
+    "staked": the edge rows we actually bet}. Counted the way the pages
+    count them (app.js edgeBoardRows: a real price and more than half a
+    cent of edge a unit). {} when the board cannot be read.
+
+    Ethan, 2026-09-23, on the Status page: "we need to specify on this
+    page the most likely boards and edge boards." """
+    try:
+        with open(_full_copy(path)) as fh:
+            b = json.load(fh)
+    except Exception:                                     # noqa: BLE001
+        return {}
+    if not isinstance(b, dict):
+        return {}
+    ev = lambda r: isinstance(r.get("ev_per_unit"), (int, float)) and r["ev_per_unit"] > 0.005  # noqa: E731
+    recs = [r for r in b.get("recommendations") or [] if isinstance(r, dict)]
+    games = [g for g in b.get("game_bets") or [] if isinstance(g, dict)]
+    return {
+        "most_likely": len(b.get("most_likely") or []),
+        "edge": sum(1 for r in recs if r.get("has_market") is not False and ev(r))
+        + sum(1 for g in games if g.get("grade") != "Pass" and ev(g)),
+        "staked": sum(1 for r in recs + games if r.get("recommended")),
+    }
 
 
 def _board_word(path: str, ok: bool) -> str:
@@ -1362,6 +1394,10 @@ def _note_board(name: str, ok) -> bool:
     # the run it described.
     if not ok and _LAST_BUILD_NOTE[0]:
         _BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]
+    # The two boards a member reads off it, as they stand after this run
+    # (a failed run leaves the last good board, so it counts that one).
+    if name in BOARD_FILES:
+        _BOARD_RUNS[name].update(_board_counts(BOARD_FILES[name]))
     # AFTER the run is recorded, so the heartbeat is written even if this
     # raises, and unconditional because the loop that matters is quiet.
     _warn_if_frozen(name)
@@ -3072,8 +3108,36 @@ _UPDATER_ON = [False]
 def _running_commit() -> str:
     if not _RUNNING_COMMIT:
         ok, out = _git("rev-parse", "--short", "HEAD")
-        _RUNNING_COMMIT.append(out if ok else "")
+        _RUNNING_COMMIT.append(out if ok else _commit_from_files(ROOT))
     return _RUNNING_COMMIT[0]
+
+
+def _commit_from_files(root) -> str:
+    """HEAD read straight out of .git, for when `git` will not answer.
+
+    THE STATUS PAGE SAID "Code running: unknown" (Ethan's screenshot,
+    2026-09-23). The site runs as the `qellys` user and the checkout
+    belongs to root, and git refuses a repository owned by someone else
+    ("detected dubious ownership") unless told to trust it — so
+    `rev-parse` failed on the box every time, and nothing said so. The
+    files are world-readable; reading them needs no trust."""
+    try:
+        git = Path(root) / ".git"
+        head = (git / "HEAD").read_text().strip()
+        if not head.startswith("ref:"):
+            return head[:8]
+        ref = head.split(None, 1)[1]
+        loose = git / ref
+        if loose.is_file():
+            return loose.read_text().strip()[:8]
+        packed = git / "packed-refs"
+        for line in packed.read_text().splitlines() if packed.is_file() else ():
+            sha, _, name = line.partition(" ")
+            if name.strip() == ref:
+                return sha[:8]
+    except OSError:
+        pass
+    return ""
 
 
 # Resolved AT IMPORT, not at first heartbeat: by heartbeat time a test

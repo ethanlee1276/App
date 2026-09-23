@@ -1770,7 +1770,13 @@ const STALE_FLOOR_MS = 8 * 60 * 1000;
 let _cycleMs = null;
 
 function staleAfterMs() {
-  if (!_cycleMs) return STALE_FLOOR_MS;
+  // UNMEASURED IS A YOUNG PROCESS, which after every deploy is the first
+  // quarter hour: the startup build and the first cycle's chores run back
+  // to back, and the board built first (NFL) passes one floor with
+  // nothing wrong — Ethan's Status page, 2026-09-23: "NFL board 11 min
+  // ago" in red beside "NFL rebuilt 11 min ago" in green. Two floors
+  // until the machine has timed itself.
+  if (!_cycleMs) return STALE_FLOOR_MS * 2;
   return Math.max(STALE_FLOOR_MS, _cycleMs * 2 + 60000);
 }
 
@@ -33134,16 +33140,30 @@ function buildsCardHTML(hb) {
   if (!hb) return "";
   const runs = hb.boards || {};
   const now = Date.now() / 1000;
+  // THE TWO BOARDS A MEMBER READS, under each league (Ethan, 2026-09-23:
+  // "we need to specify on this page the most likely boards and edge
+  // boards"). Counted by the launcher off the built board after every run
+  // (launch._board_counts) — the Edge board as edgeBoardRows draws it, and
+  // how many of those we actually stake.
+  const n = (x, one, many) => x == null ? "—" : `${x} ${x === 1 ? one : many}`;
+  const sub = (label, v, cls, note) => `<div class="st-row st-indent"><span class="st-k">${label}</span>
+      <span class="st-v ${cls}">${escapeHtml(v)}</span><span class="st-sub">${escapeHtml(note || "")}</span></div>`;
   const rows = BUILD_LEAGUES.filter(([k]) => runs[k]).map(([k, label]) => {
     const r = runs[k];
     const when = r.at_epoch ? `${ageText(now - r.at_epoch)} ago` : "time unknown";
+    const kept = r.ok ? "" : "the last good board";
+    const boards = r.most_likely == null && r.edge == null ? "" :
+      sub("Most Likely board", n(r.most_likely, "pick", "picks"), r.most_likely ? "st-good" : "st-off", kept)
+      + sub("Edge board", n(r.edge, "bet", "bets"), r.edge ? "st-good" : "st-off",
+            r.staked ? `${r.staked} staked` : (r.edge === 0 ? "nothing priced wrong" : ""));
     return `<div class="st-row"><span class="st-k">${escapeHtml(label)}</span>
       <span class="st-v ${r.ok ? "st-good" : "st-bad"}">${r.ok
         ? `rebuilt ${escapeHtml(when)}` : `build failed ${escapeHtml(when)}`}</span>
-      <span class="st-sub">${r.ok ? "" : escapeHtml(String(r.note || "kept the last good board"))}</span></div>`;
+      <span class="st-sub">${r.ok ? "" : escapeHtml(String(r.note || "kept the last good board"))}</span></div>${boards}`;
   }).join("");
   return `<div class="section-title">Model builds
-      <span class="sub">— the code running, and each league’s last rebuild on it.</span></div>
+      <span class="sub">— the code running, each league’s last rebuild on it, and what its Most Likely
+        and Edge boards hold.</span></div>
     <div class="card st-card">
       <div class="st-row"><span class="st-k">Code running</span>
         <span class="st-v ${hb.commit ? "st-good" : "st-off"}">${escapeHtml(hb.commit || "unknown")}</span>
