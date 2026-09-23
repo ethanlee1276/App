@@ -5706,6 +5706,77 @@ def recent_settled(conn, limit: int = 30,
     return out
 
 
+#: One page of the Record's settled-bet list (settled_page).
+SETTLED_PAGE_SIZE = 50
+
+
+def settled_page(conn, sport: str | None = None, kind: str | None = None,
+                 result: str | None = None, since: str | None = None,
+                 offset: int = 0) -> dict:
+    """A page of the HEADLINE record's settled bets, newest first.
+
+    Ethan's product audit, 2026-09-23, item 17: the Record as "a
+    financial terminal" — every bet, filterable, with the model's
+    number, the price, the close and the CLV on each row. The record
+    file ships the RECENT_LIMIT most recent; this is the rest of the
+    list, a page at a time, behind /api/record/bets.
+
+    THE SAME ROWS AS THE HEADLINE ABOVE IT: POOLED_BOOKS, staked,
+    settled, on or after RECORD_EPOCH by `date` (performance's own
+    floor), benched leagues out of the unscoped list (recent_settled's
+    rule). A narrower window is read on the CALENDAR day (`day_expr`),
+    the one the running P&L buckets on — the page's window is cut from
+    that curve, so the list and the chart agree about which days are in.
+
+    `kind` is "props" or "lines" (GAME_MARKETS); `result` is won,
+    lost or push. `total` counts every row the filters match, so the
+    page can say how many there are rather than how many it has.
+    """
+    cats = POOLED_BOOKS
+    where = ("WHERE status IN ('won','lost','push') AND stake_units > 0 "
+             f"AND category IN ({','.join('?' * len(cats))}) AND date >= ?")
+    args: list = [*cats, RECORD_EPOCH]
+    if since and since > RECORD_EPOCH:
+        where += f" AND {day_expr()} >= ?"
+        args.append(since)
+    if sport:
+        where += " AND sport=?"
+        args.append(sport)
+    else:
+        ex = tuple(str(x).lower() for x in BENCHED_SPORTS)
+        if ex:
+            where += f" AND LOWER(sport) NOT IN ({','.join('?' * len(ex))})"
+            args += list(ex)
+    marks = ",".join("?" * len(GAME_MARKETS))
+    if kind == "props":
+        where += f" AND market NOT IN ({marks})"
+        args += list(GAME_MARKETS)
+    elif kind == "lines":
+        where += f" AND market IN ({marks})"
+        args += list(GAME_MARKETS)
+    if result in ("won", "lost", "push"):
+        where += " AND status=?"
+        args.append(result)
+    total = conn.execute("SELECT COUNT(*) FROM bets " + where, args).fetchone()[0]
+    offset = max(0, int(offset or 0))
+    rows = conn.execute(
+        f"SELECT date, {day_expr()} AS day, sport, player, market, side, line, "
+        "odds, book, grade, status, pnl_units, hit_prob, closing_line, "
+        "closing_odds, stake_units, loss_cause FROM bets " + where
+        + " ORDER BY date DESC, id DESC LIMIT ? OFFSET ?",
+        (*args, SETTLED_PAGE_SIZE, offset)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        c = _bet_clv(r)
+        d["clv"] = round(c, 3) if c is not None else None
+        d["process"] = process_grade(r)
+        d["cause"] = d.pop("loss_cause")
+        out.append(d)
+    return {"rows": out, "total": total, "offset": offset,
+            "limit": SETTLED_PAGE_SIZE}
+
+
 def settled_on(conn, date: str, sport: str | None = None,
                categories: tuple = BOOK) -> list[dict]:
     """Every settled pick on one slate date — the profit calendar's tap.

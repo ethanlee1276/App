@@ -12259,16 +12259,144 @@ function recRecentSection(recent, settled) {
      receipts CSV. */
   const capped = (settled || 0) > recent.length;
   return `
-    <div class="section-title"><span class="st-ico">${icon("list", 15)}</span>Recent settled picks
-      <span class="sub">— newest first, at the price we actually got${
+    <div class="section-title"><span class="st-ico">${icon("list", 15)}</span>Settled bets
+      <span class="sub" id="rec-bets-sub">— newest first, at the price we actually got${
         capped ? ` · the ${recent.length} most recent of ${settled} settled`
                : ""}</span></div>
-    <div class="card rec-list">
+    <div id="rec-bets-bar"></div>
+    <div class="card rec-list" id="rec-bets">
       ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
       ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
         Show ${more} more</button>` : ""}
     </div>`;
 }
+/* EVERY SETTLED BET, FILTERABLE. Ethan's product audit, 2026-09-23,
+   item 17: the Record as "a financial terminal" — every bet, with
+   the model's number, the price, the close and the CLV, filterable.
+   The record file ships the most recent RECENT_LIMIT; the rest come
+   from /api/record/bets (ledger.settled_page) fifty at a time, over
+   the same rows as the headline: the scope in view, the page's
+   window, and the two filters here. recRecentSection draws the first
+   paint from the shipped rows; recBetsMount takes over and asks the
+   journal. On a host with no API the shipped rows are filtered here
+   and the list says it is the recent ones, not the whole record. */
+let _recBetKind = "";      // "" | props | lines
+let _recBetResult = "";    // "" | won | lost
+let _recBets = { key: "", rows: [], total: null, remote: false, busy: false };
+let _recBetsCtx = null;     // { recent, settled, scope, from } of the page in view
+
+function recBetKind(market) {
+  const m = String(market || "");
+  return TEAM_SIDE_MARKETS.has(m) || m === "total" ? "lines" : "props";
+}
+
+function recBetsQuery(scope, from) {
+  return { sport: scope === "all" || scope === "intel" ? "" : String(scope || ""),
+           kind: _recBetKind, result: _recBetResult, since: from || "" };
+}
+
+function recBetsURL(q, offset) {
+  const p = new URLSearchParams();
+  ["sport", "kind", "result", "since"].forEach((k) => { if (q[k]) p.set(k, q[k]); });
+  if (offset) p.set("offset", String(offset));
+  const s = p.toString();
+  return `/api/record/bets${s ? `?${s}` : ""}`;
+}
+
+function recBetsLocal(recent, q) {
+  return (recent || []).filter((b) => b
+    && (!q.kind || recBetKind(b.market) === q.kind)
+    && (!q.result || b.status === q.result)
+    && (!q.since || String(b.day || b.date || "") >= q.since));
+}
+
+function recBetsBarHTML(q) {
+  const chip = (group, [v, label]) => `<button type="button" class="rec-bf${q[group] === v ? " active" : ""}"
+    data-bf="${group}" data-v="${v}" aria-pressed="${q[group] === v ? "true" : "false"}">${label}</button>`;
+  return `<div class="rec-bf-group" role="group" aria-label="Market">${
+      [["", "All bets"], ["props", "Props"], ["lines", "Game lines"]].map((x) => chip("kind", x)).join("")}</div>
+    <div class="rec-bf-group" role="group" aria-label="Result">${
+      [["", "Any result"], ["won", "Won"], ["lost", "Lost"]].map((x) => chip("result", x)).join("")}</div>`;
+}
+
+/* The list and its line, from whatever _recBets holds: the journal's
+   page (remote, with a true total) or the shipped rows (local). */
+function recBetsListHTML(st, settled, q) {
+  const filtered = !!(q.kind || q.result || q.since);
+  // A dozen first, as the list always opened; then what is already
+  // here; then the journal's next fifty.
+  const shown = _recAllPicks ? st.rows : st.rows.slice(0, 12);
+  const empty = filtered ? "No settled bets match these filters." : "Nothing settled yet.";
+  const unfetched = st.remote ? Math.max(0, (st.total || 0) - st.rows.length) : 0;
+  const more = shown.length < st.rows.length
+    ? `<button class="rec-more" type="button" onclick="_recShowPicks()">Show ${st.rows.length - shown.length} more</button>`
+    : unfetched
+    ? `<button class="rec-more" type="button" data-bets-more${st.busy ? " disabled" : ""}>Show ${Math.min(unfetched, 50)} more${
+        unfetched > 50 ? ` <span class="mini">of ${unfetched}</span>` : ""}</button>`
+    : "";
+  const line = st.remote
+    ? `— newest first, at the price we actually got · ${plural(st.total || 0, "settled bet")}${
+        filtered ? " match" : ""}`
+    : `— newest first, at the price we actually got${filtered
+        ? ` · of the ${((_recBetsCtx || {}).recent || []).length} most recent settled`
+        : (settled || 0) > st.rows.length ? ` · the ${st.rows.length} most recent of ${settled} settled` : ""}`;
+  return { list: (shown.map(recSettledRow).join("") || panelEmpty(empty)) + more, line };
+}
+
+function recBetsPaint(host) {
+  const ctx = _recBetsCtx;
+  const bar = host.querySelector("#rec-bets-bar"), list = host.querySelector("#rec-bets");
+  if (!ctx || !bar || !list) return;
+  const q = recBetsQuery(ctx.scope, ctx.from);
+  const out = recBetsListHTML(_recBets, ctx.settled, q);
+  bar.className = "rec-bets-bar";
+  bar.innerHTML = recBetsBarHTML(q);
+  list.innerHTML = out.list;
+  const sub = host.querySelector("#rec-bets-sub");
+  if (sub) sub.textContent = out.line;
+  bar.querySelectorAll(".rec-bf").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.bf === "kind") _recBetKind = b.dataset.v || "";
+    else _recBetResult = b.dataset.v || "";
+    recBetsMount(host);
+  }));
+  const m = list.querySelector("[data-bets-more]");
+  if (m) m.addEventListener("click", () => recBetsFetch(host, _recBets.rows.length));
+}
+
+async function recBetsFetch(host, offset) {
+  const ctx = _recBetsCtx;
+  if (!ctx || _recBets.busy) return;
+  const key = _recBets.key;
+  _recBets.busy = true;
+  try {
+    const r = await fetch(recBetsURL(recBetsQuery(ctx.scope, ctx.from), offset));
+    const page = r.ok ? await r.json() : null;
+    if (_recBets.key === key && page && Array.isArray(page.rows)) {
+      _recBets.rows = offset ? _recBets.rows.concat(page.rows) : page.rows;
+      _recBets.total = Number(page.total) || 0;
+      _recBets.remote = true;
+    }
+  } catch (e) { /* no API here — the shipped rows stand, and say so */ }
+  if (_recBets.key !== key) return;                 // a newer filter won
+  _recBets.busy = false;
+  recBetsPaint(host);
+}
+
+/* Called after every Record render; a chip calls it again. A new
+   filter, scope or window starts from the shipped rows and asks the
+   journal once; the same one keeps what it already fetched. */
+function recBetsMount(host, recent, settled, scope, from) {
+  if (recent !== undefined) _recBetsCtx = { recent: recent || [], settled, scope, from };
+  const ctx = _recBetsCtx;
+  if (!ctx || !host.querySelector("#rec-bets")) return;
+  const q = recBetsQuery(ctx.scope, ctx.from);
+  const key = JSON.stringify(q);
+  const fresh = _recBets.key !== key;
+  if (fresh) _recBets = { key, rows: recBetsLocal(ctx.recent, q), total: null, remote: false, busy: false };
+  recBetsPaint(host);
+  if (fresh) recBetsFetch(host, 0);
+}
+
 function recAnalytics(curve, o, eras) {
   if (!curve || curve.length < 2) return recCurveChart(curve);
   // The page's one window (recRanges): the same list and state the
@@ -15791,7 +15919,7 @@ async function renderRecord() {
     : recordRibbonsHTML(d, o, src.recent);
   const winBar = recordWindowHTML(avail, rk);
   const winNote = !from ? "" : winO
-    ? `<p class="rec-win-note">The headline and the running P&amp;L are the last ${winDays} days,
+    ? `<p class="rec-win-note">The headline, the running P&amp;L and the settled bets are the last ${winDays} days,
         from ${escapeHtml(recWinDate(from))}. Everything else here is the whole record.</p>`
     : `<p class="rec-win-note">Nothing settled in the last ${winDays} days — the
         headline is the whole record.</p>`;
@@ -15804,6 +15932,7 @@ async function renderRecord() {
   bindRecordScopes(host);
   bindSubtabs(host);
   sweepRings(host);
+  recBetsMount(host, src.recent || [], o.settled, scope, from);
   // The calendar's days are doors to their bets; a day left open on the
   // last render (a range chip, a month arrow) is reopened.
   host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
@@ -16022,7 +16151,11 @@ function recSettledRow(b) {
           <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-            <span class="rl-bet">${escapeHtml(b.side || "")} ${lineTxt}${escapeHtml(marketWord(b.market))}</span></span>
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${lineTxt}${escapeHtml(marketWord(b.market))}${
+              /* The terminal's columns (audit item 17): what the model
+                 said, and what the price closed at, where known. */
+              b.hit_prob != null ? ` · model ${(Number(b.hit_prob) * 100).toFixed(0)}%` : ""}${
+              b.closing_odds != null ? ` · closed ${escapeHtml(oddsTxt(b.closing_odds))}` : ""}</span></span>
           <span class="rl-chips">${procChip}${causeChip}</span>
           <span class="rl-odds">${american(b.odds)}</span>
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>

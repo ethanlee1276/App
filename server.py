@@ -881,6 +881,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._receipts_csv()
         if parsed.path in ("/api/record/day", "/api/record/day/"):
             return self._record_day(parse_qs(parsed.query))
+        if parsed.path in ("/api/record/bets", "/api/record/bets/"):
+            return self._record_bets(parse_qs(parsed.query))
         if parsed.path in ("/api/team", "/api/team/"):
             return self._team(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
@@ -3320,6 +3322,43 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"record unavailable"}', ".json")
         net = round(sum((r.get("pnl_units") or 0) for r in rows), 2)
         out = {"date": date, "sport": sport, "rows": rows, "net_units": net}
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _record_bets(self, q):
+        """A page of the headline record's settled bets — the Record's
+        filterable list (Ethan's product audit, item 17). See
+        ledger.settled_page for which rows and why.
+
+        NOT GATED, for the reason `_receipts_csv` gives: every row is
+        settled, public, and the evidence the subscription is sold on.
+        Every parameter is checked against a closed shape before it
+        reaches SQL; anything else is a 400, never a guess.
+        """
+        import re as _re
+        arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
+        sport = arg("sport").lower()[:5]
+        kind, result, since = arg("kind"), arg("result"), arg("since")[:10]
+        try:
+            offset = int(arg("offset") or 0)
+        except ValueError:
+            offset = -1
+        if (sport and not _re.fullmatch(r"[a-z]{2,5}", sport)) \
+                or kind not in ("", "props", "lines") \
+                or result not in ("", "won", "lost", "push") \
+                or (since and not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", since)) \
+                or not 0 <= offset <= 100000:
+            return self._send(400, b'{"error":"bad filter"}', ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                out = L.settled_page(conn, sport=sport or None, kind=kind or None,
+                                     result=result or None, since=since or None,
+                                     offset=offset)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
 
     def _explain(self, q):

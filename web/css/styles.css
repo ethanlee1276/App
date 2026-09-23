@@ -4996,6 +4996,16 @@ body.pk-open { overflow: hidden; }
 .rec-win.active { color: var(--text); border-color: var(--brand-2);
   background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .rec-win-note { margin: -4px 0 14px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* The settled list's filters (audit item 17): the window row's chip,
+   in two groups — the market, then the result. */
+.rec-bets-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; }
+.rec-bf-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.rec-bf { padding: 5px 12px; min-height: 30px; border-radius: 999px; cursor: pointer;
+  background: transparent; border: var(--hairline) solid var(--border); color: var(--text-mute);
+  font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; }
+.rec-bf:hover { color: var(--text); border-color: var(--brand-2); }
+.rec-bf.active { color: var(--text); border-color: var(--brand-2);
+  background: color-mix(in oklab, var(--brand) 14%, transparent); }
 
 @media (pointer: coarse) { .rec-scope { min-height: 42px; } }
 
