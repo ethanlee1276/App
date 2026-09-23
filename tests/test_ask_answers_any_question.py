@@ -396,7 +396,7 @@ def test_the_page_says_it_answers_anything():
     assert "Ask about any team, player or game." in APP
     assert "every past game we have stored" in APP and "Looking it up…" in APP
     assert "our stored game history" in APP
-    assert "any team, any player, any sport" in HTML
+    assert "Any team, any player, any sport" in APP
     assert 'data-hint="ask about tonight’s board"' not in HTML
 
 

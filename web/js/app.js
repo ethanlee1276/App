@@ -33753,6 +33753,7 @@ function _switchViewNow(name, push, dir) {
   // moment any other view does.
   document.body.classList.toggle("msg-thread-open",
     name === "messages" && !!_msgThread);
+  document.body.classList.toggle("ask-open", name === "ask");    // the chat room: no footer
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
   // Entering view slides in from the direction of travel between tabs.
@@ -34777,6 +34778,13 @@ const ASK_SUGGEST = ["What’s the best bet on tonight’s board?",
 /* Asked from a prop page: the three questions a reader has about one bet.
    Fixed wording on purpose — the same words are the same cached answer. */
 const ASK_SUGGEST_PICK = ["Why this pick?", "How has this player done lately?", "What could go wrong?"];
+/* One question about the past, in the open league — Ask reads the stored
+   history too, and the empty room should say so by example. */
+const ASK_SUGGEST_PAST = {
+  nfl: "How have the Lions done against the Packers?", cfb: "How has Michigan done against Ohio State?",
+  mlb: "How has Aaron Judge hit lately?", nba: "How have the Celtics done against the Knicks?",
+  wnba: "How has A’ja Wilson played lately?",
+};
 let _ask = null;
 
 function askState() {
@@ -34806,16 +34814,57 @@ function askErrorText(status, body) {
   return "Ask couldn’t answer just now. Try again in a moment.";
 }
 
+/* THE CHAT ROOM. Ethan, 2026-09-23, the site footer circled on his phone:
+   "Get rid of all this shit down here and make this look more like an
+   actual ai chat room." One column pinned between the top bar and the tab
+   bar (askRoomSize measures it, as msgThreadSize does for a message
+   thread): a header, the conversation — the only thing that scrolls — and
+   the composer at the foot. The site footer and the league strip leave
+   while it is open (body.ask-open); Ask answers for every league anyway.
+   The one line of the footer that must stay — not advice, 21+, the
+   helpline — rides under the composer. */
+const ASK_AVA = `<span class="ask-ava" aria-hidden="true"><img src="logo-qb.png" alt="" width="152" height="152"></span>`;
+const ASK_SEND = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"
+  fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 function askTurnHTML(t) {
   const paras = String(t.text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   /* WHERE THE ANSWER CAME FROM: the rows and sections the server sent the
-     model, as chips — a prop's chip opens its page (the document-level
-     [data-prop] door), the rest just name what was read. */
+     model, and the lookups it made, as chips — a prop's chip opens its page
+     (the document-level [data-prop] door), the rest name what was read. */
   const src = (t.sources || []).filter((s) => s && s.label).slice(0, 8);
-  return `<div class="ask-turn ${t.role === "user" ? "me" : t.error ? "err" : "bot"}">${
+  const who = t.role === "user" ? "me" : t.error ? "err" : "bot";
+  return `<div class="ask-row ${who}">${who === "me" ? "" : ASK_AVA}<div class="ask-turn ${who}">${
     paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${src.length ? `<div class="ask-src">${
     src.map((s) => `<span class="ask-chip"${s.prop ? ` data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link"` : ""}>${
-      escapeHtml(s.label)}</span>`).join("")}</div>` : ""}</div>`;
+      escapeHtml(s.label)}</span>`).join("")}</div>` : ""}</div></div>`;
+}
+
+/* The room's height: the measured space from its own top to the highest
+   thing on the tab bar (the raised Live button stands 14px proud of it) —
+   or to the keyboard, when one is up and the tab bar is under it. */
+function askRoomSize() {
+  const el = document.getElementById("ask-room");
+  if (!el || state.view !== "ask") return;
+  const vv = window.visualViewport;
+  const vh = (vv && vv.height) || window.innerHeight;
+  const keyboard = !!vv && window.innerHeight - vv.height > 120;
+  const tab = document.querySelector(".tabbar");
+  let bottom = vh;
+  if (!keyboard && tab && getComputedStyle(tab).display !== "none") {
+    bottom = Math.min(tab.getBoundingClientRect().top,
+      ...[...tab.querySelectorAll("*")].filter((x) => x.offsetParent !== null)
+        .map((x) => x.getBoundingClientRect().top));
+  }
+  const top = el.getBoundingClientRect().top + (keyboard ? 0 : window.scrollY);
+  el.style.height = `${Math.max(300, Math.floor(bottom - top - 8))}px`;
+  const log = document.getElementById("ask-log");
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+window.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", () => { if (state.view === "ask") askRoomSize(); });
 }
 
 function renderAsk() {
@@ -34823,33 +34872,52 @@ function renderAsk() {
   if (!host) return;
   const a = askState();
   const empty = !a.turns.length;
-  host.innerHTML = `
-    ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
-      <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
-    <div class="ask-log" id="ask-log" aria-live="polite">${empty
-      ? `<div class="ask-hello"><b>Ask about any team, player or game.</b> Tonight’s boards in every
-          sport, and every past game we have stored — how a team has done against another, how a
-          player has done lately. The answer comes from our own numbers and says so when they have
-          nothing on it.</div>`
-      : a.turns.map(askTurnHTML).join("")}${a.busy ? `<div class="ask-turn bot wait"><p>Looking it up…</p></div>` : ""}</div>
-    ${empty ? `<div class="ask-suggest">${(a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST).map((s) =>
-      `<button type="button" class="rec-bf" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>` : ""}
-    <form class="ask-form" id="ask-form">
-      <textarea id="ask-input" rows="2" maxlength="400" placeholder="Ask about any player, team, game or bet"
-        aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
-      <button class="btn primary" type="submit"${a.busy ? " disabled" : ""}>Ask</button>
-    </form>
-    <p class="ask-note">Answers are written by an AI from our boards and our stored game history
-      and nothing else. They are a reading of our numbers, not advice to bet.${a.turns.length
-      ? ` <button type="button" class="ask-reset" data-ask-reset>Start over</button>` : ""}</p>`;
-  const log = host.querySelector("#ask-log");
-  if (log) log.scrollTop = log.scrollHeight;
+  const sug = (a.pick ? ASK_SUGGEST_PICK : ASK_SUGGEST)
+    .concat(a.pick ? [] : [ASK_SUGGEST_PAST[state.sport] || ASK_SUGGEST_PAST.nfl]);
+  host.innerHTML = `<div class="ask-room" id="ask-room">
+    <div class="ask-head">${ASK_AVA}
+      <div class="ask-id"><b>Ask Qellys</b><span>Any team, any player, any sport</span></div>
+      ${empty ? "" : `<button type="button" class="ask-new" data-ask-reset>New chat</button>`}
+    </div>
+    <div class="ask-log" id="ask-log" aria-live="polite">${empty ? `
+      <div class="ask-empty">${ASK_AVA.replace('class="ask-ava"', 'class="ask-ava big"')}
+        <h3>What do you want to know?</h3>
+        <p>Ask about any team, player or game. Tonight’s boards in every sport, and every past game
+          we have stored, answered from our own numbers.</p>
+        <div class="ask-suggest">${sug.map((s) =>
+          `<button type="button" class="ask-sug" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>
+      </div>` : a.turns.map(askTurnHTML).join("")}${a.busy ? `
+      <div class="ask-row bot">${ASK_AVA}<div class="ask-turn bot wait"><span class="ask-dots"
+        aria-hidden="true"><i></i><i></i><i></i></span>Looking it up…</div></div>` : ""}</div>
+    <div class="ask-dock">
+      ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
+        <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
+      <form class="ask-form" id="ask-form">
+        <textarea id="ask-input" rows="1" maxlength="400" placeholder="Ask about any player, team, game or bet"
+          aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
+        <button class="ask-send" type="submit" aria-label="Send" disabled>${ASK_SEND}</button>
+      </form>
+      <p class="ask-note">AI answers from our boards and our stored game history, not betting
+        advice. <span class="ask-help">21+ · 1-800-GAMBLER</span></p>
+    </div>
+  </div>`;
   const form = host.querySelector("#ask-form");
   const input = host.querySelector("#ask-input");
+  const send = host.querySelector(".ask-send");
   if (form) form.addEventListener("submit", (e) => { e.preventDefault(); askSend(input ? input.value : ""); });
-  if (input) input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askSend(input.value); }
-  });
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askSend(input.value); }
+    });
+    // The box grows with what is typed, to five lines, and Send wakes up.
+    input.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
+      if (send) send.disabled = a.busy || !input.value.trim();
+    });
+  }
+  askRoomSize();
+  setTimeout(askRoomSize, 400);        // again once the view's slide-in has settled
   host.querySelectorAll("[data-ask-q]").forEach((b) => b.addEventListener("click", () => askSend(b.dataset.askQ)));
   host.querySelectorAll("[data-ask-reset]").forEach((b) => b.addEventListener("click", () => {
     a.turns = []; askSave(); renderAsk();
