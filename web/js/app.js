@@ -21311,10 +21311,26 @@ const PLANS = [
   { id: "monthly", name: "Monthly", price: 25, per: "month", cadence: "Billed monthly. Cancel anytime.",
     save: 0, months: 1 },
   { id: "sixmonth", name: "6 months", price: 125, per: "6 months", cadence: "Billed every 6 months.",
-    save: 25, months: 6, popular: true },
+    save: 25, months: 6 },
   { id: "yearly", name: "Yearly", price: 225, per: "year", cadence: "Billed yearly.",
     save: 75, months: 12 },
 ];
+
+/* ONE PLAN, THEN THE LONGER ONES AS SAVINGS (Ethan's product audit,
+   2026-09-23, items 11-12): "Instead of three giant equal cards —
+   QELLYS BOOK, $25/month, everything included — then save with longer
+   plans." The 6-month card wore "Most popular", which nothing
+   measured; the badge now goes to the plan that costs least per
+   month, which is arithmetic, and it says "Best value". */
+function planPerMonth(pl) {
+  return pl.price / (pl.months || 1);
+}
+
+function bestValuePlanId(plans) {
+  let best = null;
+  (plans || []).forEach((p) => { if (!best || planPerMonth(p) < planPerMonth(best)) best = p; });
+  return best ? best.id : "";
+}
 
 /* Every plan is the same product. A tier that withheld features would
    need a second entitlement model, a second set of redaction rules and a
@@ -21668,12 +21684,11 @@ function paywallHTML(rec, status) {
     const ok = sellable(pl.id);
     const trial = trialOK && pl.id === trialPlan;
     return `
-    <article class="card pw-plan${pl.popular ? " pop" : ""}${
-      trial ? " pw-trial" : ""}">
-      ${pl.popular ? `<div class="pw-tag">Most popular</div>` : ""}
+    <article class="card pw-plan${trial ? " pw-trial" : ""}">
       ${trial ? `<div class="pw-tag pw-tag-trial">${trialDays} days free</div>`
         : ""}
-      <div class="pw-plan-name">${escapeHtml(pl.name)}</div>
+      <div class="pw-plan-name">${pl.id === "monthly" ? "Qellys Book" : escapeHtml(pl.name)}</div>
+      ${pl.id === "monthly" ? `<div class="pw-plan-sub">Everything included</div>` : ""}
       <div class="pw-price-row">
         <div class="pw-price"><span class="cur">$</span>${pl.price}<i>/${
           escapeHtml(pl.per)}</i></div>
@@ -21699,6 +21714,25 @@ function paywallHTML(rec, status) {
             trialDays + 1} unless you cancel before then — one button on
             your account page.`
         : escapeHtml(pl.cadence)}</div>
+    </article>`;
+  };
+  // The longer plans as rows: the length, the price, what it comes to a
+  // month, the saving, and one button. Same product, same checkout.
+  const bestId = bestValuePlanId(PLANS);
+  const longer = (pl) => {
+    const ok = sellable(pl.id);
+    const best = pl.id === bestId;
+    return `
+    <article class="card pw-long${best ? " best" : ""}">
+      <div class="pw-long-what"><b>${escapeHtml(pl.name)}</b>${
+        best ? `<span class="pw-best">Best value</span>` : ""}
+        <span class="pw-long-price">$${pl.price} · $${planPerMonth(pl).toFixed(2)} a month</span></div>
+      ${pl.save ? `<span class="pw-save">Save $${pl.save}</span>` : ""}
+      ${ok
+        ? `<button class="btn pw-buy pw-buy-sm" data-plan="${escapeAttr(pl.id)}"
+             onclick="coStart(this)">Choose</button>`
+        : `<button class="btn pw-buy pw-buy-sm" disabled
+             title="This plan is not switched on yet">Not yet</button>`}
     </article>`;
   };
 
@@ -21787,7 +21821,15 @@ function paywallHTML(rec, status) {
     <p class="pw-h2sub">${iconMark("lock", 13)} Every plan is the same full
       site. The only difference is how long you commit for and how much you
       save.</p>
-    <div class="pw-plans">${PLANS.map(plan).join("")}</div>
+    <div class="pw-plans" data-shape="one">
+      ${plan(PLANS.find((p) => p.id === "monthly") || PLANS[0])}
+      <div class="pw-longer">
+        <div class="pw-longer-h">Save with a longer plan</div>
+        ${PLANS.filter((p) => p.id !== "monthly").map(longer).join("")}
+        <p class="pw-longer-note">Every plan is the same product — the length
+         is the only difference.</p>
+      </div>
+    </div>
 
     <div class="pw-trust">
       <div class="pw-guar">

@@ -9857,6 +9857,25 @@ input:-webkit-autofill:focus {
 .pw-plan.pw-trial { overflow: visible; border-color: var(--good); }
 .pw-tag-trial { background: var(--good); color: var(--brand-ink); }
 
+/* Audit items 11-12: one plan card, then the longer plans as rows. */
+.pw-plans[data-shape="one"] { max-width: 900px; margin-inline: auto; }
+.pw-plan-sub { color: var(--text-mute); font-size: var(--fs-sm); margin-top: 2px; }
+.pw-longer { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pw-longer-h { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase; padding: 4px 2px 0; }
+.pw-long { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  padding: 14px 16px; text-align: left; }
+.pw-long.best { border-color: color-mix(in oklab, var(--brand) 62%, var(--border));
+  background: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+.pw-long-what { flex: 1 1 170px; min-width: 0; }
+.pw-long-what b { font-size: var(--fs-md); font-weight: 800; }
+.pw-long-price { display: block; margin-top: 2px; color: var(--text-mute);
+  font-family: var(--font-mono); font-size: var(--fs-sm); }
+.pw-best { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--brand-solid);
+  color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; vertical-align: 2px; }
+.pw-buy.pw-buy-sm { width: auto; padding: 9px 18px; font-size: var(--fs-sm); }
+.pw-longer-note { color: var(--text-mute); font-size: var(--fs-xs); margin: 2px 2px 0; }
 .pw-plan-name { font-size: var(--fs-md); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--brand-2); }
 .pw-price { font-size: var(--fs-price); font-weight: 900; line-height: var(--lh-tight);
