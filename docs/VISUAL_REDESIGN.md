@@ -547,6 +547,11 @@ surface.
     player and his position, the projection over its PPR base. The
     rank board stays the pinned-column grid it was designed as, and
     the profile's game log fits once it carries its real columns.
+  * *The rail's Key insights card is retired.* Ethan: "retire the key
+    insite card." It repeated the first reason off tonight's top picks
+    beside the rows that already carry it, under a link to insights
+    that do not exist. The rail keeps the slip column, the prediction
+    desk and Live now; the game page's own Key insights panel stays.
   Pinned by `tests/test_the_rows_look_like_a_book_everywhere.py`,
   `tests/test_the_numbers_count_up_and_the_dot_pings.py`,
   `tests/test_an_empty_board_carries_the_card.py`,
@@ -559,11 +564,14 @@ surface.
   `tests/test_one_slate_one_size.py`,
   `tests/test_the_long_shots_watch_is_the_books_row.py`,
   `tests/test_the_masthead_will_not_call_a_thin_book.py`,
-  `tests/test_the_labs_wide_tables_are_the_books_rows.py` and
-  `tests/test_the_fantasy_standings_and_lineup_are_rows.py`.
+  `tests/test_the_labs_wide_tables_are_the_books_rows.py`,
+  `tests/test_the_fantasy_standings_and_lineup_are_rows.py` and
+  `tests/test_the_rails_key_insights_card_is_retired.py`.
 * **Still open (2026-09-22, after slice T).** The desktop rail's
-  Key insights card and the sub-tabbed zones the deck does not adopt
-  sit below it; a later pass can retire what nobody opens. Zeno's tile
+  Key insights card was retired on Ethan's word (2026-09-22) — it
+  repeated the top picks' own first reasons; the sub-tabbed zones the
+  deck does not adopt sit below it, and a later pass can retire what
+  nobody opens. Zeno's tile
   and tickets appear once Juice Reel data lands. The Fantasy rooms'
   tables, the Players search cards, the Why page's calculators and the
   UFC method bar keep their own layouts — they are not rows. The empty

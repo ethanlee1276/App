@@ -36705,35 +36705,19 @@ async function renderHomePerf() {
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
-/* The right rail: KEY INSIGHTS (real reasons off tonight's best picks —
-   the same notes the cards print) and LIVE NOW (games in progress from
-   the same live states the stadium strip draws). */
+/* The right rail: the slip column (placeSlip), the prediction desk and
+   LIVE NOW (games in progress from the same live states the stadium
+   strip draws).
+
+   KEY INSIGHTS IS RETIRED (Ethan, 2026-09-22: "retire the key insite
+   card"). It repeated the first reason off the top picks — the same
+   sentence each pick's own row carries one column to the left — and
+   its "More insights" link went to the Record page, which has none.
+   The game page's Key insights panel is a different thing (that
+   game's own notes) and stays. */
 function renderRail() {
-  const ins = document.getElementById("rail-insights");
   const liv = document.getElementById("rail-live");
-  if (!ins || !liv) return;
-  const d = state.data || {};
-  // Ethan's rail render (2026-08-11): dot-bulleted insights. His mock's
-  // bullets are ATS-trend prose we don't compute — ours stay the real
-  // sources: the model's own pick reasons, then the injury watch.
-  const bullets = [];
-  (d.recommendations || []).filter((r) => r.recommended)
-    .sort((a, b) => (b.quality || 0) - (a.quality || 0))
-    .forEach((r) => {
-      const why = (r.reasons && r.reasons[0]) || r.why || "";
-      if (why && bullets.length < 4)
-        bullets.push(`<b>${escapeHtml(r.player)}</b> — ${escapeHtml(String(why))}`);
-    });
-  (d.injury_watch || []).slice(0, Math.max(0, 5 - bullets.length)).forEach((i) => {
-    if (i && i.player && i.status)
-      bullets.push(`<b>${escapeHtml(i.player)}</b> is ${escapeHtml(i.status)}`);
-  });
-  if (bullets.length) {
-    ins.hidden = false;
-    ins.innerHTML = `<div class="rail-title">Key insights</div>
-      <ul class="rail-list">${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>
-      <a class="rail-more" href="#record">More insights &#8594;</a>`;
-  } else { ins.hidden = true; ins.innerHTML = ""; }
+  if (!liv) return;
 
   renderRailDesk();
 
