@@ -7803,7 +7803,7 @@ function likelyCard(r) {
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
         </div>
       </div>
-      <span class="grade lk-pct">${pct(r.model_prob)}</span>
+      <span class="grade lk-pct">${pct(r.model_prob)}${probTierHTML(r)}</span>
     </div>
     <div class="metrics">
       <div class="metric hero"><div class="k">${r.prob_source === "market" ? "Market" : "Model"}</div>
@@ -8180,6 +8180,45 @@ function renderLikely() {
    A preview's job is scanning: face, name, the bet, the price, the
    probability, one line. The full cards still live on the Top Picks
    page, one tap away, where depth is the point. */
+/* HOW LIKELY, IN A WORD. Ethan's product audit, 2026-09-23, item 9:
+   "A user should never have to figure out: 'Is 64% good?'" — with
+   the audit's own bands: 52–57, 58–62, 63–67, 68 and up.
+
+   NOT THE AUDIT'S WORDS (Lean · Play · Strong · Premium): Lean and
+   Play are already the edge board's grades on net edge (gradeClass),
+   and one word meaning two things on two boards is item 18's own
+   complaint. Premium also reads as a price plan. So: Slight · Solid
+   · Strong · Top.
+
+   ON THE MOST LIKELY BOARD ONLY, and only as a reading of the
+   probability. That board's number is measured — it ranks at the
+   AUC its shelves print, and the Record checks each band's claim
+   against what landed. The edge board gets no such word: its edge
+   ranks no better than a coin flip on this site's own test, and
+   calling +12% "Significant" is the overclaim the site refuses.
+   The word says nothing about the price — the pill beside it does.
+
+   Read off the ROUNDED percent the row prints, so 57% always says
+   Slight and 58% always says Solid; a word that disagreed with the
+   number beside it would be worse than no word. */
+function probTier(p) {
+  const n = Number((Number(p) * 100).toFixed(0));      // the row's own rounding
+  if (!Number.isFinite(n) || n < 52) return null;
+  return n >= 68 ? { key: "top", word: "Top", band: "68% or more" }
+    : n >= 63 ? { key: "strong", word: "Strong", band: "63–67%" }
+    : n >= 58 ? { key: "solid", word: "Solid", band: "58–62%" }
+    : { key: "slight", word: "Slight", band: "52–57%" };
+}
+
+/* The word, inside the green pill under the number. A row the board
+   shows as a lean (ranked false) already says so in its label and
+   gets no second word. */
+function probTierHTML(r) {
+  const t = (r || {}).ranked === false ? null : probTier((r || {}).model_prob);
+  return t ? `<i class="ml-tier t-${t.key}" title="${t.word}: ${t.band} by the figure this row
+    is ranked on. How likely, not how good the price is — the price is the pill beside it.">${t.word}</i>` : "";
+}
+
 /* A game row’s badge: the team taken, or the league’s mark for a total,
    which belongs to the game and not to either side — the rule
    gameBetCard already draws by. */
@@ -8213,7 +8252,7 @@ function likelyRow(r) {
       <span class="k">${escapeHtml(label)}${r.book
         ? ` · ${escapeHtml(r.book)}` : ""}</span></span>
     <span class="hd-num">${r.odds != null
-        ? `<span class="hd-o">${american(r.odds)}</span>` : ""}<span class="ml-pct hd-p">${pct}</span></span>
+        ? `<span class="hd-o">${american(r.odds)}</span>` : ""}<span class="ml-pct hd-p">${pct}${probTierHTML(r)}</span></span>
   </button>`;
 }
 

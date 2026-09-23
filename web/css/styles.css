@@ -2086,6 +2086,14 @@ main { view-transition-name: page; }
 /* v5: the number is the deck's green pill (`.hd-p`, on the same span),
    beside the price in its grey one; this rule only seats them. */
 .ml-row .ml-pct { flex: 0 0 auto; }
+/* The tier word (audit item 9) under the number, in the pill: one
+   glance reads 64% and Strong together. */
+.ml-pct, .lk-pct { display: inline-flex; flex-direction: column; align-items: center;
+  line-height: 1; }
+.ml-tier { display: block; margin-top: 2px; font-family: var(--font-sans); font-style: normal;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  opacity: .8; }
+.ml-tier.t-slight { color: var(--text-mute); opacity: 1; }
 .ml-row .hd-num { flex: 0 0 auto; }
 .likely-top .shelf-head { position: static; background: none; padding-top: 0; }
 .likely-top .shelf-title { font-size: var(--fs-md); }

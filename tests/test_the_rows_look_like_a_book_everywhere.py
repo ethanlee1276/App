@@ -31,7 +31,9 @@ def test_the_most_likely_row_carries_the_price_and_the_number_as_pills():
     row = _fn("likelyRow")
     assert '<span class="hd-num">${r.odds != null' in row
     assert '`<span class="hd-o">${american(r.odds)}</span>`' in row, "the price in the grey pill"
-    assert '<span class="ml-pct hd-p">${pct}</span>' in row, "our number in the green pill"
+    # …with its tier word under it since 2026-09-23 (audit item 9;
+    # tests/test_the_likely_rows_say_how_likely.py).
+    assert '<span class="ml-pct hd-p">${pct}${probTierHTML(r)}</span>' in row, "our number in the green pill"
     k = row[row.index('<span class="k">'):row.index("</span></span>", row.index('<span class="k">'))]
     assert "american(r.odds)" not in k, "the sub-line no longer repeats the price"
     assert "r.book" in k, "the book stays in the sub-line"
