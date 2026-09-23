@@ -1832,6 +1832,7 @@ const STALE_LOUD_MS = 12 * 60 * 60 * 1000;
 const FEATURES = [
   ["The boards", "What we publish every day, in every league",
    [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
+    ["Ask Qellys", "Ask about a player, a game or a bet on tonight’s board, and get an answer written from our own numbers — it says so when the board has nothing on it, and never tells you to bet.", "ask"],
     ["Top Picks", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
     ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
@@ -9738,6 +9739,9 @@ function renderPropPage() {
           >Share card</button>
         <button class="btn ghost" data-explain aria-controls="pp-explain"
           >Explain</button>
+        <button class="btn ghost" data-ask-pick="${escapeAttr(propId(r))}"
+          data-ask-label="${escapeAttr(`${r.player || ""} ${r.side || ""} ${r.line ?? ""} ${r.market_label || ""}`.replace(/\s+/g, " ").trim())}"
+          >Ask</button>
       </div>
       <div id="fr-send-slot"></div>
       <div id="pp-explain" class="pp-explain" hidden aria-live="polite"></div>
@@ -33589,7 +33593,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -33821,6 +33825,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
   if (name === "record") renderRecord();
+  if (name === "ask") renderAsk();
   if (name === "zeno") renderZeno();
   if (name === "lab") renderLab();
   if (name === "intel") renderIntel();
@@ -34754,6 +34759,136 @@ function sendPanelHTML(r) {
    written, needs a subscription, not switched on, could not answer —
    because a box that stays empty is the failure this site keeps
    finding (the thirteen silent days of the team-form panel). */
+/* ============================================================
+   ASK QELLYS
+   ============================================================
+   Ethan, 2026-09-23, on Rithmm: "I like the Ask Scout AI agent." A
+   question about tonight's board, answered from the board — the rows
+   it names, the pick it was asked from, and a summary of the night —
+   by engine/askbot.py behind POST /api/ask. It says when the board has
+   nothing on a question, and it never tells anyone to bet.
+
+   The conversation lives in this tab (sessionStorage), the last few
+   turns ride along with each question, and a pick opened from the prop
+   page ("Ask") stays attached until it is cleared. */
+const ASK_SUGGEST = ["What’s the best bet on tonight’s board?",
+                     "Who is most likely to hit tonight?",
+                     "Why do we like the Pick of the Day?"];
+let _ask = null;
+
+function askState() {
+  if (_ask) return _ask;
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem("qb.ask") || "null"); } catch (e) {}
+  _ask = saved && Array.isArray(saved.turns)
+    ? { turns: saved.turns.slice(-20), pick: String(saved.pick || ""), pickLabel: String(saved.pickLabel || ""), busy: false }
+    : { turns: [], pick: "", pickLabel: "", busy: false };
+  return _ask;
+}
+
+function askSave() {
+  const a = askState();
+  try {
+    sessionStorage.setItem("qb.ask", JSON.stringify({ turns: a.turns.slice(-20), pick: a.pick, pickLabel: a.pickLabel }));
+  } catch (e) {}
+}
+
+/* The sentence for each way a question can fail — the explainer's own. */
+function askErrorText(status, body) {
+  if (status === 401) return "Sign in with a subscription to ask.";
+  if (status === 402) return "Ask is part of the subscription.";
+  if (status === 429) return "That’s a lot of questions at once — give it a minute.";
+  if (status === 413 || status === 400) return "That question is too long — keep it to a sentence or two.";
+  if (status === 503 && body && body.configured === false) return "Ask isn’t switched on for this site yet.";
+  return "Ask couldn’t answer just now. Try again in a moment.";
+}
+
+function askTurnHTML(t) {
+  const paras = String(t.text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return `<div class="ask-turn ${t.role === "user" ? "me" : t.error ? "err" : "bot"}">${
+    paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}</div>`;
+}
+
+function renderAsk() {
+  const host = document.getElementById("ask-body");
+  if (!host) return;
+  const a = askState();
+  const empty = !a.turns.length;
+  host.innerHTML = `
+    ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
+      <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
+    <div class="ask-log" id="ask-log" aria-live="polite">${empty
+      ? `<div class="ask-hello"><b>Ask about tonight’s board.</b> A player, a game, a bet — the
+          answer comes from our own numbers and says so when the board has nothing on it.</div>`
+      : a.turns.map(askTurnHTML).join("")}${a.busy ? `<div class="ask-turn bot wait"><p>Reading the board…</p></div>` : ""}</div>
+    ${empty ? `<div class="ask-suggest">${ASK_SUGGEST.map((s) =>
+      `<button type="button" class="rec-bf" data-ask-q="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join("")}</div>` : ""}
+    <form class="ask-form" id="ask-form">
+      <textarea id="ask-input" rows="2" maxlength="400" placeholder="Ask about a player, a game or a bet"
+        aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
+      <button class="btn primary" type="submit"${a.busy ? " disabled" : ""}>Ask</button>
+    </form>
+    <p class="ask-note">Answers are written by an AI from the numbers on our board and nothing
+      else. They are a reading of the board, not advice to bet.${a.turns.length
+      ? ` <button type="button" class="ask-reset" data-ask-reset>Start over</button>` : ""}</p>`;
+  const log = host.querySelector("#ask-log");
+  if (log) log.scrollTop = log.scrollHeight;
+  const form = host.querySelector("#ask-form");
+  const input = host.querySelector("#ask-input");
+  if (form) form.addEventListener("submit", (e) => { e.preventDefault(); askSend(input ? input.value : ""); });
+  if (input) input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askSend(input.value); }
+  });
+  host.querySelectorAll("[data-ask-q]").forEach((b) => b.addEventListener("click", () => askSend(b.dataset.askQ)));
+  host.querySelectorAll("[data-ask-reset]").forEach((b) => b.addEventListener("click", () => {
+    a.turns = []; askSave(); renderAsk();
+  }));
+  host.querySelectorAll("[data-ask-clear-pick]").forEach((b) => b.addEventListener("click", () => {
+    a.pick = ""; a.pickLabel = ""; askSave(); renderAsk();
+  }));
+}
+
+async function askSend(text) {
+  const a = askState();
+  const question = String(text || "").trim().slice(0, 400);
+  const meta = SPORT_META[state.sport];
+  if (!question || a.busy || !meta) return;
+  const history = a.turns.filter((t) => !t.error).slice(-6).map((t) => ({ role: t.role, text: t.text }));
+  a.turns.push({ role: "user", text: question });
+  a.busy = true;
+  renderAsk();
+  let turn = null;
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board: boardNameFor(meta), question, history, pick: a.pick }),
+    });
+    let body = {};
+    try { body = await res.json(); } catch (e) { body = {}; }
+    turn = res.ok && body.text ? { role: "assistant", text: body.text }
+      : { role: "assistant", text: askErrorText(res.status, body), error: true };
+  } catch (e) {
+    turn = { role: "assistant", text: askErrorText(0, null), error: true };
+  }
+  a.turns.push(turn);
+  a.busy = false;
+  askSave();
+  if (state.view === "ask") renderAsk();
+}
+
+/* The prop page's Ask: attach this pick and open the page. */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-ask-pick]");
+  if (!b) return;
+  e.preventDefault();
+  const a = askState();
+  a.pick = b.dataset.askPick || "";
+  a.pickLabel = b.dataset.askLabel || "";
+  askSave();
+  switchView("ask", true);
+});
+
 function boardNameFor(meta) {
   return String((meta || {}).fallback || "").replace(/^data\//, "");
 }
@@ -40257,7 +40392,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
 const MORE_GROUPS = [
   ["Picks", ["view:likely", "view:longshots", "view:zeno"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
-  ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
+  ["Research", ["view:ask", "view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",
                 "sport:memes"]],
   ["My Book", ["sport:mybets", "view:alerts", "view:streak", "view:bankroll"]],

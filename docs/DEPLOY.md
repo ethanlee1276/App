@@ -156,6 +156,16 @@ not switched on for this site yet" — nothing breaks, nothing spends.
 Answers are cached per build in data/explain_cache.json, so a pick
 costs one call per rebuild however many people tap it.
 
+## Ask Qellys rides on the same key
+
+The Ask page (engine/askbot.py, POST /api/ask) uses the same package and
+the same ANTHROPIC_API_KEY — nothing new to install. It uses
+QB_ASK_MODEL if you set one, else QB_EXPLAIN_MODEL, else claude-opus-5.
+Every question is a call (answers are not cached), so it has its own,
+tighter rate limit (server.RATE_ASK_PER_MIN) and is subscribers-only.
+Until the key is set the page says "Ask isn't switched on for this site
+yet".
+
 ## When you are home and want the chores list
 
 ```bash

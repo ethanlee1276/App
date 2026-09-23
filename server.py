@@ -198,6 +198,11 @@ RATE_READ_PER_MIN = 300
 #: The explainer costs real money per uncached call, so its own bucket
 #: is tighter than the read ceiling: a page's worth of taps a minute.
 RATE_EXPLAIN_PER_MIN = 20
+#: Ask Qellys (engine/askbot.py) is never cached — every question is a
+#: call — so it is tighter still: a conversation's pace, not a scraper's.
+RATE_ASK_PER_MIN = 8
+#: A question, a pick id and a few trimmed turns; anything larger is junk.
+MAX_ASK_BYTES = 32_000
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -1015,6 +1020,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._draft_plan(body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
+        if parsed.path in ("/api/ask", "/api/ask/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_ASK_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"question too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask(body)
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
         if not parsed.path.startswith("/api/profile/"):
@@ -3413,6 +3432,57 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             body = {"error": "explainer unavailable", "detail": str(exc)[:200]}
             return self._send(503, json.dumps(body).encode(), ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ask(self, body):
+        """Ask Qellys: one question about a board, answered from it.
+
+        GATED like the explainer, and for the same reasons: the answer
+        restates paid rows, and every call spends money — so a stranger
+        gets 401 and a lapsed account 402 before anything is read or
+        spent. The board is named the way the page names it, resolved
+        through `gate.full_board_file`, so an unknown name is a 400 and
+        never a path. See engine/askbot.py for what the model is shown.
+        """
+        if self._rate_limited(RATE_ASK_PER_MIN, "ask"):
+            return
+        from engine import askbot as AB
+        from engine import explainer as EX
+        from engine import gate as GATE_
+        board = str(body.get("board") or "")[:80]
+        question = str(body.get("question") or "").strip()
+        pick = str(body.get("pick") or "")[:240]
+        history = body.get("history") if isinstance(body.get("history"), list) else []
+        if (not question or len(question) > AB.MAX_QUESTION
+                or GATE_.full_board_file(board) is None):
+            return self._send(400, b'{"error":"a board and a question are required"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Ask needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        if not AB.configured():
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        payload = GATE_.full_board(board)
+        if payload is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        try:
+            out = AB.ask(payload, question, history, pick)
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            err = {"error": "ask unavailable", "detail": str(exc)[:200]}
+            return self._send(503, json.dumps(err).encode(), ".json")
+        keep = {k: out[k] for k in ("text", "refused", "matched", "focused")}
+        return self._send(200, json.dumps(keep).encode(), ".json")
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.
