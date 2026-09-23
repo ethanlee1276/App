@@ -118,20 +118,22 @@ def main() -> None:
             print(f"  forecast {r['forecast']:<6} mph  n {r['n']:<4} reported median "
                   f"{r['reported_median']:.0f}  same band once converted {r['same_band_converted']:.0%}")
         # The question that matters: at each forecast, is the cut the board
-        # gives the cut the games say? A ratio of winds is not it — on
-        # 2026-09-23 the median ratio said ×0.714 and this table said the
-        # forecast reads on the game book's scale where it counts.
-        ships = W.FORECAST_WIND_SCALE
-        print("\nthe cut at each forecast — measured (from the reported wind) / what the board gives")
-        for row in F.effect_by_forecast(pairs, W.WIND, ships):
+        # gives the cut the games say? Not a ratio of winds — on 2026-09-23
+        # the median ratio said ×0.714 and that was a calm-day artifact.
+        table = {**W.WIND, ("anytime_td", "pass"): W.TD_WIND["pass"]}
+        rows = F.effect_by_forecast(pairs, table, W.forecast_cut)
+        print("\nthe cut at each forecast — measured (over the reported winds) / what the board gives")
+        for row in rows:
             print(f"  forecast {row['forecast']:<6} n {row['n']:<4} " + "  ".join(
                 f"{m} {g} {t:.3f}/{b:.3f}" for (m, g), (t, b) in row["markets"].items()))
-        best, miss = F.best_scale(pairs, W.WIND)
-        now = F.miss_at(pairs, W.WIND, ships)
-        print(f"best single scale ×{best:.2f} (mean squared miss {miss:.6f}); the board's "
-              f"×{ships:.2f} misses {now:.6f} — "
-              + ("nothing to change" if now - miss <= F.SCALE_TOLERANCE else
-                 f"CHANGE engine/weather.FORECAST_WIND_SCALE to {best:.2f}"))
+        off = max((abs(t - b) for row in rows for t, b in row["markets"].values()), default=0.0)
+        if off <= F.FORECAST_TOLERANCE:
+            print(f"the board's forecast table matches (largest gap {off:.3f}) — nothing to change")
+        else:
+            print(f"CHANGE — a range is off by {off:.3f}; engine/weather.WIND_FORECAST measured now:")
+            for key in table:
+                print(f"    {key}: " + "{" + ", ".join(
+                    f'"{row["forecast"]}": {row["markets"][key][0]:.3f}' for row in rows) + "},")
         return
     a, _, b = args.seasons.partition("-")
     seasons = range(int(a), int(b or a) + 1)

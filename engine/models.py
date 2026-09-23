@@ -123,11 +123,10 @@ class Weather:
     rain: bool = False
     snow: bool = False
     measured: bool = False
-    #: A FORECAST, not a reading. Open-Meteo's kickoff-hour wind reads
-    #: ×0.714 of the wind the game book reports (engine/weather.py
-    #: FORECAST_WIND_SCALE), and the weather effects were measured on the
-    #: game book's — so the model converts a forecast before banding it,
-    #: and the card keeps showing the forecast's own number.
+    #: A FORECAST, not a reading. The wind effects were measured on the wind
+    #: the game book reports; a forecast takes the measured cut of its own
+    #: range instead (engine/weather.WIND_FORECAST), and the card shows the
+    #: forecast's own number.
     forecast: bool = False
 
 

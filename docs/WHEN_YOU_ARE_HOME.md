@@ -21,20 +21,21 @@ Tonight's answers (Ethan's droplet, 2026-09-23 night): the trade-tape
 indexes took the wallet history from 233 s to 8.5 s; college 2026 closes
 0 → 44; wiring clean on all four leagues; all 14 outdoor NFL games
 forecast (Rio found at the Maracanã); baseball's short starts and short
-games measured KEEP, every one (`engine/exitfit.py`); the WNBA confirmed
-the hoops rule on our own data. The wind scale took two runs: the median
-ratio said ×0.714, the by-range table said the forecast is on the game
-book's scale where it matters, and converting made the bands agree less
-(49% vs 57%) — so the board reads the forecast as it is. The check now
-measures the cut itself:
+games measured KEEP (`engine/exitfit.py`); the WNBA confirmed the hoops
+rule on our own data. The wind took three runs of `wxfit.py --scale`: the
+median ratio (×0.714) was a calm-day artifact, one best scale (×1.18)
+traded misses, and the per-range table of measured cuts is now the table
+the board applies to a forecast (`engine/weather.WIND_FORECAST`).
+
+Let the auto-update pull it (it restarts the site; a hand `git pull`
+does not), then:
 
 ```bash
 cd /srv/qellys && cat data/autoupdate.json; echo; python3 wxfit.py --scale | tail -8
 ```
 
-Want: the newest commit, then the table of "measured / board" cuts per
-forecast range and a last line ending "nothing to change". If it says
-CHANGE with a number, paste it.
+Want: the newest commit, then "the board's forecast table matches …
+nothing to change". A CHANGE line prints the new rows — paste them.
 
 ## NEXT TIME HOME — 2026-09-23 night — ANSWERED (above)
 

@@ -164,13 +164,10 @@ def apply_rules(
     # yardage markets that live on the deep ball do not.
     w = getattr(game, "weather", None)
     deep = prop.market in ("pass_yds", "rec_yds")
-    # On the game book's scale the rule was written in (engine/weather.
-    # book_wind — a forecast reads on it as it stands, FORECAST_WIND_SCALE).
-    from .weather import book_wind
-    blown = (w is not None and not w.dome and book_wind(w) >= 25 and deep)
+    blown = (w is not None and not w.dome and (w.wind_mph or 0) >= 25 and deep)
     if blown:
         recommend = False
-        warnings.append(f"Wind {book_wind(w):.0f} mph — deep-passing markets "
+        warnings.append(f"Wind {w.wind_mph:.0f} mph — deep-passing markets "
                         f"are avoided entirely at 25+ (model rule, no exceptions)")
     # Reported only where the rule can bite. A wind check on a rushing prop
     # would read as a condition that was weighed, and it was not.
@@ -178,7 +175,7 @@ def apply_rules(
         checks.append(condition(
             "wind", "Wind under the deep-ball block", not blown,
             "indoors" if (w is not None and w.dome)
-            else f"{book_wind(w):.0f} mph" if w is not None else "unknown",
+            else f"{(w.wind_mph or 0):.0f} mph" if w is not None else "unknown",
             "under 25 mph"))
 
     return RuleDecision(recommend=recommend, warnings=warnings, checks=checks)

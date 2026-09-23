@@ -29,7 +29,7 @@ games say, and what changed:
 Receivers and tight ends are one group; a back's receiving is his own. The
 wind multipliers were measured on the reported wind at kickoff, and the
 board reads Open-Meteo's forecast for the kickoff hour (engine/nflwx.py),
-which reads on the same scale where it matters (FORECAST_WIND_SCALE).
+and a forecast takes the measured cut of its own range (WIND_FORECAST).
 College reads the same table: its games are too few to measure alone.
 """
 
@@ -38,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .models import Weather, PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS
-from .wxfit import band as wind_band, FREEZE_F
+from .wxfit import band as wind_band, forecast_range, FREEZE_F
 
 
 @dataclass
@@ -80,23 +80,29 @@ TD_FREEZE: dict = {}
 TD_RAIN = {"pass": 0.811}
 TD_SNOW: dict = {}
 
-#: THE FORECAST'S OWN NUMBER, measured twice the same night. The effects
-#: above were measured on the wind the game book reports at kickoff; the
-#: board reads Open-Meteo's forecast for the kickoff hour. Over 492 outdoor
-#: games 2023-2025 (`python3 wxfit.py --scale`, Ethan's droplet, 2026-09-23)
-#: the median forecast/reported RATIO was 0.714, and for an hour the board
-#: divided by it. The by-range table the same command then printed said
-#: that was a calm-day artifact — a game book writes "Wind: 6 mph" when
-#: the forecast said 2 — and wrong where it matters:
-#:
-#:     forecast   0-4   4-7   7-10   10-13   13+
-#:     reported     6     7      9      10    14     (median)
-#:
-#: and a converted forecast landed in the reported wind's band 49% of the
-#: time against 57% as it stands. So a forecast is banded as it reads;
-#: the conversion stays a named number so the check can say if it ever
-#: should not be 1.0 (wxfit.py --scale prints the scale that fits best).
-FORECAST_WIND_SCALE = 1.0
+#: A FORECAST IS NOT A READING, and its cut is the average of what the
+#: games it turned into did. The tables above were measured on the wind the
+#: game book reports at kickoff; the board reads Open-Meteo's forecast for
+#: the kickoff hour, and the two differ game to game (the same band 57% of
+#: the time). Measured on Ethan's droplet, 2026-09-23 (`python3 wxfit.py
+#: --scale`, 492 outdoor games 2023-2025, each game's archived forecast
+#: beside its reported wind): for every forecast range, the mean of the
+#: measured multiplier over the reported winds those forecasts became.
+#: That is the cut a forecast is worth — a calm forecast still meant a
+#: breezy game book one time in five, and a 13+ forecast meant 18+ less
+#: often than the band table assumes. (The same night's first try divided
+#: every forecast by the median wind ratio, ×0.714, a calm-day artifact
+#: that cut a 10 mph forecast as a 14 mph wind; a single scale was the
+#: wrong shape of answer.) The touchdown row is read off the same games:
+#: the share of each range at 12+ mph (the catches and passing-TD rows,
+#: flat above 12, both give it) times the measured −13.5%.
+WIND_FORECAST = {
+    ("pass_td", "QB"): {"0-4": 0.988, "4-7": 0.980, "7-10": 0.951, "10-13": 0.942, "13+": 0.900},
+    ("pass_yds", "QB"): {"0-4": 0.994, "4-7": 0.991, "7-10": 0.977, "10-13": 0.973, "13+": 0.953},
+    ("rec_yds", "WRTE"): {"0-4": 0.985, "4-7": 0.978, "7-10": 0.962, "10-13": 0.949, "13+": 0.933},
+    ("receptions", "WRTE"): {"0-4": 0.996, "4-7": 0.994, "7-10": 0.985, "10-13": 0.983, "13+": 0.970},
+}
+TD_WIND_FORECAST = {"pass": {"0-4": 0.989, "4-7": 0.983, "7-10": 0.958, "10-13": 0.951, "13+": 0.914}}
 
 #: Below this forecast chance it is a dry day — the measured base, dry
 #: at kickoff, holds the games that were given a small chance and stayed dry.
@@ -134,18 +140,17 @@ def _pct(m: float) -> str:
     return f"{(m - 1.0) * 100:+.0f}%".replace("-", "−")
 
 
-def book_wind(w: Weather) -> float:
-    """The wind on the scale the bands were measured on."""
-    wind = float(w.wind_mph or 0.0)
-    return wind / FORECAST_WIND_SCALE if getattr(w, "forecast", False) else wind
+def forecast_cut(key: tuple, mph: float) -> float:
+    """A forecast's measured cut for ``key`` — a (market, group) of
+    WIND_FORECAST, or ("anytime_td", "pass") — at ``mph``."""
+    r = forecast_range(mph)
+    if key == ("anytime_td", "pass"):
+        return TD_WIND_FORECAST["pass"].get(r, 1.0)
+    return WIND_FORECAST.get(key, {}).get(r, 1.0)
 
 
-def _wind_words(w: Weather) -> str:
-    raw, book = float(w.wind_mph or 0.0), book_wind(w)
-    if getattr(w, "forecast", False):
-        return (f"Wind {raw:.0f} mph forecast" + ("" if FORECAST_WIND_SCALE == 1.0 else
-                f" (≈{book:.0f} on the game-book scale the effect was measured on)"))
-    return f"Wind {raw:.0f} mph"
+def _pct1(m: float) -> str:
+    return f"{(m - 1.0) * 100:+.1f}%".replace("-", "−")
 
 
 def precip(w: Weather) -> tuple[str | None, float]:
@@ -188,25 +193,38 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
         return WeatherEffect(mult, reasons)
 
     markets = _markets_for(position)
-    wind = book_wind(w)
-    b = wind_band(wind)
-    if b != "calm":
+    wind = float(w.wind_mph or 0.0)
+    if getattr(w, "forecast", False):
+        r = forecast_range(wind)
         hit = []
         for m in markets:
-            f = WIND.get((m, _group(m, position)), {}).get(b)
-            if f:
+            f = WIND_FORECAST.get((m, _group(m, position)), {}).get(r)
+            if f and f < 1.0:
                 mult[m] *= f
-                hit.append(f"{_LABEL[m]} {_pct(f)}")
-        who = _WHO.get(_GROUP.get(str(position or "").upper(), ""), "")
+                hit.append(f"{_LABEL[m]} {_pct1(f)}")
         if hit:
-            reasons.append(f"{_wind_words(w)} — measured in {_band_txt(b)} mph games "
-                           f"(2016-2025): {', '.join(hit)}")
-        else:
-            reasons.append(f"{_wind_words(w)} — no clear effect measured on "
-                           f"{who or 'these'} markets at {_band_txt(b)} mph; left alone")
+            reasons.append(f"Wind {wind:.0f} mph forecast — games forecast at "
+                           f"{_band_txt(r)} mph averaged {', '.join(hit)} (measured: the "
+                           f"2016-2025 effects over the winds those forecasts turned into)")
+    else:
+        b = wind_band(wind)
+        if b != "calm":
+            hit = []
+            for m in markets:
+                f = WIND.get((m, _group(m, position)), {}).get(b)
+                if f:
+                    mult[m] *= f
+                    hit.append(f"{_LABEL[m]} {_pct(f)}")
+            who = _WHO.get(_GROUP.get(str(position or "").upper(), ""), "")
+            if hit:
+                reasons.append(f"Wind {wind:.0f} mph — measured in {_band_txt(b)} mph games "
+                               f"(2016-2025): {', '.join(hit)}")
+            else:
+                reasons.append(f"Wind {wind:.0f} mph — no clear effect measured on "
+                               f"{who or 'these'} markets at {_band_txt(b)} mph; left alone")
     avoid_deep = wind >= 25
     if avoid_deep:
-        reasons.append(f"{_wind_words(w)} — deep-passing markets are "
+        reasons.append(f"Wind {wind:.0f} mph — deep-passing markets are "
                        f"avoided entirely at 25+ (hard rule, not a haircut)")
 
     kind, p = precip(w)
@@ -251,13 +269,22 @@ def td_multiplier(w: Weather | None, position: str) -> tuple[float, list[str]]:
     kind = "pass" if str(position or "").upper() in ("WR", "TE") else "rush"
     what = "receiving touchdowns" if kind == "pass" else "rushing touchdowns"
     mult, reasons = 1.0, []
-    b = wind_band(book_wind(w))
-    if b != "calm":
-        f = TD_WIND.get(kind, {}).get(b)
-        if f:
+    wind = float(w.wind_mph or 0.0)
+    if getattr(w, "forecast", False):
+        r = forecast_range(wind)
+        f = TD_WIND_FORECAST.get(kind, {}).get(r)
+        if f and f < 1.0:
             mult *= f
-            reasons.append(f"{_wind_words(w)} — {what} {_pct(f)} beyond what the "
-                           f"total already prices (measured, {_band_txt(b)} mph)")
+            reasons.append(f"Wind {wind:.0f} mph forecast — {what} {_pct1(f)} beyond what the "
+                           f"total already prices (measured, games forecast at {_band_txt(r)} mph)")
+    else:
+        b = wind_band(wind)
+        if b != "calm":
+            f = TD_WIND.get(kind, {}).get(b)
+            if f:
+                mult *= f
+                reasons.append(f"Wind {wind:.0f} mph — {what} {_pct(f)} beyond what the "
+                               f"total already prices (measured, {_band_txt(b)} mph)")
     p_kind, p = precip(w)
     if p_kind:
         f = (TD_RAIN if p_kind == "rain" else TD_SNOW).get(kind)

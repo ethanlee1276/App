@@ -134,30 +134,34 @@ def test_the_card_says_which_way_the_weather_cuts():
 
 
 # ---- the forecast is read on the scale the effect was measured on ----------
-def test_a_forecast_is_banded_as_it_reads_and_a_scale_would_convert_it():
-    """Ethan's droplet, 2026-09-23, `python3 wxfit.py --scale`, twice. The
-    median forecast/reported ratio over 492 games was 0.714 and for an hour
-    the board divided by it; the by-range table then showed the forecast
-    reads on the game book's scale where it matters (forecast 10-13 →
-    reported 10, 13+ → 14) and the converted bands agreed 49% of the time
-    against 57% as read. So the scale is 1.0 — and still a working dial."""
-    assert W.FORECAST_WIND_SCALE == 1.0
-    fc = W.evaluate_weather(Weather(wind_mph=10.0, temp_f=58.0, measured=True, forecast=True), "WR")
-    assert fc.multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["8-12"]
-    assert fc.reasons[0].startswith("Wind 10 mph forecast — measured in 8–12 mph games"), fc.reasons
-    saved = W.FORECAST_WIND_SCALE
-    W.FORECAST_WIND_SCALE = 0.714
-    try:
-        conv = W.evaluate_weather(Weather(wind_mph=10.0, measured=True, forecast=True), "WR")
-        assert conv.multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["12-18"]
-        assert "(≈14 on the game-book scale" in conv.reasons[0]
-        assert W.evaluate_weather(_wind(10.0), "WR").multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["8-12"], \
-            "a reported wind is never converted"
-    finally:
-        W.FORECAST_WIND_SCALE = saved
+def test_a_forecast_takes_its_ranges_measured_cut_and_a_reading_its_band():
+    """Ethan's droplet, 2026-09-23, `python3 wxfit.py --scale`, three runs.
+    The median forecast/reported ratio (0.714) was a calm-day artifact; a
+    single best scale (×1.18) traded one miss for another. What each
+    forecast range has been worth — the measured effects averaged over the
+    winds those forecasts became — is the table itself."""
+    wr = {mph: W.evaluate_weather(Weather(wind_mph=mph, measured=True, forecast=True), "WR")
+          for mph in (3.0, 9.0, 11.0, 15.0)}
+    assert [wr[m].multipliers[REC_YDS] for m in (3.0, 9.0, 11.0, 15.0)] == [0.985, 0.962, 0.949, 0.933]
+    assert wr[9.0].multipliers[RECEPTIONS] == 0.985
+    assert wr[9.0].reasons[0].startswith(
+        "Wind 9 mph forecast — games forecast at 7–10 mph averaged receiving yards −3.8%, catches −1.5%")
+    qb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "QB")
+    assert qb.multipliers[PASS_YDS] == 0.953 and qb.multipliers["pass_td"] == 0.900
+    rb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "RB")
+    assert all(v == 1.0 for v in rb.multipliers.values()) and rb.reasons == []
+    assert W.evaluate_weather(_wind(9.0), "WR").multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["8-12"], \
+        "a played game's reported wind keeps the band it was measured in"
+    from engine.touchdowns import weather_td_multiplier
+    g = Game(home="CHI", away="GB", weather=Weather(wind_mph=9.0, measured=True, forecast=True))
+    assert weather_td_multiplier(g, "WR")[0] == W.TD_WIND_FORECAST["pass"]["7-10"]
+    assert weather_td_multiplier(g, "QB")[0] == 1.0
+    for key, rows in W.WIND_FORECAST.items():
+        vals = [rows[r] for r in ("0-4", "4-7", "7-10", "10-13", "13+")]
+        assert vals == sorted(vals, reverse=True) and all(v < 1.0 for v in vals), key
 
 
-def test_the_deep_ball_block_reads_the_same_scale():
+def test_the_deep_ball_block_reads_the_forecast_as_it_is():
     from engine.betting import evaluate_prop
     from engine.projection import build_projection
     from engine.rules import apply_rules
@@ -172,26 +176,31 @@ def test_the_deep_ball_block_reads_the_same_scale():
     assert any(x.startswith("Wind 26 mph — deep-passing") for x in warns(
         Weather(wind_mph=26.0, measured=True, forecast=True)))
     assert not any("deep-passing" in x for x in warns(Weather(wind_mph=19.0, measured=True, forecast=True)))
-    saved = W.FORECAST_WIND_SCALE
-    W.FORECAST_WIND_SCALE = 0.714
-    try:
-        assert any(x.startswith("Wind 27 mph — deep-passing") for x in warns(
-            Weather(wind_mph=19.0, measured=True, forecast=True))), "the block reads the board's scale"
-    finally:
-        W.FORECAST_WIND_SCALE = saved
 
 
-def test_the_scale_check_asks_whether_the_cut_is_right_not_whether_the_winds_match():
-    # Reported wind = the forecast plus a calm-day floor: the median RATIO
-    # reads low, and the cut the board gives is still the right one.
+def test_the_scale_check_compares_the_cut_not_the_winds():
+    # Reported wind = the forecast with a calm-day floor: the ratio of winds
+    # reads low, and the check still compares cuts.
     pairs = [(max(6.0, f), f) for f in (1, 2, 3, 2, 4, 1, 3, 2, 9, 10, 11, 14, 15, 19, 20)]
     assert F.scale(pairs)["median_ratio"] < 0.9
-    best, miss = F.best_scale(pairs, W.WIND)
-    assert F.miss_at(pairs, W.WIND, 1.0) - miss <= F.SCALE_TOLERANCE, (best, miss)
-    rows = F.effect_by_forecast(pairs, W.WIND, 1.0)
-    assert all(t == b for r in rows for (t, b) in r["markets"].values()), rows
+    rows = F.effect_by_forecast(pairs, W.WIND)
+    assert [r["forecast"] for r in rows] == ["0-4", "4-7", "7-10", "10-13", "13+"]
+    assert all(t == b for r in rows for (t, b) in r["markets"].values()), "reading == forecast here"
+    shipped = F.effect_by_forecast(pairs, {("rec_yds", "WRTE"): W.WIND[("rec_yds", "WRTE")]}, W.forecast_cut)
+    assert shipped[2]["markets"][("rec_yds", "WRTE")] == (0.955, 0.962)
+    assert F.forecast_range(3.9) == "0-4" and F.forecast_range(13.0) == "13+" and F.FORECAST_TOLERANCE == 0.01
     src = open(os.path.join(ROOT, "wxfit.py"), encoding="utf-8").read()
-    assert "F.best_scale(pairs, W.WIND)" in src and "F.effect_by_forecast(pairs, W.WIND, ships)" in src
+    assert "F.effect_by_forecast(pairs, table, W.forecast_cut)" in src and "CHANGE — a range is off by" in src
+
+
+def test_an_ordinary_outdoor_day_does_not_light_the_weather_mark():
+    from engine.pipeline import _conditions, MATERIAL_WEATHER
+    priced = [{"market": "rec_yds", "team": "CHI", "opponent": "GB"}]
+    calm = Game(home="CHI", away="GB", weather=Weather(wind_mph=5.0, measured=True, forecast=True))
+    windy = Game(home="CHI", away="GB", weather=Weather(wind_mph=11.0, measured=True, forecast=True))
+    assert MATERIAL_WEATHER == 0.03
+    assert _conditions(calm, priced)["material"] is False
+    assert _conditions(windy, priced)["material"] is True
 
 
 def test_forecasts_are_flagged_where_they_are_stamped_and_neutral_sites_find_their_venue():
@@ -232,7 +241,7 @@ def test_touchdowns_cut_the_pass_catchers_and_not_a_quarterbacks_own_score():
     assert weather_td_multiplier(g, "QB")[0] == 1.0 and weather_td_multiplier(g, "RB")[0] == 1.0
     from engine.cfb import tds as T
     rain = T.weather_multiplier({"dome": False, "wind_mph": 4, "temp_f": 60, "precip_chance": 0.9}, "WR")
-    assert abs(rain[0] - (1 - 0.9 * (1 - W.TD_RAIN["pass"]))) < 1e-9
+    assert abs(rain[0] - W.TD_WIND_FORECAST["pass"]["4-7"] * (1 - 0.9 * (1 - W.TD_RAIN["pass"]))) < 1e-9
     assert T.weather_multiplier({}, "WR")[0] == 1.0, "an unanswered college game moves nothing"
 
 

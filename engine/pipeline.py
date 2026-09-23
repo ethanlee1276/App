@@ -1362,6 +1362,10 @@ def _market_scan(results: list[dict], long_shots: list[dict] | None = None,
 market_scan = _market_scan
 
 
+#: The weather mark lights when a priced market moves at least this much.
+MATERIAL_WEATHER = 0.03
+
+
 def _conditions(g, results: list[dict] | None) -> dict:
     """Did this venue's conditions actually MOVE a number tonight?
 
@@ -1386,7 +1390,11 @@ def _conditions(g, results: list[dict] | None) -> dict:
     from .weather import evaluate_weather
 
     eff = evaluate_weather(g.weather)
-    moved = {m for m, mult in eff.multipliers.items() if abs(mult - 1.0) > 1e-9}
+    # A cut under 3% is the ordinary outdoor day since a forecast takes its
+    # range's measured cut (a 0-7 mph forecast is worth −0.4% to −2.2% —
+    # engine/weather.WIND_FORECAST); lit for it, the mark would light on
+    # every open-air game and say nothing.
+    moved = {m for m, mult in eff.multipliers.items() if abs(mult - 1.0) >= MATERIAL_WEATHER}
     # Markets actually on the board for this game. A condition that only
     # touches markets nobody priced tonight did not move a number tonight.
     priced = {r.get("market") for r in (results or [])
@@ -1440,8 +1448,8 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             # both read it; see engine/models.Weather.
             "measured": bool(getattr(w, "measured", False)),
             "precip_chance": float(getattr(w, "precip_chance", 0.0) or 0.0),
-            # A forecast reads ×0.714 of the game book's wind
-            # (engine/weather.FORECAST_WIND_SCALE); the checks read this.
+            # A forecast takes its range's measured cut, not the band's
+            # (engine/weather.WIND_FORECAST); the checks read this.
             "forecast": bool(getattr(w, "forecast", False)),
         },
         # §5.1's encoding contract, computed rather than assumed.
