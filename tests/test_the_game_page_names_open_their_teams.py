@@ -86,6 +86,20 @@ def test_the_header_carries_the_cards_lines():
     assert "${gpLines ? \"\" : g.favorite ?" in chips
     assert ".gp-meta .gc-mkts {" in CSS
 
+
+def test_the_header_is_dressed_as_the_pick_of_the_day():
+    """Ethan, 2026-09-24, beside the Pick of the Day card: "overlay the
+    venue on this part like how we do for the pick of the day". The art
+    fills the top band and fades into the panel under a gold eyebrow and
+    the matchup in the headline serif."""
+    page = _fn("renderGamePage")
+    assert '<div class="gp-hero is-hero">' in page and 'class="gp-eyebrow"' in page
+    hero = CSS[CSS.index(".gp-hero.is-hero { display: block;"):]
+    assert "background: var(--grad-gp-fade)" in hero and "z-index: 1" in hero
+    assert "font-family: var(--font-headline)" in hero, "the matchup in the POTD's serif"
+    assert ".gp-hero.is-hero .gp-sub { font-family: var(--font-mono)" in hero
+    assert "--grad-gp-fade: linear-gradient(" in CSS
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

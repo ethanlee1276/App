@@ -11014,13 +11014,22 @@ function renderGamePage() {
         ${favBtn(g.away)}${favBtn(g.home)}
       </span>
     </div>
-    <div class="gp-hero">
+    ${/* THE PICK OF THE DAY'S LOOK (Ethan, 2026-09-24, beside the POTD
+          card: "overlay the venue on this part like how we do for the pick
+          of the day"). The venue fills the top of the card and fades into
+          it; a gold eyebrow, the matchup in the headline serif, the when
+          in mono — the potd-hero's dress on the game page's own pieces. */""}
+    <div class="gp-hero is-hero">
       <div class="gp-art">${art}${gpPhoto}
         ${mlb && isLive ? runnerOverlay(g) : ""}
         ${isLive ? `<div class="status-badge live"><span class="live-dot"></span>LIVE
           <span class="per">${escapeHtml(live.period || "")}</span></div>` : ""}
         ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
       <div class="gp-meta">
+        <div class="gp-eyebrow">${icon("stadium", 14)} ${escapeHtml([
+          (LEAGUE_LABEL[state.sport] || state.sport || "").toUpperCase(),
+          g.week ? `Week ${g.week}` : "", isLive ? "Live" : isFinal ? "Final" : "",
+          (g.stadium || {}).name || g.park_name || ""].filter(Boolean).join(" · "))}</div>
         <div class="gp-teams">
           <span>${gpTeamDoor(g.away, g.home)} ${score("away")}</span>
           <span class="gp-at">@</span>
