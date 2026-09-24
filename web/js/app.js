@@ -10940,6 +10940,25 @@ function scriptWhyItem(r) {
     ? ` It pulls against ${against.slice(0, 3).join(", ")} in the same game — keep them off one parlay.` : ""}`];
 }
 
+/* EVERY SPORT GETS THE VENUE BEHIND ITS MATCHUP (Ethan, 2026-09-24:
+   "make sure you change that so every sport now has [the] new render").
+   The game page does it for the leagues with a game page; a UFC fight is
+   a card on the UFC page, so each card wears one of the six octagon
+   renders (variants/octagon-1..6), picked by the fight's own name so a
+   bout keeps its picture from one refresh to the next, under the Pick of
+   the Day's fade. */
+function fightArtStyle(m) {
+  const key = String((m && (m.fight || m.pick)) || "");
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  const n = (h % 6) + 1;
+  return `--fight-art:url(${absoluteSrc(venueSrc(`img/venues/variants/octagon-${n}.jpg`))})`;
+}
+function fightEyebrowHTML(m) {
+  const bits = ["UFC", String((m && m.division) || "").replace(/_/g, " ")].filter(Boolean);
+  return `<div class="gp-eyebrow">${icon("stadium", 14)} ${escapeHtml(bits.join(" · "))}</div>`;
+}
+
 /* The game page's sections as a chip row that scrolls to each one —
    the segmented-markets convention every book's event page uses
    (Popular / Game lines / Player props), done as jumps rather than
@@ -11262,8 +11281,7 @@ function renderGamePage() {
           <span class="gp-at">@</span>
           <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
-        <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
-          .filter(Boolean).join(" · "))}</div>
+        <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}</div>
         ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
               circling the spread · ML · total grid on the Home card: "we
               should be showing the info I have circled"). The same
@@ -33588,10 +33606,11 @@ async function renderUFC() {
     const title = p.selection || `${p.pick} ML`;
     const board = (p.market_board || []).filter((c) => c.priced || c.fair_odds);
     return `
-    <article class="card" style="--grade-color:var(--good)">
+    <article class="card fight-hero" style="--grade-color:var(--good);${fightArtStyle(p)}">
+      ${fightEyebrowHTML(p)}
       <div class="card-head">
         <div><div class="player">${escapeHtml(title)}</div>
-          <div class="subtitle">${escapeHtml(p.fight)}${p.division ? ` · ${escapeHtml(p.division)}` : ""} ·
+          <div class="subtitle">${escapeHtml(p.fight)}${p.division ? ` · ${escapeHtml(String(p.division).replace(/_/g, " "))}` : ""} ·
             ${escapeHtml(p.book)} ${american(shown)}</div></div>
         <span class="pm-status" style="color:var(--good)">${escapeHtml(p.grade_label || "")} ${p.grade_score != null ? p.grade_score : ""}</span>
       </div>
@@ -33653,7 +33672,8 @@ async function renderUFC() {
   const passCard = (m) => {
     const [color, label] = REASON_STYLE[m.reason_code] || ["var(--text-mute)", "Pass"];
     const fs = m.fighters || [];
-    return `<article class="card" style="--grade-color:${color};padding:14px 16px">
+    return `<article class="card fight-hero" style="--grade-color:${color};${fightArtStyle(m)}">
+      ${fightEyebrowHTML(m)}
       <div class="card-head" style="align-items:flex-start">
         <div><div class="player" style="font-size:var(--fs-lg)">${escapeHtml(m.fight)}</div>
           <div class="subtitle">${escapeHtml((m.division || "").replace(/_/g, " ") || "division n/a")}
