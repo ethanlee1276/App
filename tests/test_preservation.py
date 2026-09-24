@@ -107,6 +107,36 @@ def test_the_responsible_gambling_line_is_not_hidden():
         assert bad not in block, f"the 1-800-GAMBLER block carries {bad}"
 
 
+#: Every page that shows a pick, a price, a bet, a result or a sign-up.
+#: The full notice is never quiet on any of them.
+BETTING_VIEWS = ("recommended", "tonight", "likely", "edge", "props", "prop", "game",
+                 "live", "pbp", "record", "mybets", "zeno", "bankroll", "streak",
+                 "longshots", "futures", "scanner", "ufc", "alerts", "lab", "intel",
+                 "players", "trending", "paywall", "checkout", "signup", "ask")
+
+
+def test_the_full_notice_stays_on_every_page_with_a_pick_or_a_bet():
+    """Ethan, 2026-09-24, under the notice on a team's depth chart: "any
+    pages that isn't showing picks and bets, I feel like we don't need too
+    show this at the bottom … just include the links for the terms of
+    service and privacy policy". The owner's call, and it narrows the rule
+    above to where it protects someone: a reference page (a team, the
+    standings, the injury report) keeps the Terms and Privacy links only,
+    and every page with a pick, a price or a bet keeps all of it. The
+    quiet list is an allow-list, so a new betting page cannot lose the
+    notice by being forgotten."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = js.index("const QUIET_FOOTER_VIEWS = new Set([")
+    quiet = set(re.findall(r'"([a-z]+)"', js[i:js.index("]);", i)]))
+    assert quiet and not (quiet & set(BETTING_VIEWS)), quiet & set(BETTING_VIEWS)
+    assert 'document.body.classList.toggle("footer-quiet", QUIET_FOOTER_VIEWS.has(name));' in js
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    assert "body.footer-quiet .footer-full { display: none; }" in css
+    assert ".footer-links" not in css.split("body.footer-quiet .footer-full")[1].split("}")[0]
+    # The links are outside the part that goes quiet.
+    assert HTML.index('<div class="footer-full">') < HTML.index("1-800-GAMBLER") \
+        < HTML.index('<p class="footer-links">') < HTML.index('href="privacy.html"')
+
 def test_every_routable_view_is_actually_drawn_by_the_router():
     """A view in VIEW_ORDER that nothing renders is a blank page.
 

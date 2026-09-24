@@ -11586,3 +11586,14 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .tm-key-i { white-space: nowrap; }
 .tm-key .tm-inj { margin-left: 0; margin-right: 2px; }
 .tm-key-note { flex-basis: 100%; font-size: var(--fs-xs); color: var(--text-mute); }
+
+/* Reference pages keep only the footer's links (QUIET_FOOTER_VIEWS). */
+.footer-links { margin-top: 6px; }
+body.footer-quiet .footer-full { display: none; }
+body.footer-quiet .footer-links { margin-top: 0; }
+body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
+
+/* The depth chart scrolls sideways on a phone; its position column stays put. */
+.tm-depth .rank-table th:first-child, .tm-depth .rank-table td.tm-pos {
+  position: sticky; left: 0; z-index: 1; background: var(--panel-2);
+}

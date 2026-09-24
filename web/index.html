@@ -1367,6 +1367,15 @@
   </div><!-- /.shell -->
 
   <footer class="footer">
+    <!-- THE FULL NOTICE IS FOR PAGES THAT SHOW PICKS OR BETS (Ethan,
+         2026-09-24: "any pages that isn't showing picks and bets, I feel
+         like we don't need too show this at the bottom … just include the
+         links for the terms of service and privacy policy"). A reference
+         page — a team, the standings, the injury report — carries
+         body.footer-quiet and keeps only the links; every page with a
+         pick, a price, a bet or a sign-up keeps all of it
+         (QUIET_FOOTER_VIEWS in app.js; tests/test_preservation.py). -->
+    <div class="footer-full">
     <p>
       <b>This site publishes a model’s estimates. It is not betting advice.</b>
       Every number here is a probability, not a promise. Every pick is recorded
@@ -1391,7 +1400,8 @@
       endorsed by or sponsored by any league, team, sportsbook, prediction
       market or exchange.
     </p>
-    <p style="margin-top:6px">
+    </div>
+    <p class="footer-links">
       <a href="terms.html">Terms of Service</a> ·
       <a href="privacy.html">Privacy Policy</a>
     </p>

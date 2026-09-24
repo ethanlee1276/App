@@ -34961,6 +34961,14 @@ function switchView(name, push = false) {
   go();
 }
 
+/* The pages that show no pick, price or bet — reference pages — and so
+   carry only the footer's Terms and Privacy links (Ethan, 2026-09-24). An
+   allow-list on purpose: a page left off it keeps the full notice, so a
+   new betting page can never lose it by being forgotten here. */
+const QUIET_FOOTER_VIEWS = new Set(["team", "standings", "rosters", "injuries", "weather",
+  "fantasy", "account", "messages", "memes", "discord", "status", "features", "about",
+  "methodology", "why"]);
+
 function _switchViewNow(name, push, dir) {
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
@@ -34988,6 +34996,7 @@ function _switchViewNow(name, push, dir) {
   document.body.classList.toggle("msg-thread-open",
     name === "messages" && !!_msgThread);
   document.body.classList.toggle("ask-open", name === "ask");    // the chat room: no footer
+  document.body.classList.toggle("footer-quiet", QUIET_FOOTER_VIEWS.has(name));
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
