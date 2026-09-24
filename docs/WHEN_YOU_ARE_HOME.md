@@ -15,7 +15,93 @@ as they are done.
 
 ---
 
-## AFTER THE WIND FIX — one read-only check (a minute)
+## NEXT TIME HOME — from 2026-09-24, in this order
+
+Ethan, 2026-09-24: *"save all the code u need me too run for when im
+home."* **Nothing below writes anything** — every block only reads, so
+any of them is safe mid-cycle. Paste each output back with its number.
+
+**1. Which code is running** (want `50c5b5bc` or newer):
+
+```bash
+cd /srv/qellys && cat data/autoupdate.json; echo
+```
+
+If it shows an older commit, wait five minutes and run it again — the
+auto-update pulls AND restarts the site. (A hand `git pull` does not
+restart it, so the web process keeps running the old code.)
+
+**2. The wind table** (about a minute; fetches ~75 small files from
+Open-Meteo). After three runs on 2026-09-23 a forecast takes the measured
+cut of its own range (`engine/weather.WIND_FORECAST`); this confirms the
+board gives what the games say:
+
+```bash
+cd /srv/qellys && python3 wxfit.py --scale | tail -8
+```
+
+Want: the last line ending "nothing to change". A CHANGE line prints the
+new rows — paste them.
+
+**3. The MLB Live tab holds the night** (seconds). The live scoreboard
+now reads the same baseball day as the board, rolling at 5 AM Eastern:
+
+```bash
+cd /srv/qellys && python3 -c "import json; d=json.load(open('web/data/live_mlb.json')); print(d['date'], len(d['games']), 'games,', sum(g['live']['state']=='live' for g in d['games']), 'live')"
+```
+
+Want: between midnight and 5 AM Eastern, the PREVIOUS day's date, with a
+late game still showing as live. After 5 AM, today's date. And on the
+phone, a bet whose game has ended sits under "N finished — waiting on the
+official result", not in the live list.
+
+**4. Weather reached the football games** (seconds):
+
+```bash
+cd /srv/qellys && python3 homecheck.py weather
+```
+
+Want: every outdoor NFL game "forecast" (a London or Rio game included),
+and "rows the weather moved" wherever a game is at 7+ mph or rain is 30%+
+likely.
+
+**5. Every number still traces to its model** (seconds):
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs | grep -E "wiring|LOOK"
+```
+
+Want: every league "every step and card reaches the number", and nothing
+under LOOK AT THESE.
+
+**6. On the phone, no command:** tap any Most Likely pick. The page
+should open on that pick (its side, line, book and chance) with the green
+"Why it’s likely" card straight under it. Tap an Edge bet — its page is
+unchanged.
+
+**7. SATURDAY ONLY — are college receptions priced?**
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
+```
+
+Want: `receptions … priced` above 0%.
+
+**8. Whenever there is a quiet minute** (parked since 2026-09-21):
+
+```bash
+cd /srv/qellys && python3 homecheck.py bench; python3 homecheck.py sizing; python3 homecheck.py shelves
+```
+
+**Decisions only you can make** (from `docs/AUDIT_2026-09-23.md`, no
+command): 3 — keep the "Zeno" name and say who he is where it first
+appears? · 6 — where the Predict / Fantasy / Memes tiles sit · 13 — trial
+length · 14 — switch on the privacy-safe usage counts (built, off) and
+approve the policy wording · 15 — a one-time "What do you bet?" card, yes
+or no · 18 — rename the grade words or keep them · 20 — the postal
+address for the footer.
+
+## AFTER THE WIND FIX — ANSWERED into NEXT TIME HOME (above)
 
 Tonight's answers (Ethan's droplet, 2026-09-23 night): the trade-tape
 indexes took the wallet history from 233 s to 8.5 s; college 2026 closes
@@ -26,16 +112,6 @@ rule on our own data. The wind took three runs of `wxfit.py --scale`: the
 median ratio (×0.714) was a calm-day artifact, one best scale (×1.18)
 traded misses, and the per-range table of measured cuts is now the table
 the board applies to a forecast (`engine/weather.WIND_FORECAST`).
-
-Let the auto-update pull it (it restarts the site; a hand `git pull`
-does not), then:
-
-```bash
-cd /srv/qellys && cat data/autoupdate.json; echo; python3 wxfit.py --scale | tail -8
-```
-
-Want: the newest commit, then "the board's forecast table matches …
-nothing to change". A CHANGE line prints the new rows — paste them.
 
 ## NEXT TIME HOME — 2026-09-23 night — ANSWERED (above)
 
