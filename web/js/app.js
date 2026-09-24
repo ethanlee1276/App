@@ -40490,13 +40490,21 @@ function pbpStripHTML(league, games, current) {
     const id = String(g.event_id || g.game_pk || "");
     const on = !!id && id === current;
     const door = !!id && (lv.state === "live" || lv.state === "final");
+    /* A GAME NOT UNDER WAY OPENS ITS GAME PAGE (Ethan, 2026-09-24,
+       circling the 3:10 and 6:05 chips: "I should be able to click on
+       the games up here as well and it takes us to the normal game
+       page"). There is no play-by-play before first pitch, so the chip
+       was disabled; it now opens the board's game when the board has it. */
+    const bg = !door && state.sport === league && state.data
+      ? ((state.data.games || []).find((x) => x.home === g.home && x.away === g.away) || null) : null;
     const head = lv.state === "live" ? `<span class="lb-live">${icon("dot", 8)} LIVE</span>`
       : lv.state === "final" ? `<span class="pbp-chip-final">FINAL</span>`
       : `<span class="pbp-chip-time">${escapeHtml(pbpTime(lv.start_time) || "TBD")}</span>`;
     const row = (abbr, score) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
       escapeHtml(abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
-    return `<button type="button" class="pbp-chip${on ? " active" : ""}${door ? " door" : ""}"${
-      door ? ` data-pbp="${escapeAttr(id)}"` : " disabled"}>
+    return `<button type="button" class="pbp-chip${on ? " active" : ""}${door || bg ? " door" : ""}"${
+      door ? ` data-pbp="${escapeAttr(id)}"` : bg ? ` data-pbp-game="${escapeAttr(gameId(bg))}"
+      title="Open this game’s page"` : " disabled"}>
       <div class="pbp-chip-head">${head}</div>
       ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
       <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
@@ -41466,7 +41474,8 @@ async function renderPbpPage() {
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => switchView(way.view));
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
-      el.addEventListener("click", () => openPbp(league, el.dataset.pbp)));
+      el.addEventListener("click", () => (el.dataset.pbpGame
+        ? openGame(el.dataset.pbpGame) : openPbp(league, el.dataset.pbp))));
     const m = document.getElementById("pbp-more");
     if (m) m.addEventListener("click", () => { _pbpShowAll = true; renderPbpPage(); });
     const g = document.getElementById("pbp-game-door");
