@@ -38386,6 +38386,19 @@ function showHeader() {
   headerOffset = 0;
   const bar = document.querySelector(".topbar");
   if (bar) bar.style.transform = "";
+  headerShiftVar(0);
+}
+
+/* WHAT IS PINNED UNDER THE HEADER RIDES WITH IT (Ethan, 2026-09-24, on
+   the team page's tab strip: "fix how this bar follows when I scroll
+   down"). The strip sticks at the header's foot, `--topbar-h`; once the
+   header tucked away the strip stayed parked that far down and the page
+   scrolled through the empty band above it. The header's offset is
+   published as `--hdr-shift` and the strip's `top` adds it, so the two
+   move as one — the strip reaches the top edge exactly as the header
+   leaves it, and drops back when the header returns. */
+function headerShiftVar(px) {
+  document.documentElement.style.setProperty("--hdr-shift", `${px}px`);
 }
 
 /* Phones and tablets in either orientation — never a desktop with a mouse,
@@ -38440,6 +38453,7 @@ function initHeaderTuck() {
     // Empty string, not translateY(0), so the element drops back to its
     // stylesheet state rather than carrying a permanent inline transform.
     bar.style.transform = headerOffset ? `translateY(${headerOffset}px)` : "";
+    headerShiftVar(headerOffset);
   };
 
   addEventListener("scroll", () => {

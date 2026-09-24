@@ -5924,6 +5924,9 @@ html, body { overflow-x: clip; }
    this feature exists for. One token, so they cannot drift again. */
 :root {
   --topbar-h: calc(64px + env(safe-area-inset-top));
+  /* How far the phone header has tucked up (0 down to −its height), set
+     each frame by initHeaderTuck so what is pinned under it follows. */
+  --hdr-shift: 0px;
   /* The shell's two side columns. Both are written in three places —
      the two-column shell, the three-column shell, and the breakpoint
      where the rail drops below the content — and a shell whose columns
@@ -11480,12 +11483,20 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .tm-rec { margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); font-weight: 600; }
 .tm-acts { flex: none; }
 .tm-tabs {
-  position: sticky; top: var(--topbar-h); z-index: 5;
+  /* Never above the status bar: installed to an iPhone's home screen the
+     page paints under the clock, so a fully tucked header leaves the
+     strip at the safe-area line, and ::before fills the band above it
+     with the page's own ground. Zero everywhere else. */
+  position: sticky; top: max(env(safe-area-inset-top), calc(var(--topbar-h) + var(--hdr-shift))); z-index: 5;
   display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
   margin: 0 -16px 16px; padding: 0 16px;
   background: var(--bg); border-bottom: var(--hairline) solid var(--border);
 }
 .tm-tabs::-webkit-scrollbar { display: none; }
+.tm-tabs::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 100%;
+  height: env(safe-area-inset-top); background: var(--bg); pointer-events: none;
+}
 .tm-tab {
   flex: none; min-height: 44px; padding: 0 12px; cursor: pointer;
   background: none; border: 0; border-bottom-style: solid; border-bottom-width: 3px; border-bottom-color: transparent;

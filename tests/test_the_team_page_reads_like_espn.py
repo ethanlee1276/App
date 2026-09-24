@@ -131,7 +131,13 @@ def test_a_tab_is_kept_through_a_chip_and_reset_by_a_new_team():
 def test_the_tab_strip_sticks_under_the_top_bar():
     i = CSS.index(".tm-tabs {")
     rule = CSS[i:CSS.index("}", i)]
-    assert "position: sticky" in rule and "top: var(--topbar-h)" in rule
+    # It rides with the header as the phone tucks it away (Ethan, 2026-09-24:
+    # "fix how this bar follows when I scroll down"): --hdr-shift is the
+    # header's own offset, published by initHeaderTuck.
+    assert "position: sticky" in rule and "calc(var(--topbar-h) + var(--hdr-shift))" in rule
+    assert "top: max(env(safe-area-inset-top)," in rule, "never under an installed iPhone's clock"
+    assert APP.count("headerShiftVar(") == 3, "declared, set on every tuck frame, reset by showHeader"
+    assert "headerShiftVar(headerOffset);" in APP and "headerShiftVar(0);" in APP
     tab = CSS[CSS.index(".tm-tab {"):]
     assert "min-height: 44px" in tab[:tab.index("}")]
     on = CSS[CSS.index(".tm-tab.on {"):]
