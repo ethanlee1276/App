@@ -154,7 +154,7 @@ def test_the_depth_chart_says_which_it_is():
     prog = "\n".join([
         "const escapeHtml = (s) => String(s); const escapeAttr = escapeHtml;",
         "const slugify = (s) => String(s).toLowerCase().replace(/ /g, '-');",
-        "const teamEmptyTab = (m) => 'EMPTY:' + m;", "const teamInjMark = (n) => n === 'C D' ? ' <abbr>Q</abbr>' : '';",
+        "const teamEmptyTab = (m) => 'EMPTY:' + m;", "const teamInjMark = (n) => n === 'C D' ? ' <abbr>Q</abbr>' : '';", "const teamInjKeyHTML = () => '<KEY>';",
         _fn("ordinal"), _fn("teamDepthHTML"),
         "const measured = teamDepthHTML({ squad: { positions: [{ position: 'QB', players: [{ player: 'A B' }, { player: 'C D' }] }] } });",
         "const filed = teamDepthHTML({ depth: { as_of: '2026-09-22', positions: [{ position: 'QB', players: ['Jordan Love'] }] }, squad: { positions: [] } });",
@@ -162,6 +162,7 @@ def test_the_depth_chart_says_which_it_is():
     out = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60, check=True).stdout)
     assert "ordered by who has actually played" in out[0] and ">A B</button>" in out[0] and "<th>2nd</th>" in out[0]
     assert ">C D</button> <abbr>Q</abbr></td>" in out[0], "the letter sits beside the name"
+    assert out[0].rstrip().endswith("<KEY>") and out[1].rstrip().endswith("<KEY>"), "the key closes the chart"
     assert "as the team filed it, 2026-09-22" in out[1] and 'data-player-page="jordan-love"' in out[1]
     assert out[2].startswith("EMPTY:")
 
@@ -198,6 +199,23 @@ def test_an_injured_player_carries_espns_red_letter():
         ".map(teamInjMarkOf)));")
     got = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60, check=True).stdout)
     assert got == ["Q", "O", "IR", "D", "SUSP", "PUP", "IL", "DTD", "", ""], got
+
+
+def test_a_key_says_what_the_letters_mean():
+    """Ethan, 2026-09-24: "create like a key section … so people will know
+    what the letters mean". Under the depth chart and the roster; the
+    league's own letters; every letter the mark can draw is in a key."""
+    assert "${teamInjKeyHTML(d.sport)}" in _fn("teamDepthHTML")
+    assert "rosterTab + teamInjKeyHTML(d.sport)" in _fn("renderTeamPage")
+    key = _fn("teamInjKeyHTML")
+    assert 'sport === "nfl" || sport === "cfb" ? "football" : "other"' in key
+    i = APP.index("const TEAM_INJ_KEY = ")
+    block = APP[i:APP.index("};", i)]
+    keyed = set(re.findall(r'\["([A-Z]+)", "', block))
+    j = APP.index("const TEAM_INJ_MARKS = ")
+    drawn = set(re.findall(r'"([A-Z]+)"\]', APP[j:APP.index(";\n", j)]))
+    assert drawn <= keyed, f"a letter with no key: {drawn - keyed}"
+    assert '"Questionable"' in block and '"Injured reserve"' in block and '"Out"' in block
 
 # --- the doors ------------------------------------------------------------------
 def test_the_game_page_opens_the_team_on_tonights_matchup():

@@ -28911,7 +28911,8 @@ function renderTeamPage() {
     home: () => teamHomeHTML(d, p),
     stats: () => statsTab || teamEmptyTab("No stats yet", "No player stats on file for this team yet."),
     schedule: () => teamScheduleHTML(d, p),
-    roster: () => rosterTab || teamEmptyTab("No roster yet", "No one has played for this team in the games we hold yet."),
+    roster: () => rosterTab ? rosterTab + teamInjKeyHTML(d.sport)
+      : teamEmptyTab("No roster yet", "No one has played for this team in the games we hold yet."),
     depth: () => teamDepthHTML(d),
     injuries: () => teamInjuriesHTML(d, p),
     vs: () => vsTab,
@@ -29110,7 +29111,8 @@ function teamDepthHTML(d) {
         Array.from({ length: cols }, (_x, i) => r.names[i]
           ? `<td><button type="button" class="tm-name" data-player-page="${escapeAttr(slugify(r.names[i]))}">${
               escapeHtml(r.names[i])}</button>${teamInjMark(r.names[i])}</td>` : "<td></td>").join("")}</tr>`).join("")}
-    </tbody></table></div>`;
+    </tbody></table></div>
+    ${teamInjKeyHTML(d.sport)}`;
 }
 
 /* The injury board's rows for this team — ESPN files them under the
@@ -29137,6 +29139,24 @@ function teamInjMarkOf(status) {
   const hit = TEAM_INJ_MARKS.find(([re]) => re.test(String(status || "")));
   return hit ? hit[1] : "";
 }
+/* THE KEY (Ethan, 2026-09-24: "create like a key section … so people
+   will know what the letters mean"). The letters a league actually uses,
+   in the red they are drawn in, under the chart and the roster. */
+const TEAM_INJ_KEY = {
+  football: [["Q", "Questionable"], ["D", "Doubtful"], ["O", "Out"], ["IR", "Injured reserve"],
+             ["PUP", "Physically unable to perform"], ["NFI", "Non-football injury"], ["SUSP", "Suspended"]],
+  other: [["DTD", "Day-to-day"], ["Q", "Questionable"], ["D", "Doubtful"], ["O", "Out"],
+          ["IL", "Injured list"], ["SUSP", "Suspended"]],
+};
+function teamInjKeyHTML(sport) {
+  const keys = TEAM_INJ_KEY[sport === "nfl" || sport === "cfb" ? "football" : "other"];
+  return `<div class="tm-key" role="note" aria-label="Injury key">
+    <span class="tm-key-k">Key</span>
+    ${keys.map(([k, v]) => `<span class="tm-key-i"><abbr class="tm-inj">${k}</abbr> ${escapeHtml(v)}</span>`).join("")}
+    <span class="tm-key-note">From the league’s injury report. Tap and hold a letter for the injury.</span>
+  </div>`;
+}
+
 function teamInjuryMap(d, p) {
   const m = new Map();
   for (const r of teamInjuryRows(d, p)) {

@@ -11579,3 +11579,10 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .gp-meta .gc-mk i { font-size: var(--fs-xs); }
 .gp-meta .gc-mk b { font-size: var(--fs-md); }
 .gp-meta .gc-mk-teams b { font-size: var(--fs-md); }
+/* The injury key under the depth chart and roster. */
+.tm-key { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 12px 2px 0;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.tm-key-k { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); }
+.tm-key-i { white-space: nowrap; }
+.tm-key .tm-inj { margin-left: 0; margin-right: 2px; }
+.tm-key-note { flex-basis: 100%; font-size: var(--fs-xs); color: var(--text-mute); }
