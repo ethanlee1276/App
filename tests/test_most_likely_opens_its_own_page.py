@@ -138,7 +138,7 @@ def test_the_price_refusals_stay_on_the_edge_board():
 
 def test_the_row_the_url_and_the_page_carry_it():
     assert "if (kind === \"likely\") return openProp(target, { likely: true });" in APP
-    assert '? ` data-open="likely:${escapeAttr(propId(t))}"`' in APP
+    assert 'return ` data-open="likely:${escapeAttr(propId(t))}"`;' in APP
     assert 'data-prop="${escapeAttr(propId(t))}" data-likely="1"' in APP
     assert APP.count('openProp(card.dataset.prop, { likely: card.dataset.likely === "1" })') == 2
     assert "state.propLikely = !!opts.likely;" in APP

@@ -38,7 +38,9 @@ def test_the_most_likely_card_is_a_door():
     assert re.search(r'<article class="card longshot[^"]*"\$\{likelyDoor\(r\)\}>',
                      card), "the card is no longer its own door"
     door = _fn(js, "likelyDoor")
-    assert "data-prop=" in door and "data-player-page=" in door
+    # Never the search page (Ethan, 2026-09-24): with no prop to open,
+    # the row opens on its own id — tests/test_likely_rung_door.py.
+    assert "data-prop=" in door and "data-player-page=" not in door
     # THIS LINE HELD THE BUG IN PLACE. It pinned `propOpenable(r) &&
     # findProp(id)` — the exact-line-only lookup — and went on passing
     # while the ladders (2026-09-07) put a RUNG's line on most of the
@@ -47,7 +49,7 @@ def test_the_most_likely_card_is_a_door():
     # reported landing on. Pinned on the resolution now, not on one
     # spelling of it; tests/test_likely_rung_door.py runs the doors in
     # node and is where the behaviour is actually held.
-    assert "likelyOpenableProp(r)" in door
+    assert "likelyTarget(r)" in door
     assert 'tabindex="0" role="link"' in door
 
 

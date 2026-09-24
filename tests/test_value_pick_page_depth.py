@@ -149,7 +149,7 @@ def test_the_watch_and_the_picks_read_the_same_helper():
 
 # --- the door ---------------------------------------------------------------
 FNS = ("propId", "propOpenable", "findProp", "likelyProp",
-       "likelyOpenableProp", "likelyDoor")
+       "likelyOpenableProp", "likelyTarget", "likelyDoor")
 
 
 def _door(props, row):
@@ -201,9 +201,12 @@ def test_a_recommended_scorer_opens_his_prop_page_not_the_search_page():
     assert "data-player-page" not in got
 
 
-def test_a_pick_with_no_history_still_falls_back_rather_than_opening_empty():
-    """The fallback is not the bug — opening a page with nothing on it
-    would be. A scorer nobody has a game log for has no chart to show."""
+def test_a_pick_with_no_history_opens_its_own_page_not_the_search_page():
+    """A scorer nobody has a game log for has no chart to show, and this
+    used to send him to the search page. Since 2026-09-24 (Ethan: "only
+    pulls up the page with the 'why it's likely' and not the player
+    search page") the row opens on its own id: its chance, price and
+    "Why it's likely" head the page, and the chart is simply absent."""
     bare = _pick(Prop(player="Camp Body", team="DET", opponent="NO",
                       position="WR", market=ANYTIME_TD, logs=[],
                       career_avg=0.0, vs_opponent_avg=None,
@@ -213,7 +216,8 @@ def test_a_pick_with_no_history_still_falls_back_rather_than_opening_empty():
     got = _door([bare], dict(LIKELY_TD, player="Camp Body"))
     if got is None:
         return
-    assert "data-player-page" in got, got
+    assert "data-player-page" not in got, got
+    assert 'data-prop="Camp Body|anytime_td|' in got and 'data-likely="1"' in got, got
 
 
 if __name__ == "__main__":

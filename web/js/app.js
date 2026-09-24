@@ -7727,6 +7727,18 @@ function likelyOpenableProp(r) {
   const t = likelyProp(r);
   return t && propOpenable(t) ? t : null;
 }
+/* A MOST LIKELY PICK ALWAYS OPENS ITS OWN PAGE, never the search page
+   (Ethan, 2026-09-24, beside Player search on Malachi Fields: "We need
+   too fix it so it only pulls up the page with the 'why it's likely' and
+   not the player search page"). The row fell back to the player page
+   whenever the edge board had no openable prop for it — a pick the props
+   board does not carry, or a player with under three games (Fields had
+   two). The row itself holds everything the pick page leads with — its
+   side, line, price, chance and notes — so with no prop to draw it opens
+   on its own id and renderPropPage draws it from the row (findLikelyProp). */
+function likelyTarget(r) {
+  return likelyOpenableProp(r) || r;
+}
 function likelyDoor(r) {
   if (!r) return "";
   // A GAME ROW opens the game-bet page by the same id the edge card
@@ -7735,11 +7747,8 @@ function likelyDoor(r) {
   // "we have no money lines or spreads or totals").
   if (r.kind === "game") return gameBetAttrs(r);
   if (!r.player) return "";
-  const t = likelyOpenableProp(r);
-  if (t) {
-    return ` data-prop="${escapeAttr(propId(t))}" data-likely="1" tabindex="0" role="link"`;
-  }
-  return ` data-player-page="${escapeAttr(slugify(r.player))}" tabindex="0" role="link"`;
+  const t = likelyTarget(r);
+  return ` data-prop="${escapeAttr(propId(t))}" data-likely="1" tabindex="0" role="link"`;
 }
 function likelyOpen(r) {
   if (!r) return "";
@@ -7748,10 +7757,17 @@ function likelyOpen(r) {
       ? ` data-open="prop:${escapeAttr(gameBetId(r))}"` : "";
   }
   if (!r.player) return "";
-  const t = likelyOpenableProp(r);
-  return t
-    ? ` data-open="likely:${escapeAttr(propId(t))}"`
-    : ` data-open="player:${escapeAttr(slugify(r.player))}"`;
+  const t = likelyTarget(r);
+  return ` data-open="likely:${escapeAttr(propId(t))}"`;
+}
+/* The Most Likely row a pick page was opened on, by the row's own id or
+   the /pick/ slug its address carries — as findProp reads either. */
+function findLikelyProp(id) {
+  if (!id) return null;
+  const rows = ((state.data || {}).most_likely || [])
+    .filter((x) => x && x.kind !== "game" && x.player);
+  return rows.find((x) => propId(x) === id)
+    || (String(id).includes("|") ? null : rows.find((x) => pickSlug(x) === id)) || null;
 }
 function openFrom(spec) {
   const [kind, ...rest] = String(spec || "").split(":");
@@ -9555,7 +9571,7 @@ function openProp(id, opts = {}) {
   // the address bar, Copy link and a pasted /pick/… URL are all one
   // string. A row that is not there keeps the id it was given — the
   // page's own empty state needs what it failed to find.
-  const r = findProp(id);
+  const r = findProp(id) || (opts.likely ? findLikelyProp(id) : null);
   state.propId = (r && pickSlug(r)) || id;
   // Which board the reader came from: a Most Likely row draws the page
   // around its own pick (renderPropPage, likelyFor). Every other door
@@ -10253,7 +10269,9 @@ function renderPropPage() {
       .find((g) => g.kind === "game" && gameBetId(g) === state.propId);
     if (lkRow || b) return renderGameBetPage(lkRow || b);
   }
-  const r = findProp(state.propId);
+  // A Most Likely pick with no prop on the edge board is drawn from its
+  // own row (likelyTarget) — the row is its own pick.
+  const r = findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null);
   if (!r) {
     // A bookmarked or stale link. Say so — a blank page reads as broken.
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
@@ -36681,7 +36699,7 @@ function findGameRow(id) {
 }
 
 function findSlipRow(id) {
-  return findProp(id) || findGameRow(id);
+  return findProp(id) || findGameRow(id) || findLikelyProp(id);
 }
 
 function slipHas(r) {

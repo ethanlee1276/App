@@ -126,6 +126,21 @@ def test_a_most_likely_card_drops_the_edge_boards_notes_on_the_other_side():
     assert got == [row["reasons"][0], row["reasons"][2]], got
 
 
+def test_a_most_likely_pick_with_no_edge_prop_is_drawn_from_its_own_row():
+    """Ethan, 2026-09-24, beside Player search on Malachi Fields: "fix it
+    so it only pulls up the page with the 'why it's likely' and not the
+    player search page". The door opens on the row's own id when the edge
+    board has no openable prop (tests/test_likely_rung_door.py); the page,
+    its address and the Parlay button all resolve that id to the row."""
+    prop = _fn("renderPropPage")
+    assert "findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null)" in prop
+    assert "findProp(id) || (opts.likely ? findLikelyProp(id) : null)" in _fn("openProp"), \
+        "a /pick/<slug>/likely address, so a reload or a shared link lands on it"
+    assert "findProp(id) || findGameRow(id) || findLikelyProp(id)" in _fn("findSlipRow")
+    look = _fn("findLikelyProp")
+    assert "propId(x) === id" in look and "pickSlug(x) === id" in look
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

@@ -48,7 +48,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 FNS = ("propId", "propOpenable", "findProp", "likelyProp",
-       "likelyOpenableProp", "likelyDoor", "likelyOpen")
+       "likelyOpenableProp", "likelyTarget", "likelyDoor", "likelyOpen")
 
 #: The prop as the edge board carries it — the main line, with history.
 MAIN = {"player": "Jaxon Smith-Njigba", "market": "rec_yds", "side": "OVER",
@@ -171,11 +171,12 @@ def test_the_side_may_be_spelled_either_way():
 
 def test_two_different_bets_for_one_player_and_market_are_refused():
     """The pair no longer identifies a prop, and a coin-flip choice
-    would open a page about the wrong bet."""
+    would open a page about the wrong bet — so the row opens on its own
+    id and the page is drawn from the row (see _own_page below)."""
     got = _run([TD_PROP, dict(TD_PROP, line=1.5)], TD_ROW)
     if got is None:
         return
-    assert "data-player-page=" in got and "data-prop=" not in got
+    _own_page(got, TD_ROW)
 
 
 def test_one_bet_listed_twice_is_not_an_ambiguity():
@@ -190,15 +191,14 @@ def test_one_bet_listed_twice_is_not_an_ambiguity():
     assert "Kyren Williams|anytime_td|OVER|0.5" in got
 
 
-def test_a_scorer_with_no_prop_on_the_board_takes_the_player_page():
-    """`openProp` on an id the board does not carry shows its own empty
-    state, so there is genuinely no page to open — the likelihood board
-    is offered the WHOLE ranked menu while the props board carries a
-    slice of it."""
+def test_a_scorer_with_no_prop_on_the_board_opens_its_own_page():
+    """The likelihood board is offered the WHOLE ranked menu while the
+    props board carries a slice of it. That slice's edge used to send the
+    row to the search page; the row is now its own pick page."""
     got = _run([], TD_ROW)
     if got is None:
         return
-    assert "data-player-page=" in got
+    _own_page(got, TD_ROW)
 
 
 def test_a_market_with_a_line_does_not_take_the_line_less_path():
@@ -208,16 +208,17 @@ def test_a_market_with_a_line_does_not_take_the_line_less_path():
     got = _run([MAIN], dict(RUNG, rung="main", line=49.5))
     if got is None:
         return
-    assert "data-player-page=" in got, got
+    assert "|65.5" not in got, got
+    _own_page(got, dict(RUNG, line=49.5))
 
 
 # --- what it still refuses --------------------------------------------------
-def test_a_rung_whose_main_line_is_not_on_the_board_takes_the_player_page():
-    """The fallback is correct here — there is no prop page to open."""
+def test_a_rung_whose_main_line_is_not_on_the_board_opens_its_own_page():
+    """No prop page to open — so the row's own, never the search page."""
     got = _run([], RUNG)
     if got is None:
         return
-    assert "data-player-page=" in got and "data-prop=" not in got
+    _own_page(got, RUNG)
 
 
 def test_a_row_that_is_not_a_rung_does_not_go_hunting():
@@ -227,7 +228,8 @@ def test_a_row_that_is_not_a_rung_does_not_go_hunting():
     got = _run([MAIN], stray)
     if got is None:
         return
-    assert "data-player-page=" in got, got
+    assert "|65.5" not in got, got
+    _own_page(got, stray)
 
 
 def test_a_prop_with_no_history_is_not_a_door_even_when_it_is_found():
@@ -238,7 +240,7 @@ def test_a_prop_with_no_history_is_not_a_door_even_when_it_is_found():
     got = _run([thin], RUNG)
     if got is None:
         return
-    assert "data-player-page=" in got and "data-prop=" not in got
+    _own_page(got, RUNG)
 
 
 def test_the_openable_test_reads_the_prop_not_the_row():
@@ -247,6 +249,34 @@ def test_the_openable_test_reads_the_prop_not_the_row():
     i = APP.index("function likelyOpenableProp(")
     body = APP[i:APP.index("\n}", i)]
     assert "propOpenable(t)" in body and "propOpenable(r)" not in body
+    assert "likelyOpenableProp(r) || r" in APP, "a thin prop opens the row's own page"
+
+
+# --- never the search page ---------------------------------------------------
+def _own_page(got, row):
+    """Ethan, 2026-09-24, beside Player search on Malachi Fields (two
+    games, so no prop page): a Most Likely row opens the page with "Why
+    it's likely", never the search page. With no openable prop it opens
+    on its OWN id, and renderPropPage draws it from the row
+    (findLikelyProp)."""
+    rid = "|".join([row["player"], row["market"], row["side"],
+                    "" if row["line"] is None else str(row["line"])])
+    assert "data-player-page" not in got, got
+    assert f'data-prop="{rid}" data-likely="1"' in got, (rid, got)
+
+
+def test_neither_door_can_reach_the_search_page():
+    for name in ("likelyDoor", "likelyOpen"):
+        i = APP.index(f"function {name}(")
+        body = APP[i:APP.index("\n}", i)]
+        assert "data-player-page" not in body and "player:" not in body, name
+
+
+def test_the_shelf_row_opens_its_own_page_too():
+    got = _run([], RUNG, call="likelyOpen")
+    if got is None:
+        return
+    assert got.strip() == 'data-open="likely:Jaxon Smith-Njigba|rec_yds|OVER|49.5"', got
 
 
 # --- the row says what bet it is --------------------------------------------
@@ -312,7 +342,7 @@ def test_both_doors_resolve_through_the_one_function():
     for name in ("likelyDoor", "likelyOpen"):
         i = APP.index(f"function {name}(")
         body = APP[i:APP.index("\n}", i)]
-        assert "likelyOpenableProp(r)" in body, f"{name} resolves its own way"
+        assert "likelyTarget(r)" in body, f"{name} resolves its own way"
         assert "findProp(" not in body, f"{name} still looks a prop up itself"
 
 
