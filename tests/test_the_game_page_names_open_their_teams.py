@@ -72,6 +72,20 @@ def test_it_keeps_the_headings_type_and_reads_as_tappable():
     assert "text-decoration: underline" in name[:name.index("}")]
 
 
+
+def test_the_header_carries_the_cards_lines():
+    """Ethan, 2026-09-24, circling the spread · ML · total grid on the Home
+    card: "In the second screenshot [the game page], we should be showing
+    the info I have circled." The same function draws both."""
+    page = _fn("renderGamePage")
+    assert "const gpLines = gameMarketsHTML(g, { mlb, isFinal });" in page
+    head = page[page.index('<div class="gp-sub">'):page.index('<div class="chips gp-chips">')]
+    assert "gpLines}" in head, "under the date, above the chips"
+    chips = page[page.index('<div class="chips gp-chips">'):][:900]
+    assert '${gpLines ? "" : `<span class="chip">O/U' in chips, "the O/U chip only when the grid is absent"
+    assert "${gpLines ? \"\" : g.favorite ?" in chips
+    assert ".gp-meta .gc-mkts {" in CSS
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

@@ -11573,3 +11573,9 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .pk-tonight li { font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); margin: 4px 0; }
 /* The injury letter beside a name on the team page (Q, D, O, IR), ESPN's red. */
 .tm-inj { margin-left: 4px; font-size: var(--fs-xs); font-weight: 800; color: var(--bad); text-decoration: none; letter-spacing: .02em; }
+/* The card's lines grid in the game page's header, a size up. */
+.gp-meta .gc-mkts { max-width: 480px; margin-top: 12px; }
+.gp-meta .gc-mk { padding: 8px; }
+.gp-meta .gc-mk i { font-size: var(--fs-xs); }
+.gp-meta .gc-mk b { font-size: var(--fs-md); }
+.gp-meta .gc-mk-teams b { font-size: var(--fs-md); }

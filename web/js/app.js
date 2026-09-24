@@ -10839,6 +10839,7 @@ function renderGamePage() {
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+  const gpLines = gameMarketsHTML(g, { mlb, isFinal });
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
 
@@ -11027,10 +11028,16 @@ function renderGamePage() {
         </div>
         <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
           .filter(Boolean).join(" · "))}</div>
+        ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
+              circling the spread · ML · total grid on the Home card: "we
+              should be showing the info I have circled"). The same
+              function draws both, so they cannot disagree; the O/U and
+              favourite chips it replaces stay only when it draws nothing. */
+          gpLines}
         <div class="chips gp-chips">
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
-          <span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>
-          ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
+          ${gpLines ? "" : `<span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>`}
+          ${gpLines ? "" : g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">${escapeHtml(({ outdoors: "Outdoors", open: "Roof open",
