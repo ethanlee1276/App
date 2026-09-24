@@ -127,7 +127,7 @@ def test_the_page_does_not_print_the_same_number_twice():
     pointing at exactly this duplication on the prop cards themselves."""
     fn = APP[APP.index("function renderPropPage("):]
     fn = fn[:fn.index("\n}\n")]
-    head = fn[:fn.index("propAnalysis(r)")]
+    head = fn[:fn.index("propAnalysis(")]
     assert "EV / unit" not in head, "EV is on the chart's stat row already"
 
 

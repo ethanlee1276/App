@@ -9729,8 +9729,9 @@ function renderGameBetPage(b) {
           <div>
             <div class="player">${escapeHtml(b.pick_label || b.headline || "")}
               <span class="ml-odds">${oddsTxt(b.odds)}</span></div>
-            <div class="subtitle">${escapeHtml(b.matchup
-              || `${b.away} @ ${b.home}`)}</div>
+            <div class="subtitle">${b.away && b.home
+              ? `${teamLinkHTML(state.sport, b.away, b.away)} @ ${teamLinkHTML(state.sport, b.home, b.home)}`
+              : escapeHtml(b.matchup || "")}</div>
             <div class="pick">${escapeHtml(b.market_label || b.market || "")}</div>
           </div>
         </div>
@@ -10331,11 +10332,10 @@ function renderPropPage() {
           <div>
             <div class="player">${escapeHtml(r.player || "")}
               <span class="ml-odds">${oddsTxt(v.odds)}</span></div>
-            <div class="subtitle">${escapeHtml([r.position,
-              typeof teamName === "function" ? teamName(r.team) : r.team,
-              r.opponent ? `vs ${typeof teamName === "function"
-                ? teamName(r.opponent) : r.opponent}` : ""]
-              .filter(Boolean).join(" · "))}</div>
+            <div class="subtitle">${[r.position ? escapeHtml(r.position) : "",
+              r.team ? teamLinkHTML(state.sport, r.team) : "",
+              r.opponent ? `vs ${teamLinkHTML(state.sport, r.opponent)}` : ""]
+              .filter(Boolean).join(" · ")}</div>
             <div class="pick">${escapeHtml(v.side || "")} ${
               Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
               escapeHtml(r.market_label || r.market || "")}${lk && v.book
@@ -10381,8 +10381,8 @@ function renderPropPage() {
       </div>
       ${whyLikelyHTML(v, r, lk)}
       ${shoppedLineNote(v)}
-      ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word })
-           : propAnalysis(r)}
+      ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word, min: 1 })
+           : propAnalysis(r, { min: 1 })}
     </article>
 
     ${booksTableHTML(r)}
@@ -10717,15 +10717,28 @@ function mlbPenNotes(g) {
   }).filter(Boolean);
 }
 
+/* A TEAM'S NAME, WHEREVER A PAGE PRINTS ONE IN ITS HEADER, IS ITS TEAM
+   PAGE (Ethan, 2026-09-24: "Yes start all 3" — team names open the team
+   page everywhere). A <button>, so a header that is itself a door (the
+   player head, a pick card) lets the name win: every card handler stands
+   aside for an inner button. Rows that are a door as a whole keep their
+   one door; the page they open carries these. */
+function teamLinkHTML(sport, abbr, label) {
+  if (!abbr) return "";
+  const lg = sport || state.sport;
+  return `<button type="button" class="team-link" data-team-sport="${escapeAttr(lg)}"
+    data-team-open="${escapeAttr(abbr)}">${escapeHtml(label == null ? teamNameIn(lg, abbr) : label)}</button>`;
+}
+
 /* EACH TEAM'S NAME IS ITS TEAM PAGE (Ethan, 2026-09-24, circling
    "Cardinals @ 49ers" on the game page: "when you click on the teams
    names it will pull you to the team page where it shows the whole teams
    data"). The same door the team search's chips use — [data-team-open],
    with the league on the button, since the game page knows it and
    `_teamState` may not. */
-function gpTeamDoor(team) {
+function gpTeamDoor(team, opp) {
   return `<button type="button" class="gp-team" data-team-sport="${escapeAttr(state.sport)}"
-    data-team-open="${escapeAttr(team)}" title="${escapeAttr(`${teamName(team)} team page`)}"
+    data-team-open="${escapeAttr(team)}"${opp ? ` data-team-against="${escapeAttr(opp)}"` : ""} title="${escapeAttr(`${teamName(team)} team page`)}"
     >${teamMark(team, 26)} <span class="gp-team-name">${escapeHtml(teamName(team))}</span></button>`;
 }
 
@@ -10984,9 +10997,9 @@ function renderGamePage() {
         ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
       <div class="gp-meta">
         <div class="gp-teams">
-          <span>${gpTeamDoor(g.away)} ${score("away")}</span>
+          <span>${gpTeamDoor(g.away, g.home)} ${score("away")}</span>
           <span class="gp-at">@</span>
-          <span>${gpTeamDoor(g.home)} ${score("home")}</span>
+          <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
         <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
           .filter(Boolean).join(" · "))}</div>
@@ -12070,8 +12083,9 @@ function _profileHead(r, right, door = "") {
         <div class="meta"><div class="nm">${escapeHtml(r.player)}${
           r.sport && r.sport !== state.sport ? leagueBadge(r.sport) : ""
         }${injTag(lg || "nfl", r.player)}</div>
-          <div class="sub">${teamMarkIn(lg, r.team, 16)} ${[teamNameIn(lg, r.team), r.position, "vs " + teamNameIn(lg, r.opponent)]
-            .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
+          <div class="sub">${teamMarkIn(lg, r.team, 16)} ${[r.team ? teamLinkHTML(lg, r.team, teamNameIn(lg, r.team)) : "",
+            r.position ? escapeHtml(r.position) : "", r.opponent ? `vs ${teamLinkHTML(lg, r.opponent)}` : ""]
+            .filter(Boolean).join(" · ")}</div></div>
         ${right}
         ${shareBtn("player", slugify(r.player))}
       </div>`;
@@ -25246,7 +25260,7 @@ function standingsRowHTML(t, label) {
   return `<div class="std-row">
     <span class="std-rank">${t.rank}</span>
     <span class="std-mark">${teamMarkIn(state.sport, t.team, 24)}</span>
-    <span class="std-name">${escapeHtml(meta.name || meta.nick || t.team)}</span>
+    <span class="std-name">${teamLinkHTML(state.sport, t.team, meta.name || meta.nick || t.team)}</span>
     <span class="std-n std-rec">${escapeHtml(t.record)}</span>
     <span class="std-n">${t.pct.toFixed(3).replace(/^0/, "")}</span>
     <span class="std-n ${cls}">${escapeHtml(diff)}</span>
@@ -28487,14 +28501,14 @@ function teamRoute(h) {
    One request draws the page — profile, opponents and the head-to-head
    together — because two round trips is two chances to show half of it. */
 
-let _teamState = { sport: "", team: "", vs: "", data: null, loading: false };
+let _teamState = { sport: "", team: "", vs: "", tab: "home", data: null, loading: false };
 
 function teamHref(sport, team, vs) {
   return "#team/" + encodeURIComponent(sport) + "/" + encodeURIComponent(team)
     + (vs ? "/" + encodeURIComponent(vs) : "");
 }
 
-async function openTeam(sport, team, vs) {
+async function openTeam(sport, team, vs, tab) {
   /* PRESSING AN OPPONENT CHIP IS A FILTER, NOT A NAVIGATION.
 
      Ethan, 2026-09-10: "When you click on a team in the 'against'
@@ -28514,7 +28528,10 @@ async function openTeam(sport, team, vs) {
   const same = _teamState.team === team && _teamState.sport === sport;
   if (!same) _teamOppAll = false;    // a new team starts collapsed again
   if (same && state.view === "team") _holdScroll = true;
+  // THE TAB SURVIVES A SAME-TEAM REDRAW (an opponent chip); a new team
+  // opens on Home, or on Versus when it was opened against someone.
   _teamState = { sport, team, vs: vs || "",
+                 tab: tab || (same ? _teamState.tab : (vs ? "vs" : "home")),
                  data: same ? _teamState.data : null, loading: true };
   // `_switchViewNow` draws the page and writes the address bar — see the
   // `name === "team"` branch there, and the comment on why it cannot be
@@ -28833,54 +28850,275 @@ function renderTeamPage() {
     return;
   }
   const p = d.profile;
-  host.innerHTML = `
-    <div class="card-head">
-      <div><div class="player">${escapeHtml(p.name || p.team)}</div>
-        <div class="subtitle">${escapeHtml(
-          (LEAGUE_LABEL[d.sport] || d.sport || "").toUpperCase())} ·
-          ${teamRecordLine(p.career) || "no finals on file"}</div></div>
-    </div>
+  /* ESPN'S SHAPE (Ethan, 2026-09-24, with ESPN's Packers page beside
+     ours: "I like all the data we included but I want it too be layed
+     out like the espn and include all this information and have tabs for
+     each page"). A header — crest, city over nickname, the season's
+     record and where it stands — then a strip of tabs, one section each.
+
+     The sections are built here in the order they were always drawn, and
+     the strip decides which one shows. That order still matters where it
+     did: the versus picker and its table come first, because a section
+     nobody can reach has not shipped — on a tab it is one tap from the
+     top of the page, not several screens down it. */
+  const tab = TEAM_TABS.some(([k]) => k === st.tab) ? st.tab : "home";
+  const vsTab = `
     ${d.vs_unknown ? `<div class="warning">${icon("warn")} No team here
       matched “${escapeHtml(d.vs_unknown)}” — the history below is
       ${escapeHtml(p.name)} on its own.</div>` : ""}
-    ${/* AGAINST WHOM, FIRST. Ethan, 2026-09-10, on the Rams page: "we
-          should add the versus feature so you can see past team
-          performance against other teams."
-
-          It was already there and had been since 2026-09-09 — the
-          server sends 31 opponents for that very team, checked. It drew
-          LAST: under the season table, under the leaders strip, under
-          three ten-row stat tables and under the entire squad by
-          position. On a phone that is several screens of reference
-          material before the one control on the page, so he scrolled,
-          did not reach it, and reported the feature as missing.
-
-          Built, unreachable, asked for as if new: the fifth this week,
-          and the same shape as the roster calendar two days ago. The
-          rule those cost us is that placement IS whether a feature
-          shipped, so the only interactive thing here now opens the page.
-          It is also the question a reader arrives with — they play the
-          49ers on Sunday, how has this gone — where everything below is
-          reference to be scrolled to on purpose.
-
-          Nothing else moved: stats still sit above the squad, which is
-          ESPN's order and what `test_team_stat_tables` pins. */""}
     ${teamOppPickerHTML(d, _teamState.vs)}
     ${st.loading
       ? `<p class="loading">Reading ${escapeHtml(p.name || p.team)}’s
           record against them…</p>`
-      : teamH2HHTML(d.head_to_head, d.sport)}
-    ${teamSeasonsHTML(p)}
-    ${teamStatsHTML(d.stats, d.sport)}
-    ${teamSquadHTML(d.squad, d.sport)}
-    <p class="rank-help">Built from the finished games this site has
+      : teamH2HHTML(d.head_to_head, d.sport)}`;
+  const historyTab = `${teamSeasonsHTML(p)}`;
+  const statsTab = `${teamStatsHTML(d.stats, d.sport)}`;
+  const rosterTab = `${teamSquadHTML(d.squad, d.sport)}`;
+  const body = {
+    home: () => teamHomeHTML(d, p),
+    stats: () => statsTab || teamEmptyTab("No stats yet", "No player stats on file for this team yet."),
+    schedule: () => teamScheduleHTML(d, p),
+    roster: () => rosterTab || teamEmptyTab("No roster yet", "No one has played for this team in the games we hold yet."),
+    depth: () => teamDepthHTML(d),
+    injuries: () => teamInjuriesHTML(d, p),
+    vs: () => vsTab,
+    history: () => historyTab,
+  }[tab]();
+  host.innerHTML = `
+    ${teamHeaderHTML(d, p)}
+    <nav class="tm-tabs" role="tablist" aria-label="${escapeAttr(p.name || p.team)} sections">
+      ${TEAM_TABS.map(([k, label]) => `<button type="button" role="tab" class="tm-tab${
+        k === tab ? " on" : ""}" aria-selected="${k === tab}" data-team-tab="${k}">${label}</button>`).join("")}
+    </nav>
+    <div class="tm-body" role="tabpanel">${body}</div>
+    ${["home", "schedule", "vs", "history"].includes(tab) ? `<p class="rank-help">Built from the finished games this site has
       ingested${(p.seasons || []).length
         ? ` — ${p.seasons[p.seasons.length - 1].season} to ${p.seasons[0].season}`
-        : ""}. Not a projection and not a pick: a record.</p>`;
+        : ""}. Not a projection and not a pick: a record.</p>` : ""}`;
+  // The schedule strip opens on the next game, the way ESPN's does.
+  const strip = host.querySelector(".tm-strip");
+  const next = strip && strip.children[Number(strip.dataset.start) || 0];
+  if (next) strip.scrollLeft = Math.max(0, next.offsetLeft - strip.offsetLeft - next.offsetWidth);
+  const on = host.querySelector(".tm-tab.on");
+  if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "center" });
+  if (tab === "home" || tab === "injuries") teamNeedsBoards(d.sport);
+}
+
+/* The team page's tabs, in ESPN's order, then the two that are ours. */
+const TEAM_TABS = [["home", "Home"], ["stats", "Stats"], ["schedule", "Schedule"],
+  ["roster", "Roster"], ["depth", "Depth Chart"], ["injuries", "Injuries"],
+  ["vs", "Versus"], ["history", "History"]];
+
+function teamEmptyTab(title, msg) {
+  return `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+    <div class="es-title">${escapeHtml(title)}</div><div class="es-sub">${escapeHtml(msg)}</div></div>`;
+}
+
+/* The standings and injury boards are fetched once per league and the
+   page redrawn when they land — they are not in the team answer. */
+const _teamBoardsAsked = {};
+function teamNeedsBoards(sport) {
+  if (!sport || _teamBoardsAsked[sport]) return;
+  _teamBoardsAsked[sport] = true;
+  Promise.all([loadStandings(sport), loadInjuryBoard()]).then(() => {
+    if (state.view === "team" && _teamState.sport === sport) renderTeamPage();
+  }).catch(() => {});
+}
+
+/* This team's row in its league's standings, and the group it sits in. */
+function teamStanding(sport, team) {
+  const t = _standingsCache[sport] || {};
+  for (const g of t.groups || []) {
+    const r = (g.teams || []).find((x) => x && x.team === team);
+    if (r) return { row: r, group: String(g.label || [g.conference, g.division].filter(Boolean).join(" ")).trim() };
+  }
+  return null;
+}
+
+/* Crest, "GREEN BAY" over "PACKERS", the season's record and standing. */
+function teamHeaderHTML(d, p) {
+  const full = p.name || d.name || p.team;
+  const meta = teamsForSport(d.sport)[p.team] || {};
+  const nick = meta.nick && full.endsWith(meta.nick) ? meta.nick : full.split(" ").slice(-1)[0];
+  const city = full.endsWith(nick) ? full.slice(0, full.length - nick.length).trim() : "";
+  const season = (p.seasons || [])[0];
+  const std = teamStanding(d.sport, p.team);
+  const record = (std && std.row.record) || (season && season.record) || "";
+  const where = std && std.row.rank && std.group ? `${ordinal(std.row.rank)} in ${std.group}` : "";
+  return `<header class="tm-head">
+    <span class="tm-crest">${teamMarkIn(d.sport, p.team, 64)}</span>
+    <div class="tm-id">
+      ${city ? `<div class="tm-city">${escapeHtml(city)}</div>` : ""}
+      <h2 class="tm-nick">${escapeHtml(nick)}</h2>
+      <div class="tm-rec">${escapeHtml([(LEAGUE_LABEL[d.sport] || d.sport || "").toUpperCase(),
+        record, where].filter(Boolean).join(" · "))}</div>
+    </div>
+    <div class="tm-acts">${d.sport === state.sport ? favBtn(p.team) : ""}</div>
+  </header>`;
+}
+
+/* One game as a schedule cell or row: who, where, and the result or when. */
+function teamGameWho(d, g) {
+  return `${g.at_home ? "vs" : "@"} ${teamMarkIn(d.sport, g.opponent, 20)}`;
+}
+function teamGameResult(g) {
+  if (!g.final) return "";
+  const cls = g.result === "W" ? "tm-w" : g.result === "L" ? "tm-l" : "";
+  return `<b class="${cls}">${g.result}</b> ${Math.round(g.points_for)}-${Math.round(g.points_against)}`;
+}
+function teamGameWhen(d, g) {
+  if (d.sport === "nfl" || d.sport === "cfb") return g.period ? `Wk ${g.period}` : "";
+  return g.date ? String(g.date).slice(5).replace("-", "/") : "";
+}
+function teamGameDate(g) {
+  return g.date ? String(g.date).slice(5).replace(/^0/, "").replace("-", "/").replace("/0", "/") : "";
+}
+
+/* Tonight's game on the board, if this team is on it. */
+function teamOnBoard(d, p) {
+  if (d.sport !== state.sport) return null;
+  return ((state.data || {}).games || []).find((g) => g && (g.home === p.team || g.away === p.team)) || null;
+}
+
+function teamHomeHTML(d, p) {
+  const games = ((d.schedule || {}).games) || [];
+  const next = games.findIndex((g) => !g.final);
+  const strip = games.length ? `<div class="section-title">${escapeHtml(String((d.schedule || {}).season || ""))} Schedule
+      <button type="button" class="btn-quiet tm-more" data-team-tab="schedule">Full schedule →</button></div>
+    <div class="tm-strip" data-start="${next < 0 ? games.length - 1 : next}">${games.map((g, i) => `
+      <button type="button" class="tm-cell${i === next ? " next" : ""}" data-team-sport="${escapeAttr(d.sport)}"
+        data-team-open="${escapeAttr(g.opponent)}" title="${escapeAttr(teamNameIn(d.sport, g.opponent))}">
+        <span class="tm-cell-d">${escapeHtml(teamGameDate(g) || teamGameWhen(d, g))}</span>
+        <span class="tm-cell-o">${teamGameWho(d, g)}</span>
+        <span class="tm-cell-r">${g.final ? teamGameResult(g) : escapeHtml(teamGameWhen(d, g) || "TBD")}</span>
+      </button>`).join("")}</div>` : "";
+  const g = teamOnBoard(d, p);
+  const tonight = g ? `<button type="button" class="card tm-next" data-team-game="${escapeAttr(gameId(g))}">
+      <span class="tm-next-k">On tonight’s board</span>
+      <span class="tm-next-g">${teamMarkIn(d.sport, g.away, 22)} ${escapeHtml(teamNameIn(d.sport, g.away))}
+        <span class="gp-at">@</span> ${teamMarkIn(d.sport, g.home, 22)} ${escapeHtml(teamNameIn(d.sport, g.home))}</span>
+      <span class="tm-next-m">${escapeHtml([whenLabel(g.date, g.kickoff),
+        g.total != null ? `O/U ${Number(g.total).toFixed(1)}` : "",
+        g.favorite && g.spread != null ? `${teamNameIn(d.sport, g.favorite)} −${Math.abs(g.spread).toFixed(1)}` : ""]
+        .filter(Boolean).join(" · "))} · Game page →</span></button>` : "";
+  const s = (p.seasons || [])[0];
+  const tile = (k, v, note) => v == null || v === "" ? "" : `<div class="metric"><div class="k">${k}</div>
+      <div class="v">${escapeHtml(String(v))}</div>${note ? `<div class="tm-sub">${escapeHtml(note)}</div>` : ""}</div>`;
+  const of = (r) => (r && s.teams_ranked ? `${ordinal(r)} of ${s.teams_ranked}` : "");
+  const glance = s ? `<div class="section-title">${escapeHtml(String(s.season))} at a glance</div>
+    <div class="metrics tm-glance">
+      ${tile("Record", s.record)}
+      ${tile("Scored / game", s.pf_per_game, of(s.offense_rank))}
+      ${tile("Allowed / game", s.pa_per_game, of(s.defense_rank))}
+      ${s.ats_w + s.ats_l + s.ats_p ? tile("Against the spread", `${s.ats_w}-${s.ats_l}${s.ats_p ? "-" + s.ats_p : ""}`) : ""}
+      ${s.over + s.under + s.ou_p ? tile("Over / under", `${s.over}-${s.under}${s.ou_p ? "-" + s.ou_p : ""}`) : ""}
+    </div>` : "";
+  const leaders = teamLeadersHTML(d.stats);
+  const hurt = teamInjuryRows(d, p);
+  const inj = hurt.length ? `<div class="section-title">Injuries
+      <button type="button" class="btn-quiet tm-more" data-team-tab="injuries">All ${hurt.length} →</button></div>
+    <div class="card tm-list">${hurt.slice(0, 4).map(teamInjuryRowHTML).join("")}</div>` : "";
+  const last = games.filter((x) => x.final).slice(-5).reverse();
+  const recent = last.length ? `<div class="section-title">Last ${last.length}</div>
+    <div class="card tm-list">${last.map((x) => teamScheduleRowHTML(d, x)).join("")}</div>` : "";
+  const h = d.head_to_head;
+  const vsCard = h && (h.games || []).length ? `<button type="button" class="card tm-next" data-team-tab="vs">
+      <span class="tm-next-k">Against the ${escapeHtml(teamNameIn(d.sport, h.opponent))}</span>
+      <span class="tm-next-g">${escapeHtml(teamRecordLine(h.summary).replace(/<[^>]+>/g, ""))}</span>
+      <span class="tm-next-m">${h.games.length} meeting${h.games.length === 1 ? "" : "s"} on file · last: ${
+        teamGameResult({ ...h.games[0], final: true })} · every meeting →</span></button>` : "";
+  const out = [strip, tonight, vsCard, glance, leaders ? `<div class="section-title">Leaders</div>${leaders}` : "", inj, recent].join("");
+  return out || teamEmptyTab("Nothing yet this season", "Nothing on file for this team this season yet.");
+}
+
+function teamScheduleRowHTML(d, g) {
+  const line = g.line != null ? `${g.line > 0 ? "+" : ""}${g.line}` : "";
+  const bits = g.final
+    ? [line ? `${line} ${g.covered === true ? "covered" : g.covered === false ? "missed" : g.covered === "push" ? "push" : ""}`.trim() : "",
+       g.ou ? `${g.ou} ${g.total}` : ""]
+    : [line ? `line ${line}` : "", g.total != null ? `total ${g.total}` : ""];
+  return `<button type="button" class="tm-row" data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}">
+    <span class="tm-row-w">${escapeHtml(teamGameWhen(d, g))}<small>${escapeHtml(teamGameDate(g))}</small></span>
+    <span class="tm-row-o">${g.at_home ? "vs" : "@"} ${teamMarkIn(d.sport, g.opponent, 20)}
+      ${escapeHtml(teamNameIn(d.sport, g.opponent))}</span>
+    <span class="tm-row-r">${g.final ? teamGameResult(g) : "<span class=\"tm-up\">Upcoming</span>"}
+      <small>${escapeHtml(bits.filter(Boolean).join(" · "))}</small></span>
+  </button>`;
+}
+
+function teamScheduleHTML(d, p) {
+  const sch = d.schedule || {};
+  const games = sch.games || [];
+  if (!games.length) return teamEmptyTab("No schedule yet", "No schedule on file for this team yet.");
+  const done = games.filter((g) => g.final);
+  const w = done.filter((g) => g.result === "W").length, l = done.filter((g) => g.result === "L").length;
+  return `<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
+      <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games played;
+      the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own, and a row opens the opponent.</span></div>
+    <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g)).join("")}</div>`;
+}
+
+/* The published chart where there is one (the NFL's, as filed); every
+   other league, and the NFL before a chart is on the box, reads the
+   order measured from the games played — and says which it is. */
+function teamDepthHTML(d) {
+  const pub = d.depth && (d.depth.positions || []).length ? d.depth : null;
+  const rows = pub ? pub.positions.map((x) => ({ position: x.position, names: x.players || [] }))
+    : (((d.squad || {}).positions) || []).map((x) => ({ position: x.position,
+        names: (x.players || []).map((w) => w.player) }));
+  if (!rows.length) return teamEmptyTab("No depth chart yet", "No depth chart on file for this team yet.");
+  const cols = Math.min(4, Math.max(...rows.map((r) => r.names.length)));
+  return `<div class="section-title">Depth chart
+      <span class="sub">— ${pub ? `as the team filed it${pub.as_of ? `, ${escapeHtml(String(pub.as_of))}` : ""}`
+        : "ordered by who has actually played: games first, then the position’s main stat"}.</span></div>
+    <div class="card tm-depth"><table class="rank-table"><thead><tr><th>Pos</th>${
+      Array.from({ length: cols }, (_x, i) => `<th>${ordinal(i + 1)}</th>`).join("")}</tr></thead><tbody>
+      ${rows.map((r) => `<tr><td class="tm-pos">${escapeHtml(r.position)}</td>${
+        Array.from({ length: cols }, (_x, i) => r.names[i]
+          ? `<td><button type="button" class="tm-name" data-player-page="${escapeAttr(slugify(r.names[i]))}">${
+              escapeHtml(r.names[i])}</button></td>` : "<td></td>").join("")}</tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+/* The injury board's rows for this team — ESPN files them under the
+   full name ("Green Bay Packers"). */
+function teamInjuryRows(d, p) {
+  const rows = (((_injBoard || {}).sports) || {})[d.sport] || [];
+  const want = ffNorm(p.name || d.name || "");
+  const nick = ffNorm((teamsForSport(d.sport)[p.team] || {}).nick || "");
+  return rows.filter((r) => r && !isReturnRow(r) && (r.team === p.team
+    || (want && ffNorm(r.team || "") === want)
+    || (nick && want && ffNorm(r.team || "").endsWith(nick) && want.endsWith(nick))));
+}
+function teamInjuryRowHTML(r) {
+  return `<button type="button" class="tm-row" data-player-page="${escapeAttr(slugify(r.player || ""))}">
+    <span class="tm-row-o">${escapeHtml(r.player || "")}<small>${escapeHtml(r.pos || r.position || "")}</small></span>
+    <span class="tm-row-r"><b style="color:${injTone(r.status)}">${escapeHtml(r.status || "")}</b>
+      <small>${escapeHtml([r.injury, r.return_date ? `return ${r.return_date}` : ""].filter(Boolean).join(" · "))}</small></span>
+  </button>`;
+}
+function teamInjuriesHTML(d, p) {
+  if (!_injBoard) return `<p class="loading">Reading the injury report…</p>`;
+  const rows = teamInjuryRows(d, p);
+  if (!rows.length) return teamEmptyTab("No injuries listed", `Nobody on ${p.name || p.team}’s injury report right now.`);
+  return `<div class="section-title">Injury report
+      <span class="sub">— ${rows.length} listed${_injBoard.generated_at
+        ? `, as of ${escapeHtml(String(_injBoard.generated_at).slice(0, 16).replace("T", " "))}` : ""}.</span></div>
+    <div class="card tm-list">${rows.map(teamInjuryRowHTML).join("")}</div>`;
 }
 
 /* Delegated, because the page redraws itself on every chip. */
 document.addEventListener("click", (e) => {
+  const gameBtn = e.target.closest && e.target.closest("[data-team-game]");
+  if (gameBtn) return openGame(gameBtn.dataset.teamGame);
+  const tabBtn = e.target.closest && e.target.closest("[data-team-tab]");
+  if (tabBtn) {
+    _teamState.tab = tabBtn.dataset.teamTab;
+    renderTeamPage();
+    const strip = document.querySelector("#team-page .tm-tabs");
+    if (strip && strip.getBoundingClientRect().top < 0) strip.scrollIntoView({ block: "start" });
+    return;
+  }
   const more = e.target.closest && e.target.closest("[data-team-more]");
   if (more) {
     _teamOppAll = more.dataset.teamMore === "1";
@@ -28907,8 +29145,11 @@ document.addEventListener("click", (e) => {
        by a shared link into another league, so `state.sport` is not
        reliably the league the team belongs to either. Whoever drew the
        chip knew; it says so. */
+    // FROM A GAME PAGE the team opens on Home with tonight's opponent
+    // already loaded, so its record against them is one card down.
     return openTeam(pick.dataset.teamSport || _teamState.sport || state.sport,
-                    pick.dataset.teamOpen, "");
+                    pick.dataset.teamOpen, pick.dataset.teamAgainst || "",
+                    pick.dataset.teamAgainst ? "home" : "");
   }
 });
 

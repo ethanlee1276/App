@@ -40,8 +40,11 @@ def test_every_player_prop_chart_is_bars_now():
     can never render is worse than a missing one: it reads as covered.
     """
     assert "sparkline(r.recent_values" not in APP
-    # The two prop boards plus the prop page they open.
-    assert APP.count("propAnalysis(r)") == 3
+    # The two prop boards plus the prop page they open — which asks for
+    # the chart from one game up (2026-09-24: a player with two games
+    # opened a pick page with no chart).
+    assert APP.count("propAnalysis(r)") == 2
+    assert APP.count("propAnalysis(r, { min: 1 })") == 1
     # And the game-bet card charts too — through the team-log series,
     # which is the only shape that can carry a run line.
     assert APP.count("gameBetChart(r)") == 1

@@ -201,6 +201,63 @@ def index_for_week(rows: list[dict], week: int) -> dict[tuple[str, str], tuple[s
     return idx
 
 
+#: The order a depth chart reads in: offence, defence, then the kickers.
+#: A position missing here sorts after these, alphabetically.
+CHART_ORDER = ("QB", "RB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT",
+               "DE", "EDGE", "DT", "NT", "OLB", "ILB", "MLB", "LB", "CB", "NB",
+               "FS", "SS", "S", "K", "P", "LS", "KR", "PR")
+
+#: Where the published charts are kept for the team page to read.
+CHART_FILE = "data/built/depth_nfl.json"
+
+
+def team_charts(rows: list[dict], week: int) -> dict:
+    """``{"as_of", "teams": {team: [{"position", "players": [names]}]}}``
+    — each team's published chart for ``week`` (the newest snapshot on
+    the date-keyed schema), names in depth order, one row per position.
+
+    Ethan, 2026-09-24, with ESPN's Packers page beside ours: a Depth
+    Chart tab. What a coach filed, as nflverse publishes it; the team
+    page falls back to the measured order (`teamdex.squad`) where this
+    is absent, and says which it is showing."""
+    wk = _week_rows(rows, week)
+    as_of = max((_s(r, "dt")[:10] for r in wk if _s(r, "dt")), default="") or f"week {week}"
+    by: dict = {}
+    for r in wk:
+        team = _s(r, "club_code", "team")
+        name = _s(r, "full_name", "player_name", "player_display_name")
+        pos = _position(r)
+        if not team or not name or not pos:
+            continue
+        slot = by.setdefault(team, {}).setdefault(pos, {})
+        rank = _rank(r)
+        if name not in slot or rank < slot[name]:
+            slot[name] = rank
+    order = {p: i for i, p in enumerate(CHART_ORDER)}
+    teams = {}
+    for team, positions in by.items():
+        teams[team] = [{"position": pos,
+                        "players": [n for n, _r in sorted(names.items(), key=lambda kv: (kv[1], kv[0]))]}
+                       for pos, names in sorted(positions.items(),
+                                                key=lambda kv: (order.get(kv[0], 99), kv[0]))]
+    return {"as_of": as_of, "teams": teams}
+
+
+def write_team_charts(rows: list[dict], week: int, path: str = CHART_FILE) -> int:
+    """Write `team_charts` where the server reads it; the team count."""
+    import json
+    import os
+    out = team_charts(rows, week)
+    if not out["teams"]:
+        return 0
+    tmp = path + ".tmp"
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, separators=(",", ":"))
+    os.replace(tmp, path)
+    return len(out["teams"])
+
+
 def qb1_map(rows: list[dict], week: int, back_days: int = 0) -> dict[str, str]:
     """team -> that week's top-of-chart QB (lowest depth rank wins).
 

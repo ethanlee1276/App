@@ -605,6 +605,14 @@ def main() -> None:
             # stamps a warning on that team's pass-catcher props.
             qb_notes = qb_dependency(rows, args.week, all_inj)
             depth_qb1 = qb1_map(rows, args.week)
+            # The team page's Depth Chart tab reads the published charts
+            # off disk (server._team) — written here, where they are
+            # already loaded, rather than refetched per page view.
+            try:
+                from engine.sources.depthcharts import write_team_charts
+                write_team_charts(rows, args.week)
+            except OSError as exc:
+                print(f"  · depth charts for the team page not written: {exc}")
             if qb_notes:
                 print(f"\nQB watch: {len(qb_notes)} team(s) flagged.")
                 for t, n in sorted(qb_notes.items()):

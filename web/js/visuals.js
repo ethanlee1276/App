@@ -1312,7 +1312,11 @@ function countStrip(live) {
    only one of which needs colour vision.                                */
 function propAnalysis(r, opts = {}) {
   const vals = (r.recent_values || []).filter((v) => Number.isFinite(Number(v)));
-  if (vals.length < 3) return "";
+  // THREE GAMES ON A CARD IN A LIST; ONE ON THE PICK PAGE (Ethan,
+  // 2026-09-24: Malachi Fields' pick page opened with no chart because he
+  // had played two games). The pick page asks with `min: 1` and the head
+  // says how few there are, so two bars never pass for a form line.
+  if (vals.length < (opts.min || 3)) return "";
   // THE LINE, WHEN THE MARKET DOES NOT HAVE ONE.
   //
   // Ethan's Long Shots board, 2026-08-13: every card read "LINE NaN",
@@ -1578,8 +1582,9 @@ function propAnalysis(r, opts = {}) {
       ${who ? `<span class="pa-who2">${escapeHtml(who)}</span>` : ""}
     </div>
     <div class="pa-chart">
-      <div class="pa-head"><span>${escapeHtml(
-          opts.head || `LAST ${n} GAMES vs PROP LINE`)}${early ? ` · ${early} LEFT EARLY` : ""}</span>
+      <div class="pa-head"><span>${escapeHtml(n < 3
+          ? `ONLY ${n} GAME${n === 1 ? "" : "S"} SO FAR vs PROP LINE`
+          : opts.head || `LAST ${n} GAMES vs PROP LINE`)}${early ? ` · ${early} LEFT EARLY` : ""}</span>
         <span class="pa-legend"><i class="ok"></i>${escapeHtml(
           (opts.legend || ["OVER", "UNDER"])[0])}<i class="no"></i>${escapeHtml(
           (opts.legend || ["OVER", "UNDER"])[1])}</span></div>

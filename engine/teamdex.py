@@ -380,6 +380,56 @@ def results(conn, sport: str, team: str, limit: int | None = None) -> list[dict]
     return out
 
 
+def _period_key(p) -> tuple:
+    """A week "10" after a week "9": periods are stored as text."""
+    s = str(p or "")
+    return (0, int(s), "") if s.isdigit() else (1, 0, s)
+
+
+def season_schedule(conn, sport: str, team: str, season: int | None = None) -> dict:
+    """The team's whole season, played and to come, in date order.
+
+    Ethan, 2026-09-24, with ESPN's Packers page beside ours: a Schedule
+    tab. The finals are `_game_row`s — the same score, line and cover the
+    head-to-head prints — and a fixture with no score yet is that game
+    as the table holds it: when, where, and the line if one is stored.
+    The season is the newest one this team has any game in, so a
+    schedule loaded before Week 1 reads as this season rather than last.
+    """
+    try:
+        if season is None:
+            row = conn.execute(
+                "SELECT MAX(season) FROM games WHERE sport=? AND (home=? OR away=?)",
+                (sport, team, team)).fetchone()
+            season = row[0] if row and row[0] is not None else None
+        if season is None:
+            return {"season": None, "games": []}
+        rows = conn.execute(
+            "SELECT season, period, date, home, away, home_score, away_score, "
+            "spread, total FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
+            (sport, season, team, team)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return {"season": season, "games": []}
+    games = []
+    for r in rows:
+        g = dict(r)
+        at_home = g["home"] == team
+        opp = g["away"] if at_home else g["home"]
+        if _num(g.get("home_score")) is not None and _num(g.get("away_score")) is not None:
+            row = _game_row(g, team)
+            row.update(opponent=opp, final=True)
+        else:
+            spread = _num(g.get("spread"))
+            row = {"season": g["season"], "period": g["period"], "date": g["date"],
+                   "home": g["home"], "away": g["away"], "at_home": at_home,
+                   "opponent": opp, "final": False,
+                   "line": None if spread is None else (spread if at_home else -spread),
+                   "total": _num(g.get("total"))}
+        games.append(row)
+    games.sort(key=lambda x: (x.get("date") or "", _period_key(x.get("period"))))
+    return {"season": season, "games": games}
+
+
 #: WHICH LINE LEADS A POSITION. A quarterback's row is about passing
 #: yards and a receiver's is about catches, and a squad list that sorted
 #: every position on the same market would rank the whole offence by

@@ -750,6 +750,30 @@ def _squad_or_empty(teamdex, conn, sport, team):
                 "error": "player logs unavailable"}
 
 
+def _schedule_or_empty(teamdex, conn, sport, team):
+    """`teamdex.season_schedule`, or an empty season — the same guard as
+    `_squad_or_empty`, and a module function for the same reason."""
+    try:
+        return teamdex.season_schedule(conn, sport, team)
+    except Exception:                                        # noqa: BLE001
+        return {"season": None, "games": []}
+
+
+def _depth_chart(sport, team):
+    """The team's published depth chart (NFL; nfl_build writes the file),
+    or None — the page then shows the order measured from the logs."""
+    if sport != "nfl":
+        return None
+    try:
+        from engine.sources.depthcharts import CHART_FILE
+        with open(ROOT / CHART_FILE, encoding="utf-8") as fh:
+            charts = json.load(fh)
+        positions = (charts.get("teams") or {}).get(team)
+        return {"as_of": charts.get("as_of"), "positions": positions} if positions else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 #: Reading order for a roster: starters first, then by position the way
 #: a lineup card reads.
 #:
@@ -3362,7 +3386,12 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                        # guard, same reason (Ethan, 2026-09-10: "ESPN
                        # uses theirs as an example of how we should make
                        # ours work and the data we could show").
-                       "stats": _stats_or_empty(teamdex, conn, sport, team)}
+                       "stats": _stats_or_empty(teamdex, conn, sport, team),
+                       # The Schedule and Depth Chart tabs (Ethan,
+                       # 2026-09-24, beside ESPN's Packers page). Same
+                       # guard: either failing costs its own tab.
+                       "schedule": _schedule_or_empty(teamdex, conn, sport, team),
+                       "depth": _depth_chart(sport, team)}
                 if opp.strip():
                     rivals = teamdex.resolve(opp, sport, known)
                     if rivals:

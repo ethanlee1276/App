@@ -11466,3 +11466,92 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .hd-what .hd-note { display: block; margin-top: 3px; color: var(--text-mute);
   font-family: inherit; font-size: var(--fs-xs); white-space: normal; }
 .tn-none { margin: 4px 0 10px; color: var(--text-dim); font-size: var(--fs-sm); }
+
+/* ---- The team page in ESPN's shape (2026-09-24) -------------------------
+   Ethan, beside ESPN's Packers page: "I want it too be layed out like the
+   espn … and have tabs for each page". A header (crest, city over
+   nickname, record and standing), a sticky strip of underlined tabs, and
+   one section per tab. */
+.tm-head { display: flex; align-items: center; gap: 16px; padding: 8px 0 14px; }
+.tm-crest { flex: none; display: inline-flex; }
+.tm-id { min-width: 0; flex: 1; }
+.tm-city { font-size: var(--fs-md); color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
+.tm-nick { margin: 0; font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.3px; line-height: var(--lh-tight); text-transform: uppercase; }
+.tm-rec { margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); font-weight: 600; }
+.tm-acts { flex: none; }
+.tm-tabs {
+  position: sticky; top: var(--topbar-h); z-index: 5;
+  display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 -16px 16px; padding: 0 16px;
+  background: var(--bg); border-bottom: var(--hairline) solid var(--border);
+}
+.tm-tabs::-webkit-scrollbar { display: none; }
+.tm-tab {
+  flex: none; min-height: 44px; padding: 0 12px; cursor: pointer;
+  background: none; border: 0; border-bottom-style: solid; border-bottom-width: 3px; border-bottom-color: transparent;
+  font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--text-dim); white-space: nowrap;
+}
+.tm-tab:hover { color: var(--text); }
+.tm-tab.on { color: var(--text); border-bottom-color: var(--brand); }
+.tm-body { min-height: 40vh; }
+.tm-more { margin-left: auto; float: right; font-size: var(--fs-sm); color: var(--brand); min-height: 24px; }
+
+/* The schedule strip: one cell a game, the next one lit. */
+.tm-strip {
+  display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -16px 16px; padding: 0 16px;
+  border-top: var(--hairline) solid var(--border-soft); border-bottom: var(--hairline) solid var(--border-soft);
+}
+.tm-strip::-webkit-scrollbar { display: none; }
+.tm-cell {
+  flex: none; min-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 8px; cursor: pointer; background: none; border: 0;
+  border-right: var(--hairline) solid var(--border-soft); font: inherit; color: var(--text);
+}
+.tm-cell.next { background: var(--fill-subtle); }
+.tm-cell-d { font-size: var(--fs-sm); font-weight: 700; }
+.tm-cell-o { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-dim); }
+.tm-cell-r { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+.tm-next {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; margin-bottom: 16px;
+  text-align: left; cursor: pointer; font: inherit; color: var(--text);
+}
+.tm-next-k { font-size: var(--fs-xs); font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: .08em; }
+.tm-next-g { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--fs-lg); font-weight: 800; }
+.tm-next-m { font-size: var(--fs-sm); color: var(--text-dim); }
+.tm-glance { margin-bottom: 16px; }
+.tm-sub { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-mute); }
+
+/* A list of rows: a schedule, an injury report, the last five. */
+.tm-list { padding: 0; }
+.tm-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  width: 100%; min-height: 52px; padding: 10px 14px; cursor: pointer; text-align: left;
+  background: none; border: 0; border-bottom: var(--hairline) solid var(--border-soft);
+  font: inherit; color: var(--text);
+}
+.tm-row:last-child { border-bottom: 0; }
+.tm-row:hover { background: var(--fill-hover); }
+.tm-row small { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 500; }
+.tm-row-w { min-width: 44px; font-size: var(--fs-sm); font-weight: 700; }
+.tm-row-o { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-weight: 600; }
+.tm-row-o small { flex-basis: 100%; }
+.tm-row:not(:has(.tm-row-w)) { grid-template-columns: minmax(0, 1fr) auto; }
+.tm-row-r { text-align: right; font-variant-numeric: tabular-nums; }
+.tm-up { color: var(--text-dim); font-size: var(--fs-sm); }
+
+.tm-depth { padding: 0; overflow-x: auto; }
+.tm-depth .rank-table td, .tm-depth .rank-table th { text-align: left; white-space: nowrap; }
+.tm-pos { font-weight: 800; color: var(--text-dim); }
+.tm-name {
+  background: none; border: 0; padding: 0; min-height: 24px; cursor: pointer;
+  font: inherit; color: var(--text); text-align: left;
+}
+.tm-name:hover { color: var(--brand); }
+/* A team's name that opens its team page, in whatever type it sits in. */
+.team-link {
+  display: inline-block; background: none; border: 0; padding: 0; margin: 0; min-height: 24px; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-align: inherit;
+  text-decoration: underline; text-decoration-color: var(--text-mute); text-underline-offset: 3px;
+}
+.team-link:hover, .team-link:focus-visible { text-decoration-color: var(--brand); }

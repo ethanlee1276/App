@@ -31,8 +31,8 @@ def test_both_names_in_the_header_are_doors():
     head = page[page.index('<div class="gp-teams">'):]
     head = head[:head.index("</div>")]
     assert head.count("gpTeamDoor(") == 2
-    assert "${gpTeamDoor(g.away)} ${score(\"away\")}" in head
-    assert "${gpTeamDoor(g.home)} ${score(\"home\")}" in head
+    assert "${gpTeamDoor(g.away, g.home)} ${score(\"away\")}" in head
+    assert "${gpTeamDoor(g.home, g.away)} ${score(\"home\")}" in head
 
 
 def test_the_door_is_the_team_searchs_door():

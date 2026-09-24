@@ -114,7 +114,7 @@ def test_the_card_and_the_prop_page_draw_it():
     # The chart is drawn for the pick the page shows — `propAnalysis(r)` on
     # the edge board's page, the Most Likely row's line when opened from
     # that board — and still above the books, above the logs.
-    assert page.index("propAnalysis(r)") < page.index("${booksTableHTML(r)}") < page.index("Last ${shown} game")
+    assert page.index("propAnalysis(r, { min: 1 })") < page.index("${booksTableHTML(r)}") < page.index("Last ${shown} game")
     for sel in (".bs-strip", ".bs-q.best", ".pp-books tr.best td", ".pp-books tr.bs-sep td"):
         assert sel in CSS, sel
 
