@@ -11266,7 +11266,7 @@ function pickScanHTML(r) {
   if (!x) return "";
   return `<div class="section-title minor">Matchup scan
       <span class="sub">— his read against ${escapeHtml(teamName(r.opponent || ""))} from the game’s scan.
-      It does not move the number yet.</span></div>
+      Tested against past seasons, it adds nothing to the number, so it does not move it.</span></div>
     ${scanReadHTML(x)}`;
 }
 
@@ -11307,12 +11307,16 @@ function matchupScanHTML(g) {
     ${micro.length ? `<div class="card ms-micros"><div class="ms-sub">Props under the microscope</div>
       <p class="ms-note">The markets the good reads point at, as this board prices them, likeliest first.</p>
       ${micro.map(scanMicroHTML).join("")}</div>` : ""}
-    <p class="ms-note">None of this moves our numbers yet: a reason joins the model once it has been measured
-      against past games, the way the defense-versus-position and teammate-out adjustments were. ${adjusted
-      ? `Coverage and pass-rush counts are this season’s (Pro Football Reference, via nflverse); man and zone
-      rates come from the newest season charted.`
-      : `College units are CollegeFootballData’s advanced season numbers with garbage time taken out; there
-      is no public coverage charting for college.`}</p>
+    <p class="ms-note">${adjusted
+      ? `None of this moves our numbers. We tested every reason here against the NFL’s 2022–2025 games —
+      pressure, pass and run defense, missed tackles, a starting corner out, a receiver’s zone-or-man split —
+      and none predicted a player’s line beyond the form and defense-versus-position the model already
+      prices. Read it as how the game sets up, not as an edge. Coverage and pass-rush counts are this
+      season’s (Pro Football Reference, via nflverse); man and zone rates come from the newest season charted.`
+      : `None of this moves our numbers: the NFL versions of these reasons, tested against four seasons,
+      added nothing to the model, and the college ones have not been measured. College units are
+      CollegeFootballData’s advanced season numbers with garbage time taken out; there is no public
+      coverage charting for college.`}</p>
   </div>`;
 }
 

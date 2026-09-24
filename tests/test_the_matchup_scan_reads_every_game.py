@@ -179,7 +179,7 @@ def test_ask_reads_the_scan_for_a_named_game_only():
     assert ms["soft_spot_in_coverage"] == {"ATL": "Mike Hughes"}
     assert ms["player_reads"][0]["read"] == "breakout"
     assert ms["props_under_the_microscope"][0]["clears"] is True
-    assert "It does not move our numbers yet" in AB.SYSTEM
+    assert "moves none of our numbers" in AB.SYSTEM
     src = open(os.path.join(ROOT, "engine", "askbot.py"), encoding="utf-8").read()
     assert 'facts["games"] = [game_facts(boards[s], g, scan=True)' in src
 
@@ -211,7 +211,7 @@ def test_the_game_page_draws_the_scan():
     fn = fn[:fn.index("\n}\n")]
     assert "(d.scan_reads || {})[`${away}@${home}`]" in fn
     assert "d.locked && d.locked.scan_reads" in fn, "a signed-out reader is told what is behind the paywall"
-    assert "None of this moves our numbers yet" in fn
+    assert "None of this moves our numbers" in fn and "2022–2025" in fn, "the page says what was measured"
     for sel in (".ms-unit {", ".ms-rank.good {", ".ms-read.breakout {", ".ms-why li.pro::marker {", ".ms-micro {"):
         assert sel in CSS, sel
 
