@@ -8249,7 +8249,10 @@ function renderLikely() {
   note.innerHTML = `${boardGuide("most_likely")}
     <div class="ls-note">Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
-    shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
+    shown on every row and is never what ordered it. A pick keeps its number
+    and its seat through the day unless its game starts, a bar turns it away,
+    or a pick 3 points likelier takes the seat — each row says how long it has
+    been up.${rankOnly ? ` ${rankOnly}
     ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
     price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</div>
     ${likelyRefusedNote(state.data.likely_census, rows.length)}
@@ -8365,9 +8368,13 @@ function likelyGameMark(r, size) {
    gets a chip (applied ≠ 1); a card the model only shows stays under the
    tap, where its note says so. */
 function likelyTagsHTML(r) {
-  if (!r || r.kind === "game") return "";
+  if (!r) return "";
   const pct = (x) => `${x > 1 ? "+" : "−"}${Math.abs(Math.round((x - 1) * 100))}%`;
   const tags = [];
+  /* How long it has been up, first (engine/likely.HOLD_MARGIN). */
+  const held = likelyHeldTag(r);
+  if (held) tags.push(held);
+  if (r.kind === "game") return tagsOut(tags);
   const qb = r.qb_card, mate = r.mate_card;
   if (qb && qb.headline) {
     const a = Number(qb.applied);
@@ -8384,9 +8391,45 @@ function likelyTagsHTML(r) {
     tags.push([`${thin.games} game${thin.games === 1 ? "" : "s"} in`, "",
                "Projected from this season’s first games — shown, not staked"]);
   }
-  if (!tags.length) return "";
-  return `<span class="ml-tags">${tags.map(([t, tone, why]) =>
-    `<span class="ml-tag${tone ? " " + tone : ""}" title="${escapeAttr(why)}">${escapeHtml(t)}</span>`).join("")}</span>`;
+  return tagsOut(tags);
+
+  function tagsOut(list) {
+    if (!list.length) return "";
+    return `<span class="ml-tags">${list.map(([t, tone, why]) =>
+      `<span class="ml-tag${tone ? " " + tone : ""}" title="${escapeAttr(why)}">${escapeHtml(t)}</span>`).join("")}</span>`;
+  }
+}
+
+/* HOW LONG THE BOARD HAS HELD IT (2026-09-24). Ethan: "for the most
+   likely bets they seem too change alot so it's hard too judge what
+   picks the models are comfortable with." The board now holds a pick's
+   number and seat between refreshes (engine/likely.HOLD_MARGIN) and
+   stamps when it went up (`since`); a pick the model has kept since
+   morning reads that way on the row, and one that went up in the last
+   hour says New. `since` is absent on a board built before the hold. */
+const LIKELY_NEW_MIN = 60;
+
+function likelyHeld(r) {
+  const t = Date.parse((r || {}).since || "");
+  if (!Number.isFinite(t)) return null;
+  const day = (x) => new Date(x).toLocaleDateString(undefined, tzOpts({}));
+  const when = day(t) === day(Date.now()) ? tzTime(t)
+    : `${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "short" }))} ${tzTime(t)}`;
+  return { fresh: (Date.now() - t) / 60000 < LIKELY_NEW_MIN, when };
+}
+
+/* The row's chip: [text, tone, title], or null with no `since`. On the
+   tag row under the pick (likelyTagsHTML), not the grey line, which a
+   phone cuts off at the book. */
+function likelyHeldTag(r) {
+  const h = likelyHeld(r);
+  if (!h) return null;
+  const was = Number((r || {}).first_prob);
+  const then = Number.isFinite(was) ? ` — ${wholePct(was)} when it went up` : "";
+  return h.fresh ? ["New", "new", `Went up at ${h.when}${then}`]
+    : [`Since ${h.when}`, "", `On the board since ${h.when}, held through every refresh${then}. A pick
+       keeps its number and its seat unless its game starts, a bar turns it away, or a pick 3 points
+       likelier takes the seat.`];
 }
 
 function likelyRow(r) {
@@ -9901,6 +9944,21 @@ function whyLikelyHTML(v, r, lk) {
   items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band` : ""}. The
     number this board is ranked on, calibrated against how its picks have landed; the
     Record page checks every band.`]);
+  /* How long the board has held it, and at what (engine/likely.HOLD_MARGIN). */
+  const held = likelyHeld(lk);
+  if (held) {
+    const was = Number(lk.first_prob);
+    const moved = Math.abs(was - p) >= 0.005 && Number.isFinite(was)
+      ? `${wholePct(was)} when it went up, ${wholePct(p)} now` : `${wholePct(p)} since it went up`;
+    const side = String(lk.side || "").toLowerCase();
+    items.push(["On the board", `${held.fresh ? `New — went up at ${escapeHtml(held.when)}`
+      : `Since ${escapeHtml(held.when)}, held through every refresh`}: ${moved}.${lk.first_line != null
+      ? ` It went up at ${escapeHtml(side)} ${escapeHtml(String(lk.first_line))}; that number no
+        longer clears the board’s bars at its best price, so it shows at ${escapeHtml(String(lk.line))} —
+        and goes back to ${escapeHtml(String(lk.first_line))} if it clears again.` : ""} A pick keeps its
+      number and its seat unless its game starts, a bar turns it away, or a pick 3 points likelier
+      takes the seat.`]);
+  }
   const proj = Number(r.projection);
   if (!anytime && Number.isFinite(proj)) {
     const gap = proj - line;

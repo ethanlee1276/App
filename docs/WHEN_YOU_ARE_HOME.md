@@ -21,7 +21,8 @@ Ethan, 2026-09-24: *"save all the code u need me too run for when im
 home."* **Nothing below writes anything** — every block only reads, so
 any of them is safe mid-cycle. Paste each output back with its number.
 
-**1. Which code is running** (want `50c5b5bc` or newer):
+**1. Which code is running** (want `50c5b5bc` or newer; step 7 needs
+the commit after it, "Most Likely picks hold…"):
 
 ```bash
 cd /srv/qellys && cat data/autoupdate.json; echo
@@ -79,7 +80,24 @@ should open on that pick (its side, line, book and chance) with the green
 "Why it’s likely" card straight under it. Tap an Edge bet — its page is
 unchanged.
 
-**7. SATURDAY ONLY — are college receptions priced?**
+**7. The Most Likely board holds its picks** (seconds — best a few hours
+after the update, so there is a day of refreshes to read). Ethan,
+2026-09-24: *"they seem too change alot so it's hard too judge what picks
+the models are comfortable with."* A pick now keeps its number and its
+seat between refreshes (`engine/likely.HOLD_MARGIN`), and every build
+counts what changed and why:
+
+```bash
+cd /srv/qellys && python3 homecheck.py hold
+```
+
+Want: by the afternoon most picks under "up 3h+", and under "left" mostly
+"its game started". A lot of "a likelier pick took its seat" or "no
+longer offered" means something else still moves the board — paste it.
+On the phone: Most Likely rows read "Since 9:12 AM" or "New", and a
+pick's page says when it went up and at what chance.
+
+**8. SATURDAY ONLY — are college receptions priced?**
 
 ```bash
 cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
@@ -87,7 +105,7 @@ cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
 
 Want: `receptions … priced` above 0%.
 
-**8. Whenever there is a quiet minute** (parked since 2026-09-21):
+**9. Whenever there is a quiet minute** (parked since 2026-09-21):
 
 ```bash
 cd /srv/qellys && python3 homecheck.py bench; python3 homecheck.py sizing; python3 homecheck.py shelves

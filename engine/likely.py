@@ -220,8 +220,103 @@ def ranking_number(sport: str, market: str, row: dict, model_auc):
 #: under 55% still shows nothing, and the census says so.
 PER_MARKET = 8
 
+#: THE HOLD. Ethan, 2026-09-24: "for the most likely bets they seem too
+#: change alot so it's hard too judge what picks the models are
+#: comfortable with."
+#:
+#: The board had no memory. Every refresh rebuilt it from nothing, and
+#: two things in that rebuild move on a price tick rather than on
+#: anything the model thinks:
+#:
+#:   * THE NUMBER. `_best_rung` takes the likeliest rung at no heavier
+#:     than -250, which is the rung sitting nearest the cap — so over
+#:     34.5 at -245 is the pick until the book moves it to -255, then
+#:     over 39.5 is, then 34.5 again. The player's projection never
+#:     moved; the row's line, price and percent did.
+#:   * THE SEAT. A rung near the cap is priced near 71%, and the
+#:     credibility bar keeps the model within ten points of it, so the
+#:     rows fighting for a market's eight seats sit a point or two apart.
+#:     A hop on one row reorders the seats for all of them.
+#:
+#: So a pick on the board keeps its number while that number still
+#: clears every bar at its own price (`from_prop`'s `prefer`), and keeps
+#: its seat unless a newcomer is likelier by HOLD_MARGIN. NO BAR MOVES:
+#: the floor, the -250 cap, the credibility bar and the injury holds are
+#: asked of a held pick exactly as of a new one, and a held pick that
+#: fails one leaves. What the hold decides is only which of several rows
+#: that ALL clear the bars is shown — the question a price tick used to
+#: answer.
+#:
+#: WHAT IT BOUGHT, REPLAYED BEFORE IT SHIPPED (tests/test_most_likely_
+#: holds_its_picks.py builds the replay; there was no board history on
+#: any box to measure instead — the board never kept one). Seventy-two
+#: props on alternate ladders at three books, rebuilt every fifteen
+#: minutes for six hours with every rung's price ticking; picks that
+#: differ between two looks at a forty-pick board:
+#:
+#:                       15 min apart   1 hour   3 hours
+#:     prices jitter     5.4 -> 2.4     5.1 -> 2.9   5.3 -> 4.3
+#:     prices drift      5.5 -> 2.6     6.5 -> 4.0   8.0 -> 6.9
+#:
+#: THE HELD NUMBER DID NEARLY ALL OF IT. The margin moved nothing in the
+#: replay (0.00 against 0.05: 4.1 against 3.9 at an hour), because there a
+#: pick's probability at a fixed number never moves — the mixture reads
+#: the projection, not the price. On the box it does move: passing yards
+#: price on a mean anchored to the book (`_anchored_mean`), and a
+#: projection moves on news. THREE POINTS is one step of the ladder near
+#: the cap (-220 against -250 is 68.8% against 71.4%), and each build
+#: reports how many held rows the margin alone kept (`kept_by_margin` in
+#: `turnover`): a margin that never decides a seat is doing nothing, and
+#: one deciding most of them is too wide.
+HOLD_MARGIN = 0.03
 
-def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET) -> list:
+#: HOW LONG A PICK THAT LEFT IS STILL THE SAME PICK, in minutes. Found in
+#: the replay above: a held rung whose price ticks past -250 for one
+#: refresh drops the pick to a weaker number, the pick loses its seat, and
+#: by the next refresh — the price back at -245 — the board had forgotten
+#: it and the row that took its seat was the incumbent. So a pick that
+#: left for any reason but its game starting is remembered for an hour
+#: (`turnover["held_out"]`): if it clears every bar again inside that, it
+#: returns at its own number, with its seat margin and its `since`. In
+#: the replay that took the changes between looks an hour apart from 4.4
+#: to 4.0 of forty — small, and the rest of those are the ticks the cap
+#: really did refuse. An hour is four refreshes on the slowest board:
+#: long enough to ride out a tick, short enough that a pick the model
+#: really dropped is gone by the next time anyone looks.
+HOLD_GRACE_MIN = 60
+
+
+def hold_key(r: dict) -> tuple:
+    """Which pick a row IS, across refreshes: the player and market (the
+    number may move), or the game, market and side."""
+    kind = r.get("kind") or "prop"
+    if kind == "game":
+        return ("game", r.get("matchup") or "", r.get("market") or "",
+                r.get("team") or "", str(r.get("side") or "").lower())
+    return (kind, r.get("player") or "", r.get("team") or "",
+            r.get("market") or "")
+
+
+def _seat(r: dict, held) -> float:
+    """What a row competes for a seat on: its probability, plus the hold's
+    margin when it was on the board last time."""
+    p = float(r.get("model_prob") or 0.0)
+    return p + HOLD_MARGIN if held and hold_key(r) in held else p
+
+
+def _same_number(side, line, prefer) -> bool:
+    """Is (side, line) the number ``prefer`` — one (side, line) — names?"""
+    if not prefer:
+        return False
+    try:
+        return (str(side or "").lower() == str(prefer[0] or "").lower()
+                and abs(float(line) - float(prefer[1])) < 1e-9)
+    except (TypeError, ValueError):
+        return False
+
+
+def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET,
+                 held=None) -> list:
     """The player rows the board keeps: each market's best `per_market`
     — seats no other market can take — then the best of the rest up to
     `limit`, probability order.
@@ -236,8 +331,11 @@ def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET) -> list:
     priced lowest — passing yards, the one Ethan had just asked for. The
     per-market seats are guaranteed; `limit` is the back-fill target.
     See docs/ONE_MARKET_NEVER_COSTS_ANOTHER.md.
+
+    ``held`` is the hold's index of last build's rows: a row in it
+    competes for its seat at HOLD_MARGIN over its probability.
     """
-    rows = sorted(rows, key=lambda r: -float(r.get("model_prob") or 0.0))
+    rows = sorted(rows, key=lambda r: -_seat(r, held))
     kept, taken = [], {}
     for r in rows:
         m = r.get("market") or ""
@@ -868,7 +966,7 @@ def _tally(ladder, why: str) -> None:
 
 
 def _best_rung(row: dict, market: str, fits=None, floor=None,
-               ladder: dict | None = None) -> dict | None:
+               ladder: dict | None = None, prefer=None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
     THE CHOICE, over `rungs` below, which is the derivation. This board
@@ -877,9 +975,35 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
     clears an EV floor at a price inside an even-money band — and a
     second walk of the ladder to answer it would be a second set of
     probabilities to keep honest. One derivation, two views.
+
+    ``prefer`` lists the (side, line) numbers the board held for this
+    prop, in order (see `_held_choice`): while one of them is still among
+    the rungs clearing every bar, it is the answer, whatever its
+    neighbour did to its price.
     """
     got = rungs(row, market, fits, floor=floor, ladder=ladder)
-    return max(got, key=lambda c: c["prob"]) if got else None
+    if not got:
+        return None
+    held = _held_choice(row, got, prefer, main_ok=False)
+    return held if held is not None else max(got, key=lambda c: c["prob"])
+
+
+def _held_choice(row: dict, got: list, prefer, main_ok: bool):
+    """"main", a rung from ``got``, or None: the first of the numbers the
+    board held (``prefer``, in order — the number the pick went up at,
+    then the one it showed last) that still clears every bar.
+
+    THE NUMBER IT WENT UP AT COMES FIRST. A held pick whose number ticks
+    past a bar falls back to another rung; when the first number clears
+    again the pick returns to it rather than staying wherever the tick
+    left it — the pick is the one that was posted."""
+    for p in prefer or ():
+        if main_ok and _same_number(row.get("side"), row.get("line"), p):
+            return "main"
+        for c in got:
+            if _same_number(c["side"], c["line"], p):
+                return c
+    return None
 
 
 def rungs(row: dict, market: str, fits=None, floor=None,
@@ -1004,7 +1128,7 @@ def rungs(row: dict, market: str, fits=None, floor=None,
 
 def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
               census: dict | None = None, floor=None,
-              ladder: dict | None = None) -> dict | None:
+              ladder: dict | None = None, prefer=None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -1013,6 +1137,11 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     would let the two pages disagree about the same player.
 
     ``census`` counts each refusal by reason — see `_refuse`.
+
+    ``prefer`` lists the (side, line) numbers this board held for the
+    prop — the one it went up at, then the one it showed last. The first
+    still clearing every bar, main line or rung, is the row, so a price
+    tick on a neighbouring rung does not move the pick (HOLD_MARGIN).
     """
     market = row.get("market") or ""
     if not rankable(market, sport):
@@ -1049,7 +1178,8 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
         # With or without a model number on the main line: a rung priced
         # by the model's own curve, or by a sharp book hanging the same
         # alternate, needs neither (2026-09-15).
-        rung = (_best_rung(row, market, fits, floor=floor, ladder=ladder)
+        rung = (_best_rung(row, market, fits, floor=floor, ladder=ladder,
+                           prefer=prefer)
                 if row.get("has_market") else None)
         if rung is not None:
             return _row_from(row, market, sport, bettable, prob, rung=rung)
@@ -1102,9 +1232,17 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     # bars — is what the row shows; the main number stays on the row
     # as `main_line` so the card can say which book number the rung
     # stands beside. See `_best_rung`.
-    rung = _best_rung(row, market, fits, floor=floor, ladder=ladder)
+    got = rungs(row, market, fits, floor=floor, ladder=ladder)
     main_ok = shown >= _floor(floor) and _credible(shown, row.get("fair_prob"))
-    if rung is not None and (not main_ok or rung["prob"] > shown):
+    # THE HELD NUMBER FIRST (HOLD_MARGIN, `_held_choice`): the main line or
+    # the rung the board held, while it still clears; only then the
+    # likeliest of the two.
+    held = _held_choice(row, got, prefer, main_ok)
+    if isinstance(held, dict):
+        return _row_from(row, market, sport, bettable, prob, rung=held)
+    rung = max(got, key=lambda c: c["prob"]) if got else None
+    if rung is not None and held != "main" and (
+            not main_ok or rung["prob"] > shown):
         return _row_from(row, market, sport, bettable, prob, rung=rung)
     if shown < _floor(floor):
         return _refuse(census, "under the likelihood floor after calibration")
@@ -1625,6 +1763,221 @@ def from_game_bet(row: dict, sport: str = "nfl",
 
 
 #: The kinds of row the board is built from, in the order the makers run.
+def _now() -> str:
+    """This build's stamp: UTC to the second, one format, so stamps sort."""
+    import datetime as _dt
+    return (_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+            .replace("+00:00", "Z"))
+
+
+def _started(row: dict, stamp: str) -> bool:
+    """Had this row's game kicked off by `stamp`? False when either is unreadable."""
+    import datetime as _dt
+
+    def parse(x):
+        t = _dt.datetime.fromisoformat(str(x).strip().replace("Z", "+00:00"))
+        return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+    try:
+        return bool(row.get("kickoff")) and parse(row["kickoff"]) <= parse(stamp)
+    except (TypeError, ValueError):
+        return False
+
+
+def _stamp_hold(rows: list, held: dict, stamp: str) -> None:
+    """`since`, `first_prob` and (when the number has moved) `first_line`
+    on every row: carried from last build's row for the same pick on the
+    same side, or this build's for a pick that has just gone up.
+
+    CONTINUOUS, NOT CUMULATIVE. Only last build's board is consulted, so a
+    pick that left and came back went up again when it came back — "on
+    the board since 9:12" means through every refresh since 9:12."""
+    for r in rows:
+        h = held.get(hold_key(r))
+        if h is not None and (str(h.get("side") or "").lower()
+                              == str(r.get("side") or "").lower()):
+            r["since"] = h.get("since") or stamp
+            r["first_prob"] = h.get("first_prob", h.get("model_prob"))
+            first = h.get("first_line", h.get("line"))
+            if (first is not None and r.get("line") is not None
+                    and not _same_number(r.get("side"), r.get("line"),
+                                         (r.get("side"), first))):
+                r["first_line"] = first
+        else:
+            r["since"] = stamp
+            r["first_prob"] = r.get("model_prob")
+
+
+def _minutes(since: str, stamp: str) -> float:
+    """Minutes from `since` to `stamp`; 0 when either is unreadable."""
+    import datetime as _dt
+
+    def parse(x):
+        t = _dt.datetime.fromisoformat(str(x).strip().replace("Z", "+00:00"))
+        return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+    try:
+        return (parse(stamp) - parse(since)).total_seconds() / 60.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+#: What a pick held out of the board keeps (HOLD_GRACE_MIN): enough to
+#: key it, hold its number, and give it back its `since` if it returns.
+_HELD_OUT_FIELDS = ("kind", "player", "team", "market", "matchup", "side",
+                    "line", "model_prob", "since", "first_prob", "first_line",
+                    "kickoff")
+
+
+def _turnover(rows: list, held: dict, why_left: dict, outranked: set,
+              stamp: str, by_margin: int) -> dict:
+    """What changed against last build's board, why each pick left, and
+    the picks still held out for the next build.
+
+    The measurement behind the hold (HOLD_MARGIN): on the box, each build
+    says how many picks it kept on the same number, how many moved number
+    or side, how many are new, how many came back inside the grace
+    (HOLD_GRACE_MIN), and for each that left the reason — its game
+    started, a bar turned it away (the census's own words), a likelier
+    pick took its seat, or the books stopped offering it.
+
+    `held_out` is what the next build reads back (`previous_board`). It
+    names picks, so it rides in a paid key (`gate.PAID_KEYS`).
+    """
+    now = {hold_key(r): r for r in rows}
+    kept = moved = flipped = back = 0
+    for k, r in now.items():
+        h = held.get(k)
+        if h is None:
+            continue
+        if h.get("out_at"):
+            back += 1
+        elif str(h.get("side") or "").lower() != str(r.get("side") or "").lower():
+            flipped += 1
+        elif (h.get("line") is not None and r.get("line") is not None
+              and not _same_number(r.get("side"), r.get("line"),
+                                   (h.get("side"), h.get("line")))):
+            moved += 1
+        else:
+            kept += 1
+    left: dict = {}
+    held_out: list = []
+    for k, h in held.items():
+        if k in now:
+            continue
+        started = _started(h, stamp)
+        if h.get("out_at"):
+            if not started:
+                held_out.append(h)
+            continue
+        why = ("its game started" if started
+               else why_left.get(k) or ("a likelier pick took its seat"
+                                        if k in outranked else "no longer offered"))
+        left[why] = left.get(why, 0) + 1
+        if not started:
+            ghost = {f: h.get(f) for f in _HELD_OUT_FIELDS if h.get(f) is not None}
+            ghost.update(since=h.get("since") or stamp, out_at=stamp, out_why=why)
+            held_out.append(ghost)
+    return {"at": stamp,
+            "previous": sum(1 for h in held.values() if not h.get("out_at")),
+            "rows": len(rows), "held": kept, "number_moved": moved,
+            "side_flipped": flipped, "came_back": back,
+            "new": sum(1 for k in now if k not in held), "left": left,
+            "kept_by_margin": by_margin, "held_out": held_out}
+
+
+#: The counts `_day_tally` adds up across a slate's builds.
+_DAY_COUNTS = ("held", "number_moved", "side_flipped", "came_back", "new",
+               "kept_by_margin")
+
+
+def _day_tally(day: dict, turn: dict, fresh: bool) -> dict:
+    """The slate's running tally: this build's turnover added to the last
+    one's. One build's turnover says what the last refresh did; the tally
+    says what a whole day of them did, and which reason dominates — the
+    number `homecheck.py hold` prints. The first build of a slate starts
+    it, and does not count its every row as new."""
+    out = {"builds": int(day.get("builds") or 0) + 1,
+           "since": day.get("since") or turn.get("at")}
+    for k in _DAY_COUNTS:
+        out[k] = int(day.get(k) or 0) + (0 if fresh and k == "new" else int(turn.get(k) or 0))
+    left = dict(day.get("left") or {})
+    for why, n in (turn.get("left") or {}).items():
+        left[why] = int(left.get(why) or 0) + int(n)
+    out["left"] = left
+    return out
+
+
+def previous_board(public_path, date) -> dict:
+    """What this board published last, for the hold: {"rows": its
+    `most_likely` rows and the picks it was holding out, "day": the
+    slate's running tally} — empty when there is no board yet, it is
+    another slate's, or it cannot be read.
+
+    Read from the private copies (`gate.board_source`): with the paywall
+    on, the public file has the picks taken out, and a hold reading it
+    would find nothing to hold and quietly turn itself off. THE LIGHT COPY
+    FIRST (`engine/lightboard`), written by the same build a moment after
+    the full one: it carries every Most Likely row and `likely_turnover`
+    without each row's chain and comps, and the full MLB board is 8 MB to
+    parse on every refresh of a one-gigabyte box to read forty rows.
+    """
+    import json
+    from .gate import board_source
+    from .lightboard import light_path
+    doc = None
+    for path in (light_path(public_path), public_path):
+        try:
+            with open(board_source(path), encoding="utf-8") as fh:
+                doc = json.load(fh)
+            break
+        except (OSError, ValueError, TypeError):
+            continue
+    if doc is None:
+        return {"rows": [], "day": {}}
+    if not isinstance(doc, dict) or str(doc.get("date") or "") != str(date or ""):
+        return {"rows": [], "day": {}}
+    # The board's rows, then the picks it was holding out (HOLD_GRACE_MIN);
+    # `build` drops a ghost whose hour has run and prefers a row to its ghost.
+    turn = doc.get("likely_turnover") or {}
+    rows = [r for r in doc.get("most_likely") or [] if isinstance(r, dict)]
+    rows += [r for r in turn.get("held_out") or []
+             if isinstance(r, dict) and r.get("out_at")]
+    return {"rows": rows, "day": turn.get("day") or {}}
+
+
+def hold_report(sport: str, board: dict) -> list:
+    """How steady one published Most Likely board is — `homecheck.py hold`.
+
+    Three readings, each answering part of Ethan's "it's hard too judge
+    what picks the models are comfortable with" (2026-09-24): how long
+    the picks on the board now have been up, what a day of refreshes did
+    to the board (`likely_turnover.day`), and why the picks that left,
+    left. Ages are measured at the board's own last build, so a stale
+    board does not read as a steady one.
+    """
+    rows = [r for r in (board or {}).get("most_likely") or [] if isinstance(r, dict)]
+    turn = (board or {}).get("likely_turnover") or {}
+    head = f"  {sport} {board.get('date', '')} · {len(rows)} pick{'' if len(rows) == 1 else 's'}"
+    if not rows and not turn:
+        return [head + " · no Most Likely board"]
+    at = turn.get("at")
+    if not at:
+        return [head + " · built before the hold (no `likely_turnover`) — "
+                "rebuild on a box running it"]
+    ages = [_minutes(r["since"], at) for r in rows if r.get("since")]
+    day = turn.get("day") or {}
+    out = [head + f" · {day.get('builds', 1)} build(s) since {day.get('since') or at}",
+           f"    up 3h+: {sum(1 for a in ages if a >= 180)}   1-3h: "
+           f"{sum(1 for a in ages if 60 <= a < 180)}   under 1h: "
+           f"{sum(1 for a in ages if a < 60)}"]
+    out.append("    today: " + " · ".join(
+        f"{k.replace('_', ' ')} {int(day.get(k) or 0)}" for k in _DAY_COUNTS))
+    left = sorted((day.get("left") or {}).items(), key=lambda kv: -kv[1])
+    out.append("    left: " + (" · ".join(f"{why} {n}" for why, n in left) or "none"))
+    out.append(f"    last build: kept {turn.get('held', 0)}, new {turn.get('new', 0)}, "
+               f"held out {len(turn.get('held_out') or [])}")
+    return out
+
+
 KINDS = ("td", "prop", "game")
 
 
@@ -1635,7 +1988,8 @@ def _funnel() -> dict:
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
           game_bets=None, census_by_kind: dict | None = None,
-          cut: list | None = None) -> list:
+          cut: list | None = None, previous=None,
+          turnover: dict | None = None, now: str | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
@@ -1655,15 +2009,51 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     prints nothing. Offered / kept / shown per kind is the funnel that
     answers him — a "td" line reading offered 0 is an empty feed, one
     reading offered 40 and refused 40 under the floor is the floor.
+
+    ``previous`` is the board this one replaces — the same slate's last
+    published `most_likely` (`previous_board`) — and turns on the hold
+    (HOLD_MARGIN): a pick keeps its number and its seat while it still
+    clears every bar, and carries `since` (when it went up) and
+    `first_prob` forward. ``turnover`` is filled with what changed
+    against it and why (`_turnover`). With no previous board every row
+    is new and the order is exactly the probability order it always was.
     """
     from .calibrate import is_reliable
+
+    stamp = now or _now()
+    # `previous_board` hands back {"rows", "day"}; a bare list of rows is
+    # the same board with no running tally.
+    prev_day: dict = {}
+    if isinstance(previous, dict):
+        previous, prev_day = previous.get("rows") or [], previous.get("day") or {}
+    # Last build's rows first, then the picks it was still holding out
+    # (HOLD_GRACE_MIN) — a pick on the board wins over its own ghost.
+    held: dict = {}
+    for r in previous or []:
+        if isinstance(r, dict) and not (
+                r.get("out_at") and _minutes(r["out_at"], stamp) > HOLD_GRACE_MIN):
+            held.setdefault(hold_key(r), r)
+    # WHY EACH HELD PICK LEFT, when it did: its key -> the refusal. Filled
+    # by the standard pass only; the reserve's lower floor is not a reason
+    # a pick left the real board.
+    why_left: dict = {}
+
+    def prefer_for(row) -> list | None:
+        """The numbers held for this prop: the one it went up at, then the
+        one it showed last (`_held_choice`)."""
+        h = held.get(("prop", row.get("player") or "", row.get("team") or "",
+                      row.get("market") or ""))
+        if not h:
+            return None
+        return [(h.get("side"), ln) for ln in (h.get("first_line"), h.get("line"))
+                if ln is not None] or None
 
     def bettable(market):
         return is_reliable(sport, market)
 
     funnel = {k: _funnel() for k in KINDS}
 
-    def one_pass(floor, funnel, seen=None):
+    def one_pass(floor, funnel, seen=None, why=None):
         """Every maker, every row, at one floor. Returns the rows kept.
 
         Lifted out of `build` so the reserve can ask the same question
@@ -1688,11 +2078,13 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             ``market_funnel`` is the prop row's own market's tally, kept
             beside the kind's — the same verdict written twice, never a
             second judgement."""
-            why = admissible(got, floor=floor)
-            if why:
-                _refuse(funnel[kind]["refused"], why)
+            no = admissible(got, floor=floor)
+            if no:
+                _refuse(funnel[kind]["refused"], no)
                 if market_funnel is not None:
-                    _refuse(market_funnel["refused"], why)
+                    _refuse(market_funnel["refused"], no)
+                if why is not None:
+                    why.setdefault(hold_key(got), no)
                 return False
             funnel[kind]["kept"] += 1
             if market_funnel is not None:
@@ -1738,12 +2130,16 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             local: dict = {}
             rungs: dict = {}
             got = from_prop(row, bettable, fits=fits, sport=sport,
-                            census=local, floor=floor, ladder=rungs)
-            for why, n in local.items():
-                funnel["prop"]["refused"][why] = funnel["prop"]["refused"].get(why, 0) + n
-                mf["refused"][why] = mf["refused"].get(why, 0) + n
-            for why, n in rungs.items():
-                mf["ladder"][why] = mf["ladder"].get(why, 0) + n
+                            census=local, floor=floor, ladder=rungs,
+                            prefer=prefer_for(row))
+            for no, n in local.items():
+                funnel["prop"]["refused"][no] = funnel["prop"]["refused"].get(no, 0) + n
+                mf["refused"][no] = mf["refused"].get(no, 0) + n
+            for no, n in rungs.items():
+                mf["ladder"][no] = mf["ladder"].get(no, 0) + n
+            if got is None and local and why is not None:
+                why.setdefault(("prop", row.get("player") or "",
+                                row.get("team") or "", mk), next(iter(local)))
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides — but
@@ -1781,7 +2177,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return out
 
     seated_keys: set = set()
-    out = one_pass(None, funnel, seated_keys)
+    out = one_pass(None, funnel, seated_keys, why_left)
     # NO SHELF GOES BLANK. Ethan, 2026-09-08: "Also I don't want an empty
     # boar either we need to have picks period", and then, the night
     # before the opener: "We have barely any moneylines show and barley
@@ -1829,7 +2225,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     if thin:
         spare = one_pass(RESERVE_MIN_PROB, {k: _funnel() for k in KINDS},
                          seated_keys)
-        spare.sort(key=lambda r: -float(r["model_prob"] or 0.0))
+        spare.sort(key=lambda r: -_seat(r, held))
         taken = {k: 0 for k in thin}
         for r in spare:
             kind = r.get("kind") or "prop"
@@ -1863,8 +2259,19 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # guard for it would be a branch no test could ever reach. See
     # `test_the_reserve_cap_stays_under_the_board_caps` for the invariant
     # that keeps this true if someone raises RESERVE_LIMIT.
-    players = _cut_players([r for r in out if r.get("kind") != "game"], limit)
-    games = [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]
+    players = _cut_players([r for r in out if r.get("kind") != "game"], limit,
+                           held=held)
+    games = sorted((r for r in out if r.get("kind") == "game"),
+                   key=lambda r: -_seat(r, held))[:GAME_LIMIT]
+    # WHAT THE MARGIN ALONE DECIDED: held rows seated here that the same
+    # cut without it would have dropped. Counted so the margin is judged
+    # on the box, not argued (HOLD_MARGIN).
+    by_margin = 0
+    if held:
+        plain = {id(r) for r in _cut_players(
+            [r for r in out if r.get("kind") != "game"], limit)}
+        plain |= {id(r) for r in [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]}
+        by_margin = sum(1 for r in players + games if id(r) not in plain)
     # WHAT THE DISPLAY CAPS DROPPED, HANDED BACK TO A CALLER THAT ASKED.
     #
     # Ethan, 2026-09-16: "I think the selector should see the full game
@@ -1891,10 +2298,25 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # already 8 MB); this is a second, in-memory view for a caller whose
     # question the caps were never about. Filled in place, like
     # `census_by_kind`, so no existing caller has to change.
+    seated = {id(r) for r in players} | {id(r) for r in games}
     if cut is not None:
-        seated = {id(r) for r in players} | {id(r) for r in games}
         cut.extend(r for r in out if id(r) not in seated)
-    out = sorted(players + games, key=lambda r: -float(r["model_prob"] or 0.0))
+    outranked = {hold_key(r) for r in out if id(r) not in seated}
+    out = players + games
+    _stamp_hold(out, held, stamp)
+    # PROBABILITY ORDER, AS PRINTED. Rows the page shows at the same whole
+    # percent sit longest-held first, so two picks a tenth of a point apart
+    # stop trading places on every refresh; rows at different percents are
+    # in probability order exactly as before, and with no previous board
+    # every `since` is this build's and the order is the exact one.
+    out.sort(key=lambda r: (-round(float(r["model_prob"] or 0.0), 2),
+                            0 if hold_key(r) in held else 1,
+                            str(r.get("since") or ""),
+                            -float(r["model_prob"] or 0.0)))
+    if turnover is not None:
+        turnover.update(_turnover(out, held, why_left, outranked, stamp,
+                                  by_margin))
+        turnover["day"] = _day_tally(prev_day, turnover, fresh=not held)
     # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
     # for it. An empty college Saturday has several causes and a census
     # that only reaches stdout is one nobody has the morning they need

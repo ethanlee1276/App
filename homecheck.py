@@ -1135,6 +1135,26 @@ def weather() -> list:
     return inputcheck.weather(boards)
 
 
+def hold() -> list:
+    """HOLD. How steady is each Most Likely board? (read-only)
+
+    Ethan, 2026-09-24: "for the most likely bets they seem too change
+    alot so it's hard too judge what picks the models are comfortable
+    with." The board holds a pick's number and seat between refreshes now
+    (engine/likely.HOLD_MARGIN); this reads each league's published board
+    for how long its picks have been up and what a day of refreshes did.
+    """
+    import launch
+    from engine import likely
+    out = ["HOLD — how steady each Most Likely board is (engine/likely.HOLD_MARGIN)"]
+    for sport in launch.BOARD_FILES:
+        try:
+            out += likely.hold_report(sport, _board(sport))
+        except Exception as exc:                              # noqa: BLE001
+            out.append(f"  {sport}: unreadable — {type(exc).__name__}: {exc}")
+    return out
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -1160,6 +1180,8 @@ CHECKS = {
                        "the live boards", True),
     "weather": (weather, "WEATHER: did the forecast reach the football games "
                          "and the numbers", True),
+    "hold": (hold, "HOLD: how steady each Most Likely board is, and why "
+                   "picks left", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

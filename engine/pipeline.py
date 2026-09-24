@@ -497,7 +497,8 @@ from . import boards as _boards                          # noqa: E402
 def _likely_board(results: list, td_picks: list, td_watch: list,
                   census: dict | None = None, game_bets=None,
                   census_by_kind: dict | None = None,
-                  cut: list | None = None) -> list:
+                  cut: list | None = None, previous=None,
+                  turnover: dict | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists.
 
     `game_bets` are the cards `_game_bets` priced for the edge board; the
@@ -505,12 +506,15 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
     rank (today: the moneyline) beside the player rows.
 
     `cut` is filled with the rows the board's display caps dropped — see
-    `likely.build`. They are for `potd.attach` and are never published."""
+    `likely.build`. They are for `potd.attach` and are never published.
+    `previous` is last build's board for the hold, `turnover` what
+    changed against it (`likely.HOLD_MARGIN`)."""
     from .likely import build
     try:
         return build(results, td_picks, td_watch, sport="nfl",
                      census=census, game_bets=game_bets,
-                     census_by_kind=census_by_kind, cut=cut)
+                     census_by_kind=census_by_kind, cut=cut,
+                     previous=previous, turnover=turnover)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -1088,11 +1092,16 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               model=None, allow_synthetic_line: bool = False,
               nfl_usage: dict | None = None, team_context: dict | None = None,
               team_notes: dict | None = None,
-              ripples: dict | None = None) -> dict:
+              ripples: dict | None = None,
+              likely_previous: list | None = None) -> dict:
     """The NFL board: `price_props` plus the furniture around it — game
     bets, the long-shot board, the likelihood board and the shelves they
     sit on. Sports that build their own furniture (college football)
-    call `price_props` directly and keep theirs."""
+    call `price_props` directly and keep theirs.
+
+    `likely_previous` is the Most Likely board this build replaces
+    (`likely.previous_board`), so a pick holds its number and its seat
+    between refreshes (`likely.HOLD_MARGIN`)."""
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -1127,9 +1136,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # pops the key, so they never reach the published payload.
     from . import potd as _potd
     _likely_cut: list = []
+    _likely_turnover: dict = {}
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
                             game_bets=game_bets, census_by_kind=_likely_kinds,
-                            cut=_likely_cut)
+                            cut=_likely_cut, previous=likely_previous,
+                            turnover=_likely_turnover)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1205,6 +1216,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # shown, so "barely any moneylines" reads as an empty feed, the
         # floor, or the cap rather than a guess (likely.build).
         "likely_census_by_kind": _likely_kinds,
+        # What changed against last build's board, and why (likely._turnover).
+        "likely_turnover": _likely_turnover,
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,

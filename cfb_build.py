@@ -2150,13 +2150,23 @@ def main() -> None:
             # and nowhere else — popped by `potd.attach`.
             from engine import potd as _potd_keys
             out[_potd_keys.POOL_KEY] = _ml_cut = []
+            # THE BOARD THIS BUILD REPLACES, for the hold
+            # (likely.HOLD_MARGIN).
+            from engine.likely import previous_board as _likely_prev
+            _ml_turn: dict = {}
             out["most_likely"] = _likely(out.get("recommendations") or [],
                                          rows, watch, sport="cfb",
                                          limit=_player_limit,
                                          census=_ml_census,
                                          game_bets=out.get("game_bets") or [],
                                          census_by_kind=_ml_kinds,
-                                         cut=_ml_cut)
+                                         cut=_ml_cut,
+                                         # the BUILD date, which
+                                         # `out["date"]` keeps while
+                                         # `args.date` moves to the slate
+                                         previous=_likely_prev(args.out, out.get("date")),
+                                         turnover=_ml_turn)
+            out["likely_turnover"] = _ml_turn
             # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
             # yardage markets have a model and, until the box holding
             # the logs walks them, no measurement — so `from_prop`

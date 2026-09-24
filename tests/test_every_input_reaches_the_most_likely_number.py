@@ -268,7 +268,11 @@ def test_a_most_likely_row_says_why_the_model_moved_it():
             {"player": "Zach Ertz", "qb_card": {"applied": 0.912, "headline": "Stroud out"}},
             {"player": "Malik Nabers", "mate_card": {"applied": 1.0, "out": ["X"], "headline": "shown only"}},
             {"player": "Kareem Hunt", "kind": "game"}]
-    prog = (esc + "const escapeAttr = escapeHtml;\nconst state = {data: {thin: {'Malik Nabers': {games: 2}}}};\n" + fn
+    held = app[app.index("function likelyHeld("):]       # the "Since" chip — test_most_likely_holds_its_picks
+    held = held[:held.index("\nfunction likelyRow(")]
+    prog = (esc + "const escapeAttr = escapeHtml;\nconst state = {data: {thin: {'Malik Nabers': {games: 2}}}};\n"
+            + "const tzOpts = (o) => o;\nconst tzTime = (d) => String(d);\nconst wholePct = (x) => x;\n"
+            + "const LIKELY_NEW_MIN = 60;\n" + held + fn
             + f"\nconsole.log(JSON.stringify({json.dumps(rows)}.map(likelyTagsHTML)));")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)

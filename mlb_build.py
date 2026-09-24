@@ -774,10 +774,16 @@ def main() -> None:
         # nowhere else — `potd.POOL_KEY`, popped by `potd.attach`.
         from engine import potd as _potd_keys
         result[_potd_keys.POOL_KEY] = _ml_cut = []
+        # THE BOARD THIS BUILD REPLACES, for the hold (likely.HOLD_MARGIN).
+        from engine.likely import previous_board as _likely_prev
+        _ml_turn: dict = {}
         result["most_likely"] = _likely_build(
             result["recommendations"], sport="mlb", census=_ml_census,
             game_bets=result.get("game_bets") or [],
-            census_by_kind=_ml_kinds, cut=_ml_cut)
+            census_by_kind=_ml_kinds, cut=_ml_cut,
+            previous=_likely_prev(args.out, result.get("date"))
+            if args.out else None, turnover=_ml_turn)
+        result["likely_turnover"] = _ml_turn
         if not result["most_likely"]:
             from engine.rankfit import load as _rank_store
             if not any(k.startswith("mlb:") for k in _rank_store()):

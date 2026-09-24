@@ -1019,8 +1019,13 @@ def main() -> None:
                       f"ruled out ({measured} with a measured share).")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  usage ripple skipped: {exc}")
+    # THE BOARD THIS BUILD REPLACES, for the Most Likely hold: a pick keeps
+    # its number and its seat between refreshes (likely.HOLD_MARGIN).
+    from engine.likely import previous_board as _likely_prev
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
-                       team_notes=qb_notes, ripples=ripples)
+                       team_notes=qb_notes, ripples=ripples,
+                       likely_previous=_likely_prev(args.out, slate.date)
+                       if args.out else None)
     # Say on each card what the sample rule did — the reset that was
     # applied, or the stale sample that was too thin to reset.
     if reset_report:

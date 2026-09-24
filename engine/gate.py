@@ -134,6 +134,11 @@ PAID_KEYS = (
     # board is a new KEY, and key-stripping only protects the keys
     # somebody remembered.
     "likely_parlays",
+    # THE HOLD'S MEMORY (engine/likely.HOLD_GRACE_MIN, 2026-09-24).
+    # `likely_turnover.held_out` names the picks that left the board in
+    # the last hour, with their numbers — a paid board's rows under a key
+    # nobody would have remembered. The fifth time.
+    "likely_turnover",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

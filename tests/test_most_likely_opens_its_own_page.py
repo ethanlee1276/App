@@ -72,6 +72,10 @@ def _why(prop, likely, data=None):
     prog = ("const state = " + json.dumps({"data": data or {}}) + ";\n"
             + _fn(APP, "escapeHtml") + "const oddsTxt = (o) => (o > 0 ? '+' : '') + o;\n"
             + _const(APP, "wholePct") + _fn(APP, "probTier") + _fn(APP, "whyLikelyHTML")
+            # the "On the board" line (test_most_likely_holds_its_picks.py)
+            + _const(APP, "LIKELY_NEW_MIN") + _fn(APP, "likelyHeld")
+            + "const tzOpts = (o) => Object.assign({timeZone: 'America/New_York'}, o);\n"
+            + "const tzTime = (d) => new Date(d).toLocaleTimeString('en-US', tzOpts({hour: 'numeric', minute: '2-digit'}));\n"
             + f"\nconst r = {json.dumps(prop)}, lk = {json.dumps(likely)};\n"
             + "const v = lk.line != null ? {...r, side: lk.side, line: lk.line, odds: lk.odds, book: lk.book} : r;\n"
             + "console.log(JSON.stringify(whyLikelyHTML(v, r, lk)));")
