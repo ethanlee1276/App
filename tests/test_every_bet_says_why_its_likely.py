@@ -71,7 +71,7 @@ PRELUDE = "\n".join([
 
 
 def test_a_moneyline_explains_itself():
-    fns = [_fn(n) for n in ("probTier", "whyHeldItem", "whySectionHTML", "gameBetSeries", "whyGameHTML")]
+    fns = [_fn(n) for n in ("probTier", "whyHeldItem", "whySectionHTML", "gameBetSeries", "likelyNotes", "whyGameHTML")]
     i = APP.index("const GAME_EDGE_ONLY = ")
     j = APP.index("const EDGE_ONLY_REASON = ")
     consts = APP[i:APP.index("\n", i)] + "\n" + APP[j:APP.index(";\n", j) + 2]
@@ -100,6 +100,30 @@ def test_a_long_shot_is_not_called_likely():
         return
     assert "Why it’s worth it" in got[0] and "Why it’s likely" not in got[0]
     assert "Not a pick on the Edge board" in got[1], "a row the board did not pick says so"
+
+
+def test_a_most_likely_card_drops_the_edge_boards_notes_on_the_other_side():
+    """Ethan's GB ML screenshot, 2026-09-24: the card listed "a +0.0% edge
+    on ATL" and "this model's disagreements with the closing number
+    carried no information" under a 69% Top pick. One filter
+    (likelyNotes) for the card and both pick pages."""
+    assert "const why = likelyNotes(r)" in _fn("likelyCard")
+    assert "(likely ? likelyNotes(b) : (b.reasons || []))" in _fn("whyGameHTML")
+    assert "(lk ? likelyNotes(r) : (r.reasons || []))" in _fn("renderPropPage")
+    i = APP.index("const GAME_EDGE_ONLY = ")
+    j = APP.index("const EDGE_ONLY_REASON = ")
+    consts = APP[i:APP.index("\n", i)] + "\n" + APP[j:APP.index(";\n", j) + 2]
+    row = {"reasons": ["The likely side. The edge board backed ATL ML at +223 on price.",
+                       "Model win probability 31% vs book's 31% — a +0.0% edge on ATL after the market haircut",
+                       "Power rating: GB +0.5 vs ATL -3.4 net pts/game (incl. home field)",
+                       "Measured on our own record: over 1213 graded games this model's disagreements "
+                       "with the closing number carried no information."]}
+    got = _node(consts + "\n" + _fn("likelyNotes")
+                + f"\nprocess.stdout.write(JSON.stringify(likelyNotes({json.dumps(row)})));")
+    if got is None:
+        print("  SKIP node not installed")
+        return
+    assert got == [row["reasons"][0], row["reasons"][2]], got
 
 
 if __name__ == "__main__":

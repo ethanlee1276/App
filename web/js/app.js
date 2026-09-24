@@ -7876,7 +7876,7 @@ function likelyCard(r) {
   // ("a read on who hits rather than a card"); repeating the engine's
   // version as a bullet said the same fact twice and pushed a real
   // reason off the five-bullet list.
-  const why = (r.reasons || [])
+  const why = likelyNotes(r)
     .filter((x) => r.bettable || !/nothing here is bettable/i.test(x))
     .slice(0, 5).map((x) => reasonLI(x)).join("");
   // The same game-script sentence the prop card and the Fantasy page
@@ -10155,7 +10155,20 @@ function whyLikelyHTML(v, r, lk) {
    back ("The likely side. The edge board backed CHI ML at +190…"), and
    the edge board's verdict on that price reads, beside this pick, as an
    argument against it. */
-const GAME_EDGE_ONLY = /edge on |sharp-anchor value|never beaten the .* close|info only/i;
+const GAME_EDGE_ONLY = /edge on |sharp-anchor value|never beaten the .* close|info only|carried no information/i;
+
+/* A Most Likely row's notes without the Edge board's verdicts on a price
+   (EDGE_ONLY_REASON) or on the other side's (GAME_EDGE_ONLY). One filter
+   for every surface that draws them — the card, the pick pages — so the
+   GB ML card stops saying "a +0.0% edge on ATL" and "this model's
+   disagreements with the closing number carried no information" under a
+   69% Top pick (Ethan's screenshot, 2026-09-24). The first note is the
+   row's own ("The likely side…") and always stays. */
+function likelyNotes(r) {
+  return (r.reasons || []).map(String)
+    .filter((x, i) => i === 0 ? !EDGE_ONLY_REASON.test(x)
+      : !(EDGE_ONLY_REASON.test(x) || GAME_EDGE_ONLY.test(x)));
+}
 
 function whyGameHTML(b, likely) {
   const items = [];
@@ -10190,8 +10203,7 @@ function whyGameHTML(b, likely) {
       : `${nm(b.home)}’s last ${n} games went ${s.over ? "over" : "under"} ${line} in ${hits}`;
     items.push(["Recent games", `${said}.`]);
   }
-  const notes = (b.reasons || []).filter((x, i) => !(likely && i > 0 && GAME_EDGE_ONLY.test(x)))
-    .filter((x) => !EDGE_ONLY_REASON.test(x) || !likely).slice(0, 5);
+  const notes = (likely ? likelyNotes(b) : (b.reasons || [])).slice(0, 5);
   if (notes.length) {
     items.push(["What goes into it", `<ul class="wl-moves">${notes.map((x) =>
       `<li>${escapeHtml(x.length > 240 ? x.slice(0, 237) + "…" : x)}</li>`).join("")}</ul>`]);
@@ -10269,7 +10281,7 @@ function renderPropPage() {
         Number(r.projection).toFixed(1)}${r.proj_low != null
         ? ` <span class="sub">(${Number(r.proj_low).toFixed(0)}–${
             Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
-  const reasons = (r.reasons || []).filter((x) => !lk || !EDGE_ONLY_REASON.test(x)).slice(0, 8)
+  const reasons = (lk ? likelyNotes(r) : (r.reasons || [])).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   /* SIX PILL BUTTONS WERE PILED ABOVE THIS CARD, wrapping into two
      rows on a phone (Ethan, 2026-08-25, circling them: "It feels cheap

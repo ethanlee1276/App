@@ -632,7 +632,8 @@ BOARD_OF = {"recommendations": "edge", "game_bets": "edge", "most_likely": "most
 #: site shows "an info-only lean, not a staked bet" (Ethan, 2026-09-24).
 EDGE_VERDICT = re.compile(r"edge on |sharp-anchor value|never beaten the .* close|info only|"
                           r"no credible market edge|pass, not a lean|below confidence threshold|"
-                          r"edge too small|is under the tier|disagrees with the market", re.I)
+                          r"edge too small|is under the tier|disagrees with the market|"
+                          r"carried no information", re.I)
 
 
 def tier(p) -> str:
@@ -734,9 +735,15 @@ def _caps(question: str) -> set[str]:
 
 
 #: Leagues whose teams a question can name in words (the book-facing name
-#: tables, engine/teamdex.name_map). College is left to its codes: 134
-#: schools' city and mascot words collide with everything.
-NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba")
+#: tables, engine/teamdex.name_map). College reads the map its own builds
+#: harvest from the books' spellings (engine/cfbteams), so it grows through
+#: the season and is re-read hourly; its shared mascots ("Tigers",
+#: "Bulldogs") name several schools and drop out like "New York" does.
+NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba", "cfb")
+TEAM_WORDS_TTL_S = 3600
+#: Words a city's first half leaves that name nothing on their own
+#: ("green" of Green Bay).
+TEAM_WORD_STOP = {"green", "golden", "bay", "city", "state", "north", "south", "east", "west"}
 _TEAM_WORDS: dict = {}
 
 
@@ -744,20 +751,34 @@ def _team_words(sport: str) -> dict:
     """``{"green bay": "GB", "packers": "GB", ...}`` for a league: each
     team's full name, its nickname and its city, keeping only words that
     name exactly one team ("new york" and "sox" name two, and are dropped)."""
-    if sport in _TEAM_WORDS:
-        return _TEAM_WORDS[sport]
+    hit = _TEAM_WORDS.get(sport)
+    if hit and time.time() - hit[0] < TEAM_WORDS_TTL_S:
+        return hit[1]
     from engine import teamdex
+    # Each word a team goes by, with how directly it names the team: its
+    # full name (0), its school or city and its nickname (1), a two-word
+    # nickname (2), and the city left of one ("boston" of Boston Red Sox,
+    # "alabama" of Alabama Crimson Tide) (3). A word several teams share
+    # names the one it names most directly — "michigan" is Michigan's own
+    # school, and only a prefix of Michigan State's — and names nobody
+    # when that is a tie.
     seen: dict = {}
     for full, code in (teamdex.name_map(sport) or {}).items():
         w = _norm(full).split()
-        keys = {" ".join(w), w[-1], " ".join(w[:-1])}
+        if not w:
+            continue
+        keys = [(" ".join(w), 0), (w[-1], 1), (" ".join(w[:-1]), 1)]
         if len(w) >= 3:
-            keys |= {" ".join(w[-2:]), " ".join(w[:-2])}
-        for k in keys:
-            if len(k) >= 4:
-                seen.setdefault(k, set()).add(code)
-    out = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
-    _TEAM_WORDS[sport] = out
+            keys += [(" ".join(w[-2:]), 2), (" ".join(w[:-2]), 3)]
+        for k, rank in keys:
+            if len(k) >= 4 and k not in TEAM_WORD_STOP:
+                seen.setdefault(k, {}).setdefault(rank, set()).add(code)
+    out = {}
+    for k, by_rank in seen.items():
+        best = by_rank[min(by_rank)]
+        if len(best) == 1:
+            out[k] = next(iter(best))
+    _TEAM_WORDS[sport] = (time.time(), out)
     return out
 
 
@@ -769,7 +790,26 @@ def named_teams(question: str, sport: str) -> set[str]:
     if sport not in NAMED_LEAGUES:
         return set()
     q = _norm(question)
-    return {code for k, code in _team_words(sport).items() if f" {k} " in q}
+    words = _team_words(sport)
+    # THE LONGEST NAME WINS, WHERE IT STANDS: "michigan state" is not also
+    # a question about "michigan" — but "texas vs texas a m" is about both,
+    # because the first "texas" stands on its own.
+    covered: list = []
+    out = set()
+    for k in sorted((k for k in words if f" {k} " in q), key=len, reverse=True):
+        at, hit = 0, False
+        while True:
+            i = q.find(f" {k} ", at)
+            if i < 0:
+                break
+            span = (i + 1, i + 1 + len(k))
+            if not any(a <= span[0] and span[1] <= b for a, b in covered):
+                hit = True
+                covered.append(span)
+            at = i + 1
+        if hit:
+            out.add(words[k])
+    return out
 
 
 def asked_in_full(boards, question: str) -> set[str]:

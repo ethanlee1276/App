@@ -58,6 +58,34 @@ def test_a_team_named_in_words_finds_its_game():
     assert facts["home_team"] == "GB" and facts["away_team"] == "ATL"
 
 
+def test_college_names_resolve_and_the_longest_name_wins():
+    """College too (2026-09-24): its names come from the books' spellings
+    its builds harvest (engine/cfbteams), so the fixture stands in for
+    that file. A school's own name beats a word taken from a longer one;
+    a shared mascot names nobody; a name inside a longer one at the same
+    place in the question is that longer one."""
+    from engine import teamdex
+    names = {"Ohio State Buckeyes": "OSU", "Ohio Bobcats": "OHIO", "Michigan Wolverines": "MICH",
+             "Michigan State Spartans": "MSU", "Texas Longhorns": "TEX", "Texas A&M Aggies": "TAMU",
+             "Utah State Aggies": "USU", "LSU Tigers": "LSU", "Clemson Tigers": "CLEM",
+             "Alabama Crimson Tide": "ALA"}
+    was = teamdex.name_map
+    teamdex.name_map = lambda s: names if s == "cfb" else was(s)
+    A._TEAM_WORDS.pop("cfb", None)
+    try:
+        cases = {"picks for ohio state vs michigan": {"OSU", "MICH"},
+                 "michigan state tonight": {"MSU"},
+                 "who wins texas vs texas a&m": {"TEX", "TAMU"},
+                 "alabama tonight": {"ALA"}, "ohio game": {"OHIO"}, "tigers game": set()}
+        for q, want in cases.items():
+            assert A.named_teams(q, "cfb") == want, (q, A.named_teams(q, "cfb"))
+    finally:
+        teamdex.name_map = was
+        A._TEAM_WORDS.pop("cfb", None)
+    assert A.named_teams("red sox vs white sox", "mlb") == {"BOS", "CWS"}
+    assert A.named_teams("green light tonight", "nfl") == set(), "half a city names nothing"
+
+
 def test_both_picks_come_first_labelled_as_the_site_labels_them():
     rows = A.matched_rows(BOARD, Q)
     assert [r.get("pick_label") or r.get("player") for r in rows[:2]] == ["GB ML", "Bijan Robinson"], rows
