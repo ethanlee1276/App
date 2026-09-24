@@ -1118,6 +1118,60 @@ def test_the_backup_line_reports_an_AGE_not_just_a_filename():
     assert "systemctl status qellys" in seg, "a diagnosis with no next step"
 
 
+def test_the_test_suite_line_quotes_the_verdict_not_the_stopwatch():
+    """The nightly's one line about the suite has to say what the suite
+    DID. run_tests.py prints its verdict and then a timing line under it,
+    so reading the last line of the output reported
+
+        304s wall, 8 at a time.
+
+    and never the count or the skip note — and the skip note only exists
+    because a file that quietly stops running looks like a passing file.
+    Feed the check the real transcript shape and demand the sentence.
+    """
+    green = ["  896 files, 8 at a time", "",
+             "  \u2705 test_a.py   12 tests",
+             "\u2014" * 10,
+             "All green: 4812 tests across 895 files."
+             "  1 skipped: test_venue_ingest.py.",
+             "  304s wall, 8 at a time."]
+    line = doctor._suite_summary(green)
+    assert line.startswith("All green: 4812 tests across 895 files.")
+    assert "test_venue_ingest.py" in line, "the skip note is dropped again"
+    assert "304s wall" in line, "the timing was there before; keep it"
+
+    # The failing shape already worked, because the runner returns before
+    # printing any timing. It must keep working.
+    red = ["  \u274c test_b.py failed (3/896 run)",
+           "FAILED: test_b.py  (91 passed before failure)"]
+    assert doctor._suite_summary(red).startswith("FAILED: test_b.py")
+
+
+def test_the_suite_line_is_not_fooled_by_a_test_that_prints_one():
+    """A failing file's own stdout is dumped into the same stream the
+    verdict is read from, so a test whose output happens to contain the
+    runner's wording must not outrank the runner."""
+    noisy = ["  \u274c test_runner.py FAILED",
+             "     expected 'All green: 1 tests across 1 files.'",
+             "FAILED: test_runner.py  (0 passed before failure)"]
+    assert doctor._suite_summary(noisy).startswith("FAILED: test_runner.py")
+    assert doctor._suite_summary([]) == "(no output)"
+
+
+def test_the_runner_still_prints_the_shape_the_doctor_reads():
+    """Both halves of that contract live in different files, so pin the
+    runner's side too: if the verdict sentence is reworded, this check
+    goes quiet rather than wrong."""
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    assert 'print(f"All green: {total} tests across "' in src
+    assert 'print(f"FAILED: ' in src
+    i = src.index('print(f"All green:')
+    after = src[i:i + 400]
+    assert "wall, " in after, (
+        "the timing line moved; _suite_summary assumes it comes AFTER "
+        "the verdict")
+
+
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

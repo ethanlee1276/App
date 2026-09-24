@@ -138,6 +138,48 @@ def _suite_timeout() -> int:
     return int(min(base * pressure, 5400))
 
 
+def _suite_summary(tail: list[str]) -> str:
+    """The sentence out of run_tests.py that says WHAT the run did.
+
+    This read tail[-1], and on a green run that is the wrong line. The
+    runner prints its verdict —
+
+      All green: 12644 tests across 896 files.  1 skipped: test_x.py.
+        272s wall, 8 at a time.
+
+    — and the timing line comes after it, so the nightly has been
+    reporting "272s wall, 8 at a time." as the whole result. That is the
+    one fact about the run that is not about the run: no count, and no
+    skip note — and this tree HAS a skipped file, so that note has been
+    going missing every night rather than hypothetically. Both
+    run_tests.py ("the skip note rides on the summary line because that
+    line is what doctor.py reports") and tests/test_doctor.py ("on the
+    summary line doctor.py reports") describe the behaviour this now has.
+
+    Nobody caught it because the FAILING path is right: the runner
+    returns straight after printing FAILED, so there tail[-1] IS the
+    verdict. Only the green run grew a line underneath — which means the
+    check was least informative exactly when nothing else was going to
+    prompt a closer look.
+
+    The timing rides along rather than being dropped: it was the whole
+    detail before this, and a suite that suddenly takes four times as
+    long is worth seeing.
+    """
+    if not tail:
+        return "(no output)"
+    # From the END. A failing file's output is dumped into this same
+    # stream, so a test that prints something shaped like the verdict
+    # would win a forward scan. The runner's own line is always the last
+    # one of either shape.
+    for i in range(len(tail) - 1, -1, -1):
+        line = tail[i].strip()
+        if line.startswith("All green:") or line.startswith("FAILED:"):
+            rest = " · ".join(x.strip() for x in tail[i + 1:] if x.strip())
+            return f"{line} · {rest}" if rest else line
+    return tail[-1].strip()
+
+
 def check_tests(rep):
     @_check(rep, "test suite")
     def _():
@@ -163,7 +205,7 @@ def check_tests(rep):
                     "on its own when the box is quiet)")
             return
         tail = (p.stdout or "").strip().splitlines()
-        last = tail[-1] if tail else "(no output)"
+        last = _suite_summary(tail)
         if p.returncode == 0:
             rep.add("test suite", OK, last)
         else:
