@@ -6430,7 +6430,22 @@ function renderTonight() {
      under it with the reason it missed — no stake, no journal, and it
      says so. */
   const edge = [...props, ...bets];
-  const near = edge.length ? [] : marketBest(tonightSignals()).slice(0, 8);
+  /* THE BETS WE PLACED STAY ON IT (Ethan, 2026-09-24: "It's not showing
+     the edge board bets that we placed where the numbers moves but we
+     are still riding the pick. It's only showing the 2 edges bets where
+     the line hasn't moved"). A journaled bet whose number moved no longer
+     clears the bar, so it left `recommendations` — but a bet doesn't
+     unhappen when the line moves. The same list Home's Edge box keeps
+     (ridingBets): after the live picks, marked RIDING at the price we
+     took, with the move said on its own line. Not ranked, not counted as
+     a new pick. */
+  const riding = ridingBets(tonightSignals());
+  const ridingRow = ({ b, cur }) => deckPickRow({ ...b, model_prob: null,
+      pick_label: b.market === "moneyline" ? `${teamName(b.player)} Moneyline`
+        : [b.player, b.side, b.line, b.market_label || b.market].filter((x) => x != null && x !== "").join(" ") },
+    { door: ridingAttrs(b), note: ridingMoveCopy(b, cur),
+      number: { big: "RIDING", small: "placed — rides as placed", tone: "var(--brand-2)" } });
+  const near = edge.length || riding.length ? [] : marketBest(tonightSignals()).slice(0, 8);
   const nearRow = (r) => deckPickRow(r, { door: r.player && !r.bet_type ? propAttrs(r) : gameBetAttrs(r),
     note: whyNotStaked(r),
     number: r.edge == null ? null : { big: signedPct(r.edge), small: "edge — under the bar", tone: "var(--text-mute)" } });
@@ -6452,11 +6467,13 @@ function renderTonight() {
     <div class="hd-card tn-rows">${ml.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div></section>` : ""}
     <section class="tn-col"><div class="section-title">Our edge bets
       <span class="sub">— every pick that clears the bar, journaled and staked.
-      ${plural(n, "bet")}.</span></div>
+      ${plural(n, "bet")}${riding.length ? ` · ${riding.length} placed earlier and still riding` : ""}.</span></div>
     ${boardGuide("recommendations")}
-    ${edge.length ? `<div class="hd-card tn-rows">${edge.map(edgeRow).join("")}</div>
-    <details class="tn-full"><summary>Every edge card, with the reasoning</summary>
-      <div class="cards">${props.map(cardHTML).join("")}${bets.map(gameBetCard).join("")}</div></details>`
+    ${edge.length || riding.length ? `${edge.length ? "" : `<p class="tn-none">No new bet clears the bar at
+      tonight’s numbers. These are the ones we already placed — the line moved, and they ride as placed.</p>`}
+    <div class="hd-card tn-rows">${edge.map(edgeRow).join("")}${riding.map(ridingRow).join("")}</div>
+    ${edge.length ? `<details class="tn-full"><summary>Every edge card, with the reasoning</summary>
+      <div class="cards">${props.map(cardHTML).join("")}${bets.map(gameBetCard).join("")}</div></details>` : ""}`
     : `<p class="tn-none">No bet cleared the bar tonight. The Edge board stakes only where our number
       beats the price — no edge, no bet.${near.length ? " The closest calls, with why each one missed:" : ""}</p>
       ${near.length ? `<div class="hd-card tn-rows tn-near">${near.map(nearRow).join("")}</div>` : ""}`}</section>

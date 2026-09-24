@@ -33,6 +33,20 @@ def test_an_empty_edge_board_says_why_and_shows_the_closest_calls():
     assert 'small: "edge — under the bar"' in page
 
 
+def test_the_bets_we_placed_stay_on_it_after_the_line_moves():
+    """Ethan, 2026-09-24: "It's not showing the edge board bets that we
+    placed where the numbers moves but we are still riding the pick." The
+    same list Home's Edge box keeps (ridingBets), marked RIDING at the
+    price taken, with the move said, after the live picks."""
+    page = _fn("renderTonight")
+    assert "const riding = ridingBets(tonightSignals());" in page
+    assert "${edge.map(edgeRow).join(\"\")}${riding.map(ridingRow).join(\"\")}" in page
+    assert "note: ridingMoveCopy(b, cur)" in page and 'big: "RIDING"' in page
+    assert "placed earlier and still riding" in page
+    assert "const near = edge.length || riding.length ? [] :" in page, \
+        "the closest calls only when there is nothing of ours on the board"
+
+
 if __name__ == "__main__":
     import sys
     fails = 0
@@ -41,5 +55,5 @@ if __name__ == "__main__":
             fn(); print(f"  ok  {name}")
         except Exception as exc:                                    # noqa: BLE001
             fails += 1; print(f"FAIL  {name}: {exc}")
-    print(f"\n{2 - fails} tests passed." if not fails else f"\n{fails} failed.")
+    print(f"\n{3 - fails} tests passed." if not fails else f"\n{fails} failed.")
     sys.exit(1 if fails else 0)
