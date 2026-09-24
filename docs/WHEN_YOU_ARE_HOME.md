@@ -26,32 +26,23 @@ $0.37 on its first two days against the $25 ceiling; NBA season labels
 all clean (9b not needed); wiring clean in all three leagues; all 14
 outdoor NFL games forecast and the wind table matches.
 
-**A. Re-run the deploy** (step 9 below). It stopped at its pull with
-"Cannot fast-forward to multiple branches"; the deploy now pulls the
-remote and branch by name, the way the auto-update does. Wait until
-`cat data/autoupdate.json` shows the commit after 524a72af, then:
+**A. Done.** The deploy ran on d0a25e56; the trimmed files are live
+(app.js 2,210 KB → 1,433 KB) and the script policy reads
+`script-src 'self'`. The deploy's promo check printed every code in full;
+it now prints only each code's last two characters.
 
-```bash
-cd /srv/qellys && ./deploy/deploy.sh --no-tests
-curl -s --compressed https://qellysbook.com/js/app.js | wc -c
-```
+**B. Answered.** Of the 23 lines under LOOK AT THESE, most were flat by
+construction (a factor with no coefficient for that market) or player
+memory the record has not earned for that market; the check now lists
+those as known. Two things are left for a person: pitcher strikeouts
+never get the contact-quality step (the Savant loader reads batter files
+only), and the NFL yardage and reception markets cannot clear the edge
+bar at any price once the selection haircut is applied.
 
-Want: about 1,430,000 (it read 2,273,792). The script policy already
-reads `script-src 'self'`.
-
-**B. What is under LOOK AT THESE** — the grep in step 5 printed the
-heading but can only show lines with "wiring" in them:
-
-```bash
-cd /srv/qellys && python3 homecheck.py inputs | sed -n '/LOOK AT THESE/,$p'
-```
-
-**C. The one MLB bet stuck on "player has no log"** — which it is
-(read-only). Voiding it changes the record, so it waits on your yes:
-
-```bash
-cd /srv/qellys && python3 -c "import datetime as d, homecheck as h; from engine import ledger; c,_=h._journal_ro(); hc,_=h._history_ro(); [print(dict(c.execute('SELECT id,sport,date,game_day,player,market,side,line,category,status FROM bets WHERE id=?',(r['id'],)).fetchone())) for r in ledger.why_open(c,hc,d.date.today().isoformat()) if r['reason']=='player has no log']"
-```
+**C. Two bets stuck on "player has no log"**, both in side books (not
+the headline record): cfb 2026-09-19 Ryan Williams anytime TD (`stale`)
+and mlb 2026-09-22 Harry Ford UNDER 0.5 hits (`loose`). Voiding them
+waits on Ethan's yes.
 
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.

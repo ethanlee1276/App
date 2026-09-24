@@ -39,7 +39,42 @@ KNOWN = {
                    "the card shows it, the number does not use it",
         "weather": "the weather model (engine/weather) has no passing-TD coefficient — not yet measured",
     },
+    # Flat BY CONSTRUCTION — each of these factors is built without a
+    # coefficient for the market, so "moved none" is the code doing what
+    # it says. Found on Ethan's box run, 2026-09-24, where they sat under
+    # LOOK AT THESE beside the ones that do need a person.
+    ("nfl", "rush_yds"): {
+        "weather": "wind and rain are measured against passing and receiving only "
+                   "(engine/weather.WIND_FORECAST); rushing has no coefficient",
+    },
+    ("mlb", "hits"): {
+        "weather": "the MLB weather table (engine/mlb/weather) moves home runs, total bases "
+                   "and strikeouts only",
+    },
+    ("mlb", "home_runs"): {
+        "ump": "the plate umpire moves strikeouts, outs, hits and total bases "
+               "(engine/mlb/projection) — never home runs",
+    },
+    ("mlb", "outs"): {
+        "park": "the park table (engine/mlb/parks) carries no outs factor",
+        "weather": "the MLB weather table carries no outs factor",
+        "statcast": "contact quality has hitter and strikeout branches only (engine/mlb/statcast)",
+    },
 }
+
+
+def _memory_on(sport: str, market: str) -> bool:
+    """Is per-player memory ADOPTED for this market on this box?
+    (engine/playerfit): a market whose memory the record has not earned
+    serves 1.0 for everyone, so "moved none" is the fit saying no, not a
+    wire that came loose. Unknown answers True, so a broken store is still
+    asked about."""
+    try:
+        from .playerfit import _load
+        d = _load().get(f"{sport}:{market}")
+    except Exception:                                        # noqa: BLE001
+        return True
+    return bool(isinstance(d, dict) and d.get("adopted"))
 #: Steps that only speak when something happens: flat on a quiet night is
 #: normal, so these are reported, never flagged.
 SITUATIONAL = {"injury", "cap", "rare", "learned", "lineup"}
@@ -91,6 +126,8 @@ def findings(sport: str, cen: dict) -> list[str]:
                 continue
             if k in KNOWN.get((sport, m), {}):
                 continue
+            if k == "player" and not _memory_on(sport, m):
+                continue
             out.append(f"{sport} {m}: '{STEP_LABELS.get(k, k)}' moved none of {seen} rows — "
                        f"wired in and reading nothing?")
         if c["priced"] == 0:
@@ -130,6 +167,9 @@ def report(boards: dict) -> list[str]:
         for m in sorted(cen):
             for k, why in KNOWN.get((sport, m), {}).items():
                 lines.append(f"    known: {m} {STEP_LABELS.get(k, k).lower()} — {why}")
+            if cen[m]["seen"].get("player") and not _memory_on(sport, m):
+                lines.append(f"    known: {m} player memory — off: the record has not earned it "
+                             f"for this market (engine/playerfit)")
         # A bar no read can clear (engine/census.bar_notes). The build has
         # published this since it was written and nothing read it — the
         # site audit, 2026-09-24 (L-7) — so it lands where the operator

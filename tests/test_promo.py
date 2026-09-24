@@ -620,6 +620,20 @@ def _db():
     return conn
 
 
+
+def test_the_deploy_report_masks_every_code():
+    """The Stripe promo report runs inside every deploy, and a deploy's
+    output was pasted into a chat on 2026-09-24 with every code in it.
+    The report names a code by its last two characters only."""
+    import launch
+    assert launch._mask_code("ABCDEFGH12") == "••••••••12"
+    assert launch._mask_code("x") == "••"
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def _stripe_promos_cli(")
+    fn = src[i:src.index("\ndef ", i + 10)]
+    assert "{_mask_code(row['code']):<12}" in fn
+    assert "{row['code']" not in fn, "a code printed in full"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -10467,6 +10467,14 @@ def _board_size_cli() -> None:
     print("  keys nobody reads on every poll — the table above says which.")
 
 
+def _mask_code(code: str) -> str:
+    """A discount code with all but its last two characters hidden:
+    enough to tell the codes apart in a report, useless to anybody who
+    reads the report."""
+    code = str(code or "")
+    return ("•" * max(0, len(code) - 2)) + code[-2:] if len(code) > 2 else "••"
+
+
 def _stripe_promos_cli(secret_key: str, create: bool) -> None:
     """Report (and with `create`, make) the checkout discount codes.
 
@@ -10519,7 +10527,12 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
                  else f", {used} used" if used else
                  f", max {cap} use{'s' if cap != 1 else ''}" if cap else
                  ", UNLIMITED uses")
-        print(f"  {row['code']:<12} {promo['percent_off']}% off "
+        # MASKED. This report runs inside every deploy, and on 2026-09-24
+        # a deploy's output — every code in full — was pasted into a chat
+        # to be read. The codes are secrets (docs/BILLING.md); the report
+        # only needs to say which one it means. The full codes live where
+        # they were set, in the box's environment file.
+        print(f"  {_mask_code(row['code']):<12} {promo['percent_off']}% off "
               f"{promo['duration_in_months']} months on {plans}{spent}"
               f"{'' if promo.get('first_time_only', True) else ', any customer'}"
               f"  ({state})")
