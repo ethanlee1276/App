@@ -8362,9 +8362,9 @@ function renderLikely() {
         data-jump="shelf-${escapeAttr(sh.key || "")}">${escapeHtml(sh.title)}
         <span class="mini" style="opacity:.6">${sh.rows.length}</span></button>`).join("")}
     </div>` : "";
-  host.innerHTML = shelves.length
+  host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
-    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`;
+    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + likelyScriptsHTML(rows);
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
@@ -8517,6 +8517,35 @@ function likelyHeldTag(r) {
     : [`Since ${h.when}`, "", `On the board since ${h.when}, held through every refresh${then}. A pick
        keeps its number and its seat unless its game starts, a bar turns it away, or a pick 3 points
        likelier takes the seat.`];
+}
+
+/* BUILDING A PARLAY? Every game with two or more picks on this board,
+   folded, its picks sorted into the game scripts they need (Ethan,
+   2026-09-24 — see gameScriptsHTML). A game whose picks clash says so on
+   its closed row, so the fold is worth opening. */
+function likelyScriptsHTML(rows) {
+  const games = new Map();
+  for (const r of rows) {
+    const g = scriptGameOf(r);
+    if (!g) continue;
+    const k = `${g.away}@${g.home}`;
+    if (!games.has(k)) games.set(k, { g, rows: [] });
+    games.get(k).rows.push(r);
+  }
+  const multi = [...games.values()].filter((x) => x.rows.length >= 2);
+  if (!multi.length) return "";
+  return `<section class="gs-board" id="likely-scripts">
+    <div class="section-title">Building a parlay? How each game’s picks fit together
+      <span class="sub">— picks from one game can need opposite games: one cashes when a team leads,
+      another when it trails. Open a game to see which ones win together.</span></div>
+    ${multi.map(({ g, rows: rs }) => {
+      const n = scriptClashes(rs).length;
+      return `<details class="gs-game"><summary><span class="gs-game-k">${teamMarkIn(state.sport, g.away, 18)}
+        ${escapeHtml(teamName(g.away))} @ ${teamMarkIn(state.sport, g.home, 18)} ${escapeHtml(teamName(g.home))}</span>
+        <span class="gs-game-n">${rs.length} picks${n ? ` · <b class="gs-bad">${n} ${n === 1 ? "clash" : "clashes"}</b>` : " · no clashes"}</span></summary>
+        ${gameScriptsHTML(g, rs)}</details>`;
+    }).join("")}
+  </section>`;
 }
 
 function likelyRow(r) {
@@ -10173,6 +10202,8 @@ function whyLikelyHTML(v, r, lk) {
   if (r.qb_card && r.qb_card.headline) cautions.push(escapeHtml(r.qb_card.headline));
   if (r.mate_card && r.mate_card.headline) cautions.push(escapeHtml(r.mate_card.headline));
   if (cautions.length) items.push(["Worth knowing", cautions.join("; ") + "."]);
+  // What game this pick needs, and what it pulls against (gameScriptsHTML).
+  { const gs = scriptWhyItem(lk && lk.player ? { ...r, ...lk } : r); if (gs) items.push(gs); }
   return whySectionHTML(items, p, board);
 }
 
@@ -10240,6 +10271,7 @@ function whyGameHTML(b, likely) {
     items.push(["The price", `${b.book ? `${escapeHtml(b.book)} ` : ""}${escapeHtml(oddsTxt(b.odds))}${
       implied != null ? ` implies ${wholePct(implied)}` : ""}${Number.isFinite(p) ? `; we have it at ${wholePct(p)}` : ""}.`]);
   }
+  { const gs = scriptWhyItem(b); if (gs) items.push(gs); }
   return whySectionHTML(items, p, likely ? "likely" : b.recommended === false ? "pass" : "edge");
 }
 
@@ -10714,6 +10746,200 @@ function stadiumTonightHTML(g) {
     <ul>${lines.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`;
 }
 
+/* ============================================================
+   GAME SCRIPTS — which picks need the game to go the same way
+   ============================================================
+   Ethan, 2026-09-24: "there could be 10 different most likely bets for
+   one game but … they can all fall into a different game script … if
+   you're making a parlay with those picks, there could be one pick that
+   hurts another … clarify what falls under what game script … figure out
+   how we can organize that for the user."
+
+   TWO AXES, BOTH MEASURED. A game goes two ways that move props: who is
+   AHEAD, and how many POINTS get scored. Every lean below is one this
+   repo measured against its own history (engine/corrfit.PRIORS):
+     * rushing yards and carries rise with the team's own lead
+       (rb_rush_yds__own_margin, +0.35 to +0.50) — leading teams run;
+     * catches fall with it (wr_receptions__own_margin, −0.20 to −0.35) —
+       trailing teams throw. The pace link between the two sides'
+       receivers (both_teams_overs__pace, +0.15 to +0.30) is the weakest
+       on the table and is NOT used: on its own it called half of a
+       game's pairs a clash;
+     * a quarterback's yards rise with his team's points
+       (qb_pass_yds__own_points, +0.30 to +0.45); a touchdown IS points;
+     * baseball: strikeouts fall as the other lineup's runs rise
+       (sp_strikeouts__opp_runs), a starter goes deeper when his team
+       leads (sp_outs__own_margin), and bats move with runs.
+   A moneyline or a spread IS the margin axis and a total IS the points
+   axis. An under reads each lean backwards. Anything this list does not
+   name needs nothing — it fits any script — rather than a guessed lean.
+
+   Two picks CLASH when they need opposite directions on one axis: in a
+   parlay, the game that cashes one is the game that sinks the other. */
+const GS_RUSH = /^(rush_yds|rush_att|carries|rush_attempts)$/;
+const GS_CATCH = /^(receptions|rec_yds|targets)$/;
+const GS_PASS = /^(pass_yds|pass_att|completions|pass_td|pass_tds)$/;
+const GS_TD = /(anytime_td|first_td|anytime_scorer)/;
+const GS_K = /^(strikeouts|pitcher_strikeouts)$/;
+const GS_OUTS = /^(outs|pitching_outs)$/;
+const GS_BAT = /^(hits|total_bases|home_runs|runs|rbi|rbis|hits_runs_rbis|singles|doubles)$/;
+const GS_HOOP = /^(pts|points|reb|rebounds|ast|assists|fg3m|threes|pra|pts_reb_ast)$/;
+
+/* The board game a row belongs to, by its two clubs. */
+function scriptGameOf(r) {
+  if (!r) return null;
+  const pair = r.home && r.away ? [r.home, r.away] : [r.team, r.opponent];
+  if (!pair[0] || !pair[1]) return null;
+  const g = ((state.data || {}).games || []).find((x) => x
+    && ((x.home === pair[0] && x.away === pair[1]) || (x.home === pair[1] && x.away === pair[0])));
+  return g || (r.home && r.away ? { home: r.home, away: r.away } : null);
+}
+
+/* What a pick needs: margin +1 = the HOME side ahead, −1 = the away
+   side; points +1 = a high-scoring game, −1 = a low one; 0 = no lean. */
+function scriptNeed(r) {
+  const g = scriptGameOf(r);
+  const out = { game: g, margin: 0, points: 0, whyMargin: "", whyPoints: "" };
+  if (!g) return out;
+  const mkt = String(r.bet_type || r.market || "").toLowerCase();
+  const side = String(r.side || "").toLowerCase();
+  const up = !/under|^no$/.test(side);
+  const t = r.team === g.home ? 1 : r.team === g.away ? -1 : 0;
+  const who = r.team ? teamName(r.team) : "";
+  const set = (axis, dir, why) => {
+    if (!dir) return;
+    out[axis] = dir > 0 ? 1 : -1;
+    out[axis === "margin" ? "whyMargin" : "whyPoints"] = why;
+  };
+  const game = r.kind === "game" || isGameRow(r);
+  if (game) {
+    if (/^(moneyline|spread|run_line|puck_line|ml)$/.test(mkt)) set("margin", t, `the ${who} winning the game`);
+    else if (/total/.test(mkt) && !/team_total/.test(mkt)) set("points", up ? 1 : -1, up ? "points on the board" : "a low-scoring game");
+    return out;
+  }
+  const s = up ? 1 : -1;
+  if (GS_RUSH.test(mkt)) {
+    set("margin", s * t, up ? `the ${who} ahead — leading teams run, and rushing yards rise with the lead`
+      : `the ${who} not ahead — a trailing team runs less`);
+  } else if (GS_CATCH.test(mkt)) {
+    // The margin lean only: the pace link (+0.15 to +0.30, measured
+    // between the two teams' receivers) is too weak to call a clash on.
+    set("margin", -s * t, up ? `the ${who} chasing — trailing teams throw, and catches rise when a team is behind`
+      : `the ${who} ahead — a leading team throws less`);
+  } else if (GS_PASS.test(mkt)) {
+    set("points", s, up ? "points — a quarterback’s yards rise with his team’s score" : "a low-scoring game for his team");
+  } else if (GS_TD.test(mkt)) {
+    set("points", s, up ? "points — a touchdown is points" : "a low-scoring game");
+  } else if (GS_K.test(mkt)) {
+    set("points", -s, up ? "a quiet night for the other lineup — strikeouts fall as their runs rise" : "the other lineup hitting");
+  } else if (GS_OUTS.test(mkt)) {
+    set("margin", s * t, up ? `the ${who} ahead — a winning starter is left in longer` : `the ${who} behind — a losing starter is pulled`);
+  } else if (GS_BAT.test(mkt)) {
+    set("points", s, up ? "runs — bats move with the scoring" : "a low-scoring game");
+  } else if (GS_HOOP.test(mkt)) {
+    set("points", s, up ? "a fast, high-scoring game" : "a slow, low-scoring game");
+  }
+  return out;
+}
+
+/* A pick in a word or two, for the script lists and the clash lines. */
+function scriptPickLabel(r) {
+  if (r.kind === "game" || isGameRow(r)) return r.pick_label || r.label || r.headline || r.player || "";
+  const line = r.line == null ? "" : ` ${r.line}`;
+  return `${r.player || ""} ${String(r.side || "").toLowerCase() === "yes" ? "" : (r.side || "").toLowerCase()}${line} ${
+    r.market_label || r.market || ""}`.replace(/\s+/g, " ").trim();
+}
+
+/* The four ways the game can go, named with its own clubs. */
+function scriptScenarios(g) {
+  const H = teamName(g.home), A = teamName(g.away);
+  return [[1, 1, `${H} ahead · high-scoring`], [1, -1, `${H} ahead · low-scoring`],
+          [-1, 1, `${A} ahead · high-scoring`], [-1, -1, `${A} ahead · low-scoring`]];
+}
+
+/* What the lines expect: the favourite ahead, and — football, where the
+   model has a measured cut (engine/gamescript.HIGH_TOTAL) — the total
+   read as high or low. Null on either axis when the line cannot say. */
+const GS_HIGH_TOTAL = 47;
+function scriptExpected(g) {
+  const sp = Number(g.spread);
+  const fav = g.favorite || (Number.isFinite(sp) && sp !== 0 ? (sp < 0 ? g.home : g.away) : "");
+  const margin = fav === g.home ? 1 : fav === g.away ? -1 : 0;
+  const tot = Number(g.total);
+  const points = state.sport === "nfl" && Number.isFinite(tot) && tot > 0 ? (tot >= GS_HIGH_TOTAL ? 1 : -1) : 0;
+  return { margin, points, fav, spread: Number.isFinite(sp) ? Math.abs(sp) : null, total: Number.isFinite(tot) ? tot : null };
+}
+
+/* Every pair in one game that needs opposite directions on an axis. */
+function scriptClashes(rows) {
+  const need = rows.map((r) => ({ r, n: scriptNeed(r) }));
+  const out = [];
+  for (let i = 0; i < need.length; i++) {
+    for (let j = i + 1; j < need.length; j++) {
+      const a = need[i], b = need[j];
+      if (!a.n.game || !b.n.game || a.n.game.home !== b.n.game.home) continue;
+      if (a.n.margin * b.n.margin < 0) out.push({ a: a.r, b: b.r, why: [a.n.whyMargin, b.n.whyMargin] });
+      else if (a.n.points * b.n.points < 0) out.push({ a: a.r, b: b.r, why: [a.n.whyPoints, b.n.whyPoints] });
+    }
+  }
+  return out;
+}
+
+function scriptClashLine(c) {
+  return `<b>${escapeHtml(scriptPickLabel(c.a))}</b> needs ${escapeHtml(c.why[0])}; <b>${
+    escapeHtml(scriptPickLabel(c.b))}</b> needs ${escapeHtml(c.why[1])}. In a parlay, the game that cashes one
+    is the game that sinks the other.`;
+}
+
+/* One game's picks sorted into the scripts they need. `rows` are the
+   picks in that game (Most Likely rows, game bets); each chip opens its
+   pick the way the row does. */
+function gameScriptsHTML(g, rows) {
+  rows = (rows || []).filter((r) => scriptGameOf(r));
+  if (rows.length < 2) return "";
+  const need = rows.map((r) => ({ r, n: scriptNeed(r) }));
+  const exp = scriptExpected(g);
+  const chip = ({ r }) => `<button type="button" class="gs-chip"${likelyOpen(r)}>${
+    escapeHtml(scriptPickLabel(r))}${r.model_prob != null ? ` <span>${wholePct(r.model_prob)}</span>` : ""}</button>`;
+  const fits = (n, m, p) => (!n.margin || n.margin === m) && (!n.points || n.points === p);
+  const any = need.filter((x) => !x.n.margin && !x.n.points);
+  const directional = need.filter((x) => x.n.margin || x.n.points);
+  const scen = scriptScenarios(g).map(([m, p, name]) => ({ m, p, name,
+    picks: directional.filter((x) => fits(x.n, m, p)),
+    expected: exp.margin === m && (exp.points === p || !exp.points) }))
+    .filter((sc) => sc.picks.length)
+    .sort((a, b) => (b.expected - a.expected) || (b.picks.length - a.picks.length));
+  const clashes = scriptClashes(rows);
+  const expTxt = [exp.fav ? `${teamName(exp.fav)} ahead${exp.spread != null ? ` (${MINUS}${exp.spread.toFixed(1)})` : ""}` : "",
+    exp.points ? `${exp.points > 0 ? "high" : "low"}-scoring (total ${exp.total})` : ""].filter(Boolean).join(" · ");
+  return `<div class="card gs-card">
+    ${expTxt ? `<div class="gs-expect">The lines expect <b>${escapeHtml(expTxt)}</b></div>` : ""}
+    ${scen.map((sc) => `<div class="gs-scn${sc.expected ? " is-expected" : ""}">
+      <div class="gs-scn-k">${escapeHtml(sc.name)}${sc.expected ? ` <span class="gs-tag">expected</span>` : ""}
+        <span class="gs-n">${sc.picks.length === 1 ? "1 pick" : `${sc.picks.length} picks win together`}</span></div>
+      <div class="gs-picks">${sc.picks.map(chip).join("")}</div></div>`).join("")}
+    ${any.length ? `<div class="gs-scn"><div class="gs-scn-k">Fits any script</div>
+      <div class="gs-picks">${any.map(chip).join("")}</div></div>` : ""}
+    ${clashes.length ? `<div class="gs-clashes"><div class="gs-clash-k">${icon("warn", 14)} Pull against each other</div>
+      ${clashes.map((c) => `<p class="gs-clash">${scriptClashLine(c)}</p>`).join("")}</div>`
+      : `<p class="gs-ok">${icon("check", 14)} None of these need opposite games — they can share a parlay without working against each other.</p>`}
+  </div>`;
+}
+
+/* The pick page's line: what this pick needs, and which picks in the
+   same game need the opposite. */
+function scriptWhyItem(r) {
+  const n = scriptNeed(r);
+  if (!n.game || (!n.margin && !n.points)) return null;
+  const needs = [n.whyMargin, n.whyPoints].filter(Boolean).join(", and ");
+  const same = ((state.data || {}).most_likely || []).filter((x) => x !== r && showableLikelyRow(x)
+    && scriptPickLabel(x) !== scriptPickLabel(r));
+  const against = scriptClashes([r, ...same]).filter((c) => c.a === r || c.b === r)
+    .map((c) => scriptPickLabel(c.a === r ? c.b : c.a));
+  return ["Game script", `Needs ${needs}.${against.length
+    ? ` It pulls against ${against.slice(0, 3).join(", ")} in the same game — keep them off one parlay.` : ""}`];
+}
+
 /* The game page's sections as a chip row that scrolls to each one —
    the segmented-markets convention every book's event page uses
    (Popular / Game lines / Player props), done as jumps rather than
@@ -10840,6 +11066,7 @@ function renderGamePage() {
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal });
+  const gpScripts = gameScriptsHTML(g, likelies);
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
 
@@ -11062,6 +11289,7 @@ function renderGamePage() {
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       likelies.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
+      gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
       ["gp-sec-props", shown.length ? `Props · ${shown.length}` : "Props"],
       shots.length ? ["gp-sec-shots", `Long shots · ${shots.length}`] : null,
@@ -11088,6 +11316,11 @@ function renderGamePage() {
         <span class="sub">— ranked by how often they land, not by how good the
         price is; kept in its own book, never in the headline record</span></div>
       <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div></div>` : ""}
+
+    ${gpScripts ? `<div id="gp-sec-scripts"><div class="section-title">How these picks fit together
+        <span class="sub">— each pick needs the game to go a certain way; picks that need the
+        same game win together, and picks that need opposite games hurt each other in a parlay</span></div>
+      ${gpScripts}</div>` : ""}
 
     ${betsShown.length ? `<div id="gp-sec-bets"><div class="section-title">Game bets
         <span class="sub">— moneyline, spread and totals from the team model</span></div>
@@ -37155,6 +37388,15 @@ async function slipCheck(addedKey) {
   }
 }
 
+/* The slip's own game-script check (2026-09-24): two legs from one game
+   that need opposite games say so on the ticket, in the words the game
+   page uses. Legs carry their clubs (team/opponent, or home/away). */
+function slipScriptNote(legs) {
+  const clashes = scriptClashes(legs || []);
+  if (!clashes.length) return "";
+  return `<div class="slip-clash">${icon("warn", 14)} <span>${clashes.slice(0, 2).map(scriptClashLine).join(" ")}</span></div>`;
+}
+
 /* The book's arithmetic: decimal odds multiply, independence assumed —
    which is what every book does to a cross-game ticket, and the slip
    says so on its face rather than borrowing the SGP engine's authority. */
@@ -37299,6 +37541,7 @@ function slipRender() {
       <button class="btn ghost slip-min" id="slip-clear" type="button">Clear</button>
     </div>
     ${legs}
+    ${slipScriptNote(s.legs)}
     <div class="slip-total">
       <span>Combined <b>${escapeHtml(trueMinus(String(priceTxt)))}</b>${
         imp != null ? ` · ${(imp * 100).toFixed(1)}% if the legs were independent` : ""}</span>

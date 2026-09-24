@@ -11633,3 +11633,39 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   .gp-hero.is-hero .gp-art { height: 380px; }
   .gp-hero.is-hero .gp-meta { padding: 200px 28px 24px; }
 }
+
+/* ---- Game scripts: which picks need the same game (2026-09-24) ---------- */
+.gs-card { display: grid; gap: 12px; padding: 16px; }
+.gs-expect { font-size: var(--fs-sm); color: var(--text-dim); }
+.gs-expect b { color: var(--text); }
+.gs-scn { padding: 12px; border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); background: var(--bg); }
+.gs-scn.is-expected { border-color: var(--brand); }
+.gs-scn-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-weight: 700; }
+.gs-tag { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); }
+.gs-n { margin-left: auto; font-size: var(--fs-xs); font-weight: 600; color: var(--text-mute); }
+.gs-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.gs-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; cursor: pointer;
+  border: var(--hairline) solid var(--border); border-radius: 999px; background: var(--panel-2);
+  font: inherit; font-size: var(--fs-sm); color: var(--text); text-align: left;
+}
+.gs-chip span { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--good); }
+.gs-chip:hover { border-color: var(--brand); }
+.gs-clashes { padding: 12px; border-radius: var(--radius); border: var(--hairline) solid var(--border-soft); }
+.gs-clash-k { display: flex; align-items: center; gap: 6px; font-weight: 800; color: var(--warn); }
+.gs-clash { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); }
+.gs-clash b { color: var(--text); }
+.gs-ok { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.gs-board { margin-top: 24px; }
+.gs-game { border-bottom: var(--hairline) solid var(--border-soft); }
+.gs-game summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 44px;
+  padding: 8px 2px; cursor: pointer; }
+.gs-game-k { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.gs-game-n { margin-left: auto; font-size: var(--fs-sm); color: var(--text-mute); }
+.gs-bad { color: var(--warn); }
+.gs-game[open] .gs-card { margin-bottom: 12px; }
+.slip-clash { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; padding: 10px;
+  border-radius: var(--radius); border: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-xs); color: var(--text-dim); line-height: var(--lh-snug); }
+.slip-clash svg { flex: none; color: var(--warn); margin-top: 2px; }
+.slip-clash b { color: var(--text); }

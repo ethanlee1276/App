@@ -65,6 +65,7 @@ PRELUDE = "\n".join([
     'const impliedOf = (o) => (o < 0 ? (-o) / ((-o) + 100) : 100 / (o + 100));',
     'const teamName = (t) => ({ GB: "Packers", CHI: "Bears" }[t] || t);',
     'const likelyHeld = () => null;',
+    'const scriptWhyItem = () => null;',   # the game-script line: tests/test_game_scripts.py
     'let state = { data: { team_recent: { GB: [3, -17, 7, 7, 17].map((m) => ({ margin: m })) } } };',
     'const teamRecent = (t) => (state.data.team_recent[t] || []);',
 ])
