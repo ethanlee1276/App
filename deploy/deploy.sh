@@ -60,7 +60,19 @@ if [ -z "$RESUMED" ]; then
   # The comment-stripped shell steps aside so the new page is never served
   # an old trimmed script; it is rebuilt before the restart (engine/shrink.py).
   python3 -m engine.shrink --clear >/dev/null 2>&1 || true
-  git pull --ff-only
+  # THE REMOTE AND THE BRANCH BY NAME, the way deploy/autoupdate.py pulls.
+  # A bare `git pull --ff-only` reads the branch's upstream from the git
+  # config, and on the droplet that config names more than one: Ethan's
+  # deploy on 2026-09-24 stopped here with "fatal: Cannot fast-forward
+  # to multiple branches", before the Caddy config, the trimmed scripts
+  # or the restart, while the five-minute auto-update pulled fine.
+  if ! git pull --ff-only origin "$(git rev-parse --abbrev-ref HEAD)"; then
+    # The trimmed scripts were cleared above for code that never came;
+    # put them back so the failed deploy leaves the site as it was.
+    python3 -m engine.shrink >/dev/null 2>&1 || true
+    echo "The pull failed; nothing else was changed. Fix the error above and run this again."
+    exit 1
+  fi
   AFTER="$(git rev-parse HEAD)"
 
   # THIS SCRIPT JUST OVERWROTE ITSELF, POSSIBLY. Bash does not read a

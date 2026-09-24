@@ -15,6 +15,47 @@ as they are done.
 
 ---
 
+## STILL OPEN — after Ethan's run, 2026-09-24 evening
+
+Answered tonight (droplet on 99dc78a2 → 524a72af): the Most Likely hold
+report reads as it should (40 of 52 NFL picks up 3h+, and the 12 pulled
+picks listed with their reasons); the MLB live-lines lane is approving
+three-credit pulls about every 20 minutes and ARI @ COL carried a live
+line; served boards are smaller than private ones; Ask spent $0.55 and
+$0.37 on its first two days against the $25 ceiling; NBA season labels
+all clean (9b not needed); wiring clean in all three leagues; all 14
+outdoor NFL games forecast and the wind table matches.
+
+**A. Re-run the deploy** (step 9 below). It stopped at its pull with
+"Cannot fast-forward to multiple branches"; the deploy now pulls the
+remote and branch by name, the way the auto-update does. Wait until
+`cat data/autoupdate.json` shows the commit after 524a72af, then:
+
+```bash
+cd /srv/qellys && ./deploy/deploy.sh --no-tests
+curl -s --compressed https://qellysbook.com/js/app.js | wc -c
+```
+
+Want: about 1,430,000 (it read 2,273,792). The script policy already
+reads `script-src 'self'`.
+
+**B. What is under LOOK AT THESE** — the grep in step 5 printed the
+heading but can only show lines with "wiring" in them:
+
+```bash
+cd /srv/qellys && python3 homecheck.py inputs | sed -n '/LOOK AT THESE/,$p'
+```
+
+**C. The one MLB bet stuck on "player has no log"** — which it is
+(read-only). Voiding it changes the record, so it waits on your yes:
+
+```bash
+cd /srv/qellys && python3 -c "import datetime as d, homecheck as h; from engine import ledger; c,_=h._journal_ro(); hc,_=h._history_ro(); [print(dict(c.execute('SELECT id,sport,date,game_day,player,market,side,line,category,status FROM bets WHERE id=?',(r['id'],)).fetchone())) for r in ledger.why_open(c,hc,d.date.today().isoformat()) if r['reason']=='player has no log']"
+```
+
+**D. Wednesday, Sep 30**, after the first playoff games: step 8b's
+grading line again.
+
 ## NEXT TIME HOME — from 2026-09-24, in this order
 
 Ethan, 2026-09-24: *"save all the code u need me too run for when im
