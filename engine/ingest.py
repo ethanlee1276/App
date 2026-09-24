@@ -428,11 +428,16 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
         try:
             from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
                                          xfp_player_rows, team_week_rows)
-            agg = aggregate_pbp(load_pbp_rows(season))
+            from .sources.nflunits import Units, UNIT_COLS
+            # The unit ratings (engine/gamescan) ride the same read.
+            units = Units()
+            agg = aggregate_pbp(load_pbp_rows(season, columns=UNIT_COLS),
+                                also=units.add)
             n_x = db.upsert_player_logs(conn, xfp_player_rows(agg, season))
             n_t = db.upsert_team_weeks(conn, team_week_rows(agg, season))
-            result["pbp_rows"] += n_x + n_t
-            db.log_ingest(conn, "nfl", "pbp", str(season), n_x + n_t)
+            n_u = db.upsert_team_units(conn, units.rows(season))
+            result["pbp_rows"] += n_x + n_t + n_u
+            db.log_ingest(conn, "nfl", "pbp", str(season), n_x + n_t + n_u)
         except DataUnavailable as exc:
             result["skipped"].append(f"nfl pbp {season}: {exc}")
     return result

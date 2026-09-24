@@ -1627,12 +1627,18 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 from . import db as _pdb
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
                                              xfp_player_rows)
+                from .sources.nflunits import Units, UNIT_COLS
                 season = today.year if today.month >= 8 else today.year - 1
-                agg = aggregate_pbp(load_pbp_rows(season))
-                n = _pdb.upsert_player_logs(_pdb.connect(),
-                                            xfp_player_rows(agg, season))
-                if n:
-                    log(f"  nfl pbp: {n:,} xFP/red-zone rows refreshed")
+                # The unit ratings the matchup scan ranks (engine/gamescan)
+                # ride the same read of the file.
+                units = Units()
+                agg = aggregate_pbp(load_pbp_rows(season, columns=UNIT_COLS),
+                                    also=units.add)
+                _pc = _pdb.connect()
+                n = _pdb.upsert_player_logs(_pc, xfp_player_rows(agg, season))
+                n_u = _pdb.upsert_team_units(_pc, units.rows(season))
+                if n or n_u:
+                    log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
 

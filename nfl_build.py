@@ -589,12 +589,14 @@ def main() -> None:
     _mem("injuries + resets", args.memtrace)
     qb_notes = None
     depth_qb1 = None
+    scan_depth_rows = None       # the matchup scan's corners (engine/gamescan)
     if args.depth:
         try:
             from engine.sources.depthcharts import (load_depth_charts,
                                                     refine_injury_roles,
                                                     qb_dependency, qb1_map)
             rows = load_depth_charts(args.season)
+            scan_depth_rows = rows
             all_inj = [i for g in slate.games for i in g.injuries]
             dres = refine_injury_roles(all_inj, rows, args.week)
             print(f"\nDepth charts: refined {dres.refined} role(s), "
@@ -1279,6 +1281,20 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
+        # THE MATCHUP SCAN (Ethan, 2026-09-24: "ranking the defenses and
+        # offenses and looking at where exactly in the defense and offense
+        # is good and bad and what players could shine and what players
+        # could hurt"). Units, corners, scheme, injuries and a read on
+        # every player with a prop, per game. Display only — a reason
+        # joins the NUMBER once it is measured (engine/gamescan).
+        try:
+            from engine import gamescan as _scan
+            _ns = _scan.attach_nfl(result, slate, args.season, args.week,
+                                   depth_rows=scan_depth_rows)
+            if _ns:
+                print(f"  Matchup scan: {_ns} game(s)")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  matchup scan skipped: {_exc}")
         # The live win-probability track, same wiring mlb_build carries
         # (2026-08-18, Ethan: "we should be showing that for ALL live
         # games"). One credit a pull for the whole slate, paid only while

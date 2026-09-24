@@ -53,9 +53,11 @@ def _pbp_urls(season: int) -> list[str]:
             f"{base}/play_by_play_{season}.csv"]
 
 
-def load_pbp_rows(season: int):
+def load_pbp_rows(season: int, columns=None):
     """Yield minimal per-play dicts for a season (streamed from the cached
-    CSV; the 370-column rows never materialize as dicts)."""
+    CSV; the 370-column rows never materialize as dicts). ``columns``
+    widens the default set (`NEEDED`) — the unit ratings ride the same
+    read (engine/sources/nflunits.UNIT_COLS)."""
     last = None
     text = None
     for url in _pbp_urls(season):
@@ -68,7 +70,8 @@ def load_pbp_rows(season: int):
         raise last or DataUnavailable(f"pbp {season} unavailable")
     rdr = csv.reader(io.StringIO(text))
     header = next(rdr)
-    idx = {c: header.index(c) for c in NEEDED if c in header}
+    want = tuple(dict.fromkeys(tuple(NEEDED) + tuple(columns or ())))
+    idx = {c: header.index(c) for c in want if c in header}
     for row in rdr:
         try:
             yield {c: row[i] for c, i in idx.items()}
@@ -98,9 +101,11 @@ def _new_team() -> dict:
             "pass_epa": [0.0, 0], "rush_epa": [0.0, 0], "pace": [0.0, 0]}
 
 
-def aggregate_pbp(rows) -> dict:
+def aggregate_pbp(rows, also=None) -> dict:
     """One pass: situation value table + player-week buckets + team
-    PROE / EPA (both sides of the ball) / neutral pace."""
+    PROE / EPA (both sides of the ball) / neutral pace. ``also`` is called
+    with every play first, so a second fold (the unit ratings) shares the
+    single read of the file."""
     bucket_pts: dict[str, list] = {b: [0.0, 0] for b in CARRY_BUCKETS + TARGET_BUCKETS}
     players: dict[tuple, dict] = {}
     teams: dict[tuple, dict] = {}
@@ -108,6 +113,8 @@ def aggregate_pbp(rows) -> dict:
     last_snap: dict[tuple, float] = {}     # (game_id, posteam) → seconds left
 
     for r in rows:
+        if also is not None:
+            also(r)
         try:
             wk = int(_f(r.get("week")))
         except ValueError:

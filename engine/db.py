@@ -263,6 +263,20 @@ CREATE TABLE IF NOT EXISTS injury_events (
 );
 CREATE INDEX IF NOT EXISTS idx_injury_events_seen
     ON injury_events (sport, first_seen);
+-- THE UNITS, per team-week and side of the ball (engine/gamescan).
+-- Ethan, 2026-09-24: rank "the defenses and offenses and ... where
+-- exactly in the defense and offense is good and bad". SUMS, not
+-- averages, so a blend across weeks and seasons is exact; the reader
+-- divides. `side` is 'off' (what this team's offense did) or 'def'
+-- (what its defense allowed); `opp` is the other team that week.
+CREATE TABLE IF NOT EXISTS team_units (
+    sport TEXT, season INTEGER, period TEXT, team TEXT, side TEXT, opp TEXT,
+    plays INTEGER, epa REAL, success REAL,
+    dropbacks INTEGER, pass_epa REAL, pass_success REAL, pass_expl INTEGER,
+    rushes INTEGER, rush_epa REAL, rush_success REAL, rush_yds REAL, rush_expl INTEGER,
+    sacks INTEGER, hits INTEGER,
+    PRIMARY KEY (sport, season, period, team, side)
+);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
@@ -766,6 +780,17 @@ TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe",
 
 def upsert_team_weeks(conn, rows: list[dict]) -> int:
     return _upsert(conn, "team_weeks", TEAM_WEEK_COLS, rows)
+
+
+TEAM_UNIT_COLS = ["sport", "season", "period", "team", "side", "opp",
+                  "plays", "epa", "success",
+                  "dropbacks", "pass_epa", "pass_success", "pass_expl",
+                  "rushes", "rush_epa", "rush_success", "rush_yds", "rush_expl",
+                  "sacks", "hits"]
+
+
+def upsert_team_units(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "team_units", TEAM_UNIT_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

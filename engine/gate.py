@@ -141,6 +141,12 @@ PAID_KEYS = (
     # the last hour, with their numbers — a paid board's rows under a key
     # nobody would have remembered. The fifth time.
     "likely_turnover",
+    # THE MATCHUP SCAN'S READS (engine/gamescan): each player's read and
+    # the props it points at, with the model's probability. The rest of
+    # the scan rides on the game, which is free; this is the half that
+    # says who we think shines, so it is its own paid key — the strip
+    # does not descend into the rows of `games`.
+    "scan_reads",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

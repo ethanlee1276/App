@@ -11123,6 +11123,157 @@ function gpTeamDoor(team, opp) {
     >${teamMark(team, 26)} <span class="gp-team-name">${escapeHtml(teamName(team))}</span></button>`;
 }
 
+/* ═══ THE MATCHUP SCAN (2026-09-24) ════════════════════════════════════
+   Ethan, with a Falcons @ Packers breakdown he wanted for every game:
+   "ranking the defenses and offenses and looking at where exactly in the
+   defense and offense is good and bad and what players could shine and
+   what players could hurt". engine/gamescan builds it per game: the
+   units ranked 1-32 (opponent-adjusted, blended with last season), the
+   widest unit-vs-unit gaps, each defence's corners with what they have
+   allowed, its scheme and pass rush, the injuries and what they open —
+   all on the game, free — and, in the paid `scan_reads`, a read on
+   every player with a prop and the props it points at. Nothing here
+   moves a number: a reason joins the model once it is measured. */
+const SCAN_UNITS = [["overall", "Overall", "offense", "defense"],
+  ["passing", "Passing", "passing offense", "pass defense"],
+  ["rushing", "Rushing", "run game", "run defense"],
+  ["explosive", "Explosive plays", "big-play offense", "big-play defense"],
+  ["pressure", "Protection vs pass rush", "pass protection", "pass rush"],
+  ["success", "Success rate", "offense", "defense"]];
+const SCAN_READ_TONE = { breakout: "up", good: "up", neutral: "", tough: "down", avoid: "down" };
+
+function scanRank(r) {
+  if (r == null) return `<span class="ms-rank">—</span>`;
+  const tone = r <= 8 ? "good" : r >= 25 ? "bad" : "";
+  return `<span class="ms-rank ${tone}">${ordinal(r)}</span>`;
+}
+
+function scanUnitsHTML(scan, off, def) {
+  const o = ((scan.units || {})[off] || {}).off || {};
+  const d = ((scan.units || {})[def] || {}).def || {};
+  const rows = SCAN_UNITS.map(([u, label]) => {
+    const orank = (o[u] || {}).rank, drank = (d[u] || {}).rank;
+    if (orank == null && drank == null) return "";
+    const gap = orank != null && drank != null ? drank - orank : 0;
+    const tag = gap >= 10 ? `<span class="ms-edge off">${escapeHtml(off)} edge</span>`
+      : gap <= -10 ? `<span class="ms-edge def">${escapeHtml(def)} edge</span>`
+      : `<span class="ms-edge">Even</span>`;
+    return `<div class="ms-unit"><span class="ms-unit-k">${escapeHtml(label)}</span>
+      ${scanRank(orank)}${scanRank(drank)}${tag}</div>`;
+  }).join("");
+  return `<div class="ms-units card">
+      <div class="ms-units-head"><b>${teamMark(off, 20)} ${escapeHtml(teamName(off))} offense</b>
+        <span>vs</span><b>${teamMark(def, 20)} ${escapeHtml(teamName(def))} defense</b></div>
+      <div class="ms-unit ms-unit-cols"><span></span><span>Off</span><span>Def</span><span></span></div>
+      ${rows}
+    </div>`;
+}
+
+function scanEdgeLine(e) {
+  const u = SCAN_UNITS.find(([k]) => k === e.unit) || [e.unit, e.label, "offense", "defense"];
+  const offBetter = e.gap > 0;
+  // "Packers’", not "Packers’s": most team names are plural.
+  const poss = (t) => { const n = teamName(t); return /s$/.test(n) ? `${n}’` : `${n}’s`; };
+  const a = `${poss(e.off)} ${u[2]} (${ordinal(e.off_rank)})`;
+  const b = `${poss(e.def)} ${u[3]} (${ordinal(e.def_rank)})`;
+  return offBetter ? `${a} against ${b} — an edge to the offense`
+    : `${b} against ${a} — an edge to the defense`;
+}
+
+function scanCoverageHTML(scan, team) {
+  const room = (scan.coverage || {})[team] || {};
+  const sch = (scan.scheme || {})[team];
+  const rush = (scan.rush || {})[team] || [];
+  const corners = (room.corners || []).map((c) => {
+    const spot = { LCB: "Left CB", RCB: "Right CB", NB: "Nickel" }[c.spot] || c.spot;
+    const st = c.status ? ` <span class="chip down">${escapeHtml(c.status.toLowerCase())}</span>` : "";
+    const now = c.targets ? `${c.targets} targets · ${c.yds_per_tgt ?? "—"} yds/target · ${c.rating != null ? Math.round(c.rating) : "—"} rating allowed`
+      : "no targets yet this season";
+    const last = c.last && c.last.targets ? `last season ${c.last.targets} targets, ${c.last.rating != null ? Math.round(c.last.rating) : "—"} rating` : "";
+    const soft = room.weakest === c.name ? `<span class="ms-soft">Soft spot</span>` : "";
+    return `<div class="ms-cb"><span class="ms-cb-spot">${escapeHtml(spot)}${c.next_man_up ? " · next man up" : ""}</span>
+      <span class="ms-cb-who"><b>${escapeHtml(c.name)}</b>${st}${soft}</span>
+      <span class="ms-cb-num">${escapeHtml(now)}${last ? `<br><span class="mini">${escapeHtml(last)}</span>` : ""}</span></div>`;
+  }).join("");
+  const out = (room.missing || []).map((m) => `${escapeHtml(m.name)} (${escapeHtml(m.spot)}, ${escapeHtml(m.status.toLowerCase())})`);
+  const schLine = sch ? `Zone ${Math.round(sch.zone * 100)}% · man ${Math.round(sch.man * 100)}% · middle of the field open ${Math.round(sch.mofo * 100)}% · blitz ${Math.round(sch.blitz * 100)}% · pressure ${Math.round(sch.pressure * 100)}%` : "";
+  const rushLine = rush.length ? rush.map((r) => `${escapeHtml(r.name)} ${r.pressures} pressures${r.status ? ` (${escapeHtml(r.status.toLowerCase())})` : ""}`).join(" · ") : "";
+  return `<div class="ms-cov card">
+      <div class="ms-cov-head">${teamMark(team, 22)} <b>${escapeHtml(teamName(team))} defense</b></div>
+      ${schLine ? `<p class="ms-cov-line"><b>How it covers</b> ${schLine}${scan.scheme_season ? ` <span class="mini">(${escapeHtml(String(scan.scheme_season))} charting)</span>` : ""}</p>` : ""}
+      ${corners ? `<div class="ms-cbs">${corners}</div>` : ""}
+      ${out.length ? `<p class="ms-cov-line"><b>Out</b> ${out.join(", ")}</p>` : ""}
+      ${rushLine ? `<p class="ms-cov-line"><b>Pass rush</b> ${rushLine}</p>` : ""}
+    </div>`;
+}
+
+function scanReadHTML(x) {
+  const u = x.usage || {};
+  const bits = [];
+  if (u.tgt_share) bits.push(`${Math.round(u.tgt_share * 100)}% of targets`);
+  if (u.carry_share) bits.push(`${Math.round(u.carry_share * 100)}% of carries`);
+  if (u.snap_pct) bits.push(`${Math.round(u.snap_pct * 100)}% of snaps`);
+  return `<div class="ms-read ${escapeHtml(x.read)}">
+      <div class="ms-read-head">${betMark({ player: x.player, team: x.team }, 30)}
+        <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
+          <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
+        <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></div>
+      ${(x.pro || []).length || (x.con || []).length ? `<ul class="ms-why">
+        ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
+        ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}</ul>` : ""}
+    </div>`;
+}
+
+function scanMicroHTML(m) {
+  return `<div class="ms-micro">
+      <span class="ms-micro-bet"><b>${escapeHtml(m.player)}</b> ${escapeHtml(m.side || "")} ${escapeHtml(String(m.line ?? ""))} ${escapeHtml(m.market_label || m.market || "")}</span>
+      <span class="ms-micro-price">${m.odds != null ? american(m.odds) : "—"}${m.book ? ` · ${escapeHtml(m.book)}` : ""}</span>
+      <span class="ms-micro-p">${m.prob != null ? wholePct(m.prob) : "—"}</span>
+      ${m.clears || m.edge_pick ? `<span class="ms-micro-tags">${m.clears ? `<span class="chip up">clears 65% · −250</span>` : ""}${
+        m.edge_pick ? `<span class="chip up">edge pick</span>` : ""}</span>` : ""}
+    </div>`;
+}
+
+function matchupScanHTML(g) {
+  const scan = g && g.scan;
+  if (!scan || !scan.units) return "";
+  const away = g.away, home = g.home;
+  const d = state.data || {};
+  const reads = (d.scan_reads || {})[`${away}@${home}`];
+  const locked = !reads && d.locked && d.locked.scan_reads;
+  const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
+  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, ${Math.round(u0.blend * 100)}% of each rating is this season and the rest is last season.` : "";
+  const edges = (scan.edges || []).slice(0, 5);
+  const inj = scan.injuries || [];
+  const players = (reads && reads.players) || [];
+  const micro = (reads && reads.microscope) || [];
+  return `<div id="gp-sec-scan" class="ms">
+    <div class="section-title">Matchup scan
+      <span class="sub">— where each side is strong and weak, who could shine and who could struggle</span></div>
+    <div class="ms-units-row">${scanUnitsHTML(scan, away, home)}${scanUnitsHTML(scan, home, away)}</div>
+    <p class="ms-note">Ranked 1–32, 1 best, adjusted for the opponents each team has faced. ${escapeHtml(blend)}</p>
+    ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">Biggest mismatches</div>
+      <ul>${edges.map((e) => `<li class="${e.gap > 0 ? "off" : "def"}">${escapeHtml(scanEdgeLine(e))}</li>`).join("")}</ul></div>` : ""}
+    ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
+      ${inj.map((i) => `<div class="ms-inj-row">${teamMark(i.team, 20)}
+        <span class="ms-inj-who"><b>${escapeHtml(i.player)}</b> <span class="mini">${escapeHtml(i.position || "")}</span>
+          <span class="chip ${i.status === "QUESTIONABLE" ? "" : "down"}">${escapeHtml(i.status.toLowerCase())}</span></span>
+        <span class="ms-inj-opens">${escapeHtml(i.opens || "")}</span></div>`).join("")}</div>` : ""}
+    <div class="ms-cov-row">${scanCoverageHTML(scan, away)}${scanCoverageHTML(scan, home)}</div>
+    ${players.length ? `<div class="ms-sub ms-sub-top">Who could shine, who could struggle</div>
+      <div class="ms-reads">${players.map(scanReadHTML).join("")}</div>` : locked
+      ? `<div class="card ms-locked"><b>Who could shine and who could struggle</b> — a read on every player with a prop,
+          with the reasons for and against, is part of the subscription.</div>` : ""}
+    ${micro.length ? `<div class="card ms-micros"><div class="ms-sub">Props under the microscope</div>
+      <p class="ms-note">The markets the good reads point at, as this board prices them, likeliest first.</p>
+      ${micro.map(scanMicroHTML).join("")}</div>` : ""}
+    <p class="ms-note">None of this moves our numbers yet: a reason joins the model once it has been measured
+      against past games, the way the defense-versus-position and teammate-out adjustments were. Coverage and
+      pass-rush counts are this season’s (Pro Football Reference, via nflverse); man and zone rates come from
+      the newest season charted.</p>
+  </div>`;
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -11421,6 +11572,7 @@ function renderGamePage() {
 
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
+      g.scan && g.scan.units ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       likelies.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
@@ -11431,6 +11583,7 @@ function renderGamePage() {
     ])}
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
+    ${matchupScanHTML(g)}
     ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 

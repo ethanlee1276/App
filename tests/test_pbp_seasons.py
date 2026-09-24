@@ -43,7 +43,8 @@ class _Stub:
         self._saved = (nflpbp.load_pbp_rows, nflpbp.aggregate_pbp,
                        nflpbp.xfp_player_rows, nflpbp.team_week_rows)
         nflpbp.load_pbp_rows = self._load
-        nflpbp.aggregate_pbp = lambda rows: {"season": rows}
+        # The unit fold rides the same read now (`also`, engine/gamescan).
+        nflpbp.aggregate_pbp = lambda rows, also=None: {"season": rows}
         nflpbp.xfp_player_rows = self._player
         nflpbp.team_week_rows = lambda agg, season: []
         return self
@@ -52,7 +53,7 @@ class _Stub:
         (nflpbp.load_pbp_rows, nflpbp.aggregate_pbp,
          nflpbp.xfp_player_rows, nflpbp.team_week_rows) = self._saved
 
-    def _load(self, season):
+    def _load(self, season, columns=None):
         self.seen.append(season)
         if season in self.explode_on:
             raise DataUnavailable(f"no pbp for {season}")

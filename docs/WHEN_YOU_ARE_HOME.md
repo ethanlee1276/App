@@ -44,6 +44,21 @@ the headline record): cfb 2026-09-19 Ryan Williams anytime TD (`stale`)
 and mlb 2026-09-22 Harry Ford UNDER 0.5 hits (`loose`). Voiding them
 waits on Ethan's yes.
 
+**E. The matchup scan's unit rankings — one-time backfill** (about a
+minute; **writes the history database**). The scan ranks every offence
+and defence from the play-by-play; the Tuesday refresh keeps this season
+current, and last season needs folding in once:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan backfill 2025 2026
+cd /srv/qellys && python3 -m engine.gamescan show 2026 4 GB TB
+```
+
+Want: two counts (about 1,088 rows for 2025), then Green Bay and Tampa
+Bay ranked unit by unit with their edges. The next NFL build puts the
+Matchup scan on every game page (it builds last season's man/zone cache
+on its first run, about a minute).
+
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.
 
