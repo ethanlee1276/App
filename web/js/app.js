@@ -10717,6 +10717,18 @@ function mlbPenNotes(g) {
   }).filter(Boolean);
 }
 
+/* EACH TEAM'S NAME IS ITS TEAM PAGE (Ethan, 2026-09-24, circling
+   "Cardinals @ 49ers" on the game page: "when you click on the teams
+   names it will pull you to the team page where it shows the whole teams
+   data"). The same door the team search's chips use — [data-team-open],
+   with the league on the button, since the game page knows it and
+   `_teamState` may not. */
+function gpTeamDoor(team) {
+  return `<button type="button" class="gp-team" data-team-sport="${escapeAttr(state.sport)}"
+    data-team-open="${escapeAttr(team)}" title="${escapeAttr(`${teamName(team)} team page`)}"
+    >${teamMark(team, 26)} <span class="gp-team-name">${escapeHtml(teamName(team))}</span></button>`;
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -10972,9 +10984,9 @@ function renderGamePage() {
         ${isFinal ? `<div class="status-badge final">FINAL</div>` : ""}</div>
       <div class="gp-meta">
         <div class="gp-teams">
-          <span>${teamMark(g.away, 26)} ${escapeHtml(teamName(g.away))} ${score("away")}</span>
+          <span>${gpTeamDoor(g.away)} ${score("away")}</span>
           <span class="gp-at">@</span>
-          <span>${teamMark(g.home, 26)} ${escapeHtml(teamName(g.home))} ${score("home")}</span>
+          <span>${gpTeamDoor(g.home)} ${score("home")}</span>
         </div>
         <div class="gp-sub">${escapeHtml([g.park_name, whenLabel(g.date, g.kickoff)]
           .filter(Boolean).join(" · "))}</div>
