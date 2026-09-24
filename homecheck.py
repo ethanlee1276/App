@@ -1142,12 +1142,15 @@ def weight() -> list:
     The site audit, 2026-09-24: every prop row carries its whole
     alternate ladder (`alt_lines`, `alt_sharp_lines`, `rung_probs`),
     which the page never reads, and `board_shelves` repeats every Most
-    Likely row in full. Neither could be measured off the box — the demo
-    boards have no ladders — so this prints the real numbers before
-    anything is cut.
+    Likely row in full. Both are now cut from what a browser downloads
+    (engine/served.py); the private copy keeps them. So this prints each
+    board's private size, what a phone is served, and where the bytes go —
+    the proof the cut landed on the real boards the demo ones could not
+    show.
     """
     import launch
     from engine import gate, lightboard
+    from engine.served import served
     out = ["WEIGHT — bytes per board (compact JSON; gzip on the wire is ~4-6x smaller)"]
     lists = ("recommendations", "most_likely", "game_bets", "long_shots", "longshot_watch")
     for sport, name in launch.BOARD_FILES.items():
@@ -1169,7 +1172,8 @@ def weight() -> list:
                         for k, v in r.items():
                             fields[k] = fields.get(k, 0) + size(v)
             heavy = sorted(fields.items(), key=lambda kv: -kv[1])[:6]
-            out.append(f"  {sport} {label}: {total / 1e6:.2f} MB")
+            out.append(f"  {sport} {label}: {total / 1e6:.2f} MB private · "
+                       f"{size(served(d)) / 1e6:.2f} MB served")
             out.append("    keys:   " + " · ".join(f"{k} {n / 1e6:.2f}" for n, k in top))
             out.append("    fields: " + " · ".join(f"{k} {n / 1e6:.2f}" for k, n in heavy))
     return out

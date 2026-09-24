@@ -5780,9 +5780,15 @@ body.pk-open { overflow: hidden; }
   --border: #31281D;
   --border-soft: #241D15;
   --text: #F7F1E9;
-  --text-dim: #C9BCAC;
+  /* THE SITE AUDIT, 2026-09-24 (M-5): the grey second line on every pick
+     row (--text-mute) read Lc 47 against APCA's 60 for secondary text,
+     and the loss red Lc 36 against 45 even for large bold text. Both
+     re-solved by lightness alone (palettefit.solve: hue and chroma held),
+     and --text-dim rose with them so the ladder keeps its steps:
+     text 97 · dim 73 · mute 60 · faint 32 (tests/test_contrast.py). */
+  --text-dim: #D6C8B8;
   --text-body: #E1D6C9;
-  --text-mute: #A79A88;
+  --text-mute: #C1B3A1;
   --text-faint: #857C6F;
   /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
      "i say we switch everything to the gold color like the renders but
@@ -5800,7 +5806,7 @@ body.pk-open { overflow: hidden; }
   --brand-ink: #0A0907;
   --gold: #F5B93B;
   --good: #42C268;
-  --bad: #DF5953;
+  --bad: #FF766E;
   /* WARN STAYS AMBER, AND THAT IS A KNOWN COLLISION rather than an
      oversight. With the accent gold, --warn at #F79D00 sits ~6 degrees
      of hue from --brand and reads as the same paint, which is bad: a
@@ -7431,6 +7437,14 @@ body.has-deck #rail-live { display: none; }
   /* The crest strip above the deck is the league picker; the games
      row's own league select was it again. */
   #home-deck #games-sport { display: none; }
+  /* THE HOME'S GAMES ARE A STRIP, NOT A CAROUSEL OF POSTERS (the site
+     audit, 2026-09-24, Visual 2): each card was 414px tall on a phone,
+     112 of it the wind dial. On the home the dial and the venue line
+     step aside — the conditions sentence stays — and the full card is
+     one tap away on the game page. */
+  #home-deck .hd-sec[data-sec="games"] .wind-wrap .wind { display: none; }
+  #home-deck .hd-sec[data-sec="games"] .wind-wrap { padding: 2px 12px 10px; }
+  #home-deck .hd-sec[data-sec="games"] .gc-venue { display: none; }
   /* THE ROOM INDEX, TWO ABREAST. Ethan asked for every room named and
      described (2026-09-10) and the cards are that; one card per row on
      a phone put eight of them down a whole screen before the first
@@ -10012,7 +10026,7 @@ input:-webkit-autofill:focus {
   justify-content: center; gap: 6px 18px; color: var(--text-dim); font-size: var(--fs-sm); }
 .pw-verify-list li { display: inline-flex; align-items: center; gap: 6px; }
 .pw-verify-list .ico-mark { color: var(--good); }
-.pw-verify-go { display: inline-block; margin-top: 10px; color: var(--brand-2); font-weight: 700;
+.pw-verify-go { display: inline-flex; align-items: center; min-height: 24px; margin-top: 10px; color: var(--brand-2); font-weight: 700;
   font-size: var(--fs-sm); text-decoration: none; }
 .pw-verify-go:hover { color: var(--text); }
 .pw-results { margin: 22px auto 4px; max-width: 760px;
@@ -11420,3 +11434,17 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .board-guide .bg-how::after { content: " \25BE"; }
 .board-guide[open] .bg-how::after { content: " \25B4"; }
 .board-guide > p { margin: 8px 0 0; }
+
+/* The pick page's one Share opens its three ways here (the site audit,
+   2026-09-24: six buttons across a phone became four). */
+.pp-share-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.pp-share-note { margin: 6px 0 0; color: var(--text-mute); }
+/* L-7: the sharp-book mark under a pick's line. */
+.pp-sharp { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-dim);
+  letter-spacing: .02em; }
+/* TAP TARGETS, 24px AT LEAST (the site audit's re-run, 2026-09-24): the
+   home's section doors ("Live →", "Results →"), the paywall's record
+   link and the sign-up age box measured 13-18px on a phone. Inline links
+   inside a sentence are exempt and stay as they are. */
+.hd-head a { display: inline-flex; align-items: center; min-height: 24px; }
+input.acct-age { width: 24px; height: 24px; min-width: 24px; }

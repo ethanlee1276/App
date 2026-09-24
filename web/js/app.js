@@ -8179,10 +8179,20 @@ function likelyEmptyWhy(census) {
     in as the books post their menus.`;
 }
 
+/* A board's shelves with their rows. The served board sends each shelf's
+   rows as `row_ix`, positions in `most_likely` (engine/served.py — the
+   site audit's M-3: the rows were the board's Most Likely section a
+   second time). A shelf that still carries `rows` is used as it is. */
+function boardShelves(d = state.data) {
+  const ml = (d && d.most_likely) || [];
+  return ((d && d.board_shelves) || []).map((sh) => (Array.isArray(sh.rows) ? sh
+    : { ...sh, rows: (sh.row_ix || []).map((i) => ml[i]).filter(Boolean) }));
+}
+
 function renderLikelyTop() {
   const host = document.getElementById("likely-top");
   if (!host) return;
-  const shelves = (state.data.board_shelves || [])
+  const shelves = boardShelves()
     .map((sh) => ({ ...sh,
                     rows: (sh.rows || []).filter(showableLikelyRow)
                       .slice(0, LIKELY_TOP_N) }))
@@ -8282,7 +8292,7 @@ function renderLikely() {
      measured figures are one definition, not a copy in a template. If
      the payload predates them the page falls back to the flat list
      rather than rendering nothing. */
-  const shelves = (state.data.board_shelves || [])
+  const shelves = boardShelves()
     .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow) }))
     .filter((sh) => sh.rows.length);
   /* THE JUMP BAR. Ethan, 2026-09-02, circling a shelf head halfway down
@@ -10140,6 +10150,10 @@ function renderPropPage() {
               escapeHtml(r.market_label || r.market || "")}${lk && v.book
               ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
             ${lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
+            ${/* Priced from the sharp book's own pair at this line
+                  (betting.sharp_anchor_for) — on every NFL row since it
+                  was built and drawn nowhere until the audit's L-7. */
+              r.sharp_anchored ? `<div class="pp-sharp" title="The chance is read off the sharp book’s own two-way price at this line">Priced off the sharp book</div>` : ""}
           </div>
         </div>
         ${lk ? "" : r.grade ? `<span class="grade ${gradeClass(r.grade)}">${
@@ -10149,11 +10163,12 @@ function renderPropPage() {
         ${r.player && r.odds != null ? `<button class="btn ghost"
           data-slip="${escapeAttr(propId(r))}">${slipHas(r)
             ? "On slip" : "+ Parlay"}</button>` : ""}
-        ${r.player ? `<button class="btn ghost" data-send-pick
-          >Send</button>` : ""}
-        ${shareBtn("pick", pickSlug(r))}
-        <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
-          >Share card</button>
+        ${/* ONE SHARE, NOT THREE (the site audit, 2026-09-24): Send,
+              Copy link and Share card sat side by side, six buttons across
+              a 390px phone. Share opens the three together under the
+              strip (the [data-send-pick] listener). */""}
+        <button class="btn ghost" data-send-pick aria-controls="fr-send-slot"
+          >Share</button>
         <button class="btn ghost" data-explain aria-controls="pp-explain"
           >Explain</button>
         <button class="btn ghost" data-ask-pick="${escapeAttr(propId(r))}"
@@ -10497,6 +10512,20 @@ function gpJumpHTML(jumps) {
       escapeHtml(label)}</button>`).join("")}</nav>`;
 }
 
+/* One line per team's bullpen: its season rank and, when the last two
+   days worked it past the model's threshold, the workload (L-7). */
+const PEN_TIRED = 6;
+function mlbPenNotes(g) {
+  const rank = g.bullpen_rank || {}, tired = g.bullpen_fatigue || {};
+  return [g.away, g.home].map((t) => {
+    const r = Number(rank[t]), f = Number(tired[t]);
+    const bits = [];
+    if (r > 0) bits.push(`ranks ${ordinal(r)} of 30`);
+    if (f >= PEN_TIRED) bits.push(`tired — ${f.toFixed(1)} relief innings over two days (about 5 is normal)`);
+    return bits.length ? `${t} bullpen ${bits.join(", ")}` : "";
+  }).filter(Boolean);
+}
+
 function renderGamePage() {
   const host = document.getElementById("game-body");
   if (!host) return;
@@ -10640,6 +10669,19 @@ function renderGamePage() {
   if (!w.dome && w.measured !== false && (w.precip_chance || 0) >= 0.4) notes.push(
     `${Math.round(w.precip_chance * 100)}% precipitation chance`);
   if (g.doubleheader) notes.push(`Doubleheader — game ${g.game_number || 1}`);
+  /* THE BULLPENS AND THE INJURED LIST (the site audit, 2026-09-24, L-7).
+     Both were on every MLB board and drawn nowhere: the pen's season rank
+     and its two-day workload are inputs to every hitter on this page
+     (engine/mlb/bullpen.pen_multiplier), and a tired pen is the thing a
+     bettor would most want said. Rank 1 is the best pen; a workload of
+     6+ weighted relief innings is where the model starts to move. */
+  if (mlb) notes.push(...mlbPenNotes(g));
+  if (mlb) {
+    const il = new Set(state.data.injured_list || []);
+    const out = [...new Set(props.filter((r) => il.has(r.player)).map((r) => r.player))];
+    if (out.length) notes.push(`On the injured list: ${out.slice(0, 4).join(", ")}${
+      out.length > 4 ? ` and ${out.length - 4} more` : ""} — never a pick until activated`);
+  }
   const notesCard = notes.length ? `
     <div class="card gp-notes"><div class="gp-panel-title">Key insights
         <span class="gp-panel-sub">— this game’s own data, not narratives</span></div>
@@ -14939,7 +14981,13 @@ function subtabbedDOM(view, host, groups) {
       host.insertBefore(panel, null);
       g[3].forEach((id) => {
         const el = document.getElementById(id);
-        if (el) panel.appendChild(el);
+        // A zone the home deck has adopted stays in the deck. The deck
+        // adopts on the same render, just before this first pass, and
+        // this loop used to take every one of them back — so on a first
+        // load a phone got the rooms' order (tools, stadiums, then the
+        // picks ~1,300px down), never the deck's (the site audit,
+        // 2026-09-24, Visual 1).
+        if (el && !el.closest("#home-deck")) panel.appendChild(el);
       });
     });
   }
@@ -34738,7 +34786,7 @@ function cardSerif(px, weight) {
    canvas cannot read CSS custom properties, and a card must not change
    with the viewer's theme — it is a photograph of the brand. */
 const CARD_INK = "#E8E4D9", CARD_BRAND = "#FFB000";
-const CARD_GOOD = "#29C878", CARD_BAD = "#DC5455";
+const CARD_GOOD = "#29C878", CARD_BAD = "#FF766E";
 
 function _cardRR(x, X, Y, w, h, r) {
   // roundRect with the one fallback that matters (older Safari).
@@ -36046,14 +36094,18 @@ document.addEventListener("click", async (e) => {
     const host = document.getElementById("fr-send-slot");
     if (!host) return;
     if (host.innerHTML) { host.innerHTML = ""; return; }   // toggle shut
+    const r = findProp(state.propId);
+    // The link and the card need no account; sending to a friend does.
+    const tools = r ? `<div class="pp-share-row">${shareBtn("pick", pickSlug(r))}
+      <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
+        >Share card</button></div>` : "";
     const u = await acctWho();       // null is unknown, not signed out
     if (!(u && u.signed_in)) {
-      tfToast("Sign in to send picks to friends.");
+      host.innerHTML = tools + `<p class="mini pp-share-note">Sign in to send it to a friend.</p>`;
       return;
     }
     await socFetch();
-    const r = findProp(state.propId);
-    host.innerHTML = r ? sendPanelHTML(r) : "";
+    host.innerHTML = tools + (r ? sendPanelHTML(r) : "");
     return;
   }
   const b = e.target.closest && e.target.closest("[data-send-to]");
@@ -41698,7 +41750,13 @@ function moreSheetInit() {
    section with nothing to say is not drawn. Every width: a phone reads
    it as one column, a desktop as a grid (CSS), and the board as it was
    folds under it on both. */
-const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
+/* THE PICKS BEFORE THE STADIUMS (the site audit, 2026-09-24): with no
+   Pick of the Day, a phone met the four tool tiles and a carousel of
+   400px stadium cards before the first pick. The picks now follow what
+   is live; the games come after them as a compact strip on a phone
+   (styles.css, "#home-deck .hd-sec[data-sec=games]"), and the tools
+   close the deck. */
+const HOME_DECK_ORDER = ["hero", "live", "riding", "likely", "edge", "games", "record", "zeno", "tools"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely

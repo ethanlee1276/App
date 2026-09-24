@@ -667,7 +667,11 @@ def board_bytes(name: str):
     payload = gate.full_board(name)
     if payload is None:
         return None, None, None
-    body = json.dumps(payload).encode()
+    # The subscriber's copy is served the way the public one is written
+    # (engine/served.py, the site audit's M-3): no ladders, shelves by
+    # reference, no whitespace.
+    from engine.served import served
+    body = json.dumps(served(payload), separators=(",", ":")).encode()
     # Hashed once per rebuild, not once per request — it rides in the same
     # cache entry as the bytes it describes, so the two cannot disagree.
     etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
@@ -3165,7 +3169,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = run_mlb_slate(MLB_SLATE, config)
             else:
                 result = run_slate(SLATE, config)
-            payload = json.dumps(result).encode()
+            from engine.served import served
+            payload = json.dumps(served(result)).encode()
         except Exception as exc:  # surface engine errors as JSON
             self._send(500, json.dumps({"error": str(exc)}).encode(), ".json")
             return

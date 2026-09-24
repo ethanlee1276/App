@@ -146,7 +146,7 @@ def test_the_board_and_its_shelves_are_built_from_one_list():
 def test_the_renderer_draws_shelves():
     src = _src("web", "js", "app.js")
     assert "function likelyShelf(sh)" in src
-    assert "state.data.board_shelves || []" in src
+    assert "((d && d.board_shelves) || [])" in src
 
 
 def test_it_falls_back_to_the_flat_list_on_an_older_payload():
@@ -159,7 +159,9 @@ def test_it_falls_back_to_the_flat_list_on_an_older_payload():
     # fallback it guards is unchanged.
     fn = src.index("function renderLikely()")
     body = src[fn:src.index("\nfunction ", fn + 10)]
-    assert "const shelves = (state.data.board_shelves || [])" in body
+    # Re-anchored 2026-09-24: shelves are read through boardShelves(),
+    # which rebuilds rows the served board sends as positions (M-3).
+    assert "const shelves = boardShelves()" in body
     assert 'rows.map(likelyCard).join("")' in body, \
         "the flat-list fallback left renderLikely"
 
@@ -350,7 +352,7 @@ def test_the_preview_reuses_the_shelves_rather_than_refiltering():
     src = _src("web", "js", "app.js")
     at = src.index("function renderLikelyTop()")
     body = src[at:src.index("function renderLikely()", at)]
-    assert "state.data.board_shelves" in body
+    assert "boardShelves()" in body
     assert "LIKELY_TOP_N" in body
 
 

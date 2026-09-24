@@ -130,6 +130,11 @@ def report(boards: dict) -> list[str]:
         for m in sorted(cen):
             for k, why in KNOWN.get((sport, m), {}).items():
                 lines.append(f"    known: {m} {STEP_LABELS.get(k, k).lower()} — {why}")
+        # A bar no read can clear (engine/census.bar_notes). The build has
+        # published this since it was written and nothing read it — the
+        # site audit, 2026-09-24 (L-7) — so it lands where the operator
+        # already looks: the list below.
+        flagged += [f"{sport} bar: {x}" for x in board.get("bar_status") or []]
         w = wiring(board)
         if w["checked"]:
             lines.append(f"    wiring: {w['checked']} rows checked — every step and card reaches the number"

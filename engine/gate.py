@@ -58,6 +58,8 @@ import json
 import os
 from pathlib import Path
 
+from .served import served
+
 ROOT = Path(__file__).resolve().parents[1]
 
 #: The served tree. `server.py` reads QB_WEB_DIR the same way and for the
@@ -719,10 +721,17 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             # it was before any of this existed. The full copy is still
             # written, so switching the flag on needs no rebuild — the
             # subscriber path is already populated and correct.
-            doc = redact(payload, label) if enabled() else payload
+            # WHAT A BROWSER GETS (the site audit, 2026-09-24, M-3):
+            # no alternate ladders, shelves by reference, no indentation.
+            # The full copy above keeps all of it for the droplet's tools.
+            doc = served(payload)
+            doc = redact(doc, label) if enabled() else doc
         tmp = path.with_suffix(path.suffix + ".tmp")
         with open(tmp, "w") as fh:
-            json.dump(doc, fh, indent=2)
+            if path is public:
+                json.dump(doc, fh, separators=(",", ":"))
+            else:
+                json.dump(doc, fh, indent=2)
         os.replace(tmp, path)
     return (str(public), str(full))
 

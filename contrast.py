@@ -77,9 +77,21 @@ is already Lc 52-64 and its `--text-dim` Lc 76-87, both above target, so
 copying the dark side's numbers across would have made paper worse. Only
 the fourth tier is new there.
 
-Still under target and left alone: `--bad` at Lc 36, below the 45
-large/bold bar. That one is a colour with a job — negative EV and errors
-read red — and moving it is a palette decision, not a hierarchy one.
+Left alone at the time: `--bad` at Lc 36, below the 45 large/bold bar —
+a colour with a job, so moving it was a palette decision rather than a
+hierarchy one.
+
+THE SITE AUDIT, 2026-09-24 (M-5), made that decision. `--bad` read Lc 36
+and `--text-mute`, the grey second line on every pick row, Lc 47 against
+the 60 secondary text needs. Both were re-solved by lightness alone
+(`palettefit.solve`, hue and chroma held), and `--text-dim` rose one step
+with them so the ladder keeps its spacing:
+
+    --text        Lc 97    body text, preferred
+    --text-dim    Lc 73    secondary text, with room
+    --text-mute   Lc 60    larger or secondary text    (was 47)
+    --text-faint  Lc 32    disabled or decorative
+    --bad         Lc 50    large or bold UI            (was 36)
 """
 
 from __future__ import annotations
@@ -193,10 +205,9 @@ def report(show_wcag: bool = False) -> int:
         inks = sorted({r["ink"] for r in weak})
         print(f"  Below the large/bold UI bar: {', '.join(inks)}")
         print()
-        print("  --bad is the one left, and it is a colour with a job:")
-        print("  negative EV and errors read red. Moving it is a palette")
-        print("  decision rather than a hierarchy one, so it is not")
-        print("  something this tool should quietly pick for you.")
+        print("  A colour with a job (--bad, --good, --warn) is a palette")
+        print("  decision; palettefit.py --target proposes a lightness-only")
+        print("  repair that keeps its hue and chroma.")
     else:
         print("  Every text pair clears the large/bold UI bar.")
     print()

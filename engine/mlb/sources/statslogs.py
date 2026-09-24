@@ -177,10 +177,49 @@ def fetch_person(person_id: int) -> dict:
                      f"mlb_person_{person_id}.json", ttl=86400)
 
 
-def fetch_game_log(person_id: int, group: str, season: int) -> dict:
+def fetch_game_log(person_id: int, group: str, season: int,
+                   game_type: str = "") -> dict:
+    """One player's season game log. ``game_type="P"`` asks for the
+    postseason, which the plain request leaves out (see `with_postseason`)."""
     url = (f"{STATS_BASE}/people/{person_id}/stats"
            f"?stats=gameLog&group={group}&season={season}")
-    return _get_json(url, f"mlb_log_{group}_{person_id}_{season}.json", ttl=1800)
+    name = f"mlb_log_{group}_{person_id}_{season}.json"
+    if game_type:
+        url += f"&gameType={game_type}"
+        name = f"mlb_log_{group}_{person_id}_{season}_{game_type}.json"
+    return _get_json(url, name, ttl=1800)
+
+
+#: The schedule's postseason game types: wild card, division series,
+#: league championship, World Series.
+POSTSEASON_TYPES = frozenset({"F", "D", "L", "W"})
+
+
+def with_postseason(regular: dict, post: dict) -> dict:
+    """The regular-season gameLog with the postseason's games added, in date
+    order, each game once.
+
+    THE FORM WINDOW IN OCTOBER (the site audit, 2026-09-24, H-4's known
+    limit). `stats=gameLog` answers with regular-season games unless asked
+    for another type, so a hitter's last five in October were his last five
+    of September. Grading already reads playoff finals off the box score
+    (`ingest.mlb_box_rows`); this is the model's side of it. ADDITIVE ONLY:
+    an empty or unreadable postseason answer leaves the regular log exactly
+    as it was, and a game both answers carry is counted once."""
+    def splits(doc):
+        blocks = (doc or {}).get("stats") or []
+        return list((blocks[0] or {}).get("splits") or []) if blocks else []
+    extra = splits(post)
+    if not extra:
+        return regular
+    base = splits(regular)
+    key = lambda sp: ((sp.get("game") or {}).get("gamePk"), (sp.get("date") or "")[:10])  # noqa: E731
+    seen = {key(sp) for sp in base}
+    merged = base + [sp for sp in extra if key(sp) not in seen]
+    merged.sort(key=lambda sp: (sp.get("date") or ""))
+    blocks = list((regular or {}).get("stats") or [{}])
+    blocks[0] = dict(blocks[0] or {}, splits=merged)
+    return dict(regular or {}, stats=blocks)
 
 
 def projected_lineup(team_id: int, date: str) -> list[LineupEntry]:
@@ -438,6 +477,13 @@ def build_live_slate(date: str, season: int | None = None,
                 hit_logs.append((entry.person_id, group, season))
     fetch_many(fetch_person, people)
     fetch_many(fetch_game_log, hit_logs + arms)
+    # A postseason slate asks for each player's playoff games too
+    # (`with_postseason`); a regular-season one asks for nothing more.
+    postseason = any(str(g.get("gameType") or "") in POSTSEASON_TYPES
+                     for day in (sched.get("dates") or [])
+                     for g in (day.get("games") or []))
+    if postseason:
+        fetch_many(fetch_game_log, [t + ("P",) for t in hit_logs + arms])
 
     # Pass 2: props — only from each pair's prop game.
     for g, game, box, teams, home, away in raw:
@@ -466,7 +512,7 @@ def build_live_slate(date: str, season: int | None = None,
                               opp_ab, entry.position or person.get("position", ""),
                               market, season, entry.spot, person.get("bats", "R"),
                               log_limit=limit, game_number=prop_gn,
-                              refusals=refusals)
+                              refusals=refusals, postseason=postseason)
 
         # Pitcher strikeout props from probable starters.
         if include_pitchers:
@@ -484,7 +530,7 @@ def build_live_slate(date: str, season: int | None = None,
                               lineup_spot=1, bats="R",
                               throws=pp.get("pitchHand", {}).get("code", "R"),
                               log_limit=limit, game_number=prop_gn,
-                              refusals=refusals)
+                              refusals=refusals, postseason=postseason)
 
     # AN EMPTY BOARD THE WIRE REFUSED IS NOT AN EMPTY BOARD. Publishing
     # one looks identical to a quiet slate and reports success, which is
@@ -513,12 +559,18 @@ REFUSAL_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 def _add_prop(props, person_id, name, team, opp, position, market, season,
               lineup_spot, bats, throws="R", log_limit: int | None = 15,
-              game_number: int = 0, refusals: list | None = None):
+              game_number: int = 0, refusals: list | None = None,
+              postseason: bool = False):
     if not person_id:
         return
     group = MARKET_GROUP[market]
     try:
         raw = fetch_game_log(person_id, group, season)
+        if postseason:
+            try:
+                raw = with_postseason(raw, fetch_game_log(person_id, group, season, "P"))
+            except DataUnavailable:
+                pass                    # the regular log stands on its own
         logs = parse_game_log(raw, market, limit=log_limit)
         # The SAME response, uncapped. `career_avg` used to be the mean of
         # the fifteen logs directly above it — the identical sample the

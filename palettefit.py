@@ -69,7 +69,7 @@ BINDING_GROUND = "panel-3"
 HEADROOM = 0.8
 
 #: APCA tier per token, used by --target. Same table as contrast.py's.
-TARGETS = {"text": 90, "text-dim": 60, "text-mute": 45, "text-faint": 30,
+TARGETS = {"text": 90, "text-dim": 72, "text-mute": 60, "text-faint": 30,
            "good": 60, "bad": 45, "brand": 60, "warn": 60}
 
 

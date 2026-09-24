@@ -163,8 +163,13 @@ def test_the_season_rate_is_parsed_from_the_same_cached_response():
     src = open(os.path.join(root, "engine", "mlb", "sources", "statslogs.py"),
                encoding="utf-8").read()
     i = src.index("def _add_prop(")
-    body = src[i:i + 2500]
-    assert body.count("fetch_game_log(") == 1, "one request, two parses"
+    body = src[i:i + 3200]           # +700: the postseason branch (2026-09-24)
+    # One request in the regular season. A postseason slate adds a second
+    # for the playoff games (statslogs.with_postseason, the site audit of
+    # 2026-09-24), behind its own flag; the season rate still parses the
+    # response already in hand.
+    assert body.count("fetch_game_log(person_id, group, season)") == 1, "one request, two parses"
+    assert body.count("fetch_game_log(") == 2 and "if postseason:" in body
     assert "limit=None" in body
     assert "career_games=" in body
 

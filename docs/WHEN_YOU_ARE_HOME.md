@@ -105,8 +105,11 @@ numbers only the box has:
 cd /srv/qellys && python3 homecheck.py weight
 ```
 
-(8a, M-3) Each board's size and its heaviest fields. Want to know whether
-`alt_lines` is most of the MLB board, so the page's copy can drop it.
+(8a, M-3) Each board's private size beside what a phone is now served
+(the ladders and the repeated shelf rows are cut from the served copy —
+`engine/served.py`). Want the "served" number well under the "private"
+one on every board, and the MLB one most of all. Needs one build after
+the update, so the boards are republished through the new code.
 
 ```bash
 cd /srv/qellys && python3 homecheck.py grading | grep -iE "mlb|no log" | head -20
@@ -169,9 +172,10 @@ approve the policy wording · 15 — a one-time "What do you bet?" card, yes
 or no · 18 — rename the grade words or keep them · 20 — the postal
 address for the footer. And from the site audit (`docs/AUDIT_2026-09-24.md`):
 H-3 — are 100 Ask questions per account and $25 a day the right
-ceilings? · M-5 — a brighter red and a lighter grey (both measure under
-the contrast bar)? · Visual 1 — should the picks lead Home, with the tool
-tiles under them?
+ceilings? (Everything else in that audit is fixed — your "fix all
+issues": the brighter red and lighter grey, the picks leading Home with
+the tool tiles under them, the shorter game strip and the one Share
+button are live with the update. Say if any of them should go back.)
 
 ## AFTER THE WIND FIX — ANSWERED into NEXT TIME HOME (above)
 

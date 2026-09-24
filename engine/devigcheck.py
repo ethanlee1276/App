@@ -46,6 +46,7 @@ Standard library only.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 #: Players the reference book must list before a MEASURED vig is
 #: trustworthy. THE DIRECT EVIDENCE for the failure this exists to catch:
@@ -511,6 +512,18 @@ def load(path) -> tuple[dict, str, str]:
     """
     with open(path) as fh:
         board = json.load(fh)
+    # The public copy is what a browser gets (engine/served.py, the site
+    # audit's L-7), which leaves out this report's `td_census`. A board
+    # without it is followed to the private copy behind it, and says so.
+    if not board.get("locked") and "td_census" not in board:
+        full = full_copy_of(path)
+        if full and Path(full).resolve() != Path(path).resolve():
+            with open(full) as fh:
+                private = json.load(fh)
+            if "td_census" in private:
+                return private, str(full), (
+                    "the public copy leaves out the census, so this read "
+                    "the private board behind it")
     if not board.get("locked"):
         return board, str(path), ""
     full = full_copy_of(path)

@@ -12,8 +12,8 @@ quiet tier would have ended up brighter than the tier above it.
 It has since been split, so the file now pins a LADDER as well as a floor:
 
     --text        Lc 90    body text, preferred
-    --text-dim    Lc 60    larger or secondary text
-    --text-mute   Lc 45    large or bold UI
+    --text-dim    Lc 72    secondary text, with room      (60 until 09-24)
+    --text-mute   Lc 60    larger or secondary text       (45 until 09-24)
     --text-faint  Lc 30    disabled or decorative
 
 The ratchet stays, because a ladder that is only correct on the day it was
@@ -59,14 +59,17 @@ BASELINE = {
     # worth watching.
     ("warn", "bg"): 60, ("warn", "panel"): 60,
     ("warn", "panel-2"): 59, ("warn", "panel-3"): 59,
-    ("text-dim", "bg"): 67, ("text-dim", "panel"): 66,
-    ("text-dim", "panel-2"): 66, ("text-dim", "panel-3"): 65,
+    # Re-measured 2026-09-24, the site audit's M-5: the loss red and the
+    # row grey re-solved by lightness to clear their APCA bars, and
+    # --text-dim one step up with them so the ladder keeps its spacing.
+    ("text-dim", "bg"): 74, ("text-dim", "panel"): 74,
+    ("text-dim", "panel-2"): 73, ("text-dim", "panel-3"): 73,
     ("good", "bg"): 57, ("good", "panel"): 57,
     ("good", "panel-2"): 56, ("good", "panel-3"): 55,
-    ("text-mute", "bg"): 48, ("text-mute", "panel"): 47,
-    ("text-mute", "panel-2"): 47, ("text-mute", "panel-3"): 46,
-    ("bad", "bg"): 37, ("bad", "panel"): 37,
-    ("bad", "panel-2"): 36, ("bad", "panel-3"): 35,
+    ("text-mute", "bg"): 62, ("text-mute", "panel"): 62,
+    ("text-mute", "panel-2"): 61, ("text-mute", "panel-3"): 60,
+    ("bad", "bg"): 52, ("bad", "panel"): 51,
+    ("bad", "panel-2"): 51, ("bad", "panel-3"): 50,
     ("text-faint", "bg"): 33, ("text-faint", "panel"): 32,
     ("text-faint", "panel-2"): 32, ("text-faint", "panel-3"): 31,
 }
@@ -84,8 +87,12 @@ SLACK = 1.0
 #: every line of prose is set in is a bigger change than a hierarchy repair,
 #: so it keeps the value it has had and the tolerance the old body-text test
 #: already used.
-LADDER = (("text-faint", 30), ("text-mute", 45),
-          ("text-dim", 60), ("text", 89))
+#:
+#: Raised 2026-09-24 (the site audit, M-5): --text-mute carries the second
+#: line of every pick row — secondary TEXT — so its bar is 60, not the 45
+#: of large bold UI; --text-dim moved to 72 so the steps stay 10+ apart.
+LADDER = (("text-faint", 30), ("text-mute", 60),
+          ("text-dim", 72), ("text", 89))
 
 
 # --- the algorithm ------------------------------------------------------------
