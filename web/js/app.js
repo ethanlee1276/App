@@ -8388,9 +8388,10 @@ function renderLikely() {
     <p>Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it. A pick keeps its number
-    and its seat through the day unless its game starts, a bar turns it away,
-    or a pick 3 points likelier takes the seat — each row says how long it has
-    been up.${rankOnly ? ` ${rankOnly}
+    and stays up until its game unless something about it changes — an injury,
+    the price, the model’s chance, the book pulling it; a likelier pick is
+    added beside it, never swapped in. Each row says how long it has been up,
+    and a pick that came off is listed at the bottom with the reason.${rankOnly ? ` ${rankOnly}
     ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
     price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</p>
     ${likelyRefusedNote(state.data.likely_census, rows.length)}
@@ -8423,7 +8424,8 @@ function renderLikely() {
     </div>` : "";
   host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
-    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + likelyScriptsHTML(rows);
+    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + likelyScriptsHTML(rows)
+    + likelyPulledHTML(likelyPulled());
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
@@ -8558,10 +8560,7 @@ const LIKELY_NEW_MIN = 60;
 function likelyHeld(r) {
   const t = Date.parse((r || {}).since || "");
   if (!Number.isFinite(t)) return null;
-  const day = (x) => new Date(x).toLocaleDateString(undefined, tzOpts({}));
-  const when = day(t) === day(Date.now()) ? tzTime(t)
-    : `${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "short" }))} ${tzTime(t)}`;
-  return { fresh: (Date.now() - t) / 60000 < LIKELY_NEW_MIN, when };
+  return { fresh: (Date.now() - t) / 60000 < LIKELY_NEW_MIN, when: likelyWhen(r.since) };
 }
 
 /* The row's chip: [text, tone, title], or null with no `since`. On the
@@ -8574,8 +8573,62 @@ function likelyHeldTag(r) {
   const then = Number.isFinite(was) ? ` — ${wholePct(was)} when it went up` : "";
   return h.fresh ? ["New", "new", `Went up at ${h.when}${then}`]
     : [`Since ${h.when}`, "", `On the board since ${h.when}, held through every refresh${then}. A pick
-       keeps its number and its seat unless its game starts, a bar turns it away, or a pick 3 points
-       likelier takes the seat.`];
+       stays up until its game unless something about it changes: an injury, the price, the model’s
+       chance, or the book pulling it.`];
+}
+
+/* PULLED SINCE THEY WENT UP. Ethan, 2026-09-24: "we still have most
+   likley and edge bets dissaperring from the board. there was most
+   likley bets i saw for the packers game yesterday that are no where to
+   be found." A pick the board posted now stays up until its game unless
+   something about the pick itself changes (engine/likely.HELD_SEATS);
+   one that does come off is listed until kickoff with when it went up,
+   when it came off and why (`likely_turnover.earlier`) — on this page
+   and on its game's page. Nothing a reader saw goes missing without a
+   line saying where it went. */
+function likelyPulled(d = state.data) {
+  const t = ((d || {}).likely_turnover || {});
+  return (t.earlier || []).filter((e) => e && e.out_at && (e.player || e.pick_label || e.matchup));
+}
+
+function likelyWhen(iso) {
+  const t = Date.parse(iso || "");
+  if (!Number.isFinite(t)) return "";
+  const day = (x) => new Date(x).toLocaleDateString(undefined, tzOpts({}));
+  return day(t) === day(Date.now()) ? tzTime(t)
+    : `${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "short" }))} ${tzTime(t)}`;
+}
+
+function likelyPulledRow(e) {
+  const game = e.kind === "game";
+  const bet = game ? (e.pick_label || `${teamName(e.team)} ${e.market_label || e.market || ""}`)
+    : [e.player, e.side, e.line, e.market_label || e.market].filter((x) => x != null && x !== "").join(" ");
+  const where = game ? (e.matchup || "")
+    : `${teamName(e.team)}${e.opponent ? ` vs ${teamName(e.opponent)}` : ""}`;
+  const was = Number(e.first_prob != null ? e.first_prob : e.model_prob);
+  const up = likelyWhen(e.since);
+  const facts = [where, e.odds ? american(e.odds) : "",
+    up ? `up ${up}${Number.isFinite(was) ? ` at ${wholePct(was)}` : ""}` : ""].filter(Boolean);
+  return `<div class="ml-pulled-row">
+      <span class="ml-pulled-mark">${betMark(e, 28)}</span>
+      <span class="ml-pulled-what"><b>${escapeHtml(bet)}</b>
+        <span class="ml-pulled-facts">${escapeHtml(facts.join(" · "))}</span>
+        <span class="ml-pulled-why">Pulled ${escapeHtml(likelyWhen(e.out_at))}: ${escapeHtml(e.out_note || "it no longer cleared the board")}</span></span>
+    </div>`;
+}
+
+/* The fold. Closed by default: the board is the picks; this is where a
+   pick that left can be found, not a second board. */
+function likelyPulledHTML(rows, opts = {}) {
+  if (!rows.length) return "";
+  return `<details class="ls-note likely-pulled"${opts.open ? " open" : ""}>
+      <summary><b>${escapeHtml(opts.title || "Pulled since they went up")}</b>
+        <span class="mini">${rows.length}</span></summary>
+      <p class="likely-pulled-lede">Picks that were on this board and came off before their game,
+        with the reason. They stay listed until kickoff. A pick is never pulled for being
+        outranked, so each one here left for something about the bet itself.</p>
+      ${rows.map(likelyPulledRow).join("")}
+    </details>`;
 }
 
 /* BUILDING A PARLAY? Every game with two or more picks on this board,
@@ -11135,6 +11188,11 @@ function renderGamePage() {
   const likelies = (state.data.most_likely || [])
     .filter(showableLikelyRow)
     .filter((r) => propInGame(r, g));
+  // …and this game's picks that came off the board, with why (likelyPulled).
+  const pulled = likelyPulled().filter((e) => (e.kind === "game"
+    ? [e.home, e.away].includes(g.home) && [e.home, e.away].includes(g.away)
+      || e.matchup === `${g.away} @ ${g.home}`
+    : propInGame(e, g)));
 
   // The header re-uses the same art the strip card draws, at full width.
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
@@ -11365,7 +11423,7 @@ function renderGamePage() {
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
-      likelies.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
+      likelies.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
       ["gp-sec-props", shown.length ? `Props · ${shown.length}` : "Props"],
@@ -11389,10 +11447,11 @@ function renderGamePage() {
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
-    ${likelies.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
+    ${likelies.length || pulled.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
         <span class="sub">— ranked by how often they land, not by how good the
         price is; kept in its own book, never in the headline record</span></div>
-      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div></div>` : ""}
+      ${likelies.length ? `<div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
+      ${likelyPulledHTML(pulled, { title: "Pulled from this game", open: !likelies.length })}</div>` : ""}
 
     ${gpScripts ? `<div id="gp-sec-scripts"><div class="section-title">How these picks fit together
         <span class="sub">— each pick needs the game to go a certain way; picks that need the

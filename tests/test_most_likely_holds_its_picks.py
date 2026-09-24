@@ -124,7 +124,11 @@ def test_a_seat_is_kept_unless_the_newcomer_is_clearly_likelier():
     seated = {r["player"] for r in K._cut_players(rows(0.72), 8, held=held)}
     assert "Held" in seated and "New" not in seated, "two points likelier is not enough"
     seated = {r["player"] for r in K._cut_players(rows(0.735), 8, held=held)}
-    assert "New" in seated and "Held" not in seated, "three and a half points is"
+    # Three and a half points takes a seat — BESIDE the posted pick, not
+    # in place of it (HELD_SEATS, 2026-09-24: the Packers picks Ethan saw
+    # on Wednesday were gone by Thursday because Sunday's props took
+    # their seats).
+    assert "New" in seated and "Held" in seated, "three and a half points comes in beside it"
     assert {r["player"] for r in K._cut_players(rows(0.72), 8)} >= {"New"}, "no memory, no margin"
 
 
@@ -197,8 +201,8 @@ def test_the_previous_board_is_the_same_slate_or_nothing():
         json.dump(doc, fh)
     got = K.previous_board(path, "2026-W04")
     assert [r["player"] for r in got["rows"]] == ["X", "Y"] and got["day"] == {"builds": 5}
-    assert K.previous_board(path, "2026-W05") == {"rows": [], "day": {}}
-    assert K.previous_board(os.path.join(d, "missing.json"), "2026-W04") == {"rows": [], "day": {}}
+    assert K.previous_board(path, "2026-W05") == {"rows": [], "day": {}, "earlier": []}
+    assert K.previous_board(os.path.join(d, "missing.json"), "2026-W04") == {"rows": [], "day": {}, "earlier": []}
     # The light copy first: the same rows without their chains, and the MLB
     # full board is 8 MB to parse every refresh.
     with open(os.path.join(d, "held_board_fixture_picks.json"), "w", encoding="utf-8") as fh:
@@ -320,7 +324,7 @@ def test_the_row_says_how_long_the_pick_has_been_up():
             + "const wholePct = (x) => `${Math.round(Number(x) * 100)}%`;\n"
             + "const tzOpts = (o) => Object.assign({timeZone: 'America/New_York'}, o);\n"
             + "const tzTime = (d) => new Date(d).toLocaleTimeString('en-US', tzOpts({hour: 'numeric', minute: '2-digit'}));\n"
-            + "const state = {data: {}};\nconst LIKELY_NEW_MIN = 60;\n" + _fn(APP, "likelyHeld")
+            + "const state = {data: {}};\nconst LIKELY_NEW_MIN = 60;\n" + _fn(APP, "likelyWhen") + _fn(APP, "likelyHeld")
             + _fn(APP, "likelyHeldTag") + _fn(APP, "likelyTagsHTML")
             + f"\nconsole.log(JSON.stringify([{{since: '{iso(200)}', first_prob: 0.71}}, "
             + f"{{since: '{iso(10)}', kind: 'game'}}, {{}}].map(likelyTagsHTML)));")

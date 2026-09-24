@@ -76,7 +76,7 @@ def _why(prop, likely, data=None):
             + _fn(APP, "whySectionHTML") + _fn(APP, "whyHeldItem") + _fn(APP, "whyBoardOf")
             + _fn(APP, "impliedOf") + _const(APP, "WHY_SCORER")
             # the "On the board" line (test_most_likely_holds_its_picks.py)
-            + _const(APP, "LIKELY_NEW_MIN") + _fn(APP, "likelyHeld")
+            + _const(APP, "LIKELY_NEW_MIN") + _fn(APP, "likelyWhen") + _fn(APP, "likelyHeld")
             # the game-script line (tests/test_game_scripts.py) is its own test
             + "const scriptWhyItem = () => null;\n"
             + "const tzOpts = (o) => Object.assign({timeZone: 'America/New_York'}, o);\n"

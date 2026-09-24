@@ -134,7 +134,7 @@ def test_every_surface_carries_it():
     assert "const gpScripts = gameScriptsHTML(g, likelies);" in page
     assert 'gpScripts ? ["gp-sec-scripts", "Game scripts"] : null' in page
     assert '<div id="gp-sec-scripts">' in page
-    assert "+ likelyScriptsHTML(rows);" in _fn("renderLikely")
+    assert "+ likelyScriptsHTML(rows)\n" in _fn("renderLikely")
     assert "scriptWhyItem(" in _fn("whyLikelyHTML") and "scriptWhyItem(b)" in _fn("whyGameHTML")
     assert "${slipScriptNote(s.legs)}" in _fn("slipRender")
     for sel in (".gs-card {", ".gs-scn.is-expected {", ".gs-chip {", ".gs-clash {", ".slip-clash {"):

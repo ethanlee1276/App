@@ -11732,3 +11732,17 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .card.fight-hero .card-head .player { font-family: var(--font-headline); font-size: var(--fs-2xl);
   font-weight: 700; line-height: var(--lh-tight); letter-spacing: 0; }
 .card.fight-hero .card-head .subtitle { font-family: var(--font-mono); }
+
+/* ---- Most Likely: picks pulled since they went up (2026-09-24) --------
+   Listed until kickoff with why they came off; a fold, not a second
+   board. */
+.likely-pulled { margin-top: 16px; }
+.likely-pulled summary { cursor: pointer; }
+.likely-pulled-lede { margin: 8px 0 4px; color: var(--text-mute); font-size: var(--fs-sm); }
+.ml-pulled-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
+  border-top: var(--hairline) solid var(--border-soft); }
+.ml-pulled-mark { flex: none; opacity: .8; }
+.ml-pulled-what { display: grid; gap: 2px; min-width: 0; }
+.ml-pulled-what b { color: var(--text-dim); font-weight: 700; }
+.ml-pulled-facts { color: var(--text-mute); font-size: var(--fs-xs); }
+.ml-pulled-why { color: var(--warn); font-size: var(--fs-xs); }

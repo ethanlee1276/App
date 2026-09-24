@@ -304,6 +304,37 @@ def _seat(r: dict, held) -> float:
     return p + HOLD_MARGIN if held and hold_key(r) in held else p
 
 
+#: A POSTED PICK KEEPS ITS SEAT. Ethan, 2026-09-24, the evening after
+#: the hold shipped: "we still have most likely and edge bets
+#: dissaperring from the board. there was most likley bets i saw for the
+#: packers game yesterday that are no where to be found."
+#:
+#: The seats are slate-wide: eight a market across a whole NFL week. On
+#: Wednesday the books had priced Thursday's game and little else, so the
+#: Packers picks held the seats; on Thursday the Sunday props arrived,
+#: every one three points likelier took a seat (HOLD_MARGIN), and
+#: tonight's picks were gone from the board, the shelf and their own game
+#: page hours before kickoff. Nothing about those picks had changed.
+#:
+#: So a pick that was on the board last build keeps its seat while it
+#: clears every bar, however many likelier picks arrive; a newcomer that
+#: beats it is added beside it, not swapped in. A pick still leaves for
+#: anything about ITSELF — an injury designation, the price past the cap,
+#: the model under the floor, the book no longer offering it, its game
+#: starting — and those are listed until kickoff (`_earlier`). The market
+#: may grow to HELD_SEATS times its seats; past that the weakest posted
+#: pick gives way, and says so.
+HELD_SEATS = 2
+
+
+def _posted(r: dict, held) -> bool:
+    """Was this pick on the board last build (not a ghost held out)?"""
+    if not held:
+        return False
+    h = held.get(hold_key(r))
+    return h is not None and not h.get("out_at")
+
+
 def _same_number(side, line, prefer) -> bool:
     """Is (side, line) the number ``prefer`` — one (side, line) — names?"""
     if not prefer:
@@ -342,6 +373,18 @@ def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET,
         if taken.get(m, 0) < per_market:
             taken[m] = taken.get(m, 0) + 1
             kept.append(r)
+    # A POSTED PICK KEEPS ITS SEAT (HELD_SEATS): the ones the seats above
+    # did not reach come back beside them, strongest first, up to the
+    # market's ceiling.
+    if held:
+        chosen = {id(r) for r in kept}
+        for r in rows:
+            m = r.get("market") or ""
+            if (id(r) not in chosen and _posted(r, held)
+                    and taken.get(m, 0) < per_market * HELD_SEATS):
+                taken[m] = taken.get(m, 0) + 1
+                kept.append(r)
+                chosen.add(id(r))
     if len(kept) < limit:
         chosen = {id(r) for r in kept}
         kept += [r for r in rows if id(r) not in chosen][:limit - len(kept)]
@@ -1790,6 +1833,41 @@ def _started(row: dict, stamp: str) -> bool:
         return False
 
 
+def _kicked_off(row: dict, stamp: str) -> bool:
+    """Had this row's game started by `stamp`, read the way the boards
+    actually write it: `kickoff` is an ISO time on some boards and a bare
+    local "20:15" on the NFL's (nflverse's `gametime`, Eastern), beside
+    `game_date`. `_started` only reads the first, so on the NFL board a
+    pick whose game had kicked off never read as one.
+
+    A game dated before `stamp`'s day (Eastern) has started; one dated
+    that day has once its clock time has passed; anything unreadable has
+    not, so a pick is never dropped on a guess."""
+    if _started(row, stamp):
+        return True
+    import datetime as _dt
+    import re as _re
+    try:
+        from zoneinfo import ZoneInfo
+        et = ZoneInfo("America/New_York")
+        now = _dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        now = (now if now.tzinfo else now.replace(tzinfo=_dt.timezone.utc)).astimezone(et)
+        day = _dt.date.fromisoformat(str(row.get("game_date") or row.get("date") or "")[:10])
+    except (TypeError, ValueError, KeyError):
+        return False
+    if day < now.date():
+        return True
+    if day > now.date():
+        return False
+    m = _re.match(r"^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])?", str(row.get("kickoff") or ""))
+    if not m:
+        return False
+    hh, mm = int(m.group(1)), int(m.group(2))
+    if m.group(3):
+        hh = hh % 12 + (12 if m.group(3).lower() == "pm" else 0)
+    return (now.hour, now.minute) >= (hh, mm)
+
+
 def _stamp_hold(rows: list, held: dict, stamp: str) -> None:
     """`since`, `first_prob` and (when the number has moved) `first_line`
     on every row: carried from last build's row for the same pick on the
@@ -1831,7 +1909,12 @@ def _minutes(since: str, stamp: str) -> float:
 #: key it, hold its number, and give it back its `since` if it returns.
 _HELD_OUT_FIELDS = ("kind", "player", "team", "market", "matchup", "side",
                     "line", "model_prob", "since", "first_prob", "first_line",
-                    "kickoff")
+                    "kickoff",
+                    # …and enough to DRAW it where it is listed as pulled
+                    # (`_earlier`): the reader saw this row, so the list
+                    # shows the same bet, at the price it last showed.
+                    "game_date", "opponent", "market_label", "book", "odds",
+                    "headshot", "position", "pick_label", "home", "away")
 
 
 def _turnover(rows: list, held: dict, why_left: dict, outranked: set,
@@ -1870,7 +1953,7 @@ def _turnover(rows: list, held: dict, why_left: dict, outranked: set,
     for k, h in held.items():
         if k in now:
             continue
-        started = _started(h, stamp)
+        started = _kicked_off(h, stamp)
         if h.get("out_at"):
             if not started:
                 held_out.append(h)
@@ -1913,6 +1996,59 @@ def _day_tally(day: dict, turn: dict, fresh: bool) -> dict:
     return out
 
 
+#: How many pulled picks a board carries at most — newest first. A week
+#: of NFL refreshes will not come near it; it is a bound, not a policy.
+EARLIER_MAX = 60
+
+
+def reader_reason(why: str) -> str:
+    """Why a pick left, in the words the page prints. The census's own
+    wording (`admissible`, `from_prop`, `from_game_bet`) is written for
+    the droplet's reports; a reader needs the fact about the bet."""
+    w = str(why or "").strip()
+    lw = w.lower()
+    if "floor" in lw or lw == "no probability":
+        return "the model’s chance for it fell under our bar"
+    if lw.startswith("heavier than"):
+        return f"the price moved past −{abs(HEAVIEST_PRICE)}, too heavy to call a pick"
+    if lw.startswith("listed "):
+        return w
+    if ("no real" in lw or "no book" in lw or "no longer offered" in lw
+            or "could not have posted" in lw or "could post" in lw
+            or "price is missing" in lw):
+        return "the books stopped offering it"
+    if "disagrees with" in lw:
+        return "the market moved away from our number"
+    if "likelier pick" in lw:
+        return "the board filled with likelier picks"
+    if "under way" in lw or "already been played" in lw or "game started" in lw:
+        return "its game started"
+    return w or "it no longer cleared the board"
+
+
+def _earlier(prev: list, held_out: list, rows: list, stamp: str) -> list:
+    """Every pick that went up and has since come off, until its game
+    starts — the answer to "the picks I saw yesterday are nowhere to be
+    found" (Ethan, 2026-09-24). `held_out` keeps a pick for the hour it
+    may come back as the same pick (HOLD_GRACE_MIN); this keeps it for
+    the READER until kickoff, with when it went up, when it came off and
+    why. A pick back on the board is dropped from here; so is one whose
+    game has started. Newest departure first."""
+    now = {hold_key(r) for r in rows}
+    out: dict = {}
+    for g in list(prev or []) + list(held_out or []):
+        if not isinstance(g, dict) or not g.get("out_at"):
+            continue
+        k = hold_key(g)
+        if k in now or _kicked_off(g, stamp):
+            continue
+        e = dict(g)
+        e["out_note"] = reader_reason(e.get("out_why"))
+        out[k] = e
+    return sorted(out.values(), key=lambda e: str(e.get("out_at") or ""),
+                  reverse=True)[:EARLIER_MAX]
+
+
 def previous_board(public_path, date) -> dict:
     """What this board published last, for the hold: {"rows": its
     `most_likely` rows and the picks it was holding out, "day": the
@@ -1939,16 +2075,17 @@ def previous_board(public_path, date) -> dict:
         except (OSError, ValueError, TypeError):
             continue
     if doc is None:
-        return {"rows": [], "day": {}}
+        return {"rows": [], "day": {}, "earlier": []}
     if not isinstance(doc, dict) or str(doc.get("date") or "") != str(date or ""):
-        return {"rows": [], "day": {}}
+        return {"rows": [], "day": {}, "earlier": []}
     # The board's rows, then the picks it was holding out (HOLD_GRACE_MIN);
     # `build` drops a ghost whose hour has run and prefers a row to its ghost.
     turn = doc.get("likely_turnover") or {}
     rows = [r for r in doc.get("most_likely") or [] if isinstance(r, dict)]
     rows += [r for r in turn.get("held_out") or []
              if isinstance(r, dict) and r.get("out_at")]
-    return {"rows": rows, "day": turn.get("day") or {}}
+    return {"rows": rows, "day": turn.get("day") or {},
+            "earlier": [r for r in turn.get("earlier") or [] if isinstance(r, dict)]}
 
 
 def hold_report(sport: str, board: dict) -> list:
@@ -1982,6 +2119,15 @@ def hold_report(sport: str, board: dict) -> list:
     out.append("    left: " + (" · ".join(f"{why} {n}" for why, n in left) or "none"))
     out.append(f"    last build: kept {turn.get('held', 0)}, new {turn.get('new', 0)}, "
                f"held out {len(turn.get('held_out') or [])}")
+    # Every pick listed as pulled, with why — what a reader sees in the
+    # "Pulled since they went up" fold (`_earlier`).
+    pulled = [e for e in turn.get("earlier") or [] if isinstance(e, dict)]
+    out.append(f"    pulled, listed until kickoff: {len(pulled)}")
+    for e in pulled[:20]:
+        bet = e.get("pick_label") or " ".join(
+            str(x) for x in (e.get("player"), e.get("side"), e.get("line"), e.get("market")) if x not in (None, ""))
+        out.append(f"      {bet} ({e.get('team') or ''}) · up {e.get('since') or '?'} · "
+                   f"off {e.get('out_at') or '?'} · {e.get('out_note') or e.get('out_why') or ''}")
     return out
 
 
@@ -2031,7 +2177,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # `previous_board` hands back {"rows", "day"}; a bare list of rows is
     # the same board with no running tally.
     prev_day: dict = {}
+    prev_earlier: list = []
     if isinstance(previous, dict):
+        prev_earlier = previous.get("earlier") or []
         previous, prev_day = previous.get("rows") or [], previous.get("day") or {}
     # Last build's rows first, then the picks it was still holding out
     # (HOLD_GRACE_MIN) — a pick on the board wins over its own ghost.
@@ -2268,8 +2416,12 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # that keeps this true if someone raises RESERVE_LIMIT.
     players = _cut_players([r for r in out if r.get("kind") != "game"], limit,
                            held=held)
-    games = sorted((r for r in out if r.get("kind") == "game"),
-                   key=lambda r: -_seat(r, held))[:GAME_LIMIT]
+    game_rows = sorted((r for r in out if r.get("kind") == "game"),
+                       key=lambda r: -_seat(r, held))
+    games = game_rows[:GAME_LIMIT]
+    # The same rule for the game shelf (HELD_SEATS).
+    games += [r for r in game_rows[GAME_LIMIT:] if _posted(r, held)][
+        :GAME_LIMIT * (HELD_SEATS - 1)]
     # WHAT THE MARGIN ALONE DECIDED: held rows seated here that the same
     # cut without it would have dropped. Counted so the margin is judged
     # on the box, not argued (HOLD_MARGIN).
@@ -2324,6 +2476,8 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         turnover.update(_turnover(out, held, why_left, outranked, stamp,
                                   by_margin))
         turnover["day"] = _day_tally(prev_day, turnover, fresh=not held)
+        turnover["earlier"] = _earlier(prev_earlier, turnover.get("held_out"),
+                                       out, stamp)
     # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
     # for it. An empty college Saturday has several causes and a census
     # that only reaches stdout is one nobody has the morning they need
