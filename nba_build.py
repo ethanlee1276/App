@@ -445,6 +445,17 @@ def main() -> None:
         out.update(status="unreachable", note=str(exc))
         games, yesterday = [], []
     else:
+        # NO PRESEASON (NBA readiness, 2026-09-24): starters play half their
+        # minutes, so a regular-season projection of a preseason game is an
+        # over the model has not earned. The games are dropped before
+        # anything prices them; a preseason-only day publishes an honest
+        # note, not picks.
+        pre = [g for g in games if g.get("preseason")]
+        games = [g for g in games if not g.get("preseason")]
+        if pre and not games:
+            out.update(status="preseason",
+                       note=f"{len(pre)} preseason game(s) today — starters play half their "
+                            f"minutes, so there are no picks until the regular season.")
         # SEPARATELY, because on the ESPN path each parse is its own
         # fetch: sharing one try meant yesterday's scoreboard failing
         # threw away a slate that had already been read, and the board

@@ -1199,6 +1199,32 @@ def hold() -> list:
     return out
 
 
+def nba() -> list:
+    """NBA. Is basketball ready for opening night? (read-only)
+
+    The NBA readiness pass, 2026-09-24, found two things only the box can
+    count: rows the nightly ingest filed under the calendar year instead of
+    the season (engine.seasons.relabel, which this runs WITHOUT --apply),
+    and basketball props already graded won or lost off a 0:00 box-score
+    line — a player who sat, which the book voids and the settler now does
+    too, going forward only.
+    """
+    from engine import db, ledger, seasons
+    out = ["NBA — opening-night readiness (read-only)"]
+    for table, n in seasons.relabel(db.connect(), "nba").items():
+        out.append(f"  {table}: {n['wrong']} row(s) under the wrong season"
+                   f" ({n['duplicates']} duplicate a correctly labelled row)")
+    rows = ledger.connect().execute(
+        "SELECT sport, status, COUNT(*) FROM bets WHERE sport IN ('nba','wnba') "
+        "AND actual_minutes IS NOT NULL AND actual_minutes <= 0 "
+        "AND status IN ('won','lost') GROUP BY 1, 2").fetchall()
+    if rows:
+        out += [f"  graded off 0 minutes: {r[0]} {r[1]} × {r[2]}" for r in rows]
+    else:
+        out.append("  graded off 0 minutes: none")
+    return out
+
+
 #: Subcommand name -> (function, one-line description). `all` runs every
 #: entry whose third field is True — `exchange` is excluded because it is
 #: the only one that touches the network and the only one that cares
@@ -1228,6 +1254,7 @@ CHECKS = {
                    "picks left", True),
     "weight": (weight, "WEIGHT: what each board costs a phone, and where "
                        "the bytes go", True),
+    "nba": (nba, "NBA: season labels and props graded off 0 minutes", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

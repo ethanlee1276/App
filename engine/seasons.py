@@ -149,3 +149,79 @@ def describe(sport: str, seasons: list[int], days: int) -> str:
         note = ("  Roughly a few requests per day of the season; re-runs skip "
                 "days already stored.")
     return f"{sport.upper()} seasons {span} — {days:,} date(s) to walk.{note}"
+
+
+# ---- the NBA's two season labels (NBA readiness, 2026-09-24) -----------------
+#: The history tables and the columns that, with `season`, make a row's key.
+_KEYED = {"games": ("sport", "period", "game_id"),
+          "player_game_logs": ("sport", "period", "game_id", "player", "market")}
+
+
+def relabel(conn, sport: str = "nba", apply: bool = False) -> dict:
+    """Rows whose `season` is not the season their date belongs to.
+
+    WHY THIS EXISTS. The NBA's nightly ingest (sources/nbadata) labelled a
+    game with its CALENDAR year while the ESPN backfill and every query use
+    the year the season STARTED (`season_of`) — so a March game went in as
+    "2027" beside a season filed as "2026", outside the board's
+    `season IN recent_seasons(...)`, and where both ingests had run the
+    same day was stored twice. The ingest is fixed going forward; this
+    finds what it already wrote.
+
+    ``apply=False`` only counts. ``apply=True`` moves each such row to its
+    season — or, when a correctly labelled twin already holds that key,
+    deletes it as the duplicate it is. Idempotent: a second run finds
+    nothing. Returns ``{table: {"wrong": n, "duplicates": n}}``.
+    """
+    out = {}
+    for table, cols in _KEYED.items():
+        rows = conn.execute(
+            f"SELECT rowid, season, {', '.join(cols)} FROM {table} WHERE sport=?",
+            (sport,)).fetchall()
+        wrong = dup = 0
+        for r in rows:
+            period = str(r["period"] or "")
+            if len(period) < 10 or period[4] != "-":
+                continue
+            want = season_of(sport, period)
+            if int(r["season"] or 0) == want:
+                continue
+            wrong += 1
+            twin = conn.execute(
+                f"SELECT 1 FROM {table} WHERE season=? AND "
+                + " AND ".join(f"{c}=?" for c in cols),
+                (want, *[r[c] for c in cols])).fetchone()
+            if twin:
+                dup += 1
+            if not apply:
+                continue
+            if twin:
+                conn.execute(f"DELETE FROM {table} WHERE rowid=?", (r["rowid"],))
+            else:
+                conn.execute(f"UPDATE {table} SET season=? WHERE rowid=?", (want, r["rowid"]))
+        out[table] = {"wrong": wrong, "duplicates": dup}
+    if apply:
+        conn.commit()
+    return out
+
+
+def main(argv=None) -> int:
+    """python3 -m engine.seasons relabel nba [--apply]"""
+    import argparse
+    ap = argparse.ArgumentParser(description="Season labels in the history database.")
+    ap.add_argument("cmd", choices=["relabel"])
+    ap.add_argument("sport", nargs="?", default="nba")
+    ap.add_argument("--apply", action="store_true", help="fix them (otherwise only count)")
+    a = ap.parse_args(argv)
+    from . import db
+    res = relabel(db.connect(), a.sport, apply=a.apply)
+    for table, n in res.items():
+        verb = "fixed" if a.apply else "to fix"
+        print(f"  {table}: {n['wrong']} {verb} ({n['duplicates']} of them duplicates of a correctly labelled row)")
+    if not a.apply and any(n["wrong"] for n in res.values()):
+        print("  Nothing was changed. Re-run with --apply to fix them.")
+    return 0
+
+
+if __name__ == "__main__":                                # python3 -m engine.seasons
+    raise SystemExit(main())

@@ -131,6 +131,19 @@ defaults are 100 questions per account and $25 a day. To change one
 `cd /srv/qellys && sudo ./deploy/setenv.sh QB_ASK_DAILY_USD 40` — then
 restart the site for it to take (`sudo systemctl restart qellys`).
 
+```bash
+cd /srv/qellys && python3 homecheck.py nba
+```
+
+(8d, NBA readiness) Two counts only the box has. Rows the nightly NBA
+ingest filed under the calendar year rather than the season (a March game
+as "2027" beside a season filed as "2026" — the board reads by season, so
+from January those games would have fallen out of every player's form),
+and any basketball prop already graded won or lost off a 0:00 box-score
+line (a player who sat — the book voids those; the settler now does too,
+going forward only). Paste it: I will say whether 9b is needed, and past
+grades change only on your yes.
+
 **9. Turn on the trimmed code and the strict script policy** (about a
 minute; **this one changes the box**). Both ride the Caddy config, which
 only the deploy installs — it validates the new file first and keeps the
@@ -149,6 +162,18 @@ Want: `script-src 'self'` (no `unsafe-inline`), and the size about
 1,430,000 (it was about 2,200,000 with the comments). Then force-quit the
 app on the phone, reopen, and tap around — My Bets, the Record chips, a
 Most Likely pick. Anything dead, tell me which.
+
+**9b. Only if 8d found wrong season labels — fix them** (seconds; **this
+one changes the history database**). It moves each row to its season, or
+deletes it where a correctly labelled copy already exists. Run it once
+without `--apply` first; it prints what it would do:
+
+```bash
+cd /srv/qellys && python3 -m engine.seasons relabel nba
+cd /srv/qellys && python3 -m engine.seasons relabel nba --apply
+```
+
+Want the second run to end with every count at 0 fixed on a re-run.
 
 **10. SATURDAY ONLY — are college receptions priced?**
 

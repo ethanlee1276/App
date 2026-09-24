@@ -73,6 +73,7 @@ def parse_schedule_day(sched: dict, date: str) -> list[dict]:
             final = status == 3
             out.append({
                 "game_id": g.get("gameId", ""),
+                "preseason": is_preseason(g.get("gameId", "")),
                 "home": home.get("teamTricode", ""),
                 "away": away.get("teamTricode", ""),
                 "home_score": (home.get("score") or None) if final else None,
@@ -81,6 +82,18 @@ def parse_schedule_day(sched: dict, date: str) -> list[dict]:
                 "kickoff": g.get("gameDateTimeUTC", ""),
             })
     return out
+
+
+def is_preseason(game_id) -> bool:
+    """The NBA's own game ids carry the season type in their first three
+    digits: 001 preseason, 002 regular season, 004 playoffs, 005 play-in.
+
+    NBA readiness, 2026-09-24. The CDN schedule lists the preseason with
+    everything else and nothing here told them apart, so the first two
+    weeks of October would have been priced as real games — starters on
+    regular-season minutes in games they play half of — and their box
+    scores stored as the form a player carries into opening night."""
+    return str(game_id or "").startswith("001")
 
 
 def parse_boxscore(box: dict) -> list[dict]:
@@ -117,7 +130,13 @@ def parse_boxscore(box: dict) -> list[dict]:
 def log_rows(players: list[dict], date: str, game_id: str) -> list[dict]:
     """player_game_logs rows (one per market) for one game's players. The
     position column carries the starter flag — the minutes engine's gate."""
-    season = int(date[:4])
+    # THE SEASON IT STARTED IN (engine.seasons.season_of), the label the
+    # ESPN backfill writes and every query reads. This was the calendar
+    # year, so from January every game went in under next year's label —
+    # outside the board's `season IN recent_seasons(...)` — and a
+    # player's form stopped at December (NBA readiness, 2026-09-24).
+    from ..seasons import season_of
+    season = season_of("nba", date)
     out = []
     for p in players:
         if not p["player"]:
@@ -143,10 +162,13 @@ def ingest_nba_date(conn, date: str) -> dict:
     except DataUnavailable as exc:
         result["skipped"].append(f"nba schedule: {exc}")
         return result
+    from ..seasons import season_of
     grows, prows, arows = [], [], []
     for g in games:
+        if g.get("preseason"):
+            continue                # never a result, never a player's form
         grows.append({
-            "sport": "nba", "season": int(date[:4]), "period": date,
+            "sport": "nba", "season": season_of("nba", date), "period": date,
             "game_id": f"{g['away']}@{g['home']}", "home": g["home"],
             "away": g["away"], "home_score": g["home_score"],
             "away_score": g["away_score"], "spread": 0.0, "total": None,

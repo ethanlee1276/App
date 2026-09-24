@@ -4442,6 +4442,19 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 (*wargs, b["player"], row["game_id"])).fetchone()
             if m:
                 actual_minutes = float(m["value"])
+            # ZERO MINUTES IS A SCRATCH, NOT A ZERO (NBA readiness, the site
+            # audit's follow-up, 2026-09-24). The NBA's box score lists every
+            # player on the roster, a scratch included, with 0:00 and a row of
+            # zeros — so a player who sat had his over graded LOST and his
+            # under WON. The book voids a player who does not play, and so
+            # does this journal (Ethan's rule, 2026-09-14: "a scratch is
+            # void"); the WNBA's box score leaves him out, which the no-show
+            # sweep below already voids. Team markets never reach here.
+            if actual_minutes is not None and actual_minutes <= 0:
+                conn.execute("UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0 "
+                             "WHERE id=?", (b["id"],))
+                settled += 1
+                continue
         _settle_one(conn, b, float(row["value"]), close_line,
                     actual_minutes=actual_minutes, closing_odds=close_odds)
         settled += 1

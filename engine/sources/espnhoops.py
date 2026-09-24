@@ -112,6 +112,11 @@ def parse_scoreboard(payload: dict) -> list[dict]:
                  "post": "final"}.get(stype.get("state", "pre"), "scheduled")
         out.append({
             "game_id": str(ev.get("id") or ""),
+            # ESPN's season type: 1 preseason, 2 regular, 3 postseason. A
+            # preseason box score is starters on half minutes, and stored
+            # as a game it is the form a player carries into opening night
+            # (NBA readiness, 2026-09-24) — ingest_day leaves it out.
+            "preseason": ((ev.get("season") or {}).get("type") == 1),
             "home": home["abbr"], "away": away["abbr"],
             "home_name": home["name"], "away_name": away["name"],
             # UNCHANGED, and deliberately: settlement reads these and a
@@ -278,6 +283,8 @@ def ingest_day(conn, date: str, league: str = "wnba",
 
     grows, prows = [], []
     for g in games:
+        if g.get("preseason"):
+            continue                # never a result, never a player's form
         grows.append({
             "sport": league, "season": _season_of(date, league), "period": date,
             "game_id": g["game_id"], "home": g["home"], "away": g["away"],

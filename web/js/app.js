@@ -3433,6 +3433,15 @@ function renderEmptySlate() {
        side, not an empty slate, and it is being looked at.${state.data.note
          ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
          : ""}</div>`
+    : state.data.status === "preseason"
+    /* PRESEASON IS NOT PRICED (NBA readiness, 2026-09-24): starters play
+       half their minutes, and a regular-season projection of that game is
+       an over nobody earned. Said, so an empty October board does not
+       read as a broken one. */
+    ? `<div class="es-icon">${icon("calendar", 30)}</div><div class="es-title">No picks in the preseason</div>
+       <div class="es-sub">Today’s games are preseason. Starters play about half their
+       minutes, so the model does not price them; picks start with the regular
+       season.</div>`
     : state.data.status === "schedule unknown"
     /* NEITHER "no games" NOR "offseason", because both are claims about
        the LEAGUE and what failed was our lookback. Saying the season is
