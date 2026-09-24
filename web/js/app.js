@@ -6419,9 +6419,21 @@ function renderTonight() {
      board's full cards stay on the page under one fold for the reader
      who wants them without leaving; game lines and long shots keep
      their cards, there are few. */
-  const edgeRow = (r) => deckPickRow(r, { door: propAttrs(r),
-    number: r.has_market === false ? null
+  const edgeRow = (r) => deckPickRow(r, { door: r.player && !r.bet_type ? propAttrs(r) : gameBetAttrs(r),
+    number: r.has_market === false || r.edge == null ? null
       : { big: signedPct(r.edge), small: "edge", tone: r.edge >= 0 ? "var(--good)" : "var(--bad)" } });
+  /* NO BET CLEARED THE BAR — said, and the closest calls shown (Ethan,
+     2026-09-24: "it's not showing any edge bets"). The Edge board stakes
+     only where our number beats the price, and some nights nothing does;
+     "0 bets" over an empty box read as a broken page. The best row in
+     each market that missed (marketBest, the Home page's same list) sits
+     under it with the reason it missed — no stake, no journal, and it
+     says so. */
+  const edge = [...props, ...bets];
+  const near = edge.length ? [] : marketBest(tonightSignals()).slice(0, 8);
+  const nearRow = (r) => deckPickRow(r, { door: r.player && !r.bet_type ? propAttrs(r) : gameBetAttrs(r),
+    note: whyNotStaked(r),
+    number: r.edge == null ? null : { big: signedPct(r.edge), small: "edge — under the bar", tone: "var(--text-mute)" } });
   /* v5: the page opens with its name, like every page (markPageTitles),
      so the two boards' titles are section heads at one weight; on a
      wide screen the boards sit side by side (.tn-cols), Most likely on
@@ -6442,12 +6454,13 @@ function renderTonight() {
       <span class="sub">— every pick that clears the bar, journaled and staked.
       ${plural(n, "bet")}.</span></div>
     ${boardGuide("recommendations")}
-    ${props.length ? `<div class="hd-card tn-rows">${props.map(edgeRow).join("")}</div>
+    ${edge.length ? `<div class="hd-card tn-rows">${edge.map(edgeRow).join("")}</div>
     <details class="tn-full"><summary>Every edge card, with the reasoning</summary>
-      <div class="cards">${props.map(cardHTML).join("")}</div></details>` : ""}</section>
+      <div class="cards">${props.map(cardHTML).join("")}${bets.map(gameBetCard).join("")}</div></details>`
+    : `<p class="tn-none">No bet cleared the bar tonight. The Edge board stakes only where our number
+      beats the price — no edge, no bet.${near.length ? " The closest calls, with why each one missed:" : ""}</p>
+      ${near.length ? `<div class="hd-card tn-rows tn-near">${near.map(nearRow).join("")}</div>` : ""}`}</section>
     </div>
-    ${bets.length ? `<div class="section-title minor">Game lines</div>
-      <div class="cards">${bets.map(gameBetCard).join("")}</div>` : ""}
     ${shots.length ? `<div class="section-title minor">Long shots
       <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
       ${boardGuide("long_shots")}
@@ -42085,8 +42098,14 @@ function deckPickRow(r, opts) {
   const nums = price || num ? `<div class="hd-num">${price}${num}</div>` : "";
   const door = o.door || "";
   const tag = door ? "button" : "div";
+  /* THE FACE OR THE CREST (Ethan, 2026-09-24, on the Picks page: "it's
+     not showing player or team headshots and logos"). The same mark the
+     bet's own card and page wear (betMark): a player's headshot, a
+     team's logo for a side, the league's for a game total. */
+  const mark = o.mark === false ? "" : `<span class="hd-mark">${betMark(r, 36)}</span>`;
+  const note = o.note ? `<span class="hd-note">${escapeHtml(o.note)}</span>` : "";
   return `<${tag} class="hd-row${door ? " openable" : ""}"${door ? ` type="button"${door}` : ""}>
-    <div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span></div>${nums}</${tag}>`;
+    ${mark}<div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span>${note}</div>${nums}</${tag}>`;
 }
 
 /* The Pick of the Day as a hero card — only on a day the desk said BET.

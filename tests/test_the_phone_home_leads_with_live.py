@@ -205,8 +205,10 @@ def test_the_picks_page_is_the_same_rows_with_doors():
     tonight = _strip(tonight[:tonight.index("\nfunction ", 10)])
     assert "${potdHeroHTML(d)}" in tonight
     assert 'ml.map((r) => deckPickRow(r, { door: likelyOpen(r) }))' in tonight
-    assert "door: propAttrs(r)" in tonight and 'small: "edge"' in tonight
-    assert "r.has_market === false ? null" in tonight, "no edge printed over a pick with no price"
+    # A prop opens its page, a game line its own (2026-09-24: game lines
+    # joined the Edge rows).
+    assert "door: r.player && !r.bet_type ? propAttrs(r) : gameBetAttrs(r)" in tonight and 'small: "edge"' in tonight
+    assert "r.has_market === false || r.edge == null ? null" in tonight, "no edge printed over a pick with no price"
     assert tonight.index("potdHeroHTML") < tonight.index("Most likely to hit tonight") < tonight.index("Our edge bets")
     assert '<details class="tn-full"><summary>' in tonight and "props.map(cardHTML)" in tonight
     hero = _fn("potdHeroHTML")

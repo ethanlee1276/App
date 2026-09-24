@@ -11448,3 +11448,10 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
    inside a sentence are exempt and stay as they are. */
 .hd-head a { display: inline-flex; align-items: center; min-height: 24px; }
 input.acct-age { width: 24px; height: 24px; min-width: 24px; }
+
+/* The pick rows' face or crest (deckPickRow, 2026-09-24), and the reason
+   a closest-call row missed the Edge board's bar. */
+.hd-mark { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.hd-what .hd-note { display: block; margin-top: 3px; color: var(--text-mute);
+  font-family: inherit; font-size: var(--fs-xs); white-space: normal; }
+.tn-none { margin: 4px 0 10px; color: var(--text-dim); font-size: var(--fs-sm); }
