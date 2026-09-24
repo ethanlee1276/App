@@ -278,6 +278,67 @@ def fetch_portal(year: int, api_key: str | None = None) -> dict[str, dict]:
                              f"cfbd_portal_{year}.json", api_key))
 
 
+# --- the matchup scan's college units (engine/gamescan) ----------------------
+#: How often the season's advanced numbers are asked for again: they
+#: change once a week, after the games.
+ADVANCED_TTL = 12 * 3600
+
+
+def _num(d, *path):
+    for k in path:
+        if not isinstance(d, dict):
+            return None
+        d = d.get(k)
+    try:
+        return None if d is None else float(d)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_advanced(rows: list) -> dict[str, dict]:
+    """``{school: {"plays", "off": {unit: value}, "def": {unit: value}}}``
+    from `/stats/season/advanced` — garbage time excluded.
+
+    The college units, the same questions the NFL scan asks of its
+    play-by-play: PPA (CFBD's expected-points-added) per play overall,
+    on passes and on runs; success rate; explosiveness; havoc (tackles
+    for loss, passes defended and forced fumbles over plays — generated
+    on defence, allowed on offence); line yards per carry (run blocking);
+    stuff rate (runs stopped at or behind the line)."""
+    out: dict = {}
+    for r in rows or []:
+        school = r.get("team") if isinstance(r, dict) else None
+        if not school:
+            continue
+        sides = {}
+        for side in ("offense", "defense"):
+            d = r.get(side) or {}
+            sides["off" if side == "offense" else "def"] = {
+                "overall": _num(d, "ppa"),
+                "passing": _num(d, "passingPlays", "ppa"),
+                "rushing": _num(d, "rushingPlays", "ppa"),
+                "success": _num(d, "successRate"),
+                "explosive": _num(d, "explosiveness"),
+                "havoc": _num(d, "havoc", "total"),
+                "line": _num(d, "lineYards"),
+                "stuff": _num(d, "stuffRate"),
+            }
+        plays = _num(r.get("offense") or {}, "plays") or 0.0
+        out[school] = {"plays": plays, **sides}
+    return out
+
+
+def fetch_advanced(year: int, api_key: str | None = None) -> dict[str, dict]:
+    # A finished season's table never changes: one call, kept the season.
+    # Only the season in play refreshes twice a day (CFBD's free tier is
+    # a thousand calls a month).
+    import datetime as _dt
+    ttl = ADVANCED_TTL if year >= _dt.date.today().year else SEASON_TTL
+    return parse_advanced(_get("/stats/season/advanced",
+                               {"year": year, "excludeGarbageTime": "true"},
+                               f"cfbd_advanced_{year}.json", api_key, ttl=ttl))
+
+
 def blue_chip_ratio(year: int, classes: int = 4,
                     api_key: str | None = None) -> dict[str, dict]:
     """Blue-chip ratio across the last ``classes`` recruiting classes.

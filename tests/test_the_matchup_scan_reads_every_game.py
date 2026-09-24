@@ -150,6 +150,49 @@ def test_a_questionable_player_reads_as_if():
     assert txt.startswith("If he sits — ATL's coverage thins — Sydney Brown steps in")
 
 
+# ── Ask and the pick page ──────────────────────────────────────────────────
+
+
+def _scanned_board():
+    scan = {"units": {"GB": {"off": {"passing": {"rank": 5, "value": 0.2}}, "def": {}},
+                      "ATL": {"off": {}, "def": {"passing": {"rank": 27, "value": 0.1}}}},
+            "edges": [{"unit": "passing", "off": "GB", "def": "ATL", "off_rank": 5, "def_rank": 27, "gap": 22}],
+            "coverage": {"ATL": {"weakest": "Mike Hughes"}}, "injuries": [
+                {"team": "ATL", "player": "A.J. Terrell", "position": "CB", "status": "OUT",
+                 "opens": "C.J. Henderson steps in at LCB"}],
+            "method": {"teams": 32, "opponent_adjusted": True}}
+    reads = {"players": [{"player": "Christian Watson", "team": "GB", "pos": "WR", "read": "breakout",
+                          "label": "Breakout spot", "pro": ["a", "b"], "con": []}],
+             "microscope": [{"player": "Christian Watson", "market": "rec_yds", "side": "OVER",
+                             "line": 55.5, "odds": -150, "prob": 0.66, "clears": True}]}
+    return {"games": [{"home": "GB", "away": "ATL", "scan": scan}], "scan_reads": {"ATL@GB": reads}}
+
+
+def test_ask_reads_the_scan_for_a_named_game_only():
+    from engine import askbot as AB
+    b = _scanned_board()
+    g = b["games"][0]
+    assert "matchup_scan" not in AB.game_facts(b, g), "the slate listing stays lean"
+    ms = AB.game_facts(b, g, scan=True)["matchup_scan"]
+    assert ms["unit_ranks"]["ATL"]["def"] == {"passing": 27}
+    assert ms["mismatches"] == ["GB offense passing 5 vs ATL defense passing 27: edge GB"]
+    assert ms["soft_spot_in_coverage"] == {"ATL": "Mike Hughes"}
+    assert ms["player_reads"][0]["read"] == "breakout"
+    assert ms["props_under_the_microscope"][0]["clears"] is True
+    assert "It does not move our numbers yet" in AB.SYSTEM
+    src = open(os.path.join(ROOT, "engine", "askbot.py"), encoding="utf-8").read()
+    assert 'facts["games"] = [game_facts(boards[s], g, scan=True)' in src
+
+
+def test_the_pick_page_carries_the_players_read():
+    page = APP[APP.index("function renderPropPage("):]
+    page = page[:page.index("\n}\n")]
+    assert "${pickScanHTML(r)}" in page
+    fn = APP[APP.index("function pickScanRead("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "(d.scan_reads || {})[`${g.away}@${g.home}`]" in fn
+
+
 # ── the build and the page ─────────────────────────────────────────────────
 
 

@@ -59,6 +59,17 @@ Bay ranked unit by unit with their edges. The next NFL build puts the
 Matchup scan on every game page (it builds last season's man/zone cache
 on its first run, about a minute).
 
+College needs nothing run: the next college build fetches CFBD's advanced
+season table (two calls, then cached) and scans every FBS game. To check
+it after a build:
+
+```bash
+sudo journalctl -u qellys --since "3 hours ago" | grep -i "matchup scan"
+```
+
+Want: `Matchup scan: N of M game(s).` with N close to M. A line saying
+`matchup scan skipped` is the one to send me.
+
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.
 

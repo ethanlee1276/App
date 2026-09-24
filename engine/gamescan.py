@@ -356,13 +356,25 @@ def unit_edges(off_team: str, def_team: str, ratings: dict, teams: int = 32) -> 
         gap = drank - orank          # > 0: the offence is the better unit
         out.append({"unit": ou, "label": label, "off": off_team, "def": def_team,
                     "off_rank": orank, "def_rank": drank, "gap": gap})
-    prot, rush = _rank(o, "off", "pressure"), _rank(d, "def", "pressure")
-    if prot is not None and rush is not None:
-        out.append({"unit": "pressure", "label": "pass protection vs pass rush",
-                    "off": off_team, "def": def_team, "off_rank": prot, "def_rank": rush,
-                    "gap": rush - prot})
+    for unit, label in (("pressure", "pass protection vs pass rush"),
+                        ("havoc", "ball security vs havoc"),
+                        ("line", "run blocking vs the front")):
+        a, b = _rank(o, "off", unit), _rank(d, "def", unit)
+        if a is not None and b is not None:
+            out.append({"unit": unit, "label": label, "off": off_team, "def": def_team,
+                        "off_rank": a, "def_rank": b, "gap": b - a})
     out.sort(key=lambda e: -abs(e["gap"]))
     return out
+
+
+def _weak(rank, n: int = 32) -> bool:
+    """In the bottom third of the league: 21st or worse of 32."""
+    return bool(rank) and rank >= round(n * 0.65)
+
+
+def _strong(rank, n: int = 32) -> bool:
+    """In the top quarter: 8th or better of 32."""
+    return bool(rank) and rank <= max(1, round(n * 0.25))
 
 
 def _ord(n) -> str:
@@ -384,7 +396,7 @@ def _label(score: int, volume: bool) -> tuple[str, str]:
 def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 ratings: dict, room: dict | None, scheme: dict | None,
                 split: dict | None, tackling: dict | None, line_out: list | None,
-                mates_out: list | None) -> dict:
+                mates_out: list | None, n_teams: int = 32) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), and the markets
     the read points at. Counted, not weighed: every reason is one point
@@ -406,9 +418,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         elif share >= 0.18:
             volume = True
         pr = _rank(d, "def", "passing")
-        if pr and pr >= 21:
+        if _weak(pr, n_teams):
             pro.append(f"{opp}'s pass defense ranks {_ord(pr)}")
-        elif pr and pr <= 8:
+        elif _strong(pr, n_teams):
             con.append(f"{opp}'s pass defense ranks {_ord(pr)}")
         for m in (room or {}).get("missing") or []:
             pro.append(f"{m['name']}, {opp}'s starting {m['spot']}, is {m['status'].lower()}")
@@ -444,19 +456,28 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         elif u.get("games") and cs < 0.30:
             con.append(f"Only {cs:.0%} of the carries so far")
         rr = _rank(d, "def", "rushing")
-        if rr and rr >= 21:
+        if _weak(rr, n_teams):
             pro.append(f"{opp}'s run defense ranks {_ord(rr)}")
-        elif rr and rr <= 8:
+        elif _strong(rr, n_teams):
             con.append(f"{opp}'s run defense ranks {_ord(rr)}")
         own = _rank(o, "off", "rushing")
-        if own and own >= 25:
+        if own and own >= round(n_teams * 0.78):
             con.append(f"{team}'s run game ranks {_ord(own)}")
+        # College only: how the lines meet. A front that stuffs runs at
+        # the line against a line that cannot get push.
+        stuff, push = _rank(d, "def", "stuff"), _rank(o, "off", "line")
+        if _strong(stuff, n_teams) and _weak(push, n_teams):
+            con.append(f"{opp} stuffs runs at the line ({_ord(stuff)}) and {team}'s "
+                       f"run blocking ranks {_ord(push)}")
+        elif _weak(stuff, n_teams) and _strong(push, n_teams):
+            pro.append(f"{team}'s run blocking ranks {_ord(push)} against a front "
+                       f"that stops few runs at the line ({_ord(stuff)})")
         mt = (tackling or {}).get(opp)
         if mt is not None and mt >= 0.10:
             pro.append(f"{opp} misses {mt:.0%} of its tackles")
         if (u.get("targets_pg") or 0) >= 3.5:
             lean.append("rec_yds")
-            if rr and rr <= 10:
+            if rr and rr <= round(n_teams * 0.31):
                 pro.append(f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
                            f"the ball to him through the air")
         for m in mates_out or []:
@@ -465,12 +486,15 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         lean = ["pass_yds"]
         volume = True
         pr = _rank(d, "def", "passing")
-        if pr and pr >= 21:
+        if _weak(pr, n_teams):
             pro.append(f"{opp}'s pass defense ranks {_ord(pr)}")
-        elif pr and pr <= 8:
+        elif _strong(pr, n_teams):
             con.append(f"{opp}'s pass defense ranks {_ord(pr)}")
+        havoc = _rank(d, "def", "havoc")
+        if _strong(havoc, n_teams):
+            con.append(f"{opp}'s defense ranks {_ord(havoc)} in havoc — sacks, tackles for loss, takeaways")
         rush, prot = _rank(d, "def", "pressure"), _rank(o, "off", "pressure")
-        if rush and rush <= 8 and ((prot and prot >= 20) or line_out):
+        if _strong(rush, n_teams) and ((prot and prot >= round(n_teams * 0.62)) or line_out):
             con.append(f"{opp}'s pass rush ranks {_ord(rush)}"
                        + (f" and {team} is without {', '.join(line_out)}" if line_out
                           else f" against the {_ord(prot)} pass protection"))
@@ -524,16 +548,18 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               defenders_last: dict | None = None, tackling: dict | None = None,
               schemes: dict | None = None, splits: dict | None = None,
               usage: dict | None = None, injuries=None, props: list | None = None,
-              scheme_season=None) -> dict:
+              scheme_season=None, opponent_adjusted: bool = True) -> dict:
     """The whole scan for one game (see the block comment above)."""
     usage = usage or {}
+    n_teams = max(2, len(ratings or {}))
+    gap_bar = max(EDGE_GAP, round(n_teams * 0.3))
     teams = (away, home)
     opp = {away: home, home: away}
     rooms = {t: coverage_room(t, (charts or {}).get(t) or [], defenders_now,
                               defenders_last, injuries) for t in teams}
     lines = {t: _line_out(t, (charts or {}).get(t) or [], injuries) for t in teams}
     edges = unit_edges(away, home, ratings) + unit_edges(home, away, ratings)
-    edges = [e for e in edges if abs(e["gap"]) >= EDGE_GAP]
+    edges = [e for e in edges if abs(e["gap"]) >= gap_bar]
     edges.sort(key=lambda e: -abs(e["gap"]))
     # WHO IS OUT, AND WHAT IT OPENS — starters and anyone the offence leans on.
     starters = {t: {p for row in (charts or {}).get(t) or []
@@ -582,7 +608,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
             split=(splits or {}).get((team, _abbr(name))),
-            tackling=tackling, line_out=lines[team], mates_out=mates))
+            tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams))
     order = {k: i for i, (k, _) in enumerate(READS)}
     reads.sort(key=lambda x: (order[x["read"]], -len(x["pro"])))
     # THE PROPS UNDER THE MICROSCOPE: the markets each good read points
@@ -614,6 +640,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         "injuries": inj_rows,
         "players": reads,
         "microscope": micro[:8],
+        "method": {"teams": n_teams, "opponent_adjusted": opponent_adjusted},
     }
 
 
@@ -709,6 +736,93 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          splits=splits, usage=usage,
                          injuries=getattr(g, "injuries", None) or [],
                          props=gprops, scheme_season=sch.get("season"))
+        reads[f"{away}@{home}"] = {"players": scan.pop("players"),
+                                   "microscope": scan.pop("microscope")}
+        gd["scan"] = scan
+        n += 1
+    return n
+
+
+# ═══ COLLEGE ═════════════════════════════════════════════════════════════════
+#
+# The same scan for every FBS game, from CFBD's advanced season numbers
+# (engine/sources/cfbd.parse_advanced): no defender files and no
+# charting exist for college, so the scan is the units, the mismatches
+# and a read on every player with a prop. NOT opponent-adjusted — CFBD's
+# season table is raw, and a schedule of cupcakes flatters a unit; the
+# page says so. Blended with last season by plays, like the NFL's.
+
+#: Plays of last season a college rating leans on: about four games.
+CFB_PRIOR_PLAYS = 280.0
+
+#: Each college unit's sense, from the OFFENCE's point of view.
+CFB_UNITS = {"overall": True, "passing": True, "rushing": True, "success": True,
+             "explosive": True, "havoc": False, "line": True, "stuff": False}
+
+
+def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
+    """``{team: {"games", "blend", "off": {unit: {"value","rank"}}, "def"}}``
+    from `parse_advanced` shapes keyed by the board's own team keys."""
+    prior = prior or {}
+    teams = sorted(current or prior)
+    out: dict = {}
+    for t in teams:
+        c, p = (current or {}).get(t) or {}, prior.get(t) or {}
+        plays = float(c.get("plays") or 0.0)
+        w = plays / (plays + CFB_PRIOR_PLAYS) if p else 1.0
+        out[t] = {"games": round(plays / 70) if plays else 0, "blend": round(w, 2)}
+        for side in ("off", "def"):
+            vals = {}
+            for u in CFB_UNITS:
+                a, b = (c.get(side) or {}).get(u), (p.get(side) or {}).get(u)
+                vals[u] = a if b is None else b if a is None else w * a + (1 - w) * b
+            out[t][side] = vals
+    for side in ("off", "def"):
+        for u, higher in CFB_UNITS.items():
+            good_high = higher if side == "off" else not higher
+            have = sorted(((t, out[t][side][u]) for t in teams if out[t][side][u] is not None),
+                          key=lambda tv: -tv[1] if good_high else tv[1])
+            ranks = {t: i + 1 for i, (t, _) in enumerate(have)}
+            for t in teams:
+                v = out[t][side][u]
+                out[t][side][u] = {"value": None if v is None else round(v, 4), "rank": ranks.get(t)}
+    return out
+
+
+def attach_cfb(out: dict, season: int, resolve, fetch=None) -> int:
+    """Hang a ``scan`` on every game of a college board; the reads ride
+    in ``scan_reads`` like the NFL's. ``resolve`` maps CFBD's school name
+    to the board's team key (cfbdata.resolve_team). Returns games scanned;
+    no key or no answer scans nothing and says so to the caller."""
+    if fetch is None:
+        from .sources.cfbd import fetch_advanced as fetch
+
+    def keyed(year):
+        try:
+            raw = fetch(year)
+        except Exception:                                    # noqa: BLE001
+            return {}
+        got = {}
+        for school, v in (raw or {}).items():
+            k = resolve(school)
+            if k:
+                got[k] = v
+        return got
+    cur, pri = keyed(int(season)), keyed(int(season) - 1)
+    if not cur and not pri:
+        return 0
+    ratings = cfb_ratings(cur, pri)
+    reads = out.setdefault("scan_reads", {})
+    props = list(out.get("recommendations") or [])
+    n = 0
+    for gd in out.get("games") or []:
+        home, away = gd.get("home"), gd.get("away")
+        if home not in ratings or away not in ratings:
+            continue
+        gprops = [r for r in props if r.get("team") in (home, away)
+                  and (r.get("opponent") in (home, away) or not r.get("opponent"))]
+        scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
+                         props=gprops, opponent_adjusted=False)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan

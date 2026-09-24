@@ -2259,6 +2259,20 @@ def main() -> None:
             "quotes_note": quotes_note,
             "games_quoted": 0,
         }
+    # THE MATCHUP SCAN (engine/gamescan.attach_cfb): each FBS game's
+    # units ranked from CFBD's advanced season table, the mismatches
+    # (havoc and the line of scrimmage included), and a read on every
+    # player with a prop. Informational — nothing here moves a number —
+    # so a failure is a line in the log and never a lost board.
+    try:
+        from engine import gamescan as _scan
+        from engine.seasons import season_of as _scan_season_of
+        _scanned = _scan.attach_cfb(
+            out, _scan_season_of("cfb", args.date),
+            lambda school: cfbdata.resolve_team(school, lookup))
+        print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s).")
+    except Exception as _sexc:                                # noqa: BLE001
+        print(f"  ⚠️  matchup scan skipped: {_sexc}")
     out["status"] = "slate"
     out["no_qualifying"] = result["no_qualifying"]
     # The funnel under the count (engine/census). CFB's board is game

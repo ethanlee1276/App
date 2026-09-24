@@ -10565,6 +10565,8 @@ function renderPropPage() {
         give up to his position, and what the model did with it.</span></div>
       ${matchupCardHTML(r)}` : ""}
 
+    ${pickScanHTML(r)}
+
     ${reasons ? `<div class="section-title minor">${lk ? "The model’s notes" : "Why this pick"}</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
 
@@ -11139,27 +11141,37 @@ const SCAN_UNITS = [["overall", "Overall", "offense", "defense"],
   ["rushing", "Rushing", "run game", "run defense"],
   ["explosive", "Explosive plays", "big-play offense", "big-play defense"],
   ["pressure", "Protection vs pass rush", "pass protection", "pass rush"],
-  ["success", "Success rate", "offense", "defense"]];
+  ["success", "Success rate", "offense", "defense"],
+  // College only (CFBD's advanced table): havoc is sacks, tackles for
+  // loss and takeaways; line yards credit the blocking, stuffs the front.
+  ["havoc", "Havoc", "ball security", "havoc"],
+  ["line", "Line yards", "run blocking", "front"],
+  ["stuff", "Runs stuffed at the line", "run game", "run-stopping front"]];
 const SCAN_READ_TONE = { breakout: "up", good: "up", neutral: "", tough: "down", avoid: "down" };
 
-function scanRank(r) {
+// The scan ranks the league it was given: 32 NFL teams, about 134 FBS.
+const scanTeams = (scan) => ((scan && scan.method) || {}).teams || 32;
+const scanGapBar = (n) => Math.max(10, Math.round(n * 0.3));
+
+function scanRank(r, n = 32) {
   if (r == null) return `<span class="ms-rank">—</span>`;
-  const tone = r <= 8 ? "good" : r >= 25 ? "bad" : "";
+  const tone = r <= Math.max(1, Math.round(n * 0.25)) ? "good" : r >= Math.round(n * 0.78) ? "bad" : "";
   return `<span class="ms-rank ${tone}">${ordinal(r)}</span>`;
 }
 
 function scanUnitsHTML(scan, off, def) {
   const o = ((scan.units || {})[off] || {}).off || {};
   const d = ((scan.units || {})[def] || {}).def || {};
+  const n = scanTeams(scan), bar = scanGapBar(n);
   const rows = SCAN_UNITS.map(([u, label]) => {
     const orank = (o[u] || {}).rank, drank = (d[u] || {}).rank;
     if (orank == null && drank == null) return "";
     const gap = orank != null && drank != null ? drank - orank : 0;
-    const tag = gap >= 10 ? `<span class="ms-edge off">${escapeHtml(off)} edge</span>`
-      : gap <= -10 ? `<span class="ms-edge def">${escapeHtml(def)} edge</span>`
+    const tag = gap >= bar ? `<span class="ms-edge off">${escapeHtml(off)} edge</span>`
+      : gap <= -bar ? `<span class="ms-edge def">${escapeHtml(def)} edge</span>`
       : `<span class="ms-edge">Even</span>`;
     return `<div class="ms-unit"><span class="ms-unit-k">${escapeHtml(label)}</span>
-      ${scanRank(orank)}${scanRank(drank)}${tag}</div>`;
+      ${scanRank(orank, n)}${scanRank(drank, n)}${tag}</div>`;
   }).join("");
   return `<div class="ms-units card">
       <div class="ms-units-head"><b>${teamMark(off, 20)} ${escapeHtml(teamName(off))} offense</b>
@@ -11184,6 +11196,8 @@ function scanCoverageHTML(scan, team) {
   const room = (scan.coverage || {})[team] || {};
   const sch = (scan.scheme || {})[team];
   const rush = (scan.rush || {})[team] || [];
+  // College has no defender files: no room, no scheme, no rushers, no card.
+  if (!(room.corners || []).length && !(room.missing || []).length && !sch && !rush.length) return "";
   const corners = (room.corners || []).map((c) => {
     const spot = { LCB: "Left CB", RCB: "Right CB", NB: "Nickel" }[c.spot] || c.spot;
     const st = c.status ? ` <span class="chip down">${escapeHtml(c.status.toLowerCase())}</span>` : "";
@@ -11234,6 +11248,28 @@ function scanMicroHTML(m) {
     </div>`;
 }
 
+/* THE PLAYER'S OWN READ, on his pick page: the line the game page's
+   scan wrote about him, with its reasons, so a pick is read beside what
+   the matchup says. Paid like the rest of the reads; absent, nothing. */
+function pickScanRead(r) {
+  if (!r || !r.player || !r.team) return null;
+  const d = state.data || {};
+  const g = (d.games || []).find((x) => x && [x.home, x.away].includes(r.team)
+    && (!r.opponent || [x.home, x.away].includes(r.opponent)));
+  if (!g) return null;
+  const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
+  return ((reads && reads.players) || []).find((x) => x.player === r.player && x.team === r.team) || null;
+}
+
+function pickScanHTML(r) {
+  const x = pickScanRead(r);
+  if (!x) return "";
+  return `<div class="section-title minor">Matchup scan
+      <span class="sub">— his read against ${escapeHtml(teamName(r.opponent || ""))} from the game’s scan.
+      It does not move the number yet.</span></div>
+    ${scanReadHTML(x)}`;
+}
+
 function matchupScanHTML(g) {
   const scan = g && g.scan;
   if (!scan || !scan.units) return "";
@@ -11247,11 +11283,15 @@ function matchupScanHTML(g) {
   const inj = scan.injuries || [];
   const players = (reads && reads.players) || [];
   const micro = (reads && reads.microscope) || [];
+  const n = scanTeams(scan);
+  const adjusted = ((scan.method || {}).opponent_adjusted) !== false;
+  const cov = scanCoverageHTML(scan, away) + scanCoverageHTML(scan, home);
   return `<div id="gp-sec-scan" class="ms">
     <div class="section-title">Matchup scan
       <span class="sub">— where each side is strong and weak, who could shine and who could struggle</span></div>
     <div class="ms-units-row">${scanUnitsHTML(scan, away, home)}${scanUnitsHTML(scan, home, away)}</div>
-    <p class="ms-note">Ranked 1–32, 1 best, adjusted for the opponents each team has faced. ${escapeHtml(blend)}</p>
+    <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
+      : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
     ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">Biggest mismatches</div>
       <ul>${edges.map((e) => `<li class="${e.gap > 0 ? "off" : "def"}">${escapeHtml(scanEdgeLine(e))}</li>`).join("")}</ul></div>` : ""}
     ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
@@ -11259,7 +11299,7 @@ function matchupScanHTML(g) {
         <span class="ms-inj-who"><b>${escapeHtml(i.player)}</b> <span class="mini">${escapeHtml(i.position || "")}</span>
           <span class="chip ${i.status === "QUESTIONABLE" ? "" : "down"}">${escapeHtml(i.status.toLowerCase())}</span></span>
         <span class="ms-inj-opens">${escapeHtml(i.opens || "")}</span></div>`).join("")}</div>` : ""}
-    <div class="ms-cov-row">${scanCoverageHTML(scan, away)}${scanCoverageHTML(scan, home)}</div>
+    ${cov ? `<div class="ms-cov-row">${cov}</div>` : ""}
     ${players.length ? `<div class="ms-sub ms-sub-top">Who could shine, who could struggle</div>
       <div class="ms-reads">${players.map(scanReadHTML).join("")}</div>` : locked
       ? `<div class="card ms-locked"><b>Who could shine and who could struggle</b> — a read on every player with a prop,
@@ -11268,9 +11308,11 @@ function matchupScanHTML(g) {
       <p class="ms-note">The markets the good reads point at, as this board prices them, likeliest first.</p>
       ${micro.map(scanMicroHTML).join("")}</div>` : ""}
     <p class="ms-note">None of this moves our numbers yet: a reason joins the model once it has been measured
-      against past games, the way the defense-versus-position and teammate-out adjustments were. Coverage and
-      pass-rush counts are this season’s (Pro Football Reference, via nflverse); man and zone rates come from
-      the newest season charted.</p>
+      against past games, the way the defense-versus-position and teammate-out adjustments were. ${adjusted
+      ? `Coverage and pass-rush counts are this season’s (Pro Football Reference, via nflverse); man and zone
+      rates come from the newest season charted.`
+      : `College units are CollegeFootballData’s advanced season numbers with garbage time taken out; there
+      is no public coverage charting for college.`}</p>
   </div>`;
 }
 

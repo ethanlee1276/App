@@ -259,6 +259,12 @@ SYSTEM = (
     "team, its players or its game, say who is out and who starts, and what our model "
     "did with it. The same for a row's teammate_out: say who is out ahead of him and "
     "how much the projection moved.\n"
+    "A named game's matchup_scan ranks each side's units (1 = best, out of the "
+    "league's teams), names the biggest mismatches, says what each injury opens and "
+    "reads every player with a prop (breakout, good, neutral, tough, avoid) with the "
+    "reasons for and against. Use it for who could shine or struggle, where a defence "
+    "is soft and how a game sets up. It does not move our numbers yet: never present a "
+    "read as our projection or our pick.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -933,8 +939,64 @@ def _game_label(g: dict) -> str:
     return str(g.get("matchup") or f"{g.get('away', '')} @ {g.get('home', '')}")
 
 
-def game_facts(board: dict, g: dict) -> dict:
-    """One game as the model needs it: lines, weather, the stadium, rest."""
+#: A scan's player reads Ask is shown per game, best reads first.
+SCAN_READS = 10
+
+
+def scan_facts(board: dict, g: dict) -> dict:
+    """A game's matchup scan (engine/gamescan) as Ask is shown it: the
+    unit ranks, the mismatches as sentences, what each injury opens, and
+    the player reads with their reasons. The reads are paid; Ask runs
+    only for a subscriber and reads the full board."""
+    scan = g.get("scan") if isinstance(g.get("scan"), dict) else None
+    if not scan or not scan.get("units"):
+        return {}
+    method = scan.get("method") or {}
+    out: dict = {"ranked_of": method.get("teams") or 32,
+                 "opponent_adjusted": method.get("opponent_adjusted", True)}
+    ranks = {}
+    for team, u in (scan.get("units") or {}).items():
+        if not isinstance(u, dict):
+            continue
+        ranks[team] = {side: {k: v.get("rank") for k, v in (u.get(side) or {}).items()
+                              if isinstance(v, dict) and v.get("rank") is not None}
+                       for side in ("off", "def")}
+    out["unit_ranks"] = ranks
+    edges = []
+    for e in (scan.get("edges") or [])[:6]:
+        better = e["off"] if e.get("gap", 0) > 0 else e["def"]
+        edges.append(f"{e['off']} offense {e['unit']} {e['off_rank']} vs {e['def']} defense "
+                     f"{e['unit']} {e['def_rank']}: edge {better}")
+    if edges:
+        out["mismatches"] = edges
+    inj = [f"{i['player']} ({i['team']} {i.get('position') or ''}, {str(i['status']).lower()}): {i['opens']}"
+           for i in scan.get("injuries") or [] if i.get("opens")]
+    if inj:
+        out["injuries_open"] = inj[:8]
+    for team, room in (scan.get("coverage") or {}).items():
+        if isinstance(room, dict) and room.get("weakest"):
+            out.setdefault("soft_spot_in_coverage", {})[team] = room["weakest"]
+    sch = {t: _slim(v, ("zone", "man", "mofo", "blitz", "pressure"))
+           for t, v in (scan.get("scheme") or {}).items() if isinstance(v, dict)}
+    if sch:
+        out["coverage_scheme"] = dict(sch, season=scan.get("scheme_season"))
+    reads = ((board or {}).get("scan_reads") or {}).get(f"{g.get('away')}@{g.get('home')}") or {}
+    players = [{"player": x.get("player"), "team": x.get("team"), "pos": x.get("pos"),
+                "read": x.get("read"), "for": (x.get("pro") or [])[:4],
+                "against": (x.get("con") or [])[:3]}
+               for x in (reads.get("players") or [])[:SCAN_READS]]
+    if players:
+        out["player_reads"] = players
+    micro = [_slim(m, ("player", "market", "side", "line", "odds", "prob", "clears"))
+             for m in (reads.get("microscope") or [])[:6]]
+    if micro:
+        out["props_under_the_microscope"] = micro
+    return out
+
+
+def game_facts(board: dict, g: dict, scan: bool = False) -> dict:
+    """One game as the model needs it: lines, weather, the stadium, rest —
+    and, for a game the question names, its matchup scan."""
     out = {"game": _game_label(g)}
     # Said outright: "ATL @ GB" once came back as "GB @ ATL" (2026-09-24).
     if g.get("home") and g.get("away"):
@@ -986,6 +1048,10 @@ def game_facts(board: dict, g: dict) -> dict:
     qbs = _qb_changes(board, {g.get("home"), g.get("away")})
     if qbs:
         out["starting_qb_out"] = qbs
+    if scan:
+        ms = scan_facts(board, g)
+        if ms:
+            out["matchup_scan"] = ms
     return out
 
 
@@ -1567,7 +1633,7 @@ def tonight_board(boards: dict, query: str, sport: str = "", prefer: str = "") -
                 break
             seen.add(id(r))
             rows.append(tagged(lst, r, compact(r)))
-        games = [game_facts(b, g) for g in b.get("games") or [] if isinstance(g, dict)
+        games = [game_facts(b, g, scan=True) for g in b.get("games") or [] if isinstance(g, dict)
                  and {str(g.get("home") or ""), str(g.get("away") or "")} & codes][:MAX_GAMES]
         if rows or games:
             found.append({"sport": s, "date": b.get("date") or "", "rows": rows[:MAX_MATCHED],
@@ -3038,7 +3104,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
     if "weather" in want and not games:
         games = [(sport, g) for g in boards[sport].get("games") or [] if isinstance(g, dict)][:12]
     if games:
-        facts["games"] = [game_facts(boards[s], g) for s, g in games]
+        facts["games"] = [game_facts(boards[s], g, scan=True) for s, g in games]
         sources += [{"label": f"{_game_label(g)}, lines and weather", "prop": ""} for _, g in games]
     if "record" in want:
         named = [s for s, rx in LEAGUE_WORDS.items() if re.search(rx, question.lower())]
