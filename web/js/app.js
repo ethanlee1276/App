@@ -28694,7 +28694,7 @@ function teamSquadHTML(sq, sport) {
       ${(g.players || []).map((w) => `
         <button class="tsq-row" type="button"
                 data-player-page="${escapeAttr(slugify(w.player))}">
-          <span class="tsq-who">${escapeHtml(w.player)}</span>
+          <span class="tsq-who">${escapeHtml(w.player)}${teamInjMark(w.player)}</span>
           <span class="tsq-gp">${w.games} G</span>
           <span class="tsq-stats">${(w.stats || []).slice(0, 2)
             .map(stat).join('<span class="tsq-sep">·</span>')}</span>
@@ -28887,6 +28887,7 @@ function renderTeamPage() {
      nobody can reach has not shipped — on a tab it is one tap from the
      top of the page, not several screens down it. */
   const tab = TEAM_TABS.some(([k]) => k === st.tab) ? st.tab : "home";
+  _teamInj = teamInjuryMap(d, p);
   const vsTab = `
     ${d.vs_unknown ? `<div class="warning">${icon("warn")} No team here
       matched “${escapeHtml(d.vs_unknown)}” — the history below is
@@ -28926,7 +28927,7 @@ function renderTeamPage() {
   if (next) strip.scrollLeft = Math.max(0, next.offsetLeft - strip.offsetLeft - next.offsetWidth);
   const on = host.querySelector(".tm-tab.on");
   if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "center" });
-  if (tab === "home" || tab === "injuries") teamNeedsBoards(d.sport);
+  if (["home", "injuries", "depth", "roster"].includes(tab)) teamNeedsBoards(d.sport);
 }
 
 /* The team page's tabs, in ESPN's order, then the two that are ours. */
@@ -29101,7 +29102,7 @@ function teamDepthHTML(d) {
       ${rows.map((r) => `<tr><td class="tm-pos">${escapeHtml(r.position)}</td>${
         Array.from({ length: cols }, (_x, i) => r.names[i]
           ? `<td><button type="button" class="tm-name" data-player-page="${escapeAttr(slugify(r.names[i]))}">${
-              escapeHtml(r.names[i])}</button></td>` : "<td></td>").join("")}</tr>`).join("")}
+              escapeHtml(r.names[i])}</button>${teamInjMark(r.names[i])}</td>` : "<td></td>").join("")}</tr>`).join("")}
     </tbody></table></div>`;
 }
 
@@ -29115,6 +29116,34 @@ function teamInjuryRows(d, p) {
     || (want && ffNorm(r.team || "") === want)
     || (nick && want && ffNorm(r.team || "").endsWith(nick) && want.endsWith(nick))));
 }
+/* ESPN'S LETTER BESIDE THE NAME (Ethan, 2026-09-24, on the depth chart:
+   "make sure we indicate if that player is out or questionable or on ir
+   … Put a Q or O or IR next too the names in red"). The designation off
+   the same injury board the Injuries tab lists, keyed by name, so the
+   letter and the report cannot disagree. A status with no short form
+   (an "Active" return row) marks nothing. */
+let _teamInj = new Map();
+const TEAM_INJ_MARKS = [[/injured reserve|^ir\b|\bir$/i, "IR"], [/physically unable|\bpup\b/i, "PUP"],
+  [/non-football|\bnfi\b/i, "NFI"], [/suspen/i, "SUSP"], [/\bil\b|injured list|\d+-day/i, "IL"],
+  [/\bout\b/i, "O"], [/doubtful/i, "D"], [/questionable/i, "Q"], [/day-to-day/i, "DTD"]];
+function teamInjMarkOf(status) {
+  const hit = TEAM_INJ_MARKS.find(([re]) => re.test(String(status || "")));
+  return hit ? hit[1] : "";
+}
+function teamInjuryMap(d, p) {
+  const m = new Map();
+  for (const r of teamInjuryRows(d, p)) {
+    const k = teamInjMarkOf(r.status);
+    if (k && r.player) m.set(ffNorm(r.player), { mark: k, status: r.status, injury: r.injury || "" });
+  }
+  return m;
+}
+function teamInjMark(player) {
+  const hit = _teamInj.get(ffNorm(player || ""));
+  return hit ? ` <abbr class="tm-inj" title="${escapeAttr([hit.status, hit.injury].filter(Boolean).join(" — "))}">${
+    hit.mark}</abbr>` : "";
+}
+
 function teamInjuryRowHTML(r) {
   return `<button type="button" class="tm-row" data-player-page="${escapeAttr(slugify(r.player || ""))}">
     <span class="tm-row-o">${escapeHtml(r.player || "")}<small>${escapeHtml(r.pos || r.position || "")}</small></span>

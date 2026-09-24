@@ -11560,3 +11560,5 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
 .pk-tonight-k { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin-bottom: 6px; }
 .pk-tonight ul { margin: 0; padding-left: 18px; }
 .pk-tonight li { font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-snug); margin: 4px 0; }
+/* The injury letter beside a name on the team page (Q, D, O, IR), ESPN's red. */
+.tm-inj { margin-left: 4px; font-size: var(--fs-xs); font-weight: 800; color: var(--bad); text-decoration: none; letter-spacing: .02em; }

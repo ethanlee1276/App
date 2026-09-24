@@ -148,12 +148,14 @@ def test_the_depth_chart_says_which_it_is():
     prog = "\n".join([
         "const escapeHtml = (s) => String(s); const escapeAttr = escapeHtml;",
         "const slugify = (s) => String(s).toLowerCase().replace(/ /g, '-');",
-        "const teamEmptyTab = (m) => 'EMPTY:' + m;", _fn("ordinal"), _fn("teamDepthHTML"),
+        "const teamEmptyTab = (m) => 'EMPTY:' + m;", "const teamInjMark = (n) => n === 'C D' ? ' <abbr>Q</abbr>' : '';",
+        _fn("ordinal"), _fn("teamDepthHTML"),
         "const measured = teamDepthHTML({ squad: { positions: [{ position: 'QB', players: [{ player: 'A B' }, { player: 'C D' }] }] } });",
         "const filed = teamDepthHTML({ depth: { as_of: '2026-09-22', positions: [{ position: 'QB', players: ['Jordan Love'] }] }, squad: { positions: [] } });",
         "process.stdout.write(JSON.stringify([measured, filed, teamDepthHTML({})]));"])
     out = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60, check=True).stdout)
     assert "ordered by who has actually played" in out[0] and ">A B</button>" in out[0] and "<th>2nd</th>" in out[0]
+    assert ">C D</button> <abbr>Q</abbr></td>" in out[0], "the letter sits beside the name"
     assert "as the team filed it, 2026-09-22" in out[1] and 'data-player-page="jordan-love"' in out[1]
     assert out[2].startswith("EMPTY:")
 
@@ -167,6 +169,29 @@ def test_the_record_footer_sits_only_under_what_the_finals_built():
     page = _fn("renderTeamPage")
     assert '["home", "schedule", "vs", "history"].includes(tab)' in page
 
+
+
+def test_an_injured_player_carries_espns_red_letter():
+    """Ethan, 2026-09-24, on the depth chart: "make sure we indicate if that
+    player is out or questionable or on ir … Put a Q or O or IR next too
+    the names in red." Off the same injury board as the Injuries tab."""
+    assert "${teamInjMark(r.names[i])}" in _fn("teamDepthHTML")
+    assert "${teamInjMark(w.player)}" in _fn("teamSquadHTML")
+    assert "_teamInj = teamInjuryMap(d, p);" in _fn("renderTeamPage")
+    assert '["home", "injuries", "depth", "roster"].includes(tab)' in _fn("renderTeamPage")
+    rule = CSS[CSS.index(".tm-inj {"):]
+    assert "color: var(--bad)" in rule[:rule.index("}")]
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed")
+        return
+    i = APP.index("const TEAM_INJ_MARKS = ")
+    prog = APP[i:APP.index(";\n", i) + 2] + _fn("teamInjMarkOf") + (
+        "process.stdout.write(JSON.stringify(['Questionable', 'Out', 'Injured Reserve', 'Doubtful', "
+        "'Suspension', 'Physically Unable to Perform', '10-Day-IL', 'Day-To-Day', 'Active', '']"
+        ".map(teamInjMarkOf)));")
+    got = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60, check=True).stdout)
+    assert got == ["Q", "O", "IR", "D", "SUSP", "PUP", "IL", "DTD", "", ""], got
 
 # --- the doors ------------------------------------------------------------------
 def test_the_game_page_opens_the_team_on_tonights_matchup():
