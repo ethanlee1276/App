@@ -147,7 +147,9 @@ def test_the_log_row_and_the_shopped_number_say_it():
     assert "under at 79.5, the highest number any book posts (-233); the market’s centre is 64.5" in " ".join(note.split())
     assert "left early · 39% of snaps" in rows and rows.count("pp-log") == 2
     assert centre == "", "at the market's centre there is nothing to say"
-    assert "${shoppedLineNote(r)}" in APP
+    # `v` is the pick the page shows — the row itself on the edge board's
+    # page, the Most Likely row's own line when opened from that board.
+    assert "${shoppedLineNote(v)}" in APP
 
 
 def test_the_matchup_card_explains_a_two_game_rating():

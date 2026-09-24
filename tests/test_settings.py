@@ -101,7 +101,9 @@ def test_one_place_prints_a_price():
     assert 'settings().odds !== "decimal"' in body
     # The price surfaces all go through it: cards, tables, the game page,
     # the moneyline strip.
-    for site in ('<span class="ml-odds">${oddsTxt(r.odds)}</span>',
+    # `v.odds` on the pick page: the pick it shows (the Most Likely row's
+    # own price when opened from that board), through the same formatter.
+    for site in ('<span class="ml-odds">${oddsTxt(v.odds)}</span>',
                  '<span class="ml-odds">${oddsTxt(b.odds)}</span>',
                  '<td class="num">${oddsTxt(b.odds)}</td>',
                  '<td class="num">${escapeHtml(oddsTxt(b.odds))}</td>'):

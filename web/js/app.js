@@ -7685,7 +7685,7 @@ function likelyDoor(r) {
   if (!r.player) return "";
   const t = likelyOpenableProp(r);
   if (t) {
-    return ` data-prop="${escapeAttr(propId(t))}" tabindex="0" role="link"`;
+    return ` data-prop="${escapeAttr(propId(t))}" data-likely="1" tabindex="0" role="link"`;
   }
   return ` data-player-page="${escapeAttr(slugify(r.player))}" tabindex="0" role="link"`;
 }
@@ -7698,12 +7698,17 @@ function likelyOpen(r) {
   if (!r.player) return "";
   const t = likelyOpenableProp(r);
   return t
-    ? ` data-open="prop:${escapeAttr(propId(t))}"`
+    ? ` data-open="likely:${escapeAttr(propId(t))}"`
     : ` data-open="player:${escapeAttr(slugify(r.player))}"`;
 }
 function openFrom(spec) {
   const [kind, ...rest] = String(spec || "").split(":");
   const target = rest.join(":");
+  // A Most Likely row opens the SAME pick page in its own terms — the
+  // chance it was ranked on, the line it names, why it is likely — and
+  // not in the edge board's (Ethan, 2026-09-23: "it just shows charts,
+  // it doesn't show the page we show when you click on edge bets").
+  if (kind === "likely") return openProp(target, { likely: true });
   if (kind === "prop") return openProp(target);
   if (kind === "player") return openPlayerRoute(target);
 }
@@ -9330,7 +9335,7 @@ function allProps() {
 document.addEventListener("click", (e) => {
   if (e.target.closest("a, button, input, label, select, .chip")) return;
   const card = e.target.closest("[data-prop]");
-  if (card) return openProp(card.dataset.prop);
+  if (card) return openProp(card.dataset.prop, { likely: card.dataset.likely === "1" });
   const who = e.target.closest("[data-peek]");
   if (who) openPeek(who.dataset.peek);
 });
@@ -9372,7 +9377,7 @@ document.addEventListener("keydown", (e) => {
   const card = e.target.closest("[data-prop]");
   if (card) {
     e.preventDefault();
-    return openProp(card.dataset.prop);
+    return openProp(card.dataset.prop, { likely: card.dataset.likely === "1" });
   }
   const who = e.target.closest("[data-peek]");
   if (who) {
@@ -9407,7 +9412,7 @@ function findProp(id) {
   return all.find((x) => pickSlug(x) === id) || null;
 }
 
-function openProp(id) {
+function openProp(id, opts = {}) {
   /* THE PEEK CANNOT SURVIVE A NAVIGATION OUT OF ITSELF. The overlay
      draws `pricedProfileHTML`, and that card became a door to this page
      on 2026-09-10 — so without this line a tap inside the popup would
@@ -9425,6 +9430,10 @@ function openProp(id) {
   // page's own empty state needs what it failed to find.
   const r = findProp(id);
   state.propId = (r && pickSlug(r)) || id;
+  // Which board the reader came from: a Most Likely row draws the page
+  // around its own pick (renderPropPage, likelyFor). Every other door
+  // clears it, so the edge board's page is exactly what it was.
+  state.propLikely = !!opts.likely;
   switchView("prop");
 }
 
@@ -9829,6 +9838,119 @@ function compsHTML(r) {
     </div>`;
 }
 
+/* ============================================================
+   A MOST LIKELY PICK, EXPLAINED — the page opened from that board
+   ============================================================
+   Ethan, 2026-09-23: "What I wanna fix now is giving explanations for
+   the most likely picks too. When I click on them it just shows charts."
+   Every sentence below is read off the row the board published — its
+   chance, the projection, his logs against this line, the projection's
+   own chain, the price — so the card explains the number rather than
+   decorating it, and a pick missing a piece simply says less. */
+const wholePct = (x) => `${Math.round(Number(x) * 100)}%`;
+
+/* The tiles a Most Likely pick leads with: its chance (the hero — the
+   number the board ranked it on), the projection, and what the price
+   implies beside it. */
+function likelyMetricsHTML(lk, proj) {
+  return `<div class="metric primary"><div class="k">Chance</div>
+      <div class="v pos">${wholePct(lk.model_prob)}</div></div>
+    ${proj}
+    ${lk.implied_prob != null ? `<div class="metric"><div class="k">Book implies</div>
+      <div class="v">${wholePct(lk.implied_prob)}</div></div>` : ""}`;
+}
+
+/* The Most Likely row for this prop: one per player and market. */
+function likelyFor(r) {
+  const rows = ((state.data || {}).most_likely || []);
+  return rows.find((x) => x && x.kind !== "game" && x.player === r.player
+                          && x.market === r.market) || null;
+}
+
+/* The edge board's own verdicts on the PRICE — engine/betting's refusal
+   sentences and its tier bar. True of that board, and beside a Most
+   Likely pick they read as "don't bet this" about a question this board
+   never asked. The model's other notes stay. */
+const EDGE_ONLY_REASON = new RegExp([
+  "^No credible market edge", "disagrees with the market by more than",
+  "cannot be a price for it", "calibration fit hit the edge",
+  "is under the Tier", "pass, not a lean"].join("|"), "i");
+
+function whyLikelyHTML(v, r, lk) {
+  const items = [];
+  const p = Number(lk.model_prob);
+  const t = probTier(p);
+  const over = String(v.side || "OVER").toUpperCase() === "OVER";
+  const line = Number(v.line);
+  const anytime = lk.line == null || !Number.isFinite(line);
+  const what = String(r.market_label || r.market || "").toLowerCase();
+  const num = (x) => Number(x).toFixed(1).replace(/\.0$/, "");
+  items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band` : ""}. The
+    number this board is ranked on, calibrated against how its picks have landed; the
+    Record page checks every band.`]);
+  const proj = Number(r.projection);
+  if (!anytime && Number.isFinite(proj)) {
+    const gap = proj - line;
+    const withIt = over ? gap > 0 : gap < 0;
+    items.push(["The projection", `We have him at ${num(proj)} ${escapeHtml(what)} —
+      ${num(Math.abs(gap))} ${gap >= 0 ? "above" : "below"} the ${num(line)} line${withIt
+        ? "" : ", the other side of it: the chance comes from how widely his games spread"}.`]);
+  }
+  const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value))).slice(0, 10);
+  if (logs.length >= 3) {
+    const hit = (g) => anytime ? Number(g.value) > 0
+      : over ? Number(g.value) > line : Number(g.value) < line;
+    const hits = logs.filter(hit).length;
+    const early = logs.filter((g) => g.partial);
+    const missed = early.filter((g) => !hit(g)).length;
+    items.push(["His games", `${anytime ? "Scored" : `${over ? "Over" : "Under"} ${num(line)}`} in
+      ${hits} of his last ${logs.length}${early.length ? ` — ${early.length === 1
+        ? `one was a game he left early${missed ? ", and it is one of the misses" : ""}`
+        : `${early.length} were games he left early`}` : ""}.`]);
+  }
+  const c = r.chain;
+  if (c && (c.steps || []).length) {
+    const moved = c.steps.filter((s) => Math.abs(Number(s.mult) - 1) >= 0.02)
+      .sort((a, b) => Math.abs(Number(b.mult) - 1) - Math.abs(Number(a.mult) - 1)).slice(0, 4);
+    items.push(["What moved it", moved.length
+      ? `<ul class="wl-moves">${moved.map((s) => {
+          const m = Number(s.mult);
+          // THE WHOLE REASON, every clause: a step can hold two effects
+          // (the matchup step carries the defence AND the game-script
+          // tilt), and its first clause alone printed "(×1.05)" beside a
+          // +8% the reader could not reconcile.
+          const why = String(s.why || "");
+          return `<li><b class="${m >= 1 ? "pos" : "neg"}">${escapeHtml(s.label || s.key)}
+            ${m >= 1 ? "+" : "−"}${Math.abs(Math.round((m - 1) * 100))}%</b>${why
+            ? ` — ${escapeHtml(why.length > 240 ? why.slice(0, 237) + "…" : why)}` : ""}</li>`;
+        }).join("")}</ul>`
+      : "Nothing around him — matchup, weather, who plays — moved his number by as much as 2%; it is his own form."]);
+  }
+  if (v.odds != null) {
+    const book = v.book ? `${escapeHtml(v.book)} ` : "";
+    items.push(["The price", `${book}${escapeHtml(oddsTxt(v.odds))}${lk.implied_prob != null
+      ? ` implies ${wholePct(lk.implied_prob)}; we have it at ${wholePct(p)}` : ""}.${lk.rung === "alt"
+      && lk.main_line != null ? ` An alternate line: the book’s main number is
+        ${escapeHtml(String(lk.main_side || "").toLowerCase())} ${escapeHtml(String(lk.main_line))}${
+        lk.main_odds != null ? ` at ${escapeHtml(oddsTxt(lk.main_odds))}` : ""}, and this one is
+        the likelier rung of its ladder.` : ""}`]);
+  }
+  const cautions = [];
+  const thin = ((state.data || {}).thin || {})[r.player];
+  if (thin && thin.games) {
+    cautions.push(`only ${thin.games} game${thin.games === 1 ? "" : "s"} this season to go on — shown, not staked`);
+  }
+  if (r.qb_card && r.qb_card.headline) cautions.push(escapeHtml(r.qb_card.headline));
+  if (r.mate_card && r.mate_card.headline) cautions.push(escapeHtml(r.mate_card.headline));
+  if (cautions.length) items.push(["Worth knowing", cautions.join("; ") + "."]);
+  return `<section class="why-likely" aria-label="Why it’s likely">
+    <div class="wl-head">Why it’s likely</div>
+    <dl class="wl-list">${items.map(([k, x]) => `<div class="wl-item"><dt>${k}</dt><dd>${x}</dd></div>`).join("")}</dl>
+    <p class="wl-foot">Ranked by the chance it hits, not by the price. Whether the price is
+      worth paying is the Edge board’s question.</p>
+  </section>`;
+}
+
 function renderPropPage() {
   const host = document.getElementById("prop-body");
   if (!host) return;
@@ -9864,17 +9986,32 @@ function renderPropPage() {
     if (b0) b0.addEventListener("click", () => switchView("recommended"));
     return;
   }
-  const over = String(r.side || "OVER").toUpperCase() === "OVER";
-  const line = Number(r.line);
+  /* OPENED FROM MOST LIKELY, the page is that board's pick (2026-09-23,
+     Ethan: "when I click on them it just shows charts, it doesn't show
+     the page we show when you click on edge bets"). The pick page led
+     with the EDGE board's reading of the same prop — "Edge +0.0%", a
+     grade, a 66% that was not the 71% on the row he tapped — and the
+     first explanation sat under the charts, sixty percent of the way
+     down, opening "No credible market edge". Now: the row's own side,
+     line, book, price and chance head the page; "Why it’s likely" comes
+     straight after; the chart and the logs read against that line; and
+     the edge board's gates and price refusals stay on the edge board. */
+  const lk = state.propLikely ? likelyFor(r) : null;
+  const v = lk && lk.line != null
+    ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
+    : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
+  const over = String(v.side || "OVER").toUpperCase() === "OVER";
+  const line = Number(v.line);
   const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value)));
   const N = 5;
   const shown = Math.min(N, logs.length);
+  const tier = lk ? probTier(lk.model_prob) : null;
   const proj = r.projection != null
     ? `<div class="metric"><div class="k">Projection</div><div class="v">${
         Number(r.projection).toFixed(1)}${r.proj_low != null
         ? ` <span class="sub">(${Number(r.proj_low).toFixed(0)}–${
             Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
-  const reasons = (r.reasons || []).slice(0, 8)
+  const reasons = (r.reasons || []).filter((x) => !lk || !EDGE_ONLY_REASON.test(x)).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   /* SIX PILL BUTTONS WERE PILED ABOVE THIS CARD, wrapping into two
      rows on a phone (Ethan, 2026-08-25, circling them: "It feels cheap
@@ -9896,18 +10033,20 @@ function renderPropPage() {
         <div class="card-id">${betMark(r, 56)}
           <div>
             <div class="player">${escapeHtml(r.player || "")}
-              <span class="ml-odds">${oddsTxt(r.odds)}</span></div>
+              <span class="ml-odds">${oddsTxt(v.odds)}</span></div>
             <div class="subtitle">${escapeHtml([r.position,
               typeof teamName === "function" ? teamName(r.team) : r.team,
               r.opponent ? `vs ${typeof teamName === "function"
                 ? teamName(r.opponent) : r.opponent}` : ""]
               .filter(Boolean).join(" · "))}</div>
-            <div class="pick">${escapeHtml(r.side || "")} ${
+            <div class="pick">${escapeHtml(v.side || "")} ${
               Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
-              escapeHtml(r.market_label || r.market || "")}</div>
+              escapeHtml(r.market_label || r.market || "")}${lk && v.book
+              ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
+            ${lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
           </div>
         </div>
-        ${r.grade ? `<span class="grade ${gradeClass(r.grade)}">${
+        ${lk ? "" : r.grade ? `<span class="grade ${gradeClass(r.grade)}">${
           escapeHtml(r.grade)}</span>` : ""}
       </div>
       <div class="pp-actions">
@@ -9928,9 +10067,9 @@ function renderPropPage() {
       <div id="fr-send-slot"></div>
       <div id="pp-explain" class="pp-explain" hidden aria-live="polite"></div>
       <div class="metrics">
-        ${proj}
-        ${r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
-        ${r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
+        ${lk ? likelyMetricsHTML(lk, proj) : proj}
+        ${!lk && r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
+        ${!lk && r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
           <div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>` : ""}
         ${/* EV deliberately absent: the chart's own stat row below carries
               it, and a number twice on one screen is the duplication Ethan
@@ -9938,8 +10077,10 @@ function renderPropPage() {
               metrics also fill the row instead of wrapping one onto a
               second line by itself. */""}
       </div>
-      ${shoppedLineNote(r)}
-      ${propAnalysis(r)}
+      ${lk ? whyLikelyHTML(v, r, lk) : ""}
+      ${shoppedLineNote(v)}
+      ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word })
+           : propAnalysis(r)}
     </article>
 
     ${booksTableHTML(r)}
@@ -9978,7 +10119,7 @@ function renderPropPage() {
         give up to his position, and what the model did with it.</span></div>
       ${matchupCardHTML(r)}` : ""}
 
-    ${reasons ? `<div class="section-title minor">Why this pick</div>
+    ${reasons ? `<div class="section-title minor">${lk ? "The model’s notes" : "Why this pick"}</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
 
     ${/* The three sections that answer "how does this thing think", in the
@@ -9987,7 +10128,7 @@ function renderPropPage() {
           here. Each draws nothing when its data is absent, so a slate
           built before they existed renders exactly as it did. */
       chainHTML(r)}
-    ${checksHTML(r)}
+    ${lk ? "" : checksHTML(r)}
     ${compsHTML(r)}
     ${simLabHTML(r)}`;
   const b = document.getElementById("pp-back");
@@ -34158,7 +34299,7 @@ function _switchViewNow(name, push, dir) {
     if (state.propId) {
       const shareable = !String(state.propId).includes("|");
       history.replaceState(null, "", shareable
-        ? `#pick/${encodeURIComponent(state.propId)}`
+        ? `#pick/${encodeURIComponent(state.propId)}${state.propLikely ? "/likely" : ""}`
         : `#prop/${encodeURIComponent(state.propId)}`);
     }
   }
@@ -35975,6 +36116,9 @@ function entityRoute(h) {
   // unfurl, and a hash never reaches a scraper.
   if (kind === "friend") { friendRoute(p[1]); return true; }
   if (!["player", "pick", "game"].includes(kind)) return false;
+  // `#pick/<slug>/likely` — the page as the Most Likely board opens it.
+  const likely = kind === "pick" && p.length >= 3 && p[p.length - 1] === "likely";
+  if (likely) p.pop();
   let sport = "", slug = p[1];
   if (p.length >= 3 && SPORT_CODES.includes(p[1])) { sport = p[1]; slug = p[2]; }
   if (kind === "game" && !sport) return false;   // the 2-segment form is openGame's
@@ -35986,7 +36130,7 @@ function entityRoute(h) {
   }
   if (kind === "player") return openPlayerRoute(slug);
   if (kind === "game") { openGame(slug); return true; }
-  openProp(slug);
+  openProp(slug, { likely });
   return true;
 }
 

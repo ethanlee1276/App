@@ -111,7 +111,10 @@ def test_the_card_and_the_prop_page_draw_it():
     i = APP.index("function renderPropPage()")
     page = APP[i:APP.index("\n/* ====", i)]
     assert "${booksTableHTML(r)}" in page
-    assert page.index("${propAnalysis(r)}") < page.index("${booksTableHTML(r)}") < page.index("Last ${shown} game")
+    # The chart is drawn for the pick the page shows — `propAnalysis(r)` on
+    # the edge board's page, the Most Likely row's line when opened from
+    # that board — and still above the books, above the logs.
+    assert page.index("propAnalysis(r)") < page.index("${booksTableHTML(r)}") < page.index("Last ${shown} game")
     for sel in (".bs-strip", ".bs-q.best", ".pp-books tr.best td", ".pp-books tr.bs-sep td"):
         assert sel in CSS, sel
 

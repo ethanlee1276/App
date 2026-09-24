@@ -109,7 +109,14 @@ def test_the_most_likely_rows_and_cards_carry_it_and_nothing_else_does():
     assert '<span class="grade lk-pct">${pct(r.model_prob)}${probTierHTML(r)}</span>' in card
     calls = [m.start() for m in re.finditer(r"(?<!function )probTierHTML\(r\)", _strip(APP))]
     assert len(calls) == 2, "the likely row and the likely card — no edge row, no scanner"
-    assert _strip(APP).count("probTier(") == 2, "defined once, read once (by probTierHTML)"
+    # Defined once; read by probTierHTML (the row and the card) and by the
+    # pick page as the Most Likely board opens it — its head and its "Why
+    # it's likely" card (2026-09-23), which is that board's surface too.
+    assert _strip(APP).count("probTier(") == 4, "defined once, read by the likely surfaces only"
+    page = APP[APP.index("function renderPropPage()"):APP.index("function invNorm(")]
+    assert "const tier = lk ? probTier(lk.model_prob) : null;" in page
+    why = _fn("whyLikelyHTML")
+    assert "const t = probTier(p);" in why
 
 
 def test_the_word_is_styled_under_the_number():

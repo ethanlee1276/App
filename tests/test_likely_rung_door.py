@@ -126,7 +126,9 @@ def test_the_same_is_true_of_the_shelf_row():
     got = _run([MAIN], RUNG, call="likelyOpen")
     if got is None:
         return
-    assert got.strip() == 'data-open="prop:Jaxon Smith-Njigba|rec_yds|OVER|65.5"', got
+    # `likely:` since 2026-09-23: the same prop page, opened as the Most
+    # Likely board's pick (tests/test_most_likely_opens_its_own_page.py).
+    assert got.strip() == 'data-open="likely:Jaxon Smith-Njigba|rec_yds|OVER|65.5"', got
 
 
 def test_a_main_line_row_was_never_broken_and_still_is_not():
@@ -153,7 +155,7 @@ def test_the_shelf_row_opens_it_too():
     if got is None:
         return
     assert got.strip() == \
-        'data-open="prop:Kyren Williams|anytime_td|OVER|0.5"', got
+        'data-open="likely:Kyren Williams|anytime_td|OVER|0.5"', got
 
 
 def test_the_side_may_be_spelled_either_way():

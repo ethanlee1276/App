@@ -1562,9 +1562,15 @@ function propAnalysis(r, opts = {}) {
       <div class="pa-stats">
         ${tile(`${hits} / ${n}`, "HIT RATE", backs ? "pos" : "neg")}
         ${tile(`${Math.round((hits / n) * 100)}%`, "HIT %", backs ? "pos" : "neg")}
-        ${tile(ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(2)}`, "EV",
-               (ev || 0) >= 0 ? "pos" : "neg")}
-        ${tile(conf, "CONFIDENCE", conf === "LOW" ? "neg" : "pos")}
+        ${/* A Most Likely pick is ranked on its chance, not its price: the
+              edge board's EV and grade confidence would argue with the
+              71% the reader just tapped (2026-09-23). */
+          opts.chance != null
+          ? tile(`${Math.round(Number(opts.chance) * 100)}%`, "OUR CHANCE", "pos")
+            + tile(escapeHtml(String(opts.tier || "—").toUpperCase()), "TIER", "pos")
+          : tile(ev == null ? "—" : `${ev >= 0 ? "+" : ""}${ev.toFixed(2)}`, "EV",
+                 (ev || 0) >= 0 ? "pos" : "neg")
+            + tile(conf, "CONFIDENCE", conf === "LOW" ? "neg" : "pos")}
       </div>
     </div>
   </div>`;

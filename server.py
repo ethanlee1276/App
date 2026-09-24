@@ -3978,7 +3978,10 @@ def main() -> None:
     if live:
         for sport, path in LIVE_FILES.items():
             state = "ready" if path.is_file() else "not built yet — see LAUNCH.md"
-            print(f"  {sport.upper()}: {path.relative_to(ROOT)} ({state})")
+            # A served tree outside the checkout (QB_WEB_DIR) is printed whole —
+            # relative_to raised there and took the server down at startup.
+            shown = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+            print(f"  {sport.upper()}: {shown} ({state})")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
