@@ -129,6 +129,10 @@ def test_the_card_is_rendered_from_the_real_design_system():
     src = _read("web", "og-card.html")
     assert 'href="css/styles.css"' in src, "the card must use the real stylesheet"
     assert 'src="js/visuals.js"' in src, "the card must draw a real Overhead"
+    # The drawing call moved to a file with the content policy (the site
+    # audit, 2026-09-24): the page names it, the file makes it.
+    assert 'src="js/og-card.js"' in src
+    src += _read("web", "js", "og-card.js")
     assert "ballpark(" in src or "stadium(" in src or "octagon(" in src
 
 

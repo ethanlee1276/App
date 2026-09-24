@@ -83,6 +83,32 @@ def _record(repo, ok, note):
     print(("ok: " if ok else "FAILED: ") + str(note))
 
 
+def _trim(repo, clear=False) -> str:
+    """The comment-stripped shell (engine/shrink.py): clear it, or build it.
+
+    Empty when there is nothing to say — a checkout without the module (an
+    old commit, the tests' scratch repos) or a build that changed nothing.
+    Never fatal: a failed trim leaves the originals served, which is where
+    the site was before the trim existed.
+    """
+    if not os.path.isfile(os.path.join(repo, "engine", "shrink.py")):
+        return ""
+    args = [sys.executable, "-m", "engine.shrink", "--web", os.path.join(repo, "web")]
+    if clear:
+        args.append("--clear")
+    try:
+        p = subprocess.run(args, cwd=repo, capture_output=True, text=True, timeout=120)
+    except Exception as exc:                                  # noqa: BLE001
+        return f" · trim failed: {exc}"
+    if p.returncode != 0:
+        return f" · trim failed: {(p.stderr or p.stdout).strip()[-200:]}"
+    if clear:
+        return ""
+    said = [ln for ln in p.stdout.splitlines()
+            if ln.strip() and not ln.endswith(": current")]
+    return f" · trimmed: {'; '.join(said)}" if said else ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default="/srv/qellys")
@@ -118,13 +144,28 @@ def main() -> int:
         _record(repo, False, f"not on a branch: {branch}")
         return 0
     _, before = _git(repo, "rev-parse", "--short", "HEAD")
+    # THE TRIMMED SHELL STEPS ASIDE BEFORE NEW CODE LANDS (engine/shrink).
+    # Between the pull writing a new index.html and the rebuild, an old
+    # trimmed app.js would be served under the new page — the stale-script
+    # failure the Caddyfile's @shell rule exists to stop. So when the fetch
+    # shows new commits the trimmed copies are cleared first and Caddy
+    # serves the originals until they are rebuilt, a second later. A fetch
+    # that fails changes nothing here: the pull below fails the same way
+    # and says so.
+    fetched, _ = _git(repo, "fetch", "origin", branch)
+    if fetched:
+        _, head = _git(repo, "rev-parse", "HEAD")
+        _, incoming = _git(repo, "rev-parse", "FETCH_HEAD")
+        if head and incoming and head != incoming:
+            _trim(repo, clear=True)
     ok, out = _git(repo, "pull", "--ff-only", "origin", branch)
     if not ok:
-        _record(repo, False, f"pull failed: {out}")
+        _record(repo, False, f"pull failed: {out}" + _trim(repo))
         return 0
     _, after = _git(repo, "rev-parse", "--short", "HEAD")
+    trim = _trim(repo)
     if after == before:
-        _record(repo, True, "up to date" + stray)
+        _record(repo, True, "up to date" + stray + trim)
         return 0
     # Restart AFTER recording would report a restart that hasn't happened;
     # record what was done, with the restart's own result on the line.
@@ -132,7 +173,7 @@ def main() -> int:
         subprocess.run(("systemctl", "restart", args.service),
                        check=True, timeout=120)
         _record(repo, True, f"pulled {before}..{after} and restarted "
-                            f"{args.service}" + stray)
+                            f"{args.service}" + stray + trim)
     except Exception as exc:                                  # noqa: BLE001
         _record(repo, False, f"pulled {before}..{after} but the restart "
                              f"failed: {exc}")

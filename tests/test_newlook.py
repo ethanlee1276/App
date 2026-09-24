@@ -581,7 +581,7 @@ def test_ethans_venue_renders_are_plugged_in():
     # encoded the behaviour he rejected, so it moves with the rule.
     i = APP.index("class=\"venue-photo\"")
     slot = APP[max(0, i - 400):i + 500]
-    assert "venueVariant(homeTeam)" in slot and "vpFall(this)" in slot
+    assert "venueVariant(homeTeam)" in slot and 'data-onerr="vpFall"' in slot
     assert "!isLive ? (() => {" not in APP, "the photo is gated on live again"
     assert "mlb && isLive ? runnerOverlay(g)" in APP, \
         "photo on live cards without the overlay loses the base runners"

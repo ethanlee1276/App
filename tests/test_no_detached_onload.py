@@ -91,16 +91,19 @@ def test_every_onload_that_adds_a_class_goes_through_the_helper():
     """The positive half of the rule. The check above would also pass on
     a file that stopped adding the class at all, which would put the
     drawn fallback back underneath every real photo."""
+    # Since the site audit (2026-09-24, M-4) no image carries an `onload=`:
+    # it names the class in `data-onload`, and ONE capture listener in
+    # visuals.js hands it to `artOn` — the guarded helper, the only place a
+    # parent is touched.
     seen = 0
     for path in _our_sources():
         src = open(path, encoding="utf-8").read()
-        for m in re.finditer(r"""onload\s*=\s*(["'])((?:(?!\1).)*)\1""", src):
-            body = m.group(2)
-            if "classList" in body or "artOn(" in body:
-                seen += 1
-                assert body.strip().startswith("artOn("), \
-                    f"{os.path.relpath(path, ROOT)}: {body[:70]}"
+        seen += len(re.findall(r'data-onload="[\w-]+"', src))
+        assert not re.search(r"""(?<![-\w])onload\s*=\s*["']""", src), os.path.relpath(path, ROOT)
     assert seen >= 5, f"the onload sites went missing entirely ({seen} found)"
+    vis = open(os.path.join(WEB, "js", "visuals.js"), encoding="utf-8").read()
+    i = vis.index('document.addEventListener("load"')
+    assert "artOn(el, el.dataset.onload)" in vis[i:i + 300] and "}, true);" in vis[i:i + 300]
 
 
 def test_the_helper_is_defined_before_the_page_that_uses_it_loads():

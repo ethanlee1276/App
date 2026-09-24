@@ -54,7 +54,7 @@ def test_two_doors_the_trial_first_then_the_record():
         print("  SKIP node not installed"); return
     for h in got.values():
         assert h.index('class="btn primary pw-cta-go"') < h.index('class="btn ghost pw-cta-rec" href="#record"')
-        assert 'onclick="pwToPlans()"' in h, "to the card with the fine print, not into checkout"
+        assert 'data-act="pwToPlans"' in h, "to the card with the fine print, not into checkout"
         assert "coStart" not in h
         assert ">See the record</a>" in h
     assert "Start 3 days free</button>" in got["trial"]

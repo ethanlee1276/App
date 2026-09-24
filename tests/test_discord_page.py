@@ -86,7 +86,7 @@ def test_the_page_takes_the_invite_from_the_server_or_draws_none():
 
 def test_a_visitor_who_has_not_paid_is_sent_to_the_plans():
     body = _code(_fn(_read(APP), "discordPageHTML"))
-    assert "dcSeePlans()" in body, (
+    assert 'data-act="dcSeePlans"' in body, (
         "no way out of this page for somebody who has not subscribed")
 
 

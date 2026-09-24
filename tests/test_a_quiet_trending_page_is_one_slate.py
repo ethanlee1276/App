@@ -38,6 +38,7 @@ def _node(js):
         return None
     prog = f"""
       const escapeHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const escapeAttr = (s) => escapeHtml(s).replace(/"/g, "&quot;");
       const icon = (n) => `<i class="ic-${{n}}"></i>`;
       const iconMark = (n) => `<i class="im-${{n}}"></i>`;
       const signedPct = (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";

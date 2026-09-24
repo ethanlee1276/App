@@ -274,7 +274,7 @@ def test_with_the_api_the_list_counts_the_whole_record_and_pages_on():
         print("  SKIP node not installed"); return
     assert got["page"]["line"].endswith("· 173 settled bets match"), got["page"]["line"]
     assert got["dozen"]["list"].count("<row>") == 12, "a dozen first, as the list always opened"
-    assert 'onclick="_recShowPicks()">Show 38 more<' in got["dozen"]["list"], "then what is already here"
+    assert 'data-act="recShowPicks">Show 38 more<' in got["dozen"]["list"], "then what is already here"
     assert got["page"]["list"].count("<row>") == 50
     assert "data-bets-more" in got["page"]["list"] and "Show 50 more" in got["page"]["list"] \
         and "of 123" in got["page"]["list"], "then the journal's next fifty"

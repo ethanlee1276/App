@@ -86,7 +86,7 @@ def test_the_alerts_page_reports_feeds_and_sells_no_subscription():
                    "al-toggle", "Notify me"):
         assert banned not in code, f"alerts grew a promise it cannot keep: {banned}"
     # What it does ship: the filter chips and a condition under each row.
-    assert "al-cats" in body and "_alSet(" in body
+    assert "al-cats" in body and 'data-act="alSet"' in body
     assert "al-c" in body, "every row prints the condition that fired it"
     for cat in ("Line moves", "Injuries", "The desk"):
         assert cat in body, f"filter lost {cat}"
@@ -145,7 +145,7 @@ def test_the_plan_cards_invent_no_tier_and_quote_no_unsourced_price():
         "page where the buy buttons are")
     for word in ("Premium", "Elite", "/mo"):
         assert word not in body, f"invented a tier or a term: {word}"
-    assert "Stripe" in body and "billSeePlans()" in body, \
+    assert "Stripe" in body and 'data-act="billSeePlans"' in body, \
         "the paid card must name the processor and reach the plans page"
     # And the free half is the gate's own free half.
     for free in ("Record page", "injury report", "fantasy room"):
@@ -166,7 +166,7 @@ def test_the_bet_log_table_is_a_view_of_the_same_rows():
     assert "legs ? `${legs.length}-leg parlay`" in body, \
         "type comes from the ticket's own shape, never an invented market"
     j = APP.index("const vw = window._mbView")
-    assert "_mbView='table'" in APP and "_mbView='cards'" in APP
+    assert 'data-act="mbView" data-arg="table"' in APP and 'data-act="mbView" data-arg="cards"' in APP
     assert 'vw === "table" ? betTable(shown)' in APP, \
         "both views must render the same filtered rows"
     assert ".mb-table-wrap {" in CSS and ".mbc-view {" in CSS

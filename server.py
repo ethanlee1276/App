@@ -132,11 +132,15 @@ SESSION_COOKIE = "qb_session"
 #: ESPN, Yahoo and Paddle are all reached by the SERVER — so an injected
 #: script has nowhere to send what it steals.
 #:
-#: `script-src` still needs `'unsafe-inline'`, and that is honest rather
-#: than ideal: the page carries 33 inline `onclick=` handlers. Removing
-#: them is what would let this become a real defence against injection;
-#: until then the value here is blocking EXTERNAL script sources, which it
-#: does. Written down so the weakness is a known debt and not a surprise.
+#: `script-src 'self'` AND NOTHING ELSE, since the site audit (2026-09-24,
+#: M-4). It needed `'unsafe-inline'` while the page carried inline
+#: `onclick=` handlers — 33 when this was first written, 93 by the audit —
+#: and while it did, an injected `<img onerror=…>` would have run as well.
+#: Every control now names an action in `data-act` (app.js `ACTS`), images
+#: say what to do on load or error in `data-onload` / `data-onerr`
+#: (visuals.js), and the pre-paint flag is `js/boot.js`; so no script runs
+#: that is not a file this server sent. `style-src` keeps `'unsafe-inline'`:
+#: the markup carries inline styles, and a style cannot run code.
 SECURITY_HEADERS = (
     ("X-Content-Type-Options", "nosniff"),
     ("Referrer-Policy", "strict-origin-when-cross-origin"),
@@ -145,7 +149,7 @@ SECURITY_HEADERS = (
      "default-src 'self'; "
      # Headshots and team art come from ESPN/MLB CDNs at render time.
      "img-src 'self' https: data:; "
-     "script-src 'self' 'unsafe-inline'; "
+     "script-src 'self'; "
      "style-src 'self' 'unsafe-inline'; "
      "font-src 'self'; "
      "connect-src 'self'; "

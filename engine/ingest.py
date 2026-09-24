@@ -545,6 +545,63 @@ def mlb_rows_from_slate(slate, date: str) -> tuple[list[dict], list[dict]]:
     return grows, prows
 
 
+#: The markets a box score grades, beside the stat the game log names.
+MLB_BOX_MARKETS = ("total_bases", "hits", "home_runs", "strikeouts", "outs", "pa")
+
+
+def mlb_box_rows(slate, date: str, prows: list, fetch=None) -> list[dict]:
+    """Stat lines for the date's FINAL games that the game logs did not carry.
+
+    THE POSTSEASON (the site audit, 2026-09-24). Every MLB prop grades from
+    `player_game_logs`, and this ingest fills those from each player's
+    `stats=gameLog`, which statsapi answers with REGULAR-SEASON games unless
+    it is asked for another game type — and nothing asks. From the first
+    wild-card game every final would have left its players with no line,
+    and baseball has no absent-player grade (`ledger.ABSENT_RULE_SPORTS`),
+    so every playoff prop would have sat open for good. The schedule (the
+    finals, the slate) carries every game type already; only the per-player
+    log did not.
+
+    So a final game neither of whose teams has a line for this date is read
+    off its box score — the same statsapi boxscore and the same parser the
+    Live tab's tracked bets count on (`mlb.livestats.box_rows`). In the
+    regular season every final game already has its lines and nothing is
+    fetched; a game still in play, or in doubt, is never read.
+    """
+    from .mlb.livestats import box_rows
+    from .mlb.openers import _outs
+    if fetch is None:
+        from .mlb.sources.statslogs import fetch_boxscore as fetch
+    covered = {r["team"] for r in prows if r.get("period") == date}
+    season = int(date[:4])
+    out: list[dict] = []
+    for g in slate.games:
+        if str(_game_state(g)).lower() != "final" or not getattr(g, "game_pk", 0):
+            continue
+        if g.home in covered or g.away in covered:
+            continue
+        gn = int(getattr(g, "game_number", 1) or 1)
+        for r in box_rows(fetch(int(g.game_pk)), home=g.home, away=g.away):
+            stats = dict(r["stats"])
+            if "ip" in stats:
+                outs = _outs(stats.get("ip"))
+                if outs is not None:
+                    stats["outs"] = float(outs)
+            home = r["team"] == g.home
+            for market in MLB_BOX_MARKETS:
+                if market not in stats:
+                    continue
+                out.append({
+                    "sport": "mlb", "season": season, "period": date,
+                    "game_id": f"{r['player']}-{date}" + (f"-G{gn}" if gn > 1 else ""),
+                    "player": r["player"], "team": r["team"],
+                    "opponent": g.away if home else g.home,
+                    "position": r.get("position", ""), "home": 1 if home else 0,
+                    "market": market, "value": float(stats[market]),
+                })
+    return out
+
+
 def mlb_starter_rows(slate, date: str) -> list[dict]:
     """Starting-pitcher rows from a slate's games. For a completed date the
     schedule's "probable pitcher" is the pitcher who actually started, which
@@ -674,6 +731,15 @@ def ingest_mlb_date(conn, date: str) -> dict:
         result["skipped"].append(f"mlb {date}: {exc}")
         return result
     grows, prows = mlb_rows_from_slate(slate, date)
+    # THE POSTSEASON'S STAT LINES (mlb_box_rows): a final game the game logs
+    # did not carry is read off its box score.
+    try:
+        boxed = mlb_box_rows(slate, date, prows)
+    except Exception as exc:                                  # noqa: BLE001
+        boxed = []
+        result["skipped"].append(f"mlb {date} box scores: {exc}")
+    prows += boxed
+    result["box_rows"] = len(boxed)
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
     result["starters"] = db.upsert_game_starters(conn, mlb_starter_rows(slate, date))

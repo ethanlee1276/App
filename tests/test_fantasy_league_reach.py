@@ -132,7 +132,7 @@ def test_every_way_out_of_the_desk_leaves_the_calendar_saying_something():
 
 def test_a_reader_with_no_league_is_told_what_to_do():
     fn = _fn("ffCalMinePromptHTML")
-    assert "switchView('account'" in fn, "no way to the form from here"
+    assert 'data-act="toAccount"' in fn, "no way to the form from here"
     assert "password" in fn, "the reader is not told what it costs him"
 
 

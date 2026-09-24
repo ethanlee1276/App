@@ -137,3 +137,6 @@ data/ufc_gyms.json
 # Nightly runner: local logs and its overlap lock.
 logs/
 .nightly.lock
+
+# The comment-stripped shell engine/shrink.py builds on the box (served by Caddy's @trimmed).
+web/min/

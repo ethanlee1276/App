@@ -93,7 +93,7 @@ def test_the_account_page_still_says_what_a_subscription_costs():
     body = app[app.index("function billPlansHTML("):]
     body = body[:body.index("\n}\n")]
     assert "$25" in body
-    assert "billSeePlans()" in body, "no way through to the plans page"
+    assert 'data-act="billSeePlans"' in body, "no way through to the plans page"
 
 
 # --- who gets a trial -------------------------------------------------------

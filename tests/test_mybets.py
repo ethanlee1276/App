@@ -220,7 +220,7 @@ def test_bulk_import_previews_and_dedupes_before_committing():
     assert "dupes.push" in show, "recognised rows are not held back"
     assert "dupes.length" in show, "the preview never mentions them"
     assert "skipped" in show.lower()
-    assert "mbBulkCommit()" in show, "no commit step — imports would be blind"
+    assert 'data-act="mbBulkCommit"' in show, "no commit step — imports would be blind"
     # The page carries the importer and says re-importing is safe.
     body = _slice("function renderMyBets(", "\n/* ================")
     assert "mb-bulk-text" in body and "mbBulkFile" in body

@@ -21,8 +21,8 @@ Ethan, 2026-09-24: *"save all the code u need me too run for when im
 home."* **Nothing below writes anything** — every block only reads, so
 any of them is safe mid-cycle. Paste each output back with its number.
 
-**1. Which code is running** (want `8b79a2f6` or newer — step 7 needs
-it):
+**1. Which code is running** (want the newest commit on the branch —
+steps 7-9 need today's):
 
 ```bash
 cd /srv/qellys && cat data/autoupdate.json; echo
@@ -112,9 +112,11 @@ cd /srv/qellys && python3 homecheck.py weight
 cd /srv/qellys && python3 homecheck.py grading | grep -iE "mlb|no log" | head -20
 ```
 
-(8b, H-1) Any MLB Most Likely rows stuck open because the hitter sat —
-"player has no log". Before today's fix the book could journal a
-projected lineup; paste what it shows and I will say which to void.
+(8b, H-1, H-4) Any MLB Most Likely rows stuck open because the hitter
+sat — "player has no log". Before today's fix the book could journal a
+projected lineup; paste what it shows and I will say which to void. Run
+it again the morning after the first playoff games (Wednesday, Sep 30):
+playoff props now grade off the box score, and want no MLB rows there.
 
 ```bash
 cd /srv/qellys && python3 -m engine.askbot usage
@@ -126,7 +128,26 @@ defaults are 100 questions per account and $25 a day. To change one
 `cd /srv/qellys && sudo ./deploy/setenv.sh QB_ASK_DAILY_USD 40` — then
 restart the site for it to take (`sudo systemctl restart qellys`).
 
-**9. SATURDAY ONLY — are college receptions priced?**
+**9. Turn on the trimmed code and the strict script policy** (about a
+minute; **this one changes the box**). Both ride the Caddy config, which
+only the deploy installs — it validates the new file first and keeps the
+running one if it does not validate, so the site cannot go down on it.
+The trimmed code cuts a first visit from about 1.1 MB to about 0.7 MB;
+the strict policy means no script runs that the site did not send
+(`docs/AUDIT_2026-09-24.md`, M-2 and M-4):
+
+```bash
+cd /srv/qellys && ./deploy/deploy.sh --no-tests
+curl -sI https://qellysbook.com/ | grep -io "script-src [^;]*"
+curl -s --compressed https://qellysbook.com/js/app.js | wc -c
+```
+
+Want: `script-src 'self'` (no `unsafe-inline`), and the size about
+1,430,000 (it was about 2,200,000 with the comments). Then force-quit the
+app on the phone, reopen, and tap around — My Bets, the Record chips, a
+Most Likely pick. Anything dead, tell me which.
+
+**10. SATURDAY ONLY — are college receptions priced?**
 
 ```bash
 cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
@@ -134,7 +155,7 @@ cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
 
 Want: `receptions … priced` above 0%.
 
-**10. Whenever there is a quiet minute** (parked since 2026-09-21):
+**11. Whenever there is a quiet minute** (parked since 2026-09-21):
 
 ```bash
 cd /srv/qellys && python3 homecheck.py bench; python3 homecheck.py sizing; python3 homecheck.py shelves

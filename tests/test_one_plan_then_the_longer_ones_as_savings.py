@@ -64,7 +64,7 @@ def test_one_card_then_the_longer_plans_as_rows():
     assert '<span class="pw-best">Best value</span>' in body
     assert "const bestId = bestValuePlanId(PLANS);" in body and "const best = pl.id === bestId;" in body, \
         "the badge is computed, never assigned"
-    assert 'data-plan="${escapeAttr(pl.id)}"' in body and "coStart(this)" in body, "each row still checks out"
+    assert 'data-plan="${escapeAttr(pl.id)}"' in body and 'data-act="coStart"' in body, "each row still checks out"
     assert "Card required. Becomes $${pl.price} a month on day ${" in body, "the trial terms stay on the card"
     for rule in ('.pw-plans[data-shape="one"] { max-width: 900px;', ".pw-long { display: flex;",
                  ".pw-buy.pw-buy-sm { width: auto;"):

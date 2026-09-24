@@ -120,16 +120,23 @@ def test_connect_src_is_self_and_that_is_a_real_restriction():
     assert not external, f"the page now fetches externally: {external[:3]}"
 
 
-def test_the_inline_script_weakness_is_written_down_not_hidden():
-    """`script-src` still needs 'unsafe-inline' because the page carries
-    inline onclick handlers. That is a real weakness in the policy, and an
-    exception nobody wrote down gets mistaken for a considered choice."""
+def test_no_script_runs_that_the_server_did_not_send():
+    """This test used to say: `script-src` still needs 'unsafe-inline'
+    because the page carries inline onclick handlers — "the handlers are
+    gone — tighten script-src and update this test". The site audit
+    (2026-09-24, M-4) took the 93 handlers out; script-src is 'self' alone,
+    and nothing in the pages may bring the old need back."""
+    import glob
     k = SERVER.index("SECURITY_HEADERS = (")
-    block = SERVER[max(0, k - 1400):SERVER.index("\n)", k)]
-    assert "unsafe-inline" in block
-    assert "onclick" in block, "the reason for the weakness is not recorded"
-    assert APP.count('onclick="') > 0, \
-        "the handlers are gone — tighten script-src and update this test"
+    csp = SERVER[k:SERVER.index("\n)", k)]
+    assert "script-src 'self'; " in csp and "'unsafe-inline'; \"\n     \"style-src" not in csp
+    handler = re.compile(r'(?<![-\w])on(?:click|change|input|submit|error|load|keydown|keyup|focus|blur|mouse\w+|touch\w+)\s*=\s*["\']', re.I)
+    for f in glob.glob(os.path.join(ROOT, "web", "**", "*.*"), recursive=True):
+        if f.endswith((".js", ".html")) and "/vendor/" not in f and "/min/" not in f:
+            src = open(f, encoding="utf-8").read()
+            assert not handler.search(src), f"an inline handler is back in {f}: {handler.search(src).group(0)}"
+            if f.endswith(".html"):
+                assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", src), f"an inline <script> is back in {f}"
 
 
 def test_frame_src_names_every_host_the_page_actually_embeds():

@@ -60,7 +60,7 @@ def test_the_checkout_says_an_account_is_part_of_this_before_the_button():
     # rather than as the sentence explaining what broke.
     assert needle in body, \
         "the checkout no longer mentions that an account is part of this"
-    assert body.index(needle) < body.index("coPay(this)"), \
+    assert body.index(needle) < body.index('data-act="coPay"'), \
         "the account line is below the button it is warning about"
 
 

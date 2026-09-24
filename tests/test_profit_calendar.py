@@ -188,7 +188,7 @@ def test_the_month_in_view_defaults_to_the_latest_and_arrows_only_where_there_is
         latestMonth: (latest.match(/data-month="([^"]+)"/) || [])[1],
         latestArrows: (latest.match(/aria-label="(Earlier|Later) month"/g) || []),
         augArrows: (aug.match(/aria-label="(Earlier|Later) month"/g) || []),
-        augTo: (aug.match(/_recCalSetMonth\\('([^']+)'\\)/) || [])[1],
+        augTo: (aug.match(/data-act="recCalSetMonth" data-arg="([^"]+)"/) || [])[1],
         unknownMonth: (unknown.match(/data-month="([^"]+)"/) || [])[1],
         oneArrows: (one.match(/ra-ranges/g) || []).length,
         sub: /edge book only/.test(latest), panel: /id="rc-day"/.test(latest),

@@ -34,6 +34,39 @@ function artOn(el, cls) {
   if (parent && parent.classList) parent.classList.add(cls);
 }
 
+/* NO SCRIPT IN THE MARKUP (the site audit, 2026-09-24, M-4). An image says
+   what to do when it loads or fails in `data-onload` / `data-onerr`, and
+   these two listeners do it — in the CAPTURE phase, because load and error
+   do not bubble. With no handler left in any attribute, the content policy
+   refuses inline script outright (server.py SECURITY_HEADERS, the Caddyfile).
+   Registered here, before app.js, so no image the page draws can load or
+   fail ahead of them. */
+const IMG_ERR = {
+  remove: (el) => el.remove(),
+  hide: (el) => { el.style.display = "none"; },
+  // A small headshot that failed tries the full-size one once, then goes.
+  swapFull: (el) => {
+    if (el.dataset.full) { el.src = el.dataset.full; el.removeAttribute("data-full"); }
+    else el.remove();
+  },
+  // The markup to show instead rides on the image (a venue mark).
+  fragment: (el) => el.replaceWith(document.createRange()
+    .createContextualFragment(el.getAttribute("data-fb") || "")),
+  // Team photo missing -> the family render -> the drawn scene (app.js).
+  vpFall: (el) => { if (typeof window.vpFall === "function") window.vpFall(el); else el.remove(); },
+};
+if (typeof document !== "undefined") {
+  document.addEventListener("load", (e) => {
+    const el = e.target;
+    if (el && el.dataset && el.dataset.onload) artOn(el, el.dataset.onload);
+  }, true);
+  document.addEventListener("error", (e) => {
+    const el = e.target;
+    const fn = el && el.dataset && IMG_ERR[el.dataset.onerr];
+    if (fn) fn(el);
+  }, true);
+}
+
 const DEFAULT_TEAM = { name: "", nick: "", primary: "#3a4668", secondary: "#8893b5", tertiary: "#dfe4f5" };
 // app.js points window.ACTIVE_TEAMS at the current sport's color dict
 // (NFL TEAMS or MLB_TEAMS) — abbreviations collide across leagues, so a
@@ -128,9 +161,7 @@ function playerAvatar(name, abbr, opts = {}) {
   if (opts.headshot) {
     const inner = playerAvatar(name, abbr, { ...opts, headshot: null });
     const small = facePreview(opts.headshot, size);
-    const swap = small === opts.headshot ? "this.remove()"
-      : "if(this.dataset.full){this.src=this.dataset.full;this.removeAttribute('data-full');}"
-        + "else{this.remove();}";
+    const swap = small === opts.headshot ? "remove" : "swapFull";
     /* Same rule as the team marks: a headshot is a CUT-OUT on transparent
        ground, so the drawn helmet showed through every real face. The
        drawing steps aside on load and the stack keeps a plain disc for the
@@ -140,8 +171,8 @@ function playerAvatar(name, abbr, opts = {}) {
       <img class="avatar-photo" src="${escapeAttr(small)}" alt="" loading="lazy"
            decoding="async"${small === opts.headshot ? ""
              : ` data-full="${escapeAttr(opts.headshot)}"`}
-           onload="artOn(this,'art-on')"
-           onerror="${swap}"/></span>`;
+           data-onload="art-on"
+           data-onerr="${swap}"/></span>`;
   }
   const t = team(abbr, opts.map);
   const uid = "a" + Math.random().toString(36).slice(2, 8);
@@ -336,8 +367,8 @@ function teamMark(abbr, size = 20, src = null, sport = null) {
   const img = url
     ? `<img class="team-logo" src="${escapeAttr(url)}" width="${size}"
             height="${size}" alt="" loading="lazy" decoding="async"
-            onload="artOn(this,'art-on')"
-            onerror="this.remove()">`
+            data-onload="art-on"
+            data-onerr="remove">`
     : "";
   return `<span class="team-mark-wrap" style="width:${size}px;height:${size}px"
                 role="img" aria-label="${escapeAttr(abbr)}">
@@ -371,8 +402,8 @@ function leagueMark(sport, size = 20) {
   const img = key
     ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
             width="${size}" height="${size}" alt="" loading="lazy"
-            decoding="async" onload="artOn(this,'art-on')"
-            onerror="this.remove()">`
+            decoding="async" data-onload="art-on"
+            data-onerr="remove">`
     : "";
   return `<span class="team-mark-wrap league-mark" style="width:${size}px;height:${size}px"
                 role="img" aria-label="${escapeAttr(label)}">

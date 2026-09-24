@@ -162,7 +162,7 @@ def test_the_strip_names_what_is_linked_rather_than_only_pointing():
     strip = _fn(_app(), "ffLinkStripHTML")
     assert 'localStorage.getItem("ff_user")' in strip
     assert "ESPN_LEAGUE_KEY" in strip
-    assert "switchView('account', true)" in strip, "no way across"
+    assert 'data-act="toAccount"' in strip, "no way across"
     assert "Link a league" in strip and "Manage leagues" in strip, (
         "the strip reads the same whether or not anything is linked")
 

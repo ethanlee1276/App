@@ -6157,10 +6157,10 @@ function gameCard(g) {
           // drawing stays as the fallback when every photo 404s, because
           // then onload never fires and nothing is hidden.
           return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-          onload="artOn(this,'vp-on')"
+          data-onload="vp-on"
           src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
           ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
-          onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
+          data-onerr="vpFall"` : `data-onerr="remove"`}/>`;
         })()}${
         // The one thing the drawing carried that a photo cannot.
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
@@ -6557,7 +6557,7 @@ function freshBannerHTML(feed) {
     <span>Since you last looked (${escapeHtml(ageText(gap / 1000))} ago):
       ${escapeHtml(bits.join(", "))}.
       <a href="#alerts">The feed has the play-by-play →</a></span>
-    <button class="fb-x" onclick="window._freshDismiss()" aria-label="Dismiss">${icon("cross", 12)}</button>
+    <button class="fb-x" data-act="freshDismiss" aria-label="Dismiss">${icon("cross", 12)}</button>
   </div>`;
 }
 
@@ -6699,7 +6699,7 @@ function welcomeBackHTML() {
       since you were last here:
       <b class="${cls}">${u >= 0 ? "+" : ""}${u.toFixed(2)}u</b>.
       <a href="#mybets">Your book →</a></span>
-    <button class="fb-x" onclick="window._welcomeDismiss()" aria-label="Dismiss">${icon("cross", 12)}</button>
+    <button class="fb-x" data-act="welcomeDismiss" aria-label="Dismiss">${icon("cross", 12)}</button>
   </div>`;
 }
 
@@ -10605,10 +10605,10 @@ function renderGamePage() {
   // Same onload mark as the board cards: a painted photo drops the
   // blurred SVG scene under it (see .vp-on in the stylesheet).
   const gpPhoto = `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-      onload="artOn(this,'vp-on')"
+      data-onload="vp-on"
       src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
       ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
-      onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
+      data-onerr="vpFall"` : `data-onerr="remove"`}/>`;
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
@@ -10926,7 +10926,7 @@ function renderTrending() {
 function trendRow(r, i, col) {
   const vals = (r.logs || []).map((l) => l.value);
   return `
-    <div class="trow" onclick="openPlayer('${escapeHtml(r.player).replace(/'/g, "")}')">
+    <div class="trow" data-act="openPlayer" data-arg="${escapeAttr(r.player)}">
       <div class="trank">${i + 1}</div>
       <div class="who"><div class="nm">${escapeHtml(r.player)}</div>
         <div class="mk">${escapeHtml(r.team)} · ${escapeHtml(r.market_label)}${col.tag ? ` · ${col.tag(r)}` : ""}</div></div>
@@ -11145,7 +11145,7 @@ async function renderPlayers() {
                 ${m.games ? `· ${plural(m.games, "game")} logged` : ""}
                 ${m.status ? `· ${escapeHtml(m.status)}` : ""}</div>
             </div>
-            <button class="btn" onclick="openRoster('${escapeHtml(m.team)}')">Roster</button>
+            <button class="btn" data-act="openRoster" data-arg="${escapeAttr(m.team)}">Roster</button>
           </div>`).join("")}`;
       return;
     }
@@ -12667,7 +12667,7 @@ function recSplitsSection(o, booksDrawn) {
     : cur[2];
   const chips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k, label]) =>
     `<button class="ra-range ${k === cur[0] ? "active" : ""}"
-       onclick="_recSetSplit('${k}')">${label}</button>`).join("")}</span>` : "";
+       data-act="recSetSplit" data-arg="${k}">${label}</button>`).join("")}</span>` : "";
   return `
     <div class="section-title">Splits
       <span class="sub">— where the units actually came from. The bar is win rate;
@@ -12705,7 +12705,7 @@ function recRecentSection(recent, settled) {
     <div id="rec-bets-bar"></div>
     <div class="card rec-list" id="rec-bets">
       ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
-      ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
+      ${more > 0 ? `<button class="rec-more" data-act="recShowPicks">
         Show ${more} more</button>` : ""}
     </div>`;
 }
@@ -12768,7 +12768,7 @@ function recBetsListHTML(st, settled, q) {
   const empty = filtered ? "No settled bets match these filters." : "Nothing settled yet.";
   const unfetched = st.remote ? Math.max(0, (st.total || 0) - st.rows.length) : 0;
   const more = shown.length < st.rows.length
-    ? `<button class="rec-more" type="button" onclick="_recShowPicks()">Show ${st.rows.length - shown.length} more</button>`
+    ? `<button class="rec-more" type="button" data-act="recShowPicks">Show ${st.rows.length - shown.length} more</button>`
     : unfetched
     ? `<button class="rec-more" type="button" data-bets-more${st.busy ? " disabled" : ""}>Show ${Math.min(unfetched, 50)} more${
         unfetched > 50 ? ` <span class="mini">of ${unfetched}</span>` : ""}</button>`
@@ -12966,7 +12966,7 @@ function recCalendarHTML(curve) {
   const ym = months.includes(_recCalMonth) ? _recCalMonth : months[months.length - 1];
   const i = months.indexOf(ym);
   const arrow = (to, glyph, label) => to == null ? "" :
-    `<button class="ra-range" onclick="_recCalSetMonth('${to}')" aria-label="${label}">${glyph}</button>`;
+    `<button class="ra-range" data-act="recCalSetMonth" data-arg="${to}" aria-label="${label}">${glyph}</button>`;
   const nav = months.length > 1 ? `<span class="ra-ranges">${
     arrow(i > 0 ? months[i - 1] : null, "‹", "Earlier month")}${
     arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
@@ -13011,7 +13011,7 @@ function raChips(avail, rk) {
   if (avail.length < 2) return "";
   return `<span class="ra-ranges">${avail.map(([k]) =>
     `<button class="ra-range ${k === rk ? "active" : ""}"
-       onclick="_recSetRange('${k}')">${k.toUpperCase()}</button>`).join("")}</span>`;
+       data-act="recSetRange" data-arg="${k}">${k.toUpperCase()}</button>`).join("")}</span>`;
 }
 
 function recEraSection(er) {
@@ -17144,7 +17144,7 @@ function renderEdgeBoard() {
   if (mk && !byMarket[mk]) mk = "";
   const grid = markets.length > 1 ? `<div class="pm-grid">
       ${markets.map((m, i) => `<button class="pm-tile hue${i % 6} ${mk === m ? "active" : ""}"
-        onclick="window._edgeMarket=window._edgeMarket==='${escapeHtml(m)}'?'':'${escapeHtml(m)}';renderEdgeBoard()">
+        data-act="edgeMarket" data-arg="${escapeAttr(m)}">
         <span class="pm-name">${escapeHtml(m)}</span>
         <span class="pm-count">${byMarket[m]} priced</span></button>`).join("")}
     </div>` : "";
@@ -17693,8 +17693,7 @@ function pmThumb(r, size = 19) {
   if (r.image) {
     return `<img class="kx-thumb-img" src="${escapeAttr(r.image)}" alt=""
       loading="lazy" width="${size + 5}" height="${size + 5}"
-      onerror="this.replaceWith(document.createRange().createContextualFragment(
-        this.getAttribute('data-fb')))"
+      data-onerr="fragment"
       data-fb="${escapeAttr(venueMark(r.venue, size + 2))}">`;
   }
   if (r.city || r.forecast_f != null) {
@@ -17722,8 +17721,7 @@ function deskSectionHTML(k) {
   // stay inert rather than opening a panel that has nothing to show.
   const row = (r, why) => `<div class="kx-row${r.ticker ? " openable" : ""}"${
       r.ticker ? ` role="button" tabindex="0"
-      onclick="if(!event.target.closest('a,button'))window._pmPick('k:${escapeAttr(r.ticker)}')"
-      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._pmPick('k:${escapeAttr(r.ticker)}')}"` : ""}>
+      data-act="pmRow" data-key="pmRow" data-arg="k:${escapeAttr(r.ticker)}"` : ""}>
       ${deskThumb(r)}
       <span class="kx-title">${escapeHtml(r.title)} ${side(r.rec_side)}
         <span class="kx-match">· ${why}</span></span>
@@ -18118,8 +18116,7 @@ function pmBoardRowHTML(r) {
   // underneath.
   return `<div class="kx-row openable${_pmSelKey === r.key ? " sel" : ""}"
     role="button" tabindex="0"
-    onclick="if(!event.target.closest('a,button'))window._pmPick('${escapeAttr(r.key)}')"
-    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window._pmPick('${escapeAttr(r.key)}')}">
+    data-act="pmRow" data-key="pmRow" data-arg="${escapeAttr(r.key)}">
     <span class="kx-thumb">${pmThumb(r, 19)}
       <span class="kx-thumb-l">${escapeHtml(String(r.venue || ""))}</span></span>
     <span class="kx-title" title="${escapeAttr(r.title)}">${title}
@@ -18135,7 +18132,7 @@ function pmBoardRowHTML(r) {
       r.model == null ? "—" : (r.model * 100).toFixed(0) + "%"}</span>
     <span class="kx-num kx-e">${edge}</span>
     <span class="kx-vol" title="24h volume">$${Number(r.vol || 0).toLocaleString()}</span>
-    <button class="btn pm-view" onclick="window._pmPick('${escapeAttr(r.key)}')">View</button>
+    <button class="btn pm-view" data-act="pmPick" data-arg="${escapeAttr(r.key)}">View</button>
     ${meter}
   </div>`;
 }
@@ -18159,7 +18156,7 @@ function predBoardHTML(kx, d) {
   if (!cats.some(([c]) => c === _pmCatSel)) _pmCatSel = "top";
   const tabs = `<div class="pm-cats">${cats.map(([c, label]) =>
     `<button class="mbc-chip${_pmCatSel === c ? " active" : ""}"
-       onclick="window._pmCatSet('${c}')">${escapeHtml(label)}</button>`).join("")}</div>`;
+       data-act="pmCatSet" data-arg="${c}">${escapeHtml(label)}</button>`).join("")}</div>`;
 
   let rows = all;
   if (_pmCatSel === "top") {
@@ -19035,7 +19032,7 @@ function mbBulkShow(text) {
           <th class="num">Result</th></tr></thead>
         <tbody>${sample}</tbody></table></div>
       ${fresh.length > 8 ? `<div class="mb-import-note">…and ${fresh.length - 8} more</div>` : ""}
-      <button class="btn mb-add" type="button" onclick="mbBulkCommit()">
+      <button class="btn mb-add" type="button" data-act="mbBulkCommit">
         Add ${plural(fresh.length, "bet")}</button>`
     : `<div class="mb-import-note">${_mbGraded
         ? `Nothing new to add — but ${plural(_mbGraded, "bet")} you had already
@@ -19094,7 +19091,7 @@ function renderMyBets() {
           inputmode="decimal" placeholder="25"></label>
         <label>Odds<input id="mb-odds" type="number" step="1"
           inputmode="numeric" placeholder="-110"></label>
-        <button class="btn mb-add" type="button" onclick="mbAdd()">Log bet</button>
+        <button class="btn mb-add" type="button" data-act="mbAdd">Log bet</button>
       </div>
       <div id="mb-form-warn" class="mb-warn"></div>
     </div>`;
@@ -19145,7 +19142,7 @@ function renderMyBets() {
     (stF === "all" || (stF === "open" ? b.result === "pending" : b.result === stF))
     && (!spF || b.sport === spF));
   const chip = (val, label) => `<button class="mbc-chip ${stF === val ? "active" : ""}"
-      onclick="window._mbStatus='${val}';renderMyBets()">${label}</button>`;
+      data-act="mbStatus" data-arg="${val}">${label}</button>`;
   // Render 12 ships the log as a dense TABLE; the cards came from the
   // phone render. Both are the same rows, so this is a view switch
   // rather than a second store — table on a laptop, cards on a phone.
@@ -19153,14 +19150,14 @@ function renderMyBets() {
   const filterBar = bets.length ? `
     <div class="mbc-filters">
       <div class="mbc-chips">${chip("all", "All")}${chip("open", "Open")}${chip("win", "Won")}${chip("loss", "Lost")}${chip("push", "Push")}</div>
-      ${sportsSeen.length > 1 ? `<select class="mbc-sport" onchange="window._mbSport=this.value;renderMyBets()">
+      ${sportsSeen.length > 1 ? `<select class="mbc-sport" data-change="mbSport">
         <option value="">All Sports</option>${sportsSeen.map((s) =>
           `<option${s === spF ? " selected" : ""}>${escapeHtml(s)}</option>`).join("")}</select>` : ""}
       <div class="mbc-views">
         <button class="mbc-view${vw === "cards" ? " active" : ""}" type="button"
-          onclick="window._mbView='cards';renderMyBets()">Cards</button>
+          data-act="mbView" data-arg="cards">Cards</button>
         <button class="mbc-view${vw === "table" ? " active" : ""}" type="button"
-          onclick="window._mbView='table';renderMyBets()">Table</button>
+          data-act="mbView" data-arg="table">Table</button>
       </div>
     </div>` : "";
   // What a pending bet stands to return — plain American-odds arithmetic
@@ -19171,10 +19168,10 @@ function renderMyBets() {
     const [label, color] = resultTag[b.result] || resultTag.pending;
     const legs = (b.desc || "").includes(" + ") ? (b.desc || "").split(" + ") : null;
     const actions = b.result === "pending"
-      ? `<button class="mb-act win" onclick="mbResult('${b.id}','win')">Win</button>
-         <button class="mb-act loss" onclick="mbResult('${b.id}','loss')">Loss</button>
-         <button class="mb-act push" onclick="mbResult('${b.id}','push')">Push</button>`
-      : `<button class="mb-act undo" onclick="mbResult('${b.id}','pending')">Reopen</button>`;
+      ? `<button class="mb-act win" data-act="mbResult" data-arg="${b.id}" data-arg2="win">Win</button>
+         <button class="mb-act loss" data-act="mbResult" data-arg="${b.id}" data-arg2="loss">Loss</button>
+         <button class="mb-act push" data-act="mbResult" data-arg="${b.id}" data-arg2="push">Push</button>`
+      : `<button class="mb-act undo" data-act="mbResult" data-arg="${b.id}" data-arg2="pending">Reopen</button>`;
     const outcome = b.result === "pending"
       ? `To win <b>${mbMoney(mbToWin(b))}</b>`
       : `<b style="color:${pcolor(mbProfit(b))}">${mbMoney(mbProfit(b), true)}</b>`;
@@ -19191,7 +19188,7 @@ function renderMyBets() {
         <span class="mbc-outcome">${outcome}</span>
         <span class="mb-actions">${actions}
           <button class="mb-act del" title="Delete this bet" aria-label="Delete"
-            onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></span></div>
+            data-act="mbDelete" data-arg="${b.id}">${icon("cross", 12)}</button></span></div>
     </article>`;
   };
   // The same bets as the render's table: date, pick, type, odds, stake,
@@ -19213,12 +19210,12 @@ function renderMyBets() {
         ${b.result === "pending" ? mbMoney(mbToWin(b)) + " to win" : mbMoney(mbProfit(b), true)}</td>
       <td><b style="color:${color}">${label}</b></td>
       <td class="mbt-act">${b.result === "pending"
-        ? `<button class="mb-act win" onclick="mbResult('${b.id}','win')">W</button>
-           <button class="mb-act loss" onclick="mbResult('${b.id}','loss')">L</button>
-           <button class="mb-act push" onclick="mbResult('${b.id}','push')">P</button>`
-        : `<button class="mb-act undo" onclick="mbResult('${b.id}','pending')">Reopen</button>`}
+        ? `<button class="mb-act win" data-act="mbResult" data-arg="${b.id}" data-arg2="win">W</button>
+           <button class="mb-act loss" data-act="mbResult" data-arg="${b.id}" data-arg2="loss">L</button>
+           <button class="mb-act push" data-act="mbResult" data-arg="${b.id}" data-arg2="push">P</button>`
+        : `<button class="mb-act undo" data-act="mbResult" data-arg="${b.id}" data-arg2="pending">Reopen</button>`}
         <button class="mb-act del" title="Delete this bet" aria-label="Delete"
-          onclick="mbDelete('${b.id}')">${icon("cross", 12)}</button></td>
+          data-act="mbDelete" data-arg="${b.id}">${icon("cross", 12)}</button></td>
     </tr>`;
   };
   const betTable = (rows) => `<div class="card mb-table-wrap">
@@ -19300,9 +19297,9 @@ function renderMyBets() {
       <span class="sub">— newest first. Tap Win/Loss/Push when a bet settles; the totals
       update as you go.</span>
       <span style="float:right;font-size:var(--fs-sm)">
-        <button class="btn mb-io" type="button" onclick="mbExport()">Export</button>
+        <button class="btn mb-io" type="button" data-act="mbExport">Export</button>
         <label class="btn mb-io" style="cursor:pointer">Import<input type="file"
-          accept="application/json" style="display:none" onchange="mbImport(this)"></label>
+          accept="application/json" style="display:none" data-change="mbImport"></label>
       </span></div>
     ${filterBar}
     ${!shown.length
@@ -19324,14 +19321,14 @@ function renderMyBets() {
       <div class="mb-form-row">
         <label class="btn mb-io" style="cursor:pointer">Choose CSV<input type="file"
           accept=".csv,.txt,.tsv,text/csv,text/plain,text/tab-separated-values"
-          style="display:none" onchange="mbBulkFile(this)"></label>
+          style="display:none" data-change="mbBulkFile"></label>
         <span style="color:var(--text-mute);font-size:var(--fs-sm)">or paste rows below,
           then Preview:</span>
       </div>
       <textarea id="mb-bulk-text" rows="4" spellcheck="false"
         placeholder="Date,Bet,Odds,Risk,Result&#10;2026-08-09,Yankees ML,-125,25,Won"></textarea>
       <div class="mb-form-row">
-        <button class="btn" type="button" onclick="mbBulkPaste()">Preview</button>
+        <button class="btn" type="button" data-act="mbBulkPaste">Preview</button>
       </div>
       <div id="mb-bulk-preview"></div>
     </details>
@@ -19757,7 +19754,7 @@ function renderAlerts() {
   if (!cats.some(([kk, , n]) => kk === _alFilter && n)) _alFilter = "all";
   const chips = `<div class="al-cats">${cats.filter(([kk, , n]) => n || kk === "all")
     .map(([kk, label, n]) => `<button class="al-cat${kk === _alFilter ? " on" : ""}"
-      type="button" onclick="_alSet('${kk}')">${escapeHtml(label)}
+      type="button" data-act="alSet" data-arg="${kk}">${escapeHtml(label)}
       <span class="al-n">${n}</span></button>`).join("")}</div>`;
   const show = (kk) => _alFilter === "all" || _alFilter === kk;
   const sections = [];
@@ -20238,7 +20235,7 @@ let _mcOpenMint = null;
 function mcChartBtn(c, cls) {
   if (!mcChartRef(c) || !MC_B58.test(c.mint || "")) return "";
   return `<button class="${cls || "btn mc-chart-btn"}" type="button"
-    onclick="mcShowChart('${c.mint}')"
+    data-act="mcShowChart" data-arg="${c.mint}"
     title="Open the venue’s own live candle chart for this pool">Live chart</button>`;
 }
 
@@ -20782,7 +20779,7 @@ async function renderMemes() {
   // (mc-picker / mc-pick / mcShowChart), so the poll-and-restore
   // contract is untouched.
   const picker = chartable.map((c, ix) => `<button type="button"
-      class="mc-pick" data-mint="${c.mint}" onclick="mcShowChart('${c.mint}')"
+      class="mc-pick" data-mint="${c.mint}" data-act="mcShowChart" data-arg="${c.mint}"
       title="Open the live chart">
       <span class="mc-rank">${ix + 1}</span>
       ${mcTile(c, 32)}
@@ -21737,8 +21734,8 @@ function acctSignedInHTML(u) {
         <div class="subtitle">Your bets, fantasy leagues and search history
           follow this account to every device you sign in on.</div></div>
       <div class="acct-btns">
-        <button class="btn" onclick="acctSyncNow()">Sync now</button>
-        <button class="btn ghost" onclick="acctSignOut()">Sign out</button>
+        <button class="btn" data-act="acctSyncNow">Sync now</button>
+        <button class="btn ghost" data-act="acctSignOut">Sign out</button>
       </div>
     </div>
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
@@ -21750,14 +21747,14 @@ function acctSignedInHTML(u) {
           autocomplete="current-password">
         <input type="password" class="acct-new" placeholder="new password"
           autocomplete="new-password">
-        <button class="btn ghost" onclick="acctChangePassword(this)">Change password</button>
+        <button class="btn ghost" data-act="acctChangePassword">Change password</button>
       </div>
       <p class="rank-help">Changing it signs out every other device — a
         password change is usually an answer to “somebody else may have
         this”, and leaving those sessions alive would answer it with
         nothing.</p>
       <div class="acct-row">
-        <button class="btn ghost" onclick="acctSignOutAll(this)">Sign out
+        <button class="btn ghost" data-act="acctSignOutAll">Sign out
           everywhere</button>
       </div>
       <p class="rank-help">Ends every session on every device, including
@@ -21766,9 +21763,9 @@ function acctSignedInHTML(u) {
         reach is to change a password you had no other reason to
         change.</p>
       <div class="acct-row">
-        <button class="btn ghost" onclick="acctExport()">Download my data</button>
-        <button class="btn ghost" onclick="acctSearchClear()">Clear search history</button>
-        <button class="btn ghost" onclick="acctDelete(this)">Delete my account</button>
+        <button class="btn ghost" data-act="acctExport">Download my data</button>
+        <button class="btn ghost" data-act="acctSearchClear">Clear search history</button>
+        <button class="btn ghost" data-act="acctDelete">Delete my account</button>
       </div>
       <p class="rank-help">Delete removes the account, every bet, league and
         search we hold for it, and cannot be undone.</p>
@@ -21855,7 +21852,7 @@ function acctSignInHTML() {
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
     <div class="acct-alt">
       <span>Don’t have an account?</span>
-      <button class="btn ghost" onclick="acctGoSignup()">Create one</button>
+      <button class="btn ghost" data-act="acctGoSignup">Create one</button>
     </div>
     <p class="rank-help">We never ask for your sportsbook or ESPN
       password. Those belong to someone else’s service and could not be
@@ -21901,7 +21898,7 @@ function acctFieldsHTML(mode) {
           maxlength="200"
           aria-label="${isNew ? "Choose a password" : "Password"}">
         <button type="button" class="acct-eye" aria-label="Show password"
-          aria-pressed="false" onclick="acctTogglePw(this)">
+          aria-pressed="false" data-act="acctTogglePw">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-6 10-6
             10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
@@ -21909,7 +21906,7 @@ function acctFieldsHTML(mode) {
         </button>
       </div>
       <button class="btn${isNew ? " primary" : ""}"
-        onclick="acctAuth(this, '${isNew ? "signup" : "login"}')">${
+        data-act="acctAuth" data-arg="${isNew ? "signup" : "login"}">${
         isNew ? "Create account" : "Log in"}</button>
     </div>`;
 }
@@ -21955,7 +21952,7 @@ function signupHTML() {
 
     <div class="acct-alt">
       <span>Already have an account?</span>
-      <button class="btn ghost" onclick="acctGoLogin()">Log in</button>
+      <button class="btn ghost" data-act="acctGoLogin">Log in</button>
     </div>
 
     <p class="rank-help">Ten characters or more — length is what makes a
@@ -22199,7 +22196,7 @@ function billPlansHTML(s) {
           before then.</span></p>` : ""}
         ${entitled
           ? `<div class="plan-cta plan-cur">Your plan now</div>`
-          : `<button class="btn plan-btn" onclick="billSeePlans()">See the plans</button>`}
+          : `<button class="btn plan-btn" data-act="billSeePlans">See the plans</button>`}
       </div>
     </div>
     <p class="rank-help">No card number ever reaches this server — checkout
@@ -22705,7 +22702,7 @@ function paywallHTML(rec, status) {
         `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
       ${ok
         ? `<button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
-             onclick="coStart(this)">${
+             data-act="coStart">${
              trial ? `Start ${trialDays} days free` : "Get started"}</button>`
         : `<button class="btn pw-buy" disabled
              title="This plan is not switched on yet">Not available yet</button>`}
@@ -22734,7 +22731,7 @@ function paywallHTML(rec, status) {
       ${pl.save ? `<span class="pw-save">Save $${pl.save}</span>` : ""}
       ${ok
         ? `<button class="btn pw-buy pw-buy-sm" data-plan="${escapeAttr(pl.id)}"
-             onclick="coStart(this)">Choose</button>`
+             data-act="coStart">Choose</button>`
         : `<button class="btn pw-buy pw-buy-sm" disabled
              title="This plan is not switched on yet">Not yet</button>`}
     </article>`;
@@ -22755,8 +22752,8 @@ function paywallHTML(rec, status) {
         ? `<span class="pw-who" title="${escapeHtml(status.email || "")}">
              <b>Signed in</b>${status.email
                ? `<span>${escapeHtml(status.email)}</span>` : ""}</span>
-           <button class="btn ghost pw-login" onclick="pwSignIn()">Account</button>`
-        : `<button class="btn ghost pw-login" onclick="pwSignIn()">Log in</button>`}
+           <button class="btn ghost pw-login" data-act="pwSignIn">Account</button>`
+        : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>`}
     </header>
 
     <section class="pw-hero">
@@ -22863,7 +22860,7 @@ function paywallHTML(rec, status) {
           <a href="#record">Record</a> page before you pay — it is free, it
           stays free, and it is the only claim we make that you can check.</p>
         <button class="btn primary pw-unlock-go" data-plan="sixmonth"
-          onclick="coStart(this)">Get started</button>
+          data-act="coStart">Get started</button>
       </aside>
       <div class="card pw-faq">${faqFor(status).map(([q, a], i) => `
         <details class="pw-q"${i === 0 ? " open" : ""}>
@@ -23064,7 +23061,7 @@ function a2hsHTML() {
   return `
   <div class="a2hs-card" role="dialog" aria-modal="false"
        aria-labelledby="a2hs-t">
-    <button class="a2hs-x" onclick="a2hsDismiss()" aria-label="Not now">
+    <button class="a2hs-x" data-act="a2hsDismiss" aria-label="Not now">
       ${icon("cross", 14)}</button>
     <div class="a2hs-row">
       <img class="a2hs-icon" src="/icon-192.png" alt="" width="44"
@@ -23077,20 +23074,20 @@ function a2hsHTML() {
     </div>
     ${canInstall
       ? `<div class="a2hs-go">
-           <button class="btn primary" onclick="a2hsInstall(this)">
+           <button class="btn primary" data-act="a2hsInstall">
              Add to home screen</button>
-           <button class="btn ghost" onclick="a2hsDismiss()">Not now</button>
+           <button class="btn ghost" data-act="a2hsDismiss">Not now</button>
          </div>`
       : (ios
         ? `<p class="a2hs-how">Tap ${a2hsShareIcon()} <b>Share</b> at the
              bottom of Safari, then <b>Add to Home Screen</b>.</p>
            <div class="a2hs-go">
-             <button class="btn ghost" onclick="a2hsDismiss()">Got it</button>
+             <button class="btn ghost" data-act="a2hsDismiss">Got it</button>
            </div>`
         : `<p class="a2hs-how">Open your browser’s menu and choose
              <b>Add to Home screen</b>.</p>
            <div class="a2hs-go">
-             <button class="btn ghost" onclick="a2hsDismiss()">Got it</button>
+             <button class="btn ghost" data-act="a2hsDismiss">Got it</button>
            </div>`)}
   </div>`;
 }
@@ -23213,7 +23210,7 @@ function discordPageHTML(s, welcome) {
     : (s && s.entitled
         ? `<p class="dc-pending">The invite link is not configured on this
              server yet. It will appear here the moment it is.</p>`
-        : `<button class="btn primary dc-go" onclick="dcSeePlans()">
+        : `<button class="btn primary dc-go" data-act="dcSeePlans">
              See the plans</button>`);
 
   const note = invite
@@ -23377,7 +23374,7 @@ async function renderDiscord() {
    refuse. With no trial on offer it says what it does: the plans. */
 function pwHeroCtaHTML(trialDays) {
   return `<div class="pw-cta">
-    <button class="btn primary pw-cta-go" type="button" onclick="pwToPlans()">${
+    <button class="btn primary pw-cta-go" type="button" data-act="pwToPlans">${
       trialDays > 0 ? `Start ${trialDays} days free` : "See the plans"}</button>
     <a class="btn ghost pw-cta-rec" href="#record">See the record</a>
   </div>`;
@@ -23598,7 +23595,7 @@ function checkoutHTML() {
               a password, nothing else. If you already have one you will be
               asked to sign in.</p>
             <button class="btn primary co-go" data-plan="${escapeAttr(pl.id)}"
-                    onclick="coPay(this)">${trial
+                    data-act="coPay">${trial
               ? `Start my ${tDays} free days`
               : `Continue to secure checkout — $${pl.price}`}</button>
             ${trial ? `<p class="co-note"><b>Your card is taken now and
@@ -23617,7 +23614,7 @@ function checkoutHTML() {
               have already paid through.</p>
         </div>
 
-        <button class="btn ghost co-back" onclick="coBack()">← Back to plans</button>
+        <button class="btn ghost co-back" data-act="coBack">← Back to plans</button>
       </section>
 
       <aside class="card co-what">
@@ -23724,14 +23721,14 @@ async function renderBilling() {
       <span class="bill-state${s.entitled ? " on" : ""}">${
         escapeHtml(s.note || "")}</span>
       ${s.customer_id
-        ? `<button class="btn ghost" onclick="billPortal(this)">Manage billing</button>`
+        ? `<button class="btn ghost" data-act="billPortal">Manage billing</button>`
         : (s.entitled
             // Entitled with nobody to bill: a comped address or a
             // redeemed code. "Manage billing" opened Stripe's portal for
             // a customer that does not exist and came back an error, and
             // "Subscribe" would sell them what they already have.
             ? ""
-            : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`)}
+            : `<button class="btn" data-act="billSubscribe">Subscribe</button>`)}
       ${s.live === false ? `<span class="chip warn">Stripe test mode —
         no real money moves</span>` : ""}
     </div>
@@ -23766,7 +23763,7 @@ function codeBoxHTML(codes) {
         <input class="acct-in code-in" id="code-in" type="text"
                autocomplete="off" spellcheck="false"
                placeholder="Enter your code" aria-label="Discount code">
-        <button class="btn" onclick="redeemCode(this)">Apply</button>
+        <button class="btn" data-act="redeemCode">Apply</button>
       </div>
       <p class="acct-note code-note" id="code-note"></p>
       ${held ? `<div class="code-held">${held}</div>` : ""}
@@ -24396,7 +24393,7 @@ function ffLinkStripHTML() {
       : "No fantasy league linked yet — Sleeper takes a username, ESPN a "
         + "league id off your own URL. Neither asks for a password."}</span>
     <button class="btn${bits.length ? " ghost" : ""}"
-      onclick="switchView('account', true)">${
+      data-act="toAccount">${
       bits.length ? "Manage leagues" : "Link a league"}</button>
   </div>`;
 }
@@ -24434,8 +24431,8 @@ function menuDiagHTML() {
         own.</p>` : ""}
       ${rows ? `<div class="mdg-log">${rows}</div>` : ""}
       <div class="mdg-acts">
-        <button class="btn" onclick="menuDiagCopy(this)">Copy the record</button>
-        <button class="btn ghost" onclick="menuDiagClear()">Clear it</button>
+        <button class="btn" data-act="menuDiagCopy">Copy the record</button>
+        <button class="btn ghost" data-act="menuDiagClear">Clear it</button>
       </div>
       <textarea class="mdg-raw" readonly rows="6"
         aria-label="Menu diagnostics">${escapeHtml(text)}</textarea>
@@ -24476,12 +24473,12 @@ function acctStripHTML() {
       <span class="acct-avatar sm">${escapeHtml(
         (u.email || "?").trim().slice(0, 2).toUpperCase())}</span>
       <span>Syncing to <b>${escapeHtml(u.email)}</b></span>
-      <button class="btn ghost" onclick="switchView('account', true)">Account</button>
+      <button class="btn ghost" data-act="toAccount">Account</button>
     </div>`;
   }
   return `<div class="acct-strip acct-strip-out">
     <span>Not signed in — this stays in this browser only.</span>
-    <button class="btn" onclick="switchView('account', true)">Sign in</button>
+    <button class="btn" data-act="toAccount">Sign in</button>
   </div>`;
 }
 
@@ -24493,8 +24490,8 @@ function acctLegacyCardHTML() {
         <div class="subtitle">Your bets, league link and bankroll follow this name to every
           device that signs in — stored on your own computer, nowhere else.</div></div>
         <div style="display:flex;gap:8px">
-          <button class="btn" onclick="acctSyncNow()">Sync now</button>
-          <button class="btn" onclick="acctSignOut()">Sign out</button>
+          <button class="btn" data-act="acctSyncNow">Sync now</button>
+          <button class="btn" data-act="acctSignOut">Sign out</button>
         </div></div>
       <div class="acct-note" style="margin-top:8px;color:var(--text-mute);font-size:0.85em">${escapeHtml(_acctNote)}</div>
     </div>`;
@@ -24511,8 +24508,8 @@ function acctLegacyCardHTML() {
       <input type="text" class="acct-pin" placeholder="PIN (optional)" maxlength="12"
         inputmode="numeric" autocomplete="off" style="width:120px;background:var(--panel-2);color:inherit;
         border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
-      <button class="btn" onclick="acctGo(this, true)">Create</button>
-      <button class="btn" onclick="acctGo(this, false)">Sign in</button>
+      <button class="btn" data-act="acctGo" data-arg="create">Create</button>
+      <button class="btn" data-act="acctGo" data-arg="signin">Sign in</button>
     </div>
     <div class="acct-note" style="margin-top:8px;color:var(--text-mute);font-size:0.85em">${escapeHtml(_acctNote)}</div>
   </div>`;
@@ -25215,7 +25212,7 @@ function nextUpLine(entry) {
 function injRow(r, withTeam) {
   const face = r.face && /^https:\/\//.test(r.face)
     ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
-         onerror="this.style.display='none'">` : "";
+         data-onerr="hide">` : "";
   const what = [
     withTeam ? escapeHtml(r.team) : "",
     escapeHtml(r.injury || "undisclosed") + (r.side ? ` (${escapeHtml(r.side)})` : ""),
@@ -25513,7 +25510,7 @@ function pressureHTML(pr, d) {
     ${pr.note ? `<div class="ls-note">${escapeHtml(pr.note)}</div>` : ""}
     <div class="rec-buckets pr-buckets">${cols.map(col).join("")}</div>
     ${most > CAP ? `<button class="btn ghost" type="button"
-      onclick="_stdPressureToggle()">${_stdPressureAll
+      data-act="stdPressureToggle">${_stdPressureAll
         ? `Show the top ${CAP}` : `Show all ${most} teams`}</button>` : ""}`;
 }
 
@@ -25788,7 +25785,7 @@ function unitRankingsHTML(ur, d) {
       ${col("Defense", "fewest points allowed", ur.defense)}
     </div>
     ${more > 0 ? `<button class="btn ghost" type="button"
-      onclick="_stdUnitsToggle()">${_stdUnitsAll
+      data-act="stdUnitsToggle">${_stdUnitsAll
         ? "Show the top 25" : `Show all ${ur.offense.length} teams`}</button>` : ""}`;
 }
 
@@ -25950,11 +25947,11 @@ async function renderStandings() {
       <span class="sub">— ${groups.length} group(s)</span></div>
     ${groups.length > 2 ? `<div class="std-chips">
       <button class="al-cat${!_stdGroup ? " on" : ""}" type="button"
-        onclick="_stdSet('')">All</button>
+        data-act="stdSet" data-arg="">All</button>
       ${groups.map((g) => {
         const label = g.label || g.conference || "";
         return `<button class="al-cat${_stdGroup === label ? " on" : ""}"
-          type="button" onclick="_stdSet('${escapeAttr(label)}')"
+          type="button" data-act="stdSet" data-arg="${escapeAttr(label)}"
           >${escapeHtml(label)}</button>`;
       }).join("")}</div>` : ""}
     <div class="ros-teams">
@@ -29145,7 +29142,7 @@ function ffCalMinePromptHTML() {
         same calendar scoped to YOUR players — which of them has the best
         day, every day.</div></div>
       <button class="btn" type="button"
-              onclick="switchView('account', true)">Link a league</button>
+              data-act="toAccount">Link a league</button>
     </div>
     <p class="rank-help" style="margin-bottom:0">Sleeper takes a username.
       ESPN takes a league id. Neither asks for a password.</p></div>`;
@@ -32240,7 +32237,7 @@ async function renderSleeperZone(d, errMsg) {
       <div class="card-head"><div><div class="player">Sleeper sync stopped</div>
         <div class="subtitle">The link was cleared. Reconnect on the Account
           page.</div></div>
-        <button class="btn" onclick="switchView('account', true)">Account</button></div>
+        <button class="btn" data-act="toAccount">Account</button></div>
       <div class="warning" style="margin-top:10px">${icon('warn')} ${escapeHtml(errMsg)}</div>
     </div>` : "";
     return;
@@ -32841,7 +32838,7 @@ async function renderUFC() {
   host.innerHTML = `
     <div class="ufc-hero">
       <img class="ufc-banner" alt="" loading="lazy"
-        src="${venueSrc("img/venues/ufc-hero.jpg")}" onerror="this.remove()"/>
+        src="${venueSrc("img/venues/ufc-hero.jpg")}" data-onerr="remove"/>
       ${/* The fights are the reason for the page and they sit under three
             screens of context on a phone. A jump rather than a link: they
             are on this page, and pretending otherwise would be a lie about
@@ -38379,7 +38376,7 @@ async function renderHomePerf() {
   const partial = isFinite(days) && !canWindow;
   const perfChips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k]) =>
     `<button class="ra-range ${k === rk ? "active" : ""}"
-       onclick="_perfSetRange('${k}')">${k.toUpperCase()}</button>`).join("")}</span>` : "";
+       data-act="perfSetRange" data-arg="${k}">${k.toUpperCase()}</button>`).join("")}</span>` : "";
   // What the numbers cover, in words, on every range including all-time.
   // The chip says which button is lit; this says what was counted, which
   // is the thing that was ambiguous.
@@ -42485,3 +42482,103 @@ function buzzOnSettle(rows) {
   }));
 })();
 
+/* ============================================================
+   NO SCRIPT IN THE MARKUP — the actions a control names
+   ============================================================
+   The site audit, 2026-09-24 (M-4). Ninety-three controls carried their
+   code in an `onclick=` (or `onchange=`, `onkeydown=`, an image's
+   `onerror=`), and while any did, the content policy had to allow inline
+   script — so an injected `<img onerror>` would have run too. Every one
+   now names an ACTION in `data-act` (`data-change`, `data-key`), with its
+   argument in `data-arg` / `data-arg2`, and one listener per event runs it
+   from this list. A name not on the list does nothing: markup can ask for
+   an action, never supply code. The policy now refuses inline script
+   (server.py SECURITY_HEADERS; the Caddyfile carries the same line).
+
+   One bug went with the attributes: a Trending row opened its player with
+   `openPlayer('${escapeHtml(name)}')`, and escapeHtml writes an apostrophe
+   as &#39; — which the browser decodes back inside the attribute, so every
+   Ja'Marr, De'Von and D'Andre row was a syntax error and a dead tap. A
+   name in `data-arg` is data, apostrophes and all. */
+const ACTS = {
+  freshDismiss: () => window._freshDismiss(),
+  welcomeDismiss: () => window._welcomeDismiss(),
+  openPlayer: (el, a) => openPlayer(a),
+  openRoster: (el, a) => openRoster(a),
+  recSetSplit: (el, a) => window._recSetSplit(a),
+  recShowPicks: () => window._recShowPicks(),
+  recCalSetMonth: (el, a) => window._recCalSetMonth(a),
+  recSetRange: (el, a) => window._recSetRange(a),
+  perfSetRange: (el, a) => window._perfSetRange(a),
+  edgeMarket: (el, a) => { window._edgeMarket = window._edgeMarket === a ? "" : a; renderEdgeBoard(); },
+  // The whole row opens the market — unless the tap was on a link or
+  // button inside it, which does its own thing.
+  pmRow: (el, a, b, e) => {
+    const inner = e.target.closest("a,button");
+    if (inner && inner !== el && el.contains(inner)) return;
+    window._pmPick(a);
+  },
+  pmPick: (el, a) => window._pmPick(a),
+  pmCatSet: (el, a) => window._pmCatSet(a),
+  mbBulkCommit: () => mbBulkCommit(),
+  mbAdd: () => mbAdd(),
+  mbExport: () => mbExport(),
+  mbBulkPaste: () => mbBulkPaste(),
+  mbStatus: (el, a) => { window._mbStatus = a; renderMyBets(); },
+  mbView: (el, a) => { window._mbView = a; renderMyBets(); },
+  mbResult: (el, a, b) => mbResult(a, b),
+  mbDelete: (el, a) => mbDelete(a),
+  alSet: (el, a) => window._alSet(a),
+  mcShowChart: (el, a) => mcShowChart(a),
+  stdPressureToggle: () => window._stdPressureToggle(),
+  stdUnitsToggle: () => window._stdUnitsToggle(),
+  stdSet: (el, a) => window._stdSet(a),
+  acctSyncNow: () => acctSyncNow(),
+  acctSignOut: () => acctSignOut(),
+  acctExport: () => acctExport(),
+  acctSearchClear: () => acctSearchClear(),
+  acctGoSignup: () => acctGoSignup(),
+  acctGoLogin: () => acctGoLogin(),
+  acctChangePassword: (el) => acctChangePassword(el),
+  acctSignOutAll: (el) => acctSignOutAll(el),
+  acctDelete: (el) => acctDelete(el),
+  acctTogglePw: (el) => acctTogglePw(el),
+  acctAuth: (el, a) => acctAuth(el, a),
+  acctGo: (el, a) => acctGo(el, a === "create"),
+  toAccount: () => switchView("account", true),
+  billSeePlans: () => billSeePlans(),
+  billPortal: (el) => billPortal(el),
+  billSubscribe: (el) => billSubscribe(el),
+  redeemCode: (el) => redeemCode(el),
+  pwSignIn: () => pwSignIn(),
+  pwToPlans: () => pwToPlans(),
+  dcSeePlans: () => dcSeePlans(),
+  coStart: (el) => coStart(el),
+  coPay: (el) => coPay(el),
+  coBack: () => coBack(),
+  a2hsDismiss: () => a2hsDismiss(),
+  a2hsInstall: (el) => a2hsInstall(el),
+  menuDiagCopy: (el) => menuDiagCopy(el),
+  menuDiagClear: () => menuDiagClear(),
+};
+const CHANGES = {
+  mbSport: (el) => { window._mbSport = el.value; renderMyBets(); },
+  mbImport: (el) => mbImport(el),
+  mbBulkFile: (el) => mbBulkFile(el),
+};
+const KEYS = {
+  pmRow: (el, a, b, e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    window._pmPick(a);
+  },
+};
+function _runAct(table, attr, e) {
+  const el = e.target && e.target.closest && e.target.closest(`[${attr}]`);
+  if (!el) return;
+  const fn = table[el.getAttribute(attr)];
+  if (fn) fn(el, el.dataset.arg, el.dataset.arg2, e);
+}
+document.addEventListener("click", (e) => _runAct(ACTS, "data-act", e));
+document.addEventListener("change", (e) => _runAct(CHANGES, "data-change", e));
+document.addEventListener("keydown", (e) => _runAct(KEYS, "data-key", e));

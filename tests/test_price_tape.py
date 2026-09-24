@@ -122,13 +122,13 @@ def test_the_recommendation_itself_is_clickable():
     the one row shape on the page with no way in."""
     desk = APP[APP.index("function deskSectionHTML("):]
     desk = desk[:desk.index("\nfunction ", 10)]
-    assert "_pmPick" in desk, "the recommendation rows open nothing"
+    assert 'data-act="pmRow"' in desk or 'data-act="pmPick"' in desk, "the recommendation rows open nothing"
     assert "r.ticker ?" in desk, \
         "a weather row with no ticker must not open an empty panel"
     # And the board's own rows, not just their View button.
     row = APP[APP.index("function pmBoardRowHTML("):]
     row = row[:row.index("\nfunction ", 10)]
-    assert "kx-row openable" in row and "_pmPick" in row
+    assert "kx-row openable" in row and 'data-act="pmRow"' in row
 
 
 # --- the honesty rules, in the code that draws ------------------------------

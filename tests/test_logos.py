@@ -107,7 +107,7 @@ def test_a_failed_image_removes_itself():
     js = _js()
     i = js.index("function teamMark(")
     body = js[i:i + 1800]
-    assert 'onerror="this.remove()"' in body, (
+    assert 'data-onerr="remove"' in body, (
         "without this a broken logo leaves a browser's own broken-image "
         "glyph sitting on every card")
 
@@ -216,8 +216,12 @@ def test_a_wrong_transform_falls_back_to_the_original_not_to_nothing():
     i = js.index("function playerAvatar(")
     body = js[i:i + 1600]
     assert "data-full" in body, "the original URL is not carried as a fallback"
-    assert "this.src=this.dataset.full" in body, "no swap to the original"
-    assert "this.remove()" in body, "no final give-up to the initials avatar"
+    # The swap itself lives in visuals.js's IMG_ERR.swapFull since the site
+    # audit (2026-09-24, M-4); the avatar names it.
+    assert '"swapFull"' in body, "no swap to the original"
+    swap = js[js.index("  swapFull: (el) => {"):][:260]
+    assert "el.src = el.dataset.full" in swap and 'el.removeAttribute("data-full")' in swap
+    assert "else el.remove();" in swap, "no final give-up to the initials avatar"
 
 
 def test_a_non_cloudinary_url_is_left_alone():
@@ -270,7 +274,7 @@ def test_the_untransformed_espn_href_is_still_the_fallback():
     js = _js()
     i = js.index("function playerAvatar(")
     body = js[i:i + 1600]
-    assert "data-full" in body and "this.src=this.dataset.full" in body
+    assert "data-full" in body and '"swapFull"' in body       # IMG_ERR.swapFull, visuals.js
 
 
 def test_a_cloudinary_face_still_takes_the_cloudinary_path():
@@ -385,7 +389,7 @@ def test_the_league_mark_falls_back_to_a_drawn_chip():
     js = _js()
     i = js.index("function leagueMark(")
     body = js[i:i + 1400]
-    assert "onerror=" in body and "this.remove()" in body, "no fallback"
+    assert "data-onerr=" in body and '"remove"' in body, "no fallback"
     assert "<svg" in body, "nothing underneath the image"
     assert "combiner/i?img=" in body, "raw path — 3.5x the bytes"
 
@@ -407,11 +411,11 @@ def test_the_drawn_chip_leaves_when_a_real_image_lands():
     for fn_name in ("function teamMark(", "function leagueMark("):
         i = js.index(fn_name)
         body = js[i:i + 1600]
-        assert "onload=" in body and "art-on" in body, fn_name
-        assert "onerror=" in body, f"{fn_name} lost its fallback"
+        assert "data-onload=" in body and "art-on" in body, fn_name
+        assert "data-onerr=" in body, f"{fn_name} lost its fallback"
     av = js[js.index("function playerAvatar("):]
     av = av[:av.index("\n  const t = team(")]
-    assert "onload=" in av and "art-on" in av, "the helmet still shows through faces"
+    assert "data-onload=" in av and "art-on" in av, "the helmet still shows through faces"
 
     css = _read("web", "css", "styles.css")
     assert ".team-mark-wrap.art-on > .team-mark { display: none; }" in css
@@ -427,7 +431,7 @@ def test_a_dead_cdn_still_lands_on_the_drawn_chip():
     js = _js()
     i = js.index("function teamMark(")
     body = js[i:i + 1600]
-    assert 'onerror="this.remove()"' in body
+    assert 'data-onerr="remove"' in body
     # art-on is set by onload ALONE — never at build time, or the chip
     # would be hidden under an image that never arrives.
     #
@@ -436,7 +440,9 @@ def test_a_dead_cdn_still_lands_on_the_drawn_chip():
     # finishes loading after its card was replaced, and the page then
     # apologised for itself. `artOn` is the one guarded place, and
     # tests/test_no_detached_onload.py holds that rule for every handler.
-    assert 'onload="artOn(this,\'art-on\')"' in body
+    # Since the site audit (2026-09-24, M-4) the image NAMES the class in
+    # `data-onload` and visuals.js's capture listener calls artOn with it.
+    assert 'data-onload="art-on"' in body
     assert body.count("art-on") == 1, "art-on must come from onload only"
 
 if __name__ == "__main__":

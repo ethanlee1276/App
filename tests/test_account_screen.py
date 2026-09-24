@@ -87,12 +87,12 @@ def test_sign_in_is_the_only_action_on_the_sign_in_screen():
                 card = APP[i:j + 1]
                 break
     assert card, "acctSignInHTML was not bracketed"
-    assert "acctAuth(this, 'login')" in card or "acctFieldsHTML(\"login\")" in card
+    assert 'data-act="acctAuth"' in card or "acctFieldsHTML(\"login\")" in card
     assert "'signup'" not in card, (
         "the sign-in card still submits a sign-up, which is the whole "
         "thing that was confusing")
     # And the way through is a LINK to the other page, not a second form.
-    assert "acctGoSignup()" in card
+    assert 'data-act="acctGoSignup"' in card
 
 
 def test_the_screen_does_not_carry_two_competing_headings():

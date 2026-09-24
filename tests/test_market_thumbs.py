@@ -84,7 +84,7 @@ def test_the_ladder_has_all_four_rungs_in_order():
 
 def test_a_dead_image_becomes_the_venue_badge_not_a_broken_glyph():
     fn = _fn("pmThumb")
-    assert "onerror" in fn and "data-fb" in fn, \
+    assert 'data-onerr="fragment"' in fn and "data-fb" in fn, \
         "a third-party image that 404s would leave a broken-image icon"
     assert "venueMark(r.venue" in fn
 

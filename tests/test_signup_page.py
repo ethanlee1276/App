@@ -72,12 +72,12 @@ def test_it_is_reachable_from_behind_the_wall():
 
 def test_the_login_card_links_to_it():
     card = _fn(_code(), "acctSignInHTML")
-    assert "acctGoSignup()" in card, "no way through to the sign-up page"
+    assert 'data-act="acctGoSignup"' in card, "no way through to the sign-up page"
 
 
 def test_the_signup_page_links_back():
     page = _fn(_code(), "signupHTML")
-    assert "acctGoLogin()" in page, (
+    assert 'data-act="acctGoLogin"' in page, (
         "somebody who already has an account is stranded")
 
 

@@ -57,6 +57,9 @@ if [ -z "$RESUMED" ]; then
   # --- 3. new code ----------------------------------------------------
   say "pulling"
   BEFORE="$(git rev-parse HEAD)"
+  # The comment-stripped shell steps aside so the new page is never served
+  # an old trimmed script; it is rebuilt before the restart (engine/shrink.py).
+  python3 -m engine.shrink --clear >/dev/null 2>&1 || true
   git pull --ff-only
   AFTER="$(git rev-parse HEAD)"
 
@@ -204,6 +207,12 @@ sudo systemctl enable --now qellys-update.timer >/dev/null 2>&1 || true
 echo "  auto-update timer: $(systemctl is-active qellys-update.timer \
   2>/dev/null || echo not installed) — pulls every 5 min as root, "\
 "restarts on new code (state: data/autoupdate.json)"
+
+# The page's scripts and stylesheet without their comments, for the code
+# just pulled (engine/shrink.py; Caddy serves them from web/min/ when they
+# exist). A failure leaves the originals served, as before the trim existed.
+say "trimming the shell"
+python3 -m engine.shrink || echo "  trim skipped — the originals are served"
 
 say "restarting $SERVICE"
 sudo systemctl restart "$SERVICE"

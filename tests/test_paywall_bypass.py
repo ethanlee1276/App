@@ -657,7 +657,7 @@ def test_the_checkout_asks_for_a_card_and_never_for_a_code():
                  "Nothing to pay", "less than this term"):
         assert gone not in body, \
             f"the checkout still carries the comp-code path: {gone}"
-    assert "coPay(this)" in body, "the checkout no longer offers to take a card"
+    assert 'data-act="coPay"' in body, "the checkout no longer offers to take a card"
 
 
 def test_a_code_can_still_be_redeemed_somewhere_a_walled_visitor_can_reach():

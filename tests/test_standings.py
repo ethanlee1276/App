@@ -407,7 +407,7 @@ def test_the_division_chips_filter_and_cannot_strand_the_page():
     js = _read("web", "js", "app.js")
     i = js.index("async function renderStandings()")
     body = js[i:i + 6000]
-    assert "std-chips" in body and "_stdSet" in body
+    assert "std-chips" in body and 'data-act="stdSet"' in body
     assert 'groups.length > 2' in body, "two conferences don't need chips"
     assert '_stdGroup = ""' in body, "a stale selection strands the page"
     # the crest, not a coloured abbreviation (Ethan's screenshot)

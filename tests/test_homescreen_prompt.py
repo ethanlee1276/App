@@ -161,7 +161,7 @@ def test_the_real_install_button_only_exists_when_it_can_install():
     body = _fn(_code(), "a2hsHTML")
     assert "canInstall" in body
     i = body.index("canInstall")
-    assert "a2hsInstall(this)" in body[i:], (
+    assert 'data-act="a2hsInstall"' in body[i:], (
         "the install button is drawn outside the check that it works")
 
 
