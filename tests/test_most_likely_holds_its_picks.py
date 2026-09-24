@@ -336,9 +336,11 @@ def test_the_row_says_how_long_the_pick_has_been_up():
 
 
 def test_the_pick_page_says_when_it_went_up():
-    body = _fn(APP, "whyLikelyHTML")
-    assert 'items.push(["On the board",' in body and "const held = likelyHeld(lk);" in body
+    # One "On the board" line for every bet's section (whyHeldItem, 2026-09-24).
+    body = _fn(APP, "whyHeldItem")
+    assert 'return ["On the board",' in body and "const held = likelyHeld(lk);" in body
     assert "and goes back to" in body, "a moved number says it returns"
+    assert "const heldItem = whyHeldItem(lk, p);" in _fn(APP, "whyLikelyHTML")
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     block = css[css.index("/* How long the board has held a Most Likely pick"):]
     block = block[:block.index("\n\n")]

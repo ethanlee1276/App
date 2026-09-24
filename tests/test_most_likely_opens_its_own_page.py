@@ -72,6 +72,9 @@ def _why(prop, likely, data=None):
     prog = ("const state = " + json.dumps({"data": data or {}}) + ";\n"
             + _fn(APP, "escapeHtml") + "const oddsTxt = (o) => (o > 0 ? '+' : '') + o;\n"
             + _const(APP, "wholePct") + _fn(APP, "probTier") + _fn(APP, "whyLikelyHTML")
+            # every bet's section shares its shell and its held line (2026-09-24)
+            + _fn(APP, "whySectionHTML") + _fn(APP, "whyHeldItem") + _fn(APP, "whyBoardOf")
+            + _fn(APP, "impliedOf") + _const(APP, "WHY_SCORER")
             # the "On the board" line (test_most_likely_holds_its_picks.py)
             + _const(APP, "LIKELY_NEW_MIN") + _fn(APP, "likelyHeld")
             + "const tzOpts = (o) => Object.assign({timeZone: 'America/New_York'}, o);\n"

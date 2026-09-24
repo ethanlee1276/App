@@ -174,7 +174,8 @@ def test_the_chart_needs_history_but_the_DOOR_does_not():
         "the door is gated on the chart again — a thin ingest makes the " \
         "card unclickable and it looks like the click is broken"
     i = APP.index("function renderGameBetPage(")
-    assert "No recent results for this team yet" in APP[i:i + 4000], \
+    # 7000: the page grew its likely metrics and "Why it's likely" (2026-09-24).
+    assert "No recent results for this team yet" in APP[i:i + 7000], \
         "a missing chart must be stated, not left as an empty frame"
 
 

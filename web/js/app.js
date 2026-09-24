@@ -9634,9 +9634,28 @@ function renderGameBetPage(b) {
         ? (s.legend[0]) : (s.legend[1])}</span>
     </div>`;
   }).join("") : "";
-  const reasons = (b.reasons || []).slice(0, 8)
-    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
-  const warn = (b.warnings || []).slice(0, 4)
+  /* A Most Likely game row (likely.from_game_bet, `kind: "game"`) is
+     that board's pick: its chance, the book's number and the model's
+     own rating head the page, not Model / Market / Edge — which for a
+     row ranked on the market's number read 68.9% / 68.9% / +0.0%. */
+  const likely = b.kind === "game";
+  const likelyMetrics = `<div class="metrics">
+        ${b.model_prob != null ? `<div class="metric primary"><div class="k">Chance</div>
+          <div class="v pos">${wholePct(b.model_prob)}</div></div>` : ""}
+        ${b.implied_prob != null ? `<div class="metric"><div class="k">Book implies</div>
+          <div class="v">${wholePct(b.implied_prob)}</div></div>` : ""}
+        ${b.win_prob != null ? `<div class="metric"><div class="k">Our model alone</div>
+          <div class="v">${wholePct(b.win_prob)}</div></div>` : ""}
+      </div>`;
+  const edgeMetrics = `<div class="metrics">
+        ${b.win_prob != null ? `<div class="metric"><div class="k">Model</div>
+          <div class="v">${pct(b.win_prob)}</div></div>` : ""}
+        ${b.fair_prob != null ? `<div class="metric"><div class="k">Market</div>
+          <div class="v">${pct(b.fair_prob)}</div></div>` : ""}
+        ${b.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
+          <div class="v ${b.edge >= 0 ? "pos" : "neg"}">${signedPct(b.edge)}</div></div>` : ""}
+      </div>`;
+  const warn = (b.warnings || []).filter((x) => !(likely && GAME_EDGE_ONLY.test(x))).slice(0, 4)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   host.innerHTML = `
     <div class="pp-nav">
@@ -9663,14 +9682,8 @@ function renderGameBetPage(b) {
         ${b.grade ? `<span class="grade ${gradeClass(b.grade)}">${
           escapeHtml(b.grade)}</span>` : ""}
       </div>
-      <div class="metrics">
-        ${b.win_prob != null ? `<div class="metric"><div class="k">Model</div>
-          <div class="v">${pct(b.win_prob)}</div></div>` : ""}
-        ${b.fair_prob != null ? `<div class="metric"><div class="k">Market</div>
-          <div class="v">${pct(b.fair_prob)}</div></div>` : ""}
-        ${b.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
-          <div class="v ${b.edge >= 0 ? "pos" : "neg"}">${signedPct(b.edge)}</div></div>` : ""}
-      </div>
+      ${likely ? likelyMetrics : edgeMetrics}
+      ${whyGameHTML(b, likely)}
       ${s ? gameBetChart(b) : `
       ${panelEmpty("No recent results for this team yet — the chart needs at least three games we have ingested.")}`}
     </article>
@@ -9680,8 +9693,6 @@ function renderGameBetPage(b) {
       <span class="sub">— ${escapeHtml(s.note)}, newest first.</span></div>
     <div class="card pp-logs">${logRows}</div>` : ""}
 
-    ${reasons ? `<div class="section-title minor">Why this pick</div>
-      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
     ${warn ? `<div class="section-title minor">What argues against it
       <span class="sub">— the model’s own objections, not hidden.</span></div>
       <div class="card"><ul class="reasons">${warn}</ul></div>` : ""}`;
@@ -9964,7 +9975,72 @@ const EDGE_ONLY_REASON = new RegExp([
   "cannot be a price for it", "calibration fit hit the edge",
   "is under the Tier", "pass, not a lean"].join("|"), "i");
 
+/* EVERY BET GETS ONE (Ethan, 2026-09-24, beside a Packers moneyline
+   page that had none: "Every single bet we offer needs too have a why
+   it's likely section"). A Most Likely pick brings its own row (`lk`);
+   an Edge pick or a long shot is read off its own card — its chance, its
+   line, its price — and the section says which board it is on. */
+function whyBoardOf(r) {
+  const d = state.data || {};
+  if ((d.long_shots || []).includes(r) || (d.longshot_watch || []).includes(r)) return "longshot";
+  return r.recommended === false ? "pass" : "edge";
+}
+
+/* A scorer bet (anytime touchdown, a home run) is yes-or-no, not a
+   number against a line: its section reads like the Most Likely board's
+   anytime rows (line null), never "0.2 home runs, 0.3 below the 0.5". */
+const WHY_SCORER = /anytime|first_td|home_run/;
+
+/* "On the board": how long the board has held a pick, and at what
+   (engine/likely.HOLD_MARGIN). Shared by props and game bets. */
+function whyHeldItem(lk, p) {
+  const held = likelyHeld(lk);
+  if (!held) return null;
+  const was = Number(lk.first_prob);
+  const moved = Math.abs(was - p) >= 0.005 && Number.isFinite(was)
+    ? `${wholePct(was)} when it went up, ${wholePct(p)} now` : `${wholePct(p)} since it went up`;
+  const side = String(lk.side || "").toLowerCase();
+  return ["On the board", `${held.fresh ? `New — went up at ${escapeHtml(held.when)}`
+    : `Since ${escapeHtml(held.when)}, held through every refresh`}: ${moved}.${lk.first_line != null
+    ? ` It went up at ${escapeHtml(side)} ${escapeHtml(String(lk.first_line))}; that number no
+      longer clears the board’s bars at its best price, so it shows at ${escapeHtml(String(lk.line))} —
+      and goes back to ${escapeHtml(String(lk.first_line))} if it clears again.` : ""} A pick keeps its
+    number and its seat unless its game starts, a bar turns it away, or a pick 3 points likelier
+    takes the seat.`];
+}
+
+/* The section itself, one shape for every bet. A pick under 50% is not
+   "likely" and the heading does not say it is: a long shot's case is the
+   price, and its heading says so. */
+function whySectionHTML(items, p, board) {
+  const under = Number.isFinite(p) && p < 0.5;
+  const head = under ? "Why it’s worth it" : "Why it’s likely";
+  const foot = board === "likely"
+    ? `Ranked by the chance it hits, not by the price. Whether the price is
+      worth paying is the Edge board’s question.`
+    : board === "longshot"
+    ? `A long shot on purpose: it lands less often than it misses, and it is on
+      the board because the price pays more than that chance says it should.`
+    : board === "pass"
+    ? `Not a pick on the Edge board: at this price the chance does not clear its
+      bar. Every priced bet shows its reasons, picked or not.`
+    : `On the Edge board because the price pays more than this chance says it
+      should. The Record page grades every one at the price it was posted.`;
+  return `<section class="why-likely" aria-label="${head}">
+    <div class="wl-head">${head}</div>
+    <dl class="wl-list">${items.map(([k, x]) => `<div class="wl-item"><dt>${k}</dt><dd>${x}</dd></div>`).join("")}</dl>
+    <p class="wl-foot">${foot}</p>
+  </section>`;
+}
+
 function whyLikelyHTML(v, r, lk) {
+  const board = lk ? "likely" : whyBoardOf(r);
+  if (!lk) {
+    const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(r.line) >= 1);
+    lk = { model_prob: r.hit_prob != null ? r.hit_prob : r.model_prob,
+           line: scorer ? null : r.line, side: r.side, lineup_confirmed: r.lineup_confirmed,
+           implied_prob: r.odds != null && Number(r.odds) ? impliedOf(r.odds) : null };
+  }
   const items = [];
   const p = Number(lk.model_prob);
   const t = probTier(p);
@@ -9973,24 +10049,15 @@ function whyLikelyHTML(v, r, lk) {
   const anytime = lk.line == null || !Number.isFinite(line);
   const what = String(r.market_label || r.market || "").toLowerCase();
   const num = (x) => Number(x).toFixed(1).replace(/\.0$/, "");
-  items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band` : ""}. The
-    number this board is ranked on, calibrated against how its picks have landed; the
-    Record page checks every band.`]);
-  /* How long the board has held it, and at what (engine/likely.HOLD_MARGIN). */
-  const held = likelyHeld(lk);
-  if (held) {
-    const was = Number(lk.first_prob);
-    const moved = Math.abs(was - p) >= 0.005 && Number.isFinite(was)
-      ? `${wholePct(was)} when it went up, ${wholePct(p)} now` : `${wholePct(p)} since it went up`;
-    const side = String(lk.side || "").toLowerCase();
-    items.push(["On the board", `${held.fresh ? `New — went up at ${escapeHtml(held.when)}`
-      : `Since ${escapeHtml(held.when)}, held through every refresh`}: ${moved}.${lk.first_line != null
-      ? ` It went up at ${escapeHtml(side)} ${escapeHtml(String(lk.first_line))}; that number no
-        longer clears the board’s bars at its best price, so it shows at ${escapeHtml(String(lk.line))} —
-        and goes back to ${escapeHtml(String(lk.first_line))} if it clears again.` : ""} A pick keeps its
-      number and its seat unless its game starts, a bar turns it away, or a pick 3 points likelier
-      takes the seat.`]);
+  if (Number.isFinite(p)) {
+    items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band`
+      : p < 0.5 ? ` — it lands about ${Math.max(1, Math.round(p * 10))} times in 10` : ""}. ${board === "likely"
+      ? `The number this board is ranked on, calibrated against how its picks have landed; the
+        Record page checks every band.`
+      : `The model’s own number for this side, calibrated against how its picks have landed.`}`]);
   }
+  const heldItem = whyHeldItem(lk, p);
+  if (heldItem) items.push(heldItem);
   const proj = Number(r.projection);
   if (!anytime && Number.isFinite(proj)) {
     const gap = proj - line;
@@ -10006,7 +10073,8 @@ function whyLikelyHTML(v, r, lk) {
     const hits = logs.filter(hit).length;
     const early = logs.filter((g) => g.partial);
     const missed = early.filter((g) => !hit(g)).length;
-    items.push(["His games", `${anytime ? "Scored" : `${over ? "Over" : "Under"} ${num(line)}`} in
+    items.push(["His games", `${anytime ? (/home_run/.test(String(r.market || "")) ? "Homered" : "Scored")
+      : `${over ? "Over" : "Under"} ${num(line)}`} in
       ${hits} of his last ${logs.length}${early.length ? ` — ${early.length === 1
         ? `one was a game he left early${missed ? ", and it is one of the misses" : ""}`
         : `${early.length} were games he left early`}` : ""}.`]);
@@ -10049,12 +10117,62 @@ function whyLikelyHTML(v, r, lk) {
   if (r.qb_card && r.qb_card.headline) cautions.push(escapeHtml(r.qb_card.headline));
   if (r.mate_card && r.mate_card.headline) cautions.push(escapeHtml(r.mate_card.headline));
   if (cautions.length) items.push(["Worth knowing", cautions.join("; ") + "."]);
-  return `<section class="why-likely" aria-label="Why it’s likely">
-    <div class="wl-head">Why it’s likely</div>
-    <dl class="wl-list">${items.map(([k, x]) => `<div class="wl-item"><dt>${k}</dt><dd>${x}</dd></div>`).join("")}</dl>
-    <p class="wl-foot">Ranked by the chance it hits, not by the price. Whether the price is
-      worth paying is the Edge board’s question.</p>
-  </section>`;
+  return whySectionHTML(items, p, board);
+}
+
+/* A moneyline, spread or total's reasons that are about the OTHER side's
+   price: a Most Likely game row is often the side the edge board did not
+   back ("The likely side. The edge board backed CHI ML at +190…"), and
+   the edge board's verdict on that price reads, beside this pick, as an
+   argument against it. */
+const GAME_EDGE_ONLY = /edge on |sharp-anchor value|never beaten the .* close|info only/i;
+
+function whyGameHTML(b, likely) {
+  const items = [];
+  const p = Number(likely ? b.model_prob : (b.win_prob != null ? b.win_prob : b.model_prob));
+  const t = probTier(p);
+  const kind = b.bet_type || b.market || "";
+  const team = b.team || (b.side === "home" ? b.home : b.away);
+  const nm = (x) => escapeHtml(typeof teamName === "function" ? teamName(x) : x);
+  if (Number.isFinite(p)) {
+    items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band` : ""}. ${likely
+      ? `The number this board is ranked on, calibrated against how its picks have landed; the
+        Record page checks every band.`
+      : `The model’s own number for this side.`}`]);
+  }
+  if (likely && b.rank_note) {
+    items.push(["How it’s rated", escapeHtml(b.rank_note)]);
+  } else if (!likely && b.win_prob != null && b.fair_prob != null) {
+    items.push(["How it’s rated", `Our team model has it at ${wholePct(b.win_prob)}; the book’s price,
+      with its margin taken out, says ${wholePct(b.fair_prob)}. The gap is the edge.`]);
+  }
+  const heldItem = likely ? whyHeldItem(b, p) : null;
+  if (heldItem) items.push(heldItem);
+  const s = gameBetSeries(b);
+  if (s && (s.values || []).length >= 3) {
+    const vals = s.values.slice(0, 10).map(Number).filter(Number.isFinite);
+    const hits = vals.filter((v) => (s.over ? v > s.line : v < s.line)).length;
+    const n = vals.length;
+    const line = Number(b.line);
+    const said = kind === "moneyline" ? `${nm(team)} won ${hits} of their last ${n}`
+      : kind === "spread" ? `${nm(team)} covered ${escapeHtml(s.lineText || String(b.line))} in ${hits} of their last ${n}`
+      : kind === "team_total" ? `${nm(team)} went ${s.over ? "over" : "under"} ${line} in ${hits} of their last ${n}`
+      : `${nm(b.home)}’s last ${n} games went ${s.over ? "over" : "under"} ${line} in ${hits}`;
+    items.push(["Recent games", `${said}.`]);
+  }
+  const notes = (b.reasons || []).filter((x, i) => !(likely && i > 0 && GAME_EDGE_ONLY.test(x)))
+    .filter((x) => !EDGE_ONLY_REASON.test(x) || !likely).slice(0, 5);
+  if (notes.length) {
+    items.push(["What goes into it", `<ul class="wl-moves">${notes.map((x) =>
+      `<li>${escapeHtml(x.length > 240 ? x.slice(0, 237) + "…" : x)}</li>`).join("")}</ul>`]);
+  }
+  if (b.odds != null) {
+    const implied = b.implied_prob != null ? Number(b.implied_prob)
+      : Number(b.odds) ? impliedOf(b.odds) : null;
+    items.push(["The price", `${b.book ? `${escapeHtml(b.book)} ` : ""}${escapeHtml(oddsTxt(b.odds))}${
+      implied != null ? ` implies ${wholePct(implied)}` : ""}${Number.isFinite(p) ? `; we have it at ${wholePct(p)}` : ""}.`]);
+  }
+  return whySectionHTML(items, p, likely ? "likely" : b.recommended === false ? "pass" : "edge");
 }
 
 function renderPropPage() {
@@ -10078,7 +10196,11 @@ function renderPropPage() {
        the other one on price — and it carries the card shape
        (likely.from_game_bet), so the same page draws it. */
     const b = findGameRow(state.propId);
-    if (b) return renderGameBetPage(b);
+    // Opened from Most Likely, that board's row — when both boards carry
+    // the same id, findGameRow answers with the edge board's first.
+    const lkRow = state.propLikely && ((state.data || {}).most_likely || [])
+      .find((g) => g.kind === "game" && gameBetId(g) === state.propId);
+    if (lkRow || b) return renderGameBetPage(lkRow || b);
   }
   const r = findProp(state.propId);
   if (!r) {
@@ -10188,7 +10310,7 @@ function renderPropPage() {
               metrics also fill the row instead of wrapping one onto a
               second line by itself. */""}
       </div>
-      ${lk ? whyLikelyHTML(v, r, lk) : ""}
+      ${whyLikelyHTML(v, r, lk)}
       ${shoppedLineNote(v)}
       ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word })
            : propAnalysis(r)}
@@ -32692,6 +32814,40 @@ function fighterColHTML(f) {
   </div>`;
 }
 
+/* The UFC pick's "Why it's likely" (Ethan, 2026-09-24: "Every single bet
+   we offer needs too have a why it's likely section"). The card's numbers
+   (p_model, p_market, p_final) in plain words: the blended chance, where
+   it came from, how the fight is expected to go, and the price. */
+function ufcWhyHTML(p, title, odds) {
+  const items = [];
+  const pf = Number(p.p_final);
+  const t = probTier(pf);
+  if (Number.isFinite(pf)) {
+    items.push(["Our chance", `${wholePct(pf)}${t ? ` — ${t.word}, the ${t.band} band` : ""}.
+      ${p.p_model != null && p.p_market != null ? `Our fight model has it at ${wholePct(p.p_model)},
+      the market at ${wholePct(p.p_market)}; the chance leans ${Number(p.w) >= 0.5 ? "on our model"
+      : "on the market"} (weight ${escapeHtml(String(p.w))}).` : ""}`]);
+  }
+  const m = p.method || {};
+  const ways = [["knockout", m.a_ko], ["submission", m.a_sub], ["decision", m.a_dec]]
+    .filter(([, v]) => Number(v) > 0).sort((a, b) => b[1] - a[1]);
+  if (ways.length) {
+    items.push(["How it gets there", `Most often by ${ways[0][0]} (${wholePct(ways[0][1])})${ways[1]
+      ? `, then ${ways[1][0]} (${wholePct(ways[1][1])})` : ""}${m.distance != null
+      ? `; the fight goes the distance ${wholePct(m.distance)} of the time` : ""}.`]);
+  }
+  if ((p.style_notes || []).length) {
+    items.push(["The matchup", escapeHtml(p.style_notes.join(" · "))]);
+  }
+  if (odds != null) {
+    items.push(["The price", `${p.book ? `${escapeHtml(p.book)} ` : ""}${escapeHtml(american(odds))}${
+      p.break_even != null ? ` needs it to land ${wholePct(p.break_even)} of the time to break even` : ""}${
+      Number.isFinite(pf) ? `; we have it at ${wholePct(pf)}` : ""}.`]);
+  }
+  if (p.thin_data) items.push(["Worth knowing", "Thin data on one of the fighters, so the bar it had to clear was higher."]);
+  return whySectionHTML(items, pf, "edge");
+}
+
 async function renderUFC() {
   const host = document.getElementById("ufc-body");
   if (!host) return;
@@ -32809,6 +32965,7 @@ async function renderUFC() {
         <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
         <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
       </div>
+      ${ufcWhyHTML(p, title, shown)}
       ${methodBar(p.method || {}, p)}
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
