@@ -1135,6 +1135,46 @@ def weather() -> list:
     return inputcheck.weather(boards)
 
 
+def weight() -> list:
+    """WEIGHT. What each board costs a phone to download, and where the
+    bytes go. (read-only)
+
+    The site audit, 2026-09-24: every prop row carries its whole
+    alternate ladder (`alt_lines`, `alt_sharp_lines`, `rung_probs`),
+    which the page never reads, and `board_shelves` repeats every Most
+    Likely row in full. Neither could be measured off the box — the demo
+    boards have no ladders — so this prints the real numbers before
+    anything is cut.
+    """
+    import launch
+    from engine import gate, lightboard
+    out = ["WEIGHT — bytes per board (compact JSON; gzip on the wire is ~4-6x smaller)"]
+    lists = ("recommendations", "most_likely", "game_bets", "long_shots", "longshot_watch")
+    for sport, name in launch.BOARD_FILES.items():
+        for label, path in (("full", gate.board_source(name)),
+                            ("light", gate.board_source(lightboard.light_path(name)))):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    d = json.load(fh)
+            except Exception as exc:                          # noqa: BLE001
+                out.append(f"  {sport} {label}: unreadable — {type(exc).__name__}")
+                continue
+            size = lambda v: len(json.dumps(v, separators=(",", ":")))  # noqa: E731
+            total = size(d)
+            top = sorted(((size(v), k) for k, v in d.items()), reverse=True)[:5]
+            fields: dict = {}
+            for lst in lists:
+                for r in d.get(lst) or []:
+                    if isinstance(r, dict):
+                        for k, v in r.items():
+                            fields[k] = fields.get(k, 0) + size(v)
+            heavy = sorted(fields.items(), key=lambda kv: -kv[1])[:6]
+            out.append(f"  {sport} {label}: {total / 1e6:.2f} MB")
+            out.append("    keys:   " + " · ".join(f"{k} {n / 1e6:.2f}" for n, k in top))
+            out.append("    fields: " + " · ".join(f"{k} {n / 1e6:.2f}" for k, n in heavy))
+    return out
+
+
 def hold() -> list:
     """HOLD. How steady is each Most Likely board? (read-only)
 
@@ -1182,6 +1222,8 @@ CHECKS = {
                          "and the numbers", True),
     "hold": (hold, "HOLD: how steady each Most Likely board is, and why "
                    "picks left", True),
+    "weight": (weight, "WEIGHT: what each board costs a phone, and where "
+                       "the bytes go", True),
     "exchange": (exchange, "KX-2: Kalshi ticker shapes (FETCHES; "
                            "run as the build user)", False),
 }

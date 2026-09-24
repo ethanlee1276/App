@@ -3530,6 +3530,16 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if not AB.configured():
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
+        # THE DAY'S CEILINGS (askbot.over_limit): this account's questions,
+        # and the site's estimated spend. Checked before anything is read.
+        # With the paywall off a reader need not be signed in; their line is
+        # counted against the address they asked from.
+        me = ((who.get("id") or who.get("email")) if isinstance(who, dict) else who) \
+            or f"ip:{self._client_ip()}"
+        limit = AB.over_limit(me)
+        if limit:
+            return self._send(429, json.dumps({"error": "ask daily limit",
+                                               "limit": limit}).encode(), ".json")
         payload = AB.board_at(GATE_.full_board_file(board))
         if payload is None:
             return self._send(404, b'{"error":"no such board"}', ".json")
@@ -3549,6 +3559,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             err = {"error": "ask unavailable", "detail": str(exc)[:200]}
             return self._send(503, json.dumps(err).encode(), ".json")
         keep = {k: out[k] for k in ("text", "refused", "matched", "focused", "sources", "cached")}
+        if not out.get("cached"):
+            try:
+                AB.count_question(me)
+            except Exception:                                # noqa: BLE001
+                pass                     # a counting failure never costs the answer
         return self._send(200, json.dumps(keep).encode(), ".json")
 
     def _receipts_csv(self):

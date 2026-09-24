@@ -1355,6 +1355,13 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "usage_role": row.get("usage_role", ""),
         # Carried so `admissible` can refuse on it and a lint can see it.
         "injury_status": row.get("injury_status", "") or "",
+        # A BASEBALL HITTER ON A PROJECTED LINEUP (engine/mlb/pipeline
+        # stamps it; None where a sport has no lineup card). The board
+        # shows him with the caveat; the journal waits for the card
+        # (`ledger.log_most_likely`) — found by the site audit, 2026-09-24:
+        # this row dropped the flag, so the staked book could take a
+        # hitter who then sat, and baseball has no absent-player grade.
+        "lineup_confirmed": row.get("lineup_confirmed"),
         "warnings": list(row.get("warnings") or []),
     }
 

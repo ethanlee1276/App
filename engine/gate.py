@@ -681,6 +681,13 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     """
     public = Path(public_path)
     label = name or public.name
+    # AN UNDERSCORE KEY IS THE BUILD'S OWN WORKING STATE, NEVER THE BOARD
+    # (the site audit, 2026-09-24). `potd.POOL_KEY` ("_potd_pool") carries
+    # every row the display caps cut, for the selector, and each build pops
+    # it — except the demo generator, whose board went out with the pool
+    # in it. Dropped here, once, for every build that exists or will.
+    if isinstance(payload, dict) and any(str(k).startswith("_") for k in payload):
+        payload = {k: v for k, v in payload.items() if not str(k).startswith("_")}
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label

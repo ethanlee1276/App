@@ -21,8 +21,8 @@ Ethan, 2026-09-24: *"save all the code u need me too run for when im
 home."* **Nothing below writes anything** — every block only reads, so
 any of them is safe mid-cycle. Paste each output back with its number.
 
-**1. Which code is running** (want `50c5b5bc` or newer; step 7 needs
-the commit after it, "Most Likely picks hold…"):
+**1. Which code is running** (want `8b79a2f6` or newer — step 7 needs
+it):
 
 ```bash
 cd /srv/qellys && cat data/autoupdate.json; echo
@@ -97,7 +97,36 @@ longer offered" means something else still moves the board — paste it.
 On the phone: Most Likely rows read "Since 9:12 AM" or "New", and a
 pick's page says when it went up and at what chance.
 
-**8. SATURDAY ONLY — are college receptions priced?**
+**8. The site audit's box checks** (seconds each; read-only). The audit
+(`docs/AUDIT_2026-09-24.md`) ran on this machine's demo boards; three
+numbers only the box has:
+
+```bash
+cd /srv/qellys && python3 homecheck.py weight
+```
+
+(8a, M-3) Each board's size and its heaviest fields. Want to know whether
+`alt_lines` is most of the MLB board, so the page's copy can drop it.
+
+```bash
+cd /srv/qellys && python3 homecheck.py grading | grep -iE "mlb|no log" | head -20
+```
+
+(8b, H-1) Any MLB Most Likely rows stuck open because the hitter sat —
+"player has no log". Before today's fix the book could journal a
+projected lineup; paste what it shows and I will say which to void.
+
+```bash
+cd /srv/qellys && python3 -m engine.askbot usage
+```
+
+(8c, H-3) Ask's real daily spend so far, to set the new ceilings. The
+defaults are 100 questions per account and $25 a day. To change one
+(neither is a secret, so the value goes inline), for example:
+`cd /srv/qellys && sudo ./deploy/setenv.sh QB_ASK_DAILY_USD 40` — then
+restart the site for it to take (`sudo systemctl restart qellys`).
+
+**9. SATURDAY ONLY — are college receptions priced?**
 
 ```bash
 cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
@@ -105,7 +134,7 @@ cd /srv/qellys && python3 homecheck.py inputs | grep -A6 "cfb:"
 
 Want: `receptions … priced` above 0%.
 
-**9. Whenever there is a quiet minute** (parked since 2026-09-21):
+**10. Whenever there is a quiet minute** (parked since 2026-09-21):
 
 ```bash
 cd /srv/qellys && python3 homecheck.py bench; python3 homecheck.py sizing; python3 homecheck.py shelves
@@ -117,7 +146,11 @@ appears? · 6 — where the Predict / Fantasy / Memes tiles sit · 13 — trial
 length · 14 — switch on the privacy-safe usage counts (built, off) and
 approve the policy wording · 15 — a one-time "What do you bet?" card, yes
 or no · 18 — rename the grade words or keep them · 20 — the postal
-address for the footer.
+address for the footer. And from the site audit (`docs/AUDIT_2026-09-24.md`):
+H-3 — are 100 Ask questions per account and $25 a day the right
+ceilings? · M-5 — a brighter red and a lighter grey (both measure under
+the contrast bar)? · Visual 1 — should the picks lead Home, with the tool
+tiles under them?
 
 ## AFTER THE WIND FIX — ANSWERED into NEXT TIME HOME (above)
 

@@ -396,7 +396,10 @@ def test_ask_reads_the_boards_and_writes_only_its_cache_and_its_log():
     """tests/test_gate.py lets askbot name the paid boards on this condition."""
     import re
     src = (ROOT / "engine" / "askbot.py").read_text()
-    assert re.findall(r"(?<!def )\b_write\((\w+)", src) == ["CACHE_PATH", "USAGE_PATH"]
+    # The log is written twice — each call's usage, and each account's
+    # daily question (askbot.count_question, the site audit 2026-09-24) —
+    # but still only these two files.
+    assert sorted(set(re.findall(r"(?<!def )\b_write\((\w+)", src))) == ["CACHE_PATH", "USAGE_PATH"]
     assert len(re.findall(r"\.write_text\(|json\.dump\(|os\.replace\(", src)) == 2, \
         "one writer, _write: the temp file and its rename"
     for path in (AB.CACHE_PATH, AB.USAGE_PATH):

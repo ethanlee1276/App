@@ -2974,6 +2974,75 @@ def estimate_usd(model: str, usage: dict) -> float | None:
                  + usage.get("web_searches", 0) * WEB_SEARCH_USD, 6)
 
 
+#: A CEILING ON WHAT ASK CAN SPEND. The site audit, 2026-09-24: every
+#: question is a paid model call, and the only limit was eight a minute per
+#: address — eleven thousand a day for one subscriber, or for one stolen
+#: session. The usage log below already priced every call and nothing read
+#: the total. Two lines now, each an environment variable on the box so the
+#: numbers are Ethan's to move without a deploy (0 turns either off):
+#:
+#:   * QB_ASK_PER_ACCOUNT_DAILY — questions one account may ask in a UTC
+#:     day. A cached answer costs nothing and is not counted.
+#:   * QB_ASK_DAILY_USD — the site's estimated spend in a UTC day past
+#:     which Ask pauses for everyone until midnight UTC.
+#:
+#: The defaults are far above an honest reader's day and far below a
+#: runaway: a hundred questions is an evening of hard use, and the spend
+#: line is there so a leak or a loop is a capped bill rather than an open one.
+ACCOUNT_DAILY_QUESTIONS = 100
+DAILY_USD_CEILING = 25.0
+
+
+def _env_number(name: str, default, cast):
+    try:
+        raw = os.environ.get(name, "").strip()
+        return cast(raw) if raw else default
+    except ValueError:
+        return default
+
+
+def account_daily_cap() -> int:
+    return _env_number("QB_ASK_PER_ACCOUNT_DAILY", ACCOUNT_DAILY_QUESTIONS, int)
+
+
+def daily_usd_ceiling() -> float:
+    return _env_number("QB_ASK_DAILY_USD", DAILY_USD_CEILING, float)
+
+
+def _account_tag(account) -> str:
+    """A stable, non-reversible tag for an account in the usage log — the log
+    counts questions per account and has no business holding who they are."""
+    import hashlib
+    return hashlib.sha256(f"qb-ask:{account}".encode("utf-8")).hexdigest()[:16]
+
+
+def over_limit(account, today: str | None = None) -> str:
+    """"" when this account may ask now; otherwise which line it hit —
+    "spend" (the site's day) or "account" (this account's day)."""
+    day = today or _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    d = (_read(USAGE_PATH).get("days") or {}).get(day) or {}
+    ceiling = daily_usd_ceiling()
+    if ceiling > 0 and float(d.get("usd") or 0.0) >= ceiling:
+        return "spend"
+    cap = account_daily_cap()
+    if cap > 0 and int((d.get("accounts") or {}).get(_account_tag(account), 0)) >= cap:
+        return "account"
+    return ""
+
+
+def count_question(account, today: str | None = None) -> None:
+    """One answered, uncached question against this account's day."""
+    day = today or _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+    with _LOCK:
+        log = _read(USAGE_PATH)
+        d = log.setdefault("days", {}).setdefault(day, {"calls": 0, "cached": 0, "in": 0, "out": 0,
+                                                        "cache_read": 0, "cache_write": 0, "usd": 0.0})
+        tags = d.setdefault("accounts", {})
+        tag = _account_tag(account)
+        tags[tag] = int(tags.get(tag, 0)) + 1
+        _write(USAGE_PATH, log)
+
+
 def log_usage(model: str, response=None, cached: bool = False, today: str | None = None) -> None:
     """Add one question to today's line in the usage log. ``response`` may be
     a list — a question that looked something up is one call per round."""

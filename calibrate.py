@@ -66,7 +66,8 @@ SPORT_MARKETS = {
     #
     # The same shape of gap `engine.rankfit.MARKETS` had, found the same
     # way, and closed the same way: measured on college's own logs.
-    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    # (The entry itself is the "cfb" line above; a second copy of the key
+    # here silently overrode it — found by the site audit, 2026-09-24.)
     # UFC stays absent: it has no game logs at all, so it learns from the
     # journal only and listing it would offer a fit that can never run.
 }

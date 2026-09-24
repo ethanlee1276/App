@@ -7797,7 +7797,10 @@ body.has-deck #rail-live { display: none; }
 .ra-ranges { float: right; display: inline-flex; gap: 4px; }
 .ra-range { background: none; color: var(--text-mute);
   border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
-  padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+  padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer;
+  /* 24px: the smallest target a thumb should be asked to hit (WCAG 2.5.8);
+     these measured 20 (the site audit, 2026-09-24). */
+  min-height: 24px; }
 .ra-range.active { background: var(--brand-solid); border-color: var(--brand-solid);
   color: var(--brand-ink); }
 /* (.ra-stats/.ra-tiles/.ra-alltime retired 2026-08-17 with the record
@@ -11406,3 +11409,14 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   color: var(--text-mute); list-style-position: inside; }
 .lv-done-note { margin-left: 8px; font-size: var(--fs-xs); opacity: .8; }
 .lv-done[open] > summary { color: var(--text); }
+
+/* The board guide, folded (boardGuide): one line — what the board is
+   picked on and whether money rides on it — and the proof under a tap. */
+.board-guide > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px 8px; }
+.board-guide > summary::-webkit-details-marker { display: none; }
+.board-guide .bg-how { color: var(--brand-2); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .06em; text-transform: lowercase; }
+.board-guide .bg-how::after { content: " \25BE"; }
+.board-guide[open] .bg-how::after { content: " \25B4"; }
+.board-guide > p { margin: 8px 0 0; }

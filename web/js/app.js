@@ -7965,17 +7965,25 @@ function likelyCard(r) {
    Draws nothing when the payload has no entry, so an older board or a
    sport that has not been described yet loses a paragraph rather than
    rendering "undefined". */
+/* FOLDED, THE PICKS FIRST (the site audit, 2026-09-24). Open, this was
+   two paragraphs — AUC figures, a de-vigged price, a z-score — and on a
+   phone it filled the first screen of the Most Likely page and sat
+   between Home's "top picks" heading and its first pick. It is the site's
+   proof and it stays one tap away: the line that shows says what the
+   board is picked on and whether money rides on it; the measurement and
+   the trust line open under it. */
 function boardGuide(key) {
   const g = (state.data.board_guide || []).find((b) => b.key === key);
   if (!g) return "";
   const money = g.money
     ? `<span class="chip warn">real money · Record page</span>`
     : `<span class="chip">recorded, not staked · ${escapeHtml(g.journal)} book</span>`;
-  return `<div class="ls-note">
-    <b>Picked on ${escapeHtml(g.selects_on)}.</b> ${escapeHtml(g.measured)}
-    <div style="margin-top:6px">${money}
-      <span class="mini" style="opacity:.8">${escapeHtml(g.trust)}</span></div>
-  </div>`;
+  return `<details class="ls-note board-guide">
+    <summary><b>Picked on ${escapeHtml(g.selects_on)}</b> ${money}
+      <span class="bg-how">how we know</span></summary>
+    <p>${escapeHtml(g.measured)}</p>
+    <p class="mini" style="opacity:.8">${escapeHtml(g.trust)}</p>
+  </details>`;
 }
 
 /* ============================================================
@@ -8246,17 +8254,24 @@ function renderLikely() {
     return;
   }
   const rankOnly = rows.filter((r) => !r.bettable).length;
+  /* THE PICKS COME FIRST (the site audit, 2026-09-24): four blocks of
+     method sat above the first row — a phone's whole first screen. The
+     guide is one line (boardGuide); how the board is ranked and what it
+     turned down fold behind a second. Nothing is removed. */
   note.innerHTML = `${boardGuide("most_likely")}
-    <div class="ls-note">Ranked by how likely we think it is, not by how good
+    <details class="ls-note board-guide"><summary><b>How it’s ranked</b>
+      <span class="bg-how">and what it turned down</span></summary>
+    <p>Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it. A pick keeps its number
     and its seat through the day unless its game starts, a bar turns it away,
     or a pick 3 points likelier takes the seat — each row says how long it has
     been up.${rankOnly ? ` ${rankOnly}
     ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
-    price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</div>
+    price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</p>
     ${likelyRefusedNote(state.data.likely_census, rows.length)}
-    ${likelyMarketFunnel(state.data.likely_census_by_kind)}`;
+    ${likelyMarketFunnel(state.data.likely_census_by_kind)}
+    </details>`;
   /* SHELVES, NOT ONE FLAT LIST. Ethan, 2026-08-30: "for someone betting
      nfl, they wanna find good props and td props, so lets lay it out that
      way." Every market used to be interleaved by probability, which is
@@ -8390,6 +8405,13 @@ function likelyTagsHTML(r) {
   if (thin && thin.games) {
     tags.push([`${thin.games} game${thin.games === 1 ? "" : "s"} in`, "",
                "Projected from this season’s first games — shown, not staked"]);
+  }
+  /* A hitter on a PROJECTED lineup (engine/likely, the site audit
+     2026-09-24): shown, and not recorded until the card posts. */
+  if (r.lineup_confirmed === false) {
+    tags.push(["Lineup not posted", "down",
+               "His team’s lineup card is not out yet — he is projected to play, not confirmed. "
+               + "The pick is recorded only once the card posts."]);
   }
   return tagsOut(tags);
 
@@ -10010,6 +10032,9 @@ function whyLikelyHTML(v, r, lk) {
   const thin = ((state.data || {}).thin || {})[r.player];
   if (thin && thin.games) {
     cautions.push(`only ${thin.games} game${thin.games === 1 ? "" : "s"} this season to go on — shown, not staked`);
+  }
+  if (lk.lineup_confirmed === false) {
+    cautions.push("his team’s lineup card is not out yet — he is projected to play, and the pick is recorded only once it posts");
   }
   if (r.qb_card && r.qb_card.headline) cautions.push(escapeHtml(r.qb_card.headline));
   if (r.mate_card && r.mate_card.headline) cautions.push(escapeHtml(r.mate_card.headline));
@@ -16345,6 +16370,10 @@ async function renderRecord() {
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
+  /* The calibration chart in a room that opens already showing. This
+     mount sat after `_recordRooms`'s return, where it never ran (the site
+     audit, 2026-09-24); a hidden room is still upgraded on its tab tap. */
+  if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
   sweepRings(host);
   recBetsMount(host, src.recent || [], o.settled, scope, from);
   // The calendar's days are doors to their bets; a day left open on the
@@ -16450,7 +16479,6 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "whether this account survives being right",
      (scoped ? "" : recHealthSection(d.account_health))],
   ]);
-  if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
 }
 
 /* MODEL VERSUS MARKET — does this thing beat the closing line?
@@ -34079,6 +34107,16 @@ function enhanceSectionSubs(root) {
   markPageTitles(root);
   wrapTables(root);
   (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
+    /* THE DASH WAS A JOIN, AND THE LINE IT JOINED IS GONE (the site audit,
+       2026-09-24). Two hundred and twenty-nine subtitles open "— …" from
+       when they sat on the heading's own line; every one now drops to a
+       line of its own under an amber rule (flex-basis: 100%), where the
+       dash starts a sentence with nothing before it. Trimmed here, once,
+       for the static markup and every render alike. */
+    const lead = sub.firstChild;
+    if (lead && lead.nodeType === 3 && /^\s*[—–]\s*/.test(lead.nodeValue)) {
+      lead.nodeValue = lead.nodeValue.replace(/^\s*[—–]\s*/, "");
+    }
     const title = sub.parentElement;
     if (!title || title.dataset.subEnhanced) return;
     const text = (sub.textContent || "").trim();
@@ -35393,6 +35431,12 @@ function askSave() {
 function askErrorText(status, body) {
   if (status === 401) return "Sign in with a subscription to ask.";
   if (status === 402) return "Ask is part of the subscription.";
+  if (status === 429 && body && body.limit === "account") {
+    return "That’s today’s questions for this account — Ask resets at midnight UTC, in the evening US time.";
+  }
+  if (status === 429 && body && body.limit === "spend") {
+    return "Ask is paused for the rest of the day — it resets at midnight UTC, in the evening US time.";
+  }
   if (status === 429) return "That’s a lot of questions at once — give it a minute.";
   if (status === 413 || status === 400) return "That question is too long — keep it to a sentence or two.";
   if (status === 503 && body && body.configured === false) return "Ask isn’t switched on for this site yet.";
@@ -38166,7 +38210,12 @@ function initHcm() {
   btn.addEventListener("click", () => {
     try { localStorage.setItem(HCM_KEY, hcmOn() ? "0" : "1"); } catch (e) {}
     hcmPaint();
-    if (typeof renderCards === "function") renderCards();
+    /* The board it filters (passesFilters), not only the strip. This
+       called `renderCards`, the board's name before a redesign, behind a
+       typeof guard that hid its absence: the switch changed the Top
+       Picks strip and left the board under it unfiltered until the next
+       navigation (the site audit, 2026-09-24). */
+    if (state.data) renderAll();
     renderTopPicks();
   });
   hcmPaint();

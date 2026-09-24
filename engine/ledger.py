@@ -1160,6 +1160,17 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # one refactor away from not being one.
         if r.get("reserve"):
             continue
+        # A PROJECTED LINEUP IS A GUESS ABOUT WHO PLAYS, NOT A BET — the rule
+        # `_journal_longshot_rows` has kept since 2026-07-26 (31 of 58 long
+        # shots were projected hitters who sat) and the edge book keeps
+        # upstream (an unconfirmed hitter is "On deck", not recommended).
+        # This book reads every prop row, recommended or not, so it needs
+        # the rule itself: baseball has no absent-player grade
+        # (ABSENT_RULE_SPORTS), and a staked hitter who sat would stay open
+        # for good. The row journals on the first build after the card
+        # posts, if it is still on top. Found by the site audit, 2026-09-24.
+        if r.get("lineup_confirmed") is False:
+            continue
         # NEVER A GAME UNDER WAY OR OVER — see `in_play_reason`. The board
         # refuses `live` and `started` rows itself (`likely.admissible`),
         # and it read those flags off a slate that, on 2026-09-14, had
@@ -1364,6 +1375,13 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     if abs(odds) < 100 or (pick.get("book") or "").lower() == "proxy":
         return 0
     if in_play_reason(pick):
+        return 0
+    # NOR A HITTER ON A PROJECTED LINEUP — the rule `log_most_likely` keeps
+    # (the site audit, 2026-09-24). The first pick journaled is the day's
+    # pick, so a scratch here would lock the day to a bet that can never
+    # grade: baseball has no absent-player rule. Not journaled, not locked;
+    # the day's pick is the first one whose card has posted.
+    if pick.get("lineup_confirmed") is False:
         return 0
     # The NFL settles on its WEEK label and every other sport on the
     # game's own date — the same fork `log_most_likely` makes, and for
