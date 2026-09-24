@@ -1160,6 +1160,11 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # one refactor away from not being one.
         if r.get("reserve"):
             continue
+        # A LOCKED PICK WAS JOURNALED WHEN IT WENT UP (likely.hard_exit);
+        # carried forward at its posted number it is the same bet, never a
+        # second one.
+        if r.get("locked"):
+            continue
         # A PROJECTED LINEUP IS A GUESS ABOUT WHO PLAYS, NOT A BET — the rule
         # `_journal_longshot_rows` has kept since 2026-07-26 (31 of 58 long
         # shots were projected hitters who sat) and the edge book keeps

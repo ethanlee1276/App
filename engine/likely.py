@@ -327,6 +327,78 @@ def _seat(r: dict, held) -> float:
 HELD_SEATS = 2
 
 
+#: A POSTED PICK IS LOCKED UNTIL KICKOFF. Ethan, 2026-09-25, the day
+#: after HELD_SEATS shipped: "it still seems like picks on the most likley
+#: board and page are dissapearing and new props are replacing them. we
+#: cant let that be a plroblem ever ever ever."
+#:
+#: The seat hold stopped newcomers pushing a pick off; a posted pick still
+#: left the moment it failed ANY bar on a later build. And this board picks
+#: its numbers near the bars on purpose — the likeliest rung no heavier
+#: than -250 is the one nearest -250 — so the commonest exit was a price
+#: tick: -245 to -255 and the pick was gone, when the market moving toward
+#: it is the book agreeing with it. The model easing a point under the
+#: floor, one refresh with no book quoting it, a Questionable tag, the
+#: market's seat ceiling: all of them took a pick a reader had seen.
+#:
+#: Now only a HARD exit removes a posted pick: its game started, or the
+#: player is ruled Out / Doubtful / inactive — the bet cannot be made as
+#: posted. Anything else (`lock_note` names each) keeps it on the board
+#: exactly as it went up — its number, its price, its chance — with a line
+#: saying what has changed since. The bars decide what is POSTED; nothing
+#: but the game and the player's availability decides what is TAKEN DOWN.
+#: The journal already holds the posted row (`ledger.log_most_likely`), so
+#: the board and the record now say the same thing until the game.
+PLAYABLE_STATUSES = ("questionable", "probable", "day-to-day", "day to day", "gtd")
+
+
+def hard_exit(why: str) -> bool:
+    """Is this a reason a POSTED pick may leave the board? Its game has
+    started, or its player is ruled out (not merely questionable)."""
+    lw = str(why or "").strip().lower()
+    if "under way" in lw or "already been played" in lw or "game started" in lw:
+        return True
+    if lw.startswith("listed "):
+        status = lw[len("listed "):].split(" —")[0].split(" -")[0].strip()
+        return status not in PLAYABLE_STATUSES
+    return False
+
+
+def lock_note(why: str) -> str:
+    """What has changed since a locked pick went up, in the reader's words."""
+    lw = str(why or "").strip().lower()
+    if "floor" in lw or lw == "no probability":
+        return (f"Our chance has eased under {round(MIN_PROB * 100)}% since this went up. "
+                "It stays on the board as posted.")
+    if lw.startswith("heavier than"):
+        return (f"The price has moved past −{abs(HEAVIEST_PRICE)} since this went up — "
+                "the books like it more now. Shown at the price we posted.")
+    if lw.startswith("listed "):
+        return f"Now {why.split(' —')[0].lower()} — check his status before kickoff."
+    if ("no real" in lw or "no book" in lw or "no longer offered" in lw
+            or "could not have posted" in lw or "could post" in lw or "price is missing" in lw):
+        return "No book is quoting this number right now. Shown at the price we posted."
+    if "disagrees with" in lw:
+        return "The market has moved away from our number since this went up."
+    if "number moved" in lw:
+        return "The books have moved the line since this went up. This is the number we posted."
+    if "likelier pick" in lw:
+        return ""
+    return f"Changed since this went up: {reader_reason(why)}."
+
+
+def _locked(h: dict, why: str, stamp: str) -> dict:
+    """A posted pick carried forward as it went up."""
+    r = dict(h)
+    r.pop("out_at", None)
+    r.pop("out_why", None)
+    r["locked"] = True
+    r["lock_why"] = why
+    r["lock_note"] = lock_note(why)
+    r["locked_at"] = h.get("locked_at") or stamp
+    return r
+
+
 def _posted(r: dict, held) -> bool:
     """Was this pick on the board last build (not a ghost held out)?"""
     if not held:
@@ -2462,6 +2534,28 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         cut.extend(r for r in out if id(r) not in seated)
     outranked = {hold_key(r) for r in out if id(r) not in seated}
     out = players + games
+    # THE LOCK (PLAYABLE_STATUSES above): every pick posted last build is
+    # on this board until its game or its player's status takes it down.
+    locked_n: dict = {}
+    if held:
+        for i, r in enumerate(out):
+            h = held.get(hold_key(r))
+            if (h is not None and not h.get("out_at") and h.get("line") is not None
+                    and r.get("line") is not None
+                    and not _same_number(r.get("side"), r.get("line"),
+                                         (h.get("side"), h.get("line")))):
+                out[i] = _locked(h, "number moved", stamp)
+                locked_n["number moved"] = locked_n.get("number moved", 0) + 1
+        present = {hold_key(r) for r in out}
+        for k, h in held.items():
+            if k in present or h.get("out_at") or _kicked_off(h, stamp):
+                continue
+            why = why_left.get(k) or ("a likelier pick took its seat"
+                                      if k in outranked else "no longer offered")
+            if hard_exit(why):
+                continue
+            out.append(_locked(h, why, stamp))
+            locked_n[why] = locked_n.get(why, 0) + 1
     _stamp_hold(out, held, stamp)
     # PROBABILITY ORDER, AS PRINTED. Rows the page shows at the same whole
     # percent sit longest-held first, so two picks a tenth of a point apart
@@ -2475,6 +2569,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     if turnover is not None:
         turnover.update(_turnover(out, held, why_left, outranked, stamp,
                                   by_margin))
+        # How many posted picks the lock alone kept up, and why each
+        # would otherwise have left.
+        turnover["locked"] = locked_n
         turnover["day"] = _day_tally(prev_day, turnover, fresh=not held)
         turnover["earlier"] = _earlier(prev_earlier, turnover.get("held_out"),
                                        out, stamp)

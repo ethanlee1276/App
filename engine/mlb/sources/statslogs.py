@@ -324,9 +324,15 @@ def build_live_slate(date: str, season: int | None = None,
                 pks.append(g["gamePk"])
             park = _park_of(g)
             if park in PARK_COORDS:
-                parks.append(park)
+                parks.append((park, g.get("gameDate")))
     fetch_many(fetch_boxscore, [(pk,) for pk in pks])
-    fetch_many(park_weather, [(p,) for p in parks])
+    # One forecast per park per DAY — the cache file's own key — so two
+    # games at one park (a doubleheader, a fixture) never race the same URL.
+    from ...nflwx import utc_day as _utc_day
+    one: dict = {}
+    for park, first in parks:
+        one.setdefault((park, _utc_day(first) if first else ""), (park, first))
+    fetch_many(park_weather, list(one.values()))
 
     games: list[MLBGame] = []
     props: list[MLBProp] = []
@@ -364,7 +370,7 @@ def build_live_slate(date: str, season: int | None = None,
             weather = None
             if park in PARK_COORDS:
                 try:
-                    weather = park_weather(park)
+                    weather = park_weather(park, g.get("gameDate"))
                 except DataUnavailable:
                     weather = None
             box = {}

@@ -223,7 +223,7 @@ def test_build_live_slate_offline():
     sl.fetch_boxscore = lambda pk: BOX
     sl.fetch_person = lambda pid: PERSON
     sl.fetch_game_log = lambda pid, group, season: (PLOG if group == "pitching" else LOG)
-    sl.park_weather = lambda key: __import__("engine.mlb.models", fromlist=["MLBWeather"]).MLBWeather()
+    sl.park_weather = lambda *a: __import__("engine.mlb.models", fromlist=["MLBWeather"]).MLBWeather()
     try:
         slate = sl.build_live_slate("2024-06-20", hitter_markets=(TOTAL_BASES,))
         assert slate.games and slate.props

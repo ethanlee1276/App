@@ -113,18 +113,26 @@ def test_the_market_grows_to_a_ceiling_and_no_further():
 def test_a_pick_that_comes_off_is_listed_until_kickoff_with_why():
     b0, t0 = _board([_row("Josh Jacobs")], now="2026-09-23T20:00:00Z")
     assert _players(b0) == {"Josh Jacobs"}
-    # Thursday lunchtime: the final injury report lists him questionable.
-    b1, t1 = _board([_row("Josh Jacobs", injury_status="Questionable")],
-                    previous=_prev(b0, t0), now="2026-09-24T16:00:00Z")
+    # Wednesday night: listed questionable. A posted pick STAYS (the lock,
+    # 2026-09-25) — questionable players mostly play — and says so.
+    bq, tq = _board([_row("Josh Jacobs", injury_status="Questionable")],
+                    previous=_prev(b0, t0), now="2026-09-24T02:00:00Z")
+    (q,) = bq
+    assert q["locked"] and q["lock_note"] == "Now listed questionable — check his status before kickoff."
+    assert tq["earlier"] == []
+    # Thursday lunchtime: the final injury report rules him out. That is a
+    # bet that cannot be made as posted, and it comes down.
+    b1, t1 = _board([_row("Josh Jacobs", injury_status="Out")],
+                    previous=_prev(bq, tq), now="2026-09-24T16:00:00Z")
     assert not b1
     (e,) = t1["earlier"]
     assert e["player"] == "Josh Jacobs" and e["out_at"] == "2026-09-24T16:00:00Z"
     assert e["since"] == "2026-09-23T20:00:00Z", "when it went up rides along"
-    assert e["out_note"] == "listed Questionable — held until inactives confirm"
+    assert e["out_note"] == "listed Out — held until inactives confirm"
     assert e["odds"] and e["market_label"] == "Rush Yards", "enough to draw the row a reader saw"
     # Three hours later — long past the hour a ghost is kept to come back
     # as the same pick — it is still listed.
-    b2, t2 = _board([_row("Josh Jacobs", injury_status="Questionable")],
+    b2, t2 = _board([_row("Josh Jacobs", injury_status="Out")],
                     previous=_prev(b1, t1), now="2026-09-24T19:00:00Z")
     assert [x["player"] for x in t2["earlier"]] == ["Josh Jacobs"]
     # 8:16 PM Eastern: his game has started, and the list lets him go.
@@ -183,7 +191,8 @@ def test_the_page_lists_them_on_the_board_and_on_the_game():
 
 
 def test_the_board_note_says_how_a_pick_stays_up():
-    assert "a likelier pick is\n    added beside it, never swapped in" in APP
+    assert "A likelier\n    pick is added beside it, never swapped in" in APP
+    assert "Only its game starting or\n    its player being ruled out takes it down" in APP
     assert "a pick 3 points\n    likelier takes the seat" not in APP
 
 

@@ -65,7 +65,7 @@ def _slate(box):
              sl.projected_lineup)
     sl._get_json = lambda url, cache, ttl=600: sched
     sl.fetch_boxscore = lambda pk: box
-    sl.park_weather = lambda key: None
+    sl.park_weather = lambda *a: None
     sl.projected_lineup = lambda tid, date: []
     try:
         return sl.build_live_slate("2026-08-14", hitter_markets=())

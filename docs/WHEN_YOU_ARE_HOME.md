@@ -70,6 +70,18 @@ sudo journalctl -u qellys --since "3 hours ago" | grep -i "matchup scan"
 Want: `Matchup scan: N of M game(s).` with N close to M. A line saying
 `matchup scan skipped` is the one to send me.
 
+**Weather, re-measured at the right hour** (2026-09-25). NFL forecasts
+were read four hours before kickoff until today (Eastern read as UTC),
+and the table that turns a forecast's wind into a cut was measured the
+same way. The sandbox can't reach Open-Meteo's archive; the droplet can:
+
+```bash
+cd /srv/qellys && python3 wxfit.py --scale 2>&1 | tail -12
+```
+
+Want: either `the board's forecast table matches` (nothing to change) or
+`CHANGE —` followed by new numbers. Send me the tail either way.
+
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.
 

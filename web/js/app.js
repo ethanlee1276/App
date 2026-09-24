@@ -6073,12 +6073,16 @@ function gameCard(g) {
   // — and this card printed "60°F · 6mph" for it, all season, as a
   // forecast. Same rule for every league now, and college's honest
   // sentence becomes the shared one rather than its own special case.
+  // A FORECAST FOR KICKOFF, said so (Ethan, 2026-09-25: a Sunday game
+  // showing 62° read as the weather there now). The model reads the same
+  // kickoff-hour forecast — never the conditions today.
   const wxKnown = !!(w.dome || w.measured || g.weather_checked);
   const cond = nba ? "Indoor hardwood"
     : w.dome ? "Indoor"
     : !g.weather || !wxKnown
       ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
-      : `${Math.round(w.temp_f)}°F · ${windTxt}`;
+      : `${Math.round(w.temp_f)}°F · ${windTxt}${
+        ["live", "final"].includes((g.live || {}).state) ? "" : " · kickoff forecast"}`;
   // `sub` is now MARKUP, not text, because two of its parts are drawn icons.
   // It used to be handed to escapeHtml at the point of use, which is correct
   // for text and turns an <svg> into visible angle brackets — the exact
@@ -6246,7 +6250,7 @@ function gameCard(g) {
         // "A real reading" was tested as `temp_f != null`, which the
         // engine's own prior satisfies; it is tested properly now.
         !isLive && !isFinal && w.temp_f != null && wxKnown && !w.dome && !nba
-          ? `<span class="game-wx-chip">${Math.round(w.temp_f)}° · ${Math.round(w.wind_mph || 0)}mph</span>` : ""}${picksChip}</div>
+          ? `<span class="game-wx-chip" title="Forecast for kickoff">${Math.round(w.temp_f)}° · ${Math.round(w.wind_mph || 0)}mph</span>` : ""}${picksChip}</div>
       <div class="game-info">
         <div class="gc-teams">
           <span class="gc-side">${teamMark(g.away, 30)}${score("away")}</span>
@@ -8043,6 +8047,7 @@ function likelyCard(r) {
           <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
           <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}${reserveChip(r) ? ` ${reserveChip(r)}` : ""}</div>
+          ${r.locked && r.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} ${escapeHtml(r.lock_note)}</div>` : ""}
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
         </div>
@@ -8115,9 +8120,24 @@ function boardGuide(key) {
    two pages end up disagreeing about the same player, which is the
    failure `_likely_board`'s header warns about one level up. */
 
-//: Rows per shelf on the main page. Three is a phone screen's worth and
-//: leaves the full board a reason to exist.
-const LIKELY_TOP_N = 3;
+//: Rows per shelf on the main page. Five (2026-09-25, Ethan: "I don't
+//: want to have to click through 18 different pages to find a bunch of
+//: different picks. It should all be on our main dashboard page").
+const LIKELY_TOP_N = 5;
+
+/* THE MAIN PAGE KEEPS WHAT IT SHOWED. Ranked by probability, a shelf
+   capped at a few rows let every likelier newcomer push a pick a reader
+   had already seen off the dashboard — "new props are replacing them"
+   (Ethan, 2026-09-25) — even with the pick still on the board. So the
+   dashboard orders a shelf by when each pick went up (`since`), earliest
+   first, likeliest first among picks that went up together: a pick
+   stays in its place until its game, and a new one takes the next free
+   place. The full board keeps the probability order. */
+function shelfByPosted(rows) {
+  return rows.slice().sort((a, b) =>
+    String(a.since || "~").localeCompare(String(b.since || "~"))
+    || Number(b.model_prob || 0) - Number(a.model_prob || 0));
+}
 
 /* The Quick Tools row — doors to rooms that already exist, not new
    features wearing buttons. It has moved three times in one day and
@@ -8167,6 +8187,10 @@ function renderQuickTools() {
    us is doing overs, but we have no unders." */
 const LIKELY_HEAVIEST_PRICE = -250;
 function showableLikelyRow(r) {
+  // A LOCKED PICK IS NEVER HIDDEN (engine/likely.hard_exit, 2026-09-25):
+  // it went up, and it stays shown as posted until its game — the price
+  // and shrink checks below are for what gets POSTED, not what comes down.
+  if ((r || {}).locked) return true;
   // A row the ENGINE refused as a modelling or data error, caught here
   // too. `likely.engine_credible` drops these at build time; this gate
   // exists for the board file that predates a rule, which is exactly
@@ -8308,7 +8332,7 @@ function renderLikelyTop() {
   if (!host) return;
   const shelves = boardShelves()
     .map((sh) => ({ ...sh,
-                    rows: (sh.rows || []).filter(showableLikelyRow)
+                    rows: shelfByPosted((sh.rows || []).filter(showableLikelyRow))
                       .slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
   if (!shelves.length) {
@@ -8334,7 +8358,7 @@ function renderLikelyTop() {
   const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
   host.innerHTML = `
     <div class="section-title">Qellys’ top picks
-      <span class="sub">— who’s most likely to hit · ranked by probability, not by price</span>
+      <span class="sub">— who’s most likely to hit · each pick stays here until its game</span>
     </div>
     ${boardGuide("most_likely")}
     <div class="likely-top">${shelves.map((sh) => `
@@ -8387,10 +8411,11 @@ function renderLikely() {
       <span class="bg-how">and what it turned down</span></summary>
     <p>Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
-    shown on every row and is never what ordered it. A pick keeps its number
-    and stays up until its game unless something about it changes — an injury,
-    the price, the model’s chance, the book pulling it; a likelier pick is
-    added beside it, never swapped in. Each row says how long it has been up,
+    shown on every row and is never what ordered it. A pick that goes up stays
+    up until its game, at the number it went up at. Only its game starting or
+    its player being ruled out takes it down; if the price, the books or our
+    chance moves, it stays and says “Locked in” with what changed. A likelier
+    pick is added beside it, never swapped in. Each row says how long it has been up,
     and a pick that came off is listed at the bottom with the reason.${rankOnly ? ` ${rankOnly}
     ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
     price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</p>
@@ -8515,6 +8540,9 @@ function likelyTagsHTML(r) {
   /* How long it has been up, first (engine/likely.HOLD_MARGIN). */
   const held = likelyHeldTag(r);
   if (held) tags.push(held);
+  /* LOCKED IN (engine/likely.hard_exit): up as posted, whatever has moved
+     since; the note says what did. */
+  if (r.locked) tags.push(["Locked in", "", r.lock_note || "Stays up as posted until its game"]);
   if (r.kind === "game") return tagsOut(tags);
   const qb = r.qb_card, mate = r.mate_card;
   if (qb && qb.headline) {
@@ -10485,6 +10513,7 @@ function renderPropPage() {
               escapeHtml(r.market_label || r.market || "")}${lk && v.book
               ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
             ${lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
+            ${lk && lk.locked && lk.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} Locked in — ${escapeHtml(lk.lock_note)}</div>` : ""}
             ${/* Priced from the sharp book's own pair at this line
                   (betting.sharp_anchor_for) — on every NFL row since it
                   was built and drawn nowhere until the audit's L-7. */
@@ -11401,7 +11430,8 @@ function renderGamePage() {
     : w.dome ? "Indoor"
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
-    : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
+    : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
+      isLive || isFinal ? "" : " · kickoff forecast"}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal });
   const gpScripts = gameScriptsHTML(g, likelies);
   const score = (side) => (live.home_score != null && (isLive || isFinal))

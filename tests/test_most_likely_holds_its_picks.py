@@ -102,11 +102,16 @@ def test_a_number_that_fails_a_bar_moves_then_goes_back_when_it_clears():
     assert _pick(b0)["line"] == 40.5 and _pick(b0)["since"] == "2026-09-27T14:00:00Z"
     b1 = _board([_row(ladder=capped)], previous=b0, now="2026-09-27T14:15:00Z")
     p1 = _pick(b1)
-    assert (p1["line"], p1["odds"]) == (50.5, -160), "-255 is past the cap: the bar is not relaxed"
-    assert p1["since"] == "2026-09-27T14:00:00Z" and p1["first_line"] == 40.5
+    # THE LOCK (likely.hard_exit, 2026-09-25): a posted pick is not moved
+    # to another number because its own ticked past -250 — it stays as it
+    # went up, and says what changed. The bar still decides what is POSTED.
+    assert (p1["line"], p1["odds"]) == (40.5, _pick(b0)["odds"]) and p1["locked"], \
+        "the number and price it went up at, not the rung the tick put it on"
+    assert "moved the line" in p1["lock_note"]
+    assert p1["since"] == "2026-09-27T14:00:00Z"
     b2 = _board([_row()], previous=b1, now="2026-09-27T14:30:00Z")
     p2 = _pick(b2)
-    assert p2["line"] == 40.5, "back to the number it went up at, not left where the tick put it"
+    assert p2["line"] == 40.5 and not p2.get("locked"), "clears again: an ordinary row once more"
     assert p2["since"] == "2026-09-27T14:00:00Z" and "first_line" not in p2
 
 
@@ -168,13 +173,16 @@ def test_the_turnover_says_why_each_pick_left():
     board = _board([_row(), _row(player="Floor", hit_prob=0.3, raw_prob=0.3, alt_lines=[]),
                     _row(player="C Back")], previous=prev, turnover=turn)
     assert _pick(board)["since"] == "2026-09-27T10:00:00Z"
-    assert turn["previous"] == 4 and turn["held"] == 1 and turn["new"] == 1
-    assert turn["left"] == {"its game started": 1, "no longer offered": 1,
-                            "under the likelihood floor": 1}, turn["left"]
-    ghosts = {g["player"]: g for g in turn["held_out"]}
-    assert set(ghosts) == {"Gone", "Floor"}, "a started game is not held out"
-    assert ghosts["Gone"]["out_at"] == NOW and ghosts["Gone"]["since"] == "2026-09-27T10:00:00Z"
-    assert turn["day"]["builds"] == 1 and turn["day"]["held"] == 1
+    # Only its game starting takes a posted pick down now; the other two
+    # stay up, locked, and the turnover says what would have taken them.
+    assert turn["previous"] == 4 and turn["held"] == 3 and turn["new"] == 1
+    assert turn["left"] == {"its game started": 1}, turn["left"]
+    assert turn["locked"] == {"no longer offered": 1, "under the likelihood floor": 1}
+    locked = {r["player"]: r for r in board if r.get("locked")}
+    assert set(locked) == {"Gone", "Floor"}
+    assert locked["Gone"]["since"] == "2026-09-27T10:00:00Z", "still up since it went up"
+    assert turn["held_out"] == [], "nothing that left can come back: nothing left"
+    assert turn["day"]["builds"] == 1 and turn["day"]["held"] == 3
 
 
 def test_a_pick_held_out_returns_inside_the_hour_and_not_after():

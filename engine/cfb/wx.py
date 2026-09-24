@@ -87,13 +87,11 @@ def fetch_forecast(lat: float, lon: float, date: str) -> dict:
                       ttl=FORECAST_TTL)
 
 
-def pick_hour(payload: dict, kickoff_iso: str) -> dict | None:
-    """The hourly reading nearest kickoff — pure.
-
-    Kickoff is ESPN's UTC ISO string; the payload is requested in UTC,
-    so the join is string arithmetic on hours, no timezone re-derivation
-    to get wrong twice.
-    """
+def nearest_hour(payload: dict, kickoff_iso: str) -> int | None:
+    """The index of the hourly reading nearest kickoff, or None when none
+    sits within two hours — pure. Shared with MLB's first-pitch forecast
+    (engine/mlb/sources/mlbstats.park_weather), which reads its own
+    columns at the same hour."""
     hourly = (payload or {}).get("hourly") or {}
     times = hourly.get("time") or []
     if not times or len(kickoff_iso) < 13:
@@ -102,6 +100,16 @@ def pick_hour(payload: dict, kickoff_iso: str) -> dict | None:
         ko = _dt.datetime.fromisoformat(kickoff_iso.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # TO UTC BEFORE THE ZONE IS DROPPED. The board's hours are UTC; an
+    # Eastern kickoff ("…T13:00:00-04:00", fatigue.kickoff_instant — the
+    # NFL's) had its offset stripped and was read as 13:00 UTC, so every
+    # NFL forecast was the reading four hours BEFORE kickoff (five after
+    # daylight saving ends): 9 a.m. for a 1 p.m. game, 4 p.m. for Sunday
+    # night. Found 2026-09-25 checking Ethan's "weather on a day the game
+    # isn't on" question. College's kickoffs are UTC already and read the
+    # same either way.
+    if ko.tzinfo is not None:
+        ko = ko.astimezone(_dt.timezone.utc)
     ko = ko.replace(tzinfo=None)
     best, gap = None, None
     for i, t in enumerate(times):
@@ -114,6 +122,20 @@ def pick_hour(payload: dict, kickoff_iso: str) -> dict | None:
             best, gap = i, d
     if best is None or gap is None or gap > 2 * 3600:
         return None                    # nothing within two hours is a miss
+    return best
+
+
+def pick_hour(payload: dict, kickoff_iso: str) -> dict | None:
+    """The hourly reading nearest kickoff — pure.
+
+    Kickoff is an ISO instant in any zone (ESPN's UTC, the NFL's Eastern);
+    the payload is requested in UTC and the kickoff is turned to UTC
+    before the two are compared (`nearest_hour`).
+    """
+    best = nearest_hour(payload, kickoff_iso)
+    if best is None:
+        return None
+    hourly = (payload or {}).get("hourly") or {}
     def col(key):
         vals = hourly.get(key) or []
         return vals[best] if best < len(vals) else None

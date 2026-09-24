@@ -367,36 +367,63 @@ def _get_json(url: str, cache_name: str, ttl: int = 900, timeout: int = 30) -> d
         ) from exc
 
 
-def park_weather(park_key: str) -> MLBWeather:
-    """Current conditions at a park via Open-Meteo. Wind direction relative to
-    the park (in/out/cross) needs each park's orientation — until that's
-    mapped, direction defaults to 'cross' (neutral)."""
+def park_weather(park_key: str, first_pitch: str | None = None) -> MLBWeather:
+    """The forecast at a park for the hour of FIRST PITCH, via Open-Meteo.
+
+    WHAT THIS WAS: Open-Meteo's ``current=`` reading — the conditions at
+    the park at the moment the board was built, cached per park and not
+    per game. A 7:05 game priced at ten in the morning was priced on the
+    morning's temperature and wind, and a slate built the night before
+    on the night before's. Ethan, 2026-09-25: "if it's raining today and
+    a game is on Sunday, the model isn't displaying picks like it will be
+    raining on that day." It was, here.
+
+    Now the hourly board for the UTC day of first pitch (the schedule's
+    own ``gameDate``, an ISO instant) and the hour nearest it, cached per
+    park per day. No first pitch, or no hour within two of it, is the
+    neutral default — the same answer a refused forecast gets — never a
+    reading taken at another time.
+
+    Wind direction relative to the park (in/out/cross) needs each park's
+    orientation; unmapped parks read 'cross' (neutral)."""
     coords = PARK_COORDS.get(park_key)
-    if not coords:
+    if not coords or not first_pitch:
         return MLBWeather()
+    from ...cfb.wx import nearest_hour
+    from ...nflwx import utc_day
+    day = utc_day(first_pitch)
     lat, lon = coords
     url = (f"{METEO_BASE}?latitude={lat}&longitude={lon}"
-           f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,"
+           f"&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,"
            f"wind_direction_10m,precipitation_probability"
-           f"&temperature_unit=fahrenheit&wind_speed_unit=mph")
-    data = _get_json(url, f"meteo_{park_key}.json", ttl=1800)
-    cur = data.get("current", {})
+           f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
+           f"&timezone=UTC&start_date={day}&end_date={day}")
+    data = _get_json(url, f"meteo_{park_key}_{day}.json", ttl=1800)
+    i = nearest_hour(data, str(first_pitch))
+    if i is None:
+        return MLBWeather()
+    hourly = data.get("hourly") or {}
 
-    # Convert the absolute wind bearing to park-relative in/out/cross when we
-    # know the park's orientation; otherwise fall back to neutral "cross".
+    def col(key):
+        vals = hourly.get(key) or []
+        return vals[i] if i < len(vals) else None
+    temp, wind = col("temperature_2m"), col("wind_speed_10m")
+    if temp is None or wind is None:
+        return MLBWeather()
     cf_bearing = PARK_ORIENTATION.get(park_key)
-    if cf_bearing is not None and "wind_direction_10m" in cur:
-        wind_dir = relative_wind(float(cur["wind_direction_10m"]), cf_bearing)
+    bearing = col("wind_direction_10m")
+    if cf_bearing is not None and bearing is not None:
+        wind_dir = relative_wind(float(bearing), cf_bearing)
     else:
         wind_dir = "cross"
-
+    hum, precip = col("relative_humidity_2m"), col("precipitation_probability")
     return MLBWeather(
         roof_closed=False,
-        temp_f=float(cur.get("temperature_2m", 72.0)),
-        wind_mph=float(cur.get("wind_speed_10m", 6.0)),
+        temp_f=float(temp),
+        wind_mph=float(wind),
         wind_dir_rel=wind_dir,
-        humidity=float(cur.get("relative_humidity_2m", 50.0)) / 100.0,
-        precip_chance=float(cur.get("precipitation_probability", 0.0)) / 100.0,
+        humidity=float(hum if hum is not None else 50.0) / 100.0,
+        precip_chance=float(precip or 0.0) / 100.0,
     )
 
 
@@ -568,7 +595,7 @@ def build_games(date: str, with_weather: bool = True) -> list[MLBGame]:
             weather = MLBWeather()
             if with_weather and park in PARK_COORDS:
                 try:
-                    weather = park_weather(park)
+                    weather = park_weather(park, g.get("gameDate"))
                 except DataUnavailable:
                     pass
 

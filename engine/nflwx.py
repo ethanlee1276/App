@@ -60,6 +60,20 @@ def _default_forecast(lat, lon, date, kickoff):
     return pick_hour(fetch_forecast(lat, lon, date), kickoff)
 
 
+def utc_day(instant: str) -> str:
+    """The UTC calendar day of an ISO instant ("2026-09-27T20:20:00-04:00"
+    is 2026-09-28 in UTC); the string's own first ten characters when it
+    carries no zone."""
+    import datetime as _dt
+    try:
+        t = _dt.datetime.fromisoformat(str(instant).replace("Z", "+00:00"))
+    except ValueError:
+        return str(instant)[:10]
+    if t.tzinfo is None:
+        return str(instant)[:10]
+    return t.astimezone(_dt.timezone.utc).date().isoformat()
+
+
 def coords_for(team: str):
     """The stadium the HOME team plays in, or None.
 
@@ -136,7 +150,10 @@ def attach(games, forecast=None) -> int:
         if not when:
             continue
         try:
-            got = fc(coords[0], coords[1], str(when)[:10], when)
+            # The board is requested in UTC, so it is asked for the UTC
+            # DAY of kickoff: a Sunday-night game kicks off on Monday UTC,
+            # and Sunday's board has no hour within two of it.
+            got = fc(coords[0], coords[1], utc_day(when), when)
         except Exception:                                 # noqa: BLE001
             got = None                     # a refused forecast is a miss
         if not got:
