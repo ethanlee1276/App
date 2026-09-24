@@ -538,7 +538,7 @@ def build_defense_profiles(rows: list[dict], upto_week: int,
     """
     from engine import defensevs as DV
     prior = DV.ratings(prior_rows, 99) if prior_rows else None
-    rated = DV.ratings(rows, upto_week, prior=prior)
+    rated = DV.ratings(rows, upto_week, prior=prior, week_one_prior=True)
     profiles = {}
     for team, r in rated.items():
         f = lambda s: float(r[s]["factor"])                           # noqa: E731

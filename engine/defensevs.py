@@ -102,17 +102,33 @@ def allowed_by_game(rows: list[dict], upto_week: int) -> dict:
 
 
 def ratings(rows: list[dict], upto_week: int, shrink: float = SHRINK_GAMES,
-            prior: dict | None = None) -> dict:
+            prior: dict | None = None, week_one_prior: bool = False) -> dict:
     """{defence: {stat: {"pg", "league", "raw", "factor", "rank", "of", "games"}}}.
 
     ``rank`` is 1 for the defence that gives up the MOST of that stat per
     game (the softest), so "ranked 1st" always reads as the best matchup.
     ``prior`` (last season's ratings) is where a defence starts from
-    instead of the league average, when it is given."""
+    instead of the league average, when it is given.
+
+    ``week_one_prior``: with no game played yet, the rating IS the prior
+    (the shrink below at n = 0), marked ``games`` 0 and ``last_season``.
+    This returned {} — no matchup at all in week 1 — while weeks 2 and 3
+    ran about 90% on the same prior. Found on Ethan's Saints @ Lions,
+    2026 week 1 (2026-09-24): Detroit had given up the 8th-most receiving
+    yards to receivers and the model applied nothing. MEASURED before it
+    was turned on: last season's rating alone, on weeks 1-3 of 2022-2025,
+    held out a season at a time — QB passing yards b 0.89 ± 0.33, WR
+    yards 1.05 ± 0.35, WR catches 1.06 ± 0.30, RB catches 0.60 ± 0.28,
+    each positive in three of four held-out seasons (TE and RB rushing
+    were flat, and keep the transfer the full season measured). NFL
+    only: college's week one, after a portal winter, is unmeasured."""
     games = allowed_by_game(rows, upto_week)
     per_game = {t: {s: sum(g[s] for g in wk.values()) / len(wk) for s in STATS}
                 for t, wk in games.items() if wk}
     if not per_game:
+        if week_one_prior and prior:
+            return {t: {s: dict(v, games=0, last_season=True) for s, v in r.items()}
+                    for t, r in prior.items()}
         return {}
     league = {s: sum(p[s] for p in per_game.values()) / len(per_game) for s in STATS}
     out: dict = {}
@@ -271,8 +287,13 @@ def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) ->
     games = r["games"]
     card = {"opponent": team, "stat": words, "per_game": round(float(r["pg"]), 1),
             "league": round(float(r["league"]), 1), "rank": r["rank"], "of": r["of"], "games": games,
-            "text": (f"{team} allow {num(r['pg'])} {words} a game, the {_ord(r['rank'])}-most "
+            "text": (f"{team} allowed {num(r['pg'])} {words} a game last season, the "
+                     f"{_ord(r['rank'])}-most (league {num(r['league'])}); no game yet this season"
+                     if r.get("last_season") else
+                     f"{team} allow {num(r['pg'])} {words} a game, the {_ord(r['rank'])}-most "
                      f"(league {num(r['league'])}), over {games} game{'s' if games != 1 else ''}")}
+    if r.get("last_season"):
+        card["last_season"] = True
     t = (rating or {}).get(also) if also and also != stat else None
     if t:
         card["also"] = {"stat": STATS[also][2], "per_game": round(float(t["pg"]), 2), "rank": t["rank"],
@@ -345,7 +366,11 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
     if soft or factor <= 0.97:
         n = int(r.get("games") or 0)
         now_soft = float(r.get("raw") or 1.0) >= 1.0
-        if now_soft == soft:
+        if r.get("last_season"):
+            reason = (f"{'Soft' if soft else 'Tough'} matchup — last season {name} allowed the "
+                      + (f"{_ord(r['rank'])}-most" if soft else f"{_ord(r['of'] - r['rank'] + 1)}-fewest")
+                      + f" {words} ({num(r['pg'])} a game) (×{factor:.2f}); no game yet this season")
+        elif now_soft == soft:
             reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
                       f"({num(r['pg'])} a game) (×{factor:.2f})" if soft else
                       f"Tough matchup — {name} allow the {_ord(r['of'] - r['rank'] + 1)}-fewest "

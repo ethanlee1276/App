@@ -97,11 +97,26 @@ def test_a_starter_out_is_named_and_the_next_man_up_steps_in():
 def test_a_receiver_read_counts_its_reasons():
     ratings = {"GB": {"off": {}, "def": {}}, "ATL": {"off": {}, "def": {"passing": {"rank": 24}}}}
     room = G.coverage_room("ATL", CHART["ATL"], DEF, None, [_inj("A.J. Terrell", "ATL", "CB", "IR")])
-    x = G.player_read("Christian Watson", "GB", "ATL", "WR",
-                      usage={"tgt_share": 0.29, "targets_pg": 9.5, "games": 2}, ratings=ratings,
-                      room=room, scheme={"zone": 0.67, "man": 0.33},
-                      split={"zone": [41, 467.0], "man": [21, 180.0]}, tackling={}, line_out=[], mates_out=[])
-    assert x["read"] == "breakout" and len(x["pro"]) == 5 and not x["con"]
+    kw = dict(usage={"tgt_share": 0.29, "targets_pg": 9.5, "games": 2}, ratings=ratings, room=room,
+              scheme={"zone": 0.67, "man": 0.33}, split={"zone": [41, 467.0], "man": [21, 180.0]},
+              tackling={}, line_out=[], mates_out=[])
+    # Without the model's matchup numbers (college), the unit rank counts.
+    x = G.player_read("Christian Watson", "GB", "ATL", "WR", **kw)
+    assert x["read"] == "good" and len(x["pro"]) == 2 and not x["con"]
+    # The corner out, the soft spot and the zone split are shown, not
+    # counted: four seasons found no lift in any of them (engine/scanfit).
+    assert len(x["notes"]) == 3 and any("Terrell" in n for n in x["notes"])
+    # With them (the NFL), the model's own matchup rating and the points the
+    # lines expect count, and the unit rank is a note.
+    allowed = {"qb_pass_yds": {"rank": 3, "of": 32, "pg": 251.0},
+               "wr_rec_yds": {"rank": 16, "of": 32, "pg": 140.0}}
+    y = G.player_read("Christian Watson", "GB", "ATL", "WR", allowed=allowed, points=28.25,
+                      line_words="−7 at home, total 49.5", **kw)
+    assert y["read"] == "breakout", y
+    assert "ATL gives up the 3rd-most passing yards (251 a game)" in y["pro"]
+    assert "The lines expect GB to score about 28 (−7 at home, total 49.5)" in y["pro"]
+    assert "ATL's pass defense ranks 24th" in y["notes"]
+    assert "anytime_td" in y["lean"], "a read points at the touchdown too"
     thin = G.player_read("Kyle Pitts", "ATL", "GB", "TE", usage={"tgt_share": 0.07, "games": 2},
                          ratings={"GB": {"def": {"passing": {"rank": 3}}}}, room={}, scheme={},
                          split={}, tackling={}, line_out=[], mates_out=[])
@@ -211,7 +226,7 @@ def test_the_game_page_draws_the_scan():
     fn = fn[:fn.index("\n}\n")]
     assert "(d.scan_reads || {})[`${away}@${home}`]" in fn
     assert "d.locked && d.locked.scan_reads" in fn, "a signed-out reader is told what is behind the paywall"
-    assert "None of this moves our numbers" in fn and "2022–2025" in fn, "the page says what was measured"
+    assert "moves none of them" in fn and "2022–2025" in fn, "the page says what was measured"
     for sel in (".ms-unit {", ".ms-rank.good {", ".ms-read.breakout {", ".ms-why li.pro::marker {", ".ms-micro {"):
         assert sel in CSS, sel
 

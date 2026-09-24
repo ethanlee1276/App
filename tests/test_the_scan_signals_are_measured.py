@@ -95,7 +95,7 @@ def test_the_page_says_what_the_measurement_found():
                if mean > 0 and sum(v > 0 for v in held) >= len(held) - 1 and abs(b) / se >= F.MIN_T]
     assert passing == []
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    assert "none predicted a player’s line beyond the form and defense-versus-position" in app
+    assert "none predicted a player’s line beyond those" in app and "also\n      noticed" in app
     ask = open(os.path.join(ROOT, "engine", "askbot.py"), encoding="utf-8").read()
     assert "moves none of our numbers" in ask
 

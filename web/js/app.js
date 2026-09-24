@@ -11232,9 +11232,11 @@ function scanReadHTML(x) {
         <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
         <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></div>
-      ${(x.pro || []).length || (x.con || []).length ? `<ul class="ms-why">
+      ${(x.pro || []).length || (x.con || []).length || (x.notes || []).length ? `<ul class="ms-why">
         ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
-        ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}</ul>` : ""}
+        ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted, no lift when tested</li>
+          ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>` : ""}
     </div>`;
 }
 
@@ -11308,11 +11310,13 @@ function matchupScanHTML(g) {
       <p class="ms-note">The markets the good reads point at, as this board prices them, likeliest first.</p>
       ${micro.map(scanMicroHTML).join("")}</div>` : ""}
     <p class="ms-note">${adjusted
-      ? `None of this moves our numbers. We tested every reason here against the NFL’s 2022–2025 games —
-      pressure, pass and run defense, missed tackles, a starting corner out, a receiver’s zone-or-man split —
-      and none predicted a player’s line beyond the form and defense-versus-position the model already
-      prices. Read it as how the game sets up, not as an edge. Coverage and pass-rush counts are this
-      season’s (Pro Football Reference, via nflverse); man and zone rates come from the newest season charted.`
+      ? `Each player read counts only what the model measured to predict: his share of the work, what this
+      defense gives up in the bet’s own stat, and the points the lines expect his team to score — the same
+      numbers already inside our chances, so the scan moves none of them. The rest is shown as “also
+      noticed”: pressure, unit rankings, missed tackles, a starting corner out, a receiver’s zone-or-man
+      split. Tested against the NFL’s 2022–2025 games, none predicted a player’s line beyond those. Coverage
+      and pass-rush counts are this season’s (Pro Football Reference, via nflverse); man and zone rates come
+      from the newest season charted.`
       : `None of this moves our numbers: the NFL versions of these reasons, tested against four seasons,
       added nothing to the model, and the college ones have not been measured. College units are
       CollegeFootballData’s advanced season numbers with garbage time taken out; there is no public

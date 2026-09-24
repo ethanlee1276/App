@@ -11809,6 +11809,12 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .ms-why { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--text-dim); }
 .ms-why li.pro::marker { content: "+  "; color: var(--good); font-weight: 800; }
 .ms-why li.con::marker { content: "−  "; color: var(--bad); font-weight: 800; }
+/* Noticed, shown, not counted: four seasons found no lift in these
+   (engine/scanfit), so they carry no sign and sit under the ones that do. */
+.ms-why li.note { font-style: italic; }
+.ms-why li.note::marker { content: "·  "; color: var(--text-dim); font-weight: 800; }
+.ms-why-k { list-style: none; margin: 4px 0 0 -18px; font-size: var(--fs-xs); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-dim); }
 .ms-micro { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: center;
   padding: 8px 0; border-top: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
 .ms-micro-tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }

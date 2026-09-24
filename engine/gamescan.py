@@ -393,22 +393,113 @@ def _label(score: int, volume: bool) -> tuple[str, str]:
     return key, dict(READS)[key]
 
 
+#: Implied points (from the posted spread and total) that make a
+#: scoring spot, and a thin one. The league's average is about 22.5.
+POINTS_HIGH, POINTS_LOW = 26.5, 18.5
+
+#: Position words for the defence-vs-position lines.
+_POS_WORDS = {"wr": "wide receivers", "te": "tight ends", "rb": "running backs", "qb": "quarterbacks"}
+
+
+def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
+    """(+1 soft / −1 stingy / 0, sentence) for what ``opp`` gives up in
+    one engine/defensevs stat — rank 1 gives up the most."""
+    r = (allowed or {}).get(stat) or {}
+    rank, n = r.get("rank"), r.get("of") or n_default
+    if not rank:
+        return 0, ""
+    words = D_STAT_WORDS.get(stat, stat)
+    q = max(1, round(n * 0.25))
+    pg = r.get("pg")
+    per = f" ({pg:.1f} a game)" if isinstance(pg, (int, float)) and pg < 10 else (
+        f" ({pg:.0f} a game)" if isinstance(pg, (int, float)) else "")
+    if rank <= q:
+        return 1, f"{opp} gives up the {_ord(rank)}-most {words}{per}"
+    if rank > n - q:
+        return -1, f"{opp} gives up the {_ord(n - rank + 1)}-fewest {words}{per}"
+    return 0, ""
+
+
+#: The words for engine/defensevs.STATS, as a sentence says them.
+D_STAT_WORDS = {"qb_pass_yds": "passing yards", "qb_pass_td": "passing touchdowns",
+                "wr_rec_yds": "receiving yards to wide receivers", "wr_rec": "catches to wide receivers",
+                "wr_td": "touchdowns to wide receivers", "te_rec_yds": "receiving yards to tight ends",
+                "te_rec": "catches to tight ends", "te_td": "touchdowns to tight ends",
+                "rb_rush_yds": "rushing yards to running backs", "rb_rec_yds": "receiving yards to running backs",
+                "rb_rec": "catches to running backs", "rb_td": "touchdowns to running backs"}
+
+
 def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 ratings: dict, room: dict | None, scheme: dict | None,
                 split: dict | None, tackling: dict | None, line_out: list | None,
-                mates_out: list | None, n_teams: int = 32) -> dict:
+                mates_out: list | None, n_teams: int = 32,
+                allowed: dict | None = None, points: float | None = None,
+                line_words: str = "") -> dict:
     """One player's read against this opponent: a label, the reasons for
-    and against it (each a sentence a reader can check), and the markets
-    the read points at. Counted, not weighed: every reason is one point
-    either way, so the label never says more than its reasons do."""
+    and against it (each a sentence a reader can check), what else the
+    scan noticed, and the markets the read points at.
+
+    THE LABEL COUNTS ONLY WHAT WAS MEASURED TO PREDICT (engine/scanfit,
+    2026-09-24). Ethan's Saints @ Lions week 1 is the case that showed
+    it: the first version counted Detroit's pass-defense EPA (12th — dead
+    average) and read Olave, St. Brown, Gibbs and LaPorta all NEUTRAL,
+    while ignoring the two things the model actually prices with — what a
+    defence gives up in the stat the bet is on (engine/defensevs, at the
+    rating MODEL_STAT names) and how many points the lines expect the
+    team to score (Detroit: 28, from −7 and 49.5 — the touchdown model's
+    own input). Four seasons found no lift in the rest — corners out,
+    zone-or-man splits, pressure, missed tackles, unit EPA — so they
+    are `notes`: shown, never counted. Where no defence-vs-position
+    rating is given (college), the unit ranks stand in, as before.
+
+    Counted, not weighed: every counted reason is one point either way."""
     group = _POS_GROUP.get((pos or "").upper(), "")
     u = usage or {}
-    pro, con = [], []
+    pro, con, notes = [], [], []
     o, d = ratings.get(team) or {}, ratings.get(opp) or {}
+    measured = bool(allowed)
     lean: list = []
     volume = False
+
+    def dvp(market):
+        """The model's own matchup line for this market, counted."""
+        from . import defensevs as _D
+        stat = _D.model_stat((pos or "").upper(), market)
+        if not stat or not _D.transfer((pos or "").upper(), market):
+            return
+        sign, text = _allowed_line(allowed, stat, opp, n_teams)
+        if sign > 0:
+            pro.append(text)
+        elif sign < 0:
+            con.append(text)
+
+    def own_position(stats):
+        """What the defence gives up to HIS position — shown, not counted:
+        in the NFL only the overall rating predicted (defensevs.MODEL_STAT)."""
+        for stat in stats:
+            sign, text = _allowed_line(allowed, stat, opp, n_teams)
+            if sign:
+                notes.append(text)
+
+    def scoring():
+        if points is None:
+            return
+        where = f" ({line_words})" if line_words else ""
+        if points >= POINTS_HIGH:
+            pro.append(f"The lines expect {team} to score about {points:.0f}{where}")
+        elif points <= POINTS_LOW:
+            con.append(f"The lines expect {team} to score only about {points:.0f}{where}")
+
+    def unit(side_rank, words, soft_is_pro=True):
+        """A unit rank: counted where nothing measured stands in (college),
+        a note where it was measured and found flat (the NFL)."""
+        if _weak(side_rank, n_teams):
+            (notes if measured else (pro if soft_is_pro else con)).append(f"{words} ranks {_ord(side_rank)}")
+        elif _strong(side_rank, n_teams):
+            (notes if measured else (con if soft_is_pro else pro)).append(f"{words} ranks {_ord(side_rank)}")
+
     if group in ("wr", "te"):
-        lean = ["receptions", "rec_yds"]
+        lean = ["receptions", "rec_yds", "anytime_td"]
         share = u.get("tgt_share") or 0.0
         if share >= 0.22:
             volume = True
@@ -417,18 +508,18 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             con.append(f"Only {share:.0%} of the targets so far")
         elif share >= 0.18:
             volume = True
-        pr = _rank(d, "def", "passing")
-        if _weak(pr, n_teams):
-            pro.append(f"{opp}'s pass defense ranks {_ord(pr)}")
-        elif _strong(pr, n_teams):
-            con.append(f"{opp}'s pass defense ranks {_ord(pr)}")
+        if measured:
+            dvp("rec_yds")
+            own_position((f"{group}_rec_yds", f"{group}_td"))
+        unit(_rank(d, "def", "passing"), f"{opp}'s pass defense")
+        scoring()
         for m in (room or {}).get("missing") or []:
-            pro.append(f"{m['name']}, {opp}'s starting {m['spot']}, is {m['status'].lower()}")
+            notes.append(f"{m['name']}, {opp}'s starting {m['spot']}, is {m['status'].lower()}")
         soft = (room or {}).get("weakest")
         if soft:
             c = next(x for x in room["corners"] if x["name"] == soft)
-            pro.append(f"{soft} ({c['spot']}) has allowed a {c['rating']:.0f} passer rating "
-                       f"on {c['targets']} targets")
+            notes.append(f"{soft} ({c['spot']}) has allowed a {c['rating']:.0f} passer rating "
+                         f"on {c['targets']} targets")
         sch, sp = scheme or {}, split or {}
         look = ("zone" if (sch.get("zone") or 0) >= 0.65 else
                 "man" if (sch.get("man") or 0) >= 0.35 else None)
@@ -437,32 +528,29 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             (tl, yl), (to, yo) = sp[look], sp[other]
             if tl >= 12 and to >= 8:
                 a, b = yl / tl, yo / to
-                if b and a / b >= 1.2:
-                    pro.append(f"Averaged {a:.1f} yards a target against {look} last season "
-                               f"({b:.1f} against {other}); {opp} played {look} "
-                               f"{sch[look]:.0%} of the time")
-                elif b and a / b <= 0.8:
-                    con.append(f"Averaged {a:.1f} yards a target against {look} last season "
-                               f"({b:.1f} against {other}); {opp} played {look} "
-                               f"{sch[look]:.0%} of the time")
+                if b and (a / b >= 1.2 or a / b <= 0.8):
+                    notes.append(f"Averaged {a:.1f} yards a target against {look} last season "
+                                 f"({b:.1f} against {other}); {opp} played {look} "
+                                 f"{sch[look]:.0%} of the time")
         for m in mates_out or []:
             pro.append(f"{m} is out — his targets are open")
     elif group == "rb":
-        lean = ["rush_yds"]
+        lean = ["rush_yds", "anytime_td"]
         cs = u.get("carry_share") or 0.0
         if cs >= 0.55:
             volume = True
             pro.append(f"Takes {cs:.0%} of the carries ({u.get('carries_pg', 0):g} a game)")
         elif u.get("games") and cs < 0.30:
             con.append(f"Only {cs:.0%} of the carries so far")
+        if measured:
+            dvp("rush_yds")
+            dvp("anytime_td")
         rr = _rank(d, "def", "rushing")
-        if _weak(rr, n_teams):
-            pro.append(f"{opp}'s run defense ranks {_ord(rr)}")
-        elif _strong(rr, n_teams):
-            con.append(f"{opp}'s run defense ranks {_ord(rr)}")
+        unit(rr, f"{opp}'s run defense")
         own = _rank(o, "off", "rushing")
         if own and own >= round(n_teams * 0.78):
-            con.append(f"{team}'s run game ranks {_ord(own)}")
+            (notes if measured else con).append(f"{team}'s run game ranks {_ord(own)}")
+        scoring()
         # College only: how the lines meet. A front that stuffs runs at
         # the line against a line that cannot get push.
         stuff, push = _rank(d, "def", "stuff"), _rank(o, "off", "line")
@@ -474,34 +562,36 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                        f"that stops few runs at the line ({_ord(stuff)})")
         mt = (tackling or {}).get(opp)
         if mt is not None and mt >= 0.10:
-            pro.append(f"{opp} misses {mt:.0%} of its tackles")
+            notes.append(f"{opp} misses {mt:.0%} of its tackles")
         if (u.get("targets_pg") or 0) >= 3.5:
             lean.append("rec_yds")
-            if rr and rr <= round(n_teams * 0.31):
+            stingy = (_allowed_line(allowed, "rb_rush_yds", opp, n_teams)[0] < 0 if measured
+                      else bool(rr and rr <= round(n_teams * 0.31)))
+            if stingy:
                 pro.append(f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
                            f"the ball to him through the air")
         for m in mates_out or []:
             pro.append(f"{m} is out — his carries are open")
     elif group == "qb":
-        lean = ["pass_yds"]
+        lean = ["pass_yds", "pass_td"]
         volume = True
-        pr = _rank(d, "def", "passing")
-        if _weak(pr, n_teams):
-            pro.append(f"{opp}'s pass defense ranks {_ord(pr)}")
-        elif _strong(pr, n_teams):
-            con.append(f"{opp}'s pass defense ranks {_ord(pr)}")
+        if measured:
+            dvp("pass_yds")
+        unit(_rank(d, "def", "passing"), f"{opp}'s pass defense")
+        scoring()
         havoc = _rank(d, "def", "havoc")
         if _strong(havoc, n_teams):
             con.append(f"{opp}'s defense ranks {_ord(havoc)} in havoc — sacks, tackles for loss, takeaways")
         rush, prot = _rank(d, "def", "pressure"), _rank(o, "off", "pressure")
         if _strong(rush, n_teams) and ((prot and prot >= round(n_teams * 0.62)) or line_out):
-            con.append(f"{opp}'s pass rush ranks {_ord(rush)}"
-                       + (f" and {team} is without {', '.join(line_out)}" if line_out
-                          else f" against the {_ord(prot)} pass protection"))
+            (notes if measured else con).append(
+                f"{opp}'s pass rush ranks {_ord(rush)}"
+                + (f" and {team} is without {', '.join(line_out)}" if line_out
+                   else f" against the {_ord(prot)} pass protection"))
     score = len(pro) - len(con)
     key, label = _label(score, volume)
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
-            "read": key, "label": label, "pro": pro, "con": con, "lean": lean,
+            "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
                                             "snap_pct", "games") if u.get(k) is not None}}
@@ -548,8 +638,14 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               defenders_last: dict | None = None, tackling: dict | None = None,
               schemes: dict | None = None, splits: dict | None = None,
               usage: dict | None = None, injuries=None, props: list | None = None,
-              scheme_season=None, opponent_adjusted: bool = True) -> dict:
-    """The whole scan for one game (see the block comment above)."""
+              scheme_season=None, opponent_adjusted: bool = True,
+              allowed: dict | None = None, points: dict | None = None,
+              line_words: dict | None = None) -> dict:
+    """The whole scan for one game (see the block comment above).
+
+    ``allowed`` is {defence: engine/defensevs ratings} — the model's own
+    matchup numbers; ``points`` and ``line_words`` are {team: implied
+    points} and {team: "−7 at home, total 49.5"} from the posted lines."""
     usage = usage or {}
     n_teams = max(2, len(ratings or {}))
     gap_bar = max(EDGE_GAP, round(n_teams * 0.3))
@@ -608,7 +704,9 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
             split=(splits or {}).get((team, _abbr(name))),
-            tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams))
+            tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams,
+            allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
+            line_words=(line_words or {}).get(team, "")))
     order = {k: i for i, (k, _) in enumerate(READS)}
     reads.sort(key=lambda x: (order[x["read"]], -len(x["pro"])))
     # THE PROPS UNDER THE MICROSCOPE: the markets each good read points
@@ -620,7 +718,9 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         x = good.get((r.get("team"), r.get("player")))
         if not x or (r.get("market") or "") not in x["lean"]:
             continue
-        p, odds = r.get("hit_prob"), r.get("odds")
+        # Scorer rows carry the model's chance as `model_prob`.
+        p = r.get("hit_prob") if r.get("hit_prob") is not None else r.get("model_prob")
+        odds = r.get("odds")
         micro.append({"player": r.get("player"), "team": r.get("team"), "market": r.get("market"),
                       "market_label": r.get("market_label") or r.get("market"),
                       "side": r.get("side"), "line": r.get("line"), "odds": odds,
@@ -688,6 +788,38 @@ def scheme_tables(season: int) -> dict:
     return {"season": None, "defense": {}, "receivers": {}}
 
 
+def implied_points(g) -> tuple[dict, dict]:
+    """({team: points the lines expect}, {team: the lines in words}) from a
+    slate game's POSTED spread and total — ({}, {}) when either is a
+    placeholder (models.Game.total_is_posted), because a default 44 is
+    not the market's opinion of anything."""
+    if g is None or not (getattr(g, "total_is_posted", False) and getattr(g, "spread_is_posted", False)):
+        return {}, {}
+    total, spread = float(g.total), float(g.spread)          # home spread; negative = home favoured
+    fmt = lambda x: "pick'em" if x == 0 else f"{x:+g}".replace("-", "−")   # noqa: E731
+    return ({g.home: (total - spread) / 2, g.away: (total + spread) / 2},
+            {g.home: f"{fmt(spread)} at home, total {total:g}",
+             g.away: f"{fmt(-spread)} on the road, total {total:g}"})
+
+
+def scan_props(result: dict) -> list[dict]:
+    """Every priced row the reads can point at: the stat props, and the
+    scorer rows the touchdown board carries (the watch shelf, the long
+    shots and the Most Likely scorers), once each."""
+    rows = list(result.get("recommendations") or [])
+    rows += [r for r in (result.get("longshot_watch") or []) + (result.get("long_shots") or [])
+             + [x for x in (result.get("most_likely") or []) if x.get("market") == "anytime_td"]]
+    seen, out = set(), []
+    for r in rows:
+        k = (r.get("player"), r.get("market"), str(r.get("side") or "").lower()
+             .replace("yes", "over"), r.get("line") if r.get("market") != "anytime_td" else None)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(r)
+    return out
+
+
 def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                conn=None) -> int:
     """Hang a ``scan`` on every game of an NFL board. Reads only what is
@@ -716,8 +848,12 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
             return []
     usage = usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
                         before_week=week)
-    props = list(result.get("recommendations") or [])
+    props = scan_props(result)
     by_pair = {frozenset((g.home, g.away)): g for g in getattr(slate, "games", []) or []}
+    # THE MODEL'S OWN MATCHUP NUMBERS, off the slate the board was priced
+    # from — the defence-vs-position ratings every prop was multiplied by.
+    allowed = {t: getattr(getattr(tm, "defense", None), "ratings", None) or {}
+               for t, tm in (getattr(slate, "teams", None) or {}).items()}
     # THE READS AND THE PROPS ARE THE PAID HALF. The units, corners,
     # scheme and injuries are facts anyone can look up, and ride on the
     # game; who we think shines, and at what probability, rides in
@@ -730,12 +866,14 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         g = by_pair.get(frozenset((home, away)))
         gprops = [r for r in props if r.get("team") in (home, away)
                   and r.get("opponent") in (home, away)]
+        pts, words = implied_points(g)
         scan = scan_game(home, away, ratings=ratings, charts=charts,
                          defenders_now=defenders_now, defenders_last=defenders_last,
                          tackling=tackling, schemes=sch.get("defense") or {},
                          splits=splits, usage=usage,
                          injuries=getattr(g, "injuries", None) or [],
-                         props=gprops, scheme_season=sch.get("season"))
+                         props=gprops, scheme_season=sch.get("season"),
+                         allowed=allowed, points=pts, line_words=words)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan

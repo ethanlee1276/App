@@ -985,7 +985,9 @@ def scan_facts(board: dict, g: dict) -> dict:
     reads = ((board or {}).get("scan_reads") or {}).get(f"{g.get('away')}@{g.get('home')}") or {}
     players = [{"player": x.get("player"), "team": x.get("team"), "pos": x.get("pos"),
                 "read": x.get("read"), "for": (x.get("pro") or [])[:4],
-                "against": (x.get("con") or [])[:3]}
+                "against": (x.get("con") or [])[:3],
+                # Shown on the page, tested and found to add nothing: context, never a reason.
+                "noticed_not_counted": (x.get("notes") or [])[:3]}
                for x in (reads.get("players") or [])[:SCAN_READS]]
     if players:
         out["player_reads"] = players
