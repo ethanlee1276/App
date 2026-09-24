@@ -277,9 +277,19 @@ SYSTEM = (
     "parlays, the vig, closing line value, units); any payout, implied chance, parlay "
     "price or hold comes from odds_calc, never from your own arithmetic.\n"
     "hit_prob, model_prob and win_prob are our model's chance the bet wins; fair_prob "
-    "and implied_prob are what the price implies; edge is the gap. A row with "
-    "recommended false or no stake is not one of our bets: say so. Our record is real "
-    "and includes losses; quote it straight.\n"
+    "and implied_prob are what the price implies; edge is the gap. The site publishes "
+    "picks on two boards, and every row says which (board) and whether the site shows "
+    "it as one of our picks (our_pick). The Most Likely board (most_likely) ranks the "
+    "bets likeliest to hit by our chance, with its tier (Top, Strong, Solid, Slight): "
+    "every row on it is one of our picks, shown on the site and graded on the Record "
+    "page, so never call one not recommended or info only (one with lean true is shown on "
+    "the board as a lean, and say so). The Edge board "
+    "(edge) is bets where our number beats the price: a row there is our pick only when "
+    "our_pick is true; otherwise it is a price we passed on, and say so. Long shots are "
+    "picks at long odds. When asked what we like for a game, a team or a player, give "
+    "every our_pick row for it from both boards, naming the board and the tier, before "
+    "anything we passed on. Our record is real and includes losses; quote it "
+    "straight.\n"
     f"Lead with the direct answer in one sentence, on its own line, then the one or two "
     f"facts behind it. At most {WORDS} words, plain words a first-time bettor understands. "
     "It is read on a phone, so lay it out: a list (a slate, picks, a ranking, facts side "
@@ -611,6 +621,56 @@ def compact(row: dict) -> dict:
     return out
 
 
+#: Which board a list is, in the words the site uses: the Edge board
+#: (recommendations, game_bets), the Most Likely board, the long shots.
+BOARD_OF = {"recommendations": "edge", "game_bets": "edge", "most_likely": "most_likely",
+            "long_shots": "long_shots", "longshot_watch": "long_shots"}
+
+#: The Edge board's verdicts on a price, which on a Most Likely row read as
+#: "don't bet this" about a question that board never asks — and one of
+#: them ends "info only", which is how Ask came to call a 69% Top pick the
+#: site shows "an info-only lean, not a staked bet" (Ethan, 2026-09-24).
+EDGE_VERDICT = re.compile(r"edge on |sharp-anchor value|never beaten the .* close|info only|"
+                          r"no credible market edge|pass, not a lean|below confidence threshold|"
+                          r"edge too small|is under the tier|disagrees with the market", re.I)
+
+
+def tier(p) -> str:
+    """The site's word for a Most Likely chance (web/js/app.js probTier)."""
+    try:
+        n = round(float(p) * 100)
+    except (TypeError, ValueError):
+        return ""
+    return ("Top" if n >= 68 else "Strong" if n >= 63 else "Solid" if n >= 58
+            else "Slight" if n >= 52 else "")
+
+
+def tagged(lst: str, row: dict, shown: dict) -> dict:
+    """A row as Ask is handed it, saying which board it is on and whether
+    the site shows it as one of our picks. Every Most Likely row is; an
+    Edge row is when it is recommended; a long shot is."""
+    board = BOARD_OF.get(lst, lst)
+    out = {"board": board,
+           "our_pick": board in ("most_likely", "long_shots") or bool(row.get("recommended")),
+           **shown}
+    if board == "most_likely":
+        for k in ("recommended", "stake_units", "edge", "grade"):
+            out.pop(k, None)
+        t = tier(row.get("model_prob"))
+        if t:
+            out["tier"] = t
+        if row.get("ranked") is False:
+            out["lean"] = True              # the board shows it as a lean, not ranked
+        for k in ("reasons", "warnings"):
+            if isinstance(out.get(k), list):
+                kept = [x for x in out[k] if not EDGE_VERDICT.search(str(x))]
+                if kept:
+                    out[k] = kept
+                else:
+                    out.pop(k)
+    return out
+
+
 def qb_line(card: dict) -> str:
     """A starting quarterback out (engine/qbchange.card) as one sentence."""
     return ". ".join(x for x in (card.get("headline"), card.get("detail"), card.get("note")) if x)
@@ -673,6 +733,45 @@ def _caps(question: str) -> set[str]:
     return set(re.findall(r"\b[A-Z]{2,4}\b", str(question or "")))
 
 
+#: Leagues whose teams a question can name in words (the book-facing name
+#: tables, engine/teamdex.name_map). College is left to its codes: 134
+#: schools' city and mascot words collide with everything.
+NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba")
+_TEAM_WORDS: dict = {}
+
+
+def _team_words(sport: str) -> dict:
+    """``{"green bay": "GB", "packers": "GB", ...}`` for a league: each
+    team's full name, its nickname and its city, keeping only words that
+    name exactly one team ("new york" and "sox" name two, and are dropped)."""
+    if sport in _TEAM_WORDS:
+        return _TEAM_WORDS[sport]
+    from engine import teamdex
+    seen: dict = {}
+    for full, code in (teamdex.name_map(sport) or {}).items():
+        w = _norm(full).split()
+        keys = {" ".join(w), w[-1], " ".join(w[:-1])}
+        if len(w) >= 3:
+            keys |= {" ".join(w[-2:]), " ".join(w[:-2])}
+        for k in keys:
+            if len(k) >= 4:
+                seen.setdefault(k, set()).add(code)
+    out = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
+    _TEAM_WORDS[sport] = out
+    return out
+
+
+def named_teams(question: str, sport: str) -> set[str]:
+    """The team codes a question names in words — "Green Bay vs falcons" is
+    GB and ATL (Ethan, 2026-09-24: Ask answered a question about that game
+    with none of the two picks the site showed for it, because only a code
+    typed in capitals ever matched a team)."""
+    if sport not in NAMED_LEAGUES:
+        return set()
+    q = _norm(question)
+    return {code for k, code in _team_words(sport).items() if f" {k} " in q}
+
+
 def asked_in_full(boards, question: str) -> set[str]:
     """The players a question names in full, on any of these boards."""
     q = _norm(question)
@@ -698,7 +797,7 @@ def _namesake(r: dict, matched: list[str], asked: set[str]) -> bool:
 
 def _hits(board: dict, question: str, asked: set[str] | None = None) -> list[tuple]:
     q = _norm(question)
-    caps = _caps(question)
+    caps = _caps(question) | named_teams(question, str((board or {}).get("sport") or "nfl"))
     asked = asked_in_full([board], question) if asked is None else asked
     hits = []
     for lst, r in _rows(board):
@@ -710,7 +809,11 @@ def _hits(board: dict, question: str, asked: set[str] | None = None) -> list[tup
             best = 1                                # a team code: the weakest match
         if best:
             hits.append((best, lst, r))
-    hits.sort(key=lambda h: -h[0])
+    # A game named by its teams touches every row in it; the ones the site
+    # shows as picks go first, so the cap never drops a pick for a pass.
+    rank = lambda h: (0 if h[1] == "most_likely" else 1 if h[2].get("recommended")  # noqa: E731
+                      else 2 if h[1] == "long_shots" else 3)
+    hits.sort(key=lambda h: (-h[0], rank(h)))
     seen, out, weak = set(), [], 0
     for h in hits:
         r = h[2]
@@ -778,7 +881,7 @@ def _shown(hit: tuple) -> dict:
     alone — its game logs are the priciest part of a question, and they
     earn their place only when the player or pick was asked about."""
     score, lst, r = hit
-    return {"board": lst, **(detailed(r) if score > 1 else compact(r))}
+    return tagged(lst, r, detailed(r) if score > 1 else compact(r))
 
 
 def matched_rows(board: dict, question: str) -> list[dict]:
@@ -793,6 +896,9 @@ def _game_label(g: dict) -> str:
 def game_facts(board: dict, g: dict) -> dict:
     """One game as the model needs it: lines, weather, the stadium, rest."""
     out = {"game": _game_label(g)}
+    # Said outright: "ATL @ GB" once came back as "GB @ ATL" (2026-09-24).
+    if g.get("home") and g.get("away"):
+        out["home_team"], out["away_team"] = g["home"], g["away"]
     for k in ("date", "kickoff", "spread", "favorite", "total", "home_ml", "away_ml", "roof"):
         if g.get(k) not in (None, ""):
             out[k] = g[k]
@@ -839,7 +945,7 @@ def game_facts(board: dict, g: dict) -> dict:
 
 def named_games(board: dict, question: str, rows: list[dict]) -> list[dict]:
     """The games the question or its rows are about."""
-    want = _caps(question)
+    want = _caps(question) | named_teams(question, str((board or {}).get("sport") or "nfl"))
     for r in rows:
         want |= _codes(r)
     q = _norm(question)
@@ -868,9 +974,10 @@ def board_summary(board: dict, boards: dict | None = None) -> dict:
     out = {
         "sport": b.get("sport") or "",
         "date": b.get("date") or "",
-        "our_bets": [compact(r) for r in recs[:SUMMARY_EACH]],
+        "our_bets": [tagged("recommendations", r, compact(r)) for r in recs[:SUMMARY_EACH]],
         "our_bets_total": len(recs),
-        "most_likely": [compact(r) for r in likely[:SUMMARY_EACH]],
+        "most_likely": [tagged("most_likely", r, compact(r)) for r in likely[:SUMMARY_EACH]],
+        "most_likely_total": len(likely),
         "games": [_game_label(g) for g in (b.get("games") or [])[:20] if isinstance(g, dict)],
     }
     qbs = _qb_changes(b)
@@ -1404,12 +1511,16 @@ def tonight_board(boards: dict, query: str, sport: str = "", prefer: str = "") -
             codes |= set(T.resolve(part, s)[:1])
         rows = [_shown(h) for h in hits]
         seen = {id(h[2]) for h in hits}
-        for lst, r in _rows(b):
+        # The site's picks for the team before the prices it passed on,
+        # so the cap below never drops a pick for a pass.
+        rest = sorted(((lst, r) for lst, r in _rows(b) if id(r) not in seen and codes & _codes(r)),
+                      key=lambda x: (0 if x[0] == "most_likely" else 1 if x[1].get("recommended")
+                                     else 2 if x[0] == "long_shots" else 3))
+        for lst, r in rest:
             if len(rows) >= MAX_MATCHED:
                 break
-            if id(r) not in seen and codes & _codes(r):
-                seen.add(id(r))
-                rows.append({"board": lst, **compact(r)})
+            seen.add(id(r))
+            rows.append(tagged(lst, r, compact(r)))
         games = [game_facts(b, g) for g in b.get("games") or [] if isinstance(g, dict)
                  and {str(g.get("home") or ""), str(g.get("away") or "")} & codes][:MAX_GAMES]
         if rows or games:
@@ -1618,7 +1729,9 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
         for r in src:
             key = {"best_bets": r.get("edge"), "most_likely": r.get("model_prob") or r.get("hit_prob"),
                    "long_shots": r.get("edge"), "game_lines": r.get("win_prob") or r.get("edge")}[kind]
-            rows.append((-(float(key) if isinstance(key, (int, float)) else 0), {"league": s, **compact(r)}))
+            lst = {"best_bets": "recommendations", "game_lines": "game_bets"}.get(kind, kind)
+            rows.append((-(float(key) if isinstance(key, (int, float)) else 0),
+                         {"league": s, **tagged(lst, r, compact(r))}))
     rows.sort(key=lambda x: x[0])
     if not rows:
         return {"found": False, "note": f"no {kind.replace('_', ' ')} on tonight's boards"
@@ -2944,7 +3057,15 @@ def answer_key(board_name: str, board: dict, pick: str, question: str,
     """Every league's build is in the key: an answer may come from any board."""
     stamp = ("|".join(f"{s}:{_ex.board_stamp(b)}" for s, b in sorted(boards.items()))
              if boards else _ex.board_stamp(board))
+    # And the instructions it was answered under: a rule that changes (the
+    # two boards, 2026-09-24) must not be answered by the old rule's text.
+    stamp += "|p:" + _prompt_tag()
     return "\t".join((board_name, stamp, pick or "", cache_words(question)))
+
+
+def _prompt_tag() -> str:
+    import hashlib
+    return hashlib.sha256(SYSTEM.encode("utf-8")).hexdigest()[:10]
 
 
 def cached_answer(key: str) -> dict | None:
