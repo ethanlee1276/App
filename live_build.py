@@ -293,7 +293,11 @@ def main() -> None:
     ap.add_argument("--date", default="")
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
-    date = args.date or _dt.date.today().isoformat()
+    # THE BASEBALL DAY, NOT THE CALENDAR ONE (engine/slateday): at midnight
+    # this fetched tomorrow's schedule while the board and its bets were
+    # still on tonight's, so every game past 12 Eastern left the Live tab.
+    from engine.slateday import baseball_day
+    date = args.date or baseball_day()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     # Deep files beside the scoreboard, pruned on the same clock — one

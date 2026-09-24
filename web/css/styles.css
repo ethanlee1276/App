@@ -11396,3 +11396,10 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 @media (max-width: 480px) {
   .wl-item { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* Finished bets on the Live tab: one closed line under the list (2026-09-24). */
+.lv-done { border-top: var(--hairline) solid var(--border-soft); }
+.lv-done > summary { cursor: pointer; padding: 10px 14px; font-size: var(--fs-sm);
+  color: var(--text-mute); list-style-position: inside; }
+.lv-done-note { margin-left: 8px; font-size: var(--fs-xs); opacity: .8; }
+.lv-done[open] > summary { color: var(--text); }

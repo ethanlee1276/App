@@ -608,8 +608,10 @@ def _slate_date() -> str:
     other clock-sensitive module already gives (engine/streak.py,
     engine/oddsbudget.py): compute the hour where the games are."""
     from zoneinfo import ZoneInfo
-    now = _dt.datetime.now(ZoneInfo("America/New_York"))
-    return (now - _dt.timedelta(hours=5)).date().isoformat()
+    from engine.slateday import baseball_day
+    # The rule lives in engine/slateday so the live scoreboard and the
+    # sweat read the same day as the board (they did not until 2026-09-24).
+    return baseball_day(_dt.datetime.now(ZoneInfo("America/New_York")))
 
 
 def refresh_mlb(quiet: bool = False) -> bool:

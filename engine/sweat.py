@@ -188,7 +188,10 @@ def build(today: str | None = None, quiet: bool = True,
     from .mlb.sources.live import fetch_live
     from .mlb.sources.statslogs import fetch_boxscore, fetch_linescore
 
-    day = today or _dt.date.today().isoformat()
+    # The board's own day (engine/slateday) — the calendar one turned over
+    # at midnight with west-coast games still on.
+    from .slateday import baseball_day
+    day = today or baseball_day()
     board = _load(gate.board_source(Path("web/data/mlb_recommendations.json")))
     if not board or board.get("locked"):
         return None

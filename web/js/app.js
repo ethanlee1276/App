@@ -4773,16 +4773,29 @@ function renderLivePicks() {
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
         </div>`)(ridingAttrs(r), placedStamp(r.placed_at));
+  /* A FINISHED GAME'S BET IS NOT A LIVE ONE. Ethan, 2026-09-24: "bets
+     will still be on the live page even when the game is over." They
+     stayed in the list until the overnight settle, mixed in with games
+     still being played. A bet whose game has ended now drops out of the
+     list into one closed line under it — the count, and the rows a tap
+     away — where it waits for the official box score; it is graded on
+     the Results page, not here. */
   const panel = (list, title, sub, empty, foot) => {
-    const n = list.filter((r) => r.phase === "live").length;
+    const active = list.filter((r) => r.phase !== "final");
+    const done = list.filter((r) => r.phase === "final");
+    const n = active.filter((r) => r.phase === "live").length;
     return `
     <div class="section-title">${n
         ? `<span style="color:var(--bad)">${icon('dot')}</span>`
         : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title} ${leagueTag}
       <span class="sub">— ${sub}</span></div>
     <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
-      ${list.length ? list.map(rowHTML).join("")
-        : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${empty}</p>`}
+      ${active.length ? active.map(rowHTML).join("")
+        : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${done.length
+            ? `Nothing still playing — every bet on this card has finished.` : empty}</p>`}
+      ${done.length ? `<details class="lv-done"><summary>${done.length} finished — waiting on
+          the official result<span class="lv-done-note">graded on the Results page</span></summary>
+          ${done.map(rowHTML).join("")}</details>` : ""}
       <p class="list-note" style="padding:8px 14px 10px;margin:0">${foot}</p>
     </div>`;
   };
