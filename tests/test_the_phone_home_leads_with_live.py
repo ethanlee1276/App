@@ -121,8 +121,8 @@ def test_the_order_is_hero_live_riding_tonight_record_zeno():
     got = _node("return HOME_DECK_ORDER;")
     if got is None:
         print("  SKIP node not installed"); return
-    # The picks before the games since the site audit, 2026-09-24 (Visual 1).
-    assert got == ["hero", "live", "riding", "likely", "edge", "games", "record", "zeno", "tools"], got
+    # The stadiums before the picks — Ethan put them back on top, 2026-09-24.
+    assert got == ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"], got
     skel = _fn("deckSkeleton")
     assert "host.innerHTML = HOME_DECK_ORDER.map((k) =>" in skel
     assert '`<section class="hd-sec" data-sec="${k}" hidden></section>`' in skel

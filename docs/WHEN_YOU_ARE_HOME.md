@@ -173,8 +173,8 @@ or no · 18 — rename the grade words or keep them · 20 — the postal
 address for the footer. And from the site audit (`docs/AUDIT_2026-09-24.md`):
 H-3 — are 100 Ask questions per account and $25 a day the right
 ceilings? (Everything else in that audit is fixed — your "fix all
-issues": the brighter red and lighter grey, the picks leading Home with
-the tool tiles under them, the shorter game strip and the one Share
+issues": the brighter red and lighter grey, the stadiums back at the top of
+Home with the picks under them and the tool tiles last, the shorter game strip and the one Share
 button are live with the update. Say if any of them should go back.)
 
 ## AFTER THE WIND FIX — ANSWERED into NEXT TIME HOME (above)

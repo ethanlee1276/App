@@ -41750,13 +41750,13 @@ function moreSheetInit() {
    section with nothing to say is not drawn. Every width: a phone reads
    it as one column, a desktop as a grid (CSS), and the board as it was
    folds under it on both. */
-/* THE PICKS BEFORE THE STADIUMS (the site audit, 2026-09-24): with no
-   Pick of the Day, a phone met the four tool tiles and a carousel of
-   400px stadium cards before the first pick. The picks now follow what
-   is live; the games come after them as a compact strip on a phone
-   (styles.css, "#home-deck .hd-sec[data-sec=games]"), and the tools
-   close the deck. */
-const HOME_DECK_ORDER = ["hero", "live", "riding", "likely", "edge", "games", "record", "zeno", "tools"];
+/* THE STADIUMS LEAD, THEN THE PICKS. Ethan, 2026-09-24, after the site
+   audit's closing pass moved the games under the picks: "how you moved
+   the venues too the bottom of the page. They need too move back too the
+   top." Back where the approved deck had them. What the audit fixed
+   stays: the deck keeps its zones on a first load (subtabbedDOM), the
+   game cards are shorter on a phone, and the tools close the deck. */
+const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely

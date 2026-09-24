@@ -77,10 +77,12 @@ def test_devigcheck_follows_a_public_board_to_its_census():
 
 
 # --- Visual 1: the picks lead Home ------------------------------------------
-def test_the_picks_come_before_the_games_and_the_tools_close_the_deck():
+def test_the_stadiums_lead_then_the_picks_and_the_tools_close_the_deck():
+    """Ethan, 2026-09-24: the venues go back to the top, above the picks."""
     i = APP.index("const HOME_DECK_ORDER = ")
     order = json.loads(APP[i + len("const HOME_DECK_ORDER = "):APP.index(";", i)])
-    assert order.index("likely") < order.index("games") and order.index("edge") < order.index("games")
+    assert order.index("games") < order.index("likely") < order.index("edge")
+    assert order.index("live") < order.index("games")
     assert order[-1] == "tools"
 
 
