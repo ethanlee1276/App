@@ -284,6 +284,13 @@
   --mask-fade-down: linear-gradient(to bottom, #000 45%, transparent);
   --grad-gp-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel-2) 35%, transparent) 0%,
     color-mix(in oklab, var(--panel-2) 72%, transparent) 50%, var(--panel-2) 96%);
+  /* The Home game tile's version of it (2026-09-24): the photo stays
+     bright under the chips, then dissolves into the tile's own panel
+     behind the crests and the matchup name. */
+  --tile-fade-run: 84px;
+  --grad-tile-fade: linear-gradient(180deg, transparent 0%, transparent 34%,
+    color-mix(in oklab, var(--panel) 45%, transparent) 55%,
+    color-mix(in oklab, var(--panel) 82%, transparent) 78%, var(--panel) 100%);
   /* The "more below" fade for scroll rails — a mask, so the color is
      alpha only and no theme ever has to restate it. */
   --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
@@ -6428,7 +6435,8 @@ body.has-rail .shell {
   padding: 4px 9px; border-radius: var(--radius-sm); background: rgba(7, 7, 12, .72);
   border: var(--hairline) solid var(--border); color: var(--text-dim);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; font-family: var(--font-mono); }
-:root[data-theme="light"] .game-time-chip { background: rgba(255, 255, 255, .78);
+:root[data-theme="light"] .game-time-chip,
+:root[data-theme="light"] .game-wx-chip { background: rgba(255, 255, 255, .78);
   color: var(--text-dim); }
 
 /* ---------------- Home: Top Picks strip ---------------- */
@@ -11638,6 +11646,26 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   .gp-hero.is-hero .gp-art { height: 380px; }
   .gp-hero.is-hero .gp-meta { padding: 200px 28px 24px; }
 }
+
+/* ---- Home game tiles wear the game page's venue fade (2026-09-24) ------
+   Ethan: "These little game tiles should have the same venue fading into
+   it look as when you click onto it." The band keeps its height — the
+   strip must not grow — but the photo no longer stops at the band's
+   edge: it runs on behind the crests and the matchup name and fades into
+   the tile's panel, the way the game page's hero does. The chips stay
+   where they were, now riding the photo instead of its hard edge. */
+.hero-games .game-card { position: relative; }
+.hero-games .stadium-wrap { overflow: visible; background: transparent; }
+.hero-games .stadium-wrap .venue-photo { height: calc(100% + var(--tile-fade-run)); }
+.hero-games .stadium-wrap::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: 2;
+  height: calc(100% + var(--tile-fade-run)); background: var(--grad-tile-fade); pointer-events: none;
+}
+.hero-games .game-card .game-info { position: relative; z-index: 3; }
+.hero-games .stadium-wrap .game-wx-chip, .hero-games .stadium-wrap .fav-tag { z-index: 3; }
+/* The matchup in the game page's headline serif, so the tile and the
+   page it opens read as one piece. */
+.hero-games .gc-name { font-family: var(--font-headline); font-size: var(--fs-lg); line-height: var(--lh-tight); }
 
 /* ---- Game scripts: which picks need the same game (2026-09-24) ---------- */
 .gs-card { display: grid; gap: 12px; padding: 16px; }
