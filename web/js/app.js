@@ -10684,10 +10684,34 @@ function stadiumPanel(g) {
       <span class="chip">${s.surface === "turf" ? "Turf" : "Grass"}</span>
     </div>
     ${s.plays ? `<p class="pk-plays">${escapeHtml(s.plays)}</p>` : ""}
-    <p class="pk-note">Football fields are the same size everywhere, so a venue’s
-      effect is almost entirely its environment — indoors vs outdoors first,
-      then altitude. The live weather above is the number that moves a total.</p>
+    ${stadiumTonightHTML(g)}
   </div>`;
+}
+
+/* TONIGHT, IN THE MODEL'S OWN WORDS (Ethan, 2026-09-24, beside Lambeau at
+   69°F under a note about late-season cold: "we are giving misleading
+   info here … make sure weather is linked correctly"). The venue note is
+   the building; this is the forecast for this kickoff, at this stadium,
+   and what the model did with it — `conditions.why`, the same
+   engine/weather read every prop at the game was priced with, so the page
+   cannot say one thing while the number does another. Temperature is
+   named when it moved nothing, because a reader sees it in the chip above
+   and will otherwise assume it counted. */
+function stadiumTonightHTML(g) {
+  const w = g.weather || {};
+  // The engine's provenance tail ("(measured: the 2016-2025 effects …)")
+  // is for the methodology page; the reader gets the effect.
+  const why = ((g.conditions || {}).why || []).filter(Boolean)
+    .map((x) => String(x).replace(/\s*\(measured[^)]*\)\s*$/, ""));
+  const lines = [...why];
+  if (!w.dome && w.measured !== false && w.temp_f != null
+      && !why.some((x) => /°F/.test(x))) {
+    lines.push(`${Math.round(w.temp_f)}°F — temperature is not adjusted for: in ten seasons of games, `
+      + "cold on its own showed no clear effect once wind, rain and snow were separated.");
+  }
+  if (!lines.length) return "";
+  return `<div class="pk-tonight"><div class="pk-tonight-k">Tonight’s weather, as the model used it</div>
+    <ul>${lines.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`;
 }
 
 /* The game page's sections as a chip row that scrolls to each one —
@@ -11009,7 +11033,8 @@ function renderGamePage() {
           ${g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
-          ${g.roof ? `<span class="chip">roof ${escapeHtml(g.roof)}</span>` : ""}
+          ${g.roof ? `<span class="chip">${escapeHtml(({ outdoors: "Outdoors", open: "Roof open",
+            closed: "Roof closed", dome: "Dome", retractable: "Retractable roof" })[g.roof] || `Roof ${g.roof}`)}</span>` : ""}
           ${g.lineups_confirmed === false ? `<span class="chip down">${icon('warn')} lineups pending</span>` : ""}
         </div>
         ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}

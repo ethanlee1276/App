@@ -946,6 +946,12 @@ def game_facts(board: dict, g: dict) -> dict:
     if isinstance(w, dict) and w:
         out["weather"] = {k: w[k] for k in ("dome", "temp_f", "wind_mph", "wind_dir", "precip_chance", "rain", "snow")
                           if w.get(k) not in (None, "")}
+    # What the model DID with that weather (engine/weather's read, the one
+    # every prop at the game was priced with) — so Ask says what counted
+    # rather than guessing a cold or heat effect the games never showed.
+    why = (g.get("conditions") or {}).get("why") if isinstance(g.get("conditions"), dict) else None
+    if why:
+        out["weather_read"] = [str(x)[:240] for x in why][:4]
     pitchers = g.get("pitchers") or {}
     if isinstance(pitchers, dict) and pitchers:
         out["probable_starters"] = {str(g.get(side) or side): _slim(p, ("name", "throws", "xera", "k_rate"))
