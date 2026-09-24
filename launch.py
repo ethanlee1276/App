@@ -190,6 +190,33 @@ BOARD_ODDS_COST = 3
 #: per-sport clocks split for the same reason (oddsbudget.BudgetState).
 LINES_CLOCK = "nfl_lines"
 
+#: BASEBALL'S LIVE LINE, on its own lane (Ethan, 2026-09-24: "on live
+#: games we are not displaying the live lines here"). The in-play pull
+#: (engine/livelines) rode only on the full prop pull, which the pacer
+#: rations to a few a day, so a live card spent most of every game with
+#: no live line to show. It is the board endpoint's three markets for
+#: the whole slate — the same price as the NFL's lines tier — so it paces
+#: the same way: its own clock, the sport's money (`budget_sport` maps
+#: "mlb_lines" to "mlb"), and only while a game is in progress.
+MLB_LINES_CLOCK = "mlb_lines"
+
+
+def _live_lines_due(path: str) -> bool:
+    """Is a game on this board in progress, and has the live chart's own
+    cadence (`livelines.gap_for`) come round? Asked BEFORE the pacer, so
+    an authorised pull is one the build will actually make — a pull the
+    build then skips as "too soon" would read to `_finish_paid_pull` as
+    an API that never answered."""
+    try:
+        with open(path) as fh:
+            games = json.load(fh).get("games") or []
+        if not any((g.get("live") or {}).get("state") == "live" for g in games):
+            return False
+        from engine import livelines
+        return livelines.affordable(livelines.last_pull_ts())
+    except Exception:                                        # noqa: BLE001
+        return False
+
 
 def _lines_stale(sport: str, tag: str = "lines") -> bool:
     """Are the game prices on disk past the age ceiling for this sport?
@@ -624,6 +651,8 @@ def refresh_mlb(quiet: bool = False) -> bool:
     # (60s later) is eligible — a one-cycle bootstrap, not a gap.
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="mlb")
     before_seen = _paid_pull_baseline() if spend else ""
+    live_spend = False
+    live_before = ""
     if spend:
         args.append("--odds")
         if quiet and _narrow_pull(out, "mlb"):
@@ -636,6 +665,11 @@ def refresh_mlb(quiet: bool = False) -> bool:
         # with proxy lines, silently wiping real prices off the site for all
         # but the minute after each paid pull.
         args.append("--cached-odds")
+        if _live_lines_due(out) and _odds_affordable(
+                out, quiet, sport=MLB_LINES_CLOCK, credits=BOARD_ODDS_COST):
+            args.append("--live-lines")
+            live_spend = True
+            live_before = _paid_pull_baseline()
     # 600s, not the default 180. The MLB board is the one build that has
     # never reliably fit under three minutes on the production box: 923
     # props, and since the sim memoisation it is CPU-bound on two busy
@@ -644,6 +678,8 @@ def refresh_mlb(quiet: bool = False) -> bool:
     # worst measured build — a guillotine for a hang, not for honest work.
     ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "MLB", sport="mlb")
+    _finish_paid_pull(live_spend, live_before, ok, tail, "MLB live lines",
+                      sport=MLB_LINES_CLOCK)
     if not quiet:
         print(f"  MLB  {date}: {_board_word(out, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))

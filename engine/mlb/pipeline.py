@@ -556,6 +556,13 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
         "home": g.home, "away": g.away,
         "date": g.date, "kickoff": g.kickoff,
         "spread": g.spread, "favorite": "", "total": g.total,
+        # DID A BOOK POST THEM? `total` defaults to 8.5 and `spread` to 0
+        # when no price is attached — which is every game once it starts,
+        # because the book takes its pre-game markets down at first pitch —
+        # and the card printed both as numbers ("−0.0", "O 8.5"). The page
+        # draws a dash for a number no book posted.
+        "spread_posted": bool(getattr(g, "spread_is_posted", True)),
+        "total_posted": bool(getattr(g, "total_is_posted", True)),
         "roof": park.roof if not w.roof_closed else "closed",
         "surface": park.surface,
         "live": live_to_dict(g.live),

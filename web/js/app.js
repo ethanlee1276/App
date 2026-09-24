@@ -5968,29 +5968,85 @@ window.vpFall = (el) => {
   else { el.remove(); }
 };
 
+/* THE LIVE LINE (Ethan, 2026-09-24, on a live Marlins @ Cubs card
+   reading "−0.0 / 0 / O 8.5": "on live games we are not displaying the
+   live lines here"). The book takes its pre-game prices down at first
+   pitch, so a game in progress carries its board fields at their
+   not-offered zeros; the in-play market is `live_line`, the newest quote
+   the live pull recorded (engine/livelines.latest_for). A quote older
+   than LIVE_LINE_MAX_AGE_S is not shown: the pacer allows one pull
+   every fifteen minutes during games, so this is two missed pulls. */
+const LIVE_LINE_MAX_AGE_S = 45 * 60;
+
+function liveLineOf(g, nowMs) {
+  const L = g && g.live_line;
+  if (!L || (g.live || {}).state !== "live") return null;
+  const age = (nowMs == null ? Date.now() : nowMs) / 1000 - Number(L.ts || 0);
+  return age >= -300 && age <= LIVE_LINE_MAX_AGE_S ? L : null;
+}
+
 /* The three markets in columns — spread, moneyline, total — for both
    teams: the "6-pack" every book's game card carries (research in
    docs/VISUAL_REDESIGN.md). Drawn only from fields the board already put
    on the game; a market the board did not price prints "—"; a finished
-   game prints nothing, its lines being history. */
+   game prints nothing, its lines being history. A game in progress
+   prints its live line under a LIVE tag, or, with none recorded, the
+   pre-game numbers under a PREGAME tag — never a closed price passed
+   off as tonight's. */
 function gameMarketsHTML(g, opts) {
   const o = opts || {};
   if (o.isFinal) return "";
-  const hasSp = g.spread != null && isFinite(Number(g.spread));
-  const hasT = g.total != null && isFinite(Number(g.total));
-  const hasML = g.away_ml != null || g.home_ml != null;
-  if (!hasSp && !hasT && !hasML) return "";
-  const fav = g.favorite || (hasSp && Number(g.spread) < 0 ? g.home : g.away);
-  const sp = (side) => !hasSp ? "—"
-    : `${side === fav ? MINUS : "+"}${Math.abs(Number(g.spread)).toFixed(1)}`;
-  const ml = (v) => v == null ? "—" : american(v);
+  const inPlay = (g.live || {}).state === "live";
+  const L = inPlay ? liveLineOf(g, o.nowMs) : null;
+  const num = (v) => (v != null && v !== "" && isFinite(Number(v)) ? Number(v) : null);
+  // Zero is not an American price: it is the board's "not offered".
+  const price = (v) => (num(v) ? num(v) : null);
+  // Every spread below is the HOME side's, signed. The pre-game board
+  // states it that way unless it names a favourite, in which case the
+  // favourite lays the points.
+  let homeSp = null, total = null, awayMl = null, homeMl = null;
+  if (L) {
+    homeSp = num(L.spread);
+    total = price(L.total);
+    awayMl = price(L.away_ml);
+    homeMl = price(L.home_ml);
+  } else {
+    const sp = g.spread_posted === false ? null : num(g.spread);
+    if (sp != null) {
+      homeSp = g.favorite ? (g.favorite === g.home ? -Math.abs(sp) : Math.abs(sp)) : sp;
+    }
+    total = g.total_posted === false ? null : price(g.total);
+    awayMl = price(g.away_ml);
+    homeMl = price(g.home_ml);
+  }
+  // A run line is never zero, so a zero there is a missing number; in
+  // the other sports a zero spread is a pick'em.
+  if (homeSp === 0 && o.mlb) homeSp = null;
+  if (homeSp == null && total == null && awayMl == null && homeMl == null) {
+    // Under way with nothing to show: say so, rather than let the card
+    // read as if this game never had a market.
+    return inPlay ? `<p class="gc-mkts-none">No live line yet</p>` : "";
+  }
+  const spTxt = (v) => (v == null ? "—" : v === 0 ? "PK"
+    : `${v < 0 ? MINUS : "+"}${Math.abs(v).toFixed(1)}`);
+  const ml = (v) => (v == null ? "—" : american(v));
   const cell = (k, away, home) => `<span class="gc-mk"><i>${k}</i><b>${away}</b><b>${home}</b></span>`;
-  return `<div class="gc-mkts" aria-label="Lines: ${escapeHtml(g.away)} then ${escapeHtml(g.home)}">
-    <span class="gc-mk gc-mk-teams"><i></i><b>${escapeHtml(g.away)}</b><b>${escapeHtml(g.home)}</b></span>
-    ${cell(o.mlb ? "Run line" : "Spread", sp(g.away), sp(g.home))}
-    ${cell("ML", ml(g.away_ml), ml(g.home_ml))}
-    ${cell("Total", hasT ? `O ${Number(g.total).toFixed(1)}` : "—", hasT ? `U ${Number(g.total).toFixed(1)}` : "—")}
+  const tag = L
+    ? `<i class="gc-mk-tag is-live" title="${escapeHtml(liveLineTitle(L))}">Live</i>`
+    : inPlay ? `<i class="gc-mk-tag" title="The last pre-game prices; no live line has been recorded yet">Pregame</i>`
+    : "<i></i>";
+  return `<div class="gc-mkts${L ? " is-live" : ""}" aria-label="${L ? "Live lines" : inPlay ? "Pre-game lines" : "Lines"}: ${escapeHtml(g.away)} then ${escapeHtml(g.home)}">
+    <span class="gc-mk gc-mk-teams">${tag}<b>${escapeHtml(g.away)}</b><b>${escapeHtml(g.home)}</b></span>
+    ${cell(o.mlb ? "Run line" : "Spread", spTxt(homeSp == null ? null : -homeSp), spTxt(homeSp))}
+    ${cell("ML", ml(awayMl), ml(homeMl))}
+    ${cell("Total", total != null ? `O ${total.toFixed(1)}` : "—", total != null ? `U ${total.toFixed(1)}` : "—")}
   </div>`;
+}
+
+function liveLineTitle(L) {
+  const clock = Number(L.ts) > 0 ? tzTime(Number(L.ts) * 1000) : "";
+  const books = Number(L.books) || 0;
+  return `Live line${clock ? ` as of ${clock}` : ""}${books ? ` · best price across ${books} book${books === 1 ? "" : "s"}` : ""}`;
 }
 
 function gameCard(g) {
@@ -5998,6 +6054,8 @@ function gameCard(g) {
   // The market row carries the spread and the total in columns, so the
   // sub-line under the name stops repeating them where the row draws.
   const mkts = gameMarketsHTML(g, { mlb, isFinal: (g.live || {}).state === "final" });
+  // A game under way has no pre-game line to wait for.
+  const inPlay = (g.live || {}).state === "live";
   const nba = state.sport === "nba" || state.sport === "wnba";
   const cfb = state.sport === "cfb";
   const w = g.weather || {};
@@ -6035,12 +6093,12 @@ function gameCard(g) {
     if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (!mkts && g.spread != null) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
     if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
-    sub = bits.join(" · ") || (mkts ? "" : "line not posted yet");
+    sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
   } else if (nba) {
     const bits = [];
     if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (!mkts && g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
-    sub = bits.join(" · ") || (mkts ? "" : "lines post closer to tip-off");
+    sub = bits.join(" · ") || (mkts || inPlay ? "" : "lines post closer to tip-off");
   } else if (mlb) {
     // The park name moved up to the card's venue line (fidelity pass) —
     // repeating it here printed "Coors Field" twice on one card.
@@ -6051,14 +6109,15 @@ function gameCard(g) {
        board, the rail, the long shots) never rendered at all. One
        unposted number blanked the page. Found 2026-08-25 by opening
        /mlb in Chromium and reading the console. */
-    const bits = !mkts && g.total != null ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
+    const bits = !mkts && g.total != null && g.total_posted !== false && !inPlay
+      ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
-    sub = bits.join(" · ") || (mkts ? "" : "line not posted yet");
+    sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
   } else {
     const favTxt = (!mkts && g.favorite && g.spread != null)
       ? `${esc(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
-    const ouTxt = mkts ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
+    const ouTxt = mkts || inPlay ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);

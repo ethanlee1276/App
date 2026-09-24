@@ -97,10 +97,12 @@ def test_the_card_draws_the_row_and_the_sub_line_stops_repeating_it():
     assert "${mkts}" in card
     assert '${sub ? `<div class="game-sub">${sub}</div>` : ""}' in card, "an empty sub-line is not a blank row"
     assert card.count("if (!mkts && g.total != null)") == 2, "CFB and NBA sub-lines yield the total to the row"
-    assert "const bits = !mkts && g.total != null ?" in card, "MLB too"
+    # MLB also refuses the board's 8.5 filler total and any total on a
+    # game already under way (2026-09-24: the live Marlins @ Cubs card).
+    assert "const bits = !mkts && g.total != null && g.total_posted !== false && !inPlay" in card, "MLB too"
     assert "const favTxt = (!mkts && g.favorite && g.spread != null)" in card, "and the NFL default"
-    assert 'const ouTxt = mkts ? "" : g.total != null' in card
-    assert card.count('(mkts ? "" : "line not posted yet")') == 2, \
+    assert 'const ouTxt = mkts || inPlay ? "" : g.total != null' in card
+    assert card.count('(mkts || inPlay ? "" : "line not posted yet")') == 2, \
         "with the row drawn, an otherwise-empty sub-line says nothing rather than 'not posted'"
     assert ".gc-mkts { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr));" in CSS
     assert ".gc-mk b { font-family: var(--font-mono);" in CSS

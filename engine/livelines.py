@@ -403,6 +403,38 @@ def last_pull_ts(path: str | Path | None = None) -> float:
     return float(rows[-1]["ts"]) if rows else 0.0
 
 
+def latest_for(rows: list[dict], home: str, away: str, sport: str | None = None,
+               since: float | None = None) -> dict | None:
+    """The newest in-play quote for one game, for the card's lines row.
+
+    Ethan, 2026-09-24, on a live Marlins @ Cubs card reading "−0.0 / 0 /
+    O 8.5": "on live games we are not displaying the live lines here."
+    The book takes its pre-game prices down at first pitch, so the board's
+    own fields fall back to their not-offered zeros; the live market is in
+    this file, and `track_for` only hands it over once there are
+    `MIN_POINTS` distinct prices to CHART. A card needs one.
+
+    Read off the raw rows, not `series`: that collapses repeats of the
+    same win probability and keeps the FIRST of each run, so its last
+    point can carry a run line or total the market has since moved off.
+
+    ``ts`` rides along so the page can say how old the quote is and stop
+    showing it once it is too old to stand behind.
+    """
+    pts = [r for r in rows
+           if r.get("home") == home and r.get("away") == away
+           and (sport is None or r.get("sport") == sport)
+           and (since is None or float(r.get("ts", 0)) >= since)]
+    if not pts:
+        return None
+    r = max(pts, key=lambda x: float(x.get("ts", 0)))
+    return {"ts": r.get("ts"), "books": r.get("books"),
+            "home_ml": r.get("home_odds"), "away_ml": r.get("away_odds"),
+            # The HOME spread, as `snapshot_rows` stores it; None when no
+            # book was quoting one at the pull.
+            "spread": r.get("spread"), "total": r.get("total")}
+
+
 def pull_and_record(sport: str, teams: dict, api_key: str | None = None,
                     now: float | None = None, path: str | Path | None = None,
                     force: bool = False) -> tuple[int, str]:
@@ -436,11 +468,14 @@ def pull_and_record(sport: str, teams: dict, api_key: str | None = None,
 
 def attach(games: list[dict], sport: str, since: float | None = None,
            path: str | Path | None = None) -> int:
-    """Hang each live game's ``line_track`` on its payload dict.
+    """Hang each live game's ``line_track`` and ``live_line`` on its
+    payload dict.
 
     Runs on every build whether or not a pull was paid for — the history
-    is already on disk, so the chart costs nothing to show. Returns how
-    many games got one.
+    is already on disk, so the chart costs nothing to show. ``live_line``
+    is the newest quote alone (see `latest_for`) and lands from the first
+    pull; ``line_track`` waits for enough prices to draw. Returns how
+    many games got a track.
     """
     rows = load(path)
     if not rows:
@@ -449,6 +484,9 @@ def attach(games: list[dict], sport: str, since: float | None = None,
     for g in games or []:
         if (g.get("live") or {}).get("state") != "live":
             continue
+        latest = latest_for(rows, g.get("home", ""), g.get("away", ""), sport, since)
+        if latest:
+            g["live_line"] = latest
         t = track_for(rows, g.get("home", ""), g.get("away", ""), sport, since)
         if t:
             g["line_track"] = t

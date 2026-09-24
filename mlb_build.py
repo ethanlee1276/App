@@ -59,6 +59,11 @@ def main() -> None:
                     help="Only re-price live / soon-starting games (saves API quota).")
     ap.add_argument("--odds", action="store_true",
                     help="Attach real (live during a game) sportsbook lines via The Odds API.")
+    ap.add_argument("--live-lines", action="store_true",
+                    help="Pull the in-play moneyline, run line and total for "
+                         "games in progress: one board request, three "
+                         "credits for the whole slate. The launcher passes "
+                         "it only after the budget pacer said yes.")
     ap.add_argument("--cached-odds", action="store_true",
                     help="Attach the LAST PAID pull's prices from cache — zero API "
                          "spend. What keeps the board priced between budgeted pulls.")
@@ -662,7 +667,11 @@ def main() -> None:
             from engine.sources.oddsapi import MLB_TEAM_ABBR as _mlb_names
             _live_games = [g for g in result["games"]
                            if (g.get("live") or {}).get("state") == "live"]
-            if _live_games and args.odds:
+            # `--live-lines` is the same pull on its own budget lane
+            # (launch.MLB_LINES_CLOCK): the full prop pull is rationed to a
+            # few a day, and riding only on it left live cards without a
+            # live line for most of every game (Ethan, 2026-09-24).
+            if _live_games and (args.odds or args.live_lines):
                 _n, _note = _ll.pull_and_record("mlb", _mlb_names)
                 if _n:
                     print(f"  Live line: {_note}")
