@@ -11197,33 +11197,72 @@ const SCAN_READ_TONE = { breakout: "up", good: "up", neutral: "", tough: "down",
 
 // The scan ranks the league it was given: 32 NFL teams, about 134 FBS.
 const scanTeams = (scan) => ((scan && scan.method) || {}).teams || 32;
-const scanGapBar = (n) => Math.max(10, Math.round(n * 0.3));
 
-function scanRank(r, n = 32) {
-  if (r == null) return `<span class="ms-rank">—</span>`;
-  const tone = r <= Math.max(1, Math.round(n * 0.25)) ? "good" : r >= Math.round(n * 0.78) ? "bad" : "";
-  return `<span class="ms-rank ${tone}">${ordinal(r)}</span>`;
+/* THE TALE OF THE TAPE (2026-09-25). Ethan, on the two cards this
+   replaced: "it's hard to tell whose defense is good and whose defense is
+   bad". Each card crossed one team's offense with the other's defense
+   under two columns headed OFF and DEF, so every row had to be decoded,
+   and "BUF EDGE" came in two colours. Now: one column per team, its
+   offense ranks together and its defense ranks together, every rank with
+   the word for it, and the two questions a reader has answered in a line
+   at the top. The crossings — offense against the other defense — are
+   the mismatch sentences under it, each naming the team with the edge. */
+const TAPE_LABELS = {
+  overall: ["Overall", "Overall"], passing: ["Passing", "Pass defense"],
+  rushing: ["Rushing", "Run defense"], explosive: ["Big plays", "Big plays allowed"],
+  pressure: ["Pass protection", "Pass rush"], success: ["Play success rate", "Stopping plays"],
+  havoc: ["Ball security", "Havoc (sacks, TFLs, takeaways)"], line: ["Run blocking", "Run front"],
+  stuff: ["Avoiding stuffed runs", "Stuffing runs"],
+};
+
+//: What a rank means, in a word, by quarter of the league.
+function tapeTier(r, n = 32) {
+  if (r == null) return null;
+  const q = r / n;
+  return q <= 0.25 ? ["good", "Strong"] : q <= 0.5 ? ["", "Above avg"]
+    : q <= 0.75 ? ["", "Below avg"] : ["bad", "Weak"];
 }
 
-function scanUnitsHTML(scan, off, def) {
-  const o = ((scan.units || {})[off] || {}).off || {};
-  const d = ((scan.units || {})[def] || {}).def || {};
-  const n = scanTeams(scan), bar = scanGapBar(n);
-  const rows = SCAN_UNITS.map(([u, label]) => {
-    const orank = (o[u] || {}).rank, drank = (d[u] || {}).rank;
-    if (orank == null && drank == null) return "";
-    const gap = orank != null && drank != null ? drank - orank : 0;
-    const tag = gap >= bar ? `<span class="ms-edge off">${escapeHtml(off)} edge</span>`
-      : gap <= -bar ? `<span class="ms-edge def">${escapeHtml(def)} edge</span>`
-      : `<span class="ms-edge">Even</span>`;
-    return `<div class="ms-unit"><span class="ms-unit-k">${escapeHtml(label)}</span>
-      ${scanRank(orank, n)}${scanRank(drank, n)}${tag}</div>`;
-  }).join("");
-  return `<div class="ms-units card">
-      <div class="ms-units-head"><b>${teamMark(off, 20)} ${escapeHtml(teamName(off))} offense</b>
-        <span>vs</span><b>${teamMark(def, 20)} ${escapeHtml(teamName(def))} defense</b></div>
-      <div class="ms-unit ms-unit-cols"><span></span><span>Off</span><span>Def</span><span></span></div>
-      ${rows}
+function tapeCell(r, n) {
+  const t = tapeTier(r, n);
+  if (!t) return `<span class="tp-cell">—</span>`;
+  return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em></span>`;
+}
+
+function tapeVerdict(scan, a, b, side) {
+  const ra = ((((scan.units || {})[a] || {})[side] || {}).overall || {}).rank;
+  const rb = ((((scan.units || {})[b] || {})[side] || {}).overall || {}).rank;
+  if (ra == null || rb == null) return "";
+  const word = side === "off" ? "offense" : "defense";
+  if (Math.abs(ra - rb) < 3) {
+    return `<div class="tp-verdict"><span>Better ${word}</span><b>About even</b>
+      <em>${ordinal(ra)} and ${ordinal(rb)}</em></div>`;
+  }
+  const [w, wr, lr] = ra < rb ? [a, ra, rb] : [b, rb, ra];
+  return `<div class="tp-verdict"><span>Better ${word}</span><b>${teamMark(w, 18)} ${escapeHtml(teamName(w))}</b>
+    <em>${ordinal(wr)} vs ${ordinal(lr)}</em></div>`;
+}
+
+function scanTapeHTML(scan, away, home) {
+  const n = scanTeams(scan);
+  const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
+  const group = (side, title) => {
+    const rows = SCAN_UNITS.map(([k]) => {
+      const ra = u(away, side, k), rh = u(home, side, k);
+      if (ra == null && rh == null) return "";
+      const label = (TAPE_LABELS[k] || [k, k])[side === "off" ? 0 : 1];
+      return `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>
+        ${tapeCell(ra, n)}${tapeCell(rh, n)}</div>`;
+    }).join("");
+    return rows ? `<div class="tp-group">${title}</div>${rows}` : "";
+  };
+  return `<div class="card ms-tape">
+      <div class="tp-verdicts">${tapeVerdict(scan, away, home, "off")}${tapeVerdict(scan, away, home, "def")}</div>
+      <div class="tp-row tp-head"><span class="tp-k">Rank of ${n}, 1 = best</span>
+        <span class="tp-team">${teamMark(away, 22)}<b>${escapeHtml(teamName(away))}</b></span>
+        <span class="tp-team">${teamMark(home, 22)}<b>${escapeHtml(teamName(home))}</b></span></div>
+      ${group("off", "Offense")}
+      ${group("def", "Defense")}
     </div>`;
 }
 
@@ -11234,8 +11273,8 @@ function scanEdgeLine(e) {
   const poss = (t) => { const n = teamName(t); return /s$/.test(n) ? `${n}’` : `${n}’s`; };
   const a = `${poss(e.off)} ${u[2]} (${ordinal(e.off_rank)})`;
   const b = `${poss(e.def)} ${u[3]} (${ordinal(e.def_rank)})`;
-  return offBetter ? `${a} against ${b} — an edge to the offense`
-    : `${b} against ${a} — an edge to the defense`;
+  return offBetter ? [`Edge ${teamName(e.off)}`, `${a} against ${b}`]
+    : [`Edge ${teamName(e.def)}`, `${b} against ${a}`];
 }
 
 function scanCoverageHTML(scan, team) {
@@ -11368,11 +11407,12 @@ function matchupScanHTML(g) {
   return `<div id="gp-sec-scan" class="ms">
     <div class="section-title">Matchup scan
       <span class="sub">— where each side is strong and weak, who could shine and who could struggle</span></div>
-    <div class="ms-units-row">${scanUnitsHTML(scan, away, home)}${scanUnitsHTML(scan, home, away)}</div>
+    ${scanTapeHTML(scan, away, home)}
     <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
       : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
     ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">Biggest mismatches</div>
-      <ul>${edges.map((e) => `<li class="${e.gap > 0 ? "off" : "def"}">${escapeHtml(scanEdgeLine(e))}</li>`).join("")}</ul></div>` : ""}
+      <ul>${edges.map((e) => { const [who, what] = scanEdgeLine(e);
+        return `<li class="${e.gap > 0 ? "off" : "def"}"><b>${escapeHtml(who)}</b> — ${escapeHtml(what)}</li>`; }).join("")}</ul></div>` : ""}
     ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
       ${inj.map((i) => `<div class="ms-inj-row">${teamMark(i.team, 20)}
         <span class="ms-inj-who"><b>${escapeHtml(i.player)}</b> <span class="mini">${escapeHtml(i.position || "")}</span>

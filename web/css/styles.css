@@ -11746,37 +11746,43 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
    what they open, each defence's corners and scheme, and a read on every
    player with a prop. Rank chips: green 1-8, red 25-32. */
 .ms { display: grid; gap: 12px; margin-bottom: 20px; }
-.ms-units-row, .ms-cov-row { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.ms-cov-row { display: grid; gap: 12px; grid-template-columns: 1fr; }
 @media (min-width: 861px) {
-  .ms-units-row, .ms-cov-row { grid-template-columns: 1fr 1fr; }
+  .ms-cov-row { grid-template-columns: 1fr 1fr; }
 }
-.ms-units { padding: 12px 14px; }
-.ms-units-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px;
-  font-size: var(--fs-sm); }
-.ms-units-head b { display: inline-flex; align-items: center; gap: 6px; }
-.ms-units-head span { color: var(--text-mute); font-size: var(--fs-xs); }
-.ms-unit { display: grid; grid-template-columns: minmax(0, 1fr) 52px 52px 96px; align-items: center; gap: 6px;
+/* The tale of the tape (scanTapeHTML): one column per team, the rank and
+   its word in each cell, green the top quarter and red the bottom. */
+.ms-tape { padding: 12px 14px; max-width: 680px; }
+.tp-verdicts { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+.tp-verdict { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--bg); border: var(--hairline) solid var(--border-soft); }
+.tp-verdict span { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-dim); }
+.tp-verdict b { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-md); }
+.tp-verdict em { font-style: normal; font-size: var(--fs-xs); color: var(--text-dim); }
+.tp-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 92px; align-items: center; gap: 8px;
   padding: 6px 0; border-top: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
-.ms-unit-cols { border-top: 0; padding: 0; color: var(--text-mute); font-size: var(--fs-2xs);
-  font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.ms-unit-cols span:nth-child(2), .ms-unit-cols span:nth-child(3) { text-align: center; }
-.ms-unit-k { color: var(--text-dim); }
-.ms-rank { text-align: center; font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600;
-  padding: 3px 0; border-radius: var(--radius-sm); background: var(--bg); border: var(--hairline) solid var(--border-soft); }
-.ms-rank.good { color: var(--good); border-color: color-mix(in oklab, var(--good) 45%, transparent); }
-.ms-rank.bad { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
-.ms-edge { justify-self: end; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--text-mute); }
-.ms-edge.off { color: var(--good); }
-.ms-edge.def { color: var(--brand); }
+.tp-head { border-top: 0; padding-top: 0; }
+.tp-head .tp-k { font-size: var(--fs-2xs); color: var(--text-dim); }
+.tp-team { display: grid; justify-items: center; gap: 4px; text-align: center; font-size: var(--fs-xs); }
+.tp-group { margin-top: 10px; padding: 6px 0 2px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text); border-top: var(--hairline) solid var(--border); }
+.tp-k { color: var(--text-dim); }
+.tp-cell { display: grid; justify-items: center; padding: 4px 0; border-radius: var(--radius-sm);
+  background: var(--bg); border: var(--hairline) solid var(--border-soft); line-height: var(--lh-tight); }
+.tp-cell b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.tp-cell em { font-style: normal; font-size: var(--fs-2xs); color: var(--text-dim); }
+.tp-cell.good { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
+.tp-cell.good b, .tp-cell.good em { color: var(--good); }
+.tp-cell.bad { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }
+.tp-cell.bad b, .tp-cell.bad em { color: var(--bad); }
 .ms-note { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
 .ms-sub { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
   color: var(--text-dim); margin-bottom: 8px; }
 .ms-sub-top { margin: 6px 0 0; }
 .ms-edges, .ms-inj, .ms-micros, .ms-locked { padding: 12px 14px; }
 .ms-edges ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-sm); }
-.ms-edges li.off::marker { color: var(--good); }
-.ms-edges li.def::marker { color: var(--brand); }
+.ms-edges li.off::marker, .ms-edges li.def::marker { color: var(--brand); }
 .ms-inj-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: center;
   padding: 8px 0; border-top: var(--hairline) solid var(--border-soft); }
 .ms-inj-row:first-of-type { border-top: 0; }

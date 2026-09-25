@@ -258,6 +258,26 @@ def test_the_build_scans_every_game_and_never_fails_on_it():
     assert "scan_depth_rows = rows" in BUILD
 
 
+def test_the_units_read_as_a_tale_of_the_tape():
+    """Ethan, 2026-09-25, on the OFF/DEF cards: "it's hard to tell whose
+    defense is good and whose defense is bad". One column per team, the
+    rank with its word, the better offense and defense said outright, and
+    each mismatch naming the team with the edge."""
+    tape = APP[APP.index("function scanTapeHTML("):]
+    tape = tape[:tape.index("\n}\n")]
+    assert 'group("off", "Offense")' in tape and 'group("def", "Defense")' in tape
+    assert 'tapeVerdict(scan, away, home, "off")' in tape and 'tapeVerdict(scan, away, home, "def")' in tape
+    tier = APP[APP.index("function tapeTier("):]
+    tier = tier[:tier.index("\n}\n")]
+    for word in ('"Strong"', '"Above avg"', '"Below avg"', '"Weak"'):
+        assert word in tier, word
+    edge = APP[APP.index("function scanEdgeLine("):]
+    edge = edge[:edge.index("\n}\n")]
+    assert "Edge ${teamName(e.off)}" in edge and "Edge ${teamName(e.def)}" in edge
+    assert "an edge to the defense" not in edge
+    assert "scanUnitsHTML" not in APP and "OFF</span><span>DEF" not in APP
+
+
 def test_the_game_page_draws_the_scan():
     j = APP.index("function renderGamePage(")
     page = APP[j:APP.index("\n}\n", j)]
@@ -267,7 +287,7 @@ def test_the_game_page_draws_the_scan():
     assert "(d.scan_reads || {})[`${away}@${home}`]" in fn
     assert "d.locked && d.locked.scan_reads" in fn, "a signed-out reader is told what is behind the paywall"
     assert "moves none of them" in fn and "2022–2025" in fn, "the page says what was measured"
-    for sel in (".ms-unit {", ".ms-rank.good {", ".ms-read.breakout {", ".ms-why li.pro::marker {", ".ms-micro {"):
+    for sel in (".ms-tape {", ".tp-cell.good {", ".ms-read.breakout {", ".ms-why li.pro::marker {", ".ms-micro {"):
         assert sel in CSS, sel
 
 
