@@ -636,7 +636,7 @@ def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
         js = f.read()
     assert "function showableLikelyRow(r)" in js
     assert f"const LIKELY_HEAVIEST_PRICE = {K.HEAVIEST_PRICE};" in js
-    for anchor in (".filter(showableLikelyRow).slice(0, 10)",
+    for anchor in (".filter(showableLikelyRow)\n    .filter((r) => !likelyDropped(r)).slice(0, 10)",
                    "rows: (sh.rows || []).filter(showableLikelyRow)",
                    "(state.data.most_likely || []).filter(showableLikelyRow)"):
         assert anchor in js, anchor

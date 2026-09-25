@@ -6442,7 +6442,10 @@ function tonightPick(d) {
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b._ok);
   const shots = (d.long_shots || []).slice(0, 3);
-  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
+  // A pick whose chance has dropped under the bar is not one of tonight's
+  // top picks (likelyDropped) — the boards keep it in its own fold.
+  const ml = (d.most_likely || []).filter(showableLikelyRow)
+    .filter((r) => !likelyDropped(r)).slice(0, 10);
   return { props, bets, shots, ml, n: props.length + bets.length,
            any: props.length + bets.length + shots.length + ml.length > 0 };
 }
