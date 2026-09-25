@@ -1621,8 +1621,20 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
 
         # Play-by-play refresh — the measured red-zone roles. The file is
         # ~100MB, so once a week (Tuesdays, after Monday night) is the
-        # right cadence, not daily.
-        if today.weekday() == 1:
+        # right cadence, not daily…
+        #
+        # …UNLESS THE UNIT RATINGS ARE BEHIND THE LAST WEEK PLAYED, and
+        # then every night until they are not (engine/freshness). One
+        # failed Tuesday used to leave the matchup tape a week behind with
+        # nothing to retry it — found 2026-09-25, when the tape was read
+        # as stale ("we are pulling ... 2025 information").
+        _units_behind = False
+        try:
+            from . import db as _fdb, freshness as _fresh
+            _units_behind = "unit ratings" in _fresh.football_weeks(_fdb.connect(), "nfl", today)["behind"]
+        except Exception:                                       # noqa: BLE001
+            _units_behind = False
+        if today.weekday() == 1 or _units_behind:
             try:
                 from . import db as _pdb
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,

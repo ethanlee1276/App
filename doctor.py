@@ -317,6 +317,30 @@ def check_ingest_freshness(rep):
                     "every in-season sport has finals through its last game")
 
 
+def check_football_weeks(rep):
+    """Every NFL week table against the last week played (engine/freshness).
+
+    `check_ingest_freshness` reads `games.period` as a date and skips the
+    rest, so the NFL — a week label — was never checked. 2026-09-25: the
+    matchup tape ranked on mostly-2025 unit ratings, and the Tuesday-only
+    refresh that feeds it had nothing watching it."""
+    @_check(rep, "football weeks")
+    def _():
+        if not has_history():
+            rep.add("football weeks", WARN, _no_data("stats database"))
+            return
+        from engine import db, freshness
+        r = freshness.football_weeks(db.connect(), "nfl")
+        if r["played"] is None:
+            rep.add("football weeks", OK, f"no {r['season']} NFL week is due yet")
+        elif r["behind"]:
+            rep.add("football weeks", FAIL, freshness.line(r),
+                    "the nightly maintenance catches up unit ratings on its own; "
+                    "results, stats and snaps come from `python3 ingest.py nfl`")
+        else:
+            rep.add("football weeks", OK, freshness.line(r))
+
+
 def check_odds_budget(rep):
     @_check(rep, "odds budget")
     def _():
@@ -1149,7 +1173,7 @@ def check_git(rep):
 
 CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_market_coverage,
-          check_ingest_freshness, check_odds_budget, check_llm_spend,
+          check_ingest_freshness, check_football_weeks, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
           check_learning, check_correlation_priors,
@@ -1162,7 +1186,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
 # noise that teaches you to ignore the run. --code-only drops them, so a
 # red CI run means something is actually red.
 DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
-               check_ingest_freshness, check_odds_budget, check_llm_spend,
+               check_ingest_freshness, check_football_weeks, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log, check_clv_capture, check_learning,

@@ -108,18 +108,20 @@ EOF
 
 Want: `0 board picks not in the journal`.
 
-**3b. Is this season's unit data on the box?** The matchup tape ranks
-on this season alone from two games on (2026-09-25, after the Jets'
-defence read 27th on mostly-2025 numbers) — which only helps if this
-season's weeks are stored:
+**3b. Is every NFL week table current?** The matchup tape ranks on this
+season alone from two games on (2026-09-25, after the Jets' defence read
+27th on mostly-2025 numbers) — which only helps if this season's weeks
+are stored. The doctor now checks results, player stats, snap counts and
+unit ratings against the last week played (it used to skip the NFL):
 
 ```bash
-cd /srv/qellys && sqlite3 -header -column data/history.db "SELECT season, COUNT(DISTINCT period) AS weeks, MAX(CAST(period AS INTEGER)) AS last_week, COUNT(*) AS rows FROM team_units WHERE sport='nfl' AND season >= 2025 GROUP BY season"
+cd /srv/qellys && python3 doctor.py --skip-tests 2>&1 | grep -A1 "football weeks"
 ```
 
-Want: a 2026 line with `last_week` 3 (the weeks before this Sunday).
-No 2026 line, or a last week behind, means the nightly ingest is not
-writing this season and the tape was reading 2025 — send it to me.
+Want: `✅ football weeks  Freshness: 2026 week 3 is the last played — …
+All current.` A `❌` line names what is behind. Unit ratings catch up on
+their own now (the nightly retries whenever they trail); anything else
+behind, send me the line.
 
 **4. Your call — the Tonges bet.** It was voided this morning. By your
 2026-09-14 rule a player who took snaps and logged no stat is graded at

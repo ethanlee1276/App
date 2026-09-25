@@ -1060,6 +1060,14 @@ def main() -> None:
                        likely_previous=_likely_prev(args.out, slate.date)
                        if args.out else None,
                        before_likely=_scan_first)
+    # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
+    # a table behind the last week played is data the page would present
+    # as this week's. Never fatal.
+    try:
+        from engine import db as _fdb, freshness as _fresh
+        print("  " + _fresh.line(_fresh.football_weeks(_fdb.connect(), "nfl")))
+    except Exception as _fexc:                                # noqa: BLE001
+        print(f"  ⚠️  freshness check skipped: {_fexc}")
     # Say on each card what the sample rule did — the reset that was
     # applied, or the stale sample that was too thin to reset.
     if reset_report:
