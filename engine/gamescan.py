@@ -827,6 +827,11 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             st = str(getattr(i, "status", "")).upper()
             if getattr(i, "team", "") != team:
                 continue
+            # NEVER HIS OWN ROW. "DJ Moore (WR) is questionable" was DJ
+            # Moore's own teammate line on the droplet, 2026-09-25 (Njoku
+            # and Nacua the same, out): a player is not his own teammate.
+            if _key(getattr(i, "player", "") or "") == _key(name):
+                continue
             if st in ("QUESTIONABLE", "GTD"):
                 maybes.append(i)
                 continue

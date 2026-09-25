@@ -158,6 +158,20 @@ def test_the_likeliest_number_includes_his_main_line():
     assert best["model_prob"] < K.MIN_PROB
 
 
+def test_a_longshot_is_never_called_his_likeliest():
+    """Droplet self-check, 2026-09-25: "Quinshon Judkins over 109.5 +900
+    at 1%", "David Montgomery over 99.5 +980 at 0%". With only a far rung
+    left on his side, the card says none of his numbers is one we would
+    stand behind — never that a 1% number is his likeliest."""
+    far = _row("Far", projection=40.0, line=45.5, side="under", odds=-110,
+               all_lines=[], alt_lines=[_ln("DraftKings", 109.5, 900)])
+    _, rep = _build([far], {("Far", "GB", "rush_yds"): OVER})
+    got = rep[("Far", "GB")]
+    assert got["status"] == "none" and got["priced"] and got["best"] is None, got
+    from engine import boardtruth
+    assert K.LEAN_BEST_MIN_PROB == boardtruth.LONGSHOT_PROB
+
+
 def test_the_stamp_lands_on_the_read():
     reads = {"A@B": {"players": [{"player": "Both", "team": "GB", "read": "good"},
                                  {"player": "Nobody", "team": "GB", "read": "good"}]}}

@@ -590,6 +590,11 @@ def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
 # isn't hammered with 30s-timeout requests.
 FAILED_PULL_RETRY_S = 5 * 60
 
+#: A pull that landed but bought less than a real one costs waits this
+#: long before the lane asks again. It asked every cycle before
+#: 2026-09-25 (~9 minutes on the droplet): three credits a time, all day.
+SHORT_PULL_RETRY_S = 60 * 60
+
 
 def log_decision(lane: str | None, ok: bool, reason: str, credits: int | None = None,
                  path: Path | str | None = None, now: float | None = None,
@@ -668,7 +673,14 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
         # the build actually spent; below its expectation the sport's
         # clock and touchpoint are left alone, so the next cycle asks
         # again.
+        #
+        # BUT IT DOES WAIT BEFORE ASKING AGAIN. "Next cycle" was every
+        # ~9 minutes, and each ask bought the three-credit lines again:
+        # the droplet's journal, 2026-09-25, all day. An hour's cooldown
+        # on the lane's own retry clock, not the refresh clock.
         if not bought_enough:
+            if sport:
+                state.retry_after[sport] = now + SHORT_PULL_RETRY_S
             save(state, path)
             return landed
         state.last_refresh_ts = now
@@ -1122,8 +1134,8 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     state = load(path)
     retry_at = state.retry_ts(sport)
     if retry_at and now < retry_at:
-        return False, (f"last paid pull never reached the odds API — "
-                       f"retrying ~{_fmt_clock(retry_at)}")
+        return False, (f"last paid pull never reached the odds API or "
+                       f"bought short — retrying ~{_fmt_clock(retry_at)}")
     window = prime_window(kickoffs, now)
     # THE CLOSE, and whether this ask is the one pull that buys it. Every
     # bound is checked here so the three refusals below can each ask one

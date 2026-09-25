@@ -290,6 +290,40 @@ PLAYER_WINDOW_HOURS = 36
 _TIER_ORDER = {MARQUEE: 0, STANDARD: 1, LOW: 2}
 
 
+def player_event_cap(kicks: list, now_ts: float) -> int:
+    """How many games of player props ONE pull may buy right now.
+
+    ``kicks`` are the kickoff epochs of the games inside the player
+    window. The launcher asks this same function before it authorises a
+    full pull (launch._cfb_player_events_affordable): the droplet, on
+    2026-09-25, logged "authorised pull bought 3 credit(s)" every cycle
+    because the launcher said yes to the whole pull and this cap said
+    zero games, so every cycle bought the lines and asked again.
+    """
+    cap = PLAYER_EVENT_CAP
+    try:
+        from engine.oddsbudget import affordable_events, prime_window
+        # ONE PULL, NOT FOUR THIN ONES. `affordable_events` divides
+        # the day's slice by the pacer's four touchpoints, which is
+        # right for a sport that plays every evening and wrong for
+        # one that plays on Saturday: college's measured allowance
+        # is about 26 credits a day, so a quarter of it buys ONE
+        # game of player props at five credits each, four times,
+        # three of them hours before anybody could use them.
+        #
+        # Inside the pre-kickoff window the whole day's college
+        # slice goes on one pull instead — five games at once rather
+        # than one game four times, for the same money. Outside it
+        # the default split stands, so an early cycle cannot spend
+        # the afternoon's board.
+        hot = prime_window(list(kicks), now_ts)
+        cap = min(cap, affordable_events(
+            CREDITS_PER_EVENT, pulls_per_day=1 if hot else None))
+    except Exception:                                        # noqa: BLE001
+        pass                           # a pacing hiccup never costs a board
+    return max(0, int(cap))
+
+
 def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          api_key: str | None = None,
                          now=None, cap: int | None = None,
@@ -354,28 +388,8 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     cands.sort(key=lambda c: (c[0], c[1], c[2]))
 
     if cap is None:
-        cap = PLAYER_EVENT_CAP
-        try:
-            from engine.oddsbudget import affordable_events, prime_window
-            # ONE PULL, NOT FOUR THIN ONES. `affordable_events` divides
-            # the day's slice by the pacer's four touchpoints, which is
-            # right for a sport that plays every evening and wrong for
-            # one that plays on Saturday: college's measured allowance
-            # is about 26 credits a day, so a quarter of it buys ONE
-            # game of player props at five credits each, four times,
-            # three of them hours before anybody could use them.
-            #
-            # Inside the pre-kickoff window the whole day's college
-            # slice goes on one pull instead — five games at once rather
-            # than one game four times, for the same money. Outside it
-            # the default split stands, so an early cycle cannot spend
-            # the afternoon's board.
-            kicks = [k.timestamp() for _t, _p, k, _i, _e in cands]
-            hot = prime_window(kicks, t.timestamp())
-            cap = min(cap, affordable_events(
-                CREDITS_PER_EVENT, pulls_per_day=1 if hot else None))
-        except Exception:                                    # noqa: BLE001
-            pass                       # a pacing hiccup never costs a board
+        cap = player_event_cap([k.timestamp() for _t, _p, k, _i, _e in cands],
+                               t.timestamp())
     cap = max(0, int(cap))
 
     scorers: dict = {}

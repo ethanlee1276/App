@@ -75,7 +75,9 @@ def test_a_pull_that_bought_nothing_leaves_the_clock_and_touchpoint_alone():
         st = B.load(p)
         assert st.sport_ts("cfb") == 100.0, "the clock the next full pull waits on is untouched"
         assert st.last_refresh_ts != 5000.0
-        assert st.retry_ts("cfb") == 0.0, "but a failed-pull cooldown is not set either — nothing failed"
+        # …but the lane waits an hour before asking again: it asked every
+        # ~9-minute cycle on 2026-09-25, three credits each time.
+        assert st.retry_ts("cfb") == 5000.0 + B.SHORT_PULL_RETRY_S
         assert not st.sport_touchpoint.get("cfb"), "and the touchpoint is not claimed"
 
 
@@ -135,7 +137,8 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     gated on the same window the build prices against; off it, the lane
     takes the lines tier on its own clock."""
     cfb = _fn(LAUNCH, "refresh_cfb")
-    assert "_cfb_player_pull_possible(_slate_kickoffs(CFB_OUT))" in cfb
+    assert "kicks = _slate_kickoffs(CFB_OUT)" in cfb
+    assert "_cfb_player_pull_possible(kicks)" in cfb
     assert cfb.index("_cfb_player_pull_possible(") < cfb.index('_odds_affordable(CFB_OUT, quiet, sport="cfb"')
     gate = _fn(LAUNCH, "_cfb_player_pull_possible")
     assert "PLAYER_WINDOW_HOURS" in gate
@@ -152,6 +155,33 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     assert fn([sat], now=sat + 60) is False
     assert fn([None, "x", sat], now=sat - 3600) is True
     assert fn([], now=now) is False
+
+
+def test_a_full_college_pull_is_only_offered_when_the_build_would_buy_a_game():
+    """Droplet journal, 2026-09-25, every cycle: "CFB: authorised pull
+    bought 3 credit(s) (a real pull costs at least 12)". A game was inside
+    the window, the launcher's budget said yes to the whole pull, and the
+    build's own per-game cap said zero games. The launcher now asks the
+    build's cap (`cfb_build.player_event_cap`) before it authorises."""
+    import launch
+    import cfb_build
+    from engine import oddsbudget as OB
+    cfb = _fn(LAUNCH, "refresh_cfb")
+    assert "_cfb_player_events_affordable(kicks)" in cfb
+    assert cfb.index("_cfb_player_events_affordable(") < cfb.index('_odds_affordable(CFB_OUT, quiet, sport="cfb"')
+    assert "player_event_cap(" in _fn((ROOT / "cfb_build.py").read_text(),
+                                      "attach_player_quotes")
+    now = 1_800_000_000.0
+    real = OB.affordable_events
+    try:
+        OB.affordable_events = lambda *a, **k: 0
+        assert cfb_build.player_event_cap([now + 3600], now) == 0
+        assert launch._cfb_player_events_affordable([now + 3600], now=now) is False
+        OB.affordable_events = lambda *a, **k: 4
+        assert cfb_build.player_event_cap([now + 3600], now) == 4
+        assert launch._cfb_player_events_affordable([now + 3600], now=now) is True
+    finally:
+        OB.affordable_events = real
 
 
 def test_the_player_event_cost_is_the_builds_own():

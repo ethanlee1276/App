@@ -110,6 +110,27 @@ def test_a_questionable_teammate_is_a_note_with_what_happens_if_he_sits():
     assert not any("questionable" in t for t in me["pro"]), "he may play: shown, never counted"
 
 
+def test_a_player_is_never_his_own_teammate():
+    """Droplet, 2026-09-25: "DJ Moore (WR) is questionable" on DJ Moore's
+    own card, "David Njoku (TE) is out" on Njoku's, "Puka Nacua (WR) is
+    out" on Nacua's. His own injury row is not a teammate's."""
+    usage = {("LAC", G._key("Keenan Allen")): {"name": "Keenan Allen", "tgt_share": 0.21,
+                                               "targets_pg": 6.1, "games": 3, "position": "WR"},
+             ("LAC", G._key("Ladd McConkey")): {"name": "Ladd McConkey", "tgt_share": 0.19,
+                                                "targets_pg": 6.0, "games": 3, "position": "WR"}}
+    for status in ("OUT", "QUESTIONABLE"):
+        prop = {"player": "Keenan Allen", "team": "LAC", "opponent": "BUF", "position": "WR",
+                "market": "receptions", "side": "over", "line": 4.5, "odds": -120}
+        scan = G.scan_game("BUF", "LAC", ratings={}, charts={}, defenders_now={}, usage=usage,
+                           injuries=[_Inj("Keenan Allen", "LAC", "WR", status)], props=[prop])
+        (me,) = [p for p in scan["players"] if p["player"] == "Keenan Allen"]
+        said = (me.get("pro") or []) + (me.get("con") or []) + (me.get("notes") or [])
+        assert not any(t.startswith("Keenan Allen") for t in said), (status, said)
+        mc = [p for p in scan["players"] if p["player"] == "Ladd McConkey"]
+        if mc:
+            assert any("Keenan Allen" in t for t in (mc[0].get("pro") or []) + (mc[0].get("notes") or []))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

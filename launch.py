@@ -481,6 +481,21 @@ def _cfb_player_pull_possible(kickoffs: list, now: float | None = None) -> bool:
                for k in kickoffs or [])
 
 
+def _cfb_player_events_affordable(kickoffs: list, now: float | None = None) -> bool:
+    """Would the build's own per-game budget buy at least one game? The
+    build caps its player pull with `cfb_build.player_event_cap`; asked
+    here too, so a full pull is never authorised that the build will
+    spend on the three-credit lines alone (2026-09-25, every cycle)."""
+    now = time.time() if now is None else now
+    try:
+        from cfb_build import PLAYER_WINDOW_HOURS as hours, player_event_cap
+    except Exception:                                    # noqa: BLE001
+        return True
+    kicks = [k for k in kickoffs or []
+             if isinstance(k, (int, float)) and now < k <= now + hours * 3600]
+    return player_event_cap(kicks, now) >= 1
+
+
 def _slate_kickoffs(path: str) -> list:
     """Kickoff epochs from the last build — what tells the pacer WHEN the
     day's credits are worth spending. Unparseable or absent times simply
@@ -628,6 +643,7 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
     enough = bought is None or expect is None or bought >= expect
     try:
         from engine.oddsbudget import (paid_pull_result, FAILED_PULL_RETRY_S,
+                                       SHORT_PULL_RETRY_S,
                                        log_decision)
         landed = paid_pull_result(before_seen, sport=sport, bought_enough=enough)
         if landed and not enough:
@@ -637,7 +653,8 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
                          credits=bought, kind="bought")
             print(f"  ⚠️  {label}: authorised pull bought {bought} credit(s) "
                   f"(a real pull costs at least {expect}) — the clock is not "
-                  f"stamped, so the next cycle asks again")
+                  f"stamped; the lane asks again in "
+                  f"~{SHORT_PULL_RETRY_S // 60} min")
     except Exception:
         return
     if not landed:
@@ -1156,8 +1173,15 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # asked again — ~130 three-credit pulls a day on the droplet ledger,
     # 2026-09-14. Off the window the lane goes straight to the lines
     # tier below, which paces on its own clock.
+    #
+    # …AND ONLY WHEN THE BUILD'S OWN BUDGET WOULD BUY A GAME. Inside the
+    # window, a day whose slice buys no game of player props did the
+    # same thing on 2026-09-25: authorised, three credits, unstamped,
+    # asked again every cycle.
+    kicks = _slate_kickoffs(CFB_OUT)
     spend = (_slate_games(CFB_OUT) > 0
-             and _cfb_player_pull_possible(_slate_kickoffs(CFB_OUT))
+             and _cfb_player_pull_possible(kicks)
+             and _cfb_player_events_affordable(kicks)
              and _odds_affordable(CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST))
     before_seen = _paid_pull_baseline() if spend else ""
     before_spent = _spent_so_far("cfb") if spend else 0

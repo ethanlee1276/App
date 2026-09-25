@@ -1210,6 +1210,11 @@ def _pick_brief(r: dict) -> dict:
                                   "odds", "book", "model_prob")}
 
 
+#: The least chance a no-pick card will call "his likeliest" number —
+#: `boardtruth.LONGSHOT_PROB`, the self-check's own bar.
+LEAN_BEST_MIN_PROB = 0.20
+
+
 def _main_candidate(row: dict, side, fits=None):
     """The prop's main number on ``side`` as a rung-shaped candidate —
     {side, line, odds, book, prob} — or None when no bettable book prices
@@ -1284,6 +1289,13 @@ def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
             if main is not None:
                 cands.append(main)
             for c in cands:
+                # A LONGSHOT IS NOBODY'S LIKELIEST. The main line above did
+                # not stop it on the droplet (2026-09-25 self-check:
+                # "Judkins over 109.5 +900 at 1%", Montgomery at 0%): under
+                # LEAN_BEST_MIN_PROB the card says none of his numbers is
+                # one we would stand behind, which is the true sentence.
+                if float(c["prob"]) < LEAN_BEST_MIN_PROB:
+                    continue
                 if _side(c["side"]) == lean.get("side") and (best is None or c["prob"] > best["prob"]):
                     best = dict(c, market=row.get("market"),
                                 market_label=row.get("market_label") or row.get("market"))
