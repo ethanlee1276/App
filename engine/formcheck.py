@@ -72,6 +72,16 @@ GENTLE = {
 #: The opportunity behind each outcome. Yards are not a quantity a player
 #: produces directly — they are chances times what he does with each, and
 #: the two halves behave nothing alike (see `volume_predictor`).
+#: The game-log market that carries a player's offensive snap share
+#: (engine/ingest.snap_count_rows), read beside the value for `role_scaled`.
+SNAP_MARKET = "snap_pct"
+#: How many recent games say what his role is NOW.
+ROLE_NOW_GAMES = 2
+#: A game's share may scale its evidence by at most this much either way:
+#: a 20%→60% jump does not triple a number, and a benched game is not
+#: erased.
+ROLE_SCALE_CLAMP = (0.5, 2.0)
+
 OPPORTUNITY = {
     "rush_yds": "carries",
     "rec_yds": "targets",
@@ -108,10 +118,12 @@ def _period_key(raw):
 
 
 def _rows(conn, market: str, seasons=None, sport: str = "nfl") -> list:
-    """``[(season, week, player, opponent, value, opp)]`` in time order.
+    """``[(season, week, player, opponent, value, opp, snaps)]`` in time
+    order.
 
     ``opp`` is that game's opportunity count for the market (carries for
-    rushing, targets for receiving), or None where it was not logged.
+    rushing, targets for receiving), or None where it was not logged;
+    ``snaps`` his offensive snap share that game (SNAP_MARKET), or None.
 
     ``sport`` was hardcoded to 'nfl' in the SQL, so this harness could
     not be pointed at college or baseball at all — `run` returned the
@@ -123,8 +135,8 @@ def _rows(conn, market: str, seasons=None, sport: str = "nfl") -> list:
     """
     opp_market = OPPORTUNITY.get(market)
     sql = ("SELECT season, period, player, opponent, market, value "
-           "FROM player_game_logs WHERE sport=? AND market IN (?, ?) ")
-    args: list = [sport, market, opp_market or market]
+           "FROM player_game_logs WHERE sport=? AND market IN (?, ?, ?) ")
+    args: list = [sport, market, opp_market or market, SNAP_MARKET]
     if seasons:
         sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
         args.extend(seasons)
@@ -141,12 +153,16 @@ def _rows(conn, market: str, seasons=None, sport: str = "nfl") -> list:
             continue
         key = (int(r["season"]), week, r["player"], r["opponent"] or "")
         if key not in merged:
-            merged[key] = [None, None]
+            merged[key] = [None, None, None]
             order.append(key)
-        slot = 1 if (opp_market and r["market"] == opp_market
-                     and market != opp_market) else 0
+        if r["market"] == SNAP_MARKET and market != SNAP_MARKET:
+            slot = 2
+        elif opp_market and r["market"] == opp_market and market != opp_market:
+            slot = 1
+        else:
+            slot = 0
         merged[key][slot] = float(r["value"])
-    return [(k[0], k[1], k[2], k[3], merged[k][0], merged[k][1])
+    return [(k[0], k[1], k[2], k[3], merged[k][0], merged[k][1], merged[k][2])
             for k in order if merged[k][0] is not None], unreadable
 
 
@@ -199,8 +215,33 @@ def volume_predictor(history: list, opps: list) -> float | None:
     return opp_now * eff
 
 
+def role_scaled(history: list, snaps: list, current: float | None = None) -> list | None:
+    """``history`` re-scaled to the player's CURRENT snap share — each game
+    times (current ÷ that game's share), the ratio clamped to
+    ROLE_SCALE_CLAMP — or None when the shares are not known.
+
+    THE ROLE CHANGED AND THE BLEND DID NOT NOTICE (the droplet, 2026-09-25):
+    Quinshon Judkins at 66% of the snaps projected off games played at
+    39–51%, Chuba Hubbard at 68% off games at 38%, and for the twelve backs
+    whose share had risen ten points our number sat at 0.73× the market
+    while the steady-role backs sat at 1.15×. A game at half the role is
+    half the evidence about this one. ``current`` defaults to the mean of
+    the last ROLE_NOW_GAMES shares, which is what the live model can know
+    before kickoff.
+    """
+    pairs = [(v, sn) for v, sn in zip(history, snaps or []) if sn is not None and sn > 0]
+    if len(pairs) < len(history) or not pairs:
+        return None
+    if current is None:
+        now = [sn for _v, sn in pairs[:ROLE_NOW_GAMES]]
+        current = sum(now) / len(now)
+    lo, hi = ROLE_SCALE_CLAMP
+    return [v * min(hi, max(lo, current / sn)) for v, sn in pairs]
+
+
 def predictors(history: list, career: list, vs_opp: list,
-               weights: dict | None, opps: list | None = None) -> dict:
+               weights: dict | None, opps: list | None = None,
+               snaps: list | None = None) -> dict:
     """Every candidate's number for one player-week.
 
     ``history`` is this season's prior values, MOST RECENT FIRST — the
@@ -253,6 +294,18 @@ def predictors(history: list, career: list, vs_opp: list,
             # its usage bridge, so measuring it here says whether that
             # bridge is worth what it costs.
             out["vol_blend"] = 0.5 * vol + 0.5 * (out["gentle"] or vol)
+    # THE ROLE-AWARE PAIR: the same two curves over games re-scaled to his
+    # current snap share (`role_scaled`). None where the shares are not
+    # logged, so the common subset decides what they are compared on.
+    scaled = role_scaled(history, snaps) if snaps else None
+    if scaled:
+        slogs = [GameLog(week=0, opponent="", value=v) for v in scaled]
+        out["role_form"] = compute_form(slogs, _mean(career) or _mean(scaled),
+                                        _mean(vs_opp), weights=weights).mean
+        out["role_gentle"] = compute_form(slogs, _mean(career) or _mean(scaled),
+                                          _mean(vs_opp), weights=GENTLE).mean
+    else:
+        out["role_form"] = out["role_gentle"] = None
     return out
 
 
@@ -284,13 +337,14 @@ def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
 
     seen: dict = {}          # (player, season) -> [values, most recent first]
     seen_opp: dict = {}      # the same, for the opportunity behind each
+    seen_snap: dict = {}     # the same, for his snap share that game
     career: dict = {}        # player -> every value from EARLIER seasons
     versus: dict = {}        # (player, opponent) -> values before this game
     rows_kept: list = []     # (season, week, {name: pred}, actual)
     season_now = None
     scored = 0
 
-    for season, week, player, opponent, actual, opp in rows:
+    for season, week, player, opponent, actual, opp, snap in rows:
         if season != season_now:
             # A new season starts every player's in-season log empty, and
             # folds the finished one into the career anchor. Doing this on
@@ -298,17 +352,19 @@ def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
             # career average from containing the game being predicted.
             for (p, _s), vals in seen.items():
                 career.setdefault(p, []).extend(vals)
-            seen, seen_opp, season_now = {}, {}, season
+            seen, seen_opp, seen_snap, season_now = {}, {}, {}, season
         hist = seen.get((player, season)) or []
         opps = seen_opp.get((player, season)) or []
+        snaps = seen_snap.get((player, season)) or []
         if len(hist) >= min_history:
             preds = predictors(hist, career.get(player, []),
                                versus.get((player, opponent), []), weights,
-                               opps=opps)
+                               opps=opps, snaps=snaps)
             rows_kept.append((season, week, preds, actual))
             scored += 1
         seen.setdefault((player, season), []).insert(0, actual)
         seen_opp.setdefault((player, season), []).insert(0, opp)
+        seen_snap.setdefault((player, season), []).insert(0, snap)
         versus.setdefault((player, opponent), []).append(actual)
         if log and scored and scored % 20000 == 0:
             log(f"    {market}: {scored:,} player-weeks scored")
@@ -323,7 +379,12 @@ def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
     # measured that way `volume` read MAE 19.89 against `gentle`'s 7.34,
     # which says nothing at all about the model and everything about
     # which rows each one was handed.
-    names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds})
+    # A CANDIDATE NO ROW COULD PRICE IS NOT IN THE CONTEST. `role_form`
+    # and `role_gentle` are None wherever snap shares are not logged —
+    # every college and baseball row — and keeping them in ``names``
+    # there would leave nothing for anyone to compare on.
+    names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds
+                    if preds.get(n) is not None})
     usable = [r for r in rows_kept
               if all(r[2].get(n) is not None for n in names)]
     err: dict = {n: [] for n in names}
@@ -422,3 +483,26 @@ def report_lines(out: dict) -> list:
 
 
 __all__ = ["MARKETS", "MIN_HISTORY", "run", "report_lines", "predictors"]
+
+
+def main(argv=None) -> int:
+    """``python3 -m engine.formcheck rush_yds rec_yds --seasons 2024 2025``
+    — the scoreboard, from the box's own game logs."""
+    import argparse
+    import sys
+    from . import db
+    ap = argparse.ArgumentParser(description="Score every form candidate over real player-weeks.")
+    ap.add_argument("markets", nargs="*", default=list(MARKETS))
+    ap.add_argument("--seasons", nargs="*", type=int, default=None)
+    ap.add_argument("--sport", default="nfl")
+    args = ap.parse_args(argv)
+    conn = db.connect()
+    for mk in args.markets:
+        out = run(conn, mk, seasons=args.seasons, sport=args.sport,
+                  log=lambda m: print(m, file=sys.stderr))
+        print("\n".join(report_lines(out)))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

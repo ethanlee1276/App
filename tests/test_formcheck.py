@@ -123,8 +123,31 @@ def test_a_new_candidate_is_scored_without_being_named_anywhere_else():
     being measured while still appearing to be."""
     import inspect
     src = inspect.getsource(formcheck.run)
-    assert "names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds})" \
-        in src, "the candidate list is no longer derived from the predictions"
+    assert ("names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds\n"
+            "                    if preds.get(n) is not None})") in src, \
+        "the candidate list is no longer derived from the predictions"
+
+
+def test_a_role_change_rescales_the_games_the_blend_reads():
+    """The droplet, 2026-09-25: backs whose snap share rose ten points
+    projected at 0.73× the market off games played in a smaller role.
+    `role_scaled` re-weighs each game by (current share ÷ that game's),
+    clamped, so a half-role game is half the evidence; where shares are
+    not logged it returns None and the candidate stays out of the contest."""
+    hist = [30.0, 20.0, 40.0, 10.0]          # most recent first
+    snaps = [0.60, 0.60, 0.30, 0.10]
+    got = formcheck.role_scaled(hist, snaps)
+    assert got[:2] == [30.0, 20.0], "games at the current role are unchanged"
+    assert got[2] == 80.0, "a half-role game counts double"
+    assert got[3] == 20.0, "…and the clamp stops a tenth-role game counting six times"
+    assert formcheck.role_scaled(hist, [0.6, 0.6, None, 0.1]) is None
+    assert formcheck.role_scaled(hist, []) is None
+    preds = formcheck.predictors(hist, [], [], None, snaps=snaps)
+    assert preds["role_form"] is not None and preds["role_gentle"] is not None
+    assert preds["role_form"] > preds["form"], "the bigger role lifts the number"
+    assert formcheck.predictors(hist, [], [], None)["role_form"] is None
+    assert formcheck.ROLE_SCALE_CLAMP == (0.5, 2.0) and formcheck.ROLE_NOW_GAMES == 2
+
 
 
 def test_the_gentle_control_is_a_long_window_curve():
