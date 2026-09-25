@@ -181,10 +181,31 @@ MISPOSTED_QUOTE_REASON = (
     "The price posted beside this number cannot be a price for it — treated "
     "as a bad quote, not an edge, so this is not staked or ranked")
 
+#: THE SAME GAP WHEN THE MARKET AGREES ON THE NUMBER. Quinshon Judkins,
+#: 2026-09-25: five sportsbooks at 58.5–59.5, our projection 31.5, and the
+#: card said "the price posted beside this number cannot be a price for
+#: it". Five books do not mis-post the same number; the arithmetic points
+#: at us. Said with both numbers so a reader can judge which is wrong.
+MODEL_OFF_MARKET_REASON = (
+    "Our number ({ours:g}) is far from the market's ({theirs:g}, {n} books "
+    "agree) — the gap is ours to explain, not an edge, so this is not staked "
+    "or ranked")
+#: How many sportsbooks must hang the number before the gap is ours.
+MARKET_AGREES_BOOKS = 2
+
 #: Every reason string that means "we are not betting this". Anything
 #: added above belongs here, and the suite checks that it is.
 REFUSAL_REASONS = (UNRELIABLE_CALIBRATION_REASON, NO_CREDIBLE_EDGE_REASON,
-                   IMPLAUSIBLE_EDGE_REASON, MISPOSTED_QUOTE_REASON)
+                   IMPLAUSIBLE_EDGE_REASON, MISPOSTED_QUOTE_REASON,
+                   MODEL_OFF_MARKET_REASON)
+
+
+def market_agreement(lines) -> tuple[int, float | None]:
+    """(sportsbooks hanging the market's number, that number) — the
+    exchanges' ladders left out, as in `odds.market_field`."""
+    from .odds import is_exchange, market_centre, market_field
+    field = [ln for ln in market_field(lines) if not is_exchange(ln.book)]
+    return len({ln.book for ln in field}), market_centre(field)
 
 
 #: How far a book's de-vigged price may sit from the model's own
@@ -811,7 +832,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # — 25 points is past 10 — so without this branch the card would blame
     # the model for a gap the arithmetic pins on the price.
     if not prices_line:
-        reasons.insert(0, MISPOSTED_QUOTE_REASON)
+        n_books, centre = market_agreement(prop.lines)
+        if n_books >= MARKET_AGREES_BOOKS and centre is not None:
+            reasons.insert(0, MODEL_OFF_MARKET_REASON.format(
+                ours=round(float(proj.mean), 1), theirs=centre, n=n_books))
+        else:
+            reasons.insert(0, MISPOSTED_QUOTE_REASON)
     elif not credible and not has_market:
         reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
     elif not credible:

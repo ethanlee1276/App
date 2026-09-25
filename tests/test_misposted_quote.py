@@ -227,6 +227,32 @@ def test_both_engines_skip_the_quote_check_on_a_proxy():
         assert '(best.book or "").lower() == "proxy"' in clause, mod.__name__
 
 
+def test_a_number_the_market_agrees_on_is_our_gap_not_the_quotes():
+    """Quinshon Judkins, 2026-09-25: five sportsbooks at 58.5–59.5 and our
+    projection at 31.5. The card blamed the quote. When the market agrees
+    on the number, the sentence says the gap is ours, with both numbers."""
+    import copy
+    from engine.data_loader import load_slate
+    from engine.projection import build_projection
+    from engine.betting import (evaluate_prop, MODEL_OFF_MARKET_REASON,
+                                market_agreement)
+    sl = load_slate(os.path.join(ROOT, "data", "sample_slate.json"))
+    prop = copy.deepcopy(sl.props[0])
+    prop.lines = [SportsbookLine(book="DraftKings", line=40.5, over_odds=-114, under_odds=-110),
+                  SportsbookLine(book="FanDuel", line=40.5, over_odds=-114, under_odds=-114),
+                  SportsbookLine(book="BetRivers", line=41.5, over_odds=-114, under_odds=-117),
+                  SportsbookLine(book="Novig", line=20.5, over_odds=-953, under_odds=104)]
+    game, opp = sl.game_for(prop), sl.team(prop.opponent)
+    rec = evaluate_prop(prop, build_projection(prop, game, opp), game=game)
+    assert rec.reasons[0].startswith("Our number (") and "3 books agree" in rec.reasons[0], rec.reasons
+    assert MISPOSTED_QUOTE_REASON not in rec.reasons
+    assert MODEL_OFF_MARKET_REASON in REFUSAL_REASONS
+    assert market_agreement(prop.lines) == (3, 40.5), "the exchange's rung is not a book agreeing"
+    # And the page treats the sentence as the Edge board's own verdict.
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert '"the gap is ours to explain"' in app[app.index("const EDGE_ONLY_REASON"):][:400]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

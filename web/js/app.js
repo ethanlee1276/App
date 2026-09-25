@@ -10508,7 +10508,8 @@ function likelyFor(r) {
    never asked. The model's other notes stay. */
 const EDGE_ONLY_REASON = new RegExp([
   "^No credible market edge", "disagrees with the market by more than",
-  "cannot be a price for it", "calibration fit hit the edge",
+  "cannot be a price for it", "the gap is ours to explain",
+  "calibration fit hit the edge",
   "is under the Tier", "pass, not a lean"].join("|"), "i");
 
 /* EVERY BET GETS ONE (Ethan, 2026-09-24, beside a Packers moneyline
