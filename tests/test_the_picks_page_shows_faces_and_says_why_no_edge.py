@@ -40,7 +40,8 @@ def test_the_bets_we_placed_stay_on_it_after_the_line_moves():
     price taken, with the move said, after the live picks."""
     page = _fn("renderTonight")
     assert "const riding = ridingBets(tonightSignals());" in page
-    assert "${edge.map(edgeRow).join(\"\")}${riding.map(ridingRow).join(\"\")}" in page
+    assert ('${edge.map(edgeRow).join("")}${foldRowsHTML(riding.map(ridingRow), { what: "riding" })}'
+            in page), "every edge row, then the riding rows folded after five"
     assert "note: ridingMoveCopy(b, cur)" in page and 'big: "RIDING"' in page
     assert "placed earlier and still riding" in page
     assert "const near = edge.length || riding.length ? [] :" in page, \

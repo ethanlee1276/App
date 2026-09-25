@@ -67,10 +67,11 @@ def test_the_separate_orange_card_is_gone():
 
 
 def test_the_riding_rows_render_inside_the_picks_box():
-    assert "${ridden.map(ridingRow).join(\"\")}" in APP, \
+    # Folded after five since 2026-09-25 (foldRowsHTML): still every row.
+    assert '${foldRowsHTML(ridden.map(ridingRow), { what: "riding" })}' in APP, \
         "riding rows are no longer drawn in the recommended box"
     i = APP.index("${picks.map(pickRow).join(\"\")}")
-    j = APP.index("${ridden.map(ridingRow).join(\"\")}", i)
+    j = APP.index('${foldRowsHTML(ridden.map(ridingRow), { what: "riding" })}', i)
     assert j - i < 200, "the riding rows drifted out of the picks card"
 
 

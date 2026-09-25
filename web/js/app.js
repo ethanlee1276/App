@@ -4010,7 +4010,7 @@ async function renderBestBets() {
         Every journaled bet is tracked on the <b style="color:var(--text)">Live</b> tab through settlement.</p>
       ${haircutNote}
       ${picks.map(pickRow).join("")}
-      ${ridden.map(ridingRow).join("")}
+      ${foldRowsHTML(ridden.map(ridingRow), { what: "riding" })}
       <div style="padding:8px 14px 12px">
         <button class="btn-quiet" id="picks-copy" type="button"
           title="Copy tonight\u2019s picks as text, to key into your own book"
@@ -4058,7 +4058,7 @@ async function renderBestBets() {
           <b style="color:var(--warn)">${ridden.length}
           ${ridden.length === 1 ? "bet is" : "bets are"} still riding</b> from an
           earlier pull — placed when they cleared the bar, and held since.</p>
-        <div style="margin-top:8px">${ridden.map(ridingRow).join("")}</div>` : ""}
+        <div style="margin-top:8px">${foldRowsHTML(ridden.map(ridingRow), { what: "riding" })}</div>` : ""}
     </div>`;
 
   // ======= SPACE 2: tracked signals — measurements, NOT picks =======
@@ -6648,7 +6648,7 @@ function renderTonight() {
     ${boardGuide("recommendations")}
     ${edge.length || riding.length ? `${edge.length ? "" : `<p class="tn-none">No new bet clears the bar at
       tonight’s numbers. These are the ones we already placed — the line moved, and they ride as placed.</p>`}
-    <div class="hd-card tn-rows">${edge.map(edgeRow).join("")}${riding.map(ridingRow).join("")}</div>
+    <div class="hd-card tn-rows">${edge.map(edgeRow).join("")}${foldRowsHTML(riding.map(ridingRow), { what: "riding" })}</div>
     ${edge.length ? `<details class="tn-full"><summary>Every edge card, with the reasoning</summary>
       <div class="cards">${props.map(cardHTML).join("")}${bets.map(gameBetCard).join("")}</div></details>` : ""}`
     : `<p class="tn-none">No bet cleared the bar tonight. The Edge board stakes only where our number
@@ -8492,6 +8492,26 @@ function boardShelves(d = state.data) {
    beside the ones with props; this is every one of those reads that
    leans a way, across the slate, each a door to his pick or his page. */
 const SCAN_TOP_N = 6;
+
+/* A LONG LIST FOLDS AFTER A FEW ROWS. Ethan, 2026-09-25, three screenshots
+   of Home with 109 riding bets between the edge box and everything under
+   it: "showing, like, five edge bets, then condensing it to a menu with an
+   arrow pointing down ... I gotta scroll through so many edge bets to get
+   down to the other stuff." Nothing is removed: the first FOLD_AFTER rows
+   show, the rest sit behind a "Show N more" chevron and fade in. A
+   <details>, so it works without a script and the crawl still reads every
+   row. One extra row is not worth a fold. */
+const FOLD_AFTER = 5;
+function foldRowsHTML(rows, opts = {}) {
+  const n = opts.after ?? FOLD_AFTER;
+  if (rows.length <= n + 1) return rows.join("");
+  const rest = rows.length - n;
+  const what = opts.what ? ` ${opts.what}` : "";
+  return `${rows.slice(0, n).join("")}<details class="row-fold">
+    <summary><span class="row-fold-more">Show ${rest} more${what}</span><span class="row-fold-less">Show fewer</span>
+      <span class="row-fold-chev" aria-hidden="true"></span></summary>
+    <div class="row-fold-body">${rows.slice(n).join("")}</div></details>`;
+}
 
 function scanTopRows(d) {
   const out = [];

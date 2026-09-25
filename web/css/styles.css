@@ -11861,6 +11861,20 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .ms-pick b, .sct-pick b { font-weight: 700; }
 .ms-pick.good b, .sct-pick.good b { color: var(--good); }
 .ms-pick.warn b, .sct-pick.warn b { color: var(--warn); }
+/* A folded list's "Show N more" (app.js foldRowsHTML): centred, brand
+   colour, a chevron that turns when open, the rows fading in. */
+.row-fold > summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 14px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); cursor: pointer; }
+.row-fold > summary::-webkit-details-marker { display: none; }
+.row-fold-chev { width: 8px; height: 8px; border-left: solid 2px currentColor; border-bottom: solid 2px currentColor;
+  transform: rotate(-45deg) translateY(-2px); transition: transform var(--dur-base) var(--ease-out); }
+.row-fold[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
+.row-fold-less, .row-fold[open] .row-fold-more { display: none; }
+.row-fold[open] .row-fold-less { display: inline; }
+.row-fold-body { animation: rowFoldIn var(--dur-slow) var(--ease-out) both; }
+@keyframes rowFoldIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .row-fold-body { animation: none; } .row-fold-chev { transition: none; } }
+
 .sct-more summary { padding: 10px 0 4px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); cursor: pointer; }
 button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; color: inherit;
   font: inherit; text-align: left; cursor: pointer; }
