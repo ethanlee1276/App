@@ -447,6 +447,53 @@ D_STAT_WORDS = {"qb_pass_yds": "passing yards", "qb_pass_td": "passing touchdown
                 "rb_rec": "catches to running backs", "rb_td": "touchdowns to running backs"}
 
 
+#: The model's measured teammate-out markets, in words (engine/teammates).
+_MATE_WORDS = {"receptions": "catches", "rec_yds": "receiving yards", "rush_yds": "rushing yards"}
+
+
+def mate_line(m, kind: str) -> tuple[str, bool]:
+    """(sentence, counted) for one teammate out.
+
+    Ethan, 2026-09-25: "if a WR2 or WR1 or sum is out, then other players
+    will see higher usage … we need too make sure that being implemented
+    and being convayed too the user." The line used to be "Njoku is out —
+    his targets are open" beside every receiver on the team, with no
+    number and no word on whether the model used it. It now carries, best
+    first: what the stats measured when this teammate sat before
+    (engine/redistribute's ripple on this player's own prop), what share of
+    the team's volume he leaves, and whether our projection counts it
+    (engine/teammates, measured over four seasons for a teammate at the
+    same position ranked above him).
+
+    ``counted`` is whether the line is a reason FOR the read: the model
+    moved his number, or the ripple measured a real rise, or — unmeasured —
+    the man out played his position. A shift across positions nobody has
+    measured is shown, not counted."""
+    if isinstance(m, str):
+        return f"{m} is out — his {kind} are open", True
+    who, word = m.get("name") or "", kind
+    rip, applied = m.get("ripple") or {}, m.get("applied") or {}
+    counted_words = ", ".join(f"{(v - 1) * 100:+.0f}% {_MATE_WORDS.get(k, k)}"
+                              for k, v in sorted(applied.items()) if v and abs(v - 1) > 1e-9)
+    if rip.get("measured"):
+        text = rip.get("text") or ""
+        moved = (rip.get("delta") or 0) >= 0.02
+        counted = moved or bool(counted_words)
+    else:
+        share, pg = m.get("share"), m.get("per_game")
+        size = (f" — {share:.0%} of the {word}" + (f" ({pg:g} a game)" if pg else "") + " to go around"
+                if share else "")
+        text = f"{who} ({m.get('pos') or '?'}) is out{size}"
+        if rip:
+            text += "; not enough games without him to measure who takes them"
+        counted = bool(m.get("same_pos")) or bool(counted_words)
+    if counted_words:
+        text += f" · our projection counts it: {counted_words}"
+    elif not counted:
+        text += " · not in our number: no lift measured across positions"
+    return text, counted
+
+
 def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 ratings: dict, room: dict | None, scheme: dict | None,
                 split: dict | None, tackling: dict | None, line_out: list | None,
@@ -551,7 +598,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                                  f"({b:.1f} against {other}); {opp} played {look} "
                                  f"{sch[look]:.0%} of the time")
         for m in mates_out or []:
-            pro.append(f"{m} is out — his targets are open")
+            text, counted = mate_line(m, "targets")
+            (pro if counted else notes).append(text)
     elif group == "rb":
         lean = ["rush_yds", "anytime_td"]
         cs = u.get("carry_share") or 0.0
@@ -589,7 +637,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 pro.append(f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
                            f"the ball to him through the air")
         for m in mates_out or []:
-            pro.append(f"{m} is out — his carries are open")
+            text, counted = mate_line(m, "carries")
+            (pro if counted else notes).append(text)
     elif group == "qb":
         lean = ["pass_yds", "pass_td"]
         volume = True
@@ -705,8 +754,13 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               usage: dict | None = None, injuries=None, props: list | None = None,
               scheme_season=None, opponent_adjusted: bool = True,
               allowed: dict | None = None, points: dict | None = None,
-              line_words: dict | None = None, faces: dict | None = None) -> dict:
+              line_words: dict | None = None, faces: dict | None = None,
+              evidence: list | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
+
+    ``evidence`` is every priced row of this game whose teammate-out notes
+    a read may quote (`ripples`, `mate_card`) — the props and the Most
+    Likely rows; ``props`` alone when absent.
 
     ``allowed`` is {defence: engine/defensevs ratings} — the model's own
     matchup numbers; ``points`` and ``line_words`` are {team: implied
@@ -761,15 +815,32 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         pos = r.get("position") or u.get("position") or ""
         group = _POS_GROUP.get(pos.upper(), "")
         mates = []
+        # WHAT HIS OWN PROPS KNOW about a teammate out: the measured ripple
+        # (engine/redistribute) and the model's applied multiplier
+        # (engine/teammates, the `mate_card`), market by market.
+        mine = [p for p in (props if evidence is None else evidence) or []
+                if p.get("player") == name and p.get("team") == team]
         for i in injuries or []:
             if getattr(i, "team", "") != team or str(getattr(i, "status", "")).upper() not in OUT_STATUSES:
                 continue
             ip = (getattr(i, "position", "") or "").upper()
-            mu = usage.get((team, _key(getattr(i, "player", "")))) or {}
-            if group in ("wr", "te") and ip in ("WR", "TE") and (mu.get("tgt_share") or 0) >= 0.12:
-                mates.append(getattr(i, "player", ""))
-            if group == "rb" and ip in ("RB", "FB") and (mu.get("carry_share") or 0) >= 0.3:
-                mates.append(getattr(i, "player", ""))
+            who = getattr(i, "player", "")
+            mu = usage.get((team, _key(who))) or {}
+            rec = group in ("wr", "te") and ip in ("WR", "TE") and (mu.get("tgt_share") or 0) >= 0.12
+            run = group == "rb" and ip in ("RB", "FB") and (mu.get("carry_share") or 0) >= 0.3
+            if not (rec or run):
+                continue
+            rip = next((x for p in mine for x in (p.get("ripples") or [])
+                        if _key(x.get("out") or "") == _key(who)), None)
+            applied = {}
+            for p in mine:
+                c = p.get("mate_card") or {}
+                if any(_key(o or "") == _key(who) for o in c.get("out") or []) and c.get("applied") not in (None, 1, 1.0):
+                    applied[p.get("market") or ""] = float(c["applied"])
+            mates.append({"name": who, "pos": ip, "same_pos": ip == pos.upper(),
+                          "share": mu.get("tgt_share") if rec else mu.get("carry_share"),
+                          "per_game": mu.get("targets_pg") if rec else mu.get("carries_pg"),
+                          "ripple": rip, "applied": applied})
         reads.append(dict(player_read(
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
@@ -993,7 +1064,9 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          splits=splits, usage=usage,
                          injuries=getattr(g, "injuries", None) or [],
                          props=gprops, scheme_season=sch.get("season"),
-                         allowed=allowed, points=pts, line_words=words, faces=faces)
+                         allowed=allowed, points=pts, line_words=words, faces=faces,
+                         evidence=gprops + [r for r in result.get("most_likely") or []
+                                            if r.get("team") in (home, away)])
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan
