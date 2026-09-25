@@ -6185,7 +6185,8 @@ function gameCard(g) {
   // The strip is the hero of the page, so each card is also the door into
   // that game: role/tabindex make it a real control for keyboard and screen
   // readers, not just a div that happens to listen for clicks.
-  const n = gameBetCount(g);
+  const counts = gamePickCounts(g);
+  const n = counts.total;
   // The render's card hierarchy (2026-08-11, "exactly like this page
   // visually"): the night scene on top wearing its chips, then a
   // centred column — the two marks around "vs", the matchup name, the
@@ -6199,7 +6200,8 @@ function gameCard(g) {
   const venue = venueBits.length
     ? `<div class="gc-venue">${venueBits.join(" · ")}</div>` : "";
   const picksChip = n
-    ? `<span class="gc-picks">${n} pick${n === 1 ? "" : "s"}</span>` : "";
+    ? `<span class="gc-picks" title="${escapeAttr(`${counts.edge} Edge · ${counts.likely} Most Likely`)}">${
+        n} pick${n === 1 ? "" : "s"}</span>` : "";
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
@@ -6273,11 +6275,27 @@ function gameCard(g) {
    makes the card worth tapping. Counts recommended props and game bets;
    the game page itself shows everything analyzed. */
 function gameBetCount(g) {
-  const props = (state.data.recommendations || []).filter(
-    (r) => propInGame(r, g) && passesFilters(r)).length;
-  const gbs = (state.data.game_bets || []).filter(
-    (b) => b.home === g.home && b.away === g.away && passesGameBet(b)).length;
-  return props + gbs;
+  return gamePickCounts(g).total;
+}
+
+/* EVERY PICK WE HAVE ON THE GAME, BOTH BOARDS (Ethan, 2026-09-25, circling
+   "1 PICK" on Texans @ Colts: "it's only tracking the edge bets, we need
+   it too track edge and most likely bets users can see exactly how many
+   bets we have on each game"). The Edge board's picks and the Most Likely
+   board's, a bet on both boards counted once — the same player, market,
+   side and line is one bet whichever board posted it. */
+function gamePickCounts(g) {
+  const key = (r) => [r.player || r.team || "", r.market || r.bet_type || "",
+    String(r.side || "").toLowerCase(), r.line ?? ""].join("|");
+  const edge = [
+    ...(state.data.recommendations || []).filter((r) => propInGame(r, g) && passesFilters(r)),
+    ...(state.data.game_bets || []).filter(
+      (b) => b.home === g.home && b.away === g.away && passesGameBet(b))];
+  const likely = (state.data.most_likely || []).filter(showableLikelyRow)
+    .filter((r) => propInGame(r, g));
+  const seen = new Set(edge.map(key));
+  const extra = likely.filter((r) => !seen.has(key(r))).length;
+  return { edge: edge.length, likely: likely.length, total: edge.length + extra };
 }
 
 function propInGame(r, g) {

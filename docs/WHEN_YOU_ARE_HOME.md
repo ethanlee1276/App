@@ -15,6 +15,119 @@ as they are done.
 
 ---
 
+## TONIGHT — 2026-09-25, in this order
+
+Everything left from today, with what each answer means. Blocks 1–3
+only read. Block 4 writes one row and only if you decide to. Run them
+from the droplet (or the resource-check session); paste the output back.
+
+Already answered today: the Most Likely journal check (62 picks on the
+board, 76 journaled for the week — every pick journals now); the box is
+level with GitHub again; the week-1 Tonges bet is voided; the database-
+copy ignore rules are in.
+
+**1. Did the breakout reads get their Most Likely picks?** After NFL has
+rebuilt on today's code — this shows the running commit and NFL's last
+build:
+
+```bash
+cd /srv/qellys && python3 launch.py --boards
+```
+
+Then:
+
+```bash
+cd /srv/qellys && python3 - <<'EOF'
+import json
+from engine.gate import board_source
+b = json.load(open(board_source("web/data/recommendations.json")))
+n = {}
+for g, r in (b.get("scan_reads") or {}).items():
+    for x in r.get("players") or []:
+        if x.get("read") not in ("breakout", "good", "tough", "avoid"):
+            continue
+        if x.get("pick"):
+            st, p = "PICK", x["pick"]
+        elif x.get("pick_other_side"):
+            st, p = "OTHER WAY", x["pick_other_side"]
+        elif "no_pick" in x:
+            st, p = "NO PICK", (x["no_pick"] or {}).get("best")
+            if not (x["no_pick"] or {}).get("priced", True):
+                st = "NO PROPS"
+        else:
+            st, p = "NOT STAMPED", None
+        n[st] = n.get(st, 0) + 1
+        what = (f"{p['side']} {p['line']} {p['market']} {p['odds']} {round(p['model_prob']*100)}%"
+                if p else "")
+        print(f"{x['label'][:18]:18} {x['player'][:22]:22} {st:11} {what}")
+print(n)
+EOF
+```
+
+Want: the last line split into PICK / OTHER WAY / NO PICK / NO PROPS.
+All `NOT STAMPED` means the board is still from older code — wait a cycle.
+Send the rows for Kincaid, Wilson and Mitchell.
+
+**2. Is Pinnacle's baseball price reaching the board?** (item G1) After
+an MLB build on today's code:
+
+```bash
+sudo journalctl -u qellys --since "2 hours ago" | grep "Sharp witness" | tail -3
+```
+
+Want: "N of M moneylines carry Pinnacle's price". N near M and "0
+cleared the 2% edge" is the rule working, nothing to fix. N at 0 is the
+bug — send the line.
+
+**3. Does every board pick have its journal row?**
+
+```bash
+cd /srv/qellys && python3 - <<'EOF'
+import json, sqlite3
+from engine.gate import board_source
+from engine import ledger
+b = json.load(open(board_source("web/data/recommendations.json")))
+c = sqlite3.connect("data/ledger.db")
+missing = []
+for r in b.get("most_likely") or []:
+    if r.get("reserve"):
+        continue
+    m, p = r.get("market", ""), r.get("player")
+    if r.get("kind") == "game" or m in ledger.GAME_MARKETS:
+        k = ledger.game_row_keys(r, m)
+        if not k:
+            continue
+        p, m = k[0], k[1]
+    if not c.execute("SELECT 1 FROM bets WHERE sport='nfl' AND date=? AND player=? AND market=? "
+                     "AND category IN ('likely','likely_live')", (b.get("date"), p, m)).fetchone():
+        missing.append(f"{r.get('player')} {r.get('side')} {r.get('line')} {m} {r.get('odds')}")
+print(len(missing), "board picks not in the journal")
+for x in missing: print("  ", x)
+EOF
+```
+
+Want: `0 board picks not in the journal`.
+
+**4. Your call — the Tonges bet.** It was voided this morning. By your
+2026-09-14 rule a player who took snaps and logged no stat is graded at
+zero, and he played 12% of them, so the rule says a LOSS (a `stale`
+row: zero dollars, never in the headline). To grade it like every other
+row, reopen it and the next settle pass applies the rule; to leave it
+void, do nothing:
+
+```bash
+cd /srv/qellys && sqlite3 data/ledger.db "UPDATE bets SET status='open', why_note=NULL WHERE sport='nfl' AND date='2026-W01' AND player='Jake Tonges' AND status='void'"
+```
+
+**5. The Kalshi block runs as `qellys`, never root** (item G3). The
+exact block is in `/srv/qellys/backups/OUTSTANDING-2026-09-25.md`; run
+it with `sudo -u qellys` in front, not as root.
+
+**Never commit on the box** — see block G. Write notes to `backups/` or
+send them to Claude.
+
+---
+
 ## STILL OPEN — after Ethan's run, 2026-09-24 evening
 
 Answered tonight (droplet on 99dc78a2 → 524a72af): the Most Likely hold
