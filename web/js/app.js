@@ -35120,6 +35120,22 @@ async function boardStamp(file) {
 const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB"],
   ["nba", "NBA"], ["wnba", "WNBA"], ["ufc", "UFC"]];
 
+/* THE BOARD'S SELF-CHECK (engine/boardtruth, run by launch._board_truth
+   after every build): how many of the claims the page makes held against
+   the board's own data. Ethan, 2026-09-25: "making sure all that shit is
+   good." Counts only — the detail names picks and lives in the build log. */
+const TRUTH_WORDS = { "FLOOR": "under 55%", "CAP": "heavier than −250", "OLD PRICE": "old price unmarked",
+  "NO NOW": "locked, no current price", "LOCK NOTE": "note and tile disagree",
+  "PICK MISSING": "card names a missing pick", "LONGSHOT": "longshot called likeliest",
+  "BARE MATE": "teammate-out line with no number", "DATA BEHIND": "stats behind" };
+function truthRowHTML(t, sub) {
+  if (!t || t.checked == null) return "";
+  if (!t.count) return sub("Self-check", `all ${t.checked} claims hold`, "st-good", "");
+  const what = Object.entries(t.by_check || {})
+    .map(([k, v]) => `${TRUTH_WORDS[k] || k} ${v}`).join(" · ");
+  return sub("Self-check", `${t.count} of ${t.checked} claims fail`, "st-bad", what);
+}
+
 function buildsCardHTML(hb) {
   if (!hb) return "";
   const runs = hb.boards || {};
@@ -35139,7 +35155,8 @@ function buildsCardHTML(hb) {
     const boards = r.most_likely == null && r.edge == null ? "" :
       sub("Most Likely board", n(r.most_likely, "pick", "picks"), r.most_likely ? "st-good" : "st-off", kept)
       + sub("Edge board", n(r.edge, "bet", "bets"), r.edge ? "st-good" : "st-off",
-            r.staked ? `${r.staked} staked` : (r.edge === 0 ? "nothing priced wrong" : ""));
+            r.staked ? `${r.staked} staked` : (r.edge === 0 ? "nothing priced wrong" : ""))
+      + truthRowHTML(r.truth, sub);
     return `<div class="st-row"><span class="st-k">${escapeHtml(label)}</span>
       <span class="st-v ${r.ok ? "st-good" : "st-bad"}">${r.ok
         ? `rebuilt ${escapeHtml(when)}` : `build failed ${escapeHtml(when)}`}</span>

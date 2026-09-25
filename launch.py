@@ -302,6 +302,28 @@ def _board_counts(path: str) -> dict:
     }
 
 
+def _board_truth(name: str, path: str) -> dict:
+    """engine/boardtruth.check on the full board just written, its problems
+    printed to the build log; the counts returned. {} when the board cannot
+    be read. Never fatal: a self-check that raised would cost the
+    heartbeat, not the board."""
+    try:
+        with open(_full_copy(path)) as fh:
+            b = json.load(fh)
+        from engine import boardtruth as _truth
+        rep = _truth.check(b if isinstance(b, dict) else {})
+    except Exception:                                     # noqa: BLE001
+        return {}
+    if rep.get("count"):
+        print("  ⚠️  " + _truth.line(name.upper(), rep))
+        for p in rep.get("problems") or []:
+            print(f"       {p}")
+    # COUNTS ONLY into the heartbeat: it is a public file, and a problem's
+    # detail names a paid board's pick (engine/gate.PAID_KEYS). The detail
+    # is in the build log above.
+    return {k: rep.get(k) for k in ("checked", "count", "by_check")}
+
+
 def _board_word(path: str, ok: bool) -> str:
     """What a refresh should actually say about the board it just wrote.
 
@@ -1448,6 +1470,9 @@ def _note_board(name: str, ok) -> bool:
     # (a failed run leaves the last good board, so it counts that one).
     if name in BOARD_FILES:
         _BOARD_RUNS[name].update(_board_counts(BOARD_FILES[name]))
+        # …and whether what it says holds against its own data
+        # (engine/boardtruth), into the heartbeat for the Status page.
+        _BOARD_RUNS[name]["truth"] = _board_truth(name, BOARD_FILES[name])
     # AFTER the run is recorded, so the heartbeat is written even if this
     # raises, and unconditional because the loop that matters is quiet.
     _warn_if_frozen(name)

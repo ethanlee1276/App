@@ -138,6 +138,58 @@ cd /srv/qellys && sqlite3 data/ledger.db "UPDATE bets SET status='open', why_not
 exact block is in `/srv/qellys/backups/OUTSTANDING-2026-09-25.md`; run
 it with `sudo -u qellys` in front, not as root.
 
+**6. Did the stale-data and teammate-out work reach the live board?**
+(commits 9dc0800e and 75e70e1c) After NFL has rebuilt on today's code:
+
+```bash
+cd /srv/qellys && git log --oneline -1 && python3 - <<'EOF'
+import json, datetime as dt
+from engine.gate import board_source
+d = json.load(open(board_source("web/data/recommendations.json")))
+now = dt.datetime.now(dt.timezone.utc)
+print("data_freshness:", d.get("data_freshness"))
+ml = d.get("most_likely") or []
+ages = [(now - dt.datetime.fromisoformat(r["priced_at"].replace("Z", "+00:00"))).total_seconds() / 3600
+        for r in ml if r.get("priced_at")]
+print(f"Most Likely rows {len(ml)} · with a pull time {len(ages)} · oldest price {max(ages or [0]):.1f}h")
+lk = [r for r in ml if r.get("locked")]
+print(f"locked {len(lk)} · book lists it now {sum(1 for r in lk if r.get('now_listed'))} · "
+      f"no book lists it {sum(1 for r in lk if r.get('now_listed') is False)}")
+for g in (d.get("scan_reads") or {}).values():
+    for p in g.get("players") or []:
+        for t in (p.get("pro") or []) + (p.get("notes") or []):
+            if " out" in t and ("targets" in t or "carries" in t):
+                print(" ", p["player"], "|", t)
+EOF
+```
+
+Want:
+- the commit at 75e70e1c or later;
+- `data_freshness` with `behind: []` (anything listed there is also on
+  the site's banner — send it);
+- nearly every Most Likely row with a pull time, and the oldest price
+  under 6h;
+- the locked picks split between "book lists it now" and "no book lists it";
+- each teammate-out line with a number in it (a share, or "absorbed
+  +N%"), and "our projection counts it" where the model moved his number.
+
+`data_freshness: None` and no pull times means NFL has not rebuilt on the
+new code yet — wait a cycle.
+
+**7. The board's self-check.** Every build now checks the claims its
+board makes against its own data (engine/boardtruth): picks under 55% or
+heavier than −250, old prices not marked, locked picks with no current
+price, a note and a tile that disagree, a card naming a pick the board
+lacks, a longshot called "likeliest", a teammate-out line with no number,
+stats behind. The Status page shows each league's count under "Model
+builds"; the detail is in the log:
+
+```bash
+sudo journalctl -u qellys --since "1 hour ago" | grep -A8 "self-check" | tail -40
+```
+
+No output means every claim held. Anything printed, send it.
+
 **Never commit on the box** — see block G. Write notes to `backups/` or
 send them to Claude.
 
