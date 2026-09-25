@@ -81,6 +81,9 @@ cd /srv/qellys && python3 wxfit.py --scale 2>&1 | tail -12
 
 Want: either `the board's forecast table matches` (nothing to change) or
 `CHANGE —` followed by new numbers. Send me the tail either way.
+**Done 2026-09-25:** it said CHANGE (largest gap 0.030, 483 games), and
+the new table is in engine/weather.WIND_FORECAST. Re-run it after a few
+more weeks of games; it should then say "matches".
 
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.

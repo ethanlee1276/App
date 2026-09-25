@@ -10229,9 +10229,9 @@ function whyHeldItem(lk, p) {
     : `Since ${escapeHtml(held.when)}, held through every refresh`}: ${moved}.${lk.first_line != null
     ? ` It went up at ${escapeHtml(side)} ${escapeHtml(String(lk.first_line))}; that number no
       longer clears the board’s bars at its best price, so it shows at ${escapeHtml(String(lk.line))} —
-      and goes back to ${escapeHtml(String(lk.first_line))} if it clears again.` : ""} A pick keeps its
-    number and its seat unless its game starts, a bar turns it away, or a pick 3 points likelier
-    takes the seat.`];
+      and goes back to ${escapeHtml(String(lk.first_line))} if it clears again.` : ""}${lk.locked && lk.lock_note
+    ? ` Locked in: ${escapeHtml(lk.lock_note)}` : ""} A pick stays up until its game — only its game
+    starting or its player being ruled out takes it down.`];
 }
 
 /* The section itself, one shape for every bet. A pick under 50% is not
@@ -10344,6 +10344,11 @@ function whyLikelyHTML(v, r, lk) {
   if (cautions.length) items.push(["Worth knowing", cautions.join("; ") + "."]);
   // What game this pick needs, and what it pulls against (gameScriptsHTML).
   { const gs = scriptWhyItem(lk && lk.player ? { ...r, ...lk } : r); if (gs) items.push(gs); }
+  /* THE MATCHUP SCAN'S READ ON HIM, here with the rest of the reasons
+     (Ethan, 2026-09-25: the scan said why St. Brown could do well and
+     "Why it's likely" did not). */
+  { const x = pickScanRead(lk && lk.player ? { ...r, ...lk } : r);
+    if (x) items.push([`The matchup — ${escapeHtml(x.label)}`, scanWhyList(x)]); }
   return whySectionHTML(items, p, board);
 }
 
@@ -10467,9 +10472,18 @@ function renderPropPage() {
      straight after; the chart and the logs read against that line; and
      the edge board's gates and price refusals stay on the edge board. */
   const lk = state.propLikely ? likelyFor(r) : null;
-  const v = lk && lk.line != null
+  const v0 = lk && lk.line != null
     ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
     : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
+  /* AN ANYTIME SCORER IS OVER 0.5 (2026-09-25). A Most Likely scorer row
+     carries side "yes" and no line; read literally that was UNDER a line
+     of 0 — "yes 0 Anytime TD", "ODDS (UNDER)", and a 0/10 hit rate on
+     Amon-Ra St. Brown, who scores in half his games (Ethan's screenshot).
+     The bet is one touchdown or more, and every number here reads it so. */
+  const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);
+  const v = scorer
+    ? { ...v0, side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5 }
+    : v0;
   const over = String(v.side || "OVER").toUpperCase() === "OVER";
   const line = Number(v.line);
   const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value)));
@@ -10508,9 +10522,9 @@ function renderPropPage() {
               r.team ? teamLinkHTML(state.sport, r.team) : "",
               r.opponent ? `vs ${teamLinkHTML(state.sport, r.opponent)}` : ""]
               .filter(Boolean).join(" · ")}</div>
-            <div class="pick">${escapeHtml(v.side || "")} ${
-              Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
-              escapeHtml(r.market_label || r.market || "")}${lk && v.book
+            <div class="pick">${scorer ? `${escapeHtml(r.market_label || r.market || "")} · ${over ? "Yes" : "No"}`
+              : `${escapeHtml(v.side || "")} ${Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
+              escapeHtml(r.market_label || r.market || "")}`}${lk && v.book
               ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
             ${lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
             ${lk && lk.locked && lk.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} Locked in — ${escapeHtml(lk.lock_note)}</div>` : ""}
@@ -10593,8 +10607,6 @@ function renderPropPage() {
         <span class="sub">— what ${escapeHtml(r.matchup_card.opponent || r.opponent || "")}
         give up to his position, and what the model did with it.</span></div>
       ${matchupCardHTML(r)}` : ""}
-
-    ${pickScanHTML(r)}
 
     ${reasons ? `<div class="section-title minor">${lk ? "The model’s notes" : "Why this pick"}</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
@@ -11250,27 +11262,56 @@ function scanCoverageHTML(scan, team) {
     </div>`;
 }
 
+/* A read's reasons: the counted ones, then what was noticed and not
+   counted (engine/gamescan.player_read). */
+function scanWhyList(x) {
+  if (!(x.pro || []).length && !(x.con || []).length && !(x.notes || []).length) return "";
+  return `<ul class="ms-why">
+        ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
+        ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted, no lift when tested</li>
+          ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>`;
+}
+
+/* WHERE A SCAN ROW OPENS (Ethan, 2026-09-25: "make those players
+   clickable so you could click on them ... take you to the why is it
+   likely board and chart"). His Most Likely pick first — the market the
+   read points at if he has one there — then his prop on the edge board,
+   then his player page. */
+function scanDoor(x, market) {
+  const d = state.data || {};
+  const same = (r) => r && r.player === x.player && (!r.team || !x.team || r.team === x.team);
+  const want = market ? [market] : (x.lean || []);
+  const ml = (d.most_likely || []).filter((r) => same(r) && r.kind !== "game");
+  const lk = ml.find((r) => want.includes(r.market)) || (market ? null : ml[0]);
+  if (lk) return { attrs: likelyOpen(lk), what: `his Most Likely pick — ${lk.market_label || lk.market}` };
+  const props = (d.recommendations || []).filter(same);
+  const pr = props.find((r) => want.includes(r.market) && propOpenable(r))
+    || (market ? null : props.find((r) => propOpenable(r)));
+  if (pr) return { attrs: ` data-open="prop:${escapeAttr(propId(pr))}"`, what: `his ${pr.market_label || pr.market} prop` };
+  return { attrs: ` data-open="player:${escapeAttr(slugify(x.player))}"`, what: "his player page" };
+}
+
 function scanReadHTML(x) {
   const u = x.usage || {};
   const bits = [];
   if (u.tgt_share) bits.push(`${Math.round(u.tgt_share * 100)}% of targets`);
   if (u.carry_share) bits.push(`${Math.round(u.carry_share * 100)}% of carries`);
   if (u.snap_pct) bits.push(`${Math.round(u.snap_pct * 100)}% of snaps`);
-  return `<div class="ms-read ${escapeHtml(x.read)}">
-      <div class="ms-read-head">${betMark({ player: x.player, team: x.team }, 30)}
+  const door = scanDoor(x);
+  return `<div class="ms-read ${escapeHtml(x.read)}"${door.attrs}>
+      <button type="button" class="ms-read-head"${door.attrs}>${betMark({ player: x.player, team: x.team }, 30)}
         <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
-        <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></div>
-      ${(x.pro || []).length || (x.con || []).length || (x.notes || []).length ? `<ul class="ms-why">
-        ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
-        ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
-        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted, no lift when tested</li>
-          ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>` : ""}
+        <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></button>
+      ${scanWhyList(x)}
+      <span class="ms-open">Open ${escapeHtml(door.what)} →</span>
     </div>`;
 }
 
 function scanMicroHTML(m) {
-  return `<div class="ms-micro">
+  const door = scanDoor({ player: m.player, team: m.team }, m.market);
+  return `<div class="ms-micro"${door.attrs} role="link" tabindex="0">
       <span class="ms-micro-bet"><b>${escapeHtml(m.player)}</b> ${escapeHtml(m.side || "")} ${escapeHtml(String(m.line ?? ""))} ${escapeHtml(m.market_label || m.market || "")}</span>
       <span class="ms-micro-price">${m.odds != null ? american(m.odds) : "—"}${m.book ? ` · ${escapeHtml(m.book)}` : ""}</span>
       <span class="ms-micro-p">${m.prob != null ? wholePct(m.prob) : "—"}</span>
@@ -11290,15 +11331,6 @@ function pickScanRead(r) {
   if (!g) return null;
   const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
   return ((reads && reads.players) || []).find((x) => x.player === r.player && x.team === r.team) || null;
-}
-
-function pickScanHTML(r) {
-  const x = pickScanRead(r);
-  if (!x) return "";
-  return `<div class="section-title minor">Matchup scan
-      <span class="sub">— his read against ${escapeHtml(teamName(r.opponent || ""))} from the game’s scan.
-      Tested against past seasons, it adds nothing to the number, so it does not move it.</span></div>
-    ${scanReadHTML(x)}`;
 }
 
 function matchupScanHTML(g) {

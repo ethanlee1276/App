@@ -139,15 +139,17 @@ def test_a_forecast_takes_its_ranges_measured_cut_and_a_reading_its_band():
     The median forecast/reported ratio (0.714) was a calm-day artifact; a
     single best scale (×1.18) traded one miss for another. What each
     forecast range has been worth — the measured effects averaged over the
-    winds those forecasts became — is the table itself."""
+    winds those forecasts became — is the table itself. Re-measured
+    2026-09-25 at the kickoff hour (it had been read four hours early):
+    a calm forecast is worth no cut at all, a 13+ one more than before."""
     wr = {mph: W.evaluate_weather(Weather(wind_mph=mph, measured=True, forecast=True), "WR")
           for mph in (3.0, 9.0, 11.0, 15.0)}
-    assert [wr[m].multipliers[REC_YDS] for m in (3.0, 9.0, 11.0, 15.0)] == [0.985, 0.962, 0.949, 0.933]
-    assert wr[9.0].multipliers[RECEPTIONS] == 0.985
+    assert [wr[m].multipliers[REC_YDS] for m in (3.0, 9.0, 11.0, 15.0)] == [0.997, 0.967, 0.945, 0.926]
+    assert wr[9.0].multipliers[RECEPTIONS] == 0.994
     assert wr[9.0].reasons[0].startswith(
-        "Wind 9 mph forecast — games forecast at 7–10 mph averaged receiving yards −3.8%, catches −1.5%")
+        "Wind 9 mph forecast — games forecast at 7–10 mph averaged receiving yards −3.3%, catches −0.6%")
     qb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "QB")
-    assert qb.multipliers[PASS_YDS] == 0.953 and qb.multipliers["pass_td"] == 0.900
+    assert qb.multipliers[PASS_YDS] == 0.938 and qb.multipliers["pass_td"] == 0.870
     rb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "RB")
     assert all(v == 1.0 for v in rb.multipliers.values()) and rb.reasons == []
     assert W.evaluate_weather(_wind(9.0), "WR").multipliers[REC_YDS] == W.WIND[("rec_yds", "WRTE")]["8-12"], \
@@ -158,7 +160,8 @@ def test_a_forecast_takes_its_ranges_measured_cut_and_a_reading_its_band():
     assert weather_td_multiplier(g, "QB")[0] == 1.0
     for key, rows in W.WIND_FORECAST.items():
         vals = [rows[r] for r in ("0-4", "4-7", "7-10", "10-13", "13+")]
-        assert vals == sorted(vals, reverse=True) and all(v < 1.0 for v in vals), key
+        assert vals == sorted(vals, reverse=True) and all(v <= 1.0 for v in vals), key
+        assert vals[-1] < 1.0, "a 13+ forecast always cuts"
 
 
 def test_the_deep_ball_block_reads_the_forecast_as_it_is():
@@ -187,7 +190,7 @@ def test_the_scale_check_compares_the_cut_not_the_winds():
     assert [r["forecast"] for r in rows] == ["0-4", "4-7", "7-10", "10-13", "13+"]
     assert all(t == b for r in rows for (t, b) in r["markets"].values()), "reading == forecast here"
     shipped = F.effect_by_forecast(pairs, {("rec_yds", "WRTE"): W.WIND[("rec_yds", "WRTE")]}, W.forecast_cut)
-    assert shipped[2]["markets"][("rec_yds", "WRTE")] == (0.955, 0.962)
+    assert shipped[2]["markets"][("rec_yds", "WRTE")] == (0.955, 0.967)
     assert F.forecast_range(3.9) == "0-4" and F.forecast_range(13.0) == "13+" and F.FORECAST_TOLERANCE == 0.01
     src = open(os.path.join(ROOT, "wxfit.py"), encoding="utf-8").read()
     assert "F.effect_by_forecast(pairs, table, W.forecast_cut)" in src and "CHANGE — a range is off by" in src

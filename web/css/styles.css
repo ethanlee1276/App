@@ -11815,6 +11815,12 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 /* A locked Most Likely pick's "what changed since it went up" line
    (engine/likely.hard_exit). */
 .lk-lock { margin-top: 4px; display: flex; gap: 6px; align-items: baseline; color: var(--text-dim); }
+/* A scan read opens the player's pick (scanDoor): the card is the door,
+   its header the keyboard's. */
+.ms-read[data-open], .ms-micro[data-open] { cursor: pointer; }
+button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; }
+.ms-open { display: block; margin-top: 10px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); }
 .ms-why li.note::marker { content: "·  "; color: var(--text-dim); font-weight: 800; }
 .ms-why-k { list-style: none; margin: 4px 0 0 -18px; font-size: var(--fs-xs); letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-dim); }

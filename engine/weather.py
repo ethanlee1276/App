@@ -96,13 +96,22 @@ TD_SNOW: dict = {}
 #: wrong shape of answer.) The touchdown row is read off the same games:
 #: the share of each range at 12+ mph (the catches and passing-TD rows,
 #: flat above 12, both give it) times the measured −13.5%.
+#:
+#: RE-MEASURED 2026-09-25 AT THE RIGHT HOUR. The 09-23 table paired each
+#: game with the forecast four hours BEFORE kickoff (engine/cfb/wx.
+#: nearest_hour: the NFL's Eastern kickoff was read as UTC). Re-run on the
+#: droplet with the hour fixed, 483 games: a calm or light forecast is
+#: worth less of a cut than the early-afternoon reading said (0-4 mph:
+#: nothing at all), and a 13+ forecast more (passing touchdowns ×0.870
+#: against ×0.900) — the kickoff hour is windier than the morning when it
+#: is windy at all. The touchdown row is now read off the games directly.
 WIND_FORECAST = {
-    ("pass_td", "QB"): {"0-4": 0.988, "4-7": 0.980, "7-10": 0.951, "10-13": 0.942, "13+": 0.900},
-    ("pass_yds", "QB"): {"0-4": 0.994, "4-7": 0.991, "7-10": 0.977, "10-13": 0.973, "13+": 0.953},
-    ("rec_yds", "WRTE"): {"0-4": 0.985, "4-7": 0.978, "7-10": 0.962, "10-13": 0.949, "13+": 0.933},
-    ("receptions", "WRTE"): {"0-4": 0.996, "4-7": 0.994, "7-10": 0.985, "10-13": 0.983, "13+": 0.970},
+    ("pass_td", "QB"): {"0-4": 1.000, "4-7": 0.989, "7-10": 0.979, "10-13": 0.932, "13+": 0.870},
+    ("pass_yds", "QB"): {"0-4": 1.000, "4-7": 0.995, "7-10": 0.990, "10-13": 0.968, "13+": 0.938},
+    ("rec_yds", "WRTE"): {"0-4": 0.997, "4-7": 0.984, "7-10": 0.967, "10-13": 0.945, "13+": 0.926},
+    ("receptions", "WRTE"): {"0-4": 1.000, "4-7": 0.997, "7-10": 0.994, "10-13": 0.980, "13+": 0.962},
 }
-TD_WIND_FORECAST = {"pass": {"0-4": 0.989, "4-7": 0.983, "7-10": 0.958, "10-13": 0.951, "13+": 0.914}}
+TD_WIND_FORECAST = {"pass": {"0-4": 1.000, "4-7": 0.991, "7-10": 0.982, "10-13": 0.942, "13+": 0.890}}
 
 #: Below this forecast chance it is a dry day — the measured base, dry
 #: at kickoff, holds the games that were given a small chance and stayed dry.

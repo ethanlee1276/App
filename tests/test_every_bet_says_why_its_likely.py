@@ -66,6 +66,7 @@ PRELUDE = "\n".join([
     'const teamName = (t) => ({ GB: "Packers", CHI: "Bears" }[t] || t);',
     'const likelyHeld = () => null;',
     'const scriptWhyItem = () => null;',   # the game-script line: tests/test_game_scripts.py
+    'const pickScanRead = () => null; const scanWhyList = () => "";',   # the scan's read: test_the_matchup_scan_reads_every_game
     'let state = { data: { team_recent: { GB: [3, -17, 7, 7, 17].map((m) => ({ margin: m })) } } };',
     'const teamRecent = (t) => (state.data.team_recent[t] || []);',
 ])

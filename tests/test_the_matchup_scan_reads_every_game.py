@@ -200,12 +200,45 @@ def test_ask_reads_the_scan_for_a_named_game_only():
 
 
 def test_the_pick_page_carries_the_players_read():
+    """In "Why it's likely", with the rest of the reasons (Ethan,
+    2026-09-25: the scan said why St. Brown could do well and the why
+    card did not) — not in a section of its own further down."""
     page = APP[APP.index("function renderPropPage("):]
     page = page[:page.index("\n}\n")]
-    assert "${pickScanHTML(r)}" in page
+    assert "pickScanHTML" not in APP, "one place for the read, not two"
+    why = APP[APP.index("function whyLikelyHTML("):]
+    why = why[:why.index("\n}\n")]
+    assert "pickScanRead(lk && lk.player ? { ...r, ...lk } : r)" in why
+    assert "`The matchup — ${escapeHtml(x.label)}`, scanWhyList(x)" in why
     fn = APP[APP.index("function pickScanRead("):]
     fn = fn[:fn.index("\n}\n")]
     assert "(d.scan_reads || {})[`${g.away}@${g.home}`]" in fn
+
+
+def test_a_scan_player_opens_his_pick():
+    """Ethan, 2026-09-25: "make those players clickable so you could
+    click on them ... take you to the why is it likely board and chart"."""
+    door = APP[APP.index("function scanDoor("):]
+    door = door[:door.index("\n}\n")]
+    order = [door.index(k) for k in ("likelyOpen(lk)", 'data-open="prop:', 'data-open="player:')]
+    assert order == sorted(order), "his Most Likely pick, then his prop, then his player page"
+    card = APP[APP.index("function scanReadHTML("):]
+    card = card[:card.index("\n}\n")]
+    assert '<div class="ms-read ${escapeHtml(x.read)}"${door.attrs}>' in card
+    assert '<button type="button" class="ms-read-head"${door.attrs}>' in card, "a keyboard reaches it"
+    micro = APP[APP.index("function scanMicroHTML("):]
+    assert "scanDoor({ player: m.player, team: m.team }, m.market)" in micro[:micro.index("\n}\n")]
+
+
+def test_an_anytime_scorer_reads_as_one_or_more():
+    """St. Brown's pick page read "yes 0 Anytime TD", "ODDS (UNDER)" and a
+    0/10 hit rate: the Most Likely scorer row carries side "yes" and no
+    line, and the page took that as under a line of 0."""
+    page = APP[APP.index("function renderPropPage("):]
+    page = page[:page.index("\n}\n")]
+    assert 'const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);' in page
+    assert 'side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5' in page
+    assert '${over ? "Yes" : "No"}' in page
 
 
 # ── the build and the page ─────────────────────────────────────────────────
