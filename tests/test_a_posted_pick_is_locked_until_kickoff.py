@@ -77,10 +77,23 @@ def test_the_dashboard_keeps_what_it_showed():
     assert "const LIKELY_TOP_N = 5;" in APP
 
 
-def test_a_locked_pick_is_never_journaled_twice():
-    i = LEDGER.index("def log_most_likely")
-    body = LEDGER[i:LEDGER.index("\ndef ", i + 10)]
-    assert 'if r.get("locked"):\n            continue' in body
+def test_a_locked_pick_is_journaled_once():
+    """Journaled when it went up, the lock never adds a second bet; posted
+    under the old ten-row journal and never journaled, it journals now, at
+    the number it went up at."""
+    from engine import ledger
+    posted = {"player": "Emanuel Wilson", "team": "GB", "market": "rush_yds", "side": "over",
+              "line": 9.5, "odds": -240, "book": "DraftKings", "model_prob": 0.74,
+              # A kickoff still ahead, whenever this runs: the journal
+              # refuses a game under way by the clock.
+              "game_date": "2099-09-24", "kickoff": "20:15"}
+    lock = K._locked(posted, "number moved", "2099-09-24T20:00:00Z")
+    conn = ledger.connect(":memory:")
+    board = {"sport": "nfl", "date": "2026-W03", "most_likely": [lock]}
+    assert ledger.log_most_likely(conn, board) == 1, "never journaled: it journals now"
+    assert ledger.log_most_likely(conn, board) == 0, "already in the book: never a second bet"
+    got = dict(conn.execute("SELECT odds, line, side FROM bets").fetchone())
+    assert got == {"odds": -240, "line": 9.5, "side": "OVER"}, got
 
 
 if __name__ == "__main__":

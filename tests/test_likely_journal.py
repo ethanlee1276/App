@@ -187,21 +187,23 @@ def test_a_player_who_never_took_the_field_voids_rather_than_loses():
     assert "NEVER_NOSHOW = GRADED_ELSEWHERE" in src
 
 
-# --- volume discipline ----------------------------------------------------
-def test_only_the_top_of_the_board_is_journaled():
-    """TEN, NOT FORTY, and the number is a lesson rather than a taste.
-    The old watchlist wrote two hundred rows a night into a bucket nobody
-    read. `tdbacktest.board_report` grades this board at depths 5, 10, 20
-    and 40, and the signal is at the top: the first five rows land 6.8
-    points above what they claim, the first forty are inside the noise."""
+# --- every pick the board publishes --------------------------------------
+def test_every_published_row_is_journaled():
+    """TEN UNTIL 2026-09-25, and ten was rows, not picks. The board is one
+    list across the whole NFL week, so the ten likeliest of the week were
+    journaled and a Packers back posted further down — on the page, bet
+    by readers — was in no book and missing from the Live tab (Ethan,
+    that night). Every published row is a pick, so every row journals;
+    see `LIKELY_JOURNAL_DEPTH`."""
     rows = [_row(player=f"Player {i}") for i in range(40)]
     _conn, n = _book(rows)
-    assert n == ledger.LIKELY_JOURNAL_DEPTH == 10, n
+    assert ledger.LIKELY_JOURNAL_DEPTH is None
+    assert n == 40, n
 
 
-def test_the_depth_is_the_top_of_the_list_not_a_sample():
+def test_a_depth_asked_for_is_still_the_top_of_the_list():
     rows = [_row(player=f"Player {i}", prob=0.9 - i * 0.01) for i in range(20)]
-    conn, _n = _book(rows)
+    conn, _n = _book(rows, depth=10)
     kept = {r[0] for r in conn.execute("SELECT player FROM bets")}
     assert kept == {f"Player {i}" for i in range(10)}, sorted(kept)
 
@@ -270,7 +272,7 @@ def test_the_real_board_survives_the_round_trip():
     # runs -99 to +99 and a book quoting better than even money writes
     # +103 — so the journal is right to drop it, and a test that
     # demanded otherwise was asserting about this box's model store.
-    assert 0 < n <= min(len(rows), ledger.LIKELY_JOURNAL_DEPTH), n
+    assert 0 < n <= len(rows), n
     for b in conn.execute("SELECT * FROM bets"):
         assert b["line"] is not None, b["player"]
         assert (b["side"] or "").upper() in ("OVER", "UNDER"), b["side"]

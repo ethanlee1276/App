@@ -88,6 +88,31 @@ more weeks of games; it should then say "matches".
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.
 
+**F. Every Most Likely pick journaled** (2026-09-25). Until today the
+journal took the board's top ten rows only, so a pick posted further
+down — the Packers back over 9.5 rushing yards on Thursday night — was
+on the page and never on Live or the record. After the next NFL build
+on the new code (read-only):
+
+```bash
+cd /srv/qellys && python3 - <<'EOF'
+import json, sqlite3
+from engine.gate import board_source
+b = json.load(open(board_source("web/data/nfl_picks.json")))
+rows = [r for r in b.get("most_likely") or [] if not r.get("reserve")]
+c = sqlite3.connect("data/ledger.db")
+n = c.execute("SELECT COUNT(*) FROM bets WHERE sport='nfl' AND date=? "
+              "AND category IN ('likely','likely_live')", (b.get("date"),)).fetchone()[0]
+print(b.get("date"), len(rows), "picks on the board ·", n, "Most Likely bets journaled this week")
+EOF
+sudo journalctl -u qellys --since "1 hour ago" | grep "Most likely:" | tail -3
+```
+
+Want: the journaled count at least the board count, and one build
+printing a larger "Most likely: N row(s) journaled" as it catches up.
+Thursday's Packers pick cannot be caught up: the board keeps no copy of
+a game's picks after kickoff and it was never journaled.
+
 ## NEXT TIME HOME — from 2026-09-24, in this order
 
 Ethan, 2026-09-24: *"save all the code u need me too run for when im

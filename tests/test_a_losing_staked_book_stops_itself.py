@@ -211,7 +211,12 @@ def test_a_cut_band_is_the_only_thing_that_loses_its_money():
     _settled(c, 90, 30, prob=0.80)
     _settled(c, 150, 115, prob=0.68)
     ledger.log_most_likely(c, _board(prob=0.80))
-    ledger.log_most_likely(c, _board(prob=0.68))
+    # A SECOND PICK. Both boards named the same player, and journaling one
+    # pick into both books is the double bet the journal now refuses
+    # (2026-09-25, `log_most_likely`: one pick, one row).
+    other = _board(prob=0.68)
+    other["most_likely"][0]["player"] += "_b"
+    ledger.log_most_likely(c, other)
     got = {r["category"] for r in _journaled(c)}
     assert got == {"likely", ledger.LIKELY_LIVE_CATEGORY}, got
 

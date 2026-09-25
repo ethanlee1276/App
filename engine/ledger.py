@@ -999,25 +999,25 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
     return n
 
 
-#: How deep into the likelihood board to journal. Ethan, 2026-08-30, on
-#: the two boards: "which bets do we trust more as now its confusing.
-#: also which ones are we recording?"
+#: How deep into the likelihood board to journal: ALL OF IT (None).
 #:
-#: The answer was that we recorded the board built on the signal that
-#: measures as NOISE and recorded nothing from the board built on the two
-#: that measure well — 0.721 AUC on who scores, 0.69-0.77 on who clears a
-#: line, against 0.468 for where the market is wrong. Seven of eight
-#: likelihood rows on a sample slate left no trace anywhere.
+#: It was ten from 2026-08-30 to 2026-09-25, chosen when this bucket was
+#: a measurement nobody read: `tdbacktest.board_report` found the signal
+#: in the top rows and the old watchlist had buried every audit under two
+#: hundred names a night. Then the board became the product. Ethan,
+#: 2026-09-25, with the Live tab open during Falcons-Packers: a Packers
+#: back over 9.5 rushing yards he had seen on Most Likely was nowhere on
+#: it — "it's still an issue that you have not solved."
 #:
-#: TEN, NOT FORTY, and the number is the lesson from `log_longshots`
-#: rather than a preference. The watchlist used to journal two hundred
-#: rows a night into a bucket nobody read, and it made every audit and
-#: every stuck-bet report a wall of names. `tdbacktest.board_report`
-#: grades this board at depths 5, 10, 20 and 40 and the signal is at the
-#: top: the first five rows land 6.8 points above what they claim, the
-#: first forty are inside the noise. Ten answers the headline claim at
-#: about seventy rows a week.
-LIKELY_JOURNAL_DEPTH = 10
+#: TEN WAS ROWS, NOT PICKS. The board is one list in probability order
+#: across the whole NFL week, so by Thursday, with Sunday priced, the ten
+#: likeliest rows of the WEEK were journaled and everything under them —
+#: most of what the page showed, and most of tonight's game — was posted,
+#: bet by readers, and never tracked, graded or shown on Live. The site
+#: says "every pick journaled at its real book price and graded in
+#: public"; every row the board publishes is a pick, so every row is
+#: journaled. A caller can still pass a depth; none does.
+LIKELY_JOURNAL_DEPTH = None
 
 
 def repair_inverted_likely_sides(conn) -> dict:
@@ -1076,7 +1076,7 @@ def repair_inverted_likely_sides(conn) -> dict:
 
 
 def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
-                    depth: int = LIKELY_JOURNAL_DEPTH) -> int:
+                    depth=LIKELY_JOURNAL_DEPTH) -> int:
     """Journal the top of the likelihood board to its own bucket.
 
     ``category='likely'``, a small flat stake and ZERO dollar exposure —
@@ -1101,7 +1101,9 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     sport = result.get("sport", "nfl")
     date = result.get("date", "")
     now = datetime.datetime.utcnow().isoformat(timespec="seconds")
-    rows = (result.get("most_likely") or [])[:max(0, int(depth))]
+    rows = list(result.get("most_likely") or [])
+    if depth is not None:
+        rows = rows[:max(0, int(depth))]
     kick = _kickoff_map(result)
     n = 0
     # STAKED, OR STILL A MEASUREMENT — and the BREAKER decides, not the
@@ -1160,11 +1162,13 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # one refactor away from not being one.
         if r.get("reserve"):
             continue
-        # A LOCKED PICK WAS JOURNALED WHEN IT WENT UP (likely.hard_exit);
-        # carried forward at its posted number it is the same bet, never a
-        # second one.
-        if r.get("locked"):
-            continue
+        # A LOCKED PICK IS JOURNALED LIKE ANY OTHER, at the number it went
+        # up at (likely._locked carries it). It used to be skipped on the
+        # grounds that it "was journaled when it went up" — true only for
+        # the ten rows the old depth reached, so a pick posted eleventh
+        # and then locked was on the board until kickoff and in no book.
+        # One that WAS journaled is refused below as a pick already in
+        # the book, so the lock never makes a second bet.
         # A PROJECTED LINEUP IS A GUESS ABOUT WHO PLAYS, NOT A BET — the rule
         # `_journal_longshot_rows` has kept since 2026-07-26 (31 of 58 long
         # shots were projected hitters who sat) and the edge book keeps
@@ -1246,6 +1250,18 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # paper book at the paper stake: still published, still graded,
         # no money on it — so the record keeps answering whether
         # stopping was the right call.
+        # ONE PICK, ONE ROW, WHICHEVER BOOK IT LANDED IN. The table's key
+        # carries the category, and the breaker can move a band between
+        # the paper and staked books from one build to the next — so a
+        # pick journaled on paper would be journaled AGAIN, staked, the
+        # build its band came back. Every published row journals now, and
+        # every refresh republishes them, so the book asks itself.
+        if conn.execute(
+                "SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? "
+                "AND market=? AND category IN (?, ?) LIMIT 1",
+                (sport, row_date, player, market, "likely",
+                 LIKELY_LIVE_CATEGORY)).fetchone():
+            continue
         stake_units = _stake_for(r.get("model_prob"))
         category = (LIKELY_LIVE_CATEGORY if stake_units and staked
                     else "likely")
