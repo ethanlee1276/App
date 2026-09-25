@@ -4302,7 +4302,6 @@ body.pk-open { overflow: hidden; }
 .pk-fv.up { color: var(--good); } .pk-fv.down { color: var(--bad); }
 
 .pk-plays { color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-body); margin: 10px 0 0; }
-.pk-note { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); margin: 8px 0 0; }
 @media (max-width: 860px) {
   .gp-hero { grid-template-columns: 1fr; }
 }
