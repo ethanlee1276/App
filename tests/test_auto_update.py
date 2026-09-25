@@ -191,6 +191,19 @@ def test_everything_the_service_writes_is_ignored_not_just_untracked():
     assert not unignored, unignored
 
 
+def test_a_copy_of_a_database_is_ignored_whatever_it_is_called():
+    """2026-09-25: an eight-megabyte copy of the bet journal sat untracked
+    and unignored in the droplet's checkout, past every named rule. The
+    shapes a copy takes, by shape rather than by name."""
+    shapes = ["data/ledger.db.old", "data/ledger.db.orig", "data/ledger.db.copy",
+              "data/ledger.db.1", "data/ledger.db.20260925", "ledger.db.gz",
+              "data/accounts.db.bak", "ledger.sqlite", "data/ledger.sqlite3",
+              "data/ledger.sqlite.old"]
+    loose = [p for p in shapes if subprocess.run(
+        ["git", "check-ignore", "-q", p], cwd=ROOT).returncode != 0]
+    assert not loose, loose
+
+
 def test_the_board_and_state_directories_are_ignored_wholesale():
     """Per-file ignores rot the first time a sport ships. The
     directories are what has to be ignored."""

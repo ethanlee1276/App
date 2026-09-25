@@ -103,6 +103,17 @@ data/*.backup
 *.db-wal
 *.db-shm
 *.db-journal
+# …AND EVERY OTHER SHAPE A COPY OF A DATABASE TAKES (2026-09-25: an
+# eight-megabyte copy of the bet journal sat untracked and unignored in
+# the droplet's checkout). The rules above name the shapes found so far;
+# each new one has been found the same way, after it was already sitting
+# there. So by shape, not by name: anything ending in .db plus a suffix
+# (.old, .orig, .copy, .gz, .1, a date), and SQLite's other extensions.
+*.db.*
+*.sqlite
+*.sqlite3
+*.sqlite.*
+*.sqlite3.*
 # Runtime state written next to the databases — a spend counter and a
 # failure log, both machine-local and both meaningless in anyone else's
 # clone. Same reasoning as the UFC dossiers below.
