@@ -10348,7 +10348,12 @@ function whyLikelyHTML(v, r, lk) {
      (Ethan, 2026-09-25: the scan said why St. Brown could do well and
      "Why it's likely" did not). */
   { const x = pickScanRead(lk && lk.player ? { ...r, ...lk } : r);
-    if (x) items.push([`The matchup — ${escapeHtml(x.label)}`, scanWhyList(x)]); }
+    if (x) {
+      const bits = scanUsageBits(x);
+      items.push([`The matchup — ${escapeHtml(x.label)}`,
+        `${bits.length ? `<div class="ms-use">${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos || "")} · ${
+          escapeHtml(bits.join(" · "))}</div>` : ""}${scanWhyList(x)}`]);
+    } }
   return whySectionHTML(items, p, board);
 }
 
@@ -11292,12 +11297,23 @@ function scanDoor(x, market) {
   return { attrs: ` data-open="player:${escapeAttr(slugify(x.player))}"`, what: "his player page" };
 }
 
-function scanReadHTML(x) {
-  const u = x.usage || {};
+/* His share of the work, as the read's header prints it — and as the pick
+   page's "Why it's likely" prints it. ONE HELPER FOR BOTH, and one for the
+   reasons (scanWhyList): Ethan, 2026-09-25, "all the data that we pull and
+   show for the who could shine and who could struggle ... shown on why
+   it's likely on the pick page". Two places drawing one read through the
+   same two functions cannot say different things. */
+function scanUsageBits(x) {
+  const u = (x && x.usage) || {};
   const bits = [];
   if (u.tgt_share) bits.push(`${Math.round(u.tgt_share * 100)}% of targets`);
   if (u.carry_share) bits.push(`${Math.round(u.carry_share * 100)}% of carries`);
   if (u.snap_pct) bits.push(`${Math.round(u.snap_pct * 100)}% of snaps`);
+  return bits;
+}
+
+function scanReadHTML(x) {
+  const bits = scanUsageBits(x);
   const door = scanDoor(x);
   return `<div class="ms-read ${escapeHtml(x.read)}"${door.attrs}>
       <button type="button" class="ms-read-head"${door.attrs}>${betMark({ player: x.player, team: x.team }, 30)}

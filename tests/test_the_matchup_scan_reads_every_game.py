@@ -209,7 +209,14 @@ def test_the_pick_page_carries_the_players_read():
     why = APP[APP.index("function whyLikelyHTML("):]
     why = why[:why.index("\n}\n")]
     assert "pickScanRead(lk && lk.player ? { ...r, ...lk } : r)" in why
-    assert "`The matchup — ${escapeHtml(x.label)}`, scanWhyList(x)" in why
+    assert "`The matchup — ${escapeHtml(x.label)}`" in why
+    # EVERYTHING THE CARD SAYS, THE WHY SAYS (Ethan, 2026-09-25): both draw
+    # the read through the same two helpers — his share of the work, and
+    # every reason and note — so they cannot say different things.
+    card = APP[APP.index("function scanReadHTML("):]
+    card = card[:card.index("\n}\n")]
+    for helper in ("scanUsageBits(x)", "scanWhyList(x)"):
+        assert helper in why and helper in card, helper
     fn = APP[APP.index("function pickScanRead("):]
     fn = fn[:fn.index("\n}\n")]
     assert "(d.scan_reads || {})[`${g.away}@${g.home}`]" in fn
