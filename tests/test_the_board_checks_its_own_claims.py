@@ -99,6 +99,36 @@ def test_the_status_page_shows_it():
         assert f'"{k}":' in APP[APP.index("const TRUTH_WORDS"):APP.index("function truthRowHTML")], k
 
 
+def test_the_full_copy_answers_after_a_restart_seals_the_public_one():
+    """2026-09-25: three restarts in eight minutes, each one re-sealing the
+    public copy (gate.seal), and on a one-second window the full copy read
+    as stale every time — so the self-check, and every probe on the box,
+    read the paywalled copy: no picks, "all claims hold". The window is
+    now minutes; a full copy hours older than the public one is still
+    refused, since only a writer that bypassed publish leaves one."""
+    import launch
+    from engine import gate
+    d = tempfile.mkdtemp()
+    public = os.path.join(d, "recommendations.json")
+    full = os.path.join(d, "built", "recommendations.json")
+    os.makedirs(os.path.dirname(full))
+    for path in (public, full):
+        with open(path, "w") as fh:
+            json.dump({}, fh)
+    real = gate.full_board_file
+    gate.full_board_file = lambda name: __import__("pathlib").Path(full)
+    try:
+        now = 1_800_000_000
+        os.utime(public, (now, now))
+        os.utime(full, (now - 300, now - 300))
+        assert launch._full_copy(public) == full, "five minutes behind the seal is the same board"
+        os.utime(full, (now - 3 * 3600, now - 3 * 3600))
+        assert launch._full_copy(public) == public, "hours behind is a bypassed publish"
+    finally:
+        gate.full_board_file = real
+    assert launch.FULL_COPY_LAG_S >= 300
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

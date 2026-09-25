@@ -251,6 +251,18 @@ def _slate_games(path: str) -> int:
         return 0
 
 
+#: How much older than the public file the full copy may be and still
+#: answer for it. `gate.publish` writes the 15 MB full copy first and the
+#: stripped public copy after it, and `gate.seal` rewrites the public copy
+#: alone at every restart — so on a one-second window the full copy read
+#: as stale after every restart and every slow write, and the self-check
+#: (and every droplet probe) silently read the paywalled copy instead: a
+#: board with no picks on it, "all claims hold" (2026-09-25, three
+#: restarts in eight minutes). A writer that bypassed publish leaves a
+#: full copy hours old, which this window still catches.
+FULL_COPY_LAG_S = 600
+
+
 def _slate_props(path: str) -> int:
     """Priced player props on a built board (0 when missing/unreadable).
 
@@ -268,15 +280,13 @@ def _slate_props(path: str) -> int:
 
 
 def _full_copy(path: str) -> str:
-    """The full board beside a public one (data/built/), when it is at
-    least as fresh; else the public file itself."""
+    """The full board (data/built/) when it is within FULL_COPY_LAG_S of
+    the public file; else the public file."""
     from engine import gate as _gate
     full = _gate.full_board_file(os.path.basename(path))
-    # Only a full copy at least as fresh as the public file may
-    # answer for it: a writer that bypassed gate.publish would leave
-    # an older full copy behind, and an old count is a wrong count.
+    # A bypassed publish leaves an old full copy (FULL_COPY_LAG_S).
     if full is not None and full.is_file() and os.path.isfile(path) \
-            and full.stat().st_mtime >= os.stat(path).st_mtime - 1:
+            and full.stat().st_mtime >= os.stat(path).st_mtime - FULL_COPY_LAG_S:
         return str(full)
     return path
 
