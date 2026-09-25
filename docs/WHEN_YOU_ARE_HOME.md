@@ -88,6 +88,35 @@ more weeks of games; it should then say "matches".
 **D. Wednesday, Sep 30**, after the first playoff games: step 8b's
 grading line again.
 
+**G. Found on the box, 2026-09-25 morning** (a session run on the
+droplet; its full notes are in `/srv/qellys/backups/OUTSTANDING-2026-09-25.md`
+and the matching `0001-docs-home-…patch` — untracked, so they survive a
+reset). Open:
+
+1. **The sharp-witness fix shipped and did not fire.** The commit is in
+   HEAD and the board was built six hours after it, yet every baseball
+   game row still reads `sharp_anchored: False`. Two code hops are named
+   in the notes; one of them is not happening.
+2. **One week-1 NFL bet has been open a fortnight** with a final
+   available. A single row, not systemic.
+3. **The Kalshi block must run as the `qellys` user.** Run as root it
+   leaves root-owned cache files the build user cannot write, and the
+   permission error is swallowed, so the exchange tier freezes silently.
+4. **An eight-megabyte copy of the bet journal sits untracked in the
+   repo checkout** on the box, not ignored. The box's key is read-only,
+   so it cannot be pushed from there, but it should be moved out of the
+   tree or ignored.
+
+Also in the notes: a week-2 alarm that resolved itself (do not re-chase
+it), and a note on confident zeros.
+
+**Never commit on the box.** Its GitHub key is read-only, so a commit
+there can never be pushed; it splits the branch, and the auto-update
+then STOPS ("auto-update stopped: … has diverged") rather than resetting
+— new code quietly stops reaching the site. Notes go in `backups/` or to
+Claude to commit. (2026-09-25: a notes commit did exactly this and
+blocked that morning's deploy.)
+
 **F. Every Most Likely pick journaled** (2026-09-25). Until today the
 journal took the board's top ten rows only, so a pick posted further
 down — the Packers back over 9.5 rushing yards on Thursday night — was
