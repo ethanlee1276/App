@@ -141,8 +141,8 @@ def test_the_price_refusals_stay_on_the_edge_board():
 
 def test_the_row_the_url_and_the_page_carry_it():
     assert "if (kind === \"likely\") return openProp(target, { likely: true });" in APP
-    assert 'return ` data-open="likely:${escapeAttr(propId(t))}"`;' in APP
-    assert 'data-prop="${escapeAttr(propId(t))}" data-likely="1"' in APP
+    assert 'return ` data-open="likely:${escapeAttr(propId(r))}"`;' in APP
+    assert 'data-prop="${escapeAttr(propId(r))}" data-likely="1"' in APP
     assert APP.count('openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet })') == 2
     assert "state.propLikely = !!opts.likely;" in APP
     assert '`#pick/${encodeURIComponent(state.propId)}${state.propLikely ? "/likely" : ""}`' in APP
@@ -150,7 +150,7 @@ def test_the_row_the_url_and_the_page_carry_it():
     body = APP[APP.index("function renderPropPage()"):APP.index("function invNorm(")]
     # A bet opened from the Live tab is drawn the same way, at its own
     # number (betPickFor, 2026-09-25); from any other board, nothing.
-    assert "const lk = state.propLikely ? likelyFor(r) : betPickFor(r);" in body
+    assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in body
     assert body.index("whyLikelyHTML(v, r, lk)") < body.index("propAnalysis({ ...v, logs: r.logs }")
     assert "${lk ? \"\" : checksHTML(r)}" in body, "the edge board's gates stay on the edge board"
     assert "!lk && r.edge != null" in body and "${lk ? \"\" : r.grade ?" in body

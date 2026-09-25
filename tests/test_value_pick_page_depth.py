@@ -153,7 +153,7 @@ FNS = ("propId", "propOpenable", "findProp", "likelyProp",
 
 
 def _door(props, row):
-    """`likelyDoor(row)` against a board holding exactly `props`."""
+    """Where `likelyDoor(row)` lands against a board holding exactly `props`."""
     node = shutil.which("node")
     if not node:
         return None
@@ -168,7 +168,12 @@ def _door(props, row):
       var slugify = (s) => String(s).toLowerCase().split(" ").join("-");
       var gameBetAttrs = () => " GAME-DOOR";
       %s
-      console.log(JSON.stringify(likelyDoor(%s)));
+      // Since 2026-09-25 the door names its own row and openProp resolves
+      // the prop through likelyTarget; read the door as where it lands.
+      var r0 = %s;
+      var d = likelyDoor(r0);
+      console.log(JSON.stringify(d && r0.kind !== "game"
+        ? ` data-prop="${propId(likelyTarget(r0))}" data-likely="1" tabindex="0" role="link"` : d));
     """ % (json.dumps(props), "\n".join(src), json.dumps(row))
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)

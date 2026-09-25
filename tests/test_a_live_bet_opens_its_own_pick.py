@@ -93,7 +93,7 @@ def test_the_door_carries_the_bet_and_every_path_passes_it_on():
     assert "openProp(door.dataset.prop, { bet: door.dataset.bet })" in APP
     assert "state.propBet = JSON.parse(opts.bet)" in _fn("openProp")
     page = _fn("renderPropPage")
-    assert "const lk = state.propLikely ? likelyFor(r) : betPickFor(r);" in page
+    assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page
     assert "!(lk && lk.bet)" in page, "no parlay button on a bet already placed"
     assert 'lk && lk.bet ? "" : shoppedLineNote(v)' in page
 

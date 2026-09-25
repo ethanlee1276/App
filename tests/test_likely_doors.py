@@ -49,7 +49,7 @@ def test_the_most_likely_card_is_a_door():
     # reported landing on. Pinned on the resolution now, not on one
     # spelling of it; tests/test_likely_rung_door.py runs the doors in
     # node and is where the behaviour is actually held.
-    assert "likelyTarget(r)" in door
+    assert "propId(r)" in door, "the door names its own row; openProp resolves it"
     assert 'tabindex="0" role="link"' in door
 
 

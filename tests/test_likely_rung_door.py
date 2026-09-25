@@ -94,8 +94,18 @@ def _run(props, row, call="likelyDoor"):
       var gameBetOpenable = () => true;
       var gameBetId = () => "gid";
       %s
-      console.log(JSON.stringify(%s(%s)));
-    """ % (json.dumps(props), "\n".join(src), call, json.dumps(row))
+      // SINCE 2026-09-25 A DOOR NAMES ITS ROW (likelyOpen) and openProp
+      // resolves the prop to draw through likelyTarget (Geno Smith: a tap
+      // on one pick opened another). What these tests hold is that
+      // resolution, so each door is read as where it lands.
+      var landed = {
+        likelyDoor: (r) => (!r || r.kind === "game" || !likelyDoor(r)) ? likelyDoor(r)
+          : ` data-prop="${propId(likelyTarget(r))}" data-likely="1" tabindex="0" role="link"`,
+        likelyOpen: (r) => (!r || r.kind === "game" || !likelyOpen(r)) ? likelyOpen(r)
+          : ` data-open="likely:${propId(likelyTarget(r))}"`,
+      };
+      console.log(JSON.stringify((landed[%r] || %s)(%s)));
+    """ % (json.dumps(props), "\n".join(src), call, call, json.dumps(row))
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
         path = fh.name
@@ -342,8 +352,12 @@ def test_both_doors_resolve_through_the_one_function():
     for name in ("likelyDoor", "likelyOpen"):
         i = APP.index(f"function {name}(")
         body = APP[i:APP.index("\n}", i)]
-        assert "likelyTarget(r)" in body, f"{name} resolves its own way"
+        assert "propId(r)" in body, f"{name} no longer names its own row"
         assert "findProp(" not in body, f"{name} still looks a prop up itself"
+    # …and the one place a door is resolved (Geno Smith, 2026-09-25).
+    i = APP.index("function openProp(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "likelyTarget(lkRow)" in body
 
 
 if __name__ == "__main__":

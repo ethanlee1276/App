@@ -7910,8 +7910,7 @@ function likelyDoor(r) {
   // "we have no money lines or spreads or totals").
   if (r.kind === "game") return gameBetAttrs(r);
   if (!r.player) return "";
-  const t = likelyTarget(r);
-  return ` data-prop="${escapeAttr(propId(t))}" data-likely="1" tabindex="0" role="link"`;
+  return ` data-prop="${escapeAttr(propId(r))}" data-likely="1" tabindex="0" role="link"`;
 }
 function likelyOpen(r) {
   if (!r) return "";
@@ -7920,8 +7919,13 @@ function likelyOpen(r) {
       ? ` data-open="prop:${escapeAttr(gameBetId(r))}"` : "";
   }
   if (!r.player) return "";
-  const t = likelyTarget(r);
-  return ` data-open="likely:${escapeAttr(propId(t))}"`;
+  // THE ROW'S OWN ID, never the edge prop it borrows its charts from
+  // (openProp resolves that). Ethan, 2026-09-25: "I tried too click on Geno
+  // Smith under 1.5 TD passed and it pulled up Geno Smith over 199 passing
+  // yards." The door carried the prop's id and the page looked the pick
+  // back up by player and market — a lookup that could land on another of
+  // his picks. The tapped row is now the page's pick, by its exact id.
+  return ` data-open="likely:${escapeAttr(propId(r))}"`;
 }
 /* The Most Likely row a pick page was opened on, by the row's own id or
    the /pick/ slug its address carries — as findProp reads either. */
@@ -10014,7 +10018,11 @@ function openProp(id, opts = {}) {
   // the address bar, Copy link and a pasted /pick/… URL are all one
   // string. A row that is not there keeps the id it was given — the
   // page's own empty state needs what it failed to find.
-  const r = findProp(id) || (opts.likely ? findLikelyProp(id) : null);
+  // A MOST LIKELY DOOR NAMES ITS ROW (likelyOpen): the page is that pick,
+  // drawn over the edge prop it matches when there is one (likelyTarget).
+  const lkRow = opts.likely ? findLikelyProp(id) : null;
+  state.propLikelyId = lkRow ? propId(lkRow) : null;
+  const r = (lkRow && likelyTarget(lkRow)) || findProp(id) || lkRow;
   state.propId = (r && pickSlug(r)) || id;
   // Which board the reader came from: a Most Likely row draws the page
   // around its own pick (renderPropPage, likelyFor). Every other door
@@ -10754,7 +10762,13 @@ function renderPropPage() {
   }
   // A Most Likely pick with no prop on the edge board is drawn from its
   // own row (likelyTarget) — the row is its own pick.
-  const r = findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null);
+  const lkRow = state.propLikely && state.propLikelyId ? findLikelyProp(state.propLikelyId) : null;
+  let r = findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null);
+  // NEVER ANOTHER OF HIS PROPS UNDER THIS PICK: the page draws the tapped
+  // row's own market, or the row itself (Geno Smith, 2026-09-25).
+  if (lkRow && (!r || r.player !== lkRow.player || r.market !== lkRow.market)) {
+    r = likelyTarget(lkRow);
+  }
   if (!r) {
     // A bookmarked or stale link. Say so — a blank page reads as broken.
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
@@ -10776,7 +10790,7 @@ function renderPropPage() {
      line, book, price and chance head the page; "Why it’s likely" comes
      straight after; the chart and the logs read against that line; and
      the edge board's gates and price refusals stay on the edge board. */
-  const lk = state.propLikely ? likelyFor(r) : betPickFor(r);
+  const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);
   const v0 = lk && lk.line != null
     ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
     : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
@@ -11689,9 +11703,18 @@ function scanPickHTML(x, cls = "ms-pick") {
 
 function scanDoor(x, market) {
   const d = state.data || {};
-  const own = market ? null : scanPickRow(x);
-  if (own) return { attrs: likelyOpen(own), what: `his Most Likely pick — ${own.market_label || own.market}` };
   const same = (r) => r && r.player === x.player && (!r.team || !x.team || r.team === x.team);
+  // THE PICK THE READ NAMES, and only that market: its exact row, else his
+  // row on that market and side, else on that market. Falling through to
+  // "his first Most Likely pick" opened another market than the one the
+  // card had just named (Geno Smith, 2026-09-25).
+  const named = market ? null : (x.pick || x.pick_other_side);
+  const low = (v) => String(v || "").toLowerCase();
+  const onMarket = named ? ((state.data || {}).most_likely || [])
+    .filter((r) => same(r) && r.kind !== "game" && r.market === named.market) : [];
+  const own = market ? null : (scanPickRow(x)
+    || onMarket.find((r) => low(r.side) === low(named.side)) || onMarket[0] || null);
+  if (own) return { attrs: likelyOpen(own), what: `his Most Likely pick — ${own.market_label || own.market}` };
   const want = market ? [market] : (x.lean || []);
   const ml = (d.most_likely || []).filter((r) => same(r) && r.kind !== "game");
   const lk = ml.find((r) => want.includes(r.market)) || (market ? null : ml[0]);
