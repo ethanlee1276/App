@@ -1804,6 +1804,29 @@ async function loadHeartbeat() {
 //: Nothing rebuilds on its own for half a day.
 const STALE_LOUD_MS = 12 * 60 * 60 * 1000;
 
+/* A LATE BOARD SAYS SO; A BADLY LATE ONE STOPS SHOWING PICKS.
+
+   Ethan, 2026-09-25: "The whole point of all of this is for the user to go
+   onto the site and in that moment in real time look at data, look at
+   pics with real up-to-date information … if that shit's stale, then the
+   user should know that or we shouldn't show it."
+
+   Every board rebuilds every cycle (launch.refresh_all), so there is no
+   quiet night to allow for. Two steps past the ordinary chip:
+     * past staleAfterMs() — two cycles late — the banner says how old
+       every number below is;
+     * past withholdAfterMs() the picks come off the page. A pick is a
+       price and a chance, and an hour-old pair is not one we would make
+       now. Games, the record and the reference pages stay; the picks come
+       back the moment a build lands. */
+const STALE_HIDE_FLOOR_MS = 60 * 60 * 1000;
+function withholdAfterMs() {
+  return Math.max(STALE_HIDE_FLOOR_MS, (_cycleMs || 0) * 4);
+}
+function picksWithheld() {
+  return state.builtAt != null && Date.now() - state.builtAt > withholdAfterMs();
+}
+
 /* Pages with no data feed behind them. The freshness chip ages the SLATE,
    and on a pure reference page that is a lie of scope — "Stale — built
    10h ago" over a page of prose that has no build at all. */
@@ -2168,11 +2191,12 @@ addEventListener("online", refreshStaleBar);
    THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
+const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "live",
+  "scanner", "game", "prop", "trending", "players", "futures"];
+function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
   if (!d) return null;
-  const boardViews = ["recommended", "tonight", "likely", "props", "edge", "longshots", "live",
-    "scanner", "game", "prop", "trending", "players", "futures"];
-  if (!boardViews.includes(state.view)) return null;
+  if (!boardViewNow()) return null;
   const src = String(d.generated_from || "");
   if (src && !boardIsReal(src)) return { kind: "demo" };
   if (!src || d.status === "offseason") return null;
@@ -2199,6 +2223,31 @@ function slateNoticeHTML(n) {
     <span><b>This board’s games are from ${escapeHtml(formatGameDate(n.newest))} —
     ${n.days} days ago.</b> It is the newest slate this league has published,
     so nothing below is today’s. The <a href="#record">record</a> is current.</span>`;
+}
+
+/* THE MODEL'S OWN INPUTS, BEHIND. The build checks every NFL week table
+   against the last week played (engine/freshness.football_weeks) and ships
+   the answer as `data_freshness`. A table behind means the picks and the
+   matchup ranks below were built without the latest week in them, and the
+   reader is told which — Ethan, 2026-09-25: "if that shit's stale, then the
+   user should know that". */
+const DATA_TABLE_WORDS = { "results": "final scores", "player stats": "player stats",
+  "snap counts": "snap counts", "unit ratings": "matchup-scan team rankings" };
+function dataBehind(d) {
+  const f = (d || {}).data_freshness;
+  if (!f || f.played == null || !(f.behind || []).length) return null;
+  return f;
+}
+function dataBehindHTML(f) {
+  const parts = f.behind.map((n) => {
+    const wk = (f.tables || {})[n];
+    return `${DATA_TABLE_WORDS[n] || n} ${wk ? `through week ${wk}` : "not in for this season"}`;
+  });
+  return `${icon("warn", 15)}
+    <span><b>Week ${escapeHtml(String(f.played))} is played, but our data isn’t all in yet:</b>
+    ${escapeHtml(parts.join(" · "))}. The picks and matchup reads below are built without
+    week ${escapeHtml(String(f.played))} in those numbers. This clears on its own when the data
+    lands.</span>`;
 }
 
 function renderStaleBar(ageMs, ago) {
@@ -2264,13 +2313,36 @@ function renderStaleBar(ageMs, ago) {
     host.innerHTML = slateNoticeHTML(notice);
     return;
   }
+  // Late, then too late to stand behind (withholdAfterMs, above).
+  if (!bad && ageMs != null && ageMs > withholdAfterMs()) {
+    host.hidden = false;
+    host.innerHTML = `${icon("warn", 15)}
+      <span><b>Picks are hidden — this board last updated ${escapeHtml(ago)} ago.</b>
+      A pick is a price and our chance at it, and both are ${escapeHtml(ago)} old, so we
+      are not showing them. They come back on their own the moment the next update lands.</span>`;
+    return;
+  }
+  if (!bad && ageMs != null && ageMs > staleAfterMs()) {
+    host.hidden = false;
+    host.innerHTML = `${icon("warn", 15)}
+      <span><b>Last updated ${escapeHtml(ago)} ago — later than usual.</b>
+      Prices and our chances may have moved since. Every number below is
+      ${escapeHtml(ago)} old until the next update lands.</span>`;
+    return;
+  }
+  const behind = !bad && slateNotice(state.data) === null && boardViewNow() ? dataBehind(state.data) : null;
+  if (behind) {
+    host.hidden = false;
+    host.innerHTML = dataBehindHTML(behind);
+    return;
+  }
   host.hidden = !bad;
   if (!bad) { host.innerHTML = ""; return; }
   host.innerHTML = `${icon("warn", 15)}
     <span><b>These numbers are ${escapeHtml(ago)} old.</b>
     The build that feeds this page has not run since then, so every board
     below is showing a finished slate as if it were tonight’s. Nothing
-    here is live.</span>`;
+    here is live, and the picks are hidden until it runs again.</span>`;
 }
 
 function updateAgo() {
@@ -2311,6 +2383,9 @@ function updateAgo() {
     // where this was invisible.
     + `<span class="lr-short">${stale ? `Stale ${ago}` : ago}</span>`;
   renderStaleBar(known ? Date.now() - state.builtAt : null, ago);
+  // The picks come off the page past withholdAfterMs (styles.css,
+  // body.picks-withheld) and return with the next build.
+  document.body.classList.toggle("picks-withheld", picksWithheld());
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
   // The cadence, said out loud. An age with no yardstick is why sixteen
@@ -7914,21 +7989,62 @@ function likelyOwnReadTile(r) {
    Silent when the row carries no age: older board files, and every
    sport that has not been wired to date its prices, keep the card they
    had rather than growing an empty chip. */
-function priceAgeChip(r) {
-  // NULL IS NOT ZERO, and in this language it very nearly is: a
-  // proxy-priced row carries `price_age_s: null` — there is no book
-  // price on it to date — and `Number(null)` is 0, which would have
-  // printed "priced just now" beside a number no book ever posted. The
-  // exact class of lie this whole line of work exists to end, caught by
-  // its own test.
+/* HOW OLD A PRICE IS NOW — at this second, not when the board was built.
+   `priced_at` is the pull's own clock time (engine/likely._priced_at);
+   a row without it has only its age at the build, so the time since the
+   build is added. Ethan, 2026-09-25: "We shouldn't be showing stale shit
+   to a user looking for up-to-date information." Before this a board read
+   an hour after it was built said "priced 4m ago".
+
+   NULL IS NOT ZERO, and in this language it very nearly is: a
+   proxy-priced row carries `price_age_s: null` — there is no book price
+   on it to date — and `Number(null)` is 0, which would have printed
+   "priced just now" beside a number no book ever posted. */
+function priceAgeS(r, at = "priced_at") {
+  const t = Date.parse((r || {})[at] || "");
+  if (Number.isFinite(t)) return Math.max(0, (Date.now() - t) / 1000);
+  if (at !== "priced_at") return null;
   const raw = (r || {}).price_age_s;
-  if (raw === null || raw === undefined) return "";
+  if (raw === null || raw === undefined) return null;
   const s = Number(raw);
-  if (!Number.isFinite(s) || s < 0) return "";
-  const ago = s < 90 ? "just now"
+  if (!Number.isFinite(s) || s < 0) return null;
+  return s + (state.builtAt != null ? Math.max(0, (Date.now() - state.builtAt) / 1000) : 0);
+}
+//: A price older than this may have moved. Mirrors
+//: engine/sources/oddsapi.MAX_PROP_PRICE_AGE — pinned equal by test.
+const PRICE_FRESH_S = 6 * 3600;
+function agoText(s) {
+  return s < 90 ? "just now"
     : s < 3600 ? `${Math.round(s / 60)}m ago`
     : s < 172800 ? `${Math.round(s / 3600)}h ago`
     : `${Math.round(s / 86400)}d ago`;
+}
+
+/* A LOCKED PICK'S PRICE AS IT STANDS (engine/likely.lock). The posted
+   price is the one it is tracked and graded at; this is what a book will
+   pay at the same number right now, or the fact that none lists it. */
+function likelyNowHTML(r, compact = false) {
+  if (!r || !r.locked || r.now_listed == null) return "";
+  if (!r.now_listed) {
+    return compact ? " · no book lists it now"
+      : `<div class="lk-now mini warn">No book lists this number right now — the price above is
+        the one it went up at, and it can’t be bet there now.</div>`;
+  }
+  if (compact) return ` · now ${american(r.now_odds)}`;
+  const s = priceAgeS(r, "now_priced_at");
+  return `<div class="lk-now mini">Now ${american(r.now_odds)} at ${escapeHtml(r.now_book || "")}${
+    s != null ? ` · priced ${agoText(s)}` : ""}</div>`;
+}
+
+function priceAgeChip(r) {
+  const s = priceAgeS(r);
+  if (s == null) return "";
+  if ((r || {}).locked) {
+    // The posted price, dated; today's price is on its own line (likelyNowHTML).
+    return `<span class="price-age" title="The price this pick went up at — the one it is
+      tracked and graded at">· posted price, pulled ${agoText(s)}</span>`;
+  }
+  const ago = agoText(s);
   // PAST THE FRESHNESS BAR THE CHIP CHANGES ITS TONE, because the row is
   // now making a weaker claim. The engine ships two ceilings
   // (oddsapi.MAX_GAME_PRICE_SHOW_AGE): inside the first the price is
@@ -7937,7 +8053,7 @@ function priceAgeChip(r) {
   // board is not empty on a cycle the budget declined. A reader has to
   // be able to see which of the two he is looking at without doing the
   // arithmetic himself.
-  if ((r || {}).price_stale) {
+  if ((r || {}).price_stale || s > PRICE_FRESH_S) {
     return `<span class="price-age warn" title="This price is older than our
       freshness bar. It is a real quote from the book named, but it may have
       moved since — we show it rather than leave the board empty, and we do
@@ -8069,6 +8185,7 @@ function likelyCard(r) {
           ${r.locked && r.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} ${escapeHtml(r.lock_note)}</div>` : ""}
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
+          ${likelyNowHTML(r)}
         </div>
       </div>
       <span class="grade lk-pct">${pct(r.model_prob)}${probTierHTML(r)}</span>
@@ -8839,7 +8956,11 @@ function likelyRow(r) {
     ${mark}
     <span class="ml-who"><b>${escapeHtml(game ? (r.pick_label || r.player) : r.player)}</b>
       <span class="k">${escapeHtml(label)}${r.book
-        ? ` · ${escapeHtml(r.book)}` : ""}${likelyTagsHTML(r)}</span></span>
+        ? ` · ${escapeHtml(r.book)}` : ""}${escapeHtml(likelyNowHTML(r, true))}${
+        /* A price past the freshness bar says so on the row too, not only
+           on the card behind it (priceAgeS). */
+        !r.locked && priceAgeS(r) > PRICE_FRESH_S
+          ? ` · <span class="price-age warn">priced ${agoText(priceAgeS(r))}</span>` : ""}${likelyTagsHTML(r)}</span></span>
     <span class="hd-num">${r.odds != null
         ? `<span class="hd-o">${american(r.odds)}</span>` : ""}<span class="ml-pct hd-p">${pct}${probTierHTML(r)}</span></span>
   </button>`;

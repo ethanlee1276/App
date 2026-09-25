@@ -143,6 +143,21 @@ def test_a_turned_down_pick_says_the_boards_reason():
     assert got["refused"], got
 
 
+def test_the_likeliest_number_includes_his_main_line():
+    """Ladd McConkey, 2026-09-25: the card called Over 109.5 at +700 (4%)
+    "his likeliest over" — a real alternate rung, but only the rungs were
+    read, never his main line near 45. The main line is a candidate now."""
+    low = _row("Low", projection=40.0, line=45.5, side="under", odds=-110,
+               all_lines=[{"book": "DraftKings", "line": 45.5, "over_odds": -115, "under_odds": -105}],
+               alt_lines=[_ln("DraftKings", 109.5, 700)])
+    board, rep = _build([low], {("Low", "GB", "rush_yds"): OVER})
+    assert not [r for r in board if r["side"] == "over"], "no over clears the floor"
+    best = rep[("Low", "GB")]["best"]
+    assert best is not None and best["line"] == 45.5, best
+    assert (best["side"], best["odds"], best["book"]) == ("over", -115, "DraftKings"), best
+    assert best["model_prob"] < K.MIN_PROB
+
+
 def test_the_stamp_lands_on_the_read():
     reads = {"A@B": {"players": [{"player": "Both", "team": "GB", "read": "good"},
                                  {"player": "Nobody", "team": "GB", "read": "good"}]}}

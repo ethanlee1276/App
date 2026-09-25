@@ -219,10 +219,14 @@ def _node(js):
     if not node:
         return None
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    i = app.index("function priceAgeChip(")
-    fn = app[i:app.index("\n}", i) + 2]
+    fn = ""
+    for name in ("priceAgeS", "agoText", "priceAgeChip"):
+        i = app.index(f"function {name}(")
+        fn += app[i:app.index("\n}", i) + 2] + "\n"
     prog = f"""
       var escapeHtml = (s) => String(s == null ? "" : s);
+      var state = {{ builtAt: null }};
+      const PRICE_FRESH_S = 6 * 3600;
       {fn}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """

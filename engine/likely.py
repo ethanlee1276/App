@@ -1210,6 +1210,20 @@ def _pick_brief(r: dict) -> dict:
                                   "odds", "book", "model_prob")}
 
 
+def _main_candidate(row: dict, side, fits=None):
+    """The prop's main number on ``side`` as a rung-shaped candidate —
+    {side, line, odds, book, prob} — or None when no bettable book prices
+    that side at −250 or better, or the model cannot price the number."""
+    line = row.get("line")
+    got = _price_at(row, side, line)
+    if got is None or got[0] < HEAVIEST_PRICE:
+        return None
+    p = _prob_at(row, row.get("market") or "", side, line, fits)
+    if p is None:
+        return None
+    return {"side": _side(side), "line": float(line), "odds": got[0], "book": got[1], "prob": p}
+
+
 def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
                  why: dict | None = None) -> dict:
     """{(player, team): what his read got} — see `build`'s ``lean_report``.
@@ -1257,7 +1271,19 @@ def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
             # real main-line price never reaches its rungs.
             if not row.get("has_market"):
                 continue
-            for c in rungs(row, row.get("market") or "", fits, floor=0.0):
+            # HIS MAIN LINE IS A CANDIDATE TOO. Only the alternate rungs were
+            # read here, and the rungs that survive the credibility bar can
+            # be only the far ones — Ladd McConkey, 2026-09-25, "his likeliest
+            # over … is Over 109.5 Receiving Yards · +700 · 4%" beside a main
+            # line near 45. Ethan: "Why is it talking about a plus 700 … and
+            # over 109 yards? Are we pulling this correct line that is
+            # actually reasonable?" The line was real (an alt rung); calling
+            # it his likeliest was not.
+            cands = list(rungs(row, row.get("market") or "", fits, floor=0.0))
+            main = _main_candidate(row, lean.get("side"), fits)
+            if main is not None:
+                cands.append(main)
+            for c in cands:
                 if _side(c["side"]) == lean.get("side") and (best is None or c["prob"] > best["prob"]):
                     best = dict(c, market=row.get("market"),
                                 market_label=row.get("market_label") or row.get("market"))
@@ -1580,6 +1606,11 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "market": market, "market_label": row.get("market_label", market),
         "side": side, "line": line,
         "book": book, "odds": odds,
+        # HOW OLD THIS PRICE IS (pipeline stamps it off the event payload),
+        # which the prop rows never carried — so no Most Likely prop card
+        # could say its price's age. 2026-09-25, the stale-data pass.
+        "price_age_s": row.get("price_age_s"),
+        "priced_from": row.get("priced_from") or "",
         "model_prob": round(float(shown), 4),
         # WHICH NUMBER THE READER IS LOOKING AT. A page that silently
         # swapped its probability source would be the opposite of the
@@ -1665,6 +1696,8 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
         "market": "anytime_td", "market_label": "Anytime TD",
         "side": "yes", "line": None,
         "book": row.get("book", ""), "odds": row.get("odds"),
+        "price_age_s": row.get("price_age_s"),
+        "priced_from": row.get("priced_from") or "",
         "model_prob": row.get("model_prob"),
         "implied_prob": row.get("implied_prob"),
         "projection": None,
@@ -2060,6 +2093,63 @@ def _now() -> str:
     import datetime as _dt
     return (_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
             .replace("+00:00", "Z"))
+
+
+def _priced_at(stamp: str, age_s) -> str | None:
+    """When a price was pulled: this build's stamp less the price's age.
+
+    A CLOCK TIME, NOT AN AGE. `price_age_s` is the price's age when the
+    build ran, and a page read an hour later printed it unchanged — "priced
+    4m ago" beside a number an hour old. Ethan, 2026-09-25: "We shouldn't
+    be showing stale shit to a user looking for up-to-date information."
+    With the pull's own time on the row the page ages it to the second,
+    and a locked pick carries the time its posted price was pulled."""
+    import datetime as _dt
+    if age_s is None:
+        return None
+    try:
+        t = _dt.datetime.fromisoformat(str(stamp).strip().replace("Z", "+00:00"))
+        t = t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+        at = t - _dt.timedelta(seconds=float(age_s))
+    except (TypeError, ValueError):
+        return None
+    return at.astimezone(_dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _price_at(row: dict | None, side, line):
+    """The best bettable price a book lists TODAY for (side, line) on a
+    prop's current row — (odds, book) — or None when no book lists it.
+
+    Read off every quote on the row: the alternate ladder, each book's main
+    number (both sides), and the row's own price; sharp and proxy books
+    excluded (nobody here can bet them)."""
+    from .odds import is_sharp_book
+    if not row or line is None:
+        return None
+    try:
+        line = float(line)
+    except (TypeError, ValueError):
+        return None
+    want = _side(side)
+    key = "under_odds" if want == "under" else "over_odds"
+    best = None
+    quotes = [(ln.get("line"), ln.get(key), ln.get("book"))
+              for ln in (row.get("alt_lines") or []) + (row.get("all_lines") or [])]
+    if _side(row.get("side")) == want:
+        quotes.append((row.get("line"), row.get("odds"), row.get("book")))
+    for q_line, q_odds, q_book in quotes:
+        try:
+            if abs(float(q_line) - line) > 1e-9:
+                continue
+            odds = int(q_odds or 0)
+        except (TypeError, ValueError):
+            continue
+        book = str(q_book or "")
+        if not odds or not _sane(odds) or not book or book.lower() == "proxy" or is_sharp_book(book):
+            continue
+        if best is None or odds > best[0]:
+            best = (odds, book)
+    return best
 
 
 def _started(row: dict, stamp: str) -> bool:
@@ -2756,11 +2846,26 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                         h.get("side"), h.get("line"), fits)
 
     def lock(h, why):
-        """`_locked` at today's chance, with today's projection beside it."""
+        """`_locked` at today's chance, with today's projection and today's
+        price at the posted number beside it."""
         r = _locked(h, why, stamp, now_prob(h))
-        cur = prop_now.get(hold_key(h)) if (h.get("kind") or "prop") == "prop" else None
+        prop = (h.get("kind") or "prop") == "prop"
+        cur = prop_now.get(hold_key(h)) if prop else None
         if cur and cur.get("projection") is not None:
             r["projection"] = cur["projection"]
+        if prop:
+            # THE PRICE AS IT STANDS. The posted price stays on the row —
+            # it is the one journaled and graded — and today's best price
+            # at the same number sits beside it, or the fact that no book
+            # lists that number any more.
+            got = _price_at(cur, h.get("side"), h.get("line"))
+            r["now_listed"] = got is not None
+            r["now_odds"], r["now_book"] = got if got else (None, "")
+            r["now_priced_at"] = _priced_at(stamp, cur.get("price_age_s")) if got and cur else None
+        if not r.get("priced_at"):
+            # A pick posted before rows carried their pull time: its age at
+            # the build that posted it, counted from when it went up.
+            r["priced_at"] = _priced_at(r.get("since") or stamp, h.get("price_age_s"))
         return r
     if held:
         for i, r in enumerate(out):
@@ -2782,6 +2887,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             out.append(lock(h, why))
             locked_n[why] = locked_n.get(why, 0) + 1
     _stamp_hold(out, held, stamp)
+    for r in out:
+        if not r.get("locked") and r.get("price_age_s") is not None:
+            r["priced_at"] = _priced_at(stamp, r.get("price_age_s"))
     # PROBABILITY ORDER, AS PRINTED. Rows the page shows at the same whole
     # percent sit longest-held first, so two picks a tenth of a point apart
     # stop trading places on every refresh; rows at different percents are

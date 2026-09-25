@@ -190,6 +190,8 @@ def _node(js, *fns):
     prog = """
       var escapeHtml = (s) => String(s == null ? "" : s);
       var escapeAttr = (s) => String(s == null ? "" : s);
+      var state = { builtAt: null };
+      const PRICE_FRESH_S = 6 * 3600;
       %s
       console.log(JSON.stringify((() => { %s })()));
     """ % ("\n".join(src), js)
@@ -209,7 +211,7 @@ def test_the_chip_says_the_price_may_have_moved():
       return { stale: priceAgeChip({ price_age_s: 28800, price_stale: true }),
                fresh: priceAgeChip({ price_age_s: 600, price_stale: false }),
                none:  priceAgeChip({ price_age_s: null, price_stale: true }) };
-    """, "priceAgeChip")
+    """, "priceAgeS", "agoText", "priceAgeChip")
     if got is None:
         return
     assert "may have moved" in got["stale"], got["stale"]

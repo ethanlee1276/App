@@ -38,7 +38,9 @@ def _run(js):
       const escapeHtml = (s) => String(s);
       const icon = () => "<i></i>";
       const formatGameDate = (s) => "DATE(" + s + ")";
+      {APP[APP.index("const BOARD_VIEWS = "):APP.index("];", APP.index("const BOARD_VIEWS = ")) + 2]}
       {_fn("boardIsReal")}
+      {_fn("boardViewNow")}
       {_fn("slateNotice")}
       {_fn("slateNoticeHTML")}
       const et = (daysAgo) => {{

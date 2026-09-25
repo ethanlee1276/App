@@ -9718,6 +9718,11 @@ button.rc-day b { font-size: var(--fs-sm); }
 #stalebar b { color: var(--warn); }
 #stalebar a { color: var(--brand-2); }
 @media (max-width: 760px) { #stalebar { margin: 0 12px 12px; } }
+/* A board past app.js withholdAfterMs(): every pick host comes off the
+   page until the next build lands; the stale bar says why. */
+body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
+  #tonight-body, #edge-board, #props-body, #longshots, #likely, #scanner-body,
+  #gamebets, #parlays-body, #likely-parlays-body, #gp-sec-likely) { display: none; }
 
 /* ── Links the design system never claimed ─────────────────────────────
    Found 2026-08-19 by looking at rendercheck's own screenshots: 28 links
@@ -11732,6 +11737,8 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .likely-pulled { margin-top: 16px; }
 .likely-pulled summary { cursor: pointer; }
 .likely-dropped { margin-top: 16px; }
+.lk-now { margin-top: 4px; color: var(--text-mute); }
+.lk-now.warn { color: var(--warn); }
 .likely-dropped summary { cursor: pointer; }
 .likely-dropped .ml-rows { margin-top: 8px; }
 /* Under the bar now: not the deck's green, which reads as a pick we'd make. */

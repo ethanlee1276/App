@@ -1063,9 +1063,14 @@ def main() -> None:
     # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
     # a table behind the last week played is data the page would present
     # as this week's. Never fatal.
+    # And ON THE BOARD, so the page can say it to the reader (app.js
+    # dataBehindHTML) — Ethan, 2026-09-25: "if that shit's stale, then the
+    # user should know that or we shouldn't show it."
     try:
         from engine import db as _fdb, freshness as _fresh
-        print("  " + _fresh.line(_fresh.football_weeks(_fdb.connect(), "nfl")))
+        _wk = _fresh.football_weeks(_fdb.connect(), "nfl")
+        print("  " + _fresh.line(_wk))
+        result["data_freshness"] = _wk
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  freshness check skipped: {_fexc}")
     # Say on each card what the sample rule did — the reset that was

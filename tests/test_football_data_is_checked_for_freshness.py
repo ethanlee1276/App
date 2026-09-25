@@ -66,7 +66,8 @@ def test_the_doctor_the_nightly_and_the_build_ask_it():
     maint = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
     assert 'if today.weekday() == 1 or _units_behind:' in maint
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
-    assert '_fresh.line(_fresh.football_weeks(_fdb.connect(), "nfl"))' in build
+    assert '_wk = _fresh.football_weeks(_fdb.connect(), "nfl")' in build
+    assert 'print("  " + _fresh.line(_wk))' in build
 
 
 if __name__ == "__main__":
