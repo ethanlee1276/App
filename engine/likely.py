@@ -1154,7 +1154,8 @@ def _pick_brief(r: dict) -> dict:
                                   "odds", "book", "model_prob")}
 
 
-def _lean_report(board: list, leans: dict, lean_props: dict, fits=None) -> dict:
+def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
+                 why: dict | None = None) -> dict:
     """{(player, team): what his read got} — see `build`'s ``lean_report``.
 
     "pick": a board row on the read's side (the likeliest, if several).
@@ -1186,12 +1187,26 @@ def _lean_report(board: list, leans: dict, lean_props: dict, fits=None) -> dict:
                 max(mine, key=lambda r: float(r.get("model_prob") or 0)))}
             continue
         best = None
+        # WHY THE BOARD SAID NO, in the board's own words (`build`'s
+        # why_left). Without it a card read "no Most Likely pick" beside a
+        # 72% over — Jahmyr Gibbs, 2026-09-25 — and the reader could not
+        # tell which bar the number failed.
+        refused = ("no book has a main line on it to price against"
+                   if lean_props.get(k) and not any(r.get("has_market") for r in lean_props[k])
+                   else next((reader_reason(w) for w in (
+                       (why or {}).get(("prop", k[0], k[1], row.get("market") or ""))
+                       for row in lean_props.get(k, [])) if w), ""))
         for row in lean_props.get(k, []):
+            # The same gate `from_prop` puts on the ladder: a prop with no
+            # real main-line price never reaches its rungs.
+            if not row.get("has_market"):
+                continue
             for c in rungs(row, row.get("market") or "", fits, floor=0.0):
                 if _side(c["side"]) == lean.get("side") and (best is None or c["prob"] > best["prob"]):
                     best = dict(c, market=row.get("market"),
                                 market_label=row.get("market_label") or row.get("market"))
-        out[k] = {"status": "none", "priced": bool(lean_props.get(k)), "best": None if best is None else {
+        out[k] = {"status": "none", "priced": bool(lean_props.get(k)), "refused": refused,
+                  "best": None if best is None else {
             "market": best["market"], "market_label": best["market_label"], "side": best["side"],
             "line": best["line"], "odds": best["odds"], "book": best["book"],
             "model_prob": round(float(best["prob"]), 4)}}
@@ -2703,7 +2718,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                             str(r.get("since") or ""),
                             -float(r["model_prob"] or 0.0)))
     if lean_report is not None and leans:
-        lean_report.update(_lean_report(out, leans, lean_props, fits))
+        lean_report.update(_lean_report(out, leans, lean_props, fits, why_left))
     if turnover is not None:
         turnover.update(_turnover(out, held, why_left, outranked, stamp,
                                   by_margin))

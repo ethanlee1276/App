@@ -1,0 +1,65 @@
+"""The matchup scan ranks teams on THIS season once it has two games.
+
+Ethan, 2026-09-25, on Jets @ Lions going into week 4 — the Jets' defence
+27th, Detroit's 13th: "I know for a fact that the Jets defense is ranked
+better then the lions defense right now ... Make sure we are using up to
+date information." The ratings leaned on last season as four games' worth
+of evidence, so week 4's ranks were 57% last season's, and the card never
+said so. From two games on a rank is this season's alone
+(gamescan.CURRENT_ONLY_GAMES); before that the card says how much of it
+is last season.
+"""
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from engine import gamescan as G                                 # noqa: E402
+
+APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+
+def _rows(season, weeks, epa_allowed):
+    """Two teams trading games; `epa_allowed` per team is what its defence
+    gives up a play."""
+    out = []
+    for w in range(1, weeks + 1):
+        for team, opp in (("NYJ", "DET"), ("DET", "NYJ")):
+            out.append({"sport": "nfl", "season": season, "period": str(w), "team": team,
+                        "side": "def", "opp": opp, "plays": 60, "epa": epa_allowed[team] * 60})
+            out.append({"sport": "nfl", "season": season, "period": str(w), "team": team,
+                        "side": "off", "opp": opp, "plays": 60, "epa": 0.0})
+    return out
+
+
+def test_three_games_rank_on_this_season_alone():
+    last = _rows(2025, 17, {"NYJ": 0.15, "DET": -0.05})    # 2025: Jets' D poor, Detroit's good
+    now = _rows(2026, 3, {"NYJ": -0.10, "DET": 0.05})      # 2026: the other way round
+    r = G.ratings_from_rows(now, last)
+    assert r["NYJ"]["blend"] == 1.0 and r["NYJ"]["games"] == 3
+    assert r["NYJ"]["def"]["overall"]["rank"] == 1, "the Jets' defence, on this season"
+    assert r["DET"]["def"]["overall"]["rank"] == 2
+
+
+def test_one_game_leans_on_last_season_and_says_how_much():
+    last = _rows(2025, 17, {"NYJ": 0.15, "DET": -0.05})
+    now = _rows(2026, 1, {"NYJ": -0.10, "DET": 0.05})
+    r = G.ratings_from_rows(now, last)
+    assert r["NYJ"]["blend"] == round(1 / (1 + G.PRIOR_GAMES), 2)
+
+
+def test_the_card_says_which_season_the_ranks_are():
+    fn = APP[APP.index("function scanTapeHTML("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "tapeBasis(scan, away, home)" in fn
+    basis = APP[APP.index("function tapeBasis("):]
+    basis = basis[:basis.index("\n}\n")]
+    assert "last season" in basis and "this season" in basis
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

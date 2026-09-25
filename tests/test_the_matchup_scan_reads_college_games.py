@@ -48,13 +48,19 @@ def test_havoc_and_stuffs_rank_the_right_way_round():
     assert r["UGA"]["def"]["overall"]["rank"] == 1, "the defence allowing less is first"
 
 
-def test_a_few_games_lean_on_last_season():
-    cur = cfbd.parse_advanced([_row("A", 140, 0.4, 0.1, 0.2), _row("B", 140, 0.0, 0.1, 0.2)])
+def test_one_game_leans_on_last_season_two_stand_alone():
+    """Until two games, last season fills in; from two, this season alone
+    (gamescan.CURRENT_ONLY_GAMES, 2026-09-25 — the blend used to run to
+    midseason, unsaid, and ranked teams mostly on last year)."""
     pri = cfbd.parse_advanced([_row("A", 900, -0.2, 0.1, 0.2), _row("B", 900, 0.0, 0.1, 0.2)])
-    r = G.cfb_ratings(cur, pri)
-    assert r["A"]["blend"] == round(140 / (140 + G.CFB_PRIOR_PLAYS), 2)
-    assert r["A"]["off"]["overall"]["value"] < 0.4 * 0.5, "two games are mostly last season"
-    assert G.cfb_ratings(cur)["A"]["blend"] == 1.0, "no prior, nothing to lean on"
+    one = cfbd.parse_advanced([_row("A", 70, 0.4, 0.1, 0.2), _row("B", 70, 0.0, 0.1, 0.2)])
+    r = G.cfb_ratings(one, pri)
+    assert r["A"]["blend"] == round(70 / (70 + G.CFB_PRIOR_PLAYS), 2)
+    assert r["A"]["off"]["overall"]["value"] < 0.4 * 0.5, "one game is mostly last season"
+    two = cfbd.parse_advanced([_row("A", 140, 0.4, 0.1, 0.2), _row("B", 140, 0.0, 0.1, 0.2)])
+    r = G.cfb_ratings(two, pri)
+    assert r["A"]["blend"] == 1.0 and r["A"]["off"]["overall"]["value"] == 0.4
+    assert G.cfb_ratings(one)["A"]["blend"] == 1.0, "no prior, nothing to lean on"
 
 
 def test_the_cutoffs_scale_with_the_league():

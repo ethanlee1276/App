@@ -11381,6 +11381,24 @@ function tapeVerdict(scan, a, b, side) {
     <em>${ordinal(wr)} vs ${ordinal(lr)}</em></div>`;
 }
 
+/* WHICH SEASON THESE RANKS ARE (2026-09-25). Ethan, on the Jets' defence
+   ranked 27th going into week 4: "we are pulling incorrect information or
+   stale information or 2025 information". They were mostly 2025's — the
+   ratings leaned on last season until midseason and the card never said
+   so. They are this season's alone from two games on
+   (engine/gamescan.CURRENT_ONLY_GAMES); before that this line says how
+   much of each rank is last season. */
+function tapeBasis(scan, away, home) {
+  const u = (t) => ((scan.units || {})[t]) || {};
+  const games = Math.min(...[away, home].map((t) => Number(u(t).games) || 0));
+  const last = Math.max(...[away, home].map((t) => 1 - (u(t).blend ?? 1)));
+  if (!games) return "Last season’s numbers — no games yet this season";
+  const g = `${games} game${games === 1 ? "" : "s"}`;
+  return last > 0.005
+    ? `This season (${g}) with last season filling in — ${Math.round(last * 100)}% of each rank is last season`
+    : `This season only · ${g} each`;
+}
+
 function scanTapeHTML(scan, away, home) {
   const n = scanTeams(scan);
   const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
@@ -11396,6 +11414,7 @@ function scanTapeHTML(scan, away, home) {
   };
   return `<div class="card ms-tape">
       <div class="tp-verdicts">${tapeVerdict(scan, away, home, "off")}${tapeVerdict(scan, away, home, "def")}</div>
+      <p class="tp-basis">${escapeHtml(tapeBasis(scan, away, home))}</p>
       <div class="tp-row tp-head"><span class="tp-k">Rank of ${n}, 1 = best</span>
         <span class="tp-team">${teamMark(away, 22)}<b>${escapeHtml(teamName(away))}</b></span>
         <span class="tp-team">${teamMark(home, 22)}<b>${escapeHtml(teamName(home))}</b></span></div>
@@ -11488,10 +11507,14 @@ function scanPickHTML(x, cls = "ms-pick") {
   }
   if (x.no_pick && side) {
     const b = x.no_pick.best;
+    /* THE BOARD'S OWN REASON when the number clears the 55% bar and was
+       still turned down (Gibbs, 2026-09-25: "no pick" beside a 72% over,
+       and nothing said why). */
+    const refused = x.no_pick.refused ? ` The board turned it down: ${x.no_pick.refused}.` : "";
     const why = !x.no_pick.priced ? "the books have not priced his props yet."
       : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < 0.55
-          ? " — under the 55% the board needs" : ""}.`
-      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.`;
+          ? " — under the 55% the board needs." : "."}${Number(b.model_prob) < 0.55 ? "" : refused}`
+      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.${refused}`;
     return `<span class="${cls} none"><b>No Most Likely pick</b> — ${why}</span>`;
   }
   return "";

@@ -128,7 +128,19 @@ def test_a_read_the_board_cannot_agree_with_says_so():
     _, rep = _build([under_only], {("Under", "GB", "rush_yds"): OVER})
     assert rep[("Under", "GB")]["status"] == "other_side", rep
     _, rep = _build([], {("Nobody", "GB", "rush_yds"): OVER})
-    assert rep[("Nobody", "GB")] == {"status": "none", "priced": False, "best": None}
+    assert rep[("Nobody", "GB")] == {"status": "none", "priced": False, "refused": "", "best": None}
+
+
+def test_a_turned_down_pick_says_the_boards_reason():
+    """Jahmyr Gibbs, 2026-09-25: "No Most Likely pick" beside a 72% over.
+    A ladder the board never reads (no main-line price) is not offered as
+    his best number, and the card names the reason."""
+    no_main = _row("Gibbs", team="DET", opponent="NYJ", has_market=False)
+    board, rep = _build([no_main], {("Gibbs", "DET", "rush_yds"): OVER})
+    assert not board
+    got = rep[("Gibbs", "DET")]
+    assert got["status"] == "none" and got["best"] is None, got
+    assert got["refused"], got
 
 
 def test_the_stamp_lands_on_the_read():
@@ -138,7 +150,7 @@ def test_the_stamp_lands_on_the_read():
                               ("Nobody", "GB"): {"status": "none", "priced": False, "best": None}})
     both, nobody = reads["A@B"]["players"]
     assert n == 2 and both["pick"] == {"line": 40.5}
-    assert nobody["no_pick"] == {"best": None, "priced": False}
+    assert nobody["no_pick"] == {"best": None, "priced": False, "refused": ""}
 
 
 # ── the builds run the scan first ─────────────────────────────────────────

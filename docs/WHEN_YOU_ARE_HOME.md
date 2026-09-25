@@ -108,6 +108,19 @@ EOF
 
 Want: `0 board picks not in the journal`.
 
+**3b. Is this season's unit data on the box?** The matchup tape ranks
+on this season alone from two games on (2026-09-25, after the Jets'
+defence read 27th on mostly-2025 numbers) — which only helps if this
+season's weeks are stored:
+
+```bash
+cd /srv/qellys && sqlite3 -header -column data/history.db "SELECT season, COUNT(DISTINCT period) AS weeks, MAX(CAST(period AS INTEGER)) AS last_week, COUNT(*) AS rows FROM team_units WHERE sport='nfl' AND season >= 2025 GROUP BY season"
+```
+
+Want: a 2026 line with `last_week` 3 (the weeks before this Sunday).
+No 2026 line, or a last week behind, means the nightly ingest is not
+writing this season and the tape was reading 2025 — send it to me.
+
 **4. Your call — the Tonges bet.** It was voided this morning. By your
 2026-09-14 rule a player who took snaps and logged no stat is graded at
 zero, and he played 12% of them, so the rule says a LOSS (a `stale`

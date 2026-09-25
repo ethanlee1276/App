@@ -25,11 +25,11 @@ raw two-game table cannot:
   defences is not the 30th offence in football. Each game's number is
   moved by how far the opponent's own season sits from the league
   average on the other side of the ball.
-* BLENDED WITH LAST SEASON by how much of this one there is:
-  ``weight = games / (games + PRIOR_GAMES)``. Two weeks in, a rating is a
-  third this season and two thirds last; by midseason it is this season.
-  A team that turned over its roster reads a little like last year's for
-  a few weeks, and the card says the blend.
+* THIS SEASON ALONE once a team has CURRENT_ONLY_GAMES games; before
+  that, blended with last season by ``games / (games + PRIOR_GAMES)``,
+  and the card says how much of the rank is last season's (2026-09-25:
+  the blend used to run to midseason, unsaid, and week 4's ranks were
+  mostly 2025's).
 
 Standard library only; reads the ``team_units`` table and nothing else.
 """
@@ -38,6 +38,19 @@ from __future__ import annotations
 
 #: Games of last season a rating leans on before this season's own.
 PRIOR_GAMES = 4.0
+
+#: …UNTIL THIS SEASON HAS THIS MANY GAMES, then this season alone. Ethan,
+#: 2026-09-25, on Jets @ Lions going into week 4, the Jets' defence 27th
+#: and Detroit's 13th: "I know for a fact that the Jets defense is ranked
+#: better then the lions defense right now ... Make sure we are using up
+#: to date information." PRIOR_GAMES alone made week 4's ranks 57% LAST
+#: season (3 games against 4), and nothing on the card said so. A rank
+#: here is read as "where this team stands now", the way every rankings
+#: page reads; two games is the least this season can say for itself, so
+#: from then on it says it alone. Before that, last season fills in and
+#: the card says how much (scanTapeHTML). The scan moves no number
+#: (engine/scanfit), so this is about what the page claims, not a price.
+CURRENT_ONLY_GAMES = 2
 
 #: Each unit: (numerator field(s), denominator field, better when higher
 #: — from the OFFENCE's point of view; a defence's sense is the reverse).
@@ -128,7 +141,8 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> d
     blended: dict = {}
     for team in teams:
         g = games.get(team, 0)
-        w = g / (g + PRIOR_GAMES) if (team, "off") in pri or (team, "def") in pri else 1.0
+        has_prior = (team, "off") in pri or (team, "def") in pri
+        w = 1.0 if g >= CURRENT_ONLY_GAMES or not has_prior else g / (g + PRIOR_GAMES)
         blended[team] = {"games": g, "blend": round(w, 2)}
         for side in ("off", "def"):
             c, p = cur.get((team, side), {}), pri.get((team, side), {})
@@ -900,7 +914,8 @@ def stamp_picks(scan_reads: dict, report: dict) -> int:
             elif got["status"] == "other_side":
                 x["pick_other_side"] = got["pick"]
             else:
-                x["no_pick"] = {"best": got.get("best"), "priced": got.get("priced", True)}
+                x["no_pick"] = {"best": got.get("best"), "priced": got.get("priced", True),
+                                "refused": got.get("refused") or ""}
             n += 1
     return n
 
@@ -997,6 +1012,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
 
 #: Plays of last season a college rating leans on: about four games.
 CFB_PRIOR_PLAYS = 280.0
+#: A college game's plays, one side, as `cfb_ratings` counts games.
+CFB_PLAYS_PER_GAME = 70.0
 
 #: Each college unit's sense, from the OFFENCE's point of view.
 CFB_UNITS = {"overall": True, "passing": True, "rushing": True, "success": True,
@@ -1012,8 +1029,10 @@ def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
     for t in teams:
         c, p = (current or {}).get(t) or {}, prior.get(t) or {}
         plays = float(c.get("plays") or 0.0)
-        w = plays / (plays + CFB_PRIOR_PLAYS) if p else 1.0
-        out[t] = {"games": round(plays / 70) if plays else 0, "blend": round(w, 2)}
+        # This season alone from two games on — CURRENT_ONLY_GAMES.
+        w = (1.0 if not p or plays >= CURRENT_ONLY_GAMES * CFB_PLAYS_PER_GAME
+             else plays / (plays + CFB_PRIOR_PLAYS))
+        out[t] = {"games": round(plays / CFB_PLAYS_PER_GAME) if plays else 0, "blend": round(w, 2)}
         for side in ("off", "def"):
             vals = {}
             for u in CFB_UNITS:
