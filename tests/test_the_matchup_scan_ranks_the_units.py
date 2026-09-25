@@ -65,7 +65,10 @@ def test_an_offence_that_faced_good_defences_is_credited_for_it():
     assert r["A"]["off"]["overall"]["rank"] < r["B"]["off"]["overall"]["rank"]
 
 
-def test_two_games_lean_on_last_season_and_a_full_one_does_not():
+def test_one_game_leans_on_last_season_and_a_full_one_leads_on_this():
+    """Last season fills in before two games; from two on this season
+    leads at CURRENT_SHARE and last season stays in for the whole year —
+    Ethan, 2026-09-25: "2025 data should def be used"."""
     cur = _week("A", "B", 1, 0.30, 0.0) + _week("B", "A", 1, 0.0, 0.0)
     prior = [dict(r, season=2025) for r in (_week("A", "B", 1, -0.30, 0.0) + _week("B", "A", 1, 0.0, 0.0))]
     one = G.ratings_from_rows(cur, prior)
@@ -75,7 +78,9 @@ def test_two_games_lean_on_last_season_and_a_full_one_does_not():
     for wk in range(1, 17):
         many += _week("A", "B", wk, 0.30, 0.0) + _week("B", "A", wk, 0.0, 0.0)
     full = G.ratings_from_rows(many, prior)
-    assert full["A"]["blend"] >= 0.79
+    assert full["A"]["blend"] == G.CURRENT_SHARE
+    v = full["A"]["off"]["overall"]["value"]
+    assert 0 < v < 0.30 * 0.55 + 1e-6, (v, "this season leads, last season still pulls it down")
 
 
 def test_ranks_run_one_best_on_each_side():

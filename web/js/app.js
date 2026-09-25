@@ -11572,9 +11572,10 @@ function tapeVerdict(scan, a, b, side) {
    ranked 27th going into week 4: "we are pulling incorrect information or
    stale information or 2025 information". They were mostly 2025's — the
    ratings leaned on last season until midseason and the card never said
-   so. They are this season's alone from two games on
-   (engine/gamescan.CURRENT_ONLY_GAMES); before that this line says how
-   much of each rank is last season. */
+   so. This season leads them (55%) from two games on, with last season
+   still in — Ethan, the same night: "2025 data should def be used"
+   (engine/gamescan.CURRENT_LEADS_GAMES, CURRENT_SHARE) — and this line
+   says the split. */
 function tapeBasis(scan, away, home) {
   const u = (t) => ((scan.units || {})[t]) || {};
   const games = Math.min(...[away, home].map((t) => Number(u(t).games) || 0));

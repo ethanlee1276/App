@@ -25,11 +25,12 @@ raw two-game table cannot:
   defences is not the 30th offence in football. Each game's number is
   moved by how far the opponent's own season sits from the league
   average on the other side of the ball.
-* THIS SEASON ALONE once a team has CURRENT_ONLY_GAMES games; before
-  that, blended with last season by ``games / (games + PRIOR_GAMES)``,
-  and the card says how much of the rank is last season's (2026-09-25:
-  the blend used to run to midseason, unsaid, and week 4's ranks were
-  mostly 2025's).
+* THIS SEASON LEADS, LAST SEASON STAYS IN. Once a team has
+  CURRENT_LEADS_GAMES games its rating is CURRENT_SHARE this season and
+  the rest last season, for every unit on both sides of the ball; before
+  that last season fills in more, by ``games / (games + PRIOR_GAMES)``.
+  The card says the split either way (2026-09-25: the blend used to run
+  to midseason unsaid, then for an evening ran this season alone).
 
 Standard library only; reads the ``team_units`` table and nothing else.
 """
@@ -39,18 +40,23 @@ from __future__ import annotations
 #: Games of last season a rating leans on before this season's own.
 PRIOR_GAMES = 4.0
 
-#: …UNTIL THIS SEASON HAS THIS MANY GAMES, then this season alone. Ethan,
-#: 2026-09-25, on Jets @ Lions going into week 4, the Jets' defence 27th
-#: and Detroit's 13th: "I know for a fact that the Jets defense is ranked
-#: better then the lions defense right now ... Make sure we are using up
-#: to date information." PRIOR_GAMES alone made week 4's ranks 57% LAST
-#: season (3 games against 4), and nothing on the card said so. A rank
-#: here is read as "where this team stands now", the way every rankings
-#: page reads; two games is the least this season can say for itself, so
-#: from then on it says it alone. Before that, last season fills in and
-#: the card says how much (scanTapeHTML). The scan moves no number
-#: (engine/scanfit), so this is about what the page claims, not a price.
-CURRENT_ONLY_GAMES = 2
+#: …UNTIL THIS SEASON HAS THIS MANY GAMES, then this season LEADS at
+#: CURRENT_SHARE. Ethan, 2026-09-25, on Jets @ Lions going into week 4:
+#: "I know for a fact that the Jets defense is ranked better then the
+#: lions defense right now ... Make sure we are using up to date
+#: information." PRIOR_GAMES alone made week 4's ranks 57% LAST season
+#: and nothing on the card said so; for an evening the fix was this
+#: season alone. Then, the same night: "just bc players are not doing
+#: good right now doesn't mean they are bad and could have done great
+#: last season ... 2026 data should outweigh 2025 data by just a tiny bit
+#: but 2025 data should def be used." So: this season leads by a little
+#: from two games on, last season stays in, and the card says the split
+#: (scanTapeHTML). The scan moves no number (engine/scanfit), so this is
+#: about what the page claims, not a price.
+CURRENT_LEADS_GAMES = 2
+#: This season's share of a rating (and of a player's usage) once it has
+#: CURRENT_LEADS_GAMES games; last season gets the rest.
+CURRENT_SHARE = 0.55
 
 #: Each unit: (numerator field(s), denominator field, better when higher
 #: — from the OFFENCE's point of view; a defence's sense is the reverse).
@@ -127,6 +133,18 @@ def _adjusted(rows: list[dict]) -> tuple[dict, dict]:
     return out, games
 
 
+def season_share(games: float, has_prior: bool = True,
+                 leads_at: float = CURRENT_LEADS_GAMES, prior_n: float = PRIOR_GAMES) -> float:
+    """This season's share of a blended number after ``games`` of it:
+    CURRENT_SHARE from ``leads_at`` games on, ramping up to it before
+    that, and 1.0 when there is no last season to blend with."""
+    if not has_prior:
+        return 1.0
+    if games >= leads_at:
+        return CURRENT_SHARE
+    return min(CURRENT_SHARE, games / (games + prior_n)) if games > 0 else 0.0
+
+
 def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> dict:
     """{team: {"games", "blend", "off": {unit: {"value", "rank"}}, "def": {...}}}.
 
@@ -142,7 +160,7 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> d
     for team in teams:
         g = games.get(team, 0)
         has_prior = (team, "off") in pri or (team, "def") in pri
-        w = 1.0 if g >= CURRENT_ONLY_GAMES or not has_prior else g / (g + PRIOR_GAMES)
+        w = season_share(g, has_prior)
         blended[team] = {"games": g, "blend": round(w, 2)}
         for side in ("off", "def"):
             c, p = cur.get((team, side), {}), pri.get((team, side), {})
@@ -229,6 +247,41 @@ def _status(injuries, team: str, name: str) -> str:
         if getattr(i, "team", "") == team and _key(getattr(i, "player", "")) == k:
             return str(getattr(i, "status", "") or "").upper()
     return ""
+
+
+#: The per-game usage rates a player's read blends across seasons.
+USAGE_RATES = ("targets_pg", "tgt_share", "carries_pg", "carry_share", "rec_pg",
+               "rec_yds_pg", "rush_yds_pg", "attempts_pg", "snap_pct")
+
+
+def blend_usage(now: dict, last: dict | None) -> dict:
+    """This season's usage table with last season's blended in, player by
+    player (matched by name across teams, so a mover keeps his record):
+    CURRENT_SHARE this season once he has CURRENT_LEADS_GAMES games, last
+    season filling in more before that. Ethan, 2026-09-25: "just bc
+    players are not doing good right now doesn't mean they are bad and
+    could have done great last season." Each row keeps ``last_season``
+    (his rates then) and ``blend`` (this season's share) for the card."""
+    by_name: dict = {}
+    for (_team, k), u in (last or {}).items():
+        prev = by_name.get(k)
+        if prev is None or (u.get("games") or 0) > (prev.get("games") or 0):
+            by_name[k] = u
+    out: dict = {}
+    for (team, k), u in (now or {}).items():
+        u = dict(u)
+        p = by_name.get(k)
+        if p and (p.get("games") or 0) and (u.get("games") or 0):
+            w = season_share(u["games"], True)
+            for f in USAGE_RATES:
+                a, b = u.get(f), p.get(f)
+                if a is not None and b is not None:
+                    u[f] = round(w * float(a) + (1 - w) * float(b), 3 if "share" in f or f == "snap_pct" else 1)
+            u["last_season"] = {f: p.get(f) for f in USAGE_RATES if p.get(f) is not None}
+            u["last_season"]["games"] = p.get("games")
+            u["blend"] = round(w, 2)
+        out[(team, k)] = u
+    return out
 
 
 def usage_table(weekly_rows: list[dict], snap_rows: list[dict] | None = None,
@@ -564,6 +617,16 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             (notes if measured else (pro if soft_is_pro else con)).append(f"{words} ranks {_ord(side_rank)}")
         elif _strong(side_rank, n_teams):
             (notes if measured else (con if soft_is_pro else pro)).append(f"{words} ranks {_ord(side_rank)}")
+
+    # WHICH SEASONS HIS USAGE IS (blend_usage): said once, with last
+    # season's own rate, so a quiet start reads beside what he did before.
+    ls = u.get("last_season") or {}
+    if ls and u.get("blend") is not None:
+        then = (f"{ls.get('tgt_share', 0):.0%} of the targets" if group in ("wr", "te")
+                else f"{ls.get('carry_share', 0):.0%} of the carries" if group == "rb"
+                else f"{ls.get('attempts_pg', 0):g} attempts a game")
+        notes.append(f"Usage is {u['blend']:.0%} this season, {1 - u['blend']:.0%} last "
+                     f"season — last season he had {then} over {ls.get('games', 0)} games")
 
     if group in ("wr", "te"):
         lean = ["receptions", "rec_yds", "anytime_td"]
@@ -1074,8 +1137,10 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
             return fn(*a)
         except Exception:                                    # noqa: BLE001
             return []
-    usage = usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
-                        before_week=week)
+    usage = blend_usage(
+        usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
+                    before_week=week),
+        usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
     from .sources.nflverse import headshot_map
     faces = _safe(headshot_map, season) or {}
     props = scan_props(result)
@@ -1141,9 +1206,10 @@ def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
     for t in teams:
         c, p = (current or {}).get(t) or {}, prior.get(t) or {}
         plays = float(c.get("plays") or 0.0)
-        # This season alone from two games on — CURRENT_ONLY_GAMES.
-        w = (1.0 if not p or plays >= CURRENT_ONLY_GAMES * CFB_PLAYS_PER_GAME
-             else plays / (plays + CFB_PRIOR_PLAYS))
+        # This season leads from two games on, last season stays in —
+        # CURRENT_LEADS_GAMES and CURRENT_SHARE, in plays.
+        w = season_share(plays, bool(p), leads_at=CURRENT_LEADS_GAMES * CFB_PLAYS_PER_GAME,
+                         prior_n=CFB_PRIOR_PLAYS)
         out[t] = {"games": round(plays / CFB_PLAYS_PER_GAME) if plays else 0, "blend": round(w, 2)}
         for side in ("off", "def"):
             vals = {}
