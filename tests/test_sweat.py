@@ -148,7 +148,7 @@ def test_the_rows_carry_the_sentence_ingredients():
     assert 'b.get("hit_prob")' in src, \
         "the pregame baseline no longer comes off the journal row"
     mb = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
-    assert "category, hit_prob" in mb, \
+    assert "category, book, hit_prob" in mb, \
         "mlb_build's open-bet query stopped selecting hit_prob"
 
 

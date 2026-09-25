@@ -2686,7 +2686,7 @@ async function renderPickOfTheDay() {
   const head = liveNow
     ? `Pick of the Day · ${escapeHtml(league)} — in play`
     : `Pick of the Day · ${escapeHtml(league)}`;
-  const door = ridingAttrs(pick);
+  const door = ridingAttrs({ ...pick, category: "potd" });
   /* WHAT `potd._repoint` DID TO THIS CARD, in its own words.
      That function exists because the MLB page spent 2026-09-15 showing
      one pick while the record held another, and it writes three states
@@ -6447,7 +6447,7 @@ async function renderTonightAll(host) {
       chip.click();
       const again = () => {
         if (door.dataset.open) openFrom(door.dataset.open);
-        else if (door.dataset.prop) openProp(door.dataset.prop);
+        else if (door.dataset.prop) openProp(door.dataset.prop, { bet: door.dataset.bet });
         else if (door.dataset.gid) openGame(door.dataset.gid);
       };
       afterBoardFor(s, () => { switchView("tonight"); again(); });
@@ -9486,17 +9486,36 @@ function ridingMoveCopy(b, cur) {
    MATCHED ON PLAYER AND MARKET, not on side or line. The row exists
    because the number moved; requiring the number to match would make it
    openable only in the case where it would not be riding. */
+/* THE BET AS PLACED, NEVER ANOTHER LINE OF THE SAME STAT (2026-09-25).
+   Ethan's recording from the Live tab: Bijan Robinson OVER 3.5
+   receptions, placed −243, and the tap opened "UNDER 10.5 Receptions ·
+   Novig −19900". This door found the board's row by player and market
+   alone and opened the first one — a different side, a different line,
+   and an in-play exchange quote from a game already under way. The board
+   row is still what the page is built from (his chart, his logs, the
+   projection), preferring the one at the bet's own number; `data-bet`
+   carries the bet, and the page is drawn at its side, line, price and
+   book (`betPickFor`). */
 function ridingDoorProp(b) {
   if (!b || !b.player) return null;
   const key = (s) => String(s || "").toLowerCase().trim();
   const want = `${key(b.player)}|${key(b.market)}`;
-  return allProps().find(
-    (r) => `${key(r.player)}|${key(r.market)}` === want && propOpenable(r)) || null;
+  const rows = allProps().filter(
+    (r) => `${key(r.player)}|${key(r.market)}` === want && propOpenable(r));
+  const same = (r) => key(r.side) === key(b.side) && Math.abs(Number(r.line) - Number(b.line)) < 1e-9;
+  return rows.find(same) || rows[0] || null;
+}
+
+function ridingBet(b) {
+  const prob = b.pregame_prob != null ? b.pregame_prob : b.hit_prob != null ? b.hit_prob : b.model_prob;
+  return JSON.stringify({ player: b.player, market: b.market, side: b.side, line: b.line,
+    odds: b.odds, book: b.book || "", prob: prob != null ? Number(prob) : null,
+    at: b.placed_at || b.ts || "", category: b.category || "" });
 }
 
 function ridingAttrs(b) {
   const door = ridingDoorProp(b);
-  if (door) return propAttrs(door);
+  if (door) return `${propAttrs(door)} data-bet="${escapeAttr(ridingBet(b))}"`;
   /* NO BOARD OBJECT — WHICH IS THE NIGHT THIS MATTERS MOST.
      The first cut of this only opened rows the board still carried a
      prop for, and then Ethan sent the same screenshot again with the
@@ -9708,7 +9727,7 @@ function allProps() {
 document.addEventListener("click", (e) => {
   if (e.target.closest("a, button, input, label, select, .chip")) return;
   const card = e.target.closest("[data-prop]");
-  if (card) return openProp(card.dataset.prop, { likely: card.dataset.likely === "1" });
+  if (card) return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
   const who = e.target.closest("[data-peek]");
   if (who) openPeek(who.dataset.peek);
 });
@@ -9750,7 +9769,7 @@ document.addEventListener("keydown", (e) => {
   const card = e.target.closest("[data-prop]");
   if (card) {
     e.preventDefault();
-    return openProp(card.dataset.prop, { likely: card.dataset.likely === "1" });
+    return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
   }
   const who = e.target.closest("[data-peek]");
   if (who) {
@@ -9807,7 +9826,30 @@ function openProp(id, opts = {}) {
   // around its own pick (renderPropPage, likelyFor). Every other door
   // clears it, so the edge board's page is exactly what it was.
   state.propLikely = !!opts.likely;
+  state.propBet = null;
+  if (opts.bet && !opts.likely) {
+    try { state.propBet = JSON.parse(opts.bet); } catch (_) { state.propBet = null; }
+  }
   switchView("prop");
+}
+
+/* The bet a Live or riding row opened, as the pick page draws it: the
+   same shape as a Most Likely row (`likelyFor`), so every part of the
+   page that reads the pick — the header, the chance, the chart's line,
+   "Why it's likely" — reads the bet. Only for the player and stat it was
+   opened on. */
+function betPickFor(r) {
+  const b = state.propBet;
+  if (!b || !r || b.player !== r.player || b.market !== r.market) return null;
+  const odds = Number(b.odds);
+  return { bet: true, side: b.side, line: b.line, odds: b.odds, book: b.book || "",
+    model_prob: b.prob, placed_at: b.at || "",
+    implied_prob: Number.isFinite(odds) && odds ? impliedOf(odds) : null,
+    board: isLikelyBook(b.category) ? "likely" : "edge",
+    // Which book tracked it — these are the site's picks, not the reader's.
+    book_name: isLikelyBook(b.category) ? "Most Likely" : b.category === "potd" ? "Pick of the Day"
+      : b.category === "longshot" ? "Long shot" : ["main", "paper"].includes(b.category) ? "Edge"
+      : "Our pick" };
 }
 
 /* The last N games, with the context the bar chart cannot draw. A bar
@@ -10238,8 +10280,9 @@ const wholePct = (x) => `${Math.round(Number(x) * 100)}%`;
    number the board ranked it on), the projection, and what the price
    implies beside it. */
 function likelyMetricsHTML(lk, proj) {
-  return `<div class="metric primary"><div class="k">Chance</div>
-      <div class="v pos">${wholePct(lk.model_prob)}</div></div>
+  return `${lk.model_prob != null && Number.isFinite(Number(lk.model_prob))
+    ? `<div class="metric primary"><div class="k">Chance</div>
+      <div class="v pos">${wholePct(lk.model_prob)}</div></div>` : ""}
     ${proj}
     ${lk.implied_prob != null ? `<div class="metric"><div class="k">Book implies</div>
       <div class="v">${wholePct(lk.implied_prob)}</div></div>` : ""}`;
@@ -10320,7 +10363,7 @@ function whySectionHTML(items, p, board) {
 }
 
 function whyLikelyHTML(v, r, lk) {
-  const board = lk ? "likely" : whyBoardOf(r);
+  const board = lk ? (lk.board || "likely") : whyBoardOf(r);
   if (!lk) {
     const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(r.line) >= 1);
     lk = { model_prob: r.hit_prob != null ? r.hit_prob : r.model_prob,
@@ -10337,7 +10380,9 @@ function whyLikelyHTML(v, r, lk) {
   const num = (x) => Number(x).toFixed(1).replace(/\.0$/, "");
   if (Number.isFinite(p)) {
     items.push(["Our chance", `${wholePct(p)}${t ? ` — ${t.word}, the ${t.band} band`
-      : p < 0.5 ? ` — it lands about ${Math.max(1, Math.round(p * 10))} times in 10` : ""}. ${board === "likely"
+      : p < 0.5 ? ` — it lands about ${Math.max(1, Math.round(p * 10))} times in 10` : ""}. ${lk.bet
+      ? `Our number when this bet was placed; the Record page grades it at the price it was taken at.`
+      : board === "likely"
       ? `The number this board is ranked on, calibrated against how its picks have landed; the
         Record page checks every band.`
       : `The model’s own number for this side, calibrated against how its picks have landed.`}`]);
@@ -10385,7 +10430,7 @@ function whyLikelyHTML(v, r, lk) {
   }
   if (v.odds != null) {
     const book = v.book ? `${escapeHtml(v.book)} ` : "";
-    items.push(["The price", `${book}${escapeHtml(oddsTxt(v.odds))}${lk.implied_prob != null
+    items.push(["The price", `${lk.bet ? "Placed at " : ""}${book}${escapeHtml(oddsTxt(v.odds))}${lk.implied_prob != null
       ? ` implies ${wholePct(lk.implied_prob)}; we have it at ${wholePct(p)}` : ""}.${lk.rung === "alt"
       && lk.main_line != null ? ` An alternate line: the book’s main number is
         ${escapeHtml(String(lk.main_side || "").toLowerCase())} ${escapeHtml(String(lk.main_line))}${
@@ -10537,7 +10582,7 @@ function renderPropPage() {
      line, book, price and chance head the page; "Why it’s likely" comes
      straight after; the chart and the logs read against that line; and
      the edge board's gates and price refusals stay on the edge board. */
-  const lk = state.propLikely ? likelyFor(r) : null;
+  const lk = state.propLikely ? likelyFor(r) : betPickFor(r);
   const v0 = lk && lk.line != null
     ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
     : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
@@ -10592,7 +10637,9 @@ function renderPropPage() {
               : `${escapeHtml(v.side || "")} ${Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
               escapeHtml(r.market_label || r.market || "")}`}${lk && v.book
               ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
-            ${lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
+            ${lk && lk.bet ? `<div class="pp-board">${escapeHtml(lk.book_name)} · placed ${escapeHtml(oddsTxt(lk.odds))}${
+                lk.placed_at ? ` · ${escapeHtml(placedStamp(lk.placed_at))}` : ""}</div>`
+              : lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
             ${lk && lk.locked && lk.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} Locked in — ${escapeHtml(lk.lock_note)}</div>` : ""}
             ${/* Priced from the sharp book's own pair at this line
                   (betting.sharp_anchor_for) — on every NFL row since it
@@ -10604,7 +10651,7 @@ function renderPropPage() {
           escapeHtml(r.grade)}</span>` : ""}
       </div>
       <div class="pp-actions">
-        ${r.player && r.odds != null ? `<button class="btn ghost"
+        ${r.player && r.odds != null && !(lk && lk.bet) ? `<button class="btn ghost"
           data-slip="${escapeAttr(propId(r))}">${slipHas(r)
             ? "On slip" : "+ Parlay"}</button>` : ""}
         ${/* ONE SHARE, NOT THREE (the site audit, 2026-09-24): Send,
@@ -10616,7 +10663,7 @@ function renderPropPage() {
         <button class="btn ghost" data-explain aria-controls="pp-explain"
           >Explain</button>
         <button class="btn ghost" data-ask-pick="${escapeAttr(propId(r))}"
-          data-ask-label="${escapeAttr(`${r.player || ""} ${r.side || ""} ${r.line ?? ""} ${r.market_label || ""}`.replace(/\s+/g, " ").trim())}"
+          data-ask-label="${escapeAttr(`${r.player || ""} ${v.side || ""} ${v.line ?? ""} ${r.market_label || ""}`.replace(/\s+/g, " ").trim())}"
           >Ask</button>
       </div>
       <div id="fr-send-slot"></div>
@@ -10633,7 +10680,7 @@ function renderPropPage() {
               second line by itself. */""}
       </div>
       ${whyLikelyHTML(v, r, lk)}
-      ${shoppedLineNote(v)}
+      ${lk && lk.bet ? "" : shoppedLineNote(v)}
       ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word, min: 1 })
            : propAnalysis(r, { min: 1 })}
     </article>

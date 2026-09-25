@@ -98,7 +98,7 @@ on the new code (read-only):
 cd /srv/qellys && python3 - <<'EOF'
 import json, sqlite3
 from engine.gate import board_source
-b = json.load(open(board_source("web/data/nfl_picks.json")))
+b = json.load(open(board_source("web/data/recommendations.json")))
 rows = [r for r in b.get("most_likely") or [] if not r.get("reserve")]
 c = sqlite3.connect("data/ledger.db")
 n = c.execute("SELECT COUNT(*) FROM bets WHERE sport='nfl' AND date=? "

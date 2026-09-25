@@ -442,6 +442,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "side": (b.get("side") or "OVER").upper(),
             "line": float(b.get("line") or 0),
             "odds": b.get("odds"), "stake_units": b.get("stake_units") or 0,
+            # The book it was placed at and the chance it was recorded at,
+            # so its pick page can be drawn as the bet as placed (the
+            # mapped row below carries both too).
+            "book": b.get("book") or "", "pregame_prob": b.get("hit_prob"),
             "current": None, "status": "unmapped", "phase": "upcoming",
             # Present and empty, not absent. A bet we could not place on a
             # game has no live probability by definition, and every row
@@ -584,6 +588,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # Pregame baseline, for the arrow: what the model thought at
             # journal time. Straight off the bet row; None on old rows.
             "pregame_prob": b.get("hit_prob"),
+            # And the book it was placed at: the Live row's tap opens the
+            # bet as placed — its side, its line, this price at this book
+            # (ridingAttrs), never another line of the same stat.
+            "book": b.get("book") or "",
             # Where the market's own number sits right now, for the two
             # markets that carry a line. A fact, not a forecast — see
             # `_live_prob` on why these get no probability.
@@ -628,7 +636,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
 #: number a row shows until a live one exists; `category` is what splits
 #: the Live tab's two panels.
 TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
-                "category, hit_prob, ts")
+                "category, book, hit_prob, ts")
 
 #: 'likely' rides along since 2026-09-05 — Ethan: "the most likley bets
 #: should also show in the live page ... one for edge bets, and one for

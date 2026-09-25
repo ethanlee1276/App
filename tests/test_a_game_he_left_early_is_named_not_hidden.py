@@ -149,7 +149,9 @@ def test_the_log_row_and_the_shopped_number_say_it():
     assert centre == "", "at the market's centre there is nothing to say"
     # `v` is the pick the page shows — the row itself on the edge board's
     # page, the Most Likely row's own line when opened from that board.
-    assert "${shoppedLineNote(v)}" in APP
+    # A bet opened from the Live tab was placed at its number, not shopped
+    # on tonight's board, so it carries no shop note (2026-09-25).
+    assert 'lk && lk.bet ? "" : shoppedLineNote(v)' in APP
 
 
 def test_the_matchup_card_explains_a_two_game_rating():

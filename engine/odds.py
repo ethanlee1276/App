@@ -310,6 +310,68 @@ def _without_outliers(lines, price_of):
     return keep
 
 
+#: HOW FAR FROM THE MARKET'S OWN NUMBER A LINE MAY BE AND STILL BE SHOPPED.
+#:
+#: Ethan, 2026-09-25, a screen recording from the Live tab: Bijan Robinson
+#: OVER 3.5 receptions, and the pick page his tap opened read "UNDER 10.5
+#: Receptions · Novig -19900". Novig is an exchange, and an exchange posts
+#: several numbers under the main market where a sportsbook posts one;
+#: `parse_event_lines` pairs each by (player, point) and they all arrive
+#: here as main lines. `best_under_line` takes the HIGHEST line and calls
+#: it cushion, so the top rung of the exchange's ladder won — seven
+#: receptions above the 3.5 every book hangs, at a price implying 99.5%.
+#: It is not a better number for the same bet; it is a different bet.
+#: `betting.quote_prices_its_line` could not catch it: the rung is priced
+#: honestly for ITS line, and our 88% sits inside its 25-point gap.
+#:
+#: THE CENTRE IS THE LINE PRICED CLOSEST TO A COIN FLIP, which is what a
+#: book's main number is — not the median of the lines quoted, which one
+#: exchange's ladder can drag wherever it likes. A line more than a
+#: whole unit, or 15% of the centre, from it is left out of the shop:
+#: books' main numbers differ by a half or a whole reception, and by a
+#: few yards on a 60-yard line, so ordinary shopping is untouched. Falls
+#: back to the field when nothing is left, like every refusal here.
+SHOP_WINDOW_ABS = 1.0
+SHOP_WINDOW_REL = 0.15
+
+
+def _p_over(ln) -> float | None:
+    """The over's share of one quote's pair, or its bare implied chance."""
+    try:
+        o, u = int(ln.over_odds), int(ln.under_odds)
+    except (TypeError, ValueError):
+        return None
+    if not o:
+        return None
+    po = american_to_prob(o)
+    if not u:
+        return po
+    pu = american_to_prob(u)
+    return po / (po + pu) if po + pu > 0 else None
+
+
+def market_centre(lines) -> float | None:
+    """The line of the quote priced closest to even — the market's number."""
+    best = None
+    for ln in lines:
+        p = _p_over(ln)
+        if p is None:
+            continue
+        d = abs(p - 0.5)
+        if best is None or d < best[0]:
+            best = (d, float(ln.line))
+    return best[1] if best else None
+
+
+def _near_centre(lines) -> list:
+    """The lines within the shop window of the market's centre."""
+    centre = market_centre(lines)
+    if centre is None:
+        return list(lines)
+    width = max(SHOP_WINDOW_ABS, SHOP_WINDOW_REL * abs(centre))
+    return [ln for ln in lines if abs(float(ln.line) - centre) <= width + 1e-9]
+
+
 def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 
@@ -355,6 +417,9 @@ def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> Be
     # rule would leave nothing, like the two refusals above it.
     field = bettable or clean or lines
     field = _without_outliers(field, lambda ln: ln.over_odds) or field
+    # AND A LINE FAR FROM THE MARKET'S NUMBER IS A DIFFERENT BET, not a
+    # better price for this one (SHOP_WINDOW_ABS).
+    field = _near_centre(field) or field
     for ln in field:
         fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.over_odds, fair_over)
@@ -413,6 +478,7 @@ def best_under_line(lines: list[SportsbookLine], hold: float | None = None) -> B
     bettable = [ln for ln in clean if not is_sharp_book(ln.book)]
     field = bettable or clean or lines
     field = _without_outliers(field, lambda ln: ln.under_odds) or field
+    field = _near_centre(field) or field
     for ln in field:
         _, fair_under = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)

@@ -203,11 +203,16 @@ def test_the_riding_door_opens_the_board_object_not_the_bet():
 
 def test_the_riding_door_matches_on_player_and_market_only():
     """The row exists BECAUSE the number moved. Matching on side or line
-    would make it openable only in the case where it would not be
-    riding."""
+    ALONE would make it openable only in the case where it would not be
+    riding — so any row of the stat still opens it.
+
+    BUT THE ROW AT ITS OWN NUMBER FIRST, and the page drawn at the bet's
+    number either way (2026-09-25, Ethan's recording: Bijan Robinson OVER
+    3.5 receptions opened the board's first receptions row, UNDER 10.5
+    at Novig -19900). See tests/test_a_live_bet_opens_its_own_pick.py."""
     fn = APP[APP.index("function ridingDoorProp("):APP.index("function ridingAttrs(")]
     assert "b.market" in fn and "r.market" in fn
-    assert "b.side" not in fn and "b.line" not in fn
+    assert "return rows.find(same) || rows[0] || null;" in fn
 
 
 def test_a_riding_row_with_nothing_behind_it_stays_inert():

@@ -51,11 +51,11 @@ def _fn(name):
 
 # --- the engine ------------------------------------------------------------------
 def test_every_tracker_query_reads_the_placement_time():
-    assert TRACKER_COLS.endswith("hit_prob, ts"), TRACKER_COLS
+    assert TRACKER_COLS.endswith("book, hit_prob, ts"), TRACKER_COLS
     # The two other copies of the same column list, for the fast clock
     # and the baseball board.
-    assert '"category, hit_prob, ts")' in SWEAT, "the sweat clock's rows carry no placement time"
-    assert '"category, hit_prob, ts")' in MLB_BUILD, "the MLB board's rows carry no placement time"
+    assert '"category, book, hit_prob, ts")' in SWEAT, "the sweat clock's rows carry no placement time"
+    assert '"category, book, hit_prob, ts")' in MLB_BUILD, "the MLB board's rows carry no placement time"
 
 
 def test_a_mapped_row_and_an_unmapped_row_both_say_when():
