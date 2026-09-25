@@ -89,6 +89,26 @@ def test_the_scan_hands_each_read_its_own_props_evidence():
                     " · our projection counts it: +18% catches"), line
 
 
+def test_a_questionable_teammate_is_a_note_with_what_happens_if_he_sits():
+    usage = {("LAC", G._key("Ladd McConkey")): {"name": "Ladd McConkey", "tgt_share": 0.19,
+                                                "targets_pg": 6.0, "games": 3, "position": "WR"},
+             ("LAC", G._key("Keenan Allen")): {"name": "Keenan Allen", "tgt_share": 0.21,
+                                               "targets_pg": 6.1, "games": 3, "position": "WR"},
+             ("LAC", G._key("Will Dissly")): {"name": "Will Dissly", "tgt_share": 0.13,
+                                              "targets_pg": 3.9, "games": 3, "position": "TE"}}
+    prop = {"player": "Ladd McConkey", "team": "LAC", "opponent": "BUF", "position": "WR",
+            "market": "receptions", "side": "over", "line": 4.5, "odds": -120,
+            "mate_card": {"out": [], "applied": 1.0,
+                          "if_sits": {"who": ["Keenan Allen"], "mult": 1.18, "case": "above_new"}}}
+    scan = G.scan_game("BUF", "LAC", ratings={}, charts={}, defenders_now={}, usage=usage,
+                       injuries=[_Inj("Keenan Allen", "LAC", "WR", "QUESTIONABLE"),
+                                 _Inj("Will Dissly", "LAC", "TE", "QUESTIONABLE")], props=[prop])
+    (me,) = [p for p in scan["players"] if p["player"] == "Ladd McConkey"]
+    assert "Keenan Allen (WR) is questionable — if he sits, our projection moves +18% catches" in me["notes"]
+    assert "Will Dissly (TE) is questionable — 13% of the targets ride on it" in me["notes"]
+    assert not any("questionable" in t for t in me["pro"]), "he may play: shown, never counted"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

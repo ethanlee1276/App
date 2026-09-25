@@ -2239,15 +2239,21 @@ function dataBehind(d) {
   return f;
 }
 function dataBehindHTML(f) {
+  // Football counts weeks; college, baseball and basketball count days
+  // (engine/freshness.daily, `unit: "day"`).
+  const day = f.unit === "day";
+  const when = (v) => day ? formatGameDate(String(v)) : `week ${v}`;
   const parts = f.behind.map((n) => {
     const wk = (f.tables || {})[n];
-    return `${DATA_TABLE_WORDS[n] || n} ${wk ? `through week ${wk}` : "not in for this season"}`;
+    return `${DATA_TABLE_WORDS[n] || n} ${wk ? `through ${when(wk)}` : "not in for this season"}`;
   });
+  const head = day ? `Games through ${escapeHtml(when(f.played))} are played, but our data isn’t all in yet:`
+    : `Week ${escapeHtml(String(f.played))} is played, but our data isn’t all in yet:`;
+  const tail = day ? "the latest games" : `week ${escapeHtml(String(f.played))}`;
   return `${icon("warn", 15)}
-    <span><b>Week ${escapeHtml(String(f.played))} is played, but our data isn’t all in yet:</b>
+    <span><b>${head}</b>
     ${escapeHtml(parts.join(" · "))}. The picks and matchup reads below are built without
-    week ${escapeHtml(String(f.played))} in those numbers. This clears on its own when the data
-    lands.</span>`;
+    ${tail} in those numbers. This clears on its own when the data lands.</span>`;
 }
 
 function renderStaleBar(ageMs, ago) {
@@ -7571,7 +7577,7 @@ function qbCardHTML(c) {
 function mateCardHTML(c) {
   if (!c || !c.headline) return "";
   return `<div class="mu-card qb-card">
-    <div class="mu-head">Teammate out<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
+    <div class="mu-head">${(c.out || []).length || !c.if_sits ? "Teammate out" : "Teammate questionable"}<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
     <div class="mu-line"><b>${escapeHtml(c.headline)}</b></div>
     ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
   </div>`;
@@ -10896,8 +10902,11 @@ function renderPropPage() {
         and any other club he has faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
 
-    ${r.mate_card ? `<div class="section-title minor">Teammate out
-        <span class="sub">— someone at his position is ruled out, and what the model did with it.</span></div>
+    ${r.mate_card ? `<div class="section-title minor">${(r.mate_card.out || []).length || !r.mate_card.if_sits
+          ? "Teammate out" : "Teammate questionable"}
+        <span class="sub">— ${(r.mate_card.out || []).length || !r.mate_card.if_sits
+          ? "someone at his position is ruled out, and what the model did with it"
+          : "someone at his position may not play, and what the model does if he sits"}.</span></div>
       ${mateCardHTML(r.mate_card)}` : ""}
 
     ${r.qb_card ? `<div class="section-title minor">Quarterback

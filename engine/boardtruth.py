@@ -111,7 +111,8 @@ def check(board: dict) -> dict:
     if fresh.get("played") is not None:
         checked += 1
         if fresh.get("behind"):
-            probs.append(("DATA BEHIND", f"week {fresh['played']} played; behind: "
+            unit = "day" if fresh.get("unit") == "day" else "week"
+            probs.append(("DATA BEHIND", f"{unit} {fresh['played']} played; behind: "
                           + ", ".join(fresh["behind"])))
     by: dict = {}
     for name, _ in probs:

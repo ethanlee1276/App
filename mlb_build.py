@@ -877,6 +877,10 @@ def main() -> None:
         # record held a pick made that morning.
         result["pick_of_the_day"] = _led.relock_potd(
             result.get("pick_of_the_day") or {}, result.get("most_likely") or [])
+        # HOW CURRENT THE STATS THE MODEL READ ARE (engine/freshness), on the
+        # board for the page's banner and the build's self-check.
+        from engine import freshness as _fresh
+        _fresh.stamp_board(result, "mlb")
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
         # The light copy the Home page draws first (engine/lightboard),

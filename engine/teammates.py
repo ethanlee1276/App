@@ -83,9 +83,12 @@ def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
     props the reset rule re-projected. Returns {team: [names out]}."""
     from .injuries import RULED_OUT
     out: dict = {}
+    maybe: dict = {}
     for i in injuries or []:
         if getattr(i, "status", "") in RULED_OUT:
             out.setdefault(i.team, set()).add(_norm(i.player))
+        elif getattr(i, "status", "") in MAYBE:
+            maybe.setdefault(i.team, set()).add(_norm(i.player))
     reset = {_norm(p) for p in reset_players or ()}
     for p in slate.props:
         if _norm(p.player) in reset:
@@ -94,9 +97,34 @@ def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
     last = (depth or {}).get("last") or {}
     for g in slate.games:
         g.lineup = {t: {"order": {pos: order.get(f"{t}|{pos}") or [] for pos in GROUPS},
-                        "out": sorted(out.get(t, ())), "last": last.get(t, 0)}
+                        "out": sorted(out.get(t, ())), "maybe": sorted(maybe.get(t, ())),
+                        "last": last.get(t, 0)}
                     for t in (g.home, g.away)}
     return {t: sorted(v) for t, v in out.items()}
+
+
+#: A teammate who may not play: the multiplier is NOT applied (he may well
+#: play), but the card says what it would be if he sits — and the moment
+#: the report rules him out, `stamp` moves him to `out` and it applies.
+MAYBE = {"QUESTIONABLE", "GTD"}
+
+
+def if_sits(prop, lu: dict, order: list, me: str, playing: set, mult: float):
+    """{"who", "mult", "case"} — what the measured effect would be if every
+    questionable teammate at his position sat — or None when none of them
+    would change it. Ethan, 2026-09-25: "if a WR2 or WR1 or sum is out, then
+    other players will see higher usage"; a game-day question is usually a
+    questionable one, and until today nothing was said until he was out.
+    ``mult`` is the multiplier applied now; the one returned replaces it."""
+    maybe = {n for n in playing if n != me and _norm(n) in set(lu.get("maybe") or [])}
+    if not maybe:
+        return None
+    case = case_for([tuple(o) for o in order], me, playing - maybe, int(lu.get("last") or 0))
+    pos = str(getattr(prop, "position", "") or "").upper()
+    m = EFFECT.get((prop.market, pos, case), 1.0) if case else 1.0
+    if abs(m - mult) < 1e-9:
+        return None
+    return {"who": sorted(maybe), "mult": round(m, 3), "case": case}
 
 
 def effect(prop, game) -> tuple:
@@ -114,7 +142,12 @@ def effect(prop, game) -> tuple:
     playing = {n for n in names if _norm(n) not in out}
     case = case_for([tuple(o) for o in order], me, playing, int(lu.get("last") or 0))
     if not case:
-        return 1.0, "", None
+        maybe = if_sits(prop, lu, order, me, playing, 1.0)
+        if not maybe:
+            return 1.0, "", None
+        return 1.0, "", {"team": prop.team, "out": [], "case": None, "applied": 1.0,
+                         "headline": f"{' and '.join(maybe['who'])} questionable at {pos}",
+                         "note": _if_sits_note(maybe, 1.0, prop.market), "if_sits": maybe}
     who = [n for n in names if n not in playing and n != me]
     mult = EFFECT.get((prop.market, pos, case), 1.0)
     held = mult != 1.0 and case.endswith("_cont") and getattr(prop, "reset_applied", False)
@@ -132,5 +165,24 @@ def effect(prop, game) -> tuple:
     else:
         note = "Shown for you. Over four seasons this did not move this bet enough to price it"
         reason = ""
-    return mult, reason, {"team": prop.team, "out": who, "case": case, "headline": head,
-                          "applied": round(mult, 3), "note": note}
+    card = {"team": prop.team, "out": who, "case": case, "headline": head,
+            "applied": round(mult, 3), "note": note}
+    maybe = if_sits(prop, lu, order, me, playing, mult)
+    if maybe:
+        card["if_sits"] = maybe
+        card["note"] = f"{note}. {_if_sits_note(maybe, mult, prop.market)}"
+    return mult, reason, card
+
+
+#: The measured markets, in words.
+_WORDS = {"receptions": "catches", "rec_yds": "receiving yards", "rush_yds": "rushing yards"}
+
+
+def _if_sits_note(maybe: dict, mult: float, market: str) -> str:
+    """The card's sentence for a questionable teammate."""
+    move = maybe["mult"] / mult - 1
+    who, many = " and ".join(maybe["who"]), len(maybe["who"]) > 1
+    return (f"{who} {'are' if many else 'is'} questionable. If {'they sit' if many else 'he sits'}, "
+            f"our projection moves {move * 100:+.0f}% on {_WORDS.get(market, market)} (measured over "
+            f"four seasons) — not in the number yet; it goes in on its own the moment "
+            f"{'they are' if many else 'he is'} ruled out")

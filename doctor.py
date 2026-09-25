@@ -317,6 +317,27 @@ def check_ingest_freshness(rep):
                     "every in-season sport has finals through its last game")
 
 
+def check_league_days(rep):
+    """College football, baseball and basketball's stats against their last
+    day played (engine/freshness.daily) — the NFL week check's twin for the
+    leagues whose `period` is a date. 2026-09-25."""
+    @_check(rep, "league days")
+    def _():
+        if not has_history():
+            rep.add("league days", WARN, _no_data("stats database"))
+            return
+        from engine import db, freshness
+        conn = db.connect()
+        reps = {s: freshness.daily(conn, s) for s in ("cfb", "mlb", "nba", "wnba")}
+        behind = [f"{s.upper()} {freshness.line(r)}" for s, r in reps.items() if r["behind"]]
+        if behind:
+            rep.add("league days", FAIL, " · ".join(behind),
+                    "the nightly ingest catches up on its own; to force it, "
+                    "`python3 ingest.py <sport>`")
+        else:
+            rep.add("league days", OK, "every league's stats reach its last day played")
+
+
 def check_football_weeks(rep):
     """Every NFL week table against the last week played (engine/freshness).
 
@@ -1178,7 +1199,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
           check_learning, check_correlation_priors,
           check_game_calibration, check_fitter_cadence,
-          check_git]
+          check_league_days, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -1186,7 +1207,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
 # noise that teaches you to ignore the run. --code-only drops them, so a
 # red CI run means something is actually red.
 DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
-               check_ingest_freshness, check_football_weeks, check_odds_budget, check_llm_spend,
+               check_ingest_freshness, check_league_days, check_football_weeks, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log, check_clv_capture, check_learning,

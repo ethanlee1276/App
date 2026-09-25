@@ -121,8 +121,17 @@ def test_the_teammate_out_moves_the_number_and_the_card_says_so():
     assert (m, why) == (1.0, "") and card["note"].startswith("Shown for you"), "a touchdown is shown, not priced"
     assert T.effect(sl.props[2], g) == (1.0, "", None), "nobody out at his position"
     assert T.effect(sl.props[3], g) == (1.0, "", None), "the man who is out"
+    # QUESTIONABLE IS NOT OUT — nothing is applied — but the card says what
+    # the measured effect would be if he sits (2026-09-25).
     q = _slate([("Isiah Pacheco", "QUESTIONABLE")])
-    assert T.effect(q.props[0], q.games[0]) == (1.0, "", None), "questionable is not out"
+    m, why, card = T.effect(q.props[0], q.games[0])
+    assert (m, why, card["applied"], card["out"]) == (1.0, "", 1.0, []), "questionable is not out"
+    assert card["if_sits"] == {"who": ["Isiah Pacheco"], "mult": 1.647, "case": "above_new"}
+    assert card["headline"] == "Isiah Pacheco questionable at RB"
+    assert card["note"].startswith("Isiah Pacheco is questionable. If he sits, our projection moves "
+                                   "+65% on rushing yards"), card["note"]
+    assert "goes in on its own the moment he is ruled out" in card["note"]
+    assert T.effect(q.props[2], q.games[0]) == (1.0, "", None), "a questionable back is no TE's news"
 
 
 def test_a_reset_sample_already_carries_a_long_absence():

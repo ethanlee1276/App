@@ -820,8 +820,15 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         # (engine/teammates, the `mate_card`), market by market.
         mine = [p for p in (props if evidence is None else evidence) or []
                 if p.get("player") == name and p.get("team") == team]
+        maybes = []
         for i in injuries or []:
-            if getattr(i, "team", "") != team or str(getattr(i, "status", "")).upper() not in OUT_STATUSES:
+            st = str(getattr(i, "status", "")).upper()
+            if getattr(i, "team", "") != team:
+                continue
+            if st in ("QUESTIONABLE", "GTD"):
+                maybes.append(i)
+                continue
+            if st not in OUT_STATUSES:
                 continue
             ip = (getattr(i, "position", "") or "").upper()
             who = getattr(i, "player", "")
@@ -841,16 +848,41 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                           "share": mu.get("tgt_share") if rec else mu.get("carry_share"),
                           "per_game": mu.get("targets_pg") if rec else mu.get("carries_pg"),
                           "ripple": rip, "applied": applied})
-        reads.append(dict(player_read(
+        # A TEAMMATE WHO MAY NOT PLAY (engine/teammates.if_sits): shown, never
+        # counted — he may well play — with what our projection does if he sits.
+        maybe_lines = []
+        for i in maybes:
+            ip = (getattr(i, "position", "") or "").upper()
+            who = getattr(i, "player", "")
+            mu = usage.get((team, _key(who))) or {}
+            rec = group in ("wr", "te") and ip in ("WR", "TE") and (mu.get("tgt_share") or 0) >= 0.12
+            run = group == "rb" and ip in ("RB", "FB") and (mu.get("carry_share") or 0) >= 0.3
+            if not (rec or run):
+                continue
+            moves = []
+            for p in mine:
+                sits = (p.get("mate_card") or {}).get("if_sits") or {}
+                if any(_key(o or "") == _key(who) for o in sits.get("who") or []):
+                    base = float((p.get("mate_card") or {}).get("applied") or 1.0)
+                    moves.append(f"{(float(sits['mult']) / base - 1) * 100:+.0f}% "
+                                 f"{_MATE_WORDS.get(p.get('market') or '', p.get('market') or '')}")
+            share = mu.get("tgt_share") if rec else mu.get("carry_share")
+            kind = "targets" if rec else "carries"
+            maybe_lines.append(
+                f"{who} ({ip}) is questionable — " + (
+                    f"if he sits, our projection moves {', '.join(sorted(set(moves)))}"
+                    if moves else f"{share:.0%} of the {kind} ride on it"))
+        read = player_read(
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
             split=(splits or {}).get((team, _abbr(name))),
             tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams,
             allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
-            line_words=(line_words or {}).get(team, "")),
-            # HIS FACE, not a helmet (Ethan, 2026-09-25): the prop row's
-            # own headshot, else the roster's.
-            headshot=r.get("headshot") or _face(faces, name)))
+            line_words=(line_words or {}).get(team, ""))
+        read["notes"] = list(read.get("notes") or []) + maybe_lines
+        # HIS FACE, not a helmet (Ethan, 2026-09-25): the prop row's own
+        # headshot, else the roster's.
+        reads.append(dict(read, headshot=r.get("headshot") or _face(faces, name)))
     order = {k: i for i, (k, _) in enumerate(READS)}
     reads.sort(key=lambda x: (order[x["read"]], -len(x["pro"])))
     # THE PROPS UNDER THE MICROSCOPE: the markets each good read points

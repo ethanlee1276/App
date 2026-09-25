@@ -115,8 +115,12 @@ are stored. The doctor now checks results, player stats, snap counts and
 unit ratings against the last week played (it used to skip the NFL):
 
 ```bash
-cd /srv/qellys && python3 doctor.py --skip-tests 2>&1 | grep -A1 "football weeks"
+cd /srv/qellys && python3 doctor.py --skip-tests 2>&1 | grep -A1 "football weeks\|league days"
 ```
+
+(`league days` is the same check for college, MLB, NBA and WNBA, added
+later on 2026-09-25 — want `✅ league days … every league's stats reach
+its last day played`.)
 
 Want: `✅ football weeks  Freshness: 2026 week 3 is the last played — …
 All current.` A `❌` line names what is behind. Unit ratings catch up on
