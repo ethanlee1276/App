@@ -315,6 +315,12 @@ def pick_side(lines, p_over_at, hold: float | None = None,
         fair = fair_over if side == "OVER" else fair_under
         return abs(model - fair) <= IMPLAUSIBLE_QUOTE_GAP
 
+    # THE MARKET'S NUMBER FIRST, judged on every quote. Filtering by our
+    # model before this left only the exchange rung that agreed with a
+    # model far off the market (odds.market_field).
+    from .odds import market_field
+    lines = market_field(lines)
+
     # A quote that cannot be a price for its own number does not get to win
     # the shop. Same shape as `best_over_line`'s dead-zone filter: prefer the
     # quotes that are real, and fall back to the full field when none are, so

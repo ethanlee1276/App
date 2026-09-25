@@ -350,10 +350,28 @@ def _p_over(ln) -> float | None:
     return po / (po + pu) if po + pu > 0 else None
 
 
+#: The peer-to-peer exchanges. An exchange posts a LADDER of numbers under
+#: its main market where a sportsbook posts one, so its rungs are not the
+#: market's number (see SHOP_WINDOW_ABS).
+EXCHANGE_BOOKS = ("novig", "prophetx")
+
+
+def is_exchange(book: str) -> bool:
+    """Is this quote from an exchange (Novig, ProphetX) rather than a book?"""
+    b = (book or "").strip().lower().replace(" ", "")
+    return bool(b) and any(x in b for x in EXCHANGE_BOOKS)
+
+
 def market_centre(lines) -> float | None:
-    """The line of the quote priced closest to even — the market's number."""
+    """The line of the quote priced closest to even — the market's number.
+
+    THE SPORTSBOOKS' NUMBER when any sportsbook quotes: an exchange's
+    ladder is not the market's number. The droplet, 2026-09-25: Quinshon
+    Judkins's rushing prop was priced at Under 29.5 +104 on Novig, a rung
+    no sportsbook hangs, while DraftKings had the over at 29.5 at -880."""
+    books = [ln for ln in lines if not is_exchange(getattr(ln, "book", "") or "")]
     best = None
-    for ln in lines:
+    for ln in books or lines:
         p = _p_over(ln)
         if p is None:
             continue
@@ -363,13 +381,29 @@ def market_centre(lines) -> float | None:
     return best[1] if best else None
 
 
-def _near_centre(lines) -> list:
-    """The lines within the shop window of the market's centre."""
-    centre = market_centre(lines)
+def _near_centre(lines, centre: float | None = None) -> list:
+    """The lines within the shop window of the market's centre — and an
+    exchange's quote only at a number a sportsbook also hangs, when any
+    sportsbook quotes (its other rungs are other bets)."""
+    centre = market_centre(lines) if centre is None else centre
     if centre is None:
         return list(lines)
     width = max(SHOP_WINDOW_ABS, SHOP_WINDOW_REL * abs(centre))
-    return [ln for ln in lines if abs(float(ln.line) - centre) <= width + 1e-9]
+    hung = {float(ln.line) for ln in lines if not is_exchange(getattr(ln, "book", "") or "")}
+    return [ln for ln in lines if abs(float(ln.line) - centre) <= width + 1e-9
+            and (not hung or not is_exchange(getattr(ln, "book", "") or "")
+                 or float(ln.line) in hung)]
+
+
+def market_field(lines) -> list:
+    """The quotes that are bets on THE MARKET'S number, judged on the whole
+    field before anything else filters it: `betting.pick_side` drops the
+    quotes our model disagrees with, and shopping what is left let the one
+    exchange rung that agreed with a model far off the market win the row
+    (Judkins, Montgomery, Ayomanor on the droplet, 2026-09-25). Falls back
+    to the field when nothing is left."""
+    lines = list(lines or [])
+    return _near_centre(lines) or lines
 
 
 def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
