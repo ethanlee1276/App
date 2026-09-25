@@ -252,10 +252,14 @@ def test_an_anytime_scorer_reads_as_one_or_more():
 
 
 def test_the_build_scans_every_game_and_never_fails_on_it():
-    i = BUILD.index("_scan.attach_nfl(result, slate, args.season, args.week,")
+    """Before the Most Likely board since 2026-09-25 (`_scan_first`, the
+    `before_likely` hook), so the reads can pick the side and keep the seat."""
+    i = BUILD.index("_scan.attach_nfl(partial, slate, args.season, args.week,")
     block = BUILD[BUILD.rindex("try:", 0, i):BUILD.index("matchup scan skipped", i)]
     assert "except Exception" in block
     assert "scan_depth_rows = rows" in BUILD
+    assert "before_likely=_scan_first)" in BUILD
+    assert BUILD.index("def _scan_first(") < BUILD.index("result = run_slate(")
 
 
 def test_the_units_read_as_a_tale_of_the_tape():

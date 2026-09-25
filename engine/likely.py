@@ -1081,7 +1081,7 @@ def _tally(ladder, why: str) -> None:
 
 
 def _best_rung(row: dict, market: str, fits=None, floor=None,
-               ladder: dict | None = None, prefer=None) -> dict | None:
+               ladder: dict | None = None, prefer=None, lean=None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
     THE CHOICE, over `rungs` below, which is the derivation. This board
@@ -1100,7 +1100,102 @@ def _best_rung(row: dict, market: str, fits=None, floor=None,
     if not got:
         return None
     held = _held_choice(row, got, prefer, main_ok=False)
-    return held if held is not None else max(got, key=lambda c: c["prob"])
+    if held is not None:
+        return held
+    leaned = _lean_choice(row, got, False, 0.0, lean)
+    return leaned if isinstance(leaned, dict) else max(got, key=lambda c: c["prob"])
+
+
+#: THE MATCHUP READ PICKS THE SIDE, NEVER THE CHANCE. Ethan, 2026-09-25,
+#: with the dashboard's "Who could shine" open: "how do we show dalton
+#: kincaid, garret willson, and Adonia Mitchell all as breakout candidates
+#: but then don't have any most likely bets for them? It doesn't make any
+#: sense." Two reasons it happened, both in this module: a prop's row is
+#: the likeliest number on EITHER side of its ladder, so a receiver the
+#: scan calls a breakout could come out as an under; and the seats are
+#: eight a market across a whole NFL week, so his over, clearing every
+#: bar, lost its seat to other players' overs.
+#:
+#: A LEAN (engine/gamescan.leans_from_reads — "over" for a player who
+#: could shine, "under" for one who could struggle, in the markets his
+#: read points at) chooses among the numbers that ALREADY clear every
+#: bar here: the likeliest one on the lean side, when there is one. The
+#: probability, the 55% floor, the -250 cap and the credibility bar are
+#: untouched — the scan's signals measured no lift over the model
+#: (engine/scanfit), so they never move a number. A row that agrees with
+#: its read is marked (`scan_read`) and keeps a seat past the caps
+#: (`build`, READ_SEATS). A read with nothing on its side that clears
+#: says so on its card, with our best number there (`lean_report`).
+READ_SEATS = 1
+
+
+def _side(x) -> str:
+    """A row's side as over/under ("yes" is a scorer's over)."""
+    s = str(x or "").lower()
+    return "over" if s in ("over", "yes") else "under" if s in ("under", "no") else s
+
+
+def _lean_choice(row: dict, got: list, main_ok: bool, shown: float, lean):
+    """The likeliest number on the lean side that clears: a rung, "main",
+    or None when the lean side has nothing."""
+    if not lean:
+        return None
+    mine = [c for c in got if _side(c["side"]) == lean]
+    main = main_ok and _side(row.get("side")) == lean
+    best = max(mine, key=lambda c: c["prob"]) if mine else None
+    if best is not None and (not main or best["prob"] > shown):
+        return best
+    return "main" if main else None
+
+
+def _pick_brief(r: dict) -> dict:
+    """What a read's card says about one board row."""
+    return {k: r.get(k) for k in ("player", "team", "market", "market_label", "side", "line",
+                                  "odds", "book", "model_prob")}
+
+
+def _lean_report(board: list, leans: dict, lean_props: dict, fits=None) -> dict:
+    """{(player, team): what his read got} — see `build`'s ``lean_report``.
+
+    "pick": a board row on the read's side (the likeliest, if several).
+    "other_side": the board carries him only on the other side — the
+      model's likeliest number disagrees with the read, and the card says
+      so rather than hiding either.
+    "none": nothing of his on the board; ``best`` is our likeliest number
+      on the read's side at a price the board would take (−250 or better),
+      under the floor — or None when not one of his numbers is priced.
+    """
+    want: dict = {}
+    for (player, team, _market), lean in leans.items():
+        want.setdefault((player, team), lean)
+    rows: dict = {}
+    for r in board:
+        if r.get("kind") == "game":
+            continue
+        rows.setdefault((r.get("player"), r.get("team")), []).append(r)
+    out = {}
+    for k, lean in want.items():
+        mine = [r for r in rows.get(k, []) if (k[0], k[1], r.get("market") or "") in leans]
+        agree = [r for r in mine if _side(r.get("side")) == lean.get("side")]
+        if agree:
+            out[k] = {"status": "pick", "pick": _pick_brief(
+                max(agree, key=lambda r: float(r.get("model_prob") or 0)))}
+            continue
+        if mine:
+            out[k] = {"status": "other_side", "pick": _pick_brief(
+                max(mine, key=lambda r: float(r.get("model_prob") or 0)))}
+            continue
+        best = None
+        for row in lean_props.get(k, []):
+            for c in rungs(row, row.get("market") or "", fits, floor=0.0):
+                if _side(c["side"]) == lean.get("side") and (best is None or c["prob"] > best["prob"]):
+                    best = dict(c, market=row.get("market"),
+                                market_label=row.get("market_label") or row.get("market"))
+        out[k] = {"status": "none", "priced": bool(lean_props.get(k)), "best": None if best is None else {
+            "market": best["market"], "market_label": best["market_label"], "side": best["side"],
+            "line": best["line"], "odds": best["odds"], "book": best["book"],
+            "model_prob": round(float(best["prob"]), 4)}}
+    return out
 
 
 def _held_choice(row: dict, got: list, prefer, main_ok: bool):
@@ -1243,7 +1338,7 @@ def rungs(row: dict, market: str, fits=None, floor=None,
 
 def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
               census: dict | None = None, floor=None,
-              ladder: dict | None = None, prefer=None) -> dict | None:
+              ladder: dict | None = None, prefer=None, lean=None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -1294,7 +1389,7 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
         # by the model's own curve, or by a sharp book hanging the same
         # alternate, needs neither (2026-09-15).
         rung = (_best_rung(row, market, fits, floor=floor, ladder=ladder,
-                           prefer=prefer)
+                           prefer=prefer, lean=lean)
                 if row.get("has_market") else None)
         if rung is not None:
             return _row_from(row, market, sport, bettable, prob, rung=rung)
@@ -1355,8 +1450,12 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     held = _held_choice(row, got, prefer, main_ok)
     if isinstance(held, dict):
         return _row_from(row, market, sport, bettable, prob, rung=held)
+    # THE READ'S SIDE, among the numbers that clear (READ_SEATS).
+    leaned = _lean_choice(row, got, main_ok, shown, lean) if held is None else None
+    if isinstance(leaned, dict):
+        return _row_from(row, market, sport, bettable, prob, rung=leaned)
     rung = max(got, key=lambda c: c["prob"]) if got else None
-    if rung is not None and held != "main" and (
+    if rung is not None and held != "main" and leaned != "main" and (
             not main_ok or rung["prob"] > shown):
         return _row_from(row, market, sport, bettable, prob, rung=rung)
     if shown < _floor(floor):
@@ -2214,8 +2313,14 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
           game_bets=None, census_by_kind: dict | None = None,
           cut: list | None = None, previous=None,
-          turnover: dict | None = None, now: str | None = None) -> list:
+          turnover: dict | None = None, now: str | None = None,
+          leans: dict | None = None, lean_report: dict | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
+
+    ``leans`` maps (player, team, market) to the matchup read's side —
+    {"side": "over"|"under", "read": key, "label": words} — see READ_SEATS.
+    ``lean_report`` is filled in place with what each leaned player got:
+    {(player, team): {"status": "pick"|"other_side"|"none", ...}}.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
     ties on it, would quietly rebuild the edge board under a different
@@ -2279,6 +2384,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return is_reliable(sport, market)
 
     funnel = {k: _funnel() for k in KINDS}
+    # The prop rows a matchup read leaned, by player — what `lean_report`
+    # prices when none of them came out on the read's side.
+    lean_props: dict = {}
 
     def one_pass(floor, funnel, seen=None, why=None):
         """Every maker, every row, at one floor. Returns the rows kept.
@@ -2356,9 +2464,12 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                 mf["laddered"] += 1
             local: dict = {}
             rungs: dict = {}
+            lean = (leans or {}).get((row.get("player") or "", row.get("team") or "", mk))
+            if lean:
+                lean_props.setdefault((row.get("player") or "", row.get("team") or ""), []).append(row)
             got = from_prop(row, bettable, fits=fits, sport=sport,
                             census=local, floor=floor, ladder=rungs,
-                            prefer=prefer_for(row))
+                            prefer=prefer_for(row), lean=(lean or {}).get("side"))
             for no, n in local.items():
                 funnel["prop"]["refused"][no] = funnel["prop"]["refused"].get(no, 0) + n
                 mf["refused"][no] = mf["refused"].get(no, 0) + n
@@ -2486,8 +2597,33 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # guard for it would be a branch no test could ever reach. See
     # `test_the_reserve_cap_stays_under_the_board_caps` for the invariant
     # that keeps this true if someone raises RESERVE_LIMIT.
+    # THE READ, ON THE ROWS THAT AGREE WITH IT (READ_SEATS): marked, so
+    # the card can say it and the seat below can find them.
+    for r in out:
+        lean = (leans or {}).get((r.get("player") or "", r.get("team") or "",
+                                  r.get("market") or ""))
+        if lean and _side(r.get("side")) == lean.get("side"):
+            r["scan_read"], r["scan_label"] = lean.get("read"), lean.get("label")
     players = _cut_players([r for r in out if r.get("kind") != "game"], limit,
                            held=held)
+    # …AND ITS PICK KEEPS A SEAT PAST THE CAPS: the likeliest agreeing row
+    # of each read player the cut left off, READ_SEATS a player. Every one
+    # cleared every bar; what it lacked was a seat, which is a layout fact
+    # (see `cut` below), and a card calling him a breakout beside a board
+    # without him is the contradiction Ethan asked about.
+    if leans:
+        on = {id(r) for r in players}
+        have: dict = {}
+        for r in players:
+            if r.get("scan_read"):
+                k = (r.get("player"), r.get("team"))
+                have[k] = have.get(k, 0) + 1
+        for r in sorted((r for r in out if r.get("kind") != "game" and r.get("scan_read")
+                         and id(r) not in on), key=lambda r: -float(r.get("model_prob") or 0)):
+            k = (r.get("player"), r.get("team"))
+            if have.get(k, 0) < READ_SEATS:
+                players.append(r)
+                have[k] = have.get(k, 0) + 1
     game_rows = sorted((r for r in out if r.get("kind") == "game"),
                        key=lambda r: -_seat(r, held))
     games = game_rows[:GAME_LIMIT]
@@ -2566,6 +2702,8 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                             0 if hold_key(r) in held else 1,
                             str(r.get("since") or ""),
                             -float(r["model_prob"] or 0.0)))
+    if lean_report is not None and leans:
+        lean_report.update(_lean_report(out, leans, lean_props, fits))
     if turnover is not None:
         turnover.update(_turnover(out, held, why_left, outranked, stamp,
                                   by_margin))

@@ -498,7 +498,8 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
                   census: dict | None = None, game_bets=None,
                   census_by_kind: dict | None = None,
                   cut: list | None = None, previous=None,
-                  turnover: dict | None = None) -> list:
+                  turnover: dict | None = None, leans: dict | None = None,
+                  lean_report: dict | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists.
 
     `game_bets` are the cards `_game_bets` priced for the edge board; the
@@ -514,7 +515,8 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
         return build(results, td_picks, td_watch, sport="nfl",
                      census=census, game_bets=game_bets,
                      census_by_kind=census_by_kind, cut=cut,
-                     previous=previous, turnover=turnover)
+                     previous=previous, turnover=turnover,
+                     leans=leans, lean_report=lean_report)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -1093,7 +1095,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
               nfl_usage: dict | None = None, team_context: dict | None = None,
               team_notes: dict | None = None,
               ripples: dict | None = None,
-              likely_previous: list | None = None) -> dict:
+              likely_previous: list | None = None,
+              before_likely=None) -> dict:
     """The NFL board: `price_props` plus the furniture around it — game
     bets, the long-shot board, the likelihood board and the shelves they
     sit on. Sports that build their own furniture (college football)
@@ -1101,7 +1104,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     `likely_previous` is the Most Likely board this build replaces
     (`likely.previous_board`), so a pick holds its number and its seat
-    between refreshes (`likely.HOLD_MARGIN`)."""
+    between refreshes (`likely.HOLD_MARGIN`).
+
+    `before_likely(partial)` runs after the props, game cards and long
+    shots are priced and BEFORE the Most Likely board is built — the
+    matchup scan (nfl_build), so a player it says could shine gets his
+    over on the board (`likely.READ_SEATS`). It is handed the board so
+    far ({"games", "recommendations", "long_shots", "longshot_watch"}),
+    may hang keys on it (they are published), and returns the leans."""
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -1137,10 +1147,25 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     from . import potd as _potd
     _likely_cut: list = []
     _likely_turnover: dict = {}
+    # THE MATCHUP SCAN FIRST, when the caller has one (see the docstring).
+    _games = [_game_to_dict(g, results) for g in slate.games]
+    _partial = {"date": slate.date, "games": _games, "recommendations": results,
+                "long_shots": ls, "longshot_watch": ls_watch}
+    _leans: dict = {}
+    if before_likely is not None:
+        try:
+            _leans = before_likely(_partial) or {}
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  before the Most Likely board: {_exc}")
+    _lean_report: dict = {}
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
                             game_bets=game_bets, census_by_kind=_likely_kinds,
                             cut=_likely_cut, previous=likely_previous,
-                            turnover=_likely_turnover)
+                            turnover=_likely_turnover, leans=_leans,
+                            lean_report=_lean_report)
+    if _partial.get("scan_reads"):
+        from .gamescan import stamp_picks
+        stamp_picks(_partial["scan_reads"], _lean_report)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1166,7 +1191,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,
         },
-        "games": [_game_to_dict(g, results) for g in slate.games],
+        "games": _games,
         "recommendations": results,
         # Every ingested market for tonight's players, not just the one
         # each prop priced — the Players page's market chips
@@ -1275,6 +1300,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # §14: the parlay screen runs last, over the board that just cleared the
     # singles gates — never over candidates it invented for itself.
     from .parlays import attach
+    # WHAT THE HOOK HUNG ON THE BOARD (the matchup scan's reads), published
+    # with it — the scan used to be attached after this function returned.
+    for _k, _v in _partial.items():
+        if _k not in ("date", "games", "recommendations", "long_shots", "longshot_watch"):
+            out.setdefault(_k, _v)
     return attach(out, "nfl")
 
 

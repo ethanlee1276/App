@@ -8356,7 +8356,8 @@ function scanTopRowHTML(x, shine) {
       <span class="sct-who"><b>${escapeHtml(x.player)}</b>
         <span class="sct-sub">${escapeHtml(x.team || "")} ${escapeHtml(x.pos || "")} vs ${escapeHtml(x.opp || "")}${
           bits.length ? ` · ${escapeHtml(bits[0])}` : ""}</span>
-        ${why.length ? `<span class="sct-why">${escapeHtml(why.slice(0, 2).join(" · "))}</span>` : ""}</span>
+        ${why.length ? `<span class="sct-why">${escapeHtml(why.slice(0, 2).join(" · "))}</span>` : ""}
+        ${scanPickHTML(x, "sct-pick")}</span>
       <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span>
     </button>`;
 }
@@ -8369,10 +8370,14 @@ function renderScanTop() {
   const locked = !rows.length && d.locked && d.locked.scan_reads && (d.games || []).some((g) => g.scan);
   if (!rows.length && !locked) { host.innerHTML = ""; return; }
   const first = { breakout: 0, good: 1, avoid: 0, tough: 1 };
+  // A read with its Most Likely pick leads its list.
+  const picked = (x) => (x.pick ? 0 : 1);
   const shine = rows.filter((x) => x.read === "breakout" || x.read === "good")
-    .sort((a, b) => first[a.read] - first[b.read] || (b.pro || []).length - (a.pro || []).length);
+    .sort((a, b) => picked(a) - picked(b) || first[a.read] - first[b.read]
+      || (b.pro || []).length - (a.pro || []).length);
   const struggle = rows.filter((x) => x.read === "avoid" || x.read === "tough")
-    .sort((a, b) => first[a.read] - first[b.read] || (b.con || []).length - (a.con || []).length);
+    .sort((a, b) => picked(a) - picked(b) || first[a.read] - first[b.read]
+      || (b.con || []).length - (a.con || []).length);
   const list = (title, xs, up) => xs.length ? `<div class="sct-list card">
       <div class="sct-head">${title} <span class="mini">${xs.length}</span></div>
       ${xs.slice(0, SCAN_TOP_N).map((x) => scanTopRowHTML(x, up)).join("")}
@@ -8384,8 +8389,10 @@ function renderScanTop() {
     ${locked ? `<div class="card ms-locked"><b>Who could shine and who could struggle, in every game</b> —
         a read on every key player with the reasons for and against — is part of the subscription.</div>`
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
-    <p class="ms-note">Tap a player for his pick, or his player page when he has none. The full read — every
-      reason, and what we noticed but do not count — is on each game’s page. It does not move our numbers.</p>`}`;
+    <p class="ms-note">A player who could shine gets his likeliest over on Most Likely, one who could
+      struggle his likeliest under — when one clears the board’s bars (55% or better, −250 or better).
+      The read picks the side; it never moves our number. Tap a player for his pick. The full read is on
+      each game’s page.</p>`}`;
 }
 
 function renderLikelyTop() {
@@ -8605,6 +8612,11 @@ function likelyTagsHTML(r) {
      since; the note says what did. */
   if (r.locked) tags.push(["Locked in", "", r.lock_note || "Stays up as posted until its game"]);
   if (r.kind === "game") return tagsOut(tags);
+  /* THE MATCHUP READ THIS PICK AGREES WITH (engine/likely.READ_SEATS). */
+  if (r.scan_label) {
+    tags.push([r.scan_label, /tough|avoid/.test(r.scan_read || "") ? "down" : "up",
+               "The matchup scan’s read on him — it chose this side, and never moved the number"]);
+  }
   const qb = r.qb_card, mate = r.mate_card;
   if (qb && qb.headline) {
     const a = Number(qb.applied);
@@ -11430,8 +11442,47 @@ function scanWhyList(x) {
    likely board and chart"). His Most Likely pick first — the market the
    read points at if he has one there — then his prop on the edge board,
    then his player page. */
+/* THE READ'S OWN PICK (engine/likely.READ_SEATS, 2026-09-25): the Most
+   Likely row the board seated for this read, on its side — or the one it
+   carries the other way. Ethan: "how do we show dalton kincaid, garret
+   willson, and Adonia Mitchell all as breakout candidates but then don't
+   have any most likely bets for them?" */
+function scanPickRow(x) {
+  const p = x && (x.pick || x.pick_other_side);
+  if (!p) return null;
+  const low = (v) => String(v || "").toLowerCase();
+  return ((state.data || {}).most_likely || []).find((r) => r && r.player === p.player
+    && r.market === p.market && low(r.side) === low(p.side)
+    && Number(r.line) === Number(p.line)) || null;
+}
+
+/* The line on a read that says what the Most Likely board did with it. */
+function scanPickHTML(x, cls = "ms-pick") {
+  const low = (v) => String(v || "").toLowerCase();
+  const side = { breakout: "over", good: "over", tough: "under", avoid: "under" }[x.read];
+  const say = (p) => `${escapeHtml(low(p.side) === "yes" ? "Yes" : low(p.side) === "over" ? "Over" : "Under")} ${
+    p.line != null ? escapeHtml(String(p.line)) + " " : ""}${escapeHtml(p.market_label || p.market || "")} · ${
+    escapeHtml(oddsTxt(p.odds))} · ${wholePct(p.model_prob)}`;
+  if (x.pick) return `<span class="${cls} good"><b>Most Likely pick:</b> ${say(x.pick)}</span>`;
+  if (x.pick_other_side) {
+    return `<span class="${cls} warn"><b>Our Most Likely pick on him goes the other way:</b> ${say(x.pick_other_side)}
+      — the model’s likeliest number disagrees with this read.</span>`;
+  }
+  if (x.no_pick && side) {
+    const b = x.no_pick.best;
+    const why = !x.no_pick.priced ? "the books have not priced his props yet."
+      : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < 0.55
+          ? " — under the 55% the board needs" : ""}.`
+      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.`;
+    return `<span class="${cls} none"><b>No Most Likely pick</b> — ${why}</span>`;
+  }
+  return "";
+}
+
 function scanDoor(x, market) {
   const d = state.data || {};
+  const own = market ? null : scanPickRow(x);
+  if (own) return { attrs: likelyOpen(own), what: `his Most Likely pick — ${own.market_label || own.market}` };
   const same = (r) => r && r.player === x.player && (!r.team || !x.team || r.team === x.team);
   const want = market ? [market] : (x.lean || []);
   const ml = (d.most_likely || []).filter((r) => same(r) && r.kind !== "game");
@@ -11467,6 +11518,7 @@ function scanReadHTML(x) {
         <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
         <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></button>
+      ${scanPickHTML(x)}
       ${scanWhyList(x)}
       <span class="ms-open">Open ${escapeHtml(door.what)} →</span>
     </div>`;

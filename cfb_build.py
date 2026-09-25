@@ -2106,6 +2106,27 @@ def main() -> None:
             # same page as the NFL's for the same reason, and a sport
             # that publishes an empty one would read as broken rather
             # than as narrow.
+            # THE MATCHUP SCAN FIRST (engine/gamescan.attach_cfb): each FBS
+            # game's units ranked from CFBD's advanced season table, the
+            # mismatches, and a read on every player with a prop — before
+            # the board since 2026-09-25, so a player it says could shine
+            # gets his over there (likely.READ_SEATS; Ethan: "how do we
+            # show ... breakout candidates but then don't have any most
+            # likely bets for them?"). The read picks the side, never the
+            # number; a failure is a line in the log, never a lost board.
+            _cfb_leans: dict = {}
+            _cfb_lean_report: dict = {}
+            try:
+                from engine import gamescan as _scan
+                from engine.seasons import season_of as _scan_season_of
+                _scanned = _scan.attach_cfb(
+                    out, _scan_season_of("cfb", args.date),
+                    lambda school: cfbdata.resolve_team(school, lookup))
+                _cfb_leans = _scan.leans_from_reads(out.get("scan_reads") or {})
+                print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s), "
+                      f"{len(_cfb_leans)} lean(s) for Most Likely.")
+            except Exception as _sexc:                        # noqa: BLE001
+                print(f"  ⚠️  matchup scan skipped: {_sexc}")
             from engine.likely import build as _likely
             from engine import boards as _boards
             # THE CENSUS TRAVELS WITH THE BOARD. College's whole
@@ -2165,7 +2186,11 @@ def main() -> None:
                                          # `out["date"]` keeps while
                                          # `args.date` moves to the slate
                                          previous=_likely_prev(args.out, out.get("date")),
-                                         turnover=_ml_turn)
+                                         turnover=_ml_turn,
+                                         leans=_cfb_leans,
+                                         lean_report=_cfb_lean_report)
+            if out.get("scan_reads"):
+                _scan.stamp_picks(out["scan_reads"], _cfb_lean_report)
             out["likely_turnover"] = _ml_turn
             # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
             # yardage markets have a model and, until the box holding
@@ -2259,20 +2284,19 @@ def main() -> None:
             "quotes_note": quotes_note,
             "games_quoted": 0,
         }
-    # THE MATCHUP SCAN (engine/gamescan.attach_cfb): each FBS game's
-    # units ranked from CFBD's advanced season table, the mismatches
-    # (havoc and the line of scrimmage included), and a read on every
-    # player with a prop. Informational — nothing here moves a number —
-    # so a failure is a line in the log and never a lost board.
-    try:
-        from engine import gamescan as _scan
-        from engine.seasons import season_of as _scan_season_of
-        _scanned = _scan.attach_cfb(
-            out, _scan_season_of("cfb", args.date),
-            lambda school: cfbdata.resolve_team(school, lookup))
-        print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s).")
-    except Exception as _sexc:                                # noqa: BLE001
-        print(f"  ⚠️  matchup scan skipped: {_sexc}")
+    # THE MATCHUP SCAN runs before the Most Likely board, above. That board
+    # is built only with odds in play, so a build without them (or one
+    # whose board step failed first) scans here, as it always did.
+    if not any(g.get("scan") for g in out.get("games") or []):
+        try:
+            from engine import gamescan as _scan
+            from engine.seasons import season_of as _scan_season_of
+            _scanned = _scan.attach_cfb(
+                out, _scan_season_of("cfb", args.date),
+                lambda school: cfbdata.resolve_team(school, lookup))
+            print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s).")
+        except Exception as _sexc:                            # noqa: BLE001
+            print(f"  ⚠️  matchup scan skipped: {_sexc}")
     out["status"] = "slate"
     out["no_qualifying"] = result["no_qualifying"]
     # The funnel under the count (engine/census). CFB's board is game

@@ -1032,10 +1032,34 @@ def main() -> None:
     # THE BOARD THIS BUILD REPLACES, for the Most Likely hold: a pick keeps
     # its number and its seat between refreshes (likely.HOLD_MARGIN).
     from engine.likely import previous_board as _likely_prev
+
+    # THE MATCHUP SCAN (Ethan, 2026-09-24: "ranking the defenses and
+    # offenses and looking at where exactly in the defense and offense is
+    # good and bad and what players could shine and what players could
+    # hurt"). Units, corners, scheme, injuries and a read on every key
+    # player, per game — run BEFORE the Most Likely board since
+    # 2026-09-25, so a player it says could shine gets his over there
+    # (Ethan: "how do we show dalton kincaid, garret willson, and Adonia
+    # Mitchell all as breakout candidates but then don't have any most
+    # likely bets for them?"). The read picks the side and keeps the seat;
+    # it never moves a number (engine/likely.READ_SEATS).
+    def _scan_first(partial):
+        from engine import gamescan as _scan
+        try:
+            _ns = _scan.attach_nfl(partial, slate, args.season, args.week,
+                                   depth_rows=scan_depth_rows)
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  matchup scan skipped: {_exc}")
+            return {}
+        leans = _scan.leans_from_reads(partial.get("scan_reads") or {})
+        if _ns:
+            print(f"  Matchup scan: {_ns} game(s), {len(leans)} lean(s) for Most Likely")
+        return leans
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
                        team_notes=qb_notes, ripples=ripples,
                        likely_previous=_likely_prev(args.out, slate.date)
-                       if args.out else None)
+                       if args.out else None,
+                       before_likely=_scan_first)
     # Say on each card what the sample rule did — the reset that was
     # applied, or the stale sample that was too thin to reset.
     if reset_report:
@@ -1281,20 +1305,8 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
-        # THE MATCHUP SCAN (Ethan, 2026-09-24: "ranking the defenses and
-        # offenses and looking at where exactly in the defense and offense
-        # is good and bad and what players could shine and what players
-        # could hurt"). Units, corners, scheme, injuries and a read on
-        # every player with a prop, per game. Display only — a reason
-        # joins the NUMBER once it is measured (engine/gamescan).
-        try:
-            from engine import gamescan as _scan
-            _ns = _scan.attach_nfl(result, slate, args.season, args.week,
-                                   depth_rows=scan_depth_rows)
-            if _ns:
-                print(f"  Matchup scan: {_ns} game(s)")
-        except Exception as _exc:                             # noqa: BLE001
-            print(f"  ⚠️  matchup scan skipped: {_exc}")
+        # (The matchup scan runs inside `run_slate`, before the Most Likely
+        # board — `_scan_first` above.)
         # The live win-probability track, same wiring mlb_build carries
         # (2026-08-18, Ethan: "we should be showing that for ALL live
         # games"). One credit a pull for the whole slate, paid only while

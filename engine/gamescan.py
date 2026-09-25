@@ -861,6 +861,50 @@ def implied_points(g) -> tuple[dict, dict]:
              g.away: f"{fmt(-spread)} on the road, total {total:g}"})
 
 
+#: WHICH SIDE EACH READ LEANS, for the Most Likely board (likely.READ_SEATS).
+#: A player who could shine leans over, one who could struggle leans under;
+#: a neutral read leans nowhere. Touchdown markets are left out: a scorer
+#: row is always "yes", and "no touchdown" is not a pick this board makes.
+LEAN_SIDE = {"breakout": "over", "good": "over", "tough": "under", "avoid": "under"}
+_NO_LEAN_MARKETS = ("anytime_td", "pass_td")
+
+
+def leans_from_reads(scan_reads: dict) -> dict:
+    """{(player, team, market): {"side", "read", "label"}} from the reads."""
+    out: dict = {}
+    for game in (scan_reads or {}).values():
+        for x in (game or {}).get("players") or []:
+            side = LEAN_SIDE.get(x.get("read"))
+            if not side:
+                continue
+            for m in x.get("lean") or []:
+                if m not in _NO_LEAN_MARKETS:
+                    out[(x.get("player") or "", x.get("team") or "", m)] = {
+                        "side": side, "read": x.get("read"), "label": x.get("label")}
+    return out
+
+
+def stamp_picks(scan_reads: dict, report: dict) -> int:
+    """Each leaned read gets what the Most Likely board did with it —
+    ``pick`` (his row on the read's side), ``pick_other_side`` (the board
+    has him only the other way) or ``no_pick`` (with our best number on
+    the read's side, or None). Returns reads stamped."""
+    n = 0
+    for game in (scan_reads or {}).values():
+        for x in (game or {}).get("players") or []:
+            got = (report or {}).get((x.get("player") or "", x.get("team") or ""))
+            if not got:
+                continue
+            if got["status"] == "pick":
+                x["pick"] = got["pick"]
+            elif got["status"] == "other_side":
+                x["pick_other_side"] = got["pick"]
+            else:
+                x["no_pick"] = {"best": got.get("best"), "priced": got.get("priced", True)}
+            n += 1
+    return n
+
+
 def scan_props(result: dict) -> list[dict]:
     """Every priced row the reads can point at: the stat props, and the
     scorer rows the touchdown board carries (the watch shelf, the long
