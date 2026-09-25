@@ -11355,7 +11355,7 @@ function scanReadHTML(x) {
   const bits = scanUsageBits(x);
   const door = scanDoor(x);
   return `<div class="ms-read ${escapeHtml(x.read)}"${door.attrs}>
-      <button type="button" class="ms-read-head"${door.attrs}>${betMark({ player: x.player, team: x.team }, 30)}
+      <button type="button" class="ms-read-head"${door.attrs}>${playerAvatar(x.player, x.team, { size: 36, headshot: x.headshot })}
         <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
         <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></button>
@@ -11414,8 +11414,8 @@ function matchupScanHTML(g) {
       <ul>${edges.map((e) => { const [who, what] = scanEdgeLine(e);
         return `<li class="${e.gap > 0 ? "off" : "def"}"><b>${escapeHtml(who)}</b> — ${escapeHtml(what)}</li>`; }).join("")}</ul></div>` : ""}
     ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
-      ${inj.map((i) => `<div class="ms-inj-row">${teamMark(i.team, 20)}
-        <span class="ms-inj-who"><b>${escapeHtml(i.player)}</b> <span class="mini">${escapeHtml(i.position || "")}</span>
+      ${inj.map((i) => `<div class="ms-inj-row">${playerAvatar(i.player, i.team, { size: 32, headshot: i.headshot })}
+        <span class="ms-inj-who"><b>${escapeHtml(i.player)}</b> <span class="mini">${escapeHtml(i.team || "")} ${escapeHtml(i.position || "")}</span>
           <span class="chip ${i.status === "QUESTIONABLE" ? "" : "down"}">${escapeHtml(i.status.toLowerCase())}</span></span>
         <span class="ms-inj-opens">${escapeHtml(i.opens || "")}</span></div>`).join("")}</div>` : ""}
     ${cov ? `<div class="ms-cov-row">${cov}</div>` : ""}

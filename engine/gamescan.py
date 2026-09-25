@@ -634,13 +634,25 @@ def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: 
     return ""
 
 
+def _face(faces: dict | None, name: str) -> str:
+    """A player's headshot from the roster map (nflverse.headshot_map),
+    or "" — faces are polish, never a reason a scan fails."""
+    if not faces or not name:
+        return ""
+    from .sources.nflverse import face_for
+    try:
+        return face_for(faces, name)
+    except Exception:                                        # noqa: BLE001
+        return ""
+
+
 def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_now: dict,
               defenders_last: dict | None = None, tackling: dict | None = None,
               schemes: dict | None = None, splits: dict | None = None,
               usage: dict | None = None, injuries=None, props: list | None = None,
               scheme_season=None, opponent_adjusted: bool = True,
               allowed: dict | None = None, points: dict | None = None,
-              line_words: dict | None = None) -> dict:
+              line_words: dict | None = None, faces: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
 
     ``allowed`` is {defence: engine/defensevs ratings} — the model's own
@@ -679,7 +691,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                 and (used.get("carry_share") or 0) < 0.3:
             continue
         inj_rows.append({"team": t, "player": who, "position": getattr(i, "position", ""),
-                         "status": st, "opens": _opens(i, t, opp[t], ratings, charts, usage)})
+                         "status": st, "opens": _opens(i, t, opp[t], ratings, charts, usage),
+                         "headshot": _face(faces, who)})
     # THE PLAYERS WITH PROPS IN THIS GAME, each read against his opponent.
     seen, reads = set(), []
     for r in props or []:
@@ -700,13 +713,16 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                 mates.append(getattr(i, "player", ""))
             if group == "rb" and ip in ("RB", "FB") and (mu.get("carry_share") or 0) >= 0.3:
                 mates.append(getattr(i, "player", ""))
-        reads.append(player_read(
+        reads.append(dict(player_read(
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
             split=(splits or {}).get((team, _abbr(name))),
             tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams,
             allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
-            line_words=(line_words or {}).get(team, "")))
+            line_words=(line_words or {}).get(team, "")),
+            # HIS FACE, not a helmet (Ethan, 2026-09-25): the prop row's
+            # own headshot, else the roster's.
+            headshot=r.get("headshot") or _face(faces, name)))
     order = {k: i for i, (k, _) in enumerate(READS)}
     reads.sort(key=lambda x: (order[x["read"]], -len(x["pro"])))
     # THE PROPS UNDER THE MICROSCOPE: the markets each good read points
@@ -848,6 +864,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
             return []
     usage = usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
                         before_week=week)
+    from .sources.nflverse import headshot_map
+    faces = _safe(headshot_map, season) or {}
     props = scan_props(result)
     by_pair = {frozenset((g.home, g.away)): g for g in getattr(slate, "games", []) or []}
     # THE MODEL'S OWN MATCHUP NUMBERS, off the slate the board was priced
@@ -873,7 +891,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          splits=splits, usage=usage,
                          injuries=getattr(g, "injuries", None) or [],
                          props=gprops, scheme_season=sch.get("season"),
-                         allowed=allowed, points=pts, line_words=words)
+                         allowed=allowed, points=pts, line_words=words, faces=faces)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan
