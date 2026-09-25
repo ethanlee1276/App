@@ -11731,6 +11731,11 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
    board. */
 .likely-pulled { margin-top: 16px; }
 .likely-pulled summary { cursor: pointer; }
+.likely-dropped { margin-top: 16px; }
+.likely-dropped summary { cursor: pointer; }
+.likely-dropped .ml-rows { margin-top: 8px; }
+/* Under the bar now: not the deck's green, which reads as a pick we'd make. */
+.likely-dropped .hd-p { color: var(--text-mute); border-color: var(--border-soft); background: transparent; }
 .likely-pulled-lede { margin: 8px 0 4px; color: var(--text-mute); font-size: var(--fs-sm); }
 .ml-pulled-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
   border-top: var(--hairline) solid var(--border-soft); }

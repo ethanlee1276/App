@@ -379,7 +379,8 @@ def lock_note(why: str, now=None, then=None) -> str:
     if now is not None and then is not None and float(now) < MIN_PROB:
         return (f"Our chance at this number is now {round(float(now) * 100)}%, down from "
                 f"{round(float(then) * 100)}% when it went up — under the "
-                f"{round(MIN_PROB * 100)}% a new pick needs. It stays on the board as posted.")
+                f"{round(MIN_PROB * 100)}% a new pick needs. It stays tracked and graded as posted, "
+                "in “Our chance has dropped” below the board.")
     if "floor" in lw or lw == "no probability":
         if now is not None and then is not None:
             return ("The books now hang this stat at another number; this is the one we posted, "

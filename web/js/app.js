@@ -8423,10 +8423,11 @@ function renderLikelyTop() {
   if (!host) return;
   const shelves = boardShelves()
     .map((sh) => ({ ...sh,
-                    rows: shelfByPosted((sh.rows || []).filter(showableLikelyRow))
-                      .slice(0, LIKELY_TOP_N) }))
+                    rows: shelfByPosted((sh.rows || []).filter(showableLikelyRow)
+                      .filter((r) => !likelyDropped(r))).slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
-  if (!shelves.length) {
+  const dropped = (state.data.most_likely || []).filter(showableLikelyRow).filter(likelyDropped);
+  if (!shelves.length && !dropped.length) {
     /* A sport that HAS a likelihood board deserves a one-line reason on
        the home page, not a section that silently ceases to exist. The
        tell is `likely_census` — every likelihood-capable build ships it
@@ -8445,7 +8446,7 @@ function renderLikelyTop() {
     revealChildren(host);
     return;
   }
-  const total = (state.data.most_likely || []).length;
+  const total = (state.data.most_likely || []).filter((r) => !likelyDropped(r)).length;
   const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
   host.innerHTML = `
     <div class="section-title">Qellys’ top picks
@@ -8459,6 +8460,7 @@ function renderLikelyTop() {
           ${sh.rank_auc != null ? `<span class="chip">ranks at ${Number(sh.rank_auc).toFixed(2)}</span>` : ""}</div>
         <div class="ml-rows">${(sh.rows || []).map(likelyRow).join("")}</div>
       </section>`).join("")}</div>
+    ${likelyDroppedHTML(dropped)}
     <div class="likely-top-more">
       <button class="btn ghost" id="likely-see-all" type="button">
         See the full board — every pick with its full reasoning${more > 0 ? ` · ${more} more` : ""}</button>
@@ -8483,8 +8485,10 @@ function renderLikely() {
   // to draw yet is not an empty board: renderAll draws this view the
   // moment the board lands.
   if (!state.data) return;
-  const rows = (state.data.most_likely || []).filter(showableLikelyRow);
-  if (!rows.length) {
+  const shown = (state.data.most_likely || []).filter(showableLikelyRow);
+  const rows = shown.filter((r) => !likelyDropped(r));
+  const dropped = shown.filter(likelyDropped);
+  if (!shown.length) {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">Nothing to rank yet</div>
@@ -8524,7 +8528,8 @@ function renderLikely() {
      the payload predates them the page falls back to the flat list
      rather than rendering nothing. */
   const shelves = boardShelves()
-    .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow) }))
+    .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow)
+                                  .filter((r) => !likelyDropped(r)) }))
     .filter((sh) => sh.rows.length);
   /* THE JUMP BAR. Ethan, 2026-09-02, circling a shelf head halfway down
      his screen: "we should put home run and hits and shit like that all
@@ -8541,7 +8546,7 @@ function renderLikely() {
   host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
     : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + likelyScriptsHTML(rows)
-    + likelyPulledHTML(likelyPulled());
+    + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
@@ -8752,6 +8757,33 @@ function likelyPulledHTML(rows, opts = {}) {
         with the reason. They stay listed until kickoff. A pick is never pulled for being
         outranked, so each one here left for something about the bet itself.</p>
       ${rows.map(likelyPulledRow).join("")}
+    </details>`;
+}
+
+/* OUR CHANCE HAS DROPPED. A locked pick whose chance at its posted number
+   is now under the 55% a new pick needs (engine/likely.lock_note). Ethan,
+   2026-09-25, on a Jameson Williams card reading 75% beside "eased under
+   55%": "Which number do I trust?" — and then, asked where such a pick
+   belongs: "Move it into a small 'posted…'". It is still a live bet, so
+   it stays tracked, graded, journaled and counted on its game's chip;
+   it just no longer sits among the picks we would post today.
+   Mirrors engine/likely.MIN_PROB — pinned equal by test. */
+const LIKELY_MIN_PROB = 0.55;
+function likelyDropped(r) {
+  return !!(r && r.locked) && r.model_prob != null && Number(r.model_prob) < LIKELY_MIN_PROB;
+}
+
+/* The fold for them, below the main lists. Closed: they are not picks
+   we would make today, only picks we already made. */
+function likelyDroppedHTML(rows, opts = {}) {
+  if (!rows.length) return "";
+  return `<details class="ls-note likely-dropped"${opts.open ? " open" : ""}>
+      <summary><b>${escapeHtml(opts.title || "Posted, but our chance has dropped")}</b>
+        <span class="mini">${rows.length}</span></summary>
+      <p class="likely-pulled-lede">These went up at ${Math.round(LIKELY_MIN_PROB * 100)}% or better, and our
+        chance at the posted number has since fallen under that bar. They stay tracked and graded
+        exactly as posted until their game — the percentage shown is today’s.</p>
+      <div class="ml-rows">${rows.map(likelyRow).join("")}</div>
     </details>`;
 }
 
@@ -11709,9 +11741,12 @@ function renderGamePage() {
      `showableLikelyRow` is the gate the Most Likely page itself applies,
      so a row refused there is refused here rather than surfacing on a
      page nobody thought to re-check. */
-  const likelies = (state.data.most_likely || [])
+  const gameLikely = (state.data.most_likely || [])
     .filter(showableLikelyRow)
     .filter((r) => propInGame(r, g));
+  const likelies = gameLikely.filter((r) => !likelyDropped(r));
+  // …the ones whose chance has fallen under the bar since (likelyDropped)…
+  const droppedHere = gameLikely.filter(likelyDropped);
   // …and this game's picks that came off the board, with why (likelyPulled).
   const pulled = likelyPulled().filter((e) => (e.kind === "game"
     ? [e.home, e.away].includes(g.home) && [e.home, e.away].includes(g.away)
@@ -11949,7 +11984,7 @@ function renderGamePage() {
       g.scan && g.scan.units ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
-      likelies.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
+      likelies.length || droppedHere.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
       ["gp-sec-props", shown.length ? `Props · ${shown.length}` : "Props"],
@@ -11974,10 +12009,11 @@ function renderGamePage() {
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
-    ${likelies.length || pulled.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
+    ${likelies.length || droppedHere.length || pulled.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
         <span class="sub">— ranked by how often they land, not by how good the
         price is; kept in its own book, never in the headline record</span></div>
       ${likelies.length ? `<div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
+      ${likelyDroppedHTML(droppedHere, { open: !likelies.length })}
       ${likelyPulledHTML(pulled, { title: "Pulled from this game", open: !likelies.length })}</div>` : ""}
 
     ${gpScripts ? `<div id="gp-sec-scripts"><div class="section-title">How these picks fit together

@@ -71,7 +71,10 @@ def test_the_page_never_hides_a_locked_pick():
 
 def test_the_dashboard_keeps_what_it_showed():
     top = _fn("renderLikelyTop")
-    assert "shelfByPosted((sh.rows || []).filter(showableLikelyRow))" in top
+    assert "shelfByPosted((sh.rows || []).filter(showableLikelyRow)" in top
+    # A locked pick now under the bar still shows — in its own fold below
+    # (tests/test_a_locked_pick_shows_todays_chance.py).
+    assert "likelyDroppedHTML(dropped)" in top
     order = _fn("shelfByPosted")
     assert "a.since" in order and "b.model_prob" in order
     assert "const LIKELY_TOP_N = 5;" in APP

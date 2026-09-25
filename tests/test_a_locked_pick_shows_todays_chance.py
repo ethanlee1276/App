@@ -72,6 +72,61 @@ def test_the_card_labels_it_now_and_shows_the_posted_chance():
     assert "when posted</div>" in card
 
 
+# ── a locked pick under the bar moves to its own fold ─────────────────────
+# Ethan, asked where such a pick belongs: "Move it into a small 'posted…'".
+
+
+def _fn(name):
+    i = APP.index(f"function {name}(")
+    return APP[i:APP.index("\n}\n", i) + 2]
+
+
+def test_the_page_bar_is_the_engines():
+    assert f"const LIKELY_MIN_PROB = {K.MIN_PROB};" in APP
+
+
+def test_a_dropped_pick_leaves_the_lists_for_its_fold():
+    dropped = _fn("likelyDropped")
+    assert "r.locked" in dropped and "< LIKELY_MIN_PROB" in dropped, "only a posted pick moves"
+    for name in ("renderLikely", "renderLikelyTop"):
+        body = _fn(name)
+        assert ".filter((r) => !likelyDropped(r))" in body, name
+        assert "likelyDroppedHTML(dropped)" in body, name
+    assert "likelyDroppedHTML(droppedHere" in APP, "the game page too"
+    # Still a live bet: its game's chip counts it.
+    assert "likelyDropped" not in _fn("gamePickCounts")
+
+
+def test_the_fold_names_it_and_shows_todays_chance():
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("node"):
+        return
+    harness = ("const escapeHtml=(x)=>String(x==null?'':x);"
+               "const likelyRow=(r)=>`<row>${r.player} ${Math.round(r.model_prob*100)}%</row>`;"
+               f"const LIKELY_MIN_PROB = {K.MIN_PROB};\n" + _fn("likelyDropped") + _fn("likelyDroppedHTML")
+               + "\nconst xs=JSON.parse(process.argv[2]);"
+               "process.stdout.write(JSON.stringify({flags: xs.map(likelyDropped),"
+               " html: likelyDroppedHTML(xs.filter(likelyDropped)).replace(/<[^>]+>/g,' ')}));")
+    path = os.path.join(tempfile.mkdtemp(), "d.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(harness)
+    xs = [{"player": "Jameson Williams", "locked": True, "model_prob": 0.41, "first_prob": 0.75},
+          {"player": "Held", "locked": True, "model_prob": 0.62},
+          {"player": "Fresh", "model_prob": 0.50},
+          {"player": "Unpriced", "locked": True}]
+    out = subprocess.run(["node", path, json.dumps(xs)], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-400:]
+    got = json.loads(out.stdout)
+    assert got["flags"] == [True, False, False, False], got["flags"]
+    text = " ".join(got["html"].split())
+    assert text.startswith("Posted, but our chance has dropped 1"), text
+    assert "Jameson Williams 41%" in text and "tracked and graded" in text
+    assert "Held" not in text
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
