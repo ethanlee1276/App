@@ -30148,14 +30148,29 @@ function teamOnBoard(d, p) {
   return ((state.data || {}).games || []).find((g) => g && (g.home === p.team || g.away === p.team)) || null;
 }
 
+/* THE DOOR ON A SCHEDULE GAME. Ethan, 2026-09-25, the Jaguars page with
+   the schedule strip circled: "we should be able to click on these games,
+   and then it'll take you to, like, the live game page for this game where
+   it shows all the data." The game on tonight's board opens its game page
+   — the same door as the "On tonight's board" card. A game not on the
+   board (a final from an earlier week, a week still to come) has no game
+   page yet, so it opens the opponent, as before. */
+function teamGameDoor(d, p, g) {
+  const b = teamOnBoard(d, p);
+  const other = b ? (b.home === p.team ? b.away : b.home) : null;
+  const same = b && !g.final && g.opponent === other
+    && (!g.date || !b.date || String(g.date).slice(0, 10) === String(b.date).slice(0, 10));
+  return same ? ` data-team-game="${escapeAttr(gameId(b))}" title="Game page"`
+    : ` data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}" title="${escapeAttr(teamNameIn(d.sport, g.opponent))}"`;
+}
+
 function teamHomeHTML(d, p) {
   const games = ((d.schedule || {}).games) || [];
   const next = games.findIndex((g) => !g.final);
   const strip = games.length ? `<div class="section-title">${escapeHtml(String((d.schedule || {}).season || ""))} Schedule
       <button type="button" class="btn-quiet tm-more" data-team-tab="schedule">Full schedule →</button></div>
     <div class="tm-strip" data-start="${next < 0 ? games.length - 1 : next}">${games.map((g, i) => `
-      <button type="button" class="tm-cell${i === next ? " next" : ""}" data-team-sport="${escapeAttr(d.sport)}"
-        data-team-open="${escapeAttr(g.opponent)}" title="${escapeAttr(teamNameIn(d.sport, g.opponent))}">
+      <button type="button" class="tm-cell${i === next ? " next" : ""}"${teamGameDoor(d, p, g)}>
         <span class="tm-cell-d">${escapeHtml(teamGameDate(g) || teamGameWhen(d, g))}</span>
         <span class="tm-cell-o">${teamGameWho(d, g)}</span>
         <span class="tm-cell-r">${g.final ? teamGameResult(g) : escapeHtml(teamGameWhen(d, g) || "TBD")}</span>
@@ -30188,7 +30203,7 @@ function teamHomeHTML(d, p) {
     <div class="card tm-list">${hurt.slice(0, 4).map(teamInjuryRowHTML).join("")}</div>` : "";
   const last = games.filter((x) => x.final).slice(-5).reverse();
   const recent = last.length ? `<div class="section-title">Last ${last.length}</div>
-    <div class="card tm-list">${last.map((x) => teamScheduleRowHTML(d, x)).join("")}</div>` : "";
+    <div class="card tm-list">${last.map((x) => teamScheduleRowHTML(d, x, p)).join("")}</div>` : "";
   const h = d.head_to_head;
   const vsCard = h && (h.games || []).length ? `<button type="button" class="card tm-next" data-team-tab="vs">
       <span class="tm-next-k">Against the ${escapeHtml(teamNameIn(d.sport, h.opponent))}</span>
@@ -30199,13 +30214,15 @@ function teamHomeHTML(d, p) {
   return out || teamEmptyTab("Nothing yet this season", "Nothing on file for this team this season yet.");
 }
 
-function teamScheduleRowHTML(d, g) {
+function teamScheduleRowHTML(d, g, p) {
   const line = g.line != null ? `${g.line > 0 ? "+" : ""}${g.line}` : "";
   const bits = g.final
     ? [line ? `${line} ${g.covered === true ? "covered" : g.covered === false ? "missed" : g.covered === "push" ? "push" : ""}`.trim() : "",
        g.ou ? `${g.ou} ${g.total}` : ""]
     : [line ? `line ${line}` : "", g.total != null ? `total ${g.total}` : ""];
-  return `<button type="button" class="tm-row" data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}">
+  const door = p ? teamGameDoor(d, p, g)
+    : ` data-team-sport="${escapeAttr(d.sport)}" data-team-open="${escapeAttr(g.opponent)}"`;
+  return `<button type="button" class="tm-row"${door}>
     <span class="tm-row-w">${escapeHtml(teamGameWhen(d, g))}<small>${escapeHtml(teamGameDate(g))}</small></span>
     <span class="tm-row-o">${g.at_home ? "vs" : "@"} ${teamMarkIn(d.sport, g.opponent, 20)}
       ${escapeHtml(teamNameIn(d.sport, g.opponent))}</span>
@@ -30222,8 +30239,9 @@ function teamScheduleHTML(d, p) {
   const w = done.filter((g) => g.result === "W").length, l = done.filter((g) => g.result === "L").length;
   return `<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
       <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games played;
-      the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own, and a row opens the opponent.</span></div>
-    <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g)).join("")}</div>`;
+      the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own;
+      the game on tonight’s board opens its game page, every other row opens the opponent.</span></div>
+    <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g, p)).join("")}</div>`;
 }
 
 /* The published chart where there is one (the NFL's, as filed); every
