@@ -199,6 +199,12 @@ LINES_CLOCK = "nfl_lines"
 #: the same way: its own clock, the sport's money (`budget_sport` maps
 #: "mlb_lines" to "mlb"), and only while a game is in progress.
 MLB_LINES_CLOCK = "mlb_lines"
+#: …AND BASKETBALL'S, the same lane (2026-09-25, before NBA opening night).
+#: The NBA and WNBA builds pulled the live line only alongside their full
+#: odds pull, the gap baseball had; each league now has its own clock on
+#: its own money.
+NBA_LINES_CLOCK = "nba_lines"
+WNBA_LINES_CLOCK = "wnba_lines"
 
 
 def _live_lines_due(path: str) -> bool:
@@ -1070,9 +1076,20 @@ def refresh_nba(quiet: bool = False) -> bool:
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-    elif _with_odds():
+    live_spend, live_before = False, ""
+    if not spend and _with_odds():
         args.append("--cached-odds")
+        # THE LIVE LINE ON ITS OWN LANE (NBA_LINES_CLOCK), as baseball's: only
+        # with a game under way and the live cadence round, and only when
+        # the pacer says this league can spare the three credits.
+        if _live_lines_due(NBA_OUT) and _odds_affordable(
+                NBA_OUT, quiet, sport=NBA_LINES_CLOCK, credits=BOARD_ODDS_COST):
+            args.append("--live-lines")
+            live_spend = True
+            live_before = _paid_pull_baseline()
     ok, tail = _run_build(args)
+    _finish_paid_pull(live_spend, live_before, ok, tail, "NBA live lines",
+                      sport=NBA_LINES_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "NBA", sport="nba")
     if not quiet:
         print(f"  NBA  slate: {_board_word(NBA_OUT, ok)}"
@@ -1094,9 +1111,20 @@ def refresh_wnba(quiet: bool = False) -> bool:
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-    elif _with_odds():
+    live_spend, live_before = False, ""
+    if not spend and _with_odds():
         args.append("--cached-odds")
+        # THE LIVE LINE ON ITS OWN LANE (WNBA_LINES_CLOCK), as baseball's: only
+        # with a game under way and the live cadence round, and only when
+        # the pacer says this league can spare the three credits.
+        if _live_lines_due(WNBA_OUT) and _odds_affordable(
+                WNBA_OUT, quiet, sport=WNBA_LINES_CLOCK, credits=BOARD_ODDS_COST):
+            args.append("--live-lines")
+            live_spend = True
+            live_before = _paid_pull_baseline()
     ok, tail = _run_build(args)
+    _finish_paid_pull(live_spend, live_before, ok, tail, "WNBA live lines",
+                      sport=WNBA_LINES_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
     if not quiet:
         print(f"  WNBA {_slate_date()}: {_board_word(WNBA_OUT, ok)}"

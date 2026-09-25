@@ -872,6 +872,16 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
                         _dt0.date.today().year)
     except Exception:                                       # noqa: BLE001
         pass                      # a warm pass never decides whether we price
+    # A STARTER'S CSW (engine/mlb/csw.py), off the starts just warmed — and
+    # only once `measure` has shown it beats his strikeout rate alone. Until
+    # then SHIPPED is False and nothing is read here.
+    try:
+        from .csw import SHIPPED as _csw_on, attach as _csw_attach
+        if _csw_on:
+            import datetime as _dt1
+            _csw_attach(slate.props, _dt1.date.today().year)
+    except Exception:                                       # noqa: BLE001
+        pass
 
     il_on_slate: set = set()
     results = []

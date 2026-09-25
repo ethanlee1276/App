@@ -98,6 +98,25 @@ def test_the_launcher_asks_the_pacer_and_confirms_the_pull():
     assert "sport=MLB_LINES_CLOCK)" in fn[fn.index("_finish_paid_pull(live_spend"):]
 
 
+def test_basketball_has_the_same_lane():
+    """2026-09-25, before NBA opening night: the NBA and WNBA builds pulled
+    the live line only with their full odds pull — baseball's gap."""
+    nba = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
+    assert 'ap.add_argument("--live-lines", action="store_true",' in nba
+    assert "if _live_games and (args.odds or args.live_lines):" in nba
+    for league, clock, out in (("nba", "NBA_LINES_CLOCK", "NBA_OUT"), ("wnba", "WNBA_LINES_CLOCK", "WNBA_OUT")):
+        assert f'{clock} = "{league}_lines"' in LAUNCH
+        assert oddsbudget.budget_sport(f"{league}_lines") == league
+        i = LAUNCH.index(f"def refresh_{league}(")
+        fn = LAUNCH[i:LAUNCH.index("\ndef ", i + 10)]
+        ask = fn.index('args.append("--live-lines")')
+        gate = fn[fn.rindex("if ", 0, ask):ask]
+        assert f"_live_lines_due({out})" in gate and f"sport={clock}" in gate, league
+        assert "credits=BOARD_ODDS_COST" in gate
+        assert fn.index('args.append("--cached-odds")') < ask, "only when the full pull was declined"
+        assert f"sport={clock})" in fn[fn.index("_finish_paid_pull(live_spend"):], league
+
+
 def test_the_lane_is_due_only_with_a_game_under_way_and_the_cadence_round():
     import launch
     calls = []

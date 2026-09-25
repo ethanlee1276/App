@@ -194,6 +194,19 @@ sudo journalctl -u qellys --since "1 hour ago" | grep -A8 "self-check" | tail -4
 
 No output means every claim held. Anything printed, send it.
 
+**8. Does a pitcher's CSW help his strikeout number?** (read-only, a
+minute) The strikeout adjustment for called strikes plus whiffs has been in
+the code since the Statcast layer and never ran. It now reads the
+pitch-by-pitch games the box already caches, and stays off until this
+says SHIP:
+
+```bash
+cd /srv/qellys && python3 -m engine.mlb.csw
+```
+
+Want one line, `CSW: SHIP — …` or `CSW: HOLD — …`, with the starts it
+measured. Send it either way; SHIP is the one that turns it on.
+
 **Never commit on the box** — see block G. Write notes to `backups/` or
 send them to Claude.
 

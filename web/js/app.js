@@ -18461,6 +18461,19 @@ function renderProps() {
   }));
 }
 
+/* WHY NFL YARDAGE AND CATCHES ARE NEVER CHECKED HERE — the bar kept, and
+   said. The input audit (2026-09-24) found that our graded record shows
+   the model overstating these edges, so each is shrunk before it meets its
+   tier's bar (engine/quality.TIER_MIN_EDGE: 2.5% catches, 3% yardage), and
+   none has cleared it since. Lowering the bar would stake edges our own
+   record says are not real; Ethan was asked, and on 2026-09-25 the work
+   went ahead with the bar as it is — so the page says so rather than
+   leaving a reader to wonder where the yardage bets went. */
+const NFL_YARDAGE_NOTE = ` NFL yardage and catches props sit on this list but are not
+    checked: our graded record shows the model overstates their edges, so each is
+    shrunk before it meets the 2.5–3% bar, and so far none has cleared it. The same
+    props are ranked on Most Likely.`;
+
 function renderEdgeBoard() {
   const host = document.getElementById("edge-board");
   const note = document.getElementById("edge-note");
@@ -18502,7 +18515,7 @@ function renderEdgeBoard() {
   note.innerHTML = `<b>${plays}</b> clear your current sliders · ${basis(rows.length)}. One side of every two-way
     market always prices positive — the two sides' edges sum to zero by
     construction — so the length of this list is not a signal. Checked = a tracked
-    bet; everything else is a watchlist.`;
+    bet; everything else is a watchlist.${state.sport === "nfl" ? NFL_YARDAGE_NOTE : ""}`;
   // The render's market grid (Ethan, 2026-08-11): one tile per market
   // actually priced tonight, its count real, tap to filter the board.
   const byMarket = {};

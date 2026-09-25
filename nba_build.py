@@ -383,6 +383,10 @@ def main() -> None:
                     help="buy fresh odds for this slate (spends API credits)")
     ap.add_argument("--cached-odds", action="store_true",
                     help="use the odds already on disk — no purchase")
+    # The live line on its own budget lane (launch.NBA_LINES_CLOCK /
+    # WNBA_LINES_CLOCK): one board pull for the slate while a game is live.
+    ap.add_argument("--live-lines", action="store_true",
+                    help="pull the in-play line for live games (its own budget lane)")
     ap.add_argument("--out", default="web/data/nba.json")
     # One build, two leagues. The WNBA runs the same Scalpy pipeline on the
     # same JSON shapes from its own CDN; what differs is the tuning (a
@@ -985,7 +989,7 @@ def main() -> None:
         _names = WNBA_TEAM_ABBR if args.league == "wnba" else NBA_TEAM_ABBR
         _live_games = [g for g in out.get("games") or []
                        if (g.get("live") or {}).get("state") == "live"]
-        if _live_games and args.odds:
+        if _live_games and (args.odds or args.live_lines):
             _n, _note = _ll.pull_and_record(args.league, _names)
             if _n:
                 print(f"  Live line: {_note}")
