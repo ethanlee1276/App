@@ -8532,7 +8532,7 @@ function scanTopRowHTML(x, shine) {
         <span class="sct-sub">${escapeHtml(x.team || "")} ${escapeHtml(x.pos || "")} vs ${escapeHtml(x.opp || "")}${
           bits.length ? ` · ${escapeHtml(bits[0])}` : ""}</span>
         ${why.length ? `<span class="sct-why">${escapeHtml(why.slice(0, 2).join(" · "))}</span>` : ""}
-        ${scanPickHTML(x, "sct-pick")}</span>
+        ${scanPickHTML(x, "sct-pick")}${scanTdHTML(x, "sct-pick")}</span>
       <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span>
     </button>`;
 }
@@ -11701,6 +11701,25 @@ function scanPickRow(x) {
     && Number(r.line) === Number(p.line)) || null;
 }
 
+/* HIS TOUCHDOWN CHANCE, on every read that has one (engine/gamescan
+   .stamp_touchdowns). Ethan, 2026-09-25: "I'm seeing a lot of good
+   candidates and breakout candidates ... but I'm not seeing these people
+   in the anytime touchdowns." Every quoted scorer was priced; only the top
+   of the list was published. The line says the chance, the price, and
+   whether the board seated him — a 41% tight end reads as 41%, not as a
+   pick. Left off a read whose Most Likely pick IS the touchdown. */
+function scanTdHTML(x, cls = "ms-pick") {
+  const t = x && x.td;
+  if (!t || t.odds == null || t.model_prob == null) return "";
+  const p = x.pick || x.pick_other_side;
+  if (p && String(p.market || "") === "anytime_td") return "";
+  const pct = Number(t.model_prob);
+  const tail = t.on_board ? " · on the Most Likely board"
+    : pct >= 0.55 ? " · clears the 55% bar, not seated" : " · under the 55% bar";
+  return `<span class="${cls} td"><b>Anytime TD:</b> ${wholePct(pct)} at ${escapeHtml(oddsTxt(t.odds))}${
+    t.book ? ` · ${escapeHtml(t.book)}` : ""}${tail}</span>`;
+}
+
 /* The line on a read that says what the Most Likely board did with it. */
 function scanPickHTML(x, cls = "ms-pick") {
   const low = (v) => String(v || "").toLowerCase();
@@ -11776,7 +11795,7 @@ function scanReadHTML(x) {
         <span class="ms-read-who"><b>${escapeHtml(x.player)}</b>
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
         <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></button>
-      ${scanPickHTML(x)}
+      ${scanPickHTML(x)}${scanTdHTML(x)}
       ${scanWhyList(x)}
       <span class="ms-open">Open ${escapeHtml(door.what)} →</span>
     </div>`;

@@ -187,7 +187,7 @@ def test_the_stamp_lands_on_the_read():
 
 def test_the_scan_runs_before_the_board_in_both_builds():
     assert PIPE.index("_leans = before_likely(_partial)") < PIPE.index("_likely = _likely_board(")
-    assert "leans=_leans," in PIPE and "stamp_picks(_partial[\"scan_reads\"], _lean_report)" in PIPE
+    assert "leans=_leans," in PIPE and "stamp_picks(_partial[\"scan_reads\"], _lean_report, board=_likely)" in PIPE
     assert CFB.index("_cfb_leans = _scan.leans_from_reads(") < CFB.index("out[\"most_likely\"] = _likely(")
     assert "leans=_cfb_leans," in CFB
 

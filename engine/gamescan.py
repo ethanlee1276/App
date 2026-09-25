@@ -1071,14 +1071,56 @@ def leans_from_reads(scan_reads: dict) -> dict:
     return out
 
 
-def stamp_picks(scan_reads: dict, report: dict) -> int:
-    """Each leaned read gets what the Most Likely board did with it —
-    ``pick`` (his row on the read's side), ``pick_other_side`` (the board
-    has him only the other way) or ``no_pick`` (with our best number on
-    the read's side, or None). Returns reads stamped."""
+def td_rows_by_player(result: dict) -> dict:
+    """{player: the ranked scorer row} from the touchdown boards the build
+    has priced — the value picks and the WHOLE ranked watch (pipeline
+    ._long_shots hands the scan every quoted scorer; the page's five is
+    sliced later). The highest chance wins when a player is on both."""
+    out: dict = {}
+    for sec in ("long_shots", "longshot_watch"):
+        for r in (result or {}).get(sec) or []:
+            if not isinstance(r, dict) or r.get("model_prob") is None:
+                continue
+            p = r.get("player") or ""
+            if p and (p not in out or float(r["model_prob"]) > float(out[p].get("model_prob") or 0)):
+                out[p] = r
+    return out
+
+
+def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
+    """Each read gets his touchdown chance and price (``td``). Ethan,
+    2026-09-25: "I'm seeing a lot of good candidates and breakout
+    candidates ... but I'm not seeing these people in the anytime
+    touchdowns." They were priced — every quoted scorer is — but only the
+    top of the ranked list was published, so a 41% tight end had no
+    number anywhere. Returns reads stamped."""
+    rows = td_rows_by_player(result)
     n = 0
     for game in (scan_reads or {}).values():
         for x in (game or {}).get("players") or []:
+            r = rows.get(x.get("player") or "")
+            if not r or not r.get("odds"):
+                continue
+            x["td"] = {"model_prob": round(float(r["model_prob"]), 4), "odds": r.get("odds"),
+                       "book": r.get("book") or ""}
+            n += 1
+    return n
+
+
+def stamp_picks(scan_reads: dict, report: dict, board: list | None = None) -> int:
+    """Each leaned read gets what the Most Likely board did with it —
+    ``pick`` (his row on the read's side), ``pick_other_side`` (the board
+    has him only the other way) or ``no_pick`` (with our best number on
+    the read's side, or None). A read carrying ``td`` (stamp_touchdowns)
+    learns whether the board seated that scorer (``td.on_board``).
+    Returns reads stamped."""
+    seated = {(r.get("player") or "") for r in board or []
+              if isinstance(r, dict) and r.get("kind") == "td"}
+    n = 0
+    for game in (scan_reads or {}).values():
+        for x in (game or {}).get("players") or []:
+            if isinstance(x.get("td"), dict):
+                x["td"]["on_board"] = (x.get("player") or "") in seated
             got = (report or {}).get((x.get("player") or "", x.get("team") or ""))
             if not got:
                 continue
@@ -1175,6 +1217,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan
         n += 1
+    stamp_touchdowns(reads, result)
     return n
 
 

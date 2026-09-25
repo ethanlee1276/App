@@ -1165,7 +1165,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
                             lean_report=_lean_report)
     if _partial.get("scan_reads"):
         from .gamescan import stamp_picks
-        stamp_picks(_partial["scan_reads"], _lean_report)
+        stamp_picks(_partial["scan_reads"], _lean_report, board=_likely)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
