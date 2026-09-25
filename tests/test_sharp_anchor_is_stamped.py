@@ -154,6 +154,29 @@ def test_an_mlb_game_with_no_sharp_pair_claims_nothing():
         assert not c.get("sharp_anchored"), c.get("bet_type")
 
 
+def test_every_build_says_whether_pinnacle_arrived_and_what_it_found():
+    """2026-09-25, from a session on the droplet: every baseball game row
+    read `sharp_anchored: False`, and nothing on the box could say whether
+    Pinnacle's prices never arrived (a bug) or arrived and found no side
+    worth 2% (the rule working). The census separates the two, and the
+    build prints it."""
+    from engine.mlb.pipeline import _game_bets, sharp_census_line
+    from engine.rules import RuleConfig
+    import dataclasses
+
+    quiet = dataclasses.replace(_mlb_game(), home="DDD", away="CCC", sharp_home_ml=0,
+                                sharp_away_ml=0, sharp_total=0.0, sharp_spread=0.0)
+    c: dict = {}
+    _game_bets([_mlb_game(), quiet], RuleConfig(), census=c)
+    assert c["moneylines"] == 2 and c["pinnacle_ml"] == 1, c
+    assert c["sharp_ml"] == 1 and c["pinnacle_total"] == 1 and c["pinnacle_spread"] == 1, c
+    line = sharp_census_line(c)
+    assert line.startswith("Sharp witness: 1 of 2 moneylines carry Pinnacle's price, 1 cleared"), line
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "engine", "mlb", "pipeline.py"), encoding="utf-8").read()
+    assert 'print("  " + sharp_census_line(_sharp_census))' in src
+
+
 def test_no_pipeline_has_to_remember_to_stamp_it():
     """The structural point, and the reason this is not four one-line
     fixes. The flag is set by the pricer, so a league added tomorrow

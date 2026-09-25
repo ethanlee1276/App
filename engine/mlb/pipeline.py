@@ -217,8 +217,31 @@ _NO_ANCHOR = ("No sharp-anchor value at current prices, and the model alone "
               "hasn't beaten the close — info only")
 
 
-def _game_bets(games, config: RuleConfig) -> list[dict]:
-    """Price moneyline, total (O/U) and run line from team ratings + starters."""
+#: WHAT THE SHARP BOOK DID TO THIS SLATE, printed by every build
+#: (`sharp_census_line`). A session on the droplet, 2026-09-25: every
+#: baseball game row read `sharp_anchored: False`, and nothing could say
+#: whether Pinnacle's prices never arrived or arrived and found no side
+#: worth 2% (`gamebets.SHARP_MIN_EV`) — the first is a bug, the second is
+#: the rule working. The count separates them on the build's own log.
+SHARP_CENSUS_KEYS = ("moneylines", "pinnacle_ml", "sharp_ml", "pinnacle_total", "sharp_total",
+                     "pinnacle_spread", "sharp_spread")
+
+
+def sharp_census_line(c: dict) -> str:
+    """One log line out of `_game_bets`' census."""
+    return (f"Sharp witness: {c.get('pinnacle_ml', 0)} of {c.get('moneylines', 0)} moneylines "
+            f"carry Pinnacle's price, {c.get('sharp_ml', 0)} cleared the 2% edge; totals "
+            f"{c.get('sharp_total', 0)} of {c.get('pinnacle_total', 0)}, run lines "
+            f"{c.get('sharp_spread', 0)} of {c.get('pinnacle_spread', 0)} at the same number.")
+
+
+def _game_bets(games, config: RuleConfig, census: dict | None = None) -> list[dict]:
+    """Price moneyline, total (O/U) and run line from team ratings + starters.
+
+    ``census`` is filled in place with SHARP_CENSUS_KEYS."""
+    c = census if census is not None else {}
+    for k in SHARP_CENSUS_KEYS:
+        c.setdefault(k, 0)
     out = []
     for g in games:
         has_rating = any((g.home_rating, g.away_rating,
@@ -235,11 +258,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 ctx.append(f"Starters: {home_p.name} ({home_xera:.2f} xERA) vs "
                            f"{away_p.name} ({away_xera:.2f} xERA)")
             sharp_rec = None
+            c["moneylines"] += 1
             if g.sharp_home_ml and g.sharp_away_ml:
+                c["pinnacle_ml"] += 1
                 sharp_rec = price_moneyline_sharp(
                     g.home, g.away, g.sharp_home_ml, g.sharp_away_ml,
                     g.home_ml, g.away_ml, win_prob_home=wp_home, context=ctx)
             if sharp_rec is not None:
+                c["sharp_ml"] += 1
                 # Price disagreement vs the sharp book — recommendable.
                 out.append(_finish_bet(moneyline_to_dict(sharp_rec), g, config))
             else:
@@ -277,12 +303,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 sharp_tot = None
                 if (g.sharp_total and g.sharp_total == g.total
                         and g.sharp_total_over_odds and g.sharp_total_under_odds):
+                    c["pinnacle_total"] += 1
                     sharp_tot = price_total_sharp(
                         g.home, g.away, g.total,
                         g.total_over_odds, g.total_under_odds,
                         g.sharp_total_over_odds, g.sharp_total_under_odds,
                         units="runs", context=tctx)
                 if sharp_tot is not None:
+                    c["sharp_total"] += 1
                     out.append(_finish_bet(sharp_tot, g, config))
                 else:
                     total = price_total("mlb", g.home, g.away, pt, g.total,
@@ -323,12 +351,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 sharp_sp = None
                 if (g.sharp_spread and g.sharp_spread == g.spread
                         and g.sharp_spread_home_odds and g.sharp_spread_away_odds):
+                    c["pinnacle_spread"] += 1
                     sharp_sp = price_spread_sharp(
                         g.home, g.away, g.spread,
                         g.spread_home_odds, g.spread_away_odds,
                         g.sharp_spread_home_odds, g.sharp_spread_away_odds,
                         context=sctx)
                 if sharp_sp is not None:
+                    c["sharp_spread"] += 1
                     out.append(_finish_bet(sharp_sp, g, config))
                 else:
                     spread = price_spread("mlb", g.home, g.away, margin, g.spread,
@@ -1001,7 +1031,11 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     results.sort(key=_order_key, reverse=True)
 
     with _stage("game bets"):
-        game_bets = _game_bets(slate.games, config)
+        _sharp_census: dict = {}
+        game_bets = _game_bets(slate.games, config, census=_sharp_census)
+        # Printed, not published: it answers a question about the feed,
+        # asked on the droplet's log (SHARP_CENSUS_KEYS).
+        print("  " + sharp_census_line(_sharp_census))
 
     # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
     # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts

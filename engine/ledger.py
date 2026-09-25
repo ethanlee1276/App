@@ -4090,10 +4090,21 @@ def _absent_player_verdict(hist_conn, b):
     target = normalize_name(b["player"] or "")
     if sport == "nfl":
         m = _NFL_WEEK_DATE.match(b["date"] or "")
-        day = b["game_day"] if "game_day" in b.keys() else None
-        if not m or not day:
+        if not m:
             return None
         season, period = int(m.group(1)), f"{int(m.group(2)):03d}"
+        day = b["game_day"] if "game_day" in b.keys() else None
+        # A ROW JOURNALLED BEFORE `game_day` EXISTED asks the backfill's own
+        # placement (`_week_day_for`) — his snap row, his teams' schedule,
+        # a one-date week — rather than staying open for good. Found
+        # 2026-09-25: Jake Tonges, anytime TD in week 1, 12% of the snaps
+        # and no stat row, open a fortnight, because the backfill placed
+        # rows by the player's log and this rule needed the day to look
+        # at the log. Neither could start.
+        if not day:
+            day = _week_day_for(hist_conn, b, season, period)[0]
+        if not day:
+            return None
         games = hist_conn.execute(
             "SELECT home, away, home_score, away_score FROM games "
             "WHERE sport='nfl' AND season=? AND period=? AND date=?",

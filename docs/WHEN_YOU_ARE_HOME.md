@@ -93,19 +93,30 @@ droplet; its full notes are in `/srv/qellys/backups/OUTSTANDING-2026-09-25.md`
 and the matching `0001-docs-home-…patch` — untracked, so they survive a
 reset). Open:
 
-1. **The sharp-witness fix shipped and did not fire.** The commit is in
-   HEAD and the board was built six hours after it, yet every baseball
-   game row still reads `sharp_anchored: False`. Two code hops are named
-   in the notes; one of them is not happening.
-2. **One week-1 NFL bet has been open a fortnight** with a final
-   available. A single row, not systemic.
+1. **The sharp-witness fix shipped and did not fire.** Pinnacle's
+   baseball prices ARE arriving (644 rows in the odds tape on the day
+   checked), and a card is only sharp-anchored when the sharp book shows
+   a side worth 2% (`gamebets.SHARP_MIN_EV`), so "every row False" is
+   either the rule working or a hop dropping the price. Every MLB build
+   now prints the answer:
+
+   ```bash
+   sudo journalctl -u qellys --since "2 hours ago" | grep "Sharp witness" | tail -3
+   ```
+
+   Want: "N of M moneylines carry Pinnacle's price". N near M and
+   "0 cleared the 2% edge" is the rule working; N at 0 is the bug —
+   send me the line.
+2. **Done 2026-09-25.** The week-1 bet (Jake Tonges, anytime TD +900,
+   `stale` book) was voided at Ethan's call. Why it sat open: week-1 rows
+   were journalled before `game_day` existed, and the no-show rule needed
+   the day to read the snap file. The rule now dates such a row itself
+   (tests/test_an_old_bet_is_graded_without_its_game_day.py).
 3. **The Kalshi block must run as the `qellys` user.** Run as root it
    leaves root-owned cache files the build user cannot write, and the
    permission error is swallowed, so the exchange tier freezes silently.
-4. **An eight-megabyte copy of the bet journal sits untracked in the
-   repo checkout** on the box, not ignored. The box's key is read-only,
-   so it cannot be pushed from there, but it should be moved out of the
-   tree or ignored.
+4. **Done 2026-09-25.** A database copy is ignored whatever it is
+   called (`*.db.*`, `*.sqlite*`); the box's untracked listing is empty.
 
 Also in the notes: a week-2 alarm that resolved itself (do not re-chase
 it), and a note on confident zeros.
