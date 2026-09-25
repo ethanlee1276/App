@@ -242,9 +242,13 @@ def usage_table(weekly_rows: list[dict], snap_rows: list[dict] | None = None,
         u = out.setdefault((team, _key(name)), {
             "name": name, "position": r.get("position") or "", "games": 0, "weeks": [],
             "targets": 0.0, "tgt_share": 0.0, "carries": 0.0, "receptions": 0.0,
-            "rec_yds": 0.0, "rush_yds": 0.0, "snap_pct": None})
+            "rec_yds": 0.0, "rush_yds": 0.0, "snap_pct": None,
+            "attempts": 0.0, "last_week": 0, "last_attempts": 0.0})
         u["games"] += 1
         u["weeks"].append(wk)
+        u["attempts"] += f("attempts")
+        if wk >= u["last_week"]:
+            u["last_week"], u["last_attempts"] = wk, f("attempts")
         u["targets"] += f("targets")
         u["tgt_share"] += f("target_share")
         u["carries"] += f("carries")
@@ -271,7 +275,7 @@ def usage_table(weekly_rows: list[dict], snap_rows: list[dict] | None = None,
                  carries_pg=round(u["carries"] / g, 1),
                  carry_share=round(u["carries"] / carries_team, 3) if carries_team else 0.0,
                  rec_pg=round(u["receptions"] / g, 1), rec_yds_pg=round(u["rec_yds"] / g, 1),
-                 rush_yds_pg=round(u["rush_yds"] / g, 1))
+                 rush_yds_pg=round(u["rush_yds"] / g, 1), attempts_pg=round(u["attempts"] / g, 1))
         s = snaps.get((team, k))
         if s and s[1]:
             u["snap_pct"] = round(s[0] / s[1], 2)
@@ -646,6 +650,41 @@ def _face(faces: dict | None, name: str) -> str:
         return ""
 
 
+#: Each team's players read whether or not they have a prop: the starting
+#: quarterback, the backs and the receivers who carry the work.
+KEY_BACKS, KEY_TARGETS = 2, 4
+KEY_CARRY_SHARE, KEY_TARGET_SHARE, KEY_QB_ATTEMPTS = 0.25, 0.12, 10.0
+
+
+def key_players(usage: dict, teams, injuries=None) -> list[dict]:
+    """Prop-shaped rows ({player, team, position}) for each team's key
+    players from this season's usage: the quarterback who threw the most
+    in his team's latest game, the top KEY_BACKS backs by carry share and
+    the top KEY_TARGETS receivers by target share, over the floors above.
+    A player ruled out is left off — there is no game to read him for."""
+    out_names = {(getattr(i, "team", ""), _key(getattr(i, "player", "")))
+                 for i in injuries or []
+                 if str(getattr(i, "status", "")).upper() in OUT_STATUSES}
+    rows: list = []
+    for team in teams:
+        mine = [(k, u) for (t, k), u in (usage or {}).items()
+                if t == team and (t, k) not in out_names and u.get("games")]
+        qbs = [u for _k, u in mine if (u.get("position") or "").upper() == "QB"
+               and (u.get("last_attempts") or 0) >= KEY_QB_ATTEMPTS]
+        latest = max((u.get("last_week") or 0 for u in qbs), default=0)
+        qbs = sorted((u for u in qbs if u.get("last_week") == latest),
+                     key=lambda u: -(u.get("last_attempts") or 0))[:1]
+        backs = sorted((u for _k, u in mine if _POS_GROUP.get((u.get("position") or "").upper()) == "rb"
+                        and (u.get("carry_share") or 0) >= KEY_CARRY_SHARE),
+                       key=lambda u: -(u.get("carry_share") or 0))[:KEY_BACKS]
+        catchers = sorted((u for _k, u in mine if _POS_GROUP.get((u.get("position") or "").upper()) in ("wr", "te")
+                           and (u.get("tgt_share") or 0) >= KEY_TARGET_SHARE),
+                          key=lambda u: -(u.get("tgt_share") or 0))[:KEY_TARGETS]
+        rows += [{"player": u["name"], "team": team, "position": u.get("position") or ""}
+                 for u in qbs + backs + catchers]
+    return rows
+
+
 def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_now: dict,
               defenders_last: dict | None = None, tackling: dict | None = None,
               schemes: dict | None = None, splits: dict | None = None,
@@ -693,9 +732,13 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         inj_rows.append({"team": t, "player": who, "position": getattr(i, "position", ""),
                          "status": st, "opens": _opens(i, t, opp[t], ratings, charts, usage),
                          "headshot": _face(faces, who)})
-    # THE PLAYERS WITH PROPS IN THIS GAME, each read against his opponent.
+    # THE PLAYERS WITH PROPS IN THIS GAME, each read against his opponent —
+    # AND EVERY TEAM'S KEY PLAYERS WHETHER OR NOT A BOOK HAS PRICED THEM
+    # (key_players; Ethan, 2026-09-25: "really good information we should
+    # be showing to the user, no matter if we're displaying a prop for
+    # that player").
     seen, reads = set(), []
-    for r in props or []:
+    for r in list(props or []) + key_players(usage, teams, injuries):
         name, team = r.get("player") or "", r.get("team") or ""
         if team not in teams or not name or (team, name) in seen:
             continue

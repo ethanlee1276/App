@@ -278,6 +278,47 @@ def test_the_units_read_as_a_tale_of_the_tape():
     assert "scanUnitsHTML" not in APP and "OFF</span><span>DEF" not in APP
 
 
+def test_every_teams_key_players_are_read_prop_or_not():
+    """Ethan, 2026-09-25: the reads are "really good information we should
+    be showing to the user, no matter if we're displaying a prop for that
+    player". The starting quarterback (who threw most in his team's latest
+    game), the top backs by carry share and the top receivers by target
+    share — and nobody ruled out."""
+    usage = {("BUF", "josh allen"): {"name": "Josh Allen", "position": "QB", "games": 3, "last_week": 3, "last_attempts": 31},
+             ("BUF", "mitchell trubisky"): {"name": "Mitchell Trubisky", "position": "QB", "games": 1, "last_week": 1, "last_attempts": 12},
+             ("BUF", "james cook"): {"name": "James Cook", "position": "RB", "games": 3, "carry_share": 0.6},
+             ("BUF", "ray davis"): {"name": "Ray Davis", "position": "RB", "games": 3, "carry_share": 0.26},
+             ("BUF", "ty johnson"): {"name": "Ty Johnson", "position": "RB", "games": 3, "carry_share": 0.1},
+             ("BUF", "dalton kincaid"): {"name": "Dalton Kincaid", "position": "TE", "games": 3, "tgt_share": 0.25},
+             ("BUF", "keon coleman"): {"name": "Keon Coleman", "position": "WR", "games": 3, "tgt_share": 0.13},
+             ("BUF", "dj moore"): {"name": "DJ Moore", "position": "WR", "games": 3, "tgt_share": 0.14},
+             ("BUF", "khalil shakir"): {"name": "Khalil Shakir", "position": "WR", "games": 3, "tgt_share": 0.21},
+             ("BUF", "curtis samuel"): {"name": "Curtis Samuel", "position": "WR", "games": 3, "tgt_share": 0.12},
+             ("BUF", "dawson knox"): {"name": "Dawson Knox", "position": "TE", "games": 3, "tgt_share": 0.05}}
+    got = [r["player"] for r in G.key_players(usage, ("BUF",), [_inj("DJ Moore", "BUF", "WR", "OUT")])]
+    assert got == ["Josh Allen", "James Cook", "Ray Davis", "Dalton Kincaid", "Khalil Shakir",
+                   "Keon Coleman", "Curtis Samuel"], got
+    scan = G.scan_game("BUF", "LAC", ratings={"BUF": {"off": {}, "def": {}}, "LAC": {"off": {}, "def": {}}},
+                       charts={}, defenders_now={}, usage=usage, props=[])
+    assert "Josh Allen" in {x["player"] for x in scan["players"]}, "read with no prop at all"
+
+
+def test_the_dashboard_carries_the_reads_of_every_game():
+    top = APP[APP.index("function renderScanTop("):]
+    top = top[:top.index("\n}\n")]
+    assert 'list("Could shine", shine, true)' in top and 'list("Could struggle", struggle, false)' in top
+    assert "d.locked && d.locked.scan_reads" in top, "a signed-out reader is told what is behind the paywall"
+    row = APP[APP.index("function scanTopRowHTML("):]
+    assert "scanDoor(x)" in row[:row.index("\n}\n")], "each row opens his pick or his page"
+    assert '<div id="scan-top"></div>' in open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert "  renderScanTop();" in APP
+    # Its own class prefix: the first draft used `.st-row`/`.st-sub`, the
+    # status page's, whose phone rule hid the team/usage line.
+    assert 'class="st-' not in top + row[:row.index("\n}\n")]
+    for sel in (".sct-grid {", ".sct-row {", ".sct-sub {"):
+        assert sel in CSS, sel
+
+
 def test_the_game_page_draws_the_scan():
     j = APP.index("function renderGamePage(")
     page = APP[j:APP.index("\n}\n", j)]

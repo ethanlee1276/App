@@ -85,7 +85,11 @@ def test_the_deck_is_the_first_thing_on_the_home_view_and_adopts_the_board():
     assert '<div id="home-deck" hidden></div>' in view
     got = _node("return HOME_DECK_ADOPTS;")
     if got is not None:
-        assert list(got) == ["hero", "games", "likely", "edge", "tools"], got
+        # "scan" (2026-09-25): who could shine and who could struggle, every
+        # game, right under the pick boards (Ethan: "make that a section on
+        # the actual recommended page as well").
+        assert list(got) == ["hero", "games", "likely", "edge", "scan", "tools"], got
+        assert got["scan"] == ["scan-top"]
         assert got["hero"] == ["potd-zone"], "the Pick of the Day is the hero (v4, the prototype's order)"
         assert got["games"] == ["games-head", "slate-horizon", "games-outer"], "the stadium strip, whole"
         assert got["likely"] == ["likely-top"] and got["edge"] == ["best-bets"] \
@@ -122,7 +126,7 @@ def test_the_order_is_hero_live_riding_tonight_record_zeno():
     if got is None:
         print("  SKIP node not installed"); return
     # The stadiums before the picks — Ethan put them back on top, 2026-09-24.
-    assert got == ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"], got
+    assert got == ["hero", "live", "riding", "games", "likely", "edge", "scan", "record", "zeno", "tools"], got
     skel = _fn("deckSkeleton")
     assert "host.innerHTML = HOME_DECK_ORDER.map((k) =>" in skel
     assert '`<section class="hd-sec" data-sec="${k}" hidden></section>`' in skel

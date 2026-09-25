@@ -3148,6 +3148,7 @@ function renderAll() {
   // reads what the renderers wrote to decide which rooms exist, so a
   // host filled after it would be sorted into no room at all.
   renderLikelyTop();
+  renderScanTop();
   renderQuickTools();
   // AFTER the renderers, always. Which rooms exist is decided by what
   // they just wrote — grouping first would judge every block empty and
@@ -8325,6 +8326,66 @@ function boardShelves(d = state.data) {
   const ml = (d && d.most_likely) || [];
   return ((d && d.board_shelves) || []).map((sh) => (Array.isArray(sh.rows) ? sh
     : { ...sh, rows: (sh.row_ix || []).map((i) => ml[i]).filter(Boolean) }));
+}
+
+/* WHO COULD SHINE, WHO COULD STRUGGLE — EVERY GAME, ON THE DASHBOARD.
+   Ethan, 2026-09-25: "that's still really good information we should be
+   showing to the user, no matter if we're displaying a prop for that
+   player ... make that a section on the actual recommended page as
+   well. So users can scroll and see all that information." The game
+   scan reads every team's key players (engine/gamescan.key_players)
+   beside the ones with props; this is every one of those reads that
+   leans a way, across the slate, each a door to his pick or his page. */
+const SCAN_TOP_N = 6;
+
+function scanTopRows(d) {
+  const out = [];
+  for (const g of (d.games || [])) {
+    const reads = ((d.scan_reads || {})[`${g.away}@${g.home}`] || {}).players || [];
+    reads.forEach((x) => out.push(x));
+  }
+  return out;
+}
+
+function scanTopRowHTML(x, shine) {
+  const door = scanDoor(x);
+  const why = (shine ? x.pro : x.con) || [];
+  const bits = scanUsageBits(x);
+  return `<button type="button" class="sct-row"${door.attrs}>
+      ${playerAvatar(x.player, x.team, { size: 36, headshot: x.headshot })}
+      <span class="sct-who"><b>${escapeHtml(x.player)}</b>
+        <span class="sct-sub">${escapeHtml(x.team || "")} ${escapeHtml(x.pos || "")} vs ${escapeHtml(x.opp || "")}${
+          bits.length ? ` · ${escapeHtml(bits[0])}` : ""}</span>
+        ${why.length ? `<span class="sct-why">${escapeHtml(why.slice(0, 2).join(" · "))}</span>` : ""}</span>
+      <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span>
+    </button>`;
+}
+
+function renderScanTop() {
+  const host = document.getElementById("scan-top");
+  if (!host) return;
+  const d = state.data || {};
+  const rows = scanTopRows(d);
+  const locked = !rows.length && d.locked && d.locked.scan_reads && (d.games || []).some((g) => g.scan);
+  if (!rows.length && !locked) { host.innerHTML = ""; return; }
+  const first = { breakout: 0, good: 1, avoid: 0, tough: 1 };
+  const shine = rows.filter((x) => x.read === "breakout" || x.read === "good")
+    .sort((a, b) => first[a.read] - first[b.read] || (b.pro || []).length - (a.pro || []).length);
+  const struggle = rows.filter((x) => x.read === "avoid" || x.read === "tough")
+    .sort((a, b) => first[a.read] - first[b.read] || (b.con || []).length - (a.con || []).length);
+  const list = (title, xs, up) => xs.length ? `<div class="sct-list card">
+      <div class="sct-head">${title} <span class="mini">${xs.length}</span></div>
+      ${xs.slice(0, SCAN_TOP_N).map((x) => scanTopRowHTML(x, up)).join("")}
+      ${xs.length > SCAN_TOP_N ? `<details class="sct-more"><summary>Show all ${xs.length}</summary>
+        ${xs.slice(SCAN_TOP_N).map((x) => scanTopRowHTML(x, up)).join("")}</details>` : ""}
+    </div>` : "";
+  host.innerHTML = `<div class="section-title">Who could shine, who could struggle
+      <span class="sub">— every game’s key players, read against the defense they face</span></div>
+    ${locked ? `<div class="card ms-locked"><b>Who could shine and who could struggle, in every game</b> —
+        a read on every key player with the reasons for and against — is part of the subscription.</div>`
+      : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
+    <p class="ms-note">Tap a player for his pick, or his player page when he has none. The full read — every
+      reason, and what we noticed but do not count — is on each game’s page. It does not move our numbers.</p>`}`;
 }
 
 function renderLikelyTop() {
@@ -16103,7 +16164,7 @@ const REC_ROOMS = [
    // beside its cards), then the deep board and its dials.
    ["probation-note", "talent-note", "quick-tools",
     "games-head", "games-outer",
-    "likely-top", "home-perf", "stats", "best-bets",
+    "likely-top", "home-perf", "stats", "best-bets", "scan-top",
     "parlay-mode", "empty-slate", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
@@ -43045,7 +43106,7 @@ function moreSheetInit() {
    top." Back where the approved deck had them. What the audit fixed
    stays: the deck keeps its zones on a first load (subtabbedDOM), the
    game cards are shorter on a phone, and the tools close the deck. */
-const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "record", "zeno", "tools"];
+const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "scan", "record", "zeno", "tools"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely
@@ -43057,6 +43118,7 @@ const HOME_DECK_ADOPTS = {
   games: ["games-head", "slate-horizon", "games-outer"],
   likely: ["likely-top"],
   edge: ["best-bets"],
+  scan: ["scan-top"],
   tools: ["quick-tools"],
 };
 const DECK_LIVE_EVERY_MS = 20000;

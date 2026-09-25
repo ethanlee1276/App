@@ -11825,6 +11825,23 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
    its header the keyboard's. */
 .ms-read[data-open], .ms-micro[data-open] { cursor: pointer; }
 .ms-use { font-size: var(--fs-sm); color: var(--text-dim); margin-bottom: 6px; }
+/* The dashboard's shine/struggle section (renderScanTop). Its own prefix:
+   `.st-row`/`.st-sub` are the status page's. The two cards sit top-aligned
+   so the shorter list does not stretch its rows to the taller one. */
+.sct-grid { display: grid; gap: 12px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 861px) {
+  .sct-grid { grid-template-columns: 1fr 1fr; }
+}
+.sct-list { display: grid; align-content: start; padding: 4px 14px 8px; }
+.sct-head { padding: 10px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text); }
+.sct-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 0; border: 0; border-top: var(--hairline) solid var(--border-soft);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sct-who { display: grid; gap: 2px; min-width: 0; justify-items: start; text-align: left; }
+.sct-sub { font-size: var(--fs-xs); color: var(--text-dim); }
+.sct-why { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
+.sct-more summary { padding: 10px 0 4px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); cursor: pointer; }
 button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; color: inherit;
   font: inherit; text-align: left; cursor: pointer; }
 .ms-open { display: block; margin-top: 10px; font-size: var(--fs-sm); font-weight: 700; color: var(--brand); }
