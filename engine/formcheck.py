@@ -482,7 +482,94 @@ def report_lines(out: dict) -> list:
     return lines
 
 
-__all__ = ["MARKETS", "MIN_HISTORY", "run", "report_lines", "predictors"]
+# --- the scoreboard on disk, and the veto it gives the fitter -----------------
+#: How much better the gentle curve must ORDER a market, walk-forward,
+#: before the fitter's adopted curve is set aside for it. Rushing yards on
+#: 2026-09-25 read +0.665 against +0.650; receiving yards tied.
+VETO_MARGIN = 0.005
+
+
+def scoreboard_path(path=None) -> str:
+    from . import modelstate as _modelstate
+    return str(path) if path is not None else _modelstate.path("formcheck.json")
+
+
+def save_scoreboard(results: list, sport: str = "nfl", path=None) -> str:
+    """Merge these markets' tables into the store (`sport:market` keys), the
+    way `formfit.save` merges fits: one sport's run never erases another's."""
+    import datetime as _dt
+    import json
+    import os
+    p = scoreboard_path(path)
+    try:
+        with open(p) as fh:
+            stored = json.load(fh)
+        if not isinstance(stored, dict):
+            stored = {}
+    except (OSError, ValueError):
+        stored = {}
+    for out in results:
+        if not out.get("candidates"):
+            continue
+        stored[f"{sport}:{out['market']}"] = {
+            "candidates": out["candidates"], "compared_on": out.get("compared_on"),
+            "at": _dt.datetime.now().isoformat(timespec="seconds")}
+    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
+    with open(p, "w") as fh:
+        json.dump(stored, fh, indent=1)
+    return p
+
+
+_board_cache: dict = {}
+
+
+def _scoreboard(p: str) -> dict:
+    """The stored scoreboard, re-read only when the file changes: every
+    projection on a build asks (`formfit.weights_for`)."""
+    import json
+    import os
+    try:
+        stamp = os.stat(p).st_mtime
+    except OSError:
+        return {}
+    hit = _board_cache.get(p)
+    if hit and hit[0] == stamp:
+        return hit[1]
+    try:
+        with open(p) as fh:
+            d = json.load(fh)
+        d = d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        d = {}
+    _board_cache[p] = (stamp, d)
+    return d
+
+
+def veto(sport: str, market: str, path=None) -> dict | None:
+    """The gentle curve, when the last walk-forward scored it better than
+    the blend the fitter adopted by VETO_MARGIN on ordering and no worse on
+    error; else None.
+
+    THE FITTER PROPOSES, THE WALK-FORWARD ADOPTS. `formfit` fits its
+    recency dial in-sample and adopted a hard recency tilt for rushing
+    yards; scored forward over 2,609 player-weeks (2024–26) that curve
+    ordered backs at +0.650 and the gentle control at +0.665, with less
+    error — the harness had said so on every run and nothing read it
+    (Judkins at 31.5 against a 59.5 market, 2026-09-25)."""
+    d = (_scoreboard(scoreboard_path(path)).get(f"{sport}:{market}") or {})
+    c = d.get("candidates") or {}
+    form, gentle = c.get("form") or {}, c.get("gentle") or {}
+    try:
+        if (float(gentle["rank"]) - float(form["rank"]) >= VETO_MARGIN
+                and float(gentle["mae"]) <= float(form["mae"])):
+            return dict(GENTLE)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
+
+
+__all__ = ["MARKETS", "MIN_HISTORY", "run", "report_lines", "predictors",
+           "save_scoreboard", "veto"]
 
 
 def main(argv=None) -> int:
@@ -495,12 +582,23 @@ def main(argv=None) -> int:
     ap.add_argument("markets", nargs="*", default=list(MARKETS))
     ap.add_argument("--seasons", nargs="*", type=int, default=None)
     ap.add_argument("--sport", default="nfl")
+    ap.add_argument("--write", action="store_true",
+                    help="store the scoreboard, which `formfit.weights_for` "
+                         "reads to set a losing curve aside (formcheck.veto)")
     args = ap.parse_args(argv)
     conn = db.connect()
+    results = []
     for mk in args.markets:
         out = run(conn, mk, seasons=args.seasons, sport=args.sport,
                   log=lambda m: print(m, file=sys.stderr))
         print("\n".join(report_lines(out)))
+        results.append(out)
+    if args.write:
+        p = save_scoreboard(results, sport=args.sport)
+        vetoed = [o["market"] for o in results if veto(args.sport, o["market"])]
+        print(f"  scoreboard stored: {p}" + (
+            f" — the gentle curve now stands in for the fitted blend on: "
+            f"{', '.join(vetoed)}" if vetoed else " — every fitted blend holds"))
     return 0
 
 

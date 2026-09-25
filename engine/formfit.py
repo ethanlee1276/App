@@ -294,7 +294,11 @@ def weights_for(sport: str, market: str, path=None) -> dict | None:
     total = sum(float(v) for v in w.values())
     if not 0.99 <= total <= 1.01:      # a curve that isn't a blend is a bug
         return None
-    return w
+    # THE WALK-FORWARD'S VETO (engine/formcheck.veto): an adopted curve the
+    # forward scoreboard says loses to the gentle control is set aside for
+    # it. The projection is the one place both verdicts meet.
+    from .formcheck import veto as _veto
+    return _veto(sport, market) or w
 
 
 def report(path=None) -> list[dict]:
@@ -334,4 +338,10 @@ def report(path=None) -> list[dict]:
                         else "leans on the long run" if d.get("adopted")
                         else "default kept"),
         })
+        # …and whether the walk-forward set it aside (engine/formcheck).
+        from .formcheck import veto as _veto
+        out[-1]["vetoed"] = bool(d.get("adopted")) and _veto(
+            out[-1]["sport"], out[-1]["market"]) is not None
+        if out[-1]["vetoed"]:
+            out[-1]["reading"] = "set aside — the gentle curve orders it better forward"
     return out

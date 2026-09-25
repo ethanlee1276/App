@@ -6986,6 +6986,11 @@ def relearn(sport: str) -> None:
     import subprocess
     steps = [("recency dial", [sys.executable, "formfit.py",
                                "--from-db", "data/history.db", "--sport", sport]),
+             # THE WALK-FORWARD, right after the dial it judges: the
+             # scoreboard it stores is what lets `formfit.weights_for`
+             # set a losing curve aside (engine/formcheck.veto).
+             ("walk-forward scoreboard", [sys.executable, "-m", "engine.formcheck",
+                                          "--sport", sport, "--write"]),
              ("player memory", [sys.executable, "playerfit.py",
                                 "--from-db", "data/history.db", "--sport", sport]),
              ("temperatures (last — the two above move the model)",

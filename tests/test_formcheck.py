@@ -24,6 +24,7 @@ rec_yds was never adopted at all so it runs the hard-coded default, which
 is just as recency-heavy.
 """
 
+import json
 import os
 import sys
 
@@ -325,6 +326,57 @@ def test_an_absent_window_is_renormalised_rather_than_counted_as_zero():
     logs = [GameLog(week=0, opponent="", value=50.0) for _ in range(6)]
     got = compute_form(logs, 50.0, None)
     assert abs(got.mean - 50.0) < 1e-9, got.mean
+
+
+def test_the_walk_forward_can_set_a_fitted_curve_aside():
+    """Rushing yards, 2026-09-25: the fitter adopted a hard recency tilt
+    and the walk-forward scored the gentle control better (+0.665 vs
+    +0.650, less error) on every run — and nothing read it. The stored
+    scoreboard now vetoes: `weights_for` hands back GENTLE for a market
+    the gentle curve orders better by VETO_MARGIN with no more error, and
+    the fitted curve for one it does not (receiving yards tied)."""
+    import tempfile
+    from engine import formfit
+    d = tempfile.mkdtemp()
+    board = os.path.join(d, "formcheck.json")
+    rush = {"market": "rush_yds", "compared_on": 2609, "candidates": {
+        "form": {"n": 2609, "mae": 20.70, "rmse": 28.97, "rank": 0.650},
+        "gentle": {"n": 2609, "mae": 19.94, "rmse": 27.85, "rank": 0.665}}}
+    rec = {"market": "rec_yds", "compared_on": 5435, "candidates": {
+        "form": {"n": 5435, "mae": 20.51, "rmse": 27.87, "rank": 0.538},
+        "gentle": {"n": 5435, "mae": 20.51, "rmse": 27.87, "rank": 0.538}}}
+    formcheck.save_scoreboard([rush, rec, {"market": "pass_yds", "skipped": "x"}], sport="nfl", path=board)
+    assert formcheck.veto("nfl", "rush_yds", path=board) == formcheck.GENTLE
+    assert formcheck.veto("nfl", "rec_yds", path=board) is None, "a tie is not a veto"
+    assert formcheck.veto("nfl", "pass_yds", path=board) is None
+    assert formcheck.veto("mlb", "rush_yds", path=board) is None, "another sport's table says nothing"
+    # A better ordering bought with more error is not a veto either.
+    worse = dict(rush, candidates={"form": rush["candidates"]["form"],
+                                   "gentle": dict(rush["candidates"]["gentle"], mae=21.0)})
+    formcheck.save_scoreboard([worse], sport="nfl", path=board)
+    assert formcheck.veto("nfl", "rush_yds", path=board) is None
+    assert formcheck.veto("nfl", "rec_yds", path=board) is None, "the merge kept the other market"
+    # The fitter's lookup is where the veto lands.
+    fits = os.path.join(d, "formfit.json")
+    tilt = {"last1": 0.25, "last3": 0.35, "last5": 0.25, "last10": 0.10, "season": 0.05}
+    with open(fits, "w") as fh:
+        json.dump({"nfl:rush_yds": {"adopted": True, "weights": tilt, "samples": 5000}}, fh)
+    real = formcheck.veto
+    try:
+        formcheck.veto = lambda sport, market, path=None: real(sport, market, path=board)
+        assert formfit.weights_for("nfl", "rush_yds", path=fits) == tilt, "no veto stored: the fit holds"
+        formcheck.save_scoreboard([rush], sport="nfl", path=board)
+        assert formfit.weights_for("nfl", "rush_yds", path=fits) == formcheck.GENTLE
+        rep = {r["market"]: r for r in formfit.report(path=fits)}
+        assert rep["rush_yds"]["vetoed"] and "set aside" in rep["rush_yds"]["reading"]
+    finally:
+        formcheck.veto = real
+    # …and the nightly refit stores the scoreboard right after the dial.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "launch.py"), encoding="utf-8").read()
+    i = src.index('("recency dial", [sys.executable, "formfit.py"')
+    j = src.index('("walk-forward scoreboard", [sys.executable, "-m", "engine.formcheck"')
+    assert i < j < src.index('("player memory"', i)
 
 
 if __name__ == "__main__":
