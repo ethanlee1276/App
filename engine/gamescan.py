@@ -489,7 +489,9 @@ def mate_line(m, kind: str) -> tuple[str, bool]:
         counted = bool(m.get("same_pos")) or bool(counted_words)
     if counted_words:
         text += f" · our projection counts it: {counted_words}"
-    elif not counted:
+    elif not counted and not m.get("same_pos"):
+        # Only an absence at ANOTHER position is the unmeasured kind; a
+        # measured one that did not move says so in its own words above.
         text += " · not in our number: no lift measured across positions"
     return text, counted
 

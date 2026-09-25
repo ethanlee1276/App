@@ -84,6 +84,14 @@ def test_the_page_draws_the_tapped_row():
     assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page
 
 
+def test_another_leagues_card_on_tonight_opens_as_its_pick():
+    """Tonight, every league: a tap on another league's Most Likely card
+    switches the board and then opens it — as that board's pick, now that
+    its door names its own row (found in the 2026-09-25 review)."""
+    assert ('else if (door.dataset.prop) openProp(door.dataset.prop, '
+            '{ likely: door.dataset.likely === "1", bet: door.dataset.bet });') in APP
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

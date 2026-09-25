@@ -50,12 +50,14 @@ def test_every_check_fires_on_its_own_case():
     b["most_likely"] += [
         _row(player="Low", model_prob=0.51),                                   # FLOOR
         _row(player="Chalk", odds=-300),                                       # CAP
-        _row(player="Old", price_age_s=8 * 3600),                              # OLD PRICE
+        _row(player="Old", price_age_s=49 * 3600),                             # OLD PRICE
+        # Between the 6h bar and the 48h ceiling the page itself says "may
+        # have moved" (app.js priceAgeChip): not a problem to report.
+        _row(player="Aging", price_age_s=8 * 3600),
         _row(player="Lk", locked=True),                                        # NO NOW
         _row(player="Note", locked=True, now_listed=False, model_prob=0.47,
              lock_note="Our chance at this number is now 44%, down from 60%"),  # LOCK NOTE
     ]
-    b["most_likely"].append(_row(player="OldOk", price_age_s=8 * 3600, price_stale=True))
     b["most_likely"].append(_row(player="Res", reserve=True, model_prob=0.40))
     players = b["scan_reads"]["X@Y"]["players"]
     players.append({"player": "Gone", "pick": {"side": "over", "line": 9.5, "market": "rush_yds"}})

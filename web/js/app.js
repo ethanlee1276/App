@@ -6546,7 +6546,9 @@ async function renderTonightAll(host) {
       chip.click();
       const again = () => {
         if (door.dataset.open) openFrom(door.dataset.open);
-        else if (door.dataset.prop) openProp(door.dataset.prop, { bet: door.dataset.bet });
+        // A Most Likely card's door names its own row (likelyDoor), so it
+        // opens as that board's pick — as the site-wide handler opens it.
+        else if (door.dataset.prop) openProp(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet });
         else if (door.dataset.gid) openGame(door.dataset.gid);
       };
       afterBoardFor(s, () => { switchView("tonight"); again(); });
@@ -35169,7 +35171,7 @@ const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB
    after every build): how many of the claims the page makes held against
    the board's own data. Ethan, 2026-09-25: "making sure all that shit is
    good." Counts only — the detail names picks and lives in the build log. */
-const TRUTH_WORDS = { "FLOOR": "under 55%", "CAP": "heavier than −250", "OLD PRICE": "old price unmarked",
+const TRUTH_WORDS = { "FLOOR": "under 55%", "CAP": "heavier than −250", "OLD PRICE": "price too old to show",
   "NO NOW": "locked, no current price", "LOCK NOTE": "note and tile disagree",
   "PICK MISSING": "card names a missing pick", "LONGSHOT": "longshot called likeliest",
   "BARE MATE": "teammate-out line with no number", "DATA BEHIND": "stats behind" };

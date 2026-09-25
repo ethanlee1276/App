@@ -57,7 +57,8 @@ def test_an_absence_across_positions_is_shown_not_counted():
     assert text.endswith("not in our number: no lift measured across positions")
     flat = {"name": "X", "pos": "WR", "same_pos": True,
             "ripple": {"measured": True, "delta": 0.004, "text": "X out — share did not move (+0.4%)"}}
-    assert G.mate_line(flat, "targets")[1] is False, "a measured non-move is not a reason"
+    assert G.mate_line(flat, "targets") == ("X out — share did not move (+0.4%)", False), \
+        "a measured non-move is not a reason, and it is not an across-positions absence"
 
 
 def test_the_read_counts_it_only_when_it_is_counted():

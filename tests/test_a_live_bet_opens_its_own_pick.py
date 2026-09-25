@@ -90,7 +90,9 @@ def test_the_live_row_carries_its_book_and_its_chance():
 def test_the_door_carries_the_bet_and_every_path_passes_it_on():
     assert 'data-bet="${escapeAttr(ridingBet(b))}"' in _fn("ridingAttrs")
     assert APP.count('bet: card.dataset.bet }') == 2, "the click and the keyboard"
-    assert "openProp(door.dataset.prop, { bet: door.dataset.bet })" in APP
+    # Tonight, every league: the bet and — for a Most Likely card — which
+    # board it came from (2026-09-25 review).
+    assert 'openProp(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet })' in APP
     assert "state.propBet = JSON.parse(opts.bet)" in _fn("openProp")
     page = _fn("renderPropPage")
     assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page

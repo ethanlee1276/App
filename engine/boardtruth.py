@@ -15,8 +15,11 @@ its word:
 
   FLOOR        an unlocked Most Likely row under the 55% the board needs
   CAP          an unlocked Most Likely row heavier than −250
-  OLD PRICE    an unlocked row whose price was past the freshness bar at
-               the build and is not marked `price_stale`
+  OLD PRICE    an unlocked row whose price was past the SHOW ceiling at the
+               build (oddsapi.MAX_PROP_PRICE_SHOW_AGE, 48h) — a number too
+               old to be on the board at all. Between the 6h freshness bar
+               and that, the page itself says "may have moved" (app.js
+               priceAgeChip), so those rows are not a problem to report.
   NO NOW       a locked pick with no word on today's price at its number
   LOCK NOTE    a locked pick's note naming a chance its tile does not show
   PICK MISSING a scan read that names its Most Likely pick, which is not on
@@ -68,7 +71,7 @@ def check(board: dict) -> dict:
     """{"checked": claims read, "count": problems, "by_check": {name: n},
     "problems": ["CHECK — row: detail", … up to KEEP]}."""
     from .likely import HEAVIEST_PRICE, MIN_PROB
-    from .sources.oddsapi import MAX_PROP_PRICE_AGE
+    from .sources.oddsapi import MAX_PROP_PRICE_SHOW_AGE
     probs: list[tuple[str, str]] = []
     checked = 0
     ml = [r for r in (board or {}).get("most_likely") or [] if isinstance(r, dict)]
@@ -90,8 +93,9 @@ def check(board: dict) -> dict:
             probs.append(("CAP", f"{_who(r)}: {odds:+.0f}"))
     for r in ml + [x for x in (board or {}).get("recommendations") or [] if isinstance(x, dict)]:
         age = _f(r.get("price_age_s"))
-        if age is not None and not r.get("locked") and age > MAX_PROP_PRICE_AGE and not r.get("price_stale"):
-            probs.append(("OLD PRICE", f"{_who(r)}: {age / 3600:.1f}h old at the build, not marked"))
+        if age is not None and not r.get("locked") and age > MAX_PROP_PRICE_SHOW_AGE:
+            probs.append(("OLD PRICE", f"{_who(r)}: {age / 3600:.1f}h old at the build — past the "
+                          f"{MAX_PROP_PRICE_SHOW_AGE / 3600:.0f}h it may be shown at all"))
     for game in ((board or {}).get("scan_reads") or {}).values():
         for x in (game or {}).get("players") or []:
             checked += 1
