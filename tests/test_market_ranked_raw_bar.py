@@ -154,7 +154,10 @@ def test_the_page_never_sees_the_books_number_under_the_word_model():
     model's own read gets its own tile beside it."""
     card = APP[APP.index("function likelyCard("):]
     card = card[:card.index("\nfunction ", 10)]
-    assert '<div class="k">${r.prob_source === "market" ? "Market" : "Model"}</div>' in card
+    # "now" follows the word on a locked pick, whose chance is today's
+    # (tests/test_a_locked_pick_shows_todays_chance.py) — the word itself
+    # is still the source's.
+    assert '<div class="k">${r.prob_source === "market" ? "Market" : "Model"}${' in card
     assert "${likelyOwnReadTile(r)}" in card
     tile = APP[APP.index("function likelyOwnReadTile("):]
     tile = tile[:tile.index("\n}") + 2]

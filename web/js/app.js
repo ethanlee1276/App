@@ -8074,8 +8074,13 @@ function likelyCard(r) {
       <span class="grade lk-pct">${pct(r.model_prob)}${probTierHTML(r)}</span>
     </div>
     <div class="metrics">
-      <div class="metric hero"><div class="k">${r.prob_source === "market" ? "Market" : "Model"}</div>
-        <div class="v">${pct(r.model_prob)}</div></div>
+      <div class="metric hero"><div class="k">${r.prob_source === "market" ? "Market" : "Model"}${
+          r.locked ? " now" : ""}</div>
+        <div class="v">${pct(r.model_prob)}</div>${
+        /* A LOCKED PICK'S CHANCE IS TODAY'S (engine/likely._locked, 2026-09-25:
+           "Which number do I trust?"); the one it went up at sits under it. */
+        r.locked && r.first_prob != null && Math.abs(Number(r.first_prob) - Number(r.model_prob)) >= 0.005
+          ? `<div class="sub">${pct(r.first_prob)} when posted</div>` : ""}</div>
       ${likelyOwnReadTile(r)}
       <div class="metric"><div class="k">Book implied</div>
         <div class="v">${r.implied_prob == null ? "—" : pct(r.implied_prob)}</div></div>

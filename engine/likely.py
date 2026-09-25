@@ -364,10 +364,26 @@ def hard_exit(why: str) -> bool:
     return False
 
 
-def lock_note(why: str) -> str:
-    """What has changed since a locked pick went up, in the reader's words."""
+def lock_note(why: str, now=None, then=None) -> str:
+    """What has changed since a locked pick went up, in the reader's words.
+
+    ``now`` and ``then`` are the model's chance at the posted number today
+    and when it went up (`_prob_at`); with them the note says the numbers
+    rather than "eased under 55%" beside a tile still reading the old one
+    (Ethan, 2026-09-25: "How can we display our model is saying this has
+    a 71% chance too hit but then say it went under 55% in the other spot.
+    Which number do I trust?")."""
     lw = str(why or "").strip().lower()
+    # TODAY'S CHANCE UNDER THE BAR IS THE NEWS, whatever refusal the build
+    # recorded for the prop (which can be about another number).
+    if now is not None and then is not None and float(now) < MIN_PROB:
+        return (f"Our chance at this number is now {round(float(now) * 100)}%, down from "
+                f"{round(float(then) * 100)}% when it went up — under the "
+                f"{round(MIN_PROB * 100)}% a new pick needs. It stays on the board as posted.")
     if "floor" in lw or lw == "no probability":
+        if now is not None and then is not None:
+            return ("The books now hang this stat at another number; this is the one we posted, "
+                    "and its chance is as shown.")
         return (f"Our chance has eased under {round(MIN_PROB * 100)}% since this went up. "
                 "It stays on the board as posted.")
     if lw.startswith("heavier than"):
@@ -387,14 +403,53 @@ def lock_note(why: str) -> str:
     return f"Changed since this went up: {reader_reason(why)}."
 
 
-def _locked(h: dict, why: str, stamp: str) -> dict:
-    """A posted pick carried forward as it went up."""
+def _prob_at(row: dict | None, market: str, side, line, fits=None):
+    """The model's chance for (side, line) off a prop's CURRENT row — the
+    derivation `rungs` prices a ladder number with — or None."""
+    if not row or line is None:
+        return None
+    try:
+        line = float(line)
+    except (TypeError, ValueError):
+        return None
+    pre = (row.get("rung_probs") or {}).get(f"{line:g}")
+    if pre is not None:
+        p_over = float(pre)
+    else:
+        p_over = display_prob(market, row.get("projection"), line,
+                              row.get("recent_values"), fits=fits)
+        if p_over is None:
+            try:
+                mu, sd = float(row.get("projection")), float(row.get("proj_std") or 0)
+            except (TypeError, ValueError):
+                return None
+            if sd <= 0:
+                return None
+            from .statmath import prob_over
+            anchored = _anchored_mean(row, sd)
+            p_over = prob_over(line, anchored if anchored is not None else mu, sd)
+    p = 1.0 - float(p_over) if _side(side) == "under" else float(p_over)
+    return round(p, 4)
+
+
+def _locked(h: dict, why: str, stamp: str, now_prob=None) -> dict:
+    """A posted pick carried forward as it went up — at TODAY's chance.
+
+    The number, the price and the book stay as posted; the chance does
+    not. ``now_prob`` is the model's chance at the posted number off this
+    build (`_prob_at`), and it replaces the posted one on the row so every
+    reader of `model_prob` — the tile, the tier, the order, the note —
+    says today's number; `first_prob` keeps the one it went up at."""
     r = dict(h)
     r.pop("out_at", None)
     r.pop("out_why", None)
+    then = h.get("first_prob", h.get("model_prob"))
+    if now_prob is not None:
+        r["first_prob"] = then
+        r["model_prob"] = round(float(now_prob), 4)
     r["locked"] = True
     r["lock_why"] = why
-    r["lock_note"] = lock_note(why)
+    r["lock_note"] = lock_note(why, now=now_prob, then=then if now_prob is not None else None)
     r["locked_at"] = h.get("locked_at") or stamp
     return r
 
@@ -2688,6 +2743,24 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # THE LOCK (PLAYABLE_STATUSES above): every pick posted last build is
     # on this board until its game or its player's status takes it down.
     locked_n: dict = {}
+    # THE PROP ROWS THIS BUILD PRICED, for a locked pick's chance TODAY at
+    # the number it went up at (`_locked`, `_prob_at`).
+    prop_now = {("prop", r.get("player") or "", r.get("team") or "", r.get("market") or ""): r
+                for r in props or []}
+
+    def now_prob(h):
+        if (h.get("kind") or "prop") != "prop":
+            return None
+        return _prob_at(prop_now.get(hold_key(h)), h.get("market") or "",
+                        h.get("side"), h.get("line"), fits)
+
+    def lock(h, why):
+        """`_locked` at today's chance, with today's projection beside it."""
+        r = _locked(h, why, stamp, now_prob(h))
+        cur = prop_now.get(hold_key(h)) if (h.get("kind") or "prop") == "prop" else None
+        if cur and cur.get("projection") is not None:
+            r["projection"] = cur["projection"]
+        return r
     if held:
         for i, r in enumerate(out):
             h = held.get(hold_key(r))
@@ -2695,7 +2768,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                     and r.get("line") is not None
                     and not _same_number(r.get("side"), r.get("line"),
                                          (h.get("side"), h.get("line")))):
-                out[i] = _locked(h, "number moved", stamp)
+                out[i] = lock(h, "number moved")
                 locked_n["number moved"] = locked_n.get("number moved", 0) + 1
         present = {hold_key(r) for r in out}
         for k, h in held.items():
@@ -2705,7 +2778,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                                       if k in outranked else "no longer offered")
             if hard_exit(why):
                 continue
-            out.append(_locked(h, why, stamp))
+            out.append(lock(h, why))
             locked_n[why] = locked_n.get(why, 0) + 1
     _stamp_hold(out, held, stamp)
     # PROBABILITY ORDER, AS PRINTED. Rows the page shows at the same whole
