@@ -6182,7 +6182,18 @@ function gameCard(g) {
     if (g.attention_tier) bits.push(`${esc(g.attention_tier)} attention`);
     if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (!mkts && g.spread != null) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
-    if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
+    /* THE LIKELY STARTERS, read off the logs and ESPN's injury report
+       (engine/cfb/qbchange.read_game) — Ethan, 2026-09-26: "every game is
+       saying QB Unconfirmed". The warning stays only for a side with no
+       read at all. */
+    if (!g.qb_confirmed) {
+      const rd = g.qb_read || {};
+      const named = ["away", "home"].map((s) => rd[s] && rd[s].starter ? rd[s] : null);
+      if (named.some(Boolean)) {
+        bits.push(`QB: ${named.map((r, i) => r ? esc(r.starter) + (r.out ? ` (for ${esc(r.out)})` : "")
+          : `${esc(teamName(i ? g.home : g.away))} unknown`).join(" vs ")}`);
+      } else bits.push(`${icon('warn')} QB unconfirmed`);
+    }
     sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
   } else if (nba) {
     const bits = [];

@@ -1490,6 +1490,22 @@ def main() -> None:
 
     store = cfbstatus.load_store()
     games = [cfbstatus.annotate_game(g, store) for g in games]
+    # THE LIKELY STARTER, READ OFF THE DATA, where nobody confirmed one by
+    # hand (engine/cfb/qbchange.read_game): the passing logs and ESPN's
+    # injury board. Shown on the card; the conditional hold is unchanged.
+    try:
+        from engine.cfb import qbchange as _cqb_read
+        from engine.sources.injuries import load_cfb_injuries as _early_inj
+        try:
+            _inj_for_read = _early_inj(games, lookup)
+        except Exception:                                    # noqa: BLE001
+            _inj_for_read = []
+        _qb_logs = _cqb_read.passers(conn, day.year, {t for g in games for t in (g.get("home"), g.get("away"))})
+        games = [_cqb_read.read_game(g, _qb_logs, _inj_for_read) for g in games]
+        print(f"  QB read: {sum(1 for g in games if g.get('qb_read'))} of {len(games)} game(s) "
+              f"named from the logs and the injury report")
+    except Exception as _qrx:                                 # noqa: BLE001
+        print(f"  ⚠️  QB read skipped: {_qrx}")
 
     # Kickoff weather, joined on the VENUE ESPN names (so neutral sites
     # read the right sky) with CFBD's coordinates and Open-Meteo's hourly
@@ -1526,6 +1542,7 @@ def main() -> None:
                      "away_rank": g.get("away_rank"),
                      "attention_tier": attention_tier(g),
                      "qb_confirmed": g.get("qb_confirmed", False),
+                     "qb_read": g.get("qb_read") or {},
                      "venue": g.get("venue", ""), "indoor": g.get("indoor", False),
                      # What the Weather page and the game card read; the
                      # park_name key is the shape every other league uses.

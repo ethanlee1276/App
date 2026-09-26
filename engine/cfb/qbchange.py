@@ -116,6 +116,41 @@ def card(ch: dict, own: bool = False) -> dict:
             "headline": words, "detail": detail(ch), "applied": 1.0, "note": note}
 
 
+def read_game(game: dict, qb: dict, injuries: list) -> dict:
+    """The game with ``qb_read`` — each side's likely starter off the logs
+    and ESPN's board — for any side nobody confirmed by hand. Ethan,
+    2026-09-26: "every game is saying QB Unconfirmed". The manual
+    confirmation (engine/cfb/status, `launch.py --confirm-qb`) had never
+    been filled in, so every card said it. This names the quarterback the
+    data points to and why; it does NOT set ``qb_confirmed`` — whether this
+    read may lift the conditional hold on game bets is Ethan's call."""
+    status = {(getattr(i, "team", ""), getattr(i, "player", "")): str(getattr(i, "status", "")).upper()
+              for i in injuries or []}
+    st = game.get("qb_status") or {}
+    read = {}
+    for side in ("home", "away"):
+        team = game.get(side) or ""
+        if ((st.get(side) or {}).get("state") or "unknown") != "unknown":
+            continue
+        q = (qb or {}).get(team)
+        if not q:
+            continue
+        usual, last = q["usual"], q["last"]
+        listed = status.get((team, usual), "")
+        if listed in RULED_OUT:
+            nxt = sorted((p for p in q["by"] if p != usual and status.get((team, p), "") not in RULED_OUT),
+                         key=lambda p: -q["by"][p])
+            read[side] = {"starter": nxt[0] if nxt else "", "out": usual,
+                          "why": f"{usual} is {listed.lower()} on ESPN's injury report"}
+        elif last == usual:
+            read[side] = {"starter": usual,
+                          "why": "started the last game" + (f"; listed {listed.lower()}" if listed
+                                                             else "; not on ESPN's injury report")}
+        else:
+            read[side] = {"starter": last, "why": f"started the last game ({usual} has the most yards)"}
+    return {**game, "qb_read": read} if read else game
+
+
 def stamp(rows, chs: dict) -> int:
     """Put the change's card on every row of that team (props, scorers,
     Most Likely rows): his own when he is one of the two quarterbacks."""

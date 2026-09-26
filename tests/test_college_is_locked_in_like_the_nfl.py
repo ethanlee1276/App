@@ -131,6 +131,30 @@ def test_a_college_teammate_out_says_what_it_opens_in_catches():
     assert "Gone Guy" not in reads, "nor one every book took down"
 
 
+def test_every_card_names_the_likely_quarterbacks_instead_of_unconfirmed():
+    """Ethan, 2026-09-26: "im noticing for cfb that every game is saying 'QB
+    Unconfirmed'". The manual confirmation had never been filled in. The card
+    now names each side's likely starter off the passing logs and ESPN's
+    injury report; the conditional hold on game bets is left as it was."""
+    from types import SimpleNamespace as NS
+    qb = Q.passers(_logs(), 2026, ["A", "B", "C"])
+    g = {"home": "B", "away": "C", "qb_confirmed": False,
+         "qb_status": {"home": {"state": "unknown"}, "away": {"state": "unknown"}}}
+    got = Q.read_game(g, qb, [NS(team="C", player="Star QB", status="OUT")])
+    assert got["qb_read"]["home"] == {"starter": "Their QB", "why": "started the last game; not on ESPN's injury report"}
+    assert got["qb_read"]["away"]["starter"] == "Backup QB" and got["qb_read"]["away"]["out"] == "Star QB"
+    assert got["qb_confirmed"] is False, "the hold is Ethan's call, not this read's"
+    a = Q.read_game({**g, "home": "A"}, qb, [])
+    assert a["qb_read"]["home"]["starter"] == "Fill In", "whoever started last game"
+    confirmed = {**g, "qb_status": {"home": {"state": "confirmed"}, "away": {"state": "confirmed"}}}
+    assert "qb_read" not in Q.read_game(confirmed, qb, []), "a hand confirmation stands"
+    assert '"qb_read": g.get("qb_read") or {},' in BUILD
+    assert "games = [_cqb_read.read_game(g, _qb_logs, _inj_for_read) for g in games]" in BUILD
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "bits.push(`QB: ${named.map((r, i) => r ? esc(r.starter)" in js
+    assert "} else bits.push(`${icon('warn')} QB unconfirmed`);" in js
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
