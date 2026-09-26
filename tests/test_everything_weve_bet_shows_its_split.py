@@ -50,7 +50,12 @@ def test_one_side_alone_is_not_a_combined_line():
 
 
 def test_the_export_ships_both_and_never_folds_zeno_into_overall():
-    assert '"combined": _zeno.combined(scoped, _zeno_block),' in LEDGER
+    # The model half is the record the page shows as the model's — the
+    # pooled book (edge + Most Likely), which app.js seats as `overall` —
+    # so the combined tile adds up with the tile beneath it.
+    assert '"combined": _zeno.combined(_pooled["overall"], _zeno_block),' in LEDGER
+    assert '"pooled": _pooled,' in LEDGER
+    assert "s.overall = s.pooled.overall;" in APP, "the page's model tile is the pooled book"
     assert '"overall": scoped,' in LEDGER, "the model's overall stays its own"
 
 

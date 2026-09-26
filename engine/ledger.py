@@ -8255,6 +8255,13 @@ def export_json(conn, path) -> None:
     allp = performance(conn)
     scoped = performance(conn, since=since)
     _zeno_block = _zeno.block_or_empty()
+    # THE RECORD THE PAGE SHOWS AS THE MODEL'S (`pooled`: the edge board
+    # and the Most Likely board as one — app.js adoptPooledRecord seats it
+    # as `overall`). The combined line adds Zeno to THIS, not to the edge
+    # book alone: Ethan, 2026-09-26, "my bets plus the sites bets does not
+    # equal that" — the tile under it read 1236-867-9, +4.3u, while the
+    # combined one had added him to the edge book's 588-539, +2.1u.
+    _pooled = pooled_report(conn, since=since)
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "record_epoch": since,
@@ -8291,7 +8298,7 @@ def export_json(conn, path) -> None:
             "benched_settled": _benched_settled(conn, since),
         },
         "overall": scoped,
-        "pooled": pooled_report(conn, since=since),
+        "pooled": _pooled,
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
@@ -8399,7 +8406,7 @@ def export_json(conn, path) -> None:
         # EVERYTHING WE'VE BET: the model's scoped record and Zeno's
         # tickets in one line, the split always beside it (Ethan,
         # 2026-09-26). `overall` above stays the model's alone.
-        "combined": _zeno.combined(scoped, _zeno_block),
+        "combined": _zeno.combined(_pooled["overall"], _zeno_block),
         "paper_mode": paper_mode(conn),
         # `paper_recent` — the hundred paper rows themselves — was dropped
         # on 2026-08-20 along with the Record page panel that was its only
