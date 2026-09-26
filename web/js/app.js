@@ -20720,7 +20720,11 @@ function pmFlowLeague(f) {
 
 /* The venues' marks. Kalshi's is its letter; Polymarket's is drawn as the
    outline mark its app uses. Both are the venues' own identities, shown
-   to say whose market a row is — the same reason the table names them. */
+   to say whose market a row is — the same reason the table names them.
+   The hero's art is Ethan's own banner of the two (web/img/predict,
+   2026-09-26: "use this second screenshot as the background of where i
+   circled … like how the pick of the day renders is"): it fills the
+   hero behind the words, the way the venue fills the Pick of the Day. */
 function pmxKalshiMark(size = 30) {
   return `<span class="pmx-k" style="font-size:${size}px" aria-hidden="true">K</span>`;
 }
@@ -20738,11 +20742,6 @@ function pmxDoor(venue, cls, inner) {
     ? `<a class="${cls}" href="${escapeAttr(PMX_VENUE_URL[venue])}" target="_blank" rel="noopener">${inner}</a>`
     : `<div class="${cls}">${inner}</div>`;
 }
-function pmxVenueCard(name, venue, mark) {
-  return pmxDoor(venue, "pmx-venue", `<span class="pmx-venue-mark">${mark}</span>
-    <span class="pmx-venue-txt"><b>${name}</b><span>Live markets</span><span>Real-world outcomes</span></span>
-    <span class="pmx-venue-go" aria-hidden="true">→</span>`);
-}
 
 function pmxHeroHTML() {
   return `<header class="pmx-hero">
@@ -20752,12 +20751,10 @@ function pmxHeroHTML() {
       <p class="pmx-sub">Trade real-world outcomes on Kalshi and Polymarket.</p>
       <p class="pmx-sub2">Live markets. Real-time odds. Track the smart money.</p>
     </div>
-    <div class="pmx-art" aria-hidden="true" style="background-image:url('img/field/field-nfl-home-ball@640.webp')">
-      <div class="pmx-glass"><span>${pmxKalshiMark(46)}<em>Kalshi</em></span><span>${pmxPolyMark(44)}<em>Polymarket</em></span></div>
-    </div>
-    <div class="pmx-venues">
-      ${pmxVenueCard("Kalshi", "kalshi", pmxKalshiMark(34))}
-      ${pmxVenueCard("Polymarket", "polymarket", pmxPolyMark(32))}
+    <div class="pmx-art" aria-hidden="true">
+      <img class="pmx-art-img" src="img/predict/pm-hero@800.webp"
+        srcset="img/predict/pm-hero@800.webp 800w, img/predict/pm-hero.webp 1600w"
+        sizes="(max-width: 760px) 100vw, 1000px" alt="" decoding="async"/>
     </div>
   </header>`;
 }
