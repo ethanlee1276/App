@@ -8257,6 +8257,12 @@ def export_json(conn, path) -> None:
     # HIS TICKETS ARE THE PRODUCT, HIS TOTALS THE PROOF (Ethan,
     # 2026-09-26: "you only get access to the bets if you paid"). The
     # free half rides record.json; the bets go to their own paid board.
+    # The tickets Claude wrote from slips he sent (data/zeno_manual.json)
+    # come in first — idempotent, and never fails the export.
+    try:
+        _zeno.import_manual()
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️  Zeno's hand-written tickets not imported — {type(exc).__name__}: {exc}")
     _zeno_block, _zeno_tickets = _zeno.split(_zeno.block_or_empty())
     # THE RECORD THE PAGE SHOWS AS THE MODEL'S (`pooled`: the edge board
     # and the Most Likely board as one — app.js adoptPooledRecord seats it

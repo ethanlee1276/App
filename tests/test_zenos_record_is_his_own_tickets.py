@@ -510,6 +510,31 @@ def test_the_post_form_is_his_alone_and_says_so():
     assert "+ (tix.owner ? zenoGradeHTML(r) : \"\")" in src
 
 
+def test_bets_he_sends_to_claude_come_in_from_the_repo_once():
+    """The third way in: slips he sends in the chat, written to
+    data/zeno_manual.json and pushed; the export imports them, and a
+    ticket written open then settled is updated, never doubled."""
+    d = Path(tempfile.mkdtemp())
+    manual = d / "zeno_manual.json"
+    row = {"book": "fanduel", "external_id": "claude-1", "placed_at": "2026-09-28T13:00:00",
+           "sport": "nfl", "selection": "Bills ML", "odds": -150, "stake": 30, "result": "open"}
+    manual.write_text(json.dumps([row]), encoding="utf-8")
+    conn = zeno.connect(d / "z.db")
+    try:
+        assert zeno.import_manual(manual, conn)["added"] == 1
+        assert zeno.import_manual(manual, conn)["unchanged"] == 1, "twice is once"
+        manual.write_text(json.dumps([dict(row, result="won")]), encoding="utf-8")
+        assert zeno.import_manual(manual, conn)["updated"] == 1
+        assert tuple(conn.execute("SELECT COUNT(*), MAX(source) FROM zeno_bets").fetchone()) == (1, "claude")
+    finally:
+        conn.close()
+    assert zeno.import_manual(d / "none.json") is None
+    assert json.loads((ROOT / "data" / "zeno_manual.json").read_text(encoding="utf-8")) == [] \
+        or isinstance(json.loads((ROOT / "data" / "zeno_manual.json").read_text(encoding="utf-8")), list)
+    led = (ROOT / "engine" / "ledger.py").read_text(encoding="utf-8")
+    assert led.index("_zeno.import_manual()") < led.index("_zeno.split(_zeno.block_or_empty())")
+
+
 # --- the box ---------------------------------------------------------------
 def test_the_cli_refuses_to_create_a_root_owned_store():
     """The service runs as `qellys` under ProtectSystem=strict. A store

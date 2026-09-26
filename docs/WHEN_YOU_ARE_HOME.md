@@ -842,6 +842,8 @@ token once (it stays on that phone). Then:
   Void. Your record and the combined line update on the next build.
 - When Juice Reel's API is on, its copy of a bet you posted takes over
   the posted one (same book, stake, price and day) — never a second bet.
+- Or send Claude the slip: it goes into `data/zeno_manual.json`, and the
+  droplet imports it on the next record build after it pulls.
 
 **Members' copy:** `data/built/zeno.json`. The public `web/data/zeno.json`
 is a locked stub that says how many bets, never which.

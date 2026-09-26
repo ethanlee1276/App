@@ -553,6 +553,31 @@ def split(b: dict) -> tuple[dict, dict]:
     return free, paid
 
 
+#: BETS HE SENDS TO CLAUDE (Ethan, 2026-09-26, the third way in beside the
+#: post form and the Juice Reel sync): bet slips he sends in the chat,
+#: written here as JSON tickets and pushed. The droplet pulls the file and
+#: the next record export imports it — idempotently, so a ticket written
+#: open and written again settled UPDATES, and one written twice is one.
+MANUAL_PATH = Path(os.environ.get("QB_ZENO_MANUAL", "").strip()
+                   or (Path(__file__).resolve().parents[1] / "data" / "zeno_manual.json"))
+MANUAL_SOURCE = "claude"
+
+
+def import_manual(path=None, conn=None) -> dict | None:
+    """Import the hand-written tickets file, or None when there is none."""
+    p = Path(path) if path else MANUAL_PATH
+    if not p.exists():
+        return None
+    rows, _ = parse_text(p.read_text(encoding="utf-8"))
+    own = conn is None
+    conn = conn or connect()
+    try:
+        return import_rows(conn, rows, source=MANUAL_SOURCE)
+    finally:
+        if own:
+            conn.close()
+
+
 def publish_tickets(paid: dict, web_data=None) -> str:
     """Write the paid half through the gate: the full copy outside the web
     root for members (/api/board/zeno.json), a locked stub — how many
