@@ -83,7 +83,9 @@ def test_a_four_cell_record_row_has_its_own_columns():
     """The calibration rows have no icon and no book cell; on the
     six-column grid their first cell fell into the 20px icon track and
     the band printed over the words (desktop, 2026-09-22)."""
-    assert APP.count('class="rl-row rl-cal ') == 3, "the three calibration templates carry the modifier"
+    # Four since 2026-09-26: the Record page's Most Likely board by tier
+    # (recBoardSection) is the same four-cell row.
+    assert APP.count('class="rl-row rl-cal ') == 4, "the four calibration templates carry the modifier"
     assert ".rl-row.rl-cal { grid-template-columns: 112px minmax(0, 1fr) 90px 72px; }" in CSS
     # …and the phone restates its five-track area layout at the same
     # specificity, so the desktop rule does not outrank it there. The

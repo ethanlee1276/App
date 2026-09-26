@@ -84,7 +84,7 @@ def test_the_stadiums_lead_then_the_picks_and_the_tools_close_the_deck():
     # No edge section on the home since 2026-09-26 — Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore".
     assert order.index("games") < order.index("likely") and "edge" not in order
     assert order.index("live") < order.index("games")
-    assert order[-1] == "tools"
+    assert order[0] == "tools", "the four doors lead (Ethan, 2026-09-26)"
 
 
 def test_the_rooms_leave_the_deck_s_zones_in_the_deck():

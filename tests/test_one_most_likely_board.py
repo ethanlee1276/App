@@ -103,8 +103,12 @@ def test_the_record_check_reads_our_own_journal():
 
 def test_the_tier_rule():
     assert B.tier_of({"model": True, "matchup": True, "market": True, "record": None}) == "top"
+    assert B.tier_of({"model": True, "matchup": True, "market": True, "record": True}) == "top"
     assert B.tier_of({"model": True, "matchup": True, "market": None, "record": None}) == "strong"
     assert B.tier_of({"model": True, "matchup": True, "market": True, "record": False}) == "strong"
+    # The box, 2026-09-26: 42 Top picks, most with no matchup read. Without
+    # the matchup a pick tops out at Strong, whatever else agrees.
+    assert B.tier_of({"model": True, "matchup": None, "market": True, "record": True}) == "strong"
     assert B.tier_of({"model": False, "matchup": True, "market": True, "record": True}) == "look"
     assert B.tier_of({"model": True, "matchup": False, "market": False, "record": True}) == "look"
 
@@ -137,6 +141,50 @@ def test_the_page_draws_one_board_everywhere():
     # Best of the slate or By game, with lane filters.
     assert 'data-ob-view="best">Best of the slate' in js and 'data-ob-view="game">By game' in js
     assert 'localStorage.setItem("qb.obView", state.obView)' in js
+
+
+def test_the_record_reads_the_board_back_by_tier():
+    """Ethan, 2026-09-26: "yes do the record page next". Every board row is
+    journaled on paper under 'board' with its tier as the grade; the Record
+    page shows each tier's W-L, hit rate against what we claimed, and ROI."""
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    rows = [("Top pick", "won", 0.8), ("Top pick", "won", 0.9), ("Top pick", "lost", -1.0),
+            ("Strong", "lost", -1.0), ("Worth a look", "open", 0.0)]
+    for i, (g, st, pnl) in enumerate(rows):
+        conn.execute("INSERT INTO bets (sport, date, player, market, side, line, odds, hit_prob, stake_units, "
+                     "pnl_units, status, category, grade) VALUES ('nfl', '2026-W04', ?, 'rec_yds', 'over', 24.5, "
+                     "-120, 0.66, 1.0, ?, ?, 'board', ?)", (f"P{i}", pnl, st, g))
+    rep = ledger.board_report(conn, sport="nfl")
+    top, strong, look = rep["tiers"]
+    assert [t["tier"] for t in rep["tiers"]] == list(ledger.BOARD_TIERS) == ["Top pick", "Strong", "Worth a look"]
+    assert (top["w"], top["l"], top["settled"], top["actual"], top["claimed"]) == (2, 1, 3, 0.6667, 0.66)
+    assert top["units"] == 0.7 and abs(top["roi"] - 0.7 / 3) < 1e-3
+    assert (strong["w"], strong["l"]) == (0, 1) and look["open"] == 1 and look["actual"] is None
+    assert rep["settled"] == 4 and rep["open"] == 1
+    src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
+    assert '"board": board_report(conn, since=since),' in src and '"board_by_sport": {' in src
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "+ recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)" in js
+    assert "Most Likely board · by tier" in js
+
+
+def test_the_picks_tab_is_the_one_board_and_one_door_to_the_edge_picks():
+    """Ethan, 2026-09-26: "any user could hop on and know exactly, 'okay,
+    these are the bets I need to do'". The phone's Picks tab is the Pick of
+    the Day, then Top picks, then Strong; the edge bets are one button to
+    their own page, not a second copy of them."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    tn = js[js.index("function renderTonight() {"):]
+    tn = tn[:tn.index("\nfunction ", 10)]
+    branch = tn[tn.index("if (oneBoardOn()) {"):tn.index("/* The Picks page in the redesign's shape")]
+    assert (branch.index("${potdHeroHTML(d)}") < branch.index('<div class="section-title">Top picks')
+            < branch.index('<div class="section-title">Strong'))
+    assert 'data-goto="edge">Edge picks · ${plural(n, "bet")} tonight' in branch
+    assert "edgeRow" not in branch and "cardHTML" not in branch, "no second copy of the edge bets"
+    assert "(r.checks || {}).matchup === true" in branch, "the note is the matchup's reason, only when it backs the pick"
+    guide = js[js.index("function renderLikely() {"):]
+    assert "Every pick goes through four checks" in guide[:9000]
 
 
 if __name__ == "__main__":

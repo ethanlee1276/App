@@ -11438,6 +11438,17 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 /* The pick page's shopped-number line (shoppedLineNote). */
 .pp-shopped { color: var(--text-mute); font-size: var(--fs-sm); margin: 6px 0 10px; line-height: var(--lh-snug); }
 
+/* THE PHONE HOME, TRIMMED (Ethan, 2026-09-26, a phone screenshot with The
+   Desk crossed out and the Tonight's board / Watchlists tabs circled:
+   "remove the desk and what I circled. It just doesn't fit and seems like
+   it's just scattered in there"). The desk stays in the desktop rail; the
+   home's room tabs and their one-line hint go on a phone — the board room
+   is what shows, and Game Lines still opens its room from the menu. */
+@media (max-width: 760px) {
+  #rail-desk { display: none !important; }
+  #view-recommended > .subnav-wrap { display: none; }
+}
+
 /* A Most Likely pick, explained (whyLikelyHTML, 2026-09-23) — the card
    that leads the pick page when the reader came from that board. */
 .pp-book { color: var(--text-mute); font-weight: 400; }
@@ -11883,6 +11894,8 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .matchup-picks .sc-lines li::before { content: "· "; color: var(--brand); }
+/* The Picks tab's two doors under the tiers (app.js renderTonight). */
+.tn-more { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 /* The one Most Likely board (app.js oneBoardHTML): a tier summary, the
    view and lane controls, and on every row its four checks. */
 .one-board .ob-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }

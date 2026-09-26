@@ -129,7 +129,9 @@ def test_the_doors_open_the_pages_that_are_never_empty_minus_this_one():
 def test_the_picks_page_opens_with_its_name_and_reads_in_two_columns():
     body = _fn("renderTonight")
     i = body.index('<div class="section-title">Tonight’s bets\n      <span class="sub">— the pick of the day, who is likeliest to hit, and what we stake</span></div>')
-    assert i < body.index("${potdHeroHTML(d)}") < body.index('<div class="tn-cols">'), "name, hero, then the boards"
+    # The layout below is the one without the one Most Likely board; with
+    # it (engine/likelyboard, 2026-09-26) the tab is its own branch above.
+    assert i < body.index("${potdHeroHTML(d)}", i) < body.index('<div class="tn-cols">'), "name, hero, then the boards"
     assert body.count('<section class="tn-col">') == 2
     assert '<div class="section-title">Our edge bets' in body, "a section head like its neighbour, not a minor one"
     assert '<div class="section-title">Most likely to hit tonight' in body

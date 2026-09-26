@@ -196,8 +196,12 @@ def test_the_dashboard_deltas_are_doors_and_measurements():
         app = f.read()
     qt = app[app.index("function renderQuickTools("):]
     qt = qt[:qt.index("\n}")]
-    for href in ("#fantasy", "#scanner", "#mybets", "#bankroll"):
+    # 2026-09-26: the scanner and tracker doors became the full Most Likely
+    # board and Edge Picks (Ethan: "that prop scanner button is probably
+    # old ... swap that bet tracker button for something else").
+    for href in ("#fantasy", "#likely", "#edge", "#bankroll"):
         assert f'href="{href}"' in qt, f"quick tools lost {href}"
+    assert 'href="#scanner"' not in qt and 'href="#mybets"' not in qt
     # Recent results are curve ROWS, and only when the rows carry the
     # per-day record — a stale file drops the block instead of guessing.
     assert "const tail = full.slice(-5).reverse();" in FN

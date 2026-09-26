@@ -118,7 +118,9 @@ def test_the_single_league_page_is_unchanged_but_for_the_chip_row():
     fn = _fn("renderTonight")
     assert 'if (_tonightScope === "all") { renderTonightAll(host); return; }' in fn
     assert "const { props, bets, shots, ml, n } = tonightPick(d);" in fn
-    assert fn.count('tonightChipsHTML("sport", state.sport)') == 2, "the chips on the empty page too"
+    # Three since 2026-09-26: the one Most Likely board's branch
+    # (engine/likelyboard) carries the chips too.
+    assert fn.count('tonightChipsHTML("sport", state.sport)') == 3, "the chips on the empty page and the one board too"
     assert "Most likely to hit tonight" in fn and "Our edge bets" in fn and "bindTonightChips(host);" in fn
     i = APP.index('try { _tonightScope = localStorage.getItem("qb.tonight.scope")')
     assert "=== \"all\" ? \"all\" : \"sport\"" in APP[i:i + 120], "anything but a remembered All is the single league"

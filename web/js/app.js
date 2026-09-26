@@ -6593,6 +6593,45 @@ function renderTonight() {
     bindEmptyDoors(host);
     return;
   }
+  /* THE ONE BOARD, WHEN THE BUILD CARRIES IT (engine/likelyboard). Ethan,
+     2026-09-26: "any user could hop on and know exactly, 'okay, these are
+     the bets I need to do'" — and the edge bets have their own page now
+     ("We shouldn't show that on the main page anymore"). So this tab is
+     the Pick of the Day, then the Top picks and Strong in that order, each
+     saying its tier; the edge bets are one line that opens their page. */
+  if (oneBoardOn()) {
+    const rows = oneBoardRows();
+    const top = rows.filter((r) => r.tier === "top"), strong = rows.filter((r) => r.tier === "strong");
+    const lookN = rows.filter((r) => r.tier === "look").length;
+    const riding = ridingBets(tonightSignals());
+    const tierRow = (r) => deckPickRow(r.lane === "td" ? { ...r, pick_label: `${r.player} · Anytime TD` } : r,
+      { door: likelyOpen(r), note: (r.checks || {}).matchup === true
+          ? ((r.check_notes || {}).matchup || "").replace(/^matchup read: /, "") : "" });
+    host.innerHTML = `
+      ${tonightChipsHTML("sport", state.sport)}
+      <div class="section-title">Tonight’s bets
+        <span class="sub">— the pick of the day, then our Top picks and Strong ones, in that order</span></div>
+      ${potdHeroHTML(d)}
+      ${top.length ? `<div class="section-title">Top picks
+        <span class="sub">— our number, the matchup and the market agree</span></div>
+        <div class="hd-card tn-rows">${top.map(tierRow).join("")}</div>` : ""}
+      ${strong.length ? `<div class="section-title">Strong
+        <span class="sub">— most of the checks agree</span></div>
+        <div class="hd-card tn-rows">${foldRowsHTML(strong.map(tierRow), { what: "Strong picks" })}</div>` : ""}
+      <div class="tn-more">
+        ${lookN ? `<button class="btn ghost" type="button" data-goto="likely">${plural(lookN, "more pick", "more picks")} worth a look — the full board</button>` : ""}
+        <button class="btn ghost" type="button" data-goto="edge">Edge picks · ${plural(n, "bet")} tonight${riding.length ? ` · ${riding.length} riding` : ""}</button>
+      </div>
+      ${shots.length ? `<div class="section-title minor">Long shots
+        <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
+        ${boardGuide("long_shots")}
+        <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
+    bindTonightChips(host);
+    host.querySelectorAll("[data-goto]").forEach((b) =>
+      b.addEventListener("click", () => switchView(b.dataset.goto, true)));
+    if (typeof fillMeters === "function") fillMeters(host);
+    return;
+  }
   /* The Picks page in the redesign's shape (2026-09-22, Figma frame D):
      the Pick of the Day as a hero, then rows a thumb can scan — Most
      likely with its chance, the edge bets with their edge — each row a
@@ -8311,6 +8350,14 @@ function shelfByPosted(rows) {
    the claim and its evidence"), and then promoted to the TOP of the
    page — his screenshot circled the four tiles: "We should show this
    at the top of the page." An app opens with its launcher row. */
+/* THE FOUR DOORS (Ethan, 2026-09-26, a phone screenshot: "those four
+   buttons ... should be at the top of the mobile page. But I guess that
+   prop scanner button is probably old, so maybe we should update it to
+   take you to ... the full page of all the most likely bets ... And maybe
+   we swap that bet tracker button for something else because it's unused
+   and nobody clicks it"). The scanner and the tracker are still in the
+   menu; these two doors are the full Most Likely board and Edge Picks,
+   the page that is not on the phone's tab bar. */
 function renderQuickTools() {
   const host = document.getElementById("quick-tools");
   if (!host) return;
@@ -8318,10 +8365,10 @@ function renderQuickTools() {
     <div class="qt-row">
       <a class="qt-chip" href="#fantasy">${icon("trophy", 17)}<span class="qt-t">
         <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span></a>
-      <a class="qt-chip" href="#scanner">${icon("search", 17)}<span class="qt-t">
-        <b>Props scanner</b><span class="k">filter every priced prop</span></span></a>
-      <a class="qt-chip" href="#mybets">${icon("book", 17)}<span class="qt-t">
-        <b>Bet tracker</b><span class="k">log your own tickets</span></span></a>
+      <a class="qt-chip" href="#likely">${icon("target", 17)}<span class="qt-t">
+        <b>All Most Likely picks</b><span class="k">every pick, by tier and by game</span></span></a>
+      <a class="qt-chip" href="#edge">${icon("rising", 17)}<span class="qt-t">
+        <b>Edge Picks</b><span class="k">where our number beats the price</span></span></a>
       <a class="qt-chip" href="#bankroll">${icon("chart", 17)}<span class="qt-t">
         <b>Bankroll</b><span class="k">stakes and limits</span></span></a>
     </div>`;
@@ -8698,6 +8745,12 @@ function renderLikely() {
   note.innerHTML = `${boardGuide("most_likely")}
     <details class="ls-note board-guide"><summary><b>How it’s ranked</b>
       <span class="bg-how">and what it turned down</span></summary>
+    ${oneBoardOn() ? `<p>Every pick goes through four checks: <b>our number</b> (our chance clears the
+    bar for its kind of bet — touchdowns are their own lane), <b>the matchup</b> (the offence-against-defence
+    read backs this side), <b>the market</b> (the sportsbooks’ price is near our chance) and <b>our record</b>
+    (picks like it have hit about as often as we said). A <b>Top pick</b> has our number, the matchup and the
+    market agreeing with the record not against it; <b>Strong</b> has most of them; everything else is
+    <b>Worth a look</b>. Tap “why?” on any row for each check’s reason. Nothing is dropped — lower tiers fold.</p>` : ""}
     <p>Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it. A pick that goes up stays
@@ -15080,6 +15133,34 @@ function recLeadtimeSection(lt) {
     an instruction: bet sooner.</div>`;
 }
 
+/* THE ONE MOST LIKELY BOARD, BY TIER (engine/likelyboard, ledger
+   .board_report). Ethan, 2026-09-26: "yes do the record page next" — one
+   record, broken down by tier, so it answers whether Top picks really hit
+   more than Worth a look. Every row is tracked on paper at the tier it went
+   up at; until one settles, the section says how many are waiting. */
+function recBoardSection(bd, scope) {
+  if (!bd || (!bd.settled && !bd.open)) return "";
+  const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const rows = (bd.tiers || []).map((t) => {
+    const played = t.settled + (t.push || 0);
+    const tone = t.actual == null ? "" : t.claimed != null && t.actual >= t.claimed ? "won" : "lost";
+    return `<div class="rl-row rl-cal ${tone}">
+      <span class="rl-date">${escapeHtml(t.tier)}</span>
+      <span class="rl-main">${t.settled ? `${t.w}–${t.l}${t.push ? `–${t.push}` : ""} · hit <strong>${pct(t.actual)}</strong> · we said ${pct(t.claimed)}`
+        : "no results yet"}</span>
+      <span class="rl-proc">${t.open ? `${t.open} open` : played ? `${played} settled` : ""}</span>
+      <span class="rl-pnl ${t.roi == null ? "" : toneOf(t.roi)}">${t.roi == null ? "—" : `${t.roi >= 0 ? "+" : ""}${(t.roi * 100).toFixed(1)}%`}</span>
+    </div>`;
+  }).join("");
+  const waiting = !bd.settled
+    ? `<p class="ls-note">${plural(bd.open, "pick is", "picks are")} waiting on their games. The first results land once
+        they settle — then this shows whether Top picks hit more than the rest.</p>` : "";
+  return `<div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Most Likely board · by tier
+      <span class="sub">— every pick tracked at the tier it went up at: Top pick, Strong, Worth a look</span></div>
+    ${waiting}
+    <div class="card rec-board-tiers" style="padding:0;margin-top:6px">${rows}</div>`;
+}
+
 function recLikelySection(lk, scope) {
   if (!lk || (!lk.settled && !lk.open)) return "";
   // The league whose rows these are, or "" on the pooled scope. Read off
@@ -18002,6 +18083,7 @@ async function renderRecord() {
     + recZenoSection(d.zeno, scope)
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
                      scope, d.potd_recent || [])
+    + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)
     + verdict + ridingNote + unstaked + small
@@ -43826,7 +43908,7 @@ function moreSheetInit() {
    top." Back where the approved deck had them. What the audit fixed
    stays: the deck keeps its zones on a first load (subtabbedDOM), the
    game cards are shorter on a phone, and the tools close the deck. */
-const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "scan", "record", "zeno", "tools"];
+const HOME_DECK_ORDER = ["tools", "hero", "live", "riding", "games", "likely", "scan", "record", "zeno"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely

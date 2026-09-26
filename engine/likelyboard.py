@@ -33,8 +33,8 @@ say):
            the rate we claimed in our own journal (RECORD_MIN_N settled
            first) — the check that learns.
 
-THE TIERS. Top: the model passes, nothing disagrees, and three checks
-agree. Strong: the model passes and at most one check is against it with
+THE TIERS. Top: our number, the matchup and the market agree and the
+record is not against it. Strong: the model passes and at most one check is against it with
 three for, or none against with two for. Worth a look: the rest.
 
 Nothing here moves a probability; the tier is how many independent reads
@@ -182,11 +182,18 @@ def matchup_check(r: dict, leans: dict, td_scores: dict):
 
 
 def tier_of(checks: dict) -> str:
+    """Top: our number, the MATCHUP and the market all agree, and our record
+    is not against it. The box's first board (2026-09-26) had 42 Top picks,
+    most of them receiving-yards overs the matchup had no read on — the
+    model, the market and the record agreeing without the one check Ethan
+    built this board around. A pick with no matchup read tops out at
+    Strong. Strong: the model passes and at most one check is against it
+    with three for, or none against with two for."""
     vals = list(checks.values())
     pos, neg = vals.count(True), vals.count(False)
     if not checks.get("model"):
         return "look"
-    if neg == 0 and pos >= 3:
+    if checks.get("matchup") is True and checks.get("market") is True and checks.get("record") is not False:
         return "top"
     if (neg == 0 and pos >= 2) or (neg <= 1 and pos >= 3):
         return "strong"

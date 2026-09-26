@@ -7170,6 +7170,47 @@ LIKELY_BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 LIKELY_MARKET_MIN_N = 40
 
 
+#: The one Most Likely board's tiers, as `engine/likelyboard` journals them
+#: (the tier is the grade) — top first.
+BOARD_TIERS = ("Top pick", "Strong", "Worth a look")
+
+
+def board_report(conn, since: str | None = None, sport: str | None = None) -> dict:
+    """THE ONE BOARD, BY TIER (engine/likelyboard). Ethan, 2026-09-26, on
+    the plan: one record, broken down by tier, so it says whether Top picks
+    really hit more than Worth a look. Every row is journaled on paper
+    under category 'board' with its tier as the grade; this reads them back.
+
+    Per tier: settled (won+lost), W-L, pushes, open, how often it hit
+    against what we claimed, and the flat-stake ROI at the price shown."""
+    _bench, _bargs = ("", ()) if sport else off_record_sql()
+    win = (" AND date >= ?" if since else "") + _bench
+    wargs: tuple = ((since,) if since else ()) + _bargs
+    sw = " AND sport=?" if sport else ""
+    sargs: tuple = (sport,) if sport else ()
+    tiers = []
+    for label in BOARD_TIERS:
+        r = conn.execute(
+            "SELECT SUM(status='won') w, SUM(status='lost') l, SUM(status='push') p, "
+            "SUM(status='open') o, AVG(CASE WHEN status IN ('won','lost') THEN hit_prob END) claimed, "
+            "SUM(CASE WHEN status IN ('won','lost','push') THEN pnl_units ELSE 0 END) pnl, "
+            "SUM(CASE WHEN status IN ('won','lost','push') THEN stake_units ELSE 0 END) staked "
+            "FROM bets WHERE category='board' AND grade=?" + win + sw,
+            (label,) + wargs + sargs).fetchone()
+        w, l = int(r["w"] or 0), int(r["l"] or 0)
+        n = w + l
+        tiers.append({
+            "tier": label, "settled": n, "w": w, "l": l, "push": int(r["p"] or 0),
+            "open": int(r["o"] or 0),
+            "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
+            "actual": round(w / n, 4) if n else None,
+            "units": round(float(r["pnl"] or 0.0), 3),
+            "roi": round(float(r["pnl"] or 0.0) / float(r["staked"]), 4) if r["staked"] else None,
+        })
+    return {"sport": sport or "", "tiers": tiers,
+            "settled": sum(t["settled"] for t in tiers), "open": sum(t["open"] for t in tiers)}
+
+
 def likely_report(conn, since: str | None = None,
                   sport: str | None = None) -> dict:
     """The Most Likely scoreboard — the paper record, read back.
@@ -8263,6 +8304,14 @@ def export_json(conn, path) -> None:
         # and roi and shit to it." This is what "does good" is checked
         # against.
         "likely": likely_report(conn, since=since),
+        # THE ONE MOST LIKELY BOARD, BY TIER (engine/likelyboard), pooled
+        # and per sport — a sport with nothing in the book is omitted.
+        "board": board_report(conn, since=since),
+        "board_by_sport": {
+            sp: rep for sp, rep in
+            ((sp, board_report(conn, since=since, sport=sp))
+             for sp in TRACKED_SPORTS if not is_benched(sp))
+            if rep.get("settled") or rep.get("open")},
         # THE SAME REPORT, PER SPORT. The Record page has a scope per
         # league, and this section had no per-sport cut to render — so the
         # page dropped it entirely on every scope but "All bets". Ethan,
