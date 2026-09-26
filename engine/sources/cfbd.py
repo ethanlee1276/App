@@ -324,7 +324,19 @@ def parse_advanced(rows: list) -> dict[str, dict]:
                 "stuff": _num(d, "stuffRate"),
             }
         plays = _num(r.get("offense") or {}, "plays") or 0.0
-        out[school] = {"plays": plays, **sides}
+        # SCORING CHANCES — drives that reached the opponent's 40 (CFBD
+        # spells the field "totalOpportunies") — had on offence and allowed
+        # on defence, with each side's plays to put them per game: college's
+        # red-zone trips (gamescan.cfb_chances). Beside the units, not among
+        # them: they are a rate for the touchdown matchup, not a ranked unit.
+        chances = {}
+        for side in ("offense", "defense"):
+            d = r.get(side) or {}
+            opps = _num(d, "totalOpportunies")
+            chances["off" if side == "offense" else "def"] = {
+                "opps": opps if opps is not None else _num(d, "totalOpportunities"),
+                "ppo": _num(d, "pointsPerOpportunity"), "plays": _num(d, "plays")}
+        out[school] = {"plays": plays, **sides, "chances": chances}
     return out
 
 

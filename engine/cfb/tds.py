@@ -1204,6 +1204,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "matchup_card": mu_card,
                         "game_date": g.get("date", ""),
                         "kickoff": g.get("kickoff", ""),
+                        # WHAT THE MATCHUP READS (engine/matchpicks,
+                        # tdscenarios): his team's expected points, his
+                        # red-zone touches a game, his role.
+                        "implied_total": round(float(implied), 1),
+                        "rz_chances": round(float(u.get("rz_car") or 0) + float(u.get("rz_rec") or 0), 2),
+                        "position": pos,
                     })
 
             if not in_odds_window(odds, CFB_TD_ODDS):

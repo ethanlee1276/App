@@ -66,9 +66,9 @@ RECORD_MISS = 0.08
 #: matchup check reads differs by sport, and where a sport has no matchup
 #: read the check says so and its picks top out at Strong — a Top pick is
 #: one the matchup backs, in every sport:
-#:   nfl, cfb   the game scan's lean on this player and market (and, for
-#:              an NFL scorer, his touchdown matchup of 8 — calibrated on
-#:              32 teams, so college scorers are not read with it);
+#:   nfl, cfb   the game scan's lean on this player and market, and for a
+#:              scorer his touchdown matchup of 8 (college's defence ranks
+#:              read as among 32 — tdscenarios.rank32);
 #:   mlb        the projection's own Matchup step (opposing starter,
 #:              platoon, the lineup around him), when it moved the number
 #:              at least MODEL_MATCHUP_STEP toward this side;
@@ -327,8 +327,6 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
         if r.get("matchup_score") is not None:
             td_scores[r["player"]] = int(r["matchup_score"])
             continue
-        if sport != "nfl":
-            continue
         g = by_game.get(r["game"])
         if not g or not g.get("scan"):
             continue
@@ -336,7 +334,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
         opp, team = r.get("opponent"), r.get("team")
         row = dict(r, position=str(r.get("position") or positions.get(r["player"]) or "").upper())
         m = td_matchup(row, (scan.get("units") or {}).get(opp), (scan.get("redzone") or {}).get(team),
-                       (scan.get("redzone") or {}).get(opp), usage=usage.get(r["player"]))
+                       (scan.get("redzone") or {}).get(opp), n_teams=int(scan.get("n_teams") or 32),
+                       usage=usage.get(r["player"]))
         td_scores[r["player"]] = m["score"]
         for t in m["lines"]:
             if t not in r["case_lines"]:

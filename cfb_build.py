@@ -2133,9 +2133,14 @@ def main() -> None:
             try:
                 from engine import gamescan as _scan
                 from engine.seasons import season_of as _scan_season_of
+                try:
+                    _cfb_use = _scan.cfb_usage(conn, _scan_season_of("cfb", args.date))
+                except Exception:                            # noqa: BLE001
+                    _cfb_use = {}
                 _scanned = _scan.attach_cfb(
                     out, _scan_season_of("cfb", args.date),
-                    lambda school: cfbdata.resolve_team(school, lookup))
+                    lambda school: cfbdata.resolve_team(school, lookup),
+                    usage=_cfb_use, watch=watch)
                 _cfb_leans = _scan.leans_from_reads(out.get("scan_reads") or {})
                 print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s), "
                       f"{len(_cfb_leans)} lean(s) for Most Likely.")
@@ -2204,8 +2209,32 @@ def main() -> None:
                                          leans=_cfb_leans,
                                          lean_report=_cfb_lean_report)
             if out.get("scan_reads"):
-                _scan.stamp_picks(out["scan_reads"], _cfb_lean_report)
+                _scan.stamp_picks(out["scan_reads"], _cfb_lean_report, board=out["most_likely"])
             out["likely_turnover"] = _ml_turn
+            # THE NFL'S MATCHUP SHELVES, FOR COLLEGE (Ethan, 2026-09-26: "all
+            # that work we have done for the past couple days has also been
+            # done for college football"): the touchdown scenarios and every
+            # game's matchup picks, from the same scan and the whole scorer
+            # list — each journaled on paper below, and pooled into the one
+            # Most Likely board.
+            try:
+                from engine.tdscenarios import build as _td_scen
+                out["td_scenarios"] = _td_scen({"games": out.get("games") or [],
+                                                "scan_reads": out.get("scan_reads") or {},
+                                                "most_likely": out["most_likely"]})
+            except Exception as _tsx:                        # noqa: BLE001
+                print(f"  ⚠️  touchdown scenarios skipped: {_tsx}")
+                out["td_scenarios"] = []
+            try:
+                from engine.matchpicks import build as _mp_build
+                out["matchup_picks"] = _mp_build(out.get("games") or [], out.get("scan_reads") or {},
+                                                 watch, out.get("recommendations") or [])
+            except Exception as _mpx:                        # noqa: BLE001
+                print(f"  ⚠️  matchup picks skipped: {_mpx}")
+                out["matchup_picks"] = []
+            print(f"  Touchdown scenarios: {len(out['td_scenarios'])} · matchup picks: "
+                  f"{sum(len(m.get('td') or []) + len(m.get('props') or []) for m in out['matchup_picks'])} "
+                  f"across {len(out['matchup_picks'])} game(s)")
             # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
             # yardage markets have a model and, until the box holding
             # the logs walks them, no measurement — so `from_prop`
@@ -2392,6 +2421,21 @@ def main() -> None:
         ml_n = ledger.log_most_likely(
             lconn, {"sport": "cfb", "date": args.date,
                     "most_likely": out.get("most_likely") or []})
+        # The scenarios and the matchup picks, each in its own paper bucket,
+        # as the NFL's (nfl_build).
+        _sc_n = ledger.log_most_likely(
+            lconn, {"sport": "cfb", "date": args.date, "most_likely": out.get("td_scenarios") or []},
+            category="td_scenario", grade_label="Scenario")
+        if _sc_n:
+            print(f"Touchdown scenarios: {_sc_n} row(s) journaled on paper.")
+        from engine.matchpicks import journal_rows as _mp_rows
+        for _kind, _cat in (("td", "matchup_td"), ("prop", "matchup_prop")):
+            _mp_n = ledger.log_most_likely(
+                lconn, {"sport": "cfb", "date": args.date, "games": out.get("games") or [],
+                        "most_likely": _mp_rows(out.get("matchup_picks"), _kind)},
+                depth=None, category=_cat, grade_label="Matchup")
+            if _mp_n:
+                print(f"Matchup picks ({_kind}): {_mp_n} row(s) journaled on paper.")
         # The one board, per tier, on paper (engine/likelyboard).
         from engine import likelyboard as _lb
         _lb_n = _lb.journal(lconn, out, "cfb", args.date)

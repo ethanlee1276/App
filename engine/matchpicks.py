@@ -42,7 +42,7 @@ Standard library only.
 """
 from __future__ import annotations
 
-from .tdscenarios import OFFENSE_POINTS, DEFENSE_RANK, RED_ZONE_CHANCES, TRIPS_REL, _pts, _ord
+from .tdscenarios import OFFENSE_POINTS, DEFENSE_RANK, RED_ZONE_CHANCES, TRIPS_REL, _pts, _ord, rank32
 
 #: A scorer below this chance is not a pick, whatever the matchup.
 TD_MIN_PROB = 0.28
@@ -66,6 +66,9 @@ PROP_MAX_JUICE = -250
 #: Brady Russell under 5 rushing yards and Dyami Brown under 1.5 catches.
 PROP_MIN_TARGETS = 3.0
 PROP_MIN_CARRIES = 6.0
+#: College logs catches, not targets: two a game is the receiving role
+#: (about three targets at a college catch rate).
+PROP_MIN_CATCHES = 2.0
 PROP_PER_GAME = 4
 PROP_PER_PLAYER = 2
 
@@ -85,7 +88,7 @@ def td_matchup(row: dict, opp_units: dict | None, rz_own: dict | None, rz_opp: d
     off_rel, def_rel = (rz_own or {}).get("off_rel"), (rz_opp or {}).get("def_rel")
     trips = [v for v in (off_rel, def_rel) if v is not None]
     trips_rel = sum(trips) / len(trips) if trips else None
-    pts = {"offense": _pts(implied, OFFENSE_POINTS), "defense": _pts(rank, DEFENSE_RANK),
+    pts = {"offense": _pts(implied, OFFENSE_POINTS), "defense": _pts(rank32(rank, n_teams), DEFENSE_RANK),
            "red_zone": _pts(rz, RED_ZONE_CHANCES), "trips": _pts(trips_rel, TRIPS_REL)}
     team, opp = row.get("team") or "", row.get("opponent") or ""
     lines = []
@@ -97,13 +100,15 @@ def td_matchup(row: dict, opp_units: dict | None, rz_own: dict | None, rz_opp: d
     u = usage or {}
     share = u.get("carry_share") if unit == "rushing" and pos != "QB" else u.get("tgt_share")
     if share is not None and pos != "QB":
-        lines.append(f"{float(share):.0%} of the {'carries' if unit == 'rushing' else 'targets'}")
+        lines.append(f"{float(share):.0%} of the {'carries' if unit == 'rushing' else (u.get('share_of') or 'targets')}")
     if rz is not None:
         lines.append(f"{float(rz):.1f} expected red-zone chances")
     if trips:
         bits = []
+        what = ("scoring chances (drives to the 40)"
+                if (rz_own or rz_opp or {}).get("what") == "scoring chances" else "red-zone plays")
         if off_rel is not None:
-            bits.append(f"{team} gets {float(rz_own.get('off')):.1f} red-zone plays a game "
+            bits.append(f"{team} gets {float(rz_own.get('off')):.1f} {what} a game "
                         f"({off_rel * 100:+.0f}% vs the league)")
         if def_rel is not None:
             bits.append(f"{opp} allows {float(rz_opp.get('def')):.1f} ({def_rel * 100:+.0f}%)")
@@ -205,7 +210,10 @@ def prop_picks(game: dict, reads: list, props: list) -> list:
                 continue
             u = x.get("usage") or {}
             role = u.get("carries_pg") if mk == "rush_yds" else u.get("targets_pg") if mk != "pass_yds" else 99
-            if role is None or float(role) < (PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS):
+            bar = PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS
+            if role is None and mk in ("receptions", "rec_yds") and u.get("share_of") == "catches":
+                role, bar = u.get("rec_pg"), PROP_MIN_CATCHES
+            if role is None or float(role) < bar:
                 continue
             hp = float(r["hit_prob"])
             prob = hp if str(r.get("side") or "").lower() == side else 1.0 - hp

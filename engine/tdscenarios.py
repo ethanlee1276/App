@@ -59,6 +59,14 @@ LIMIT = 8
 _GROUP = {"WR": "wr", "TE": "wr", "RB": "rb"}
 
 
+def rank32(rank, n_teams: int = 32):
+    """A defence's rank as it would sit among 32 — DEFENSE_RANK is set on
+    the NFL's; a college rank of 100 of 134 is 24th of 32, not 100th."""
+    if rank is None:
+        return None
+    return float(rank) * 32.0 / max(2, int(n_teams or 32))
+
+
 def _pts(value, bars) -> int:
     if value is None:
         return 0
@@ -98,7 +106,7 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
     trips = [v for v in (off_rel, def_rel) if v is not None]
     trips_rel = sum(trips) / len(trips) if trips else None
     pts = {"offense": _pts(implied, OFFENSE_POINTS),
-           "defense": _pts(rank, DEFENSE_RANK),
+           "defense": _pts(rank32(rank, n_teams), DEFENSE_RANK),
            "usage": _pts(share, TARGET_SHARE if grp == "wr" else CARRY_SHARE),
            "red_zone": _pts(rz, RED_ZONE_CHANCES),
            "trips": _pts(trips_rel, TRIPS_REL)}
@@ -117,7 +125,7 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
         lines.append(f"{opp}’s {'pass' if grp == 'wr' else 'run'} defence ranks {_ord(rank)} of {n_teams}"
                      + (f" ({blend:.0%} this season, the rest last)" if blend is not None else ""))
     if share is not None:
-        lines.append(f"{float(share):.0%} of the {'targets' if grp == 'wr' else 'carries'}"
+        lines.append(f"{float(share):.0%} of the {(u.get('share_of') or 'targets') if grp == 'wr' else 'carries'}"
                      + (f" · {u['snap_pct']:.0%} of the snaps" if u.get("snap_pct") is not None else ""))
     if rz is not None:
         before, then = td.get("rz_before"), td.get("rz_then_implied")
@@ -130,12 +138,17 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
     if trips:
         pct = lambda v: f"{v * 100:+.0f}%"                     # noqa: E731
         bits = []
+        college = (rz_own or rz_opp or {}).get("what") == "scoring chances"
+        what = "scoring chances (drives to the 40)" if college else "red-zone plays"
         if off_rel is not None:
-            bits.append(f"{team} runs {float((rz_own or {}).get('off')):.1f} red-zone plays a game ({pct(off_rel)} vs the league)")
+            bits.append(f"{team} {'gets' if college else 'runs'} {float((rz_own or {}).get('off')):.1f} {what} a game "
+                        f"({pct(off_rel)} vs the league)")
         if def_rel is not None:
             bits.append(f"{opp} allows {float((rz_opp or {}).get('def')):.1f} ({pct(def_rel)})")
-        # Both against the schedule each side has faced (engine/redzone).
-        lines.append(" · ".join(bits) + " — for the teams each has played")
+        # Both against the schedule each side has faced (engine/redzone);
+        # college's are raw season numbers (gamescan.cfb_chances).
+        lines.append(" · ".join(bits) + (" — this season, not schedule-adjusted" if college
+                                          else " — for the teams each has played"))
     # HIS QUARTERBACK, WHEN THE STARTER IS OUT. Ethan, 2026-09-26: "last
     # week the starting QB for that team was announced out for the season
     # so no way that number is correct now." The lines above already carry
@@ -148,9 +161,12 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
 
 def build(result: dict, n_teams: int = 32, limit: int = LIMIT) -> list:
     """Scenario rows for the board, ranked by our chance, from the reads
-    (`scan_reads`) and each game's scan units."""
+    (`scan_reads`) and each game's scan units. A scan that says how many
+    teams its ranks are out of (college's) overrides ``n_teams``."""
     units_by_team: dict = {}
     rz_by_team: dict = {}
+    n_teams = next((int((g.get("scan") or {}).get("n_teams")) for g in result.get("games") or []
+                    if (g.get("scan") or {}).get("n_teams")), n_teams)
     for g in result.get("games") or []:
         for t, u in ((g.get("scan") or {}).get("units") or {}).items():
             units_by_team[t] = u

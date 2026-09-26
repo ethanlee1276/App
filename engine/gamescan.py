@@ -631,11 +631,14 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     if group in ("wr", "te"):
         lean = ["receptions", "rec_yds", "anytime_td"]
         share = u.get("tgt_share") or 0.0
+        # College logs catches, not targets (cfb_usage): said as catches.
+        word = u.get("share_of") or "targets"
+        per = u.get("targets_pg") if word == "targets" else u.get("rec_pg")
         if share >= 0.22:
             volume = True
-            pro.append(f"Commands {share:.0%} of the targets ({u.get('targets_pg', 0):g} a game)")
+            pro.append(f"Commands {share:.0%} of the {word} ({per or 0:g} a game)")
         elif u.get("games") and share < 0.12:
-            con.append(f"Only {share:.0%} of the targets so far")
+            con.append(f"Only {share:.0%} of the {word} so far")
         elif share >= 0.18:
             volume = True
         if measured:
@@ -726,7 +729,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
-                                            "snap_pct", "games") if u.get(k) is not None}}
+                                            "snap_pct", "games", "rec_pg", "share_of")
+                      if u.get(k) is not None}}
 
 
 def _opens(inj, team: str, opp: str, ratings: dict, charts: dict, usage: dict) -> str:
@@ -1315,7 +1319,75 @@ def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
     return out
 
 
-def attach_cfb(out: dict, season: int, resolve, fetch=None) -> int:
+def cfb_chances(current: dict, prior: dict | None = None) -> dict:
+    """``{team: {"off", "def", "off_rel", "def_rel", "what"}}`` — scoring
+    chances a game (drives reaching the opponent's 40) each offence had and
+    each defence allowed, blended with last season by plays the way the
+    unit ratings are, each against the league. College's red-zone trips
+    (engine/redzone is the NFL's, from play-by-play college does not have).
+    Raw, not opponent-adjusted, like the rest of the college scan."""
+    prior = prior or {}
+    per: dict = {}
+    for t in sorted(set(current or {}) | set(prior)):
+        c = ((current or {}).get(t) or {}).get("chances") or {}
+        p = (prior.get(t) or {}).get("chances") or {}
+        row = {}
+        for side in ("off", "def"):
+            cs, ps = c.get(side) or {}, p.get(side) or {}
+            def rate(s):
+                opps, plays = s.get("opps"), s.get("plays")
+                return None if opps is None or not plays else opps / (plays / CFB_PLAYS_PER_GAME)
+            a, b = rate(cs), rate(ps)
+            plays = float(cs.get("plays") or 0.0)
+            w = season_share(plays, b is not None, leads_at=CURRENT_LEADS_GAMES * CFB_PLAYS_PER_GAME,
+                             prior_n=CFB_PRIOR_PLAYS)
+            v = a if b is None else b if a is None else w * a + (1 - w) * b
+            if v is not None:
+                row[side] = round(v, 2)
+        if row:
+            per[t] = row
+    out: dict = {}
+    for side in ("off", "def"):
+        vals = [r[side] for r in per.values() if side in r]
+        mean = sum(vals) / len(vals) if vals else 0.0
+        for t, r in per.items():
+            if side in r and mean:
+                o = out.setdefault(t, {"what": "scoring chances"})
+                o[side] = r[side]
+                o[f"{side}_rel"] = round(r[side] / mean - 1.0, 3)
+    return out
+
+
+def cfb_usage(conn, season: int) -> dict:
+    """``{(team, key): usage}`` for the college scan, from the touchdown
+    board's own blended usage table (engine/cfb/tds.merged_usage): carries
+    and catches a game, the share of the team's carries, and the share of
+    its CATCHES — college box scores log no targets, so the receiving share
+    is said as catches (``share_of``) and never passed off as targets."""
+    from .cfb.tds import merged_usage, role_of
+    _season, usage, _why = merged_usage(conn, int(season))
+    out: dict = {}
+    for team, players in (usage or {}).items():
+        car = sum(float(u.get("carries") or 0) for u in players.values()) or 0.0
+        rec = sum(float(u.get("receptions") or 0) for u in players.values()) or 0.0
+        for _norm, u in players.items():
+            name = u.get("player") or ""
+            if not name:
+                continue
+            out[(team, _key(name))] = {
+                "name": name, "position": role_of(u), "games": int(u.get("games") or 0),
+                "carries_pg": round(float(u.get("carries") or 0), 1),
+                "carry_share": round(float(u.get("carries") or 0) / car, 3) if car else 0.0,
+                "rec_pg": round(float(u.get("receptions") or 0), 1),
+                "tgt_share": round(float(u.get("receptions") or 0) / rec, 3) if rec else 0.0,
+                "share_of": "catches",
+                "rec_yds_pg": round(float(u.get("rec_yds") or 0), 1),
+                "rush_yds_pg": round(float(u.get("rush_yds") or 0), 1)}
+    return out
+
+
+def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None = None,
+               watch: list | None = None) -> int:
     """Hang a ``scan`` on every game of a college board; the reads ride
     in ``scan_reads`` like the NFL's. ``resolve`` maps CFBD's school name
     to the board's team key (cfbdata.resolve_team). Returns games scanned;
@@ -1338,6 +1410,7 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None) -> int:
     if not cur and not pri:
         return 0
     ratings = cfb_ratings(cur, pri)
+    chances = cfb_chances(cur, pri)
     reads = out.setdefault("scan_reads", {})
     props = list(out.get("recommendations") or [])
     n = 0
@@ -1348,11 +1421,23 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None) -> int:
         gprops = [r for r in props if r.get("team") in (home, away)
                   and (r.get("opponent") in (home, away) or not r.get("opponent"))]
         scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
-                         props=gprops, opponent_adjusted=False)
+                         props=gprops, opponent_adjusted=False, usage=usage or {})
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
+        # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we
+        # want college football and NFL to be on the same level"): how many
+        # teams a rank is out of, and the scoring chances each side gets and
+        # gives — the touchdown matchup and the scenarios read both.
+        scan["n_teams"] = len(ratings)
+        rz = {t: chances[t] for t in (home, away) if t in chances}
+        if rz:
+            scan["redzone"] = rz
         gd["scan"] = scan
         n += 1
+    # Every read gets his touchdown chance and price, from the WHOLE ranked
+    # scorer list (the page's shelf is sliced later), as attach_nfl does.
+    stamp_touchdowns(reads, {"long_shots": out.get("long_shots") or [],
+                             "longshot_watch": watch if watch is not None else out.get("longshot_watch") or []})
     return n
 
 
