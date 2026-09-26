@@ -71,18 +71,22 @@ def test_the_team_cap_and_pulled_players():
 
 
 def _prop(player, market, side, line, hp, odds=-110, **kw):
+    lines = kw.pop("all_lines", [{"book": "FanDuel", "line": line, "over_odds": odds, "under_odds": odds}])
     return {"player": player, "team": kw.pop("team", "BUF"), "opponent": kw.pop("opponent", "DET"),
             "market": market, "market_label": market, "side": side, "line": line, "hit_prob": hp,
-            "odds": odds, "book": "FanDuel", **kw}
+            "odds": odds, "book": "FanDuel", "all_lines": lines, **kw}
 
 
 def test_yards_and_catches_follow_the_read_where_our_number_agrees():
     reads = [
         {"player": "Davante Adams", "team": "BUF", "opp": "DET", "read": "good", "label": "Good matchup",
-         "lean": ["receptions", "rec_yds"], "pro": ["DET allows the 4th-most catches to receivers"]},
+         "lean": ["receptions", "rec_yds"], "pro": ["DET allows the 4th-most catches to receivers"],
+         "usage": {"targets_pg": 8.0}},
         {"player": "Rhamondre Stevenson", "team": "DET", "opp": "BUF", "read": "tough",
-         "label": "Tough matchup", "lean": ["rush_yds"], "con": ["BUF's run defence ranks 3rd"]},
-        {"player": "Coin Flip", "team": "BUF", "opp": "DET", "read": "good", "lean": ["rec_yds"]},
+         "label": "Tough matchup", "lean": ["rush_yds"], "con": ["BUF's run defence ranks 3rd"],
+         "usage": {"carries_pg": 13.0}},
+        {"player": "Coin Flip", "team": "BUF", "opp": "DET", "read": "good", "lean": ["rec_yds"],
+         "usage": {"targets_pg": 5.0}},
     ]
     props = [
         _prop("Davante Adams", "receptions", "OVER", 4.5, 0.62),
@@ -102,6 +106,30 @@ def test_yards_and_catches_follow_the_read_where_our_number_agrees():
     assert st["side"] == "UNDER" and abs(st["model_prob"] - 0.60) < 1e-9
     assert (st["odds"], st["book"]) == (-115, "DraftKings"), "Novig +105 against -115 is not close"
     assert by[("Davante Adams", "receptions")]["matchup_lines"] == ["DET allows the 4th-most catches to receivers"]
+
+
+def test_no_proxy_line_no_exchange_rung_no_heavy_juice_no_fringe_role():
+    """The box's first run, 2026-09-26: eight of eighteen picks priced at the
+    model's own "proxy" line, Terrance Ferguson under 49.5 at -380 on
+    ProphetX alone, Brady Russell under 5 rushing yards."""
+    def read(name, mk, **u):
+        return {"player": name, "team": "BUF", "opp": "DET", "read": "tough", "lean": [mk], "usage": u}
+    reads = [read("Proxy Guy", "rec_yds", targets_pg=5.0), read("Rung Guy", "rec_yds", targets_pg=5.0),
+             read("Juice Guy", "receptions", targets_pg=5.0), read("Brady Russell", "rush_yds", carries_pg=1.5),
+             read("No Usage", "rec_yds"), read("Real Guy", "rec_yds", targets_pg=6.0)]
+    props = [
+        _prop("Proxy Guy", "rec_yds", "UNDER", 14.0, 0.62,
+              all_lines=[{"book": "proxy", "line": 14.0, "over_odds": -110, "under_odds": -110}]),
+        _prop("Rung Guy", "rec_yds", "OVER", 49.5, 0.32,
+              all_lines=[{"book": "ProphetX", "line": 49.5, "over_odds": 290, "under_odds": -380}]),
+        _prop("Juice Guy", "receptions", "UNDER", 2.5, 0.75,
+              all_lines=[{"book": "DraftKings", "line": 2.5, "over_odds": 230, "under_odds": -300}]),
+        _prop("Brady Russell", "rush_yds", "UNDER", 5.5, 0.70),
+        _prop("No Usage", "rec_yds", "UNDER", 20.5, 0.70),
+        _prop("Real Guy", "rec_yds", "UNDER", 38.5, 0.60),
+    ]
+    got = [r["player"] for r in M.prop_picks(GAME, reads, props)]
+    assert got == ["Real Guy"], got
 
 
 def test_build_and_the_journal_rows():

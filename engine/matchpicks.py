@@ -57,6 +57,15 @@ TD_PER_TEAM = 3
 PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
 #: Our chance on the read's side at the posted line.
 PROP_MIN_PROB = 0.55
+#: The longest price a yards-or-catches pick is taken at. The box, 2026-09-26:
+#: "Terrance Ferguson UNDER 49.5 -380 ProphetX" was an exchange rung, not a
+#: market; a -380 under says nothing a reader can use.
+PROP_MAX_JUICE = -250
+#: A real role before a read's line means anything — targets a game for the
+#: receiving markets, carries a game for rushing. The same box run picked
+#: Brady Russell under 5 rushing yards and Dyami Brown under 1.5 catches.
+PROP_MIN_TARGETS = 3.0
+PROP_MIN_CARRIES = 6.0
 PROP_PER_GAME = 4
 PROP_PER_PLAYER = 2
 
@@ -161,13 +170,19 @@ def _side_price(row: dict, side: str):
     exchange only when a sportsbook is close (odds.prefer_sportsbook)."""
     from types import SimpleNamespace as NS
     from .odds import bettable_lines, prefer_sportsbook
-    if str(row.get("side") or "").lower() == side and row.get("odds"):
-        return row.get("odds"), row.get("book") or ""
+    from .odds import is_exchange
     key = "over_odds" if side == "over" else "under_odds"
+    # A REAL SPORTSBOOK QUOTE AT THIS LINE, OR NO PICK. A "proxy" row is a
+    # line the model hung itself (eight of eighteen picks on the box's first
+    # run, 2026-09-26); an exchange alone at a line is a rung of its ladder.
     lines = [NS(book=ln.get("book") or "", line=ln.get("line"), over_odds=ln.get(key))
              for ln in row.get("all_lines") or []
-             if ln.get("line") == row.get("line") and ln.get(key)]
-    best = prefer_sportsbook(bettable_lines(lines)) if lines else None
+             if ln.get("line") == row.get("line") and ln.get(key)
+             and (ln.get("book") or "").lower() != "proxy"]
+    lines = bettable_lines(lines) if lines else []
+    if not any(not is_exchange(ln.book) for ln in lines):
+        return None, ""
+    best = prefer_sportsbook(lines)
     return (best.over_odds, best.book) if best else (None, "")
 
 
@@ -188,12 +203,16 @@ def prop_picks(game: dict, reads: list, props: list) -> list:
             r = by_key.get((x.get("player") or "", mk))
             if not r or str(r.get("injury_status") or "").strip():
                 continue
+            u = x.get("usage") or {}
+            role = u.get("carries_pg") if mk == "rush_yds" else u.get("targets_pg") if mk != "pass_yds" else 99
+            if role is None or float(role) < (PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS):
+                continue
             hp = float(r["hit_prob"])
             prob = hp if str(r.get("side") or "").lower() == side else 1.0 - hp
             if prob < PROP_MIN_PROB:
                 continue
             odds, book = _side_price(r, side)
-            if not odds:
+            if not odds or int(odds) < PROP_MAX_JUICE:
                 continue
             rows.append({
                 "kind": "prop", "matchup_pick": True, "player": r.get("player"), "team": r.get("team"),
