@@ -466,7 +466,7 @@ def _long_shots(slate, usage: dict | None = None,
     for c in candidates:
         c["hold"] = fairs.get((_game_key(c.get("game")),
                                getattr(c.get("prop"), "player", None)))
-    picks = [p.to_dict() for p in build_td_longshots(candidates)]
+    picks = [p.to_dict() for p in build_td_longshots(candidates, census=census)]
     # The most-likely list dedupes against the picks but is NOT a
     # top-up: MLB trims its watch to fill a three-row board, and that
     # exact semantics would hide the near-lock precisely on the weeks

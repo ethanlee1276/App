@@ -585,9 +585,45 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
     return rows[:limit] if limit else rows
 
 
+#: How many of the value board's nearest misses the census names.
+CENSUS_NEAREST = 10
+
+
+def value_board_census(candidates: list, graded: list, picked: list, outside: int) -> dict:
+    """WHY THE VALUE BOARD IS THE SIZE IT IS — per scorer. It sat empty all
+    of 2026-09-25 with no record of which bar turned each man away
+    (Ethan: "I only see minus 100 and minus 200 bets"). Counts by refusal,
+    and the CENSUS_NEAREST refused scorers with the most EV, each with the
+    numbers the bar read: his calibrated chance, the price's implied
+    chance, the edge after the market shrink, the EV and the grade."""
+    took = {(p.player, p.team) for p in picked}
+    why: dict = {}
+    rows = []
+    for p in graded:
+        if (p.player, p.team) in took:
+            continue
+        far = any("too large to trust" in str(c) for c in (p.caveats or []))
+        reason = ("model too far from the price" if far
+                  else "no edge after the market shrink" if p.ev_per_unit <= 0
+                  else "under the grade bar" if p.grade == "Pass"
+                  else "concentration cap")
+        why[reason] = why.get(reason, 0) + 1
+        rows.append({"player": p.player, "team": p.team, "odds": p.odds, "book": p.book,
+                     "model_prob": round(float(p.model_prob), 4),
+                     "book_prob": round(float(p.book_prob), 4),
+                     "edge": round(float(p.edge), 4), "ev": round(float(p.ev_per_unit), 4),
+                     "grade": p.grade, "why": reason})
+    rows.sort(key=lambda r: -r["ev"])
+    if outside:
+        why["outside the odds window"] = outside
+    return {"priced": len(candidates), "graded": len(graded), "picked": len(picked),
+            "refused": why, "nearest": rows[:CENSUS_NEAREST]}
+
+
 def build_td_longshots(candidates: list[dict], limit: int = 6,
                        per_game: int = 2,
-                       require_edge: bool = True) -> list[LongShot]:
+                       require_edge: bool = True,
+                       census: dict | None = None) -> list[LongShot]:
     """Rank anytime-touchdown picks.
 
     ``candidates`` = ``[{prop, game, opponent, opportunity_share, odds, book,
@@ -595,11 +631,14 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
     1–2-per-game concentration cap. ``require_edge=False`` returns the
     ranked pool with the Pass rows still in it — what a caller that wants
     the reasoning on every priced man (a watch row, a test) asks for.
+    ``census`` is filled with `value_board_census` when given.
     """
     picks: list[LongShot] = []
+    outside = 0
     for c in candidates:
         odds = int(c["odds"])
         if not in_odds_window(odds, NFL_TD_ODDS):
+            outside += 1
             continue
         prop, game, opp = c["prop"], c["game"], c["opponent"]
         prob, info = td_probability(prop, game, opp,
@@ -644,6 +683,9 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
                     f"(measured, recent weeks)")
             picks.append(pick)
 
-    return select(picks, per_key_cap=per_game,
-                  key=lambda p: tuple(sorted((p.team, p.opponent))), limit=limit,
-                  require_edge=require_edge)
+    chosen = select(picks, per_key_cap=per_game,
+                    key=lambda p: tuple(sorted((p.team, p.opponent))), limit=limit,
+                    require_edge=require_edge)
+    if census is not None:
+        census["value_board"] = value_board_census(candidates, picks, chosen, outside)
+    return chosen
