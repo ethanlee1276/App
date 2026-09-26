@@ -44441,7 +44441,16 @@ function recordRibbonsHTML(rec, ov, recent) {
   const rate = (t) => ((t.wins || 0) + (t.losses || 0)) ? (t.wins || 0) / ((t.wins || 0) + (t.losses || 0)) : 0;
   const ring = (r) => { const pc = Math.max(0, Math.min(100, Math.round(r * 100)));
     return `<span class="hd-ring" style="--pc:0" data-pc="${pc}" title="${pc}% of decisions won"><i data-count>${pc}%</i></span>`; };
-  const tile = (k, rec, big, color, sub, form, r) => `<div class="hd-ribbon">${ring(r)}
+  /* A PERSON'S BOOK RINGS ITS ROI, NOT ITS HIT RATE (Ethan, 2026-09-26:
+     "yeah switch it"). His Pikkit record is 221-1141 at +26% ROI — a
+     longshot book, where a 16% hit-rate ring reads as losing when the
+     money is well up, and it dragged the combined tile's ring down with
+     it. The ring fills to |ROI| (capped at 100%), red when it is below
+     zero; the model's own tile keeps its hit rate. */
+  const roiRing = (roi) => { const v = Number(roi || 0);
+    const pc = Math.max(0, Math.min(100, Math.round(Math.abs(v) * 100)));
+    return `<span class="hd-ring${v < 0 ? " neg" : ""}" style="--pc:0" data-pc="${pc}" title="${sign(v)}${Math.abs(v * 100).toFixed(1)}% return on the dollars risked"><i data-count>${sign(v)}${Math.round(Math.abs(v) * 100)}%</i></span>`; };
+  const tile = (k, rec, big, color, sub, form, r, ringHTML) => `<div class="hd-ribbon">${ringHTML || ring(r)}
     <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
       <span class="hd-big">${rec} <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
     ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
@@ -44456,7 +44465,7 @@ function recordRibbonsHTML(rec, ov, recent) {
     const part = (x) => `${sign(Number(x.net_units || 0))}${Math.abs(Number(x.net_units || 0)).toFixed(1)}u`;
     tiles.push(tile("Everything we’ve bet · model + Zeno", wl(cb), `${sign(u)}${Math.abs(u).toFixed(1)}u`, tone(u),
                     `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}`,
-                    "", rate(cb)));
+                    "", rate(cb), roiRing(roi)));
   }
   if (ov.settled) {
     const roi = Number(ov.roi || 0);
@@ -44472,7 +44481,7 @@ function recordRibbonsHTML(rec, ov, recent) {
     const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u · `;
     tiles.push(tile(z.label || (z.snapshot ? `Zeno · his own book · via ${z.snapshot.source || "Pikkit"}` : "Zeno · his own book"), wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
                     `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
-                    dots(z.recent, "result"), rate(zo)));
+                    dots(z.recent, "result"), rate(zo), zo.roi == null ? "" : roiRing(zo.roi)));
   }
   return tiles.join("");
 }

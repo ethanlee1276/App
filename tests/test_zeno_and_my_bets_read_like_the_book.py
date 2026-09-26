@@ -153,6 +153,30 @@ def test_my_bets_opens_with_your_ribbon_and_the_cards_wear_the_decks_pills():
     assert ".mbc-head .hd-chip { flex: 0 0 auto; }" in CSS
 
 
+
+def test_a_persons_book_rings_its_roi_and_the_model_its_hit_rate():
+    """Ethan, 2026-09-26: "yeah switch it" — his Pikkit record is 221-1141
+    at +26% ROI, and a 16% hit-rate ring read as losing."""
+    got = _node("""
+      const zeno = recordRibbonsHTML({ zeno: { overall: { settled: 1389, wins: 221, losses: 1141, pushes: 27,
+                                                profit: 8001.64, roi: 0.2607, staked: 30692.9, net_units: 800.16 } } }, {}, []);
+      const down = recordRibbonsHTML({ zeno: { overall: { settled: 10, wins: 3, losses: 7, profit: -40, roi: -0.4, staked: 100 } } }, {}, []);
+      const model = recordRibbonsHTML({}, { settled: 10, wins: 6, losses: 4, roi: 0.05, net_units: 0.5 }, []);
+      const both = recordRibbonsHTML({ combined: { settled: 1399, wins: 227, losses: 1145, pushes: 27, roi: 0.25, net_units: 800.66,
+                                         split: { model: { net_units: 0.5 }, zeno: { net_units: 800.16 } } } },
+                                     { settled: 10, wins: 6, losses: 4, roi: 0.05, net_units: 0.5 }, []);
+      return { zeno, down, model, both };""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert 'data-pc="26"' in got["zeno"] and "<i data-count>+26%</i>" in got["zeno"], got["zeno"][:400]
+    assert "return on the dollars risked" in got["zeno"] and "decisions won" not in got["zeno"]
+    assert 'class="hd-ring neg"' in got["down"] and "<i data-count>\u221240%</i>" in got["down"]
+    assert "decisions won" in got["model"] and "<i data-count>60%</i>" in got["model"], "the model keeps its hit rate"
+    first = got["both"][:got["both"].index("Model")]
+    assert "<i data-count>+25%</i>" in first, "the combined tile rings its ROI too"
+    assert ".hd-ring.neg {" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "css",
+                                                 "styles.css"), encoding="utf-8").read()
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
