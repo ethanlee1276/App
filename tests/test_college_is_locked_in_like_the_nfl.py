@@ -141,7 +141,7 @@ def test_every_card_names_the_likely_quarterbacks_instead_of_unconfirmed():
     g = {"home": "B", "away": "C", "qb_confirmed": False,
          "qb_status": {"home": {"state": "unknown"}, "away": {"state": "unknown"}}}
     got = Q.read_game(g, qb, [NS(team="C", player="Star QB", status="OUT")])
-    assert got["qb_read"]["home"] == {"starter": "Their QB", "why": "started the last game; not on ESPN's injury report"}
+    assert got["qb_read"]["home"] == {"starter": "Their QB", "firm": True, "why": "started the last game; not on ESPN's injury report"}
     assert got["qb_read"]["away"]["starter"] == "Backup QB" and got["qb_read"]["away"]["out"] == "Star QB"
     assert got["qb_confirmed"] is False, "the hold is Ethan's call, not this read's"
     a = Q.read_game({**g, "home": "A"}, qb, [])
@@ -152,7 +152,28 @@ def test_every_card_names_the_likely_quarterbacks_instead_of_unconfirmed():
     assert "games = [_cqb_read.read_game(g, _qb_logs, _inj_for_read) for g in games]" in BUILD
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "bits.push(`QB: ${named.map((r, i) => r ? esc(r.starter)" in js
-    assert "} else bits.push(`${icon('warn')} QB unconfirmed`);" in js
+    assert "} else if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);" in js
+
+
+def test_a_firm_read_confirms_the_side_and_a_soft_one_keeps_the_hold():
+    """Ethan, 2026-09-26, asked whether the data's read should lift the
+    conditional hold on college game bets: "i would assume so." Firm — the
+    usual starter started last game and is not listed, or he is listed out
+    and the next passer is named — confirms; anything softer stays held."""
+    from types import SimpleNamespace as NS
+    qb = Q.passers(_logs(), 2026, ["A", "B", "C"])
+    unk = {"state": "unknown"}
+    g = {"home": "B", "away": "C", "qb_confirmed": False, "qb_status": {"home": unk, "away": unk}}
+    got = Q.apply_read(Q.read_game(g, qb, [NS(team="C", player="Star QB", status="OUT")]))
+    assert got["qb_confirmed"] is True
+    assert got["qb_status"]["home"]["state"] == "confirmed" and got["qb_status"]["home"]["starter"] == "Their QB"
+    assert got["qb_status"]["away"]["state"] == "backup" and got["qb_downgrade"] == ["C"]
+    soft = Q.apply_read(Q.read_game({**g, "home": "A"}, qb, [NS(team="C", player="Star QB", status="OUT")]))
+    assert soft["qb_confirmed"] is False and soft["qb_uncertain_team"] == "A", "a different man started last week"
+    q = Q.apply_read(Q.read_game(g, qb, [NS(team="B", player="Their QB", status="QUESTIONABLE"),
+                                          NS(team="C", player="Star QB", status="OUT")]))
+    assert q["qb_confirmed"] is False, "a questionable starter is not confirmed"
+    assert "games = [_cqb_read.apply_read(g) for g in games]" in BUILD
 
 
 if __name__ == "__main__":

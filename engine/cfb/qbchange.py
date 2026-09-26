@@ -140,15 +140,51 @@ def read_game(game: dict, qb: dict, injuries: list) -> dict:
         if listed in RULED_OUT:
             nxt = sorted((p for p in q["by"] if p != usual and status.get((team, p), "") not in RULED_OUT),
                          key=lambda p: -q["by"][p])
-            read[side] = {"starter": nxt[0] if nxt else "", "out": usual,
+            read[side] = {"starter": nxt[0] if nxt else "", "out": usual, "firm": bool(nxt),
                           "why": f"{usual} is {listed.lower()} on ESPN's injury report"}
         elif last == usual:
-            read[side] = {"starter": usual,
+            read[side] = {"starter": usual, "firm": not listed,
                           "why": "started the last game" + (f"; listed {listed.lower()}" if listed
                                                              else "; not on ESPN's injury report")}
         else:
-            read[side] = {"starter": last, "why": f"started the last game ({usual} has the most yards)"}
+            read[side] = {"starter": last, "firm": False,
+                          "why": f"started the last game ({usual} has the most yards)"}
     return {**game, "qb_read": read} if read else game
+
+
+def apply_read(game: dict) -> dict:
+    """The read CONFIRMS a side where it is firm — Ethan, 2026-09-26, asked
+    whether the data's read should lift the conditional hold on college game
+    bets: "i would assume so. we should be getting the locked schedule in as
+    soon as possible to confirm qbs." Firm means: the usual starter started
+    the last game and is not on ESPN's injury report (confirmed), or he is
+    listed out and the next passer is named (a positively reported backup,
+    engine/cfb/status.BACKUP). Anything softer — a different man started
+    last week, or the starter is questionable — stays unknown and keeps its
+    game conditional, as does any side a hand confirmation already set."""
+    from .status import BACKUP, CONFIRMED, UNKNOWN
+    read = game.get("qb_read") or {}
+    st = {k: dict(v) for k, v in (game.get("qb_status") or {}).items()}
+    changed = False
+    for side, r in read.items():
+        if not r.get("firm") or (st.get(side) or {}).get("state", UNKNOWN) != UNKNOWN:
+            continue
+        st[side] = {"state": BACKUP if r.get("out") else CONFIRMED, "starter": r.get("starter") or "",
+                    "note": f"read from the data: {r.get('why') or ''}", "recorded_at": "", "source": "data"}
+        changed = True
+    if not changed:
+        return game
+    out = dict(game, qb_status=st)
+    unknown = [game.get(side, "") for side in ("home", "away")
+               if (st.get(side) or {}).get("state", UNKNOWN) == UNKNOWN]
+    out["qb_confirmed"] = not unknown
+    if unknown:
+        out["qb_uncertain_team"] = " and ".join(t for t in unknown if t)
+    else:
+        out.pop("qb_uncertain_team", None)
+    out["qb_downgrade"] = [game.get(side, "") for side in ("home", "away")
+                           if (st.get(side) or {}).get("state") == BACKUP]
+    return out
 
 
 def stamp(rows, chs: dict) -> int:

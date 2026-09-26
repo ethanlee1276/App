@@ -1502,8 +1502,12 @@ def main() -> None:
             _inj_for_read = []
         _qb_logs = _cqb_read.passers(conn, day.year, {t for g in games for t in (g.get("home"), g.get("away"))})
         games = [_cqb_read.read_game(g, _qb_logs, _inj_for_read) for g in games]
+        # …and where the read is firm, it confirms the side (Ethan's yes,
+        # 2026-09-26): the game's bets are graded, not conditional.
+        games = [_cqb_read.apply_read(g) for g in games]
         print(f"  QB read: {sum(1 for g in games if g.get('qb_read'))} of {len(games)} game(s) "
-              f"named from the logs and the injury report")
+              f"named from the logs and the injury report; "
+              f"{sum(1 for g in games if g.get('qb_confirmed'))} confirmed")
     except Exception as _qrx:                                 # noqa: BLE001
         print(f"  ⚠️  QB read skipped: {_qrx}")
 
