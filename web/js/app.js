@@ -50,7 +50,7 @@ const state = {
   // The one Most Likely board's view (Best of the slate / By game), kept
   // per viewer; the filter resets with the page.
   obView: (() => { try { return localStorage.getItem("qb.obView") || "best"; } catch (e) { return "best"; } })(),
-  obFilter: "all", obSort: "prob",
+  obFilter: "all", obTier: "all", obSort: "prob",
   // Scoped to ONE GAME PAGE, and reversible there (#gp-showall reveals,
   // #gp-hideall puts it back). It used to be the board's global
   // checkbox; with that gone, a one-way flip would have left every
@@ -9316,18 +9316,19 @@ function obFilterOf(r) {
 }
 const OB_FILTERS = [["all", "All"], ["td", "Touchdowns"], ["yards", "Yards"], ["catches", "Catches"],
                     ["other", "Other props"], ["game", "Game lines"]];
-function obTierSections(rows, fold = 8) {
+/* Every pick a chip counts is drawn: no fold, no closed tier (Ethan,
+   2026-09-26: "It'll display we're showing 70 yard picks, but then we'll
+   only show 10"). The section's count is the rows under it, and the
+   sections add up to the chip that is lit. */
+function obTierSections(rows) {
+  const first = OB_TIERS.find(([t]) => rows.some((r) => r.tier === t));
   return OB_TIERS.map(([t, title, sub]) => {
     const rs = obSorted(rows.filter((r) => r.tier === t));
     if (!rs.length) return "";
-    const body = `<div class="ob-cards">${foldRowsHTML(rs.map((r, i) => obCardHTML(r, i + 1)), { after: fold, what: "picks" })}</div>`;
+    const body = `<div class="ob-cards">${rs.map((r, i) => obCardHTML(r, i + 1)).join("")}</div>`;
     const head = `<div class="ob-sec-head"><h3 class="ob-sec-title">${title} <span class="ob-count">${rs.length}</span></h3>
-      <p class="ob-sec-sub">${sub}</p>${t === "top" || !rows.some((r) => r.tier === "top") ? obSortHTML() : ""}</div>`;
-    return t === "look"
-      ? `<details class="likely-shelf ob-tier ob-look" id="ob-${t}"><summary class="ob-sec-head"><h3 class="ob-sec-title">${title}
-          <span class="ob-count">${rs.length}</span></h3><p class="ob-sec-sub">${sub}</p><span class="chip">show</span></summary>
-          ${body}</details>`
-      : `<section class="likely-shelf ob-tier" id="ob-${t}">${head}${body}</section>`;
+      <p class="ob-sec-sub">${sub}</p>${first && first[0] === t ? obSortHTML() : ""}</div>`;
+    return `<section class="likely-shelf ob-tier" id="ob-${t}">${head}${body}</section>`;
   }).join("");
 }
 function obByGameHTML(rows) {
@@ -9341,23 +9342,36 @@ function obByGameHTML(rows) {
       ${g ? `<div class="mp-head" data-team-game="${escapeAttr(gameId(g))}" role="button" tabindex="0">
         ${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}
         <span class="mini">${escapeHtml(whenLabel(g.date, g.kickoff))}</span></div>` : ""}
-      <div class="ob-cards">${foldRowsHTML(obSorted(rs).map((r) => obCardHTML(r, 0)), { after: 4, what: "picks" })}</div></div>`;
+      <div class="ob-cards">${obSorted(rs).map((r) => obCardHTML(r, 0)).join("")}</div></div>`;
   };
   return `<div class="matchup-picks">${keys.map((k) => block(k, rows.filter((r) => r.game === k))).join("")}
     ${rest.length ? block("", rest) : ""}</div>`;
 }
+/* The tier chips and the kind chips are two filters on one list, and
+   each chip counts the picks it would show with the other filter as it
+   stands — so the lit pair's number is the number of cards drawn. */
+function obPicked(all, tier, lane) {
+  return all.filter((r) => (tier === "all" || r.tier === tier) && (lane === "all" || obFilterOf(r) === lane));
+}
+function obShowingHTML(rows, tier) {
+  const by = OB_TIERS.map(([t, title]) => [title, rows.filter((r) => r.tier === t).length]).filter(([, n]) => n);
+  return `<p class="ob-showing">Showing <b>${plural(rows.length, "pick")}</b>${tier === "all" && by.length > 1
+    ? ` — ${by.map(([title, n]) => `${n} ${title === "Top picks" ? "Top" : title}`).join(" · ")}` : ""}</p>`;
+}
 function oneBoardHTML() {
   const all = oneBoardRows();
   const view = state.obView === "game" ? "game" : "best";
+  const tier = OB_TIERS.some(([t]) => t === state.obTier) ? state.obTier : "all";
   const filters = OB_FILTERS.filter(([k]) => k === "all" || all.some((r) => obFilterOf(r) === k));
   const f = filters.some(([k]) => k === state.obFilter) ? state.obFilter : "all";
-  const rows = f === "all" ? all : all.filter((r) => obFilterOf(r) === f);
-  const tiers = OB_TIERS.map(([t, title]) => [t, title, all.filter((r) => r.tier === t).length]);
-  const tIcon = { top: "shield", strong: "clock", look: "warn" };
+  const rows = obPicked(all, tier, f);
+  const tiers = [["all", "All tiers"], ...OB_TIERS].map(([t, title]) => [t, title, obPicked(all, t, f).length]);
+  const tIcon = { all: "list", top: "shield", strong: "clock", look: "warn" };
   return `<div class="one-board">
     <div class="ob-bar">
-      <div class="ob-summary">${tiers.map(([t, title, n]) => n ? `<button type="button" class="ob-tier-chip tier-${t}"
-        data-jump="ob-${t}">${icon(tIcon[t], 16)} ${title} <span>· ${n}</span></button>` : "").join("")}</div>
+      <div class="ob-summary">${tiers.map(([t, title, n]) => n || t === tier ? `<button type="button"
+        class="ob-tier-chip tier-${t}${t === tier ? " on" : ""}" data-ob-tier="${t}" aria-pressed="${t === tier}">${
+        icon(tIcon[t], 16)} ${title} <span>· ${n}</span></button>` : "").join("")}</div>
       <div class="ob-controls">
         <button class="ob-view-btn${view === "best" ? " on" : ""}" type="button" data-ob-view="best">${icon("trophy", 15)} Best of the slate</button>
         <button class="ob-view-btn${view === "game" ? " on" : ""}" type="button" data-ob-view="game">By game</button>
@@ -9365,8 +9379,10 @@ function oneBoardHTML() {
     </div>
     ${filters.length > 2 ? `<div class="ob-filters">${filters.map(([k, label]) => `<button class="ob-filter${k === f ? " on" : ""}"
       type="button" data-ob-filter="${k}">${label}
-      <span>${k === "all" ? all.length : all.filter((r) => obFilterOf(r) === k).length}</span></button>`).join("")}</div>` : ""}
-    ${view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
+      <span>${obPicked(all, tier, k).length}</span></button>`).join("")}</div>` : ""}
+    ${obShowingHTML(rows, tier)}
+    ${!rows.length ? `<div class="ls-note">No ${tier === "all" ? "" : "pick in this tier "}of this kind tonight — pick another chip.</div>`
+      : view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
   </div>`;
 }
 function obSortHTML() {
@@ -9385,6 +9401,10 @@ function bindOneBoard(host, rerender) {
   }));
   host.querySelectorAll("[data-ob-filter]").forEach((b) => b.addEventListener("click", () => {
     state.obFilter = b.dataset.obFilter;
+    rerender();
+  }));
+  host.querySelectorAll("[data-ob-tier]").forEach((b) => b.addEventListener("click", () => {
+    state.obTier = b.dataset.obTier === state.obTier ? "all" : b.dataset.obTier;
     rerender();
   }));
 }

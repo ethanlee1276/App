@@ -218,6 +218,33 @@ def test_the_page_and_home_follow_the_render():
     assert "@media (max-width: 760px)" in phone[:400]
 
 
+def test_every_chip_counts_the_cards_it_shows():
+    """Ethan, 2026-09-26: "It'll display we're showing 70 yard picks, but
+    then we'll only show 10… it shows that we have 153 picks total, but it
+    doesn't show that many." The tier chips and the kind chips are two
+    filters on one list; each chip counts what it would show with the other
+    as it stands; every counted pick is drawn — no fold, no closed tier —
+    and a line says how many are showing and how they split."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    fn = lambda name: js[js.index(f"function {name}("):][:js[js.index(f"function {name}("):].index("\nfunction ", 10)]
+    board, secs, games = fn("oneBoardHTML"), fn("obTierSections"), fn("obByGameHTML")
+    for body in (secs, games):
+        assert "foldRowsHTML" not in body and "<details" not in body, "a counted pick is never folded away"
+    assert "const rows = obPicked(all, tier, f);" in board
+    assert "obPicked(all, t, f).length" in board and "<span>${obPicked(all, tier, k).length}</span>" in board, \
+        "each chip counts with the other filter applied"
+    assert '[["all", "All tiers"], ...OB_TIERS]' in board and 'data-ob-tier="${t}"' in board
+    assert "${obShowingHTML(rows, tier)}" in board
+    assert 'state.obTier = b.dataset.obTier === state.obTier ? "all" : b.dataset.obTier;' in js
+    assert 'obFilter: "all", obTier: "all",' in js
+    # The phone card is two lines: who beside the price and ring, then the checks.
+    phone = css[css.index('everything\'s very bulky'):]
+    phone = phone[:phone.index("\n}\n")]
+    assert 'grid-template-areas: "who odds ring" "checks checks checks";' in phone
+    assert ".ob-door { display: none; }" in phone and ".ob-sec-sub { display: none; }" in phone
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
