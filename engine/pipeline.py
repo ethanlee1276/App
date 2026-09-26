@@ -1180,6 +1180,16 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  touchdown scenarios skipped: {_exc}")
         _scenarios = []
+    # MATCHUP PICKS (engine/matchpicks): every game broken down offence
+    # against defence into its touchdowns and its yards-and-catches bets —
+    # quarterbacks included, no edge bar, no slate cap — journaled on paper
+    # by nfl_build. Ethan, 2026-09-26.
+    try:
+        from .matchpicks import build as _match_picks
+        _matchups = _match_picks(_games, _partial.get("scan_reads") or {}, ls_watch, results)
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  matchup picks skipped: {_exc}")
+        _matchups = []
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1250,6 +1260,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # count that only reaches stdout is one nobody has.
         "likely_census": _likely_census,
         "td_scenarios": _scenarios,
+        "matchup_picks": _matchups,
         # …AND WHERE EACH KIND OF ROW DIED. The flat census above is one
         # line per reason across the scorer, prop and game makers; this
         # is the same refusals per kind with what was offered, kept and

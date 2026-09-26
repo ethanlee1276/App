@@ -109,7 +109,8 @@ def test_the_page_draws_it_under_the_touchdown_shelf_on_both_boards():
     fn = fn[:fn.index("\n}\n")]
     assert "Touchdown scenarios" in fn and "built from the matchup" in fn and 'data-team-game="${escapeAttr(gameId(g))}"' in fn
     assert '.replace(/ data-open="[^"]*"/g, "")' in fn, "the game door wins the tap, not the row's own"
-    assert "</section>`).join(\"\")}${tdScenariosHTML()}</div>" in APP, "Home, under the shelves"
+    # Under the shelves, after the matchup picks (engine/matchpicks, 2026-09-26).
+    assert "</section>`).join(\"\")}${matchupPicksHTML()}${tdScenariosHTML()}</div>" in APP, "Home, under the shelves"
     assert '+ tdScenariosHTML() + likelyScriptsHTML(rows)' in APP, "the full board"
 
 

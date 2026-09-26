@@ -1479,6 +1479,16 @@ def main() -> None:
                 category="td_scenario", grade_label="Scenario")
             if sc_logged:
                 print(f"Touchdown scenarios: {sc_logged} row(s) journaled on paper.")
+            # THE MATCHUP PICKS, touchdowns and yards-and-catches each in
+            # their own paper bucket (engine/matchpicks; Ethan, 2026-09-26).
+            from engine.matchpicks import journal_rows as _mp_rows
+            for _kind, _cat, _label in (("td", "matchup_td", "Matchup"), ("prop", "matchup_prop", "Matchup")):
+                _n = ledger.log_most_likely(
+                    lconn, {"sport": "nfl", "date": result.get("date", ""), "games": result.get("games") or [],
+                            "most_likely": _mp_rows(result.get("matchup_picks"), _kind)},
+                    depth=None, category=_cat, grade_label=_label)
+                if _n:
+                    print(f"Matchup picks ({_kind}): {_n} row(s) journaled on paper.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             #

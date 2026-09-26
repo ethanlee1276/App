@@ -11872,6 +11872,17 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .td-scenarios .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .td-scenarios .sc-lines li::before { content: "· "; color: var(--brand); }
+/* Matchup picks (app.js matchupPicksHTML / gpMatchupHTML): one block per
+   game, touchdowns then yards and catches, each row with its case. */
+.matchup-picks .mp-game { margin: 0 0 14px; }
+.matchup-picks .mp-head { cursor: pointer; font-weight: 700; font-size: var(--fs-sm);
+  padding: 6px 0; border-bottom: var(--hairline) solid var(--border-soft); display: flex; gap: 8px; align-items: baseline; }
+.matchup-picks .mp-head .mini { color: var(--text-mute); font-weight: 400; }
+.matchup-picks .mp-sub { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 2px; }
+.matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
+.matchup-picks .sc-lines li::before { content: "· "; color: var(--brand); }
 .td-why { margin-top: 4px; }
 .td-why > summary { list-style: none; cursor: pointer; color: var(--brand); font-weight: 700; font-size: var(--fs-xs); }
 .td-why > summary::-webkit-details-marker { display: none; }

@@ -7936,7 +7936,9 @@ function likelyOpen(r) {
    the /pick/ slug its address carries — as findProp reads either. */
 function findLikelyProp(id) {
   if (!id) return null;
-  const rows = ((state.data || {}).most_likely || [])
+  // The matchup picks open the same way (engine/matchpicks).
+  const mp = ((state.data || {}).matchup_picks || []).flatMap((m) => (m && m.props) || []);
+  const rows = [...((state.data || {}).most_likely || []), ...mp]
     .filter((x) => x && x.kind !== "game" && x.player);
   return rows.find((x) => propId(x) === id)
     || (String(id).includes("|") ? null : rows.find((x) => pickSlug(x) === id)) || null;
@@ -8632,7 +8634,7 @@ function renderLikelyTop() {
           <span class="mini" style="opacity:.6">${(sh.rows || []).length}</span></h3>
           ${sh.rank_auc != null ? `<span class="chip">ranks at ${Number(sh.rank_auc).toFixed(2)}</span>` : ""}</div>
         <div class="ml-rows">${(sh.rows || []).map(likelyRow).join("")}</div>
-      </section>`).join("")}${tdScenariosHTML()}</div>
+      </section>`).join("")}${matchupPicksHTML()}${tdScenariosHTML()}</div>
     ${likelyDroppedHTML(dropped)}
     <div class="likely-top-more">
       <button class="btn ghost" id="likely-see-all" type="button">
@@ -8718,7 +8720,7 @@ function renderLikely() {
     </div>` : "";
   host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
-    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + tdScenariosHTML() + likelyScriptsHTML(rows)
+    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + matchupPicksHTML() + tdScenariosHTML() + likelyScriptsHTML(rows)
     + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -9086,6 +9088,61 @@ function likelyShelf(sh) {
       <div class="cards">${rows.map(likelyCard).join("")}</div>
     </details>
   </section>`;
+}
+
+/* MATCHUP PICKS (engine/matchpicks). Ethan, 2026-09-26: "build a matchup
+   touchdown pick section for every game ... and I also like the idea of
+   doing the yardage and reception picks the same way." Every game broken
+   down offence against defence — its scorers (quarterbacks included) and
+   its could-shine / could-struggle yards and catches where our number
+   agrees — each with the lines that made the case. */
+function matchupPickRowHTML(r) {
+  const td = r.kind === "td";
+  const shown = td ? { ...r, line: null, market_label: `Anytime TD · ${r.label || ""}`.replace(/ · $/, "") }
+    : { ...r, market_label: `${r.market_label || r.market}${r.label ? ` · ${r.label}` : ""}` };
+  const row = likelyRow(shown);
+  return `<div class="sc-row">${td ? row.replace(/ data-open="[^"]*"/g, "") : row}
+    ${(r.matchup_lines || []).length ? `<ul class="sc-lines">${r.matchup_lines.map((t) =>
+      `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : ""}</div>`;
+}
+function matchupGameHTML(m, opts = {}) {
+  const td = m.td || [], pp = m.props || [];
+  const g = ((state.data || {}).games || []).find((x) => x && x.away === m.away && x.home === m.home) || null;
+  return `<div class="mp-game">
+    ${opts.head === false ? "" : `<div class="mp-head"${g ? ` data-team-game="${escapeAttr(gameId(g))}" role="button" tabindex="0"` : ""}>
+      ${escapeHtml(teamName(m.away))} @ ${escapeHtml(teamName(m.home))}
+      ${g ? `<span class="mini">${escapeHtml(whenLabel(g.date, g.kickoff))}</span>` : ""}</div>`}
+    ${td.length ? `<div class="mp-sub">Touchdowns · ${td.length}</div>
+      <div class="ml-rows">${td.map(matchupPickRowHTML).join("")}</div>` : ""}
+    ${pp.length ? `<div class="mp-sub">Yards &amp; catches · ${pp.length}</div>
+      <div class="ml-rows">${pp.map(matchupPickRowHTML).join("")}</div>` : ""}
+  </div>`;
+}
+function matchupPicksHTML() {
+  const games = ((state.data || {}).matchup_picks || []).filter((m) => m && ((m.td || []).length || (m.props || []).length));
+  if (!games.length) return "";
+  const n = games.reduce((a, m) => a + (m.td || []).length + (m.props || []).length, 0);
+  return `<section class="likely-shelf matchup-picks" id="shelf-matchup-picks">
+    <div class="shelf-head"><h3 class="shelf-title">Matchup picks
+      <span class="mini" style="opacity:.6">${n}</span></h3>
+      <span class="chip">game by game</span></div>
+    <p class="ls-note">Every game broken down offence against defence: the scorers the matchup
+      makes a case for, and the yards and catches for the players who could shine or struggle,
+      where our number agrees. Ranked by our chance. Tracked on paper.</p>
+    ${foldRowsHTML(games.map((m) => matchupGameHTML(m)), { after: 3, what: "games" })}
+  </section>`;
+}
+function gpMatchupHTML(g) {
+  const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
+  if (!m || !((m.td || []).length || (m.props || []).length)) return "";
+  return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Matchup picks
+      <span class="sub">— this game broken down offence against defence: its scorers, and the
+      yards and catches for who could shine or struggle, where our number agrees</span></div>
+    ${matchupGameHTML(m, { head: false })}</div>`;
+}
+function matchupPickCount(g) {
+  const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
+  return m ? (m.td || []).length + (m.props || []).length : 0;
 }
 
 function renderLongShots() {
@@ -12248,6 +12305,7 @@ function renderGamePage() {
       g.scan && g.scan.units ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
+      matchupPickCount(g) ? ["gp-sec-matchup", `Matchup picks · ${matchupPickCount(g)}`] : null,
       likelies.length || droppedHere.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
@@ -12272,6 +12330,8 @@ function renderGamePage() {
       <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
+
+    ${gpMatchupHTML(g)}
 
     ${likelies.length || droppedHere.length || pulled.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
         <span class="sub">— ranked by how often they land, not by how good the
