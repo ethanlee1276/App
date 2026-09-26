@@ -21,7 +21,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
-URL = "https://links.pikkit.com/QellysBook"
+URL = "https://links.pikkit.com/user/QellysBook"
 
 
 def _fn(name):

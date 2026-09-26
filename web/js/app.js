@@ -18024,7 +18024,7 @@ const POTD_MIN_N = 20;
    wherever HIS record or bets are — and only there: the model's picks are
    not bets at a book, so they are not on Pikkit; they are verified by this
    site's own timestamped, graded public record. */
-const PIKKIT_URL = "https://links.pikkit.com/QellysBook";
+const PIKKIT_URL = "https://links.pikkit.com/user/QellysBook";
 function pikkitBadgeHTML(text) {
   return `<a class="pk-verified" href="${PIKKIT_URL}" target="_blank" rel="noopener noreferrer"
     title="Zeno’s record, charts and every bet, synced from his sportsbooks and verified by Pikkit"

@@ -52,7 +52,7 @@ def _node(js):
       const MINUS = "\\u2212";
       const escapeHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
       const american = (o) => (o > 0 ? "+" : MINUS) + Math.abs(o);
-      const PIKKIT_URL="https://links.pikkit.com/QellysBook"; const pikkitBadgeHTML=(t)=>"<a class=\\"pk-verified\\">"+(t||"Zeno’s picks verified on Pikkit")+"</a>";
+      const PIKKIT_URL="https://links.pikkit.com/user/QellysBook"; const pikkitBadgeHTML=(t)=>"<a class=\\"pk-verified\\">"+(t||"Zeno’s picks verified on Pikkit")+"</a>";
       {_fn("zenoMoney")}
       {_fn("zenoTicketRow")}
       {_fn("recordRibbonsHTML")}

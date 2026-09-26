@@ -597,7 +597,7 @@ let cache=null; const loadRecordOnce=async()=>cache;
 const doc={el:{},getElementById(id){return this.el[id];}};
 global.document=doc; global.navigator={clipboard:{writeText:async()=>{}}}; global.window={};
 global.localStorage={getItem:()=>""};
-const PIKKIT_URL="https://links.pikkit.com/QellysBook"; const pikkitBadgeHTML=(t)=>"<a class=\\"pk-verified\\">"+(t||"Zeno’s picks verified on Pikkit")+"</a>";
+const PIKKIT_URL="https://links.pikkit.com/user/QellysBook"; const pikkitBadgeHTML=(t)=>"<a class=\\"pk-verified\\">"+(t||"Zeno’s picks verified on Pikkit")+"</a>";
 // A MEMBER's view unless the kind says "locked": the paid board is the
 // block's own tickets (engine/zeno.split), served through paidFetch.
 let TIX=null; const paidFetch=async()=>({ok:true, json:async()=>TIX});

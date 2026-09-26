@@ -222,6 +222,9 @@ INTENTS = {
               r"playing|active|status)\b",
     "weather": r"\b(weather|wind\w*|rain\w*|snow\w*|cold|temperature|dome|roof)\b",
     "longshot": r"\b(long ?shots?|plus[- ]money|underdogs?|lottery|big (?:odds|payout))\b",
+    # ZENO (Ethan, 2026-09-26: "hows zenos record" was answered "I couldn't
+    # find anyone named Zeno"). He is the site's owner-bettor, not a player.
+    "zeno": r"\b(zeno\w*|the owner|owner'?s (?:bets|picks|record)|your own bets|pikkit)\b",
 }
 
 SYSTEM = (
@@ -310,6 +313,59 @@ SYSTEM = (
     "advice. News comes from the news lookup first, then web_search for the story; "
     "scores for games in our leagues come only from live_scores; for anything live you "
     "say how old it is."
+)
+
+#: WHERE HIS RECORD IS VERIFIED — the same link the page's Pikkit badge opens.
+PIKKIT_URL = "https://links.pikkit.com/user/QellysBook"
+
+#: THE SITE ITSELF. Ethan, 2026-09-26: "we need to be able to answer any
+#: question about sports and any questions about the actual site." Ask knew
+#: every board and nothing about the product around them, so "what is Zeno",
+#: "how much is it" or "where are the parlays" had no answer. The plans are
+#: the page's PLANS (tests/test_ask_knows_zeno_and_the_site.py holds the two
+#: together); nothing here is a number a bettor acts on.
+SITE_GUIDE = (
+    "About the site, for questions about Qellys Book itself (what it is, how it works, where "
+    "something is, what a word means, what membership costs). Answer these from this guide; "
+    "if it does not cover the question, say so and point to the page most likely to have it.\n"
+    "- What it is: a sports-betting analytics site for the NFL, college football, MLB, the NBA, "
+    "the WNBA and the UFC. Our models price every game and prop; the site posts the bets they "
+    "like and grades every one in public.\n"
+    "- Two boards of picks. Most Likely (the Top Picks page) ranks the bets likeliest to hit, "
+    "each with a tier (Top pick, Strong, Worth a look) set by four checks: our number, the "
+    "matchup, the market and our record. Edge Picks are bets where our number beats the "
+    "book's price, sized in units. Long Shots are plus-money darts kept in their own bucket. "
+    "The Pick of the Day leads the home page.\n"
+    "- The Record page grades every pick we post, wins and losses, in units and ROI, by sport, "
+    "by board and by tier; it is public and free. Picks are posted before the game and never "
+    "edited after.\n"
+    "- Zeno: the site's owner, who bets his own money at real sportsbooks. His record is on "
+    "the Record page (the Zeno's Bets button) and on the Zeno's Picks page, beside the "
+    "site's record and never mixed into the model's own numbers; a combined line shows both "
+    "together with the split. 1 unit of his is $10. Every Zeno pick is verified on Pikkit, "
+    "which syncs his sportsbooks: " + PIKKIT_URL + " . His record is free to see; his open "
+    "bets, props and parlays, posted as he places them, are for members. The model's picks "
+    "are not on Pikkit: they are verified by the site's own public Record page.\n"
+    "- Membership: one product, three lengths: $25 a month, $125 for 6 months, or $225 a "
+    "year, billed through Stripe, cancel anytime from the account page. A free trial is "
+    "offered when the paywall page shows one. Members get every sport, every pick, Ask "
+    "Qellys, all of Zeno's props and parlays, line movement and line shopping, the fantasy "
+    "suite, prediction markets, the injury board and weather, alerts, the bet tracker and "
+    "bankroll tools, and the members' Discord.\n"
+    "- Pages: Dashboard (home), Top Picks, Edge Picks, Long Shots, Live Now (live scores, "
+    "our open bets tracked live, each game's play-by-play with our picks on it), My Bets "
+    "(your own bet tracker and record), Record, Ask Qellys; Odds: Over / Under (every prop, "
+    "both sides), Game Lines, Line Shopping, Futures (the season simulated); Research: "
+    "Injuries, Weather, Trending, Rosters, Players, Rankings; plus Predict (Kalshi and "
+    "Polymarket prediction markets), Fantasy, Radar, Alerts, Streak (a free pick-3 game), "
+    "Bankroll (unit sizing) and Zeno's Picks. The league tabs at the top (NFL, CFB, MLB, NBA, "
+    "WNBA, UFC) switch every page between leagues.\n"
+    "- Words: a unit is one standard stake; ROI is profit over money risked; an edge is our "
+    "chance minus the price's implied chance; closing line value is beating the final price. "
+    "We never tell anyone to bet or how much.\n"
+    "General sports questions (rules, history, how a stat or a bet works, who won what) are "
+    "welcome: explain rules and bets from general knowledge, and check any fact or number "
+    "about a real result, player or team with our tools or web_search first."
 )
 
 
@@ -571,6 +627,12 @@ TOOLS = [
           "nickname or city.",
           {"query": {"type": "string", "description": "A team, player or matchup."},
            "sport": _SPORT_ARG}, "query"),
+    _tool("zeno_record",
+          "Zeno's own record: the site owner's real-money sportsbook bets, verified on Pikkit. All time, "
+          "this year, a month or this week (window: all, 2026, 2026-09, week), in dollars and in units "
+          "($10 a unit), with ROI, his latest results, how many bets are open, and the combined line "
+          "(the model's picks plus his). For any question about Zeno, the owner, or his bets.",
+          {"window": {"type": "string"}}),
 ]
 
 
@@ -2129,6 +2191,60 @@ def futures(sport: str = "", team: str = "", limit=None, data_dir=None, prefer: 
     return out
 
 
+def _zeno_line(t: dict, unit: float) -> dict:
+    """One window of Zeno's record: dollars, units at his unit, W-L-P, ROI."""
+    t = t or {}
+    profit = t.get("profit")
+    out = {k: t.get(k) for k in ("label", "wins", "losses", "pushes", "settled") if t.get(k) is not None}
+    if profit is not None:
+        out["profit_dollars"] = round(float(profit), 2)
+        out["net_units"] = round(float(profit) / unit, 2) if unit else None
+    if t.get("staked") is not None:
+        out["risked_dollars"] = round(float(t["staked"]), 2)
+    if t.get("roi") is not None:
+        out["roi"] = round(float(t["roi"]), 4)
+    return out
+
+
+def zeno_record(window: str = "", data_dir=None) -> dict:
+    """Zeno's own sportsbook record, as public as the page draws it.
+
+    The FREE half of his block only (record.json, `engine.zeno.split`):
+    the totals, the Pikkit windows, how many bets are open and the results
+    of his latest ones. Which bets are open, and the tickets themselves,
+    are the members' board (zeno.json), and Ask never reads it — a free
+    reader asking Ask must not get what the paywall sells."""
+    rec = _load_json(Path(data_dir or ROOT / "web" / "data") / "record.json")
+    z = rec.get("zeno") or {}
+    if not z or not ((z.get("overall") or {}).get("settled") or z.get("snapshot")):
+        return {"error": "Zeno's record is not published yet"}
+    unit = float(z.get("unit_dollars") or 10)
+    out = {"who": "Zeno, the site's owner, betting his own money at real sportsbooks",
+           "unit_dollars": unit, "verified_on": PIKKIT_URL,
+           "all_time": _zeno_line(z.get("overall"), unit),
+           "open_bets": int(z.get("open_n") or 0),
+           "open_bets_note": "which bets are open, and every prop and parlay, are for members",
+           "latest_results": [r.get("result") for r in (z.get("recent") or [])[:10] if r.get("result")]}
+    snap = z.get("snapshot") or {}
+    wins = [w for w in snap.get("windows") or [] if isinstance(w, dict)]
+    if window:
+        wl = window.lower()
+        exact = [w for w in wins if str(w.get("key", "")).lower() == wl]
+        wins = exact or [w for w in wins if wl in str(w.get("key", "")).lower()
+                         or wl in str(w.get("label", "")).lower()] or wins
+    out["windows"] = [_zeno_line(w, unit) for w in wins if w.get("key") != "all"]
+    if snap.get("as_of"):
+        out["pikkit_as_of"] = snap["as_of"]
+    comb = rec.get("combined") or {}
+    if comb.get("settled"):
+        out["combined_with_the_site"] = {
+            "what": "the model's picks plus Zeno's own bets, in units",
+            "settled": comb.get("settled"), "wins": comb.get("wins"), "losses": comb.get("losses"),
+            "pushes": comb.get("pushes"), "net_units": comb.get("net_units"), "roi": comb.get("roi"),
+            "split": comb.get("split")}
+    return out
+
+
 def our_record(sport: str = "", window: str = "", bets: bool = False, result: str = "", kind: str = "",
                data_dir=None) -> dict:
     """Our public record: the headline, a window of days, the markets, and the settled bets themselves."""
@@ -2917,6 +3033,8 @@ def run_tool(name: str, args, boards: dict, prefer: str = "", data_dir=None) -> 
             return futures(sport, arg("team"), a.get("limit"), data_dir, prefer)
         if name == "our_record":
             return our_record(sport, arg("window"), bool(a.get("bets")), arg("result"), arg("kind"), data_dir)
+        if name == "zeno_record":
+            return zeno_record(arg("window"), data_dir)
         if name == "odds_calc":
             return odds_calc(a.get("odds"), a.get("stake"))
         if name == "league_table":
@@ -3004,6 +3122,8 @@ def tool_source(name: str, args, result: dict) -> dict | None:
         label = f"{str(result.get('sport', '')).upper()} futures"
     elif name == "our_record":
         label = "Our record"
+    elif name == "zeno_record":
+        label = "Zeno’s record"
     elif name == "player_leaders":
         label = f"{result['sport'].upper()} {result['season']} leaders, {result['stat']}"
     elif name == "standings":
@@ -3116,6 +3236,11 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         if rec:
             facts["our_record"] = rec
             sources.append({"label": "Our record", "prop": ""})
+    if "zeno" in want:
+        zf = zeno_record(data_dir=data_dir)
+        if not zf.get("error"):
+            facts["zeno"] = zf
+            sources.append({"label": "Zeno’s record", "prop": ""})
     if "injury" in want:
         injuries = _load_json(data_dir / "injuries.json")
         inj: list[dict] = []
@@ -3138,7 +3263,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         if shots:
             facts["long_shots"] = shots
     system = [
-        {"type": "text", "text": SYSTEM},
+        {"type": "text", "text": SYSTEM + "\n" + SITE_GUIDE},
         {"type": "text", "text": "Tonight's board summary, for the league the reader has open:\n"
          + json.dumps(board_summary(board, boards), sort_keys=True, separators=(",", ":")),
          "cache_control": {"type": "ephemeral"}},
