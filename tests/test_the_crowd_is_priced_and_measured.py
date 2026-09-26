@@ -182,6 +182,26 @@ def test_every_build_calls_the_hook():
         assert f"_crowd.attach_to_board{arg}" in (ROOT / f).read_text(), f
 
 
+
+def test_college_names_come_off_the_board_and_hawaii_matches():
+    """The box, 2026-09-26: college games carried codes alone, so 1 of 65
+    Polymarket games matched; and "Hawai'i" split into HAWAI."""
+    b = {"games": [{"home": "WYO", "away": "HAW", "date": "2026-09-26"},
+                   {"home": "FSU", "away": "CARK", "date": "2026-09-26"}],
+         "teams": {"WYO": {"name": "Wyoming Cowboys", "nick": "Wyoming"},
+                   "HAW": {"name": "Hawai'i Rainbow Warriors", "nick": "Hawai'i"},
+                   "FSU": {"name": "Florida State Seminoles", "nick": "Florida St"},
+                   "CARK": {"name": "Central Arkansas Bears", "nick": "C Arkansas"}}}
+    rows = [{"sport": "cfb", "teams": ["Hawai'i", "Wyoming"], "prob": 0.44, "price_basis": "book",
+             "spread_cents": 1.0, "liquidity": 20000.0, "volume_24h": 5000.0, "start": "2026-09-26T19:00:00"},
+            {"sport": "cfb", "teams": ["Central Arkansas", "Florida State"], "prob": 0.03, "price_basis": "book",
+             "spread_cents": 1.0, "liquidity": 20000.0, "volume_24h": 5000.0, "start": "2026-09-26T19:00:00"}]
+    census = crowd.attach(b, "cfb", [], rows)
+    assert census["polymarket"] == 2, census
+    assert b["games"][0]["crowd"]["polymarket"] == 0.56, "Hawai'i was listed first: Wyoming at home is 1 - 0.44"
+    assert b["games"][1]["crowd"]["polymarket"] == 0.97
+    assert "home_name" not in b["games"][0], "names are borrowed for the match, not written onto the board"
+
 # --- the fit ----------------------------------------------------------------------
 def _world(n=1500, crowd_skill=0.0, momentum=0.0, seed=7):
     """Games whose truth the books see with noise; Kalshi sees `crowd_skill`

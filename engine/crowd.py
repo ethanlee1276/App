@@ -129,6 +129,30 @@ def model_p_home(game_bets, g: dict) -> tuple[float | None, float | None]:
     return None, None
 
 
+def _board_names(games, teams) -> list:
+    """Games with their clubs' names filled from the board's own ``teams``.
+
+    COLLEGE HAS NO NAME LIST ANYWHERE ELSE. The box, 2026-09-26: 65 of
+    Polymarket's college games were on the slate and one matched, because
+    every college game carried its codes alone (``FSU``, ``WYO``) and
+    `exchangefair.names_for` has no college map. The board ships ESPN's
+    identity for every school (`cfbdata.parse_teams`: the full name and
+    the short one), so both are joined in — "Florida State Seminoles
+    Florida St" — and a venue's "Florida State" finds every word."""
+    if not isinstance(teams, dict) or not teams:
+        return games
+    out = []
+    for g in games:
+        row = dict(g)
+        for side in ("home", "away"):
+            key = f"{side}_name"
+            t = teams.get(str(row.get(side) or ""))
+            if not str(row.get(key) or "").strip() and isinstance(t, dict):
+                row[key] = " ".join(str(t.get(k) or "") for k in ("name", "nick")).strip()
+        out.append(row)
+    return out
+
+
 def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None) -> dict:
     """Hang ``crowd`` on every game a venue priced. Returns a census."""
     from .sources import kalshi, polysports
@@ -136,7 +160,7 @@ def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None) -> dic
     census = {"games": len(games), "kalshi": 0, "polymarket": 0}
     if not games:
         return census
-    named = _xf.with_names(games, sport)
+    named = _xf.with_names(_board_names(games, result.get("teams")), sport)
     key = lambda g: (str(g.get("away") or ""), str(g.get("home") or ""))  # noqa: E731
     kx: dict = {}
     for m in kalshi_markets or []:

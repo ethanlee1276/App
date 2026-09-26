@@ -220,8 +220,11 @@ def fetch_sports(sports=None) -> tuple[list[dict], dict]:
 
 
 def _tokens(text: str) -> set[str]:
+    """A name's words, apostrophes closed up first: the venue writes
+    "Hawai'i" and a split on the apostrophe leaves HAWAI, which is in no
+    name of ours (the box, 2026-09-26)."""
     from .kalshi import _name_tokens
-    return _name_tokens(text)
+    return _name_tokens(str(text or "").replace("'", "").replace("\u2019", ""))
 
 
 def _club(outcome: str, g: dict, side: str) -> bool:
