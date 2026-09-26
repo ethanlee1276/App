@@ -154,6 +154,19 @@ def test_pitch_type_matchups_and_the_lineup_against_his_hand():
     assert "Throws ${escapeHtml(s.mix)}" in js and "hitters measured)" in js
 
 
+def test_pending_lineups_say_when_they_usually_post():
+    """Ethan, 2026-09-26: "it says every linup for every game isnt confirmed."
+    A morning board is all pending — clubs post about three hours before
+    first pitch — so the label says when, and what the board does until then."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    fn = js[js.index("function lineupPendingWords(g, short) {"):]
+    fn = fn[:fn.index("\nfunction ", 10)]
+    assert "const LINEUP_LEAD_H = 3;" in js and "tzTime(t - LINEUP_LEAD_H * 3600e3)" in fn
+    assert "until then each team’s last lineup is used and hitter picks wait" in fn
+    assert "lineups pending`);" not in js.replace("lineups pending\";", "")
+    assert js.count("lineupPendingWords(g") >= 3, "the card, the game page's notes and its chip"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

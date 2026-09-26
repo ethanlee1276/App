@@ -265,6 +265,20 @@ function tzOpts(o) {
   return tz ? Object.assign({ timeZone: tz }, o) : o;
 }
 
+/* WHEN AN MLB GAME'S LINEUPS USUALLY POST (Ethan, 2026-09-26: "it says
+   every lineup for every game isnt confirmed"). Clubs post about three
+   hours before first pitch; until then the board prices each team's last
+   lineup and holds its hitter picks. Said with the time, so a morning
+   board full of "pending" reads as early, not broken. */
+const LINEUP_LEAD_H = 3;
+function lineupPendingWords(g, short) {
+  const t = Date.parse((g && g.kickoff) || "");
+  const at = Number.isFinite(t) ? tzTime(t - LINEUP_LEAD_H * 3600e3) : "";
+  if (short) return at ? `lineups post ~${at}` : "lineups pending";
+  return `Lineups not posted yet${at ? ` — clubs usually post them about ${LINEUP_LEAD_H} hours before first pitch (around ${at})` : ""}; `
+    + "until then each team’s last lineup is used and hitter picks wait";
+}
+
 function tzTime(d, o) {
   return new Date(d).toLocaleTimeString(undefined,
     tzOpts(o || { hour: "numeric", minute: "2-digit" }));
@@ -6213,7 +6227,7 @@ function gameCard(g) {
     const bits = !mkts && g.total != null && g.total_posted !== false && !inPlay
       ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
-    if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
+    if (g.lineups_confirmed === false) bits.push(`${icon('clock')} ${esc(lineupPendingWords(g, true))}`);
     sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
   } else {
     const favTxt = (!mkts && g.favorite && g.spread != null)
@@ -12580,7 +12594,7 @@ function renderGamePage() {
   const notes = [];
   (g.injuries || []).slice(0, 4).forEach((i) => notes.push(
     `${i.player} (${i.team} ${i.position || ""}) — ${i.status}`));
-  if (g.lineups_confirmed === false) notes.push("Lineups not confirmed yet");
+  if (g.lineups_confirmed === false) notes.push(lineupPendingWords(g));
   if (mlb && f.hr >= 1.05) notes.push(`Park boosts home runs +${Math.round((f.hr - 1) * 100)}%`);
   if (mlb && f.hr && f.hr <= 0.95) notes.push(`Park suppresses home runs ${Math.round((f.hr - 1) * 100)}%`);
   if (!w.dome && w.measured !== false && (w.wind_mph || 0) >= 12) notes.push(
@@ -12728,7 +12742,7 @@ function renderGamePage() {
           <span class="chip">${escapeHtml(cond)}</span>
           ${g.roof ? `<span class="chip">${escapeHtml(({ outdoors: "Outdoors", open: "Roof open",
             closed: "Roof closed", dome: "Dome", retractable: "Retractable roof" })[g.roof] || `Roof ${g.roof}`)}</span>` : ""}
-          ${g.lineups_confirmed === false ? `<span class="chip down">${icon('warn')} lineups pending</span>` : ""}
+          ${g.lineups_confirmed === false ? `<span class="chip">${icon('clock')} ${escapeHtml(lineupPendingWords(g, true))}</span>` : ""}
         </div>
         ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}
       </div>
