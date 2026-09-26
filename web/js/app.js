@@ -917,6 +917,8 @@ function isNegReason(x) {
    -------------------------------------------------------------------- */
 const ICON_PATHS = {
   check: '<path d="M3 8.5l3.2 3.4L13 4.6"/>',
+  // The quick links' way-in mark (Ethan's dashboard render, 2026-09-26).
+  chev: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
   // A PAIR OF SCALES. Used four times on the paywall and the checkout
   // under the
   // words "graded in public" — and it did not exist, so `icon()` returned
@@ -2628,6 +2630,17 @@ function potdCallStrip(payload) {
       escapeHtml(why || "nothing cleared the bar today")}</span>`}</div>`;
 }
 
+/* THE FOOTBALL CARD'S ART (Ethan's dashboard render, 2026-09-26): the
+   ball under the lights, drawn as the card's background with the words
+   on its dark left — the Pick of the Day's own picture, where the other
+   sports keep the venue band above. */
+function potdBallArt() {
+  if (!["nfl", "cfb"].includes(state.sport)) return "";
+  return `<div class="potd-ball" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
+    srcset="img/home/nfl-ball@800.webp 800w, img/home/nfl-ball.webp 1600w"
+    sizes="(max-width: 720px) 100vw, 1000px" src="img/home/nfl-ball.webp"></div>`;
+}
+
 async function renderPickOfTheDay() {
   const host = document.getElementById("potd-zone");
   if (!host) return;
@@ -2719,8 +2732,9 @@ async function renderPickOfTheDay() {
       ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
       : escapeHtml(got.carried || got.relocked || got.note
                     || "No pick today.");
-    host.innerHTML = `<div class="card" style="border-left:3px solid var(--brand);margin-bottom:12px">
-      <div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
+    const art = potdBallArt();
+    host.innerHTML = `<div class="card${art ? " potd-hero" : ""}"${art ? ' data-art="ball"' : ""} style="border-left:3px solid var(--brand);margin-bottom:12px">
+      ${art}<div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
       <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
@@ -2818,8 +2832,8 @@ async function renderPickOfTheDay() {
         ? "shown from the journal at the price it was locked at"
         : (pick.locked ? "locked earlier today — the board still agrees" : ""));
   host.innerHTML = `
-    <div class="card potd-hero${potdArt ? " has-art" : ""}" style="${potdStyle}">
-      <div class="player">${iconMark("target")}${head}</div>
+    <div class="card potd-hero${potdArt ? " has-art" : ""}"${potdBallArt() ? ' data-art="ball"' : ""} style="${potdStyle}">
+      ${potdBallArt()}<div class="player">${iconMark("target")}${head}</div>
       ${potdCallStrip(got)}
       ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${iconMark("lock")}${escapeHtml(relockNote)}</div>` : ""}
@@ -8390,19 +8404,35 @@ function shelfByPosted(rows) {
    and nobody clicks it"). The scanner and the tracker are still in the
    menu; these two doors are the full Most Likely board and Edge Picks,
    the page that is not on the phone's tab bar. */
+/* THE DASHBOARD'S NAME, ON THE HELMET UNDER THE LIGHTS (Ethan's render,
+   2026-09-26): the book's name and its three promises over his banner,
+   the art fading into the page the way the Pick of the Day's venue does.
+   Inside #quick-tools, so it costs the fold exactly what the tools were
+   given (tests/test_board_order), and it is the dashboard's alone. */
+function brandHeroHTML() {
+  return `<div class="qt-brand">
+      <div class="qt-brand-art" aria-hidden="true"><img alt="" decoding="async" fetchpriority="high"
+        srcset="img/home/qb-helmet@800.webp 800w, img/home/qb-helmet.webp 1600w"
+        sizes="(max-width: 720px) 100vw, 1100px" src="img/home/qb-helmet.webp"></div>
+      <div class="qt-brand-t"><b>Qellys Book</b>
+        <span>Real data. Real edges. Real results.</span></div>
+    </div>`;
+}
+
 function renderQuickTools() {
   const host = document.getElementById("quick-tools");
   if (!host) return;
-  host.innerHTML = `
+  const go = `<span class="qt-go">${icon("chev", 15)}</span>`;
+  host.innerHTML = `${brandHeroHTML()}
     <div class="qt-row">
-      <a class="qt-chip" href="#fantasy">${icon("trophy", 17)}<span class="qt-t">
-        <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span></a>
-      <a class="qt-chip" href="#likely">${icon("target", 17)}<span class="qt-t">
-        <b>All Most Likely picks</b><span class="k">every pick, by tier and by game</span></span></a>
-      <a class="qt-chip" href="#edge">${icon("rising", 17)}<span class="qt-t">
-        <b>Edge Picks</b><span class="k">where our number beats the price</span></span></a>
-      <a class="qt-chip" href="#bankroll">${icon("chart", 17)}<span class="qt-t">
-        <b>Bankroll</b><span class="k">stakes and limits</span></span></a>
+      <a class="qt-chip" href="#fantasy">${icon("trophy", 22)}<span class="qt-t">
+        <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span>${go}</a>
+      <a class="qt-chip" href="#likely">${icon("target", 22)}<span class="qt-t">
+        <b>All Most Likely picks</b><span class="k">every pick, by tier and by game</span></span>${go}</a>
+      <a class="qt-chip" href="#edge">${icon("rising", 22)}<span class="qt-t">
+        <b>Edge Picks</b><span class="k">where our number beats the price</span></span>${go}</a>
+      <a class="qt-chip" href="#bankroll">${icon("chart", 22)}<span class="qt-t">
+        <b>Bankroll</b><span class="k">stakes and limits</span></span>${go}</a>
     </div>`;
 }
 
@@ -44940,10 +44970,16 @@ async function deckLiveHTML(riding, rows) {
       first = kick ? formatKickoff(kick) : "";
     }
     const queued = (rows || []).filter((r) => r.phase === "upcoming").length;
-    inner = `<div class="hd-quiet"><i class="live-dot paused"></i>${
-      escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</div>`;
+    /* The quiet card on the field under the lights (Ethan's dashboard
+       render, 2026-09-26) — football's picture, so football only. */
+    const field = ["nfl", "cfb"].includes(state.sport)
+      ? `<span class="hd-field" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
+          srcset="img/home/nfl-ball@800.webp 800w, img/home/nfl-ball.webp 1600w"
+          sizes="(max-width: 720px) 100vw, 1000px" src="img/home/nfl-ball@800.webp"></span>` : "";
+    inner = `<div class="hd-quiet${field ? " has-field" : ""}">${field}<i class="live-dot paused"></i><span>${
+      escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</span></div>`;
   }
-  return `${deckHead("Live now", "#live", "live", "Live")}${inner}`;
+  return `${deckHead(`Live now <i class="hd-live-dot" aria-hidden="true"></i>`, "#live", "live", "Live")}${inner}`;
 }
 
 function deckRidingHTML(riding) {
@@ -45048,7 +45084,7 @@ function recordRibbonsHTML(rec, ov, recent) {
     return `<span class="hd-ring${v < 0 ? " neg" : ""}" style="--pc:0" data-pc="${pc}" title="${sign(v)}${Math.abs(v * 100).toFixed(1)}% return on the dollars risked"><i data-count>${sign(v)}${Math.round(Math.abs(v) * 100)}%</i></span>`; };
   const tile = (k, rec, big, color, sub, form, r, ringHTML) => `<div class="hd-ribbon">${ringHTML || ring(r)}
     <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
-      <span class="hd-big">${rec} <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
+      <span class="hd-big"><span class="hd-rec">${rec}</span> <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
     ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
   const tiles = [];
   /* EVERYTHING WE'VE BET (engine/zeno.combined): the model's picks and

@@ -312,6 +312,10 @@
   /* The Prediction Market page (Ethan's renders, 2026-09-26). */
   --venue-kalshi: #28D18C;
   --grad-pmx-art: linear-gradient(180deg, transparent 0%, transparent 50%, color-mix(in oklab, var(--panel) 72%, transparent) 76%, var(--panel) 100%);
+  --grad-brand-side: linear-gradient(90deg, color-mix(in oklab, var(--panel) 92%, transparent) 0%, color-mix(in oklab, var(--panel) 62%, transparent) 34%, transparent 62%);
+  --grad-brand-foot: linear-gradient(180deg, transparent 0%, transparent 62%, color-mix(in oklab, var(--panel) 80%, transparent) 100%);
+  --grad-potd-mask: linear-gradient(90deg, transparent 0%, color-mix(in oklab, black 55%, transparent) 30%, black 62%);
+  --grad-field-quiet: linear-gradient(90deg, color-mix(in oklab, var(--panel) 90%, transparent) 0%, color-mix(in oklab, var(--panel) 58%, transparent) 55%, color-mix(in oklab, var(--panel) 40%, transparent) 100%);
   --grad-pmx-verdict: linear-gradient(90deg, color-mix(in srgb, var(--brand) 8%, var(--panel)), var(--panel));
 
   --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
@@ -7125,6 +7129,13 @@ body.has-deck #rail-live { display: none; }
 .rail-slip .hd-ribbon { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; }
 .rail-slip .hd-form { grid-column: 1 / -1; margin-top: 8px; }
 .rail-slip .hd-big { white-space: nowrap; }
+/* Ethan, 2026-09-26: "fix how all of this is going off the page".
+   The ribbons wrap inside the column: the record and the number
+   are each kept whole, and they take a second line before the page does. */
+.hd-rec { white-space: nowrap; }
+.rail-slip .hd-rw .hd-big { display: flex; flex-wrap: wrap; column-gap: 6px; white-space: normal; }
+.rail-slip .hd-rw > * { min-width: 0; overflow-wrap: anywhere; }
+.rail-slip .hd-rw .hd-big > * { overflow-wrap: normal; }
 /* v5: the Record page's lead — the deck's ribbons above the rooms. */
 .rec-ribbons { margin: 8px 0 16px; }
 /* v3: the live card's win-probability bar (home share filled). */
@@ -11643,6 +11654,59 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .pmx-rail { grid-template-columns: 1fr; }
   .pmx-bands .pm-band { grid-template-columns: 1.2fr 1fr 1.4fr 1fr; padding: 12px; font-size: var(--fs-sm); }
   .pmx-sort { margin-left: 0; }
+}
+
+/* THE DASHBOARD, TO ETHAN'S RENDER (2026-09-26). The book's name on the
+   helmet under the lights, the quick links as tall gold-edged tiles with
+   a way-in chevron, the Pick of the Day and the quiet Live now card on
+   the football art, a green dot on Live now, and the rail's record
+   ribbons wrapping inside their 280px instead of running off the page. */
+.qt-brand { position: relative; overflow: hidden; display: flex; align-items: center;
+  min-height: clamp(112px, 13vw, 176px); margin: 0 0 14px; padding: 18px clamp(18px, 3vw, 34px);
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg); background: var(--panel); }
+.qt-brand-art { position: absolute; inset: 0; }
+.qt-brand-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; }
+.qt-brand-art::after { content: ""; position: absolute; inset: 0; background: var(--grad-brand-side), var(--grad-brand-foot); }
+.qt-brand-t { position: relative; display: grid; gap: 10px; }
+.qt-brand-t b { font-family: var(--font-headline); font-size: clamp(var(--fs-3xl), 4.2vw, 58px);
+  font-weight: 700; line-height: var(--lh-tight); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.qt-brand-t span { color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600;
+  letter-spacing: .3em; text-transform: uppercase; }
+#quick-tools .qt-chip { gap: 14px; padding: 16px 16px 16px 18px;
+  border-color: color-mix(in oklab, var(--brand) 38%, var(--border-soft)); }
+#quick-tools .qt-chip:hover { border-color: var(--brand); }
+#quick-tools .qt-t { flex: 1; }
+#quick-tools .qt-t b { font-size: var(--fs-md); }
+.qt-go { display: grid; place-items: center; flex: none; color: var(--text-dim); }
+.qt-chip:hover .qt-go { color: var(--brand); }
+/* The football Pick of the Day: the ball on the card's right, the words
+   on the dark left. */
+.potd-hero[data-art="ball"] { padding: 22px 26px; background-image: none; }
+.potd-ball { position: absolute; inset: 0 0 0 auto; width: min(64%, 760px); pointer-events: none; }
+.potd-ball img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
+.potd-ball { -webkit-mask-image: var(--grad-potd-mask); mask-image: var(--grad-potd-mask); }
+.potd-hero[data-art="ball"] > :not(.potd-ball) { position: relative; }
+.potd-hero[data-art="ball"] .player { display: flex; align-items: center; gap: 10px;
+  color: var(--text); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0; text-transform: none; }
+.potd-hero[data-art="ball"] .player .ic { color: var(--brand); }
+.potd-hero[data-art="ball"] .potd-call.is-pass { margin: 14px 0 10px; padding: 10px 16px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border); background: color-mix(in oklab, var(--panel) 70%, transparent); }
+.potd-hero[data-art="ball"] .potd-call.is-pass .potd-call-word { color: var(--text); }
+/* Live now: the green dot beside the heading, the quiet card on the field. */
+.hd-head > span { display: inline-flex; align-items: center; gap: 10px; }
+.hd-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); }
+.hd-quiet.has-field { position: relative; overflow: hidden; min-height: 64px; border-color: color-mix(in oklab, var(--brand) 30%, var(--border-soft)); }
+.hd-field { position: absolute; inset: 0; pointer-events: none; }
+.hd-field img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 88%; }
+.hd-field::after { content: ""; position: absolute; inset: 0; background: var(--grad-field-quiet); }
+.hd-quiet.has-field > :not(.hd-field) { position: relative; }
+@media (max-width: 720px) {
+  .qt-brand { min-height: 104px; padding: 14px 16px; }
+  .qt-brand-t { gap: 6px; }
+  .qt-brand-t span { font-size: var(--fs-2xs); letter-spacing: .2em; }
+  .potd-hero[data-art="ball"] { padding: 18px 16px; }
+  .potd-ball { width: 100%; opacity: .5; }
+  .potd-hero[data-art="ball"] .player { font-size: var(--fs-xl); }
 }
 
 /* A Most Likely pick, explained (whyLikelyHTML, 2026-09-23) — the card

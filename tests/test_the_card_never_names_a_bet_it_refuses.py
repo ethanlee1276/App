@@ -85,6 +85,7 @@ def render(payload, sport="mlb", top=None):
     {_fn("potdLiveRow")}
     {_fn("potdLiveStrip")}
     {_fn("potdCallStrip")}
+    {_fn("potdBallArt")}
     const _top = {json.dumps(top)};
     async function loadTopPickOnce() {{ return _top || {{}}; }}
     async function loadRecordOnce() {{ return {{}}; }}
