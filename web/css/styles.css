@@ -273,6 +273,8 @@
     color-mix(in srgb, var(--bad) 16%, transparent) 50%, transparent 65%);
   /* The Pick of the Day hero: its venue render fades into the panel
      under the headline. */
+  /* The Most Likely page's cards (obCardHTML): a warm edge fading to the panel. */
+  --grad-ob-card: linear-gradient(90deg, color-mix(in srgb, var(--brand) 6%, var(--panel-2)), var(--panel));
   --grad-potd-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel) 25%, transparent),
     var(--panel) 62%);
   /* The game page's hero: the same venue fade, onto the hero's own
@@ -11894,6 +11896,117 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .matchup-picks .sc-lines li::before { content: "· "; color: var(--brand); }
+/* THE MOST LIKELY PAGE, TO ETHAN'S RENDER (2026-09-26; app.js obHeroHTML,
+   oneBoardHTML, obCardHTML). A hero over the stadium art, the four pills,
+   the tier chips and the view, the lane filters, then each tier's cards:
+   rank · face and team mark · the bet · the four checks · the price · our
+   chance as a ring · the door. Home draws the same cards. */
+.view.ob-on > .section-title { display: none; }
+.ob-hero {
+  --ob-art: none;
+  position: relative; border-radius: var(--radius-lg); overflow: hidden; padding: 34px 28px 30px;
+  margin: 4px 0 14px; background-image: var(--grad-art-dim), var(--ob-art); background-size: cover;
+  background-position: center 38%; border: var(--hairline) solid var(--border-soft); }
+.ob-h1 { font-family: var(--font-display); font-size: var(--fs-4xl); line-height: var(--lh-tight);
+  font-weight: 800; letter-spacing: -.02em; margin: 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ob-h1 em { font-style: italic; color: var(--brand); }
+.ob-h1-ico { color: var(--brand); display: inline-flex; }
+.ob-lede { margin: 6px 0 0; color: var(--text-dim); font-size: var(--fs-lg); }
+.ob-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.ob-pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--radius);
+  background: var(--panel-2); border: var(--hairline) solid var(--border); color: var(--text); font-size: var(--fs-sm);
+  text-decoration: none; }
+.ob-pill.gold { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+.ob-drop { display: block; padding: 0; }
+.ob-drop > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.ob-drop > summary::-webkit-details-marker { display: none; }
+.ob-drop[open] { flex-basis: 100%; }
+.ob-drop-body { padding: 0 14px 12px; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.ob-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 10px; }
+.one-board .ob-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.ob-tier-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: var(--radius);
+  background: var(--panel-2); border: var(--hairline) solid var(--border); color: var(--text); font-weight: 700;
+  font-size: var(--fs-md); cursor: pointer; }
+.ob-tier-chip span { color: var(--text-mute); font-weight: 600; }
+.ob-tier-chip.tier-top { color: var(--good); border-color: color-mix(in srgb, var(--good) 55%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, var(--panel-2)); }
+.ob-controls { display: flex; gap: 8px; }
+.ob-view-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: var(--radius);
+  background: var(--panel-2); border: var(--hairline) solid var(--border); color: var(--text); font-weight: 700; cursor: pointer; }
+.ob-view-btn.on { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+.ob-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+.ob-filter { padding: 8px 16px; border-radius: 999px; background: var(--panel-2); border: var(--hairline) solid var(--border);
+  color: var(--text); font-weight: 600; cursor: pointer; }
+.ob-filter span { color: var(--text-mute); margin-left: 6px; }
+.ob-filter.on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.ob-filter.on span { color: var(--brand-ink); opacity: .75; }
+.ob-sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 8px 0 10px; }
+.ob-sec-title { margin: 0; font-size: var(--fs-2xl); font-weight: 800; }
+.ob-count { color: var(--text-mute); font-weight: 600; }
+.ob-sec-sub { margin: 0; color: var(--text-mute); font-size: var(--fs-sm); flex: 1 1 260px; }
+.ob-sort { color: var(--text-mute); font-size: var(--fs-sm); display: inline-flex; align-items: center; gap: 6px; }
+.ob-sort select { background: var(--panel-2); color: var(--text); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm); padding: 4px 8px; }
+.ob-look > summary.ob-sec-head { cursor: pointer; list-style: none; }
+.ob-look > summary::-webkit-details-marker { display: none; }
+.ob-cards { display: grid; gap: 8px; }
+.ob-card { display: grid; align-items: center; gap: 10px 16px; padding: 12px 16px; border-radius: var(--radius-lg);
+  grid-template-columns: auto minmax(0, 1.6fr) minmax(0, 1.2fr) auto auto auto auto;
+  grid-template-areas: "rank who checks odds ring door view";
+  background: var(--grad-ob-card);
+  border: var(--hairline) solid var(--border-soft); }
+.ob-card.tier-top { border-color: color-mix(in srgb, var(--good) 30%, var(--border-soft)); }
+.ob-rank { grid-area: rank; align-self: start; justify-self: start; font-weight: 800; font-size: var(--fs-sm); color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 14%, transparent); border: var(--hairline) solid
+  color-mix(in srgb, var(--brand) 45%, transparent); border-radius: var(--radius-sm); padding: 3px 7px; }
+.ob-who { grid-area: who; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0;
+  color: inherit; text-align: left; cursor: pointer; min-width: 0; font: inherit; }
+.ob-face { position: relative; flex: none; display: inline-flex; }
+.ob-logo { position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--panel-3); padding: 2px; }
+.ob-what { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ob-what b { font-size: var(--fs-lg); }
+.ob-bet { color: var(--text-dim); font-size: var(--fs-sm); }
+.ob-book, .ob-plain { color: var(--text-mute); font-size: var(--fs-xs); }
+.ob-checkcol { grid-area: checks; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.one-board .ob-card .ob-checks { padding: 0; }
+.one-board .ob-card .td-why { padding: 0; margin: 0; }
+.ob-odds { grid-area: odds; font-family: var(--font-mono); font-size: var(--fs-lg); padding: 8px 12px;
+  border-radius: var(--radius); background: var(--panel-3); border: var(--hairline) solid var(--border); }
+.ob-ring { grid-area: ring; position: relative; width: 58px; height: 58px; display: grid; place-items: center;
+  text-align: center; line-height: 1; }
+.ob-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ob-ring-bg { fill: none; stroke: var(--border); stroke-width: 4; }
+.ob-ring-fg { fill: none; stroke: var(--text-mute); stroke-width: 4; stroke-linecap: round; }
+.ob-ring.tier-top .ob-ring-fg { stroke: var(--good); }
+.ob-ring.tier-strong .ob-ring-fg { stroke: var(--brand); }
+.ob-ring b { position: relative; font-size: var(--fs-sm); color: var(--text); }
+.ob-ring.tier-top b { color: var(--good); }
+.ob-ring small { position: relative; display: block; font-size: var(--fs-2xs); font-weight: 800; color: var(--good); }
+.ob-door { grid-area: door; display: grid; place-items: center; width: 42px; height: 42px; border-radius: var(--radius);
+  background: var(--panel-3); border: var(--hairline) solid var(--border); color: var(--good); cursor: pointer; }
+.ob-view { grid-area: view; display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px;
+  border-radius: var(--radius); background: none; border: var(--hairline) solid var(--brand); color: var(--brand);
+  font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: var(--fs-xs); cursor: pointer; }
+@media (max-width: 1279px) { .ob-view { display: none; } .ob-card { grid-template-areas: "rank who checks odds ring door view"; } }
+@media (max-width: 900px) {
+  .ob-card { grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "rank who who who" "checks checks checks checks" "odds ring door ." ; }
+  .ob-rank { align-self: center; }
+}
+@media (max-width: 760px) {
+  /* The picks come first on a phone: the pills, tiers and lanes are one
+     row each that scrolls sideways, not three screens of wrapped chips. */
+  .ob-pills, .one-board .ob-summary, .ob-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ob-pills::-webkit-scrollbar, .one-board .ob-summary::-webkit-scrollbar, .ob-filters::-webkit-scrollbar { display: none; }
+  .ob-pill, .ob-tier-chip, .ob-filter { flex: none; white-space: nowrap; }
+  .ob-drop[open] { flex-basis: auto; white-space: normal; max-width: 80vw; }
+  .ob-hero { padding: 22px 18px; }
+  .ob-h1 { font-size: var(--fs-3xl); }
+  .ob-lede { font-size: var(--fs-md); }
+  .ob-card { padding: 12px; gap: 8px 12px; }
+  .ob-card { grid-template-areas: "rank who who who" "checks checks checks checks" "odds ring door ."; }
+}
 /* The Picks tab's two doors under the tiers (app.js renderTonight). */
 .tn-more { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 /* The one Most Likely board (app.js oneBoardHTML): a tier summary, the

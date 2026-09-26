@@ -139,7 +139,7 @@ def test_the_page_draws_one_board_everywhere():
                 "((state.data || {}).likely_board || {}).rows || []);"):
         assert bit in js, bit
     # Best of the slate or By game, with lane filters.
-    assert 'data-ob-view="best">Best of the slate' in js and 'data-ob-view="game">By game' in js
+    assert 'data-ob-view="best">${icon("trophy", 15)} Best of the slate' in js and 'data-ob-view="game">By game' in js
     assert 'localStorage.setItem("qb.obView", state.obView)' in js
 
 
@@ -185,6 +185,37 @@ def test_the_picks_tab_is_the_one_board_and_one_door_to_the_edge_picks():
     assert "(r.checks || {}).matchup === true" in branch, "the note is the matchup's reason, only when it backs the pick"
     guide = js[js.index("function renderLikely() {"):]
     assert "Every pick goes through four checks" in guide[:9000]
+
+
+def test_the_page_and_home_follow_the_render():
+    """Ethan, 2026-09-26, two renders of the Most Likely page: "For when you
+    click on the most likely bets and it takes you to the full page, follow
+    this render. And then obviously on the main dashboard, we want to follow
+    this render as well." The hero over the stadium art, the four pills, and
+    each pick as a card: rank, face with the team mark, the bet and book,
+    the tags, the four checks and Why?, the price, the ring (TOP on a Top
+    pick), the door and View details. Home draws the same card."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    hero = js[js.index("function obHeroHTML() {"):]
+    hero = hero[:hero.index("\nfunction ", 10)]
+    for bit in ("Most Likely <em>to Hit</em>", "Every pick in one place, tiered by how many checks agree.",
+                "img/venues/variants/${art}-gold.jpg", "How we know", "How it’s ranked and what it turned down",
+                'href="#record"'):
+        assert bit in hero, bit
+    card = js[js.index("function obCardHTML(r, rank, opts = {}) {"):]
+    card = card[:card.index("\nfunction ", 10)]
+    for bit in ('<span class="ob-rank">#${rank}</span>', "${obFaceHTML(r)}", "${tags}", "${obChecksHTML(r)}",
+                '<span class="ob-odds">', "${obRingHTML(r)}", 'class="ob-door"', "View details"):
+        assert bit in card, bit
+    assert card.count("${door}") == 3, "the face, the door and View details all open the pick"
+    assert '${r.tier === "top" ? "<small>TOP</small>" : ""}' in js
+    assert "obCardHTML(r, i + 1, { why: false })" in js, "Home draws the same card"
+    assert "note.innerHTML = obHeroHTML();" in js and ".view.ob-on > .section-title { display: none; }" in css
+    assert 'const OB_SORTS = [["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];' in js
+    # A phone reads the picks first: one sideways row of pills, tiers and lanes.
+    phone = css[css.index(".ob-pills, .one-board .ob-summary, .ob-filters { flex-wrap: nowrap;") - 400:]
+    assert "@media (max-width: 760px)" in phone[:400]
 
 
 if __name__ == "__main__":
