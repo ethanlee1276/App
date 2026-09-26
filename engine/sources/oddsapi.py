@@ -1613,7 +1613,21 @@ def best_scorer_price(quotes: list[dict]) -> dict | None:
         med = others[m // 2] if m % 2 else (others[m // 2 - 1] + others[m // 2]) / 2.0
         refused.append({"book": q.get("book", ""), "yes_odds": int(q["yes_odds"]),
                         "gap_pts": round(100.0 * (med - american_to_prob(int(q["yes_odds"]))), 1)})
-    best = max(kept or field, key=lambda q: q["yes_odds"])
+    pool = kept or field
+    best = max(pool, key=lambda q: q["yes_odds"])
+    # AN EXCHANGE'S PRICE ONLY WHEN A SPORTSBOOK IS CLOSE — the rule the
+    # prop shop has kept since 2026-09-26 (odds.prefer_sportsbook; Ethan:
+    # "if the Novig prices are almost the same as the sports book prices,
+    # then it does not matter"), which the scorer shop never got: McCaffrey
+    # "Anytime TD · Novig -223" on the board the same evening.
+    from ..odds import EXCHANGE_NEAR_PROB, is_exchange
+    if is_exchange(best.get("book") or ""):
+        books = [q for q in pool if not is_exchange(q.get("book") or "")]
+        if books:
+            book = max(books, key=lambda q: q["yes_odds"])
+            gap = american_to_prob(int(book["yes_odds"])) - american_to_prob(int(best["yes_odds"]))
+            if gap > EXCHANGE_NEAR_PROB:
+                best = book
     if refused:
         best = {**best, "refused": refused}
     return best

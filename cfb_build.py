@@ -386,6 +386,8 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         cands.append((_TIER_ORDER.get(attention_tier(g), 9),
                       0 if priceable else 1, ko, i, entry["event_id"]))
     cands.sort(key=lambda c: (c[0], c[1], c[2]))
+    from engine.pricedplayers import Tracker as _PricedTracker
+    _priced = _PricedTracker()
 
     if cap is None:
         cap = player_event_cap([k.timestamp() for _t, _p, k, _i, _e in cands],
@@ -449,6 +451,21 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
             quotes.setdefault(norm, []).extend(qs)
         if quotes:
             scorers[i] = quotes
+        # WHO THIS PULL PRICED, and who every book has since taken down
+        # before kickoff (engine/pricedplayers) — the NFL's Zay Flowers rule
+        # ("i dont see zay flowers on any sports book"), for college: the
+        # game carries him as pulled, the scan gives him no read, and no
+        # matchup pick or scenario is built on him.
+        try:
+            _cfg = oddsapi.SPORT_CONFIG["cfb"]
+            _who = set(oddsapi.parse_event_players(payload, _cfg["markets"]).values())
+            if _cfg.get("scorers"):
+                _who |= set(oddsapi.parse_event_players(payload, _cfg["scorers"]).values())
+            _gone = _priced.see(event_id, sorted(_who), age)
+            if _gone:
+                games[i]["pulled_players"] = sorted(set(games[i].get("pulled_players") or []) | set(_gone))
+        except Exception as _pexc:                           # noqa: BLE001
+            print(f"  ⚠️  pulled-player check skipped for one game: {_pexc}")
         for key, got in oddsapi.parse_event_lines(
                 payload, oddsapi.SPORT_CONFIG["cfb"]["markets"]).items():
             lines.setdefault(key, []).extend(got)
@@ -465,6 +482,7 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
             for key, got in oddsapi.parse_event_sharp_lines(payload, _alt_map).items():
                 alt_sharp.setdefault(key, []).extend(got)
 
+    _priced.save()
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
             f"pulled at {CREDITS_PER_EVENT} credit(s) each"
             + (" (cached)" if cache_only else ""))
@@ -1947,9 +1965,36 @@ def main() -> None:
                                      alt=alt_prop_lines,
                                      alt_sharp=alt_sharp_prop_lines)
             print(f"  {quotes_note}")
+            # Who the books pulled rides on the board's own game rows, where
+            # the scan and the matchup picks read it.
+            _pulled_n = 0
+            for _g, _gd in zip(games, out["games"]):
+                if _g.get("pulled_players"):
+                    _gd["pulled_players"] = list(_g["pulled_players"])
+                    _pulled_n += len(_g["pulled_players"])
+            if _pulled_n:
+                print(f"  Pulled by every book before kickoff: {_pulled_n} player(s)")
         except Exception as _qexc:                           # noqa: BLE001
             quotes_note = f"player quotes unavailable: {_qexc}"
             print(f"  ⚠️  {quotes_note}")
+
+    # WHO IS HURT, from ESPN's college injury board — the feed the Injuries
+    # page already draws, which this build never read (Ethan, 2026-09-26:
+    # college "locked in" like the NFL). It reaches the same places the
+    # NFL's does: the rules engine's health check holds a listed player's
+    # props, his scorer rows carry the status the Most Likely board holds
+    # on, and the matchup scan gives a ruled-out player no read and says
+    # what his absence opens. A feed that fails is a line, never a board.
+    _cfb_inj: list = []
+    _cfb_status: dict = {}
+    try:
+        from engine.sources.injuries import load_cfb_injuries, status_by_player
+        _cfb_inj = load_cfb_injuries(out.get("games") or [], lookup)
+        _cfb_status = status_by_player(_cfb_inj)
+        print(f"  Injuries: {len(_cfb_inj)} designation(s) on tonight's schools "
+              f"({sum(1 for i in _cfb_inj if i.status in ('OUT', 'IR', 'DOUBTFUL'))} out or doubtful)")
+    except Exception as _iexc:                               # noqa: BLE001
+        print(f"  ⚠️  college injuries unavailable: {_iexc}")
 
     try:
         from engine.cfb import props as _cfbprops
@@ -1970,6 +2015,8 @@ def main() -> None:
                                                   alt=alt_prop_lines,
                                                   alt_sharp=alt_sharp_prop_lines)
         prop_census["priced"] = _matched
+        for _pg in getattr(_prop_slate, "games", None) or []:
+            _pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
@@ -2108,6 +2155,38 @@ def main() -> None:
             quotes, td_note = td_quotes, quotes_note
             rows, census, watch = _tds.build_cfb_td_longshots(
                 conn, out["games"], quotes, day.year)
+            # Each scorer carries his listing, as the NFL's do — the board
+            # holds a listed player and the scenarios leave him out.
+            from engine.sources.oddsapi import normalize_name as _nn
+            for _r in list(rows or []) + list(watch or []):
+                if isinstance(_r, dict) and not _r.get("injury_status"):
+                    _st = _cfb_status.get((_r.get("team"), _nn(_r.get("player") or "")))
+                    if _st:
+                        _r["injury_status"] = _st
+            # A STARTING QUARTERBACK OUT, BENCHED OR BACK (engine/cfb/
+            # qbchange): read off the college passing logs, ESPN's injury
+            # board and the passer the books priced this week, and put on
+            # every row of that team — shown, not priced (unmeasured for
+            # college, and the card says so).
+            try:
+                from engine.cfb import qbchange as _cqb
+                _teams = {t for g in out.get("games") or [] for t in (g.get("home"), g.get("away"))}
+                _priced_qbs: dict = {}
+                for _p in out.get("recommendations") or []:
+                    if _p.get("market") == "pass_yds" and _p.get("has_market") and _p.get("player") \
+                            and _p.get("player") not in _priced_qbs.setdefault(_p.get("team"), []):
+                        _priced_qbs[_p.get("team")].append(_p["player"])
+                _qb_ch = _cqb.changes(_cqb.passers(conn, day.year, _teams), _cfb_inj, _priced_qbs)
+                _cqb.stamp(list(out.get("recommendations") or []) + list(rows or []) + list(watch or []), _qb_ch)
+                # …and on the game cards, as the NFL's (pipeline: qb_cards).
+                for _gd in out.get("games") or []:
+                    _cards = [_cqb.card(_qb_ch[t]) for t in (_gd.get("home"), _gd.get("away")) if t in _qb_ch]
+                    if _cards:
+                        _gd["qb_cards"] = _cards
+                if _qb_ch:
+                    print(f"  QB changes: " + "; ".join(_cqb.card(c)["headline"] for c in _qb_ch.values()))
+            except Exception as _qbx:                         # noqa: BLE001
+                print(f"  ⚠️  college QB check skipped: {_qbx}")
             out["long_shots"] = rows
             # The most-likely-scorers list — shown, never journaled. The
             # page's shelf is the top of the ranked menu; the board below
@@ -2140,7 +2219,7 @@ def main() -> None:
                 _scanned = _scan.attach_cfb(
                     out, _scan_season_of("cfb", args.date),
                     lambda school: cfbdata.resolve_team(school, lookup),
-                    usage=_cfb_use, watch=watch)
+                    usage=_cfb_use, watch=watch, injuries=_cfb_inj)
                 _cfb_leans = _scan.leans_from_reads(out.get("scan_reads") or {})
                 print(f"  Matchup scan: {_scanned} of {len(out.get('games') or [])} game(s), "
                       f"{len(_cfb_leans)} lean(s) for Most Likely.")

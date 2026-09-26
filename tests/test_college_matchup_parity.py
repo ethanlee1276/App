@@ -129,7 +129,7 @@ def test_college_scenarios_and_matchup_picks_are_built_pooled_and_journaled():
     for bit in ('out["td_scenarios"] = _td_scen(', 'out["matchup_picks"] = _mp_build(',
                 'category="td_scenario", grade_label="Scenario")',
                 'for _kind, _cat in (("td", "matchup_td"), ("prop", "matchup_prop")):',
-                "usage=_cfb_use, watch=watch)", "_scan.cfb_usage(conn, "):
+                "usage=_cfb_use, watch=watch, injuries=_cfb_inj)", "_scan.cfb_usage(conn, "):
         assert bit in BUILD, bit
     # The one board reads a college scorer's touchdown matchup off the scan.
     out["most_likely"] = [{"player": "Wide Out", "team": "UGA", "opponent": "TENN", "kind": "td",

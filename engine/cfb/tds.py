@@ -924,6 +924,37 @@ def scorer_depth(logs: list, quotes: list) -> dict:
     }
 
 
+def _rz_now(before: float, implied, then) -> dict:
+    """``rz_chances`` this week, ``rz_before`` and ``rz_then_implied`` —
+    the three fields the NFL's scorer rows carry (touchdowns.py)."""
+    from ..touchdowns import RZ_SCALE_CLAMP
+    lo, hi = RZ_SCALE_CLAMP
+    now = before
+    if implied and then and float(then) > 0:
+        now = before * max(lo, min(hi, float(implied) / float(then)))
+    return {"rz_chances": round(now, 2), "rz_before": round(before, 2),
+            "rz_then_implied": then}
+
+
+def points_per_game(conn, season: int) -> dict:
+    """{team: points scored a game} over a season's graded college games —
+    the offence his red-zone touches were measured in, for scaling them to
+    this week's (touchdowns.RZ_SCALE_CLAMP; the NFL's Skattebo fix)."""
+    got: dict = {}
+    try:
+        rows = conn.execute("SELECT home, away, home_score, away_score FROM games WHERE sport='cfb' "
+                            "AND season=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                            (int(season),)).fetchall()
+    except Exception:                                        # noqa: BLE001
+        return {}
+    for r in rows:
+        for team, pts in ((r[0], r[2]), (r[1], r[3])):
+            t = got.setdefault(team, [0.0, 0])
+            t[0] += float(pts or 0)
+            t[1] += 1
+    return {t: round(v / n, 1) for t, (v, n) in got.items() if n >= 2}
+
+
 def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                            season: int, limit: int = 6,
                            per_game: int = 2
@@ -984,6 +1015,11 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     except Exception as exc:                                  # noqa: BLE001
         census["defense_ratings_error"] = f"{type(exc).__name__}: {exc}"
     census["defenses_rated"] = len(dratings)
+    # WHAT EACH OFFENCE SCORED when the red-zone touches were measured —
+    # so a player's chances are scaled to what his team is expected to
+    # score THIS week, as the NFL's are (Ethan, 2026-09-26, on Skattebo's
+    # red-zone number after his quarterback went down).
+    scored = points_per_game(conn, usage_season) if usage_season else {}
     for gi, player_quotes in (quotes_by_game or {}).items():
         try:
             g = games[int(gi)]
@@ -1206,9 +1242,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "kickoff": g.get("kickoff", ""),
                         # WHAT THE MATCHUP READS (engine/matchpicks,
                         # tdscenarios): his team's expected points, his
-                        # red-zone touches a game, his role.
+                        # red-zone touches a game — scaled to this week's
+                        # offence against what his team scored when they
+                        # were measured — and his role.
                         "implied_total": round(float(implied), 1),
-                        "rz_chances": round(float(u.get("rz_car") or 0) + float(u.get("rz_rec") or 0), 2),
+                        **_rz_now(float(u.get("rz_car") or 0) + float(u.get("rz_rec") or 0),
+                                  implied, scored.get(usage_team)),
                         "position": pos,
                     })
 

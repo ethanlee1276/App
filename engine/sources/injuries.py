@@ -208,7 +208,8 @@ def week_starts(slate) -> dict[str, float]:
 
 
 def live_injuries(rows: list[dict], now: float | None = None,
-                  since: dict[str, float] | None = None) -> list[Injury]:
+                  since: dict[str, float] | None = None,
+                  team_key=None) -> list[Injury]:
     """ESPN's NFL board (`espninjuries.parse_injuries` rows) as engine
     `Injury` objects, keyed the way the slate keys teams.
 
@@ -223,9 +224,14 @@ def live_injuries(rows: list[dict], now: float | None = None,
     before its team's week began is about a game already played and is
     dropped. A team missing from it falls back to the flat
     `LIVE_DESIGNATION_DAYS` window.
+
+    ``team_key`` maps ESPN's team name to the slate's key — the NFL's
+    abbreviation table by default; college passes its school resolver
+    (load_cfb_injuries).
     """
     from .espninjuries import current_rows, _parse_iso_ts
     from .oddsapi import TEAM_ABBR
+    team_key = team_key or TEAM_ABBR.get
     cutoff = (now if now is not None else time.time()) - LIVE_DESIGNATION_DAYS * 86400
     since = since or {}
     out: list[Injury] = []
@@ -237,7 +243,7 @@ def live_injuries(rows: list[dict], now: float | None = None,
         status = _map_live_status(r.get("status"))
         if not status:
             continue
-        team = TEAM_ABBR.get(r.get("team") or "")
+        team = team_key(r.get("team") or "")
         if not team:
             continue
         if status in ("QUESTIONABLE", "DOUBTFUL"):
@@ -250,6 +256,37 @@ def live_injuries(rows: list[dict], now: float | None = None,
                           role=POSITION_ROLE.get(position, position.lower()),
                           status=status))
     return [i for i in out if i.player]
+
+
+def load_cfb_injuries(games: list[dict], lookup: dict) -> list[Injury]:
+    """ESPN's college-football injury board as `Injury` objects keyed the way
+    the college board keys schools (cfbdata.resolve_team), aged against each
+    school's game week. College had the feed (espninjuries.LEAGUES["cfb"],
+    drawn on the Injuries page) and its build never read it — Ethan,
+    2026-09-26: "every single issue we ran into ... make sure every single
+    thing is done for college football". Raises what the fetch raises."""
+    import datetime as _dt
+    from .espninjuries import fetch_injuries, parse_injuries
+    from .cfbdata import resolve_team
+    since: dict[str, float] = {}
+    for g in games or []:
+        try:
+            d = _dt.date.fromisoformat(str(g.get("date") or "")[:10])
+        except ValueError:
+            continue
+        start = _dt.datetime.combine(d - _dt.timedelta(days=WEEK_LEAD_DAYS), _dt.time.min,
+                                     tzinfo=_dt.timezone.utc).timestamp()
+        for t in (g.get("home"), g.get("away")):
+            if t:
+                since[t] = start
+    return live_injuries(parse_injuries(fetch_injuries("cfb")), since=since,
+                         team_key=lambda name: resolve_team(name, lookup))
+
+
+def status_by_player(injuries: list[Injury]) -> dict:
+    """{(team, normalised name): status} for stamping priced rows."""
+    from .oddsapi import normalize_name
+    return {(i.team, normalize_name(i.player)): i.status for i in injuries or [] if i.player}
 
 
 def load_live_injuries(slate=None) -> list[Injury]:

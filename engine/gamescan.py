@@ -666,7 +666,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                                  f"({b:.1f} against {other}); {opp} played {look} "
                                  f"{sch[look]:.0%} of the time")
         for m in mates_out or []:
-            text, counted = mate_line(m, "targets")
+            text, counted = mate_line(m, word)
             (pro if counted else notes).append(text)
     elif group == "rb":
         lean = ["rush_yds", "anytime_td"]
@@ -757,9 +757,9 @@ def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: 
         return f"{opp}'s blockers get relief"
     if pos in ("WR", "TE"):
         u = usage.get((team, _key(who))) or {}
-        share = u.get("tgt_share")
-        return (f"{share:.0%} of {team}'s targets to share out" if share else
-                f"{team}'s targets shift")
+        share, word = u.get("tgt_share"), u.get("share_of") or "targets"
+        return (f"{share:.0%} of {team}'s {word} to share out" if share else
+                f"{team}'s {word} shift")
     if pos in ("RB", "FB"):
         u = usage.get((team, _key(who))) or {}
         share = u.get("carry_share")
@@ -1387,7 +1387,7 @@ def cfb_usage(conn, season: int) -> dict:
 
 
 def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None = None,
-               watch: list | None = None) -> int:
+               watch: list | None = None, injuries: list | None = None) -> int:
     """Hang a ``scan`` on every game of a college board; the reads ride
     in ``scan_reads`` like the NFL's. ``resolve`` maps CFBD's school name
     to the board's team key (cfbdata.resolve_team). Returns games scanned;
@@ -1421,7 +1421,9 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
         gprops = [r for r in props if r.get("team") in (home, away)
                   and (r.get("opponent") in (home, away) or not r.get("opponent"))]
         scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
-                         props=gprops, opponent_adjusted=False, usage=usage or {})
+                         props=gprops, opponent_adjusted=False, usage=usage or {},
+                         injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],
+                         pulled=gd.get("pulled_players") or [])
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we
