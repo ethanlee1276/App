@@ -59,7 +59,9 @@ def _order(html, *ids):
 def test_the_venues_come_before_the_picks():
     """The instruction, in one assertion."""
     html = _html()
-    a, b = _order(html, "games-title", "best-bets")
+    # The home's picks are the one Most Likely board since 2026-09-26 (the
+    # edge picks moved to their own page — see below).
+    a, b = _order(html, "games-title", "likely-top")
     assert a < b, "the venue scroller is back below the picks"
 
 
@@ -69,16 +71,23 @@ def test_the_scroller_follows_its_own_heading():
     assert a < b
 
 
-def test_the_summary_tiles_still_lead():
-    """RE-DECIDED 2026-08-11 (Ethan's render: "copy it and ship it"):
-    the home page opens like the render — stadium strip, then the Top
-    Picks strip, THEN tonight's tiles and the performance panels. The
-    tiles still sit above the full pick cards, so the count still leads
-    the thing it counts."""
+def test_the_edge_picks_live_on_their_own_page():
+    """RE-DECIDED 2026-09-26. Ethan, with the home's edge picks circled and
+    an arrow to the menu: "the edge bets can be its own menu or tab. We
+    shouldn't show that on the main page anymore" — and the performance
+    panels, the tonight/analyzed/edge/exposure tiles and the edge cards
+    crossed out. The day strip, the tiles, the edge picks and their cards
+    moved whole to the Edge Picks page, in the order they had (the count
+    still leads the thing it counts); the performance panel is gone."""
     html = _html()
-    assert html.index('id="top-picks"') < html.index('class="stats"')
-    assert html.index('class="stats"') < html.index('id="home-perf"')
-    assert html.index('id="home-perf"') < html.index('id="best-bets"')
+    edge = html.index('id="view-edge"')
+    home, home_end = html.index('id="view-recommended"'), html.index('id="view-bankroll"')
+    for i in ("daycard-zone", "stats", "best-bets", "cards"):
+        at = html.index(f'id="{i}"')
+        assert at > edge and not (home < at < home_end), f"{i} is back on the home page"
+    a, b, c, d = _order(html, "daycard-zone", "stats", "best-bets", "cards")
+    assert a < b < c < d
+    assert 'id="home-perf"' not in html, "the crossed-out performance panel came back"
 
 
 def test_the_preseason_block_stayed_retired():
@@ -101,7 +110,7 @@ def test_nothing_new_slipped_in_above_the_picks():
     """
     import re
     html = _html()
-    picks = html.index('id="best-bets"')
+    picks = html.index('id="likely-top"')
     # Scoped to the Recommended view: the header and every other <section>
     # carry ids too, and counting those measures the whole document rather
     # than the thing above the picks.

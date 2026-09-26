@@ -476,7 +476,9 @@ def test_the_slider_panel_is_gone_and_the_cards_still_have_their_room():
     js = _js()
     i = js.index("const REC_ROOMS = [")
     board = js[i:js.index('["gamebets"', i)]
-    assert '"cards"' in board
+    # The cards themselves left the home for Edge Picks on 2026-09-26 —
+    # Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore".
+    assert '"cards"' not in board and 'id="cards"' in _read("web", "index.html")
     assert '"rec-controls"' not in board, "the room still places a panel that is gone"
     assert 'id="rec-controls"' not in _read("web", "index.html")
 

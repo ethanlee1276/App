@@ -1870,7 +1870,7 @@ const FEATURES = [
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
     ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
     ["Over / Under", "Every prop we price tonight with both sides side by side — the book’s price and our chance for the over and the under, as cards or a list.", "props"],
-    ["Value Bets", "The edge board: where we think the price is wrong. The only board we stake money on, and the only one whose ROI is quoted in money.", "edge"],
+    ["Edge Picks", "Where our number beats the price: the picks we stake, their cards, and the wider edge board under them. The only board we stake money on, and the only one whose ROI is quoted in money.", "edge"],
     ["Game Lines", "Moneylines, spreads and totals with the model’s number beside the book’s — and the book actually posting each side named on the card.", "futures"],
     ["Best price per book", "Odds shopping on every card: the best number available for the side taken, book by book, so you never bet a worse price than exists.", null],
     ["Reserve tier", "A thin shelf fills from a labelled reserve rather than publishing empty. The tier says it is a reserve; it is never dressed up as a recommendation.", null],
@@ -16833,8 +16833,11 @@ const REC_ROOMS = [
    // beside its cards), then the deep board and its dials.
    ["probation-note", "talent-note", "quick-tools",
     "games-head", "games-outer",
-    "likely-top", "home-perf", "stats", "best-bets", "scan-top",
-    "parlay-mode", "empty-slate", "cards"]],
+    // 2026-09-26: the edge picks, their tiles and cards moved to the Edge
+    // Picks page and the performance panel was removed (Ethan's crossed-out
+    // screenshots) — the home is the one Most Likely board and the reads.
+    "likely-top", "scan-top",
+    "parlay-mode", "empty-slate"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
@@ -43823,7 +43826,7 @@ function moreSheetInit() {
    top." Back where the approved deck had them. What the audit fixed
    stays: the deck keeps its zones on a first load (subtabbedDOM), the
    game cards are shorter on a phone, and the tools close the deck. */
-const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "edge", "scan", "record", "zeno", "tools"];
+const HOME_DECK_ORDER = ["hero", "live", "riding", "games", "likely", "scan", "record", "zeno", "tools"];
 /* The zones the deck ADOPTS from the board — moved into its sections,
    not redrawn: the same renderers keep writing into them by id, so
    the stadium strip, the Pick of the Day card, the Most Likely
@@ -43834,7 +43837,7 @@ const HOME_DECK_ADOPTS = {
   hero: ["potd-zone"],
   games: ["games-head", "slate-horizon", "games-outer"],
   likely: ["likely-top"],
-  edge: ["best-bets"],
+  // The edge picks left the home for the Edge Picks page (2026-09-26).
   scan: ["scan-top"],
   tools: ["quick-tools"],
 };

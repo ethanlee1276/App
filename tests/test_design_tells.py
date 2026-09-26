@@ -675,8 +675,12 @@ def test_the_counts_tile_still_leads_the_recommended_page():
     # RE-DECIDED 2026-08-11 with the rest of the home order (Ethan's
     # render): stadiums and the Top Picks strip open the page; the tiles
     # follow them and still lead the FULL pick cards below.
-    assert view.index('id="top-picks"') < view.index('id="stats"')
-    assert view.index('id="stats"') < view.index('id="best-bets"')
+    # RE-DECIDED 2026-09-26 (Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore"): the strip, the tiles and the edge
+    # picks moved to the Edge Picks page together — the tiles still lead
+    # the picks they count, there.
+    assert 'id="stats"' not in view and 'id="best-bets"' not in view
+    edge = html[html.index('id="view-edge"'):]
+    assert edge.index('id="stats"') < edge.index('id="best-bets"')
 
 
 

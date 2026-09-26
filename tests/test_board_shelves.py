@@ -220,12 +220,14 @@ def test_most_likely_outgrew_the_betting_menu():
 
 
 def test_the_staking_board_sits_below_the_two_that_do_not_stake():
-    """Same claim, new geometry: the two no-stake boards are tier-1;
-    the staking board stays behind the Betting fold below them."""
+    """Same claim, new geometry: the two no-stake boards lead; the staking
+    board sits below them. Since 2026-09-26 it is a tier-1 row of its own
+    (Edge Picks) rather than behind the Betting fold — Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore" — and still
+    below the two with more evidence behind them."""
     html = _src("web", "index.html")
     assert html.index('data-view="likely"') < html.index('data-view="edge"')
     assert html.index('data-view="longshots"') < html.index('data-view="edge"')
-    assert 'data-view="edge"' in _betting_group()
+    assert 'data-view="edge"' not in _betting_group()
 
 
 def test_the_menu_order_matches_the_guide_it_never_read():
@@ -247,7 +249,10 @@ def test_the_two_prop_boards_no_longer_share_a_name():
     player props too — the label said nothing that told them apart."""
     group = _betting_group()
     assert "Player Props" not in group
-    assert "Value Bets" in group
+    # The edge board's own name since 2026-09-26, in the top tier: "Edge
+    # Picks" — nothing a Most Likely row could be mistaken for.
+    html = _src("web", "index.html")
+    assert "Edge Picks</button>" in html and "Value Bets</button>" not in html
 
 
 def test_the_long_shot_hint_is_not_baseball_only():
@@ -292,7 +297,9 @@ def test_it_sits_above_the_slider_filtered_edge_cards():
     src = _src("web", "js", "app.js")
     at = src.index('["board", "Tonight')
     room = src[at:src.index('["gamebets"', at)]
-    assert room.index('"likely-top"') < room.index('"cards"')
+    # The edge cards left the home for the Edge Picks page (Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore"):
+    # the likelihood board is the home's picks, with no edge cards under it.
+    assert '"likely-top"' in room and '"cards"' not in room
 
 
 def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
@@ -317,10 +324,15 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
     # …and once more, from his screenshot circling the four tool tiles:
     # "We should show this at the top of the page." The launcher row
     # opens the page; the venues follow it.
-    order = ['"quick-tools"', '"games-head"',
-             '"likely-top"', '"home-perf"', '"stats"', '"best-bets"']
+    # …and on 2026-09-26, the edge half left: "the edge bets can be its own
+    # menu or tab. We shouldn't show that on the main page anymore", with
+    # the performance panels crossed out. The room is the tools, the
+    # venues, the one Most Likely board, then who could shine.
+    order = ['"quick-tools"', '"games-head"', '"likely-top"', '"scan-top"']
     idx = [room.index(k) for k in order]
     assert idx == sorted(idx), order
+    for gone in ('"home-perf"', '"stats"', '"best-bets"', '"cards"'):
+        assert gone not in room, gone
     assert '"top-picks"' not in room, "the duplicate strip is back"
 
 
