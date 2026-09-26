@@ -140,6 +140,19 @@ def record_check(table: dict | None, market: str, side: str, prob: float):
     return None, words
 
 
+def record_seen(table: dict | None, market: str, side: str, prob: float) -> dict:
+    """What the record check read, for the card to say it in numbers:
+    settled picks like this one, how many it needs before it speaks, and
+    (once it does) the rate they hit against the rate we claimed."""
+    band = _band(prob)
+    cell = (table or {}).get((market, side, band)) if band is not None else None
+    n = cell["n"] if cell else 0
+    out = {"n": n, "need": RECORD_MIN_N}
+    if n >= RECORD_MIN_N:
+        out.update(rate=round(cell["hits"] / n, 4), claimed=round(cell["claimed"] / n, 4))
+    return out
+
+
 def market_check(r: dict):
     from .odds import american_to_prob
     p = r.get("model_prob")
@@ -292,6 +305,7 @@ def build(result: dict, record: dict | None = None) -> dict:
         tier = tier_of(checks)
         r.update({"lane": lane, "tier": tier, "tier_label": TIER_LABEL[tier],
                   "checks": checks, "check_notes": notes,
+                  "record_seen": record_seen(record, r.get("market"), _side(r), prob),
                   "matchup_score": td_scores.get(r.get("player") or "") if lane == "td" else r.get("matchup_score")})
         rows.append(r)
         tiers[tier] += 1

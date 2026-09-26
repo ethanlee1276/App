@@ -245,6 +245,40 @@ def test_every_chip_counts_the_cards_it_shows():
     assert ".ob-door { display: none; }" in phone and ".ob-sec-sub { display: none; }" in phone
 
 
+def test_the_record_check_says_its_numbers_and_every_check_is_coloured():
+    """Ethan, 2026-09-26: "what is this our record thing and why is it not
+    green? And is this something we need to fill in with data" — then, on a
+    game page, "make sure it's colored how it's supposed to be". The record
+    fills itself as our own picks settle; the card now says where it stands
+    (7 of 20 graded, or hit 71% of 34), and ✓/✕/— read green/red/grey on
+    every page that draws a pick, the game page included."""
+    from engine import ledger
+    conn = ledger.connect(":memory:")
+    for i in range(7):
+        conn.execute("INSERT INTO bets (sport, date, player, market, side, line, hit_prob, status, category) "
+                     "VALUES ('nfl', '2026-W01', ?, 'rush_yds', 'over', 70.5, 0.66, 'won', 'likely')", (f"R{i}",))
+    for i in range(30):
+        conn.execute("INSERT INTO bets (sport, date, player, market, side, line, hit_prob, status, category) "
+                     "VALUES ('nfl', '2026-W02', ?, 'receptions', 'over', 4.5, 0.65, ?, 'likely')",
+                     (f"P{i}", "won" if i < 20 else "lost"))
+    t = B.record_table(conn, "nfl")
+    assert B.record_seen(t, "rush_yds", "over", 0.66) == {"n": 7, "need": B.RECORD_MIN_N}
+    assert B.record_seen(t, "receptions", "over", 0.63) == {"n": 30, "need": 20, "rate": 0.6667, "claimed": 0.65}
+    assert B.record_seen(t, "anytime_td", "over", 0.66) == {"n": 0, "need": 20}
+    src = open(os.path.join(ROOT, "engine", "likelyboard.py"), encoding="utf-8").read()
+    assert '"record_seen": record_seen(record, r.get("market"), _side(r), prob),' in src
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    assert "if (s.rate == null) return `Record: ${s.n} of ${s.need} graded`;" in js
+    assert "return `Record: hit ${Math.round(s.rate * 100)}% of ${s.n}`;" in js
+    assert 'k === "record" ? obRecordLabel(r) : label' in js
+    # The colours are not scoped to one page.
+    assert "\n.ob-check.yes { color: var(--good); }" in css and "\n.ob-check.no { color: var(--bad); }" in css
+    assert ".one-board .ob-check.yes" not in css
+    assert '<div id="gp-sec-matchup" class="matchup-picks one-board">' in js
+    assert "${obTierSections(rows, { sort: false })}" in js, "no sort box on the game page: nothing wires it there"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -9208,12 +9208,23 @@ const OB_CHECKS = [["model", "Our number"], ["matchup", "Matchup"], ["market", "
 const OB_TIERS = [["top", "Top picks", "Our number, the matchup and the market agree, and nothing we track says otherwise."],
                   ["strong", "Strong", "Most of the checks agree."],
                   ["look", "Worth a look", "Our number likes it; the other checks are split or can’t say yet."]];
+/* The record check says its numbers on the card (Ethan, 2026-09-26: "what
+   is this our record thing and why is it not green? And is this something
+   we need to fill in with data"). It fills itself as our own picks settle:
+   under RECORD_MIN_N it counts toward the bar, past it the hit rate shows. */
+function obRecordLabel(r) {
+  const s = r.record_seen;
+  if (!s || s.n == null) return "Our record";
+  if (s.rate == null) return `Record: ${s.n} of ${s.need} graded`;
+  return `Record: hit ${Math.round(s.rate * 100)}% of ${s.n}`;
+}
 function obChecksHTML(r) {
   const c = r.checks || {}, n = r.check_notes || {};
   return `<div class="ob-checks">${OB_CHECKS.map(([k, label]) => {
     const v = c[k];
     const cls = v === true ? "yes" : v === false ? "no" : "na";
-    return `<span class="ob-check ${cls}" title="${escapeAttr(n[k] || "")}">${icon(v === true ? "check" : v === false ? "cross" : "dash", 11)} ${label}</span>`;
+    return `<span class="ob-check ${cls}" title="${escapeAttr(n[k] || "")}">${icon(v === true ? "check" : v === false ? "cross" : "dash", 11)} ${
+      k === "record" ? obRecordLabel(r) : label}</span>`;
   }).join("")}</div>`;
 }
 function obWhyHTML(r) {
@@ -9320,8 +9331,8 @@ const OB_FILTERS = [["all", "All"], ["td", "Touchdowns"], ["yards", "Yards"], ["
    2026-09-26: "It'll display we're showing 70 yard picks, but then we'll
    only show 10"). The section's count is the rows under it, and the
    sections add up to the chip that is lit. */
-function obTierSections(rows) {
-  const first = OB_TIERS.find(([t]) => rows.some((r) => r.tier === t));
+function obTierSections(rows, opts = {}) {
+  const first = opts.sort === false ? null : OB_TIERS.find(([t]) => rows.some((r) => r.tier === t));
   return OB_TIERS.map(([t, title, sub]) => {
     const rs = obSorted(rows.filter((r) => r.tier === t));
     if (!rs.length) return "";
@@ -9419,9 +9430,9 @@ function obGameHTML(g) {
   const k = `${g.away}@${g.home}`;
   const rows = oneBoardRows().filter((r) => r.game === k);
   if (!rows.length) return "";
-  return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Most likely · this game
+  return `<div id="gp-sec-matchup" class="matchup-picks one-board"><div class="section-title">Most likely · this game
       <span class="sub">— every pick in this game, with the four checks behind its tier</span></div>
-    ${obTierSections(rows, 6)}</div>`;
+    ${obTierSections(rows, { sort: false })}</div>`;
 }
 
 function matchupPickRowHTML(r) {
