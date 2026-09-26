@@ -45,6 +45,18 @@ def test_the_cards_as_sent():
             w["2026-06"]["pushes"]) == (260.93, 0.4007, 5, 18, 1)
 
 
+
+def test_this_week_is_its_own_card_and_agrees_with_the_calendar():
+    """Pikkit's 9/21-9/27 card: +$134.22, +62.86%, 9-19-0 — the
+    September calendar's Sep 21 (+$69.8) and Sep 24 (+$64.4)."""
+    w = {x["key"]: x for x in SNAP["windows"]}["2026-09-21..2026-09-27"]
+    assert (w["profit"], w["roi"], w["wins"], w["losses"], w["pushes"]) == (134.22, 0.6286, 9, 19, 0)
+    sep = {x["key"]: x for x in SNAP["windows"]}["2026-09"]["days"]
+    week = sum(v for k, v in sep.items() if "2026-09-21" <= k <= "2026-09-27")
+    assert abs(week - w["profit"]) < 0.1, week
+    assert not __import__("re").match(r"^\d{4}-\d{2}$", w["key"]), "a week is a headline card, not a month"
+
+
 def test_the_months_sit_inside_their_year():
     w = {x["key"]: x for x in SNAP["windows"]}
     months = [x for k, x in w.items() if len(k) == 7 and k.startswith("2026-")]
