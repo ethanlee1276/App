@@ -82,7 +82,7 @@ def test_every_hitter_and_starter_gets_a_read_in_the_football_shape():
 
 
 def test_the_reads_reach_most_likely_the_board_and_the_matchup_picks():
-    for bit in ("_ms = _mscan.scan(slate)", 'result["scan_reads"] = _ms["reads"]',
+    for bit in ("_ms = _mscan.scan(slate, _ars)", 'result["scan_reads"] = _ms["reads"]',
                 "leans=_mlb_leans, lean_report=_mlb_lean_report)",
                 '_stamp_mlb(result["scan_reads"], _mlb_lean_report, board=result["most_likely"])',
                 'sport="mlb")', 'category="matchup_prop", grade_label="Matchup")'):
@@ -124,6 +124,34 @@ def test_the_game_page_draws_the_tape_and_the_reads():
     assert ".mlb-tape { display: grid;" in css
     src = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
     assert '_gd["mlb_tape"] = _t' in src
+
+
+def test_pitch_type_matchups_and_the_lineup_against_his_hand():
+    """Ethan, 2026-09-26: "which batters do good against what pitchers and left
+    hand and right hand ... what tools and data we need". The hitter half is
+    Savant's pitch-arsenal board (whiff rate by pitch type); the pitcher half
+    is his mix over his last starts, off the playByPlay the build already
+    caches for velocity. arsenal.matchup re-weights the hitter by tonight's
+    mix; the difference from his usual is the read."""
+    sl = _slate()
+    ars = {"season": 2026, "mix": {"NYY": {"pitcher": "Gerrit Cole", "shares": {"FF": 0.45, "SL": 0.35, "CH": 0.20}}},
+           "batters": {"lefty masher": {"FF": {"pa": 120, "whiff_pct": 0.15, "usage": 0.5, "est_woba": 0.40},
+                                        "SL": {"pa": 60, "whiff_pct": 0.18, "usage": 0.2, "est_woba": 0.36},
+                                        "CH": {"pa": 50, "whiff_pct": 0.20, "usage": 0.1, "est_woba": 0.33},
+                                        "CU": {"pa": 40, "whiff_pct": 0.45, "usage": 0.2, "est_woba": 0.25}}}}
+    got = SC.scan(sl, ars)
+    m = {x["player"]: x for x in got["reads"]["BOS@NYY"]["players"]}["Lefty Masher"]
+    line = next(t for t in m["pro"] if t.startswith("Sees the ball well"))
+    assert "four-seamers 45%, sliders 35%, changeups 20%" in line and "his usual" in line, line
+    assert got["tapes"]["BOS@NYY"]["sides"]["NYY"]["mix"] == "four-seamers 45%, sliders 35%, changeups 20%"
+    # The lineup against a hand needs four measured bats.
+    props = [_prop(f"H{i}", "BOS", "NYY", "LF", "hits", bats="L", platoon_factor=1.06) for i in range(4)]
+    assert SC.lineup_vs_hand(props, "BOS", "R") == {"hand": "R", "factor": 1.06, "hitters": 4}
+    assert SC.lineup_vs_hand(props[:3], "BOS", "R") is None
+    for bit in ("_ars = _mscan.arsenal_context(slate, int(args.date[:4]))", "_ms = _mscan.scan(slate, _ars)"):
+        assert bit in BUILD, bit
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "Throws ${escapeHtml(s.mix)}" in js and "hitters measured)" in js
 
 
 if __name__ == "__main__":

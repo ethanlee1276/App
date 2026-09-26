@@ -51,6 +51,61 @@ XERA_GOOD, XERA_BAD = 3.40, 4.80
 WIND_OUT_MPH = 8.0
 
 
+#: A hitter's whiff rate against tonight's mix this far from his usual
+#: reads as a real difference (arsenal.matchup; coverage gates it first).
+WHIFF_DELTA = 0.03
+#: The share of the lineup's own platoon factors that says it hits this
+#: hand better or worse than its average.
+LINEUP_HAND_EDGE = 0.03
+
+PITCH_WORDS = {"FF": "four-seamers", "SI": "sinkers", "FC": "cutters", "SL": "sliders", "ST": "sweepers",
+               "CU": "curveballs", "KC": "knuckle-curves", "CH": "changeups", "FS": "splitters",
+               "SV": "slurves", "KN": "knuckleballs", "FO": "forkballs", "SC": "screwballs"}
+
+
+def pitch_mix(person_id: int, season: int) -> dict:
+    """{pitch_type: share} over his last starts, pooled by pitches thrown —
+    the same cached playByPlay the build already warmed for velocity."""
+    from .arsenal import history
+    tot: dict = {}
+    n = 0
+    for st in history(int(person_id), int(season)) or []:
+        for t, sh in (st.get("shares") or {}).items():
+            tot[t] = tot.get(t, 0.0) + sh * st["n"]
+        n += st["n"]
+    return {t: round(v / n, 4) for t, v in tot.items()} if n else {}
+
+
+def arsenal_context(slate, season: int) -> dict:
+    """{"batters": Savant's pitch-arsenal batter board, "season": year used,
+    "mix": {team: {"pitcher", "shares"}}} for tonight's starters with a
+    person id. Either half missing leaves the other; nothing raises."""
+    from .models import STRIKEOUTS, OUTS
+    out = {"batters": {}, "season": None, "mix": {}}
+    try:
+        from .sources.savant import load_arsenal
+        board = load_arsenal(int(season), "batter")
+        out["season"] = board.pop("_season", None) if board else None
+        out["batters"] = board or {}
+    except Exception:                                        # noqa: BLE001
+        pass
+    for p in getattr(slate, "props", None) or []:
+        if p.market not in (STRIKEOUTS, OUTS) or not getattr(p, "person_id", 0) or p.team in out["mix"]:
+            continue
+        try:
+            shares = pitch_mix(p.person_id, season)
+        except Exception:                                    # noqa: BLE001
+            shares = {}
+        if shares:
+            out["mix"][p.team] = {"pitcher": p.player, "shares": shares}
+    return out
+
+
+def _mix_words(shares: dict, k: int = 3) -> str:
+    top = sorted(shares.items(), key=lambda kv: -kv[1])[:k]
+    return ", ".join(f"{PITCH_WORDS.get(t, t)} {sh:.0%}" for t, sh in top)
+
+
 def _ord(n: int) -> str:
     return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
@@ -66,7 +121,7 @@ def _label(pro: list, con: list, breakout: bool) -> tuple[str, str]:
     return key, LABELS[key]
 
 
-def read_hitter(prop, game, park) -> dict:
+def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
     """One hitter against tonight's starter, park and pen."""
     pro, con, notes = [], [], []
     team, opp = prop.team, prop.opponent
@@ -88,6 +143,25 @@ def read_hitter(prop, game, park) -> dict:
             pro.append(f"{sp.name}'s expected ERA is {sp.xera:.2f}")
         elif sp.xera <= XERA_GOOD:
             con.append(f"{sp.name}'s expected ERA is {sp.xera:.2f} — a tough starter")
+        # HOW HE HANDLES WHAT THIS STARTER THROWS (arsenal.matchup): his own
+        # whiff rate by pitch type (Savant's arsenal board), re-weighted by
+        # the starter's mix over his last starts — against his usual. The
+        # difference is the read, and only over most of the arsenal.
+        mx = ((arsenal or {}).get("mix") or {}).get(opp)
+        if mx and (arsenal or {}).get("batters"):
+            from .arsenal import matchup as _am
+            from .sources.savant import _norm as _sv_norm
+            row = arsenal["batters"].get(_sv_norm(prop.player))
+            m = _am(mx["shares"], row) if row else None
+            if m and m.get("enough") and m.get("whiff_delta") is not None:
+                what = (f"against {sp.name}'s mix ({_mix_words(mx['shares'])}): whiffs "
+                        f"{m['whiff_vs_mix']:.0%}, his usual {m['whiff_baseline']:.0%}")
+                if m["whiff_delta"] <= -WHIFF_DELTA:
+                    pro.append("Sees the ball well " + what)
+                elif m["whiff_delta"] >= WHIFF_DELTA:
+                    con.append("Swings and misses more " + what)
+                else:
+                    notes.append("No edge " + what)
         if prop.vs_pitcher_avg is not None:
             notes.append(f"Career against {sp.name}: {prop.vs_pitcher_avg:.2f} a game "
                          f"(too few meetings to count)")
@@ -184,7 +258,23 @@ def read_starter(prop, game, park) -> dict:
             "usage": {"throws": prop.throws}}
 
 
-def tape(game) -> dict:
+def lineup_vs_hand(props, team: str, hand: str) -> dict | None:
+    """How tonight's lineup hits this hand, from each hitter's own measured
+    platoon factor (engine/mlb/platoon): the average, and how many of the
+    lineup it rests on. None with fewer than four measured bats."""
+    fs = {}
+    for p in props or []:
+        if p.team == team and (p.position or "").upper() not in ("SP", "P", "RP") \
+                and p.platoon_factor and p.player not in fs:
+            fs[p.player] = float(p.platoon_factor)
+    measured = [v for v in fs.values() if v != 1.0]
+    if len(measured) < 4:
+        return None
+    avg = sum(measured) / len(measured)
+    return {"hand": hand, "factor": round(avg, 3), "hitters": len(measured)}
+
+
+def tape(game, props=None, arsenal: dict | None = None) -> dict:
     """The tale of the tape: each starter against the other lineup, pens,
     park, weather, umpire."""
     from .parks import get_park
@@ -192,7 +282,11 @@ def tape(game) -> dict:
     sides = {}
     for team in (game.away, game.home):
         sp = (game.pitchers or {}).get(team)
+        opp_sp = (game.pitchers or {}).get(game.home if team == game.away else game.away)
+        mx = ((arsenal or {}).get("mix") or {}).get(team)
         sides[team] = {
+            "mix": _mix_words(mx["shares"]) if mx else "",
+            "vs_hand": lineup_vs_hand(props, team, (opp_sp.throws or "R").upper()) if opp_sp else None,
             "starter": ({"name": sp.name, "throws": sp.throws, "k_rate": round(sp.k_rate, 3),
                          "xera": round(sp.xera, 2), "slg_vs_l": round(sp.slg_allowed_vs_l, 3),
                          "slg_vs_r": round(sp.slg_allowed_vs_r, 3)} if sp else None),
@@ -210,7 +304,7 @@ def tape(game) -> dict:
             "league": {"slg": LEAGUE_SLG, "k_rate": LEAGUE_K_RATE}}
 
 
-def scan(slate) -> dict:
+def scan(slate, arsenal: dict | None = None) -> dict:
     """``{"reads": {away@home: {"players": [...]}}, "tapes": {away@home: tape}}``
     — one read per player (his first prop row carries what the read
     needs), hitters and starters."""
@@ -224,14 +318,14 @@ def scan(slate) -> dict:
                 break
     for g in slate.games:
         key = f"{g.away}@{g.home}"
-        tapes[key] = tape(g)
+        tapes[key] = tape(g, getattr(slate, "props", None), arsenal)
         park = get_park(g.park)
         players = []
         for _name, p in (by_game.get(id(g)) or (g, {}))[1].items():
             if (p.position or "").upper() in ("SP", "P", "RP"):
                 players.append(read_starter(p, g, park))
             else:
-                players.append(read_hitter(p, g, park))
+                players.append(read_hitter(p, g, park, arsenal))
         players.sort(key=lambda x: (["breakout", "good", "neutral", "tough", "avoid"].index(x["read"]),
                                     -len(x["pro"])))
         if players:

@@ -474,7 +474,17 @@ def main() -> None:
     try:
         from engine.mlb import scan as _mscan
         from engine.gamescan import leans_from_reads as _leans_of
-        _ms = _mscan.scan(slate)
+        # Pitch-type matchups: Savant's arsenal board for hitters and each
+        # starter's mix over his last starts (cached with velocity).
+        try:
+            _ars = _mscan.arsenal_context(slate, int(args.date[:4]))
+            print(f"  Pitch mix: {len(_ars['mix'])} starter(s); arsenal board: "
+                  f"{len(_ars['batters'])} hitter(s)"
+                  + (f" ({_ars['season']})" if _ars.get("season") else ""))
+        except Exception as _ax:                            # noqa: BLE001
+            print(f"  ⚠️  pitch-type matchups skipped: {_ax}")
+            _ars = None
+        _ms = _mscan.scan(slate, _ars)
         result["scan_reads"] = _ms["reads"]
         for _gd in result.get("games") or []:
             _t = _ms["tapes"].get(f"{_gd.get('away')}@{_gd.get('home')}")

@@ -6186,13 +6186,13 @@ function gameCard(g) {
        (engine/cfb/qbchange.read_game) — Ethan, 2026-09-26: "every game is
        saying QB Unconfirmed". The warning stays only for a side with no
        read at all. */
-    if (!g.qb_confirmed) {
+    {
       const rd = g.qb_read || {};
       const named = ["away", "home"].map((s) => rd[s] && rd[s].starter ? rd[s] : null);
       if (named.some(Boolean)) {
         bits.push(`QB: ${named.map((r, i) => r ? esc(r.starter) + (r.out ? ` (for ${esc(r.out)})` : "")
           : `${esc(teamName(i ? g.home : g.away))} unknown`).join(" vs ")}`);
-      } else bits.push(`${icon('warn')} QB unconfirmed`);
+      } else if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
     }
     sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
   } else if (nba) {
@@ -12399,12 +12399,15 @@ function mlbScanHTML(g) {
     const s = t.sides[team] || {}, sp = s.starter;
     const opp = team === g.home ? g.away : g.home;
     const lineK = (t.sides[opp] || {}).k_rate;
+    const vh = (t.sides[opp] || {}).vs_hand;
     return `<div class="card mlb-tape-side">
       <div class="ms-sub">${escapeHtml(teamName(team))}</div>
       ${sp ? `<div class="mlb-tape-row"><b>${escapeHtml(sp.name)}</b> <span class="mini">${escapeHtml(sp.throws || "")}HP</span></div>
         <div class="mlb-tape-row">Strikes out ${pct(sp.k_rate)} · expected ERA ${Number(sp.xera).toFixed(2)}</div>
         <div class="mlb-tape-row">Slugging allowed: lefties ${slg(sp.slg_vs_l)} · righties ${slg(sp.slg_vs_r)}</div>
-        <div class="mlb-tape-row">Facing a lineup that strikes out ${pct(lineK)}</div>`
+        ${s.mix ? `<div class="mlb-tape-row">Throws ${escapeHtml(s.mix)}</div>` : ""}
+        <div class="mlb-tape-row">Facing a lineup that strikes out ${pct(lineK)}${vh ? ` and hits ${escapeHtml(vh.hand)}HP ${
+          vh.factor >= 1 ? "+" : "−"}${Math.abs(Math.round((vh.factor - 1) * 100))}% vs its usual (${vh.hitters} hitters measured)` : ""}</div>`
         : `<div class="mlb-tape-row mini">Starter not announced yet</div>`}
       <div class="mlb-tape-row mini">Bullpen${s.pen_rank ? ` ranks ${s.pen_rank}` : ""}${
         s.pen_fatigue != null ? ` · ${Number(s.pen_fatigue).toFixed(1)} relief innings the last two days` : ""}</div>
