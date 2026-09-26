@@ -20592,9 +20592,6 @@ function predBoardHTML(kx, d) {
   const modeled = ((k.rows) || []).filter((r) => r.model_p != null);
   const nRec = ((k.rows) || []).filter((r) => r.rec).length
     + ((k.weather) || []).filter((r) => r.rec).length;
-  const tile = (label, v, sub) => `<div class="tile"><div class="k">${label}</div>
-    <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
-
   // Category tabs, the render's top strip. "Top opportunities" sorts the
   // PRICED markets by the size of the gap; everything else is the plain
   // volume table, filtered to one sport where one is picked.
@@ -20664,12 +20661,12 @@ function predBoardHTML(kx, d) {
       means we do not price that market, not that the edge is zero.</span></div>
     ${tabs}
     <div class="stats pm-tiles">
-      ${tile("Markets tracked", all.length, "both venues, live now")}
-      ${tile("Priced by our model", modeled.length, "Kalshi two-sided books")}
-      ${tile("Average gap", avgEdge == null ? "—" : avgEdge.toFixed(1) + " pts",
-             "model vs market, priced rows")}
-      ${tile("24h volume", "$" + Math.round(totVol).toLocaleString(),
-             `the desk recommends ${nRec}`)}
+      ${pmxTile("Markets tracked", all.length, "both venues, live now", "bars")}
+      ${pmxTile("Priced by our model", modeled.length, "Kalshi two-sided books", "line")}
+      ${pmxTile("Average gap", avgEdge == null ? "—" : avgEdge.toFixed(1) + " pts",
+             "model vs market, priced rows", "bars-good")}
+      ${pmxTile("24h volume", "$" + Math.round(totVol).toLocaleString(),
+             `the desk recommends ${nRec}`, "refresh")}
     </div>
     <div class="pm-layout">
       <div class="card kx-table pm-table" style="padding:0">${
@@ -20682,6 +20679,235 @@ function predBoardHTML(kx, d) {
     ${rows.length > shown.length
       ? `<p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
          Showing ${shown.length} of ${rows.length} in this view.</p>` : ""}`;
+}
+
+/* ============================================================
+   THE PREDICTION MARKET PAGE, TO ETHAN'S RENDERS (2026-09-26: "here is 3
+   renders for the 3 different page we have for the prediction pages.
+   match these renders for all 3 pages.")
+
+   One shell for the three rooms: the hero (eyebrow, the title with its
+   gold second word, the venues' cards), the room pills under it, the
+   room itself, and a rail of the live flow and the venues on Board and
+   Flow. "Does it work?" is the report card and takes the full width, as
+   its render does. The rooms, the desk and the tests that pin them are
+   unchanged underneath: `subtabbedHTML("intel", …)` still builds them.
+   ============================================================ */
+let _pmFlowLeague = "all";
+let _pmFlowSort = "volume";
+window._pmFlowLeague = (a) => { _pmFlowLeague = a || "all"; renderIntel(); };
+window._pmFlowSort = (a) => { _pmFlowSort = a || "volume"; renderIntel(); };
+
+const PMX_LEAGUES = [["all", "All Markets"], ["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"],
+                     ["nba", "NBA"], ["wnba", "WNBA"], ["ufc", "UFC"]];
+
+/* Which league a flagged trade is about: the market's slug first (a game
+   event's slug opens with its league, `nfl-buf-kc-…`), then its words. A
+   market about none of ours is "other" and shows under All Markets only. */
+function pmFlowLeague(f) {
+  const slug = String((f && f.slug) || "").toLowerCase();
+  const m = slug.match(/^(nfl|cfb|ncaaf|mlb|nba|wnba|ufc)-/);
+  if (m) return m[1] === "ncaaf" ? "cfb" : m[1];
+  const t = String((f && f.market) || "");
+  if (/\bUFC\b|\bMMA\b/i.test(t)) return "ufc";
+  if (/\bWNBA\b/.test(t)) return "wnba";
+  if (/\bNBA\b/.test(t)) return "nba";
+  if (/\bMLB\b|World Series/i.test(t)) return "mlb";
+  if (/\bNFL\b|Super Bowl/i.test(t)) return "nfl";
+  if (/\bCFB\b|college football|NCAAF|Heisman/i.test(t)) return "cfb";
+  return "other";
+}
+
+/* The venues' marks. Kalshi's is its letter; Polymarket's is drawn as the
+   outline mark its app uses. Both are the venues' own identities, shown
+   to say whose market a row is — the same reason the table names them. */
+function pmxKalshiMark(size = 30) {
+  return `<span class="pmx-k" style="font-size:${size}px" aria-hidden="true">K</span>`;
+}
+function pmxPolyMark(size = 30) {
+  return `<svg class="pmx-poly" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M6 7.5 26 3v26L6 24.5z M6 7.5 26 16 M6 24.5 26 16" fill="none" stroke="currentColor"
+      stroke-width="2.6" stroke-linejoin="round"/></svg>`;
+}
+
+/* A door to a venue, through the same switch as every outbound market
+   link (EXTERNAL_MARKET_LINKS, see extLink): off, it is a plain card. */
+const PMX_VENUE_URL = { kalshi: "https://kalshi.com/markets", polymarket: "https://polymarket.com" };
+function pmxDoor(venue, cls, inner) {
+  return EXTERNAL_MARKET_LINKS
+    ? `<a class="${cls}" href="${escapeAttr(PMX_VENUE_URL[venue])}" target="_blank" rel="noopener">${inner}</a>`
+    : `<div class="${cls}">${inner}</div>`;
+}
+function pmxVenueCard(name, venue, mark) {
+  return pmxDoor(venue, "pmx-venue", `<span class="pmx-venue-mark">${mark}</span>
+    <span class="pmx-venue-txt"><b>${name}</b><span>Live markets</span><span>Real-world outcomes</span></span>
+    <span class="pmx-venue-go" aria-hidden="true">→</span>`);
+}
+
+function pmxHeroHTML() {
+  return `<header class="pmx-hero">
+    <div class="pmx-hero-txt">
+      <div class="pmx-eyebrow">Prediction market</div>
+      <h1 class="pmx-title">Prediction <span>Market</span><span class="pmx-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></h1>
+      <p class="pmx-sub">Trade real-world outcomes on Kalshi and Polymarket.</p>
+      <p class="pmx-sub2">Live markets. Real-time odds. Track the smart money.</p>
+    </div>
+    <div class="pmx-art" aria-hidden="true" style="background-image:url('img/field/field-nfl-home-ball@640.webp')">
+      <div class="pmx-glass"><span>${pmxKalshiMark(46)}<em>Kalshi</em></span><span>${pmxPolyMark(44)}<em>Polymarket</em></span></div>
+    </div>
+    <div class="pmx-venues">
+      ${pmxVenueCard("Kalshi", "kalshi", pmxKalshiMark(34))}
+      ${pmxVenueCard("Polymarket", "polymarket", pmxPolyMark(32))}
+    </div>
+  </header>`;
+}
+
+/* A stat tile in the render's dress: the label in small caps, the number
+   big, the line under it, and a small drawn glyph beside it. */
+function pmxGlyph(kind) {
+  if (kind === "line") {
+    return `<svg viewBox="0 0 72 36" aria-hidden="true"><path d="M2 32 16 22 26 26 40 12 50 18 70 4"
+      fill="none" stroke="var(--brand)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  if (kind === "refresh") {
+    return `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none"
+      stroke="rgba(255,255,255,.12)" stroke-width="1.5"/><path d="M28 14a10 10 0 1 0 1.5 9" fill="none"
+      stroke="var(--brand)" stroke-width="2.6" stroke-linecap="round"/><path d="M29 8v7h-7" fill="none"
+      stroke="var(--brand)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  const green = kind === "bars-good";
+  const hs = green ? [14, 22, 30, 36] : [10, 18, 28, 20, 14];
+  return `<svg viewBox="0 0 ${hs.length * 9} 36" aria-hidden="true">${hs.map((h, i) =>
+    `<rect x="${i * 9}" y="${36 - h}" width="6" height="${h}" rx="1.5" fill="${green ? "var(--good)" : "var(--brand)"}"
+      opacity="${green ? 0.55 + i * 0.15 : 0.9}"/>`).join("")}</svg>`;
+}
+function pmxTile(label, value, sub, glyph) {
+  return `<div class="tile pmx-tile"><div class="pmx-tile-txt"><div class="k">${label}</div>
+    <div class="v">${value}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>
+    ${glyph ? `<span class="pmx-glyph">${pmxGlyph(glyph)}</span>` : ""}</div>`;
+}
+
+/* The price line on a flow card: OUR recorded tape of the market the
+   trade was in (pm_build attaches it to the busiest markets). No tape,
+   no line — a flat line drawn through nothing would be a claim. */
+function pmxFlowSpark(f, d) {
+  const m = ((d && d.markets) || []).find((x) => x && x.slug === f.slug);
+  const pts = ((m && m.tape) || []).filter((p) => Array.isArray(p) && p.length > 1);
+  if (pts.length < 2) return "";
+  const w = 120, h = 34;
+  const xs = pts.map((p) => p[0]), vs = pts.map((p) => p[1]);
+  const t0 = Math.min(...xs), span = (Math.max(...xs) - t0) || 1;
+  let lo = Math.min(...vs), hi = Math.max(...vs);
+  if (hi - lo < 0.02) { lo -= 0.01; hi += 0.01; }
+  const x = (t) => 1 + ((t - t0) / span) * (w - 2);
+  const y = (v) => h - 2 - ((v - lo) / (hi - lo)) * (h - 4);
+  const up = vs[vs.length - 1] >= vs[0];
+  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
+  return `<svg class="pmx-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${path}" fill="none" stroke="${up ? "var(--good)" : "var(--bad)"}" stroke-width="1.8"
+      stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function pmxFlowCardHTML(f, d, proven) {
+  const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
+  const usd = (v) => `$${Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const tone = { Live: "good", Chasing: "warn", Historical: "mute" }[f.status] || "brand";
+  const nowTone = f.current_price != null && f.entry_price != null
+    ? (f.current_price >= f.entry_price ? "good" : "bad") : "mute";
+  const ring = f.score >= 70 ? "var(--bad)" : f.score >= 40 ? "var(--brand)" : "var(--text-mute)";
+  const sigs = (f.signals || []).map((s) =>
+    `<span class="pmx-chip" title="${escapeAttr(s.value || "")}">${escapeHtml(s.name)}</span>`).join("");
+  return `<article class="pmx-fcard fc-${tone}">
+    <div class="pmx-fcard-head">
+      <span class="pmx-ring" style="background:conic-gradient(${ring} ${Math.max(0, Math.min(100, f.score)) * 3.6}deg, var(--fill-hover) 0)"
+        title="Composite informed-flow score (0–100)"><span>${f.score}</span></span>
+      <span class="pmx-who"><span class="pmx-name">${extLink(`https://polymarket.com/profile/${f.wallet}`,
+        escapeHtml(traderLabel(f)))}</span>
+        <span class="pmx-meta">${pmAgo(f.ts)} · ${plural(f.wallet_trades, "trade")} on our tape</span></span>
+      <span class="pmx-status tone-${tone}">${escapeHtml(String(f.status || "").toUpperCase())}</span>
+    </div>
+    <div class="pmx-fcard-bet"><b>${escapeHtml(f.side)} ${escapeHtml(f.outcome)}</b>
+      <span class="pmx-amt">· ${usd(f.usd)}</span>${pmxFlowSpark(f, d)}</div>
+    <div class="pmx-market">${extLink(`https://polymarket.com/market/${f.slug}`, escapeHtml(f.market))}</div>
+    <div class="pmx-metrics">
+      <div><span>Position</span><b>${usd(f.usd)}</b></div>
+      <div><span>Entry</span><b>${cents(f.entry_price)}</b></div>
+      <div><span>Now</span><b class="tone-${nowTone}">${cents(f.current_price)}</b></div>
+    </div>
+    <div class="pmx-chips">${sigs}</div>
+    <p class="pmx-foot">The trade this flag points at: <b>${escapeHtml(f.side)} ${escapeHtml(f.outcome)}</b>
+      at ${cents(f.current_price)} or better · ${proven
+        ? `<span class="tone-good">recommended (signal proven — 0.1u)</span>`
+        : `<span class="tone-warn">tracked, not recommended</span> — graded on the Record page`}</p>
+  </article>`;
+}
+
+function pmxFlowHTML(d, proven) {
+  let flow = (d.flow || []).slice();
+  const counts = {};
+  flow.forEach((f) => { const l = pmFlowLeague(f); counts[l] = (counts[l] || 0) + 1; });
+  if (_pmFlowLeague !== "all") flow = flow.filter((f) => pmFlowLeague(f) === _pmFlowLeague);
+  const by = { volume: (a, b) => (b.usd || 0) - (a.usd || 0), newest: (a, b) => (b.ts || 0) - (a.ts || 0),
+               score: (a, b) => (b.score || 0) - (a.score || 0) }[_pmFlowSort] || (() => 0);
+  flow.sort(by);
+  const chips = PMX_LEAGUES.map(([k, label]) => `<button type="button" class="pmx-pill${
+    _pmFlowLeague === k ? " active" : ""}" data-act="pmFlowLeague" data-arg="${k}">${label}${
+    k !== "all" && counts[k] ? ` <small>${counts[k]}</small>` : ""}</button>`).join("");
+  const sort = `<label class="pmx-sort">Sort by:
+    <select data-change="pmFlowSort" aria-label="Sort the flow">${[["volume", "Most volume"],
+      ["newest", "Newest"], ["score", "Highest score"]].map(([k, l]) =>
+      `<option value="${k}"${_pmFlowSort === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>`;
+  const cards = flow.slice(0, 12).map((f) => pmxFlowCardHTML(f, d, proven)).join("");
+  return `<div class="pmx-sechead"><h2>Informed flow <details class="pmx-why"><summary>why?↑</summary>
+      <p>Large trades scored for anomaly signals, with receipts on every chip (hover). Probabilities,
+      never verdicts.</p></details></h2>
+      <div class="pmx-pills">${chips}</div>${sort}</div>
+    <div class="pmx-fgrid">${cards || `<div class="empty-slate" style="grid-column:1/-1">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">${_pmFlowLeague === "all" ? "No flagged flow yet" : "No flagged flow in this league"}</div>
+      <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates across
+      refreshes — big trades are a few per hour.</div></div>`}</div>`;
+}
+
+/* The rail: the newest large trades, and the doors to the venues. The
+   flow is Polymarket's alone — Kalshi publishes no trade identity. */
+function pmxRailHTML(d) {
+  const usd = (v) => `$${Math.round(Number(v || 0)).toLocaleString()}`;
+  const art = (slug) => {
+    const m = ((d && d.markets) || []).find((x) => x && x.slug === slug);
+    return m && m.image ? `<img src="${escapeAttr(m.image)}" alt="" loading="lazy" data-onerr="remove"/>` : pmxPolyMark(20);
+  };
+  const latest = ((d && d.flow) || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 8);
+  const rows = latest.map((f) => `<li class="pmx-lf">
+      <span class="pmx-lf-art">${art(f.slug)}</span>
+      <span class="pmx-lf-txt"><b><span class="tone-good">${usd(f.usd)}</span> ${escapeHtml(f.side)} ${
+        escapeHtml(f.outcome)}</b><span>${pmAgo(f.ts)} · Polymarket</span></span>
+      <span class="pmx-lf-v">${pmxPolyMark(18)}</span></li>`).join("");
+  return `<section class="pmx-card pmx-live"><div class="pmx-card-head">Live flow
+      <span class="pmx-livedot">Live</span></div>
+      ${rows ? `<ul class="pmx-lflist">${rows}</ul>` : `<p class="pmx-empty">No large trades on the tape yet.</p>`}
+      <button type="button" class="pmx-more" data-act="pmxRoom" data-arg="flow">View all live flow →</button></section>
+    <section class="pmx-card pmx-tools"><div class="pmx-card-head">Market tools</div>
+      ${pmxDoor("kalshi", "pmx-tool", `${pmxKalshiMark(26)}
+        <span><b>Kalshi Markets</b><span>Browse live markets →</span></span>`)}
+      ${pmxDoor("polymarket", "pmx-tool", `${pmxPolyMark(26)}
+        <span><b>Polymarket</b><span>Browse live markets →</span></span>`)}
+      <button type="button" class="pmx-tool" data-act="pmxRoom" data-arg="proof"><span class="pmx-q">?</span>
+        <span><b>How it works?</b><span>Learn the basics →</span></span></button></section>`;
+}
+
+/* Switch rooms from outside the pill row (the rail's doors), through the
+   pills themselves so the page keeps one way of switching. */
+function pmxRoom(id) {
+  const b = document.querySelector(`#intel-body .subnav-btn[data-subtab="${id}"]`);
+  if (b) { b.click(); b.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+}
+function pmxBindRooms(host) {
+  const shell = host.querySelector(".pmx");
+  if (!shell) return;
+  host.querySelectorAll(".subnav-btn").forEach((b) => b.addEventListener("click", () => {
+    shell.dataset.tab = b.dataset.subtab;
+  }));
 }
 
 async function renderIntel() {
@@ -20706,6 +20932,7 @@ async function renderIntel() {
       the board is below; if both stay empty, the machine may not be able to reach the
       venues.</div></div>`
       + predBoardHTML(kx, d);
+    host.innerHTML = `<div class="pmx" data-tab="board"><div class="pmx-col">${pmxHeroHTML()}${host.innerHTML}</div></div>`;
     if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
     if (typeof mountLiveTicks === "function") mountLiveTicks(host);
     return;
@@ -20715,53 +20942,6 @@ async function renderIntel() {
   const proven = pmSignalProven(d.validation);
   const cents = (p) => p == null ? "—" : `${(p * 100).toFixed(0)}¢`;
   const usd = (v) => `$${Number(v || 0).toLocaleString()}`;
-  const statusColor = { Live: "var(--good)", Chasing: "var(--warn)", Historical: "var(--text-mute)" };
-  const heat = (s) => s >= 70 ? "var(--bad)" : s >= 40 ? "var(--warn)" : "var(--brand)";
-  const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
-    <div class="v">${v}</div>${sub ? `<div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${sub}</div>` : ""}</div>`;
-
-  const flagCards = (d.flow || []).slice(0, 12).map((f) => {
-    const color = statusColor[f.status] || "var(--brand)";
-    const sigs = (f.signals || []).map((s) =>
-      `<span class="chip" title="${escapeHtml(s.value)}">${escapeHtml(s.name)}</span>`).join("");
-    return `<article class="card" style="--grade-color:${color}">
-      <div class="card-head">
-        <div class="card-id">
-          <div class="score-ring" title="Composite informed-flow score (0–100)"
-            style="background:conic-gradient(${heat(f.score)} ${f.score * 3.6}deg, rgba(255,255,255,.08) 0)">
-            <span>${f.score}</span></div>
-          <div>
-            <div class="player"><span class="wallet">${extLink(
-              `https://polymarket.com/profile/${f.wallet}`,
-              escapeHtml(traderLabel(f)))}</span></div>
-            <div class="subtitle">${pmAgo(f.ts)} · ${plural(f.wallet_trades, "trade")} on our tape</div>
-            <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
-              <span class="book">· ${usd(f.usd)}</span></div>
-          </div>
-        </div>
-        <span class="pm-status" style="color:${color}">${f.status.toUpperCase()}</span>
-      </div>
-      <!-- .pm-title so the stylesheet can find this link: it is the card’s
-           headline and its main tap target, and needs a thumb-sized hit
-           box on a phone. -->
-      <div class="pm-title" style="margin:8px 0 10px;font-weight:600;line-height:1.35">
-        ${extLink(`https://polymarket.com/market/${f.slug}`,
-                  escapeHtml(f.market))}</div>
-      <div class="metrics">
-        <div class="metric"><div class="k">Position</div><div class="v">${usd(f.usd)}</div></div>
-        <div class="metric"><div class="k">Entry</div><div class="v">${cents(f.entry_price)}</div></div>
-        <div class="metric primary"><div class="k">Now</div><div class="v" style="color:${color}">${cents(f.current_price)}</div></div>
-      </div>
-      <div class="chips" style="margin-top:10px">${sigs}</div>
-      <div style="margin-top:10px;font-size:var(--fs-sm);padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
-        <span style="color:var(--text-mute)">The trade this flag points at:</span>
-        <b>${escapeHtml(f.side)} ${escapeHtml(f.outcome)}</b> at ${cents(f.current_price)} or better
-        · ${proven
-          ? `<span style="color:var(--good);font-weight:700">recommended (signal proven — 0.1u)</span>`
-          : `<span style="color:var(--warn)">tracked, not recommended</span> — graded on the Record page`}
-      </div>
-    </article>`;
-  }).join("");
 
   const traderCards = (d.top_traders || []).map((t) => {
     const label = traderLabel(t);
@@ -20798,26 +20978,19 @@ async function renderIntel() {
      validation blocks end to end — Ethan's "too much too scroll
      through". They are three different questions, so they are three
      tabs: what to bet, who is betting, and whether any of it works. */
-  host.innerHTML = subtabbedHTML("intel", [
+  const rooms = subtabbedHTML("intel", [
     ["board", "Board",
      "every live market from Kalshi and Polymarket in one table, plus the desk’s picks",
      predBoardHTML(kx, d)],
     ["flow", "Flow",
      "who is betting — Polymarket’s public tape, which Kalshi does not publish",
-     `<div class="stats">
-        ${tile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`)}
-        ${tile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one")}
-        ${tile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades")}
-        ${tile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site")}
+     `<div class="stats pmx-tiles">
+        ${pmxTile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`, "bars")}
+        ${pmxTile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one", "line")}
+        ${pmxTile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades", "bars-good")}
+        ${pmxTile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site", "refresh")}
       </div>
-      <div class="section-title">Informed flow
-        <span class="sub">— large trades scored for anomaly signals, with receipts on every chip
-        (hover). Probabilities, never verdicts.</span></div>
-      <div class="cards wide">${flagCards ||
-        `<div class="empty-slate" style="grid-column:1/-1"><div class="es-icon">${icon("signal", 30)}</div>
-          <div class="es-title">No flagged flow yet</div>
-          <div class="es-sub">The feed scores the last 24h of recorded tape and accumulates
-          across refreshes — big trades are a few per hour.</div></div>`}</div>
+      ${pmxFlowHTML(d, proven)}
       <div class="section-title">Top traders
         <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
       <div class="cards wide">${traderCards ||
@@ -20831,9 +21004,13 @@ async function renderIntel() {
      "the flow signal graded against what actually happened",
      `${intelVerdict(d.validation)}${intelReportCard(d.validation)}`],
   ]);
+  host.innerHTML = `<div class="pmx" data-tab="${escapeAttr(_subtab.intel || "board")}">
+    <div class="pmx-col">${pmxHeroHTML()}${rooms}</div>
+    <aside class="pmx-rail">${pmxRailHTML(d)}</aside></div>`;
   // Every other subtabbed page binds its rooms after writing them; without
   // this the tabs render and do nothing.
   bindSubtabs(host);
+  pmxBindRooms(host);
   // EACH MOUNT IN ITS OWN TRY. These are three independent enhancements
   // over markup that already stands on its own, and chaining them bare
   // means the first one to throw silently cancels the rest — which is
@@ -34803,7 +34980,7 @@ function intelVerdict(v) {
        (hit ${pctv(v.hit_rate)} vs ${pctv(v.avg_implied)} implied, ${v.roi >= 0 ? "+" : ""}${pctv(v.roi)} ROI,
        z ${v.z}). Following a fresh LIVE flag below — same side, at or better than the flagged
        entry price — is now a recommended play, sized small (flat 0.1u).</p>`
-    : `<div style="font-weight:800;font-size:var(--fs-xl)">${iconMark("target", 16)}What we recommend right now: <span style="color:var(--warn)">nothing — watch, don’t bet</span></div>
+    : `<div class="pmx-verdict-t"><span class="pmx-info" aria-hidden="true">i</span>What we recommend right now: <span>nothing — watch, don’t bet</span></div>
        <p style="margin:8px 0 0">This page detects large anomalous trades ("informed flow") and
        <b>paper-tracks every flag</b> to find out whether following that money actually wins.
        ${v && v.graded
@@ -34815,25 +34992,48 @@ function intelVerdict(v) {
        <b>100+ graded flags, z ≥ 2, positive ROI</b>. If the signal (or one wallet, or one
        score band) clears it, this box flips to a recommendation. Until then, every flag below
        is a tracked observation — not a play.</p>`;
-  return `<div class="card" style="margin-bottom:16px;border-left:3px solid ${pmSignalProven(v) ? "var(--good)" : "var(--warn)"}">${body}</div>`;
+  return `<div class="card pmx-verdict${pmSignalProven(v) ? " proven" : ""}">${body}</div>`;
+}
+
+/* The report card's tiles in the render's dress: a gold badge with its
+   drawn mark, the label in small caps, the number big. */
+function pmxBadgeTile(kind, label, value, sub) {
+  const g = {
+    doc: `<path d="M8 4h11l5 5v19H8z M19 4v5h5 M12 15h8 M12 19h8 M12 23h5" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`,
+    target: `<circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="16" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="16" cy="16" r="1.8" fill="currentColor"/><path d="M16 16 26 6 M22 6h4v4" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+    bars: `<rect x="7" y="18" width="4" height="8" rx="1" fill="currentColor"/><rect x="14" y="13" width="4"
+      height="13" rx="1" fill="currentColor"/><rect x="21" y="7" width="4" height="19" rx="1" fill="currentColor"/>`,
+    sigma: `<path d="M23 7H9l8 9-8 9h14" fill="none" stroke="currentColor" stroke-width="2.4"
+      stroke-linejoin="round" stroke-linecap="round"/>`,
+  }[kind] || "";
+  return `<div class="tile pmx-btile"><span class="pmx-badge" aria-hidden="true"><svg viewBox="0 0 32 32">${g}</svg></span>
+    <div><div class="k">${label}</div><div class="v">${value}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div></div>`;
 }
 
 function intelReportCard(v) {
-  const head = `<div class="section-title">Flag report card
-      <span class="sub">— do our flags actually win? Every flag is stored and graded when
-      its market resolves. Published, not promised.</span></div>`;
+  const head = `<div class="pmx-sechead"><h2>Flag report card <details class="pmx-why"><summary>why?↑</summary>
+      <p>Do our flags actually win? Every flag is stored and graded when its market resolves.
+      Published, not promised.</p></details></h2></div>`;
   if (!v || !v.graded) {
     return `${head}<div class="card">${panelEmpty("No graded flags yet — flags settle when their markets resolve, so this fills as resolutions land. The recording started the moment the flow feed first ran.")}</div>`;
   }
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const zColor = v.z >= 1 ? "var(--good)" : v.z <= -1 ? "var(--bad)" : "var(--text)";
-  const bands = (v.by_score || []).map((b) => `
+  const bandRows = (v.by_score || []).map((b) => `
     <div class="dl-row pm-band">
       <span class="dl-main"><strong>Score ${escapeHtml(b.band)}</strong></span>
       <span class="dl-num">${b.wins}-${b.n - b.wins}</span>
-      <span class="dl-num implied">${pctv(b.hit_rate)} vs ${pctv(b.avg_implied)} implied</span>
+      <span class="dl-num implied">${pctv(b.hit_rate)} vs ${pctv(b.avg_implied)} <small>implied</small></span>
       <span class="dl-num strong ${b.roi >= 0 ? "pos" : "neg"}">${b.roi >= 0 ? "+" : ""}${pctv(b.roi)} ROI</span>
     </div>`).join("");
+  const bands = bandRows ? `<div class="dl-row pm-band pm-band-head" aria-hidden="true">
+      <span class="dl-main">Score band</span><span class="dl-num">Record</span>
+      <span class="dl-num implied">Hit rate vs implied</span><span class="dl-num strong">Flat-stake ROI</span>
+    </div>${bandRows}` : "";
   const wallets = (v.wallets || []).map((w) => `
     <div class="dl-row pm-wallet">
       <span class="dl-main"><span class="wallet">${extLink(
@@ -34844,15 +35044,13 @@ function intelReportCard(v) {
       <span class="dl-num strong" title="calibration z — higher = less like luck">z ${w.z}</span>
     </div>`).join("");
   return `${head}
-    <div class="stats">
-      <div class="tile"><div class="k">Flags graded</div><div class="v">${v.graded}</div></div>
-      <div class="tile"><div class="k">Hit rate</div><div class="v">${pctv(v.hit_rate)}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">prices implied ${pctv(v.avg_implied)}</div></div>
-      <div class="tile"><div class="k">Flat-stake ROI</div><div class="v ${v.roi >= 0 ? "pos" : ""}">${v.roi >= 0 ? "+" : ""}${pctv(v.roi)}</div></div>
-      <div class="tile"><div class="k">Calibration z</div><div class="v" style="color:${zColor}">${v.z}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">above 0 = flags beat their price</div></div>
+    <div class="stats pmx-report">
+      ${pmxBadgeTile("doc", "Flags graded", v.graded, "")}
+      ${pmxBadgeTile("target", "Hit rate", pctv(v.hit_rate), `prices implied ${pctv(v.avg_implied)}`)}
+      ${pmxBadgeTile("bars", "Flat-stake ROI", `<span class="${v.roi >= 0 ? "pos" : "neg"}">${v.roi >= 0 ? "+" : ""}${pctv(v.roi)}</span>`, "")}
+      ${pmxBadgeTile("sigma", "Calibration z", `<span style="color:${zColor}">${v.z}</span>`, "above 0 = flags beat their price")}
     </div>
-    ${bands ? `<div class="card" style="padding:0">${bands}</div>` : ""}
+    ${bands ? `<div class="card pmx-bands" style="padding:0">${bands}</div>` : ""}
     ${intelWeights(v.weights)}
     ${wallets ? `<div class="section-title">Wallets least like luck
         <span class="sub">— graded flags only, min 3, ranked by calibration z</span></div>
@@ -45476,6 +45674,8 @@ const ACTS = {
   },
   pmPick: (el, a) => window._pmPick(a),
   pmCatSet: (el, a) => window._pmCatSet(a),
+  pmFlowLeague: (el, a) => window._pmFlowLeague(a),
+  pmxRoom: (el, a) => pmxRoom(a),
   mbBulkCommit: () => mbBulkCommit(),
   mbAdd: () => mbAdd(),
   mbExport: () => mbExport(),
@@ -45519,6 +45719,7 @@ const ACTS = {
 };
 const CHANGES = {
   mbSport: (el) => { window._mbSport = el.value; renderMyBets(); },
+  pmFlowSort: (el) => window._pmFlowSort(el.value),
   mbImport: (el) => mbImport(el),
   mbBulkFile: (el) => mbBulkFile(el),
 };

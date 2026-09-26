@@ -1,0 +1,78 @@
+"""The Prediction Market page, to Ethan's three renders (2026-09-26: "here
+is 3 renders for the 3 different page we have for the prediction pages.
+match these renders for all 3 pages.")
+
+One shell for the three rooms: the hero (eyebrow, the title with its gold
+second word, the venues' cards), the room pills, the room, and a rail of
+the live flow and the venues on Board and Flow; "Does it work?" runs full
+width. Flow gets the render's league chips and sort; the proof room its
+callout, badge tiles and banded table.
+"""
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+
+
+def _fn(name):
+    i = APP.index(f"function {name}(")
+    return APP[i:APP.index("\n}\n", i) + 2]
+
+
+def test_the_shell_wraps_the_three_rooms():
+    i = APP.index("async function renderIntel()")
+    fn = APP[i:APP.index("\n/* =====", i)]
+    assert 'subtabbedHTML("intel"' in fn and "pmxHeroHTML()" in fn and "pmxRailHTML(d)" in fn
+    assert "pmxBindRooms(host)" in fn and "bindSubtabs(host)" in fn
+    hero = _fn("pmxHeroHTML")
+    assert "Prediction <span>Market</span>" in hero and 'pmxVenueCard("Kalshi", "kalshi"' in hero
+    assert "EXTERNAL_MARKET_LINKS" in _fn("pmxDoor"), "venue doors go through the review switch"
+    assert '.pmx[data-tab="proof"] .pmx-rail' in CSS, "the proof room runs full width"
+
+
+def test_flow_has_league_chips_and_a_sort():
+    flow = _fn("pmxFlowHTML")
+    assert 'data-act="pmFlowLeague"' in flow and 'data-change="pmFlowSort"' in flow
+    assert "pmFlowLeague: (el, a) => window._pmFlowLeague(a)," in APP
+    assert "pmFlowSort: (el) => window._pmFlowSort(el.value)," in APP
+    node = shutil.which("node")
+    if not node:
+        print("  SKIP node not installed"); return
+    prog = _fn("pmFlowLeague") + """
+      const cases = [{slug: "nfl-buf-kc-2026-09-28"}, {slug: "ncaaf-osu-mich-2026-11-28"},
+        {slug: "fed-oct", market: "Will the Fed cut?"}, {slug: "x", market: "UFC Fight Night: A vs. B"},
+        {slug: "y", market: "Who wins the World Series?"}, {slug: "z", market: "Super Bowl champion"}];
+      console.log(JSON.stringify(cases.map(pmFlowLeague)));"""
+    out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=30, check=True).stdout
+    assert json.loads(out) == ["nfl", "cfb", "other", "ufc", "mlb", "nfl"]
+
+
+def test_the_card_line_is_our_own_tape_or_nothing():
+    spark = _fn("pmxFlowSpark")
+    assert "m.tape" in spark and "pts.length < 2" in spark, "no tape, no line"
+    card = _fn("pmxFlowCardHTML")
+    assert "tracked, not recommended" in card and "recommended (signal proven — 0.1u)" in card
+
+
+def test_the_rail_is_polymarket_flow_and_the_doors():
+    rail = _fn("pmxRailHTML")
+    assert "· Polymarket" in rail and "Kalshi" not in rail.split("pmx-tools")[0].replace("Kalshi publishes", ""), \
+        "the live flow is Polymarket's alone"
+    assert 'data-act="pmxRoom" data-arg="flow"' in rail and 'data-act="pmxRoom" data-arg="proof"' in rail
+
+
+def test_the_proof_room_wears_the_render():
+    assert 'class="card pmx-verdict' in _fn("intelVerdict")
+    card = _fn("intelReportCard")
+    assert "pmxBadgeTile(" in card and "pm-band-head" in card and "Flag report card" in card
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
+    for f in fns:
+        f(); print(f"  ok  {f.__name__}")
+    print(f"\n{len(fns)} tests passed.")

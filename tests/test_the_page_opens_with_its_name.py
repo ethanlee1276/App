@@ -72,7 +72,10 @@ def test_most_views_actually_open_this_way():
     h = re.sub(r"<!--.*?-->", "", HTML, flags=re.S)
     views = re.findall(r'<section class="view[^"]*" id="view-([a-z]+)"[^>]*>(.*?)(?=<section class="view|</main>)', h, flags=re.S)
     opens = [n for n, body in views if re.match(r'\s*<div class="section-title[^"]*"', body)]
-    assert len(views) >= 38 and len(opens) >= 28, (len(views), len(opens))
+    # 27 since 2026-09-26: the Prediction Market page opens with the hero
+    # Ethan's render draws (pmxHeroHTML — eyebrow, title, venues) in place
+    # of the title band, so its section-title went with it.
+    assert len(views) >= 38 and len(opens) >= 27, (len(views), len(opens))
 
 
 APP = (ROOT / "web" / "js" / "app.js").read_text()
