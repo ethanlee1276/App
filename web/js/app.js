@@ -24625,12 +24625,18 @@ function pwResultsHTML(rec) {
      figure in this function as a claim) —
      the ring, the W-L, the ROI, the units, the settled count and the
      last five, drawn by the same builder as the home and the Record
-     page (recordRibbonsHTML) from the same pooled record. The model's
-     tile only: Zeno's book is his, not the product. The tiles beneath
-     carry what the ribbon does not say: the win rate against the
-     break-even our prices require — or the bar alone, while the sample
-     cannot carry a rate — and how much was staked to earn the number. */
-  const ribbon = recordRibbonsHTML({}, o, (rec && rec.recent) || []);
+     page (recordRibbonsHTML) from the same pooled record. AND THE
+     COMBINED LINE, as on the Record page (Ethan, the day his Pikkit
+     record went up: "we need to display the new combined record here too
+     on the paywall"): "Everything we've bet" leads with its split on the
+     tile — the model's units and Zeno's, his unit's dollar value beside
+     them — then the model's own tile, then Zeno's, so the
+     number a buyer is paying for is never hidden inside the bigger one.
+     The tiles beneath are the MODEL's and say so: its win rate against
+     the break-even its prices require — or the bar alone, while the
+     sample cannot carry a rate — and how much it staked to earn its number. */
+  const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno }, o,
+                                   (rec && rec.recent) || []);
   return `<div class="pw-results">
     ${ribbon ? `<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>` : ""}
     <div class="pw-stats pw-stats-two">
@@ -24639,11 +24645,11 @@ function pwResultsHTML(rec) {
             tile carries until a win rate means something. */""}
       ${o.settled >= PROOF_RATE_FLOOR
         ? stat(pct(o.win_rate || 0),
-               `win rate · ${pct(o.breakeven || 0)} needed at our prices`)
+               `the model’s win rate · ${pct(o.breakeven || 0)} needed at our prices`)
         : stat(pct(o.breakeven || 0),
                "needed at the prices we took, to break even")}
       ${stat(`${(o.units_staked || 0).toFixed(1)}u`,
-             `staked to earn ${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u, flat units`,
+             `the model staked to earn ${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u, flat units`,
              net >= 0 ? "pos" : "neg")}
     </div>
     <p class="pw-results-note">${o.settled < PROOF_RATE_FLOOR

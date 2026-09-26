@@ -80,8 +80,11 @@ def test_the_paywall_reads_the_same_record_as_every_other_page():
 
 def test_the_results_strip_leads_with_the_ribbon_and_keeps_what_it_lacks():
     body = _fn("pwResultsHTML")
-    assert "const ribbon = recordRibbonsHTML({}, o, (rec && rec.recent) || []);" in body, \
-        "the model's tile only — an empty record for Zeno's seat, so his book stays off the sales page"
+    # Ethan, 2026-09-26: "we need to display the new combined record here
+    # too on the paywall" — the combined line leads with its split, then
+    # the model's tile, then Zeno's, as on the Record page.
+    assert ("const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno }, o,\n"
+            "                                   (rec && rec.recent) || []);") in body
     assert '<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>' in body
     assert '<div class="pw-stats pw-stats-two">' in body
     assert 'stat(o.settled, `graded' not in body and '"record")' not in body and '"net, flat stakes"' not in body, \
@@ -91,7 +94,7 @@ def test_the_results_strip_leads_with_the_ribbon_and_keeps_what_it_lacks():
     assert ".pw-results .pw-stats-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }" in CSS
 
 
-def test_the_wall_prints_the_pooled_book_and_never_zenos():
+def test_the_wall_prints_the_pooled_book_then_zenos():
     got = _node("""
       const file = { overall: { settled: 40, wins: 20, losses: 20, pushes: 0, net_units: -1, roi: -0.025, units_staked: 40, win_rate: .5, breakeven: .524 },
         recent: [{ status: "won" }],
@@ -106,12 +109,31 @@ def test_the_wall_prints_the_pooled_book_and_never_zenos():
     h = got["html"]
     assert "35-24-1" in h and "+1.7% ROI" in h and "+7.6u · 60 settled" in h, "the pooled book, not the edge book"
     assert "20-20" not in h, "the edge book's own record must not leak onto the wall"
-    assert h.count('class="hd-ribbon"') == 1 and "Zeno" not in h, "one ribbon, the model's"
+    assert h.count('class="hd-ribbon"') == 2 and "Zeno · his own book" in h, "the model's, then Zeno's (no combined in this file)"
+    assert h.index("Model") < h.index("Zeno · his own book"), "the model's tile before his"
     assert 'data-pc="59"' in h and '<i class="w">W</i><i class="w">W</i><i class="l">L</i>' in h
     assert "59.3%" in h and "52.9% needed at our prices" in h and "445.2u" in h and "+7.60u" in h
     assert "hd-ribbon" in got["thin"] and "52.0%" in got["thin"] and "needed at the prices we took" in got["thin"], \
         "a thin sample still shows the ribbon and the bar, never a rate"
     assert got["none"] == ""
+
+
+def test_the_wall_leads_with_the_combined_line_and_its_split():
+    got = _node("""
+      const file = { overall: { settled: 40, wins: 20, losses: 20, net_units: -1, roi: -0.025, units_staked: 40 },
+        pooled: { overall: { settled: 2112, wins: 1236, losses: 867, pushes: 9, net_units: 4.3, roi: 0.008, units_staked: 521.5,
+                             win_rate: .588, breakeven: .57 }, recent: [] },
+        zeno: { overall: { settled: 1389, wins: 221, losses: 1141, pushes: 27, profit: 8001.64, roi: 0.2607, staked: 30692.9,
+                           net_units: 800.16 }, unit_dollars: 10, recent: [] },
+        combined: { settled: 3501, wins: 1457, losses: 2008, pushes: 36, net_units: 804.46, roi: 0.223, units_staked: 3590.8,
+                    unit_dollars: 10, split: { model: { net_units: 4.3 }, zeno: { net_units: 800.16 } } } };
+      return pwResultsHTML(adoptPooledRecord(file));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got.count('class="hd-ribbon"') == 3
+    assert got.index("Everything we’ve bet") < got.index("Model") < got.index("Zeno · his own book")
+    assert "1457-2008-36" in got and "model +4.3u · Zeno +800.2u (1u = $10)" in got, "the split rides the tile"
+    assert "the model’s win rate" in got and "the model staked to earn" in got, "the stats beneath are the model's"
 
 
 if __name__ == "__main__":

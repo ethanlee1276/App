@@ -123,7 +123,7 @@ def test_the_two_halves_do_not_print_the_same_numbers_twice():
         assert outcome in results, f"{outcome} left the results strip"
     # v5: the W-L, the net and the ROI ride the ribbon, drawn by the same
     # builder as the home and the Record page — the model's tile only.
-    assert "recordRibbonsHTML({}, o, (rec && rec.recent) || [])" in results, \
+    assert "recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno }, o," in results, \
         "the record and the net left the results strip — the ribbon carries them"
     for process in ("o.avg_clv", "o.process"):
         assert process in proof, f"{process} left the proof block"
