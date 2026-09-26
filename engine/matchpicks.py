@@ -238,14 +238,21 @@ def prop_picks(game: dict, reads: list, props: list) -> list:
     return picked
 
 
-def build(games: list, scan_reads: dict, watch: list, props: list) -> list:
-    """[{"game", "home", "away", "kickoff", "td": [...], "props": [...]}] for
-    every game with a scan, in the board's game order."""
+def positions_map(props: list, scan_reads: dict) -> dict:
+    """{player: position} from the prop rows, then the reads — a scorer row
+    carries none."""
     positions = {r.get("player"): r.get("position") for r in props or [] if r.get("position")}
     for game in (scan_reads or {}).values():
         for x in (game or {}).get("players") or []:
             if x.get("pos"):
                 positions.setdefault(x.get("player"), x.get("pos"))
+    return positions
+
+
+def build(games: list, scan_reads: dict, watch: list, props: list) -> list:
+    """[{"game", "home", "away", "kickoff", "td": [...], "props": [...]}] for
+    every game with a scan, in the board's game order."""
+    positions = positions_map(props, scan_reads)
     out = []
     for g in games or []:
         home, away = g.get("home"), g.get("away")

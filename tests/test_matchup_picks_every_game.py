@@ -156,7 +156,8 @@ def test_it_is_published_paywalled_journaled_and_drawn():
     assert '("td", "matchup_td", "Matchup"), ("prop", "matchup_prop", "Matchup")' in build
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "${matchupPicksHTML()}${tdScenariosHTML()}" in js
-    assert '["gp-sec-matchup", `Matchup picks · ${matchupPickCount(g)}`]' in js
+    # Labelled "Most likely" once the one board (engine/likelyboard) is on.
+    assert '["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`]' in js
     assert "${gpMatchupHTML(g)}" in js
 
 

@@ -47,6 +47,10 @@ const BARS = Object.freeze({ conf: 6.0, edge: 2.0, juice: -350 });
 
 const state = {
   data: null, minConf: BARS.conf, minEdge: BARS.edge, maxJuice: BARS.juice,
+  // The one Most Likely board's view (Best of the slate / By game), kept
+  // per viewer; the filter resets with the page.
+  obView: (() => { try { return localStorage.getItem("qb.obView") || "best"; } catch (e) { return "best"; } })(),
+  obFilter: "all",
   // Scoped to ONE GAME PAGE, and reversible there (#gp-showall reveals,
   // #gp-hideall puts it back). It used to be the board's global
   // checkbox; with that gone, a one-way flip would have left every
@@ -7936,11 +7940,13 @@ function likelyOpen(r) {
    the /pick/ slug its address carries — as findProp reads either. */
 function findLikelyProp(id) {
   if (!id) return null;
-  // The matchup picks open the same way (engine/matchpicks).
+  // The matchup picks and the one board open the same way.
   const mp = ((state.data || {}).matchup_picks || []).flatMap((m) => (m && m.props) || []);
-  const rows = [...((state.data || {}).most_likely || []), ...mp]
+  const ob = (((state.data || {}).likely_board || {}).rows || []);
+  const rows = [...((state.data || {}).most_likely || []), ...mp, ...ob]
     .filter((x) => x && x.kind !== "game" && x.player);
   return rows.find((x) => propId(x) === id)
+    || rows.find((x) => x.market === "anytime_td" && propId({ ...x, line: null }) === id)
     || (String(id).includes("|") ? null : rows.find((x) => pickSlug(x) === id)) || null;
 }
 function openFrom(spec) {
@@ -8623,7 +8629,20 @@ function renderLikelyTop() {
   }
   const total = (state.data.most_likely || []).filter((r) => !likelyDropped(r)).length;
   const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
-  host.innerHTML = `
+  /* THE ONE BOARD'S BEST (engine/likelyboard): Top picks, then Strong. */
+  const oneBoard = oneBoardOn();
+  const obMore = oneBoard ? oneBoardRows().length - Math.min(8, oneBoardRows().filter((r) => r.tier !== "look").length) : 0;
+  host.innerHTML = oneBoard ? `
+    <div class="section-title">Qellys’ top picks
+      <span class="sub">— the picks where our number, the matchup and the market agree</span>
+    </div>
+    ${boardGuide("most_likely")}
+    ${oneBoardHomeHTML()}
+    ${likelyDroppedHTML(dropped)}
+    <div class="likely-top-more">
+      <button class="btn ghost" id="likely-see-all" type="button">
+        See the full board — every pick, by tier and by game${obMore > 0 ? ` · ${obMore} more` : ""}</button>
+    </div>` : `
     <div class="section-title">Qellys’ top picks
       <span class="sub">— who’s most likely to hit · each pick stays here until its game</span>
     </div>
@@ -8702,6 +8721,22 @@ function renderLikely() {
      measured figures are one definition, not a copy in a template. If
      the payload predates them the page falls back to the flat list
      rather than rendering nothing. */
+  /* THE ONE BOARD (engine/likelyboard), when the build carries it. */
+  const likelySub = document.getElementById("likely-sub");
+  if (likelySub) likelySub.textContent = oneBoardOn()
+    ? "— every pick in one place, tiered by how many checks agree"
+    : "— grouped by the kind of bet, ranked by how likely it is";
+  if (oneBoardOn()) {
+    host.innerHTML = oneBoardHTML() + likelyScriptsHTML(rows)
+      + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
+    bindOneBoard(host, renderLikely);
+    host.querySelectorAll("[data-jump]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const el = document.getElementById(b.dataset.jump);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+    return;
+  }
   const shelves = boardShelves()
     .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow)
                                   .filter((r) => !likelyDropped(r)) }))
@@ -9002,6 +9037,7 @@ function likelyScriptsHTML(rows) {
    him one. Under the touchdown shelf on Home and on the full board; a
    row opens its game page. Tracked on paper under its own bucket. */
 function tdScenariosHTML() {
+  if (oneBoardOn()) return "";                  // absorbed into the one board
   const rows = ((state.data || {}).td_scenarios || []).filter((r) => r && r.player);
   if (!rows.length) return "";
   const games = (state.data || {}).games || [];
@@ -9096,6 +9132,131 @@ function likelyShelf(sh) {
    down offence against defence — its scorers (quarterbacks included) and
    its could-shine / could-struggle yards and catches where our number
    agrees — each with the lines that made the case. */
+/* ONE MOST LIKELY BOARD (engine/likelyboard). Ethan, 2026-09-26: "combine
+   the matchup picks and most likely picks into one big, just most likely
+   pick area ... I don't want to lose any picks, but I want to just be more
+   confident in what we're selecting ... so we're not confusing the user
+   and don't have a million different places for a million different
+   picks." Every pick is one row with its tier (Top pick · Strong · Worth a
+   look) and the four checks that set it — our number, the matchup, the
+   market, our record — each with the sentence behind it. */
+function oneBoardOn() {
+  const b = (state.data || {}).likely_board;
+  return !!(b && (b.rows || []).length);
+}
+function oneBoardRows() {
+  return (((state.data || {}).likely_board || {}).rows || [])
+    .filter(showableLikelyRow).filter((r) => !likelyDropped(r));
+}
+const OB_CHECKS = [["model", "Our number"], ["matchup", "Matchup"], ["market", "Market"], ["record", "Our record"]];
+const OB_TIERS = [["top", "Top picks", "Our number, the matchup and the market agree, and nothing we track says otherwise."],
+                  ["strong", "Strong", "Most of the checks agree."],
+                  ["look", "Worth a look", "Our number likes it; the other checks are split or can’t say yet."]];
+function obChecksHTML(r) {
+  const c = r.checks || {}, n = r.check_notes || {};
+  return `<div class="ob-checks">${OB_CHECKS.map(([k, label]) => {
+    const v = c[k];
+    const cls = v === true ? "yes" : v === false ? "no" : "na";
+    return `<span class="ob-check ${cls}" title="${escapeAttr(n[k] || "")}">${icon(v === true ? "check" : v === false ? "cross" : "dash", 11)} ${label}</span>`;
+  }).join("")}</div>`;
+}
+function obWhyHTML(r) {
+  const n = r.check_notes || {};
+  const checks = OB_CHECKS.map(([k, label]) => n[k] ? `<li><b>${label}:</b> ${escapeHtml(n[k])}</li>` : "").join("");
+  const lines = (r.case_lines || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  return checks || lines ? `<details class="td-why"><summary>why?</summary><ul>${checks}${lines}</ul></details>` : "";
+}
+function obRowHTML(r, opts = {}) {
+  const td = r.lane === "td";
+  const shown = td ? { ...r, line: null,
+    market_label: `Anytime TD · hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10` } : r;
+  return `<div class="ob-row tier-${escapeAttr(r.tier || "look")}">${likelyRow(shown)}${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>`;
+}
+function obFilterOf(r) {
+  if (r.lane === "td") return "td";
+  if (r.lane === "game") return "game";
+  const m = String(r.market || "");
+  return m === "receptions" ? "catches" : /yds/.test(m) ? "yards" : "other";
+}
+const OB_FILTERS = [["all", "All"], ["td", "Touchdowns"], ["yards", "Yards"], ["catches", "Catches"],
+                    ["other", "Other props"], ["game", "Game lines"]];
+function obTierSections(rows, fold = 8) {
+  return OB_TIERS.map(([t, title, sub]) => {
+    const rs = rows.filter((r) => r.tier === t);
+    if (!rs.length) return "";
+    const body = `<div class="ml-rows">${foldRowsHTML(rs.map((r) => obRowHTML(r)), { after: fold, what: "picks" })}</div>`;
+    const head = `<div class="shelf-head"><h3 class="shelf-title">${title}
+      <span class="mini" style="opacity:.6">${rs.length}</span></h3></div><p class="ls-note">${sub}</p>`;
+    return t === "look"
+      ? `<details class="likely-shelf ob-tier ob-look" id="ob-${t}"><summary class="shelf-head"><h3 class="shelf-title">${title}
+          <span class="mini" style="opacity:.6">${rs.length}</span></h3><span class="chip">show</span></summary>
+          <p class="ls-note">${sub}</p>${body}</details>`
+      : `<section class="likely-shelf ob-tier" id="ob-${t}">${head}${body}</section>`;
+  }).join("");
+}
+function obByGameHTML(rows) {
+  const games = (state.data || {}).games || [];
+  const keyOf = (g) => `${g.away}@${g.home}`;
+  const keys = games.map(keyOf).filter((k) => rows.some((r) => r.game === k));
+  const rest = rows.filter((r) => !keys.includes(r.game));
+  const block = (k, rs) => {
+    const g = games.find((x) => keyOf(x) === k);
+    return `<div class="mp-game">
+      ${g ? `<div class="mp-head" data-team-game="${escapeAttr(gameId(g))}" role="button" tabindex="0">
+        ${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}
+        <span class="mini">${escapeHtml(whenLabel(g.date, g.kickoff))}</span></div>` : ""}
+      <div class="ml-rows">${foldRowsHTML(rs.map((r) => obRowHTML(r)), { after: 4, what: "picks" })}</div></div>`;
+  };
+  return `<div class="matchup-picks">${keys.map((k) => block(k, rows.filter((r) => r.game === k))).join("")}
+    ${rest.length ? block("", rest) : ""}</div>`;
+}
+function oneBoardHTML() {
+  const all = oneBoardRows();
+  const view = state.obView === "game" ? "game" : "best";
+  const filters = OB_FILTERS.filter(([k]) => k === "all" || all.some((r) => obFilterOf(r) === k));
+  const f = filters.some(([k]) => k === state.obFilter) ? state.obFilter : "all";
+  const rows = f === "all" ? all : all.filter((r) => obFilterOf(r) === f);
+  const tiers = OB_TIERS.map(([t, title]) => [t, title, all.filter((r) => r.tier === t).length]);
+  return `<div class="one-board">
+    <div class="ob-summary">${tiers.map(([t, title, n]) => n ? `<button type="button" class="chip ob-tier-chip tier-${t}"
+      data-jump="ob-${t}">${title} · ${n}</button>` : "").join("")}</div>
+    <div class="std-chips ob-controls">
+      <button class="al-cat${view === "best" ? " on" : ""}" type="button" data-ob-view="best">Best of the slate</button>
+      <button class="al-cat${view === "game" ? " on" : ""}" type="button" data-ob-view="game">By game</button>
+    </div>
+    ${filters.length > 2 ? `<div class="std-chips ob-filters">${filters.map(([k, label]) => `<button class="al-cat${k === f ? " on" : ""}"
+      type="button" data-ob-filter="${k}">${label}
+      <span class="mini" style="opacity:.6">${k === "all" ? all.length : all.filter((r) => obFilterOf(r) === k).length}</span></button>`).join("")}</div>` : ""}
+    ${view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
+  </div>`;
+}
+function bindOneBoard(host, rerender) {
+  host.querySelectorAll("[data-ob-view]").forEach((b) => b.addEventListener("click", () => {
+    state.obView = b.dataset.obView;
+    try { localStorage.setItem("qb.obView", state.obView); } catch (e) { /* private window */ }
+    rerender();
+  }));
+  host.querySelectorAll("[data-ob-filter]").forEach((b) => b.addEventListener("click", () => {
+    state.obFilter = b.dataset.obFilter;
+    rerender();
+  }));
+}
+function oneBoardHomeHTML() {
+  const all = oneBoardRows();
+  const top = [...all.filter((r) => r.tier === "top"), ...all.filter((r) => r.tier === "strong")].slice(0, 8);
+  return `<div class="one-board">${top.length
+    ? `<div class="ml-rows">${top.map((r) => obRowHTML(r, { why: false })).join("")}</div>`
+    : `<div class="ls-note">No pick clears three checks yet — the full board has every one.</div>`}</div>`;
+}
+function obGameHTML(g) {
+  const k = `${g.away}@${g.home}`;
+  const rows = oneBoardRows().filter((r) => r.game === k);
+  if (!rows.length) return "";
+  return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Most likely · this game
+      <span class="sub">— every pick in this game, with the four checks behind its tier</span></div>
+    ${obTierSections(rows, 6)}</div>`;
+}
+
 function matchupPickRowHTML(r) {
   const td = r.kind === "td";
   const shown = td ? { ...r, line: null, market_label: `Anytime TD · ${r.label || ""}`.replace(/ · $/, "") }
@@ -9119,6 +9280,7 @@ function matchupGameHTML(m, opts = {}) {
   </div>`;
 }
 function matchupPicksHTML() {
+  if (oneBoardOn()) return "";                  // absorbed into the one board
   const games = ((state.data || {}).matchup_picks || []).filter((m) => m && ((m.td || []).length || (m.props || []).length));
   if (!games.length) return "";
   const n = games.reduce((a, m) => a + (m.td || []).length + (m.props || []).length, 0);
@@ -9133,6 +9295,7 @@ function matchupPicksHTML() {
   </section>`;
 }
 function gpMatchupHTML(g) {
+  if (oneBoardOn()) return obGameHTML(g);
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   if (!m || !((m.td || []).length || (m.props || []).length)) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Matchup picks
@@ -9141,6 +9304,7 @@ function gpMatchupHTML(g) {
     ${matchupGameHTML(m, { head: false })}</div>`;
 }
 function matchupPickCount(g) {
+  if (oneBoardOn()) return oneBoardRows().filter((r) => r.game === `${g.away}@${g.home}`).length;
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   return m ? (m.td || []).length + (m.props || []).length : 0;
 }
@@ -12065,7 +12229,7 @@ function renderGamePage() {
   const gameLikely = (state.data.most_likely || [])
     .filter(showableLikelyRow)
     .filter((r) => propInGame(r, g));
-  const likelies = gameLikely.filter((r) => !likelyDropped(r));
+  const likelies = oneBoardOn() ? [] : gameLikely.filter((r) => !likelyDropped(r));
   // …the ones whose chance has fallen under the bar since (likelyDropped)…
   const droppedHere = gameLikely.filter(likelyDropped);
   // …and this game's picks that came off the board, with why (likelyPulled).
@@ -12305,7 +12469,7 @@ function renderGamePage() {
       g.scan && g.scan.units ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
-      matchupPickCount(g) ? ["gp-sec-matchup", `Matchup picks · ${matchupPickCount(g)}`] : null,
+      matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
       likelies.length || droppedHere.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,

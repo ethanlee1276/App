@@ -1060,6 +1060,23 @@ def main() -> None:
                        likely_previous=_likely_prev(args.out, slate.date)
                        if args.out else None,
                        before_likely=_scan_first)
+    # ONE MOST LIKELY BOARD (engine/likelyboard): the Most Likely rows, the
+    # matchup picks and the touchdown scenarios in one pool, each put
+    # through four checks — our chance, the matchup, the market, our own
+    # record — and tiered. Ethan, 2026-09-26: "combine the matchup picks
+    # and most likely picks into one big, just most likely pick area".
+    try:
+        from engine import likelyboard as _lb, ledger as _lb_ledger
+        try:
+            _rec = _lb.record_table(_lb_ledger.connect(), "nfl")
+        except Exception:                                    # noqa: BLE001
+            _rec = {}
+        result["likely_board"] = _lb.build(result, record=_rec)
+        _t = result["likely_board"]["tiers"]
+        print(f"  Most Likely board: {len(result['likely_board']['rows'])} pick(s) — "
+              f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  one Most Likely board skipped: {_exc}")
     # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
     # a table behind the last week played is data the page would present
     # as this week's. Never fatal.
@@ -1489,6 +1506,17 @@ def main() -> None:
                     depth=None, category=_cat, grade_label=_label)
                 if _n:
                     print(f"Matchup picks ({_kind}): {_n} row(s) journaled on paper.")
+            # THE ONE BOARD, per tier, on paper (engine/likelyboard): the
+            # tier a pick went up at is its grade, so the record can say
+            # whether Top really hits more than Worth a look.
+            from engine.likelyboard import journal_rows as _lb_rows, TIERS as _LB_TIERS
+            for _tier, _label in _LB_TIERS:
+                _n = ledger.log_most_likely(
+                    lconn, {"sport": "nfl", "date": result.get("date", ""), "games": result.get("games") or [],
+                            "most_likely": _lb_rows(result.get("likely_board"), _tier)},
+                    depth=None, category="board", grade_label=_label)
+                if _n:
+                    print(f"Most Likely board ({_label}): {_n} row(s) journaled on paper.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             #

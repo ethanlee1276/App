@@ -104,6 +104,8 @@ PAID_KEYS = (
     # reasons, ranked — the paid product under another name.
     "td_scenarios",
     "matchup_picks",
+    # THE ONE MOST LIKELY BOARD (engine/likelyboard): every pick, tiered.
+    "likely_board",
     # THE MAIN BOARD, which is the product under its own name — who we
     # think will actually hit. Ranked by likelihood rather than edge, and
     # every bit as much the thing somebody is paying for.

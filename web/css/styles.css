@@ -11883,6 +11883,20 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .matchup-picks .sc-lines li::before { content: "· "; color: var(--brand); }
+/* The one Most Likely board (app.js oneBoardHTML): a tier summary, the
+   view and lane controls, and on every row its four checks. */
+.one-board .ob-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.one-board .ob-tier-chip { cursor: pointer; }
+.one-board .ob-tier-chip.tier-top { color: var(--good); }
+.one-board .ob-controls, .one-board .ob-filters { margin-bottom: 8px; }
+.one-board .ob-row { padding-bottom: 6px; border-bottom: var(--hairline) solid var(--border-soft); }
+.one-board .ob-checks { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 14px 0 58px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.one-board .ob-check.yes { color: var(--good); }
+.one-board .ob-check.no { color: var(--bad); }
+.one-board .td-why { padding: 0 14px 0 58px; }
+.one-board .ob-look > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.one-board .ob-look > summary::-webkit-details-marker { display: none; }
 .td-why { margin-top: 4px; }
 .td-why > summary { list-style: none; cursor: pointer; color: var(--brand); font-weight: 700; font-size: var(--fs-xs); }
 .td-why > summary::-webkit-details-marker { display: none; }
