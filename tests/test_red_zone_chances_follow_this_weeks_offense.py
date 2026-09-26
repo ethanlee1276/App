@@ -71,7 +71,8 @@ def test_the_scenario_says_the_scaled_number_and_the_quarterback_change():
     td = {"model_prob": 0.42, "odds": 113, "book": "Novig", "implied_total": 20.5,
           "rz_chances": 3.35, "rz_before": 4.0, "rz_then_implied": 24.5,
           "qb_change": "Russell Wilson (OUT) — Jameis Winston starts"}
-    s = S.score(_read(td), units)
+    trips = dict(rz_own={"off": 8.0, "off_rel": 0.06}, rz_opp={"def": 9.0, "def_rel": 0.2})
+    s = S.score(_read(td), units, **trips)
     assert s, "still a scenario"
     assert ("3.4 expected red-zone chances this week (4.0 a game before, scaled to 20.5 expected points "
             "from 24.5)") in s["lines"], s["lines"]
@@ -79,7 +80,7 @@ def test_the_scenario_says_the_scaled_number_and_the_quarterback_change():
         in s["lines"]
     # Unmoved, the line reads as before.
     flat = dict(td, rz_chances=4.0, qb_change=None)
-    assert "4.0 expected red-zone chances" in S.score(_read(flat), units)["lines"]
+    assert "4.0 expected red-zone chances" in S.score(_read(flat), units, **trips)["lines"]
 
 
 def test_the_read_stamp_carries_them():

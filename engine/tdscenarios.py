@@ -25,7 +25,8 @@ on and the touchdown model priced:
   red zone   the red-zone chances the model expects him to get.
 
 Each is scored 0–2; a player is a scenario when he scores at least
-SCENARIO_MIN with the defence, the usage and the red zone all counting,
+SCENARIO_MIN (of 10, with red-zone trips the fifth reading) with the
+defence, the usage and the red zone all counting,
 and never when he is on the injury report (the Most Likely board's rule). Scenarios are
 ranked by OUR chance of the touchdown, so the shelf reads top down the way
 the touchdown shelf does, and each carries the four lines that made it.
@@ -46,8 +47,12 @@ DEFENSE_RANK = (26, 20)                # opponent's unit rank of 32, higher = so
 TARGET_SHARE = (0.24, 0.18)            # WR / TE
 CARRY_SHARE = (0.55, 0.40)             # RB
 RED_ZONE_CHANCES = (1.5, 0.9)          # expected red-zone touches
-#: A scenario scores at least this of 8, with defence and usage both > 0.
-SCENARIO_MIN = 5
+#: Red-zone trips (engine/redzone): his offence's red-zone plays per game
+#: and the opponent's allowed, each against the league, averaged. (strong, ok).
+TRIPS_REL = (0.15, 0.05)
+#: A scenario scores at least this of 10, with defence, usage and his red
+#: zone all counting. Was 5 of 8 before red-zone trips joined (2026-09-26).
+SCENARIO_MIN = 6
 #: How many the shelf carries.
 LIMIT = 8
 
@@ -66,7 +71,8 @@ def _ord(n) -> str:
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 
-def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
+def score(read: dict, opp_units: dict | None, n_teams: int = 32,
+          rz_own: dict | None = None, rz_opp: dict | None = None) -> dict | None:
     """The four readings for one read carrying a touchdown stamp, or None
     when he is not a scenario. ``opp_units`` is the scan's rating for the
     opponent ({"def": {"passing": {"rank"}, "rushing": {"rank"}}, "blend"})."""
@@ -87,10 +93,15 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
     rank = (((opp_units or {}).get("def") or {}).get(unit) or {}).get("rank")
     share = u.get("tgt_share") if grp == "wr" else u.get("carry_share")
     rz = td.get("rz_chances")
+    off_rel = (rz_own or {}).get("off_rel")
+    def_rel = (rz_opp or {}).get("def_rel")
+    trips = [v for v in (off_rel, def_rel) if v is not None]
+    trips_rel = sum(trips) / len(trips) if trips else None
     pts = {"offense": _pts(implied, OFFENSE_POINTS),
            "defense": _pts(rank, DEFENSE_RANK),
            "usage": _pts(share, TARGET_SHARE if grp == "wr" else CARRY_SHARE),
-           "red_zone": _pts(rz, RED_ZONE_CHANCES)}
+           "red_zone": _pts(rz, RED_ZONE_CHANCES),
+           "trips": _pts(trips_rel, TRIPS_REL)}
     total = sum(pts.values())
     # THE RED ZONE IS REQUIRED, like the defence and the usage. Flowers again:
     # "it says 0.0 redzone chances expected yet we display this pick." A
@@ -114,6 +125,16 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
         lines.append(f"{float(rz):.1f} expected red-zone chances"
                      + (f" this week ({float(before):.1f} a game before, scaled to {float(implied):.1f} "
                         f"expected points from {float(then):.1f})" if moved else ""))
+    # RED-ZONE TRIPS: how often his offence gets inside the 20, and how
+    # often their defence lets teams in (engine/redzone).
+    if trips:
+        pct = lambda v: f"{v * 100:+.0f}%"                     # noqa: E731
+        bits = []
+        if off_rel is not None:
+            bits.append(f"{team} runs {(rz_own or {}).get('off'):g} red-zone plays a game ({pct(off_rel)} vs the league)")
+        if def_rel is not None:
+            bits.append(f"{opp} allows {(rz_opp or {}).get('def'):g} ({pct(def_rel)})")
+        lines.append(" · ".join(bits))
     # HIS QUARTERBACK, WHEN THE STARTER IS OUT. Ethan, 2026-09-26: "last
     # week the starting QB for that team was announced out for the season
     # so no way that number is correct now." The lines above already carry
@@ -127,9 +148,12 @@ def build(result: dict, n_teams: int = 32, limit: int = LIMIT) -> list:
     """Scenario rows for the board, ranked by our chance, from the reads
     (`scan_reads`) and each game's scan units."""
     units_by_team: dict = {}
+    rz_by_team: dict = {}
     for g in result.get("games") or []:
         for t, u in ((g.get("scan") or {}).get("units") or {}).items():
             units_by_team[t] = u
+        for t, r in ((g.get("scan") or {}).get("redzone") or {}).items():
+            rz_by_team[t] = r
     seated = {(r.get("player") or "") for r in result.get("most_likely") or []
               if isinstance(r, dict) and r.get("kind") == "td" and not r.get("reserve")}
     out = []
@@ -137,7 +161,8 @@ def build(result: dict, n_teams: int = 32, limit: int = LIMIT) -> list:
         for x in game.get("players") or []:
             if (x.get("player") or "") in seated:
                 continue
-            s = score(x, units_by_team.get(x.get("opp") or ""), n_teams)
+            s = score(x, units_by_team.get(x.get("opp") or ""), n_teams,
+                      rz_own=rz_by_team.get(x.get("team") or ""), rz_opp=rz_by_team.get(x.get("opp") or ""))
             if not s:
                 continue
             td = x["td"]

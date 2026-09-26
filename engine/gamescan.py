@@ -1200,6 +1200,13 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         from . import db
         conn = db.connect()
     ratings = unit_ratings(conn, season, before_week=week)
+    # RED-ZONE TRIPS, offence and defence (engine/redzone), for the
+    # touchdown scenarios' fifth reading.
+    try:
+        from .redzone import team_rates as _rz_rates
+        rz_teams = _rz_rates(conn, season, before_week=week)
+    except Exception:                                        # noqa: BLE001
+        rz_teams = {}
     charts = team_charts(depth_rows, week)["teams"] if depth_rows else {}
     now_rows = N.load_pfr_def(season)
     defenders_now = N.defenders(now_rows)
@@ -1250,6 +1257,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          pulled=getattr(g, "pulled_players", None) or [])
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
+        scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}
         gd["scan"] = scan
         n += 1
     stamp_touchdowns(reads, result)
