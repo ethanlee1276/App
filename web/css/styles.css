@@ -7021,6 +7021,15 @@ body.has-deck #rail-live { display: none; }
 .zeno-win { margin: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .zeno-win-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .zeno-win-nums { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-sm); }
+/* "Verified on Pikkit" — his record's receipt, wherever it is (app.js
+   pikkitBadgeHTML). */
+.pk-verified { display: inline-flex; align-items: center; gap: 5px; color: var(--good);
+  font-weight: 700; font-size: var(--fs-sm); text-decoration: none; white-space: nowrap; }
+.pk-verified:hover { text-decoration: underline; }
+.pk-row { margin: 6px 0 8px; }
+.pk-card { margin: 0 0 12px; padding: 12px 14px; }
+.pk-card .list-note { margin: 6px 0 0; }
+.pw-verify .pk-go { margin-left: 14px; }
 /* Zeno grading a bet he posted, under its row (app.js zenoGradeHTML). */
 .zeno-grade { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 10px; }
 .zeno-grade .btn { padding: 4px 10px; font-size: var(--fs-sm); }

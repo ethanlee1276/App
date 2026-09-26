@@ -54,6 +54,7 @@ def _node(js):
         return None
     prog = f"""
       const MINUS = "\\u2212";
+      const pikkitBadgeHTML = (t) => "<a class='pk-verified'>" + (t || "Zeno’s picks verified on Pikkit") + "</a>";
       {_const("PROOF_RATE_FLOOR")}
       {_fn("zenoMoney")}
       {_fn("recordRibbonsHTML")}

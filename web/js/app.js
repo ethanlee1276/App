@@ -18017,6 +18017,20 @@ const POTD_MIN_N = 20;
    count-up keeps the comma where it finds one (countAt). The grouping
    is written out here and in mbMoney rather than shared: three test
    harnesses lift each formatter on its own. */
+/* ZENO'S PIKKIT PAGE — his record, charts and every bet, synced straight
+   from his sportsbooks and marked Verified by Pikkit. Ethan, 2026-09-26:
+   "users can use it to verify my charts and picks and record and we need
+   to plaster everywhere that all picks are verified on pikkit." Said
+   wherever HIS record or bets are — and only there: the model's picks are
+   not bets at a book, so they are not on Pikkit; they are verified by this
+   site's own timestamped, graded public record. */
+const PIKKIT_URL = "https://links.pikkit.com/QellysBook";
+function pikkitBadgeHTML(text) {
+  return `<a class="pk-verified" href="${PIKKIT_URL}" target="_blank" rel="noopener noreferrer"
+    title="Zeno’s record, charts and every bet, synced from his sportsbooks and verified by Pikkit"
+    >${iconMark("check", 12)}<span>${escapeHtml(text || "Zeno’s picks verified on Pikkit")}</span><span aria-hidden="true">↗</span></a>`;
+}
+
 function zenoMoney(x) {
   const v = Number(x || 0);
   return `${v < 0 ? MINUS : ""}$${Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
@@ -18124,6 +18138,7 @@ function recZenoSection(z, scope, tix) {
         · <a href="#zeno" data-view="zeno">what’s riding now →</a></span></div>
     <div class="card" style="border-left:3px solid var(--brand)">
       <div>${zenoTallyLine(t)}</div>
+      <div class="pk-row">${pikkitBadgeHTML()}</div>
       ${!scope && books.length > 1 ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${books.map((b) => `${escapeHtml(b.name)} ${b.wins}-${b.losses}${b.pushes ? "-" + b.pushes : ""} ${
           b.profit >= 0 ? "+" : ""}${zenoMoney(b.profit)}`).join(" · ")}</div>` : ""}
@@ -18401,6 +18416,10 @@ async function renderZeno() {
   host.innerHTML = `
     ${ribbon ? `<div class="hd-stats rec-ribbons">${ribbon}</div>`
              : `<div class="card"><p class="list-note">No tickets yet.</p></div>`}
+    <div class="card pk-card">${pikkitBadgeHTML("Every Zeno pick is verified on Pikkit")}
+      <p class="list-note">Every bet Zeno places is tracked on Pikkit, synced straight from his
+        sportsbooks — the record, the charts and each pick. Check it yourself before you tail
+        anything.</p></div>
     ${zenoSnapshotHTML(z.snapshot, z.unit_dollars)}
     <p class="list-note">${z.snapshot
       ? `The record up to ${escapeHtml(zenoDay(z.snapshot.as_of))} is ${escapeHtml(z.snapshot.source || "Pikkit")}’s,
@@ -24696,7 +24715,7 @@ const PLAN_FEATURES = [
   // ZENO'S BETS (Ethan, 2026-09-26: the paywall should say it "gets access
   // to ALL of my Zeno's props and parlays"). Third, so the longer plans'
   // four-line summary carries it too. Paid for real: engine/zeno.PAID_BOARD.
-  "All of Zeno’s props and parlays, posted as he places them",
+  "All of Zeno’s props and parlays, posted as he places them — verified on Pikkit",
   "Daily picks, player props and parlay tickets",
   "Line movement, line shopping and the price tape",
   "The full fantasy suite — draft kit, mock draft, lineups, trades",
@@ -25196,8 +25215,10 @@ function paywallHTML(rec, status) {
           <li>${iconMark("check", 13)}<span>Every price is recorded.</span></li>
           <li>${iconMark("check", 13)}<span>Every result is graded.</span></li>
           <li>${iconMark("check", 13)}<span>Every loss stays on the board.</span></li>
+          <li>${iconMark("check", 13)}<span>Every Zeno pick is verified on Pikkit.</span></li>
         </ul>
         <a class="pw-verify-go" href="#record">See the record — it’s free &#8594;</a>
+        <a class="pw-verify-go pk-go" href="${PIKKIT_URL}" target="_blank" rel="noopener noreferrer">Zeno’s record on Pikkit &#8599;</a>
       </div>
       <div class="pw-sports">${PW_SPORTS.map(([label, mark]) =>
         // aria-hidden: the label is the next node, and a screen reader
@@ -25214,7 +25235,7 @@ function paywallHTML(rec, status) {
       ${feature("🤖", "Ask Qellys",
         "An AI assistant for any team, player or game in any sport — tonight’s boards and every past game we have stored — answered from our own numbers, with the sources shown.")}
       ${feature("🎟️", "All of Zeno’s props and parlays",
-        "Every prop and parlay Zeno places at FanDuel, DraftKings and theScore Bet — the pick, the book, the price he got and the stake — posted the moment he places it. His record is free to check first.")}
+        "Every prop and parlay Zeno places at FanDuel, DraftKings and theScore Bet — the pick, the book, the price he got and the stake — posted the moment he places it. Every one is verified on Pikkit, synced from his sportsbooks: check his record there before you pay.")}
       ${feature("🎯", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
       ${feature("📊", "The model, shown working",
@@ -44767,8 +44788,10 @@ function recordRibbonsHTML(rec, ov, recent) {
        reader's hand-logged bets on My Bets — under its own label. */
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
     const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u${unitNote(z.unit_dollars)} · `;
-    tiles.push(tile(z.label || (z.snapshot ? `Zeno · his own book · via ${z.snapshot.source || "Pikkit"}` : "Zeno · his own book"), wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
-                    `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
+    const zeno = !z.label;          // Zeno's own tile, not a reader's book on My Bets
+    tiles.push(tile(z.label || "Zeno · his own book · verified on Pikkit", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+                    `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}${
+                      zeno ? ` · ${pikkitBadgeHTML("check it on Pikkit")}` : ""}`,
                     dots(z.recent, "result"), rate(zo), zo.roi == null ? "" : roiRing(zo.roi)));
   }
   return tiles.join("");
@@ -44786,9 +44809,9 @@ async function deckRecordHTML() {
   const tix = await zenoTickets();
   const open = tix.locked ? [] : (tix.open || []);
   const zeno = open.length
-    ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
+    ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}<div class="pk-row">${pikkitBadgeHTML()}</div>
        <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div>`
-    : tix.locked && Number(z.open_n) ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}${zenoLockedHTML(z)}` : "";
+    : tix.locked && Number(z.open_n) ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}<div class="pk-row">${pikkitBadgeHTML()}</div>${zenoLockedHTML(z)}` : "";
   return { record, zeno };
 }
 

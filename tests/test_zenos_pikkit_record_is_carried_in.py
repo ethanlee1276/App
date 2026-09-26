@@ -128,7 +128,7 @@ def test_the_page_says_where_it_came_from_and_shows_the_cards():
     assert 'class="zeno-receipt"' in fn and "<img src=" in fn, "the Pikkit card is the receipt"
     assert "marked Verified by ${src}, as of" in fn
     assert "${zenoSnapshotHTML(z.snapshot, z.unit_dollars)}" in APP
-    assert "Zeno · his own book · via ${z.snapshot.source || \"Pikkit\"}" in APP
+    assert "Zeno · his own book · verified on Pikkit" in APP
 
 
 def test_his_units_say_what_a_unit_is_worth():
