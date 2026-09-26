@@ -279,6 +279,53 @@ def test_the_record_check_says_its_numbers_and_every_check_is_coloured():
     assert "${obTierSections(rows, { sort: false })}" in js, "no sort box on the game page: nothing wires it there"
 
 
+def test_every_sport_gets_the_board_with_its_own_matchup_read():
+    """Ethan, 2026-09-26: "we need to make sure that every other sport that
+    has the Qellys' top picks is getting the same remodel". The board is
+    built on every sport's build; what the matchup check reads is the
+    sport's own — the scan in football, the projection's Matchup step in
+    baseball, nothing yet in basketball (whose picks top out at Strong,
+    and the check says why)."""
+    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "model"}
+    def rec(player, market, mult, why="opp starter K% +12%"):
+        return {"player": player, "market": market,
+                "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},
+                                                 {"key": "matchup", "mult": mult, "why": why}]}}
+    def ml(player, market, side, prob=0.66, odds=-190):
+        return {"player": player, "team": "NYY", "market": market, "side": side, "line": 5.5,
+                "model_prob": prob, "odds": odds, "kind": "prop"}
+    result = {"games": [], "recommendations": [rec("Cole", "strikeouts", 1.08), rec("Judge", "hits", 0.99),
+                                               rec("Soto", "total_bases", 0.94)],
+              "most_likely": [ml("Cole", "strikeouts", "over"), ml("Judge", "hits", "over"),
+                              ml("Soto", "total_bases", "over"), ml("Nobody", "hits", "over")]}
+    board = B.build(result, record={}, sport="mlb")
+    by = {r["player"]: r for r in board["rows"]}
+    assert board["matchup_source"] == "model"
+    assert by["Cole"]["checks"]["matchup"] is True and "+8%" in by["Cole"]["check_notes"]["matchup"]
+    assert by["Cole"]["tier"] == "top"
+    assert by["Judge"]["checks"]["matchup"] is None and "not enough to call" in by["Judge"]["check_notes"]["matchup"]
+    assert by["Soto"]["checks"]["matchup"] is False
+    assert by["Nobody"]["checks"]["matchup"] is None
+    # An under reads the step the other way.
+    under = B.build({"games": [], "recommendations": [rec("Cole", "strikeouts", 0.92)],
+                     "most_likely": [ml("Cole", "strikeouts", "under")]}, record={}, sport="mlb")
+    assert under["rows"][0]["checks"]["matchup"] is True
+    # Basketball: no read, said, and nothing above Strong.
+    hoops = B.build({"games": [], "most_likely": [ml("Brunson", "points", "over")]}, record={}, sport="nba")
+    r = hoops["rows"][0]
+    assert hoops["matchup_source"] == "none" and r["checks"]["matchup"] is None
+    assert r["check_notes"]["matchup"] == "no matchup read for this sport yet" and r["tier"] == "strong"
+    # The builds attach and journal it.
+    for build, sport in (("mlb_build.py", "'mlb'"), ("nba_build.py", "args.league"), ("cfb_build.py", "'cfb'")):
+        src = open(os.path.join(ROOT, build), encoding="utf-8").read()
+        assert f"_lb.attach({'result' if build == 'mlb_build.py' else 'out'}, {sport})" in src, build
+        assert "_lb.journal(lconn, " in src, build
+    # Off football the kind chips are the sport's own markets.
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "if (!obFootball()) return `m:${m}`;" in js and "const filters = obFilterList(all);" in js
+    assert 'if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";' in js
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

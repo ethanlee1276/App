@@ -899,6 +899,11 @@ def main() -> None:
                                                     out["most_likely"])
         except Exception as exc:                          # noqa: BLE001
             print(f"⚠️  likelihood board skipped: {exc}")
+        # THE ONE MOST LIKELY BOARD, as the NFL's (engine/likelyboard) —
+        # the same cards on every sport's page. Basketball has no matchup
+        # read yet, so its picks top out at Strong and the check says why.
+        from engine import likelyboard as _lb
+        print(f"  {_lb.attach(out, args.league)}")
 
         # Journal picks + stale flags under the league that produced them —
         # this build runs as BOTH leagues, and journaling "nba" while the
@@ -948,6 +953,11 @@ def main() -> None:
             ml = ledger.log_most_likely(
                 lconn, {"sport": args.league, "date": args.date,
                         "most_likely": out.get("most_likely") or []})
+            # The one board, per tier, on paper (engine/likelyboard).
+            from engine import likelyboard as _lb
+            _lb_n = _lb.journal(lconn, out, args.league, args.date)
+            if _lb_n:
+                print(f"Most Likely board: {_lb_n} row(s) journaled on paper.")
             # AND THE PICK OF THE DAY, to its own book. Refuses a row the
             # selector flagged below its bar, refuses a second pick on a day
             # that already has one, and refuses a game under way — see

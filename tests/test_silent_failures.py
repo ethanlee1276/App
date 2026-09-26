@@ -164,6 +164,14 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # to pass an error on as one. A lookup must never fail the whole
         # question, so it does not raise.
         "run_tool",
+        # THE ONE BOARD ON EVERY SPORT, 2026-09-26 (engine/likelyboard
+        # .attach), caught by this sweep the hour it was written. Its
+        # failure is the build-log line "one Most Likely board skipped:
+        # <exception>", which no quiet day produces — a quiet day returns
+        # the board's counts — and every build prints it. The page then
+        # draws the older Most Likely shelves, which is the right fallback:
+        # a board that fails must never take the picks down with it.
+        "attach",
     }
 
     def broad(h):

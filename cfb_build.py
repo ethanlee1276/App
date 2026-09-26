@@ -2240,6 +2240,10 @@ def main() -> None:
             # returns the one shelf with rows on it and drops the rest.
             out["board_guide"] = _boards.guide("cfb")
             out["board_shelves"] = _boards.shelves("cfb", out["most_likely"])
+            # THE ONE MOST LIKELY BOARD, as the NFL's (engine/likelyboard):
+            # the same checks, tiers and cards on the college page.
+            from engine import likelyboard as _lb
+            print(f"  {_lb.attach(out, 'cfb')}")
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every
@@ -2388,6 +2392,11 @@ def main() -> None:
         ml_n = ledger.log_most_likely(
             lconn, {"sport": "cfb", "date": args.date,
                     "most_likely": out.get("most_likely") or []})
+        # The one board, per tier, on paper (engine/likelyboard).
+        from engine import likelyboard as _lb
+        _lb_n = _lb.journal(lconn, out, "cfb", args.date)
+        if _lb_n:
+            print(f"Most Likely board: {_lb_n} row(s) journaled on paper.")
         # AND THE PICK OF THE DAY, to its own book. Refuses a row the
         # selector flagged below its bar, refuses a second pick on a day
         # that already has one, and refuses a game under way — see

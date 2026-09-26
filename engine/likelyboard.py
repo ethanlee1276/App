@@ -61,6 +61,20 @@ RECORD_MIN_N = 20
 #: how far under it says no.
 RECORD_SLACK = 0.04
 RECORD_MISS = 0.08
+#: EVERY SPORT GETS THE BOARD (Ethan, 2026-09-26: "every other sport that
+#: has the Qellys' top picks is getting the same remodel"). What the
+#: matchup check reads differs by sport, and where a sport has no matchup
+#: read the check says so and its picks top out at Strong — a Top pick is
+#: one the matchup backs, in every sport:
+#:   nfl, cfb   the game scan's lean on this player and market (and, for
+#:              an NFL scorer, his touchdown matchup of 8 — calibrated on
+#:              32 teams, so college scorers are not read with it);
+#:   mlb        the projection's own Matchup step (opposing starter,
+#:              platoon, the lineup around him), when it moved the number
+#:              at least MODEL_MATCHUP_STEP toward this side;
+#:   nba, wnba  none yet.
+MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "model"}
+MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
 RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board")
 #: Chance bands the record is read in (ledger.LIKELY_BANDS).
@@ -173,8 +187,40 @@ def market_check(r: dict):
     return None, words
 
 
-def matchup_check(r: dict, leans: dict, td_scores: dict):
+def model_matchups(recs: list) -> dict:
+    """{(player, market): (multiplier, why)} — each pick's Matchup step,
+    off the projection chain the pipeline publishes (engine/chain)."""
+    out = {}
+    for rec in recs or []:
+        for st in ((rec or {}).get("chain") or {}).get("steps") or []:
+            if st.get("key") == "matchup" and st.get("mult") is not None:
+                out[(rec.get("player") or "", rec.get("market"))] = (float(st["mult"]), st.get("why") or "")
+                break
+    return out
+
+
+def _model_matchup(r: dict, steps: dict):
+    got = steps.get((r.get("player") or "", r.get("market")))
+    if not got:
+        return None, "the model has no matchup step for this market"
+    mult, why = got
+    pct = f"{(mult - 1) * 100:+.0f}%"
+    toward = mult - 1 if _side(r) == "over" else 1 - mult
+    words = f"matchup moved our number {pct}" + (f" ({why})" if why else "")
+    if toward >= MODEL_MATCHUP_STEP:
+        return True, words
+    if toward <= -MODEL_MATCHUP_STEP:
+        return False, words + " — against this side"
+    return None, words + " — not enough to call"
+
+
+def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = None,
+                  source: str = "scan"):
     lane = lane_of(r)
+    if source == "none" and lane != "game":
+        return None, "no matchup read for this sport yet"
+    if source == "model" and lane == "prop":
+        return _model_matchup(r, steps or {})
     if lane == "td":
         s = td_scores.get(r.get("player") or "")
         if s is None:
@@ -223,9 +269,12 @@ def _game_of(r: dict, games: list) -> str:
     return ""
 
 
-def build(result: dict, record: dict | None = None) -> dict:
-    """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n}} — the pool,
-    checked and tiered, ranked Top first then by our chance."""
+def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
+    """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
+    "matchup_source": ...} — the pool, checked and tiered, ranked Top
+    first then by our chance."""
+    source = MATCHUP_SOURCE.get(sport, "none")
+    steps = model_matchups(result.get("recommendations") or []) if source == "model" else {}
     from .gamescan import leans_from_reads
     from .matchpicks import td_matchup, positions_map
     games = result.get("games") or []
@@ -278,6 +327,8 @@ def build(result: dict, record: dict | None = None) -> dict:
         if r.get("matchup_score") is not None:
             td_scores[r["player"]] = int(r["matchup_score"])
             continue
+        if sport != "nfl":
+            continue
         g = by_game.get(r["game"])
         if not g or not g.get("scan"):
             continue
@@ -299,7 +350,7 @@ def build(result: dict, record: dict | None = None) -> dict:
         checks, notes = {}, {}
         checks["model"] = prob >= MODEL_BAR[lane]
         notes["model"] = f"our chance {prob:.0%} (the bar here is {MODEL_BAR[lane]:.0%})"
-        checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores)
+        checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         tier = tier_of(checks)
@@ -312,7 +363,44 @@ def build(result: dict, record: dict | None = None) -> dict:
         lanes[lane] = lanes.get(lane, 0) + 1
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
     rows.sort(key=lambda r: (rank[r["tier"]], -float(r["model_prob"])))
-    return {"rows": rows, "tiers": tiers, "lanes": lanes}
+    return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source}
+
+
+def attach(result: dict, sport: str, conn=None) -> str:
+    """Build the board onto ``result["likely_board"]`` with this sport's
+    record; the line for the build log. Never raises — a board that fails
+    leaves the page on its older Most Likely shelves."""
+    try:
+        if conn is None:
+            from . import ledger
+            try:
+                conn = ledger.connect()
+            except Exception:                                # noqa: BLE001
+                conn = None
+        try:
+            rec = record_table(conn, sport) if conn is not None else {}
+        except Exception:                                    # noqa: BLE001
+            rec = {}
+        board = build(result, record=rec, sport=sport)
+        result["likely_board"] = board
+        t = board["tiers"]
+        return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
+                f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look")
+    except Exception as exc:                                 # noqa: BLE001
+        return f"⚠️  one Most Likely board skipped: {exc}"
+
+
+def journal(lconn, result: dict, sport: str, date: str = "") -> int:
+    """The board's rows to the paper book, one bucket per tier (category
+    ``board``, the tier as the grade) — as nfl_build does."""
+    from . import ledger
+    n = 0
+    for tier, label in TIERS:
+        n += ledger.log_most_likely(
+            lconn, {"sport": sport, "date": date or result.get("date", ""), "games": result.get("games") or [],
+                    "most_likely": journal_rows(result.get("likely_board"), tier)},
+            depth=None, category="board", grade_label=label) or 0
+    return n
 
 
 def journal_rows(board: dict, tier: str) -> list:

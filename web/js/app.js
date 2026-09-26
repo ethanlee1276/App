@@ -8746,11 +8746,11 @@ function renderLikely() {
     <details class="ls-note board-guide"><summary><b>How it’s ranked</b>
       <span class="bg-how">and what it turned down</span></summary>
     ${oneBoardOn() ? `<p>Every pick goes through four checks: <b>our number</b> (our chance clears the
-    bar for its kind of bet — touchdowns are their own lane), <b>the matchup</b> (the offence-against-defence
-    read backs this side), <b>the market</b> (the sportsbooks’ price is near our chance) and <b>our record</b>
+    bar for its kind of bet — touchdowns are their own lane), <b>the matchup</b> (${escapeHtml(obMatchupWords())}),
+    <b>the market</b> (the sportsbooks’ price is near our chance) and <b>our record</b>
     (picks like it have hit about as often as we said). A <b>Top pick</b> has our number, the matchup and the
     market agreeing with the record not against it; <b>Strong</b> has most of them; everything else is
-    <b>Worth a look</b>. Tap “why?” on any row for each check’s reason. Nothing is dropped — lower tiers fold.</p>` : ""}
+    <b>Worth a look</b>. Tap “why?” on any row for each check’s reason. Nothing is dropped — every pick is on the page.</p>` : ""}
     <p>Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it. A pick that goes up stays
@@ -9287,6 +9287,14 @@ function obCardHTML(r, rank, opts = {}) {
     <button class="ob-view" type="button"${door}>View details ${icon("rising", 12)}</button>
   </div>`;
 }
+/* What the matchup check reads on this sport's board (engine/likelyboard
+   MATCHUP_SOURCE), said where the checks are explained. */
+function obMatchupWords() {
+  const src = ((state.data || {}).likely_board || {}).matchup_source;
+  if (src === "model") return "our model’s matchup step — the opposing pitcher and the lineup around him — moved the number toward this side";
+  if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
+  return "the offence-against-defence read backs this side";
+}
 function obHeroHTML() {
   const art = { nfl: "football", cfb: "football", mlb: "baseball", nba: "basketball", wnba: "basketball" }[state.sport] || "football";
   const g = (state.data.board_guide || []).find((b) => b.key === "most_likely") || {};
@@ -9302,7 +9310,7 @@ function obHeroHTML() {
         <div class="ob-drop-body"><p>${escapeHtml(g.measured)}</p><p class="mini">${escapeHtml(g.trust || "")}</p></div></details>` : ""}
       <details class="ob-pill ob-drop"><summary>${icon("list", 16)} How it’s ranked and what it turned down</summary>
         <div class="ob-drop-body"><p>Every pick goes through four checks: <b>our number</b> (our chance clears the bar for its
-        kind of bet — touchdowns are their own lane), <b>the matchup</b> (the offence-against-defence read backs this side),
+        kind of bet — touchdowns are their own lane), <b>the matchup</b> (${escapeHtml(obMatchupWords())}),
         <b>the market</b> (the sportsbooks’ price is near our chance) and <b>our record</b> (picks like it have hit about
         as often as we said). A <b>Top pick</b> has our number, the matchup and the market agreeing with the record not
         against it; <b>Strong</b> has most of them; everything else is <b>Worth a look</b>.</p>
@@ -9319,14 +9327,32 @@ function obSorted(rows) {
     : (a, b) => b.model_prob - a.model_prob);
 }
 
+/* Football reads its props as touchdowns, yards and catches; every other
+   sport gets a chip per market it priced tonight (Hits, Total Bases,
+   Strikeouts…) — "Other props" would be the whole baseball board. */
+function obFootball() {
+  return state.sport === "nfl" || state.sport === "cfb";
+}
 function obFilterOf(r) {
   if (r.lane === "td") return "td";
   if (r.lane === "game") return "game";
   const m = String(r.market || "");
+  if (!obFootball()) return `m:${m}`;
   return m === "receptions" ? "catches" : /yds/.test(m) ? "yards" : "other";
 }
 const OB_FILTERS = [["all", "All"], ["td", "Touchdowns"], ["yards", "Yards"], ["catches", "Catches"],
                     ["other", "Other props"], ["game", "Game lines"]];
+function obFilterList(all) {
+  if (obFootball()) return OB_FILTERS.filter(([k]) => k === "all" || all.some((r) => obFilterOf(r) === k));
+  const seen = new Map();
+  all.filter((r) => r.lane !== "game").forEach((r) => {
+    const k = obFilterOf(r);
+    const got = seen.get(k) || [k, r.market_label || String(r.market || "").replace(/_/g, " "), 0];
+    got[2] += 1; seen.set(k, got);
+  });
+  const markets = [...seen.values()].sort((a, b) => b[2] - a[2]).map(([k, label]) => [k, label]);
+  return [["all", "All"], ...markets, ...(all.some((r) => r.lane === "game") ? [["game", "Game lines"]] : [])];
+}
 /* Every pick a chip counts is drawn: no fold, no closed tier (Ethan,
    2026-09-26: "It'll display we're showing 70 yard picks, but then we'll
    only show 10"). The section's count is the rows under it, and the
@@ -9373,7 +9399,7 @@ function oneBoardHTML() {
   const all = oneBoardRows();
   const view = state.obView === "game" ? "game" : "best";
   const tier = OB_TIERS.some(([t]) => t === state.obTier) ? state.obTier : "all";
-  const filters = OB_FILTERS.filter(([k]) => k === "all" || all.some((r) => obFilterOf(r) === k));
+  const filters = obFilterList(all);
   const f = filters.some(([k]) => k === state.obFilter) ? state.obFilter : "all";
   const rows = obPicked(all, tier, f);
   const tiers = [["all", "All tiers"], ...OB_TIERS].map(([t, title]) => [t, title, obPicked(all, t, f).length]);

@@ -806,6 +806,12 @@ def main() -> None:
         print(f"⚠️  likelihood board skipped: {exc}")
         result.setdefault("most_likely", [])
         result.setdefault("board_shelves", [])
+    # THE ONE MOST LIKELY BOARD, as the NFL's (engine/likelyboard): the
+    # same four checks and tiers, so the page draws the same cards. Ethan,
+    # 2026-09-26: "every other sport that has the Qellys' top picks is
+    # getting the same remodel".
+    from engine import likelyboard as _lb
+    print(f"  {_lb.attach(result, 'mlb')}")
     _stg.stop(_tk)
 
     c = result["counts"]
@@ -926,6 +932,11 @@ def main() -> None:
             ml_logged = ledger.log_most_likely(
                 lconn, {"sport": "mlb", "date": args.date,
                         "most_likely": result.get("most_likely") or []})
+            # The one board, per tier, on paper (engine/likelyboard).
+            from engine import likelyboard as _lb
+            _lb_n = _lb.journal(lconn, result, "mlb", args.date)
+            if _lb_n:
+                print(f"Most Likely board: {_lb_n} row(s) journaled on paper.")
             # AND THE PICK OF THE DAY, to its own book. Refuses a row the
             # selector flagged below its bar, refuses a second pick on a day
             # that already has one, and refuses a game under way — see
