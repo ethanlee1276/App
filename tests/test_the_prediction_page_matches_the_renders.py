@@ -34,6 +34,9 @@ def test_the_shell_wraps_the_three_rooms():
     assert "pmxDoor(\"kalshi\"" in _fn("pmxRailHTML"), "the venues' doors are in the rail's market tools"
     assert "EXTERNAL_MARKET_LINKS" in _fn("pmxDoor"), "venue doors go through the review switch"
     assert '.pmx[data-tab="proof"] .pmx-rail' in CSS, "the proof room runs full width"
+    # the sticky rail scrolls on its own rather than waiting for the page's end
+    assert ".pmx-rail { max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain;" in CSS
+    assert "max-height: none; overflow: visible; }" in CSS, "stacked under the page, it is just part of it"
 
 
 def test_flow_has_league_chips_and_a_sort():

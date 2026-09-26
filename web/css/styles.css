@@ -11591,6 +11591,12 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .pmx-foot b { color: var(--text); }
 /* the rail */
 .pmx-rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 84px; }
+/* Ethan, 2026-09-26: "make this side menu scrollable. for me to get to the
+   bottom of the side bar, i have to scroll all the way down the page." It
+   stuck to the screen while being taller than it, so its foot only arrived
+   with the page's. It scrolls on its own now, inside the screen. */
+.pmx-rail { max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; padding-bottom: 4px; }
 .pmx-card { background: var(--panel); border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
 .pmx-card-head { display: flex; justify-content: space-between; align-items: center; text-transform: uppercase;
   letter-spacing: .14em; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 8px; }
@@ -11643,7 +11649,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .pmx-bands .pm-band-head > span { font-size: var(--fs-xs); font-weight: 600; }
 @media (max-width: 1180px) {
   .pmx { grid-template-columns: minmax(0, 1fr); }
-  .pmx-rail { position: static; display: grid; grid-template-columns: 1fr 1fr; }
+  .pmx-rail { position: static; display: grid; grid-template-columns: 1fr 1fr; max-height: none; overflow: visible; }
 }
 @media (max-width: 760px) {
   .pmx-hero { padding: 104px 16px 18px; }
