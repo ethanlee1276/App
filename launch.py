@@ -52,6 +52,44 @@ load_local_secrets()  # pull ODDS_API_KEY from secrets.local into the environmen
 FAIL_LINES = 6
 
 
+#: Where every build's full output is kept: <script>.log for the latest
+#: run, <script>.prev.log for the one before.
+BUILD_LOG_DIR = ROOT / "data" / "logs"
+#: A line counts as a warning when it carries one of these.
+BUILD_WARN_MARKS = ("⚠️", "Traceback", "skipped:", "Error:")
+#: The last warning set announced per script, so the journal hears about a
+#: change and not the same warnings every cycle.
+_BUILD_WARNED: dict = {}
+
+
+def _keep_build_log(args: list, out: list, code: int) -> None:
+    """THE BUILD'S OWN WORDS, KEPT. Every model build prints what it did —
+    "Injuries: 157 designations", "Analyzed 610 props", "touchdown
+    scenarios skipped: …" — and until 2026-09-26 none of it reached the
+    journal or a file on a successful build: a section a build swallowed
+    left no trace, and a night's diagnosis went in circles through probes.
+    The full output goes to data/logs/<script>.log (the previous run to
+    .prev.log); the journal gets ONE line, and only when the build's set of
+    warning lines changes, so a build that warns every cycle cannot flood it."""
+    try:
+        name = Path(str(args[0])).stem if args else "build"
+        BUILD_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        cur = BUILD_LOG_DIR / f"{name}.log"
+        if cur.exists():
+            os.replace(cur, BUILD_LOG_DIR / f"{name}.prev.log")
+        stamp = _dt.datetime.now().isoformat(timespec="seconds")
+        cur.write_text(f"# {stamp} · exit {code} · {' '.join(str(a) for a in args)}\n"
+                       + "\n".join(out) + "\n")
+        warns = [ln.strip() for ln in out if any(m in ln for m in BUILD_WARN_MARKS)]
+        key = "\n".join(sorted(set(warns)))
+        if warns and _BUILD_WARNED.get(name) != key:
+            print(f"  {name}: {len(warns)} warning line(s) — first: {warns[0][:140]} "
+                  f"(full output: data/logs/{name}.log)")
+        _BUILD_WARNED[name] = key
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     """Run a build script as a subprocess. Returns (ok, last_output_line).
 
@@ -91,6 +129,7 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         return False, str(exc)
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
+    _keep_build_log(args, out, proc.returncode)
     if proc.returncode != 0:
         # THE LAST LINE ALONE IS NOT THE ERROR. This printed
         # `tail[:140]`, and for a Python traceback that is the exception
