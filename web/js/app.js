@@ -7567,7 +7567,7 @@ function muNum(x) {
 function qbCardHTML(c) {
   if (!c || !c.starter) return "";
   return `<div class="mu-card qb-card">
-    <div class="mu-head">QB change<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
+    <div class="mu-head">${c.status === "RETURNS" ? "QB back" : "QB change"}<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
     <div class="mu-line"><b>${escapeHtml(c.headline || "")}</b></div>
     ${c.detail ? `<div class="mu-line">${escapeHtml(c.detail)}</div>` : ""}
     ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
@@ -8821,7 +8821,7 @@ function likelyTagsHTML(r) {
   const qb = r.qb_card, mate = r.mate_card;
   if (qb && qb.headline) {
     const a = Number(qb.applied);
-    tags.push([`QB change${a && a !== 1 ? ` ${pct(a)}` : ""}`, a && a < 1 ? "down" : "",
+    tags.push([`${qb.status === "RETURNS" ? "QB back" : "QB change"}${a && a !== 1 ? ` ${pct(a)}` : ""}`, a && a < 1 ? "down" : "",
                qb.headline]);
   }
   if (mate && Number(mate.applied) && Number(mate.applied) !== 1) {

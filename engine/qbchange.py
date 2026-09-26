@@ -68,6 +68,42 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
         key = "backup" if sp.usage_role == "backup" else "starter"
         slot[key] = slot[key] or sp.player
     passing: dict = {}
+    # THE USUAL STARTER (Ethan, 2026-09-26, on Seattle): "Drew Lock has
+    # started one game for Seattle so far in 2026 ... week two ... Darnold
+    # did get injured and Lock took over." Two games of volume made Lock
+    # the "starter", so Darnold back at QB1 read as a benching. A team's
+    # usual starter is its leading passer LAST season, or in its FIRST game
+    # this season; the depth chart naming him again is a return.
+    team_att: dict = {}
+    for rows, current in ((prior_stats or [], False), (stats or [], True)):
+        for r in rows:
+            if _s(r, "position", "position_group").upper() != "QB":
+                continue
+            if _s(r, "season_type", "game_type", default="REG").upper() not in ("REG", ""):
+                continue
+            wk = int(_f(r, "week", default=0))
+            if current and wk >= upto_week:
+                continue
+            team = _s(r, "recent_team", "team")
+            name = _s(r, "player_display_name", "player_name", "full_name")
+            if team and name:
+                key = (team, "last") if not current else (team, wk)
+                cell = team_att.setdefault(key, {})
+                cell[name] = cell.get(name, 0.0) + _f(r, "attempts")
+    usual: dict = {}
+    first_week = {}
+    for (team, wk) in team_att:
+        if wk != "last" and (team not in first_week or wk < first_week[team]):
+            first_week[team] = wk
+    for team in {t for t, _w in team_att}:
+        names = []
+        for key in ((team, "last"), (team, first_week.get(team))):
+            cell = team_att.get(key) or {}
+            if cell:
+                lead = max(sorted(cell), key=lambda n: cell[n])
+                if lead not in names:
+                    names.append(lead)
+        usual[team] = names
     for rows, current in ((prior_stats or [], False), (stats or [], True)):
         for r in rows:
             if _s(r, "position", "position_group").upper() != "QB":
@@ -80,7 +116,8 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
             a = passing.setdefault(name, [0.0, 0.0])
             a[0] += _f(r, "attempts")
             a[1] += _f(r, "passing_yards")
-    return {"teams": teams, "passing": {k: tuple(v) for k, v in passing.items()}}
+    return {"teams": teams, "passing": {k: tuple(v) for k, v in passing.items()},
+            "usual": {t: n for t, n in usual.items() if t in teams}}
 
 
 def changes(qb: dict, injuries: list, depth_qb1: dict | None = None) -> dict:
@@ -108,6 +145,18 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None) -> dict:
                 replacement = cand
                 break
         tier, s_ypa, r_ypa = tier_of(qb.get("passing") or {}, starter, replacement or "")
+        # HIS USUAL STARTER BACK: the man the volume ranking called the
+        # starter filled in; the depth chart's QB1 is the team's usual one.
+        # Last season's leader comes first: a starter hurt early in week 1
+        # (Darnold) can be out-thrown in that game by the man who replaced
+        # him, so the first game's leader only speaks when last season's
+        # leader is not in the picture.
+        usual = [_norm(n) for n in ((qb.get("usual") or {}).get(team) or [])]
+        rep, sta = _norm(replacement or ""), _norm(starter)
+        if benched and replacement and usual and (
+                (rep == usual[0] and sta != usual[0])
+                or (rep in usual[1:] and sta not in usual)):
+            status, tier = "RETURNS", "return"
         out[team] = {"team": team, "starter": starter, "status": status or "BENCHED",
                      "replacement": replacement, "tier": tier,
                      "starter_ypa": round(s_ypa, 1) if s_ypa else None,
@@ -120,6 +169,8 @@ def headline(ch: dict) -> str:
     """"Joe Burrow (OUT) — Jake Browning starts", or, when it is the depth
     chart and not an injury (a benching, or the usual starter back from
     one): "Brock Purdy starts over Mac Jones (this week's depth chart)"."""
+    if ch["status"] == "RETURNS":
+        return f"{ch['replacement']} is back at QB — {ch['starter']} started while he was out"
     if ch["status"] == "BENCHED" and ch.get("replacement"):
         return f"{ch['replacement']} starts over {ch['starter']} (this week’s depth chart)"
     who = f"{ch['replacement']} starts" if ch.get("replacement") else "his replacement is not named yet"
@@ -162,8 +213,12 @@ def apply_to_slate(slate, chs: dict) -> dict:
 def card(ch: dict, applied: float = 1.0, own: bool = False) -> dict:
     """What goes under a pick of that team."""
     note = ""
-    if own:
+    if own and ch.get("status") == "RETURNS":
+        note = f"Back as the starter; {ch['starter']} started while he was out"
+    elif own:
         note = f"Starting in place of {ch['starter']}"
+    elif ch.get("status") == "RETURNS":
+        note = "His usual quarterback is back — nothing to adjust"
     elif applied != 1.0:
         note = (f"Measured over four seasons: behind a quarterback this far below the starter, "
                 f"receivers lost {round((1 - applied) * 100)}% — applied (×{applied:.2f})")

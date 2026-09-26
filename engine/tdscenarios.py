@@ -141,7 +141,8 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
     # so no way that number is correct now." The lines above already carry
     # it through the implied total; this says it in words.
     if td.get("qb_change"):
-        lines.append(f"QB change: {td['qb_change']} — the lines above already account for it")
+        head = "QB" if " is back at QB" in str(td["qb_change"]) else "QB change"
+        lines.append(f"{head}: {td['qb_change']} — the lines above already account for it")
     return {"points": pts, "score": total, "lines": lines}
 
 

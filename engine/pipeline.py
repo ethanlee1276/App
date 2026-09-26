@@ -407,7 +407,7 @@ def _long_shots(slate, usage: dict | None = None,
     from .models import ANYTIME_TD
     from .touchdowns import build_td_longshots, td_watchlist
     from .fantasy import _short_key
-    from .odds import bettable_lines
+    from .odds import bettable_lines, prefer_sportsbook
 
     from .nflusage import from_maps, usage_keys
     usage = usage or {}
@@ -428,7 +428,11 @@ def _long_shots(slate, usage: dict | None = None,
         # the sharp book's thin margin makes it the LONGEST price on the
         # board — so a bare max named a book the reader cannot bet at.
         # See `odds.bettable_lines` for the whole shape of it.
-        best = max(bettable_lines(prop.lines), key=lambda ln: ln.over_odds)
+        # An exchange's price only when a sportsbook is within a hair of it
+        # (odds.prefer_sportsbook — Ethan, 2026-09-26).
+        best = prefer_sportsbook(bettable_lines(prop.lines))
+        if best is None:
+            continue
         keys = usage_keys(prop.player, prop.team, team_of)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),

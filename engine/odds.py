@@ -466,6 +466,33 @@ def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> Be
     return best
 
 
+#: How close, in implied probability, an exchange's price must sit to the
+#: best sportsbook's for the exchange to be the one shown. Ethan,
+#: 2026-09-26, on Novig pricing four of eight touchdown scenarios: "if the
+#: Novig prices are almost the same as the sports book prices, then it
+#: does not matter." 1.5 points: -108 against -110 (51.9% vs 52.4%) keeps
+#: the exchange; -108 against -125 (51.9% vs 55.6%) shows the sportsbook.
+EXCHANGE_NEAR_PROB = 0.015
+
+
+def prefer_sportsbook(lines: list, price=lambda ln: ln.over_odds):
+    """The best-priced quote, unless it is an exchange's and the best
+    SPORTSBOOK quote is more than EXCHANGE_NEAR_PROB worse — then that
+    sportsbook's. None for no lines; an exchange alone is still returned."""
+    lines = [ln for ln in (lines or []) if price(ln)]
+    if not lines:
+        return None
+    best = max(lines, key=price)
+    if not is_exchange(getattr(best, "book", "") or ""):
+        return best
+    books = [ln for ln in lines if not is_exchange(getattr(ln, "book", "") or "")]
+    if not books:
+        return best
+    book = max(books, key=price)
+    gap = american_to_prob(int(price(book))) - american_to_prob(int(price(best)))
+    return best if gap <= EXCHANGE_NEAR_PROB else book
+
+
 def bettable_lines(lines: list) -> list:
     """The quotes a reader could actually take, or the whole field.
 
