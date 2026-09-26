@@ -9303,6 +9303,7 @@ function obCardHTML(r, rank, opts = {}) {
 function obMatchupWords() {
   const src = ((state.data || {}).likely_board || {}).matchup_source;
   if (src === "model") return "our model’s matchup step — the opposing pitcher and the lineup around him — moved the number toward this side";
+  if (src === "scan+model") return "the matchup scan backs this side — his split against this hand, what the starter allows to his side, the park and the wind — or, where it has no read, our model’s matchup step moved the number toward it";
   if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
   return "the offence-against-defence read backs this side";
 }
@@ -12171,7 +12172,7 @@ function scanWhyList(x) {
   return `<ul class="ms-why">
         ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
         ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
-        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted, no lift when tested</li>
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${state.sport === "mlb" ? "" : ", no lift when tested"}</li>
           ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>`;
 }
 
@@ -12376,6 +12377,57 @@ function matchupScanHTML(g) {
       added nothing to the model, and the college ones have not been measured. College units are
       CollegeFootballData’s advanced season numbers with garbage time taken out; there is no public
       coverage charting for college.`}</p>
+  </div>`;
+}
+
+/* THE MLB MATCHUP SCAN on the game page (engine/mlb/scan; Ethan,
+   2026-09-26: "who's going to struggle and who's going to do good ... left
+   hand and right hand"). Each starter against the other lineup — his hand,
+   strikeout rate, expected ERA and the slugging he allows to lefties and
+   righties — the pens, the park, the wind and the umpire; then the read on
+   every hitter and starter, in the football scan's own rows. */
+function mlbScanHTML(g) {
+  const t = g && g.mlb_tape;
+  if (!t || !t.sides) return "";
+  const d = state.data || {};
+  const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
+  const locked = !reads && d.locked && d.locked.scan_reads;
+  const players = (reads && reads.players) || [];
+  const pct = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
+  const slg = (x) => x == null ? "—" : `.${Math.round(x * 1000)}`;
+  const side = (team) => {
+    const s = t.sides[team] || {}, sp = s.starter;
+    const opp = team === g.home ? g.away : g.home;
+    const lineK = (t.sides[opp] || {}).k_rate;
+    return `<div class="card mlb-tape-side">
+      <div class="ms-sub">${escapeHtml(teamName(team))}</div>
+      ${sp ? `<div class="mlb-tape-row"><b>${escapeHtml(sp.name)}</b> <span class="mini">${escapeHtml(sp.throws || "")}HP</span></div>
+        <div class="mlb-tape-row">Strikes out ${pct(sp.k_rate)} · expected ERA ${Number(sp.xera).toFixed(2)}</div>
+        <div class="mlb-tape-row">Slugging allowed: lefties ${slg(sp.slg_vs_l)} · righties ${slg(sp.slg_vs_r)}</div>
+        <div class="mlb-tape-row">Facing a lineup that strikes out ${pct(lineK)}</div>`
+        : `<div class="mlb-tape-row mini">Starter not announced yet</div>`}
+      <div class="mlb-tape-row mini">Bullpen${s.pen_rank ? ` ranks ${s.pen_rank}` : ""}${
+        s.pen_fatigue != null ? ` · ${Number(s.pen_fatigue).toFixed(1)} relief innings the last two days` : ""}</div>
+    </div>`;
+  };
+  const env = [];
+  if (t.park) env.push(`${escapeHtml(t.park.name)}: home runs ${Math.round((t.park.hr - 1) * 100) >= 0 ? "+" : ""}${Math.round((t.park.hr - 1) * 100)}%`);
+  if (t.weather && !t.weather.roof_closed && t.weather.wind_mph) env.push(`wind ${Math.round(t.weather.wind_mph)} mph ${escapeHtml(t.weather.wind || "")}`);
+  if (t.weather && t.weather.roof_closed) env.push("closed roof");
+  if (t.umpire && t.umpire.name) env.push(`plate umpire ${escapeHtml(t.umpire.name)}`);
+  return `<div id="gp-sec-scan" class="ms">
+    <div class="section-title">Matchup scan
+      <span class="sub">— each starter against the other lineup, and who could shine or struggle</span></div>
+    <div class="mlb-tape">${side(g.away)}${side(g.home)}</div>
+    ${env.length ? `<p class="ms-note">${env.join(" · ")}</p>` : ""}
+    ${players.length ? `<div class="ms-sub ms-sub-top">Who could shine, who could struggle</div>
+      <div class="ms-reads">${players.map(scanReadHTML).join("")}</div>` : locked
+      ? `<div class="card ms-locked"><b>Who could shine and who could struggle</b> — a read on every hitter and
+          starter, with the reasons for and against, is part of the subscription.</div>` : ""}
+    <p class="ms-note">None of this moves our numbers: every piece — the hitter’s own split against this hand,
+      the slugging the starter allows to his side, expected stats, the park by the batter’s hand, the wind,
+      the pens and the umpire — is already inside the model’s chance. The read picks a side; career numbers
+      against tonight’s starter are shown and never counted, the samples are too small.</p>
   </div>`;
 }
 
@@ -12681,7 +12733,7 @@ function renderGamePage() {
 
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
-      g.scan && g.scan.units ? ["gp-sec-scan", "Matchup scan"] : null,
+      (g.scan && g.scan.units) || g.mlb_tape ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
@@ -12693,7 +12745,7 @@ function renderGamePage() {
     ])}
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
-    ${matchupScanHTML(g)}
+    ${matchupScanHTML(g) || mlbScanHTML(g)}
     ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 

@@ -55,6 +55,10 @@ TD_PER_TEAM = 3
 
 #: The markets a read can turn into a yards-or-catches pick.
 PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
+#: Baseball's (engine/mlb/scan): a hitter's hits, total bases and home runs,
+#: a starter's strikeouts and outs. A hitter's role is a spot in tonight's
+#: posted lineup; a starter's is being tonight's starter.
+MLB_PROP_MARKETS = ("hits", "total_bases", "home_runs", "strikeouts", "outs")
 #: Our chance on the read's side at the posted line.
 PROP_MIN_PROB = 0.55
 #: The longest price a yards-or-catches pick is taken at. The box, 2026-09-26:
@@ -191,13 +195,15 @@ def _side_price(row: dict, side: str):
     return (best.over_odds, best.book) if best else (None, "")
 
 
-def prop_picks(game: dict, reads: list, props: list) -> list:
-    """This game's yards-and-catches picks: each read's markets on its side,
-    where our number agrees."""
+def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list:
+    """This game's yards-and-catches picks (a baseball game's hits, bases,
+    homers, strikeouts and outs): each read's markets on its side, where
+    our number agrees."""
     home, away = game.get("home"), game.get("away")
+    markets = MLB_PROP_MARKETS if sport == "mlb" else PROP_MARKETS
     by_key: dict = {}
     for r in props or []:
-        if r.get("market") in PROP_MARKETS and r.get("line") is not None and r.get("hit_prob") is not None:
+        if r.get("market") in markets and r.get("line") is not None and r.get("hit_prob") is not None:
             by_key.setdefault((r.get("player") or "", r.get("market")), r)
     rows = []
     for x in reads or []:
@@ -209,8 +215,14 @@ def prop_picks(game: dict, reads: list, props: list) -> list:
             if not r or str(r.get("injury_status") or "").strip():
                 continue
             u = x.get("usage") or {}
-            role = u.get("carries_pg") if mk == "rush_yds" else u.get("targets_pg") if mk != "pass_yds" else 99
-            bar = PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS
+            if sport == "mlb":
+                # In tonight's posted lineup, or tonight's starter.
+                if (x.get("pos") or "") != "SP" and not u.get("lineup_spot"):
+                    continue
+                role, bar = 99, 0
+            else:
+                role = u.get("carries_pg") if mk == "rush_yds" else u.get("targets_pg") if mk != "pass_yds" else 99
+                bar = PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS
             if role is None and mk in ("receptions", "rec_yds") and u.get("share_of") == "catches":
                 role, bar = u.get("rec_pg"), PROP_MIN_CATCHES
             if role is None or float(role) < bar:
@@ -257,7 +269,7 @@ def positions_map(props: list, scan_reads: dict) -> dict:
     return positions
 
 
-def build(games: list, scan_reads: dict, watch: list, props: list) -> list:
+def build(games: list, scan_reads: dict, watch: list, props: list, sport: str = "nfl") -> list:
     """[{"game", "home", "away", "kickoff", "td": [...], "props": [...]}] for
     every game with a scan, in the board's game order."""
     positions = positions_map(props, scan_reads)
@@ -268,8 +280,8 @@ def build(games: list, scan_reads: dict, watch: list, props: list) -> list:
         reads = ((scan_reads or {}).get(key) or {}).get("players") or []
         if not g.get("scan") and not reads:
             continue
-        td = td_picks(g, watch, reads, g.get("pulled_players") or (), positions)
-        pp = prop_picks(g, reads, props)
+        td = [] if sport == "mlb" else td_picks(g, watch, reads, g.get("pulled_players") or (), positions)
+        pp = prop_picks(g, reads, props, sport=sport)
         for r in td + pp:
             r["game"] = key
         if td or pp:

@@ -12050,6 +12050,13 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   .ob-ring small { display: none; }
   .ob-door { display: none; }
 }
+/* The MLB matchup scan's tale of the tape (app.js mlbScanHTML). */
+.mlb-tape { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 6px 0 8px; }
+.mlb-tape-side { padding: 10px 12px; display: grid; gap: 2px; }
+.mlb-tape-side .ms-sub { margin: 0 0 4px; }
+.mlb-tape .mlb-tape-row { margin: 0; padding: 0; min-height: 0; font-size: var(--fs-sm); color: var(--text-dim);
+  line-height: var(--lh-tight); }
+.mlb-tape-row b { color: var(--text); }
 /* The Picks tab's two doors under the tiers (app.js renderTonight). */
 .tn-more { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 /* The one Most Likely board (app.js oneBoardHTML): a tier summary, the

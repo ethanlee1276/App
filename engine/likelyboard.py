@@ -69,11 +69,13 @@ RECORD_MISS = 0.08
 #:   nfl, cfb   the game scan's lean on this player and market, and for a
 #:              scorer his touchdown matchup of 8 (college's defence ranks
 #:              read as among 32 — tdscenarios.rank32);
-#:   mlb        the projection's own Matchup step (opposing starter,
-#:              platoon, the lineup around him), when it moved the number
-#:              at least MODEL_MATCHUP_STEP toward this side;
+#:   mlb        the MLB scan's read (engine/mlb/scan — platoon split, the
+#:              starter's slugging allowed by hand, expected stats, park,
+#:              the opponent's strikeout rate…); where it has none, the
+#:              projection's own Matchup step, when it moved the number at
+#:              least MODEL_MATCHUP_STEP toward this side;
 #:   nba, wnba  none yet.
-MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "model"}
+MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "scan+model"}
 MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
 RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board")
@@ -221,6 +223,9 @@ def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = No
         return None, "no matchup read for this sport yet"
     if source == "model" and lane == "prop":
         return _model_matchup(r, steps or {})
+    if source == "scan+model" and lane == "prop" \
+            and not leans.get((r.get("player") or "", r.get("team") or "", r.get("market"))):
+        return _model_matchup(r, steps or {})
     if lane == "td":
         s = td_scores.get(r.get("player") or "")
         if s is None:
@@ -274,7 +279,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
     "matchup_source": ...} — the pool, checked and tiered, ranked Top
     first then by our chance."""
     source = MATCHUP_SOURCE.get(sport, "none")
-    steps = model_matchups(result.get("recommendations") or []) if source == "model" else {}
+    steps = model_matchups(result.get("recommendations") or []) if source in ("model", "scan+model") else {}
     from .gamescan import leans_from_reads
     from .matchpicks import td_matchup, positions_map
     games = result.get("games") or []

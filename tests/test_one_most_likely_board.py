@@ -286,7 +286,7 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     sport's own — the scan in football, the projection's Matchup step in
     baseball, nothing yet in basketball (whose picks top out at Strong,
     and the check says why)."""
-    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "model"}
+    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,
                 "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},
@@ -300,7 +300,7 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
                               ml("Soto", "total_bases", "over"), ml("Nobody", "hits", "over")]}
     board = B.build(result, record={}, sport="mlb")
     by = {r["player"]: r for r in board["rows"]}
-    assert board["matchup_source"] == "model"
+    assert board["matchup_source"] == "scan+model"
     assert by["Cole"]["checks"]["matchup"] is True and "+8%" in by["Cole"]["check_notes"]["matchup"]
     assert by["Cole"]["tier"] == "top"
     assert by["Judge"]["checks"]["matchup"] is None and "not enough to call" in by["Judge"]["check_notes"]["matchup"]

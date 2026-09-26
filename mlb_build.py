@@ -462,6 +462,31 @@ def main() -> None:
     with _stg.stage("model (run_mlb_slate)"):
         result = run_mlb_slate(slate, config, il_map=il_map)
 
+    # THE MATCHUP SCAN (engine/mlb/scan): a tale of the tape per game and a
+    # read on every hitter and starter — could shine, could struggle,
+    # breakout — from what the model already priced (platoon splits, the
+    # starter's slugging allowed by hand, expected stats, barrels, lineup
+    # slot, park by hand, wind, pens, umpire). Ethan, 2026-09-26: "all the
+    # work we did for NFL and college football ... move that to MLB".
+    # Picks the side, never the number. A failure is a line, never a board.
+    _mlb_leans: dict = {}
+    _mlb_lean_report: dict = {}
+    try:
+        from engine.mlb import scan as _mscan
+        from engine.gamescan import leans_from_reads as _leans_of
+        _ms = _mscan.scan(slate)
+        result["scan_reads"] = _ms["reads"]
+        for _gd in result.get("games") or []:
+            _t = _ms["tapes"].get(f"{_gd.get('away')}@{_gd.get('home')}")
+            if _t:
+                _gd["mlb_tape"] = _t
+        _mlb_leans = _leans_of(result["scan_reads"])
+        _nr = sum(len(g.get("players") or []) for g in _ms["reads"].values())
+        print(f"  Matchup scan: {len(_ms['reads'])} game(s), {_nr} read(s), "
+              f"{len(_mlb_leans)} lean(s) for Most Likely")
+    except Exception as _msx:                              # noqa: BLE001
+        print(f"  ⚠️  MLB matchup scan skipped: {_msx}")
+
     # Team form: hot & cold from our own ingested results, plus the season
     # audit (did hot form predict the next game at all?). Track → measure →
     # only then adjust; the form SAMPLER below journals the hot side at
@@ -791,7 +816,23 @@ def main() -> None:
             game_bets=result.get("game_bets") or [],
             census_by_kind=_ml_kinds, cut=_ml_cut,
             previous=_likely_prev(args.out, result.get("date"))
-            if args.out else None, turnover=_ml_turn)
+            if args.out else None, turnover=_ml_turn,
+            leans=_mlb_leans, lean_report=_mlb_lean_report)
+        if result.get("scan_reads"):
+            from engine.gamescan import stamp_picks as _stamp_mlb
+            _stamp_mlb(result["scan_reads"], _mlb_lean_report, board=result["most_likely"])
+        # EVERY GAME'S MATCHUP PICKS (engine/matchpicks, the NFL's shelf):
+        # each read's markets on its side where our number agrees, at a real
+        # sportsbook's price — journaled on paper, pooled into the board.
+        try:
+            from engine.matchpicks import build as _mp_build
+            result["matchup_picks"] = _mp_build(result.get("games") or [], result.get("scan_reads") or {},
+                                                [], result.get("recommendations") or [], sport="mlb")
+            print(f"  Matchup picks: {sum(len(m.get('props') or []) for m in result['matchup_picks'])} "
+                  f"across {len(result['matchup_picks'])} game(s)")
+        except Exception as _mpx:                           # noqa: BLE001
+            print(f"  ⚠️  MLB matchup picks skipped: {_mpx}")
+            result["matchup_picks"] = []
         result["likely_turnover"] = _ml_turn
         if not result["most_likely"]:
             from engine.rankfit import load as _rank_store
@@ -932,6 +973,14 @@ def main() -> None:
             ml_logged = ledger.log_most_likely(
                 lconn, {"sport": "mlb", "date": args.date,
                         "most_likely": result.get("most_likely") or []})
+            # The matchup picks on paper, as the NFL's (matchup_prop).
+            from engine.matchpicks import journal_rows as _mp_rows
+            _mp_n = ledger.log_most_likely(
+                lconn, {"sport": "mlb", "date": args.date, "games": result.get("games") or [],
+                        "most_likely": _mp_rows(result.get("matchup_picks"), "prop")},
+                depth=None, category="matchup_prop", grade_label="Matchup")
+            if _mp_n:
+                print(f"Matchup picks: {_mp_n} row(s) journaled on paper.")
             # The one board, per tier, on paper (engine/likelyboard).
             from engine import likelyboard as _lb
             _lb_n = _lb.journal(lconn, result, "mlb", args.date)
