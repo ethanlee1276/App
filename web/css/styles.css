@@ -7014,6 +7014,15 @@ body.has-deck #rail-live { display: none; }
 .hd-quiet { display: flex; align-items: center; gap: 10px; padding: 14px;
   border: var(--hairline) solid var(--border-soft); border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text-dim); font-size: var(--fs-sm); }
+/* Zeno's record carried in from Pikkit: one card per window, the
+   Pikkit card itself underneath as the receipt (app.js zenoSnapshotHTML). */
+.zeno-snap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px; margin-bottom: 12px; }
+.zeno-win { margin: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.zeno-win-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.zeno-win-nums { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-sm); }
+.zeno-receipt img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg);
+  border: var(--hairline) solid var(--border-soft); }
 .hd-card { padding: 4px 14px; border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius-lg); background: var(--panel); }
 .hd-potd { padding: 12px 14px 4px; border-color: var(--brand); }

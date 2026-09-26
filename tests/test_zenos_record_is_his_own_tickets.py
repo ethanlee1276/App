@@ -260,6 +260,9 @@ def test_the_export_carries_the_block_and_the_paywall_never_strips_it():
     from engine import gate, ledger
     os.environ["QB_ZENO_DB"] = str(Path(tempfile.mkdtemp()) / "z.db")
     zeno.DB_PATH = Path(os.environ["QB_ZENO_DB"])
+    # A store of its own and no carried-in Pikkit record, so the block is
+    # these tickets alone (tests/test_zenos_pikkit_record_is_carried_in.py).
+    zeno.SNAPSHOT_PATH = Path(tempfile.mkdtemp()) / "no_snapshot.json"
     conn = zeno.connect()
     zeno.import_rows(conn, _tickets())
     conn.close()

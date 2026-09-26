@@ -18077,6 +18077,40 @@ function recZenoSection(z, scope) {
     </div>`;
 }
 
+/* THE RECORD CARRIED IN FROM PIKKIT (engine/zeno.load_snapshot). Ethan,
+   2026-09-26, sent Pikkit's all-time, 2026 and September cards: no free
+   tracker both syncs and hands the bets out, and Juice Reel's API is
+   still pending. Each window says its W-L, dollars, units and ROI, and
+   carries Pikkit's own card beside it as the receipt — the numbers were
+   read off it, and anyone can check them against it. */
+function zenoDay(iso) {
+  const t = Date.parse(String(iso || ""));
+  return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : String(iso || "");
+}
+function zenoSnapshotHTML(snap) {
+  const ws = (snap && snap.windows) || [];
+  if (!ws.length) return "";
+  const src = escapeHtml(snap.source || "Pikkit");
+  const card = (w) => {
+    const pr = Number(w.profit || 0), u = Number(w.net_units || 0), roi = Number(w.roi || 0) * 100;
+    const tone = pr >= 0 ? "var(--good)" : "var(--bad)";
+    return `<figure class="card zeno-win">
+      <figcaption class="zeno-win-head"><b>${escapeHtml(w.label || "")}</b>
+        <span class="mini">${Number(w.wins)}-${Number(w.losses)}${Number(w.pushes) ? `-${Number(w.pushes)}` : ""}</span></figcaption>
+      <div class="zeno-win-nums"><b style="color:${tone}">${pr >= 0 ? "+" : ""}${zenoMoney(pr)}</b>
+        <span style="color:${tone}">${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(1)}u</span>
+        <span style="color:${tone}">${roi >= 0 ? "+" : MINUS}${Math.abs(roi).toFixed(2)}% ROI</span></div>
+      ${w.receipt ? `<a class="zeno-receipt" href="${escapeAttr(w.receipt)}" target="_blank" rel="noopener">
+        <img src="${escapeAttr(w.receipt)}" alt="${src}’s ${escapeAttr(w.label || "")} card, the receipt for these numbers" loading="lazy"/></a>` : ""}
+    </figure>`;
+  };
+  return `<div class="section-title"><span class="st-ico">${icon("check", 15)}</span>From ${src}
+      <span class="sub">— synced from the sportsbooks and marked Verified by ${src}, as of ${escapeHtml(zenoDay(snap.as_of))}.
+      Tap a card for the original.</span></div>
+    <div class="zeno-snap">${ws.map(card).join("")}</div>`;
+}
+
 async function renderZeno() {
   const host = document.getElementById("zeno-body");
   if (!host) return;
@@ -18102,7 +18136,11 @@ async function renderZeno() {
   host.innerHTML = `
     ${ribbon ? `<div class="hd-stats rec-ribbons">${ribbon}</div>`
              : `<div class="card"><p class="list-note">No tickets yet.</p></div>`}
-    <p class="list-note">The record, in dollars, as the books settled it. Full receipts on the
+    ${zenoSnapshotHTML(z.snapshot)}
+    <p class="list-note">${z.snapshot
+      ? `The record up to ${escapeHtml(zenoDay(z.snapshot.as_of))} is ${escapeHtml(z.snapshot.source || "Pikkit")}’s,
+         read off the cards above; bets that settle after that are added on top as they come in.`
+      : `The record, in dollars, as the books settled it.`} Full receipts on the
       <a href="#record" data-view="record">Record</a> page.</p>
     <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Riding now
       <span class="sub">— ${open.length ? `${plural(open.length, "open ticket")}, ${zenoMoney(z.overall.open_stake)} at risk` : "nothing open right now"}</span></div>
@@ -44432,7 +44470,7 @@ function recordRibbonsHTML(rec, ov, recent) {
        reader's hand-logged bets on My Bets — under its own label. */
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
     const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u · `;
-    tiles.push(tile(z.label || "Zeno · his own book", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+    tiles.push(tile(z.label || (z.snapshot ? `Zeno · his own book · via ${z.snapshot.source || "Pikkit"}` : "Zeno · his own book"), wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
                     `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
                     dots(z.recent, "result"), rate(zo)));
   }

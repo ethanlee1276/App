@@ -112,7 +112,10 @@ def test_the_ribbon_serves_a_persons_book_under_its_own_label():
     assert "2-2-1" in got["you"] and "−$12.50" in got["you"]
     assert "ROI" not in got["noRoi"], "no ROI on file, no ROI clause"
     assert got["nothing"] == "", "no ribbon over nothing settled"
-    assert 'tile(z.label || "Zeno · his own book"' in _fn("recordRibbonsHTML")
+    # A person's own label wins; Zeno's names Pikkit when his record was
+    # carried in from it (tests/test_zenos_pikkit_record_is_carried_in.py).
+    assert 'tile(z.label || (z.snapshot ? `Zeno · his own book · via ${z.snapshot.source || "Pikkit"}` : "Zeno · his own book")' \
+        in _fn("recordRibbonsHTML")
 
 
 def test_zenos_page_opens_with_his_ribbon_and_folds_the_long_tail():

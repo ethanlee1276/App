@@ -87,6 +87,58 @@ RECENT_LIMIT = 40
 UNIT_DOLLARS = 10.0
 
 
+#: A RECORD CARRIED IN FROM PIKKIT, read off its shared record cards.
+#: Ethan, 2026-09-26: Juice Reel's API is still pending, Pikkit's export
+#: is paid, and no free tracker both syncs and hands the bets out — "can
+#: i just tell you my pikkit record and send you screenshots". So the
+#: record up to `as_of` is Pikkit's summary (profit, ROI, W-L-P), kept
+#: in the repo with the screenshots beside it as the receipts, and the
+#: page says so. A ticket imported later counts on top only if it settled
+#: AFTER `as_of`; anything earlier is already inside Pikkit's numbers.
+SNAPSHOT_PATH = Path(os.environ.get("QB_ZENO_SNAPSHOT", "").strip()
+                     or (Path(__file__).resolve().parents[1] / "data" / "zeno_snapshot.json"))
+
+
+def load_snapshot(path=None) -> dict | None:
+    """The carried-in record, each window with its dollars at risk and
+    units worked out; None when there is none."""
+    p = Path(path) if path else SNAPSHOT_PATH
+    if not p.exists():
+        return None
+    snap = json.loads(p.read_text(encoding="utf-8"))
+    unit = unit_dollars()
+    for w in snap.get("windows") or []:
+        profit, roi = float(w["profit"]), float(w.get("roi") or 0)
+        # Pikkit's ROI is profit over the dollars risked, so the stake is
+        # read back from it (to the cent Pikkit rounds the ROI to).
+        staked = float(w["staked"]) if w.get("staked") is not None else (profit / roi if roi else 0.0)
+        w["staked"] = round(staked, 2)
+        w["settled"] = int(w["wins"]) + int(w["losses"]) + int(w.get("pushes") or 0)
+        w["net_units"] = round(profit / unit, 2)
+        w["units_staked"] = round(staked / unit, 2)
+    return snap
+
+
+def _with_snapshot(t: dict, snap: dict | None, after: dict) -> dict:
+    """``t`` (the tickets' own tally, used for what is open) with the
+    snapshot's all-time window plus ``after`` (tickets settled after it)."""
+    base = next((w for w in (snap or {}).get("windows") or [] if w.get("key") == "all"), None)
+    if not base:
+        return t
+    out = dict(t)
+    for k in ("wins", "losses", "pushes"):
+        out[k] = int(base[k]) + int(after.get(k) or 0)
+    out["settled"] = int(base["settled"]) + int(after.get("settled") or 0)
+    staked = float(base["staked"]) + float(after.get("staked") or 0)
+    profit = float(base["profit"]) + float(after.get("profit") or 0)
+    out["staked"], out["profit"] = round(staked, 2), round(profit, 2)
+    out["returned"] = round(staked + profit, 2)
+    out["roi"] = round(profit / staked, 4) if staked else None
+    unit = unit_dollars()
+    out["units_staked"], out["net_units"] = round(staked / unit, 2), round(profit / unit, 2)
+    return out
+
+
 def unit_dollars() -> float:
     try:
         v = float(os.environ.get("QB_ZENO_UNIT", "").strip() or UNIT_DOLLARS)
@@ -395,8 +447,10 @@ def _row_out(r) -> dict:
             "profit": _profit(r), "legs": legs, "settled_at": r["settled_at"]}
 
 
-def block(conn) -> dict:
-    """The `zeno` block of record.json — everything the page draws."""
+def block(conn, snap: dict | None = None) -> dict:
+    """The `zeno` block of record.json — everything the page draws.
+    ``snap`` is the record carried in from Pikkit (`load_snapshot`); the
+    live store's caller passes it, a bare store has none."""
     rows = conn.execute(
         "SELECT * FROM zeno_bets ORDER BY COALESCE(settled_at, placed_at, "
         "imported_at) DESC, id DESC").fetchall()
@@ -419,8 +473,15 @@ def block(conn) -> dict:
     open_rows = sorted((r for r in rows if r["result"] == "open"),
                        key=lambda r: (r["event_at"] or r["placed_at"] or "", r["id"]))
     last = conn.execute("SELECT MAX(imported_at) FROM zeno_bets").fetchone()[0]
+    overall = _tally(rows)
+    if snap:
+        cut = str(snap.get("as_of") or "")
+        after = _tally([r for r in rows if r["result"] != "open"
+                        and str(r["settled_at"] or r["placed_at"] or "")[:19] > cut])
+        overall = _with_snapshot(overall, snap, after)
     return {
-        "overall": _tally(rows),
+        "overall": overall,
+        "snapshot": snap,
         "by_book": {b: dict(_tally(v), name=BOOKS.get(b, b))
                     for b, v in by_book.items()},
         "by_sport": {s: _tally(v) for s, v in by_sport.items()},
@@ -444,10 +505,19 @@ def block_or_empty(path=None) -> dict:
     `error`, the page draws it as unavailable rather than as nothing,
     and the export line below prints it.
     """
+    snap = None
+    if path is None:
+        # THE LIVE RECORD'S CARRIED-IN PART. Said, not swallowed: a
+        # snapshot that will not read leaves the tickets' own record and
+        # names why.
+        try:
+            snap = load_snapshot()
+        except (ValueError, KeyError, TypeError) as exc:
+            print(f"  ⚠️  Zeno's Pikkit snapshot not read — {type(exc).__name__}: {exc}")
     try:
         conn = connect(path)
         try:
-            return block(conn)
+            return block(conn, snap)
         finally:
             conn.close()
     except Exception as exc:                                  # noqa: BLE001
