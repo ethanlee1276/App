@@ -83,7 +83,7 @@ def test_the_row_and_the_pick_page_say_so():
     esc = esc[:esc.index("\n}\n") + 2]
     prog = (esc + "const escapeAttr = escapeHtml;\nconst state = {data: {}};\n"
             + "const tzOpts = (o) => o;\nconst tzTime = (d) => String(d);\nconst wholePct = (x) => x;\n"
-            + "const LIKELY_NEW_MIN = 60;\n" + held + fn
+            + "const LIKELY_NEW_MIN = 60;\nconst cardScanRead = () => null;\n" + held + fn
             + "\nconsole.log(JSON.stringify([{lineup_confirmed: false}, {lineup_confirmed: true}, {}]"
             + ".map(likelyTagsHTML)));")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:

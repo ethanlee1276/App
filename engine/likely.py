@@ -1191,6 +1191,23 @@ def _side(x) -> str:
     return "over" if s in ("over", "yes") else "under" if s in ("under", "no") else s
 
 
+def stamp_reads(rows, leans) -> None:
+    """Mark each row with the scan read it agrees with — THIS build's read,
+    never a stale one. Ethan, 2026-09-26: Kincaid was "a breakout
+    candidate up here, but then he's listed as a good matchup down here".
+    His card was a pick locked since Friday, and `_locked` copies the
+    posted row whole, so it kept Friday's label while the reads shelf drew
+    today's. Every row is cleared and stamped again: a read that is gone,
+    or now on the other side, leaves no label."""
+    for r in rows or []:
+        r.pop("scan_read", None)
+        r.pop("scan_label", None)
+        lean = (leans or {}).get((r.get("player") or "", r.get("team") or "",
+                                  r.get("market") or ""))
+        if lean and _side(r.get("side")) == lean.get("side"):
+            r["scan_read"], r["scan_label"] = lean.get("read"), lean.get("label")
+
+
 def _lean_choice(row: dict, got: list, main_ok: bool, shown: float, lean):
     """The likeliest number on the lean side that clears: a rung, "main",
     or None when the lean side has nothing."""
@@ -2772,11 +2789,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # that keeps this true if someone raises RESERVE_LIMIT.
     # THE READ, ON THE ROWS THAT AGREE WITH IT (READ_SEATS): marked, so
     # the card can say it and the seat below can find them.
-    for r in out:
-        lean = (leans or {}).get((r.get("player") or "", r.get("team") or "",
-                                  r.get("market") or ""))
-        if lean and _side(r.get("side")) == lean.get("side"):
-            r["scan_read"], r["scan_label"] = lean.get("read"), lean.get("label")
+    stamp_reads(out, leans)
     players = _cut_players([r for r in out if r.get("kind") != "game"], limit,
                            held=held)
     # …AND ITS PICK KEEPS A SEAT PAST THE CAPS: the likeliest agreeing row
@@ -2899,6 +2912,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             out.append(lock(h, why))
             locked_n[why] = locked_n.get(why, 0) + 1
     _stamp_hold(out, held, stamp)
+    # TODAY'S READ ON THE CARRIED ROWS TOO: a locked pick is the posted row
+    # copied whole, stamp and all (see `stamp_reads`).
+    stamp_reads(out, leans)
     for r in out:
         if not r.get("locked") and r.get("price_age_s") is not None:
             r["priced_at"] = _priced_at(stamp, r.get("price_age_s"))

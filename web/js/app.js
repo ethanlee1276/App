@@ -8932,8 +8932,9 @@ function likelyTagsHTML(r) {
   if (r.locked) tags.push(["Locked in", "", r.lock_note || "Stays up as posted until its game"]);
   if (r.kind === "game") return tagsOut(tags);
   /* THE MATCHUP READ THIS PICK AGREES WITH (engine/likely.READ_SEATS). */
-  if (r.scan_label) {
-    tags.push([r.scan_label, /tough|avoid/.test(r.scan_read || "") ? "down" : "up",
+  const sr = cardScanRead(r);
+  if (sr) {
+    tags.push([sr.label, /tough|avoid/.test(sr.read || "") ? "down" : "up",
                "The matchup scan’s read on him — it chose this side, and never moved the number"]);
   }
   const qb = r.qb_card, mate = r.mate_card;
@@ -9294,8 +9295,7 @@ function obBetLine(r) {
 }
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
-  const tags = likelyTagsHTML(r.scan_label || !r.label || !r.read ? r
-    : { ...r, scan_label: r.label, scan_read: r.read });
+  const tags = likelyTagsHTML(r);
   const name = r.kind === "game" ? (r.pick_label || r.player) : r.player;
   const td = r.lane === "td" ? `<span class="ob-plain">hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10</span>` : "";
   return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}">
@@ -12325,6 +12325,29 @@ function scanMicroHTML(m) {
 /* THE PLAYER'S OWN READ, on his pick page: the line the game page's
    scan wrote about him, with its reasons, so a pick is read beside what
    the matchup says. Paid like the rest of the reads; absent, nothing. */
+/* THE READ A CARD NAMES — the live one, the same the reads shelf and the
+   pick page show. Ethan, 2026-09-26: Kincaid was "a breakout candidate up
+   here, but then he's listed as a good matchup down here". His card was a
+   pick locked since Friday and carried Friday's stamped label. The card
+   now names today's read, and only when the pick is on its side (over or
+   yes for a good read, under for a tough one); a read gone neutral or
+   turned leaves no tag. The stamp (`scan_label`, or a matchup pick's own
+   `label`) is used only when the reads are not on the page. */
+const SCAN_READ_SIDE = { breakout: "over", good: "over", tough: "under", avoid: "under" };
+function cardScanRead(r) {
+  if (!r || r.kind === "game") return null;
+  const d = state.data || {};
+  if (!d.scan_reads) {
+    const label = r.scan_label || r.label, read = r.scan_read || r.read;
+    return label && read ? { read, label } : null;
+  }
+  const x = pickScanRead(r);
+  const want = x && SCAN_READ_SIDE[x.read];
+  const side = String(r.side || "").toLowerCase();
+  const mine = side === "yes" ? "over" : side === "no" ? "under" : side;
+  return want && want === mine ? { read: x.read, label: x.label } : null;
+}
+
 function pickScanRead(r) {
   if (!r || !r.player || !r.team) return null;
   const d = state.data || {};

@@ -332,7 +332,7 @@ def test_the_row_says_how_long_the_pick_has_been_up():
             + "const wholePct = (x) => `${Math.round(Number(x) * 100)}%`;\n"
             + "const tzOpts = (o) => Object.assign({timeZone: 'America/New_York'}, o);\n"
             + "const tzTime = (d) => new Date(d).toLocaleTimeString('en-US', tzOpts({hour: 'numeric', minute: '2-digit'}));\n"
-            + "const state = {data: {}};\nconst LIKELY_NEW_MIN = 60;\n" + _fn(APP, "likelyWhen") + _fn(APP, "likelyHeld")
+            + "const state = {data: {}};\nconst LIKELY_NEW_MIN = 60;\nconst cardScanRead = () => null;\n" + _fn(APP, "likelyWhen") + _fn(APP, "likelyHeld")
             + _fn(APP, "likelyHeldTag") + _fn(APP, "likelyTagsHTML")
             + f"\nconsole.log(JSON.stringify([{{since: '{iso(200)}', first_prob: 0.71}}, "
             + f"{{since: '{iso(10)}', kind: 'game'}}, {{}}].map(likelyTagsHTML)));")

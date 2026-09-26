@@ -204,7 +204,7 @@ def test_every_read_says_what_the_board_did_with_it():
     assert "${scanPickHTML(x)}" in _fn("scanReadHTML")
     assert '${scanPickHTML(x, "sct-pick")}' in _fn("scanTopRowHTML")
     assert "const own = market ? null : (scanPickRow(x)" in _fn("scanDoor")
-    assert "if (r.scan_label) {" in _fn("likelyTagsHTML"), "the pick's card names the read"
+    assert "const sr = cardScanRead(r);" in _fn("likelyTagsHTML"), "the pick's card names the read"
     if not shutil.which("node"):
         return
     harness = ("const escapeHtml=(x)=>String(x==null?'':x);"

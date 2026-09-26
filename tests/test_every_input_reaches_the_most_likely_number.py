@@ -281,7 +281,7 @@ def test_a_most_likely_row_says_why_the_model_moved_it():
     held = held[:held.index("\nfunction likelyRow(")]
     prog = (esc + "const escapeAttr = escapeHtml;\nconst state = {data: {thin: {'Malik Nabers': {games: 2}}}};\n"
             + "const tzOpts = (o) => o;\nconst tzTime = (d) => String(d);\nconst wholePct = (x) => x;\n"
-            + "const LIKELY_NEW_MIN = 60;\n" + held + fn
+            + "const LIKELY_NEW_MIN = 60;\nconst cardScanRead = () => null;\n" + held + fn
             + f"\nconsole.log(JSON.stringify({json.dumps(rows)}.map(likelyTagsHTML)));")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(prog)
