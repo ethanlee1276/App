@@ -187,7 +187,8 @@ def test_the_record_page_has_a_zenos_bets_button_that_opens_his_page():
         fh.write(prog)
     on, off = json.loads(subprocess.run(["node", path], capture_output=True, text=True, check=True).stdout)
     assert 'data-scope="zeno">Zeno’s Bets <span class="rec-scope-n">1391</span></button>' in on, on
-    assert on.index("Prediction Market") < on.index("Zeno’s Bets") < on.index(">NFL"), "after Prediction Market"
+    assert on.index("All bets") < on.index("Zeno’s Bets") < on.index("Prediction Market") < on.index(">NFL"), \
+        "right after All bets, before Prediction Market"
     assert "Zeno" not in off, "no record, no button"
 
 

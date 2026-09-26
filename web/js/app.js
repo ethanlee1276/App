@@ -16839,7 +16839,6 @@ function recordScopeHTML(d, scope) {
   const jc = d.journaled || {};
   const parts = [btn("all", "All bets",
                      journaled(jc.all || d.overall))];
-  parts.push(btn("intel", "Prediction Market", null));
   /* ZENO'S BETS (Ethan, 2026-09-26: "we should also have a button here for
      'Zenos Bets'"). Not a scope of this page — his book is its own
      record, graded by the books, not by us — so it opens his page, where
@@ -16848,6 +16847,9 @@ function recordScopeHTML(d, scope) {
   const zo = (d.zeno || {}).overall || {};
   const zn = (zo.settled || 0) + ((d.zeno || {}).open_n ?? zo.open ?? 0);
   if (zn) parts.push(btn("zeno", "Zeno’s Bets", zn));
+  // Before Prediction Market (Ethan, 2026-09-26: "put the zenos bets
+  // button before the prediction market button, not after").
+  parts.push(btn("intel", "Prediction Market", null));
   for (const sp of tracked) {
     const r = (d.by_sport || {})[sp] || {};
     // A sport with nothing journaled is still listed. Hiding it would
