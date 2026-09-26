@@ -41964,8 +41964,9 @@ let _pbpTab = "info";           // info | props | injuries | players
 
 /* ---------------- The page's other rooms ----------------
    Ethan, 2026-09-05: "the play by plays other rooms". The render's
-   sub-tabs: Game info (the park facts), Live props (the reader's open
-   bets on this game, from the tracker), Injuries (both clubs'
+   sub-tabs: Game info (the park facts), Our picks (the Most Likely and
+   edge picks on this game, tracked — it was "Live props", the tracker's
+   open tickets as one list, until 2026-09-26), Injuries (both clubs'
    designations from the injury board), Player stats (the box score the
    fast loop now writes into the deep file, from the parsers the tracker
    trusts). Team stats and Splits are not built: the summary's team
@@ -41975,7 +41976,7 @@ let _pbpTab = "info";           // info | props | injuries | players
 // below. Named once so a change cannot reach one league and miss the
 // other — which is the shape of most of this file's football bugs.
 const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
-const PBP_TABS = [["info", "Game info"], ["props", "Live props"], ["injuries", "Injuries"], ["players", "Player stats"]];
+const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];
 
 /* The open bets on THIS game, from the board's tracker — which is the
    viewed league's, so another league's page has none to show. */
@@ -42205,22 +42206,89 @@ function pbpTotalsHTML(d, league) {
       nothing fetched, nothing estimated.</p></div>`;
 }
 
+/* OUR PICKS ON THIS GAME. Ethan, 2026-09-26, the room circled on a
+   Wyoming–Hawai'i page: "instead of posting live bets, we should just be
+   displaying the most likely bets and edge bets that were placed on that
+   game in that tab instead." The room was the tracker's open tickets as
+   one flat list — "Hawai'i Moneyline · placed −125 · tracking" — with no
+   word for which board a ticket came from, so it read as a live bet.
+
+   Now it is the two boards' picks on this game under their own heads,
+   the way the Live tab splits them: the Pick of the Day first when it is
+   on this game, then Most Likely, then Edge. A pick the journal holds
+   was placed, and carries the tracker's word (tracking, CLEARED,
+   BUSTED…) and its live numbers; a board pick the journal does not hold
+   says it is on the board. Matched on player, market and side (a game
+   market on its market: one game carries one moneyline pick), so a
+   placed pick is drawn once. */
+const PBP_GAME_MARKETS = new Set(["moneyline", "spread", "total", "team_total"]);
+function pbpPickKey(r) {
+  const n = (s) => String(s || "").toLowerCase().trim();
+  return `${n(r.player)}|${n(r.market)}|${n(r.side)}`;
+}
+function pbpMarketOf(r) {
+  return String(r.market || r.bet_type || "").toLowerCase();
+}
+function pbpGameMarket(r) {
+  return r.kind === "game" || PBP_GAME_MARKETS.has(pbpMarketOf(r));
+}
+function pbpMergePicks(placed, board) {
+  const keys = new Set(placed.map(pbpPickKey));
+  const markets = new Set(placed.filter(pbpGameMarket).map(pbpMarketOf));
+  return [...placed.map((r) => ({ r, placed: true })),
+          ...board.filter((b) => (pbpGameMarket(b) ? !markets.has(pbpMarketOf(b)) : !keys.has(pbpPickKey(b))))
+            .map((r) => ({ r, placed: false }))];
+}
+function pbpOurPicks(d) {
+  const data = state.data || {};
+  const g = { home: d.home, away: d.away };
+  const placed = liveTrackerRows(pbpPropRows(data.live_picks, d));
+  const likelyBoard = oneBoardOn()
+    ? oneBoardRows().filter((r) => r.game === `${d.away}@${d.home}`)
+    : (data.most_likely || []).filter(showableLikelyRow).filter((r) => propInGame(r, g) && !likelyDropped(r));
+  const edgeBoard = [
+    ...(data.recommendations || []).filter(passesFilters).filter((r) => propInGame(r, g)),
+    ...(data.game_bets || []).filter(passesGameBet).filter((b) => b.home === d.home && b.away === d.away),
+  ];
+  return {
+    potd: liveTrackerRows(pbpPropRows(data.live_potd, d)).map((r) => ({ r, placed: true })),
+    likely: pbpMergePicks(placed.filter((r) => isLikelyBook(r.category)), likelyBoard),
+    edge: pbpMergePicks(placed.filter((r) => !isLikelyBook(r.category)), edgeBoard),
+  };
+}
+function pbpPickRowHTML({ r, placed }, book) {
+  const word = ({ cleared: "CLEARED", busted: "BUSTED", dead: "NO CHANCES LEFT", won_pending: "WON", lost_pending: "LOST",
+                  push_pending: "PUSH", final_pending: "FINAL", tracking: "tracking", upcoming: "upcoming", unmapped: "unplaced" })[r.status] || r.status;
+  const tone = ["cleared", "won_pending"].includes(r.status) ? "var(--good)"
+    : ["busted", "dead", "lost_pending"].includes(r.status) ? "var(--bad)" : "var(--text-mute)";
+  const label = r.pick_label ? escapeHtml(r.pick_label)
+    : r.lane === "td" ? `${escapeHtml(r.player)} Anytime TD`
+    : trackerBetText({ ...r, market_label: r.market_label || r.market });
+  const chance = r.model_prob != null ? r.model_prob : r.hit_prob;
+  const sub = placed
+    ? `placed ${american(r.odds)}${r.current != null ? ` · now ${escapeHtml(String(r.current))}` : ""}${
+        r.live_prob != null ? ` · ${Math.round(r.live_prob * 100)}% live` : ""}${r.category === "longshot" ? " · long shot" : ""}`
+    : `${r.odds != null ? american(r.odds) : ""}${chance != null ? ` · ${Math.round(chance * 100)}% our chance` : ""}${
+        r.tier ? ` · ${escapeHtml(((OB_TIERS.find(([k]) => k === r.tier) || [])[1]) || r.tier)}` : ""}`.replace(/^ · /, "");
+  const door = placed ? ridingAttrs(r) : book === "likely" ? likelyOpen(r) : pbpGameMarket(r) ? "" : propAttrs(r);
+  return `<div class="pbp-prop-row${door ? " openable" : ""}"${door}>
+      <span class="pick-id">${betMark(r, 24)}</span>
+      <span class="pbp-prop-main"><b>${label}</b><span class="mini">${sub}</span></span>
+      ${placed ? `<b style="color:${tone}">${escapeHtml(word)}</b>` : `<span class="mini pbp-pick-board">on the board</span>`}
+    </div>`;
+}
 function pbpPropsHTML(d, league) {
   if (state.sport !== league) {
-    return `<p class="rail-quiet">Your open bets are tracked on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
+    return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
   }
-  const rows = pbpPropRows((state.data || {}).live_picks, d);
-  if (!rows.length) return `<p class="rail-quiet">No open bets on this game.</p>`;
-  const word = (r) => ({ cleared: "CLEARED", busted: "BUSTED", dead: "NO CHANCES LEFT", won_pending: "WON", lost_pending: "LOST",
-                         push_pending: "PUSH", final_pending: "FINAL", tracking: "tracking", upcoming: "upcoming", unmapped: "unplaced" })[r.status] || r.status;
-  const tone = (r) => ["cleared", "won_pending"].includes(r.status) ? "var(--good)" : ["busted", "dead", "lost_pending"].includes(r.status) ? "var(--bad)" : "var(--text-mute)";
-  return rows.map((r) => `<div class="pbp-prop-row">
-      <span class="pick-id">${betMark(r, 24)}</span>
-      <span class="pbp-prop-main"><b>${escapeHtml(r.market === "moneyline" ? `${teamName(r.player)} Moneyline` : `${r.player} ${r.side} ${r.line} ${r.market_label || r.market}`)}</b>
-        <span class="mini">placed ${american(r.odds)}${r.current != null ? ` · now ${escapeHtml(String(r.current))}` : ""}${
-          r.live_prob != null ? ` · ${Math.round(r.live_prob * 100)}% live` : ""}</span></span>
-      <b style="color:${tone(r)}">${escapeHtml(word(r))}</b>
-    </div>`).join("");
+  const { potd, likely, edge } = pbpOurPicks(d);
+  if (!potd.length && !likely.length && !edge.length) return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>`;
+  const group = (list, title, book, empty) => `<div class="pbp-picks-group">
+      <div class="pbp-picks-head">${title}<span class="mini">${list.length}</span></div>
+      ${list.length ? list.map((x) => pbpPickRowHTML(x, book)).join("") : `<p class="rail-quiet">${empty}</p>`}</div>`;
+  return `${potd.length ? group(potd, "Pick of the Day", "potd", "") : ""}
+    ${group(likely, "Most Likely", "likely", "No Most Likely pick on this game.")}
+    ${group(edge, "Edge picks", "edge", "No edge pick on this game.")}`;
 }
 
 function pbpInjuriesHTML(d, league) {

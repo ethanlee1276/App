@@ -2,7 +2,8 @@
 
 Ethan, 2026-09-05: "the play by plays other rooms". The render's
 sub-tabs, built where the data is real: Game info (the park facts),
-Live props (the reader's open bets on this game, from the tracker),
+Our picks (the Most Likely and edge picks on this game, tracked —
+tests/test_pbp_our_picks.py; it was "Live props" until 2026-09-26),
 Injuries (both clubs' designations from the injury board), Player
 stats (the box score the fast loop writes into the deep file, through
 the parsers the tracker already trusts). Team stats and Splits are not
@@ -159,14 +160,14 @@ def test_the_props_and_injuries_rooms_pick_this_games_rows_only():
 
 def test_the_page_has_four_real_tabs_and_says_what_is_not_built():
     i = APP.index("const PBP_TABS = ")
-    assert 'const PBP_TABS = [["info", "Game info"], ["props", "Live props"], ["injuries", "Injuries"], ["players", "Player stats"]];' in APP[i:i + 200]
+    assert 'const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];' in APP[i:i + 200]
     assert "Team stats and Splits are not built" in APP[i - 900:i]
     page = _fn("renderPbpPage")
     assert 'const tab = PBP_TABS.some(([k]) => k === _pbpTab) ? _pbpTab : "info";' in page
     assert 'tab === "props" ? pbpPropsHTML(d, league)' in page and 'tab === "players" ? pbpPlayersHTML(d, league)' in page
     assert '_pbpTab = b.dataset.pbpTab; renderPbpPage();' in page
     props = _fn("pbpPropsHTML")
-    assert "if (state.sport !== league) {" in props and "No open bets on this game." in props
+    assert "if (state.sport !== league) {" in props and "No Most Likely or edge picks on this game." in props
     players = _fn("pbpPlayersHTML")
     assert "No box score on file yet" in players and "the fields the open-bet tracker reads, nothing more" in players
     # THE ROOM IS A TABLE NOW (2026-09-10), so the market words moved
