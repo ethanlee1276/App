@@ -81,14 +81,18 @@ def arsenal_context(slate, season: int) -> dict:
     "mix": {team: {"pitcher", "shares"}}} for tonight's starters with a
     person id. Either half missing leaves the other; nothing raises."""
     from .models import STRIKEOUTS, OUTS
-    out = {"batters": {}, "season": None, "mix": {}}
+    out = {"batters": {}, "season": None, "mix": {}, "error": ""}
     try:
         from .sources.savant import load_arsenal
         board = load_arsenal(int(season), "batter")
         out["season"] = board.pop("_season", None) if board else None
         out["batters"] = board or {}
-    except Exception:                                        # noqa: BLE001
-        pass
+        if not board:
+            out["error"] = "Savant's arsenal board came back empty for this season and last"
+    except Exception as exc:                                 # noqa: BLE001
+        # SAID, not swallowed: the box's first run printed "arsenal board:
+        # 0 hitter(s)" with no reason (2026-09-26).
+        out["error"] = f"{type(exc).__name__}: {exc}"[:300]
     for p in getattr(slate, "props", None) or []:
         if p.market not in (STRIKEOUTS, OUTS) or not getattr(p, "person_id", 0) or p.team in out["mix"]:
             continue

@@ -480,7 +480,8 @@ def main() -> None:
             _ars = _mscan.arsenal_context(slate, int(args.date[:4]))
             print(f"  Pitch mix: {len(_ars['mix'])} starter(s); arsenal board: "
                   f"{len(_ars['batters'])} hitter(s)"
-                  + (f" ({_ars['season']})" if _ars.get("season") else ""))
+                  + (f" ({_ars['season']})" if _ars.get("season") else "")
+                  + (f" — {_ars['error']}" if _ars.get("error") else ""))
         except Exception as _ax:                            # noqa: BLE001
             print(f"  ⚠️  pitch-type matchups skipped: {_ax}")
             _ars = None
