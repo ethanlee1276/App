@@ -139,11 +139,40 @@ class RedZoneUsage:
     targets_inside_10: float = 0.0
     rz_touch_share: float = 0.0      # 0..1 share of team red-zone touches
     measured: bool = False
+    #: His team's average implied points in the games these touches were
+    #: measured over (engine/nflusage.red_zone_usage), so this week's
+    #: expected touches can be scaled to this week's offence — see
+    #: `expected_this_week`. None when the schedule had no lines.
+    team_implied: float | None = None
+    games: int = 0
 
     @property
     def opportunities(self) -> float:
-        """Expected red-zone chances per game."""
+        """His red-zone chances per game, as measured over recent games."""
         return self.carries_inside_10 + self.targets_inside_10
+
+    def expected_this_week(self, implied_now: float | None) -> float:
+        """His red-zone chances THIS week: the measured per-game average,
+        scaled by the points his team is expected to score now against
+        what it was expected to score when those touches were measured.
+
+        Ethan, 2026-09-26, on Cam Skattebo's "4.0 expected red-zone
+        chances": "last week the starting QB for that team was announced
+        out for the season so no way that number is correct now." The 4.0
+        was a per-game average from games the old quarterback started,
+        carried forward unchanged. The market's implied total knows the
+        quarterback is gone; scaling by it carries that into the red zone.
+        Clamped to RZ_SCALE_CLAMP so one strange total cannot halve or
+        double a role."""
+        base = self.opportunities
+        if not implied_now or not self.team_implied or self.team_implied <= 0:
+            return base
+        lo, hi = RZ_SCALE_CLAMP
+        return base * clamp(float(implied_now) / float(self.team_implied), lo, hi)
+
+
+#: How far this week's offence may scale a player's red-zone chances.
+RZ_SCALE_CLAMP = (0.6, 1.4)
 
 
 def team_implied_total(game: Game, team: str) -> float:
@@ -373,9 +402,13 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         f"Team implied total {implied:.1f} → {team_tds:.2f} expected offensive TDs",
         f"Share of team TDs from {share_src}",
     ]
+    rz_now = rz.expected_this_week(implied)
     if rz.rz_touch_share:
+        scaled = rz.team_implied and abs(rz_now - rz.opportunities) >= 0.05
         reasons.append(f"Red-zone touch share ~{rz.rz_touch_share:.0%} "
-                       f"({rz.opportunities:.1f} expected chances)")
+                       f"({rz_now:.1f} expected chances"
+                       + (f" this week — {rz.opportunities:.1f} a game before, scaled to "
+                          f"{implied:.1f} expected points from {rz.team_implied:.1f})" if scaled else ")"))
     # Script replaces the old adjective ("Favoured — positive game
     # script"): that sentence appeared on every favourite's card while
     # the rate contained no such factor — a reason describing math that
@@ -411,6 +444,13 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         "mate_card": mate_card,
         "reasons": reasons, "caveats": caveats,
         "opportunities": rz.opportunities,
+        # THIS WEEK'S red-zone chances (RedZoneUsage.expected_this_week),
+        # beside the measured average, for the card and the scenarios.
+        # `opportunities` stays the measured figure the value board's
+        # grade has always read.
+        "rz_expected": round(rz_now, 2),
+        "rz_before": round(rz.opportunities, 2),
+        "rz_then_implied": rz.team_implied,
         "primary_reason": reasons[0] if not def_reasons else def_reasons[0],
         "data_quality": 0.85 if not rz.measured else 1.0,
         "implied_total": implied,
@@ -553,7 +593,9 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             # the lines expect from his team, and the red-zone chances the
             # model expects him to get.
             "implied_total": info.get("implied_total"),
-            "rz_chances": info.get("opportunities"),
+            "rz_chances": info.get("rz_expected"),
+            "rz_before": info.get("rz_before"),
+            "rz_then_implied": info.get("rz_then_implied"),
             "vig": round(vig, 4), "vig_source": vig_source,
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),

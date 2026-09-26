@@ -1104,6 +1104,10 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
             x["td"] = {"model_prob": round(float(r["model_prob"]), 4), "odds": r.get("odds"),
                        "book": r.get("book") or "",
                        "implied_total": r.get("implied_total"), "rz_chances": r.get("rz_chances"),
+                       "rz_before": r.get("rz_before"), "rz_then_implied": r.get("rz_then_implied"),
+                       # HIS QUARTERBACK, when the starter is out (engine/qbchange):
+                       # the headline, so the scenario says who is throwing.
+                       "qb_change": ((r.get("qb_card") or {}).get("headline") or None),
                        # WHY THAT NUMBER (engine/touchdowns.td_probability):
                        # the implied total, where his share comes from, the
                        # red-zone line, and the caveat when red-zone usage

@@ -99,7 +99,17 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
         lines.append(f"{float(share):.0%} of the {'targets' if grp == 'wr' else 'carries'}"
                      + (f" · {u['snap_pct']:.0%} of the snaps" if u.get("snap_pct") is not None else ""))
     if rz is not None:
-        lines.append(f"{float(rz):.1f} expected red-zone chances")
+        before, then = td.get("rz_before"), td.get("rz_then_implied")
+        moved = before is not None and then and implied is not None and abs(float(rz) - float(before)) >= 0.05
+        lines.append(f"{float(rz):.1f} expected red-zone chances"
+                     + (f" this week ({float(before):.1f} a game before, scaled to {float(implied):.1f} "
+                        f"expected points from {float(then):.1f})" if moved else ""))
+    # HIS QUARTERBACK, WHEN THE STARTER IS OUT. Ethan, 2026-09-26: "last
+    # week the starting QB for that team was announced out for the season
+    # so no way that number is correct now." The lines above already carry
+    # it through the implied total; this says it in words.
+    if td.get("qb_change"):
+        lines.append(f"QB change: {td['qb_change']} — the lines above already account for it")
     return {"points": pts, "score": total, "lines": lines}
 
 

@@ -81,7 +81,7 @@ def test_the_board_carries_journals_and_paywalls_it():
     assert "td_scenarios" in gate.PAID_KEYS
     # The watch rows and the read stamp carry the two numbers the scenario reads.
     td = open(os.path.join(ROOT, "engine", "touchdowns.py"), encoding="utf-8").read()
-    assert '"implied_total": info.get("implied_total"),' in td and '"rz_chances": info.get("opportunities"),' in td
+    assert '"implied_total": info.get("implied_total"),' in td and '"rz_chances": info.get("rz_expected"),' in td
     scan = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
     assert '"implied_total": r.get("implied_total"), "rz_chances": r.get("rz_chances"),' in scan
 

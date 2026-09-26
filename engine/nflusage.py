@@ -83,6 +83,24 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
             tw = team_weeks.setdefault(r["team"], {})
             tw[r["period"]] = tw.get(r["period"], 0.0) + float(r["value"] or 0)
 
+    # WHAT HIS TEAM WAS EXPECTED TO SCORE in the games these touches come
+    # from, off the schedule's own closing numbers — so the touchdown model
+    # can scale them to this week's offence (RedZoneUsage
+    # .expected_this_week; a quarterback lost for the season, 2026-09-26).
+    implied_by: dict = {}
+    try:
+        from .tdbacktest import implied_total as _implied
+        for g in conn.execute(
+                "SELECT period, home, away, spread, total FROM games "
+                "WHERE sport='nfl' AND season=? AND total IS NOT NULL AND spread IS NOT NULL",
+                (season,)):
+            for team, home in ((g["home"], True), (g["away"], False)):
+                v = _implied(g["total"], g["spread"], home)
+                if v is not None:
+                    implied_by[(team, g["period"])] = v
+    except Exception:                                        # noqa: BLE001
+        implied_by = {}
+
     out: dict = {}
     for (player, team), weeks in per_player.items():
         recent = sorted(weeks, reverse=True)[:RZ_WEEKS]
@@ -98,12 +116,15 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
         team_avg = [team_weeks.get(team, {}).get(w, 0.0) for w in recent]
         team_touches = sum(team_avg) / n if n else 0.0
         share = (tgt + car) / team_touches if team_touches > 0 else 0.0
+        then = [implied_by[(team, w)] for w in recent if (team, w) in implied_by]
         out[_short_key(player, team)] = RedZoneUsage(
             carries_inside_5=round(i5, 2),
             carries_inside_10=round(car, 2),
             targets_inside_10=round(tgt, 2),
             rz_touch_share=round(min(share, 1.0), 3),
             measured=True,
+            team_implied=round(sum(then) / len(then), 2) if then else None,
+            games=n,
         )
     return out
 
