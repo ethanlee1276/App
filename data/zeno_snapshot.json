@@ -3,14 +3,71 @@
   "note": "Read off Pikkit's shared record cards, which Pikkit marks Verified (synced from the sportsbooks). Profit, ROI and record are Pikkit's; the dollars at risk are profit / ROI.",
   "as_of": "2026-09-26T14:23:03",
   "windows": [
-    {"key": "all", "label": "All time", "profit": 8001.64, "roi": 0.2607,
-     "wins": 221, "losses": 1141, "pushes": 27, "updated": "2026-09-26T14:23:03",
-     "receipt": "img/zeno/pikkit-all-time-2026-09-26.png"},
-    {"key": "2026", "label": "2026", "profit": 1236.44, "roi": 0.3225,
-     "wins": 57, "losses": 265, "pushes": 9, "updated": "2026-09-26T14:22:52",
-     "receipt": "img/zeno/pikkit-2026-2026-09-26.png"},
-    {"key": "2026-09", "label": "September 2026", "profit": 571.53, "roi": 0.3494,
-     "wins": 30, "losses": 150, "pushes": 1, "updated": "2026-09-26T14:22:43",
-     "receipt": "img/zeno/pikkit-september-2026-2026-09-26.png"}
+    {
+      "key": "all",
+      "label": "All time",
+      "profit": 8001.64,
+      "roi": 0.2607,
+      "wins": 221,
+      "losses": 1141,
+      "pushes": 27,
+      "updated": "2026-09-26T14:23:03",
+      "receipt": "img/zeno/pikkit-all-time-2026-09-26.png"
+    },
+    {
+      "key": "2026",
+      "label": "2026",
+      "profit": 1236.44,
+      "roi": 0.3225,
+      "wins": 57,
+      "losses": 265,
+      "pushes": 9,
+      "updated": "2026-09-26T14:22:52",
+      "receipt": "img/zeno/pikkit-2026-2026-09-26.png"
+    },
+    {
+      "key": "2026-09",
+      "label": "September 2026",
+      "profit": 571.53,
+      "roi": 0.3494,
+      "wins": 30,
+      "losses": 150,
+      "pushes": 1,
+      "updated": "2026-09-26T14:22:43",
+      "receipt": "img/zeno/pikkit-september-2026-2026-09-26.png"
+    },
+    {
+      "key": "2026-08",
+      "label": "August 2026",
+      "profit": 53.12,
+      "roi": 0.4284,
+      "wins": 2,
+      "losses": 7,
+      "pushes": 1,
+      "updated": "2026-09-26T14:44:01",
+      "receipt": "img/zeno/pikkit-august-2026-2026-09-26.png"
+    },
+    {
+      "key": "2026-07",
+      "label": "July 2026",
+      "profit": 355.6,
+      "roi": 0.6199,
+      "wins": 13,
+      "losses": 41,
+      "pushes": 4,
+      "updated": "2026-09-26T14:44:07",
+      "receipt": "img/zeno/pikkit-july-2026-2026-09-26.png"
+    },
+    {
+      "key": "2026-06",
+      "label": "June 2026",
+      "profit": 260.93,
+      "roi": 0.4007,
+      "wins": 5,
+      "losses": 18,
+      "pushes": 1,
+      "updated": "2026-09-26T14:44:13",
+      "receipt": "img/zeno/pikkit-june-2026-2026-09-26.png"
+    }
   ]
 }

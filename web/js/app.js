@@ -18105,10 +18105,18 @@ function zenoSnapshotHTML(snap) {
         <img src="${escapeAttr(w.receipt)}" alt="${src}’s ${escapeAttr(w.label || "")} card, the receipt for these numbers" loading="lazy"/></a>` : ""}
     </figure>`;
   };
+  /* The headline windows (all time, the year) stand; the months, one card
+     each, fold under them newest first — six Pikkit cards in a row is a
+     wall on a phone. */
+  const month = (w) => /^\d{4}-\d{2}$/.test(String(w.key || ""));
+  const heads = ws.filter((w) => !month(w)), months = ws.filter(month)
+    .sort((a, b) => String(b.key).localeCompare(String(a.key)));
   return `<div class="section-title"><span class="st-ico">${icon("check", 15)}</span>From ${src}
       <span class="sub">— synced from the sportsbooks and marked Verified by ${src}, as of ${escapeHtml(zenoDay(snap.as_of))}.
       Tap a card for the original.</span></div>
-    <div class="zeno-snap">${ws.map(card).join("")}</div>`;
+    <div class="zeno-snap">${heads.map(card).join("")}</div>
+    ${months.length ? `<details class="tn-full zeno-months"><summary>Month by month · ${months.length}</summary>
+      <div class="zeno-snap">${months.map(card).join("")}</div></details>` : ""}`;
 }
 
 async function renderZeno() {

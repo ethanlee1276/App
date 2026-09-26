@@ -36,6 +36,27 @@ def test_the_cards_as_sent():
     assert (w["2026-09"]["profit"], w["2026-09"]["roi"], w["2026-09"]["wins"], w["2026-09"]["losses"],
             w["2026-09"]["pushes"]) == (571.53, 0.3494, 30, 150, 1)
     assert SNAP["source"] == "Pikkit" and SNAP["as_of"] == "2026-09-26T14:23:03"
+    # The months he sent next (June, July, August 2026) — each its own card.
+    assert (w["2026-08"]["profit"], w["2026-08"]["roi"], w["2026-08"]["wins"], w["2026-08"]["losses"],
+            w["2026-08"]["pushes"]) == (53.12, 0.4284, 2, 7, 1)
+    assert (w["2026-07"]["profit"], w["2026-07"]["roi"], w["2026-07"]["wins"], w["2026-07"]["losses"],
+            w["2026-07"]["pushes"]) == (355.60, 0.6199, 13, 41, 4)
+    assert (w["2026-06"]["profit"], w["2026-06"]["roi"], w["2026-06"]["wins"], w["2026-06"]["losses"],
+            w["2026-06"]["pushes"]) == (260.93, 0.4007, 5, 18, 1)
+
+
+def test_the_months_sit_inside_their_year():
+    w = {x["key"]: x for x in SNAP["windows"]}
+    months = [x for k, x in w.items() if len(k) == 7 and k.startswith("2026-")]
+    assert sum(x["wins"] for x in months) <= w["2026"]["wins"]
+    assert sum(x["losses"] for x in months) <= w["2026"]["losses"]
+
+
+def test_the_months_fold_under_the_headline_cards():
+    i = APP.index("function zenoSnapshotHTML(")
+    fn = APP[i:APP.index("\n}\n", i)]
+    assert 'Month by month · ${months.length}' in fn and "zeno-months" in fn
+    assert "String(b.key).localeCompare(String(a.key))" in fn, "newest month first"
 
 
 def test_every_receipt_is_on_the_site():
