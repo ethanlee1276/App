@@ -8254,6 +8254,7 @@ def export_json(conn, path) -> None:
     # on a one-core box. show_epoch() already did it the cheap way.
     allp = performance(conn)
     scoped = performance(conn, since=since)
+    _zeno_block = _zeno.block_or_empty()
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "record_epoch": since,
@@ -8390,10 +8391,15 @@ def export_json(conn, path) -> None:
         "paper": performance(conn, category="paper", since=since),
         # ZENO'S RECORD — Ethan's own sportsbook tickets, from its own
         # store and never from this journal. Two provenances, two rows
-        # on the page, never one number. Public like the rest of this
+        # on the page; the one line that adds them is `combined` below,
+        # and it always shows the split. Public like the rest of this
         # file; the only write path is the owner token. Never fails the
         # export: a missing store is an empty block. See engine/zeno.py.
-        "zeno": _zeno.block_or_empty(),
+        "zeno": _zeno_block,
+        # EVERYTHING WE'VE BET: the model's scoped record and Zeno's
+        # tickets in one line, the split always beside it (Ethan,
+        # 2026-09-26). `overall` above stays the model's alone.
+        "combined": _zeno.combined(scoped, _zeno_block),
         "paper_mode": paper_mode(conn),
         # `paper_recent` — the hundred paper rows themselves — was dropped
         # on 2026-08-20 along with the Record page panel that was its only

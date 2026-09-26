@@ -515,7 +515,10 @@ def test_the_card_says_dollars_the_book_settled_and_a_parlay_once():
     assert "settled by\n        the book, not by our model" in got or "settled by the book" in got.replace("\n        ", " ")
     assert got.count("3-leg parlay") == 1
     assert "Yankees ML" in got, "the legs are not shown"
-    assert "u</span>" not in got, "a unit crept onto a page that is in dollars"
+    # Dollars lead; units ride beside them at engine/zeno.UNIT_DOLLARS a
+    # unit (Ethan, 2026-09-26: "1 unit = $10") — never in their place.
+    assert "+6.2u</span>" in got, "the units beside the dollars"
+    assert got.index("$61.70") < got.index("+6.2u"), "dollars first"
 
 
 def test_the_card_scopes_to_a_league_and_stays_off_one_with_no_rows():

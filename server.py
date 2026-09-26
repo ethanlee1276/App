@@ -1975,6 +1975,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, json.dumps(
                 {"error": f"could not parse the export: {exc}"}).encode(),
                 ".json")
+        # A LOOK BEFORE A WRITE: `X-Zeno-Preview: 1` answers with how the
+        # export was read (engine/zeno.preview) and writes nothing — the
+        # first upload of a new export (Pikkit's) is checked this way.
+        if (self.headers.get("X-Zeno-Preview") or "").strip() in ("1", "true", "yes"):
+            return self._send(200, json.dumps(Z.preview(text)).encode(), ".json")
         source = (self.headers.get("X-Zeno-Source") or "juicereel").strip()[:40]
         conn = Z.connect()
         try:

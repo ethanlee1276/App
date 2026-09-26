@@ -42,7 +42,7 @@ def test_the_page_opens_with_the_scope_in_view_above_the_rooms():
     # The scope in view, not the pooled number — or, with a window chosen
     # (audit item 5, 2026-09-23), that scope's last N days, cut from its
     # own curve (tests/test_the_record_has_windows.py).
-    assert ": recordRibbonsHTML(d, o, src.recent);" in body, "the scope in view, not the pooled number"
+    assert ": recordRibbonsHTML(dAll, o, src.recent);" in body, "the scope in view, not the pooled number"
     j = body.rindex("host.innerHTML = scopeBar")   # the main assembly; two empty branches use the same opener earlier
     tail = body[j:j + 400]
     assert '(ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>' in tail

@@ -154,10 +154,10 @@ def test_the_headline_reads_the_window_from_the_scopes_own_curve():
     assert "const avail = recRangesFor(src.curve);" in body, "the scope in view's curve, not the pooled one"
     assert "const rk = recRangeKey(avail);" in body and "const from = recRangeFrom(avail, rk);" in body
     assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
-    assert "recordRibbonsHTML(d, { ...winO, label: `Model · last ${winDays} days` }," in body
+    assert "recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` }," in body
     assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from))' in body, \
         "the form dots are the window's own"
-    assert ": recordRibbonsHTML(d, o, src.recent);" in body, "no window, or an empty one: the whole record"
+    assert ": recordRibbonsHTML(dAll, o, src.recent);" in body, "no window, or an empty one: the whole record"
     j = body.rindex("host.innerHTML = scopeBar + winBar")
     tail = body[j:j + 400]
     assert tail.index("rec-ribbons") < tail.index("winNote") < tail.index("_recordRooms("), \

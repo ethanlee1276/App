@@ -18014,6 +18014,8 @@ function zenoTallyLine(t) {
          ${t.profit >= 0 ? "+" : ""}${zenoMoney(t.profit)}</span>
        ${roi == null ? "" : `<span style="color:${roi >= 0 ? "var(--good)" : "var(--bad)"}">
          ${roi >= 0 ? "+" : ""}${roi.toFixed(1)}% ROI</span>`}
+       ${t.net_units == null ? "" : `<span style="color:${t.net_units >= 0 ? "var(--good)" : "var(--bad)"}">
+         ${t.net_units >= 0 ? "+" : MINUS}${Math.abs(Number(t.net_units)).toFixed(1)}u</span>`}
        <span style="color:var(--text-mute)">· ${zenoMoney(t.staked)} risked
        · ${n} settled${t.open ? `, ${t.open} riding` : ""}</span>`
     : `<span style="color:var(--text-mute)">Nothing settled yet${
@@ -18426,10 +18428,14 @@ async function renderRecord() {
   const from = recRangeFrom(avail, rk);
   const winDays = (avail.find(([k]) => k === rk) || [])[1];
   const winO = from ? recRangeTotals(src.curve, from) : null;
+  /* The combined line is the WHOLE record's (engine/zeno.combined): it
+     shows only on the whole, unscoped record, never beside a sport, a
+     book or a window it was not added up over. */
+  const dAll = winO || scoped ? { ...d, combined: null } : d;
   const ribbons = winO
-    ? recordRibbonsHTML(d, { ...winO, label: `Model · last ${winDays} days` },
+    ? recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` },
         (src.recent || []).filter((r) => String((r || {}).date || "") >= from))
-    : recordRibbonsHTML(d, o, src.recent);
+    : recordRibbonsHTML(dAll, o, src.recent);
   const winBar = recordWindowHTML(avail, rk);
   const winNote = !from ? "" : winO
     ? `<p class="rec-win-note">The headline, the running P&amp;L and the settled bets are the last ${winDays} days,
@@ -44402,6 +44408,18 @@ function recordRibbonsHTML(rec, ov, recent) {
       <span class="hd-big">${rec} <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
     ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
   const tiles = [];
+  /* EVERYTHING WE'VE BET (engine/zeno.combined): the model's picks and
+     Zeno's own tickets in one line, in units — with the split always on
+     the tile, so the model's own record (the next tile) is never hidden
+     inside it. Ethan, 2026-09-26. */
+  const cb = (rec || {}).combined;
+  if (cb && cb.settled && cb.split) {
+    const u = Number(cb.net_units || 0), roi = Number(cb.roi || 0);
+    const part = (x) => `${sign(Number(x.net_units || 0))}${Math.abs(Number(x.net_units || 0)).toFixed(1)}u`;
+    tiles.push(tile("Everything we’ve bet · model + Zeno", wl(cb), `${sign(u)}${Math.abs(u).toFixed(1)}u`, tone(u),
+                    `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}`,
+                    "", rate(cb)));
+  }
   if (ov.settled) {
     const roi = Number(ov.roi || 0);
     const u = Number(ov.net_units || 0);
@@ -44413,8 +44431,9 @@ function recordRibbonsHTML(rec, ov, recent) {
     /* v5: the same tile serves a person's own book — Zeno's, or the
        reader's hand-logged bets on My Bets — under its own label. */
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
+    const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u · `;
     tiles.push(tile(z.label || "Zeno · his own book", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
-                    `${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
+                    `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
                     dots(z.recent, "result"), rate(zo)));
   }
   return tiles.join("");

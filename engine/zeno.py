@@ -35,11 +35,13 @@ data" is not a permission check that could be misconfigured; it is the
 absence of any feature by which anyone else could. Reading is public,
 which is the point.
 
-DOLLARS, NOT UNITS. The model's books are sized in units because a unit
-is a house convention. These were placed in money and the book settled
-them in money; converting to units would put a number on the page that
-Ethan never bet. ROI is profit over the dollars at risk, with pushes and
-voids out of the denominator — the same rule the model's record uses.
+DOLLARS FIRST, UNITS BESIDE THEM. These were placed in money and the book
+settled them in money, so the store and the headline stay in dollars.
+Ethan, 2026-09-26, asked for them in units too ("1 unit = $10") so they
+can sit beside the model's record and add into the combined line
+(`combined`); the units are the dollars over UNIT_DOLLARS, shown next to
+them, never instead. ROI is profit over the dollars at risk, with pushes
+and voids out of the denominator — the same rule the model's record uses.
 
 A PARLAY IS ONE BET. The legs ride along as a list for the page to show;
 the stake, the price and the result belong to the ticket. Counting legs
@@ -77,6 +79,20 @@ RESULTS = ("open", "won", "lost", "push", "void", "cashout")
 OWNER_TOKEN_ENV = "QB_OWNER_TOKEN"
 
 RECENT_LIMIT = 40
+
+#: DOLLARS PER UNIT, for the units the page shows beside the dollars and
+#: for the combined line. Ethan, 2026-09-26: "1 unit = $10". The store
+#: stays in dollars — the book settled money, and a unit is only how the
+#: page counts it. `QB_ZENO_UNIT` on the box overrides it.
+UNIT_DOLLARS = 10.0
+
+
+def unit_dollars() -> float:
+    try:
+        v = float(os.environ.get("QB_ZENO_UNIT", "").strip() or UNIT_DOLLARS)
+    except ValueError:
+        v = UNIT_DOLLARS
+    return v if v > 0 else UNIT_DOLLARS
 
 
 # --- the store ------------------------------------------------------------
@@ -326,7 +342,42 @@ def _tally(rows) -> dict:
     t["roi"] = round(t["profit"] / t["staked"], 4) if t["staked"] else None
     for k in ("staked", "returned", "open_stake"):
         t[k] = round(t[k], 2)
+    unit = unit_dollars()
+    t["units_staked"] = round(t["staked"] / unit, 2)
+    t["net_units"] = round(t["profit"] / unit, 2)
     return t
+
+
+def combined(model: dict | None, zeno: dict | None) -> dict | None:
+    """EVERYTHING WE'VE BET, with the split always beside it. Ethan,
+    2026-09-26, asked for his own record to count in the page's ROI and
+    units; the answer he chose is a combined line that says what each
+    side added — the model's picks (graded by us, in units) and his own
+    tickets (graded by the book, at UNIT_DOLLARS a unit). Never folded
+    into the model's own numbers: `overall` stays the model's alone, so a
+    reader judging the picks still can. None until both sides have a
+    settled bet — a "combined" line of one side is that side."""
+    m = model or {}
+    z = (zeno or {}).get("overall") or {}
+    if not m.get("settled") or not z.get("settled"):
+        return None
+    mu, mn = float(m.get("units_staked") or 0), float(m.get("net_units") or 0)
+    zu, zn = float(z.get("units_staked") or 0), float(z.get("net_units") or 0)
+    staked = mu + zu
+    return {
+        "settled": int(m["settled"]) + int(z["settled"]),
+        "wins": int(m.get("wins") or 0) + int(z.get("wins") or 0),
+        "losses": int(m.get("losses") or 0) + int(z.get("losses") or 0),
+        "pushes": int(m.get("pushes") or 0) + int(z.get("pushes") or 0),
+        "units_staked": round(staked, 2),
+        "net_units": round(mn + zn, 2),
+        "roi": round((mn + zn) / staked, 4) if staked else None,
+        "unit_dollars": unit_dollars(),
+        "split": {"model": {"settled": int(m["settled"]), "net_units": round(mn, 2),
+                            "units_staked": round(mu, 2)},
+                  "zeno": {"settled": int(z["settled"]), "net_units": round(zn, 2),
+                           "units_staked": round(zu, 2)}},
+    }
 
 
 def _row_out(r) -> dict:
@@ -379,6 +430,7 @@ def block(conn) -> dict:
         "books": [BOOKS.get(b, b) for b in by_book],
         "n_rows": len(rows),
         "last_import": last,
+        "unit_dollars": unit_dollars(),
     }
 
 
@@ -446,14 +498,14 @@ HEADERS = {
                     "juice_bet_id", "juice bet id"),
     "leg_id": ("bet_leg_id", "bet leg id", "leg id", "leg_id"),
     "placed_at": ("placed", "placed at", "date placed", "date", "bet date",
-                  "timestamp", "created", "date_placed"),
+                  "timestamp", "created", "date_placed", "time_placed", "time placed"),
     "event_at": ("event date", "game date", "start", "event time", "kickoff",
                  "event_date", "event_start", "game_date"),
-    "sport": ("sport", "league", "leg_sport", "leg_league", "leg sport"),
+    "sport": ("sport", "league", "leg_sport", "leg_league", "leg sport", "sports", "leagues"),
     "event": ("event", "game", "match", "matchup", "event_name", "event name"),
     "market": ("market", "bet type", "type", "category", "leg_type", "leg type"),
     "selection": ("selection", "bet", "pick", "description", "wager name",
-                  "name", "bet_on", "bet on"),
+                  "name", "bet_on", "bet on", "bet_info", "bet info"),
     "line": ("line", "handicap", "spread", "total",
              "bet_on_spread_total_number"),
     "odds": ("odds", "price", "american odds", "american", "odds_american",
@@ -475,7 +527,7 @@ HEADERS = {
     "result": ("result", "status", "outcome", "settled", "w/l",
                "bet_result", "bet result"),
     "settled_at": ("settled at", "settled date", "date settled", "graded",
-                   "date_settled"),
+                   "date_settled", "time_settled", "time settled"),
     "legs": ("legs", "selections", "parlay legs"),
 }
 
@@ -488,23 +540,56 @@ IGNORED_HEADERS = {
 }
 
 
-def parse_csv(text: str) -> tuple[list[dict], list[str]]:
-    """``(rows, unknown_headers)`` from an export's CSV text."""
-    rdr = csv.DictReader(io.StringIO(text))
-    fields = [f.strip() for f in (rdr.fieldnames or [])]
-    lut = {}
-    unknown = []
-    for f in fields:
-        lf = f.lower()
+def header_map(fields) -> tuple[dict, list[str]]:
+    """``({export column: our field}, unknown columns)``. A column is
+    matched by its name, case and a byte-order mark aside; the first
+    column to claim a field keeps it."""
+    lut, unknown = {}, []
+    for f in fields or []:
+        lf = str(f).replace("\ufeff", "").strip().lower()
         hit = next((k for k, names in HEADERS.items() if lf in names), None)
         if hit and hit not in lut.values():
             lut[f] = hit
         elif lf not in IGNORED_HEADERS and not hit:
-            unknown.append(f)
+            unknown.append(str(f).strip())
+    return lut, unknown
+
+
+def parse_csv(text: str) -> tuple[list[dict], list[str]]:
+    """``(rows, unknown_headers)`` from an export's CSV text."""
+    rdr = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    lut, unknown = header_map(rdr.fieldnames)
     rows = []
     for rec in rdr:
         rows.append({lut[k]: v for k, v in rec.items() if k in lut})
     return rows, unknown
+
+
+def preview(text: str, limit: int = 5) -> dict:
+    """WHAT AN IMPORT WOULD DO, WRITING NOTHING. Ethan, 2026-09-26: Juice
+    Reel's approval is pending and its export would not upload, so his
+    record comes from Pikkit's export — whose columns nobody publishes.
+    A column read wrongly (profit taken as payout, a date as the stake)
+    would put a false number on a public record, so the first look at a
+    new export is this: every column and what it was read as, the
+    tickets it makes, and the first few in full."""
+    s = text.strip()
+    columns: dict = {}
+    if not s.startswith(("[", "{")):
+        fields = next(csv.reader(io.StringIO(s.lstrip("\ufeff"))), [])
+        lut, _ = header_map(fields)
+        columns = {str(f).strip(): lut.get(f, "ignored" if str(f).strip().lower() in IGNORED_HEADERS
+                                          else "NOT READ") for f in fields}
+    rows, unknown = parse_text(text)
+    tickets = [t for t in (normalize(r) for r in rows) if t]
+    results: dict = {}
+    for t in tickets:
+        results[t["result"]] = results.get(t["result"], 0) + 1
+    return {"columns": columns, "unknown_headers": unknown, "rows": len(rows),
+            "tickets": len(tickets), "skipped": len(rows) - len(tickets), "results": results,
+            "books": sorted({t["book"] for t in tickets}),
+            "first": [{k: t.get(k) for k in ("book", "placed_at", "selection", "odds", "stake",
+                                            "result", "payout", "legs")} for t in tickets[:limit]]}
 
 
 def group_legs(rows: list[dict]) -> list[dict]:
@@ -593,6 +678,8 @@ def _cli(argv=None) -> int:
     imp = sub.add_parser("import", help="import a Juice Reel / CSV / JSON export")
     imp.add_argument("file")
     imp.add_argument("--source", default="juicereel")
+    pv = sub.add_parser("preview", help="show how an export would be read, writing nothing")
+    pv.add_argument("file")
     sub.add_parser("show", help="print the record block")
     a = ap.parse_args(argv)
     if a.cmd == "import":
@@ -618,6 +705,18 @@ def _cli(argv=None) -> int:
               f"{got['unchanged']} unchanged · {got['skipped']} skipped")
         if unknown:
             print(f"  headers not recognised (tell Claude): {unknown}")
+        return 0
+    if a.cmd == "preview":
+        got = preview(Path(a.file).read_text(encoding="utf-8"))
+        for col, field in got["columns"].items():
+            print(f"  {col!r:>34} -> {field}")
+        print(f"  {got['rows']} row(s) → {got['tickets']} ticket(s), {got['skipped']} skipped · "
+              f"results {got['results']} · books {got['books']}")
+        for t in got["first"]:
+            print(f"   {t}")
+        if got["unknown_headers"]:
+            print(f"  headers not recognised (tell Claude): {got['unknown_headers']}")
+        print("  Nothing was written. Import with: python3 -m engine.zeno import FILE --source pikkit")
         return 0
     if a.cmd == "show":
         conn = connect()
