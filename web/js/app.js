@@ -4731,7 +4731,12 @@ function renderLivePicks() {
   };
   // Sportsbook-style progress bar: fill = where the stat is now, tick = the
   // line. Green once an over is home, red once an under is dead, neutral
-  // while it's still in the balance. Only for rows with a countable stat —
+  // while an over is still climbing. AN UNDER IS GREEN WHILE IT HOLDS
+  // (Ethan, 2026-09-26: "for under bets, can we show a green line instead
+  // of a orange line since technically the bet is winning till it goes
+  // over, then once it's over the line will go red") — and red the moment
+  // the stat passes the line, before the grader has said so. A push
+  // waiting to settle stays neutral. Only for rows with a countable stat —
   // moneylines have no bar (the score line tells that story).
   const progressBar = (r) => {
     if (r.current == null || !(r.line > 0) || r.market === "moneyline") return "";
@@ -4741,9 +4746,11 @@ function renderLivePicks() {
     const span = Math.max(target, r.current, 1);
     const fillPct = Math.min(100, Math.max(0, (r.current / span) * 100));
     const tickPct = Math.min(98.5, (r.line / span) * 100);
-    const good = r.status === "cleared" || r.status === "won_pending";
+    const under = String(r.side || "").toUpperCase() === "UNDER";
     const bad = r.status === "busted" || r.status === "lost_pending"
-      || r.status === "dead";
+      || r.status === "dead" || (under && Number(r.current) > Number(r.line));
+    const good = !bad && (r.status === "cleared" || r.status === "won_pending"
+      || (under && r.status !== "push_pending" && r.status !== "final_pending"));
     const color = good ? "var(--good)" : bad ? "var(--bad)" : "var(--brand)";
     return `
       <span style="display:block;position:relative;margin-top:7px;height:5px;border-radius:3px;
