@@ -131,10 +131,11 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
         pct = lambda v: f"{v * 100:+.0f}%"                     # noqa: E731
         bits = []
         if off_rel is not None:
-            bits.append(f"{team} runs {(rz_own or {}).get('off'):g} red-zone plays a game ({pct(off_rel)} vs the league)")
+            bits.append(f"{team} runs {float((rz_own or {}).get('off')):.1f} red-zone plays a game ({pct(off_rel)} vs the league)")
         if def_rel is not None:
-            bits.append(f"{opp} allows {(rz_opp or {}).get('def'):g} ({pct(def_rel)})")
-        lines.append(" · ".join(bits))
+            bits.append(f"{opp} allows {float((rz_opp or {}).get('def')):.1f} ({pct(def_rel)})")
+        # Both against the schedule each side has faced (engine/redzone).
+        lines.append(" · ".join(bits) + " — for the teams each has played")
     # HIS QUARTERBACK, WHEN THE STARTER IS OUT. Ethan, 2026-09-26: "last
     # week the starting QB for that team was announced out for the season
     # so no way that number is correct now." The lines above already carry

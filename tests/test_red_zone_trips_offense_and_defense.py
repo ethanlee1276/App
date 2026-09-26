@@ -8,6 +8,12 @@ number to the opponent the schedule names (the defence allowed), per
 game, before the week being read, 55/45 with last season from two games
 on, centred on the league. The scenario scores it 0–2 (TRIPS_REL) and
 now needs 6 of 10.
+
+Opponent-adjusted (2026-09-26): Pittsburgh read "allows 4.45 (-50%)"
+after holding Atlanta to 0 and New England to 1 — the league's two lowest
+red-zone offences. Each game is now moved by the opponent's rate from its
+OTHER games, so a defence is credited for beating an offence's level, not
+for drawing a bad one.
 """
 import os
 import sqlite3
@@ -46,9 +52,45 @@ def test_offence_and_defence_are_read_before_the_week_and_centred():
     r = R.team_rates(_db(), 2026, before_week=3)
     assert r["BUF"]["off"] == 12.0 and r["BUF"]["games"] == 2
     assert r["DET"]["def"] == 12.0, "NO and CHI each ran 12 against Detroit"
-    assert r["BUF"]["off_rel"] > 0.3 and r["NYJ"]["off_rel"] < 0, (r["BUF"], r["NYJ"])
+    assert r["BUF"]["off_rel"] > 0.3, r["BUF"]
+    # The Jets ran 6 against a Buffalo defence that held its other opponent
+    # to 6 too: as counted they are below the league, against that defence
+    # they are average (opponent-adjusted).
+    assert r["NYJ"]["off_raw"] == 6.0 and abs(r["NYJ"]["off_rel"]) < 0.05, r["NYJ"]
     assert r["DET"]["def_rel"] > 0.3 and r["BUF"]["def_rel"] < 0
     assert all(v["off"] != 99 for v in r.values()), "the week being read is never in its own number"
+
+
+def test_a_defence_is_not_credited_for_drawing_bad_offences():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE player_game_logs (sport, season, period, player, team, market, value)")
+    conn.execute("CREATE TABLE games (sport, season, period, home, away)")
+
+    def game(yr, wk, home, away, hp, ap):
+        p = f"{wk:03d}"
+        conn.execute("INSERT INTO games VALUES ('nfl', ?, ?, ?, ?)", (yr, p, home, away))
+        for team, n in ((home, hp), (away, ap)):
+            conn.execute("INSERT INTO player_game_logs VALUES ('nfl', ?, ?, 'X', ?, 'rz_car', ?)", (yr, p, team, n))
+
+    # Last season: two weak red-zone offences (ATL, NE: 3 a game) and a
+    # league at 9; PIT allowed 9 to the good ones. This season PIT drew
+    # both weak offences and held them to their usual 3.
+    for wk in range(1, 9):
+        game(2025, wk, "ATL", f"A{wk}", 3, 9)
+        game(2025, wk, "NE", f"B{wk}", 3, 9)
+        game(2025, wk, "PIT", f"C{wk}", 9, 9)
+    game(2026, 1, "PIT", "ATL", 9, 3)
+    game(2026, 2, "NE", "PIT", 3, 9)
+    game(2026, 1, "NE", "D1", 3, 9)
+    game(2026, 2, "ATL", "D2", 3, 9)
+    game(2026, 1, "D2", "D3", 9, 9)
+    game(2026, 2, "D1", "D3", 9, 9)
+    r = R.team_rates(conn, 2026, before_week=3)
+    pit = r["PIT"]
+    assert pit["def_raw"] < 7.0, pit                 # as counted: 3 a game this season
+    assert pit["def"] > pit["def_raw"] + 2.0, pit     # against those offences: about average
+    assert abs(pit["def_rel"]) < 0.15, pit
 
 
 def test_the_scenario_scores_trips_as_its_fifth_reading():

@@ -41,7 +41,7 @@ def test_olave_against_the_lions_is_a_scenario_and_a_thin_role_is_not():
     assert s and s["points"] == {"offense": 2, "defense": 2, "usage": 2, "red_zone": 2, "trips": 0}
     rz = T.score(olave, _units(30, 12), rz_own={"off": 9.1, "off_rel": 0.18}, rz_opp={"def": 8.6, "def_rel": 0.12})
     assert rz["points"]["trips"] == 2 and rz["score"] == 10
-    assert "NO runs 9.1 red-zone plays a game (+18% vs the league) · DET allows 8.6 (+12%)" in rz["lines"]
+    assert "NO runs 9.1 red-zone plays a game (+18% vs the league) · DET allows 8.6 (+12%) — for the teams each has played" in rz["lines"]
     assert s["lines"][1] == "DET’s pass defence ranks 30th of 32 (55% this season, the rest last)"
     assert s["lines"][0] == "NO expected to score 25.5 by the lines" and "27% of the targets" in s["lines"][2]
     # Same game, a fourth receiver: the defence is soft but nobody throws to him.
