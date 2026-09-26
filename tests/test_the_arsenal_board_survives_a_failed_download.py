@@ -7,6 +7,11 @@ raised straight past last season's good board, and the scan lost every
 hitter's pitch-type read. Now a failed download tries the second URL form
 (the page's own export), then last season, and raises only when neither
 season has the board.
+
+Then the probe on the box: the cached 2026 file was the right header with
+NO ROWS. The "pitchType=ALL" form answers with an empty table, and the
+August check had read only its first line. Every URL form is now tried
+until one has hitters, the page's own export form first.
 """
 import os
 import sys
@@ -50,13 +55,26 @@ def test_a_season_that_will_not_download_falls_back_to_last_season():
     board, calls = _run(lambda u: HEAD + ROW if "year=2025" in u else DataUnavailable("403"))
     assert isinstance(board, dict) and board.get("_season") == 2025, board
     assert "SL" in board[next(k for k in board if k != "_season")]
-    assert sum("year=2026" in u for u in calls) == 2, "both URL forms tried before falling back"
+    assert sum("year=2026" in u for u in calls) == len(SV.ARSENAL_FORMS), "every form tried first"
 
 
-def test_the_second_url_form_is_used_when_the_first_is_not_the_csv():
+def test_a_header_with_no_rows_tries_the_next_form():
+    """The box's exact file: the header, no hitters, from the ALL form."""
+    board, calls = _run(lambda u: HEAD + (ROW if "min=q" in u else ""))
+    assert isinstance(board, dict) and board.get("_season") == 2026, board
+    assert "min=10" in calls[0] and "min=q" in calls[1] and len(calls) == 2, calls
+
+
+def test_the_pages_export_form_goes_first():
     board, calls = _run(lambda u: HEAD + ROW if "min=10" in u else "<html>maintenance</html>")
     assert isinstance(board, dict) and board.get("_season") == 2026, board
-    assert "pitchType=ALL" in calls[0] and "min=10" in calls[1]
+    assert len(calls) == 1 and "pitchType=&" in calls[0], calls
+    assert "pitchType=ALL" in SV.ARSENAL_FORMS[-1][1], "the ALL form is the last resort"
+
+
+def test_every_form_empty_in_both_seasons_is_empty_not_an_error():
+    board, calls = _run(lambda u: HEAD)
+    assert board == {} and len(calls) == 2 * len(SV.ARSENAL_FORMS), (board, calls)
 
 
 def test_neither_season_says_why():

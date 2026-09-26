@@ -212,12 +212,19 @@ SAVANT_ARSENAL = ("https://baseballsavant.mlb.com/leaderboard/"
                   "pitch-arsenal-stats?type={type}&pitchType=ALL&year={year}"
                   "&csv=true")
 # THE SAME BOARD AS THE PAGE'S OWN EXPORT BUTTON WRITES IT: every pitch
-# type left blank rather than "ALL", and a 10-PA floor. Tried when the
-# first form does not come back as the CSV (the box's 2026-09-26 build:
-# "arsenal board: 0 hitter(s)").
+# type left blank rather than "ALL", and a 10-PA floor. The box, 2026-09-26:
+# "arsenal board: 0 hitter(s)", and the probe showed the cached file was
+# the right header with NO ROWS — the "ALL" form answers with an empty
+# table (the August check read only `head -1`, the header, so it never
+# showed rows). Each form is tried in turn until one has hitters.
 SAVANT_ARSENAL_ALT = ("https://baseballsavant.mlb.com/leaderboard/"
                       "pitch-arsenal-stats?type={type}&pitchType=&year={year}"
                       "&team=&min=10&csv=true")
+SAVANT_ARSENAL_Q = ("https://baseballsavant.mlb.com/leaderboard/"
+                    "pitch-arsenal-stats?type={type}&pitchType=&year={year}"
+                    "&team=&min=q&csv=true")
+#: (cache suffix, URL), in the order tried.
+ARSENAL_FORMS = (("_alt", SAVANT_ARSENAL_ALT), ("_q", SAVANT_ARSENAL_Q), ("", SAVANT_ARSENAL))
 
 
 def parse_arsenal(rows) -> dict[str, dict]:
@@ -280,7 +287,7 @@ def load_arsenal(year: int, kind: str = "batter",
     """
     failed = ""
     try:
-        board = parse_arsenal(_read_csv_text(_arsenal_text(year, kind)))
+        board = _arsenal_board(year, kind)
     except DataUnavailable as exc:
         if not (fallback and year > 2015):
             raise
@@ -302,30 +309,41 @@ def load_arsenal(year: int, kind: str = "batter",
     return {}
 
 
-def _arsenal_text(year: int, kind: str) -> str:
-    """The board's CSV text, from the cache or either URL form."""
-    tried = []
-    for n, tmpl in enumerate((SAVANT_ARSENAL, SAVANT_ARSENAL_ALT)):
-        name = f"savant_arsenal_{kind}_{year}{'' if n == 0 else '_alt'}.csv"
+def _arsenal_board(year: int, kind: str) -> dict:
+    """The first URL form whose CSV has hitters in it, parsed; {} when
+    every form answered with the header alone. Raises DataUnavailable only
+    when no form came back as the CSV at all."""
+    tried, got_csv = [], False
+    for suffix, tmpl in ARSENAL_FORMS:
+        name = f"savant_arsenal_{kind}_{year}{suffix}.csv"
         local = CACHE_DIR / name
+        text = None
         if local.exists():
             text = local.read_text(encoding="utf-8", errors="replace")
-            if _looks_like_arsenal(text):
-                return text
-            # A poisoned cache is worse than none: it is served for the
-            # whole TTL and looks exactly like an empty season.
-            local.unlink(missing_ok=True)
+            if not _looks_like_arsenal(text):
+                # A poisoned cache is worse than none: it is served for the
+                # whole TTL and looks exactly like an empty season.
+                local.unlink(missing_ok=True)
+                text = None
         url = tmpl.format(type=kind, year=year)
-        try:
-            text = fetch_text(url, name, ttl=6 * 3600)
-        except DataUnavailable as exc:
-            tried.append(str(exc)[:160])
-            continue
-        if _looks_like_arsenal(text):
-            return text
-        (CACHE_DIR / name).unlink(missing_ok=True)
-        tried.append(f"{url} did not return the arsenal CSV — got {len(text or '')} bytes "
-                     f"starting {(text or '')[:60]!r}")
+        if text is None:
+            try:
+                text = fetch_text(url, name, ttl=6 * 3600)
+            except DataUnavailable as exc:
+                tried.append(str(exc)[:160])
+                continue
+            if not _looks_like_arsenal(text):
+                (CACHE_DIR / name).unlink(missing_ok=True)
+                tried.append(f"{url} did not return the arsenal CSV — got {len(text or '')} bytes "
+                             f"starting {(text or '')[:60]!r}")
+                continue
+        got_csv = True
+        board = parse_arsenal(_read_csv_text(text))
+        if board:
+            return board
+        tried.append(f"{url} came back with the header and no rows")
+    if got_csv:
+        return {}
     raise DataUnavailable("; ".join(tried) + ". The cache has been cleared, so a retry "
                           "will re-fetch rather than re-read this.")
 
@@ -346,6 +364,7 @@ if __name__ == "__main__":
             print(f"{board}: FETCH FAILED — {exc}")
         except Exception as exc:  # noqa: BLE001
             print(f"{board}: PARSE FAILED — {type(exc).__name__}: {exc}")
-    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}.csv")):
-        head = f.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
-        print(f"header of {f.name}: {head[0][:160] if head else '(empty)'}")
+    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}*.csv")):
+        lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        print(f"{f.name}: {max(len(lines) - 1, 0)} row(s); header "
+              f"{lines[0][:100] if lines else '(empty)'}")
