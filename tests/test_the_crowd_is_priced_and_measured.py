@@ -85,13 +85,41 @@ def test_it_is_pinned_to_one_game_the_right_way_round():
 
 
 def test_a_dead_venue_costs_its_rows_not_the_build():
-    orig = polysports.fetch_events
-    polysports.fetch_events = lambda tag, **k: (_ for _ in ()).throw(OSError("blocked"))
+    orig = polysports.fetch_events, polysports.fetch_series_ids
+    boom = lambda *a, **k: (_ for _ in ()).throw(OSError("blocked"))   # noqa: E731
+    polysports.fetch_events, polysports.fetch_series_ids = boom, boom
     try:
         rows, report = polysports.fetch_sports(["cfb"])
     finally:
-        polysports.fetch_events = orig
-    assert rows == [] and report == {"cfb": "error"}, "one error, and the aliases are not tried"
+        polysports.fetch_events, polysports.fetch_series_ids = orig
+    assert rows == [] and report == {"sports": "error", "cfb": "error"}, "one error, and the aliases are not tried"
+
+
+FUTURE = {"slug": "super-bowl-champion-2027", "startDate": "2026-07-22T05:31:00Z", "markets": [
+    {"slug": "will-the-bills-win", "question": "Will the Bills win Super Bowl 2027?", "sportsMarketType": "moneyline",
+     "outcomes": "[\"Yes\", \"No\"]", "outcomePrices": "[\"0.12\", \"0.88\"]", "bestBid": 0.11, "bestAsk": 0.13}]}
+
+
+def test_a_future_is_never_a_game():
+    """The box, 2026-09-26: the nfl tag's first 134 rows were Yes/No
+    futures carrying a winner-type sportsMarketType."""
+    assert polysports.parse_events([FUTURE]) == []
+    yes_no_in_a_game = dict(EVENT, markets=[dict(FUTURE["markets"][0])])
+    assert polysports.parse_events([yes_no_in_a_game]) == [], "two named clubs, never Yes/No"
+
+
+def test_the_league_game_series_comes_first():
+    orig = polysports.fetch_series_ids, polysports.fetch_series_events, polysports.fetch_events
+    tags = []
+    polysports.fetch_series_ids = lambda **k: {"nfl": ["10187"]}
+    polysports.fetch_series_events = lambda sid, **k: [FUTURE, EVENT, EVENT]
+    polysports.fetch_events = lambda tag, **k: tags.append(tag) or []
+    try:
+        rows, report = polysports.fetch_sports(["nfl"])
+    finally:
+        polysports.fetch_series_ids, polysports.fetch_series_events, polysports.fetch_events = orig
+    assert [r["teams"] for r in rows] == [["Bills", "Chiefs"]], "the game once, the future never"
+    assert report == {"series:10187": 2} and tags == [], "the tag is only the fallback"
 
 
 # --- the crowd on the game --------------------------------------------------------
@@ -206,6 +234,23 @@ def test_a_small_record_is_not_enough_games_yet():
     assert st["crowd_vs_books"]["kalshi"]["verdict"].startswith("not enough games yet (60 of 200)")
     assert "not enough games yet" in crowdfit.report(st)
 
+
+
+def test_the_prices_keep_their_own_file_and_the_fit_reads_it():
+    """college recorded 0 of 13 while history.db was locked: its own file."""
+    d = Path(tempfile.mkdtemp())
+    b = _board()
+    crowd.attach(b, "nfl", KALSHI, [])
+    cconn = crowd.connect(d / "crowd.db")
+    assert crowd.store(cconn, "nfl", b["games"], now=1789948800, game_bets=b["game_bets"]) == 1
+    assert (d / "crowd.db").is_file()
+    hist = sqlite3.connect(":memory:")
+    hist.execute("CREATE TABLE games (sport TEXT, season INTEGER, period TEXT, game_id TEXT, home TEXT, "
+                 "away TEXT, home_score REAL, away_score REAL, date TEXT)")
+    hist.execute("INSERT INTO games VALUES ('nfl',2026,'2026-09-28','1','KC','BUF',27,20,'2026-09-28')")
+    rows = crowdfit.load(hist, cconn)
+    assert len(rows) == 1 and rows[0]["y"] == 1 and rows[0]["kalshi"] == 0.61
+    assert crowd.DB_PATH.name == "crowd.db"
 
 # --- the desk -----------------------------------------------------------------------
 def test_the_desk_reads_the_members_board_with_its_moneylines():

@@ -84,14 +84,30 @@ def fetch_events(tag: str, limit: int = 200, ttl: int = 300) -> list[dict]:
 
 
 def is_moneyline(m: dict) -> bool:
-    """A two-club winner market, not a spread, total or prop."""
-    kind = str(m.get("sportsMarketType") or "").lower()
-    if kind:
-        return kind in ("moneyline", "winner", "game")
+    """A two-club winner market, not a spread, total, prop or future.
+
+    TWO NAMED CLUBS, ALWAYS — never Yes/No. The box, 2026-09-26: the
+    `nfl` tag's first 134 "moneylines" were season futures ("Yes"/"No",
+    dated July), because they carry a winner-type `sportsMarketType` and
+    the first cut trusted that field on its own. A game's winner market
+    names both clubs as its outcomes; nothing else does."""
     outs = [str(o) for o in _jlist(m.get("outcomes"))]
-    if len(outs) != 2 or {o.lower() for o in outs} & {"yes", "no", "draw", "tie"}:
+    if len(outs) != 2 or {o.strip().lower() for o in outs} & {"yes", "no", "draw", "tie", "over", "under"}:
+        return False
+    kind = str(m.get("sportsMarketType") or "").lower()
+    if kind and kind not in ("moneyline", "winner", "game"):
         return False
     return not NOT_ML.search(str(m.get("question") or ""))
+
+
+#: A GAME event's slug: league, two club codes, the date
+#: ("nfl-buf-mia-2026-09-28"). Futures and awards live under the same tags
+#: with prose slugs, and are skipped before any market is read.
+GAME_SLUG = re.compile(r"^[a-z]+-[a-z0-9]+-[a-z0-9]+-\d{4}-\d{2}-\d{2}")
+
+
+def is_game_event(ev: dict) -> bool:
+    return bool(GAME_SLUG.match(str(ev.get("slug") or "").lower()))
 
 
 def parse_events(events: list[dict]) -> list[dict]:
@@ -99,7 +115,7 @@ def parse_events(events: list[dict]) -> list[dict]:
     the first club's price, and the book's quality."""
     out = []
     for ev in events or []:
-        if not isinstance(ev, dict):
+        if not isinstance(ev, dict) or not is_game_event(ev):
             continue
         for m in ev.get("markets") or []:
             if not isinstance(m, dict) or m.get("closed") is True or not is_moneyline(m):
@@ -133,22 +149,73 @@ def parse_events(events: list[dict]) -> list[dict]:
     return out
 
 
+#: Polymarket's own league names on its /sports list, per league of ours.
+SPORT_KEYS = {"nfl": ("nfl",), "cfb": ("cfb", "ncaaf"), "mlb": ("mlb",),
+              "nba": ("nba",), "wnba": ("wnba",)}
+
+
+def fetch_series_ids(ttl: int = 86400) -> dict:
+    """``{our league: [series id, …]}`` off Polymarket's /sports list,
+    which names each league's GAME series. {} when the list is not there."""
+    raw = json.loads(fetch_text(f"{GAMMA}/sports", "poly_sports.json", ttl=ttl, timeout=TIMEOUT_S))
+    out: dict = {}
+    for row in raw if isinstance(raw, list) else []:
+        name = str((row or {}).get("sport") or "").strip().lower()
+        ids = [x.strip() for x in str((row or {}).get("series") or "").split(",") if x.strip()]
+        for ours, keys in SPORT_KEYS.items():
+            if name in keys and ids:
+                out.setdefault(ours, []).extend(ids)
+    return out
+
+
+def fetch_series_events(series_id: str, limit: int = 200, ttl: int = 300) -> list[dict]:
+    url = f"{GAMMA}/events?series_id={series_id}&closed=false&active=true&limit={limit}"
+    raw = json.loads(fetch_text(url, f"poly_series_{series_id}.json", ttl=ttl, timeout=TIMEOUT_S))
+    return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
+
+
 def fetch_sports(sports=None) -> tuple[list[dict], dict]:
     """``(rows, report)`` for every league asked: the game moneylines, and
-    per tag how many events came back (or "error")."""
+    per source how many came back (or "error").
+
+    THE LEAGUE'S GAME SERIES FIRST, the tag second. A tag holds every
+    market about the league — futures, awards, the draft — and returns
+    them oldest first, so a week's games can sit past the page. The
+    series off /sports is the games alone. Either way only game events
+    and two-club markets are kept (`is_game_event`, `is_moneyline`)."""
     rows, report = [], {}
+    try:
+        series = fetch_series_ids()
+    except Exception:                                          # noqa: BLE001
+        series = {}
+        report["sports"] = "error"
     for sport in (sports or SPORT_TAGS):
-        for tag in SPORT_TAGS.get(sport, ()):
+        got = []
+        for sid in series.get(sport, []):
             try:
-                events = fetch_events(tag)
+                parsed = [dict(r, sport=sport) for r in parse_events(fetch_series_events(sid))]
             except Exception:                                  # noqa: BLE001
-                report[tag] = "error"
-                break                     # the venue is down; aliases will not help
-            parsed = [dict(r, sport=sport) for r in parse_events(events)]
-            report[tag] = len(parsed)
-            rows.extend(parsed)
-            if parsed:
-                break
+                report[f"series:{sid}"] = "error"
+                continue
+            report[f"series:{sid}"] = len(parsed)
+            got.extend(parsed)
+        if not got:
+            for tag in SPORT_TAGS.get(sport, ()):
+                try:
+                    events = fetch_events(tag)
+                except Exception:                              # noqa: BLE001
+                    report[tag] = "error"
+                    break                 # the venue is down; aliases will not help
+                parsed = [dict(r, sport=sport) for r in parse_events(events)]
+                report[tag] = len(parsed)
+                got.extend(parsed)
+                if parsed:
+                    break
+        seen = set()
+        for r in got:
+            if r["slug"] not in seen:
+                seen.add(r["slug"])
+                rows.append(r)
     return rows, report
 
 

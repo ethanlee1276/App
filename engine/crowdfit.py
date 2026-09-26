@@ -120,13 +120,16 @@ def _games(conn) -> dict:
     return out
 
 
-def load(conn) -> list[dict]:
+def load(conn, crowd_conn=None) -> list[dict]:
     """One row per finished game: its last pregame prices, the prices
-    about `SWING_HOURS` before them, and the result."""
-    ensure_tables(conn)
+    about `SWING_HOURS` before them, and the result. ``conn`` holds the
+    finals (the history DB); ``crowd_conn`` the recorded prices
+    (`crowd.DB_PATH`), the same connection when both are in one."""
+    snaps = crowd_conn or conn
+    ensure_tables(snaps)
     finals = _games(conn)
     by: dict = {}
-    for r in conn.execute(
+    for r in snaps.execute(
             "SELECT sport, date, away, home, bucket_ts, kalshi, polymarket, books, model, model_raw "
             "FROM crowd_snaps ORDER BY bucket_ts"):
         r = tuple(r)
@@ -197,8 +200,8 @@ def swings(rows: list[dict]) -> dict:
     return out
 
 
-def run(conn, write: bool = True) -> dict:
-    rows = load(conn)
+def run(conn, write: bool = True, crowd_conn=None) -> dict:
+    rows = load(conn, crowd_conn)
     by_sport: dict = {}
     for r in rows:
         by_sport[r["game"][0]] = by_sport.get(r["game"][0], 0) + 1

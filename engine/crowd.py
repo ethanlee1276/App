@@ -36,7 +36,10 @@ whether they earn a say, and nothing is wired into pricing until it does.
 from __future__ import annotations
 
 import datetime as _dt
+import os
+import sqlite3
 import time
+from pathlib import Path
 
 from . import exchangefair as _xf
 
@@ -50,6 +53,22 @@ POLY_MIN_LIQUIDITY = 1000.0
 #: One stored row per game per bucket, so a board built every few
 #: minutes does not write the same prices forty times an hour.
 SNAP_BUCKET_S = 900
+
+#: ITS OWN FILE, not the history database. The box, 2026-09-26: college
+#: recorded 0 of 13 priced games while `live_build` logged "database is
+#: locked" on history.db — every builder and the live loop write there. A
+#: few rows a build need nothing else, and waiting on nobody is the point.
+DB_PATH = Path(os.environ.get("QB_CROWD_DB", "").strip()
+               or (Path(__file__).resolve().parents[1] / "data" / "crowd.db"))
+
+
+def connect(path=None):
+    p = Path(path or DB_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(p), timeout=30)
+    ensure_tables(conn)
+    return conn
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS crowd_snaps (
@@ -241,7 +260,6 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
         try:
             own = conn is None
             if own:
-                from .db import connect
                 conn = connect()
             try:
                 stored = store(conn, sport, result.get("games") or [],
@@ -250,7 +268,7 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
                 if own:
                     conn.close()
         except Exception as exc:                               # noqa: BLE001
-            notes.append(f"not recorded ({type(exc).__name__})")
+            notes.append(f"not recorded ({type(exc).__name__}: {exc})")
     census["recorded"] = stored
     result["crowd_census"] = census
     return (f"  {sport.upper()} crowd prices: Kalshi on {census['kalshi']}, Polymarket on "
