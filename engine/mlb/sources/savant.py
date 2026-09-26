@@ -191,26 +191,6 @@ def attach_statcast(props, year: int) -> int:
     return n
 
 
-if __name__ == "__main__":
-    # Ground-truth diagnostic:  python3 -m engine.mlb.sources.savant 2026
-    import sys
-    year = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
-    for board, loader in (("expected_statistics", load_expected_stats),
-                          ("exit_velocity_barrels", load_barrels)):
-        try:
-            data = loader(year)
-            print(f"{board}: parsed {len(data)} player profile(s)")
-            for name in list(data)[:3]:
-                print(f"   e.g. {name!r} -> {data[name]}")
-        except DataUnavailable as exc:
-            print(f"{board}: FETCH FAILED — {exc}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"{board}: PARSE FAILED — {type(exc).__name__}: {exc}")
-    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}.csv")):
-        head = f.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
-        print(f"header of {f.name}: {head[0][:160] if head else '(empty)'}")
-
-
 # --- §6's hitter half: performance BY PITCH TYPE -----------------------------
 #
 # MLB_MODEL §6 parked the arsenal matchup behind "needs pitch-mix +
@@ -231,6 +211,13 @@ if __name__ == "__main__":
 SAVANT_ARSENAL = ("https://baseballsavant.mlb.com/leaderboard/"
                   "pitch-arsenal-stats?type={type}&pitchType=ALL&year={year}"
                   "&csv=true")
+# THE SAME BOARD AS THE PAGE'S OWN EXPORT BUTTON WRITES IT: every pitch
+# type left blank rather than "ALL", and a 10-PA floor. Tried when the
+# first form does not come back as the CSV (the box's 2026-09-26 build:
+# "arsenal board: 0 hitter(s)").
+SAVANT_ARSENAL_ALT = ("https://baseballsavant.mlb.com/leaderboard/"
+                      "pitch-arsenal-stats?type={type}&pitchType=&year={year}"
+                      "&team=&min=10&csv=true")
 
 
 def parse_arsenal(rows) -> dict[str, dict]:
@@ -283,39 +270,82 @@ def load_arsenal(year: int, kind: str = "batter",
     "pitcher" for how each pitcher's own offerings perform. The batter
     board is the one §6 was missing.
 
-    FALLS BACK ONE SEASON when the requested one is empty, and says so by
-    returning the year it actually used. A hitter's profile from last
-    season is real information; an empty dict is not, and in April — or in
-    any season Savant has not populated yet — empty is what the current
-    year returns. The caller is told which year it got so it can label the
-    reading rather than pass it off as current.
+    FALLS BACK ONE SEASON when the requested one is empty OR WILL NOT
+    DOWNLOAD, and says so by returning the year it actually used. A
+    hitter's profile from last season is real information; an empty dict
+    is not. The fallback used to run only on an empty board, so a season
+    whose fetch failed raised straight past last season's good one. The
+    caller is told which year it got so it can label the reading rather
+    than pass it off as current. Raises only when neither season has it.
     """
-    name = f"savant_arsenal_{kind}_{year}.csv"
-    local = CACHE_DIR / name
-    text = None
-    if local.exists():
-        text = local.read_text(encoding="utf-8", errors="replace")
-        if not _looks_like_arsenal(text):
-            # A poisoned cache is worse than none: it is served for the
-            # whole TTL and looks exactly like an empty season.
-            local.unlink(missing_ok=True)
-            text = None
-    if text is None:
-        url = SAVANT_ARSENAL.format(type=kind, year=year)
-        text = fetch_text(url, name, ttl=6 * 3600)
-        if not _looks_like_arsenal(text):
-            (CACHE_DIR / name).unlink(missing_ok=True)
-            raise DataUnavailable(
-                f"{url} did not return the arsenal CSV — got "
-                f"{len(text or '')} bytes starting "
-                f"{(text or '')[:60]!r}. The cache has been cleared, so a "
-                f"retry will re-fetch rather than re-read this.")
-    board = parse_arsenal(_read_csv_text(text))
+    failed = ""
+    try:
+        board = parse_arsenal(_read_csv_text(_arsenal_text(year, kind)))
+    except DataUnavailable as exc:
+        if not (fallback and year > 2015):
+            raise
+        board, failed = {}, f"{year}: {exc}"
     if board:
         board["_season"] = year          # what the caller actually got
         return board
     if fallback and year > 2015:
-        prior = load_arsenal(year - 1, kind, fallback=False)
+        try:
+            prior = load_arsenal(year - 1, kind, fallback=False)
+        except DataUnavailable as exc:
+            if not failed:
+                raise
+            raise DataUnavailable(f"{failed} | {year - 1}: {exc}") from exc
         if prior:
             return prior
+    if failed:
+        raise DataUnavailable(f"{failed} | {year - 1}: came back empty")
     return {}
+
+
+def _arsenal_text(year: int, kind: str) -> str:
+    """The board's CSV text, from the cache or either URL form."""
+    tried = []
+    for n, tmpl in enumerate((SAVANT_ARSENAL, SAVANT_ARSENAL_ALT)):
+        name = f"savant_arsenal_{kind}_{year}{'' if n == 0 else '_alt'}.csv"
+        local = CACHE_DIR / name
+        if local.exists():
+            text = local.read_text(encoding="utf-8", errors="replace")
+            if _looks_like_arsenal(text):
+                return text
+            # A poisoned cache is worse than none: it is served for the
+            # whole TTL and looks exactly like an empty season.
+            local.unlink(missing_ok=True)
+        url = tmpl.format(type=kind, year=year)
+        try:
+            text = fetch_text(url, name, ttl=6 * 3600)
+        except DataUnavailable as exc:
+            tried.append(str(exc)[:160])
+            continue
+        if _looks_like_arsenal(text):
+            return text
+        (CACHE_DIR / name).unlink(missing_ok=True)
+        tried.append(f"{url} did not return the arsenal CSV — got {len(text or '')} bytes "
+                     f"starting {(text or '')[:60]!r}")
+    raise DataUnavailable("; ".join(tried) + ". The cache has been cleared, so a retry "
+                          "will re-fetch rather than re-read this.")
+
+
+if __name__ == "__main__":
+    # Ground-truth diagnostic:  python3 -m engine.mlb.sources.savant 2026
+    import sys
+    year = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
+    for board, loader in (("expected_statistics", load_expected_stats),
+                          ("exit_velocity_barrels", load_barrels),
+                          ("pitch_arsenal_batter", lambda y: load_arsenal(y, "batter"))):
+        try:
+            data = loader(year)
+            print(f"{board}: parsed {len(data)} player profile(s)")
+            for name in list(data)[:3]:
+                print(f"   e.g. {name!r} -> {data[name]}")
+        except DataUnavailable as exc:
+            print(f"{board}: FETCH FAILED — {exc}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"{board}: PARSE FAILED — {type(exc).__name__}: {exc}")
+    for f in sorted(CACHE_DIR.glob(f"savant_*_{year}.csv")):
+        head = f.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
+        print(f"header of {f.name}: {head[0][:160] if head else '(empty)'}")
