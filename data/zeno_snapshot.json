@@ -34,7 +34,23 @@
       "losses": 150,
       "pushes": 1,
       "updated": "2026-09-26T14:22:43",
-      "receipt": "img/zeno/pikkit-september-2026-2026-09-26.png"
+      "receipt": "img/zeno/pikkit-september-2026-2026-09-26.png",
+      "days": {
+        "2026-09-04": 68.3,
+        "2026-09-05": -20,
+        "2026-09-09": 12.5,
+        "2026-09-10": -184,
+        "2026-09-13": -114,
+        "2026-09-14": -45.2,
+        "2026-09-15": 10.3,
+        "2026-09-16": -20,
+        "2026-09-17": 995,
+        "2026-09-19": -35,
+        "2026-09-20": -230,
+        "2026-09-21": 69.8,
+        "2026-09-24": 64.4
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-september-2026.png"
     },
     {
       "key": "2026-08",
@@ -45,7 +61,18 @@
       "losses": 7,
       "pushes": 1,
       "updated": "2026-09-26T14:44:01",
-      "receipt": "img/zeno/pikkit-august-2026-2026-09-26.png"
+      "receipt": "img/zeno/pikkit-august-2026-2026-09-26.png",
+      "days": {
+        "2026-08-03": -5,
+        "2026-08-07": -4,
+        "2026-08-13": 94.3,
+        "2026-08-14": 37.8,
+        "2026-08-16": -5,
+        "2026-08-20": -25,
+        "2026-08-22": -20,
+        "2026-08-27": -20
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-august-2026.png"
     },
     {
       "key": "2026-07",
@@ -56,7 +83,23 @@
       "losses": 41,
       "pushes": 4,
       "updated": "2026-09-26T14:44:07",
-      "receipt": "img/zeno/pikkit-july-2026-2026-09-26.png"
+      "receipt": "img/zeno/pikkit-july-2026-2026-09-26.png",
+      "days": {
+        "2026-07-06": 247,
+        "2026-07-07": -10,
+        "2026-07-10": 15.8,
+        "2026-07-11": 156,
+        "2026-07-13": -20,
+        "2026-07-18": -20,
+        "2026-07-19": -20,
+        "2026-07-21": -9.64,
+        "2026-07-24": 7.4,
+        "2026-07-25": -8.04,
+        "2026-07-26": 24.6,
+        "2026-07-27": -2.68,
+        "2026-07-29": -5.12
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-july-2026.png"
     },
     {
       "key": "2026-06",
@@ -67,7 +110,22 @@
       "losses": 18,
       "pushes": 1,
       "updated": "2026-09-26T14:44:13",
-      "receipt": "img/zeno/pikkit-june-2026-2026-09-26.png"
+      "receipt": "img/zeno/pikkit-june-2026-2026-09-26.png",
+      "days": {
+        "2026-06-03": -20,
+        "2026-06-05": 28,
+        "2026-06-08": 260,
+        "2026-06-12": 128,
+        "2026-06-13": 92.3,
+        "2026-06-14": -25,
+        "2026-06-20": -100,
+        "2026-06-26": -10.1,
+        "2026-06-28": 37.9,
+        "2026-06-29": -100,
+        "2026-06-30": -30
+      },
+      "calendar_receipt": "img/zeno/pikkit-calendar-june-2026.png"
     }
-  ]
+  ],
+  "days_note": "Pikkit's calendar cards round each day to three figures ($995, $68.3); the month's profit is Pikkit's exact figure. Open bets (Sep 27: $47 riding) are not counted."
 }

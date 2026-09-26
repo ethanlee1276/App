@@ -18088,9 +18088,10 @@ function zenoDay(iso) {
   return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : String(iso || "");
 }
-function zenoSnapshotHTML(snap) {
+function zenoSnapshotHTML(snap, unit) {
   const ws = (snap && snap.windows) || [];
   if (!ws.length) return "";
+  unit = Number(unit) || 10;
   const src = escapeHtml(snap.source || "Pikkit");
   const card = (w) => {
     const pr = Number(w.profit || 0), u = Number(w.net_units || 0), roi = Number(w.roi || 0) * 100;
@@ -18113,10 +18114,67 @@ function zenoSnapshotHTML(snap) {
     .sort((a, b) => String(b.key).localeCompare(String(a.key)));
   return `<div class="section-title"><span class="st-ico">${icon("check", 15)}</span>From ${src}
       <span class="sub">— synced from the sportsbooks and marked Verified by ${src}, as of ${escapeHtml(zenoDay(snap.as_of))}.
-      Tap a card for the original.</span></div>
+      Units at $${escapeHtml(String(unit))} each. Tap a card for the original.</span></div>
     <div class="zeno-snap">${heads.map(card).join("")}</div>
     ${months.length ? `<details class="tn-full zeno-months"><summary>Month by month · ${months.length}</summary>
-      <div class="zeno-snap">${months.map(card).join("")}</div></details>` : ""}`;
+      <div class="zeno-snap">${months.map(card).join("")}</div></details>` : ""}
+    ${zenoCalendarHTML(months, snap)}`;
+}
+
+/* DAY BY DAY, off Pikkit's calendar cards (Ethan, 2026-09-26, sent June
+   through September). The Record page's calendar grid (rc-*) in dollars:
+   a cell per day with the day's profit, shaded by size, the month's exact
+   total under it and Pikkit's own calendar as the receipt. Pikkit rounds
+   each day to three figures, so the days can sum a few cents from the
+   month — the foot says the total is Pikkit's. */
+function zenoCalMoney(v) {
+  const n = Number(v) || 0, m = Math.abs(n);
+  return `${n > 0 ? "+" : n < 0 ? MINUS : ""}$${m >= 100 ? m.toFixed(0) : m >= 10 ? m.toFixed(1).replace(/\.0$/, "") : m.toFixed(2).replace(/\.?0+$/, "")}`;
+}
+function zenoCalMonthHTML(w) {
+  const [y, m] = String(w.key).split("-").map(Number);
+  const first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate();
+  const days = w.days || {};
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i++) cells.push(`<span class="rc-day blank"></span>`);
+  for (let d = 1; d <= n; d++) {
+    const date = `${w.key}-${String(d).padStart(2, "0")}`;
+    if (!(date in days)) { cells.push(`<span class="rc-day off">${d}</span>`); continue; }
+    const v = Number(days[date]) || 0, a = Math.abs(v);
+    const depth = a < 25 ? 1 : a < 100 ? 2 : 3;
+    cells.push(`<span class="rc-day ${toneOf(v) || "flat"} rc-${depth}" title="${date}: ${zenoCalMoney(v)}">${d}<b>${zenoCalMoney(v)}</b></span>`);
+  }
+  const pr = Number(w.profit) || 0;
+  return `<div class="rc-month zeno-cal-month">
+    <div class="rc-grid">${["S", "M", "T", "W", "T", "F", "S"].map((h) => `<span class="rc-h">${h}</span>`).join("")}${cells.join("")}</div>
+    <p class="rc-foot"><b>${escapeHtml(w.label || "")}</b> · ${Object.keys(days).length} days bet
+      · <b>${Number(w.wins)}-${Number(w.losses)}${Number(w.pushes) ? `-${Number(w.pushes)}` : ""}</b>
+      · <b class="${toneOf(pr)}">${pr >= 0 ? "+" : MINUS}${zenoMoney(Math.abs(pr))}</b> (Pikkit’s total)
+      ${w.calendar_receipt ? ` · <a href="${escapeAttr(w.calendar_receipt)}" target="_blank" rel="noopener">Pikkit’s calendar</a>` : ""}</p></div>`;
+}
+let _zenoCalMonth = null;    // "YYYY-MM" in view on his calendar; null = the latest
+window._zenoCalSetMonth = (ym) => { _zenoCalMonth = ym; renderZeno(); };
+/* The Record page's profit calendar, his way round (Ethan, 2026-09-26:
+   "make the calendars our way and not the screenshots. you have each day
+   so u can do that"): one month in view, drawn from the days, arrows only
+   where there is a month to go to; Pikkit's calendar is a link under it. */
+function zenoCalendarHTML(months, snap) {
+  const ms = (months || []).filter((w) => w.days && Object.keys(w.days).length)
+    .sort((a, b) => String(a.key).localeCompare(String(b.key)));
+  if (!ms.length) return "";
+  const keys = ms.map((w) => w.key);
+  const ym = keys.includes(_zenoCalMonth) ? _zenoCalMonth : keys[keys.length - 1];
+  const i = keys.indexOf(ym);
+  const arrow = (to, glyph, label) => to == null ? "" :
+    `<button class="ra-range" data-act="zenoCalSetMonth" data-arg="${to}" aria-label="${label}">${glyph}</button>`;
+  const nav = keys.length > 1 ? `<span class="ra-ranges">${
+    arrow(i > 0 ? keys[i - 1] : null, "‹", "Earlier month")}${
+    arrow(i < keys.length - 1 ? keys[i + 1] : null, "›", "Later month")}</span>` : "";
+  return `<div class="zeno-cal">
+    <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
+      <span class="sub">— his dollars by day</span>${nav}</div>
+    <div class="card rc-card zeno-cal-card">${zenoCalMonthHTML(ms[i])}</div>
+    ${snap && snap.days_note ? `<p class="list-note">${escapeHtml(snap.days_note)}</p>` : ""}</div>`;
 }
 
 async function renderZeno() {
@@ -18144,7 +18202,7 @@ async function renderZeno() {
   host.innerHTML = `
     ${ribbon ? `<div class="hd-stats rec-ribbons">${ribbon}</div>`
              : `<div class="card"><p class="list-note">No tickets yet.</p></div>`}
-    ${zenoSnapshotHTML(z.snapshot)}
+    ${zenoSnapshotHTML(z.snapshot, z.unit_dollars)}
     <p class="list-note">${z.snapshot
       ? `The record up to ${escapeHtml(zenoDay(z.snapshot.as_of))} is ${escapeHtml(z.snapshot.source || "Pikkit")}’s,
          read off the cards above; bets that settle after that are added on top as they come in.`
@@ -44467,12 +44525,16 @@ function recordRibbonsHTML(rec, ov, recent) {
      Zeno's own tickets in one line, in units — with the split always on
      the tile, so the model's own record (the next tile) is never hidden
      inside it. Ethan, 2026-09-26. */
+  /* WHAT A UNIT OF HIS IS WORTH, said wherever his units are (Ethan,
+     2026-09-26: "make sure users know 1 unit is $10 so we can put a
+     dollar amount behind the 800 units"). engine/zeno.UNIT_DOLLARS. */
+  const unitNote = (ud) => (Number(ud) > 0 ? ` (1u = $${Number(ud)})` : "");
   const cb = (rec || {}).combined;
   if (cb && cb.settled && cb.split) {
     const u = Number(cb.net_units || 0), roi = Number(cb.roi || 0);
     const part = (x) => `${sign(Number(x.net_units || 0))}${Math.abs(Number(x.net_units || 0)).toFixed(1)}u`;
     tiles.push(tile("Everything we’ve bet · model + Zeno", wl(cb), `${sign(u)}${Math.abs(u).toFixed(1)}u`, tone(u),
-                    `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}`,
+                    `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}${unitNote(cb.unit_dollars)}`,
                     "", rate(cb), roiRing(roi)));
   }
   if (ov.settled) {
@@ -44486,7 +44548,7 @@ function recordRibbonsHTML(rec, ov, recent) {
     /* v5: the same tile serves a person's own book — Zeno's, or the
        reader's hand-logged bets on My Bets — under its own label. */
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
-    const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u · `;
+    const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u${unitNote(z.unit_dollars)} · `;
     tiles.push(tile(z.label || (z.snapshot ? `Zeno · his own book · via ${z.snapshot.source || "Pikkit"}` : "Zeno · his own book"), wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
                     `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}`,
                     dots(z.recent, "result"), rate(zo), zo.roi == null ? "" : roiRing(zo.roi)));
@@ -45062,6 +45124,7 @@ const ACTS = {
   recSetSplit: (el, a) => window._recSetSplit(a),
   recShowPicks: () => window._recShowPicks(),
   recCalSetMonth: (el, a) => window._recCalSetMonth(a),
+  zenoCalSetMonth: (el, a) => window._zenoCalSetMonth(a),
   recSetRange: (el, a) => window._recSetRange(a),
   perfSetRange: (el, a) => window._perfSetRange(a),
   edgeMarket: (el, a) => { window._edgeMarket = window._edgeMarket === a ? "" : a; renderEdgeBoard(); },

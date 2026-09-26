@@ -115,8 +115,42 @@ def test_the_page_says_where_it_came_from_and_shows_the_cards():
     fn = APP[i:APP.index("\n}\n", i)]
     assert 'class="zeno-receipt"' in fn and "<img src=" in fn, "the Pikkit card is the receipt"
     assert "marked Verified by ${src}, as of" in fn
-    assert "${zenoSnapshotHTML(z.snapshot)}" in APP
+    assert "${zenoSnapshotHTML(z.snapshot, z.unit_dollars)}" in APP
     assert "Zeno · his own book · via ${z.snapshot.source || \"Pikkit\"}" in APP
+
+
+def test_his_units_say_what_a_unit_is_worth():
+    """Ethan, 2026-09-26: "make sure users know 1 unit is $10 so we can put
+    a dollar amount behind the 800 units"."""
+    assert "const unitNote = (ud) => (Number(ud) > 0 ? ` (1u = $${Number(ud)})` : \"\");" in APP
+    assert "Zeno ${part(cb.split.zeno)}${unitNote(cb.unit_dollars)}" in APP, "on the combined tile"
+    assert "u${unitNote(z.unit_dollars)} · `" in APP, "on his own tile"
+    assert "Units at $${escapeHtml(String(unit))} each." in APP, "on his page"
+    assert Z.unit_dollars() == 10.0
+
+
+def test_the_calendars_add_up_to_pikkits_months():
+    """Pikkit rounds each day to three figures; the days land within a
+    dollar of the month, and the page names the month's total as Pikkit's."""
+    for w in SNAP["windows"]:
+        if w.get("days"):
+            assert abs(sum(w["days"].values()) - w["profit"]) < 1.0, w["key"]
+            assert all(k.startswith(w["key"] + "-") for k in w["days"]), w["key"]
+            assert os.path.getsize(os.path.join(ROOT, "web", w["calendar_receipt"])) > 10_000
+    assert sorted(w["key"] for w in SNAP["windows"] if w.get("days")) == ["2026-06", "2026-07", "2026-08", "2026-09"]
+    i = APP.index("function zenoCalMonthHTML(")
+    fn = APP[i:APP.index("\n}\n", i)]
+    assert "(Pikkit’s total)" in fn and "Pikkit’s calendar" in fn
+
+
+def test_the_calendar_is_drawn_our_way_one_month_at_a_time():
+    """Ethan: "make the calendars our way and not the screenshots" — the
+    Record page's grid, drawn from the days, with its arrows."""
+    i = APP.index("function zenoCalendarHTML(")
+    fn = APP[i:APP.index("\n}\n", i)]
+    assert 'data-act="zenoCalSetMonth"' in fn and "zenoCalMonthHTML(ms[i])" in fn
+    assert "<img" not in fn and "<img" not in APP[APP.index("function zenoCalMonthHTML("):i]
+    assert "zenoCalSetMonth: (el, a) => window._zenoCalSetMonth(a)," in APP
 
 
 if __name__ == "__main__":

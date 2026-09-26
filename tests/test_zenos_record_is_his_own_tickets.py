@@ -480,7 +480,7 @@ const escapeHtml=(x)=>String(x==null?"":x), icon=()=>"", american=(o)=>(o>0?"+":
 const plural=(n,w)=>n+" "+w+(n===1?"":"s");
 let cache=null; const loadRecordOnce=async()=>cache;
 const doc={el:{},getElementById(id){return this.el[id];}};
-global.document=doc; global.navigator={clipboard:{writeText:async()=>{}}};
+global.document=doc; global.navigator={clipboard:{writeText:async()=>{}}}; global.window={};
 """ + body + """
 const z=JSON.parse(process.argv[2]), kind=process.argv[3], scope=process.argv[4]||"";
 if (kind==="card") process.stdout.write(recZenoSection(z, scope));
