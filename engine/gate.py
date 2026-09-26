@@ -281,6 +281,12 @@ PAID_FILES = (
     # Named files are the safety net for exactly this: key-stripping only
     # protects boards whose keys were anticipated.
     "predmarkets.json",
+    # ZENO'S BETS — every prop and parlay he has riding or has settled,
+    # bet by bet (engine/zeno.PAID_BOARD). Ethan, 2026-09-26: "you only
+    # get access to the bets if you paid to get access for the website."
+    # His TOTALS stay free in record.json: they are the proof, these are
+    # the product.
+    "zeno.json",
 )
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
@@ -384,6 +390,9 @@ KNOWN_BOARDS = (
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
+    # Zeno's bets, written beside record.json by ledger.export_json and on
+    # every owner post (engine/zeno.publish_tickets). Paid whole.
+    "zeno.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
     # a board without telling the gate. Unregistered meant `is_free` said

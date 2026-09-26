@@ -943,6 +943,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(code, json.dumps(body).encode(), ".json")
         if parsed.path in ("/api/zeno", "/api/zeno/"):
             return self._zeno_get()
+        if parsed.path in ("/api/zeno/tickets", "/api/zeno/tickets/"):
+            return self._zeno_tickets()
         if self._entity_page(parsed.path):
             return
         return self._static(parsed.path)
@@ -1931,11 +1933,28 @@ class Handler(BaseHTTPRequestHandler):
         build — an import lands here the moment it is made."""
         from engine import zeno as Z
         try:
-            return self._send(200, json.dumps(Z.block_or_empty()).encode(),
+            # The FREE half only: his bets are paid (engine/zeno.split).
+            return self._send(200, json.dumps(Z.split(Z.block_or_empty())[0]).encode(),
                               ".json")
         except Exception as exc:                             # noqa: BLE001
             return self._send(500, json.dumps(
                 {"error": f"{type(exc).__name__}: {exc}"}).encode(), ".json")
+
+    def _zeno_tickets(self):
+        """His bets, live from the store, FOR HIM: the owner token, the same
+        door as the import. Members read the published board
+        (/api/board/zeno.json); this is what lets him grade a bet he
+        posted from his page whether or not his account holds a plan."""
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            return self._send(503, b'{"error":"owner import is not '
+                                   b'configured on this server"}', ".json")
+        if not ok:
+            return self._send(403, b'{"error":"not the owner"}', ".json")
+        return self._send(200, json.dumps(Z.split(Z.block_or_empty())[1]).encode(), ".json")
 
     def _zeno_import(self):
         """THE ONE WAY IN, and it is a secret rather than an account.
@@ -1986,6 +2005,14 @@ class Handler(BaseHTTPRequestHandler):
             got = Z.import_rows(conn, rows, source=source)
         finally:
             conn.close()
+        # A BET HE POSTS REACHES MEMBERS NOW, not at the next record
+        # build: the paid board is republished from the store at once.
+        try:
+            Z.publish_tickets(Z.split(Z.block_or_empty())[1])
+            got["published"] = True
+        except Exception as exc:                             # noqa: BLE001
+            got["published"] = False
+            got["publish_error"] = f"{type(exc).__name__}: {exc}"[:200]
         got["unknown_headers"] = unknown
         return self._send(200, json.dumps(got).encode(), ".json")
 

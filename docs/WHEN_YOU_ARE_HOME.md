@@ -831,6 +831,21 @@ that line back to me — that is the sample I need.
 just open the Record page. The block lands in record.json on the next
 build.
 
+**4. Post a bet from your phone (2026-09-26).** Your props and parlays are
+for members; your record stays free. Open **Zeno's Picks**, scroll to the
+bottom, tap **"Zeno? Sign in to post a bet"** and paste the same owner
+token once (it stays on that phone). Then:
+
+- **Post a bet** — straight/prop or parlay (one leg per line), book,
+  sport, odds, stake. It reaches members the moment you tap **Post it**.
+- **Grade it** — under each open bet in "Riding now": Won, Lost, Push,
+  Void. Your record and the combined line update on the next build.
+- When Juice Reel's API is on, its copy of a bet you posted takes over
+  the posted one (same book, stake, price and day) — never a second bet.
+
+**Members' copy:** `data/built/zeno.json`. The public `web/data/zeno.json`
+is a locked stub that says how many bets, never which.
+
 ---
 
 ## TIMING. Why these take longer than they read (read first)

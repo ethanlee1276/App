@@ -80,6 +80,19 @@ OWNER_TOKEN_ENV = "QB_OWNER_TOKEN"
 
 RECENT_LIMIT = 40
 
+#: THE SOURCE OF A BET ZENO POSTED HIMSELF, from the owner-only form on
+#: his page (app.js zenoPostFormHTML) the moment he placed it. Ethan,
+#: 2026-09-26: subscribers get "ALL of my Zeno's props and parlays", and
+#: until Juice Reel's API is approved, posting them is how they get here.
+POST_SOURCE = "post"
+
+#: THE PAID HALF of his record: the tickets themselves — what is riding
+#: and what settled, bet by bet. Ethan, 2026-09-26: "you only get access
+#: to the bets if you paid to get access for the website." The totals,
+#: the Pikkit cards and the calendar stay in record.json, free, because
+#: they are the proof; the bets are the product. engine/gate.PAID_FILES.
+PAID_BOARD = "zeno.json"
+
 #: DOLLARS PER UNIT, for the units the page shows beside the dollars and
 #: for the combined line. Ethan, 2026-09-26: "1 unit = $10". The store
 #: stays in dollars — the book settled money, and a unit is only how the
@@ -331,6 +344,16 @@ def import_rows(conn, rows, source: str = "manual") -> dict:
             continue
         cur = conn.execute("SELECT id, result, payout, settled_at FROM zeno_bets "
                            "WHERE key=?", (r["key"],)).fetchone()
+        if cur is None and source != POST_SOURCE:
+            # THE SAME BET, POSTED BY HAND AND THEN SYNCED. Zeno posts a
+            # bet the moment he places it; Juice Reel later sends the book's
+            # own copy under the book's ticket id. Matched on what both
+            # agree on — book, stake, price, the day it was placed (a day
+            # either side, for time zones) — the posted row takes the
+            # book's key and result, and is never counted twice.
+            cur = _posted_twin(conn, r)
+            if cur is not None:
+                conn.execute("UPDATE zeno_bets SET key=? WHERE id=?", (r["key"], cur["id"]))
         if cur is None:
             conn.execute(
                 "INSERT INTO zeno_bets (key, book, placed_at, event_at, sport, "
@@ -359,6 +382,23 @@ def import_rows(conn, rows, source: str = "manual") -> dict:
             out["unchanged"] += 1
     conn.commit()
     return out
+
+
+def _posted_twin(conn, r: dict):
+    """A posted, not-yet-synced row for the same bet, or None."""
+    day = str(r.get("placed_at") or "")[:10]
+    if not day or r.get("odds") is None:
+        return None
+    try:
+        d0 = _dt.date.fromisoformat(day)
+    except ValueError:
+        return None
+    days = [(d0 + _dt.timedelta(days=k)).isoformat() for k in (-1, 0, 1)]
+    return conn.execute(
+        "SELECT id, result, payout, settled_at FROM zeno_bets WHERE source=? AND book=? "
+        "AND ABS(stake-?)<0.005 AND odds=? AND substr(COALESCE(placed_at,''),1,10) IN (?,?,?) "
+        "AND key LIKE ? ORDER BY id LIMIT 1",
+        (POST_SOURCE, r["book"], float(r["stake"]), int(r["odds"]), *days, f"%:{POST_SOURCE}-%")).fetchone()
 
 
 # --- what the page reads ----------------------------------------------------
@@ -444,7 +484,8 @@ def _row_out(r) -> dict:
             "sport": r["sport"], "event": r["event"], "market": r["market"],
             "selection": r["selection"], "line": r["line"], "odds": r["odds"],
             "stake": r["stake"], "payout": r["payout"], "result": r["result"],
-            "profit": _profit(r), "legs": legs, "settled_at": r["settled_at"]}
+            "profit": _profit(r), "legs": legs, "settled_at": r["settled_at"],
+            "key": r["key"], "posted": (r["source"] == POST_SOURCE)}
 
 
 def block(conn, snap: dict | None = None) -> dict:
@@ -493,6 +534,32 @@ def block(conn, snap: dict | None = None) -> dict:
         "last_import": last,
         "unit_dollars": unit_dollars(),
     }
+
+
+def split(b: dict) -> tuple[dict, dict]:
+    """``(free, paid)``: the block with its tickets taken out, and the
+    tickets. The free half keeps every total, the Pikkit snapshot and the
+    calendar, and each settled ticket's RESULT alone (the last-five form
+    dots and the per-sport filter need no more); the paid half is every
+    open ticket and every settled one in full."""
+    b = b or {}
+    free = {k: v for k, v in b.items() if k not in ("open", "recent")}
+    free["recent"] = [{"result": r.get("result"), "sport": r.get("sport"),
+                       "settled_at": r.get("settled_at")} for r in b.get("recent") or []]
+    free["open"] = []
+    free["open_n"] = len(b.get("open") or [])
+    paid = {"generated_at": _now(), "open": list(b.get("open") or []),
+            "recent": list(b.get("recent") or [])}
+    return free, paid
+
+
+def publish_tickets(paid: dict, web_data=None) -> str:
+    """Write the paid half through the gate: the full copy outside the web
+    root for members (/api/board/zeno.json), a locked stub — how many
+    bets, never which — on the public path."""
+    from . import gate
+    target = Path(web_data) if web_data else (gate._WEB / "data")
+    return gate.publish(paid, target / PAID_BOARD, PAID_BOARD)[0]
 
 
 def block_or_empty(path=None) -> dict:

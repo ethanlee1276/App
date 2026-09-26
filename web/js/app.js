@@ -18044,7 +18044,45 @@ function zenoTicketRow(r, showResult) {
     <div class="hd-state">${state}</div></div>`;
 }
 
-function recZenoSection(z, scope) {
+/* ZENO'S BETS ARE FOR MEMBERS (engine/zeno.PAID_BOARD; Ethan, 2026-09-26:
+   "you only get access to the bets if you paid to get access for the
+   website"). His totals, Pikkit cards and calendar ride the free
+   record.json; the tickets — what is riding and what settled, bet by bet —
+   come from the paid board: /api/board/zeno.json for a member, the owner
+   endpoint for him (his token, the same one the post form uses), and the
+   locked stub for anyone else. {open, recent}, or {locked: true}. */
+let _zenoTix = null, _zenoTixAt = 0;
+function zenoOwnerToken() {
+  try { return localStorage.getItem("qb.zenoOwner") || ""; } catch (e) { return ""; }
+}
+async function zenoTickets(force) {
+  if (!force && _zenoTix && Date.now() - _zenoTixAt < 30000) return _zenoTix;
+  const ok = (t) => t && Array.isArray(t.open) && Array.isArray(t.recent);
+  let t = null;
+  const tok = zenoOwnerToken();
+  if (tok) {
+    try {
+      const r = await fetch("/api/zeno/tickets", { headers: { "X-Owner-Token": tok } });
+      if (r.ok) t = await r.json();
+    } catch (e) { t = null; }
+  }
+  if (!ok(t)) {
+    try { const r = await paidFetch("zeno.json"); if (r.ok) t = await r.json(); } catch (e) { t = null; }
+  }
+  _zenoTix = ok(t) ? { ...t, owner: !!tok && ok(t) } : { locked: true, open: [], recent: [] };
+  _zenoTixAt = Date.now();
+  return _zenoTix;
+}
+/* What a visitor without a plan sees where his bets would be: how many
+   are riding and settled — never which — and the way in. */
+function zenoLockedHTML(z) {
+  const n = Number((z || {}).open_n) || 0;
+  return `<div class="card ms-locked zeno-locked"><b>${n ? `${plural(n, "bet")} riding right now.` : "Zeno’s bets"}</b>
+    Every prop and parlay Zeno places — the pick, the book, the price he got and the stake — is for
+    members. His record above is free, and always will be. <a href="#paywall">See the plans</a></div>`;
+}
+
+function recZenoSection(z, scope, tix) {
   if (!z || !z.overall) return "";
   /* A BROKEN STORE IS NOT A QUIET DAY. `block_or_empty` never fails the
      export, but an empty block that came from a failure carries `error`,
@@ -18057,7 +18095,8 @@ function recZenoSection(z, scope) {
       the next build.</p></div>`;
   const t = scope ? (z.by_sport || {})[scope] : z.overall;
   if (!t || (!t.settled && !t.open)) return "";
-  const rows = (z.recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
+  const locked = !tix || tix.locked;
+  const rows = locked ? [] : (tix.recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
   const books = Object.values(z.by_book || {}).filter((b) => b.settled);
   return `
     <div class="section-title"><span class="st-ico">${icon("star", 15)}</span>Zeno’s Record
@@ -18069,7 +18108,8 @@ function recZenoSection(z, scope) {
       ${!scope && books.length > 1 ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${books.map((b) => `${escapeHtml(b.name)} ${b.wins}-${b.losses}${b.pushes ? "-" + b.pushes : ""} ${
           b.profit >= 0 ? "+" : ""}${zenoMoney(b.profit)}`).join(" · ")}</div>` : ""}
-      ${rows.length ? `<div class="hd-card">${rows.map((r) => zenoTicketRow(r, true)).join("")}</div>` : ""}
+      ${rows.length ? `<div class="hd-card">${rows.map((r) => zenoTicketRow(r, true)).join("")}</div>`
+        : locked && (t.settled || t.open) ? zenoLockedHTML(z) : ""}
       <p style="margin:8px 0 0;font-size:var(--fs-xs);color:var(--text-mute)">
         Real money at real books. Every result here is the sportsbook’s own settlement — nothing is
         re-graded or re-priced by this site — and every ticket is the full ticket: a parlay counts once,
@@ -18177,6 +18217,144 @@ function zenoCalendarHTML(months, snap) {
     ${snap && snap.days_note ? `<p class="list-note">${escapeHtml(snap.days_note)}</p>` : ""}</div>`;
 }
 
+/* ZENO POSTS HIS OWN BETS (Ethan, 2026-09-26: subscribers get "ALL of my
+   Zeno's props and parlays", and until Juice Reel's API is approved,
+   posting them the moment he places them is how they arrive). Only with
+   his owner token — the same QB_OWNER_TOKEN door as the import; there is
+   no account that can post here. A posted bet is a ticket like any other:
+   open until he grades it from this page (or the synced copy from Juice
+   Reel arrives and takes its place — engine/zeno._posted_twin). */
+const ZENO_POST_BOOKS = [["fanduel", "FanDuel"], ["draftkings", "DraftKings"], ["thescore", "theScore Bet"]];
+const ZENO_POST_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "other"];
+async function zenoPost(rows) {
+  const r = await fetch("/api/zeno/import", {
+    method: "POST",
+    headers: { "X-Owner-Token": zenoOwnerToken(), "X-Zeno-Source": "post", "Content-Type": "application/json" },
+    body: JSON.stringify(rows),
+  });
+  let j = {};
+  try { j = await r.json(); } catch (e) { j = {}; }
+  if (!r.ok) throw new Error(j.error || `the site answered ${r.status}`);
+  return j;
+}
+/* The same ticket again with its result: the store matches it on its key
+   (the post's own id) and updates it — never a second row. */
+function zenoGradePayload(r, result) {
+  const ext = String(r.key || "").split(":").slice(1).join(":");
+  const p = { book: r.book, placed_at: r.placed_at, event_at: r.event_at, sport: r.sport, event: r.event,
+              market: r.market, selection: r.selection, line: r.line, odds: r.odds, stake: r.stake,
+              legs: r.legs, result };
+  if (ext && !ext.startsWith("h:")) p.external_id = ext;
+  return p;
+}
+function zenoGradeHTML(r) {
+  return `<div class="zeno-grade" data-key="${escapeAttr(r.key || "")}">
+    <span class="mini">Grade it:</span>${[["won", "Won"], ["lost", "Lost"], ["push", "Push"], ["void", "Void"]]
+      .map(([k, w]) => `<button type="button" class="btn ghost zeno-grade-btn" data-result="${k}">${w}</button>`).join("")}</div>`;
+}
+function zenoOwnerHTML(tix) {
+  if (!tix.owner) {
+    return `<details class="zeno-owner-in"><summary class="mini">Zeno? Sign in to post a bet</summary>
+      <form class="mb-form zeno-owner-token" autocomplete="off">
+        <div class="mb-form-row"><label class="mb-grow">Owner token
+          <input type="password" name="token" required autocomplete="off"/></label>
+          <button class="btn primary" type="submit">Sign in</button></div>
+        <p class="list-note zeno-owner-msg"></p></form></details>`;
+  }
+  return `<div class="section-title"><span class="st-ico">${icon("ticket", 15)}</span>Post a bet
+      <span class="sub">— goes to members the moment you post it; grade it from “Riding now” when it settles</span></div>
+    <form class="card mb-form zeno-post" autocomplete="off">
+      <div class="mb-form-row">
+        <label>Type<select name="kind"><option value="straight">Straight / prop</option><option value="parlay">Parlay</option></select></label>
+        <label>Book<select name="book">${ZENO_POST_BOOKS.map(([k, w]) => `<option value="${k}">${w}</option>`).join("")}</select></label>
+        <label>Sport<select name="sport">${ZENO_POST_SPORTS.map((k) => `<option value="${k}">${k.toUpperCase()}</option>`).join("")}</select></label>
+      </div>
+      <div class="mb-form-row"><label class="mb-grow zeno-post-pick">The pick
+        <input name="selection" placeholder="Josh Allen Over 1.5 Pass TD"/></label></div>
+      <div class="mb-form-row zeno-post-legs" hidden><label class="mb-grow">The legs, one per line
+        <textarea name="legs" rows="4" placeholder="Bills ML&#10;Chiefs ML&#10;Allen Over 250.5 Pass Yds"></textarea></label></div>
+      <div class="mb-form-row">
+        <label class="mb-grow">Game (optional)<input name="event" placeholder="BUF @ MIA"/></label>
+        <label>Odds<input name="odds" inputmode="numeric" placeholder="-110" required/></label>
+        <label>Stake ($)<input name="stake" inputmode="decimal" placeholder="20" required/></label>
+      </div>
+      <div class="mb-form-row"><button class="btn primary" type="submit">Post it</button>
+        <button class="btn ghost zeno-owner-out" type="button">Sign out</button></div>
+      <p class="list-note zeno-post-msg"></p>
+    </form>`;
+}
+function bindZenoOwner(host, tix) {
+  const tokForm = host.querySelector(".zeno-owner-token");
+  if (tokForm) tokForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const tok = String(new FormData(tokForm).get("token") || "").trim();
+    const msg = tokForm.querySelector(".zeno-owner-msg");
+    try { localStorage.setItem("qb.zenoOwner", tok); } catch (err) { /* private window */ }
+    const t = await zenoTickets(true);
+    if (!t.owner) {
+      try { localStorage.removeItem("qb.zenoOwner"); } catch (err) { /* private window */ }
+      if (msg) msg.textContent = "That token was not accepted.";
+      await zenoTickets(true);
+      return;
+    }
+    renderZeno();
+  });
+  const form = host.querySelector(".zeno-post");
+  if (form) {
+    const kind = form.querySelector('[name="kind"]');
+    const legsRow = form.querySelector(".zeno-post-legs"), pickRow = form.querySelector(".zeno-post-pick");
+    kind.addEventListener("change", () => {
+      legsRow.hidden = kind.value !== "parlay";
+      pickRow.hidden = kind.value === "parlay";
+    });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(form), msg = form.querySelector(".zeno-post-msg");
+      const legs = String(f.get("legs") || "").split("\n").map((x) => x.trim()).filter(Boolean);
+      const parlay = f.get("kind") === "parlay";
+      const selection = parlay ? `${legs.length}-leg parlay: ${legs.join(" / ")}`.slice(0, 200)
+        : String(f.get("selection") || "").trim();
+      if (!selection || (parlay && legs.length < 2)) {
+        msg.textContent = parlay ? "A parlay needs at least two legs, one per line." : "Type the pick.";
+        return;
+      }
+      const row = { book: f.get("book"), sport: f.get("sport"), event: String(f.get("event") || "").trim() || null,
+                    market: parlay ? "parlay" : "prop", selection, legs: parlay ? legs : null,
+                    odds: String(f.get("odds") || "").trim(), stake: String(f.get("stake") || "").trim(),
+                    placed_at: new Date().toISOString().slice(0, 19), result: "open",
+                    external_id: `post-${Date.now()}` };
+      msg.textContent = "Posting…";
+      try {
+        const got = await zenoPost([row]);
+        if (!got.added) { msg.textContent = "Not posted — check the odds and the stake."; return; }
+        await zenoTickets(true);
+        renderZeno();
+      } catch (err) { msg.textContent = `Not posted: ${err.message}`; }
+    });
+    const out = form.querySelector(".zeno-owner-out");
+    if (out) out.addEventListener("click", async () => {
+      try { localStorage.removeItem("qb.zenoOwner"); } catch (err) { /* private window */ }
+      await zenoTickets(true);
+      renderZeno();
+    });
+  }
+  const byKey = new Map((tix.open || []).map((r) => [r.key, r]));
+  host.querySelectorAll(".zeno-grade").forEach((bar) => bar.querySelectorAll(".zeno-grade-btn").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const r = byKey.get(bar.dataset.key);
+      if (!r) return;
+      bar.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+      try {
+        await zenoPost([zenoGradePayload(r, b.dataset.result)]);
+        await zenoTickets(true);
+        renderZeno();
+      } catch (err) {
+        bar.insertAdjacentHTML("beforeend", `<span class="mini">Not saved: ${escapeHtml(err.message)}</span>`);
+        bar.querySelectorAll("button").forEach((x) => { x.disabled = false; });
+      }
+    })));
+}
+
 async function renderZeno() {
   const host = document.getElementById("zeno-body");
   if (!host) return;
@@ -18192,8 +18370,10 @@ async function renderZeno() {
       import will fill this page.</p></div>`;
     return;
   }
-  const open = z.open || [];
-  const settled = z.recent || [];
+  const tix = await zenoTickets();
+  const locked = !!tix.locked;
+  const open = locked ? [] : (tix.open || []);
+  const settled = locked ? [] : (tix.recent || []);
   /* v5: the page opens with his ribbon — the deck's and the Record page's
      own tile (recordRibbonsHTML) — then what is riding and what settled
      as the book's rows, ten settled in view and the rest one tap away. */
@@ -18209,8 +18389,10 @@ async function renderZeno() {
       : `The record, in dollars, as the books settled it.`} Full receipts on the
       <a href="#record" data-view="record">Record</a> page.</p>
     <div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Riding now
-      <span class="sub">— ${open.length ? `${plural(open.length, "open ticket")}, ${zenoMoney(z.overall.open_stake)} at risk` : "nothing open right now"}</span></div>
-    ${open.length ? `<div class="hd-card">${open.map((r) => zenoTicketRow(r, false)).join("")}</div>`
+      <span class="sub">— ${locked ? "members only" : open.length ? `${plural(open.length, "open ticket")}, ${zenoMoney(open.reduce((a, r) => a + (Number(r.stake) || 0), 0))} at risk` : "nothing open right now"}</span></div>
+    ${locked ? zenoLockedHTML(z)
+      : open.length ? `<div class="hd-card">${open.map((r) => zenoTicketRow(r, false)
+          + (tix.owner ? zenoGradeHTML(r) : "")).join("")}</div>`
       : `<div class="card"><p class="list-note">Nothing riding. Check back before the next slate.</p></div>`}
     ${settled.length ? `
     <div class="section-title"><span class="st-ico">${icon("check", 15)}</span>Last settled
@@ -18218,10 +18400,12 @@ async function renderZeno() {
     <div class="hd-card">${settled.slice(0, FOLD).map((r) => zenoTicketRow(r, true)).join("")}</div>
     ${settled.length > FOLD ? `<details class="tn-full"><summary>${plural(settled.length - FOLD, "more settled ticket")}</summary>
       <div class="hd-card">${settled.slice(FOLD).map((r) => zenoTicketRow(r, true)).join("")}</div></details>` : ""}` : ""}
-    <p class="list-note">
+    ${locked ? "" : `<p class="list-note">
       "Copy" puts the selection, price and book on your clipboard to paste into your own app.
-      Prices move; what you get may not be what Zeno got.${z.last_import ? ` Last synced ${escapeHtml(String(z.last_import).replace("T", " ").slice(0, 16))} UTC.` : ""}</p>`;
+      Prices move; what you get may not be what Zeno got.${z.last_import ? ` Last synced ${escapeHtml(String(z.last_import).replace("T", " ").slice(0, 16))} UTC.` : ""}</p>`}
+    ${zenoOwnerHTML(tix)}`;
   sweepRings(host);
+  bindZenoOwner(host, tix);
   host.querySelectorAll(".zeno-copy").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.text || ""); b.textContent = "Copied"; }
     catch (e) { b.textContent = "Copy failed"; }
@@ -18272,6 +18456,8 @@ function recPotdSection(rep, scope, recent) {
 }
 
 async function renderRecord() {
+  /* His bets for the Zeno card below, members only (zenoTickets). */
+  const _zenoTixRec = await zenoTickets();
   const host = document.getElementById("record-body");
   if (!host) return;
   let d = null, pmv = null;
@@ -18449,7 +18635,7 @@ async function renderRecord() {
        and never inside them. Its own store, its own block, its own card:
        two provenances that shared a number would make both worthless.
        Scoped to a league when that league has rows; pooled on "All". */
-    + recZenoSection(d.zeno, scope)
+    + recZenoSection(d.zeno, scope, _zenoTixRec)
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
                      scope, d.potd_recent || [])
     + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
@@ -24488,6 +24674,10 @@ const PLAN_FEATURES = [
   "Every sport: NFL, MLB, NBA, WNBA, CFB and UFC",
   // Second, so the longer plans' four-line summary carries it too.
   "Ask Qellys, the AI assistant — any team, player or game",
+  // ZENO'S BETS (Ethan, 2026-09-26: the paywall should say it "gets access
+  // to ALL of my Zeno's props and parlays"). Third, so the longer plans'
+  // four-line summary carries it too. Paid for real: engine/zeno.PAID_BOARD.
+  "All of Zeno’s props and parlays, posted as he places them",
   "Daily picks, player props and parlay tickets",
   "Line movement, line shopping and the price tape",
   "The full fantasy suite — draft kit, mock draft, lineups, trades",
@@ -25004,6 +25194,8 @@ function paywallHTML(rec, status) {
     <div class="pw-feats">
       ${feature("🤖", "Ask Qellys",
         "An AI assistant for any team, player or game in any sport — tonight’s boards and every past game we have stored — answered from our own numbers, with the sources shown.")}
+      ${feature("🎟️", "All of Zeno’s props and parlays",
+        "Every prop and parlay Zeno places at FanDuel, DraftKings and theScore Bet — the pick, the book, the price he got and the stake — posted the moment he places it. His record is free to check first.")}
       ${feature("🎯", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
       ${feature("📊", "The model, shown working",
@@ -36818,8 +37010,9 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "pr
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    "signup", "streak", "messages",
-                   // Zeno's own bets are public like the Record — a
-                   // person's real tickets are the proof, not the product.
+                   // Zeno's PAGE stays open: his record there is the
+                   // proof, like the Record's. His BETS inside it are for
+                   // members (engine/zeno.PAID_BOARD, zenoTickets).
                    "zeno"];
 
 function wallBlocked(name) {
@@ -44571,10 +44764,12 @@ async function deckRecordHTML() {
   const record = tiles
     ? `${deckHead("The record", "#record", "record", "Results")}
        <div class="hd-stats">${tiles}</div>` : "";
-  const open = z.open || [];
+  const tix = await zenoTickets();
+  const open = tix.locked ? [] : (tix.open || []);
   const zeno = open.length
     ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}
-       <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div>` : "";
+       <div class="hd-card">${open.slice(0, 3).map((r) => zenoTicketRow(r, false)).join("")}</div>`
+    : tix.locked && Number(z.open_n) ? `${deckHead("Zeno’s picks", "#zeno", "zeno", "Tail")}${zenoLockedHTML(z)}` : "";
   return { record, zeno };
 }
 

@@ -271,6 +271,14 @@ def test_the_export_carries_the_block_and_the_paywall_never_strips_it():
     ledger.export_json(lconn, out)
     got = json.loads(out.read_text(encoding="utf-8"))["zeno"]
     assert got["overall"]["settled"] == 3 and got["overall"]["open"] == 1, got["overall"]
+    # HIS BETS LEAVE THE FREE FILE (2026-09-26): record.json keeps the
+    # totals and each result; the tickets are the paid board beside it.
+    assert got["open"] == [] and got["open_n"] == 1
+    assert all(set(r) <= {"result", "sport", "settled_at"} for r in got["recent"])
+    assert "Chiefs -3.5" not in out.read_text(encoding="utf-8")
+    paid = json.loads((out.parent / "built" / "zeno.json").read_text(encoding="utf-8"))
+    assert paid["open"][0]["selection"] == "Chiefs -3.5" and len(paid["recent"]) == 3
+    assert (out.parent / "zeno.json").exists(), "the public stub beside record.json"
     assert "zeno" not in gate.PAID_KEYS
     assert "zeno" not in gate.paid_keys_for("record.json")
 
@@ -336,9 +344,15 @@ class _Site:
         self.port = _free_port()
         self.db = os.path.join(self.dir, "z.db")
         env = dict(os.environ)
+        # A WEB TREE OF ITS OWN: an import republishes his paid board
+        # (engine/zeno.publish_tickets), and with no QB_WEB_DIR that write
+        # lands in THIS checkout's web/data and data/built.
+        os.makedirs(os.path.join(self.dir, "web", "data"), exist_ok=True)
         env.update({"QB_ACCOUNTS_DB": os.path.join(self.dir, "a.db"),
                     "QB_ZENO_DB": self.db, "QB_PAYWALL": "",
-                    "QB_COMP_EMAILS": ""})
+                    "QB_COMP_EMAILS": "", "QB_WEB_DIR": os.path.join(self.dir, "web"),
+                    # These tickets alone — no carried-in Pikkit record.
+                    "QB_ZENO_SNAPSHOT": os.path.join(self.dir, "no_snapshot.json")})
         env.pop(zeno.OWNER_TOKEN_ENV, None)
         if token is not None:
             env[zeno.OWNER_TOKEN_ENV] = token
@@ -411,13 +425,89 @@ def test_over_the_wire_only_the_owner_writes_and_everyone_reads():
         code, body = site.call("GET", "/api/zeno")
         z = json.loads(body)
         assert code == 200 and z["n_rows"] == 2 and z["overall"]["open"] == 1
-        assert z["open"][0]["selection"] == "Chiefs -3.5"
+        # HIS BETS ARE FOR MEMBERS (engine/zeno.split, 2026-09-26): the
+        # public read says how many are riding, never which.
+        assert z["open"] == [] and z["open_n"] == 1, z["open"]
+        assert "Chiefs -3.5" not in body and all(set(r) <= {"result", "sport", "settled_at"} for r in z["recent"])
+        # He reads his own, live, with his token (to grade from his page).
+        code, body = site.call("GET", "/api/zeno/tickets")
+        assert code == 403, (code, body)
+        code, body = site.call("GET", "/api/zeno/tickets", None, {"X-Owner-Token": "owner-token-for-the-test"})
+        assert code == 200 and json.loads(body)["open"][0]["selection"] == "Chiefs -3.5", body
         # Bearer form works too, for a phone shortcut.
         code, body = site.call("POST", "/api/zeno/import", _CSV,
                                {"Authorization": "Bearer owner-token-for-the-test"})
         assert code == 200 and json.loads(body)["unchanged"] == 2, body
     finally:
         site.stop()
+
+
+def test_he_posts_a_bet_members_get_it_he_grades_it_and_a_sync_never_doubles_it():
+    """Ethan, 2026-09-26: subscribers get "ALL of my Zeno's props and
+    parlays", posted as he places them (his token only), graded from his
+    page, and matched — not doubled — when Juice Reel sends the book's
+    own copy."""
+    site = _Site(token="owner-token-for-the-test")
+    tok = {"X-Owner-Token": "owner-token-for-the-test", "X-Zeno-Source": "post"}
+    try:
+        straight = {"book": "fanduel", "sport": "nfl", "market": "prop", "selection": "Josh Allen Over 1.5 Pass TD",
+                    "odds": "-120", "stake": "20", "placed_at": "2026-09-27T17:05:00", "result": "open",
+                    "external_id": "post-1"}
+        parlay = {"book": "draftkings", "sport": "nfl", "market": "parlay",
+                  "selection": "2-leg parlay: Bills ML / Chiefs ML", "legs": ["Bills ML", "Chiefs ML"],
+                  "odds": "+264", "stake": "10", "placed_at": "2026-09-27T17:06:00", "result": "open",
+                  "external_id": "post-2"}
+        code, body = site.call("POST", "/api/zeno/import", json.dumps([straight, parlay]),
+                               {"X-Owner-Token": "not-it"})
+        assert code == 403, "nobody but him posts"
+        code, body = site.call("POST", "/api/zeno/import", json.dumps([straight, parlay]), tok)
+        got = json.loads(body)
+        assert code == 200 and got["added"] == 2 and got["published"] is True, got
+        # The members' board has them at once; the public stub says how many, never which.
+        board = json.loads((Path(site.dir) / "data" / "built" / "zeno.json").read_text())
+        assert {r["selection"] for r in board["open"]} == {straight["selection"], parlay["selection"]}
+        assert [r["legs"] for r in board["open"] if r["market"] == "parlay"] == [["Bills ML", "Chiefs ML"]]
+        assert all(r["posted"] for r in board["open"])
+        # With the paywall on, the public copy is the gate's stub: a count,
+        # never a bet (engine/gate.PAID_FILES). Off (this server), it is
+        # the full board, as every board is.
+        from engine import gate
+        stub = json.dumps(gate.redact(board, "zeno.json"))
+        assert gate.is_wholly_paid("zeno.json") and not gate.is_free("zeno.json")
+        assert "Josh Allen" not in stub and "Bills ML" not in stub and '"whole_board"' in stub, stub
+        # He grades the straight bet won from his page: the same ticket, updated.
+        graded = dict(straight, result="won")
+        code, body = site.call("POST", "/api/zeno/import", json.dumps([graded]), tok)
+        assert json.loads(body)["updated"] == 1, body
+        code, body = site.call("GET", "/api/zeno")
+        z = json.loads(body)
+        assert z["overall"]["wins"] == 1 and z["open_n"] == 1, z["overall"]
+        # Juice Reel sends the book's copy of the parlay under its own id:
+        # the posted row takes it over — one bet, not two.
+        synced = {"book": "DraftKings", "sport": "nfl", "selection": "Bills ML / Chiefs ML (DK parlay)",
+                  "odds": 264, "stake": 10, "placed_at": "2026-09-27T21:06:11Z", "result": "lost",
+                  "external_id": "JR-998877"}
+        code, body = site.call("POST", "/api/zeno/import", json.dumps([synced]),
+                               {"X-Owner-Token": "owner-token-for-the-test", "X-Zeno-Source": "juicereel-api"})
+        got = json.loads(body)
+        assert got["added"] == 0 and got["updated"] == 1, got
+        z = json.loads(site.call("GET", "/api/zeno")[1])
+        assert z["n_rows"] == 2 and z["overall"]["losses"] == 1 and z["open_n"] == 0, z["overall"]
+    finally:
+        site.stop()
+
+
+def test_the_post_form_is_his_alone_and_says_so():
+    src = _js()
+    i = src.index("function zenoOwnerHTML(")
+    fn = src[i:src.index("\nfunction ", i + 10)]
+    assert "if (!tix.owner)" in fn and 'type="password" name="token"' in fn, "no form without his token"
+    assert "Post it" in fn and 'name="legs"' in fn and 'value="parlay"' in fn
+    post = src[src.index("async function zenoPost("):src.index("\nfunction zenoGradePayload(")]
+    assert '"X-Owner-Token": zenoOwnerToken(), "X-Zeno-Source": "post"' in post
+    grade = src[src.index("function zenoGradePayload("):src.index("\nfunction zenoGradeHTML(")]
+    assert 'if (ext && !ext.startsWith("h:")) p.external_id = ext;' in grade, "a grade updates the same ticket"
+    assert "+ (tix.owner ? zenoGradeHTML(r) : \"\")" in src
 
 
 # --- the box ---------------------------------------------------------------
@@ -454,7 +544,7 @@ def _js():
 def test_the_record_page_draws_the_card_and_the_site_has_the_page():
     src = _js()
     i = src.index("const receipts = calendar")
-    assert "recZenoSection(d.zeno, scope)" in src[i:i + 600], src[i:i + 600]
+    assert "recZenoSection(d.zeno, scope, _zenoTixRec)" in src[i:i + 600], src[i:i + 600]
     assert '"zeno"' in src[src.index("const VIEW_ORDER"):src.index("const VIEW_ORDER") + 900]
     wall = src[src.index("const WALL_OPEN"):src.index("];", src.index("const WALL_OPEN"))]
     assert '"zeno"' in wall, "the picks page is behind the paywall"
@@ -481,10 +571,17 @@ const plural=(n,w)=>n+" "+w+(n===1?"":"s");
 let cache=null; const loadRecordOnce=async()=>cache;
 const doc={el:{},getElementById(id){return this.el[id];}};
 global.document=doc; global.navigator={clipboard:{writeText:async()=>{}}}; global.window={};
+global.localStorage={getItem:()=>""};
+// A MEMBER's view unless the kind says "locked": the paid board is the
+// block's own tickets (engine/zeno.split), served through paidFetch.
+let TIX=null; const paidFetch=async()=>({ok:true, json:async()=>TIX});
 """ + body + """
 const z=JSON.parse(process.argv[2]), kind=process.argv[3], scope=process.argv[4]||"";
-if (kind==="card") process.stdout.write(recZenoSection(z, scope));
-else { cache={zeno:z}; doc.el["zeno-body"]={innerHTML:"",querySelectorAll:()=>[]};
+TIX = kind.startsWith("locked") ? {generated_at:"x", locked:{whole_board:3}, locked_reason:"subscription"}
+                                : {open: z.open||[], recent: z.recent||[]};
+if (kind==="card") process.stdout.write(recZenoSection(z, scope, {open: z.open||[], recent: z.recent||[]}));
+else if (kind==="locked-card") process.stdout.write(recZenoSection(z, scope, {locked:true, open:[], recent:[]}));
+else { cache={zeno:z}; doc.el["zeno-body"]={innerHTML:"",querySelectorAll:()=>[],querySelector:()=>null};
   renderZeno().then(()=>process.stdout.write(doc.el["zeno-body"].innerHTML)); }
 """
     path = os.path.join(tempfile.mkdtemp(), "r.js")
@@ -522,6 +619,26 @@ def test_the_card_says_dollars_the_book_settled_and_a_parlay_once():
     # unit (Ethan, 2026-09-26: "1 unit = $10") — never in their place.
     assert "+6.2u</span>" in got, "the units beside the dollars"
     assert got.index("$61.70") < got.index("+6.2u"), "dollars first"
+
+
+def test_a_visitor_without_a_plan_sees_his_record_but_not_his_bets():
+    """Ethan, 2026-09-26: "you only get access to the bets if you paid to
+    get access for the website." The public copy of the paid board is a
+    locked stub; his page and the Record card say how many are riding and
+    never which, and point at the plans. His record stays in view."""
+    z = _block()
+    free, paid = zeno.split(z)
+    page = _render("locked-page", free)
+    if page is None:
+        return
+    assert "Chiefs -3.5" not in page and "Yankees ML" not in page, "a bet leaked to a visitor"
+    assert "1 bet riding right now." in page and "for\n    members" in page and 'href="#paywall"' in page
+    assert "members only" in page
+    card = _render("locked-card", free)
+    assert "Chiefs -3.5" not in card and "3-leg parlay" not in card and 'href="#paywall"' in card
+    assert "$61.70" in card, "the record itself stays free"
+    assert paid["open"][0]["selection"] == "Chiefs -3.5" and len(paid["recent"]) == len(z["recent"]) == 4
+    assert '"Copy" puts the selection' not in page, "nothing to copy for a visitor"
 
 
 def test_the_card_scopes_to_a_league_and_stays_off_one_with_no_rows():

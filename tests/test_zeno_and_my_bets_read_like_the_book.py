@@ -123,7 +123,10 @@ def test_zenos_page_opens_with_his_ribbon_and_folds_the_long_tail():
     assert "const ribbon = recordRibbonsHTML({ zeno: z }, {}, []);" in body, "his own tile, none of the model's"
     assert '<div class="hd-stats rec-ribbons">${ribbon}</div>' in body
     assert '<div class="card"><p class="list-note">No tickets yet.</p></div>' in body
-    assert '<div class="hd-card">${open.map((r) => zenoTicketRow(r, false)).join("")}</div>' in body
+    # His open bets, with the grade buttons under each for him alone
+    # (Ethan, 2026-09-26 — he posts and grades them from this page).
+    assert ('<div class="hd-card">${open.map((r) => zenoTicketRow(r, false)\n'
+            '          + (tix.owner ? zenoGradeHTML(r) : "")).join("")}</div>') in body
     assert "const FOLD = 10;" in body and 'settled.slice(0, FOLD).map((r) => zenoTicketRow(r, true))' in body
     assert '<details class="tn-full"><summary>${plural(settled.length - FOLD, "more settled ticket")}</summary>' in body
     assert 'settled.slice(FOLD).map((r) => zenoTicketRow(r, true))' in body, "the rest are there, one tap away"

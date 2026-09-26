@@ -8254,7 +8254,10 @@ def export_json(conn, path) -> None:
     # on a one-core box. show_epoch() already did it the cheap way.
     allp = performance(conn)
     scoped = performance(conn, since=since)
-    _zeno_block = _zeno.block_or_empty()
+    # HIS TICKETS ARE THE PRODUCT, HIS TOTALS THE PROOF (Ethan,
+    # 2026-09-26: "you only get access to the bets if you paid"). The
+    # free half rides record.json; the bets go to their own paid board.
+    _zeno_block, _zeno_tickets = _zeno.split(_zeno.block_or_empty())
     # THE RECORD THE PAGE SHOWS AS THE MODEL'S (`pooled`: the edge board
     # and the Most Likely board as one — app.js adoptPooledRecord seats it
     # as `overall`). The combined line adds Zeno to THIS, not to the edge
@@ -8528,3 +8531,9 @@ def export_json(conn, path) -> None:
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_text(_json.dumps(out, indent=2))
     _os.replace(tmp, p)
+    # The paid half, beside it: web/data/zeno.json (a locked stub for the
+    # public) and its full copy for members. Never fails the export.
+    try:
+        _zeno.publish_tickets(_zeno_tickets, p.parent)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️  Zeno's tickets not published — {type(exc).__name__}: {exc}")

@@ -667,6 +667,9 @@ SOLD_AS_PAID = {
     "the meme-coin scanner": "memecoins.json",
     "Prediction markets": "predmarkets.json",
     "game scripts": "fantasy.json",
+    # Ethan, 2026-09-26: "ALL of my Zeno's props and parlays" — his bets,
+    # engine/zeno.PAID_BOARD. His record stays free in record.json.
+    "Zeno’s props and parlays": "zeno.json",
 }
 
 
