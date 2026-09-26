@@ -1,0 +1,385 @@
+"""Defense versus position: what each defense gives up, per game, to each position.
+
+Ethan, 2026-09-23: "I was looking up top offenses and top defenses and
+worst offenses and worst defenses and looking up what the exact player
+matchups would be … where a really good offense and tight end might be
+playing a really bad corner … the Lions corners were giving up a lot of
+yards to Chris Olave during the Saints game. So then I went and took a
+bunch of Bills wide receivers for touchdowns and that was all winning."
+
+What the model had before this: one yards-allowed number per position,
+averaged over every player who appeared (a defence that faced five
+receivers looked stingier than one that faced three), WR1, WR2 and slot
+all the same number, NOTHING for touchdowns allowed (the anytime-TD model
+borrowed the yards number, at full strength), and no allowance for how
+few games a September rating rests on.
+
+What this is: for every defence, per GAME, the totals it conceded to each
+position group — receiving yards, catches and touchdowns to wide
+receivers, tight ends and backs, rushing yards and touchdowns to backs,
+passing yards and touchdowns to quarterbacks — against the league's
+average, walk-forward (only games before the week being priced), and
+shrunk toward average by how many games it rests on:
+
+    factor = 1 + (raw - 1) * games / (games + SHRINK_GAMES)
+
+Two weeks of a secondary being torched is a signal and also mostly noise;
+the shrink is how much of each. How much of a defence's factor actually
+reaches ONE player is a separate, measured number per market and
+position — TRANSFER below, from `python3 defensefit.py`
+(engine/defensefit.py) — and which rating the model reads for it is
+MODEL_STAT, also measured: for receivers that is the defence's overall
+pass defence, and for touchdowns to receivers nothing, because nothing
+predicted them.
+
+What box scores cannot say: which corner covered which receiver. nflverse
+has no coverage assignments; those come from paid charting (PFF, FTN's
+full product). So "a bad corner" is measured here as what the defence
+gives up to the position — which is what Olave's day against Detroit
+shows up as.
+"""
+from __future__ import annotations
+
+#: Position groups, from nflverse's `position` column.
+GROUP_OF = {"QB": "QB", "WR": "WR", "TE": "TE", "RB": "RB", "FB": "RB", "HB": "RB"}
+
+#: stat -> (group, the columns summed, words)
+STATS = {
+    "qb_pass_yds": ("QB", ("passing_yards",), "passing yards"),
+    "qb_pass_td": ("QB", ("passing_tds",), "passing TDs"),
+    "wr_rec_yds": ("WR", ("receiving_yards",), "receiving yards to WRs"),
+    "wr_rec": ("WR", ("receptions",), "catches by WRs"),
+    "wr_td": ("WR", ("receiving_tds", "rushing_tds"), "TDs to WRs"),
+    "te_rec_yds": ("TE", ("receiving_yards",), "receiving yards to TEs"),
+    "te_rec": ("TE", ("receptions",), "catches by TEs"),
+    "te_td": ("TE", ("receiving_tds", "rushing_tds"), "TDs to TEs"),
+    "rb_rush_yds": ("RB", ("rushing_yards",), "rushing yards to RBs"),
+    "rb_rec_yds": ("RB", ("receiving_yards",), "receiving yards to RBs"),
+    "rb_rec": ("RB", ("receptions",), "catches by RBs"),
+    "rb_td": ("RB", ("rushing_tds", "receiving_tds"), "TDs to RBs"),
+}
+
+#: Games of evidence that count as much as the league average does. Fitted
+#: by engine/defensefit.py (the value that best predicts the next game).
+SHRINK_GAMES = 12.0
+
+
+def _f(row: dict, key: str) -> float:
+    try:
+        v = row.get(key)
+        return float(v) if v not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _week(row: dict) -> int:
+    try:
+        return int(float(row.get("week") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _regular(row: dict) -> bool:
+    return str(row.get("season_type") or row.get("game_type") or "REG") in ("REG", "")
+
+
+def allowed_by_game(rows: list[dict], upto_week: int) -> dict:
+    """{defence: {week: {stat: total conceded}}} for regular-season weeks before ``upto_week``."""
+    out: dict = {}
+    for r in rows:
+        wk = _week(r)
+        if not (0 < wk < upto_week) or not _regular(r):
+            continue
+        team = str(r.get("opponent_team") or r.get("opponent") or "").strip()
+        group = GROUP_OF.get(str(r.get("position") or r.get("position_group") or "").upper())
+        if not team or not group:
+            continue
+        game = out.setdefault(team, {}).setdefault(wk, {s: 0.0 for s in STATS})
+        for stat, (g, cols, _w) in STATS.items():
+            if g == group:
+                game[stat] += sum(_f(r, c) for c in cols)
+    return out
+
+
+def ratings(rows: list[dict], upto_week: int, shrink: float = SHRINK_GAMES,
+            prior: dict | None = None, week_one_prior: bool = False) -> dict:
+    """{defence: {stat: {"pg", "league", "raw", "factor", "rank", "of", "games"}}}.
+
+    ``rank`` is 1 for the defence that gives up the MOST of that stat per
+    game (the softest), so "ranked 1st" always reads as the best matchup.
+    ``prior`` (last season's ratings) is where a defence starts from
+    instead of the league average, when it is given.
+
+    ``week_one_prior``: with no game played yet, the rating IS the prior
+    (the shrink below at n = 0), marked ``games`` 0 and ``last_season``.
+    This returned {} — no matchup at all in week 1 — while weeks 2 and 3
+    ran about 90% on the same prior. Found on Ethan's Saints @ Lions,
+    2026 week 1 (2026-09-24): Detroit had given up the 8th-most receiving
+    yards to receivers and the model applied nothing. MEASURED before it
+    was turned on: last season's rating alone, on weeks 1-3 of 2022-2025,
+    held out a season at a time — QB passing yards b 0.89 ± 0.33, WR
+    yards 1.05 ± 0.35, WR catches 1.06 ± 0.30, RB catches 0.60 ± 0.28,
+    each positive in three of four held-out seasons (TE and RB rushing
+    were flat, and keep the transfer the full season measured). NFL
+    only: college's week one, after a portal winter, is unmeasured."""
+    games = allowed_by_game(rows, upto_week)
+    per_game = {t: {s: sum(g[s] for g in wk.values()) / len(wk) for s in STATS}
+                for t, wk in games.items() if wk}
+    if not per_game:
+        if week_one_prior and prior:
+            return {t: {s: dict(v, games=0, last_season=True) for s, v in r.items()}
+                    for t, r in prior.items()}
+        return {}
+    league = {s: sum(p[s] for p in per_game.values()) / len(per_game) for s in STATS}
+    out: dict = {}
+    for team, p in per_game.items():
+        n = len(games[team])
+        row = {}
+        for s in STATS:
+            raw = p[s] / league[s] if league[s] > 0 else 1.0
+            centre = 1.0
+            if prior and team in prior and s in prior[team]:
+                centre = float(prior[team][s].get("factor", 1.0))
+            w = n / (n + shrink) if (n + shrink) > 0 else 1.0
+            row[s] = {"pg": round(p[s], 2), "league": round(league[s], 2), "raw": round(raw, 4),
+                      "factor": round(centre + (raw - centre) * w, 4), "games": n}
+        out[team] = row
+    teams = sorted(out)
+    for s in STATS:
+        order = sorted(teams, key=lambda t: (-out[t][s]["pg"], t))
+        for i, t in enumerate(order):
+            out[t][s]["rank"] = i + 1
+            out[t][s]["of"] = len(order)
+    return out
+
+
+def stat_for(position: str, market: str) -> str | None:
+    """Which defensive stat a prop on this position and market reads."""
+    g = GROUP_OF.get(str(position or "").upper())
+    if not g:
+        return None
+    if market in ("anytime_td", "td", "tds"):
+        return {"QB": None, "WR": "wr_td", "TE": "te_td", "RB": "rb_td"}[g]
+    if market == "pass_yds":
+        return "qb_pass_yds" if g == "QB" else None
+    if market == "pass_td":
+        return "qb_pass_td" if g == "QB" else None
+    if market == "rush_yds":
+        return "rb_rush_yds" if g == "RB" else None
+    if market == "rec_yds":
+        return {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rec_yds"}.get(g)
+    if market == "receptions":
+        return {"WR": "wr_rec", "TE": "te_rec", "RB": "rb_rec"}.get(g)
+    return None
+
+
+#: WHICH RATING THE MODEL USES, per (market, position), where it differs
+#: from the one shown. Measured four ways over 2022-2025 with each season
+#: held out in turn (`python3 defensefit.py`):
+#:
+#:   * receivers and tight ends: what a defence gives up to THEIR position
+#:     did not predict their next game beyond their own form (held-out
+#:     gain −0.06% WR yards, −0.12% TE yards). The defence's overall pass
+#:     defence did (+0.14%, +0.15%; catches +0.14%, +0.40%), so that is
+#:     what prices them;
+#:   * touchdowns to receivers and tight ends: nothing tried predicted them
+#:     (−0.39% and −0.12% by position, −0.42% and −0.11% by pass defence),
+#:     so the model leaves them alone. The matchup is still SHOWN;
+#:   * passing touchdowns (measured 2026-09-23, when the scan found the
+#:     market had no matchup at all): neither the defence's passing
+#:     touchdowns allowed (b 0.16 ± 0.16; held out +0.17%, +0.16%, −2.10%,
+#:     −0.02% for 2022-2025) nor its passing yards allowed (b 0.23 ± 0.33;
+#:     +0.07%, +0.04%, −1.33%, −0.19%) predicted a quarterback's
+#:     touchdowns beyond the board's own projection (engine/passtd). No
+#:     TRANSFER, so the model leaves it alone; the card still shows it;
+#:   * everything else uses its own position's rating.
+MODEL_STAT = {
+    ("rec_yds", "WR"): "qb_pass_yds", ("receptions", "WR"): "qb_pass_yds",
+    ("rec_yds", "TE"): "qb_pass_yds", ("receptions", "TE"): "qb_pass_yds",
+    ("anytime_td", "WR"): None, ("anytime_td", "TE"): None, ("anytime_td", "QB"): None,
+}
+
+
+#: COLLEGE, measured 2026-09-23 (`python3 cfbdefensefit.py`,
+#: engine/cfb/defensefit.py): 2022-2025 FBS-against-FBS games from our own
+#: logs, each season held out in turn, the same fit as the NFL's. THE RULE
+#: that chose each entry: a rating is used where its held-out gain is
+#: positive on average AND in at least three of the four seasons, and
+#: where two ratings qualify, the larger average wins. College differs
+#: from the NFL in the way that matters most: what a defence gives up to
+#: the receiver's OWN position predicts him in college (WR catches positive
+#: in all four seasons), where in the NFL only overall pass defence did.
+#: A college quarterback's rushing reads the run defence.
+MODEL_STAT_CFB = {
+    ("rush_yds", "QB"): "rb_rush_yds",
+}
+
+
+def model_stat(position: str, market: str, sport: str = "nfl") -> str | None:
+    """The rating the projection multiplies by for this position and market, or None."""
+    g = GROUP_OF.get(str(position or "").upper())
+    table = MODEL_STAT_CFB if sport == "cfb" else MODEL_STAT
+    if (market, g) in table:
+        return table[(market, g)]
+    return stat_for(position, market)
+
+
+#: How much of a defence's factor reaches one player: ``1 + TRANSFER·(factor − 1)``.
+#: Fitted on 2022-2025 with the ratings above (shrunk 12 games toward last
+#: season's). Re-measure with `python3 defensefit.py`.
+#: ±SE from the fit; the held-out gains are in the MODEL_STAT note above.
+TRANSFER = {
+    ("pass_yds", "QB"): 0.73,       # ±0.15   n 1,523   held-out +1.52%, every season positive
+    ("rush_yds", "RB"): 0.72,       # ±0.11   n 3,027   held-out +1.46%, every season positive
+    ("rec_yds", "RB"): 0.39,        # ±0.15   n 1,489   held-out +0.36%
+    ("receptions", "RB"): 0.47,     # ±0.12   n 2,161   held-out +0.23%
+    ("anytime_td", "RB"): 0.45,     # ±0.12   n 3,887   held-out +0.32%
+    ("rec_yds", "WR"): 0.57,        # ±0.15   n 5,214   (pass defence) held-out +0.14%
+    ("receptions", "WR"): 0.45,     # ±0.13   n 4,908   (pass defence) held-out +0.14%
+    ("rec_yds", "TE"): 0.79,        # ±0.26   n 2,107   (pass defence) held-out +0.15%
+    ("receptions", "TE"): 0.86,     # ±0.22   n 2,167   (pass defence) held-out +0.40%
+}
+
+
+#: College transfers (see MODEL_STAT_CFB). Held-out gain = share of squared
+#: error removed against the player's own form, per held-out season
+#: 2022 / 2023 / 2024 / 2025. The touchdown rows are what the rating adds
+#: ON TOP of the book's implied team total, because the college touchdown
+#: board is built from that total (engine/cfb/tds) — and the defence's
+#: overall scoring record measured nothing beyond it (tds.defense_multiplier);
+#: what a defence gives up to one POSITION does.
+TRANSFER_CFB = {
+    ("pass_yds", "QB"): 0.82,     # n 2,974   +1.87 +1.37 +5.02 +7.28   mean +3.89%
+    ("rush_yds", "RB"): 0.87,     # n 8,084   +2.51 +3.37 +2.27 +0.11   mean +2.07%
+    ("rush_yds", "QB"): 0.16,     # n 2,864   +0.15 −0.08 +0.03 +0.17   mean +0.07%  (run defence)
+    ("rec_yds", "WR"): 0.35,      # n 11,790  −0.11 +0.35 +0.36 +0.27   mean +0.22%  (pass defence +0.21%)
+    ("rec_yds", "TE"): 0.29,      # n 2,967   −0.15 +0.69 +0.39 +0.42   mean +0.34%
+    ("rec_yds", "RB"): 0.35,      # n 1,950   +0.01 −0.68 +0.50 +1.85   mean +0.42%
+    ("receptions", "WR"): 0.28,   # n 11,557  +0.15 +0.33 +0.08 +0.12   mean +0.17%
+    ("receptions", "TE"): 0.18,   # n 3,057   −0.09 +0.39 +0.07 +0.19   mean +0.14%
+    ("receptions", "RB"): 0.22,   # n 2,717   +0.19 −0.35 +0.20 +0.42   mean +0.12%
+    ("anytime_td", "RB"): 0.44,   # n 9,233   beyond the total +0.37 +0.25 +0.18 +0.81
+    ("anytime_td", "WR"): 0.48,   # n 10,782  beyond the total +0.08 +0.24 +0.36 +0.28
+    ("anytime_td", "TE"): 0.21,   # n 2,475   beyond the total −0.08 +0.16 +0.09 +0.30
+}
+
+
+def transfer(position: str, market: str, sport: str = "nfl") -> float:
+    table = TRANSFER_CFB if sport == "cfb" else TRANSFER
+    return table.get((market, GROUP_OF.get(str(position or "").upper())), 0.0)
+
+
+def _ord(n: int) -> str:
+    return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def num(x) -> str:
+    """155.53 → "155.5", 1.0 → "1": a per-game figure as a person reads it."""
+    return f"{float(x):.1f}".rstrip("0").rstrip(".")
+
+
+def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) -> dict | None:
+    """What goes under a pick: the defence, what it gives up to this position, where that ranks."""
+    r = (rating or {}).get(stat)
+    if not r:
+        return None
+    _g, _c, words = STATS[stat]
+    games = r["games"]
+    card = {"opponent": team, "stat": words, "per_game": round(float(r["pg"]), 1),
+            "league": round(float(r["league"]), 1), "rank": r["rank"], "of": r["of"], "games": games,
+            "text": (f"{team} allowed {num(r['pg'])} {words} a game last season, the "
+                     f"{_ord(r['rank'])}-most (league {num(r['league'])}); no game yet this season"
+                     if r.get("last_season") else
+                     f"{team} allow {num(r['pg'])} {words} a game, the {_ord(r['rank'])}-most "
+                     f"(league {num(r['league'])}), over {games} game{'s' if games != 1 else ''}")}
+    if r.get("last_season"):
+        card["last_season"] = True
+    t = (rating or {}).get(also) if also and also != stat else None
+    if t:
+        card["also"] = {"stat": STATS[also][2], "per_game": round(float(t["pg"]), 2), "rank": t["rank"],
+                        "of": t["of"]}
+        per = f"{float(t['pg']):.1f}" if also.endswith("_td") else num(t["pg"])
+        card["text"] += f"; {per} {STATS[also][2]} a game ({_ord(t['rank'])}-most)"
+    return card
+
+
+#: Bounds on one defence's factor. College's is the projection's college cap
+#: (engine/projection.CAP_BOUNDS), for the reason written there.
+FACTOR_BOUNDS = {"nfl": (0.80, 1.25), "cfb": (0.70, 1.40)}
+
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def effect(team: str, rating: dict, position: str, market: str, sport: str = "nfl",
+           label: str = "") -> tuple[float, str, dict | None]:
+    """(multiplier, reason, card) for one prop against this defence.
+
+    The card shows what the defence gives up to the player's OWN position in
+    this market, with a second line beside it (touchdowns under a yards
+    prop, yards under a touchdown prop). The multiplier reads what was
+    MEASURED to predict it (MODEL_STAT) at the measured strength (TRANSFER);
+    where nothing predicted, it is 1.0 and the card says so.
+
+    ``sport`` picks the measured tables (college has its own, MODEL_STAT_CFB
+    and TRANSFER_CFB); ``label`` is the defence as a reader names it, for a
+    league whose codes are not names (college's "espn:333")."""
+    name = label or team
+    show = stat_for(position, market) or model_stat(position, market, sport)
+    g = GROUP_OF.get(str(position or "").upper())
+    if g == "QB":
+        # A quarterback's two markets sit under each other.
+        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds"}.get(market)
+    else:
+        also = (stat_for(position, "anytime_td") if market != "anytime_td"
+                else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))
+    card = matchup_card(name, rating, show, also) if show else None
+    stat = model_stat(position, market, sport)
+    b = transfer(position, market, sport)
+    r = (rating or {}).get(stat) if stat else None
+    if not r or not b:
+        if card:
+            card["model"] = {"reads": None, "applied": 1.0,
+                             "note": "shown for you; it has not predicted this bet, so the model leaves it out"}
+        return 1.0, "", card
+    lo, hi = FACTOR_BOUNDS.get(sport, FACTOR_BOUNDS["nfl"])
+    factor = _clamp(1.0 + b * (float(r["factor"]) - 1.0), lo, hi)
+    words = STATS[stat][2]
+    if card:
+        # …and how much of that is THIS season: n/(n+SHRINK_GAMES) of the
+        # rating is these games, the rest last season's — so a card
+        # reading "1st-most over 2 games" beside "+5%" explains itself
+        # (Ethan, 2026-09-23: "the lions rank 31 out of 32 … why an under").
+        n = int(r.get("games") or 0)
+        card["model"] = {"reads": words, "applied": round(factor, 3), "games": n,
+                         "season_weight": round(n / (n + SHRINK_GAMES), 2) if n else 0.0,
+                         "strength": b}
+    reason = ""
+    # THE SENTENCE AGREES WITH ITSELF (2026-09-23). The rank is THIS
+    # season's games and the factor is mostly LAST season's early on, so
+    # a September board printed "Tough matchup — MIN allow the 29th-fewest
+    # passing yards (289.5 a game) (×0.96)" — 74 of 357 matchup lines on
+    # the week-3 build. Where this season points the other way, the line
+    # says what the number stands on.
+    soft = factor >= 1.03
+    if soft or factor <= 0.97:
+        n = int(r.get("games") or 0)
+        now_soft = float(r.get("raw") or 1.0) >= 1.0
+        if r.get("last_season"):
+            reason = (f"{'Soft' if soft else 'Tough'} matchup — last season {name} allowed the "
+                      + (f"{_ord(r['rank'])}-most" if soft else f"{_ord(r['of'] - r['rank'] + 1)}-fewest")
+                      + f" {words} ({num(r['pg'])} a game) (×{factor:.2f}); no game yet this season")
+        elif now_soft == soft:
+            reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
+                      f"({num(r['pg'])} a game) (×{factor:.2f})" if soft else
+                      f"Tough matchup — {name} allow the {_ord(r['of'] - r['rank'] + 1)}-fewest "
+                      f"{words} ({num(r['pg'])} a game) (×{factor:.2f})")
+        else:
+            last = round(100 * (1 - n / (n + SHRINK_GAMES))) if n else 100
+            reason = (f"{'Soft' if soft else 'Tough'} matchup (×{factor:.2f}) — {last}% of "
+                      f"{name}'s rating is last season, when they were "
+                      f"{'generous' if soft else 'stingy'} with {words}; {n} game"
+                      f"{'' if n == 1 else 's'} into this one they allow {num(r['pg'])} a game, "
+                      f"the {_ord(r['rank'])}-most")
+    return factor, reason, card
