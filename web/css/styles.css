@@ -12141,3 +12141,12 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .ms-micro-tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-micro-price { font-family: var(--font-mono); color: var(--text-dim); font-size: var(--fs-xs); }
 .ms-micro-p { font-family: var(--font-mono); font-weight: 700; color: var(--text); }
+
+/* Every market's price on a game (crowdStripHTML). */
+.gp-crowd { margin: 10px 0 4px; }
+.gp-crowd-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
+.gp-crowd-t { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.gp-crowd-t th, .gp-crowd-t td { padding: 4px 6px; text-align: right; border-bottom: var(--hairline) solid var(--border-soft); }
+.gp-crowd-t th[scope="row"], .gp-crowd-t thead th:first-child { text-align: left; }
+.gp-crowd-t thead th { color: var(--text-mute); font-weight: 600; }
+.gp-crowd-gap { margin: 6px 0 0; color: var(--text-mute); }

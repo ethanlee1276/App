@@ -1030,6 +1030,10 @@ def main() -> None:
     # and a pick made without them — which looks like nothing wrong.
     from engine import exchangefair as _xf
     print(_xf.attach_to_board(out, args.league))
+    # EVERY VENUE'S PRICE ON EVERY GAME, and the pregame record of them
+    # that `engine/crowdfit` measures (engine/crowd). Never raises.
+    from engine import crowd as _crowd
+    print(_crowd.attach_to_board(out, args.league))
     _pn = _potd.attach(out, args.league)
     if _pn:
         print(_pn)

@@ -15,6 +15,37 @@ as they are done.
 
 ---
 
+## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)
+
+**A. Are the Polymarket tags real?** Prints how many game moneylines
+each league's tag returned. A league showing 0 or "error" means the tag
+name is wrong or the venue is blocked; paste it back.
+
+```
+cd /srv/qellys && python3 -c "from engine.sources import polysports as p; rows, rep = p.fetch_sports(); print(rep, len(rows))"
+```
+
+**B. After the next NFL and MLB builds: are the prices on the games?**
+Look for the "crowd prices" lines in the build output. The count to
+watch is how many games Kalshi and Polymarket each priced:
+
+```
+cd /srv/qellys && python3 -c "
+import json; from engine import gate
+for f in ('recommendations.json','mlb_recommendations.json','cfb.json'):
+    d = json.load(open(gate.board_source('web/data/'+f)))
+    print(f, d.get('crowd_census'), d.get('polymarket_tags'))"
+```
+
+**C. In two or three weeks: is the crowd right?** Once a couple of
+hundred games have finished with stored prices:
+
+```
+cd /srv/qellys && python3 crowdfit.py
+```
+
+---
+
 ## TONIGHT — 2026-09-25, in this order
 
 Everything left from today, with what each answer means. Blocks 1–3

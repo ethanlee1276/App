@@ -9491,6 +9491,32 @@ function oneBoardHomeHTML() {
     ? `<div class="ob-cards">${top.map((r, i) => obCardHTML(r, i + 1, { why: false })).join("")}</div>`
     : `<div class="ls-note">No pick clears three checks yet — the full board has every one.</div>`}</div>`;
 }
+/* EVERY MARKET'S PRICE ON THIS GAME. Ethan, 2026-09-26: "we should also
+   look into where we can use pollymarket and kalshi odds for money lines
+   and other bets since crowd betting is more accurate". `engine/crowd`
+   hangs `crowd` on each game a prediction market priced — the home
+   club's chance from Kalshi, Polymarket and the books (de-vigged) — and
+   records it, with our model's number, for `engine/crowdfit`, which
+   measures whether the crowd beats the books. Our number is not on the
+   game: the moneyline card is the members'. Shown for both clubs; it
+   moves no pick. */
+function crowdStripHTML(g) {
+  const c = (g && g.crowd) || null;
+  if (!c) return "";
+  const cells = [["kalshi", "Kalshi"], ["polymarket", "Polymarket"], ["books", "Books"]]
+    .filter(([k]) => c[k] != null);
+  if (!cells.some(([k]) => k === "kalshi" || k === "polymarket")) return "";
+  const pct = (p) => `${Math.round(p * 100)}%`;
+  const gap = c.gap_pts != null && Math.abs(c.gap_pts) >= 3
+    ? `<p class="mini gp-crowd-gap">The prediction markets rate ${escapeHtml(teamName(c.gap_pts > 0 ? g.home : g.away))}
+        ${Math.abs(c.gap_pts).toFixed(1)} points higher than the books do.</p>` : "";
+  return `<div class="gp-crowd"><div class="gp-crowd-head">Win chance, every market</div>
+    <table class="gp-crowd-t"><thead><tr><th scope="col" aria-label="Team"></th>${
+      cells.map(([, l]) => `<th scope="col">${l}</th>`).join("")}</tr></thead>
+    <tbody>${[["away", (p) => 1 - p], ["home", (p) => p]].map(([side, f]) => `<tr><th scope="row">${
+      escapeHtml(teamName(g[side]))}</th>${cells.map(([k]) => `<td>${pct(f(c[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>${gap}</div>`;
+}
 function obGameHTML(g) {
   const k = `${g.away}@${g.home}`;
   const rows = oneBoardRows().filter((r) => r.game === k);
@@ -12570,6 +12596,7 @@ function renderGamePage() {
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
       isLive || isFinal ? "" : " · kickoff forecast"}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal });
+  const gpCrowd = isFinal ? "" : crowdStripHTML(g);
   const gpScripts = gameScriptsHTML(g, likelies);
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
@@ -12773,6 +12800,7 @@ function renderGamePage() {
               function draws both, so they cannot disagree; the O/U and
               favourite chips it replaces stay only when it draws nothing. */
           gpLines}
+        ${gpCrowd}
         <div class="chips gp-chips">
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           ${gpLines ? "" : `<span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>`}

@@ -50,16 +50,28 @@ def _tonights_games_and_probs(data_dir: Path):
     """
     games_by_sport, model_probs = {}, {}
     for sport, fname in SLATE_FILES.items():
+        # THE MEMBERS' COPY, NOT THE PUBLIC ONE (audit, 2026-09-26).
+        # `game_bets` is a paid key, so web/data holds the board with it
+        # taken out — and this read that copy, so from the day the paywall
+        # went on the desk had no model number for any game and could
+        # recommend nothing. `gate.board_source` is the helper written for
+        # exactly this mistake (tests/test_tools_read_the_full_board.py).
         try:
-            d = json.loads((data_dir / fname).read_text())
+            d = json.loads(gate.board_source(data_dir / fname).read_text())
         except Exception:                          # noqa: BLE001
             continue
         names = _names_by_abbr(sport)
         rows = []
         for g in d.get("games", []) or []:
+            # THE BOOKS' MONEYLINES RIDE ALONG. `kalshi.board` compares the
+            # exchange with the books' de-vigged price when a game carries
+            # `home_ml`/`away_ml`, and these rows never copied them — so
+            # the venue-against-venue read had never once fired.
             rows.append({"home": g.get("home", ""), "away": g.get("away", ""),
                          "home_name": names.get(g.get("home", ""), ""),
-                         "away_name": names.get(g.get("away", ""), "")})
+                         "away_name": names.get(g.get("away", ""), ""),
+                         "home_ml": g.get("home_ml"), "away_ml": g.get("away_ml"),
+                         "date": g.get("date", "")})
         if rows:
             games_by_sport[sport] = rows
         for b in d.get("game_bets", []) or []:
