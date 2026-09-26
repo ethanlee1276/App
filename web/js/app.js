@@ -11904,6 +11904,12 @@ function matchupScanHTML(g) {
     <div class="section-title">Matchup scan
       <span class="sub">— where each side is strong and weak, who could shine and who could struggle</span></div>
     ${scanTapeHTML(scan, away, home)}
+    ${/* WHO THE BOOKS TOOK DOWN before kickoff (engine/pricedplayers):
+          Zay Flowers, 2026-09-26, off every book while the report still
+          read Questionable. No read for them below, and this says why. */
+      (scan.pulled || []).length ? `<p class="ms-note ms-pulled"><b>Taken down by the books:</b> ${
+        escapeHtml(scan.pulled.join(", "))} — priced in an earlier pull and on no book now, before kickoff.
+        Treated as out: no read for ${scan.pulled.length === 1 ? "him" : "them"} below, until the report or the books say otherwise.</p>` : ""}
     <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
       : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
     ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">Biggest mismatches</div>

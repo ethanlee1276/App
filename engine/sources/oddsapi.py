@@ -1825,6 +1825,9 @@ class OddsAttachResult:
     #: was indexed off them — and the oldest such payload.
     stale_prop_events: int = 0
     stale_prop_age_s: float = 0.0
+    #: Players the books priced in the previous pull and dropped in this
+    #: one, before kickoff (engine/pricedplayers), "Name (AWY@HOM)".
+    pulled_players: list = field(default_factory=list)
     # Players the books have priced who matched NO slate prop — the book's
     # menu knows who's playing before the official lineup does. Each entry:
     # {player, market, home, away, lines}.
@@ -2551,6 +2554,13 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     # shared with the board-lines path so the rule has one definition.
     days = slate_days(slate.games)
 
+    # WHO EACH PULL PRICED (engine/pricedplayers): a player the previous
+    # pull priced and this one does not, before kickoff, was pulled by the
+    # books — Zay Flowers, 2026-09-26, off every book while the report
+    # still read Questionable.
+    from engine.pricedplayers import Tracker as _PricedTracker
+    _priced = _PricedTracker()
+
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
         away = _abbr(ev.get("away_team", ""))
@@ -2698,6 +2708,26 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     # Which game the quote belongs to — the check below
                     # needs it, and a scorer quote carries no teams.
                     scorer_pairs.setdefault(k, (home, away))
+            # This payload's whole player menu, stat props and scorers both,
+            # into the pull memory; who the books have since dropped, before
+            # kickoff, goes on the game.
+            try:
+                _who = set(parse_event_players(payload, cfg["markets"]).values())
+                if scorer_map:
+                    _who |= set(parse_event_players(payload, scorer_map).values())
+                _gone = _priced.see(ev.get("id") or "", sorted(_who), _age)
+                _kick = str(ev.get("commence_time") or "").replace("Z", "+00:00")
+                try:
+                    import datetime as _dtm
+                    _kick_ts = _dtm.datetime.fromisoformat(_kick).timestamp() if _kick else None
+                except ValueError:
+                    _kick_ts = None
+                _cur = _priced.data.get(ev.get("id") or "") or {}
+                if _gone and game is not None and (_kick_ts is None or float(_cur.get("latest_at") or 0) < _kick_ts):
+                    game.pulled_players = sorted(set(getattr(game, "pulled_players", None) or []) | set(_gone))
+                    result.pulled_players.extend(f"{p} ({away}@{home})" for p in _gone)
+            except Exception:                                # noqa: BLE001
+                pass
         # Attach real game-market prices to the matching game (each leg gets
         # its own moneyline/total/spread).
         #
@@ -2895,4 +2925,5 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # be mistaken for a closing line.
         record_snapshots(slate.props, slate=slate)
 
+    _priced.save()
     return result

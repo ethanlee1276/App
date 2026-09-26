@@ -415,6 +415,10 @@ class Game:
     #: current recommendation. See `oddsapi.MAX_GAME_PRICE_SHOW_AGE` for
     #: why showing-and-labelling beats refusing.
     price_stale: bool = False
+    #: Players the books priced in the previous pull and have since taken
+    #: down, before kickoff (engine/pricedplayers) — Zay Flowers,
+    #: 2026-09-26. The matchup scan gives them no read and says so.
+    pulled_players: list = field(default_factory=list)
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (points scored / allowed vs league baseline) for the

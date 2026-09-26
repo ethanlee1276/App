@@ -820,7 +820,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               scheme_season=None, opponent_adjusted: bool = True,
               allowed: dict | None = None, points: dict | None = None,
               line_words: dict | None = None, faces: dict | None = None,
-              evidence: list | None = None) -> dict:
+              evidence: list | None = None, pulled: list | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
 
     ``evidence`` is every priced row of this game whose teammate-out notes
@@ -871,6 +871,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
     # be showing to the user, no matter if we're displaying a prop for
     # that player").
     seen, reads = set(), []
+    pulled_keys = {_key(p) for p in (pulled or [])}
     for r in list(props or []) + key_players(usage, teams, injuries):
         name, team = r.get("player") or "", r.get("team") or ""
         if team not in teams or not name or (team, name) in seen:
@@ -883,6 +884,10 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         # came in through `props` with his own listing never asked.
         own_status = _status(injuries, team, name)
         if own_status in OUT_STATUSES:
+            continue
+        # …OR ONE EVERY BOOK HAS TAKEN DOWN (Game.pulled_players): the books
+        # move before the report does.
+        if _key(name) in pulled_keys:
             continue
         u = usage.get((team, _key(name))) or {}
         pos = r.get("position") or u.get("position") or ""
@@ -999,6 +1004,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         "players": reads,
         "microscope": micro[:8],
         "method": {"teams": n_teams, "opponent_adjusted": opponent_adjusted},
+        # WHO THE BOOKS TOOK DOWN before kickoff, said on the game page.
+        "pulled": sorted(pulled or []),
     }
 
 
@@ -1239,7 +1246,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          props=gprops, scheme_season=sch.get("season"),
                          allowed=allowed, points=pts, line_words=words, faces=faces,
                          evidence=gprops + [r for r in result.get("most_likely") or []
-                                            if r.get("team") in (home, away)])
+                                            if r.get("team") in (home, away)],
+                         pulled=getattr(g, "pulled_players", None) or [])
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         gd["scan"] = scan
