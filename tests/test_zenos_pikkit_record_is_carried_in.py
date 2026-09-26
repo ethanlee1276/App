@@ -165,6 +165,32 @@ def test_the_calendar_is_drawn_our_way_one_month_at_a_time():
     assert "zenoCalSetMonth: (el, a) => window._zenoCalSetMonth(a)," in APP
 
 
+def test_the_record_page_has_a_zenos_bets_button_that_opens_his_page():
+    """Ethan, 2026-09-26, the Record page's chips circled: "We should also
+    have a button here for 'Zenos Bets'"."""
+    import shutil
+    import subprocess
+    i = APP.index("function recordScopeHTML(")
+    fn = APP[i:APP.index("\n}\n", i) + 2]
+    assert 'btn("zeno", "Zeno’s Bets", zn)' in fn
+    bind = APP[APP.index("function bindRecordScopes("):]
+    bind = bind[:bind.index("\n}\n")]
+    assert 'if (b.dataset.scope === "zeno") { switchView("zeno", true); return; }' in bind, "it opens his page"
+    if not shutil.which("node"):
+        return
+    prog = ("const escapeHtml=(x)=>String(x==null?'':x); const SPORT_META={nfl:{name:'NFL'}};\n" + fn +
+            "\nconst d={tracked_sports:['nfl'], journaled:{all:{settled:10,open:1}},"
+            " zeno:{overall:{settled:1389,open:0}, open_n:2}};\n"
+            "console.log(JSON.stringify([recordScopeHTML(d,'all'), recordScopeHTML({tracked_sports:[]},'all')]));")
+    path = os.path.join(tempfile.mkdtemp(), "c.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(prog)
+    on, off = json.loads(subprocess.run(["node", path], capture_output=True, text=True, check=True).stdout)
+    assert 'data-scope="zeno">Zeno’s Bets <span class="rec-scope-n">1391</span></button>' in on, on
+    assert on.index("Prediction Market") < on.index("Zeno’s Bets") < on.index(">NFL"), "after Prediction Market"
+    assert "Zeno" not in off, "no record, no button"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

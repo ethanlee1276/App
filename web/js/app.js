@@ -16833,6 +16833,14 @@ function recordScopeHTML(d, scope) {
   const parts = [btn("all", "All bets",
                      journaled(jc.all || d.overall))];
   parts.push(btn("intel", "Prediction Market", null));
+  /* ZENO'S BETS (Ethan, 2026-09-26: "we should also have a button here for
+     'Zenos Bets'"). Not a scope of this page — his book is its own
+     record, graded by the books, not by us — so it opens his page, where
+     his record and (for members) his bets live. Counted like the others:
+     settled and riding together. */
+  const zo = (d.zeno || {}).overall || {};
+  const zn = (zo.settled || 0) + ((d.zeno || {}).open_n ?? zo.open ?? 0);
+  if (zn) parts.push(btn("zeno", "Zeno’s Bets", zn));
   for (const sp of tracked) {
     const r = (d.by_sport || {})[sp] || {};
     // A sport with nothing journaled is still listed. Hiding it would
@@ -17199,6 +17207,8 @@ function groupRecommended() {
 function bindRecordScopes(host) {
   host.querySelectorAll(".rec-scope").forEach((b) =>
     b.addEventListener("click", () => {
+      // His book opens his page (recordScopeHTML says why).
+      if (b.dataset.scope === "zeno") { switchView("zeno", true); return; }
       _recordScope = b.dataset.scope;
       renderRecord();
     }));
