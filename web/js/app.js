@@ -8522,11 +8522,38 @@ function scanTopRows(d) {
   return out;
 }
 
-function scanTopRowHTML(x, shine) {
+/* THE RANK, ONE RULE (Ethan, 2026-09-26, the list circled: "are these
+   ranked? Or just scattered in there"). They were sorted by whether the
+   read had a pick, then breakout before good, then by how many reasons it
+   listed — and ties fell back to game order, with no number shown. Now:
+
+     1. the read's strength — breakout / avoid before good / tough;
+     2. its net case — reasons for minus reasons against (the struggle
+        list the other way round), the same count the engine labels on;
+     3. our chance on his side — his Most Likely pick's chance, else his
+        touchdown chance on the shine list;
+     4. his name, so a tie never shuffles between refreshes. */
+function scanStrength(x, shine) {
+  const tier = shine ? ({ breakout: 2, good: 1 }[x.read] || 0) : ({ avoid: 2, tough: 1 }[x.read] || 0);
+  const pro = (x.pro || []).length, con = (x.con || []).length;
+  const net = shine ? pro - con : con - pro;
+  const p = x.pick || (shine ? null : x.pick_other_side);
+  const chance = Number((p && p.model_prob) ?? (shine && x.td ? x.td.model_prob : 0)) || 0;
+  return { tier, net, chance };
+}
+function scanRanked(xs, shine) {
+  return xs.map((x) => ({ x, s: scanStrength(x, shine) }))
+    .sort((a, b) => b.s.tier - a.s.tier || b.s.net - a.s.net || b.s.chance - a.s.chance
+      || String(a.x.player || "").localeCompare(String(b.x.player || "")))
+    .map((o) => o.x);
+}
+
+function scanTopRowHTML(x, shine, rank) {
   const door = scanDoor(x);
   const why = (shine ? x.pro : x.con) || [];
   const bits = scanUsageBits(x);
-  return `<button type="button" class="sct-row"${door.attrs}>
+  return `<button type="button" class="sct-row${rank ? " ranked" : ""}"${door.attrs}>
+      ${rank ? `<span class="sct-rank${rank <= 3 ? " top" : ""}">${rank}</span>` : ""}
       ${playerAvatar(x.player, x.team, { size: 36, headshot: x.headshot })}
       <span class="sct-who"><b>${escapeHtml(x.player)}</b>
         <span class="sct-sub">${escapeHtml(x.team || "")} ${escapeHtml(x.pos || "")} vs ${escapeHtml(x.opp || "")}${
@@ -8544,20 +8571,14 @@ function renderScanTop() {
   const rows = scanTopRows(d);
   const locked = !rows.length && d.locked && d.locked.scan_reads && (d.games || []).some((g) => g.scan);
   if (!rows.length && !locked) { host.innerHTML = ""; return; }
-  const first = { breakout: 0, good: 1, avoid: 0, tough: 1 };
-  // A read with its Most Likely pick leads its list.
-  const picked = (x) => (x.pick ? 0 : 1);
-  const shine = rows.filter((x) => x.read === "breakout" || x.read === "good")
-    .sort((a, b) => picked(a) - picked(b) || first[a.read] - first[b.read]
-      || (b.pro || []).length - (a.pro || []).length);
-  const struggle = rows.filter((x) => x.read === "avoid" || x.read === "tough")
-    .sort((a, b) => picked(a) - picked(b) || first[a.read] - first[b.read]
-      || (b.con || []).length - (a.con || []).length);
+  const shine = scanRanked(rows.filter((x) => x.read === "breakout" || x.read === "good"), true);
+  const struggle = scanRanked(rows.filter((x) => x.read === "avoid" || x.read === "tough"), false);
+  const row = (x, i, up) => scanTopRowHTML(x, up, i + 1);
   const list = (title, xs, up) => xs.length ? `<div class="sct-list card">
-      <div class="sct-head">${title} <span class="mini">${xs.length}</span></div>
-      ${xs.slice(0, SCAN_TOP_N).map((x) => scanTopRowHTML(x, up)).join("")}
+      <div class="sct-head">${title} <span class="mini">${xs.length} · ranked</span></div>
+      ${xs.slice(0, SCAN_TOP_N).map((x, i) => row(x, i, up)).join("")}
       ${xs.length > SCAN_TOP_N ? `<details class="sct-more"><summary>Show all ${xs.length}</summary>
-        ${xs.slice(SCAN_TOP_N).map((x) => scanTopRowHTML(x, up)).join("")}</details>` : ""}
+        ${xs.slice(SCAN_TOP_N).map((x, i) => row(x, i + SCAN_TOP_N, up)).join("")}</details>` : ""}
     </div>` : "";
   host.innerHTML = `<div class="section-title">Who could shine, who could struggle
       <span class="sub">— every game’s key players, read against the defense they face</span></div>

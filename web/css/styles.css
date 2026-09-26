@@ -11849,6 +11849,11 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .sct-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
   width: 100%; padding: 10px 0; border: 0; border-top: var(--hairline) solid var(--border-soft);
   background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sct-row.ranked { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+/* The rank (app.js scanRanked): a small numeral ahead of the face. */
+.sct-rank { min-width: 20px; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700;
+  color: var(--text-mute); text-align: right; font-variant-numeric: tabular-nums; }
+.sct-rank.top { color: var(--brand); }
 .sct-who { display: grid; gap: 2px; min-width: 0; justify-items: start; text-align: left; }
 .sct-sub { font-size: var(--fs-xs); color: var(--text-dim); }
 .sct-why { font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: anywhere; }
