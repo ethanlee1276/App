@@ -86,3 +86,39 @@ def served(payload):
     out = _drop({k: v for k, v in payload.items() if k not in DROP_TOP})
     _shelves_by_reference(out)
     return out
+
+
+# --- memory -----------------------------------------------------------------
+def release_memory() -> None:
+    """Hand freed memory back to the system after a big parse.
+
+    THE 2026-09-26 OUTAGE. The server process reached 1.4GB within four
+    minutes of every restart and the kernel killed it every ten minutes
+    for two hours: each member board request parsed an 18MB board, built
+    a second trimmed copy and serialised it, several boards at once. The
+    trees are garbage the moment the bytes exist, but glibc keeps freed
+    blocks in its arenas, so the process never shrank. `malloc_trim`
+    returns them; `gc.collect` first so the cycles are gone too. A no-op
+    anywhere glibc is not the allocator.
+    """
+    import gc
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
+#: The top-level keys Ask never reads, dropped from its cached copy. The
+#: box's boards, 2026-09-26: player_stats is 1.1-1.5MB of JSON on each
+#: football board and board_shelves repeats Most Likely row for row.
+ASK_DROP_TOP = ("player_stats", "board_shelves") + DROP_TOP
+
+
+def for_ask(board):
+    """The copy of a board Ask keeps in memory: the ladders gone at every
+    depth and the sections it never reads left out."""
+    if not isinstance(board, dict):
+        return board
+    return {k: _drop(v) for k, v in board.items() if k not in ASK_DROP_TOP}

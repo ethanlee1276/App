@@ -1171,6 +1171,9 @@ def board_summary(board: dict, boards: dict | None = None) -> dict:
 _BOARDS: dict = {}
 
 
+_BOARDS_PARSE = threading.Lock()
+
+
 def board_at(path) -> dict | None:
     """A board file, parsed once per write of it. Every question reads every
     league's board, and the builds write each a few times a day."""
@@ -1182,9 +1185,22 @@ def board_at(path) -> dict | None:
     hit = _BOARDS.get(str(path))
     if hit and hit[0] == stamp:
         return hit[1]
-    data = _load_json(Path(path)) or None
-    if data is not None:
-        _BOARDS[str(path)] = (stamp, data)
+    # ONE PARSE AT A TIME, AND THE SLIM COPY KEPT (the 2026-09-26 outage,
+    # engine/served.release_memory). Every question reads every league's
+    # board and this cache held each one whole — the football boards are
+    # 18MB of JSON, several times that parsed. It keeps `served.for_ask`
+    # of it instead, parses under one lock so five cold boards are not
+    # five parses at once, and hands the freed memory back after.
+    from .served import for_ask, release_memory
+    with _BOARDS_PARSE:
+        hit = _BOARDS.get(str(path))
+        if hit and hit[0] == stamp:
+            return hit[1]
+        data = _load_json(Path(path)) or None
+        if data is not None:
+            data = for_ask(data)
+            _BOARDS[str(path)] = (stamp, data)
+        release_memory()
     return data
 
 

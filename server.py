@@ -606,6 +606,7 @@ _SW_LOCK = threading.Lock()
 #: every request, after this, exactly as before.
 _BOARD_CACHE: dict = {}
 _BOARD_LOCK = threading.Lock()
+_PARSE_LOCK = threading.Lock()
 
 
 def file_bytes(path, key: str = ""):
@@ -660,18 +661,40 @@ def board_bytes(name: str):
         hit = _BOARD_CACHE.get(name)
         if hit is not None and hit[0] == stamp:
             return hit[1], st.st_mtime, hit[2]
-    # Read OUTSIDE the lock: a cold read of a megabyte-and-a-half must
-    # not hold every other board's requests behind it, and two threads
-    # racing to fill the same entry cost one duplicated parse rather than
-    # a queue. The loser overwrites with an identical value.
-    payload = gate.full_board(name)
-    if payload is None:
-        return None, None, None
-    # The subscriber's copy is served the way the public one is written
-    # (engine/served.py, the site audit's M-3): no ladders, shelves by
-    # reference, no whitespace.
-    from engine.served import served
-    body = json.dumps(served(payload), separators=(",", ":")).encode()
+    # THE BUILD'S OWN SERVED COPY FIRST (the 2026-09-26 outage: this
+    # function parsing 18MB boards is what the kernel kept killing the
+    # server for). `gate.publish` writes it beside the full copy, after
+    # it; it is used only when at least as new, so a board rewritten by
+    # anything else still falls through to the parse below.
+    side = gate.served_sidecar(path)
+    try:
+        if side.stat().st_mtime_ns >= st.st_mtime_ns:
+            body = side.read_bytes()
+            etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
+            with _BOARD_LOCK:
+                _BOARD_CACHE[name] = (stamp, body, etag)
+            return body, st.st_mtime, etag
+    except OSError:
+        pass
+    # ONE PARSE AT A TIME. It used to run outside any lock so a cold read
+    # would not queue other boards — right for the megabyte-and-a-half
+    # boards it was written for, and ruinous at 18MB, where five cold
+    # boards at once is five parse trees and five trimmed copies.
+    from engine.served import served, release_memory
+    with _PARSE_LOCK:
+        with _BOARD_LOCK:
+            hit = _BOARD_CACHE.get(name)
+            if hit is not None and hit[0] == stamp:
+                return hit[1], st.st_mtime, hit[2]
+        payload = gate.full_board(name)
+        if payload is None:
+            return None, None, None
+        # The subscriber's copy is served the way the public one is
+        # written (engine/served.py, the site audit's M-3): no ladders,
+        # shelves by reference, no whitespace.
+        body = json.dumps(served(payload), separators=(",", ":")).encode()
+        del payload
+        release_memory()
     # Hashed once per rebuild, not once per request — it rides in the same
     # cache entry as the bytes it describes, so the two cannot disagree.
     etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
@@ -2057,11 +2080,10 @@ class Handler(BaseHTTPRequestHandler):
                     {"error": "Tail/fade rides on the picks — an active "
                               "subscription is what makes the argument "
                               "fair."}).encode(), ".json")
-            try:
-                board = json.loads(Path(gate.board_source(
-                    LIVE_FILES[sport])).read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                board = {}
+            # The shared slim copy (askbot.board_at), not a fresh parse
+            # per call — the 2026-09-26 outage.
+            from engine import askbot as AB
+            board = AB.board_at(gate.board_source(LIVE_FILES[sport])) or {}
             code, out = TF.record_call(
                 conn, who["id"], board, sport,
                 str(body.get("player") or ""), str(body.get("market") or ""),
@@ -3545,7 +3567,10 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if not EX.configured():
             return self._send(503, b'{"error":"explainer not configured","configured":false}',
                               ".json")
-        payload = GATE_.full_board(board)
+        # The shared slim copy Ask keeps (askbot.board_at), not a fresh
+        # parse of an 18MB board per question — the 2026-09-26 outage.
+        from engine import askbot as AB
+        payload = AB.board_at(GATE_.full_board_file(board))
         if payload is None:
             return self._send(404, b'{"error":"no such board"}', ".json")
         try:

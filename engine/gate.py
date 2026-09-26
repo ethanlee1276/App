@@ -754,7 +754,34 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             else:
                 json.dump(doc, fh, indent=2)
         os.replace(tmp, path)
+        if path is full:
+            # THE MEMBERS' BYTES, MADE HERE (the 2026-09-26 outage). The
+            # server used to build them itself: parse the 18MB private
+            # copy, trim it, serialise it — per board, per rebuild, several
+            # at once — and that is what walked it past its memory cap
+            # every ten minutes. The build already holds the board, so it
+            # writes the served copy beside the full one, after it, and
+            # `server.board_bytes` reads it when it is at least as new.
+            _write_served_sidecar(full, payload)
     return (str(public), str(full))
+
+
+def served_sidecar(full_path) -> Path:
+    """Where a private board's ready-to-serve bytes live. Not a `.json`
+    name, so `full_board_file` can never hand it out by URL."""
+    p = Path(full_path)
+    return p.with_name(p.name + ".served")
+
+
+def _write_served_sidecar(full: Path, payload) -> None:
+    try:
+        side = served_sidecar(full)
+        tmp = side.with_name(side.name + ".tmp")
+        with open(tmp, "w") as fh:
+            json.dump(served(payload), fh, separators=(",", ":"))
+        os.replace(tmp, side)
+    except (OSError, TypeError, ValueError):
+        pass                      # the server falls back to building them
 
 
 def _paid_rows(payload: dict, name: str) -> int:
