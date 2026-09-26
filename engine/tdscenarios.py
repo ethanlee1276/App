@@ -25,7 +25,8 @@ on and the touchdown model priced:
   red zone   the red-zone chances the model expects him to get.
 
 Each is scored 0–2; a player is a scenario when he scores at least
-SCENARIO_MIN with the defence and the usage both counting. Scenarios are
+SCENARIO_MIN with the defence, the usage and the red zone all counting,
+and never when he is on the injury report (the Most Likely board's rule). Scenarios are
 ranked by OUR chance of the touchdown, so the shelf reads top down the way
 the touchdown shelf does, and each carries the four lines that made it.
 Scorers already seated on the Most Likely touchdown shelf are left off —
@@ -74,6 +75,12 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
     grp = _GROUP.get(pos)
     if not grp or td.get("model_prob") is None or not td.get("odds"):
         return None
+    # NEVER A PLAYER WHO IS LISTED. Ethan, 2026-09-26: Zay Flowers on this
+    # shelf — "this player isn't even playing for this game." The Most
+    # Likely board holds any listed player until inactives confirm
+    # (likely.admissible); a scenario answers to the same rule.
+    if str(td.get("injury_status") or "").strip() or read.get("own_status"):
+        return None
     u = read.get("usage") or {}
     implied = td.get("implied_total")
     unit = "passing" if grp == "wr" else "rushing"
@@ -85,7 +92,10 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32) -> dict | None:
            "usage": _pts(share, TARGET_SHARE if grp == "wr" else CARRY_SHARE),
            "red_zone": _pts(rz, RED_ZONE_CHANCES)}
     total = sum(pts.values())
-    if total < SCENARIO_MIN or not pts["defense"] or not pts["usage"]:
+    # THE RED ZONE IS REQUIRED, like the defence and the usage. Flowers again:
+    # "it says 0.0 redzone chances expected yet we display this pick." A
+    # touchdown case with no red-zone role is not one.
+    if total < SCENARIO_MIN or not pts["defense"] or not pts["usage"] or not pts["red_zone"]:
         return None
     team, opp = read.get("team") or "", read.get("opp") or ""
     blend = (opp_units or {}).get("blend")

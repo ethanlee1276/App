@@ -876,6 +876,14 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         if team not in teams or not name or (team, name) in seen:
             continue
         seen.add((team, name))
+        # NEVER A READ ON A PLAYER WHO IS NOT PLAYING. Ethan, 2026-09-26:
+        # Zay Flowers as a touchdown scenario — "this player isn't even
+        # playing for this game." `key_players` already skipped the ruled
+        # out; a player the books still price (props linger after the news)
+        # came in through `props` with his own listing never asked.
+        own_status = _status(injuries, team, name)
+        if own_status in OUT_STATUSES:
+            continue
         u = usage.get((team, _key(name))) or {}
         pos = r.get("position") or u.get("position") or ""
         group = _POS_GROUP.get(pos.upper(), "")
@@ -950,6 +958,10 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
             line_words=(line_words or {}).get(team, ""))
         read["notes"] = list(read.get("notes") or []) + maybe_lines
+        # HIS OWN LISTING, when it is short of out: the read assumes he plays.
+        if own_status in ("QUESTIONABLE", "GTD"):
+            read["notes"].insert(0, f"{name} is listed {own_status.lower()} himself — this read assumes he plays")
+            read["own_status"] = own_status
         # HIS FACE, not a helmet (Ethan, 2026-09-25): the prop row's own
         # headshot, else the roster's.
         reads.append(dict(read, headshot=r.get("headshot") or _face(faces, name)))
@@ -1108,6 +1120,9 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
                        # HIS QUARTERBACK, when the starter is out (engine/qbchange):
                        # the headline, so the scenario says who is throwing.
                        "qb_change": ((r.get("qb_card") or {}).get("headline") or None),
+                       # HIS OWN LISTING (injuries.player_injury_status), which
+                       # the Most Likely board holds on and the scenarios must.
+                       "injury_status": r.get("injury_status") or "",
                        # WHY THAT NUMBER (engine/touchdowns.td_probability):
                        # the implied total, where his share comes from, the
                        # red-zone line, and the caveat when red-zone usage

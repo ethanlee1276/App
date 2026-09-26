@@ -123,9 +123,16 @@ def test_a_player_is_never_his_own_teammate():
                 "market": "receptions", "side": "over", "line": 4.5, "odds": -120}
         scan = G.scan_game("BUF", "LAC", ratings={}, charts={}, defenders_now={}, usage=usage,
                            injuries=[_Inj("Keenan Allen", "LAC", "WR", status)], props=[prop])
-        (me,) = [p for p in scan["players"] if p["player"] == "Keenan Allen"]
-        said = (me.get("pro") or []) + (me.get("con") or []) + (me.get("notes") or [])
-        assert not any(t.startswith("Keenan Allen") for t in said), (status, said)
+        mine = [p for p in scan["players"] if p["player"] == "Keenan Allen"]
+        if status == "OUT":
+            # Ruled out: no read at all since 2026-09-26 (Zay Flowers,
+            # test_a_player_who_is_not_playing_gets_no_read).
+            assert not mine, mine
+        else:
+            (me,) = mine
+            said = (me.get("pro") or []) + (me.get("con") or []) + (me.get("notes") or [])
+            assert not any(t.startswith("Keenan Allen (") for t in said), (status, said)
+            assert said and "himself — this read assumes he plays" in said[0] if me.get("notes") else True
         mc = [p for p in scan["players"] if p["player"] == "Ladd McConkey"]
         if mc:
             assert any("Keenan Allen" in t for t in (mc[0].get("pro") or []) + (mc[0].get("notes") or []))
