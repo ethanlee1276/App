@@ -11716,8 +11716,10 @@ function scanTdHTML(x, cls = "ms-pick") {
   const pct = Number(t.model_prob);
   const tail = t.on_board ? " · on the Most Likely board"
     : pct >= 0.55 ? " · clears the 55% bar, not seated" : " · under the 55% bar";
+  const why = (t.why || []).concat(t.caveats || []);
   return `<span class="${cls} td"><b>Anytime TD:</b> ${wholePct(pct)} at ${escapeHtml(oddsTxt(t.odds))}${
-    t.book ? ` · ${escapeHtml(t.book)}` : ""}${tail}</span>`;
+    t.book ? ` · ${escapeHtml(t.book)}` : ""}${tail}${why.length ? `<details class="td-why"><summary>why ${wholePct(pct)}</summary>
+      <ul>${why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}</span>`;
 }
 
 /* The line on a read that says what the Most Likely board did with it. */

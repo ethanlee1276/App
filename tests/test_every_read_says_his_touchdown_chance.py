@@ -35,7 +35,11 @@ def _result():
     return {"long_shots": [{"player": "Keon Coleman", "model_prob": 0.31, "odds": 260, "book": "DraftKings"}],
             "longshot_watch": [
                 {"player": "James Cook", "model_prob": 0.4787, "odds": -170, "book": "Novig"},
-                {"player": "Dalton Kincaid", "model_prob": 0.41, "odds": 140, "book": "DraftKings"},
+                {"player": "Dalton Kincaid", "model_prob": 0.41, "odds": 140, "book": "DraftKings",
+                 "reasons": ["Team implied total 24.5 → 2.60 expected offensive TDs",
+                             "Share of team TDs from 0.50 TD/game over 2 games, blended with the TE baseline",
+                             "Red-zone touch share ~28% (1.4 expected chances)"],
+                 "caveats": ["Thin touchdown history (2 games) — position baseline used"]},
                 {"player": "Dalton Kincaid", "model_prob": 0.39, "odds": 150, "book": "FanDuel"},
                 {"player": "Nobody Priced", "model_prob": 0.2, "odds": None}]}
 
@@ -44,7 +48,10 @@ def test_the_read_carries_his_chance_price_and_seat():
     reads = _reads()
     assert G.stamp_touchdowns(reads, _result()) == 2, "Allen has no scorer row; he is not stamped"
     k, c, a = reads["LAC@BUF"]["players"]
-    assert k["td"] == {"model_prob": 0.41, "odds": 140, "book": "DraftKings"}, "the higher chance wins"
+    assert (k["td"]["model_prob"], k["td"]["odds"], k["td"]["book"]) == (0.41, 140, "DraftKings"), "the higher chance wins"
+    assert k["td"]["why"][0].startswith("Team implied total") and len(k["td"]["why"]) == 3
+    assert k["td"]["caveats"] == ["Thin touchdown history (2 games) — position baseline used"]
+    assert c["td"]["why"] == [] and c["td"]["caveats"] == []
     assert c["td"]["odds"] == -170 and "td" not in a
     G.stamp_picks(reads, {}, board=[{"kind": "td", "player": "James Cook"}, {"kind": "prop", "player": "Dalton Kincaid"}])
     assert c["td"]["on_board"] is True and k["td"]["on_board"] is False
@@ -63,6 +70,7 @@ def test_the_card_says_it_on_both_read_cards():
     fn = fn[:fn.index("\n}\n")]
     assert "Anytime TD:" in fn and "on the Most Likely board" in fn and "under the 55% bar" in fn
     assert 'String(p.market || "") === "anytime_td"' in fn, "a touchdown pick is not said twice"
+    assert '<details class="td-why"><summary>why ${wholePct(pct)}</summary>' in fn, "the number opens its reasons"
     assert '${scanPickHTML(x, "sct-pick")}${scanTdHTML(x, "sct-pick")}' in APP, "the dashboard list"
     assert "${scanPickHTML(x)}${scanTdHTML(x)}" in APP, "the game page card"
 

@@ -1102,7 +1102,14 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
             if not r or not r.get("odds"):
                 continue
             x["td"] = {"model_prob": round(float(r["model_prob"]), 4), "odds": r.get("odds"),
-                       "book": r.get("book") or ""}
+                       "book": r.get("book") or "",
+                       # WHY THAT NUMBER (engine/touchdowns.td_probability):
+                       # the implied total, where his share comes from, the
+                       # red-zone line, and the caveat when red-zone usage
+                       # was inferred. Ethan on Kincaid at 32%, 2026-09-25:
+                       # "I want you to double-check that."
+                       "why": [str(t) for t in (r.get("reasons") or [])][:5],
+                       "caveats": [str(t) for t in (r.get("caveats") or [])][:3]}
             n += 1
     return n
 

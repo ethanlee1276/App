@@ -11861,6 +11861,10 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .ms-pick b, .sct-pick b { font-weight: 700; }
 .ms-pick.good b, .sct-pick.good b { color: var(--good); }
 .ms-pick.td b, .sct-pick.td b { color: var(--brand); }
+.td-why { margin-top: 4px; }
+.td-why > summary { list-style: none; cursor: pointer; color: var(--brand); font-weight: 700; font-size: var(--fs-xs); }
+.td-why > summary::-webkit-details-marker { display: none; }
+.td-why ul { margin: 4px 0 0; padding-left: 16px; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .ms-pick.warn b, .sct-pick.warn b { color: var(--warn); }
 /* A folded list's "Show N more" (app.js foldRowsHTML): centred, brand
    colour, a chevron that turns when open, the rows fading in. */
