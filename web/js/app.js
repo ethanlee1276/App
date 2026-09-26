@@ -50,7 +50,7 @@ const state = {
   // The one Most Likely board's view (Best of the slate / By game), kept
   // per viewer; the filter resets with the page.
   obView: (() => { try { return localStorage.getItem("qb.obView") || "best"; } catch (e) { return "best"; } })(),
-  obFilter: "all", obTier: "all", obSort: "prob",
+  obFilter: "all", obTier: "all", obSort: "best",
   // Scoped to ONE GAME PAGE, and reversible there (#gp-showall reveals,
   // #gp-hideall puts it back). It used to be the board's global
   // checkbox; with that gone, a one-way flip would have left every
@@ -9344,13 +9344,19 @@ function obHeroHTML() {
         ${likelyMarketFunnel(state.data.likely_census_by_kind)}</div></details>
     </div>`;
 }
-const OB_SORTS = [["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];
+/* THE DEFAULT ORDER IS THE BOARD'S OWN (engine/likelyboard.build): how
+   hard the matchup backs the pick, then our chance. Ethan, 2026-09-26:
+   Kincaid, a Good matchup, sat #1 "with the breakout candidates below
+   him" — the page re-sorted every tier by chance alone. */
+const OB_SORTS = [["best", "Strongest matchup"], ["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];
 function obSorted(rows) {
-  const k = state.obSort || "prob";
+  const k = state.obSort || "best";
   const t = (r) => Date.parse(r.kickoff || r.game_date || "") || 0;
+  const m = (r) => Number(r.matchup_strength) || 0;
   return rows.slice().sort(k === "kick" ? (a, b) => t(a) - t(b) || b.model_prob - a.model_prob
     : k === "price" ? (a, b) => Number(b.odds || -9999) - Number(a.odds || -9999)
-    : (a, b) => b.model_prob - a.model_prob);
+    : k === "prob" ? (a, b) => b.model_prob - a.model_prob
+    : (a, b) => m(b) - m(a) || b.model_prob - a.model_prob);
 }
 
 /* Football reads its props as touchdowns, yards and catches; every other
@@ -9450,7 +9456,7 @@ function oneBoardHTML() {
 }
 function obSortHTML() {
   return `<label class="ob-sort">Sorted by <select data-ob-sort aria-label="Sort the picks">${OB_SORTS.map(([k, label]) =>
-    `<option value="${k}"${(state.obSort || "prob") === k ? " selected" : ""}>${label.toLowerCase()}</option>`).join("")}</select></label>`;
+    `<option value="${k}"${(state.obSort || "best") === k ? " selected" : ""}>${label.toLowerCase()}</option>`).join("")}</select></label>`;
 }
 function bindOneBoard(host, rerender) {
   host.querySelectorAll("[data-ob-sort]").forEach((sel) => sel.addEventListener("change", () => {
@@ -12353,9 +12359,12 @@ function pickScanRead(r) {
   const d = state.data || {};
   const g = (d.games || []).find((x) => x && [x.home, x.away].includes(r.team)
     && (!r.opponent || [x.home, x.away].includes(r.opponent)));
-  if (!g) return null;
-  const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
-  return ((reads && reads.players) || []).find((x) => x.player === r.player && x.team === r.team) || null;
+  const reads = g && (d.scan_reads || {})[`${g.away}@${g.home}`];
+  const mine = (xs) => (xs || []).find((x) => x.player === r.player && x.team === r.team) || null;
+  /* No game matched by name (a college school spelled two ways, a moved
+     game): his read is still his, found across the day's reads. */
+  return mine(reads && reads.players)
+    || (reads ? null : Object.values(d.scan_reads || {}).map((x) => mine(x && x.players)).find(Boolean) || null);
 }
 
 function matchupScanHTML(g) {

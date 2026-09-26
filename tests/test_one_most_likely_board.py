@@ -212,7 +212,7 @@ def test_the_page_and_home_follow_the_render():
     assert '${r.tier === "top" ? "<small>TOP</small>" : ""}' in js
     assert "obCardHTML(r, i + 1, { why: false })" in js, "Home draws the same card"
     assert "note.innerHTML = obHeroHTML();" in js and ".view.ob-on > .section-title { display: none; }" in css
-    assert 'const OB_SORTS = [["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];' in js
+    assert 'const OB_SORTS = [["best", "Strongest matchup"], ["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];' in js
     # A phone reads the picks first: one sideways row of pills, tiers and lanes.
     phone = css[css.index(".ob-pills, .one-board .ob-summary, .ob-filters { flex-wrap: nowrap;") - 400:]
     assert "@media (max-width: 760px)" in phone[:400]

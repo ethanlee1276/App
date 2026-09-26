@@ -245,6 +245,30 @@ def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = No
     return None, ""
 
 
+#: HOW HARD THE MATCHUP BACKS A PICK, for the order inside a tier. Ethan,
+#: 2026-09-26, the NFL board: Kincaid (a Good matchup) sat #1 of the Top
+#: picks "with the breakout candidates below him". The tier used the
+#: matchup, but the order inside it was our chance alone, so the read never
+#: touched the ranking. Now a pick the matchup backs strongly — a breakout
+#: or avoid read, a touchdown matchup of STRONG_TD or better — ranks ahead
+#: of one it merely backs (a good or tough read, a scorer at TD_CASE, the
+#: model's own matchup step), and only then by our chance. The same rule in
+#: every sport; a sport with no matchup read ranks by chance as before.
+STRONG_READS = ("breakout", "avoid")
+STRONG_TD = 6
+
+
+def matchup_strength(r: dict, leans: dict, td_scores: dict, backed) -> int:
+    """2 strongly backed, 1 backed, 0 not (or no read)."""
+    if backed is not True:
+        return 0
+    lane = lane_of(r)
+    if lane == "td":
+        return 2 if (td_scores.get(r.get("player") or "") or 0) >= STRONG_TD else 1
+    lean = leans.get((r.get("player") or "", r.get("team") or "", r.get("market")))
+    return 2 if lean and lean.get("read") in STRONG_READS else 1
+
+
 def tier_of(checks: dict) -> str:
     """Top: our number, the MATCHUP and the market all agree, and our record
     is not against it. The box's first board (2026-09-26) had 42 Top picks,
@@ -277,7 +301,8 @@ def _game_of(r: dict, games: list) -> str:
 def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
     """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
     "matchup_source": ...} — the pool, checked and tiered, ranked Top
-    first then by our chance."""
+    first, then by how hard the matchup backs it (`matchup_strength`),
+    then by our chance."""
     source = MATCHUP_SOURCE.get(sport, "none")
     steps = model_matchups(result.get("recommendations") or []) if source in ("model", "scan+model") else {}
     from .gamescan import leans_from_reads
@@ -361,12 +386,13 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
         r.update({"lane": lane, "tier": tier, "tier_label": TIER_LABEL[tier],
                   "checks": checks, "check_notes": notes,
                   "record_seen": record_seen(record, r.get("market"), _side(r), prob),
+                  "matchup_strength": matchup_strength(r, leans, td_scores, checks["matchup"]),
                   "matchup_score": td_scores.get(r.get("player") or "") if lane == "td" else r.get("matchup_score")})
         rows.append(r)
         tiers[tier] += 1
         lanes[lane] = lanes.get(lane, 0) + 1
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
-    rows.sort(key=lambda r: (rank[r["tier"]], -float(r["model_prob"])))
+    rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
     return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source}
 
 
