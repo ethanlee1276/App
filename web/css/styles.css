@@ -11861,6 +11861,12 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .ms-pick b, .sct-pick b { font-weight: 700; }
 .ms-pick.good b, .sct-pick.good b { color: var(--good); }
 .ms-pick.td b, .sct-pick.td b { color: var(--brand); }
+/* Touchdown scenarios (app.js tdScenariosHTML): a Most Likely row with
+   the four lines that built the case under it. */
+.td-scenarios .sc-row { cursor: pointer; }
+.td-scenarios .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
+.td-scenarios .sc-lines li::before { content: "· "; color: var(--brand); }
 .td-why { margin-top: 4px; }
 .td-why > summary { list-style: none; cursor: pointer; color: var(--brand); font-weight: 700; font-size: var(--fs-xs); }
 .td-why > summary::-webkit-details-marker { display: none; }

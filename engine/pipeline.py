@@ -1166,6 +1166,16 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     if _partial.get("scan_reads"):
         from .gamescan import stamp_picks
         stamp_picks(_partial["scan_reads"], _lean_report, board=_likely)
+    # TOUCHDOWN SCENARIOS (engine/tdscenarios): a scorer built from the
+    # matchup, the usage and the red zone, ranked by our chance — the
+    # shelf under the touchdown shelf, journaled on paper by nfl_build.
+    from .tdscenarios import build as _td_scenarios
+    try:
+        _scenarios = _td_scenarios({"games": _games, "scan_reads": _partial.get("scan_reads") or {},
+                                    "most_likely": _likely})
+    except Exception as _exc:                                 # noqa: BLE001
+        print(f"  ⚠️  touchdown scenarios skipped: {_exc}")
+        _scenarios = []
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1235,6 +1245,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # exists: a board that comes up short has several causes and a
         # count that only reaches stdout is one nobody has.
         "likely_census": _likely_census,
+        "td_scenarios": _scenarios,
         # …AND WHERE EACH KIND OF ROW DIED. The flat census above is one
         # line per reason across the scorer, prop and game makers; this
         # is the same refusals per kind with what was offered, kept and

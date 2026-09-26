@@ -549,6 +549,11 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
             "book_prob": round(american_to_prob(odds), 4),
+            # THE SCENARIO'S TWO NUMBERS (engine/tdscenarios): the points
+            # the lines expect from his team, and the red-zone chances the
+            # model expects him to get.
+            "implied_total": info.get("implied_total"),
+            "rz_chances": info.get("opportunities"),
             "vig": round(vig, 4), "vig_source": vig_source,
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),

@@ -1076,7 +1076,8 @@ def repair_inverted_likely_sides(conn) -> dict:
 
 
 def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
-                    depth=LIKELY_JOURNAL_DEPTH) -> int:
+                    depth=LIKELY_JOURNAL_DEPTH, category: str = "likely",
+                    grade_label: str = "Likely") -> int:
     """Journal the top of the likelihood board to its own bucket.
 
     ``category='likely'``, a small flat stake and ZERO dollar exposure —
@@ -1110,7 +1111,10 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     # league list alone. `live_verdict` is asked ONCE here rather than
     # per row, because it queries the journal and this loop can carry a
     # hundred rows; the answer cannot change mid-slate.
-    staked = likely_is_staked(sport)
+    # ANOTHER BUCKET, SAME RULES: the touchdown scenarios (engine
+    # /tdscenarios) journal through here under their own ``category`` on
+    # paper only, so their record never mixes with the Most Likely book.
+    staked = likely_is_staked(sport) if category == "likely" else False
     brk = live_verdict(conn, sport) if staked else None
     unit_dollars = (float(get_cfg(conn, "unit_pct")) / 100.0 * bankroll(conn)
                     if staked else 0.0)
@@ -1259,14 +1263,14 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         if conn.execute(
                 "SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? "
                 "AND market=? AND category IN (?, ?) LIMIT 1",
-                (sport, row_date, player, market, "likely",
-                 LIKELY_LIVE_CATEGORY)).fetchone():
+                (sport, row_date, player, market, category,
+                 LIKELY_LIVE_CATEGORY if category == "likely" else category)).fetchone():
             continue
         stake_units = _stake_for(r.get("model_prob"))
-        category = (LIKELY_LIVE_CATEGORY if stake_units and staked
-                    else "likely")
-        grade = LIKELY_LIVE_GRADE if category == LIKELY_LIVE_CATEGORY \
-            else "Likely"
+        row_category = (LIKELY_LIVE_CATEGORY if stake_units and staked
+                        else category)
+        grade = LIKELY_LIVE_GRADE if row_category == LIKELY_LIVE_CATEGORY \
+            else grade_label
         if not stake_units:
             stake_units = flat_stake
         cur = conn.execute(
@@ -1300,7 +1304,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
              None, grade, stake_units,
              round(stake_units * unit_dollars, 2)
-             if category == LIKELY_LIVE_CATEGORY else 0.0,
+             if row_category == LIKELY_LIVE_CATEGORY else 0.0,
              # MINUTES TO KICKOFF AT JOURNAL TIME, the column the other
              # three books have carried since capture lag shipped and
              # this one never did. Ethan, 2026-09-15, after the KC-DEN
@@ -1310,7 +1314,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # against kickoff windows by hand. A measurement book that
              # cannot say when its rows were taken cannot defend its own
              # calibration.
-             _lead_min(r, kick), category,
+             _lead_min(r, kick), row_category,
              # The witness behind this row's fair. A likelihood
              # row ranked on the market's number and one a sharp
              # book anchored are different bets with the same

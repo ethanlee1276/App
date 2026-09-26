@@ -1470,6 +1470,15 @@ def main() -> None:
                 print("Pick of the Day: recorded.")
             if ml_logged:
                 print(f"Most likely: {ml_logged} row(s) journaled.")
+            # THE TOUCHDOWN SCENARIOS, on paper under their own bucket, so
+            # in a few weeks the record says how a matchup-built scorer
+            # does (engine/tdscenarios; Ethan, 2026-09-26).
+            sc_logged = ledger.log_most_likely(
+                lconn, {"sport": "nfl", "date": result.get("date", ""),
+                        "most_likely": result.get("td_scenarios") or []},
+                category="td_scenario", grade_label="Scenario")
+            if sc_logged:
+                print(f"Touchdown scenarios: {sc_logged} row(s) journaled on paper.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             #

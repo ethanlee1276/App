@@ -8611,7 +8611,7 @@ function renderLikelyTop() {
           <span class="mini" style="opacity:.6">${(sh.rows || []).length}</span></h3>
           ${sh.rank_auc != null ? `<span class="chip">ranks at ${Number(sh.rank_auc).toFixed(2)}</span>` : ""}</div>
         <div class="ml-rows">${(sh.rows || []).map(likelyRow).join("")}</div>
-      </section>`).join("")}</div>
+      </section>`).join("")}${tdScenariosHTML()}</div>
     ${likelyDroppedHTML(dropped)}
     <div class="likely-top-more">
       <button class="btn ghost" id="likely-see-all" type="button">
@@ -8697,7 +8697,7 @@ function renderLikely() {
     </div>` : "";
   host.innerHTML = (shelves.length
     ? jump + shelves.map(likelyShelf).join("")
-    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + likelyScriptsHTML(rows)
+    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`) + tdScenariosHTML() + likelyScriptsHTML(rows)
     + likelyDroppedHTML(dropped) + likelyPulledHTML(likelyPulled());
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -8965,6 +8965,42 @@ function likelyScriptsHTML(rows) {
         <span class="gs-game-n">${rs.length} picks${n ? ` · <b class="gs-bad">${n} ${n === 1 ? "clash" : "clashes"}</b>` : " · no clashes"}</span></summary>
         ${gameScriptsHTML(g, rs)}</details>`;
     }).join("")}
+  </section>`;
+}
+
+/* TOUCHDOWN SCENARIOS (engine/tdscenarios). Ethan, 2026-09-26: "i dont
+   give a shit about edge, i want to use our data for offense and defense
+   and where offense players do good and what defense players do bad to
+   create a senario where a specific player can get a touchdown, mixed
+   with redsone usage and redzone trips." A scorer picked by the matchup
+   — the points his team is expected to score, where the defence ranks
+   against his position, his share of the targets or carries, his
+   red-zone chances — ranked by our chance, with the four lines that made
+   him one. Under the touchdown shelf on Home and on the full board; a
+   row opens its game page. Tracked on paper under its own bucket. */
+function tdScenariosHTML() {
+  const rows = ((state.data || {}).td_scenarios || []).filter((r) => r && r.player);
+  if (!rows.length) return "";
+  const games = (state.data || {}).games || [];
+  const gameFor = (key) => {
+    const [away, home] = String(key || "").split("@");
+    return games.find((g) => g && g.away === away && g.home === home) || null;
+  };
+  return `<section class="likely-shelf td-scenarios" id="shelf-td-scenarios">
+    <div class="shelf-head"><h3 class="shelf-title">Touchdown scenarios
+      <span class="mini" style="opacity:.6">${rows.length}</span></h3>
+      <span class="chip">built from the matchup</span></div>
+    <p class="ls-note">Scorers the matchup builds a case for — his offence, their defence at his
+      position, his share of the work, his red-zone looks — ranked by our chance. Not picks:
+      tracked on paper, so the record says how they do.</p>
+    <div class="ml-rows">${rows.map((r) => {
+      const g = gameFor(r.game);
+      return `<div class="sc-row"${g ? ` data-team-game="${escapeAttr(gameId(g))}" role="button" tabindex="0"` : ""}>
+        ${likelyRow({ ...r, line: null, market_label: `Anytime TD · ${r.label || ""}`.replace(/ · $/, "") })
+          .replace(/ data-open="[^"]*"/g, "")}
+        <ul class="sc-lines">${(r.scenario_lines || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+      </div>`;
+    }).join("")}</div>
   </section>`;
 }
 

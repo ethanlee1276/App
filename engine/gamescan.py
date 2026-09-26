@@ -1103,6 +1103,7 @@ def stamp_touchdowns(scan_reads: dict, result: dict) -> int:
                 continue
             x["td"] = {"model_prob": round(float(r["model_prob"]), 4), "odds": r.get("odds"),
                        "book": r.get("book") or "",
+                       "implied_total": r.get("implied_total"), "rz_chances": r.get("rz_chances"),
                        # WHY THAT NUMBER (engine/touchdowns.td_probability):
                        # the implied total, where his share comes from, the
                        # red-zone line, and the caveat when red-zone usage
