@@ -43,6 +43,7 @@ temperature now (`fit_calibration`), which brings the worst band from
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -220,6 +221,31 @@ RZ_SCALE_CLAMP = (0.6, 1.4)
 #: on all five) and brings the held-out seasons to 14.6% against 14.5%,
 #: every band inside 1.6 points; the ordering is unchanged (AUC 0.684).
 QB_TD_RATE_SCALE = 1.40
+
+#: A RUNNING BACK'S CHANCE, STEEPENED. Ethan, 2026-09-27, with the other
+#: model's deeper Jets @ Lions and Chargers @ Bills reports, which fade
+#: James Cook to 48% because "Allen takes his goal-line carries" (books
+#: 62-67%, ours 59%). Measured on the replay before anything moved:
+#: lead backs behind a quarterback who takes 30%+ of the team's inside-5
+#: carries scored 45.8% against 42.4% claimed (n 168) — no fade; the
+#: back's own red-zone share already carries the quarterback. What the
+#: same table did show is the top of the running-back curve running LOW:
+#: backs the calibrated chain called 45%+ claimed 51.8% and scored 55.7%
+#: (n 769, z +2.2), under in all five seasons (+1.6 to +5.8), while the
+#: 10-20% backs ran 2.3 points high. The curve is too flat for backs.
+#: One line in log-odds, logit(p) -> ALPHA + BETA * logit(p), fitted
+#: leave-one-season-out on the chain's own output: held-out log-loss
+#: 0.49995 -> 0.49908, and those 45%+ backs come to 55.2% claimed against
+#: 55.7% scored. Receivers (the fit made their top band worse), tight ends
+#: and quarterbacks (no held-out gain) are left as they are.
+RB_TD_LOGIT = (0.183, 1.165)
+
+
+def rb_steepened(prob: float) -> float:
+    """A running back's chance on the measured, steeper curve (RB_TD_LOGIT)."""
+    p = clamp(prob, 1e-4, 1 - 1e-4)
+    alpha, beta = RB_TD_LOGIT
+    return 1.0 / (1.0 + math.exp(-(alpha + beta * math.log(p / (1.0 - p)))))
 
 
 def team_implied_total(game: Game, team: str) -> float:
@@ -446,6 +472,8 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         rate *= QB_TD_RATE_SCALE
     rate = clamp(rate, 0.005, 1.15)
     prob = prob_at_least_one(rate)
+    if pos == "RB":
+        prob = rb_steepened(prob)
 
     reasons = [
         f"Team implied total {implied:.1f} → {team_tds:.2f} expected offensive TDs",
@@ -472,6 +500,10 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     # the rate contained no such factor — a reason describing math that
     # was not being done.
     reasons += def_reasons + wx_reasons + script_reasons
+    if pos == "RB":
+        reasons.append("Running back: read on the measured back curve — over 2021-2025 the backs "
+                       "the model called 45%+ scored 56% against 52% claimed; fitted on seasons it "
+                       "was not tested on")
     if pos == "QB":
         reasons.append(f"Quarterback: scoring rate ×{QB_TD_RATE_SCALE:.2f} — over 2021-2025 the model "
                        f"under-called quarterbacks' touchdowns (25% claimed, 34% scored among the "

@@ -135,6 +135,31 @@ def test_a_quarterbacks_touchdown_rate_is_scaled_as_measured():
     assert "MIN_PRIOR_WEEKS" in src and "TD_CARRY_GAMES" in src
 
 
+def test_running_backs_read_on_the_steeper_curve():
+    # Measured 2021-2025: backs the chain called 45%+ scored 55.7% against
+    # 51.8% claimed, the 10-20% backs ran high — one steeper log-odds line.
+    from engine import touchdowns as T
+    from engine.models import Prop, Game, Team, DefenseProfile, Weather, ANYTIME_TD
+    assert T.RB_TD_LOGIT == (0.183, 1.165)
+    assert abs(T.rb_steepened(0.5) - 0.5456) < 1e-3
+    assert T.rb_steepened(0.60) > 0.60 and T.rb_steepened(0.12) < 0.12
+    lo = [T.rb_steepened(x / 100) for x in range(1, 99)]
+    assert lo == sorted(lo), "the order of backs never changes"
+    game = Game(home="BUF", away="LAC", weather=Weather(dome=True, measured=True), total=50.0, spread=-7.0)
+    opp = Team(abbr="LAC", name="LAC", defense=DefenseProfile(team="LAC"))
+    rz = RedZoneUsage(carries_inside_5=1.5, carries_inside_10=3.0, rz_touch_share=0.5, measured=True, games=2)
+
+    def run(pos):
+        prop = Prop(player="James Cook", team="BUF", opponent="LAC", position=pos, market=ANYTIME_TD,
+                    logs=[], career_avg=0.0, vs_opponent_avg=None, lines=[])
+        return T.td_probability(prop, game, opp, 0.35, red_zone=rz)
+    p_rb, info = run("RB")
+    assert 0.0 < p_rb < 1.0
+    assert any(r.startswith("Running back: read on the measured back curve") for r in info["reasons"])
+    _p_wr, info_wr = run("WR")
+    assert not any(r.startswith("Running back") for r in info_wr["reasons"]), "receivers are left as they were"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

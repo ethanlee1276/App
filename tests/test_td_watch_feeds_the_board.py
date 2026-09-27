@@ -43,8 +43,10 @@ from engine.pipeline import _long_shots, run_slate                      # noqa: 
 from engine.touchdowns import TD_WATCH_LIMIT                            # noqa: E402
 from engine.likely import MIN_PROB, HEAVIEST_PRICE, PER_MARKET          # noqa: E402
 
-#: (price, under price) for each of the eight backs, in slate order.
-PRICES = [(-200, 160)] * 6 + [(-260, 200), (140, -170)]
+#: (price, under price) for each of the eight backs, in slate order. The
+#: last is +200, not +140: backs read on the steeper measured curve
+#: (touchdowns.RB_TD_LOGIT) and a +140 bell cow now clears the floor.
+PRICES = [(-200, 160)] * 6 + [(-260, 200), (200, -250)]
 
 
 def _slate():
