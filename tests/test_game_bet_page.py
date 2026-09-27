@@ -255,9 +255,12 @@ def test_the_edge_board_carries_a_mark_per_row():
     assert 'class="pick-id"' in APP[i:i + 1400]
     # Window widened 2026-08-17: the chart pass added per-row values
     # (and their comment) to both maps, pushing the games map deeper in.
-    j = APP.index("function edgeBoardRows(")
+    # The prop row moved into edgePropRow (2026-09-27), which the game
+    # page's edge section shares; the board maps its props through it.
+    j = APP.index("function edgePropRow(")
     block = APP[j:j + 2800]
     assert "betMark(r, 30)" in block, "player rows must use the face chain"
+    assert ".map(edgePropRow)" in APP[APP.index("function edgeBoardRows("):][:600]
     assert "teamMark(b.team" in block, "a game line wears its team's logo"
 
 

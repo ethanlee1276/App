@@ -287,8 +287,11 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     fn = fn[:fn.index("\n}")]
     assert "edge-spark" in fn and "gamelogBars(r.vals" in fn
     assert "line: r.line" in fn
-    src = APP[APP.index("function edgeBoardRows("):]
+    # The prop row is built once (edgePropRow) for the Edge page and the
+    # game page's edge section alike.
+    src = APP[APP.index("function edgePropRow("):]
     src = src[:src.index("\nfunction edgeRowHTML")]
+    assert ".map(edgePropRow)" in src
     assert "vals: (r.logs || []).map((l) => l.value)" in src
     # Phone: the chart wraps, it does not vanish — Ethan asked for the
     # charts, and display:none at 700px would be quietly taking them back.

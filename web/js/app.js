@@ -12871,16 +12871,6 @@ function renderGamePage() {
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
 
-  // Grouping by market earns its keep on a full board. Inside one game it
-  // often means four headings above four single cards, which reads as
-  // clutter — so below a handful of props they stay one section.
-  const byMarket = new Map();
-  const GROUP_FROM = 6;
-  shown.forEach((r) => {
-    const k = shown.length >= GROUP_FROM ? (r.market_label || r.market || "Other") : "Player props";
-    if (!byMarket.has(k)) byMarket.set(k, []);
-    byMarket.get(k).push(r);
-  });
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   // The hero wears the same venue art chain as the strip card (Ethan's
@@ -13110,7 +13100,7 @@ function renderGamePage() {
       likelies.length || droppedHere.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
-      ["gp-sec-props", shown.length ? `Props · ${shown.length}` : "Props"],
+      ["gp-sec-props", shown.length ? `Edge picks · ${shown.length}` : "Edge picks"],
       shots.length ? ["gp-sec-shots", `Long shots · ${shots.length}`] : null,
     ])}
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
@@ -13123,12 +13113,16 @@ function renderGamePage() {
     <div class="stats gp-stats">
       <div class="tile"><div class="k">Props analyzed</div><div class="v">${props.length}</div>
         <div class="tile-sub">in this game</div></div>
-      <div class="tile"><div class="k">Recommended</div><div class="v">${props.filter((r) => r._ok).length + bets.filter((b) => b._ok).length}</div>
-        <div class="tile-sub">props &amp; game bets</div></div>
-      <div class="tile"><div class="k">Game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
+      <div class="tile"><div class="k">Edge picks</div><div class="v">${props.filter((r) => r._ok).length + bets.filter((b) => b._ok).length}</div>
+        <div class="tile-sub">props &amp; game bets that clear the edge bar</div></div>
+      <div class="tile"><div class="k">Edge game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
         <div class="tile-sub">moneyline, spread, totals</div></div>
-      <div class="tile"><div class="k">Most likely</div><div class="v">${likelies.length}</div>
-        <div class="tile-sub">ranked by likelihood · own book</div></div>
+      <div class="tile"><div class="k">Most likely</div><div class="v">${
+        /* The one board's picks in this game when it is on — the section
+           below draws them; `likelies` is the old shelf and is empty then
+           (Ethan, 2026-09-27: the tile read 0 above Top picks 2, Strong 12). */
+        oneBoardOn() ? matchupPickCount(g) : likelies.length}</div>
+        <div class="tile-sub">on the Most Likely board · own book</div></div>
       <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
@@ -13170,10 +13164,14 @@ function renderGamePage() {
       <button class="btn ghost" id="gp-showbets" type="button"
         >Show ${bets.length - betsShown.length} anyway</button></p>` : ""}
 
-    <div id="gp-sec-props">${shown.length ? [...byMarket.keys()].map((k) => `
-        <div class="section-title">${escapeHtml(k)}
-          <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
-        <div class="cards gp-cards">${byMarket.get(k).map(cardHTML).join("")}</div>`).join("")
+    ${/* THE EDGE PICKS IN THIS GAME, as the Edge page draws them (Ethan,
+          2026-09-27, crossing out the old "Player props" cards: "this is
+          the old page still hiding in our new stuff") — one row each, the
+          price and the EV in the pills, the full card one tap away. */""}
+    <div id="gp-sec-props">${shown.length ? `
+        <div class="section-title">Edge picks · this game
+          <span class="sub">— ${plural(shown.length, "prop", "props")} that clear the edge bar; tap one for the full card</span></div>
+        <div class="card" style="padding:0">${shown.map(edgePropRow).sort((a, b) => b.ev - a.ev).map(edgeRowHTML).join("")}</div>`
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
           <div class="es-title">No player props clear the filters in this game</div>
           <div class="es-sub">Either the model passes on everything here, or books haven’t
@@ -19602,11 +19600,10 @@ const EDGE_BANDS = [
   ["Long odds (+151 and up)", (o) => o > 150],
 ];
 
-function edgeBoardRows() {
-  const props = (state.data.recommendations || [])
-    .filter((r) => r.has_market !== false && (r.ev_per_unit || 0) > 0.005
-                   && r.odds >= state.maxJuice)
-    .map((r) => ({
+/* One edge prop as an Edge-board row (edgeRowHTML) — the Edge page and the
+   game page's edge section draw the same row from the same fields. */
+function edgePropRow(r) {
+  return {
       label: `${r.player} · ${r.side} ${r.line} ${r.market_label}`,
       sub: `${r.book || ""} · ${teamName(r.team)} vs ${teamName(r.opponent)}`,
       odds: r.odds, model: r.hit_prob, implied: r.fair_prob,
@@ -19628,7 +19625,14 @@ function edgeBoardRows() {
       // for the stat. Without it an UNDER row painted its nine winning
       // games red and its one loser green — see gamelogBars.
       line: r.line, team: r.team, side: r.side,
-    }));
+    };
+}
+
+function edgeBoardRows() {
+  const props = (state.data.recommendations || [])
+    .filter((r) => r.has_market !== false && (r.ev_per_unit || 0) > 0.005
+                   && r.odds >= state.maxJuice)
+    .map(edgePropRow);
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
     .map((b) => {

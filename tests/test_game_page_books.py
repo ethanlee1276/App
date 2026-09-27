@@ -78,9 +78,12 @@ def test_the_headline_recommended_count_is_the_edge_book_only():
     """The books do not share a record, and this tile is where they would
     first be quietly added together."""
     page = _nocomments(_fn(_js(), "renderGamePage"))
-    m = re.search(r'<div class="k">Recommended</div><div class="v">\$\{([^}]*)\}',
+    # Renamed "Edge picks" (Ethan, 2026-09-27: "wondering if these numbers
+    # are correct" — "Recommended 2" beside "Most likely 0" said nothing
+    # about which book either counted).
+    m = re.search(r'<div class="k">Edge picks</div><div class="v">\$\{([^}]*)\}',
                   page)
-    assert m, "the Recommended tile moved; re-anchor this test"
+    assert m, "the Edge picks tile moved; re-anchor this test"
     expr = m.group(1)
     assert "props.filter" in expr and "bets.filter" in expr, \
         f"the edge book left the Recommended tile: {expr}"
@@ -94,6 +97,8 @@ def test_the_likelihood_rows_get_their_own_labelled_tile():
                   page)
     assert m, "no Most likely tile on the game page"
     assert "likelies.length" in m.group(1)
+    assert "oneBoardOn() ? matchupPickCount(g)" in m.group(1), \
+        "with the one board on, the tile counts the board's picks in this game, not the empty old shelf"
     # The label has to say it is a separate book, the way Long shots does
     # — a bare count beside "Recommended" reads as more of the same thing.
     i = page.index('<div class="k">Most likely</div>')
@@ -115,7 +120,7 @@ def test_the_likelihood_section_leads():
     page = _nocomments(_fn(_js(), "renderGamePage"))
     lead = page.index("Most likely to hit")
     for later in ('<div class="section-title">Game bets',
-                  "[...byMarket.keys()]",
+                  "Edge picks · this game",
                   '<div class="section-title">Long shots'):
         assert lead < page.index(later), \
             f"the likelihood section fell below {later!r}"
