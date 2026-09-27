@@ -144,6 +144,69 @@ def crowd_lines(row: dict, g: dict, first_is_home: bool) -> dict:
     return out
 
 
+_MONTHS = {m: i for i, m in enumerate(("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG",
+                                        "SEP", "OCT", "NOV", "DEC"), start=1)}
+
+
+def _kalshi_event_game(event_ticker: str) -> tuple[str, str] | None:
+    """``(date, clubs)`` out of a line event ticker —
+    "KXNFLSPREAD-26SEP27CARCLE" → ("2026-09-27", "CARCLE"); baseball's
+    carries a start time too ("26SEP271505HOUATH"). None if unreadable."""
+    import re
+    parts = str(event_ticker or "").upper().split("-")
+    if len(parts) < 2:
+        return None
+    m = re.match(r"^(\d{2})([A-Z]{3})(\d{2})\d*([A-Z]+)$", parts[1])
+    if not m or m.group(2) not in _MONTHS:
+        return None
+    return f"20{m.group(1)}-{_MONTHS[m.group(2)]:02d}-{m.group(3)}", m.group(4)
+
+
+def kalshi_lines(markets, g: dict) -> dict:
+    """Kalshi's price on THE BOARD'S OWN spread and total, by the rule
+    `crowd_lines` holds Polymarket to: the same bet the books quote, never
+    a neighbouring one. Ethan's box, 2026-09-27 (crowdprobe.py) confirmed
+    the series; see kalshi.LINE_SERIES for their shape.
+
+    "HOME wins by over F" prices the home club covering −F; "AWAY wins by
+    over F" is the home club covering +F, from the other side. So a board
+    line matches only a half-point strike of the same size — a −7 has no
+    Kalshi twin (its markets are 6.5 and 7.5, each a different bet) and is
+    left out rather than stretched. The game is matched by the ticker's
+    date and its two clubs, exactly; a club code Kalshi spells differently
+    matches nothing, which is the safe way to be wrong.
+
+        kalshi_home_cover   P(home covers the board's line)
+        kalshi_over         P(over the board's total)
+    """
+    out: dict = {}
+    hl, tot = home_spread(g), g.get("total")
+    home, away = str(g.get("home") or "").upper(), str(g.get("away") or "").upper()
+    date = str(g.get("date") or "")[:10]
+    for m in markets or []:
+        got = _kalshi_event_game(m.get("event_ticker"))
+        if not got or got[1] not in (away + home, home + away) or (date and got[0] != date):
+            continue
+        if _xf.quality(m) or m.get("floor_strike") is None or m.get("strike_type") != "greater":
+            continue
+        f, p = float(m["floor_strike"]), float(m["prob"])
+        series = str(m.get("series") or m.get("event_ticker") or "").upper()
+        if "SPREAD" in series and hl is not None and "kalshi_home_cover" not in out:
+            club = str(m.get("ticker") or "").upper().rsplit("-", 1)[-1].rstrip("0123456789")
+            if club == home and abs(f + hl) < 0.01:
+                out.update(spread_home_line=hl, kalshi_home_cover=round(p, 4))
+            elif club == away and abs(f - hl) < 0.01:
+                out.update(spread_home_line=hl, kalshi_home_cover=round(1.0 - p, 4))
+        elif "TOTAL" in series and tot is not None and "kalshi_over" not in out:
+            try:
+                same = abs(f - float(tot)) < 0.01
+            except (TypeError, ValueError):
+                same = False
+            if same:
+                out.update(total_line=float(tot), kalshi_over=round(p, 4))
+    return out
+
+
 def book_p_home(g: dict) -> float | None:
     """The sportsbooks' home win chance, de-vigged, or None."""
     hm, am = g.get("home_ml"), g.get("away_ml")
@@ -204,11 +267,13 @@ def _board_names(games, teams) -> list:
     return out
 
 
-def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None) -> dict:
+def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None,
+           kalshi_line_markets=None) -> dict:
     """Hang ``crowd`` on every game a venue priced. Returns a census."""
     from .sources import kalshi, polysports
     games = [g for g in result.get("games") or [] if isinstance(g, dict)]
-    census = {"games": len(games), "kalshi": 0, "polymarket": 0, "poly_spread": 0, "poly_total": 0}
+    census = {"games": len(games), "kalshi": 0, "polymarket": 0, "poly_spread": 0, "poly_total": 0,
+              "kalshi_spread": 0, "kalshi_total": 0}
     if not games:
         return census
     named = _xf.with_names(_board_names(games, result.get("teams")), sport)
@@ -248,9 +313,12 @@ def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None) -> dic
         if k in px:
             c["polymarket"], c["poly_spread"] = px[k]
             census["polymarket"] += 1
-        lines = pl.get(k) or {}
+        lines = dict(pl.get(k) or {})
+        lines.update(kalshi_lines(kalshi_line_markets, g))
         census["poly_spread"] += "poly_home_cover" in lines
         census["poly_total"] += "poly_over" in lines
+        census["kalshi_spread"] += "kalshi_home_cover" in lines
+        census["kalshi_total"] += "kalshi_over" in lines
         if not c and not lines:
             g.pop("crowd", None)
             continue
@@ -317,18 +385,20 @@ def store(conn, sport: str, games, now: float | None = None, game_bets=None) -> 
              model, raw, c.get("kalshi_spread"), c.get("poly_spread")))
         n += 1
         date, a, h = str(g.get("date") or "")[:10], g.get("away"), g.get("home")
-        for kind, line_key, p_key in (("spread_home", "spread_home_line", "poly_home_cover"),
-                                      ("over", "total_line", "poly_over")):
+        for kind, line_key, p_key, venue in (("spread_home", "spread_home_line", "poly_home_cover", "polymarket"),
+                                             ("over", "total_line", "poly_over", "polymarket"),
+                                             ("spread_home", "spread_home_line", "kalshi_home_cover", "kalshi"),
+                                             ("over", "total_line", "kalshi_over", "kalshi")):
             if c.get(p_key) is not None:
                 conn.execute("INSERT OR REPLACE INTO crowd_lines VALUES (?,?,?,?,?,?,?,?,?,?)",
-                             (sport, date, a, h, bucket, kind, c.get(line_key), "polymarket",
+                             (sport, date, a, h, bucket, kind, c.get(line_key), venue,
                               c[p_key], None))
     conn.commit()
     return n
 
 
 def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None,
-                    conn=None, record: bool = True) -> str:
+                    conn=None, record: bool = True, kalshi_line_fetch=None) -> str:
     """One hook, every build: fetch both venues, hang ``crowd`` on the
     games, record the pregame prices. NEVER RAISES — each venue is its own
     failure domain, and a crowd price is never the reason a board fails.
@@ -340,6 +410,15 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
     except Exception as exc:                                   # noqa: BLE001
         kmk = []
         notes.append(f"Kalshi unavailable ({type(exc).__name__})")
+    # An injected moneyline feed means a test or a replay: the line series
+    # are then read only when injected too, never fetched behind its back.
+    if kalshi_line_fetch is None and kalshi_fetch is not None:
+        kalshi_line_fetch = list
+    try:
+        kline = (kalshi_line_fetch or (lambda: kalshi.fetch_line_markets(sport)))()
+    except Exception as exc:                                   # noqa: BLE001
+        kline = []
+        notes.append(f"Kalshi lines unavailable ({type(exc).__name__})")
     try:
         prow, report = (poly_fetch or (lambda: polysports.fetch_sports([sport])))()
         result["polymarket_tags"] = report
@@ -347,7 +426,7 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
         prow = []
         notes.append(f"Polymarket unavailable ({type(exc).__name__})")
     try:
-        census = attach(result, sport, kmk, prow)
+        census = attach(result, sport, kmk, prow, kline)
     except Exception as exc:                                   # noqa: BLE001
         result["crowd_error"] = f"{type(exc).__name__}: {exc}"
         return f"  ⚠️  {sport.upper()} crowd prices: {exc}"
@@ -369,5 +448,6 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
     result["crowd_census"] = census
     return (f"  {sport.upper()} crowd prices: Kalshi on {census['kalshi']}, Polymarket on "
             f"{census['polymarket']} of {census['games']} games (spread {census['poly_spread']}, "
-            f"total {census['poly_total']}) · {stored} recorded"
+            f"total {census['poly_total']}; Kalshi spread {census['kalshi_spread']}, "
+            f"total {census['kalshi_total']}) · {stored} recorded"
             + (f" · {'; '.join(notes)}" if notes else ""))

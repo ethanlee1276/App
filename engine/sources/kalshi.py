@@ -65,6 +65,37 @@ SPORT_SERIES = {
 }
 
 
+#: Spread and total series per sport — CONFIRMED on the box, 2026-09-27
+#: (crowdprobe.py): KXNFLSPREAD 16 events / 412 markets, KXNFLTOTAL 16 /
+#: 304, the college and baseball pairs likewise; KXMLBRUNLINE is empty.
+#: A spread market reads "CAR wins by over 20.5 points?" (the club in the
+#: ticker's last segment, the margin its floor strike); a total "over 50.5
+#: points scored" (the floor strike).
+LINE_SERIES = {
+    "nfl": ("KXNFLSPREAD", "KXNFLTOTAL"),
+    "cfb": ("KXNCAAFSPREAD", "KXNCAAFTOTAL"),
+    "mlb": ("KXMLBSPREAD", "KXMLBTOTAL"),
+}
+
+
+def fetch_line_markets(sport: str, parse=None) -> list[dict]:
+    """This sport's spread and total markets, parsed, each tagged with its
+    ``series``. A series that errors is skipped — a crowd price is never
+    the reason a board fails."""
+    parse = parse or parse_markets
+    out = []
+    for series in LINE_SERIES.get(str(sport or "").lower(), ()):
+        try:
+            events = fetch_events(series)
+        except Exception:                         # noqa: BLE001
+            continue
+        raw = [m for ev in events or [] for m in (ev.get("markets") or [])]
+        for m in parse(raw):
+            m["series"] = series
+            out.append(m)
+    return out
+
+
 def fetch_sports_markets(parse) -> tuple[list[dict], dict]:
     """Game markets straight from the sports series, plus a per-series
     report. ``parse`` is parse_markets, injected so tests stay offline.
@@ -174,6 +205,10 @@ def parse_markets(raw: list[dict]) -> list[dict]:
             "open_interest": oi,
             "close_time": m.get("close_time", ""),
             "category": (m.get("category") or "").strip(),
+            # The strike, for the spread and total series ("wins by over
+            # 6.5", "over 50.5 points") — engine/crowd.kalshi_lines.
+            "floor_strike": _num(m.get("floor_strike")),
+            "strike_type": m.get("strike_type") or "",
         })
     out.sort(key=lambda r: -r["volume_24h"])
     return out

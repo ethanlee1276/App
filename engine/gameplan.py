@@ -97,6 +97,14 @@ def _ord(n) -> str:
     return f"{n}{suf}"
 
 
+def _real_book(book) -> bool:
+    """A price a book actually posted — not the 'proxy' stand-in the build
+    uses when no book lists a number. The box, 2026-09-27: the LAC@BUF plan
+    set "Keleki Latu OVER 0.0 Receptions -110 proxy" against "the market"
+    and warned off "Ray Davis OVER 17.5 -110 proxy" — neither a market."""
+    return bool(book) and str(book).strip().lower() != "proxy"
+
+
 def _juice_ok(odds) -> bool:
     try:
         return odds is not None and float(odds) >= MAX_JUICE
@@ -257,6 +265,8 @@ def avoids(g: dict, reads: list, props: list) -> list:
         if not why:
             continue
         odds, book = _side_price(r, "over")
+        if not _real_book(book or r.get("book")):
+            continue
         out.append({"kind": "prop", "player": r.get("player"), "team": r.get("team"), "opponent": r.get("opponent"),
                     "position": r.get("position"), "headshot": r.get("headshot"), "market": market,
                     "market_label": r.get("market_label") or market, "side": "OVER", "line": r.get("line"),
@@ -274,7 +284,8 @@ def gaps(g: dict, props: list) -> list:
         if not _in_game(r, g):
             continue
         raw, fair, side = r.get("raw_prob"), r.get("fair_prob"), str(r.get("side") or "").upper()
-        if raw is None or fair is None or side not in ("OVER", "UNDER", "YES") or not _juice_ok(r.get("odds")):
+        if (raw is None or fair is None or side not in ("OVER", "UNDER", "YES") or not _juice_ok(r.get("odds"))
+                or not _real_book(r.get("book"))):
             continue
         gap = float(raw) - float(fair)
         if abs(gap) <= GAP_MIN:
@@ -427,7 +438,14 @@ def plan_for(g: dict, reads: dict, props: list, board_rows: list, matchup: dict 
         return None
     script, s_lines = script_lines(g)
     players = (reads or {}).get("players") or []
-    fit_rows = fits(g, matchup, props, board_rows)
+    avoid_rows = avoids(g, players, props)
+    # ONE PLAY, ONE STEP. The box, 2026-09-27: "Dalton Kincaid OVER 56.5
+    # Receiving Yards" sat under Plays that fit AND Plays to avoid (chasing
+    # last week). The warning wins: a number priced off three hot games is
+    # the reason not to take it, whatever the matchup says.
+    warned = {(r.get("player"), r.get("market"), str(r.get("side") or "").upper()) for r in avoid_rows}
+    fit_rows = [r for r in fits(g, matchup, props, board_rows)
+                if (r.get("player"), r.get("market"), str(r.get("side") or "").upper()) not in warned]
     out = {"game": _key(g), "home": g.get("home"), "away": g.get("away"),
            "date": g.get("date"), "kickoff": g.get("kickoff"),
            "script": {k: script.get(k) for k in ("archetype", "read", "favorite", "confidence",
@@ -439,7 +457,7 @@ def plan_for(g: dict, reads: dict, props: list, board_rows: list, matchup: dict 
                {"key": "who", "title": "Who scores", "rows": who_scores(g, field, board_rows, matchup)},
                {"key": "fits", "title": "Plays that fit", "rows": fit_rows,
                 "note": yardage_note(sport) if any(not r["volume"] for r in fit_rows) else ""},
-               {"key": "avoid", "title": "Plays to avoid", "rows": avoids(g, players, props)},
+               {"key": "avoid", "title": "Plays to avoid", "rows": avoid_rows},
                {"key": "watch", "title": "What changes the read", "rows": watch_items(g, scan, props)},
                {"key": "gap", "title": "Where we disagree with the market", "rows": gaps(g, props)},
            ]}

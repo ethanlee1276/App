@@ -20,12 +20,11 @@ What a defence allows in each STAT is measurable today, and it is most of
 what a position split would say — a leaky rebounding defence shows up in
 rebounds allowed whoever grabs them.
 
-WHY IT MOVES NOTHING YET. How much of a defence's factor reaches ONE
-player is a measured number in every other league (defensevs.TRANSFER);
-here it is not measured yet, so TRANSFER is 0 for every market and the
-card says so. `python3 hoopsdvpfit.py` measures it on the box's logs —
-the same walk-forward shape as `defensefit.py` — and nothing is wired into
-a projection until that run says it earns a place.
+HOW MUCH MOVES A NUMBER. How much of a defence's factor reaches ONE
+player is a measured number in every league (defensevs.TRANSFER); here
+`python3 hoopsdvpfit.py` measured it on the box's logs (2026-09-27, the
+same walk-forward shape as `defensefit.py`), and `projection_mult` reads
+it into each projection — see TRANSFER.
 
 Per game, not per possession: we do not ingest possessions, so a fast
 team's defence reads a little worse than it is. Said on the card.
@@ -45,8 +44,40 @@ MIN_GAMES = 3
 SEASON_MIN_GAMES = 5
 
 #: How much of a defence's factor reaches one player's projection, per
-#: market. Unmeasured, so nothing: see the module docstring.
-TRANSFER = {m: 0.0 for m in MARKETS}
+#: league and market — MEASURED on the box, 2026-09-27 (hoopsdvpfit.py,
+#: walk-forward, the slope of a player's result over his own baseline on
+#: the defence's shrunk factor):
+#:
+#:     NBA 2024-25   points +1.52 ± 0.15   rebounds +1.44 ± 0.15
+#:                   assists +1.13 ± 0.12  threes +1.13 ± 0.16
+#:     WNBA 2021-26  points +0.79 ± 0.23   rebounds +0.78 ± 0.16
+#:                   assists +1.28 ± 0.27  threes +0.89 ± 0.23
+#:
+#: Every one clears two standard errors. Capped at 1.0 — the whole lean,
+#: never more: a slope over 1 is the shrink doing its job (the factor is
+#: pulled toward average, so the part that survives reads larger), and
+#: reading more than a defence's whole lean into one player is a claim
+#: the fit cannot make.
+TRANSFER = {
+    "nba": {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0},
+    "wnba": {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89},
+}
+
+
+def projection_mult(sport: str, rating: dict, opponent: str, market: str) -> tuple[float, str]:
+    """``(multiplier, note)`` for one player's projection against tonight's
+    defence: ``1 + TRANSFER * (factor - 1)``. (1.0, "") with no rating,
+    no measured transfer, or a market the defences are not rated in."""
+    t = (TRANSFER.get(str(sport or "").lower()) or {}).get(market) or 0.0
+    r = ((rating or {}).get(opponent) or {}).get(market)
+    if not t or not r or r.get("factor") is None:
+        return 1.0, ""
+    mult = round(1.0 + t * (float(r["factor"]) - 1.0), 4)
+    if abs(mult - 1.0) < 0.005:
+        return 1.0, ""
+    return mult, (f"Matchup: {opponent} allow {r['pg']:.1f} {MARKETS[market]} a game "
+                  f"({_ord(r['rank'])}-most of {r['of']}) — {(mult - 1) * 100:+.0f}% on his projection "
+                  f"(measured: {'the whole' if t >= 1 else f'{t:.0%} of the'} defence's lean reaches one player)")
 
 
 def allowed_by_game(rows) -> dict:
@@ -134,9 +165,8 @@ def matchup_card(team: str, rating: dict, market: str, last_season: bool = False
             "rank": r["rank"], "of": r["of"], "games": r["games"],
             "text": (f"{team} allow {r['pg']:.1f} {MARKETS[market]} a game, the "
                      f"{_ord(r['rank'])}-most of {r['of']} (league {r['league']:.1f}), {when}"),
-            "note": ("Shown for you. Per game, not per possession, and the model does not read it "
-                     "yet — how much a defence moves one player is still being measured on our "
-                     "basketball logs.")}
+            "note": ("Read into the projection — measured on our basketball logs, the defence's lean "
+                     "reaches one player (hoopsdvp.TRANSFER). Per game, not per possession.")}
     if last_season:
         card["last_season"] = True
     return card

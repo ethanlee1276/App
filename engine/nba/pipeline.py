@@ -88,8 +88,12 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     from .context import env_factor, layoff_adjustment, star_tax
     env_m, env_note = env_factor(prop.get("game_total"), tune.key)
     lay_m, lay_note = layoff_adjustment(prop.get("days_off"), stat)
-    proj = round(rate * proj_min * pmult * env_m * lay_m, 2)
-    context_notes = [n for n in (env_note, lay_note) if n]
+    # TONIGHT'S DEFENCE (engine/hoopsdvp.projection_mult), measured on the
+    # box 2026-09-27: what it allows in this stat, at the share of its lean
+    # that reaches one player. 1.0 when no rating reached this prop.
+    dvp_m = float(prop.get("dvp_mult") or 1.0)
+    proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m, 2)
+    context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note")) if n]
     from ..exitfit import exits as _exits, RECENT as _RECENT
     from .minutes import EXIT_ROLE_MINUTES
     _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)

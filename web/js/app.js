@@ -9629,17 +9629,21 @@ function oneBoardHomeHTML() {
 function crowdLinesHTML(g, c) {
   const rows = [];
   const pct = (p) => `${Math.round(p * 100)}%`;
-  if (c.poly_home_cover != null && c.spread_home_line != null) {
-    const hl = Number(c.spread_home_line);
-    const homeGives = hl < 0;
-    const fav = homeGives ? g.home : g.away;
-    const p = homeGives ? c.poly_home_cover : 1 - c.poly_home_cover;
-    rows.push(`<li><b>${escapeHtml(teamName(fav))} ${MINUS}${Math.abs(hl).toFixed(1)}</b> covers ${pct(p)}
-      <span class="mini">on Polymarket</span></li>`);
-  }
-  if (c.poly_over != null && c.total_line != null) {
-    rows.push(`<li><b>Over ${Number(c.total_line).toFixed(1)}</b> ${pct(c.poly_over)}
-      <span class="mini">on Polymarket</span></li>`);
+  // Polymarket's and, since 2026-09-27, Kalshi's (engine/crowd.kalshi_lines).
+  for (const [cover, over, venue] of [["poly_home_cover", "poly_over", "Polymarket"],
+                                      ["kalshi_home_cover", "kalshi_over", "Kalshi"]]) {
+    if (c[cover] != null && c.spread_home_line != null) {
+      const hl = Number(c.spread_home_line);
+      const homeGives = hl < 0;
+      const fav = homeGives ? g.home : g.away;
+      const p = homeGives ? c[cover] : 1 - c[cover];
+      rows.push(`<li><b>${escapeHtml(teamName(fav))} ${MINUS}${Math.abs(hl).toFixed(1)}</b> covers ${pct(p)}
+        <span class="mini">on ${venue}</span></li>`);
+    }
+    if (c[over] != null && c.total_line != null) {
+      rows.push(`<li><b>Over ${Number(c.total_line).toFixed(1)}</b> ${pct(c[over])}
+        <span class="mini">on ${venue}</span></li>`);
+    }
   }
   return rows.length ? `<ul class="gp-crowd-lines">${rows.join("")}</ul>` : "";
 }

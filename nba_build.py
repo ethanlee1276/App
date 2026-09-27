@@ -681,6 +681,15 @@ def main() -> None:
         # them". On the WNBA board those two produced the identical blank
         # page — 430 props buildable from history, zero priced, no census,
         # no explanation anywhere.
+        # Tonight's defences, rated before any prop is priced: the matchup
+        # is now read into the projection (engine/hoopsdvp.projection_mult,
+        # measured 2026-09-27), not only shown under the pick.
+        try:
+            from engine import hoopsdvp as _dvp0
+            _dvp_rating, _ = _dvp0.board_ratings(conn, args.league, args.date)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  matchup ratings skipped: {exc}")
+            _dvp0, _dvp_rating = None, {}
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         for prop in slate.props:
@@ -694,7 +703,12 @@ def main() -> None:
                 continue
             line, over_odds, under_odds, book = two
             spread, fav = spread_by_team.get(h["team"], (0.0, False))
+            _opp = next((g["away"] if g["home"] == h["team"] else g["home"]
+                         for g in games if h["team"] in (g["home"], g["away"])), "")
+            _dm, _dn = (_dvp0.projection_mult(args.league, _dvp_rating, _opp, prop.market)
+                        if _dvp0 else (1.0, ""))
             props.append({
+                "dvp_mult": _dm, "dvp_note": _dn,
                 "player": prop.player, "team": h["team"],
                 "opponent": next((g["away"] if g["home"] == h["team"]
                                   else g["home"] for g in games
@@ -820,8 +834,7 @@ def main() -> None:
                 pass
             # THE MATCHUP UNDER EVERY PICK (engine/hoopsdvp, 2026-09-27):
             # what tonight's defence allows a game in this stat and where
-            # that ranks — shown, and read by no projection until
-            # hoopsdvpfit.py measures how much of it reaches one player.
+            # that ranks — and, measured, read into the projection above.
             try:
                 from engine import hoopsdvp as _dvp
                 _dvp_rt, _dvp_last = _dvp.board_ratings(conn, args.league, args.date)

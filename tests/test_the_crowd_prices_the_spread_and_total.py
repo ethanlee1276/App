@@ -99,7 +99,8 @@ def test_the_board_hangs_them_and_records_them(tmp=None):
 
 def test_the_game_page_shows_them_and_never_our_number():
     fn = APP[APP.index("function crowdLinesHTML("):APP.index("function crowdStripHTML(")]
-    assert "c.poly_home_cover" in fn and "c.poly_over" in fn and "on Polymarket" in fn
+    assert '["poly_home_cover", "poly_over", "Polymarket"]' in fn and "on ${venue}" in fn
+    assert '["kalshi_home_cover", "kalshi_over", "Kalshi"]' in fn
     assert "win_prob" not in fn and "model" not in fn
     strip = APP[APP.index("function crowdStripHTML("):APP.index("function obGameHTML(")]
     assert "crowdLinesHTML(g, c)" in strip
@@ -131,6 +132,55 @@ def test_crowdfit_grades_them_on_the_final_score():
     assert "not enough games yet" in sp["verdict"]
     assert "4. On the books' own spread and total" in crowdfit.report(
         {"games": 0, "by_sport": {}, "accuracy": {}, "crowd_vs_books": {}, "swings": {}, "lines": got})
+
+
+# --- Kalshi's spread and total (series confirmed on the box, 2026-09-27) -----
+def _kx(ticker, floor, prob, spread=2.0, vol=5000.0):
+    event = ticker.rsplit("-", 1)[0]
+    series = event.split("-")[0]
+    return {"ticker": ticker, "event_ticker": event, "series": series, "prob": prob, "price_basis": "book",
+            "spread_cents": spread, "volume_24h": vol, "open_interest": 0.0, "floor_strike": floor,
+            "strike_type": "greater"}
+
+
+def test_kalshi_prices_the_boards_own_half_point_line():
+    g = {"away": "LAC", "home": "BUF", "date": "2026-09-27", "spread": 7.5, "favorite": "BUF", "total": 50.5}
+    mk = [_kx("KXNFLSPREAD-26SEP27LACBUF-BUF8", 7.5, 0.47),            # BUF wins by over 7.5
+          _kx("KXNFLSPREAD-26SEP27LACBUF-BUF7", 6.5, 0.53),            # a neighbouring bet
+          _kx("KXNFLTOTAL-26SEP27LACBUF-51", 50.5, 0.55),
+          _kx("KXNFLTOTAL-26SEP27LACBUF-50", 49.5, 0.60)]
+    got = crowd.kalshi_lines(mk, g)
+    assert got == {"spread_home_line": -7.5, "kalshi_home_cover": 0.47, "total_line": 50.5, "kalshi_over": 0.55}
+
+
+def test_kalshi_reads_the_dog_side_and_refuses_a_whole_number():
+    dog = {"away": "NYJ", "home": "DET", "date": "2026-09-27", "spread": 3.5, "favorite": "NYJ", "total": 44.0}
+    got = crowd.kalshi_lines([_kx("KXNFLSPREAD-26SEP27NYJDET-NYJ4", 3.5, 0.40)], dog)
+    assert got == {"spread_home_line": 3.5, "kalshi_home_cover": 0.60}, "the away club's market, turned round"
+    seven = {"away": "LAC", "home": "BUF", "date": "2026-09-27", "spread": 7.0, "favorite": "BUF"}
+    assert crowd.kalshi_lines([_kx("KXNFLSPREAD-26SEP27LACBUF-BUF8", 7.5, 0.47),
+                               _kx("KXNFLSPREAD-26SEP27LACBUF-BUF7", 6.5, 0.53)], seven) == {}, \
+        "a -7 has no Kalshi twin: 6.5 and 7.5 are different bets"
+
+
+def test_kalshi_lines_need_the_right_game_and_a_real_book():
+    g = {"away": "LAC", "home": "BUF", "date": "2026-09-27", "spread": 7.5, "favorite": "BUF", "total": 50.5}
+    assert crowd.kalshi_lines([_kx("KXNFLTOTAL-26OCT04LACBUF-51", 50.5, 0.55)], g) == {}, "next meeting"
+    assert crowd.kalshi_lines([_kx("KXNFLTOTAL-26SEP27CARCLE-51", 50.5, 0.55)], g) == {}, "another game"
+    assert crowd.kalshi_lines([_kx("KXNFLTOTAL-26SEP27LACBUF-51", 50.5, 0.55, spread=20.0)], g) == {}, "wide book"
+    mlb = {"away": "HOU", "home": "ATH", "date": "2026-09-27", "spread": 1.5, "favorite": "HOU", "total": 8.5}
+    assert crowd.kalshi_lines([_kx("KXMLBTOTAL-26SEP271505HOUATH-9", 8.5, 0.52)], mlb) == \
+        {"total_line": 8.5, "kalshi_over": 0.52}, "baseball's ticker carries a start time"
+
+
+def test_kalshi_lines_reach_the_game_and_the_record():
+    result = {"games": [{"away": "LAC", "home": "BUF", "date": "2026-09-27", "spread": 7.5,
+                         "favorite": "BUF", "total": 50.5}]}
+    census = crowd.attach(result, "nfl", [], [], [_kx("KXNFLTOTAL-26SEP27LACBUF-51", 50.5, 0.55)])
+    assert census["kalshi_total"] == 1 and result["games"][0]["crowd"]["kalshi_over"] == 0.55
+    conn = sqlite3.connect(":memory:")
+    crowd.store(conn, "nfl", result["games"], now=0)
+    assert conn.execute("SELECT kind, line, venue, p FROM crowd_lines").fetchall() == [("over", 50.5, "kalshi", 0.55)]
 
 
 if __name__ == "__main__":

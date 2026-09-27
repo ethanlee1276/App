@@ -3,8 +3,8 @@
 The NFL, college and MLB boards say whom a player is facing; basketball's
 said nothing. `engine/hoopsdvp` rates every defence by what it concedes a
 game in points, rebounds, assists and threes — walk-forward, shrunk by
-games — and hangs the NFL's own `matchup_card` on each pick. It moves no
-projection: TRANSFER is 0 until `hoopsdvpfit.py` measures it on the box.
+games — and hangs the NFL's own `matchup_card` on each pick. Measured on
+the box (hoopsdvpfit.py, 2026-09-27), it now moves the projection.
 """
 import random
 import sqlite3
@@ -54,12 +54,36 @@ def test_it_is_walk_forward():
     assert H.ratings(rows, before="2026-01-01") == {}
 
 
-def test_the_card_says_what_it_is_and_that_the_model_does_not_read_it():
+def test_the_card_says_what_it_is_and_that_the_model_reads_it():
     card = H.matchup_card("PHX", H.ratings([x[:5] for x in _logs()]), "pts")
     assert card["opponent"] == "PHX" and card["rank"] == 1 and card["stat"] == "points allowed"
-    assert "does not read it" in card["note"] and "per possession" in card["note"]
+    assert "Read into the projection" in card["note"] and "per possession" in card["note"]
     assert H.matchup_card("PHX", {}, "pts") is None and H.matchup_card("PHX", {"PHX": {}}, "min") is None
-    assert all(v == 0.0 for v in H.TRANSFER.values()), "nothing moves a number until measured"
+
+
+def test_the_measured_transfer_moves_the_projection():
+    # hoopsdvpfit.py on the box, 2026-09-27: the NBA's whole lean in every
+    # stat, the WNBA's 78-100% — capped at the whole lean, never more.
+    assert H.TRANSFER["nba"] == {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0}
+    assert H.TRANSFER["wnba"] == {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89}
+    assert all(0.0 < v <= 1.0 for lg in H.TRANSFER.values() for v in lg.values())
+    rating = {"PHX": {"pts": {"pg": 90.0, "league": 80.0, "rank": 1, "of": 13, "games": 20, "factor": 1.10}}}
+    m, note = H.projection_mult("nba", rating, "PHX", "pts")
+    assert m == 1.10 and "+10% on his projection" in note and "the whole" in note
+    m, note = H.projection_mult("wnba", rating, "PHX", "pts")
+    assert m == 1.079 and "79% of the" in note
+    assert H.projection_mult("nba", rating, "LVA", "pts") == (1.0, "")
+    assert H.projection_mult("nba", rating, "PHX", "min") == (1.0, "")
+    assert H.projection_mult("mlb", rating, "PHX", "pts") == (1.0, "")
+
+
+def test_the_pipeline_multiplies_it_in():
+    import os as _os
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    src = open(_os.path.join(root, "engine", "nba", "pipeline.py"), encoding="utf-8").read()
+    assert "proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m, 2)" in src
+    build = open(_os.path.join(root, "nba_build.py"), encoding="utf-8").read()
+    assert '"dvp_mult": _dm, "dvp_note": _dn,' in build
 
 
 def test_attach_hangs_cards_on_the_picks():

@@ -37,38 +37,23 @@ for f in ('recommendations.json','mlb_recommendations.json','cfb.json'):
     print(f, d.get('crowd_census'), d.get('polymarket_tags'))"
 ```
 
-**B1. Today's touchdown work, on every game (2026-09-27).** After the
-next NFL build (the box pulls the branch every ~5 minutes; the build
-follows), this walks every game on the live board: the game plan's "Who
-scores" step and each scorer's seat, and on every priced scorer the
-goal-line counts, quarterbacks x1.40, the running-back curve and depth
-receivers. The last line is ALL TOUCHDOWN CHECKS PASS or names what is
-missing. Reads only:
+**Answered 2026-09-27 evening** (Ethan's run on 4117cab0): B1 `tdcheck.py`
+ALL TOUCHDOWN CHECKS PASS, Gibbs priced out past −250, reserves said as
+reserves; the touchdown calibration on the box is T 1.12 / +0.20, the one
+the day's position fixes were fitted against (no refit needed — Wednesday's
+deep refit runs anyway); `tdearlyfit.py` matched the sandbox (the raw chain
+runs ~4 points low, which the calibration corrects). B2 `crowdprobe.py`
+confirmed Kalshi's spread and total series for NFL, college and MLB — now
+wired (engine/crowd.kalshi_lines: the board's own half-point line only).
+B3 `hoopsdvpfit.py` measured the defence's lean reaching one player in
+every stat (NBA the whole lean; WNBA 78–100%) — now read into basketball
+projections (hoopsdvp.TRANSFER). B5's LAC@BUF plan showed a play in both
+"fits" and "avoid" and proxy lines set against "the market" — both fixed.
+
+The one to re-run after the next NFL build (reads only):
 
 ```
 cd /srv/qellys && python3 tdcheck.py
-```
-
-**B2. Spreads and totals (2026-09-27).** The prediction markets'
-price on the board's own spread and total is now read too. This prints
-what each venue lists beyond the winner: Polymarket's spreads and totals
-per league (those are live in the builds, and the "crowd prices" line
-now says "spread N, total N"), and which CANDIDATE Kalshi spread/total
-series exist (discovery only — nothing Kalshi is wired in until this
-says which series are real). Paste the output back:
-
-```
-cd /srv/qellys && python3 crowdprobe.py nfl cfb mlb
-```
-
-**B3. Basketball matchup cards (2026-09-27).** NBA and WNBA picks now
-carry the matchup card the NFL has — what tonight's defence allows a game
-in that stat, and its rank — shown only; it moves no projection. This
-measures whether it should (per stat: how much of a defence's lean
-reaches one player). Read-only; paste it back:
-
-```
-cd /srv/qellys && python3 hoopsdvpfit.py
 ```
 
 **B4. How much of a team's rating should be this season (2026-09-27).**
@@ -82,7 +67,7 @@ play-by-play the box already caches). Read-only after the backfill; paste
 the output back:
 
 ```
-cd /srv/qellys && python3 -m engine.gamescan backfill 2021 2022 2023 2024 && python3 scanblendfit.py
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan backfill 2021 2022 2023 2024 && python3 scanblendfit.py
 ```
 
 **B5. The game plan, game by game (2026-09-27).** Every football game
@@ -107,7 +92,7 @@ names (`pass_cmp`, `rush_att`) from the game logs, so re-ingest this
 season once so those rows exist before the first of them settles:
 
 ```
-cd /srv/qellys && python3 ingest.py nfl --seasons 2025,2026 && python3 marketfit.py
+cd /srv/qellys && sudo -u qellys python3 ingest.py nfl --seasons 2025,2026 && python3 marketfit.py
 ```
 
 **C. In two or three weeks: is the crowd right?** Once a couple of
