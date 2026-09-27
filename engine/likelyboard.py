@@ -315,9 +315,20 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
 
     pool: dict = {}
     order = []
+    capped: list = []
+    from .likely import HEAVIEST_PRICE
 
     def add(r: dict, source: str, lines=()):
         if not isinstance(r, dict) or r.get("model_prob") is None or (not r.get("player") and r.get("kind") != "game"):
+            return
+        # THE MAIN LIST'S -250 CAP ON EVERYTHING POOLED IN. Ethan,
+        # 2026-09-27: Gibbs at -320 was a Top pick through the matchup
+        # picks while the main list would never post him — "Yes cap at
+        # -250". The main list's own rows are left to it: a pick it posted
+        # and then held after the price moved (likely's hold) stays.
+        if source != "likely" and _past(r.get("odds"), HEAVIEST_PRICE):
+            capped.append({"player": r.get("player"), "market": r.get("market"),
+                           "odds": r.get("odds"), "source": source})
             return
         k = key_of(r)
         if k not in pool:
@@ -393,7 +404,16 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
         lanes[lane] = lanes.get(lane, 0) + 1
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
-    return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source}
+    return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
+            "capped": capped}
+
+
+def _past(odds, cap: int) -> bool:
+    """A price heavier than ``cap`` (e.g. -320 against -250)."""
+    try:
+        return int(odds) < cap
+    except (TypeError, ValueError):
+        return False
 
 
 def attach(result: dict, sport: str, conn=None) -> str:

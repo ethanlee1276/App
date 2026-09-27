@@ -148,6 +148,11 @@ def td_picks(game: dict, watch: list, reads: list, pulled=(), positions: dict | 
         prob = float(r["model_prob"])
         if prob < TD_MIN_PROB:
             continue
+        # THE -250 CAP, as the yards-and-catches picks below already had
+        # it (PROP_MAX_JUICE). Ethan, 2026-09-27, on Gibbs at -320 seated as
+        # a Top pick through the one board: "Yes cap at -250".
+        if int(r["odds"]) < PROP_MAX_JUICE:
+            continue
         pos = str(r.get("position") or (positions or {}).get(name) or "").upper()
         r = dict(r, position=pos)
         m = td_matchup(r, units.get(opp), rz.get(team), rz.get(opp), n_teams, usage.get(name))

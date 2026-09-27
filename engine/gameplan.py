@@ -337,8 +337,10 @@ def who_scores(g: dict, field: list, board_rows: list, matchup: dict | None) -> 
             seat = (f"On the Most Likely board as a reserve — under the usual {_FLOOR:.0%} bar, shown "
                     f"because the touchdown shelf was thin. Ranked, not recommended.")
         elif b and odds and odds < _CAP:
-            seat = (f"On the Most Likely board — {b.get('tier_label') or 'posted'} — through the matchup "
-                    f"picks; at {odds:+d} he is past the {_CAP} cap the main list holds to.")
+            # Only a HELD pick gets here since the cap covers every pooled
+            # source (likelyboard): posted inside it, the price moved since.
+            seat = (f"On the Most Likely board — {b.get('tier_label') or 'posted'} — posted inside the "
+                    f"{_CAP} cap and held; the price has since moved to {odds:+d}.")
         elif b:
             seat = f"On the Most Likely board — {b.get('tier_label') or 'posted'}."
         elif odds and odds < _CAP:

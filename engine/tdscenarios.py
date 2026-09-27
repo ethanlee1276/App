@@ -59,6 +59,15 @@ LIMIT = 8
 _GROUP = {"WR": "wr", "TE": "wr", "RB": "rb"}
 
 
+
+def _past_cap(odds) -> bool:
+    """A price heavier than the Most Likely board's cap (likely.HEAVIEST_PRICE)."""
+    from .likely import HEAVIEST_PRICE
+    try:
+        return int(odds) < HEAVIEST_PRICE
+    except (TypeError, ValueError):
+        return False
+
 def rank32(rank, n_teams: int = 32):
     """A defence's rank as it would sit among 32 — DEFENSE_RANK is set on
     the NFL's; a college rank of 100 of 134 is 24th of 32, not 100th."""
@@ -88,6 +97,10 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
     pos = str(read.get("pos") or read.get("position") or "").upper()
     grp = _GROUP.get(pos)
     if not grp or td.get("model_prob") is None or not td.get("odds"):
+        return None
+    # THE BOARD'S -250 CAP, here too. Ethan, 2026-09-27, on Gibbs at -320
+    # seated as a Top pick through the pooled board: "Yes cap at -250".
+    if _past_cap(td.get("odds")):
         return None
     # NEVER A PLAYER WHO IS LISTED. Ethan, 2026-09-26: Zay Flowers on this
     # shelf — "this player isn't even playing for this game." The Most
