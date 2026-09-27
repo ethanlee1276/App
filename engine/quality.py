@@ -26,6 +26,9 @@ from .statmath import clamp
 # Tier 3 — touchdowns, quarantined on the long-shot board.
 MARKET_TIER = {
     "receptions": 1,
+    # The other volume markets (2026-09-27): a bet on a role, priced as
+    # carefully as catches are.
+    "pass_att": 1, "pass_cmp": 1, "rush_att": 1,
     "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
     "anytime_td": 3,
     # Game lines, since the 0–100 grade became the ONE gate (Ethan,
@@ -131,6 +134,7 @@ def unreachable_markets(sport: str, markets, fair: float = 0.50) -> list[str]:
 
 VOLATILITY = {
     "receptions": "LOW",
+    "pass_att": "LOW", "pass_cmp": "LOW", "rush_att": "MEDIUM",
     "pass_yds": "MEDIUM",          # lowest CV of the yardage family
     "rush_yds": "HIGH", "rec_yds": "HIGH",
     "anytime_td": "EXTREME",

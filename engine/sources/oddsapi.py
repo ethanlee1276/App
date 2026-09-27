@@ -33,7 +33,7 @@ from ..secrets import load_local_secrets
 # never closes while either module is still being defined.
 from .. import bookvig
 from ..models import (
-    SportsbookLine, PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS,
+    SportsbookLine, PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS,
 )
 
 ODDS_BASE = "https://api.the-odds-api.com/v4"
@@ -113,7 +113,18 @@ NFL_ODDS_TO_MARKET[PASS_TD_ODDS_KEY] = PASS_TD
 #: Markets asked for on the strength of the API's documentation rather
 #: than a call that returned them. On the first rejection of a request
 #: that names no key, these are what gets dropped.
-UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY})
+#: THE VOLUME MARKETS, 2026-09-27 (Ethan: "some other stuff that the ai
+#: recommends"): a quarterback's attempts and completions, a back's
+#: carries — measured before bought (engine/models PASS_ATT). Three more
+#: credits per event (oddsbudget.EVENT_CREDITS). A quarterback's rushing
+#: yards cost nothing new: `player_rush_yds` was already on the request
+#: and the slate simply built him no prop for it. Unproven against the
+#: API from here, like passing touchdowns were, and behind the same
+#: drop-and-retry guard.
+VOLUME_ODDS_KEYS = {"player_pass_attempts": PASS_ATT, "player_pass_completions": PASS_CMP,
+                    "player_rush_attempts": RUSH_ATT}
+NFL_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
+UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, *VOLUME_ODDS_KEYS})
 #: Keys the API refused this process: dropped from every later request.
 REJECTED_MARKETS: set = set()
 

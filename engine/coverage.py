@@ -377,8 +377,10 @@ def _prop_closes_layer(conn, sport: str) -> Layer | None:
                  f"{rows:,} price row(s) across {_names(priced)}{clv}", fix)
 
 
-def _names(markets: list, limit: int = 4) -> str:
-    """A readable market list that does not run off the line."""
+def _names(markets: list, limit: int = 8) -> str:
+    """A readable market list that does not run off the line. Eight since
+    2026-09-27: the football board quotes nine prop markets, and a list
+    that folded past four hid passing yards behind "+5 more"."""
     markets = list(markets)
     if len(markets) <= limit:
         return ", ".join(markets) or "none"

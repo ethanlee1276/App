@@ -86,6 +86,18 @@ prints one game's plan from the box's own board, read-only:
 cd /srv/qellys && python3 -m engine.gameplan nfl LAC@BUF
 ```
 
+**B6. The markets the other AI bets that we did not carry (2026-09-27).**
+Pass attempts, completions, carries and a quarterback's rushing yards are
+now priced (measured first — `python3 marketfit.py` prints the held-out
+ranking figures; interceptions measured a coin and stay off). Three
+more credits per game per pull. The journal settles the two new stat
+names (`pass_cmp`, `rush_att`) from the game logs, so re-ingest this
+season once so those rows exist before the first of them settles:
+
+```
+cd /srv/qellys && python3 ingest.py nfl --seasons 2025,2026 && python3 marketfit.py
+```
+
 **C. In two or three weeks: is the crowd right?** Once a couple of
 hundred games have finished with stored prices:
 

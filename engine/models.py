@@ -30,6 +30,19 @@ ANYTIME_TD = "anytime_td"        # scores a touchdown (rushing or receiving)
 #: a QB, we are not showing passing touchdown stats at all, and we also
 #: don't display that as a pick in the edge bets or most likely bets".
 PASS_TD = "pass_td"
+#: THE VOLUME MARKETS THE OTHER AI BETS AND THE SITE DID NOT CARRY. Ethan,
+#: 2026-09-27: "we dont have a market for interceptions, QB over or under
+#: rushing yards, or some other stuff that the ai recommends". Measured
+#: first (marketfit.py, walk-forward on 2021-2025 box scores, held-out
+#: 2025): pass attempts rank at 0.707, completions 0.696, carries 0.632,
+#: a quarterback's rushing yards 0.616 — every one clears
+#: likely.MIN_RANK_AUC in the same harness that scores catches at 0.619.
+#: Interceptions measured 0.540 (0.568 with the opponent's rate): a coin,
+#: so they stay off — a market the model cannot sort is a market it
+#: cannot honestly price.
+PASS_ATT = "pass_att"
+PASS_CMP = "pass_cmp"
+RUSH_ATT = "rush_att"
 
 # Human labels for the markets, used in the UI and explanations.
 MARKET_LABELS = {
@@ -39,6 +52,11 @@ MARKET_LABELS = {
     RECEPTIONS: "Receptions",
     ANYTIME_TD: "Anytime TD",
     PASS_TD: "Passing TDs",
+    PASS_ATT: "Pass Attempts",
+    PASS_CMP: "Completions",
+    # "Carries" on purpose: the player page already draws a Carries chip
+    # from the usage rows and dedupes chips BY LABEL (engine/statlogs).
+    RUSH_ATT: "Carries",
 }
 
 

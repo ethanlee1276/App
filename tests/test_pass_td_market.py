@@ -91,12 +91,13 @@ def test_the_market_is_bought_again_behind_the_guard():
     assert PASS_TD_ODDS_KEY in SPORT_CONFIG["nfl"]["markets"]
     assert SPORT_CONFIG["nfl"]["markets"][PASS_TD_ODDS_KEY] == PASS_TD
     assert PASS_TD_ODDS_KEY not in SPORT_CONFIG["cfb"]["markets"]
-    assert NFL_ODDS_TO_MARKET == {**ODDS_TO_MARKET, PASS_TD_ODDS_KEY: PASS_TD}
+    from engine.sources.oddsapi import VOLUME_ODDS_KEYS
+    assert NFL_ODDS_TO_MARKET == {**ODDS_TO_MARKET, PASS_TD_ODDS_KEY: PASS_TD, **VOLUME_ODDS_KEYS}
     assert PASS_TD_ODDS_KEY in UNPROVEN_MARKETS       # what the guard drops first
     assert isinstance(REJECTED_MARKETS, set)
     # AND THE BUDGET COUNTS WHAT IS ACTUALLY ASKED FOR: thirteen again.
     from engine.oddsbudget import credits_per_event
-    assert credits_per_event("nfl") == 13
+    assert credits_per_event("nfl") == 16     # sixteen since 2026-09-27: the volume markets
 
 
 def test_one_unusable_market_must_not_be_able_to_empty_the_board():

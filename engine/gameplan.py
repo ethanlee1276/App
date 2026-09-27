@@ -47,7 +47,7 @@ FIT_MIN_PROB = 0.55
 #: Plays that fit, per game; volume markets are listed before yardage.
 FIT_PER_GAME = 6
 #: The volume markets: bets on a role, not on a big play.
-VOLUME_MARKETS = ("receptions", "anytime_td", "pass_td")
+VOLUME_MARKETS = ("receptions", "anytime_td", "pass_td", "pass_att", "pass_cmp", "rush_att")
 #: Yardage markets the record says the model orders no better than a coin
 #: (calibrate.SHUT_MARKETS names them for the Edge board): a play here is
 #: shown as the read's, never as a number the model vouches for.
@@ -65,7 +65,8 @@ MAX_JUICE = -250
 WATCH_MOVE = 0.08
 
 _MARKET_WORD = {"receptions": "catches", "rec_yds": "receiving yards", "rush_yds": "rushing yards",
-                "pass_yds": "passing yards", "pass_td": "passing touchdowns", "anytime_td": "a touchdown"}
+                "pass_yds": "passing yards", "pass_td": "passing touchdowns", "anytime_td": "a touchdown",
+                "pass_att": "pass attempts", "pass_cmp": "completions", "rush_att": "carries"}
 
 REFUSALS = (IMPLAUSIBLE_EDGE_REASON, UNRELIABLE_CALIBRATION_REASON,
             MODEL_OFF_MARKET_REASON.split(" (")[0])

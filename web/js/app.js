@@ -14013,7 +14013,7 @@ document.addEventListener("click", async (e) => {
    ANY STAT THIS TABLE HAS NO PHASE FOR is shown exactly as before. That
    is every baseball and basketball line, where "0 hits" IS the read and
    grouping football phases over it would be nonsense. */
-const VS_PHASES = [["Passing Yards", "Passing TDs"],
+const VS_PHASES = [["Passing Yards", "Passing TDs", "Pass Attempts", "Completions"],
                    ["Carries", "Rushing Yards"],
                    ["Targets", "Receptions", "Receiving Yards"]];
 
@@ -14023,6 +14023,7 @@ const VS_SHORT = {
   "Passing Yards": "Pass Yds", "Passing TDs": "Pass TD",
   "Rushing Yards": "Rush Yds", "Receiving Yards": "Rec Yds",
   "Receptions": "Rec", "Targets": "Tgts", "Carries": "Car",
+  "Pass Attempts": "Att", "Completions": "Cmp",
 };
 
 function vsStatsHTML(stats) {

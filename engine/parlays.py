@@ -413,7 +413,8 @@ FAMILY = {
     "team_total": "teamtotal", "total": "gametotal",
 }
 TIER = {
-    "receptions": 1, "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
+    "receptions": 1, "pass_att": 1, "pass_cmp": 1, "rush_att": 1,
+    "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
     "anytime_td": 3, "pass_td": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,

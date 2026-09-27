@@ -89,7 +89,7 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     # joined the request, and back to four the same afternoon — see the
     # incident note in `sources.oddsapi`. The derived sum above is the
     # assertion that matters; this one just says which four.
-    assert len(cfg["markets"]) == 5, sorted(cfg["markets"])    # five since 2026-09-15: passing TDs
+    assert len(cfg["markets"]) == 8, sorted(cfg["markets"])    # eight since 2026-09-27: the volume markets
     # Baseball's price is derived the same way since its ladders joined
     # (2026-09-15): five markets, three ladders, three game markets.
     mlb = oa.SPORT_CONFIG["mlb"]

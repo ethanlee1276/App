@@ -62,7 +62,7 @@ MIN_BOOK_PAIRS = 400
 #: The markets this fits. `anytime_td` is absent on purpose — it has no
 #: line for a projection to be compared against, and `engine.tdbacktest`
 #: fits it through its own front door.
-MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
+MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "pass_att", "pass_cmp", "rush_att")
 
 
 def book_pairs(report, market: str = "") -> list:

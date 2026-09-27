@@ -54,7 +54,7 @@ TD_PER_GAME = 4
 TD_PER_TEAM = 3
 
 #: The markets a read can turn into a yards-or-catches pick.
-PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
+PROP_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "pass_att", "pass_cmp", "rush_att")
 #: Baseball's (engine/mlb/scan): a hitter's hits, total bases and home runs,
 #: a starter's strikeouts and outs. A hitter's role is a spot in tonight's
 #: posted lineup; a starter's is being tonight's starter.
@@ -221,8 +221,9 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
                     continue
                 role, bar = 99, 0
             else:
-                role = u.get("carries_pg") if mk == "rush_yds" else u.get("targets_pg") if mk != "pass_yds" else 99
-                bar = PROP_MIN_CARRIES if mk == "rush_yds" else PROP_MIN_TARGETS
+                role = (u.get("carries_pg") if mk in ("rush_yds", "rush_att")
+                        else 99 if mk in ("pass_yds", "pass_att", "pass_cmp") else u.get("targets_pg"))
+                bar = PROP_MIN_CARRIES if mk in ("rush_yds", "rush_att") else PROP_MIN_TARGETS
             if role is None and mk in ("receptions", "rec_yds") and u.get("share_of") == "catches":
                 role, bar = u.get("rec_pg"), PROP_MIN_CATCHES
             if role is None or float(role) < bar:

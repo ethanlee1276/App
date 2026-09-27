@@ -23,7 +23,7 @@ from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
 from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
-    PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
+    PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
 )
 from ..data_loader import Slate
 
@@ -51,6 +51,9 @@ MARKET_COLUMNS = {
     RUSH_YDS: ("rushing_yards",),
     REC_YDS: ("receiving_yards",),
     RECEPTIONS: ("receptions",),
+    PASS_ATT: ("attempts", "passing_attempts"),
+    PASS_CMP: ("completions", "passing_completions"),
+    RUSH_ATT: ("carries", "rushing_attempts"),
 }
 
 #: How many games a touchdown log is topped up to from the PRIOR season
@@ -455,9 +458,16 @@ def _regular_season(rows: list[dict]) -> list[dict]:
 QB_START_ATTEMPTS = 15.0
 
 
+#: The markets that are a quarterback's by nature.
+QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP)
+
+
 def quarterbacked(row: dict, market: str) -> bool:
-    """False for a passing row from a game he did not really play in."""
-    return market not in (PASS_YDS, PASS_TD) or _f(row, "attempts") >= QB_START_ATTEMPTS
+    """False for a passing row — or a quarterback's rushing row — from a
+    game he did not really play in."""
+    qb_row = market in QB_MARKETS or (
+        market == RUSH_YDS and _s(row, "position", "position_group").upper() == "QB")
+    return not qb_row or _f(row, "attempts") >= QB_START_ATTEMPTS
 
 
 def player_game_logs(rows: list[dict], player: str, market: str,
@@ -566,7 +576,16 @@ POSITION_MARKETS = {
     # attach to and the board could not have carried one even after the
     # odds key was added (engine/passtd.py). The role string is the same
     # — he is the starter for both.
-    "QB": [(PASS_YDS, "starter"), (PASS_TD, "starter")],
+    # AND, since 2026-09-27, THE VOLUME MARKETS AND HIS RUSHING (Ethan:
+    # "QB over or under rushing yards, or some other stuff that the ai
+    # recommends"). Measured in marketfit.py, held-out 2025: attempts
+    # 0.707, completions 0.696, a quarterback's rushing yards 0.616 — the
+    # last re-measured after the 0.536 below, in a harness that scores a
+    # back's rushing yards at the same 0.616. His rushing carries the
+    # SECONDARY_FLOOR (8 yards — books hang a pocket passer 8.5-12.5 and
+    # stop below that) so a statue gets no line nobody hangs.
+    "QB": [(PASS_YDS, "starter"), (PASS_TD, "starter"), (PASS_ATT, "starter"),
+           (PASS_CMP, "starter"), (RUSH_YDS, "starter")],
     # EVERY MARKET THE BOOK IS ALREADY PAID FOR, 2026-09-23. Each position
     # had ONE market here since the first nflverse commit — a receiver got
     # receiving yards, a tight end catches, a back rushing yards — while
@@ -594,7 +613,7 @@ POSITION_MARKETS = {
     # The FIRST market in each list is the position's own; the others
     # carry a volume floor (SECONDARY_FLOOR) so a third back with one
     # catch a game does not get a line nobody hangs.
-    "RB": [(RUSH_YDS, "rb1"), (RECEPTIONS, "rb1"), (REC_YDS, "rb1")],
+    "RB": [(RUSH_YDS, "rb1"), (RUSH_ATT, "rb1"), (RECEPTIONS, "rb1"), (REC_YDS, "rb1")],
     "WR": [(REC_YDS, "wr1"), (RECEPTIONS, "wr1")],
     "TE": [(RECEPTIONS, "te"), (REC_YDS, "te")],
 }
@@ -603,7 +622,7 @@ POSITION_MARKETS = {
 #: his position's own, before a prop is built on it — the college board's
 #: floors (engine/cfb/props._MIN_MEAN), the same question in the same
 #: sport.
-SECONDARY_FLOOR = {REC_YDS: 12.0, RECEPTIONS: 1.5}
+SECONDARY_FLOOR = {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0}
 
 #: Positions whose role says WHERE he ranks on his team — "wr2", "rb1".
 #: The table's role is only the default; the depth order comes from the
@@ -1089,8 +1108,8 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     seen_td: set[tuple[str, str]] = set()
     td_props: list[Prop] = []
     for p in props:
-        if p.market == PASS_YDS:
-            continue                 # QB passing TDs are a different market
+        if p.market in (PASS_YDS, PASS_ATT, PASS_CMP):
+            continue                 # QB passing volume is not a scorer market
         key = (p.team, p.player)
         if key in seen_td:
             continue

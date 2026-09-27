@@ -99,6 +99,17 @@ RANK_AUC = {
     #: neighbourhood: it is the same kind of question about the same
     #: kind of event, asked of the man who throws it.
     "pass_td": 0.687,
+    #: THE VOLUME MARKETS, measured 2026-09-27 (marketfit.py): walk-forward
+    #: on the cached 2021-2025 box scores, each game projected from earlier
+    #: games only and scored against a trailing-average line, held-out
+    #: 2025. That harness is stricter than the one behind the figures
+    #: around it (it scores catches at 0.619, not 0.770), so these are
+    #: conservative: pass attempts 0.707 ± 0.023, completions 0.696 ±
+    #: 0.023, carries 0.632 ± 0.023. Interceptions scored 0.540 and are
+    #: not here, which is what keeps them off the board.
+    "pass_att": 0.707,
+    "pass_cmp": 0.696,
+    "rush_att": 0.632,
     "receptions": 0.770,
     "rush_yds": 0.761,
     "rec_yds": 0.733,

@@ -141,6 +141,12 @@ NFL_USAGE_MARKETS = {
     "air_yards": ("receiving_air_yards", "air_yards"),
     "fp_ppr": ("fantasy_points_ppr",),
     "pass_att": ("attempts", "passing_attempts"),
+    # PRICED MARKETS SINCE 2026-09-27 (engine/models PASS_CMP, RUSH_ATT):
+    # completions under their own name, and carries a second time under
+    # the market's name so `ledger.settle_from_history` — which looks a
+    # bet's actual up by its market — finds them.
+    "pass_cmp": ("completions", "passing_completions"),
+    "rush_att": ("carries",),
     # THE SCORING COMPONENTS, added 2026-08-15 for the lineup optimiser.
     #
     # `fp_ppr` is nflverse's own PPR total and is exactly right for a PPR
@@ -172,7 +178,7 @@ NFL_USAGE_MARKETS = {
 #: Markets that only exist for a quarterback. Writing a zero for everyone
 #: else would make "he threw no touchdowns" and "he is a wide receiver"
 #: the same row.
-NFL_QB_ONLY = {"pass_att", "pass_td", "pass_int"}
+NFL_QB_ONLY = {"pass_att", "pass_cmp", "pass_td", "pass_int"}
 
 
 def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:

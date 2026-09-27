@@ -728,7 +728,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             text, counted = mate_line(m, word)
             (pro if counted else notes).append(text)
     elif group == "rb":
-        lean = ["rush_yds", "anytime_td"]
+        lean = ["rush_yds", "rush_att", "anytime_td"]
         cs = u.get("carry_share") or 0.0
         if cs >= 0.55:
             volume = True
@@ -767,7 +767,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             text, counted = mate_line(m, "carries")
             (pro if counted else notes).append(text)
     elif group == "qb":
-        lean = ["pass_yds", "pass_td"]
+        lean = ["pass_yds", "pass_td", "pass_att", "pass_cmp"]
         volume = True
         if measured:
             dvp("pass_yds")

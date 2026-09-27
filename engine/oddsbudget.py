@@ -76,7 +76,9 @@ CREDITS_PER_EVENT = 8
 #: `oddsapi.MLB_ALT_ODDS_TO_MARKET`) and the three game markets.
 #: Hoops: five player markets, five ladders (`oddsapi.HOOPS_ALT_ODDS_TO_MARKET`)
 #: and the three game markets; both leagues buy the same request.
-EVENT_CREDITS = {"nfl": 13, "mlb": 11, "nba": 13, "wnba": 13}
+#: Sixteen since 2026-09-27: pass attempts, completions and carries joined
+#: the request (`oddsapi.VOLUME_ODDS_KEYS`), measured before bought.
+EVENT_CREDITS = {"nfl": 16, "mlb": 11, "nba": 13, "wnba": 13}
 
 
 def credits_per_event(sport: str | None = None) -> int:

@@ -43,7 +43,10 @@ def test_every_stat_market_the_pull_buys_has_a_position_that_builds_it():
     held = {(pos, m) for pos, markets in N.POSITION_MARKETS.items() for m, _r in markets}
     for pair in (("WR", RECEPTIONS), ("TE", REC_YDS), ("RB", REC_YDS), ("RB", RECEPTIONS)):
         assert pair in held, f"{pair}: the book sells it and the matchup is measured for it"
-    assert ("QB", RUSH_YDS) not in held, "measured weakest of all (0.536); stays off until it ranks"
+    # Off until 2026-09-27 (0.536 in the first harness); re-measured in
+    # marketfit.py at 0.616 held-out, level with a back's 0.616 in the
+    # same harness, and on (Ethan: "QB over or under rushing yards").
+    assert ("QB", RUSH_YDS) in held and N.is_secondary("QB", RUSH_YDS), "a pocket passer gets no line nobody hangs"
 
 
 def test_a_position_s_own_market_comes_first_and_the_rest_have_a_floor():
@@ -52,7 +55,7 @@ def test_a_position_s_own_market_comes_first_and_the_rest_have_a_floor():
     assert [m for m, _r in N.POSITION_MARKETS["RB"]][0] == RUSH_YDS
     assert N.is_secondary("WR", RECEPTIONS) and N.is_secondary("RB", REC_YDS)
     assert not N.is_secondary("WR", REC_YDS) and not N.is_secondary("TE", RECEPTIONS)
-    assert N.SECONDARY_FLOOR == {REC_YDS: 12.0, RECEPTIONS: 1.5}, "the college board's floors"
+    assert N.SECONDARY_FLOOR == {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0}, "the college board's floors; a quarterback's rushing floor is where the books stop hanging one"
 
 
 def test_receivers_and_backs_are_ranked_on_their_team():

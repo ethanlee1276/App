@@ -368,7 +368,7 @@ def test_a_game_with_no_line_is_not_counted_as_having_one():
 def test_the_names_helper_does_not_run_off_the_line():
     assert C._names(["a", "b"]) == "a, b"
     assert C._names([]) == "none"
-    assert C._names(list("abcdef")) == "a, b, c, d (+2 more)"
+    assert C._names(list("abcdefghij")) == "a, b, c, d, e, f, g, h (+2 more)"   # eight since 2026-09-27: nine football prop markets
 
 
 if __name__ == "__main__":

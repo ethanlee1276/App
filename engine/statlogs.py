@@ -62,7 +62,10 @@ SPORT_MARKETS = {
             # dedupe-by-label reason the anytime_td note gives above:
             # `pass_td` is now a priced market too, so a second spelling
             # here would draw one stat on two chips.
-            ("pass_td", "Passing TDs")),
+            ("pass_td", "Passing TDs"),
+            # The volume markets priced since 2026-09-27 (engine/models):
+            # carries already has its chip above, under the same label.
+            ("pass_att", "Pass Attempts"), ("pass_cmp", "Completions")),
     "mlb": (("total_bases", "Total Bases"), ("hits", "Hits"),
             ("home_runs", "Home Runs"), ("strikeouts", "Strikeouts"),
             ("outs", "Outs Recorded")),
