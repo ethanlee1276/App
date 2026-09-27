@@ -11789,6 +11789,43 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .potd-hero[data-art="ball"] #potd-top-pick { font-size: var(--fs-xs); }
 }
 
+/* THE TOP BAR, TO ETHAN'S DASHBOARD RENDER (2026-09-26). On a wide
+   screen: the name with its line under it over the sidebar's column, the
+   league tabs boxed into the bar (placeLeagues moves the strip here), and
+   search as a field-shaped door. Narrower screens keep the bar they had. */
+.brand-tag { display: none; }
+.ns-label { display: none; }
+@media (min-width: 1280px) {
+  .topbar .brand-home { width: calc(var(--sidebar-w) - 20px); gap: 10px; }
+  .topbar .logo { width: 44px; height: 44px; }
+  .topbar .brand-words h1 { font-size: var(--fs-lg); letter-spacing: .26em; }
+  .brand-tag { display: block; margin-top: 5px; color: var(--brand-2); font-size: var(--fs-2xs);
+    font-weight: 700; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; }
+  .topbar .sportbar { flex: 0 0 auto; padding: 0; background: transparent; border-bottom: 0; }
+  .topbar .sportbar-in { gap: 2px; padding: 3px; border: var(--hairline) solid var(--border);
+    border-radius: var(--radius); background: var(--panel); }
+  .topbar .sportbar-in .sport-btn { padding: 8px 14px; min-height: 0; border: var(--hairline) solid transparent;
+    border-radius: var(--radius-sm); font-size: var(--fs-sm); }
+  .topbar .sportbar-in .sport-btn.active { border-color: var(--brand); color: var(--brand);
+    background: color-mix(in oklab, var(--brand) 12%, transparent); }
+  #nav-search { display: flex; align-items: center; justify-content: flex-start; gap: 9px;
+    width: clamp(150px, 15vw, 280px); padding: 0 12px; border: var(--hairline) solid var(--border);
+    border-radius: var(--radius); background: var(--panel); }
+  #nav-search .ns-label { display: inline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-mute); font-size: var(--fs-sm); }
+  #nav-search svg { flex: none; width: 16px; height: 16px; }
+}
+/* The date range steps aside first when the bar runs short. */
+@media (min-width: 1280px) and (max-width: 1520px) {
+  .topbar #slate-date { display: none; }
+}
+/* …then, on the narrowest of these, the source pill (the freshness chip
+   beside it still says how old the board is) and a shorter search box. */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .topbar #data-source { display: none; }
+  #nav-search { width: 150px; }
+}
+
 /* A Most Likely pick, explained (whyLikelyHTML, 2026-09-23) — the card
    that leads the pick page when the reader came from that board. */
 .pp-book { color: var(--text-mute); font-weight: 400; }

@@ -45298,6 +45298,31 @@ function placeSlip() {
   });
 }
 
+/* THE LEAGUE TABS IN THE TOP BAR, on a wide screen (Ethan's dashboard
+   render, 2026-09-26: NFL · CFB · MLB · NBA · WNBA · UFC boxed in the bar
+   beside the search, not a band across the page under it). The strip is
+   the same element either way — every handler finds its chips by
+   `.sportbar-in .sport-btn` wherever it sits — and below the width it
+   goes home to the top of <main>, where the phone's crest carousel and
+   the tablet's tab row have always been. */
+const LEAGUES_MQ = "(min-width: 1280px)";
+let _leaguesHome = null;
+function placeLeagues() {
+  const bar = document.getElementById("sportbar");
+  const top = document.querySelector(".topbar");
+  const brand = document.getElementById("brand-home");
+  if (!bar || !top || !brand) return;
+  if (!_leaguesHome) _leaguesHome = { parent: bar.parentElement, next: bar.nextElementSibling };
+  const wide = !!(window.matchMedia && window.matchMedia(LEAGUES_MQ).matches);
+  if (wide) {
+    if (bar.parentElement !== top) brand.after(bar);
+  } else if (bar.parentElement !== _leaguesHome.parent) {
+    _leaguesHome.parent.insertBefore(bar, _leaguesHome.next && _leaguesHome.next.parentElement === _leaguesHome.parent
+      ? _leaguesHome.next : _leaguesHome.parent.firstChild);
+  }
+  document.body.classList.toggle("leagues-up", wide);
+}
+
 async function renderHomeDeck(opts) {
   /* v5 motion: the live clock's redraw (armDeckLive) is `still` — the
      riding rows and the strip refilled in place, no skeleton, no
@@ -45657,6 +45682,9 @@ function buzzOnSettle(rows) {
   syncRail();
   // The slip column follows the viewport across the rail's breakpoint.
   if (window.matchMedia) window.matchMedia(SLIP_MQ).addEventListener("change", placeSlip);
+  // …and the league tabs follow it into the top bar (placeLeagues).
+  placeLeagues();
+  if (window.matchMedia) window.matchMedia(LEAGUES_MQ).addEventListener("change", placeLeagues);
 
   /* THE WALL GOES UP BEFORE ANYTHING ELSE IS WORTH LOOKING AT.
      Ethan, 2026-08-20: "the site should immeditly show a page showing

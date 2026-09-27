@@ -112,6 +112,23 @@ def test_live_now_steps_aside_when_the_stadium_tiles_are_there():
     assert "return (((state.data || {}).games) || []).length > 0;" in _fn("deckHasStadiums")
 
 
+HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+
+def test_the_top_bar_carries_the_name_line_the_leagues_and_a_search_box():
+    """The render's bar: the name with "Data. Discipline. Edge." under it,
+    the league tabs boxed beside it, search as a field. Wide screens only;
+    the strip is moved, not copied, so every chip lookup still finds it."""
+    assert '<span class="brand-tag">Data. Discipline. Edge.</span>' in HTML
+    assert '<span class="ns-label">Search players or teams…</span>' in HTML
+    assert 'const LEAGUES_MQ = "(min-width: 1280px)";' in APP
+    place = _fn("placeLeagues")
+    assert "brand.after(bar)" in place and "_leaguesHome.parent.insertBefore(bar" in place
+    assert "placeLeagues();" in APP and 'window.matchMedia(LEAGUES_MQ).addEventListener("change", placeLeagues);' in APP
+    assert ".topbar .sportbar-in .sport-btn.active { border-color: var(--brand); color: var(--brand);" in CSS
+    assert ".brand-tag { display: none; }" in CSS and ".ns-label { display: none; }" in CSS
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
