@@ -105,6 +105,34 @@ def test_the_game_page_shows_them_and_never_our_number():
     assert "crowdLinesHTML(g, c)" in strip
 
 
+def test_crowdfit_grades_them_on_the_final_score():
+    """Graded against a coin flip, pushes left out, the latest bucket only."""
+    from engine import crowdfit
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE games (sport TEXT, date TEXT, period TEXT, home TEXT, away TEXT, "
+                 "home_score REAL, away_score REAL)")
+    crowd.ensure_tables(conn)
+    rows = []
+    for i in range(6):
+        a, h = f"A{i}", f"H{i}"
+        # home wins by 7 every time: covers −3.5, and 27+20 = 47 stays under 47.5
+        conn.execute("INSERT INTO games VALUES ('nfl','2026-09-28',NULL,?,?,27,20)", (h, a))
+        conn.execute("INSERT INTO crowd_lines VALUES ('nfl','2026-09-28',?,?,100,'spread_home',-3.5,'polymarket',0.40,NULL)", (a, h))
+        conn.execute("INSERT INTO crowd_lines VALUES ('nfl','2026-09-28',?,?,200,'spread_home',-3.5,'polymarket',0.60,NULL)", (a, h))
+        conn.execute("INSERT INTO crowd_lines VALUES ('nfl','2026-09-28',?,?,200,'over',47.5,'polymarket',0.45,NULL)", (a, h))
+    # a push on the spread (home by 7 against a 7) grades nothing
+    conn.execute("INSERT INTO games VALUES ('nfl','2026-09-28',NULL,'HP','AP',27,20)")
+    conn.execute("INSERT INTO crowd_lines VALUES ('nfl','2026-09-28','AP','HP',200,'spread_home',-7,'polymarket',0.6,NULL)")
+    got = crowdfit.lines(conn)
+    sp, ov = got["polymarket:spread_home"], got["polymarket:over"]
+    assert sp["games"] == 6 and sp["lean_n"] == 6 and sp["lean_hit"] == 1.0, sp
+    assert sp["brier_vs_even"] < 0, "0.60 on a side that won beats a coin flip"
+    assert ov["lean_hit"] == 1.0 and ov["games"] == 6
+    assert "not enough games yet" in sp["verdict"]
+    assert "4. On the books' own spread and total" in crowdfit.report(
+        {"games": 0, "by_sport": {}, "accuracy": {}, "crowd_vs_books": {}, "swings": {}, "lines": got})
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
