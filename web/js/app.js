@@ -1391,7 +1391,33 @@ function normalizeSlate(d) {
   d.market_scan = d.market_scan || {};
   d.counts = d.counts || {};
   if (d.counts.props_analyzed == null) d.counts.props_analyzed = d.recommendations.length;
+  refreshLikelyPrices(d);
   return d;
+}
+
+/* A HELD MOST LIKELY PICK AT TODAY'S PRICE, ONCE, FOR EVERY SURFACE.
+   Ethan, 2026-09-27: "the most likely bets all just stay in the same spot
+   and didn't seem like they are updating" — "keep them in place but
+   refresh the prices". engine/likely keeps a posted pick's seat and its
+   number (the lock) and prices that number each build (now_odds,
+   now_book). Here, as the board loads, a held row whose number a book
+   still lists takes that price as its own — every row, card, deck and
+   pick page reads `odds` and `book` — and the posted price moves to
+   `posted_odds`/`posted_book`, said under it (likelyNowHTML). The record
+   grades the posted price; nothing here writes to it. */
+function refreshLikelyPrices(d) {
+  const lists = [d.most_likely, ((d.likely_board || {}).rows)];
+  (d.board_shelves || []).forEach((sh) => lists.push(sh && sh.rows));
+  for (const rows of lists) {
+    for (const r of rows || []) {
+      if (!r || !r.locked || !r.now_listed || r.now_odds == null || r.price_refreshed) continue;
+      r.posted_odds = r.odds;
+      r.posted_book = r.book;
+      r.odds = r.now_odds;
+      r.book = r.now_book || r.book;
+      r.price_refreshed = true;
+    }
+  }
 }
 
 /* The last ETag seen per board endpoint. Keyed by URL, so switching
@@ -8189,11 +8215,16 @@ function likelyNowHTML(r, compact = false) {
       : `<div class="lk-now mini warn">No book lists this number right now — the price above is
         the one it went up at, and it can’t be bet there now.</div>`;
   }
-  if (compact) return ` · now ${american(r.now_odds)}`;
-  const s = priceAgeS(r, "now_priced_at");
-  return `<div class="lk-now mini">Now ${american(r.now_odds)} at ${escapeHtml(r.now_book || "")}${
-    s != null ? ` · priced ${agoText(s)}` : ""}</div>`;
+  /* THE HEADLINE PRICE IS TODAY'S (refreshLikelyPrices, as the board
+     loads); this line keeps the one it went up at, which is the price it
+     is tracked and graded at. */
+  const po = r.posted_odds != null ? r.posted_odds : r.odds;
+  const pb = r.posted_odds != null ? r.posted_book : r.book;
+  if (compact) return ` · posted ${american(po)}`;
+  return `<div class="lk-now mini">Posted at ${american(po)}${pb ? ` at ${escapeHtml(pb)}` : ""}
+    — tracked and graded at that price.</div>`;
 }
+
 
 function priceAgeChip(r) {
   const s = priceAgeS(r);
@@ -11321,7 +11352,11 @@ function whyLikelyHTML(v, r, lk) {
   }
   if (v.odds != null) {
     const book = v.book ? `${escapeHtml(v.book)} ` : "";
-    items.push(["The price", `${lk.bet ? "Placed at " : ""}${book}${escapeHtml(oddsTxt(v.odds))}${lk.implied_prob != null
+    const fresh = !lk.bet && lk.price_refreshed;
+    items.push(["The price", `${lk.bet ? "Placed at " : ""}${book}${escapeHtml(oddsTxt(v.odds))}${fresh
+      ? ` now (posted at ${escapeHtml(oddsTxt(lk.posted_odds))}${lk.posted_book
+          ? ` at ${escapeHtml(lk.posted_book)}` : ""}, the price it is graded at)`
+      : lk.implied_prob != null
       ? ` implies ${wholePct(lk.implied_prob)}; we have it at ${wholePct(p)}` : ""}.${lk.rung === "alt"
       && lk.main_line != null ? ` An alternate line: the book’s main number is
         ${escapeHtml(String(lk.main_side || "").toLowerCase())} ${escapeHtml(String(lk.main_line))}${

@@ -141,7 +141,7 @@ REDACTED = {"date": "2026-09-03", "live_picks": [], "recommendations": [],
 def _run(setup, plan):
     """Run load() once and report what the page is left holding."""
     src = (_STUBS
-           + _fn("normalizeSlate") + "\n"
+           + _fn("normalizeSlate") + "\n" + _fn("refreshLikelyPrices") + "\n"
            + _fn("locksAwayWhatWeHold") + "\n"
            + _fn("lightNameFor") + "\n"
            + _fn("_loadNow", kind="async function") + "\n"

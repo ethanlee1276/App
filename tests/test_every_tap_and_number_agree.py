@@ -285,10 +285,19 @@ def test_every_door_shows_its_own_pick():
             text = _minus(d["text"])
             # The parlay-builder chips name a pick and its chance, not its price.
             if "gs-chip" not in d.get("cls", ""):
-                assert _odds(r["odds"]) in text, (name, d["id"], "price", text[:200])
+                assert _odds(_shown_odds(r)) in text, (name, d["id"], "price", text[:200])
             assert _pct(r["model_prob"]).search(text), (name, d["id"], "chance", text[:200])
             if r["line"] is not None:
                 assert str(r["line"]) in text, (name, d["id"], "number", text[:200])
+
+
+def _shown_odds(r):
+    """The price a row and its pick page show: a held pick's price as it
+    stands when a book lists its number (Ethan, 2026-09-27: "keep them in
+    place but refresh the prices"), else the posted one."""
+    if r.get("locked") and r.get("now_listed") and r.get("now_odds") is not None:
+        return r["now_odds"]
+    return r["odds"]
 
 
 def test_every_tap_opens_that_pick():
@@ -306,7 +315,7 @@ def test_every_tap_opens_that_pick():
                 assert "anytime td · yes" in pick, (where, o["pick"])
             else:
                 assert f"{r['side'].lower()} {r['line']} {r['market_label'].lower()}" in pick, (where, o["pick"])
-            assert _odds(r["odds"]) in _minus(o["player"]), (where, "price", o["player"])
+            assert _odds(_shown_odds(r)) in _minus(o["player"]), (where, "price", o["player"])
             assert o["board"].startswith("Most Likely"), (where, o["board"])
             assert _pct(r["model_prob"]).search(o["body"]), (where, "chance")
 

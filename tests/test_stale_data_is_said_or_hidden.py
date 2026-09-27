@@ -194,17 +194,19 @@ def test_the_card_and_the_row_say_the_price_now():
       const at = new Date(Date.now() - 5 * 60000).toISOString();
       return {
         now: likelyNowHTML({ locked: true, now_listed: true, now_odds: -190, now_book: "FanDuel",
-                             now_priced_at: at }),
+                             now_priced_at: at, odds: -150, book: "DraftKings" }),
         gone: likelyNowHTML({ locked: true, now_listed: false }),
-        compact: likelyNowHTML({ locked: true, now_listed: true, now_odds: -190 }, true),
+        compact: likelyNowHTML({ locked: true, now_listed: true, now_odds: -190, odds: -150 }, true),
         fresh: likelyNowHTML({ now_listed: true, now_odds: -190 }),
         old: likelyNowHTML({ locked: true }),
       };""", "priceAgeS", "agoText", "likelyNowHTML", pre="var state={};")
     if got is None:
         return
-    assert "Now -190 at FanDuel · priced 5m ago" in got["now"], got["now"]
+    # Ethan, 2026-09-27: "keep them in place but refresh the prices" — the
+    # headline price is today's (refreshLikelyPrices); this line keeps the posted one.
+    assert "Posted at -150 at DraftKings" in got["now"] and "graded at that price" in got["now"], got["now"]
     assert "No book lists this number right now" in got["gone"]
-    assert got["compact"] == " · now -190"
+    assert got["compact"] == " · posted -150"
     assert got["fresh"] == "" and got["old"] == "", "only a locked pick, and only once the build says"
 
 

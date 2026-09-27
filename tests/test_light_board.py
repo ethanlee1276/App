@@ -169,7 +169,7 @@ def _run_light(setup, plan, light):
     """tests/test_open_bets_vanish's scripted wire, with the light copy on it."""
     import test_open_bets_vanish as H
     src = (H._STUBS
-           + H._fn("normalizeSlate") + "\n" + H._fn("locksAwayWhatWeHold") + "\n"
+           + H._fn("normalizeSlate") + "\n" + H._fn("refreshLikelyPrices") + "\n" + H._fn("locksAwayWhatWeHold") + "\n"
            + H._fn("lightNameFor") + "\n"
            + H._fn("_loadNow", kind="async function") + "\n"
            # `load` is the coalescer now; this harness wants the load itself.
