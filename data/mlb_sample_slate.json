@@ -13,7 +13,8 @@
         "wind_mph": 16,
         "wind_dir_rel": "out",
         "humidity": 0.62,
-        "precip_chance": 0.05
+        "precip_chance": 0.05,
+        "measured": true
       },
       "lineups_confirmed": true,
       "pitchers": {
@@ -79,7 +80,8 @@
         "wind_mph": 7,
         "wind_dir_rel": "cross",
         "humidity": 0.3,
-        "precip_chance": 0.1
+        "precip_chance": 0.1,
+        "measured": true
       },
       "lineups_confirmed": true,
       "pitchers": {
@@ -135,7 +137,8 @@
         "wind_mph": 0,
         "wind_dir_rel": "cross",
         "humidity": 0.5,
-        "precip_chance": 0.0
+        "precip_chance": 0.0,
+        "measured": true
       },
       "lineups_confirmed": false,
       "pitchers": {

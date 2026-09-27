@@ -6223,7 +6223,7 @@ function gameCard(g) {
     : !g.weather || !wxKnown
       ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
       : `${Math.round(w.temp_f)}°F · ${windTxt}${
-        ["live", "final"].includes((g.live || {}).state) ? "" : " · kickoff forecast"}`;
+        ["live", "final"].includes((g.live || {}).state) ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}`;
   // `sub` is now MARKUP, not text, because two of its parts are drawn icons.
   // It used to be handed to escapeHtml at the point of use, which is correct
   // for text and turns an <svg> into visible angle brackets — the exact
@@ -12670,7 +12670,7 @@ function renderGamePage() {
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
-      isLive || isFinal ? "" : " · kickoff forecast"}`;
+      isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal });
   const gpCrowd = isFinal ? "" : crowdStripHTML(g);
   const gpScripts = gameScriptsHTML(g, likelies);

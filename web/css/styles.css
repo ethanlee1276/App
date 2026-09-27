@@ -7672,6 +7672,12 @@ body.has-deck #rail-live { display: none; }
   object-fit: cover; z-index: 1; }
 .stadium-wrap .status-badge, .stadium-wrap .top-game-tag,
 .stadium-wrap .game-time-chip, .stadium-wrap .gc-picks { z-index: 3; }
+/* …and each chip sets its own line back. `.stadium-wrap { line-height: 0 }`
+   (the image-gap fix) was inherited by the text chips, so the Top game
+   ribbon drew as an 8px strip with its words half above the card
+   (the 2026-09-27 sweep). */
+.stadium-wrap .top-game-tag, .stadium-wrap .game-time-chip,
+.stadium-wrap .gc-picks { line-height: var(--lh-tight); }
 /* The live base diamond, over the photo. Bottom-left is the one corner
    nothing else on this card claims: the LIVE badge is top-left, the time
    and weather chips are top-right, and the picks chip is bottom-right. */

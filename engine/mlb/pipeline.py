@@ -646,6 +646,10 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             "temp_f": w.temp_f, "wind_mph": w.wind_mph,
             "wind_dir": w.wind_dir_rel,       # "out" | "in" | "cross"
             "rain": w.precip_chance >= 0.5, "snow": False,
+            # A forecast or the neutral prior? Without this the card read
+            # every outdoor park as "weather not pulled" — the flag the
+            # NFL fix taught it to ask for was never sent from here.
+            "measured": bool(getattr(w, "measured", False)),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, park, results),

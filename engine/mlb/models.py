@@ -104,6 +104,10 @@ class MLBWeather:
     wind_dir_rel: str = "cross"
     humidity: float = 0.50
     precip_chance: float = 0.0
+    #: True only when the numbers came from a real first-pitch forecast.
+    #: The defaults above are a neutral prior, and a card must not print a
+    #: prior as a reading (tests/test_unmeasured_weather — the NFL's bug).
+    measured: bool = False
 
 
 @dataclass

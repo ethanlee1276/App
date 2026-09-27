@@ -127,6 +127,23 @@ def test_absence_of_the_flag_reads_as_known_so_mlb_is_untouched():
             f"{name} turned an absent flag into 'unmeasured'"
 
 
+
+def test_the_ballpark_forecast_says_it_was_pulled():
+    """2026-09-27 sweep: every outdoor MLB park read "weather not pulled"
+    beside a wind gauge drawing the real forecast. The tile asks for
+    `measured`, and the baseball board never sent it."""
+    from engine.mlb.models import MLBWeather
+    assert MLBWeather().measured is False, "the neutral prior is not a reading"
+    src = _read("engine", "mlb", "sources", "mlbstats.py")
+    i = src.index("def park_weather(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert body.count("measured=True") == 1, "only the real forecast is flagged"
+    pipe = _read("engine", "mlb", "pipeline.py")
+    j = pipe.index('"weather": {')
+    assert '"measured": bool(getattr(w, "measured", False))' in pipe[j:j + 700]
+    assert 'mlb ? " · first-pitch forecast" : " · kickoff forecast"' in APP
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
