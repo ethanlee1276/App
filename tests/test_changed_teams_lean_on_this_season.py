@@ -1,18 +1,21 @@
-"""A side of the ball that is not last season's leans on this season.
+"""What changed on a team, and what it does to the season split.
 
 Ethan, 2026-09-27, on the Jets in the matchup scan: "any team that has a
 new QB starting this season or new defense coach or offense coach or new
 coach, I feel like the 2026 offense and defense should favor more for
-those teams. Like maybe 75/25 or 70/30."
+those teams." Set by hand that day (75/25, then 65/35 for new staff,
+60/40 when the head coach calls the plays), then: "Idk if anything should
+be at 75/25. Write the check and do the check then change anything that's
+hurting."
 
-A new head coach moves both sides, a new starting QB or offensive
-coordinator the offence, a new defensive coordinator the defence — read
-from the nflverse schedule (coaches and starting QBs) and the hand-kept
-coordinator file (engine/teamchange). A changed side blends 75/25 from
-two games on by what changed — 75/25 for a new starting QB, 65/35 for
-new staff with the same players, 60/40 for a coordinator whose plays the
-head coach calls (Ethan, the same day: "75/25 seems like a lot especially
-if the players r not different") — and an unchanged side keeps 55/45.
+The check (scanblendfit.py, 2022-2025) found that only a new starting QB
+makes a season's own games predict more; a new head coach changed
+nothing, and nothing earned 75%. So engine/teamchange still names every
+change — new QB and head coach from the nflverse schedule, coordinators
+and the head coach's play-calling from the hand-kept staff file — but
+only an offence under a new starting QB takes this season faster
+(gamescan.unit_share, QB_PRIOR_GAMES); every other side takes it at the
+measured league rate.
 """
 import json
 import os
@@ -128,46 +131,32 @@ def test_the_2026_staff_file_is_filled_and_sane():
     assert "_sources" in blob, "every name says where it came from"
 
 
-def test_a_new_coordinator_under_a_play_calling_head_coach_is_60_40():
-    """Ethan, 2026-09-27: "teams with new cordinators but head coach
-    calling plays maybe we do 60/40". Only when the coordinator is the
-    side's only change: a new QB on the same side still counts in full."""
+def test_the_head_coachs_play_calling_is_named_not_weighted():
+    """The file says who calls the plays over a new coordinator, and the
+    card says so. It moves nothing: measured, new staff did not."""
     staff = {"NYJ": {"dc": "Brian Duker", "oc": "Frank Reich", "hc_calls": ["def", "off"]},
              "KC": {"oc": "Eric Bieniemy", "hc_calls": ["off"]}}
     ch = T.detect(_schedule(), 2026, before_week=4, staff=staff)
-    assert ch["NYJ"]["hc_calls"] == ["def"], "the new QB keeps the offence in full"
+    assert ch["NYJ"]["hc_calls"] == ["def"], "the offence's change is its QB, not only a coordinator"
     assert ch["NYJ"]["def"] == ["new defensive coordinator (Brian Duker); the head coach calls the plays"]
-    assert ch["KC"]["hc_calls"] == ["off"]
-    assert G.HC_CALLS_SHARE == 0.60
-    assert G.season_share(3, changed=True, top=G.HC_CALLS_SHARE) == 0.60
-    assert G.season_share(1, changed=True, top=G.HC_CALLS_SHARE) == 0.5
-    last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
-    now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
-    r = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["x"], "hc_calls": ["def"],
-                                                "top": {"def": G.HC_CALLS_SHARE}}})
-    assert r["NYJ"]["blend_def"] == 0.60
-    assert abs(r["NYJ"]["def"]["overall"]["value"] - (0.60 * -0.10 + 0.40 * 0.15)) < 1e-6
-    assert set(r["NYJ"]["changed"]) == {"def"}, "the markers are not sides"
+    assert ch["KC"]["hc_calls"] == ["off"] and "qb" not in ch["KC"]
 
 
-def test_the_share_goes_by_what_changed_and_the_largest_wins():
-    """New players count more than new staff; two changes on one side
-    take the larger share, never a sum."""
-    staff = {"NYJ": {"dc": "Brian Duker", "oc": "Frank Reich", "hc_calls": ["def"]},
-             "KC": {"oc": "Eric Bieniemy", "hc_calls": ["off"]}}
-    ch = T.detect(_schedule(), 2026, before_week=4, staff=staff)
-    assert ch["NYJ"]["top"] == {"off": G.QB_CHANGE_SHARE, "def": G.HC_CALLS_SHARE}, \
-        "new QB and new OC: the QB's 75, not more"
-    assert ch["TEN"]["top"] == {"off": G.CHANGED_SHARE, "def": G.CHANGED_SHARE}
-    assert ch["KC"]["top"] == {"off": G.HC_CALLS_SHARE}
-    assert (G.QB_CHANGE_SHARE, G.CHANGED_SHARE, G.HC_CALLS_SHARE) == (0.75, 0.65, 0.60)
+def test_only_a_new_starting_qb_moves_the_split():
+    ch = T.detect(_schedule(), 2026, before_week=4,
+                  staff={"NYJ": {"dc": "Brian Duker", "oc": "Frank Reich"}})
+    assert ch["NYJ"]["qb"] == ["off"] and "qb" not in ch["TEN"], "a new head coach is not a new QB"
+    assert not hasattr(G, "CHANGED_SHARE") and not hasattr(G, "HC_CALLS_SHARE"), "the hand tiers are gone"
     last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
     now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
-    r = G.ratings_from_rows(now, last, {"NYJ": {"off": ["qb"], "def": ["dc"],
-                                                "top": {"off": 0.75, "def": 0.60}}})
-    assert (r["NYJ"]["blend_off"], r["NYJ"]["blend_def"]) == (0.75, 0.60)
+    r = G.ratings_from_rows(now, last, {"NYJ": ch["NYJ"], "DET": ch.get("TEN")})
+    assert r["NYJ"]["blend_off"] == round(3 / (3 + G.QB_PRIOR_GAMES), 2)
+    assert r["NYJ"]["blend_def"] == r["NYJ"]["blend"] == round(3 / (3 + G.UNIT_PRIOR_GAMES), 2)
+    assert r["DET"]["blend_off"] == r["DET"]["blend_def"] == r["DET"]["blend"], "new staff, same split"
+    assert set(r["NYJ"]["changed"]) == {"off", "def"}, "every change is still named for the card"
     rz = open(os.path.join(ROOT, "engine", "redzone.py"), encoding="utf-8").read()
-    assert 'top = (ch.get("top") or {}).get(side)' in rz
+    assert 'qb = side in (((changes or {}).get(team) or {}).get("qb") or [])' in rz
+
 
 def _units(season, weeks, epa_allowed):
     out = []
@@ -180,29 +169,34 @@ def _units(season, weeks, epa_allowed):
     return out
 
 
-def test_the_jets_defence_the_way_ethan_described_it():
-    """2025: the Jets' defence poor, Detroit's good. 2026: a modest turn
-    the other way. At 55/45 Detroit still ranks first; with the Jets'
-    defence under new staff it leans 65/35 and the Jets rank first."""
-    last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
-    now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
-    same = G.ratings_from_rows(now, last)
-    assert same["DET"]["def"]["overall"]["rank"] == 1
-    moved = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["new defensive coordinator"]}})
-    assert moved["NYJ"]["def"]["overall"]["rank"] == 1
-    assert abs(moved["NYJ"]["def"]["overall"]["value"] - (0.65 * -0.10 + 0.35 * 0.15)) < 1e-6
-    assert moved["NYJ"]["blend_def"] == G.CHANGED_SHARE == 0.65
-    assert moved["NYJ"]["blend_off"] == moved["NYJ"]["blend"] == 0.55, "the other side is untouched"
-    assert moved["NYJ"]["changed"] == {"def": ["new defensive coordinator"]}
-    assert "changed" not in moved["DET"]
-
-
-def test_the_ramp_before_two_games():
-    assert G.season_share(1, changed=True) == 0.5 and G.season_share(1) == 0.2
-    assert G.season_share(2, changed=True) == G.season_share(12, changed=True) == 0.65
-    assert G.season_share(3, changed=True, top=G.QB_CHANGE_SHARE) == 0.75
-    assert G.season_share(0, changed=True) == 0.0
-    assert G.season_share(3, has_prior=False, changed=True) == 1.0
+def test_what_the_check_found_is_what_the_split_does():
+    """scanblendfit.py on 2022-2025: this season's best share grows with
+    its games (0.26 after 2-3, 0.41 after 4-5, 0.59 after 6-8) and faster
+    for a new QB's offence (0.45 after 2-3). games / (games + k) with
+    k = 6 and 3.5 fits both."""
+    assert (G.UNIT_PRIOR_GAMES, G.QB_PRIOR_GAMES) == (6.0, 3.5)
+    assert abs(G.unit_share(2.5) - 0.29) < 0.01 and abs(G.unit_share(7) - 0.54) < 0.01
+    assert abs(G.unit_share(2.5, new_qb=True) - 0.42) < 0.01
+    assert G.unit_share(0) == 0.0 and G.unit_share(5, has_prior=False) == 1.0
+    fit = open(os.path.join(ROOT, "scanblendfit.py"), encoding="utf-8").read()
+    assert "def best_share(" in fit and "def boot(" in fit and "def hand_share(" in fit
+    # The check's own arithmetic, on points built to a known answer: a
+    # target that is exactly 30% this season, 70% last, fits at 0.30; a
+    # ramp built at k=4 fits at k=4.
+    import random
+    import scanblendfit as F
+    rnd = random.Random(3)
+    pts = []
+    for i in range(200):
+        a, b = rnd.uniform(-1, 1), rnd.uniform(-1, 1)
+        pts.append(("same", 3, f"c{i % 40}", a, b, 0.3 * a + 0.7 * b, 1.0))
+    assert abs(F.best_share(pts) - 0.30) < 1e-9 and F.boot(pts, reps=20) < 1e-6
+    ramp = []
+    for i in range(300):
+        n, a, b = rnd.randint(2, 8), rnd.uniform(-1, 1), rnd.uniform(-1, 1)
+        w = n / (n + 4.0)
+        ramp.append(("same", n, f"c{i}", a, b, w * a + (1 - w) * b, 1.0))
+    assert F.best_ramp(ramp)[0] == 4.0
 
 
 def test_the_build_reads_the_changes_and_the_red_zone_uses_them_too():
@@ -212,7 +206,7 @@ def test_the_build_reads_the_changes_and_the_red_zone_uses_them_too():
     assert "unit_ratings(conn, season, before_week=week, changes=changes)" in body
     assert "_rz_rates(conn, season, before_week=week, changes=changes)" in body
     rz = open(os.path.join(ROOT, "engine", "redzone.py"), encoding="utf-8").read()
-    assert "season_share(g, True, changed=changed, top=top)" in rz
+    assert "unit_share(g, True, new_qb=new_qb)" in rz
 
 
 def test_the_card_names_the_side_and_the_reason():

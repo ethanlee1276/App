@@ -117,29 +117,34 @@ def _two_seasons(now_games):
 
 def test_the_radar_blends_this_season_with_last_like_the_scan():
     """Ethan, 2026-09-27: "this chart should now be updated since it says
-    2025 and we use a mix of 2025 and 2026". Three games in, a team whose
-    offence turned round climbs; the 2025-only shape would not move."""
-    conn = _two_seasons(3)
+    2025 and we use a mix of 2025 and 2026". The radar takes this season
+    at the scan's own measured split (gamescan.unit_share): half by six
+    games, so a team whose offence turned round has climbed; the
+    2025-only shape would not move."""
+    conn = _two_seasons(6)
     only_last = teamshape.team_shapes(conn, "nfl", 2025)
     both = teamshape.blended_shapes(conn, "nfl", 2026)
     assert only_last["T0"]["pct"]["offense"] == 0.0
     assert both["T0"]["pct"]["offense"] > only_last["T0"]["pct"]["offense"]
-    assert both["T0"]["games"] == 3 and both["T0"]["games_last"] == 10
-    assert both["T0"]["blend"] == {"off": 0.55, "def": 0.55}, "the scan's own split"
-    # A side a new QB or new staff changed leans harder, as in the scan.
+    assert both["T0"]["games"] == 6 and both["T0"]["games_last"] == 10
+    assert both["T0"]["blend"] == {"off": 0.5, "def": 0.5}, "the scan's own measured split"
+    # An offence under a new starting QB takes this season faster, as in the scan.
     moved = teamshape.blended_shapes(conn, "nfl", 2026,
-                                     {"T0": {"off": ["qb"], "def": [], "top": {"off": 0.75}}})
-    assert moved["T0"]["blend"] == {"off": 0.75, "def": 0.55}
+                                     {"T0": {"off": ["new starting QB (X)"], "def": [], "qb": ["off"]}})
+    assert moved["T0"]["blend"] == {"off": round(6 / 9.5, 2), "def": 0.5}
     assert moved["T0"]["raw"]["offense"] > both["T0"]["raw"]["offense"]
-    # Form is the last five finals whichever season they fell in: T0's
-    # three 2026 games plus its last two of 2025.
-    stats = teamshape._season_stats(teamshape._finals(conn, "nfl", 2026))
-    last = teamshape._season_stats(teamshape._finals(conn, "nfl", 2025))
+    # Form is the last five finals whichever season they fell in: three
+    # games in, the three plus last season's last two.
+    three = _two_seasons(3)
+    got = teamshape.blended_shapes(three, "nfl", 2026)
+    stats = teamshape._season_stats(teamshape._finals(three, "nfl", 2026))
+    last = teamshape._season_stats(teamshape._finals(three, "nfl", 2025))
     want = sum((last["T0"]["margins"] + stats["T0"]["margins"])[-5:]) / 5
-    assert both["T0"]["raw"]["form"] == round(want, 1)
+    assert got["T0"]["raw"]["form"] == round(want, 1)
     # Before a 2026 game, last season stands alone.
     before = teamshape.blended_shapes(_conn(_league()), "nfl", 2026)
     assert before["T5"]["pct"] == teamshape.team_shapes(_conn(_league()), "nfl", 2025)["T5"]["pct"]
+
 
 def test_the_build_ships_shapes_and_the_page_draws_them():
     src = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()

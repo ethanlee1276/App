@@ -88,9 +88,13 @@ def test_a_defence_is_not_credited_for_drawing_bad_offences():
     game(2026, 2, "D1", "D3", 9, 9)
     r = R.team_rates(conn, 2026, before_week=3)
     pit = r["PIT"]
-    assert pit["def_raw"] < 7.0, pit                 # as counted: 3 a game this season
-    assert pit["def"] > pit["def_raw"] + 2.0, pit     # against those offences: about average
-    assert abs(pit["def_rel"]) < 0.15, pit
+    # Two games in, this season is a quarter of the number (the measured
+    # split, gamescan.unit_share): 3 a game this season, 9 last.
+    assert pit["blend"] == 0.25 and abs(pit["def_raw"] - (0.25 * 3 + 0.75 * 9)) < 1e-6, pit
+    # Against those offences this season's 3 is about average: the
+    # adjustment lifts this season's part by 4, a quarter of it showing.
+    assert pit["def"] > pit["def_raw"] + 0.75, pit
+    assert abs(pit["def_rel"]) < 0.2, pit
 
 
 def test_the_scenario_scores_trips_as_its_fifth_reading():

@@ -1,4 +1,4 @@
-"""The matchup scan ranks teams on THIS season once it has two games.
+"""The matchup scan's ranks: this season and last, and how much of each.
 
 Ethan, 2026-09-25, on Jets @ Lions going into week 4 — the Jets' defence
 27th, Detroit's 13th: "I know for a fact that the Jets defense is ranked
@@ -33,33 +33,34 @@ def _rows(season, weeks, epa_allowed):
     return out
 
 
-def test_three_games_lead_on_this_season_with_last_season_still_in():
+def test_this_season_takes_over_as_its_games_come_in():
     """Ethan, 2026-09-25, twice: the Jets' defence is better than Detroit's
-    RIGHT NOW — and, the same night, "2026 data should outweigh 2025 data
-    by just a tiny bit but 2025 data should def be used." So this season
-    leads at CURRENT_SHARE from two games on and last season stays in."""
+    RIGHT NOW — and, the same night, "2025 data should def be used." That
+    was first a flat 55% this season from two games on. MEASURED on
+    2022-2025 (scanblendfit.py, 2026-09-27), two or three games predict
+    the rest of a season less than that: the best share grows with the
+    games, games / (games + 6). So a clear turnaround shows by midseason,
+    not after two weeks, and last season never leaves."""
     last = _rows(2025, 17, {"NYJ": 0.15, "DET": -0.05})    # 2025: Jets' D poor, Detroit's good
-    now = _rows(2026, 3, {"NYJ": -0.20, "DET": 0.05})      # 2026: the other way round, clearly
-    r = G.ratings_from_rows(now, last)
-    assert r["NYJ"]["blend"] == G.CURRENT_SHARE == 0.55 and r["NYJ"]["games"] == 3
-    assert r["NYJ"]["def"]["overall"]["rank"] == 1, "the Jets' defence, this season leading"
-    assert r["DET"]["def"]["overall"]["rank"] == 2
-    # …and the number is the blend, not this season's alone: 55/45.
-    assert abs(r["NYJ"]["def"]["overall"]["value"] - (0.55 * -0.20 + 0.45 * 0.15)) < 1e-6
-    # A modest edge this season does not overturn a big gap last season —
-    # that is the rule as asked ("outweigh … by just a tiny bit").
-    r2 = G.ratings_from_rows(_rows(2026, 3, {"NYJ": -0.10, "DET": 0.05}), last)
-    assert r2["DET"]["def"]["overall"]["rank"] == 1
-    assert G.season_share(0) == 0.0 and G.season_share(1) == 0.2
+    three = G.ratings_from_rows(_rows(2026, 3, {"NYJ": -0.20, "DET": 0.05}), last)
+    assert three["NYJ"]["blend"] == round(3 / 9, 2) and three["NYJ"]["games"] == 3
+    assert abs(three["NYJ"]["def"]["overall"]["value"] - (3 / 9 * -0.20 + 6 / 9 * 0.15)) < 1e-4
+    assert three["DET"]["def"]["overall"]["rank"] == 1, "three games are not yet enough"
+    six = G.ratings_from_rows(_rows(2026, 6, {"NYJ": -0.20, "DET": 0.05}), last)
+    assert six["NYJ"]["blend"] == 0.5
+    assert six["NYJ"]["def"]["overall"]["rank"] == 1, "by six the turnaround leads"
+    assert G.unit_share(0) == 0.0 and G.unit_share(2) == 0.25 and G.unit_share(6) == 0.5
+    assert abs(G.unit_share(3, new_qb=True) - 3 / 6.5) < 1e-12, "a new QB's offence takes over faster"
+    assert G.unit_share(3, has_prior=False) == 1.0
+    # Player usage keeps its own split; nothing measured it yet.
     assert G.season_share(2) == G.season_share(10) == 0.55
-    assert G.season_share(3, has_prior=False) == 1.0
 
 
 def test_one_game_leans_on_last_season_and_says_how_much():
     last = _rows(2025, 17, {"NYJ": 0.15, "DET": -0.05})
     now = _rows(2026, 1, {"NYJ": -0.10, "DET": 0.05})
     r = G.ratings_from_rows(now, last)
-    assert r["NYJ"]["blend"] == round(1 / (1 + G.PRIOR_GAMES), 2)
+    assert r["NYJ"]["blend"] == round(1 / (1 + G.UNIT_PRIOR_GAMES), 2)
 
 
 def test_the_card_says_which_season_the_ranks_are():

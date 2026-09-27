@@ -31,11 +31,13 @@ raw two-game table cannot:
   that last season fills in more, by ``games / (games + PRIOR_GAMES)``.
   The card says the split either way (2026-09-25: the blend used to run
   to midseason unsaid, then for an evening ran this season alone).
-* A SIDE THAT IS NOT LAST SEASON'S LEANS HARDER. A new head coach (both
-  sides), starting QB or offensive coordinator (offence) or defensive
-  coordinator (defence) makes that side CHANGED_SHARE this season
-  (engine/teamchange; Ethan, 2026-09-27, "like 75/25 or 70/30"), and the
-  card names the reason.
+* MEASURED SINCE 2026-09-27 (scanblendfit.py): the unit ranks no longer
+  use that fixed split. This season's share GROWS with its games —
+  ``unit_share``: games / (games + UNIT_PRIOR_GAMES), faster for an
+  offence under a new starting QB — because a flat 55% from two games
+  on leaned on two noisy weeks harder than they predict. New coaches and
+  coordinators are named on the card and move nothing: measured, they
+  did not make a season's own weeks tell more.
 
 Standard library only; reads the ``team_units`` table and nothing else.
 """
@@ -62,32 +64,40 @@ CURRENT_LEADS_GAMES = 2
 #: This season's share of a rating (and of a player's usage) once it has
 #: CURRENT_LEADS_GAMES games; last season gets the rest.
 CURRENT_SHARE = 0.55
-#: …AND A SIDE OF THE BALL THAT IS NOT LAST SEASON'S leans harder on this
-#: one. Ethan, 2026-09-27: "any team that has a new QB starting this
-#: season or new defense coach or offense coach or new coach ... the 2026
-#: offense and defense should favor more for those teams. Like maybe 75/25
-#: or 70/30." A new head coach moves both sides, a new starting QB or
-#: offensive coordinator the offence, a new defensive coordinator the
-#: defence (engine/teamchange says which, from data). Before two games it
-#: ramps as games / (games + CHANGED_PRIOR_GAMES): half this season after
-#: one game, where an unchanged side is a fifth.
-#:
-#: THEN DIALLED BY WHAT CHANGED (Ethan, later the same day: "maybe we also
-#: dial back too 65/35 for the new coaches ... 75/25 seems like a lot
-#: especially if the players r not different"). New players matter more
-#: than new staff: a new starting QB is QB_CHANGE_SHARE, a new head coach
-#: or coordinator with the same players CHANGED_SHARE. A side with two
-#: changes takes the larger, never a sum (engine/teamchange puts the
-#: side's share in ``top``).
-CHANGED_SHARE = 0.65
-QB_CHANGE_SHARE = 0.75
-CHANGED_PRIOR_GAMES = 1.0
-#: …LESS WHEN THE HEAD COACH KEEPS CALLING THAT SIDE'S PLAYS. Ethan, the
-#: same day: "teams with new cordinators but head coach calling plays
-#: maybe we do 60/40" — the Jets' defence (Aaron Glenn calls it over a
-#: new DC), the Chiefs', Bears' and Rams' offences. engine/teamchange
-#: marks such a side ``hc_calls`` and gives it this share.
-HC_CALLS_SHARE = 0.60
+
+# ── THE TEAM UNITS' SPLIT, MEASURED (scanblendfit.py, 2026-09-27) ────────
+# Ethan, after a day of setting it by hand (75/25 for a changed side,
+# then 65/35 for new staff, 60/40 when the head coach calls the plays):
+# "Idk if anything should be at 75/25. Write the check and do the check
+# then change anything that's hurting." The check replays 2022-2025,
+# weeks 3-9: blend the weeks so far with last season at share w, score
+# it against the team's REST of the season (opponent-adjusted EPA,
+# passing, rushing, success; errors in league-sd units). What it found:
+#
+#   * the best share GROWS with games: 0.26 after 2-3, 0.41 after 4-5,
+#     0.59 after 6-8 for an unchanged side — a flat 55% from game two
+#     leaned on two noisy weeks harder than they predict;
+#   * a new head coach changed nothing (best 0.42, the same as no change);
+#   * a new starting QB did: 0.45 after 2-3 games, 0.54 overall;
+#   * nothing earned 75%.
+#
+# games / (games + k) fits it with one number per group — k = 6 for every
+# side, 3.5 for an offence under a new starting QB — and on seasons it was
+# not fitted on (fit 2022-23, test 2024-25) it beat the hand split by
+# 5-10%. Coordinators have no history to measure; since a new head coach
+# moved nothing, neither do they. engine/teamchange still names every
+# change for the card.
+UNIT_PRIOR_GAMES = 6.0
+QB_PRIOR_GAMES = 3.5
+
+
+def unit_share(games: float, has_prior: bool = True, new_qb: bool = False) -> float:
+    """This season's share of a team-unit number after ``games`` of it —
+    the measured split above; 1.0 with no last season to blend with."""
+    if not has_prior:
+        return 1.0
+    k = QB_PRIOR_GAMES if new_qb else UNIT_PRIOR_GAMES
+    return games / (games + k) if games > 0 else 0.0
 
 #: Each unit: (numerator field(s), denominator field, better when higher
 #: — from the OFFENCE's point of view; a defence's sense is the reverse).
@@ -165,32 +175,29 @@ def _adjusted(rows: list[dict]) -> tuple[dict, dict]:
 
 
 def season_share(games: float, has_prior: bool = True,
-                 leads_at: float = CURRENT_LEADS_GAMES, prior_n: float = PRIOR_GAMES,
-                 changed: bool = False, top: float | None = None) -> float:
+                 leads_at: float = CURRENT_LEADS_GAMES, prior_n: float = PRIOR_GAMES) -> float:
     """This season's share of a blended number after ``games`` of it:
     CURRENT_SHARE from ``leads_at`` games on, ramping up to it before
-    that, and 1.0 when there is no last season to blend with. A side
-    that ``changed`` (engine/teamchange) leads at CHANGED_SHARE, with a
-    ramp ``prior_n`` scaled the same way (college counts in plays);
-    ``top`` overrides that lead (engine/teamchange's per-side share)."""
+    that, and 1.0 when there is no last season to blend with. Player
+    usage and the college units still use it; the NFL team units use the
+    measured ``unit_share``."""
     if not has_prior:
         return 1.0
-    top = (top or CHANGED_SHARE) if changed else CURRENT_SHARE
-    if changed:
-        prior_n = prior_n * CHANGED_PRIOR_GAMES / PRIOR_GAMES
     if games >= leads_at:
-        return top
-    return min(top, games / (games + prior_n)) if games > 0 else 0.0
+        return CURRENT_SHARE
+    return min(CURRENT_SHARE, games / (games + prior_n)) if games > 0 else 0.0
 
 
 def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
                       changes: dict | None = None) -> dict:
     """{team: {"games", "blend", "off": {unit: {"value", "rank"}}, "def": {...}}}.
 
-    ``changes`` is engine/teamchange's ``{team: {"off": [reason], "def":
-    [...]}}``: a side with a reason blends at CHANGED_SHARE, and the team
-    carries ``changed`` (the reasons) and ``blend_off``/``blend_def`` so
-    the card can say which side leans on this season and why.
+    The split is ``unit_share`` (measured). ``changes`` is
+    engine/teamchange's ``{team: {"off": [reason], "def": [...], "qb":
+    ["off"]}}``: an offence under a new starting QB takes this season
+    faster; every change's reasons ride on the team as ``changed`` with
+    ``blend_off``/``blend_def``, so the card can name them and show which
+    split actually moved.
 
     ``current`` and ``prior`` are `team_units` rows for this season (the
     weeks before the game) and last season. Ranks run 1 = best: the best
@@ -204,16 +211,15 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
     for team in teams:
         g = games.get(team, 0)
         has_prior = (team, "off") in pri or (team, "def") in pri
-        w = season_share(g, has_prior)
+        w = unit_share(g, has_prior)
         blended[team] = {"games": g, "blend": round(w, 2)}
         ch = (changes or {}).get(team) or {}
         why = {s: list(ch[s]) for s in ("off", "def") if ch.get(s)}
-        tops = ch.get("top") or {}
+        qb = set(ch.get("qb") or [])
         if why and has_prior:
             blended[team]["changed"] = why
         for side in ("off", "def"):
-            ws = season_share(g, has_prior, changed=bool(why.get(side)),
-                              top=tops.get(side)) if why else w
+            ws = unit_share(g, has_prior, new_qb=side in qb)
             if why and has_prior:
                 blended[team][f"blend_{side}"] = round(ws, 2)
             c, p = cur.get((team, side), {}), pri.get((team, side), {})

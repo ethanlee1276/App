@@ -160,9 +160,9 @@ def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -
     updated since it says 2025 and we use a mix of 2025 and 2026").
 
     Each team's offense axis leans on this season at the scan's offence
-    share, defense at its defence share — 55/45 from two games on, more
-    for a side a new QB or staff changed (engine/teamchange, via
-    gamescan.season_share) — and the whole-team axes (home edge,
+    share, defense at its defence share — gamescan.unit_share, growing
+    with the season's games and faster for an offence under a new
+    starting QB, as measured — and the whole-team axes (home edge,
     steadiness) at the mean of the two. Form is the last FORM_GAMES
     finals whichever season they fell in: a team three games in reads its
     three and last season's last two. Percentiles are then taken across
@@ -170,7 +170,7 @@ def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -
 
     ``{team: {"pct", "raw", "games" (this season), "games_last",
     "blend": {"off", "def"}}}``; {} when the league cannot be ranked."""
-    from .gamescan import season_share
+    from .gamescan import unit_share
     now = _season_stats(_finals(conn, sport, season))
     last = _season_stats(_finals(conn, sport, season - 1))
     mean = lambda xs: sum(xs) / len(xs) if xs else None       # noqa: E731
@@ -193,8 +193,7 @@ def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -
         g = len(c.get("margins", []))
         has_prior = bool(p.get("margins"))
         ch = (changes or {}).get(t) or {}
-        tops = ch.get("top") or {}
-        w = {side: season_share(g, has_prior, changed=bool(ch.get(side)), top=tops.get(side))
+        w = {side: unit_share(g, has_prior, new_qb=side in (ch.get("qb") or []))
              for side in ("off", "def")}
         wt = (w["off"] + w["def"]) / 2
         raw["offense"][t] = mix(mean(c.get("scored")), mean(p.get("scored")), w["off"])

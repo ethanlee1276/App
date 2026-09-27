@@ -12246,10 +12246,10 @@ function tapeVerdict(scan, a, b, side) {
    ranked 27th going into week 4: "we are pulling incorrect information or
    stale information or 2025 information". They were mostly 2025's — the
    ratings leaned on last season until midseason and the card never said
-   so. This season leads them (55%) from two games on, with last season
-   still in — Ethan, the same night: "2025 data should def be used"
-   (engine/gamescan.CURRENT_LEADS_GAMES, CURRENT_SHARE) — and this line
-   says the split. */
+   so. This line says the split — since 2026-09-27 the measured one,
+   growing with this season's games (engine/gamescan.unit_share,
+   scanblendfit.py), last season still in — Ethan, 2026-09-25: "2025 data
+   should def be used". */
 function tapeBasis(scan, away, home) {
   const u = (t) => ((scan.units || {})[t]) || {};
   const games = Math.min(...[away, home].map((t) => Number(u(t).games) || 0));
@@ -12261,26 +12261,32 @@ function tapeBasis(scan, away, home) {
     : `This season only · ${g} each`;
 }
 
-/* …AND WHICH SIDES LEAN HARDER ON THIS SEASON (2026-09-27). Ethan: a
-   team with a new QB, head coach or coordinator should read "the 2026
-   offense and defense ... more — like 75/25 or 70/30". The engine does
-   that per side (engine/teamchange, gamescan.CHANGED_SHARE) and ships the
-   reasons; this names them under the split, one line per side changed,
-   one line for both when a new head coach moved both. */
+/* …AND WHAT CHANGED ON EACH TEAM (2026-09-27). The engine names every
+   new QB, head coach and coordinator (engine/teamchange); MEASURED
+   (scanblendfit.py), only a new starting QB makes a season's own games
+   predict more, so only that side's split moves (gamescan.unit_share).
+   A side whose split moved says its share; a coaching change is named
+   and says it left the split alone — never a percentage it did not
+   cause. */
 function tapeChanges(scan, away, home) {
   const lines = [];
   for (const t of [away, home]) {
     const u = ((scan.units || {})[t]) || {};
     const why = u.changed || {};
+    const base = Math.round((u.blend ?? 0) * 100);
     const pct = (side) => Math.round((u[`blend_${side}`] ?? u.blend ?? 0) * 100);
-    const say = (side) => (why[side] || []).join("; ");
-    const off = say("off"), def = say("def");
-    if (off && off === def && pct("off") === pct("def")) {
-      lines.push(`${teamName(t)} offense and defense: ${pct("off")}% this season — ${off}`);
-      continue;
+    const said = new Set(), staff = [];
+    for (const side of ["off", "def"]) {
+      if (!(why[side] || []).length || pct(side) === base) continue;
+      lines.push(`${teamName(t)} ${side === "off" ? "offense" : "defense"}: ${pct(side)}% this season — ${why[side].join("; ")}`);
+      why[side].forEach((r) => said.add(r));
     }
-    if (off) lines.push(`${teamName(t)} offense: ${pct("off")}% this season — ${off}`);
-    if (def) lines.push(`${teamName(t)} defense: ${pct("def")}% this season — ${def}`);
+    for (const side of ["off", "def"]) {
+      for (const r of why[side] || []) if (!said.has(r) && !staff.includes(r)) staff.push(r);
+    }
+    if (staff.length) {
+      lines.push(`${teamName(t)}: ${staff.join("; ")} — same split as every team (new coaches measured no faster change, 2022–25)`);
+    }
   }
   return lines.map((l) => `<p class="tp-basis tp-changed">${escapeHtml(l)}</p>`).join("");
 }
@@ -12902,8 +12908,8 @@ function renderGamePage() {
           <th>${escapeHtml(g.home)}</th><th>${escapeHtml(g.away)}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <p class="gp-sim-note">${_sh.blend ? `Percentile against the whole league on this
-        season and last, blended the way the matchup scan blends its ranks — more of
-        this season for a team with a new QB or new coaches` : "Percentile against the whole league on last season’s finals"}:
+        season and last, blended the way the matchup scan blends its ranks — this
+        season counting for more as its games come in, faster for a new starting QB` : "Percentile against the whole league on last season’s finals"}:
         offense is points scored, defense is points allowed (fewer ranks
         higher), form is the last five margins, home edge is home-minus-road
         margin, steadiness is low variance. Measured shape, not a projection.</p>

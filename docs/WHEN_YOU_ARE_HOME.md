@@ -59,6 +59,20 @@ reaches one player). Read-only; paste it back:
 cd /srv/qellys && python3 hoopsdvpfit.py
 ```
 
+**B4. How much of a team's rating should be this season (2026-09-27).**
+The matchup scan's split is now MEASURED, not set by hand: this season's
+share grows with its games (a third after 3 games, half after 6), faster
+for an offence under a new starting QB; new coaches are named on the card
+but change nothing, because on 2022-2025 they did not help. That was
+measured here on the cached play-by-play. This re-runs it on the box's own
+database (the first line fills in the older seasons once; it reads
+play-by-play the box already caches). Read-only after the backfill; paste
+the output back:
+
+```
+cd /srv/qellys && python3 -m engine.gamescan backfill 2021 2022 2023 2024 && python3 scanblendfit.py
+```
+
 **C. In two or three weeks: is the crowd right?** Once a couple of
 hundred games have finished with stored prices:
 

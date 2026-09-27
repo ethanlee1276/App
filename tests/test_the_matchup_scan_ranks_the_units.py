@@ -66,21 +66,22 @@ def test_an_offence_that_faced_good_defences_is_credited_for_it():
 
 
 def test_one_game_leans_on_last_season_and_a_full_one_leads_on_this():
-    """Last season fills in before two games; from two on this season
-    leads at CURRENT_SHARE and last season stays in for the whole year —
-    Ethan, 2026-09-25: "2025 data should def be used"."""
+    """This season's share grows with its games (gamescan.unit_share,
+    measured by scanblendfit.py) and last season stays in for the whole
+    year — Ethan, 2026-09-25: "2025 data should def be used"."""
     cur = _week("A", "B", 1, 0.30, 0.0) + _week("B", "A", 1, 0.0, 0.0)
     prior = [dict(r, season=2025) for r in (_week("A", "B", 1, -0.30, 0.0) + _week("B", "A", 1, 0.0, 0.0))]
     one = G.ratings_from_rows(cur, prior)
-    assert one["A"]["blend"] == round(1 / (1 + G.PRIOR_GAMES), 2)
+    assert one["A"]["blend"] == round(1 / (1 + G.UNIT_PRIOR_GAMES), 2)
     assert one["A"]["off"]["overall"]["value"] < 0.30 * 0.5, "one game is mostly last season"
     many = []
     for wk in range(1, 17):
         many += _week("A", "B", wk, 0.30, 0.0) + _week("B", "A", wk, 0.0, 0.0)
     full = G.ratings_from_rows(many, prior)
-    assert full["A"]["blend"] == G.CURRENT_SHARE
+    share = 16 / (16 + G.UNIT_PRIOR_GAMES)
+    assert full["A"]["blend"] == round(share, 2) and share > 0.5, "a full season leads"
     v = full["A"]["off"]["overall"]["value"]
-    assert 0 < v < 0.30 * 0.55 + 1e-6, (v, "this season leads, last season still pulls it down")
+    assert 0 < v < 0.30 * share + 1e-6, (v, "this season leads, last season still pulls it down")
 
 
 def test_ranks_run_one_best_on_each_side():
