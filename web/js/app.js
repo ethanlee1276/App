@@ -2744,15 +2744,19 @@ async function renderPickOfTheDay() {
        beside NO BET — it reads it off the same `verdict.why` — so this
        line answers the question the strip leaves open: then what do I do
        with today? */
+    // NOT TWICE (Ethan, 2026-09-27, the phone card): the note is often the
+    // very sentence the strip already prints beside NO BET, and the card
+    // read "No pick today: …" two lines apart. Said once, in the strip.
+    const stripWhy = String(((got.verdict || {}).why) || "").trim();
+    const noteRaw = String(got.carried || got.relocked || got.note || "No pick today.").trim();
     const why = below
       ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
-      : escapeHtml(got.carried || got.relocked || got.note
-                    || "No pick today.");
+      : (stripWhy && noteRaw.replace(/\.$/, "") === stripWhy.replace(/\.$/, "") ? "" : escapeHtml(noteRaw));
     const art = potdBallArt();
     host.innerHTML = `<div class="card${art ? " potd-hero" : ""}"${art ? ' data-art="ball"' : ""} style="border-left:3px solid var(--brand);margin-bottom:12px">
       ${art}<div class="player">${iconMark("target")}Pick of the Day · ${escapeHtml(league)}</div>
       ${potdCallStrip(got)}
-      <div style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>
+      ${why ? `<div class="potd-why" style="color:var(--text-mute);font-size:var(--fs-md);margin-top:4px">${why}</div>` : ""}
       <div id="potd-top-pick" style="margin-top:6px;font-size:var(--fs-sm)"></div></div>`;
     renderDayTopPick();
     return;

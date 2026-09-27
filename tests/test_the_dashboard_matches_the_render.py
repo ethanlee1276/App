@@ -83,6 +83,15 @@ def test_the_new_gradients_are_tokens():
         assert re.search(rf"^  {name}: linear-gradient\(.*\);$", CSS, re.M), name
 
 
+def test_on_a_phone_the_links_are_one_row_and_the_card_says_it_once():
+    """Ethan, 2026-09-27: "They both make up too much page space"."""
+    assert "#quick-tools .qt-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }" in CSS
+    assert "#quick-tools .qt-t .k, #quick-tools .qt-go { display: none; }" in CSS
+    potd = _fn("renderPickOfTheDay")
+    assert 'const stripWhy = String(((got.verdict || {}).why) || "").trim();' in potd
+    assert '${why ? `<div class="potd-why"' in potd, "the note is left out when it only repeats the strip"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
