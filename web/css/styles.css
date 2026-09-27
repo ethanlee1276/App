@@ -312,10 +312,11 @@
   /* The Prediction Market page (Ethan's renders, 2026-09-26). */
   --venue-kalshi: #28D18C;
   --grad-pmx-art: linear-gradient(90deg, transparent 0%, transparent 8%, color-mix(in oklab, black 60%, transparent) 32%, black 56%);
+  --grad-rail-fade: linear-gradient(180deg, black 0%, black calc(100% - 56px), transparent 100%);
   --grad-brand-side: linear-gradient(90deg, color-mix(in oklab, var(--panel) 92%, transparent) 0%, color-mix(in oklab, var(--panel) 62%, transparent) 34%, transparent 62%);
   --grad-brand-foot: linear-gradient(180deg, transparent 0%, transparent 62%, color-mix(in oklab, var(--panel) 80%, transparent) 100%);
   --grad-potd-mask: linear-gradient(90deg, transparent 0%, color-mix(in oklab, black 55%, transparent) 30%, black 62%);
-  --grad-field-quiet: linear-gradient(90deg, color-mix(in oklab, var(--panel) 90%, transparent) 0%, color-mix(in oklab, var(--panel) 58%, transparent) 55%, color-mix(in oklab, var(--panel) 40%, transparent) 100%);
+  --grad-field-quiet: linear-gradient(90deg, color-mix(in oklab, var(--panel) 82%, transparent) 0%, color-mix(in oklab, var(--panel) 30%, transparent) 50%, color-mix(in oklab, var(--panel) 8%, transparent) 100%);
   --grad-pmx-verdict: linear-gradient(90deg, color-mix(in srgb, var(--brand) 8%, var(--panel)), var(--panel));
 
   --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
@@ -11634,8 +11635,10 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
    bottom of the side bar, i have to scroll all the way down the page." It
    stuck to the screen while being taller than it, so its foot only arrived
    with the page's. It scrolls on its own now, inside the screen. */
-.pmx-rail { max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain;
+.pmx-rail { max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain;
   scrollbar-width: thin; padding-bottom: 4px; }
+/* To the screen's foot, and faded there while more is below (pmxRailFade). */
+.pmx-rail.more-below { -webkit-mask-image: var(--grad-rail-fade); mask-image: var(--grad-rail-fade); }
 .pmx-card { background: var(--panel); border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
 .pmx-card-head { display: flex; justify-content: space-between; align-items: center; text-transform: uppercase;
   letter-spacing: .14em; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 8px; }
@@ -11741,9 +11744,9 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 /* Live now: the green dot beside the heading, the quiet card on the field. */
 .hd-head > span { display: inline-flex; align-items: center; gap: 10px; }
 .hd-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); }
-.hd-quiet.has-field { position: relative; overflow: hidden; min-height: 64px; border-color: color-mix(in oklab, var(--brand) 30%, var(--border-soft)); }
+.hd-quiet.has-field { position: relative; overflow: hidden; min-height: 76px; border-color: color-mix(in oklab, var(--brand) 30%, var(--border-soft)); }
 .hd-field { position: absolute; inset: 0; pointer-events: none; }
-.hd-field img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 88%; }
+.hd-field img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 52%; }
 .hd-field::after { content: ""; position: absolute; inset: 0; background: var(--grad-field-quiet); }
 .hd-quiet.has-field > :not(.hd-field) { position: relative; }
 @media (max-width: 720px) {

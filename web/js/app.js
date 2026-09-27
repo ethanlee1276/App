@@ -2643,15 +2643,18 @@ function potdCallStrip(payload) {
       escapeHtml(why || "nothing cleared the bar today")}</span>`}</div>`;
 }
 
-/* THE FOOTBALL CARD'S ART (Ethan's dashboard render, 2026-09-26): the
+/* THE CARD'S ART (Ethan's dashboard render, 2026-09-26): the league's
    ball under the lights, drawn as the card's background with the words
-   on its dark left — the Pick of the Day's own picture, where the other
-   sports keep the venue band above. */
+   on its dark left. Each league its own (2026-09-27: "we are using an NFL
+   render on the CFB page" — and MLB had none); a league without one keeps
+   the venue band above. */
+const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball" };
 function potdBallArt() {
-  if (!["nfl", "cfb"].includes(state.sport)) return "";
+  const stem = POTD_BALL[state.sport];
+  if (!stem) return "";
   return `<div class="potd-ball" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
-    srcset="img/home/nfl-ball@800.webp 800w, img/home/nfl-ball.webp 1600w"
-    sizes="(max-width: 720px) 100vw, 1000px" src="img/home/nfl-ball.webp"></div>`;
+    srcset="img/home/${stem}@800.webp 800w, img/home/${stem}.webp 1600w"
+    sizes="(max-width: 720px) 100vw, 1000px" src="img/home/${stem}.webp"></div>`;
 }
 
 async function renderPickOfTheDay() {
@@ -20948,6 +20951,22 @@ function pmxBindRooms(host) {
   host.querySelectorAll(".subnav-btn").forEach((b) => b.addEventListener("click", () => {
     shell.dataset.tab = b.dataset.subtab;
   }));
+  pmxRailFade(host.querySelector(".pmx-rail"));
+}
+
+/* THE RAIL SAYS THERE IS MORE BELOW (Ethan, 2026-09-27, circling the
+   cut-off Market tools card: "fix how there is this weird black bar down
+   here"). A scrolling column cuts its last card at the edge; faded while
+   there is more to scroll, and square again at the end, it reads as a
+   list that continues rather than a box that broke. */
+function pmxRailFade(rail) {
+  if (!rail) return;
+  const sync = () => rail.classList.toggle("more-below",
+    rail.scrollTop + rail.clientHeight < rail.scrollHeight - 4);
+  rail.addEventListener("scroll", sync, { passive: true });
+  window.addEventListener("resize", sync, { passive: true });
+  sync();
+  setTimeout(sync, 400);          // the flow list fills in after the first paint
 }
 
 async function renderIntel() {
@@ -44984,12 +45003,11 @@ async function deckLiveHTML(riding, rows) {
       first = kick ? formatKickoff(kick) : "";
     }
     const queued = (rows || []).filter((r) => r.phase === "upcoming").length;
-    /* The quiet card on the field under the lights (Ethan's dashboard
-       render, 2026-09-26) — football's picture, so football only. */
-    const field = ["nfl", "cfb"].includes(state.sport)
-      ? `<span class="hd-field" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
-          srcset="img/home/nfl-ball@800.webp 800w, img/home/nfl-ball.webp 1600w"
-          sizes="(max-width: 720px) 100vw, 1000px" src="img/home/nfl-ball@800.webp"></span>` : "";
+    /* The quiet card on an empty stadium under the lights (Ethan,
+       2026-09-27: not the 50-yard line — his stadium photo, every league). */
+    const field = `<span class="hd-field" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
+          srcset="img/home/stadium-field@800.webp 800w, img/home/stadium-field.webp 1600w"
+          sizes="(max-width: 720px) 100vw, 1000px" src="img/home/stadium-field@800.webp"></span>`;
     inner = `<div class="hd-quiet${field ? " has-field" : ""}">${field}<i class="live-dot paused"></i><span>${
       escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</span></div>`;
   }

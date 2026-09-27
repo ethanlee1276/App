@@ -24,11 +24,13 @@ def _fn(name):
 
 
 def test_the_two_backgrounds_ship_small_with_a_phone_size():
-    for stem in ("qb-helmet", "nfl-ball"):
+    for stem in ("qb-helmet", "nfl-ball", "cfb-ball", "mlb-ball", "stadium-field"):
         big, small = IMG / f"{stem}.webp", IMG / f"{stem}@800.webp"
         assert big.read_bytes()[8:12] == b"WEBP" and small.read_bytes()[8:12] == b"WEBP"
         assert big.stat().st_size < 400_000 and small.stat().st_size < 120_000
+    for stem in ("qb-helmet", "stadium-field"):
         assert f"img/home/{stem}@800.webp 800w, img/home/{stem}.webp 1600w" in APP
+    assert "img/home/${stem}@800.webp 800w, img/home/${stem}.webp 1600w" in APP
 
 
 def test_the_book_names_itself_on_the_helmet_inside_the_tools():
@@ -43,9 +45,12 @@ def test_the_book_names_itself_on_the_helmet_inside_the_tools():
     assert "  chev: '<path" in APP
 
 
-def test_football_draws_the_ball_and_the_other_sports_keep_their_venue():
+def test_each_league_draws_its_own_ball_and_the_rest_keep_their_venue():
+    """2026-09-27: "we are using an NFL render on the CFB page" — and MLB
+    had none."""
+    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball" };' in APP
     art = _fn("potdBallArt")
-    assert '["nfl", "cfb"].includes(state.sport)' in art and 'return "";' in art
+    assert "POTD_BALL[state.sport]" in art and 'return "";' in art
     potd = _fn("renderPickOfTheDay")
     assert potd.count("potdBallArt()") >= 2 or "const art = potdBallArt();" in potd
     assert 'data-art="ball"' in potd
@@ -56,7 +61,8 @@ def test_football_draws_the_ball_and_the_other_sports_keep_their_venue():
 def test_live_now_has_its_green_dot_and_the_quiet_card_its_field():
     live = _fn("deckLiveHTML")
     assert 'Live now <i class="hd-live-dot" aria-hidden="true"></i>' in live
-    assert 'class="hd-field" aria-hidden="true"' in live and '["nfl", "cfb"]' in live
+    assert 'class="hd-field" aria-hidden="true"' in live and "img/home/stadium-field" in live
+    assert "nfl-ball" not in live, "the empty stadium, not the 50-yard line"
     assert ".hd-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); }" in CSS
 
 

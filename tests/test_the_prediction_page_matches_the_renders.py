@@ -39,7 +39,10 @@ def test_the_shell_wraps_the_three_rooms():
     assert "EXTERNAL_MARKET_LINKS" in _fn("pmxDoor"), "venue doors go through the review switch"
     assert '.pmx[data-tab="proof"] .pmx-rail' in CSS, "the proof room runs full width"
     # the sticky rail scrolls on its own rather than waiting for the page's end
-    assert ".pmx-rail { max-height: calc(100vh - 150px); overflow-y: auto; overscroll-behavior: contain;" in CSS
+    assert ".pmx-rail { max-height: calc(100vh - 100px); overflow-y: auto; overscroll-behavior: contain;" in CSS
+    # and it fades at its foot while more is below, rather than cutting a card into a black bar
+    assert ".pmx-rail.more-below { -webkit-mask-image: var(--grad-rail-fade); mask-image: var(--grad-rail-fade); }" in CSS
+    assert 'pmxRailFade(host.querySelector(".pmx-rail"));' in APP
     assert "max-height: none; overflow: visible; }" in CSS, "stacked under the page, it is just part of it"
 
 
