@@ -44992,6 +44992,12 @@ function deckGameHTML(x) {
 }
 
 async function deckLiveHTML(riding, rows) {
+  /* NOT TWICE (Ethan, 2026-09-27, crossing out the Live now strip above
+     the stadium tiles: "We don't need to show the live now if we already
+     have the stadium tiles on this page"). The tiles carry every game on
+     the slate — the live ones with their LIVE badge, clock and score —
+     so the strip only speaks when the board has no games to draw. */
+  if (deckHasStadiums()) return "";
   const fast = await fetchFastLiveAll();
   const live = deckLiveGames(fast, riding, state.sport);
   const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
@@ -45016,6 +45022,10 @@ async function deckLiveHTML(riding, rows) {
       escapeHtml(deckQuietLine({ league, sport: state.sport, first, queued }))}</span></div>`;
   }
   return `${deckHead(`Live now <i class="hd-live-dot" aria-hidden="true"></i>`, "#live", "live", "Live")}${inner}`;
+}
+
+function deckHasStadiums() {
+  return (((state.data || {}).games) || []).length > 0;
 }
 
 function deckRidingHTML(riding) {

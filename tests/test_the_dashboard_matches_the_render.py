@@ -101,6 +101,15 @@ def test_the_live_card_is_not_a_tower():
     assert '<div class="lb-play lb-why">Catching up' in APP
 
 
+def test_live_now_steps_aside_when_the_stadium_tiles_are_there():
+    """Ethan, 2026-09-27: "We don't need to show the live now if we already
+    have the stadium tiles on this page." The tiles carry the live games."""
+    live = _fn("deckLiveHTML")
+    assert live.index('if (deckHasStadiums()) return "";') < live.index("fetchFastLiveAll()"), \
+        "no strip, and no scoreboard fetch for it, when the tiles are drawn"
+    assert "return (((state.data || {}).games) || []).length > 0;" in _fn("deckHasStadiums")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
