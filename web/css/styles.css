@@ -11826,6 +11826,11 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   #nav-search { width: 150px; }
 }
 
+/* The prediction markets on the board's own spread and total (crowdLinesHTML). */
+.gp-crowd-lines { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.gp-crowd-lines b { color: var(--text); font-variant-numeric: tabular-nums; }
+
 /* A Most Likely pick, explained (whyLikelyHTML, 2026-09-23) — the card
    that leads the pick page when the reader came from that board. */
 .pp-book { color: var(--text-mute); font-weight: 400; }

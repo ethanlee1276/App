@@ -9550,12 +9550,38 @@ function oneBoardHomeHTML() {
    measures whether the crowd beats the books. Our number is not on the
    game: the moneyline card is the members'. Shown for both clubs; it
    moves no pick. */
+/* THE SPREAD AND THE TOTAL, when a venue prices the board's own line
+   (engine/crowd.crowd_lines — the same bet the books quote, never a
+   neighbouring one). A book's line is set to split the money about
+   evenly, so a crowd that says 57% at that line is saying the line is
+   off — recorded for crowdfit, shown here, moving no pick. */
+function crowdLinesHTML(g, c) {
+  const rows = [];
+  const pct = (p) => `${Math.round(p * 100)}%`;
+  if (c.poly_home_cover != null && c.spread_home_line != null) {
+    const hl = Number(c.spread_home_line);
+    const homeGives = hl < 0;
+    const fav = homeGives ? g.home : g.away;
+    const p = homeGives ? c.poly_home_cover : 1 - c.poly_home_cover;
+    rows.push(`<li><b>${escapeHtml(teamName(fav))} ${MINUS}${Math.abs(hl).toFixed(1)}</b> covers ${pct(p)}
+      <span class="mini">on Polymarket</span></li>`);
+  }
+  if (c.poly_over != null && c.total_line != null) {
+    rows.push(`<li><b>Over ${Number(c.total_line).toFixed(1)}</b> ${pct(c.poly_over)}
+      <span class="mini">on Polymarket</span></li>`);
+  }
+  return rows.length ? `<ul class="gp-crowd-lines">${rows.join("")}</ul>` : "";
+}
+
 function crowdStripHTML(g) {
   const c = (g && g.crowd) || null;
   if (!c) return "";
   const cells = [["kalshi", "Kalshi"], ["polymarket", "Polymarket"], ["books", "Books"]]
     .filter(([k]) => c[k] != null);
-  if (!cells.some(([k]) => k === "kalshi" || k === "polymarket")) return "";
+  const lines = crowdLinesHTML(g, c);
+  if (!cells.some(([k]) => k === "kalshi" || k === "polymarket")) {
+    return lines ? `<div class="gp-crowd"><div class="gp-crowd-head">The prediction markets on this line</div>${lines}</div>` : "";
+  }
   const pct = (p) => `${Math.round(p * 100)}%`;
   const gap = c.gap_pts != null && Math.abs(c.gap_pts) >= 3
     ? `<p class="mini gp-crowd-gap">The prediction markets rate ${escapeHtml(teamName(c.gap_pts > 0 ? g.home : g.away))}
@@ -9565,7 +9591,7 @@ function crowdStripHTML(g) {
       cells.map(([, l]) => `<th scope="col">${l}</th>`).join("")}</tr></thead>
     <tbody>${[["away", (p) => 1 - p], ["home", (p) => p]].map(([side, f]) => `<tr><th scope="row">${
       escapeHtml(teamName(g[side]))}</th>${cells.map(([k]) => `<td>${pct(f(c[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
-    </table>${gap}</div>`;
+    </table>${gap}${lines}</div>`;
 }
 function obGameHTML(g) {
   const k = `${g.away}@${g.home}`;

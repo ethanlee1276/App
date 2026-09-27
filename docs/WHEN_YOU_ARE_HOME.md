@@ -37,6 +37,18 @@ for f in ('recommendations.json','mlb_recommendations.json','cfb.json'):
     print(f, d.get('crowd_census'), d.get('polymarket_tags'))"
 ```
 
+**B2. Spreads and totals (2026-09-27).** The prediction markets'
+price on the board's own spread and total is now read too. This prints
+what each venue lists beyond the winner: Polymarket's spreads and totals
+per league (those are live in the builds, and the "crowd prices" line
+now says "spread N, total N"), and which CANDIDATE Kalshi spread/total
+series exist (discovery only — nothing Kalshi is wired in until this
+says which series are real). Paste the output back:
+
+```
+cd /srv/qellys && python3 crowdprobe.py nfl cfb mlb
+```
+
 **C. In two or three weeks: is the crowd right?** Once a couple of
 hundred games have finished with stored prices:
 

@@ -135,6 +135,7 @@ def parse_events(events: list[dict]) -> list[dict]:
             if not (0.0 < p0 < 1.0):
                 continue
             out.append({
+                "lines": parse_lines(ev),
                 "slug": str(m.get("slug") or ""),
                 "event_slug": str(ev.get("slug") or ""),
                 "question": str(m.get("question") or ev.get("title") or ""),
@@ -147,6 +148,84 @@ def parse_events(events: list[dict]) -> list[dict]:
                 "start": str(m.get("gameStartTime") or ev.get("startDate") or ev.get("endDate") or "")[:19],
             })
     return out
+
+
+# --- the spreads and totals on the same game event -------------------------
+#: THE OTHER TWO BETS ON A GAME (Ethan, 2026-09-26: "use pollymarket and
+#: kalshi odds for money lines and other bets"). A game event carries its
+#: spread and total markets beside the moneyline. Read with the same care:
+#: a market is a spread or a total only when both its kind AND its line can
+#: be read without guessing, and anything else is skipped, never coerced.
+#:
+#:   spread  "Spread: Chiefs (-3.5)", outcomes the two clubs — the named
+#:           club gives (or gets) the points in the brackets;
+#:   total   "Chiefs vs. Bills: O/U 47.5", outcomes Over / Under.
+#:
+#: Gamma's own `line` field is used first where it sends one; the question
+#: is the fallback. `sportsMarketType` narrows the kind where present.
+_SPREAD_Q = re.compile(r"spread\W+(.+?)\s*\(\s*([+-]?\d+(?:\.\d+)?)\s*\)", re.I)
+_TOTAL_Q = re.compile(r"(?:o/u|over/under|total(?: points)?)\s*:?\s*(\d+(?:\.\d+)?)", re.I)
+
+
+def _side_price(m: dict, idx: int):
+    """``(p, basis, spread_cents)`` for outcome ``idx`` of a two-outcome
+    market: the book's mid where it is two-sided (Gamma's bid/ask are the
+    FIRST outcome's), else the last trade."""
+    prices = [_num(x) for x in _jlist(m.get("outcomePrices"))]
+    bid, ask = _num(m.get("bestBid")), _num(m.get("bestAsk"))
+    if bid and ask and 0 < bid < ask < 1:
+        mid = (bid + ask) / 2.0
+        return (mid if idx == 0 else 1.0 - mid), "book", round((ask - bid) * 100.0, 2)
+    if len(prices) == 2 and prices[idx] is not None:
+        sp = _num(m.get("spread"))
+        return prices[idx], "last_trade", (round(sp * 100.0, 2) if sp is not None else None)
+    return None, "", None
+
+
+def parse_line(m: dict) -> dict | None:
+    """One spread or total market as a row, or None when it is neither or
+    cannot be read cleanly."""
+    if not isinstance(m, dict) or m.get("closed") is True:
+        return None
+    outs = [str(o).strip() for o in _jlist(m.get("outcomes"))]
+    if len(outs) != 2:
+        return None
+    q = str(m.get("question") or "")
+    kind = str(m.get("sportsMarketType") or "").lower()
+    low = {o.lower() for o in outs}
+    row = None
+    if low == {"over", "under"} and kind in ("", "totals", "total", "over_under"):
+        line = _num(m.get("line"))
+        hit = _TOTAL_Q.search(q)
+        if line is None and hit:
+            line = _num(hit.group(1))
+        if line is None or line <= 0:
+            return None
+        idx = [o.lower() for o in outs].index("over")
+        p, basis, spread = _side_price(m, idx)
+        row = {"kind": "total", "line": line, "p": p}               # P(over)
+    elif not (low & {"yes", "no", "over", "under", "draw", "tie"}) and (
+            kind in ("spreads", "spread") or (not kind and "spread" in q.lower())):
+        hit = _SPREAD_Q.search(q)
+        if not hit:
+            return None
+        team, line = hit.group(1).strip(), _num(hit.group(2))
+        names = [o.lower() for o in outs]
+        if line is None or team.lower() not in names:
+            return None
+        idx = names.index(team.lower())
+        p, basis, spread = _side_price(m, idx)
+        row = {"kind": "spread", "team": outs[idx], "line": line, "p": p}   # P(team covers)
+    if not row or row["p"] is None or not (0.0 < row["p"] < 1.0):
+        return None
+    row.update({"p": round(row["p"], 4), "price_basis": basis, "spread_cents": spread,
+                "volume_24h": _num(m.get("volume24hr")) or 0.0,
+                "liquidity": _num(m.get("liquidity")) or 0.0})
+    return row
+
+
+def parse_lines(ev: dict) -> list[dict]:
+    return [r for r in (parse_line(m) for m in (ev.get("markets") or [])) if r]
 
 
 #: Polymarket's own league names on its /sports list, per league of ours.

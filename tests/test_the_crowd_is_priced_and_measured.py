@@ -136,7 +136,7 @@ def test_every_venue_hangs_on_the_game_and_our_number_does_not():
     assert abs(c["books"] - 0.5798) < 0.002 and c["gap_pts"] == round((0.6 - c["books"]) * 100, 1)
     assert "model" not in c and "model_raw" not in c, "the moneyline card is the members'"
     assert "crowd" not in b["games"][1], "a game no venue priced carries nothing"
-    assert census == {"games": 2, "kalshi": 1, "polymarket": 1}
+    assert census == {"games": 2, "kalshi": 1, "polymarket": 1, "poly_spread": 0, "poly_total": 0}
 
 
 def test_a_wide_or_thin_book_is_not_a_price():
