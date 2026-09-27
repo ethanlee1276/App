@@ -1044,6 +1044,14 @@ def main() -> None:
     # likely bets for them?"). The read picks the side and keeps the seat;
     # it never moves a number (engine/likely.READ_SEATS).
     def _scan_first(partial):
+        # WHAT WAS CARRIED FROM LAST SEASON, AND WHO CHANGED TEAMS, on the
+        # rows BEFORE the Most Likely board reads them: engine/boldcheck
+        # calls a number built on another team's role a data problem
+        # (DJ Moore, off his Chicago seasons, 2026-09-27) and could not
+        # see it when this ran only after the board.
+        if carry_report.get("carried"):
+            from engine import carry as _carry_early
+            _carry_early.decorate(partial.get("recommendations") or [], carry_report)
         from engine import gamescan as _scan
         try:
             _ns = _scan.attach_nfl(partial, slate, args.season, args.week,
@@ -1529,6 +1537,14 @@ def main() -> None:
                     depth=None, category=_cat, grade_label=_label)
                 if _n:
                     print(f"Matchup picks ({_kind}): {_n} row(s) journaled on paper.")
+            # THE BOLD ROWS (engine/boldcheck): far from the books, checked
+            # and found real — shown on Most Likely, on paper here.
+            _n = ledger.log_most_likely(
+                lconn, {"sport": "nfl", "date": result.get("date", ""), "games": result.get("games") or [],
+                        "most_likely": [r for r in result.get("most_likely") or [] if r.get("bold")]},
+                depth=None, category="bold", grade_label="Bold")
+            if _n:
+                print(f"Bolder than the books: {_n} row(s) journaled on paper.")
             # WHERE WE DISAGREE WITH THE MARKET (engine/gameplan): the rows
             # the credibility guard refused, on paper under `plan_gap` at
             # our RAW chance — so the record, not an argument, says whether

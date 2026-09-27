@@ -1015,7 +1015,11 @@ def admissible(row: dict, floor=None) -> str:
     # credibility as an over.
     if int(row["odds"]) < HEAVIEST_PRICE:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
-    if not _credible(prob, row.get("implied_prob")):
+    # A REAL FIND STANDS PAST BOTH CREDIBILITY BARS (engine/boldcheck):
+    # no sign its inputs are wrong, and a measured step or his own games
+    # account for the gap. Everything else below still applies to it.
+    bold = bool(row.get("bold"))
+    if not _credible(prob, row.get("implied_prob")) and not bold:
         return "the shown probability disagrees with the market by more than we credit"
     # EACH REFUSAL NAMES ITS OWN NUMBER. Three different questions are
     # asked of three different probabilities here, and until 2026-09-08
@@ -1038,7 +1042,7 @@ def admissible(row: dict, floor=None) -> str:
     # …and the same question asked of the claim BEFORE the shrink, which
     # is the only place a big disagreement is still visible. See
     # `engine_credible`.
-    if not engine_credible(row):
+    if not engine_credible(row) and not bold:
         return "the raw model claim, before the shrink, disagrees with the market by more than we credit"
     # THE INJURY HOLD, WHICH THIS BOARD NEVER HAD. `rules.apply_rules`
     # holds a Questionable / Doubtful / Out player "until inactives
@@ -1532,6 +1536,18 @@ def _main_other_side(row: dict, market: str, fits=None, floor=None,
     return dict(cand, fair=fair if fair is not None else cand["prob"], source="model", main=True)
 
 
+def _bold_verdict(row: dict, shown) -> dict | None:
+    """engine/boldcheck's verdict on the main line when our number — as
+    shown, or the engine's claim before the shrink — sits more than
+    MAX_CREDIBLE_EDGE from the market's; None inside the bar."""
+    from .boldcheck import check
+    raw = row.get("raw_prob") if not row.get("sharp_anchored") else None
+    try:
+        return check(row, row.get("side"), row.get("line"), shown, row.get("fair_prob"), raw)
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
 def _main_shown(row: dict, market: str, fits=None) -> float | None:
     """The chance `from_prop` shows for the main line's own side: the
     display mixture where the market has one, else the engine's number
@@ -1652,7 +1668,12 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     # as `main_line` so the card can say which book number the rung
     # stands beside. See `_best_rung`.
     got = rungs(row, market, fits, floor=floor, ladder=ladder)
-    main_ok = shown >= _floor(floor) and _credible(shown, row.get("fair_prob"))
+    # FAR FROM THE BOOKS: A DATA ERROR, OR A REAL FIND? (engine/boldcheck;
+    # Ethan, 2026-09-27). A main line the credibility bar would refuse is
+    # asked first; a "found" row stands past the bar, labelled.
+    bold = _bold_verdict(row, shown)
+    found = bool(bold and bold.get("verdict") == "found")
+    main_ok = shown >= _floor(floor) and (_credible(shown, row.get("fair_prob")) or found)
     # THE HELD NUMBER FIRST (HOLD_MARGIN, `_held_choice`): the main line or
     # the rung the board held, while it still clears; only then the
     # likeliest of the two.
@@ -1685,14 +1706,14 @@ def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
     #
     # REFUSED, NOT SHRUNK: a likelihood board that quietly moves its
     # number toward the market has stopped saying what it believes.
-    if not _credible(shown, row.get("fair_prob")):
+    if not _credible(shown, row.get("fair_prob")) and not found:
         return _refuse(census, "the shown probability disagrees with the market by more than we credit")
-    return _row_from(row, market, sport, bettable, prob, shown=shown, source=source)
+    return _row_from(row, market, sport, bettable, prob, shown=shown, source=source, bold=bold)
 
 
 def _row_from(row: dict, market: str, sport: str, bettable, prob,
               shown: float | None = None, source: str = "model",
-              rung: dict | None = None) -> dict:
+              rung: dict | None = None, bold: dict | None = None) -> dict:
     """The likelihood row, from the main line or from a rung of the ladder."""
     if rung is not None:
         side, line, book, odds = rung["side"], rung["line"], rung["book"], rung["odds"]
@@ -1794,6 +1815,12 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         # hitter who then sat, and baseball has no absent-player grade.
         "lineup_confirmed": row.get("lineup_confirmed"),
         "warnings": list(row.get("warnings") or []),
+        # FAR FROM THE BOOKS (engine/boldcheck): the verdict, and — when it
+        # is a real find — the flag that lets the row past the credibility
+        # bars in `admissible`, with the reason the card prints.
+        "gap_check": bold,
+        "bold": bool(bold and bold.get("verdict") == "found"),
+        "bold_why": list((bold or {}).get("why") or []) if bold and bold.get("verdict") == "found" else [],
     }
 
 

@@ -2539,6 +2539,13 @@ def main() -> None:
                 depth=None, category=_cat, grade_label="Matchup")
             if _mp_n:
                 print(f"Matchup picks ({_kind}): {_mp_n} row(s) journaled on paper.")
+        # The bold rows, on paper (engine/boldcheck; nfl_build).
+        _bold_n = ledger.log_most_likely(
+            lconn, {"sport": "cfb", "date": args.date, "games": out.get("games") or [],
+                    "most_likely": [r for r in out.get("most_likely") or [] if r.get("bold")]},
+            depth=None, category="bold", grade_label="Bold")
+        if _bold_n:
+            print(f"Bolder than the books: {_bold_n} row(s) journaled on paper.")
         # Where we disagree with the market, on paper (engine/gameplan; nfl_build).
         from engine.gameplan import journal_rows as _gap_rows
         _gap_n = ledger.log_most_likely(

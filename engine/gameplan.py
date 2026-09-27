@@ -272,6 +272,11 @@ def gaps(g: dict, props: list) -> list:
         gap = float(raw) - float(fair)
         if abs(gap) <= GAP_MIN:
             continue
+        from .boldcheck import check as _check
+        try:
+            v = _check(r, side, r.get("line"), r.get("hit_prob"), fair, raw) or {}
+        except Exception:                                    # noqa: BLE001
+            v = {}
         out.append({"kind": "prop", "player": r.get("player"), "team": r.get("team"), "opponent": r.get("opponent"),
                     "position": r.get("position"), "headshot": r.get("headshot"), "market": r.get("market"),
                     "market_label": r.get("market_label") or r.get("market"), "side": side, "line": r.get("line"),
@@ -279,9 +284,15 @@ def gaps(g: dict, props: list) -> list:
                     "odds": r.get("odds"), "book": r.get("book"), "model_prob": round(float(raw), 4),
                     "shown_prob": round(float(r.get("hit_prob") or raw), 4), "raw_prob": round(float(raw), 4), "fair_prob": round(float(fair), 4), "gap": round(gap, 4),
                     "projection": r.get("projection"), "game": _key(g),
+                    "verdict": v.get("verdict") or "unexplained", "verdict_label": v.get("label") or "",
                     "why": (f"Our raw number says {float(raw):.0%} on the {side.lower()}; the market says "
-                            f"{float(fair):.0%}. Past {GAP_MIN:.0%} the site calls that its own error and stakes "
-                            f"nothing — on paper so the record can say whether it was.")})
+                            f"{float(fair):.0%}. "
+                            + (f"{v['label']} — {' '.join(v.get('why') or [])} "
+                               if v.get("label") else "")
+                            + ("Shown on Most Likely; the site stakes nothing on it and grades it on paper."
+                               if v.get("verdict") == "found" else
+                               "Kept off the board; the site stakes nothing and grades it on paper so the "
+                               "record can say whether it was."))})
     out.sort(key=lambda r: -abs(r["gap"]))
     return out[:4]
 

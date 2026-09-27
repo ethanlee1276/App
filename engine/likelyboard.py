@@ -78,7 +78,7 @@ RECORD_MISS = 0.08
 MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "scan+model"}
 MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
-RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board")
+RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board", "bold")
 #: Chance bands the record is read in (ledger.LIKELY_BANDS).
 BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 
@@ -339,7 +339,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
                 row["case_lines"].append(t)
 
     for r in result.get("most_likely") or []:
-        add(r, "likely")
+        add(r, "likely", r.get("bold_why"))
     for g in result.get("matchup_picks") or []:
         for r in (g.get("td") or []) + (g.get("props") or []):
             add(r, "matchup", r.get("matchup_lines"))

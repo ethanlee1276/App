@@ -447,7 +447,10 @@ def decorate(recommendations: list[dict], report: dict) -> int:
     n = 0
     for r in recommendations:
         entry = carried.get(r.get("player"))
-        if not entry:
+        # ONCE PER ROW: nfl_build stamps the board before the Most Likely
+        # check reads it (engine/boldcheck needs the team change) and again
+        # after, for the rows built later.
+        if not entry or r.get("carried"):
             continue
         season, games = entry.get("season"), entry.get("games")
         note = (f"Carried from {season}: no {season + 1} games yet, so this "

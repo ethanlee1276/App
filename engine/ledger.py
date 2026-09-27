@@ -1166,6 +1166,11 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
         # one refactor away from not being one.
         if r.get("reserve"):
             continue
+        # A BOLD ROW (engine/boldcheck) is on the board for the reader and
+        # in its own paper bucket ("bold") for the record — never in the
+        # staked Most Likely book until that record says it wins.
+        if category == "likely" and r.get("bold"):
+            continue
         # A LOCKED PICK IS JOURNALED LIKE ANY OTHER, at the number it went
         # up at (likely._locked carries it). It used to be skipped on the
         # grounds that it "was journaled when it went up" — true only for

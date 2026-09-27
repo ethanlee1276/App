@@ -1,0 +1,477 @@
+{
+ "Kenyon Sadiq|rec_yds": {
+  "side": "OVER",
+  "line": 28.5,
+  "odds": -115,
+  "book": "FanDuel",
+  "hit_prob": 0.5841,
+  "raw_prob": 0.673668,
+  "fair_prob": 0.5108,
+  "projection": 37.9,
+  "proj_std": 20.864,
+  "recent_values": [
+   17.0,
+   21.0
+  ],
+  "carried": null,
+  "market": "rec_yds",
+  "player": "Kenyon Sadiq",
+  "team": "NYJ",
+  "opponent": "DET",
+  "position": "TE",
+  "has_market": true,
+  "chain": {
+   "base": {
+    "value": 19.7797
+   },
+   "steps": [
+    {
+     "key": "matchup",
+     "mult": 1.0965,
+     "why": "Soft matchup \u2014 DET allow the 2nd-most passing yards (329 a game) (\u00d71.07); Game script: 6.5-pt underdog \u2014 projected trailing script leans pass volume up (\u00d71.03)"
+    },
+    {
+     "key": "lineup",
+     "mult": 1.747,
+     "why": "Teammate out: Mason Taylor just ruled out ahead of him at TE \u2014 measured (\u00d71.75)"
+    }
+   ]
+  },
+  "logs": [
+   {
+    "week": 2,
+    "value": 17.0,
+    "snaps": 0.36
+   },
+   {
+    "week": 1,
+    "value": 21.0,
+    "snaps": 0.42
+   }
+  ]
+ },
+ "Omarion Hampton|receptions": {
+  "side": "OVER",
+  "line": 1.5,
+  "odds": -148,
+  "book": "FanDuel",
+  "hit_prob": 0.6362,
+  "raw_prob": 0.70699,
+  "fair_prob": 0.5654,
+  "projection": 3.0,
+  "proj_std": 2.817,
+  "recent_values": [
+   2.0,
+   0.0,
+   8.0,
+   1.0,
+   1.0,
+   2.0,
+   6.0,
+   5.0,
+   6.0,
+   1.0,
+   2.0
+  ],
+  "carried": {
+   "season": 2025,
+   "games": 9,
+   "weight": 0.8181818181818182,
+   "position": "RB"
+  },
+  "market": "receptions",
+  "player": "Omarion Hampton",
+  "team": "LAC",
+  "opponent": "BUF",
+  "position": "RB",
+  "has_market": true,
+  "chain": {
+   "base": {
+    "value": 2.9571
+   },
+   "steps": [
+    {
+     "key": "matchup",
+     "mult": 1.0261,
+     "why": "Game script: 7.0-pt underdog \u2014 projected trailing script leans pass volume up (\u00d71.03)"
+    }
+   ]
+  },
+  "logs": [
+   {
+    "week": 2,
+    "value": 2.0,
+    "snaps": 0.63
+   },
+   {
+    "week": 1,
+    "value": 0.0,
+    "snaps": 0.58
+   },
+   {
+    "week": 17,
+    "value": 8.0,
+    "snaps": 0.81
+   },
+   {
+    "week": 16,
+    "value": 1.0,
+    "snaps": 0.55
+   },
+   {
+    "week": 15,
+    "value": 1.0,
+    "snaps": 0.36
+   },
+   {
+    "week": 14,
+    "value": 2.0,
+    "snaps": 0.31
+   },
+   {
+    "week": 5,
+    "value": 6.0,
+    "snaps": 0.58
+   },
+   {
+    "week": 4,
+    "value": 5.0,
+    "snaps": 0.89
+   },
+   {
+    "week": 3,
+    "value": 6.0,
+    "snaps": 0.79
+   },
+   {
+    "week": 2,
+    "value": 1.0,
+    "snaps": 0.62
+   },
+   {
+    "week": 1,
+    "value": 2.0,
+    "snaps": 0.8
+   }
+  ]
+ },
+ "Ladd McConkey|receptions": {
+  "side": "UNDER",
+  "line": 4.5,
+  "odds": 116,
+  "book": "DraftKings",
+  "hit_prob": 0.6148,
+  "raw_prob": 0.792695,
+  "fair_prob": 0.4369,
+  "projection": 3.4,
+  "proj_std": 1.375,
+  "recent_values": [
+   3.0,
+   5.0,
+   1.0,
+   4.0,
+   2.0,
+   1.0,
+   4.0,
+   3.0,
+   4.0,
+   4.0,
+   6.0,
+   9.0
+  ],
+  "carried": {
+   "season": 2025,
+   "games": 16,
+   "weight": 0.8888888888888888,
+   "position": "WR"
+  },
+  "market": "receptions",
+  "player": "Ladd McConkey",
+  "team": "LAC",
+  "opponent": "BUF",
+  "position": "WR",
+  "has_market": true,
+  "chain": {
+   "base": {
+    "value": 3.402
+   },
+   "steps": [
+    {
+     "key": "matchup",
+     "mult": 0.993,
+     "why": "Tough matchup (\u00d70.97) \u2014 86% of BUF's rating is last season, when they were stingy with passing yards; 2 games into this one they allow 300.5 a game, the 3rd-most; Game script: 7.0-pt underdog \u2014 projected trailing script leans pass volume up (\u00d71.03)"
+    }
+   ]
+  },
+  "logs": [
+   {
+    "week": 2,
+    "value": 3.0,
+    "snaps": 0.46
+   },
+   {
+    "week": 1,
+    "value": 5.0,
+    "snaps": 0.49
+   },
+   {
+    "week": 17,
+    "value": 1.0,
+    "snaps": 0.89
+   },
+   {
+    "week": 16,
+    "value": 4.0,
+    "snaps": 0.75
+   },
+   {
+    "week": 15,
+    "value": 2.0,
+    "snaps": 0.74
+   },
+   {
+    "week": 14,
+    "value": 1.0,
+    "snaps": 0.86
+   },
+   {
+    "week": 13,
+    "value": 4.0,
+    "snaps": 0.76
+   },
+   {
+    "week": 11,
+    "value": 3.0,
+    "snaps": 0.62
+   },
+   {
+    "week": 10,
+    "value": 4.0,
+    "snaps": 0.71
+   },
+   {
+    "week": 9,
+    "value": 4.0,
+    "snaps": 0.69
+   },
+   {
+    "week": 8,
+    "value": 6.0,
+    "snaps": 0.58
+   },
+   {
+    "week": 7,
+    "value": 9.0,
+    "snaps": 0.88
+   }
+  ]
+ },
+ "DJ Moore|receptions": {
+  "side": "UNDER",
+  "line": 3.5,
+  "odds": 110,
+  "book": "FanDuel",
+  "hit_prob": 0.5921,
+  "raw_prob": 0.734704,
+  "fair_prob": 0.4494,
+  "projection": 2.2,
+  "proj_std": 2.061,
+  "recent_values": [
+   0.0,
+   5.0,
+   1.0,
+   1.0,
+   5.0,
+   4.0,
+   1.0,
+   2.0,
+   5.0,
+   1.0,
+   0.0,
+   4.0
+  ],
+  "carried": {
+   "season": 2025,
+   "games": 17,
+   "weight": 0.8947368421052632,
+   "position": "WR",
+   "reset": {
+    "kind": "team change",
+    "detail": "joined BUF from CHI"
+   }
+  },
+  "market": "receptions",
+  "player": "DJ Moore",
+  "team": "BUF",
+  "opponent": "LAC",
+  "position": "WR",
+  "has_market": true,
+  "chain": {
+   "base": {
+    "value": 2.3166
+   },
+   "steps": [
+    {
+     "key": "matchup",
+     "mult": 0.9528,
+     "why": "Game script: 7.0-pt favorite \u2014 projected leading script leans pass volume down (\u00d70.97)"
+    }
+   ]
+  },
+  "logs": [
+   {
+    "week": 2,
+    "value": 0.0,
+    "snaps": null
+   },
+   {
+    "week": 1,
+    "value": 5.0,
+    "snaps": null
+   },
+   {
+    "week": 18,
+    "value": 1.0,
+    "snaps": null
+   },
+   {
+    "week": 17,
+    "value": 1.0,
+    "snaps": null
+   },
+   {
+    "week": 16,
+    "value": 5.0,
+    "snaps": null
+   },
+   {
+    "week": 15,
+    "value": 4.0,
+    "snaps": null
+   },
+   {
+    "week": 14,
+    "value": 1.0,
+    "snaps": null
+   },
+   {
+    "week": 13,
+    "value": 2.0,
+    "snaps": null
+   },
+   {
+    "week": 12,
+    "value": 5.0,
+    "snaps": null
+   },
+   {
+    "week": 11,
+    "value": 1.0,
+    "snaps": null
+   },
+   {
+    "week": 10,
+    "value": 0.0,
+    "snaps": null
+   },
+   {
+    "week": 9,
+    "value": 4.0,
+    "snaps": null
+   }
+  ]
+ },
+ "Garrett Wilson|rec_yds": {
+  "side": "UNDER",
+  "line": 70.5,
+  "odds": -110,
+  "book": "ESPN BET",
+  "hit_prob": 0.5634,
+  "raw_prob": 0.640943,
+  "fair_prob": 0.5,
+  "projection": 58.2,
+  "proj_std": 34.198,
+  "recent_values": [
+   57.0,
+   79.0,
+   0.0,
+   13.0,
+   71.0,
+   82.0,
+   84.0,
+   50.0,
+   95.0
+  ],
+  "carried": {
+   "season": 2025,
+   "games": 7,
+   "weight": 0.7777777777777778,
+   "position": "WR"
+  },
+  "market": "rec_yds",
+  "player": "Garrett Wilson",
+  "team": "NYJ",
+  "opponent": "DET",
+  "position": "WR",
+  "has_market": true,
+  "chain": {
+   "base": {
+    "value": 54.0036
+   },
+   "steps": [
+    {
+     "key": "matchup",
+     "mult": 1.0769,
+     "why": "Soft matchup \u2014 DET allow the 2nd-most passing yards (329 a game) (\u00d71.05); Game script: 6.5-pt underdog \u2014 projected trailing script leans pass volume up (\u00d71.03)"
+    }
+   ]
+  },
+  "logs": [
+   {
+    "week": 2,
+    "value": 57.0,
+    "snaps": 0.88
+   },
+   {
+    "week": 1,
+    "value": 79.0,
+    "snaps": 0.75
+   },
+   {
+    "week": 10,
+    "value": 0.0,
+    "snaps": 0.39
+   },
+   {
+    "week": 6,
+    "value": 13.0,
+    "snaps": 0.84
+   },
+   {
+    "week": 5,
+    "value": 71.0,
+    "snaps": 0.94
+   },
+   {
+    "week": 4,
+    "value": 82.0,
+    "snaps": 0.98
+   },
+   {
+    "week": 3,
+    "value": 84.0,
+    "snaps": 1.0
+   },
+   {
+    "week": 2,
+    "value": 50.0,
+    "snaps": 0.94
+   },
+   {
+    "week": 1,
+    "value": 95.0,
+    "snaps": 1.0
+   }
+  ]
+ }
+}

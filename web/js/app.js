@@ -9036,6 +9036,15 @@ function likelyTagsHTML(r) {
     tags.push([`${who.split(" ").slice(-1)[0]} out ${pct(Number(mate.applied))}`,
                Number(mate.applied) > 1 ? "up" : "down", mate.headline || ""]);
   }
+  /* BOLDER THAN THE BOOKS (engine/boldcheck, 2026-09-27): our number is
+     more than ten points above the market's, and the check found it
+     real, not a data error — the reason rides in the tag and under the
+     card's "Why?". Shown, graded on paper, not staked. */
+  if (r.bold) {
+    tags.push(["Bolder than the books", "up",
+               ((r.bold_why || []).join(" ") || "More confident than the market, and checked for a data error")
+               + " Graded on paper, not staked."]);
+  }
   const thin = ((state.data || {}).thin || {})[r.player];
   if (thin && thin.games) {
     tags.push([`${thin.games} game${thin.games === 1 ? "" : "s"} in`, "",
