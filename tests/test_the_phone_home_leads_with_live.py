@@ -272,7 +272,8 @@ def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
     light = CSS.index(':root[data-theme="light"]', block)   # the light block AFTER the new-look tokens, not the first in the sheet
     assert "--font-headline:" not in CSS[block:light], "the new-look block must not override it the way it overrides --font-display"
     assert ".potd-hero .potd-bet + span { font-family: var(--font-mono); }" in CSS
-    assert ".potd-hero.has-art { padding-top: 124px;" in CSS, "the art has room to be seen"
+    assert ".potd-hero[data-art=\"ball\"] { padding: 22px 26px; background-image: none; }" in CSS, \
+        "the art sits behind the words, full bleed"
 
 
 if __name__ == "__main__":

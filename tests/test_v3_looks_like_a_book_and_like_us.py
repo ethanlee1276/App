@@ -132,10 +132,16 @@ def test_the_pick_of_the_day_is_a_hero_on_its_own_venue_render():
     assert '[pick.odds != null ? american(pick.odds) + (pick.book ? ` at ${escapeHtml(pick.book)}` : "") : escapeHtml(pick.book || ""),' in potd, \
         "an unpriced pick is not the word undefined"
     assert 'matchup].filter(Boolean).join(" · ")' in potd, "no leading separator when the price is missing"
-    assert '<div class="card potd-hero${potdArt ? " has-art" : ""}"' in potd
-    assert "--potd-art:url(${potdArt})" in potd
-    assert ".potd-hero.has-art { padding-top: 124px; background-image: var(--grad-potd-fade), var(--potd-art); }" in CSS
-    assert "  --potd-art: none;" in CSS and "  --grad-potd-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel) 25%, transparent)," in CSS
+    # Ethan, 2026-09-27: "when we have a pick of the day ... I want the
+    # color matching stadium art, then when there is no pick we use the
+    # renders". The team's stadium sits where the ball does; the ball is
+    # the fallback for a league with no stadium family.
+    assert "const heroArt = potdVenueArt(potdArt) || potdBallArt();" in potd
+    assert '<div class="card potd-hero"${heroArt ? \' data-art="ball"\' : ""}' in potd
+    assert "${heroArt}<div class=\"player\">" in potd and "potdBallArt()}<div" not in potd
+    venue = _fn("potdVenueArt")
+    assert 'class="potd-ball potd-venue"' in venue and "escapeHtml(src)" in venue
+    assert "has-art" not in CSS and "--potd-art" not in CSS
     assert ".potd-hero .potd-bet { font-family: var(--font-headline);" in CSS, "the headline in the book's voice — Bodoni, by its own token"
 
 

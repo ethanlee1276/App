@@ -2657,6 +2657,19 @@ function potdBallArt() {
     sizes="(max-width: 720px) 100vw, 1000px" src="img/home/${stem}.webp"></div>`;
 }
 
+/* …AND A PICK GETS ITS TEAM'S STADIUM (Ethan, 2026-09-27, circling the
+   card with a bet on it: "when we have a pick of the day to put here, I
+   want the color matching stadium art, then when there is no pick we use
+   the renders that is there right now"). The same colour-matched venue
+   render the stadium strip gives that team (venueVariant), laid in where
+   the ball goes — the card keeps the ball's layout, the words on the dark
+   left. */
+function potdVenueArt(src) {
+  if (!src) return "";
+  return `<div class="potd-ball potd-venue" aria-hidden="true"><img alt="" loading="lazy"
+    decoding="async" src="${escapeHtml(src)}"></div>`;
+}
+
 async function renderPickOfTheDay() {
   const host = document.getElementById("potd-zone");
   if (!host) return;
@@ -2779,7 +2792,17 @@ async function renderPickOfTheDay() {
        market it is. */
     const sd = String(pick.side || "").trim();
     const dup = pick.line != null && Math.abs(parseFloat(sd)) === Math.abs(Number(pick.line));
-    text = `${teamName(pick.player || pick.team)} ${escapeHtml(sd)}${
+    /* …AND THE JOURNAL'S NAME FOR A SPREAD IS "CAR -2.5". A pick shown
+       from its morning lock carries the journal's `player`, which already
+       holds the team AND the number, with an empty side — so the card
+       read "CAR -2.5 -2.5 Spread" and never said "Panthers" (Ethan's
+       screenshot, 2026-09-27). The number in the name counts as the side. */
+    const named = /^(.*\S)\s+([+\-\u2212]?\d+(?:\.\d+)?)$/.exec(String(pick.player || "").trim());
+    const lineIn = named && !sd ? named[2] : "";
+    const who = pick.team || (named ? named[1] : pick.player);
+    text = lineIn
+      ? `${teamName(who)} ${escapeHtml(lineIn)} ${escapeHtml(label)}`
+      : `${teamName(named ? who : (pick.player || pick.team))} ${escapeHtml(sd)}${
       dup ? "" : ` ${pick.line}`} ${escapeHtml(label)}`;
   }
   else text = `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${pick.line} ${escapeHtml(label)}`;
@@ -2845,15 +2868,17 @@ async function renderPickOfTheDay() {
   const potdFam = VENUE_FAMILY[state.sport];
   const potdTeam = activeTeams()[pick.team] || activeTeams()[pick.player];
   const potdArt = potdFam ? absoluteSrc(venueSrc(`img/venues/variants/${potdFam}-${venueVariant(potdTeam)}.jpg`)) : "";
-  const potdStyle = `border-left:3px solid ${accent};margin-bottom:12px${potdArt ? `;--potd-art:url(${potdArt})` : ""}`;
+  const potdStyle = `border-left:3px solid ${accent};margin-bottom:12px`;
+  // The team's stadium when this league has them; the ball otherwise.
+  const heroArt = potdVenueArt(potdArt) || potdBallArt();
   const carriedNote = got.carried ? escapeHtml(got.carried) : "";
   const relockNote = got.relocked
     || (pick.off_board
         ? "shown from the journal at the price it was locked at"
         : (pick.locked ? "locked earlier today — the board still agrees" : ""));
   host.innerHTML = `
-    <div class="card potd-hero${potdArt ? " has-art" : ""}"${potdBallArt() ? ' data-art="ball"' : ""} style="${potdStyle}">
-      ${potdBallArt()}<div class="player">${iconMark("target")}${head}</div>
+    <div class="card potd-hero"${heroArt ? ' data-art="ball"' : ""}${potdArt ? ' data-venue="1"' : ""} style="${potdStyle}">
+      ${heroArt}<div class="player">${iconMark("target")}${head}</div>
       ${potdCallStrip(got)}
       ${relockNote ? `<div style="margin-top:4px;font-size:var(--fs-sm);color:var(--text-mute)">
         ${iconMark("lock")}${escapeHtml(relockNote)}</div>` : ""}

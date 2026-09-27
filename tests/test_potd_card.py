@@ -324,7 +324,7 @@ def test_a_spread_prints_its_number_once():
     is."""
     body = _card()
     i = body.index("const sd = String(pick.side")
-    block = body[i:i + 500]
+    block = body[i:i + 1600]   # the journal-name case (2026-09-27) sits between
     assert "parseFloat(sd)" in block and "Number(pick.line)" in block, block
     assert "dup ?" in block, "the duplicate is detected and never dropped"
 

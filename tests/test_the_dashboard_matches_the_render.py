@@ -155,6 +155,26 @@ def test_no_sort_toolbar_over_an_empty_strip():
     assert i < games.index("if (!games.length) {"), "hidden before the empty return"
 
 
+
+def test_a_pick_shown_from_its_lock_names_the_team_and_the_line_once():
+    """Ethan's screenshot, 2026-09-27: "CAR -2.5 -2.5 Spread". A pick shown
+    from its morning lock carries the journal's player ("CAR -2.5") and an
+    empty side; the number in the name is the side, the team is named."""
+    import json, subprocess
+    potd = _fn("renderPickOfTheDay")
+    i = potd.index("const named = ")
+    rx = potd[i + len("const named = "):potd.index(".exec(", i)]
+    js = f"""
+    const rx = {rx};
+    const m = rx.exec("CAR -2.5"), p = rx.exec("LAA"), t = rx.exec("New York Jets +3");
+    console.log(JSON.stringify([m && [m[1], m[2]], p, t && [t[1], t[2]]]));
+    """
+    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == [["CAR", "-2.5"], None, ["New York Jets", "+3"]]
+    assert "const lineIn = named && !sd ? named[2] : \"\";" in potd
+    assert "${teamName(who)} ${escapeHtml(lineIn)} ${escapeHtml(label)}" in potd
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:

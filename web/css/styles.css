@@ -275,8 +275,6 @@
      under the headline. */
   /* The Most Likely page's cards (obCardHTML): a warm edge fading to the panel. */
   --grad-ob-card: linear-gradient(90deg, color-mix(in srgb, var(--brand) 6%, var(--panel-2)), var(--panel));
-  --grad-potd-fade: linear-gradient(180deg, color-mix(in oklab, var(--panel) 25%, transparent),
-    var(--panel) 62%);
   /* The game page's hero: the same venue fade, onto the hero's own
      panel, over the art's band only. */
   /* A render dimmed for type on top, and the fade that dissolves it into
@@ -7149,11 +7147,10 @@ body.has-deck #rail-live { display: none; }
 /* v3: the live card's win-probability bar (home share filled). */
 .hd-wp { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
 .hd-wp i { display: block; height: 100%; background: var(--good); }
-/* v3: the Pick of the Day as the home's hero, on its venue render. */
-.potd-hero {
-  --potd-art: none;
-  position: relative; overflow: hidden; background-size: cover; background-position: center; }
-.potd-hero.has-art { padding-top: 124px; background-image: var(--grad-potd-fade), var(--potd-art); }
+/* v3: the Pick of the Day as the home's hero. Its art is an image behind
+   the words — the team's stadium on a pick, the league's ball without one
+   (potdVenueArt / potdBallArt); the old top band went 2026-09-27. */
+.potd-hero { position: relative; overflow: hidden; }
 /* The prototype's hero: a gold eyebrow, the verdict as a pill, the bet
    in Bodoni, the price line in mono. The card's own pieces, dressed —
    the markup and every field are the ones test_potd_card pins. */
@@ -11766,6 +11763,9 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .potd-ball img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
 .potd-ball { -webkit-mask-image: var(--grad-potd-mask); mask-image: var(--grad-potd-mask); }
 .potd-hero[data-art="ball"] > :not(.potd-ball) { position: relative; }
+/* A pick's stadium sits where the ball does, a little brighter on the
+   right so the team colour reads (renderPickOfTheDay, potdVenueArt). */
+.potd-venue img { object-position: 60% 50%; }
 .potd-hero[data-art="ball"] .player { display: flex; align-items: center; gap: 10px;
   color: var(--text); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0; text-transform: none; }
 .potd-hero[data-art="ball"] .player .ic { color: var(--brand); }
