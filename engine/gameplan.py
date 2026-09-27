@@ -352,6 +352,9 @@ def who_scores(g: dict, field: list, board_rows: list, matchup: dict | None) -> 
             # source (likelyboard): posted inside it, the price moved since.
             seat = (f"On the Most Likely board — {b.get('tier_label') or 'posted'} — posted inside the "
                     f"{_CAP} cap and held; the price has since moved to {odds:+d}.")
+        elif b and b.get("backed_note"):
+            seat = (f"On the Most Likely board — {b.get('tier_label') or 'posted'}, "
+                    f"{b['backed_note'].replace(' — ', ', ')}.")
         elif b:
             seat = f"On the Most Likely board — {b.get('tier_label') or 'posted'}."
         elif odds and odds < _CAP:

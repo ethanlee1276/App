@@ -9425,7 +9425,10 @@ function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
   const name = r.kind === "game" ? (r.pick_label || r.player) : r.player;
-  const td = r.lane === "td" ? `<span class="ob-plain">hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10</span>` : "";
+  /* A touchdown under 55% that the matchup put here says so (engine/
+     likelyboard `backed_note`; Ethan, 2026-09-27: keep the tier, say it). */
+  const td = r.lane === "td" ? `<span class="ob-plain">hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10${
+    r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : ""}</span>` : "";
   return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}">
     ${rank ? `<span class="ob-rank">#${rank}</span>` : ""}
     <button class="ob-who" type="button"${door}>${obFaceHTML(r)}

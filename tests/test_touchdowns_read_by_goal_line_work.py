@@ -199,6 +199,10 @@ def test_the_seat_says_how_he_got_on_the_board():
     unseated = {r["player"]: r for r in P.who_scores(GAME, FIELD, BOARD, None)}
     assert unseated["Jahmyr Gibbs"]["why"][-1].startswith("Likely — but -320 is past the board's -250 cap")
     assert rows["Amon-Ra St. Brown"]["why"][-1] == "On the Most Likely board — Top pick."
+    backed = BOARD + [{"player": "Breece Hall", "market": "anytime_td", "game": "NYJ@DET", "tier": "top",
+                       "tier_label": "Top pick", "backed_note": "57% — backed by the matchup"}]
+    hall = {r["player"]: r for r in P.who_scores(GAME, FIELD, backed, None)}["Breece Hall"]
+    assert hall["why"][-1] == "On the Most Likely board — Top pick, 57%, backed by the matchup."
 
 
 if __name__ == "__main__":

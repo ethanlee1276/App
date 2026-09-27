@@ -59,6 +59,27 @@ def test_the_page_folds_matchup_picks_and_scenarios_into_the_board():
     assert "if (oneBoardOn()) return obGameHTML(g);" in APP
 
 
+def test_a_matchup_touchdown_under_the_bar_keeps_its_tier_and_says_why():
+    # Ethan, 2026-09-27, choosing (b): Breece Hall at 42% keeps his tier
+    # and says "42% — backed by the matchup"; a reserve the matchup also
+    # backs reads the same way, not as a reserve.
+    result = {"games": [], "most_likely": [_td("Amon-Ra St. Brown", -110, 0.52, reserve=True,
+                                              reserve_note="Below the board's usual bar")],
+              "matchup_picks": [{"away": "NYJ", "home": "DET",
+                                 "td": [_td("Breece Hall", 106, 0.42), _td("Amon-Ra St. Brown", -110, 0.52),
+                                        _td("Jahmyr Gibbs", -200, 0.70)], "props": []}],
+              "td_scenarios": []}
+    rows = {r["player"]: r for r in LB.build(result)["rows"]}
+    assert rows["Breece Hall"]["backed_note"] == "42% — backed by the matchup"
+    assert rows["Amon-Ra St. Brown"]["backed_note"] == "52% — backed by the matchup"
+    assert "reserve" not in rows["Amon-Ra St. Brown"], "matchup-backed, not a reserve"
+    assert "backed_note" not in rows["Jahmyr Gibbs"], "over the bar: nothing to explain"
+    reserve_only = LB.build({"games": [], "most_likely": [_td("Sam LaPorta", 150, 0.45, reserve=True)],
+                             "matchup_picks": [], "td_scenarios": []})["rows"][0]
+    assert reserve_only.get("reserve") and "backed_note" not in reserve_only
+    assert "r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : \"\"" in APP
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

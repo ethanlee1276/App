@@ -48,6 +48,9 @@ from __future__ import annotations
 
 #: Our chance a pick needs for the model check, by lane.
 MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
+#: The main Most Likely list's bar (likely.MIN_PROB) — a touchdown under it
+#: here is said as matchup-backed (see `build`).
+LIKELY_BAR = 0.55
 #: Our chance within this of the book's: the market agrees.
 MARKET_AGREE = 0.08
 #: Our chance this far ABOVE the book's: the market disagrees.
@@ -394,6 +397,16 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         tier = tier_of(checks)
+        # A TOUCHDOWN UNDER THE MAIN LIST'S BAR, BACKED BY THE MATCHUP.
+        # Ethan, 2026-09-27, on Breece Hall at 42% reading "Top pick" beside
+        # St. Brown at 52% reading "reserve — ranked, not recommended": he
+        # chose to keep the matchup picks' tiers and say what they are. So
+        # a pick the matchup picks or the scenarios put here under 55% says
+        # its chance and that the matchup backs it, and is not a reserve.
+        if lane == "td" and prob < LIKELY_BAR and {"matchup", "scenario"} & set(r.get("sources") or ()):
+            r["backed_note"] = f"{prob:.0%} — backed by the matchup"
+            r.pop("reserve", None)
+            r.pop("reserve_note", None)
         r.update({"lane": lane, "tier": tier, "tier_label": TIER_LABEL[tier],
                   "checks": checks, "check_notes": notes,
                   "record_seen": record_seen(record, r.get("market"), _side(r), prob),
