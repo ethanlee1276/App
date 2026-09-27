@@ -179,6 +179,13 @@ def aggregate_pbp(rows, also=None) -> dict:
             bucket_pts[b][1] += 1
             p = players.setdefault((r["receiver_player_name"], team, wk), {})
             p[b] = p.get(b, 0) + 1
+            # INSIDE-THE-10 TARGETS, the receiver's goal-line work (Ethan's
+            # other model reads St. Brown's and LaPorta's "3 targets inside
+            # the 10", 2026-09-27). Kept under an underscore key so it is a
+            # count, never an xFP bucket — `xfp_player_rows` prices only the
+            # situation buckets.
+            if yl <= 10:
+                p["_i10_tgt"] = p.get("_i10_tgt", 0) + 1
 
     values = {b: round(s / n, 4) if n >= 30 else None
               for b, (s, n) in bucket_pts.items()}
@@ -198,6 +205,8 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
         xfp = 0.0
         priced = True
         for b, n in buckets.items():
+            if b.startswith("_"):
+                continue
             v = values.get(b)
             if v is None:
                 priced = False
@@ -217,6 +226,7 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
         out.append({**base, "market": "rz_car",
                     "value": float(buckets.get("car_i5", 0)
                                    + buckets.get("car_rz", 0))})
+        out.append({**base, "market": "i10_tgt", "value": float(buckets.get("_i10_tgt", 0))})
     return out
 
 

@@ -432,11 +432,73 @@ def teammate_vacancy(row, ctx):
 #: (+0.0007 here, +0.0005 there); `teammate_vacancy`'s own note already
 #: recorded that its band gradient is flat in college, and this is that
 #: observation arriving from the other direction.
+#: GOAL-LINE WORK, the other model's first question for every scorer.
+#: Ethan, 2026-09-27, with its Jets @ Lions and Chargers @ Bills touchdown
+#: reports ("this type of research has always beat our site"): Gibbs "11
+#: red-zone carries, 5 inside the 5", Allen "3 carries inside the 5",
+#: St. Brown and LaPorta "3 targets inside the 10". The shipped chain reads
+#: inside-5 carries only through xFP and a ±15% red-zone nudge; these ask
+#: whether the counts themselves carry more. The window is the replay's
+#: own (this season's games before the graded week).
+GOAL_LINE_TARGETS = "i10_tgt"
+
+
+def _goal_line(row, ctx, which):
+    weeks = ctx["form"].get((row["season"], row["short"]))
+    prior = row["prior_weeks"]
+    if not weeks or not prior:
+        return None
+    i5 = ctx.get("goal_line_market")
+    if not i5:
+        return None
+    car = _mean(weeks, prior, i5)
+    tgt = _mean(weeks, prior, GOAL_LINE_TARGETS) if ctx.get("has_i10") else None
+    if which == "car":
+        return car
+    if tgt is None:
+        return None
+    if which == "tgt":
+        return tgt
+    own = car + tgt
+    if which == "touches":
+        return own
+    tw = ctx["team_week"]
+    team = sum(tw.get((row["season"], w, row["team"]), {}).get(i5, 0.0)
+               + tw.get((row["season"], w, row["team"]), {}).get(GOAL_LINE_TARGETS, 0.0)
+               for w in prior) / len(prior)
+    return (own / team) if team > 0 else None
+
+
+def goal_line_carries(row, ctx):
+    """Inside-5 carries a game."""
+    return _goal_line(row, ctx, "car")
+
+
+def goal_line_targets(row, ctx):
+    """Inside-10 targets a game."""
+    return _goal_line(row, ctx, "tgt")
+
+
+def goal_line_touches(row, ctx):
+    """Inside-5 carries plus inside-10 targets, a game."""
+    return _goal_line(row, ctx, "touches")
+
+
+def goal_line_share(row, ctx):
+    """His share of his team's goal-line work (inside-5 carries plus
+    inside-10 targets)."""
+    return _goal_line(row, ctx, "share")
+
+
 CANDIDATES = (
     ("red-zone share over overall", red_zone_over_overall),
     ("usage trend, last 3 weeks", usage_trend),
     ("QB share of inside-5 work", quarterback_goal_line),
     ("teammate vacancy this week", teammate_vacancy),
+    ("inside-5 carries a game", goal_line_carries),
+    ("inside-10 targets a game", goal_line_targets),
+    ("goal-line touches a game", goal_line_touches),
+    ("share of team goal-line work", goal_line_share),
 )
 
 
@@ -456,10 +518,14 @@ def context(conn, sport: str) -> dict:
     touches = touch_markets(sport)
     i5 = GOAL_LINE_MARKET.get(sport)
     rz = RZ_MARKETS.get(sport, RZ_MARKETS["nfl"])
-    wanted = tuple(dict.fromkeys(touches + rz + ((i5,) if i5 else ())))
+    i10 = (GOAL_LINE_TARGETS,) if i5 else ()
+    wanted = tuple(dict.fromkeys(touches + rz + ((i5,) if i5 else ()) + i10))
     form = _by_player(conn, sport, wanted)
     team_week = _team_week(conn, sport, tuple(dict.fromkeys(
-        touches + ((i5,) if i5 else ()))))
+        touches + ((i5,) if i5 else ()) + i10)))
+    has_i10 = bool(i10) and bool(conn.execute(
+        "SELECT 1 FROM player_game_logs WHERE sport=? AND market=? LIMIT 1",
+        (sport, GOAL_LINE_TARGETS)).fetchone())
     qb_i5: dict = defaultdict(dict)
     roster: dict = defaultdict(dict)
     played: dict = defaultdict(set)
@@ -475,7 +541,7 @@ def context(conn, sport: str) -> dict:
     return {"form": form, "team_week": team_week, "qb_i5": qb_i5,
             "roster": roster, "played": played,
             "sport": sport, "touch_markets": touches,
-            "goal_line_market": i5}
+            "goal_line_market": i5, "has_i10": has_i10}
 
 
 def graded_rows(conn, sport: str) -> list:
