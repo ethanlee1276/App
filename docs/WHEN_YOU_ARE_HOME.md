@@ -73,6 +73,19 @@ the output back:
 cd /srv/qellys && python3 -m engine.gamescan backfill 2021 2022 2023 2024 && python3 scanblendfit.py
 ```
 
+**B5. The game plan, game by game (2026-09-27).** Every football game
+page now opens with a Game plan: the line and the script, who is out and
+where the work goes, the matchup, the plays that fit (volume first), the
+plays to avoid, what changes the read, and where our raw number disagrees
+with the market — those last rows go on paper under `plan_gap`, so in a
+few weeks `python3 ledger.py report` says whether big disagreements with
+the books pay (the other AI's strongest calls are exactly those). This
+prints one game's plan from the box's own board, read-only:
+
+```
+cd /srv/qellys && python3 -m engine.gameplan nfl LAC@BUF
+```
+
 **C. In two or three weeks: is the crowd right?** Once a couple of
 hundred games have finished with stored prices:
 

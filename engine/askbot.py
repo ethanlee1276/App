@@ -270,6 +270,14 @@ SYSTEM = (
     "its reasons predicted a player's line beyond what our model already prices, so it "
     "moves none of our numbers: never present a read as our projection, our pick or an "
     "edge.\n"
+    "A named game's game_plan is that game read in a bettor's order: line (the script), "
+    "out (who is out and what it opens), matchup, fits (the plays that fit — volume "
+    "markets first, each with our chance and whether the Most Likely board carries it), "
+    "avoid (the over that fights the matchup or chases last week), watch (what changes "
+    "the read before kickoff) and gap (rows our raw number puts more than ten points "
+    "from the market — named, never staked, on paper). When asked how a game sets up or "
+    "what to play in it, walk those steps in that order and say which plays fit and "
+    "which to avoid; a gap row is a disagreement we are testing, never a pick.\n"
     "For a start/sit you may say who you would start: lead with that, then each "
     "player's projected points on its own line, and mention a big weekly swing "
     "(boom-or-bust) or a tough matchup when it decides it. That is fantasy advice, "
@@ -1060,6 +1068,36 @@ def scan_facts(board: dict, g: dict) -> dict:
     return out
 
 
+def plan_facts(board: dict, g: dict) -> dict:
+    """A game's plan (engine/gameplan) as Ask is shown it: each step in
+    order — the sentences, or the rows with our chance and the reason.
+    Paid like the reads."""
+    key = f"{g.get('away')}@{g.get('home')}"
+    p = next((x for x in (board or {}).get("game_plans") or []
+              if isinstance(x, dict) and x.get("game") == key), None)
+    if not p:
+        return {}
+    out: dict = {}
+    if p.get("script"):
+        out["script"] = _slim(p["script"], ("archetype", "read", "favorite", "confidence"))
+    for s in p.get("steps") or []:
+        k = s.get("key")
+        if s.get("lines"):
+            out[k] = [str(x)[:240] for x in s["lines"]][:5]
+        elif k in ("out", "watch"):
+            out[k] = [f"{r.get('player') or 'Weather'} ({r.get('team') or ''} {r.get('position') or ''}, "
+                      f"{str(r.get('status') or '').lower()}): {r.get('opens') or r.get('text') or ''}"
+                      for r in s.get("rows") or [] if isinstance(r, dict)][:8]
+        elif s.get("rows"):
+            out[k] = [dict(_slim(r, ("player", "team", "market", "side", "line", "odds", "book", "model_prob",
+                                     "raw_prob", "fair_prob", "on_board", "tier")),
+                           why=(r["why"] if isinstance(r.get("why"), str) else " ".join(r.get("why") or []))[:300])
+                      for r in s["rows"] if isinstance(r, dict)][:6]
+        if s.get("note"):
+            out[f"{k}_note"] = str(s["note"])[:300]
+    return out
+
+
 def game_facts(board: dict, g: dict, scan: bool = False) -> dict:
     """One game as the model needs it: lines, weather, the stadium, rest —
     and, for a game the question names, its matchup scan."""
@@ -1118,6 +1156,9 @@ def game_facts(board: dict, g: dict, scan: bool = False) -> dict:
         ms = scan_facts(board, g)
         if ms:
             out["matchup_scan"] = ms
+        plan = plan_facts(board, g)
+        if plan:
+            out["game_plan"] = plan
     return out
 
 

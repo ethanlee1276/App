@@ -12511,7 +12511,7 @@ function scanMicroHTML(m) {
    `label`) is used only when the reads are not on the page. */
 const SCAN_READ_SIDE = { breakout: "over", good: "over", tough: "under", avoid: "under" };
 function cardScanRead(r) {
-  if (!r || r.kind === "game") return null;
+  if (!r || r.kind === "game" || r.no_read_tag) return null;
   const d = state.data || {};
   if (!d.scan_reads) {
     const label = r.scan_label || r.label, read = r.scan_read || r.read;
@@ -12535,6 +12535,76 @@ function pickScanRead(r) {
      game): his read is still his, found across the day's reads. */
   return mine(reads && reads.players)
     || (reads ? null : Object.values(d.scan_reads || {}).map((x) => mine(x && x.players)).find(Boolean) || null);
+}
+
+/* THE GAME PLAN (engine/gameplan; Ethan, 2026-09-27: "focus on the way
+   the ai thinks and finds its bets … the steps it goes through"). One
+   game read in a bettor's order: the line and the script, who is out and
+   where the work goes, the matchup, the plays that fit (volume first —
+   catches and touchdowns are bets on a role), the plays to avoid, what
+   changes the read before kickoff, and where our raw number disagrees
+   with the market (named, never staked, on paper). Every row is one the
+   board already prices; the plan is the order they are read in. Paid,
+   like the reads: locked, the section says what it is. */
+function gamePlanFor(g) {
+  const d = state.data || {};
+  return (d.game_plans || []).find((p) => p && p.away === g.away && p.home === g.home) || null;
+}
+function planRowHTML(r, kind) {
+  const td = r.kind === "td" || r.market === "anytime_td";
+  /* The read's tag rides only on a fit: on an avoid or a gap row the
+     scan's "good matchup" beside "chasing last week" reads as a quarrel. */
+  const base = kind === "fits" ? r : { ...r, no_read_tag: true };
+  const shown = td ? { ...base, line: null, market_label: `Anytime TD${r.label ? ` · ${r.label}` : ""}` }
+    : { ...base, market_label: `${r.market_label || r.market}${kind === "fits" && r.label ? ` · ${r.label}` : ""}` };
+  const row = likelyRow(shown);
+  const why = Array.isArray(r.why) ? r.why : r.why ? [r.why] : [];
+  const tag = kind !== "fits" ? "" : r.on_board
+    ? `<span class="chip up">${escapeHtml(r.tier_label || "on the Most Likely board")}</span>`
+    : `<span class="chip">the read’s play — not on the board</span>`;
+  return `<div class="sc-row gplan-row ${kind}">${td ? row.replace(/ data-open="[^"]*"/g, "") : row}
+    ${tag || why.length ? `<ul class="sc-lines">${tag ? `<li class="gplan-tag">${tag}</li>` : ""}${
+      why.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : ""}</div>`;
+}
+function gamePlanHTML(g) {
+  const d = state.data || {};
+  const p = gamePlanFor(g);
+  const locked = !p && d.locked && d.locked.game_plans && g.scan && g.scan.units;
+  if (!p && !locked) return "";
+  const head = `<div class="section-title">Game plan
+      <span class="sub">— this game read in order: the line, who is out, the matchup, the plays
+      that fit, the plays to avoid, what changes the read</span></div>`;
+  if (locked) {
+    return `<div id="gp-sec-plan" class="ms gplan">${head}<div class="card ms-locked"><b>The game plan</b> —
+      the seven steps, the plays that fit and the plays to avoid with our chance on each, is part of the
+      subscription.</div></div>`;
+  }
+  const by = {};
+  (p.steps || []).forEach((s) => { if (s && s.key) by[s.key] = s; });
+  const step = (s, body) => !s || !body ? "" : `<div class="card gplan-step gplan-${escapeHtml(s.key)}">
+      <div class="ms-sub">${escapeHtml(s.title)}</div>${body}${s.note ? `<p class="ms-note">${escapeHtml(s.note)}</p>` : ""}</div>`;
+  const lines = (s) => s && (s.lines || []).length
+    ? `<ul class="gplan-lines">${s.lines.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "";
+  const people = (s) => s && (s.rows || []).length ? s.rows.map((i) => `<div class="ms-inj-row">${
+      i.player ? playerAvatar(i.player, i.team, { size: 32, headshot: i.headshot })
+        : `<span class="gplan-wx">${icon("cloud", 18)}</span>`}
+      <span class="ms-inj-who"><b>${escapeHtml(i.player || "Weather")}</b>${i.team
+        ? ` <span class="mini">${escapeHtml(i.team)} ${escapeHtml(i.position || "")}</span>` : ""}
+        ${i.status && i.status !== "weather" ? `<span class="chip ${String(i.status).toUpperCase() === "QUESTIONABLE"
+          ? "" : "down"}">${escapeHtml(String(i.status).toLowerCase())}</span>` : ""}</span>
+      <span class="ms-inj-opens">${escapeHtml(i.opens || i.text || "")}</span></div>`).join("") : "";
+  const rows = (s, kind) => s && (s.rows || []).length
+    ? `<div class="ml-rows">${s.rows.map((r) => planRowHTML(r, kind)).join("")}</div>` : "";
+  const note = (t) => `<p class="ms-note">${t}</p>`;
+  return `<div id="gp-sec-plan" class="ms gplan">${head}
+    ${step(by.line, lines(by.line))}
+    ${step(by.out, people(by.out) || note("Nobody of note is out or questionable."))}
+    ${step(by.matchup, lines(by.matchup))}
+    ${step(by.fits, rows(by.fits, "fits") || note("No play fits today: no read of this game leans a side where our number agrees at 55% or better at a price worth laying."))}
+    ${step(by.avoid, rows(by.avoid, "avoid"))}
+    ${step(by.watch, people(by.watch))}
+    ${step(by.gap, rows(by.gap, "gap"))}
+  </div>`;
 }
 
 function matchupScanHTML(g) {
@@ -12969,6 +13039,7 @@ function renderGamePage() {
 
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
+      gamePlanHTML(g) ? ["gp-sec-plan", "Game plan"] : null,
       (g.scan && g.scan.units) || g.mlb_tape ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
@@ -12981,6 +13052,7 @@ function renderGamePage() {
     ])}
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
+    ${gamePlanHTML(g)}
     ${matchupScanHTML(g) || mlbScanHTML(g)}
     ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}

@@ -12299,6 +12299,18 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
 .matchup-picks .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none;
   color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
 .matchup-picks .sc-lines li::before { content: "· "; color: var(--brand); }
+/* THE GAME PLAN (gamePlanHTML): seven steps in a bettor's order, each a
+   card; the play rows are the board's own rows with the reason under. */
+.gplan-step { padding: 12px 14px; }
+.gplan-lines { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--fs-sm); }
+.gplan-lines li::marker { color: var(--brand); }
+.gplan .sc-lines { margin: 0 0 6px; padding: 0 14px 0 58px; list-style: none; display: grid; gap: 3px;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-tight); }
+.gplan .sc-lines li::before { content: "· "; color: var(--brand); }
+.gplan .sc-lines li.gplan-tag::before { content: ""; }
+.gplan-row.avoid .ml-pct { background: color-mix(in oklab, var(--bad) 18%, transparent); color: var(--bad); }
+.gplan-row.gap .ml-pct { background: var(--bg); color: var(--text-dim); }
+.gplan-wx { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-dim); }
 /* THE MOST LIKELY PAGE, TO ETHAN'S RENDER (2026-09-26; app.js obHeroHTML,
    oneBoardHTML, obCardHTML). A hero over the stadium art, the four pills,
    the tier chips and the view, the lane filters, then each tier's cards:

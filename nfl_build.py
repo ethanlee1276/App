@@ -1077,6 +1077,14 @@ def main() -> None:
               f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  one Most Likely board skipped: {_exc}")
+    # THE GAME PLAN (engine/gameplan): each game read in a bettor's order —
+    # the line and the script, who is out, the matchup, the plays that
+    # fit (volume first), the plays to avoid, what changes the read, and
+    # where our raw number disagrees with the market. Ethan, 2026-09-27:
+    # "focus on the way the ai thinks and finds its bets … the steps it
+    # goes through". Built AFTER the board so a fit can say its tier.
+    from engine import gameplan as _gplan
+    print(f"  {_gplan.attach(result, 'nfl')}")
     # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
     # a table behind the last week played is data the page would present
     # as this week's. Never fatal.
@@ -1521,6 +1529,17 @@ def main() -> None:
                     depth=None, category=_cat, grade_label=_label)
                 if _n:
                     print(f"Matchup picks ({_kind}): {_n} row(s) journaled on paper.")
+            # WHERE WE DISAGREE WITH THE MARKET (engine/gameplan): the rows
+            # the credibility guard refused, on paper under `plan_gap` at
+            # our RAW chance — so the record, not an argument, says whether
+            # a big disagreement with the books ever pays (2026-09-27).
+            from engine.gameplan import journal_rows as _gap_rows
+            _n = ledger.log_most_likely(
+                lconn, {"sport": "nfl", "date": result.get("date", ""), "games": result.get("games") or [],
+                        "most_likely": _gap_rows(result.get("game_plans"))},
+                depth=None, category="plan_gap", grade_label="Gap")
+            if _n:
+                print(f"Market gaps: {_n} row(s) journaled on paper.")
             # THE ONE BOARD, per tier, on paper (engine/likelyboard): the
             # tier a pick went up at is its grade, so the record can say
             # whether Top really hits more than Worth a look.

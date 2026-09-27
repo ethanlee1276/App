@@ -153,6 +153,11 @@ PAID_KEYS = (
     # says who we think shines, so it is its own paid key — the strip
     # does not descend into the rows of `games`.
     "scan_reads",
+    # THE GAME PLAN (engine/gameplan): the plays that fit, the plays to
+    # avoid and where we disagree with the market, each with our chance —
+    # the scan's reads and the board's rows under a seventh name. A new
+    # view of a paid board is a new key.
+    "game_plans",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

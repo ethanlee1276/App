@@ -2373,6 +2373,9 @@ def main() -> None:
             # the same checks, tiers and cards on the college page.
             from engine import likelyboard as _lb
             print(f"  {_lb.attach(out, 'cfb')}")
+            # THE GAME PLAN, as the NFL's (engine/gameplan; nfl_build).
+            from engine import gameplan as _gplan
+            print(f"  {_gplan.attach(out, 'cfb')}")
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every
@@ -2536,6 +2539,14 @@ def main() -> None:
                 depth=None, category=_cat, grade_label="Matchup")
             if _mp_n:
                 print(f"Matchup picks ({_kind}): {_mp_n} row(s) journaled on paper.")
+        # Where we disagree with the market, on paper (engine/gameplan; nfl_build).
+        from engine.gameplan import journal_rows as _gap_rows
+        _gap_n = ledger.log_most_likely(
+            lconn, {"sport": "cfb", "date": args.date, "games": out.get("games") or [],
+                    "most_likely": _gap_rows(out.get("game_plans"))},
+            depth=None, category="plan_gap", grade_label="Gap")
+        if _gap_n:
+            print(f"Market gaps: {_gap_n} row(s) journaled on paper.")
         # The one board, per tier, on paper (engine/likelyboard).
         from engine import likelyboard as _lb
         _lb_n = _lb.journal(lconn, out, "cfb", args.date)
