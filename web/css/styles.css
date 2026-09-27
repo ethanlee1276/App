@@ -9867,6 +9867,8 @@ body.walled .nav-btn { display: none !important; }
    "a person who has never signed in has no use for … a sport switcher" —
    it just named the topbar's copy of it. */
 body.walled .sportbar { display: none !important; }
+/* The league row leaves the pages that are not about a league (OFF_LEAGUE_VIEWS). */
+body.off-league .sportbar { display: none; }
 /* THE SITE MASTHEAD AND FOOTER GO TOO, and missing them was visible in a
    screenshot rather than in the markup: the wall draws its OWN lockup and
    its own legal block, so leaving the site's in place stacked two Qellys

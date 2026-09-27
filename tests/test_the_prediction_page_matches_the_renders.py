@@ -79,6 +79,22 @@ def test_the_proof_room_wears_the_render():
     assert "pmxBadgeTile(" in card and "pm-band-head" in card and "Flag report card" in card
 
 
+def test_the_prediction_page_shows_no_league_chrome():
+    """Ethan, 2026-09-27: "We should not be showing this stuff on the
+    prediction page" — the sports slate's stale bar and the league row."""
+    assert 'const OFF_LEAGUE_VIEWS = ["intel", "memes"];' in APP
+    assert 'document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));' in APP
+    assert "body.off-league .sportbar { display: none; }" in CSS
+    i = APP.index("function renderStaleBar(")
+    bar = APP[i:APP.index("\n}\n", i)]
+    off = bar.index("OFF_LEAGUE_VIEWS.includes(state.view)")
+    assert bar.index("wireDown()") < off, "a connection failure still shows everywhere"
+    assert off < bar.index("slateNotice(state.data)") < bar.index("withholdAfterMs()"), \
+        "the slate's demo, stale and withheld bars never reach a page off the league"
+    i = APP.index("function updateAgo(")
+    assert 'OFF_LEAGUE_VIEWS.includes(state.view) ? "hidden" : ""' in APP[i:i + 900], "nor does the slate's age chip"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:

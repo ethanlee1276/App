@@ -1996,6 +1996,15 @@ function renderFeatures() {
 }
 
 const REFERENCE_VIEWS = ["why", "about", "methodology", "features"];
+/* PAGES THAT ARE NOT ABOUT A LEAGUE. Ethan, 2026-09-27, circling the
+   "Picks are hidden — this board last updated 1h ago" bar and the league
+   chips over the Prediction Market page: "We should not be showing this
+   stuff on the prediction page." Both describe the sports slate — its age,
+   its picks, which league it is — and neither the prediction market nor
+   the crypto radar is a league or runs on that slate. The league row, the
+   slate's age chip and its stale bar leave these pages (offline and
+   unreachable still show: those are about the connection, not the slate). */
+const OFF_LEAGUE_VIEWS = ["intel", "memes"];
 
 /* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
    pipeline is dead and every number below is a fossil". It exists
@@ -2326,6 +2335,9 @@ function renderStaleBar(ageMs, ago) {
       reload.</span>`;
     return;
   }
+  // Everything below is about the sports slate, and a page that is not
+  // about a league (OFF_LEAGUE_VIEWS) shows none of it.
+  if (OFF_LEAGUE_VIEWS.includes(state.view)) { host.hidden = true; host.innerHTML = ""; return; }
   // A demo board outranks the age: its numbers were never live at all.
   const notice = slateNotice(state.data);
   if (notice && notice.kind === "demo") {
@@ -2378,7 +2390,8 @@ function updateAgo() {
     el.style.visibility = "hidden";   // hidden, not display:none — the row
     return;                           // must not change height mid-tap
   }
-  el.style.visibility = "";
+  // The slate's age, not this page's: off a league it describes nothing here.
+  el.style.visibility = OFF_LEAGUE_VIEWS.includes(state.view) ? "hidden" : "";
   if (!state.lastLoad) return;
   // Age of the DATA where the server told us (Last-Modified), falling back
   // to the fetch time. The fallback flatters: it can only ever say
@@ -37426,6 +37439,7 @@ function _switchViewNow(name, push, dir) {
     name === "messages" && !!_msgThread);
   document.body.classList.toggle("ask-open", name === "ask");    // the chat room: no footer
   document.body.classList.toggle("footer-quiet", QUIET_FOOTER_VIEWS.has(name));
+  document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
