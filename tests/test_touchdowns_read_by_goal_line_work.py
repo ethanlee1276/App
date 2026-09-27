@@ -160,6 +160,32 @@ def test_running_backs_read_on_the_steeper_curve():
     assert not any(r.startswith("Running back") for r in info_wr["reasons"]), "receivers are left as they were"
 
 
+def test_depth_receivers_are_scaled_and_starters_are_not():
+    # Measured 2021-2025: receivers with a thin slice of the offence's
+    # expected points scored ~2 points under the call; starters were right.
+    from engine import touchdowns as T
+    from engine.models import Prop, Game, Team, DefenseProfile, Weather, ANYTIME_TD
+    assert (T.DEPTH_WR_SCALE, T.DEPTH_WR_FULL, T.DEPTH_WR_ONE) == (0.70, 0.02, 0.15)
+    assert T.depth_wr_scale(None) == 1.0, "nothing measured, nothing applied"
+    assert T.depth_wr_scale(0.01) == 0.70 and T.depth_wr_scale(0.20) == 1.0
+    assert abs(T.depth_wr_scale(0.085) - 0.85) < 1e-9
+    game = Game(home="DET", away="NYJ", weather=Weather(dome=True, measured=True), total=48.5, spread=-6.5)
+    opp = Team(abbr="NYJ", name="NYJ", defense=DefenseProfile(team="NYJ"))
+
+    def run(pos, share):
+        prop = Prop(player="Kalif Raymond", team="DET", opponent="NYJ", position=pos, market=ANYTIME_TD,
+                    logs=[], career_avg=0.0, vs_opponent_avg=None, lines=[])
+        return T.td_probability(prop, game, opp, 0.06, xfp={"xfp_share": share})
+    deep, info = run("WR", 0.03)
+    assert any(r.startswith("Depth receiver: scoring rate") for r in info["reasons"])
+    starter, info_s = run("WR", 0.25)
+    assert not any(r.startswith("Depth receiver") for r in info_s["reasons"])
+    assert deep < starter
+    te, info_te = run("TE", 0.03)
+    assert not any(r.startswith("Depth receiver") for r in info_te["reasons"]) and te > 0.0, \
+        "tight ends ran slightly LOW, so they are left alone"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -240,12 +240,38 @@ QB_TD_RATE_SCALE = 1.40
 #: and quarterbacks (no held-out gain) are left as they are.
 RB_TD_LOGIT = (0.183, 1.165)
 
+#: A DEPTH RECEIVER'S RATE, SCALED DOWN. Ethan, 2026-09-27: "fix the backup
+#: receivers being 2 points high too". On the replay, receivers claimed
+#: 21.2% and scored 19.8% (z -3.4), all of it below the starters: 10-20%
+#: calls ran 15.0% against 12.7%, and 30%+ calls were already right. The
+#: gap follows his slice of the offence — the share of team expected
+#: fantasy points (xFP) that the live board reads from the same logs the
+#: replay does. His rate is scaled by DEPTH_WR_SCALE up to FULL, ramping
+#: back to 1.0 at ONE, so a starter is untouched. Leave-one-season-out:
+#: the scale came out 0.70-0.80 in every fold; held-out log-loss 0.45729
+#: -> 0.45660, the 10-20% band 12.7% claimed against 12.7% scored, every
+#: band inside z 0.6. With no xFP measured nothing is applied.
+DEPTH_WR_SCALE, DEPTH_WR_FULL, DEPTH_WR_ONE = 0.70, 0.02, 0.15
+
 
 def rb_steepened(prob: float) -> float:
     """A running back's chance on the measured, steeper curve (RB_TD_LOGIT)."""
     p = clamp(prob, 1e-4, 1 - 1e-4)
     alpha, beta = RB_TD_LOGIT
     return 1.0 / (1.0 + math.exp(-(alpha + beta * math.log(p / (1.0 - p)))))
+
+
+def depth_wr_scale(xfp_share) -> float:
+    """The receiver's rate multiplier from his xFP share (1.0 for a starter
+    or when no share is measured)."""
+    if xfp_share is None:
+        return 1.0
+    s = float(xfp_share)
+    if s <= DEPTH_WR_FULL:
+        return DEPTH_WR_SCALE
+    if s >= DEPTH_WR_ONE:
+        return 1.0
+    return DEPTH_WR_SCALE + (1.0 - DEPTH_WR_SCALE) * (s - DEPTH_WR_FULL) / (DEPTH_WR_ONE - DEPTH_WR_FULL)
 
 
 def team_implied_total(game: Game, team: str) -> float:
@@ -471,6 +497,8 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     if pos == "QB":
         rate *= QB_TD_RATE_SCALE
     rate = clamp(rate, 0.005, 1.15)
+    depth = depth_wr_scale((xfp or {}).get("xfp_share")) if pos == "WR" else 1.0
+    rate *= depth
     prob = prob_at_least_one(rate)
     if pos == "RB":
         prob = rb_steepened(prob)
@@ -500,6 +528,10 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     # the rate contained no such factor — a reason describing math that
     # was not being done.
     reasons += def_reasons + wx_reasons + script_reasons
+    if depth < 1.0:
+        reasons.append(f"Depth receiver: scoring rate ×{depth:.2f} — {float(xfp['xfp_share']):.0%} of the "
+                       f"offence's expected points; over 2021-2025 receivers this far down the "
+                       f"depth chart scored less than the model said")
     if pos == "RB":
         reasons.append("Running back: read on the measured back curve — over 2021-2025 the backs "
                        "the model called 45%+ scored 56% against 52% claimed; fitted on seasons it "
