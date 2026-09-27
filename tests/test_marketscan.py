@@ -188,6 +188,14 @@ def test_longshot_warnings_flag_plus_money_props_with_measured_cost():
     # Props without a real market are skipped.
     assert longshot_warnings([{**recs[0], "has_market": False}]) == []
 
+    # One row per bet: the same home run on the main board and the long-
+    # shot board, under two labels, is one quote — the graded one kept.
+    twin = {**recs[0], "market_label": "Home Run", "grade": ""}
+    one = longshot_warnings([recs[0], twin])
+    assert len(one) == 1 and one[0]["grade"] == "Lean"
+    # …but another book's price for it is its own row.
+    assert len(longshot_warnings([recs[0], {**twin, "book": "FD"}])) == 2
+
 
 def test_stale_quotes_dedupes_and_caps_the_board():
     """On a real 1,016-prop board this emitted 911 rows — every quote below

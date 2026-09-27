@@ -320,6 +320,12 @@ def longshot_warnings(recs: list[dict]) -> list[dict]:
     before anyone forms a view on the player."""
     from .odds import american_to_prob
     out: list[dict] = []
+    # ONE ROW PER BET. A home-run pick is on the main board AND the long-
+    # shot board, under two labels ("Home Runs" / "Home Run"), and the
+    # scanner listed it twice (the 2026-09-27 sweep). The same player,
+    # market, side, book and price is one quote; the first seen — the
+    # main board's, which carries the grade — is the one kept.
+    seen: set = set()
     for r in recs:
         if r.get("has_market") is False:
             continue
@@ -329,6 +335,11 @@ def longshot_warnings(recs: list[dict]) -> list[dict]:
         p = american_to_prob(int(odds))
         if p >= LONGSHOT_MAX_PROB:
             continue
+        key = (r.get("player", ""), r.get("market", ""), str(r.get("side", "OVER")).upper(),
+               r.get("book", ""), int(odds))
+        if key in seen:
+            continue
+        seen.add(key)
         label, roi = band_for(int(odds))
         out.append({
             "bet": f"{r.get('player', '')} {r.get('side', 'OVER')} "
