@@ -12582,7 +12582,7 @@ function gamePlanHTML(g) {
   if (!p && !locked) return "";
   const head = `<div class="section-title">Game plan
       <span class="sub">— this game read in order: the line, who is out, the matchup, the plays
-      that fit, the plays to avoid, what changes the read</span></div>`;
+      that fit, the plays to avoid, what changes the read, who scores</span></div>`;
   if (locked) {
     return `<div id="gp-sec-plan" class="ms gplan">${head}<div class="card ms-locked"><b>The game plan</b> —
       the seven steps, the plays that fit and the plays to avoid with our chance on each, is part of the
@@ -12609,6 +12609,7 @@ function gamePlanHTML(g) {
     ${step(by.line, lines(by.line))}
     ${step(by.out, people(by.out) || note("Nobody of note is out or questionable."))}
     ${step(by.matchup, lines(by.matchup))}
+    ${step(by.who, rows(by.who, "who"))}
     ${step(by.fits, rows(by.fits, "fits") || note("No play fits today: no read of this game leans a side where our number agrees at 55% or better at a price worth laying."))}
     ${step(by.avoid, rows(by.avoid, "avoid"))}
     ${step(by.watch, people(by.watch))}

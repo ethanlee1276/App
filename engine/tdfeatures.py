@@ -490,6 +490,30 @@ def goal_line_share(row, ctx):
     return _goal_line(row, ctx, "share")
 
 
+def last_season_td_rate(row, ctx):
+    """His touchdowns a game LAST season (8+ games), on top of the chain.
+
+    The replay walks within a season, so its own history for a player is
+    this season's games only — and the chain trusts that history fully
+    only past TD_HISTORY_GAMES. Early in a season an established scorer
+    (Josh Allen's rushing, St. Brown) reads as mostly his position's
+    baseline. If last season's rate carries what the chain is missing,
+    this is where it shows (2026-09-27, the other model's "Allen already
+    has 4 rushing TDs")."""
+    got = ctx.get("last_td", {}).get((row["season"] - 1, row["short"]))
+    if not got or got[1] < 8:
+        return None
+    return got[0] / got[1]
+
+
+def early_last_season_td_rate(row, ctx):
+    """The same, only in the first four weeks, where the chain's own
+    history is thinnest."""
+    if int(str(row["week"]).lstrip("0") or 0) > 4:
+        return None
+    return last_season_td_rate(row, ctx)
+
+
 CANDIDATES = (
     ("red-zone share over overall", red_zone_over_overall),
     ("usage trend, last 3 weeks", usage_trend),
@@ -499,6 +523,8 @@ CANDIDATES = (
     ("inside-10 targets a game", goal_line_targets),
     ("goal-line touches a game", goal_line_touches),
     ("share of team goal-line work", goal_line_share),
+    ("last season's TDs a game", last_season_td_rate),
+    ("  …in weeks 1-4 only", early_last_season_td_rate),
 )
 
 
@@ -523,6 +549,14 @@ def context(conn, sport: str) -> dict:
     form = _by_player(conn, sport, wanted)
     team_week = _team_week(conn, sport, tuple(dict.fromkeys(
         touches + ((i5,) if i5 else ()) + i10)))
+    last_td: dict = {}
+    for (season, _per, player, team, _pos, _m, value) in conn.execute(
+            "SELECT season, period, player, team, position, market, value FROM player_game_logs "
+            "WHERE sport=? AND market='anytime_td'", (sport,)):
+        k = (season, _short_key(player, team))
+        tot = last_td.setdefault(k, [0.0, 0])
+        tot[0] += float(value or 0.0) > 0
+        tot[1] += 1
     has_i10 = bool(i10) and bool(conn.execute(
         "SELECT 1 FROM player_game_logs WHERE sport=? AND market=? LIMIT 1",
         (sport, GOAL_LINE_TARGETS)).fetchone())
@@ -541,7 +575,7 @@ def context(conn, sport: str) -> dict:
     return {"form": form, "team_week": team_week, "qb_i5": qb_i5,
             "roster": roster, "played": played,
             "sport": sport, "touch_markets": touches,
-            "goal_line_market": i5, "has_i10": has_i10}
+            "goal_line_market": i5, "has_i10": has_i10, "last_td": last_td}
 
 
 def graded_rows(conn, sport: str) -> list:

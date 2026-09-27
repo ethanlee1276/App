@@ -158,6 +158,9 @@ PAID_KEYS = (
     # the scan's reads and the board's rows under a seventh name. A new
     # view of a paid board is a new key.
     "game_plans",
+    # EVERY QUOTED SCORER with our chance (engine/pipeline `td_field`) —
+    # the whole touchdown watch list under another name.
+    "td_field",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

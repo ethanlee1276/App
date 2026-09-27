@@ -118,7 +118,7 @@ def _step(p, key):
 
 def test_the_steps_come_in_a_bettors_order():
     p = _plan()
-    assert [s["key"] for s in p["steps"]] == ["line", "out", "matchup", "fits", "avoid", "watch", "gap"]
+    assert [s["key"] for s in p["steps"]] == ["line", "out", "matchup", "who", "fits", "avoid", "watch", "gap"]
     assert p["script"]["archetype"] == "Favorite runs, dog throws"
     line = _step(p, "line")["lines"]
     assert line[0].startswith("BUF by 7 at 50: the lines expect BUF to score about 28.5, LAC about 21.5")

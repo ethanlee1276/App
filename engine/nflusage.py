@@ -75,7 +75,7 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
     for r in conn.execute(
             "SELECT player, team, period, market, value FROM player_game_logs "
             "WHERE sport='nfl' AND season=? AND market IN "
-            "('rz_tgt', 'rz_car', 'i5_car')", (season,)):
+            "('rz_tgt', 'rz_car', 'i5_car', 'i10_tgt')", (season,)):
         wk = per_player.setdefault((r["player"], r["team"]), {}) \
                        .setdefault(r["period"], {})
         wk[r["market"]] = float(r["value"] or 0)
@@ -109,6 +109,9 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
         n = len(recent)
         tgt = sum(weeks[w].get("rz_tgt", 0.0) for w in recent) / n
         i5 = sum(weeks[w].get("i5_car", 0.0) for w in recent) / n
+        # Inside-the-10 targets (play-by-play `i10_tgt`, 2026-09-27): shown
+        # on the card as goal-line work, 0 on an older ingest.
+        i10 = sum(weeks[w].get("i10_tgt", 0.0) for w in recent) / n
         # rz_car (all inside-20 carries) is a newer market — older ingests
         # only have the inside-5 slice, which is still a floor, not zero.
         car = sum(max(weeks[w].get("rz_car", 0.0), weeks[w].get("i5_car", 0.0))
@@ -125,6 +128,7 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
             measured=True,
             team_implied=round(sum(then) / len(then), 2) if then else None,
             games=n,
+            targets_goal_line=round(i10, 2),
         )
     return out
 

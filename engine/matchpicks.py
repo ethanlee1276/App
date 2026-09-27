@@ -105,6 +105,8 @@ def td_matchup(row: dict, opp_units: dict | None, rz_own: dict | None, rz_opp: d
     share = u.get("carry_share") if unit == "rushing" and pos != "QB" else u.get("tgt_share")
     if share is not None and pos != "QB":
         lines.append(f"{float(share):.0%} of the {'carries' if unit == 'rushing' else (u.get('share_of') or 'targets')}")
+    if row.get("goal_line_text"):
+        lines.append(row["goal_line_text"])
     if rz is not None:
         lines.append(f"{float(rz):.1f} expected red-zone chances")
     if trips:

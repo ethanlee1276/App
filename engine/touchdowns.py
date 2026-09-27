@@ -145,6 +145,40 @@ class RedZoneUsage:
     #: `expected_this_week`. None when the schedule had no lines.
     team_implied: float | None = None
     games: int = 0
+    #: Inside-the-10 targets a game (play-by-play `i10_tgt`). The field
+    #: above named `targets_inside_10` has always held RED-ZONE targets
+    #: (inside the 20); this is the receiver's goal-line work.
+    targets_goal_line: float = 0.0
+
+    def goal_line(self) -> dict | None:
+        """His goal-line work as COUNTS over the games measured — how the
+        other model says it ("11 red-zone carries, 5 inside the 5"; Ethan,
+        2026-09-27). None when nothing was measured."""
+        if not self.measured or not self.games:
+            return None
+        n = int(self.games)
+        return {"games": n,
+                "rz_car": int(round(self.carries_inside_10 * n)),
+                "i5_car": int(round(self.carries_inside_5 * n)),
+                "rz_tgt": int(round(self.targets_inside_10 * n)),
+                "i10_tgt": int(round(self.targets_goal_line * n))}
+
+    def goal_line_text(self) -> str:
+        """"11 red-zone carries (5 inside the 5), 6 red-zone targets (3 inside
+        the 10) in his last 2 games" — or "" with none of either."""
+        g = self.goal_line()
+        if not g:
+            return ""
+        bits = []
+        if g["rz_car"]:
+            bits.append(f"{g['rz_car']} red-zone carr{'y' if g['rz_car'] == 1 else 'ies'}"
+                        + (f" ({g['i5_car']} inside the 5)" if g["i5_car"] else ""))
+        if g["rz_tgt"]:
+            bits.append(f"{g['rz_tgt']} red-zone target{'' if g['rz_tgt'] == 1 else 's'}"
+                        + (f" ({g['i10_tgt']} inside the 10)" if g["i10_tgt"] else ""))
+        if not bits:
+            return f"No red-zone touches in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
+        return f"{', '.join(bits)} in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
 
     @property
     def opportunities(self) -> float:
@@ -173,6 +207,19 @@ class RedZoneUsage:
 
 #: How far this week's offence may scale a player's red-zone chances.
 RZ_SCALE_CLAMP = (0.6, 1.4)
+
+#: A QUARTERBACK'S TOUCHDOWN RATE, SCALED. Ethan, 2026-09-27, with the other
+#: model's Chargers @ Bills card: Josh Allen "4 rushing TDs in two games, 3
+#: carries inside the 5 — ~58%", the book ~55%, ours 45%. Measured on the
+#: replay (tdearlyfit.py; 2,308 QB player-weeks 2021-2025, after the
+#: market's own calibration): quarterbacks claimed 11.2% and scored 14.5%,
+#: and in the 20-35% band — the rushing quarterbacks — 25.4% against 34.3%.
+#: The chain's position baseline has a quarterback barely scoring and his
+#: own history never gets past a third of the weight. A single scale on his
+#: rate, fitted leave-one-season-out, came out 1.35-1.55 in every fold (1.40
+#: on all five) and brings the held-out seasons to 14.6% against 14.5%,
+#: every band inside 1.6 points; the ordering is unchanged (AUC 0.684).
+QB_TD_RATE_SCALE = 1.40
 
 
 def team_implied_total(game: Game, team: str) -> float:
@@ -395,6 +442,8 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     # Ceiling reflects reality: even a bell-cow goal-line back on a big favourite
     # tops out near a 2-in-3 chance to find the end zone.
     rate = team_tds * base_share * rz_mult * def_mult * wx_mult * script_mult
+    if pos == "QB":
+        rate *= QB_TD_RATE_SCALE
     rate = clamp(rate, 0.005, 1.15)
     prob = prob_at_least_one(rate)
 
@@ -403,6 +452,15 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         f"Share of team TDs from {share_src}",
     ]
     rz_now = rz.expected_this_week(implied)
+    # GOAL-LINE WORK AS COUNTS, first — the evidence a bettor reads (the
+    # other model's every scorer starts here). Measured 2026-09-27 on
+    # 22,099 graded player-weeks: inside-5 carries and inside-10 targets
+    # add nothing on top of this chain (AUC 0.7212 -> 0.7214), because xFP
+    # and the red-zone share already carry them — so it is said, not
+    # re-counted.
+    gl_text = rz.goal_line_text()
+    if gl_text:
+        reasons.append(f"Goal-line work: {gl_text}")
     if rz.rz_touch_share:
         scaled = rz.team_implied and abs(rz_now - rz.opportunities) >= 0.05
         reasons.append(f"Red-zone touch share ~{rz.rz_touch_share:.0%} "
@@ -414,6 +472,10 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     # the rate contained no such factor — a reason describing math that
     # was not being done.
     reasons += def_reasons + wx_reasons + script_reasons
+    if pos == "QB":
+        reasons.append(f"Quarterback: scoring rate ×{QB_TD_RATE_SCALE:.2f} — over 2021-2025 the model "
+                       f"under-called quarterbacks' touchdowns (25% claimed, 34% scored among the "
+                       f"rushers); measured on seasons it was not fitted on")
 
     caveats = []
     if not rz.measured:
@@ -451,6 +513,8 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         "rz_expected": round(rz_now, 2),
         "rz_before": round(rz.opportunities, 2),
         "rz_then_implied": rz.team_implied,
+        "goal_line": rz.goal_line(),
+        "goal_line_text": gl_text,
         "primary_reason": reasons[0] if not def_reasons else def_reasons[0],
         "data_quality": 0.85 if not rz.measured else 1.0,
         "implied_total": implied,
@@ -596,6 +660,8 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "rz_chances": info.get("rz_expected"),
             "rz_before": info.get("rz_before"),
             "rz_then_implied": info.get("rz_then_implied"),
+            "goal_line": info.get("goal_line"),
+            "goal_line_text": info.get("goal_line_text") or "",
             "vig": round(vig, 4), "vig_source": vig_source,
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),

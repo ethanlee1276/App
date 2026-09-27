@@ -60,6 +60,13 @@ CHASE_YARDS = 25.0
 GAP_MIN = MAX_CREDIBLE_EDGE
 #: The heaviest price a plan row is quoted at.
 MAX_JUICE = -250
+#: "Who scores": the scorers per game, likeliest first — the other model's
+#: six-candidate table (Ethan, 2026-09-27).
+WHO_SCORES = 6
+#: The Most Likely board's heaviest price (likely.HEAVIEST_PRICE) and its
+#: floor (likely.MIN_PROB), said on a scorer the board does not carry.
+from .likely import HEAVIEST_PRICE as _CAP, MIN_PROB as _FLOOR   # noqa: E402
+
 #: A questionable player whose absence moves a projection this much is
 #: a pregame watch item.
 WATCH_MOVE = 0.08
@@ -297,6 +304,55 @@ def gaps(g: dict, props: list) -> list:
     return out[:4]
 
 
+# ═══ WHO SCORES ══════════════════════════════════════════════════════════
+
+def who_scores(g: dict, field: list, board_rows: list, matchup: dict | None) -> list:
+    """Every quoted scorer in the game, likeliest first, WHO_SCORES of
+    them: our chance, his goal-line work, and his seat — on the Most
+    Likely board (its tier), or why not (the price past the board's cap:
+    "likely, priced out"; under the floor: "a real chance, not a likely
+    one"). Ethan's other model's Gibbs, 2026-09-27: "the most likely TD
+    on the board — but the price kills it"."""
+    key = _key(g)
+    on_board = {r.get("player"): r for r in board_rows or []
+                if r.get("game") == key and r.get("market") == "anytime_td"}
+    matched = {r.get("player"): r for r in (matchup or {}).get("td") or []}
+    rows = [r for r in field or [] if isinstance(r, dict) and _in_game(r, g)
+            and r.get("model_prob") is not None and not str(r.get("injury_status") or "").strip()]
+    rows.sort(key=lambda r: -float(r["model_prob"]))
+    out = []
+    for r in rows[:WHO_SCORES]:
+        p = float(r["model_prob"])
+        b = on_board.get(r.get("player"))
+        try:
+            odds = int(r.get("odds") or 0)
+        except (TypeError, ValueError):
+            odds = 0
+        if b:
+            seat = f"On the Most Likely board — {b.get('tier_label') or 'posted'}."
+        elif odds and odds < _CAP:
+            seat = (f"Likely — but {odds:+d} is past the board's {_CAP} cap, so it is priced out, "
+                    f"not doubted.")
+        elif p < _FLOOR:
+            seat = f"A real chance, not a likely one — under the board's {_FLOOR:.0%} bar."
+        else:
+            seat = "Clears the bar; the board's seats went to likelier picks."
+        why = [x for x in (r.get("goal_line_text"),) if x]
+        m = matched.get(r.get("player"))
+        if m:
+            why += [x for x in (m.get("matchup_lines") or []) if x and x != r.get("goal_line_text")][:2]
+        elif r.get("implied_total") is not None:
+            why.append(f"{r.get('team')} expected to score {float(r['implied_total']):.1f} by the lines")
+        why.append(seat)
+        out.append({"kind": "td", "player": r.get("player"), "team": r.get("team"),
+                    "opponent": r.get("opponent"), "position": r.get("position"), "headshot": r.get("headshot"),
+                    "market": "anytime_td", "market_label": "Anytime TD", "side": "YES", "line": 0.5,
+                    "odds": r.get("odds"), "book": r.get("book"), "model_prob": round(p, 4),
+                    "game": key, "goal_line": r.get("goal_line"), "on_board": bool(b),
+                    "tier": (b or {}).get("tier"), "tier_label": (b or {}).get("tier_label"), "why": why})
+    return out
+
+
 # ═══ 6. WHAT CHANGES THE READ ════════════════════════════════════════════
 
 def watch_items(g: dict, scan: dict, props: list) -> list:
@@ -352,7 +408,7 @@ def yardage_note(sport: str = "nfl") -> str:
 
 
 def plan_for(g: dict, reads: dict, props: list, board_rows: list, matchup: dict | None,
-             sport: str = "nfl") -> dict | None:
+             sport: str = "nfl", field: list | None = None) -> dict | None:
     scan = g.get("scan") if isinstance(g.get("scan"), dict) else None
     if not scan:
         return None
@@ -367,6 +423,7 @@ def plan_for(g: dict, reads: dict, props: list, board_rows: list, matchup: dict 
                {"key": "line", "title": "The line and the script", "lines": s_lines},
                {"key": "out", "title": "Who is out, and where the work goes", "rows": absences(scan)},
                {"key": "matchup", "title": "The matchup", "lines": matchup_lines(scan, g.get("home"), g.get("away"))},
+               {"key": "who", "title": "Who scores", "rows": who_scores(g, field, board_rows, matchup)},
                {"key": "fits", "title": "Plays that fit", "rows": fit_rows,
                 "note": yardage_note(sport) if any(not r["volume"] for r in fit_rows) else ""},
                {"key": "avoid", "title": "Plays to avoid", "rows": avoids(g, players, props)},
@@ -386,7 +443,8 @@ def build(result: dict, sport: str = "nfl") -> list:
     for g in result.get("games") or []:
         if not isinstance(g, dict):
             continue
-        p = plan_for(g, reads_all.get(_key(g)) or {}, props, board, matchups.get(_key(g)), sport)
+        p = plan_for(g, reads_all.get(_key(g)) or {}, props, board, matchups.get(_key(g)), sport,
+                     field=result.get("td_field") or result.get("longshot_watch") or [])
         if p:
             out.append(p)
     return out

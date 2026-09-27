@@ -384,6 +384,12 @@ def _td_board_fairs(candidates: list, slate, census: dict | None = None) -> dict
     return out
 
 
+#: What each scorer carries into `td_field` (the game plan's "Who scores").
+_TD_FIELD_KEYS = ("player", "team", "opponent", "position", "headshot", "model_prob", "odds", "book",
+                  "implied_total", "rz_chances", "goal_line", "goal_line_text", "injury_status",
+                  "market", "market_label", "side", "line")
+
+
 def _long_shots(slate, usage: dict | None = None,
                 census: dict | None = None) -> tuple[list[dict], list[dict]]:
     """Anytime-touchdown board: ``(value picks, most-likely watchlist)``.
@@ -1228,6 +1234,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # was handed the whole menu; this key is the Long Shots page's
         # shelf and keeps its size (touchdowns.TD_WATCH_LIMIT).
         "longshot_watch": ls_watch[:_TD_WATCH_LIMIT],
+        # EVERY QUOTED SCORER, SLIM (engine/gameplan's "Who scores"): the
+        # other model's six-candidate table per game needs the whole field,
+        # not the page's five. Paid (gate.PAID_KEYS "td_field").
+        "td_field": [{k: r.get(k) for k in _TD_FIELD_KEYS} for r in ls_watch],
         # THE OTHER BOARD, and the one the measurements actually support.
         # `long_shots` ranks by edge, which the model is demonstrably bad
         # at (claimed-edge AUC 0.468 on the site's own settle pass);
