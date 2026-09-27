@@ -254,3 +254,105 @@ def early_samples(seasons: dict, weeks=(2, 3)) -> list[dict]:
                             out.append({"season": season, "m": m, "g": pos, "e": e,
                                         "y": sum(_f(g[wk], c) for c in cols), "tier": case})
     return out
+
+
+# ═══ ACROSS POSITIONS ════════════════════════════════════════════════════
+#
+# Ethan, 2026-09-27: the other model "finds where other players are out
+# and other players could step up" — a wide receiver out lifting the tight
+# end and the back, not only the next receiver. `samples` measures the
+# same position only. This measures the rest: when one of a team's two
+# leading target-getters (LEADER_SHARE of the targets or more, any of WR,
+# TE, RB) does not play, what the players at the OTHER positions do
+# against their own form. Only games with nobody out at the player's own
+# position count, so the effect is not the same-position one again.
+
+#: MEASURED 2026-09-27 (`python3 matefit.py --cross`, 2022-2025, week 4+):
+#: small and not significant — nothing ships. A TE's receiving yards with
+#: the WR leader out ×1.13 ± .13 (n 66), a WR's catches with the TE leader
+#: out ×1.12 ± .11 (n 27); in TARGETS, WRs +11% ± 9% (n 30, up all four
+#: seasons) and the TE +7% ± 7% (n 68) — against +19% to +75% for the
+#: same-position cases engine/teammates applies. A back's carries and
+#: targets do not move when a receiver sits. The two cells the plain rule
+#: would pass rest on two games each, hence MIN_CROSS_N.
+#: The fewest games a cross-position cell needs before the rule is asked.
+MIN_CROSS_N = 20
+#: A target leader: one of the team's top two by targets a game, at this
+#: share of the team's targets or more over his earlier games.
+LEADER_SHARE = 0.18
+LEADERS = 2
+#: The markets measured across positions (a touchdown is too rare to).
+CROSS_MARKETS = {
+    "WR": [("rec_yds", ("receiving_yards",), 15.0), ("receptions", ("receptions",), 1.5)],
+    "TE": [("rec_yds", ("receiving_yards",), 15.0), ("receptions", ("receptions",), 1.5)],
+    "RB": [("rush_yds", ("rushing_yards",), 15.0), ("receptions", ("receptions",), 1.5),
+           ("rec_yds", ("receiving_yards",), 12.0)],
+}
+
+
+def target_leaders(games: dict, team: str, week: int) -> list[tuple]:
+    """[(name, position, targets a game, last week played)] — the team's
+    top LEADERS target-getters before ``week`` with MIN_GAMES games and
+    LEADER_SHARE of the team's targets."""
+    per: list = []
+    team_tgt = 0.0
+    for (t, p, name), g in games.items():
+        if t != team:
+            continue
+        prev = [w for w in g if w < week]
+        tg = sum(_f(g[w], "targets") for w in prev)
+        team_tgt += tg
+        if len(prev) >= MIN_GAMES:
+            per.append((name, p, tg / len(prev), max(prev), tg))
+    if team_tgt <= 0:
+        return []
+    per.sort(key=lambda x: -x[2])
+    return [(n, p, tpg, last) for n, p, tpg, last, tg in per[:LEADERS] if tg / team_tgt >= LEADER_SHARE]
+
+
+def cross_case(leaders: list, me: str, my_pos: str, played: set, last_team_week: int) -> str | None:
+    """"x{POS}_new" / "x{POS}_cont" when a target leader at another
+    position did not play (the first such, by targets), else None."""
+    for name, pos, _tpg, last in leaders:
+        if name == me or pos == my_pos or name in played:
+            continue
+        return f"x{pos}_{'new' if last >= last_team_week else 'cont'}"
+    return None
+
+
+def cross_samples(seasons: dict) -> list[dict]:
+    """Points for `measure`: tier = cross_case, None when every target
+    leader played; skipped when anyone is out at the player's own
+    position (that is `samples`' question)."""
+    from .form import compute_form
+    from .models import GameLog
+    out = []
+    for season, rows in sorted(seasons.items()):
+        games, team_weeks = _games_from_stats(rows)
+        for team, weeks in team_weeks.items():
+            for wk in sorted(weeks):
+                if wk < FIRST_WEEK:
+                    continue
+                last = max((w for w in weeks if w < wk), default=0)
+                played = {name for (t, _p, name), g in games.items() if t == team and wk in g}
+                leaders = target_leaders(games, team, wk)
+                for pos in GROUPS:
+                    order = ranked(games, team, pos, wk)
+                    if any(o[0] not in played for o in order):
+                        continue                      # someone out at his own position
+                    for name, _v, _n, _l in order:
+                        g = games[(team, pos, name)]
+                        if wk not in g:
+                            continue
+                        case = cross_case(leaders, name, pos, played, last)
+                        prev = [g[w] for w in sorted(g) if w < wk]
+                        for m, cols, floor in CROSS_MARKETS[pos]:
+                            vals = [sum(_f(p, c) for c in cols) for p in prev]
+                            logs = [GameLog(week=len(vals) - j, opponent="", value=v)
+                                    for j, v in enumerate(reversed(vals))]
+                            e = compute_form(logs, sum(vals) / len(vals), None).mean
+                            if e < floor or e <= 0:
+                                continue
+                            out.append({"season": season, "m": m, "g": pos, "e": e,
+                                        "y": sum(_f(g[wk], c) for c in cols), "tier": case})
+    return out
