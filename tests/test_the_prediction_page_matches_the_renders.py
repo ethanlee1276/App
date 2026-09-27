@@ -30,7 +30,10 @@ def test_the_shell_wraps_the_three_rooms():
     assert "pmxBindRooms(host)" in fn and "bindSubtabs(host)" in fn
     hero = _fn("pmxHeroHTML")
     assert "Prediction <span>Market</span>" in hero and "img/predict/pm-hero@800.webp" in hero
-    assert ".pmx-art { position: absolute; inset: 0 0 auto 0;" in CSS and "var(--grad-pmx-art)" in CSS, "the banner is the hero's background, as the Pick of the Day's venue is"
+    assert ".pmx-art { position: absolute; inset: 0 0 0 auto; width: 64%;" in CSS and "mask-image: var(--grad-pmx-art);" in CSS, "the banner is the hero's right side, faded into it"
+    # "we should make this a little smaller" (2026-09-26): a band, not a poster
+    assert "min-height: clamp(150px, 14vw, 200px); align-items: center; }" in CSS
+    assert "clamp(120px, 18vw, 238px)" not in CSS
     assert "pmxDoor(\"kalshi\"" in _fn("pmxRailHTML"), "the venues' doors are in the rail's market tools"
     assert "EXTERNAL_MARKET_LINKS" in _fn("pmxDoor"), "venue doors go through the review switch"
     assert '.pmx[data-tab="proof"] .pmx-rail' in CSS, "the proof room runs full width"
