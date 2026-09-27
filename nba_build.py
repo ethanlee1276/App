@@ -818,6 +818,18 @@ def main() -> None:
                           f"named on the card — evidence, nothing rejected.")
             except Exception:                                # noqa: BLE001
                 pass
+            # THE MATCHUP UNDER EVERY PICK (engine/hoopsdvp, 2026-09-27):
+            # what tonight's defence allows a game in this stat and where
+            # that ranks — shown, and read by no projection until
+            # hoopsdvpfit.py measures how much of it reaches one player.
+            try:
+                from engine import hoopsdvp as _dvp
+                _dvp_rt, _dvp_last = _dvp.board_ratings(conn, args.league, args.date)
+                _dvp_n = _dvp.attach(recs, _dvp_rt, _dvp_last)
+                print(f"Matchup cards: {_dvp_n} of {len(recs)} pick(s)"
+                      f"{' (last season — too few games this season yet)' if _dvp_last else ''}.")
+            except Exception as exc:                         # noqa: BLE001
+                print(f"⚠️  matchup cards skipped: {exc}")
             out["recommendations"] = recs
             # SAY HOW MANY FACES JOINED. Ethan ingested 100 of 105 WNBA
             # photos and every card still drew initials, because the
@@ -900,8 +912,9 @@ def main() -> None:
         except Exception as exc:                          # noqa: BLE001
             print(f"⚠️  likelihood board skipped: {exc}")
         # THE ONE MOST LIKELY BOARD, as the NFL's (engine/likelyboard) —
-        # the same cards on every sport's page. Basketball has no matchup
-        # read yet, so its picks top out at Strong and the check says why.
+        # the same cards on every sport's page. Basketball shows a matchup
+        # card now (engine/hoopsdvp) but no MEASURED matchup read yet, so
+        # its picks still top out at Strong and the check says why.
         from engine import likelyboard as _lb
         print(f"  {_lb.attach(out, args.league)}")
 

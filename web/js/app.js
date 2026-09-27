@@ -7713,7 +7713,7 @@ function matchupCardHTML(r) {
       <span class="mu-rank${tone(x.rank, x.of)}">${muOrd(x.rank)}-most of ${x.of}</span></div>`;
   const m = c.model || {};
   const move = m.applied != null ? Math.round((Number(m.applied) - 1) * 100) : 0;
-  const model = m.reads
+  const model = c.note ? escapeHtml(c.note) : m.reads
     ? `Model: their ${escapeHtml(m.reads)} allowed moves this projection ${move > 0 ? "+" : ""}${move}%${
         m.games != null && m.season_weight != null && m.season_weight < 0.5
           ? ` — after ${m.games} game${m.games === 1 ? "" : "s"}, ${Math.round(m.season_weight * 100)}% of that rating is this season and the rest is last season’s, at the measured pull`
@@ -7721,7 +7721,7 @@ function matchupCardHTML(r) {
     : "Shown for you. The model leaves this one out: over four seasons it did not predict this bet.";
   return `<div class="mu-card">
     <div class="mu-head">Matchup vs ${escapeHtml(c.opponent)}
-      <span class="mu-sub">this season, ${c.games} game${c.games === 1 ? "" : "s"}</span></div>
+      <span class="mu-sub">${c.last_season ? "last season" : "this season"}, ${c.games} game${c.games === 1 ? "" : "s"}</span></div>
     ${line(c, c.league)}${c.also ? line(c.also) : ""}
     <div class="mu-model">${model}</div>
   </div>`;

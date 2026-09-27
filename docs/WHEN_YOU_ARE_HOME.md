@@ -49,6 +49,16 @@ says which series are real). Paste the output back:
 cd /srv/qellys && python3 crowdprobe.py nfl cfb mlb
 ```
 
+**B3. Basketball matchup cards (2026-09-27).** NBA and WNBA picks now
+carry the matchup card the NFL has — what tonight's defence allows a game
+in that stat, and its rank — shown only; it moves no projection. This
+measures whether it should (per stat: how much of a defence's lean
+reaches one player). Read-only; paste it back:
+
+```
+cd /srv/qellys && python3 hoopsdvpfit.py
+```
+
 **C. In two or three weeks: is the crowd right?** Once a couple of
 hundred games have finished with stored prices:
 
