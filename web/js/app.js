@@ -5024,8 +5024,19 @@ function renderLivePicks() {
      list into one closed line under it — the count, and the rows a tap
      away — where it waits for the official box score; it is graded on
      the Results page, not here. */
+  /* WINNERS UP, LOSERS DOWN. Ethan, 2026-09-27, the 1pm games in the
+     third quarter: "push all under bets that end up going over to the
+     bottom of the page … all bets that have an over that hit and that are
+     green shoot to the top. And then everything that's still open stays
+     in the middle." Cashed first, then the bets still running, then the
+     ones not yet started, then the dead; the list's own order holds
+     inside each band (a stable sort). */
+  const band = (r) => (["cleared", "won_pending"].includes(r.status) ? 0
+    : ["busted", "dead", "lost_pending"].includes(r.status) ? 3
+    : r.phase === "live" ? 1 : 2);
   const panel = (list, title, sub, empty, foot) => {
     const active = list.filter((r) => r.phase !== "final");
+    active.sort((a, b) => band(a) - band(b));   // stable: the list's order holds inside a band
     const done = list.filter((r) => r.phase === "final");
     const n = active.filter((r) => r.phase === "live").length;
     return `
