@@ -4968,6 +4968,11 @@ body.pk-open { overflow: hidden; }
      first row instead: on the screen with the least room, the number the
      card exists to communicate is read first and the context follows. */
   .metrics .metric.primary { grid-column: 1 / -1; order: -1; }
+  /* …but with only ONE tile beside it the rule strands that one on a
+     half-empty row of its own (the 2026-09-27 sweep, an anytime-TD pick:
+     "Chance" full width, "Book implies" alone under it). Two tiles share
+     the row. */
+  .metrics:has(> .metric:nth-child(2):last-child) .metric.primary { grid-column: auto; }
 }
 
 /* ============================================================
@@ -11772,6 +11777,14 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .qt-brand-t { gap: 6px; }
   .qt-brand-t span { font-size: var(--fs-2xs); letter-spacing: .2em; }
   .potd-ball { width: 100%; opacity: .5; }
+  /* The game page's five counts (the 2026-09-27 sweep): a column of five
+     big tiles ran ~330px for five small numbers. Three across, the
+     numbers a size down, the sub-lines left to the desktop. */
+  .stats.gp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .stats.gp-stats .tile { padding: 10px 10px 9px; }
+  .stats.gp-stats .tile .k { font-size: var(--fs-2xs); }
+  .stats.gp-stats .tile .v { font-size: var(--fs-xl); margin-top: 3px; }
+  .stats.gp-stats .tile-sub { display: none; }
   /* SMALLER ON A PHONE (Ethan, 2026-09-27, circling the quick links and
      the Pick of the Day: "They both make up too much page space"). The
      four links become one row of icon tiles, the way a book's app lays

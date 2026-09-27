@@ -12720,7 +12720,11 @@ function renderGamePage() {
   const gpSp = (side) => g.spread == null ? "—"
     : `${side === gpFav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
   const gpMl = (v) => v == null ? "—" : oddsTxt(v);
-  const linesCard = (g.spread != null || g.total != null
+  // NOT TWICE (the 2026-09-27 sweep): the hero already draws these three
+  // markets (gpLines, the Home card's grid) for any game not yet final,
+  // and the card below repeated the same six numbers straight under it.
+  // It stays for a finished game, where the hero draws none.
+  const linesCard = !gpLines && (g.spread != null || g.total != null
                      || g.away_ml != null || g.home_ml != null) ? `
     <div class="card gp-lines"><div class="gp-panel-title">Game lines</div>
       <div class="lb-table">
@@ -12739,8 +12743,9 @@ function renderGamePage() {
   if (g.lineups_confirmed === false) notes.push(lineupPendingWords(g));
   if (mlb && f.hr >= 1.05) notes.push(`Park boosts home runs +${Math.round((f.hr - 1) * 100)}%`);
   if (mlb && f.hr && f.hr <= 0.95) notes.push(`Park suppresses home runs ${Math.round((f.hr - 1) * 100)}%`);
-  if (!w.dome && w.measured !== false && (w.wind_mph || 0) >= 12) notes.push(
-    `${Math.round(w.wind_mph)}mph wind${w.wind_dir ? " " + w.wind_dir : ""}`);
+  // The wind is not repeated here: the hero's conditions chip (`cond`)
+  // prints it for every measured outdoor game, and the weather panel
+  // under it says what the model did with it.
   if (!w.dome && w.measured !== false && (w.precip_chance || 0) >= 0.4) notes.push(
     `${Math.round(w.precip_chance * 100)}% precipitation chance`);
   if (g.doubleheader) notes.push(`Doubleheader — game ${g.game_number || 1}`);

@@ -103,8 +103,11 @@ def test_every_other_weather_surface_asks_the_same_question():
     on the site in the fourth."""
     # The game page header.
     assert 'w.measured === false ? "Outdoor · weather not pulled"' in APP
-    # The key-insights list (a 12mph note off a 6mph constant).
-    assert 'w.measured !== false && (w.wind_mph || 0) >= 12' in APP
+    # The key-insights list used to repeat the wind (a 12mph note off a 6mph
+    # constant was the bug); since 2026-09-27 it carries no wind at all —
+    # the header chip above says it, behind the same measured test.
+    notes_at = APP.index("const notes = [];")
+    assert "mph wind" not in APP[notes_at:APP.index("const notesCard", notes_at)]
     # The weather page's own row.
     i = APP.index('const cells = w.dome')
     assert "w.measured === false" in APP[i:i + 500]

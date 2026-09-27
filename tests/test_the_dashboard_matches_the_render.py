@@ -129,6 +129,18 @@ def test_the_top_bar_carries_the_name_line_the_leagues_and_a_search_box():
     assert ".brand-tag { display: none; }" in CSS and ".ns-label { display: none; }" in CSS
 
 
+def test_the_game_and_pick_pages_do_not_say_things_twice_on_a_phone():
+    """The 2026-09-27 sweep: the game page's Game lines card repeated the
+    hero's own spread/ML/total grid, its Key insights repeated the wind the
+    hero's conditions chip prints, its five counts ran ~330px, and a pick
+    with two tiles stranded the second on a half-empty row."""
+    assert "const linesCard = !gpLines && (g.spread != null" in APP
+    i = APP.index("const notes = [];")
+    assert "mph wind" not in APP[i:APP.index("const notesCard", i)]
+    assert ".stats.gp-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }" in CSS
+    assert ".metrics:has(> .metric:nth-child(2):last-child) .metric.primary { grid-column: auto; }" in CSS
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
