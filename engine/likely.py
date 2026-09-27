@@ -1379,8 +1379,9 @@ def rungs(row: dict, market: str, fits=None, floor=None,
     """
     from .odds import devig_two_way, is_sharp_book
     alts = row.get("alt_lines") or []
-    if not alts:
-        return []
+    # NO LADDER IS NOT NO CANDIDATES: the main line's other side is one
+    # (see the end of this function) — passing touchdowns have no
+    # alternate ladder at any book, and returning here hid their over.
     sharp: dict[float, tuple[float, float]] = {}
     for ln in row.get("alt_sharp_lines") or []:
         try:
@@ -1467,10 +1468,81 @@ def rungs(row: dict, market: str, fits=None, floor=None,
         _tally(ladder, "priced")
         out.append({"line": line, "side": side, "book": book, "odds": odds,
                     "prob": p, "fair": fair, "source": source})
+    # THE MAIN LINE'S OTHER SIDE. Ethan, 2026-09-27, on "Allen O1.5 pass
+    # TD — 57% over, market 61%. No edge, no fight": "for the most likely
+    # bets we need to show what we genuinely think is going to happen and
+    # not stumping a pick bc there is no edge. for the edge bets thats ok
+    # bc they are EDGE bets." The row this board reads is the EDGE
+    # engine's — `betting.choose_side` hands over whichever side has the
+    # better VALUE, so Allen's row arrived as UNDER 1.5 at 43% (the soft
+    # price) and the over we think happens was never asked about: no book
+    # sells an alternate passing-TD ladder, so no rung carried it either.
+    # On a thin slate the reserve then filled the board with value sides
+    # under 50% — Allen under 43%, Shakir under 41% — the opposite of what
+    # "most likely" says. The other side of the main number is a
+    # candidate like any rung, at its own best bettable price, held to the
+    # same floor, the same -250 cap and the same credibility bar against
+    # its own side of the market.
+    other = _main_other_side(row, market, fits, floor=floor, ladder=ladder)
+    if other is not None and not any(
+            _same_number(c["side"], c["line"], (other["side"], other["line"])) for c in out):
+        out.append(other)
     # Highest probability first, so a caller that wants one can take the
     # head and a caller with its own bars walks a sensible order.
     out.sort(key=lambda c: -c["prob"])
     return out
+
+
+def _main_other_side(row: dict, market: str, fits=None, floor=None,
+                     ladder: dict | None = None) -> dict | None:
+    """The main line's OTHER side — the one the edge engine did not pick
+    — as a rung-shaped candidate that clears the board's bars, or None."""
+    side = _side(row.get("side"))
+    if side not in ("over", "under") or row.get("line") is None or not row.get("has_market"):
+        return None
+    flip = "under" if side == "over" else "over"
+    cand = _main_candidate(dict(row, market=market), flip, fits)
+    if cand is None:
+        return None
+    # ONE NUMBER AND ITS COMPLEMENT. The rung derivation prices off the
+    # display mixture, else the projection's normal; the main line shows
+    # the mixture, else the engine's own `hit_prob` (passing TDs are a
+    # Poisson in engine/passtd, not a normal). Priced separately, the two
+    # sides of ONE number did not sum to one — St. Brown over 7.5 at 47%
+    # and under 7.5 at 49%. The other side is the complement of what the
+    # main side shows.
+    shown = _main_shown(row, market, fits)
+    if shown is not None:
+        cand = dict(cand, prob=round(1.0 - shown, 4))
+    # ONLY WHEN IT IS THE LIKELIER SIDE. This exists to show the side we
+    # think happens; a minority side must never be a candidate a read's
+    # lean can pick over the majority (Allen's yards: over 46% beside an
+    # under at 51%).
+    if cand["prob"] <= 0.5:
+        return None
+    if cand["prob"] < _floor(floor):
+        _tally(ladder, "under the floor")
+        return None
+    fair = row.get("fair_prob")
+    fair = None if fair is None else round(1.0 - float(fair), 4)
+    if not _credible(cand["prob"], fair):
+        _tally(ladder, "disagrees with the rung’s own price")
+        return None
+    _tally(ladder, "priced")
+    return dict(cand, fair=fair if fair is not None else cand["prob"], source="model", main=True)
+
+
+def _main_shown(row: dict, market: str, fits=None) -> float | None:
+    """The chance `from_prop` shows for the main line's own side: the
+    display mixture where the market has one, else the engine's number
+    (the model's own read on a sharp-anchored card)."""
+    prob = row.get("raw_prob") if row.get("sharp_anchored") and row.get("raw_prob") is not None \
+        else row.get("hit_prob")
+    fitted = display_prob(market, row.get("projection"), row.get("line"),
+                          row.get("recent_values"), fits=fits)
+    if fitted is not None:
+        return 1.0 - float(fitted) if _side(row.get("side")) == "under" else float(fitted)
+    return None if prob is None else float(prob)
 
 
 def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
@@ -1631,6 +1703,9 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         # against the MAIN line's fair, where it was made.
         implied = round(float(rung["fair"]), 4)
         ev = None
+        # THE OTHER SIDE OF THE MAIN NUMBER (`_main_other_side`): the
+        # engine's side stays on the row as `main_side` — that is the Edge
+        # board's view — and this row says the side we think happens.
     else:
         side, line, book, odds = (row.get("side", ""), row.get("line"),
                                   row.get("book", ""), row.get("odds"))
@@ -1660,7 +1735,7 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         # line beside them so the card can say what the rung stands
         # next to; the journal and the grader read `line`/`side`/`odds`
         # and so grade the rung itself.
-        "rung": "alt" if rung is not None else "main",
+        "rung": "alt" if rung is not None and not rung.get("main") else "main",
         "main_line": row.get("line"), "main_odds": row.get("odds"),
         "main_book": row.get("book", ""), "main_side": row.get("side", ""),
         "raw_prob": round(float(prob), 4) if prob is not None else None,
