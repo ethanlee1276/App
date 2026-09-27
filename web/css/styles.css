@@ -8059,7 +8059,18 @@ body.has-deck #rail-live { display: none; }
   .lb-card .lb-head { grid-column: 1 / -1; }
   .lb-card .lb-table { border-top: none; padding-top: 0; margin-top: 0;
     min-width: 300px; }
+  /* ONLY THE SCORE AND THE LINES SHARE A ROW (Ethan, 2026-09-27: "look at
+     how huge these live game tiles are"). Everything after them — the
+     pressure line, the plays, the line track — used to auto-place into
+     the next free cell, so the plays ran down the narrow lines column
+     beside an empty half card. They take the card's full width now. */
+  .lb-card > :not(.lb-head):not(.lb-score):not(.lb-table) { grid-column: 1 / -1; }
 }
+/* The catching-up note is a sentence, not a play row: its words were
+   stacked one per line in the row's 2.4em clock column. */
+.lb-play.lb-why { display: block; }
+/* A football clock ("Q4 4:26") fits its column on one line. */
+.lb-play { grid-template-columns: minmax(2.4em, max-content) 1fr auto; }
 
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }

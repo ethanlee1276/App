@@ -24,7 +24,7 @@ def _fn(name):
 
 
 def test_the_two_backgrounds_ship_small_with_a_phone_size():
-    for stem in ("qb-helmet", "nfl-ball", "cfb-ball", "mlb-ball", "stadium-field"):
+    for stem in ("qb-helmet", "nfl-ball", "cfb-ball", "mlb-ball", "nba-ball", "wnba-ball", "stadium-field"):
         big, small = IMG / f"{stem}.webp", IMG / f"{stem}@800.webp"
         assert big.read_bytes()[8:12] == b"WEBP" and small.read_bytes()[8:12] == b"WEBP"
         assert big.stat().st_size < 400_000 and small.stat().st_size < 120_000
@@ -48,7 +48,7 @@ def test_the_book_names_itself_on_the_helmet_inside_the_tools():
 def test_each_league_draws_its_own_ball_and_the_rest_keep_their_venue():
     """2026-09-27: "we are using an NFL render on the CFB page" — and MLB
     had none."""
-    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball" };' in APP
+    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball" };' in APP
     art = _fn("potdBallArt")
     assert "POTD_BALL[state.sport]" in art and 'return "";' in art
     potd = _fn("renderPickOfTheDay")
@@ -90,6 +90,15 @@ def test_on_a_phone_the_links_are_one_row_and_the_card_says_it_once():
     potd = _fn("renderPickOfTheDay")
     assert 'const stripWhy = String(((got.verdict || {}).why) || "").trim();' in potd
     assert '${why ? `<div class="potd-why"' in potd, "the note is left out when it only repeats the strip"
+
+
+def test_the_live_card_is_not_a_tower():
+    """Ethan, 2026-09-27: "look at how huge these live game tiles are". On
+    a desk the plays auto-placed into the narrow lines column, and the
+    catching-up note stacked one word per line in the 2.4em clock cell."""
+    assert ".lb-card > :not(.lb-head):not(.lb-score):not(.lb-table) { grid-column: 1 / -1; }" in CSS
+    assert ".lb-play.lb-why { display: block; }" in CSS
+    assert '<div class="lb-play lb-why">Catching up' in APP
 
 
 if __name__ == "__main__":
