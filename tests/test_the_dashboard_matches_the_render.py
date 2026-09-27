@@ -99,6 +99,8 @@ def test_the_live_card_is_not_a_tower():
     assert ".lb-card > :not(.lb-head):not(.lb-score):not(.lb-table) { grid-column: 1 / -1; }" in CSS
     assert ".lb-play.lb-why { display: block; }" in CSS
     assert '<div class="lb-play lb-why">Catching up' in APP
+    # and on a phone the play wraps rather than losing its end to an ellipsis
+    assert ".lb-play .lb-what { white-space: normal; overflow: visible; min-width: 0; overflow-wrap: anywhere; }" in CSS
 
 
 def test_live_now_steps_aside_when_the_stadium_tiles_are_there():

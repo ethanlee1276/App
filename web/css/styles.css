@@ -8069,6 +8069,13 @@ body.has-deck #rail-live { display: none; }
 /* The catching-up note is a sentence, not a play row: its words were
    stacked one per line in the row's 2.4em clock column. */
 .lb-play.lb-why { display: block; }
+/* ON A PHONE THE PLAY WRAPS rather than trailing off: an ellipsis ate the
+   end of the line, which is the part that says what happened ("Field Goal
+   Good", the SCORE and TO marks), and the mark itself ran past the edge
+   (the 2026-09-27 layout sweep). Two lines beat half a play. */
+@media (max-width: 720px) {
+  .lb-play .lb-what { white-space: normal; overflow: visible; min-width: 0; overflow-wrap: anywhere; }
+}
 /* A football clock ("Q4 4:26") fits its column on one line. */
 .lb-play { grid-template-columns: minmax(2.4em, max-content) 1fr auto; }
 
