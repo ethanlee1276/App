@@ -21,6 +21,11 @@ squash the rest of the league into the middle of the chart. Ties share
 the mean of their positions; a league of one team has no shape at all
 (``{}``) — a radar with no comparison is decoration.
 
+THE SEASONS ARE BLENDED (2026-09-27): ``blended_shapes`` is what the
+build ships — this season and last, mixed per team at the matchup scan's
+own split — so the radar and the scan's ranks never tell two stories.
+``team_shapes`` (one season alone) stays for the tests and the history.
+
 Standard library only, like the rest of the ratings stack.
 """
 
@@ -130,6 +135,93 @@ def _sd(xs: list) -> float:
         return 0.0
     m = sum(xs) / len(xs)
     return math.sqrt(sum((x - m) ** 2 for x in xs) / (len(xs) - 1))
+
+
+def _season_stats(rows) -> dict:
+    """{team: {"scored", "allowed", "margins", "home", "away"}} lists for
+    one season's finals, in period order."""
+    out: dict = {}
+    for _period, home, away, hs, as_ in rows:
+        hm = float(hs) - float(as_)
+        for team, mine, theirs, m, side in ((home, hs, as_, hm, "home"),
+                                            (away, as_, hs, -hm, "away")):
+            t = out.setdefault(team, {"scored": [], "allowed": [], "margins": [],
+                                      "home": [], "away": []})
+            t["scored"].append(float(mine))
+            t["allowed"].append(float(theirs))
+            t["margins"].append(m)
+            t[side].append(m)
+    return out
+
+
+def blended_shapes(conn, sport: str, season: int, changes: dict | None = None) -> dict:
+    """The radar on THIS season and last, blended the way the matchup scan
+    blends its unit ranks (Ethan, 2026-09-27: "this chart should now be
+    updated since it says 2025 and we use a mix of 2025 and 2026").
+
+    Each team's offense axis leans on this season at the scan's offence
+    share, defense at its defence share — 55/45 from two games on, more
+    for a side a new QB or staff changed (engine/teamchange, via
+    gamescan.season_share) — and the whole-team axes (home edge,
+    steadiness) at the mean of the two. Form is the last FORM_GAMES
+    finals whichever season they fell in: a team three games in reads its
+    three and last season's last two. Percentiles are then taken across
+    the league on the blended numbers, as before.
+
+    ``{team: {"pct", "raw", "games" (this season), "games_last",
+    "blend": {"off", "def"}}}``; {} when the league cannot be ranked."""
+    from .gamescan import season_share
+    now = _season_stats(_finals(conn, sport, season))
+    last = _season_stats(_finals(conn, sport, season - 1))
+    mean = lambda xs: sum(xs) / len(xs) if xs else None       # noqa: E731
+
+    def mix(a, b, w):
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return w * a + (1 - w) * b
+
+    teams = [t for t in set(now) | set(last)
+             if len((now.get(t) or {}).get("margins", [])) + len((last.get(t) or {}).get("margins", [])) >= MIN_GAMES]
+    if len(teams) < 4:
+        return {}
+    raw: dict = {axis: {} for axis in AXES}
+    meta: dict = {}
+    for t in teams:
+        c, p = now.get(t) or {}, last.get(t) or {}
+        g = len(c.get("margins", []))
+        has_prior = bool(p.get("margins"))
+        ch = (changes or {}).get(t) or {}
+        tops = ch.get("top") or {}
+        w = {side: season_share(g, has_prior, changed=bool(ch.get(side)), top=tops.get(side))
+             for side in ("off", "def")}
+        wt = (w["off"] + w["def"]) / 2
+        raw["offense"][t] = mix(mean(c.get("scored")), mean(p.get("scored")), w["off"])
+        raw["defense"][t] = -mix(mean(c.get("allowed")), mean(p.get("allowed")), w["def"])
+        recent = (p.get("margins") or []) + (c.get("margins") or [])
+        raw["form"][t] = mean(recent[-FORM_GAMES:])
+        edge = lambda d: ((mean(d.get("home")) or 0.0) - (mean(d.get("away")) or 0.0)) if d.get("margins") else None  # noqa: E731
+        raw["home_edge"][t] = mix(edge(c) if g >= 2 else None, edge(p), wt) or 0.0
+        sd = lambda d: _sd(d["margins"]) if len(d.get("margins") or []) >= 2 else None  # noqa: E731
+        raw["steadiness"][t] = -(mix(sd(c), sd(p), wt) or 0.0)
+        meta[t] = {"games": g, "games_last": len(p.get("margins") or []),
+                   "blend": {k: round(v, 2) for k, v in w.items()}}
+    pcts = {axis: _percentiles(vals) for axis, vals in raw.items()}
+    out: dict = {}
+    for t in teams:
+        out[t] = {
+            "pct": {axis: pcts[axis].get(t, 50.0) for axis in AXES},
+            "raw": {
+                "offense": round(raw["offense"][t], 1),
+                "defense": round(-raw["defense"][t], 1),
+                "form": round(raw["form"][t], 1),
+                "home_edge": round(raw["home_edge"][t], 1),
+                "steadiness": round(-raw["steadiness"][t], 1),
+            },
+            **meta[t],
+        }
+    return out
 
 
 def latest_shaped_season(conn, sport: str, today_year: int) -> int | None:

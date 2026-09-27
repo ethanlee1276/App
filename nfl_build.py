@@ -1390,12 +1390,23 @@ def main() -> None:
             # today's calendar year would also work in August. A build of
             # `nfl_build.py 2024 5` must rank 2024/2023 shapes, not this
             # year's — the panel describes the teams on THIS board.
-            _season = _ts.latest_shaped_season(_sconn, "nfl", args.season)
-            if _season:
-                result["team_shapes"] = _ts.team_shapes(_sconn, "nfl", _season)
-                result["team_shapes_season"] = _season
-                print(f"  Team shapes: {len(result['team_shapes'])} team(s) "
-                      f"ranked on season {_season}.")
+            # THIS SEASON AND LAST, BLENDED (Ethan, 2026-09-27: "this
+            # chart should now be updated since it says 2025 and we use a
+            # mix of 2025 and 2026") — at the matchup scan's own split,
+            # new QBs and staff included, so the radar and the ranks agree.
+            # latest_shaped_season stays the fallback: a DB with no finals
+            # for this season or last ships nothing, as before.
+            from engine.teamchange import nfl_changes as _tc
+            _shapes = _ts.blended_shapes(_sconn, "nfl", args.season,
+                                         _tc(args.season, before_week=args.week))
+            if not _shapes:
+                _season = _ts.latest_shaped_season(_sconn, "nfl", args.season)
+                _shapes = _ts.team_shapes(_sconn, "nfl", _season) if _season else {}
+            if _shapes:
+                result["team_shapes"] = _shapes
+                result["team_shapes_season"] = args.season
+                print(f"  Team shapes: {len(_shapes)} team(s), "
+                      f"{args.season} blended with {args.season - 1}.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  team shapes skipped: {_exc}")
         # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this

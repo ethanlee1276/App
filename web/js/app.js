@@ -12876,13 +12876,22 @@ function renderGamePage() {
     const axes = ["offense", "defense", "form", "home_edge", "steadiness"];
     const names = { offense: "Offense", defense: "Defense", form: "Form",
                     home_edge: "Home edge", steadiness: "Steadiness" };
+    /* WHICH SEASONS (2026-09-27). The build blends this season with last
+       at the matchup scan's split (engine/teamshape.blended_shapes); the
+       label says how much of each team's shape is this season. An older
+       payload with one season still reads as it did. */
+    const thisPct = (x) => x.blend ? Math.round(((x.blend.off + x.blend.def) / 2) * 100) : null;
+    const sub = _sh.blend && _sa.blend
+      ? `— ${season} blended with ${Number(season) - 1}, league percentiles · ${escapeHtml(g.home)} ${
+          thisPct(_sh)}% this season (${plural(_sh.games, "game")}), ${escapeHtml(g.away)} ${
+          thisPct(_sa)}% (${plural(_sa.games, "game")})`
+      : `— ${season} measured profile, league percentiles (${_sh.games} and ${_sa.games} finals)`;
     const rows = axes.map((a) => `<tr><td>${names[a]}</td>
       <td class="num">${Number(_sh.pct[a]).toFixed(0)}</td>
       <td class="num">${Number(_sa.pct[a]).toFixed(0)}</td></tr>`).join("");
     return `
     <div class="card gp-shape"><div class="gp-panel-title">Team shapes
-        <span class="gp-panel-sub">— ${season} measured profile, league
-        percentiles (${_sh.games} and ${_sa.games} finals)</span></div>
+        <span class="gp-panel-sub">${sub}</span></div>
       <div class="gp-shape-radar" data-echart-radar="${escapeAttr(JSON.stringify({
         axes: axes.map((a) => names[a]),
         series: [
@@ -12892,11 +12901,12 @@ function renderGamePage() {
       }))}"><table class="agate gp-shape-tbl"><thead><tr><th></th>
           <th>${escapeHtml(g.home)}</th><th>${escapeHtml(g.away)}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
-      <p class="gp-sim-note">Percentile against the whole league on last season’s
-        finals: offense is points scored, defense is points allowed (fewer ranks
+      <p class="gp-sim-note">${_sh.blend ? `Percentile against the whole league on this
+        season and last, blended the way the matchup scan blends its ranks — more of
+        this season for a team with a new QB or new coaches` : "Percentile against the whole league on last season’s finals"}:
+        offense is points scored, defense is points allowed (fewer ranks
         higher), form is the last five margins, home edge is home-minus-road
-        margin, steadiness is low variance. Measured shape, not a projection —
-        and last season’s roster is not this season’s.</p>
+        margin, steadiness is low variance. Measured shape, not a projection.</p>
     </div>`;
   })() : "";
   host.innerHTML = `
