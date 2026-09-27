@@ -1142,7 +1142,14 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         report["qb"] = _quarterbacks(specs, stats, prior_stats, upto_week, team_of)
         # THE DEPTH ORDER AT EACH POSITION, the one engine/matefit measured
         # on — engine/teammates reads it once the injuries are in.
+        # Ranked on SNAP SHARE when the feed has this season's counts
+        # (engine/matefit.volume: a TE1 blanked in the box score is still
+        # the TE1); on targets when it does not.
         from ..teammates import depth_table as _depth_table
-        report["depth"] = _depth_table(stats, participating, upto_week)
+        try:
+            _snap_rows = load_snap_counts(season)
+        except DataUnavailable:
+            _snap_rows = None
+        report["depth"] = _depth_table(stats, participating, upto_week, _snap_rows)
 
     return Slate(date=f"{season}-W{week:02d}", teams=teams, games=games, props=props)

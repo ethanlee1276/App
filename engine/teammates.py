@@ -14,8 +14,11 @@ own form (engine/matefit.py, `python3 matefit.py`, 2022-2025, every
 season).
 
 HOW IT READS A GAME (nfl_build, after the injury report and the reset):
-the depth order at each position is the per-game volume ranking the
-fitter measured on (matefit.ranked: top three with three games), a
+the depth order at each position is the per-game ranking the fitter
+measured on — SNAP SHARE over every game he took a snap in when the build
+has snap counts (EFFECT_SNAPS), targets over his box-score rows when it
+does not (EFFECT); top three, ranked from week 2 on the games so far
+(matefit.early_min_games; 2026-09-27, Sadiq behind Mason Taylor), a
 teammate is out when the report or the live board rules him out, and the
 case is whether he ranks ABOVE or BELOW the player and whether he played
 last week ("new" — the player's recent games do not know yet) or was
@@ -40,6 +43,24 @@ EFFECT = {
     ("receptions", "WR", "above_cont"): 1.091,   # ± .034  n 428
     ("rec_yds", "WR", "above_cont"): 1.107,      # ± .045  n 432
 }
+#: THE SAME, WITH THE DEPTH ORDER RANKED ON SNAP SHARE — what the board
+#: uses whenever the build has snap counts (engine/matefit.volume). Filled
+#: from `python3 matefit.py --snaps` below.
+EFFECT_SNAPS = {
+    ("rec_yds", "TE", "above_new"): 1.747,       # ± .248  n 37
+    ("rec_yds", "WR", "above_cont"): 1.105,      # ± .048  n 355
+    ("rec_yds", "WR", "above_new"): 1.222,       # ± .087  n 185
+    ("receptions", "RB", "above_new"): 1.657,    # ± .163  n 44
+    ("receptions", "RB", "below_new"): 1.157,
+    ("receptions", "TE", "above_cont"): 1.231,   # ± .085  n 93
+    ("receptions", "TE", "above_new"): 1.568,    # ± .205  n 41
+    ("receptions", "WR", "above_cont"): 1.094,   # ± .036  n 345
+    ("receptions", "WR", "above_new"): 1.193,    # ± .068  n 178
+    ("rush_yds", "RB", "above_cont"): 1.372,     # ± .082  n 221
+    ("rush_yds", "RB", "above_new"): 1.662,      # ± .162  n 95
+    ("rush_yds", "RB", "below_cont"): 1.096,     # ± .033  n 598
+    ("rush_yds", "RB", "below_new"): 1.142,      # ± .046  n 325
+}
 #: The words for each case, on the card.
 CASE_WORDS = {"above_new": "just ruled out ahead of him", "above_cont": "out ahead of him",
               "below_new": "just ruled out behind him", "below_cont": "out behind him"}
@@ -50,32 +71,52 @@ def _norm(name: str) -> str:
     return normalize_name(str(name or ""))
 
 
-def depth_table(stats: list[dict], teams, upto_week: int) -> dict:
+def depth_table(stats: list[dict], teams, upto_week: int, snaps: list[dict] | None = None) -> dict:
     """{"order": {"TEAM|POS": [[name, per-game volume, games, last week]]},
-    "last": {team: the team's last week before this one}} — matefit.ranked
-    over this season's rows, the order the multipliers were measured on."""
+    "last": {team: the team's last week before this one}, "basis": "snaps" |
+    "targets"} — matefit.ranked over this season's games, the order the
+    multipliers were measured on.
+
+    ``snaps`` (the season's snap-count rows) ranks on snap share and counts
+    every game a player took a snap in; without it, on targets over the
+    box-score rows, as first measured."""
     from .sources.nflverse import _f, _s, _regular_season
-    from .matefit import ranked
+    from .matefit import ranked, early_min_games, games_from_snaps
     games: dict = {}
     last: dict = {}
-    for r in _regular_season(stats or []):
-        wk = int(_f(r, "week", default=0))
-        if wk <= 0 or wk >= upto_week:
-            continue
-        team = _s(r, "recent_team", "team")
-        if teams and team not in teams:
-            continue
-        last[team] = max(last.get(team, 0), wk)
-        pos = _s(r, "position", "position_group").upper()
-        if pos in GROUPS:
-            games.setdefault((team, pos, _s(r, "player_display_name", "player_name", "full_name")), {})[wk] = r
+    basis = "targets"
+    if snaps:
+        got, tw = games_from_snaps([r for r in (stats or []) if 0 < int(_f(r, "week", default=0)) < upto_week],
+                                   [r for r in snaps if 0 < int(_f(r, "week", default=0)) < upto_week])
+        for (team, pos, name), g in got.items():
+            if not teams or team in teams:
+                games[(team, pos, name)] = g
+        for team, weeks in tw.items():
+            if weeks and (not teams or team in teams):
+                last[team] = max(weeks)
+        basis = "snaps" if games else "targets"
+    if not games:
+        for r in _regular_season(stats or []):
+            wk = int(_f(r, "week", default=0))
+            if wk <= 0 or wk >= upto_week:
+                continue
+            team = _s(r, "recent_team", "team")
+            if teams and team not in teams:
+                continue
+            last[team] = max(last.get(team, 0), wk)
+            pos = _s(r, "position", "position_group").upper()
+            if pos in GROUPS:
+                games.setdefault((team, pos, _s(r, "player_display_name", "player_name", "full_name")), {})[wk] = r
     order = {}
     for team in {t for t, _p, _n in games}:
         for pos in GROUPS:
-            got = ranked(games, team, pos, upto_week)
+            # From week 2, on the games played so far (early_min_games):
+            # until 2026-09-27 the order needed three games, so the step
+            # never ran in weeks 1-3 (Sadiq, Mason Taylor out, week 3).
+            got = ranked(games, team, pos, upto_week, early_min_games(upto_week))
             if got:
                 order[f"{team}|{pos}"] = [[n, round(v, 2), g, lw] for n, v, g, lw in got]
-    return {"order": order, "last": last}
+    return {"order": order, "last": last, "basis": basis}
 
 
 def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
@@ -95,10 +136,11 @@ def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
             p.reset_applied = True
     order = (depth or {}).get("order") or {}
     last = (depth or {}).get("last") or {}
+    basis = (depth or {}).get("basis") or "targets"
     for g in slate.games:
         g.lineup = {t: {"order": {pos: order.get(f"{t}|{pos}") or [] for pos in GROUPS},
                         "out": sorted(out.get(t, ())), "maybe": sorted(maybe.get(t, ())),
-                        "last": last.get(t, 0)}
+                        "last": last.get(t, 0), "basis": basis}
                     for t in (g.home, g.away)}
     return {t: sorted(v) for t, v in out.items()}
 
@@ -149,7 +191,8 @@ def effect(prop, game) -> tuple:
                          "headline": f"{' and '.join(maybe['who'])} questionable at {pos}",
                          "note": _if_sits_note(maybe, 1.0, prop.market), "if_sits": maybe}
     who = [n for n in names if n not in playing and n != me]
-    mult = EFFECT.get((prop.market, pos, case), 1.0)
+    table = EFFECT_SNAPS if lu.get("basis") == "snaps" else EFFECT
+    mult = table.get((prop.market, pos, case), 1.0)
     held = mult != 1.0 and case.endswith("_cont") and getattr(prop, "reset_applied", False)
     if held:
         mult = 1.0
