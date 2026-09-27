@@ -161,8 +161,9 @@ def starting_qbs(schedules, season: int, before_week: int | None = None) -> dict
 
 
 def load_staff(season: int, path: Path | None = None) -> dict:
-    """``{team: {"oc": name, "dc": name}}`` for ``season`` from the staff
-    file; {} when it is missing or unreadable."""
+    """``{team: {"hc"/"oc"/"dc": name, "hc_calls": ["off"|"def"]}}`` for
+    ``season`` from the staff file; {} when it is missing or unreadable.
+    ``hc_calls`` names the side whose plays the head coach calls."""
     try:
         blob = json.loads(Path(path or STAFF_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -170,22 +171,34 @@ def load_staff(season: int, path: Path | None = None) -> dict:
     got = blob.get(str(season)) if isinstance(blob, dict) else None
     if not isinstance(got, dict):
         return {}
-    return {_team(t): {k: str(v).strip() for k, v in (d or {}).items()
-                       if k in ("hc", "oc", "dc") and str(v or "").strip()}
-            for t, d in got.items() if isinstance(d, dict)}
+    out: dict = {}
+    for t, d in got.items():
+        if not isinstance(d, dict):
+            continue
+        row = {k: str(v).strip() for k, v in d.items()
+               if k in ("hc", "oc", "dc") and isinstance(v, str) and v.strip()}
+        calls = [x for x in (d.get("hc_calls") or []) if x in ("off", "def")]
+        if calls:
+            row["hc_calls"] = calls
+        out[_team(t)] = row
+    return out
 
 
 def detect(schedules, season: int, before_week: int | None = None,
            staff: dict | None = None) -> dict:
     """``{team: {"off": [reason, ...], "def": [...]}}`` — only teams with
     a change, only the sides it moves. A reason reads "new starting QB
-    (Geno Smith)"."""
+    (Geno Smith)". A side whose ONLY change is a coordinator whose plays
+    the head coach calls is also listed under ``"hc_calls"``: it blends at
+    gamescan.HC_CALLS_SHARE, not CHANGED_SHARE."""
     out: dict = {}
+    kinds: dict = {}
 
     def add(team, kind, who):
         for side in SIDES[kind]:
             out.setdefault(team, {"off": [], "def": []})[side].append(
                 f"{WORDS[kind]} ({who})" if who else WORDS[kind])
+            kinds.setdefault((team, side), set()).add(kind)
 
     hc_seen: set = set()
     try:
@@ -207,6 +220,18 @@ def detect(schedules, season: int, before_week: int | None = None,
         for kind in ("hc", "oc", "dc"):
             if roles.get(kind) and not (kind == "hc" and team in hc_seen):
                 add(team, kind, roles[kind])
+    # …AND WHO CALLS THE PLAYS (Ethan, 2026-09-27: "teams with new
+    # cordinators but head coach calling plays maybe we do 60/40"). A new
+    # coordinator under a head coach who keeps calling that side's plays
+    # changes less; a new head coach or QB on the same side still counts
+    # in full.
+    for team, roles in (staff or {}).items():
+        for side in roles.get("hc_calls") or []:
+            coord = "oc" if side == "off" else "dc"
+            if kinds.get((team, side)) == {coord}:
+                out[team].setdefault("hc_calls", []).append(side)
+                reasons = out[team][side]
+                reasons[-1] = f"{reasons[-1]}; the head coach calls the plays"
     return out
 
 

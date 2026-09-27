@@ -85,14 +85,14 @@ def team_rates(conn, season: int, before_week: int | None = None,
     adjusted vs the league, "games": n, "blend": w}}. ``changes`` is
     engine/teamchange's: a side that is not last season's leans on this
     one at gamescan.CHANGED_SHARE, as the unit ranks do."""
-    from .gamescan import season_share
+    from .gamescan import season_share, HC_CALLS_SHARE
 
     now_games = _season_games(conn, int(season), before_week)
     pri_games = _season_games(conn, int(season) - 1, None)
     now, pri = _by_side(now_games), _by_side(pri_games)
 
     def blended(side_now: dict, side_pri: dict, team: str, n_games: int | None = None,
-                skip_now=None, skip_pri=None, changed: bool = False):
+                skip_now=None, skip_pri=None, changed: bool = False, top=None):
         a = _mean(v for w, v in (side_now.get(team) or {}).items() if w != skip_now)
         b = _mean(v for w, v in (side_pri.get(team) or {}).items() if w != skip_pri)
         g = n_games if n_games is not None else len([w for w in (side_now.get(team) or {}) if w != skip_now])
@@ -100,7 +100,7 @@ def team_rates(conn, season: int, before_week: int | None = None,
             return b
         if b is None:
             return a
-        w = season_share(g, True, changed=changed)
+        w = season_share(g, True, changed=changed, top=top)
         return w * a + (1 - w) * b
 
     def split(by: dict, side: str) -> dict:
@@ -153,9 +153,11 @@ def team_rates(conn, season: int, before_week: int | None = None,
         row = {"games": g, "blend": round(season_share(g, True), 2)}
         for side, a_now, a_pri, r_now, r_pri in (("off", adj_off_now, adj_off_pri, off_now, off_pri),
                                                   ("def", adj_def_now, adj_def_pri, def_now, def_pri)):
-            moved = bool(((changes or {}).get(team) or {}).get(side))
-            row[side] = blended(a_now, a_pri, team, n_games=g, changed=moved)
-            row[f"{side}_raw"] = blended(r_now, r_pri, team, n_games=g, changed=moved)
+            ch = (changes or {}).get(team) or {}
+            moved = bool(ch.get(side))
+            top = HC_CALLS_SHARE if side in (ch.get("hc_calls") or []) else None
+            row[side] = blended(a_now, a_pri, team, n_games=g, changed=moved, top=top)
+            row[f"{side}_raw"] = blended(r_now, r_pri, team, n_games=g, changed=moved, top=top)
         out[team] = row
     for side in ("off", "def"):
         league = _mean(r[side] for r in out.values() if r.get(side) is not None)

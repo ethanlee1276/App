@@ -113,7 +113,8 @@ def test_the_2026_staff_file_is_filled_and_sane():
     assert sum(1 for v in staff.values() if v.get("oc")) == 21
     assert sum(1 for v in staff.values() if v.get("dc")) == 14
     assert sum(1 for v in staff.values() if v.get("hc")) == 10
-    assert staff["NYJ"] == {"oc": "Frank Reich", "dc": "Brian Duker"}
+    assert staff["NYJ"] == {"oc": "Frank Reich", "dc": "Brian Duker", "hc_calls": ["def"]}
+    assert {t for t, v in staff.items() if v.get("hc_calls")} == {"NYJ", "KC", "CHI", "LA"}
     assert staff["ARI"]["hc"] == "Mike LaFleur" and "dc" not in staff["ARI"]
     assert "NE" not in staff, "Kuhr ran the 2025 defence already"
     nfl = {"ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB",
@@ -122,6 +123,29 @@ def test_the_2026_staff_file_is_filled_and_sane():
     assert set(staff) <= nfl, set(staff) - nfl
     blob = json.load(open(os.path.join(ROOT, "data", "nfl_staff_changes.json")))
     assert "_sources" in blob, "every name says where it came from"
+
+
+def test_a_new_coordinator_under_a_play_calling_head_coach_is_60_40():
+    """Ethan, 2026-09-27: "teams with new cordinators but head coach
+    calling plays maybe we do 60/40". Only when the coordinator is the
+    side's only change: a new QB on the same side still counts in full."""
+    staff = {"NYJ": {"dc": "Brian Duker", "oc": "Frank Reich", "hc_calls": ["def", "off"]},
+             "KC": {"oc": "Eric Bieniemy", "hc_calls": ["off"]}}
+    ch = T.detect(_schedule(), 2026, before_week=4, staff=staff)
+    assert ch["NYJ"]["hc_calls"] == ["def"], "the new QB keeps the offence in full"
+    assert ch["NYJ"]["def"] == ["new defensive coordinator (Brian Duker); the head coach calls the plays"]
+    assert ch["KC"]["hc_calls"] == ["off"]
+    assert G.HC_CALLS_SHARE == 0.60
+    assert G.season_share(3, changed=True, top=G.HC_CALLS_SHARE) == 0.60
+    assert G.season_share(1, changed=True, top=G.HC_CALLS_SHARE) == 0.5
+    last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
+    now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
+    r = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["x"], "hc_calls": ["def"]}})
+    assert r["NYJ"]["blend_def"] == 0.60
+    assert abs(r["NYJ"]["def"]["overall"]["value"] - (0.60 * -0.10 + 0.40 * 0.15)) < 1e-6
+    assert set(r["NYJ"]["changed"]) == {"def"}, "the marker is not a side"
+    rz = open(os.path.join(ROOT, "engine", "redzone.py"), encoding="utf-8").read()
+    assert 'HC_CALLS_SHARE if side in (ch.get("hc_calls") or []) else None' in rz
 
 def _units(season, weeks, epa_allowed):
     out = []
@@ -165,7 +189,7 @@ def test_the_build_reads_the_changes_and_the_red_zone_uses_them_too():
     assert "unit_ratings(conn, season, before_week=week, changes=changes)" in body
     assert "_rz_rates(conn, season, before_week=week, changes=changes)" in body
     rz = open(os.path.join(ROOT, "engine", "redzone.py"), encoding="utf-8").read()
-    assert "season_share(g, True, changed=changed)" in rz
+    assert "season_share(g, True, changed=changed, top=top)" in rz
 
 
 def test_the_card_names_the_side_and_the_reason():
