@@ -148,6 +148,13 @@ def test_card_grids_start_where_their_heading_does():
     assert "justify-content: center" not in CSS[CSS.index(".cards { display: grid;"):][:200]
 
 
+
+def test_no_sort_toolbar_over_an_empty_strip():
+    games = _fn("renderGames")
+    i = games.index('ctl.style.display = games.length ? "" : "none";')
+    assert i < games.index("if (!games.length) {"), "hidden before the empty return"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:

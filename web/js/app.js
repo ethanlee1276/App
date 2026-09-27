@@ -5852,6 +5852,12 @@ function renderGames() {
   } else if (upEl) {
     upEl.style.display = "none";
   }
+  /* …AND A TOOLBAR WITH NOTHING UNDER IT (the 2026-09-27 sweep): a sort
+     select and two layout buttons sat over "This slate hasn't been built
+     yet" on every league with no games. The league tabs up top switch
+     leagues; the strip's own controls show when there is a strip. */
+  const ctl = document.getElementById("games-controls");
+  if (ctl) ctl.style.display = games.length ? "" : "none";
   if (!games.length) {
     /* TWO DEAD BUTTONS ON AN EMPTY BOARD. This early return skipped the
        `syncStripArrows()` call further down, so on any night with no
