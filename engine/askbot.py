@@ -116,7 +116,13 @@ PRICES = {"claude-sonnet-5": (2.0, 10.0), "claude-haiku-4-5": (1.0, 5.0),
           "claude-opus-5": (5.0, 25.0), "claude-opus-5-5": (4.0, 20.0),
           "claude-opus-4-8": (5.0, 25.0), "claude-fable-5-1": (10.0, 50.0)}
 
-#: Ceilings.
+#: Ceilings. A question is capped at MAX_QUESTION characters; the carried
+#: conversation keeps the last MAX_TURNS turns, each trimmed to
+#: MAX_TURN_CHARS; an answer runs to WORDS words; MAX_TOKENS bounds the
+#: model call itself. MAX_MATCHED caps rows sent per lookup, SUMMARY_EACH
+#: caps rows per board section, RECENT_GAMES caps a player's game log,
+#: MAX_GAMES caps games per schedule/slate answer, MAX_INJURIES caps
+#: injuries per team or league.
 MAX_QUESTION = 400
 MAX_TURNS = 4
 MAX_TURN_CHARS = 800
