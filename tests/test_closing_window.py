@@ -144,10 +144,11 @@ def test_the_days_ceiling_does_not_refuse_the_close():
     still records the number its open bets settle against."""
     p = _tmp()
     # The last pull sits INSIDE the readiness window (which opened three
-    # hours before kickoff) so that exemption is already spent and the
-    # ceiling is what answers the second ask below.
-    save(BudgetState(remaining=40000, last_refresh_ts=NOW - 2 * 3600,
-                     sport_last_refresh={"nfl": NOW - 2 * 3600}), p)
+    # hours before kickoff) and the inactives window (80 minutes) so both
+    # exemptions are already spent and the ceiling is what answers the
+    # second ask below.
+    save(BudgetState(remaining=40000, last_refresh_ts=NOW - 55 * 60,
+                     sport_last_refresh={"nfl": NOW - 55 * 60}), p)
     real = ob.spent_today
     ob.spent_today = lambda *a, **k: 10 ** 6      # the day is long gone
     try:

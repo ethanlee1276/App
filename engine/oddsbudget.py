@@ -864,6 +864,28 @@ PRIME_BEFORE_S = 3.5 * 3600      # window opens this long before first pitch
 # one per wave (1pm, 4pm, 8pm).
 READY_BEFORE_S = 3 * 3600
 READY_SPORTS = ("nfl", "cfb")
+
+# --- the inactives pull ---------------------------------------------------------
+# Ethan, 2026-09-27, 12pm on a Sunday, with the books open beside the site:
+# "Garrett Wilson … his line shot up to like 80 yards … because other
+# people were ruled out, but yet we're still displaying 50 yards at minus
+# 250 when they now have 50 yards at minus 386 … we need to make sure
+# everything's getting updated right at like twelve, twelve thirty."
+#
+# The readiness pull fired at 10:16 for the 1pm wave; the next two fell to
+# the day's ceiling (672 of 808 credits, a pull costs 272), and the noon
+# touchpoint sits BELOW the ceiling check, so it never got its turn. NFL
+# inactive lists post 90 minutes before kickoff and the books re-hang
+# every affected prop within minutes — the most informative prices of the
+# day, and the day's budget was spent before they existed.
+#
+# So a second football door, the same shape as the readiness pull: once the
+# next kickoff is within INACTIVES_BEFORE_S, a league in INACTIVES_SPORTS
+# that has not pulled since the window opened gets one full pull through
+# the day's ceiling and the ordinary gap. Never the reserve, once per wave
+# (1pm, 4pm, the night game), NFL only — college posts no inactive list.
+INACTIVES_BEFORE_S = 80 * 60
+INACTIVES_SPORTS = ("nfl",)
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
 # A flat 1/31st-of-the-balance-per-day is the wrong shape for how this is
@@ -1052,6 +1074,17 @@ def prime_window(kickoffs, now: float):
     return min(ks) - PRIME_BEFORE_S <= now <= max(ks) + PRIME_AFTER_LAST_S
 
 
+def inactives_window(kickoffs, now: float):
+    """When the inactives window for the NEXT kickoff opened, else None —
+    `ready_window`'s shape, INACTIVES_BEFORE_S out."""
+    ks = [k for k in (kickoffs or [])
+          if isinstance(k, (int, float)) and k >= now]
+    if not ks:
+        return None
+    opened = min(ks) - INACTIVES_BEFORE_S
+    return opened if opened <= now else None
+
+
 def ready_window(kickoffs, now: float):
     """When the readiness window for the NEXT kickoff opened, else None.
 
@@ -1171,6 +1204,18 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                  f"{_fmt_clock(min(k for k in kickoffs if isinstance(k, (int, float)) and k >= now))} "
                  f"at {close_cost} credit(s) ({state.remaining} left this month)"
                  if ready else "")
+    # THE INACTIVES PULL rides the readiness pull's door (see
+    # INACTIVES_BEFORE_S): same bounds, its own window and its own reason.
+    i_opened = (inactives_window(kickoffs, now)
+                if budget_sport(sport) in INACTIVES_SPORTS else None)
+    if (not ready and not closing and i_opened is not None
+            and state.sport_ts(sport) < i_opened
+            and now - state.sport_ts(sport) >= MIN_REFRESH_GAP):
+        ready = True
+        ready_why = (f"inactives pull — re-pricing the slate after the inactive "
+                     f"lists, before "
+                     f"{_fmt_clock(min(k for k in kickoffs if isinstance(k, (int, float)) and k >= now))} "
+                     f"at {close_cost} credit(s) ({state.remaining} left this month)")
     # THE STALENESS PULL. The prices on disk are past the age ceiling, so
     # the board is refusing to show them; this pull is what replaces an
     # empty shelf with a real number. Bounded exactly like the close:
