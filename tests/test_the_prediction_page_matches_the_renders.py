@@ -9,6 +9,7 @@ width. Flow gets the render's league chips and sort; the proof room its
 callout, badge tiles and banded table.
 """
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -93,6 +94,22 @@ def test_the_prediction_page_shows_no_league_chrome():
         "the slate's demo, stale and withheld bars never reach a page off the league"
     i = APP.index("function updateAgo(")
     assert 'OFF_LEAGUE_VIEWS.includes(state.view) ? "hidden" : ""' in APP[i:i + 900], "nor does the slate's age chip"
+
+
+def test_the_board_stacks_on_a_phone_instead_of_squeezing():
+    """Ethan, 2026-09-27, on the phone board: "is all squished and very
+    ugly". `.pmx .pm-layout`'s two columns outranked the board's own
+    stacking rule, and the phone row placed its model % in a grid area the
+    template did not have."""
+    i = CSS.index(".pmx .pm-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }")
+    tail = CSS[i:]
+    assert "@media (max-width: 1100px) {\n  .pmx .pm-layout { grid-template-columns: minmax(0, 1fr); }" in tail
+    assert ".pmx .pm-detail:has(.pm-d-empty) { display: none; }" in tail
+    areas = re.search(r'\.pmx \.pm-table \.kx-row \{[^}]*grid-template-areas: ([^;]*);', tail).group(1)
+    for area in ("sport", "title", "view", "k", "n", "m", "e", "meter"):
+        assert re.search(rf'(?<![\w-]){area}(?![\w-])', areas), f"{area} has a place in the phone row"
+    for k, word in (("k", "YES"), ("n", "NO"), ("m", "OURS"), ("e", "GAP")):
+        assert f'.pmx .pm-table .kx-{k}::before {{ content: "{word}"; }}' in tail
 
 
 if __name__ == "__main__":

@@ -11537,6 +11537,38 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .pmx-k { font-family: var(--font-sans); font-weight: 900; color: var(--venue-kalshi); line-height: 1; }
 .pmx-poly { color: var(--text); flex: 0 0 auto; }
 .pmx .pm-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
+/* ONE COLUMN BELOW 1100px (Ethan, 2026-09-27, a phone screenshot of the
+   board: "is all squished and very ugly"). The rule above outranked the
+   board's own stacking query, so a phone drew the detail panel and the
+   table side by side at half width each. */
+@media (max-width: 1100px) {
+  .pmx .pm-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked, the empty panel is a card of nothing above the list: it
+     arrives with the first View tap instead. */
+  .pmx .pm-detail:has(.pm-d-empty) { display: none; }
+}
+@media (max-width: 760px) {
+  /* A phone row in three lines: the market and its View, the four
+     numbers each under its own label, then the meter. */
+  .pmx .pm-table .kx-row { grid-template-columns: 52px repeat(4, minmax(0, 1fr)) auto;
+    grid-template-areas: "sport title title title title view" ". k n m e e" ". meter meter meter meter meter";
+    row-gap: 8px; column-gap: 8px; padding: 14px 12px; }
+  .pmx .pm-table .kx-title { font-size: var(--fs-md); line-height: var(--lh-snug); }
+  .pmx .pm-table .kx-k, .pmx .pm-table .kx-n, .pmx .pm-table .kx-m, .pmx .pm-table .kx-e {
+    display: grid; gap: 2px; align-content: start; text-align: left; font-size: var(--fs-md); white-space: nowrap; }
+  .pmx .pm-table .kx-k { grid-area: k; } .pmx .pm-table .kx-n { grid-area: n; }
+  .pmx .pm-table .kx-m { grid-area: m; } .pmx .pm-table .kx-e { grid-area: e; }
+  .pmx .pm-table .kx-k::before, .pmx .pm-table .kx-n::before,
+  .pmx .pm-table .kx-m::before, .pmx .pm-table .kx-e::before {
+    color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .08em; }
+  .pmx .pm-table .kx-k::before { content: "YES"; }
+  .pmx .pm-table .kx-n::before { content: "NO"; }
+  .pmx .pm-table .kx-m::before { content: "OURS"; }
+  .pmx .pm-table .kx-e::before { content: "GAP"; }
+  .pmx .pm-table .pm-view { grid-area: view; align-self: start; }
+  .pmx .pm-table .kx-meter { grid-area: meter; }
+  .pmx .pm-detail { padding: 14px; }
+}
 /* the room pills */
 .pmx .subnav-wrap { margin: 4px 0 16px; }
 .pmx .subnav { display: flex; gap: 10px; flex-wrap: wrap; }
