@@ -47,7 +47,7 @@ def _node(js):
         "const propAttrs = (r) => ` data-prop=\"edge:${r.player}\"`;",
         "const liveTrackerRows = (rows) => rows;",
         "const oneBoardOn = () => _oneBoard;",
-        "const oneBoardRows = () => (state.data.likely_board || {}).rows || [];",
+        "const oneBoardRows = () => (state.data.likely_board || {}).rows || []; const oneBoardAllRows = oneBoardRows;",
         "const showableLikelyRow = () => true; const likelyDropped = (r) => !!r.dropped;",
         "const passesFilters = (r) => !!r.recommended; const passesGameBet = (b) => b.grade !== 'Pass';",
         _const("OB_TIERS"),

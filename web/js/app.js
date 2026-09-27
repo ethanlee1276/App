@@ -1245,15 +1245,58 @@ function ridingWhen(b) {
    answers false — an unknown kickoff is not a started game. */
 function likelyStarted(r) {
   if (!r) return false;
-  if (r.live) return true;
+  // A row's `live` is a flag; a game's is the scoreboard's object, whose
+  // "pre" state is not a started game.
+  const lv = r.live;
+  if (lv === true) return true;
+  if (lv && typeof lv === "object"
+      && !["scheduled", "pre", "upcoming"].includes(String(lv.state || "scheduled"))) return true;
   const k = String(r.kickoff || r.game_kickoff || "");
   if (!k) return false;
   // A bare local timestamp cannot be compared against a clock in another
   // zone, and guessing the reader's is how a 1pm kickoff reads as
   // started in London. No offset, no verdict.
-  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(k)) return false;
-  const t = Date.parse(k);
+  let t;
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(k)) {
+    t = Date.parse(k);
+  } else {
+    // THE FOOTBALL SHAPE: "13:00" EASTERN beside a "YYYY-MM-DD" date
+    // (launch._eastern_epoch reads it the same way). Without this every
+    // NFL row answered "not started" all game long — Ethan, 2026-09-27,
+    // the 1pm games over and their picks still on Top Picks.
+    const m = /^(\d{1,2}):(\d{2})$/.exec(k.trim());
+    const d = String(r.game_date || r.date || "");
+    if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+    let off = /-(0[4-9]|10)-/.test(d) ? "-04:00" : "-05:00";   // EDT Apr–Oct, else EST
+    try {
+      const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" })
+        .formatToParts(new Date(`${d}T16:00:00Z`)).find((p) => p.type === "timeZoneName").value;
+      const o = /GMT([+-])(\d{1,2})/.exec(tz);
+      if (o) off = `${o[1]}${o[2].padStart(2, "0")}:00`;
+    } catch (e) { /* the month rule above stands */ }
+    t = Date.parse(`${d}T${m[1].padStart(2, "0")}:${m[2]}:00${off}`);
+  }
   return Number.isFinite(t) && t <= Date.now();
+}
+
+/* OFF THE BOARD AT KICKOFF. Ethan, 2026-09-27, the 1pm games finished and
+   Walker, Henry and Jeanty still ranked on Top Picks: "all these bets
+   should be clearing off the board once the game starts." The boards are
+   pre-game rankings; a started pick lives on Live and in the Riding rail,
+   where it is tracked against the score. A prop row carries no kickoff of
+   its own, so its game's is used (by team, on its date). */
+function rowStarted(r) {
+  if (!r) return false;
+  if (likelyStarted(r)) return true;
+  const games = ((typeof state !== "undefined" && state.data) || {}).games || [];
+  const d0 = String(r.game_date || r.date || "");
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(d0) ? d0 : "";   // "2026-W03" is a slate, not a day
+  const [ga, gh] = String(r.game || "").split("@");
+  const g = games.find((x) => (!date || !x.date || String(x.date) === date)
+    && ((ga && gh && x.away === ga && x.home === gh)
+        || (r.home && r.away && x.home === r.home && x.away === r.away)
+        || (r.team && (x.home === r.team || x.away === r.team))));
+  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date });
 }
 
 /* A ROW SHOWN BECAUSE NOTHING ON ITS SHELF CLEARED THE BAR.
@@ -6571,7 +6614,7 @@ function tonightPick(d) {
   const shots = (d.long_shots || []).slice(0, 3);
   // A pick whose chance has dropped under the bar is not one of tonight's
   // top picks (likelyDropped) — the boards keep it in its own fold.
-  const ml = (d.most_likely || []).filter(showableLikelyRow)
+  const ml = (d.most_likely || []).filter(showableLikelyRow).filter((r) => !rowStarted(r))
     .filter((r) => !likelyDropped(r)).slice(0, 10);
   return { props, bets, shots, ml, n: props.length + bets.length,
            any: props.length + bets.length + shots.length + ml.length > 0 };
@@ -8795,10 +8838,10 @@ function renderLikelyTop() {
   if (!host) return;
   const shelves = boardShelves()
     .map((sh) => ({ ...sh,
-                    rows: shelfByPosted((sh.rows || []).filter(showableLikelyRow)
+                    rows: shelfByPosted((sh.rows || []).filter(showableLikelyRow).filter((r) => !rowStarted(r))
                       .filter((r) => !likelyDropped(r))).slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
-  const dropped = (state.data.most_likely || []).filter(showableLikelyRow).filter(likelyDropped);
+  const dropped = (state.data.most_likely || []).filter(showableLikelyRow).filter((r) => !rowStarted(r)).filter(likelyDropped);
   if (!shelves.length && !dropped.length) {
     /* A sport that HAS a likelihood board deserves a one-line reason on
        the home page, not a section that silently ceases to exist. The
@@ -8870,7 +8913,7 @@ function renderLikely() {
   // to draw yet is not an empty board: renderAll draws this view the
   // moment the board lands.
   if (!state.data) return;
-  const shown = (state.data.most_likely || []).filter(showableLikelyRow);
+  const shown = (state.data.most_likely || []).filter(showableLikelyRow).filter((r) => !rowStarted(r));
   const rows = shown.filter((r) => !likelyDropped(r));
   const dropped = shown.filter(likelyDropped);
   if (!shown.length) {
@@ -8938,7 +8981,7 @@ function renderLikely() {
     return;
   }
   const shelves = boardShelves()
-    .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow)
+    .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow).filter((r) => !rowStarted(r))
                                   .filter((r) => !likelyDropped(r)) }))
     .filter((sh) => sh.rows.length);
   /* THE JUMP BAR. Ethan, 2026-09-02, circling a shelf head halfway down
@@ -9354,9 +9397,14 @@ function oneBoardOn() {
   const b = (state.data || {}).likely_board;
   return !!(b && (b.rows || []).length);
 }
-function oneBoardRows() {
+function oneBoardAllRows() {
   return (((state.data || {}).likely_board || {}).rows || [])
     .filter(showableLikelyRow).filter((r) => !likelyDropped(r));
+}
+/* The boards: what has not kicked off (rowStarted). A game's own page and
+   its live tracker keep the game's picks through the game — oneBoardAllRows. */
+function oneBoardRows() {
+  return oneBoardAllRows().filter((r) => !rowStarted(r));
 }
 const OB_CHECKS = [["model", "Our number"], ["matchup", "Matchup"], ["market", "Market"], ["record", "Our record"]];
 const OB_TIERS = [["top", "Top picks", "Our number, the matchup and the market agree, and nothing we track says otherwise."],
@@ -9673,7 +9721,7 @@ function crowdStripHTML(g) {
 }
 function obGameHTML(g) {
   const k = `${g.away}@${g.home}`;
-  const rows = oneBoardRows().filter((r) => r.game === k);
+  const rows = oneBoardAllRows().filter((r) => r.game === k);
   if (!rows.length) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks one-board"><div class="section-title">Most likely · this game
       <span class="sub">— every pick in this game, with the four checks behind its tier</span></div>
@@ -9727,7 +9775,7 @@ function gpMatchupHTML(g) {
     ${matchupGameHTML(m, { head: false })}</div>`;
 }
 function matchupPickCount(g) {
-  if (oneBoardOn()) return oneBoardRows().filter((r) => r.game === `${g.away}@${g.home}`).length;
+  if (oneBoardOn()) return oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`).length;
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   return m ? (m.td || []).length + (m.props || []).length : 0;
 }
@@ -19631,10 +19679,10 @@ function edgePropRow(r) {
 function edgeBoardRows() {
   const props = (state.data.recommendations || [])
     .filter((r) => r.has_market !== false && (r.ev_per_unit || 0) > 0.005
-                   && r.odds >= state.maxJuice)
+                   && r.odds >= state.maxJuice && !rowStarted(r))
     .map(edgePropRow);
   const games = (state.data.game_bets || [])
-    .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
+    .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005 && !rowStarted(b))
     .map((b) => {
       const s = gameBetSeries(b);   // one call — it reads team_recent twice
       return {
@@ -42776,7 +42824,7 @@ function pbpOurPicks(d) {
   const g = { home: d.home, away: d.away };
   const placed = liveTrackerRows(pbpPropRows(data.live_picks, d));
   const likelyBoard = oneBoardOn()
-    ? oneBoardRows().filter((r) => r.game === `${d.away}@${d.home}`)
+    ? oneBoardAllRows().filter((r) => r.game === `${d.away}@${d.home}`)
     : (data.most_likely || []).filter(showableLikelyRow).filter((r) => propInGame(r, g) && !likelyDropped(r));
   const edgeBoard = [
     ...(data.recommendations || []).filter(passesFilters).filter((r) => propInGame(r, g)),

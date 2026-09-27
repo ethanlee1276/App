@@ -113,11 +113,66 @@ def test_a_kickoff_with_no_timezone_is_not_a_verdict():
         "boardlint dropped its own naive-timestamp guard; these two must agree"
 
 
-# --- the decision -------------------------------------------------------------
-def test_a_started_row_is_still_shown():
-    """THE POINT. `showableLikelyRow` is the filter that removes rows,
-    and it must not learn about kickoff: a card that disappears under a
-    reader mid-scroll is the complaint this fix exists NOT to cause."""
+# --- the decision, reversed 2026-09-27 ----------------------------------------
+# Ethan, the 1pm games over and Walker, Henry and Jeanty still ranked on
+# Top Picks: "all these bets should be clearing off the board once the
+# game starts." The BOARDS (Top Picks, Most Likely, Tonight, Edge) now
+# drop a started row — `rowStarted`, applied where each board lists its
+# rows. A game's own page and its live tracker keep that game's picks
+# through the game (`oneBoardAllRows`), and a posted pick is tracked on
+# Live and in the Riding rail, so nothing a reader bet on vanishes.
+def test_the_boards_clear_a_started_row():
+    assert "!rowStarted(r)" in _fn("oneBoardRows")
+    src = _fn("edgeBoardRows")
+    assert "!rowStarted(r)" in src and "!rowStarted(b)" in src
+    assert "!rowStarted(r)" in _fn("renderLikelyTop")
+    assert "!rowStarted(r)" in _fn("renderLikely")
+
+
+def test_the_game_page_and_its_tracker_keep_the_game_s_picks():
+    for name in ("obGameHTML", "matchupPickCount", "pbpOurPicks"):
+        src = _fn(name)
+        assert "oneBoardAllRows()" in src and "oneBoardRows()" not in src, name
+
+
+def test_football_kickoffs_are_read_in_eastern_time():
+    """The NFL row carries "13:00" beside "2026-09-27" — the shape the old
+    check refused to read, so no NFL pick ever counted as started."""
+    if not shutil.which("node"):
+        print("  SKIP node is not installed")
+        return
+    prog = _fn("likelyStarted") + _fn("rowStarted") + """
+const state = {data: {games: [
+  {home: "MIA", away: "KC", date: "2026-09-27", kickoff: "13:00", live: {state: "pre"}},
+  {home: "GB", away: "ATL", date: "2026-09-27", kickoff: "20:15", live: {state: "pre"}},
+  {home: "SF", away: "ARI", date: "2026-09-27", kickoff: "16:05", live: {state: "live"}}]}};
+const at = (iso) => { Date.now = () => Date.parse(iso); };
+const bad = [];
+const want = (name, got, exp) => { if (got !== exp) bad.push(name); };
+at("2026-09-27T16:59:00Z");
+want("12:59 ET, 1pm kick", rowStarted({game: "KC@MIA", kickoff: "13:00", game_date: "2026-09-27"}), false);
+at("2026-09-27T17:00:30Z");
+want("1:00 ET, 1pm kick", rowStarted({game: "KC@MIA", kickoff: "13:00", game_date: "2026-09-27"}), true);
+want("a prop by team, slate date", rowStarted({team: "KC", date: "2026-W03"}), true);
+want("the night game", rowStarted({game: "ATL@GB", kickoff: "20:15", game_date: "2026-09-27"}), false);
+want("a game bet, night", rowStarted({home: "GB", away: "ATL", date: "2026-09-27"}), false);
+want("scoreboard says live", rowStarted({team: "SF"}), true);
+want("scoreboard pre is not started", likelyStarted({live: {state: "pre"}}), false);
+at("2026-12-06T17:59:00Z");
+want("December, EST, 12:59", likelyStarted({kickoff: "13:00", game_date: "2026-12-06"}), false);
+at("2026-12-06T18:01:00Z");
+want("December, EST, 1:01", likelyStarted({kickoff: "13:00", game_date: "2026-12-06"}), true);
+console.log(bad.length ? "FAIL " + bad.join(", ") : "OK");
+"""
+    out = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-400:]
+    assert out.stdout.strip() == "OK", out.stdout.strip()
+
+
+def test_the_shared_filter_stays_kickoff_blind():
+    """`showableLikelyRow` also feeds the game page and the play-by-play
+    tracker, which keep a started game's picks; the kickoff rule lives
+    at each board instead."""
     src = _fn("showableLikelyRow")
     for banned in ("likelyStarted", "kickoff", "live"):
         assert banned not in src, \

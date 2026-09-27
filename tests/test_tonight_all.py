@@ -40,7 +40,7 @@ def _node(js):
       const passesFilters = (r) => r.grade !== "Pass";
       const passesGameBet = (b) => b.ok !== false;
       const heldForLongShots = (r) => r.market === "home_runs" && !r.hr_featured;
-      const showableLikelyRow = (r) => !r.hidden;
+      const showableLikelyRow = (r) => !r.hidden; const rowStarted = () => false;
       const likelyDropped = (r) => !!(r && r.locked) && Number(r.model_prob) < 0.55;
       {_fn("escapeHtml")}
       {_fn("tonightPick")}
