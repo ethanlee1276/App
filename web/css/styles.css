@@ -850,8 +850,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    hug the left edge with two-thirds of the screen empty beside it, which
    reads as broken rather than selective — and sparse IS this product's
    normal state, since the models are built to pass on most things. */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(346px, 100%), 440px));
-  gap: 18px; justify-content: center; }
+/* THE CARDS FILL THEIR ROW FROM THE LEFT (the 2026-09-27 sweep). Fixed
+   440px tracks centred in a wide column left every card grid indented
+   ~140px from its own left-aligned heading on a desktop — the game
+   page's Most likely cards most visibly. The tracks stretch to share the
+   row instead, so the grid starts where its heading does. */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(346px, 100%), 1fr));
+  gap: 18px; }
 .loading { color: var(--text-dim); grid-column: 1 / -1; text-align: center; padding: 60px; }
 .card {
   position: relative; overflow: hidden;
@@ -3683,11 +3688,8 @@ body.msg-thread-open .footer { display: none; }
 }
 .gp-art svg { width: 100%; height: auto; max-height: 260px; display: block; }
 
-/* auto-FILL keeps empty tracks, so a section holding one card leaves it
-   parked in the first track well left of centre. auto-FIT collapses them
-   and the lone card centres — which matters here, where a game often has
-   exactly one prop in a market. */
-.gp-cards { grid-template-columns: repeat(auto-fit, minmax(min(346px, 100%), 440px)); }
+/* The game page's cards follow `.cards` (left-aligned, filling the row);
+   the centred lone card this rule used to make sat off its heading. */
 
 
 /* ======================================================================

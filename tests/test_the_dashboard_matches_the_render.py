@@ -141,6 +141,13 @@ def test_the_game_and_pick_pages_do_not_say_things_twice_on_a_phone():
     assert ".metrics:has(> .metric:nth-child(2):last-child) .metric.primary { grid-column: auto; }" in CSS
 
 
+def test_card_grids_start_where_their_heading_does():
+    """The 2026-09-27 sweep: fixed 440px tracks centred in a wide column
+    left the game page's cards ~140px in from their own heading."""
+    assert ".cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(346px, 100%), 1fr));" in CSS
+    assert "justify-content: center" not in CSS[CSS.index(".cards { display: grid;"):][:200]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     for f in fns:
