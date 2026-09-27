@@ -16,6 +16,7 @@ What counts, and which side it moves:
 
   new head coach        both sides    the schedule (below)
   new starting QB       the offence   the schedule (below)
+  (a head coach the schedule has not caught up with: the staff file)
   new offensive coord.  the offence   data/nfl_staff_changes.json
   new defensive coord.  the defence   data/nfl_staff_changes.json
 
@@ -170,7 +171,7 @@ def load_staff(season: int, path: Path | None = None) -> dict:
     if not isinstance(got, dict):
         return {}
     return {_team(t): {k: str(v).strip() for k, v in (d or {}).items()
-                       if k in ("oc", "dc") and str(v or "").strip()}
+                       if k in ("hc", "oc", "dc") and str(v or "").strip()}
             for t, d in got.items() if isinstance(d, dict)}
 
 
@@ -186,18 +187,25 @@ def detect(schedules, season: int, before_week: int | None = None,
             out.setdefault(team, {"off": [], "def": []})[side].append(
                 f"{WORDS[kind]} ({who})" if who else WORDS[kind])
 
+    hc_seen: set = set()
     try:
         for team, (was, now) in head_coaches(schedules, season, before_week).items():
             if was and now and was.lower() != now.lower():
                 add(team, "hc", now)
+                hc_seen.add(team)
         for team, (was, now, same) in starting_qbs(schedules, season, before_week).items():
             if was and now and not same:
                 add(team, "qb", now)
     except Exception:                                        # noqa: BLE001
         pass
+    # THE FILE BACKS THE SCHEDULE UP ON HEAD COACHES. nflverse stamps a
+    # season's rows with last season's staff until someone updates them —
+    # in September 2026 Arizona's games still named Jonathan Gannon, fired
+    # in January and by then Green Bay's DC. A head coach listed in the
+    # file counts unless the schedule already said so.
     for team, roles in (staff or {}).items():
-        for kind in ("oc", "dc"):
-            if roles.get(kind):
+        for kind in ("hc", "oc", "dc"):
+            if roles.get(kind) and not (kind == "hc" and team in hc_seen):
                 add(team, kind, roles[kind])
     return out
 

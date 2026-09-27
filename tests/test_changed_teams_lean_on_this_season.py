@@ -96,6 +96,33 @@ def test_coordinators_come_from_the_staff_file_only():
     assert T.detect(None, 2026) == {} and T.detect([{"season": "x"}], 2026) == {}
 
 
+
+def test_the_file_backs_up_a_head_coach_the_schedule_missed():
+    """nflverse kept Jonathan Gannon on Arizona's 2026 rows after he was
+    fired; the file's head coach counts, once, and never twice when the
+    schedule already caught it."""
+    rows = _schedule()
+    ch = T.detect(rows, 2026, before_week=4, staff={"NYJ": {"hc": "Someone New"},
+                                                    "TEN": {"hc": "Robert Saleh"}})
+    assert ch["NYJ"]["def"] == ["new head coach (Someone New)"]
+    assert ch["TEN"]["off"] == ["new head coach (Robert Saleh)"], "not listed twice"
+
+
+def test_the_2026_staff_file_is_filled_and_sane():
+    staff = T.load_staff(2026)
+    assert sum(1 for v in staff.values() if v.get("oc")) == 21
+    assert sum(1 for v in staff.values() if v.get("dc")) == 14
+    assert sum(1 for v in staff.values() if v.get("hc")) == 10
+    assert staff["NYJ"] == {"oc": "Frank Reich", "dc": "Brian Duker"}
+    assert staff["ARI"]["hc"] == "Mike LaFleur" and "dc" not in staff["ARI"]
+    assert "NE" not in staff, "Kuhr ran the 2025 defence already"
+    nfl = {"ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB",
+           "HOU", "IND", "JAX", "KC", "LA", "LAC", "LV", "MIA", "MIN", "NE", "NO", "NYG",
+           "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS"}
+    assert set(staff) <= nfl, set(staff) - nfl
+    blob = json.load(open(os.path.join(ROOT, "data", "nfl_staff_changes.json")))
+    assert "_sources" in blob, "every name says where it came from"
+
 def _units(season, weeks, epa_allowed):
     out = []
     for w in range(1, weeks + 1):
