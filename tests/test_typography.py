@@ -20,16 +20,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # strings, which is the point — but the production droplet has no Node, and
 # there it did not even fail cleanly: it raised FileNotFoundError from
 # subprocess, so deploy.sh reported a stack trace rather than a reason.
-# The SKIP convention is what the repo already uses for exactly this (see
-# test_venue_ingest.py and Pillow): run_tests.py prints the reason and
-# names the file on the summary line, so coverage that stops happening
-# stays visible. `apt install -y nodejs` on any box you want it to run on.
+#
+# THE FIRST FIX FOR THAT WAS TOO BIG. It printed a SKIP line and raised
+# SystemExit at import, which is the whole-file convention — right for
+# test_venue_ingest.py, where every assertion needs Pillow, and wrong
+# here, where exactly one assertion needs node. The droplet is the box
+# with no Node that runs the deploy gate, and that gate silently stopped
+# checking the fonts are shipped, the theme toggle clears the touch
+# floor, and — the expensive one — that no CSS comment reopens. The
+# stylesheet is 700 KB and a reopened comment eats the rule under it
+# without a symptom; that check existing only on machines that happen to
+# have Node is the same as it not existing.
+#
+# So the gate is per-test now, which is what the rest of the repo already
+# does (test_mybets.py, test_phone_feel.py, test_routes.py): the one
+# assertion that shells out returns early, every other check in the file
+# runs everywhere, and the test count says which of the two happened.
+# `apt install -y nodejs` on any box you want the full set on.
 import shutil as _shutil                                     # noqa: E402
-if not _shutil.which("node"):
-    print("SKIP node is not installed; one assertion here executes the "
-          "sign regex rather than reading it. `apt install -y nodejs`")
-    print("\n0 tests passed.")
-    raise SystemExit(0)
+
+NODE = _shutil.which("node")
 
 
 def _read(*parts):
@@ -186,6 +196,36 @@ def test_the_balance_check_reads_the_inline_style_blocks_too():
         assert page in found, f"{page} carries a <style> block nothing checks"
 
 
+def test_this_file_does_not_bow_out_whole_when_node_is_missing():
+    """The reason the balance check above stopped running on the droplet
+    for a while, pinned so it cannot happen twice.
+
+    One assertion here shells out to node. Gating the whole MODULE on that
+    — a SKIP line and SystemExit at import — takes every other check in
+    the file with it, on the one box that has no Node and runs the deploy
+    gate. The coverage that disappears is not the node assertion; it is
+    the CSS comment balance over 700 KB of stylesheet, which has no
+    symptom when it breaks.
+
+    So: no module-level bail-out. A missing optional binary may skip the
+    assertions that need it and nothing else."""
+    own = _read("tests", "test_typography.py")
+    head = own[:own.index("\ndef ")]      # everything before the first def
+    # Comments only, not code: the paragraph above explains the bad gate by
+    # name, so a naive substring search finds its own explanation.
+    code = "\n".join(l for l in head.splitlines()
+                     if not l.lstrip().startswith("#"))
+    assert "SystemExit" not in code, \
+        "this file is bowing out whole again; gate the node assertion instead"
+    assert "0 tests passed" not in code, \
+        "a whole-file SKIP here hides the CSS balance check, not just node"
+
+    # …and the gate that replaced it is genuinely inside the one test.
+    sign = own[own.index("def test_the_sign_regex_cannot_eat"):]
+    sign = sign[:sign.index("\ndef ")]
+    assert "if not NODE:" in sign, "the node gate has left its test"
+
+
 def test_a_reopened_comment_is_actually_caught():
     """The scanner is the thing being trusted, so make it fail on demand —
     otherwise a refactor that quietly stops counting reads as all-clear."""
@@ -224,6 +264,9 @@ def test_the_sign_regex_cannot_eat_a_date_or_a_score():
     pattern = m.group(1)
     assert "^|[^" in pattern, "the rule has to constrain what PRECEDES the sign"
 
+    if not NODE:
+        return          # node-less box: the source-level half above still ran
+
     import subprocess
     probe = subprocess.run(
         # Raw: the JS below contains \w, \d and \u2212, and Python was
@@ -231,7 +274,7 @@ def test_the_sign_regex_cannot_eat_a_date_or_a_score():
         # the same thing in both languages, \w and \d are not Python
         # escapes at all, and 3.12 started warning that a future release
         # will make them an error. node parses every one of them itself.
-        ["node", "-e", r"""
+        [NODE, "-e", r"""
 const s = process.argv[1];
 const MINUS = "\u2212";
 const RE_SIGN = /(^|[^\w])-(?=[\d.])/g;
