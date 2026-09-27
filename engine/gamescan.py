@@ -71,13 +71,22 @@ CURRENT_SHARE = 0.55
 #: defence (engine/teamchange says which, from data). Before two games it
 #: ramps as games / (games + CHANGED_PRIOR_GAMES): half this season after
 #: one game, where an unchanged side is a fifth.
-CHANGED_SHARE = 0.75
+#:
+#: THEN DIALLED BY WHAT CHANGED (Ethan, later the same day: "maybe we also
+#: dial back too 65/35 for the new coaches ... 75/25 seems like a lot
+#: especially if the players r not different"). New players matter more
+#: than new staff: a new starting QB is QB_CHANGE_SHARE, a new head coach
+#: or coordinator with the same players CHANGED_SHARE. A side with two
+#: changes takes the larger, never a sum (engine/teamchange puts the
+#: side's share in ``top``).
+CHANGED_SHARE = 0.65
+QB_CHANGE_SHARE = 0.75
 CHANGED_PRIOR_GAMES = 1.0
 #: …LESS WHEN THE HEAD COACH KEEPS CALLING THAT SIDE'S PLAYS. Ethan, the
 #: same day: "teams with new cordinators but head coach calling plays
 #: maybe we do 60/40" — the Jets' defence (Aaron Glenn calls it over a
 #: new DC), the Chiefs', Bears' and Rams' offences. engine/teamchange
-#: marks such a side ``hc_calls``.
+#: marks such a side ``hc_calls`` and gives it this share.
 HC_CALLS_SHARE = 0.60
 
 #: Each unit: (numerator field(s), denominator field, better when higher
@@ -163,7 +172,7 @@ def season_share(games: float, has_prior: bool = True,
     that, and 1.0 when there is no last season to blend with. A side
     that ``changed`` (engine/teamchange) leads at CHANGED_SHARE, with a
     ramp ``prior_n`` scaled the same way (college counts in plays);
-    ``top`` overrides that lead (HC_CALLS_SHARE)."""
+    ``top`` overrides that lead (engine/teamchange's per-side share)."""
     if not has_prior:
         return 1.0
     top = (top or CHANGED_SHARE) if changed else CURRENT_SHARE
@@ -199,12 +208,12 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
         blended[team] = {"games": g, "blend": round(w, 2)}
         ch = (changes or {}).get(team) or {}
         why = {s: list(ch[s]) for s in ("off", "def") if ch.get(s)}
-        calls = set(ch.get("hc_calls") or [])
+        tops = ch.get("top") or {}
         if why and has_prior:
             blended[team]["changed"] = why
         for side in ("off", "def"):
             ws = season_share(g, has_prior, changed=bool(why.get(side)),
-                              top=HC_CALLS_SHARE if side in calls else None) if why else w
+                              top=tops.get(side)) if why else w
             if why and has_prior:
                 blended[team][f"blend_{side}"] = round(ws, 2)
             c, p = cur.get((team, side), {}), pri.get((team, side), {})

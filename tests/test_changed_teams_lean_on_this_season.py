@@ -9,7 +9,10 @@ A new head coach moves both sides, a new starting QB or offensive
 coordinator the offence, a new defensive coordinator the defence — read
 from the nflverse schedule (coaches and starting QBs) and the hand-kept
 coordinator file (engine/teamchange). A changed side blends 75/25 from
-two games on (gamescan.CHANGED_SHARE); an unchanged one keeps 55/45.
+two games on by what changed — 75/25 for a new starting QB, 65/35 for
+new staff with the same players, 60/40 for a coordinator whose plays the
+head coach calls (Ethan, the same day: "75/25 seems like a lot especially
+if the players r not different") — and an unchanged side keeps 55/45.
 """
 import json
 import os
@@ -140,12 +143,31 @@ def test_a_new_coordinator_under_a_play_calling_head_coach_is_60_40():
     assert G.season_share(1, changed=True, top=G.HC_CALLS_SHARE) == 0.5
     last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
     now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
-    r = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["x"], "hc_calls": ["def"]}})
+    r = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["x"], "hc_calls": ["def"],
+                                                "top": {"def": G.HC_CALLS_SHARE}}})
     assert r["NYJ"]["blend_def"] == 0.60
     assert abs(r["NYJ"]["def"]["overall"]["value"] - (0.60 * -0.10 + 0.40 * 0.15)) < 1e-6
-    assert set(r["NYJ"]["changed"]) == {"def"}, "the marker is not a side"
+    assert set(r["NYJ"]["changed"]) == {"def"}, "the markers are not sides"
+
+
+def test_the_share_goes_by_what_changed_and_the_largest_wins():
+    """New players count more than new staff; two changes on one side
+    take the larger share, never a sum."""
+    staff = {"NYJ": {"dc": "Brian Duker", "oc": "Frank Reich", "hc_calls": ["def"]},
+             "KC": {"oc": "Eric Bieniemy", "hc_calls": ["off"]}}
+    ch = T.detect(_schedule(), 2026, before_week=4, staff=staff)
+    assert ch["NYJ"]["top"] == {"off": G.QB_CHANGE_SHARE, "def": G.HC_CALLS_SHARE}, \
+        "new QB and new OC: the QB's 75, not more"
+    assert ch["TEN"]["top"] == {"off": G.CHANGED_SHARE, "def": G.CHANGED_SHARE}
+    assert ch["KC"]["top"] == {"off": G.HC_CALLS_SHARE}
+    assert (G.QB_CHANGE_SHARE, G.CHANGED_SHARE, G.HC_CALLS_SHARE) == (0.75, 0.65, 0.60)
+    last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
+    now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
+    r = G.ratings_from_rows(now, last, {"NYJ": {"off": ["qb"], "def": ["dc"],
+                                                "top": {"off": 0.75, "def": 0.60}}})
+    assert (r["NYJ"]["blend_off"], r["NYJ"]["blend_def"]) == (0.75, 0.60)
     rz = open(os.path.join(ROOT, "engine", "redzone.py"), encoding="utf-8").read()
-    assert 'HC_CALLS_SHARE if side in (ch.get("hc_calls") or []) else None' in rz
+    assert 'top = (ch.get("top") or {}).get(side)' in rz
 
 def _units(season, weeks, epa_allowed):
     out = []
@@ -161,15 +183,15 @@ def _units(season, weeks, epa_allowed):
 def test_the_jets_defence_the_way_ethan_described_it():
     """2025: the Jets' defence poor, Detroit's good. 2026: a modest turn
     the other way. At 55/45 Detroit still ranks first; with the Jets'
-    defence changed it leans 75/25 and the Jets rank first."""
+    defence under new staff it leans 65/35 and the Jets rank first."""
     last = _units(2025, 17, {"NYJ": 0.15, "DET": -0.05})
     now = _units(2026, 3, {"NYJ": -0.10, "DET": 0.05})
     same = G.ratings_from_rows(now, last)
     assert same["DET"]["def"]["overall"]["rank"] == 1
     moved = G.ratings_from_rows(now, last, {"NYJ": {"off": [], "def": ["new defensive coordinator"]}})
     assert moved["NYJ"]["def"]["overall"]["rank"] == 1
-    assert abs(moved["NYJ"]["def"]["overall"]["value"] - (0.75 * -0.10 + 0.25 * 0.15)) < 1e-6
-    assert moved["NYJ"]["blend_def"] == G.CHANGED_SHARE == 0.75
+    assert abs(moved["NYJ"]["def"]["overall"]["value"] - (0.65 * -0.10 + 0.35 * 0.15)) < 1e-6
+    assert moved["NYJ"]["blend_def"] == G.CHANGED_SHARE == 0.65
     assert moved["NYJ"]["blend_off"] == moved["NYJ"]["blend"] == 0.55, "the other side is untouched"
     assert moved["NYJ"]["changed"] == {"def": ["new defensive coordinator"]}
     assert "changed" not in moved["DET"]
@@ -177,7 +199,8 @@ def test_the_jets_defence_the_way_ethan_described_it():
 
 def test_the_ramp_before_two_games():
     assert G.season_share(1, changed=True) == 0.5 and G.season_share(1) == 0.2
-    assert G.season_share(2, changed=True) == G.season_share(12, changed=True) == 0.75
+    assert G.season_share(2, changed=True) == G.season_share(12, changed=True) == 0.65
+    assert G.season_share(3, changed=True, top=G.QB_CHANGE_SHARE) == 0.75
     assert G.season_share(0, changed=True) == 0.0
     assert G.season_share(3, has_prior=False, changed=True) == 1.0
 

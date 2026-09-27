@@ -10,7 +10,13 @@ The scan's unit ranks (engine/gamescan) and the red-zone rates
 (engine/redzone) blend this season with last at 55/45 from two games on
 (gamescan.CURRENT_SHARE). That is right for a team that is still the same
 team, and too much of last season for one that is not. A side that
-changed leans on this season at gamescan.CHANGED_SHARE instead.
+changed leans harder on this season, by what changed (``top``, below):
+
+  new starting QB (new players)          75/25  gamescan.QB_CHANGE_SHARE
+  new head coach or coordinator          65/35  gamescan.CHANGED_SHARE
+  new coordinator, head coach calls it   60/40  gamescan.HC_CALLS_SHARE
+
+and a side with more than one change takes the largest, never a sum.
 
 What counts, and which side it moves:
 
@@ -189,8 +195,10 @@ def detect(schedules, season: int, before_week: int | None = None,
     """``{team: {"off": [reason, ...], "def": [...]}}`` — only teams with
     a change, only the sides it moves. A reason reads "new starting QB
     (Geno Smith)". A side whose ONLY change is a coordinator whose plays
-    the head coach calls is also listed under ``"hc_calls"``: it blends at
-    gamescan.HC_CALLS_SHARE, not CHANGED_SHARE."""
+    the head coach calls is also listed under ``"hc_calls"``. ``"top"`` is
+    each changed side's share of this season: the largest its changes
+    earn (QB_CHANGE_SHARE for a new QB, HC_CALLS_SHARE for a coordinator
+    whose plays the head coach calls, CHANGED_SHARE otherwise)."""
     out: dict = {}
     kinds: dict = {}
 
@@ -232,6 +240,17 @@ def detect(schedules, season: int, before_week: int | None = None,
                 out[team].setdefault("hc_calls", []).append(side)
                 reasons = out[team][side]
                 reasons[-1] = f"{reasons[-1]}; the head coach calls the plays"
+    # THE SHARE EACH CHANGED SIDE EARNS — the largest of its changes.
+    from .gamescan import CHANGED_SHARE, QB_CHANGE_SHARE, HC_CALLS_SHARE
+    for team, row in out.items():
+        for side in ("off", "def"):
+            ks = kinds.get((team, side)) or set()
+            if not ks:
+                continue
+            share = (QB_CHANGE_SHARE if "qb" in ks
+                     else HC_CALLS_SHARE if side in (row.get("hc_calls") or [])
+                     else CHANGED_SHARE)
+            row.setdefault("top", {})[side] = share
     return out
 
 

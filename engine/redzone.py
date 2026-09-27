@@ -84,8 +84,8 @@ def team_rates(conn, season: int, before_week: int | None = None,
     opponent-adjusted), "off_raw"/"def_raw": as counted, "off_rel"/"def_rel":
     adjusted vs the league, "games": n, "blend": w}}. ``changes`` is
     engine/teamchange's: a side that is not last season's leans on this
-    one at gamescan.CHANGED_SHARE, as the unit ranks do."""
-    from .gamescan import season_share, HC_CALLS_SHARE
+    one at the share engine/teamchange gives that side, as the unit ranks do."""
+    from .gamescan import season_share
 
     now_games = _season_games(conn, int(season), before_week)
     pri_games = _season_games(conn, int(season) - 1, None)
@@ -155,7 +155,7 @@ def team_rates(conn, season: int, before_week: int | None = None,
                                                   ("def", adj_def_now, adj_def_pri, def_now, def_pri)):
             ch = (changes or {}).get(team) or {}
             moved = bool(ch.get(side))
-            top = HC_CALLS_SHARE if side in (ch.get("hc_calls") or []) else None
+            top = (ch.get("top") or {}).get(side)
             row[side] = blended(a_now, a_pri, team, n_games=g, changed=moved, top=top)
             row[f"{side}_raw"] = blended(r_now, r_pri, team, n_games=g, changed=moved, top=top)
         out[team] = row
