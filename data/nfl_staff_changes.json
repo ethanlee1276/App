@@ -1,0 +1,4 @@
+{
+  "_note": "New coordinators by season, for engine/teamchange. Head-coach and starting-QB changes come from the nflverse schedule and are NOT listed here; no free feed carries coordinators, so this is the one hand-kept input. A team listed for a season leans harder on that season's numbers on that side of the ball: oc -> offense, dc -> defense. Only coordinators new THIS season; a name must be a real hire, never a guess. Example: \"2026\": {\"NYJ\": {\"dc\": \"Full Name\"}}",
+  "2026": {}
+}

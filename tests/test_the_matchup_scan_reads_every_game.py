@@ -133,6 +133,9 @@ def test_the_reads_are_paid_and_the_facts_ride_the_game():
     wk, sn = NV.load_weekly_stats, NV.load_snap_counts
     NV.load_weekly_stats = lambda s: []
     NV.load_snap_counts = lambda s: []
+    import engine.teamchange as TC
+    real_changes = TC.nfl_changes
+    TC.nfl_changes = lambda *a, **k: {}       # never the schedule download
     try:
         result = {"games": [{"home": "GB", "away": "ATL"}],
                   "recommendations": [{"player": "Christian Watson", "team": "GB", "opponent": "ATL",
@@ -142,6 +145,7 @@ def test_the_reads_are_paid_and_the_facts_ride_the_game():
     finally:
         G.unit_ratings, N.load_pfr_def, G.scheme_tables = real
         NV.load_weekly_stats, NV.load_snap_counts = wk, sn
+        TC.nfl_changes = real_changes
     scan = result["games"][0]["scan"]
     assert "players" not in scan and "microscope" not in scan
     assert [p["player"] for p in result["scan_reads"]["ATL@GB"]["players"]] == ["Christian Watson"]

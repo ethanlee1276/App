@@ -31,6 +31,11 @@ raw two-game table cannot:
   that last season fills in more, by ``games / (games + PRIOR_GAMES)``.
   The card says the split either way (2026-09-25: the blend used to run
   to midseason unsaid, then for an evening ran this season alone).
+* A SIDE THAT IS NOT LAST SEASON'S LEANS HARDER. A new head coach (both
+  sides), starting QB or offensive coordinator (offence) or defensive
+  coordinator (defence) makes that side CHANGED_SHARE this season
+  (engine/teamchange; Ethan, 2026-09-27, "like 75/25 or 70/30"), and the
+  card names the reason.
 
 Standard library only; reads the ``team_units`` table and nothing else.
 """
@@ -57,6 +62,17 @@ CURRENT_LEADS_GAMES = 2
 #: This season's share of a rating (and of a player's usage) once it has
 #: CURRENT_LEADS_GAMES games; last season gets the rest.
 CURRENT_SHARE = 0.55
+#: …AND A SIDE OF THE BALL THAT IS NOT LAST SEASON'S leans harder on this
+#: one. Ethan, 2026-09-27: "any team that has a new QB starting this
+#: season or new defense coach or offense coach or new coach ... the 2026
+#: offense and defense should favor more for those teams. Like maybe 75/25
+#: or 70/30." A new head coach moves both sides, a new starting QB or
+#: offensive coordinator the offence, a new defensive coordinator the
+#: defence (engine/teamchange says which, from data). Before two games it
+#: ramps as games / (games + CHANGED_PRIOR_GAMES): half this season after
+#: one game, where an unchanged side is a fifth.
+CHANGED_SHARE = 0.75
+CHANGED_PRIOR_GAMES = 1.0
 
 #: Each unit: (numerator field(s), denominator field, better when higher
 #: — from the OFFENCE's point of view; a defence's sense is the reverse).
@@ -134,19 +150,31 @@ def _adjusted(rows: list[dict]) -> tuple[dict, dict]:
 
 
 def season_share(games: float, has_prior: bool = True,
-                 leads_at: float = CURRENT_LEADS_GAMES, prior_n: float = PRIOR_GAMES) -> float:
+                 leads_at: float = CURRENT_LEADS_GAMES, prior_n: float = PRIOR_GAMES,
+                 changed: bool = False) -> float:
     """This season's share of a blended number after ``games`` of it:
     CURRENT_SHARE from ``leads_at`` games on, ramping up to it before
-    that, and 1.0 when there is no last season to blend with."""
+    that, and 1.0 when there is no last season to blend with. A side
+    that ``changed`` (engine/teamchange) leads at CHANGED_SHARE, with a
+    ramp ``prior_n`` scaled the same way (college counts in plays)."""
     if not has_prior:
         return 1.0
+    top = CHANGED_SHARE if changed else CURRENT_SHARE
+    if changed:
+        prior_n = prior_n * CHANGED_PRIOR_GAMES / PRIOR_GAMES
     if games >= leads_at:
-        return CURRENT_SHARE
-    return min(CURRENT_SHARE, games / (games + prior_n)) if games > 0 else 0.0
+        return top
+    return min(top, games / (games + prior_n)) if games > 0 else 0.0
 
 
-def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> dict:
+def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
+                      changes: dict | None = None) -> dict:
     """{team: {"games", "blend", "off": {unit: {"value", "rank"}}, "def": {...}}}.
+
+    ``changes`` is engine/teamchange's ``{team: {"off": [reason], "def":
+    [...]}}``: a side with a reason blends at CHANGED_SHARE, and the team
+    carries ``changed`` (the reasons) and ``blend_off``/``blend_def`` so
+    the card can say which side leans on this season and why.
 
     ``current`` and ``prior`` are `team_units` rows for this season (the
     weeks before the game) and last season. Ranks run 1 = best: the best
@@ -162,12 +190,18 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> d
         has_prior = (team, "off") in pri or (team, "def") in pri
         w = season_share(g, has_prior)
         blended[team] = {"games": g, "blend": round(w, 2)}
+        why = {s: list(r) for s, r in ((changes or {}).get(team) or {}).items() if r}
+        if why and has_prior:
+            blended[team]["changed"] = why
         for side in ("off", "def"):
+            ws = season_share(g, has_prior, changed=bool(why.get(side))) if why else w
+            if why and has_prior:
+                blended[team][f"blend_{side}"] = round(ws, 2)
             c, p = cur.get((team, side), {}), pri.get((team, side), {})
             vals = {}
             for u in UNITS:
                 a, b = c.get(u), p.get(u)
-                vals[u] = (a if b is None else b if a is None else w * a + (1 - w) * b)
+                vals[u] = (a if b is None else b if a is None else ws * a + (1 - ws) * b)
             blended[team][side] = vals
     for side in ("off", "def"):
         for u, (_, _, higher) in UNITS.items():
@@ -183,7 +217,7 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None) -> d
 
 
 def unit_ratings(conn, season: int, before_week: int | None = None,
-                 sport: str = "nfl") -> dict:
+                 sport: str = "nfl", changes: dict | None = None) -> dict:
     """The ratings a game in ``season`` week ``before_week`` is priced
     against: this season's weeks before it, blended with last season's."""
     def rows(yr, upto=None):
@@ -198,7 +232,7 @@ def unit_ratings(conn, season: int, before_week: int | None = None,
         return {}
     if not cur and not pri:
         return {}
-    return ratings_from_rows(cur, pri)
+    return ratings_from_rows(cur, pri, changes)
 
 
 # ═══ THE SCAN: one game, both offences against both defences ═══════════════
@@ -1203,12 +1237,19 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     if conn is None:
         from . import db
         conn = db.connect()
-    ratings = unit_ratings(conn, season, before_week=week)
+    # WHO IS NOT LAST SEASON'S TEAM (engine/teamchange): a new head coach,
+    # starting QB or coordinator tips that side's blend to this season.
+    try:
+        from .teamchange import nfl_changes
+        changes = nfl_changes(season, before_week=week)
+    except Exception:                                        # noqa: BLE001
+        changes = {}
+    ratings = unit_ratings(conn, season, before_week=week, changes=changes)
     # RED-ZONE TRIPS, offence and defence (engine/redzone), for the
     # touchdown scenarios' fifth reading.
     try:
         from .redzone import team_rates as _rz_rates
-        rz_teams = _rz_rates(conn, season, before_week=week)
+        rz_teams = _rz_rates(conn, season, before_week=week, changes=changes)
     except Exception:                                        # noqa: BLE001
         rz_teams = {}
     charts = team_charts(depth_rows, week)["teams"] if depth_rows else {}
@@ -1470,7 +1511,9 @@ def _main(argv) -> int:
     if len(argv) == 5 and argv[0] == "show":
         from . import db
         season, week, a, b = int(argv[1]), int(argv[2]), argv[3].upper(), argv[4].upper()
-        r = unit_ratings(db.connect(), season, before_week=week)
+        from .teamchange import nfl_changes
+        r = unit_ratings(db.connect(), season, before_week=week,
+                         changes=nfl_changes(season, before_week=week))
         if not r:
             print("  no unit rows yet — run: python3 -m engine.gamescan backfill "
                   f"{season - 1} {season}")
@@ -1478,6 +1521,8 @@ def _main(argv) -> int:
         for t in (a, b):
             x = r.get(t) or {}
             print(f"  {t}  games {x.get('games')}  this season {int((x.get('blend') or 0) * 100)}%")
+            for side, why in (x.get("changed") or {}).items():
+                print(f"    {side} leans {int((x.get(f'blend_{side}') or 0) * 100)}% this season: {'; '.join(why)}")
             for side in ("off", "def"):
                 print(f"    {side}: " + "  ".join(f"{u} {v['rank']}" for u, v in (x.get(side) or {}).items()))
         for e in unit_edges(a, b, r) + unit_edges(b, a, r):

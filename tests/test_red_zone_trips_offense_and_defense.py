@@ -107,7 +107,7 @@ def test_the_scenario_scores_trips_as_its_fifth_reading():
 
 def test_the_scan_carries_it():
     src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
-    assert "rz_teams = _rz_rates(conn, season, before_week=week)" in src
+    assert "rz_teams = _rz_rates(conn, season, before_week=week, changes=changes)" in src
     assert 'scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}' in src
     sc = open(os.path.join(ROOT, "engine", "tdscenarios.py"), encoding="utf-8").read()
     assert 'rz_own=rz_by_team.get(x.get("team") or ""), rz_opp=rz_by_team.get(x.get("opp") or "")' in sc

@@ -12236,6 +12236,30 @@ function tapeBasis(scan, away, home) {
     : `This season only · ${g} each`;
 }
 
+/* …AND WHICH SIDES LEAN HARDER ON THIS SEASON (2026-09-27). Ethan: a
+   team with a new QB, head coach or coordinator should read "the 2026
+   offense and defense ... more — like 75/25 or 70/30". The engine does
+   that per side (engine/teamchange, gamescan.CHANGED_SHARE) and ships the
+   reasons; this names them under the split, one line per side changed,
+   one line for both when a new head coach moved both. */
+function tapeChanges(scan, away, home) {
+  const lines = [];
+  for (const t of [away, home]) {
+    const u = ((scan.units || {})[t]) || {};
+    const why = u.changed || {};
+    const pct = (side) => Math.round((u[`blend_${side}`] ?? u.blend ?? 0) * 100);
+    const say = (side) => (why[side] || []).join("; ");
+    const off = say("off"), def = say("def");
+    if (off && off === def && pct("off") === pct("def")) {
+      lines.push(`${teamName(t)} offense and defense: ${pct("off")}% this season — ${off}`);
+      continue;
+    }
+    if (off) lines.push(`${teamName(t)} offense: ${pct("off")}% this season — ${off}`);
+    if (def) lines.push(`${teamName(t)} defense: ${pct("def")}% this season — ${def}`);
+  }
+  return lines.map((l) => `<p class="tp-basis tp-changed">${escapeHtml(l)}</p>`).join("");
+}
+
 function scanTapeHTML(scan, away, home) {
   const n = scanTeams(scan);
   const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
@@ -12251,7 +12275,7 @@ function scanTapeHTML(scan, away, home) {
   };
   return `<div class="card ms-tape">
       <div class="tp-verdicts">${tapeVerdict(scan, away, home, "off")}${tapeVerdict(scan, away, home, "def")}</div>
-      <p class="tp-basis">${escapeHtml(tapeBasis(scan, away, home))}</p>
+      <p class="tp-basis">${escapeHtml(tapeBasis(scan, away, home))}</p>${tapeChanges(scan, away, home)}
       <div class="tp-row tp-head"><span class="tp-k">Rank of ${n}, 1 = best</span>
         <span class="tp-team">${teamMark(away, 22)}<b>${escapeHtml(teamName(away))}</b></span>
         <span class="tp-team">${teamMark(home, 22)}<b>${escapeHtml(teamName(home))}</b></span></div>
