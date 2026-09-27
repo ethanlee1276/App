@@ -188,6 +188,32 @@ def season_share(games: float, has_prior: bool = True,
     return min(CURRENT_SHARE, games / (games + prior_n)) if games > 0 else 0.0
 
 
+def _stamp_now_ranks(out: dict, now: dict, units, higher_of) -> None:
+    """Each unit's rank on THIS SEASON ALONE beside the blended one, as
+    ``now_rank``. Ethan, 2026-09-27, on the Jets: "how are we ranking the
+    Jets defense almost the worst in the league when they are ranked 7th".
+    After two games the blended rank is 25% this season (the measured
+    forecast of the rest of it, see UNIT_PRIOR_GAMES), so a defence 10th
+    this year and 30th last showed as 28th with nothing on the card saying
+    what this season alone says. The blend still ranks; this is shown
+    beside it. Stamped only where a team's blend leans on last season.
+
+    ``now`` is ``{team: {side: {unit: value}}}`` for this season;
+    ``higher_of(unit)`` is True when a higher value is the better offence."""
+    for side in ("off", "def"):
+        for u in units:
+            good_high = higher_of(u) if side == "off" else not higher_of(u)
+            have = [(t, ((now.get(t) or {}).get(side) or {}).get(u)) for t in out]
+            have = sorted(((t, v) for t, v in have if v is not None),
+                          key=lambda tv: -tv[1] if good_high else tv[1])
+            ranks = {t: i + 1 for i, (t, _) in enumerate(have)}
+            for t in out:
+                cell = (out[t].get(side) or {}).get(u)
+                if (isinstance(cell, dict) and ranks.get(t) is not None
+                        and out[t].get("games") and (out[t].get("blend") or 1.0) < 1.0):
+                    cell["now_rank"] = ranks[t]
+
+
 def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
                       changes: dict | None = None) -> dict:
     """{team: {"games", "blend", "off": {unit: {"value", "rank"}}, "def": {...}}}.
@@ -238,6 +264,9 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
                 v = blended[t][side].get(u)
                 blended[t][side][u] = {"value": None if v is None else round(v, 4),
                                        "rank": ranks.get(t)}
+    _stamp_now_ranks(blended, {t: {side: cur.get((t, side)) or {} for side in ("off", "def")}
+                               for t in teams},
+                     UNITS, lambda u: UNITS[u][2])
     return blended
 
 
@@ -1382,6 +1411,9 @@ def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
             for t in teams:
                 v = out[t][side][u]
                 out[t][side][u] = {"value": None if v is None else round(v, 4), "rank": ranks.get(t)}
+    _stamp_now_ranks(out, {t: {side: ((current or {}).get(t) or {}).get(side) or {}
+                               for side in ("off", "def")} for t in teams},
+                     CFB_UNITS, lambda u: CFB_UNITS[u])
     return out
 
 

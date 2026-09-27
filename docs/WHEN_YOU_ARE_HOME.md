@@ -37,6 +37,18 @@ for f in ('recommendations.json','mlb_recommendations.json','cfb.json'):
     print(f, d.get('crowd_census'), d.get('polymarket_tags'))"
 ```
 
+**B1. Today's touchdown work, on every game (2026-09-27).** After the
+next NFL build (the box pulls the branch every ~5 minutes; the build
+follows), this walks every game on the live board: the game plan's "Who
+scores" step and each scorer's seat, and on every priced scorer the
+goal-line counts, quarterbacks x1.40, the running-back curve and depth
+receivers. The last line is ALL TOUCHDOWN CHECKS PASS or names what is
+missing. Reads only:
+
+```
+cd /srv/qellys && python3 tdcheck.py
+```
+
 **B2. Spreads and totals (2026-09-27).** The prediction markets'
 price on the board's own spread and total is now read too. This prints
 what each venue lists beyond the winner: Polymarket's spreads and totals

@@ -12231,10 +12231,15 @@ function tapeTier(r, n = 32) {
     : q <= 0.75 ? ["", "Below avg"] : ["bad", "Weak"];
 }
 
-function tapeCell(r, n) {
+function tapeCell(r, n, now) {
   const t = tapeTier(r, n);
   if (!t) return `<span class="tp-cell">—</span>`;
-  return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em></span>`;
+  /* THIS SEASON ALONE, under the blended rank (engine/gamescan
+     _stamp_now_ranks): the blend is mostly last season after two games,
+     so a defence 10th this year read "28th · Weak" with nothing beside
+     it saying so (Ethan, 2026-09-27, on the Jets). */
+  const nowLine = now != null && now !== r ? `<small class="tp-now">${ordinal(now)} this season</small>` : "";
+  return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em>${nowLine}</span>`;
 }
 
 function tapeVerdict(scan, a, b, side) {
@@ -12303,13 +12308,14 @@ function tapeChanges(scan, away, home) {
 function scanTapeHTML(scan, away, home) {
   const n = scanTeams(scan);
   const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
+  const un = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).now_rank;
   const group = (side, title) => {
     const rows = SCAN_UNITS.map(([k]) => {
       const ra = u(away, side, k), rh = u(home, side, k);
       if (ra == null && rh == null) return "";
       const label = (TAPE_LABELS[k] || [k, k])[side === "off" ? 0 : 1];
       return `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>
-        ${tapeCell(ra, n)}${tapeCell(rh, n)}</div>`;
+        ${tapeCell(ra, n, un(away, side, k))}${tapeCell(rh, n, un(home, side, k))}</div>`;
     }).join("");
     return rows ? `<div class="tp-group">${title}</div>${rows}` : "";
   };
@@ -12625,7 +12631,7 @@ function matchupScanHTML(g) {
   const reads = (d.scan_reads || {})[`${away}@${home}`];
   const locked = !reads && d.locked && d.locked.scan_reads;
   const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
-  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, ${Math.round(u0.blend * 100)}% of each rating is this season and the rest is last season.` : "";
+  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, ${Math.round(u0.blend * 100)}% of each rating is this season and the rest is last season — measured, that is the best forecast of how a side plays the rest of the year. The small line under a rank is this season alone.` : "";
   const edges = (scan.edges || []).slice(0, 5);
   const inj = scan.injuries || [];
   const players = (reads && reads.players) || [];

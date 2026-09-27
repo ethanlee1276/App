@@ -12197,6 +12197,7 @@ body.footer-quiet .footer { padding-top: 14px; padding-bottom: 28px; }
   background: var(--bg); border: var(--hairline) solid var(--border-soft); line-height: var(--lh-tight); }
 .tp-cell b { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
 .tp-cell em { font-style: normal; font-size: var(--fs-2xs); color: var(--text-dim); }
+.tp-cell .tp-now { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-dim); }
 .tp-cell.good { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
 .tp-cell.good b, .tp-cell.good em { color: var(--good); }
 .tp-cell.bad { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }

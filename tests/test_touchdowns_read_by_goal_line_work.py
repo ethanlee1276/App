@@ -186,6 +186,19 @@ def test_depth_receivers_are_scaled_and_starters_are_not():
         "tight ends ran slightly LOW, so they are left alone"
 
 
+def test_the_seat_says_how_he_got_on_the_board():
+    board = BOARD + [
+        {"player": "Breece Hall", "market": "anytime_td", "game": "NYJ@DET", "tier": "top",
+         "tier_label": "Top pick", "reserve": True},
+        {"player": "Jahmyr Gibbs", "market": "anytime_td", "game": "NYJ@DET", "tier": "top",
+         "tier_label": "Top pick", "sources": ["matchup"]}]
+    rows = {r["player"]: r for r in P.who_scores(GAME, FIELD, board, None)}
+    assert rows["Breece Hall"]["why"][-1].startswith("On the Most Likely board as a reserve — under the usual 55% bar")
+    assert rows["Jahmyr Gibbs"]["why"][-1] == ("On the Most Likely board — Top pick — through the matchup picks; "
+                                               "at -320 he is past the -250 cap the main list holds to.")
+    assert rows["Amon-Ra St. Brown"]["why"][-1] == "On the Most Likely board — Top pick."
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

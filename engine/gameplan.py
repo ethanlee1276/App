@@ -328,7 +328,18 @@ def who_scores(g: dict, field: list, board_rows: list, matchup: dict | None) -> 
             odds = int(r.get("odds") or 0)
         except (TypeError, ValueError):
             odds = 0
-        if b:
+        # HOW he got there, said — not only that he did. Found checking the
+        # Jets @ Lions build, 2026-09-27: the one board pools the matchup
+        # picks and scenarios (engine/likelyboard) and tops the touchdown
+        # shelf up with reserve rows, so "on the board" covered a 46%
+        # reserve and a -320 matchup pick past the cap alike.
+        if b and b.get("reserve"):
+            seat = (f"On the Most Likely board as a reserve — under the usual {_FLOOR:.0%} bar, shown "
+                    f"because the touchdown shelf was thin. Ranked, not recommended.")
+        elif b and odds and odds < _CAP:
+            seat = (f"On the Most Likely board — {b.get('tier_label') or 'posted'} — through the matchup "
+                    f"picks; at {odds:+d} he is past the {_CAP} cap the main list holds to.")
+        elif b:
             seat = f"On the Most Likely board — {b.get('tier_label') or 'posted'}."
         elif odds and odds < _CAP:
             seat = (f"Likely — but {odds:+d} is past the board's {_CAP} cap, so it is priced out, "
