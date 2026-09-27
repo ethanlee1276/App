@@ -44,9 +44,13 @@ def test_the_nfl_ratings_stamp_it_too():
 
 
 def test_the_card_draws_it_and_says_what_it_is():
-    assert "${ordinal(now)} this season</small>" in APP
+    assert 'This season <span class="tp-now-n">${ordinal(now)}</span></small>' in APP
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    rule = css[css.index(".tp-cell .tp-now {"):].split("}")[0]
+    assert "white-space: nowrap" in rule and "text-align: center" in rule and "font-mono" not in rule, \
+        "one centred line, never wrapped in mono (Ethan: 'it looks buggy')"
     assert "${tapeCell(ra, n, un(away, side, k))}${tapeCell(rh, n, un(home, side, k))}" in APP
-    assert "The small line under a rank is this season alone." in APP
+    assert "“This season” under it is this season on its own." in APP
 
 
 if __name__ == "__main__":

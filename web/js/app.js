@@ -12280,7 +12280,12 @@ function tapeCell(r, n, now) {
      _stamp_now_ranks): the blend is mostly last season after two games,
      so a defence 10th this year read "28th · Weak" with nothing beside
      it saying so (Ethan, 2026-09-27, on the Jets). */
-  const nowLine = now != null && now !== r ? `<small class="tp-now">${ordinal(now)} this season</small>` : "";
+  /* One short centred line under a hairline, on every cell that has one,
+     so a row's two boxes match (Ethan, 2026-09-27: "fix how the boxes
+     look and the wording, it looks buggy" — "17th this season" in mono
+     wrapped to two left-aligned lines in a 92px cell). */
+  const nowLine = now != null
+    ? `<small class="tp-now">This season <span class="tp-now-n">${ordinal(now)}</span></small>` : "";
   return `<span class="tp-cell ${t[0]}"><b>${ordinal(r)}</b><em>${t[1]}</em>${nowLine}</span>`;
 }
 
@@ -12673,7 +12678,7 @@ function matchupScanHTML(g) {
   const reads = (d.scan_reads || {})[`${away}@${home}`];
   const locked = !reads && d.locked && d.locked.scan_reads;
   const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
-  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, ${Math.round(u0.blend * 100)}% of each rating is this season and the rest is last season — measured, that is the best forecast of how a side plays the rest of the year. The small line under a rank is this season alone.` : "";
+  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, the big number is ${Math.round(u0.blend * 100)}% this season and ${100 - Math.round(u0.blend * 100)}% last season — the mix that best predicted the rest of a season when we tested it. “This season” under it is this season on its own.` : "";
   const edges = (scan.edges || []).slice(0, 5);
   const inj = scan.injuries || [];
   const players = (reads && reads.players) || [];
