@@ -12593,8 +12593,8 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .ob-tierword.tier-top { color: var(--good); }
 .ob-tierword.tier-strong { color: var(--brand); }
 .ob-story { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
-.ob-sticky { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--bg);
-  padding: 6px 0 2px; margin: 0 0 6px; }
+/* The tier and market filters scroll with the page (Ethan, 2026-09-28: pinned, they covered the cards). */
+.ob-sticky { position: static; margin: 0 0 6px; }
 @media (max-width: 760px) {
   .ob-hero { padding: 10px 12px; }
   .ob-lede { display: none; }

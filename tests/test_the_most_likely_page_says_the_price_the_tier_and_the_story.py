@@ -82,10 +82,12 @@ def test_the_card_carries_the_price_the_tier_and_the_story():
         assert sel in CSS, sel
 
 
-def test_the_controls_are_one_pinned_strip_and_a_phone_starts_on_the_picks():
+def test_the_controls_scroll_with_the_page_and_a_phone_starts_on_the_picks():
     board = _fn("oneBoardHTML")
     assert '<div class="ob-sticky">' in board
-    assert ".ob-sticky { position: sticky; top: var(--topbar-h);" in CSS
+    assert ".ob-sticky { position: static;" in CSS
+    tail = CSS[CSS.rindex("THE MOST LIKELY PAGE, 2026-09-28"):]
+    assert "position: sticky" not in tail, "the filters must not follow the page"
     tail = CSS[CSS.rindex("THE MOST LIKELY PAGE, 2026-09-28"):]
     assert ".ob-lede { display: none; }" in tail and ".ob-pills .ob-pill:first-child { display: none; }" in tail
     assert ".ob-bar { flex-wrap: nowrap; overflow-x: auto;" in tail
