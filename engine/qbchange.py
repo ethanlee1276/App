@@ -127,11 +127,16 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
             "usual": {t: n for t, n in usual.items() if t in teams}}
 
 
-def changes(qb: dict, injuries: list, depth_qb1: dict | None = None) -> dict:
+def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
+            news_qb: dict | None = None) -> dict:
     """{team: change} for every team whose starter is out or benched this week.
 
     ``injuries`` are the slate's (weekly report merged with the live board);
-    ``depth_qb1`` is sources/depthcharts.qb1_map for this week, or None."""
+    ``depth_qb1`` is sources/depthcharts.qb1_map for this week, or None;
+    ``news_qb`` is engine/newsqb.expected_starters — {team: {"name",
+    "source", …}} — the man the beat reporters expect, read when the
+    starter is out and the depth chart has not named someone else
+    (2026-09-28: Keenum for the Bears, hours before any chart moved)."""
     ruled = {}
     for i in injuries or []:
         if getattr(i, "status", "") in RULED_OUT:
@@ -146,10 +151,12 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None) -> dict:
         benched = bool(qb1) and _norm(qb1) != _norm(starter) and not status
         if not status and not benched:
             continue
-        replacement = None
-        for cand in (qb1, slot.get("backup")):
+        replacement, reported = None, None
+        news = (news_qb or {}).get(team) or {}
+        for cand in (qb1, news.get("name"), slot.get("backup")):
             if cand and _norm(cand) != _norm(starter) and (team, _norm(cand)) not in ruled:
                 replacement = cand
+                reported = news if cand == news.get("name") and cand != qb1 else None
                 break
         tier, s_ypa, r_ypa = tier_of(qb.get("passing") or {}, starter, replacement or "")
         # HIS USUAL STARTER BACK: the man the volume ranking called the
@@ -166,6 +173,9 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None) -> dict:
             status, tier = "RETURNS", "return"
         out[team] = {"team": team, "starter": starter, "status": status or "BENCHED",
                      "replacement": replacement, "tier": tier,
+                     # Named by the news, not the chart: the card says so.
+                     "reported": ({"source": reported.get("source") or "", "title": reported.get("title") or ""}
+                                  if reported else None),
                      "starter_ypa": round(s_ypa, 1) if s_ypa else None,
                      "replacement_ypa": round(r_ypa, 1) if r_ypa else None,
                      "replacement_attempts": int((qb.get("passing") or {}).get(replacement or "", (0, 0))[0])}
@@ -180,7 +190,11 @@ def headline(ch: dict) -> str:
         return f"{ch['replacement']} is back at QB — {ch['starter']} started while he was out"
     if ch["status"] == "BENCHED" and ch.get("replacement"):
         return f"{ch['replacement']} starts over {ch['starter']} (this week’s depth chart)"
-    who = f"{ch['replacement']} starts" if ch.get("replacement") else "his replacement is not named yet"
+    if ch.get("replacement") and ch.get("reported"):
+        src = (ch["reported"] or {}).get("source") or "reports"
+        who = f"{ch['replacement']} expected to start (per {src})"
+    else:
+        who = f"{ch['replacement']} starts" if ch.get("replacement") else "his replacement is not named yet"
     return f"{ch['starter']} ({ch['status']}) — {who}"
 
 
@@ -233,7 +247,8 @@ def card(ch: dict, applied: float = 1.0, own: bool = False) -> dict:
         note = "Shown for you. Over four seasons this change did not move this bet enough to price it"
     return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
             "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
-            "detail": detail(ch), "applied": round(applied, 3), "note": note}
+            "detail": detail(ch), "applied": round(applied, 3), "note": note,
+            "reported": ch.get("reported")}
 
 
 def effect(prop, game) -> tuple:

@@ -921,6 +921,10 @@ def main() -> None:
         # that `engine/crowdfit` measures (engine/crowd). Never raises.
         from engine import crowd as _crowd
         print(_crowd.attach_to_board(result, "mlb"))
+        # THE OPENING LINES, kept and compared (engine/lineopen) — after the crowd
+        # hook, whose money split the against-the-money note reads.
+        from engine import lineopen as _lo
+        print(_lo.attach_to_board(result, "mlb"))
         _pn = _potd.attach(result, "mlb")
         if _pn:
             print(_pn)

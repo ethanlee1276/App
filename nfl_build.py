@@ -629,8 +629,17 @@ def main() -> None:
     qb_changes: dict = {}
     try:
         from engine import qbchange as _qbc
+        # THE REPORTERS' STARTER (engine/newsqb), off the headlines the news
+        # build already fetched: read behind the depth chart, ahead of
+        # "second quarterback by volume".
+        try:
+            from engine import newsqb as _nq
+            _news_qb = _nq.expected_starters(_nq.load_headlines(), carry_report.get("qb") or {})
+        except Exception:                                     # noqa: BLE001
+            _news_qb = {}
         qb_changes = _qbc.changes(carry_report.get("qb") or {},
-                                  [i for g in slate.games for i in g.injuries], depth_qb1)
+                                  [i for g in slate.games for i in g.injuries], depth_qb1,
+                                  news_qb=_news_qb)
         _qb_applied = _qbc.apply_to_slate(slate, qb_changes)
         if qb_changes:
             print(f"\nQB changes: {len(qb_changes)} team(s) starting someone else.")
@@ -1447,6 +1456,10 @@ def main() -> None:
         # that `engine/crowdfit` measures (engine/crowd). Never raises.
         from engine import crowd as _crowd
         print(_crowd.attach_to_board(result, "nfl"))
+        # THE OPENING LINES, kept and compared (engine/lineopen) — after the crowd
+        # hook, whose money split the against-the-money note reads.
+        from engine import lineopen as _lo
+        print(_lo.attach_to_board(result, "nfl"))
         _pn = _potd.attach(result, "nfl")
         if _pn:
             print(_pn)

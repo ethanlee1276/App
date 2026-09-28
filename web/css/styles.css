@@ -6938,6 +6938,10 @@ body.has-rail .shell {
    quote, PREGAME when a game under way has none yet. Live is a
    condition, so amber, with the dot the LIVE badge wears. */
 .gc-mk-teams .gc-mk-tag { white-space: nowrap; letter-spacing: .06em; }
+/* Where the line opened, and the against-the-money note (lineOpenHTML). */
+.gc-mk-open { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gc-mk-open b { color: var(--text-dim); font-weight: 700; }
+.gc-mk-rlm { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-dim); }
 .gc-mkts-none { margin: 8px 0 0; padding-top: 8px; border-top: var(--hairline) solid var(--border-soft);
   color: var(--text-mute); font-size: var(--fs-xs); text-align: center; }
 .gc-mk-teams .gc-mk-tag.is-live { color: var(--brand); }

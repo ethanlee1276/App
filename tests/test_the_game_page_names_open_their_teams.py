@@ -78,7 +78,9 @@ def test_the_header_carries_the_cards_lines():
     card: "In the second screenshot [the game page], we should be showing
     the info I have circled." The same function draws both."""
     page = _fn("renderGamePage")
-    assert "const gpLines = gameMarketsHTML(g, { mlb, isFinal });" in page
+    # `open: true` (2026-09-28): the game page alone adds the "Opened …"
+    # line under the grid; the Home card stays the three columns.
+    assert "const gpLines = gameMarketsHTML(g, { mlb, isFinal, open: true });" in page
     head = page[page.index('<div class="gp-sub">'):page.index('<div class="chips gp-chips">')]
     assert "gpLines}" in head, "under the date, above the chips"
     chips = page[page.index('<div class="chips gp-chips">'):][:900]

@@ -47,6 +47,19 @@ cd /srv/qellys && python3 legcheck.py
 Any legs: `python3 legcheck.py "Jalen Hurts" pass_yds over 199.5 "DeVonta Smith" receptions over 5.5`
 (markets: pass_yds, rec_yds, receptions, rush_yds, rush_att, pass_att, pass_cmp, anytime_td).
 
+**M3. Is bet365 on offer? (2026-09-28, about six credits, read-only).** It
+was the best price on all three legs of a research report and it is not
+among the books we pull. This asks The Odds API for one market in each
+region and prints the bookmaker keys that answer, marking the ones we
+do not pull. The key is read from the environment and never printed:
+
+```
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^ODDS_API_KEY | xargs) python3 bookprobe.py
+```
+
+Paste it back. If bet365 answers in a region we can use, adding it is a
+one-line change to the pull.
+
 ---
 
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)

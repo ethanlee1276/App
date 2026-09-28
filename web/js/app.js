@@ -6292,7 +6292,31 @@ function gameMarketsHTML(g, opts) {
     ${cell(o.mlb ? "Run line" : "Spread", spTxt(homeSp == null ? null : -homeSp), spTxt(homeSp))}
     ${cell("ML", ml(awayMl), ml(homeMl))}
     ${cell("Total", total != null ? `O ${total.toFixed(1)}` : "—", total != null ? `U ${total.toFixed(1)}` : "—")}
-  </div>`;
+  </div>${o.open && !L ? lineOpenHTML(g, spTxt) : ""}`;
+}
+
+/* WHERE THE LINE OPENED (engine/lineopen). Ethan, 2026-09-28, on what the
+   site was missing: the board could never say "PHI opened -4.5, now -3.5"
+   because every pull overwrote the numbers. Drawn under the game page's
+   grid only (o.open) — the Home card stays the three columns. With the
+   money split on the game it also says when the spread moved AGAINST the
+   money — toward the side holding the minority of it. A note, not a pick. */
+function lineOpenHTML(g, spTxt) {
+  const lo = g && g.line_open;
+  if (!lo || (lo.spread_home == null && lo.total == null)) return "";
+  const sp = lo.spread_home != null ? Number(lo.spread_home) : null;
+  const bits = [];
+  if (sp != null) bits.push(`${escapeHtml(g.home)} ${spTxt(sp)}`);
+  if (lo.total != null) bits.push(`O/U ${Number(lo.total).toFixed(1)}`);
+  const moved = [];
+  if (lo.spread_move) moved.push(`spread ${lo.spread_move > 0 ? "+" : MINUS}${Math.abs(lo.spread_move).toFixed(1)}`);
+  if (lo.total_move) moved.push(`total ${lo.total_move > 0 ? "+" : MINUS}${Math.abs(lo.total_move).toFixed(1)}`);
+  const since = lo.since ? ` <span class="mini">(first priced ${escapeHtml(String(lo.since).replace("T", " "))})</span>` : "";
+  const rlm = lo.against_money;
+  return `<p class="gc-mk-open"><b>Opened</b> ${bits.join(" · ")}${since} · ${
+    moved.length ? `since then ${moved.join(", ")}` : "unchanged"}</p>${rlm ? `<p class="gc-mk-rlm">The spread moved ${
+      Math.abs(Number(rlm.delta)).toFixed(1)} toward ${escapeHtml(teamName(rlm.toward === "home" ? g.home : g.away))} while ${
+      Math.round(Number(rlm.money_share) * 100)}% of the money was on ${escapeHtml(teamName(rlm.money_on === "home" ? g.home : g.away))} — the books moved against the money.</p>` : ""}`;
 }
 
 function liveLineTitle(L) {
@@ -13003,7 +13027,7 @@ function renderGamePage() {
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
       isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}`;
-  const gpLines = gameMarketsHTML(g, { mlb, isFinal });
+  const gpLines = gameMarketsHTML(g, { mlb, isFinal, open: true });
   const gpCrowd = isFinal ? "" : crowdStripHTML(g);
   const gpMoney = isFinal ? "" : gameMoneyHTML(g);
   const gpScripts = gameScriptsHTML(g, likelies);
