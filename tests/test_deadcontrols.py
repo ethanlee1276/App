@@ -67,7 +67,7 @@ const VIEWS = [['board',null],['scanner','[data-view="scanner"]'],['longshots','
   ['futures','[data-view="futures"]'],['edge','[data-view="edge"]'],['injuries','[data-view="injuries"]'],
   ['weather','[data-view="weather"]'],['players','[data-view="players"]'],['live','[data-view="live"]'],
   ['trending','[data-view="trending"]'],['rosters','[data-view="rosters"]'],['standings','[data-view="standings"]'],
-  ['bankroll','[data-view="bankroll"]'],['alerts','[data-view="alerts"]'],['tonight','[data-view="tonight"]'],
+  ['bankroll','[data-view="bankroll"]'],['alerts','[data-view="alerts"]'],['likely','[data-view="likely"]'],
   ['record','[data-sport="record"]'],['intel','[data-sport="intel"]'],['fantasy','[data-sport="fantasy"]'],
   ['memes','[data-sport="memes"]'],['mybets','[data-sport="mybets"]'],['lab','[data-sport="lab"]'],
   ['about','[data-sport="about"]'],['why','[data-sport="why"]']];

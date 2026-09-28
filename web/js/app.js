@@ -45036,7 +45036,7 @@ const MORE_GROUPS = [
   ["Proof", ["sport:lab", "sport:methodology", "sport:status",
              "sport:why", "sport:features", "sport:about"]],
 ];
-const TAB_BAR_VIEWS = ["recommended", "tonight", "live", "ask"];
+const TAB_BAR_VIEWS = ["recommended", "likely", "live", "ask"];
 const TAB_BAR_TOOLS = ["record"];
 
 /* "view:edge" → the sidebar button that opens the Edge Board. */

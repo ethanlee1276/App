@@ -387,7 +387,7 @@ def test_the_endpoint_is_gated_checked_and_honest_about_being_off():
 def test_the_page_shows_where_each_answer_came_from():
     assert 'data-view="ask"' in HTML and 'id="view-ask"' in HTML
     # The tab bar's fifth slot (Ethan, 2026-09-23: "It should be where the menu button is").
-    assert 'const TAB_BAR_VIEWS = ["recommended", "tonight", "live", "ask"];' in APP
+    assert 'const TAB_BAR_VIEWS = ["recommended", "likely", "live", "ask"];' in APP
     bar = HTML[HTML.index('<nav class="tabbar"'):]
     bar = bar[:bar.index("</nav>")]
     assert bar.rstrip().endswith("Ask</button>") and 'data-view="ask"' in bar

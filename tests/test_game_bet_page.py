@@ -279,7 +279,10 @@ def test_the_phone_tab_points_at_tonights_bets():
     bar = HTML[HTML.index('<nav class="tabbar"'):]
     bar = bar[:bar.index("</nav>")]
     views = re.findall(r'data-view="([a-z]+)"', bar)
-    assert "tonight" in views, f"no Tonight tab: {views}"
+    # SINCE 2026-09-28 the tab opens the Most Likely page — Ethan, circling
+    # it: "it should take you straight to" the tiered board. Tonight's page
+    # stays (a swipe away); the tab's job is the one board of picks.
+    assert "likely" in views, f"no Most Likely tab: {views}"
     assert "edge" not in views, "the phone still leads with the Edge Board"
     # Labelled "Picks" since the 2026-09-22 redesign Ethan approved — the
     # same page, under the name a new reader would look for.

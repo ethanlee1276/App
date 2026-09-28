@@ -103,11 +103,11 @@ def test_five_tabs_and_the_fifth_is_ask():
     items = re.findall(r'<button class="tb-item[^"]*"', bar)
     assert len(items) == 5, items
     views = re.findall(r'data-view="([a-z]+)"', bar)
-    assert views == ["recommended", "tonight", "live", "ask"], views
+    assert views == ["recommended", "likely", "live", "ask"], views
     assert bar.rstrip().endswith("Ask</button>"), "Ask is the fifth slot, where More was"
     assert 'data-sport="record" data-kind="tool"' in bar
     assert 'id="tb-more"' not in bar and "More</button>" not in bar, "the menu is the hamburger's now"
-    assert "Picks</button>" in bar, "the tonight page under its plain name"
+    assert "Picks</button>" in bar, "the Most Likely page under its plain name (Ethan, 2026-09-28)"
     assert 'id="tb-search"' not in bar, "search moved into the sheet"
 
 
