@@ -251,7 +251,9 @@ def test_the_address_bar_is_written_where_every_other_deep_view_writes_it():
         "openTeam is writing the URL again; switchView will overwrite it"
     i = APP.index('if (name === "team") {')
     branch = APP[i:APP.index('if (name === "game") {', i)]
-    assert "history.replaceState" in branch and "teamHref(" in branch
+    # Through writeDetail since 2026-09-28: a push when a tap opened the page
+    # (so the back-swipe returns), a replace when the router did.
+    assert "writeDetail(teamHref(" in branch
     assert "renderTeamPage()" in branch
 
 

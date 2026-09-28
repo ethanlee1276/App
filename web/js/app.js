@@ -37757,7 +37757,7 @@ function detailBackView() {
 function detailBackLabel() {
   return `← Back to ${BACK_NAMES[detailBackView()] || "the board"}`;
 }
-function detailBack() { switchView(detailBackView()); }
+function detailBack() { markBackNav(); switchView(detailBackView()); }
 
 const DETAIL_VIEWS = ["prop", "game", "pbp"];
 
@@ -37768,15 +37768,55 @@ const DETAIL_VIEWS = ["prop", "game", "pbp"];
    cleared on use so it can never leak into the next real navigation. */
 let _holdScroll = false;
 
+/* EVERY PAGE REMEMBERS WHERE YOU WERE. Ethan, 2026-09-28: "There is other
+   pages I scroll then click and go back and it shoots you back to the top
+   … every page [should] remember how far down you scrolled and which page
+   you left." Two pieces:
+
+     * _scrollMemo — the offset of every page as it is left, by view.
+     * a BACK is any Back button (detailBack, the play-by-play's) or the
+       browser's own back/forward (popstate). Landing on a page by a back
+       restores its remembered offset; a plain tab tap still starts at the
+       top, which is what a tab is for.
+
+   A page that draws after the switch (a board still loading, a long list
+   growing) would clamp the offset, so the landing retries for a moment —
+   and stops the instant the reader touches the page, so it never fights a
+   thumb. */
+var _scrollMemo = {};
+var _backNavAt = 0;
+var _routerNavAt = 0;          // a switch the router made (a hash, a history step): no new entry
+var _touchedAt = 0;
+function markBackNav() { _backNavAt = Date.now(); }
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("popstate", () => { _backNavAt = Date.now(); _routerNavAt = Date.now(); });
+  ["touchstart", "wheel", "keydown"].forEach((ev) =>
+    window.addEventListener(ev, () => { _touchedAt = Date.now(); }, { passive: true }));
+}
+
 function _landScroll(name, leaving) {
   if (_holdScroll) { _holdScroll = false; return; }
   let y = 0;
+  const back = Date.now() - _backNavAt < 2000;
+  _backNavAt = 0;
   if (_boardReturn && name === _boardReturn.view
       && DETAIL_VIEWS.includes(leaving)) {
     y = _boardReturn.y;
     _boardReturn = null;
+  } else if (back && _scrollMemo[name] != null) {
+    y = _scrollMemo[name];
   }
   window.scrollTo({ top: y, behavior: "instant" });
+  if (y > 0) {
+    const landed = Date.now();
+    let tries = 0;
+    const again = () => {
+      if (_touchedAt > landed || state.view !== name || tries++ > 24) return;
+      if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y, behavior: "instant" });
+      if (Math.abs(window.scrollY - y) > 2) setTimeout(again, 80);
+    };
+    setTimeout(again, 60);
+  }
 }
 
 function switchView(name, push = false) {
@@ -37819,8 +37859,16 @@ function _switchViewNow(name, push, dir) {
   // Captured BEFORE state.view moves: the offset belongs to the view
   // being left, and one line later there is no way to ask which that was.
   const leaving = state.view;
+  if (leaving) _scrollMemo[leaving] = window.scrollY;
   if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
     _boardReturn = { view: leaving, y: window.scrollY };
+  /* A DETAIL PAGE OPENED BY A TAP IS A NEW HISTORY ENTRY, so the phone's
+     back-swipe returns to the page it was opened from. They replaced the
+     entry before, which made the swipe skip the page you came from. The
+     router's own switches (a pasted link, a history step) still replace. */
+  const openedByTap = name !== leaving && Date.now() - _routerNavAt > 1500;
+  const writeDetail = (url, st) => (openedByTap ? history.pushState(st || { view: name }, "", url)
+                                                : history.replaceState(st || null, "", url));
   state.view = name;
   if (typeof ridingTraySync === "function") ridingTraySync();
   if (name !== leaving || !_anLanded) {
@@ -37860,7 +37908,7 @@ function _switchViewNow(name, push, dir) {
        and it shows the one that matches /pick/juan-soto-home-runs. */
     if (state.propId) {
       const shareable = !String(state.propId).includes("|");
-      history.replaceState(null, "", shareable
+      writeDetail(shareable
         ? `#pick/${encodeURIComponent(state.propId)}${state.propLikely ? "/likely" : ""}`
         : `#prop/${encodeURIComponent(state.propId)}`);
     }
@@ -37875,9 +37923,7 @@ function _switchViewNow(name, push, dir) {
        writes its URL from right here for the same reason. */
     renderTeamPage();
     if (_teamState.team) {
-      history.replaceState({ view: "team" }, "",
-                           teamHref(_teamState.sport, _teamState.team,
-                                    _teamState.vs));
+      writeDetail(teamHref(_teamState.sport, _teamState.team, _teamState.vs), { view: "team" });
     }
     moveIndicator();
     _landScroll(name, leaving);
@@ -37885,7 +37931,7 @@ function _switchViewNow(name, push, dir) {
   }
   if (name === "game") {
     renderGamePage();
-    if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
+    if (state.gameId) writeDetail(`#game/${encodeURIComponent(state.gameId)}`);
     moveIndicator();
     _landScroll(name, leaving);
     return;
@@ -37893,7 +37939,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "pbp") {
     renderPbpPage();
     if (state.pbp && state.pbp.league && state.pbp.event)
-      history.replaceState(null, "", `#pbp/${encodeURIComponent(state.pbp.league)}/${encodeURIComponent(state.pbp.event)}`);
+      writeDetail(`#pbp/${encodeURIComponent(state.pbp.league)}/${encodeURIComponent(state.pbp.event)}`);
     moveIndicator();
     _landScroll(name, leaving);
     return;
@@ -37977,7 +38023,7 @@ function _switchViewNow(name, push, dir) {
      still naming the page you left is the bug that line exists to
      prevent. */
   if (name === "players" && state.playerSlug)
-    history.replaceState(null, "", `#player/${encodeURIComponent(state.playerSlug)}`);
+    writeDetail(`#player/${encodeURIComponent(state.playerSlug)}`);
   const subRouted = (name === "prop" && state.propId)
                  || (name === "game" && state.gameId)
                  || (name === "players" && state.playerSlug);
@@ -39769,6 +39815,7 @@ function urlBackToView() {
 }
 
 function initialView() {
+  _routerNavAt = Date.now();
   const h = (location.hash || "").replace("#", "");
   if (entityRoute(h)) return;
   // A league as a destination: /mlb, /cfb. This replaced the #nba
@@ -41361,6 +41408,7 @@ function bind() {
      screen — and then the URL you copied pointed at something you were not
      looking at. */
   window.addEventListener("hashchange", () => {
+    _routerNavAt = Date.now();
     const h = (location.hash || "").replace("#", "");
     if (entityRoute(h)) return;
     if (SPORT_CODES.includes(h)) {
@@ -44103,7 +44151,7 @@ async function renderPbpPage() {
   const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">${way.label}</button>`;
   const wire = () => {
     const b = document.getElementById("pbp-back");
-    if (b) b.addEventListener("click", () => switchView(way.view));
+    if (b) b.addEventListener("click", () => { markBackNav(); switchView(way.view); });
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
       el.addEventListener("click", () => (el.dataset.pbpGame
         ? openGame(el.dataset.pbpGame) : openPbp(league, el.dataset.pbp))));
