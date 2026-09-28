@@ -10,9 +10,11 @@ Run directly: `python3 tests/test_a_read_says_who_is_throwing.py`
 """
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 QB = (ROOT / "engine" / "qbchange.py").read_text(encoding="utf-8")
 
@@ -47,6 +49,7 @@ const out = {
   te: scanQbLine({team: "CHI", pos: "TE", player: "Colston Loveland"}),
   wr: scanQbLine({team: "CHI", pos: "WR", player: "Luther Burden III"}),
   qb: scanQbLine({team: "CHI", pos: "QB", player: "Tyson Bagent"}),
+  rb: scanQbLine({team: "CHI", pos: "RB", player: "Kyle Monangai"}),
   other: scanQbLine({team: "PHI", pos: "WR", player: "A. J. Brown"})};
 console.log(JSON.stringify(out));
 """
@@ -57,7 +60,18 @@ console.log(JSON.stringify(out));
     assert "Tyson Bagent starts" in o["te"] and "tight ends’" in o["te"] and "left alone" in o["te"]
     assert "taken off his numbers" in o["wr"]
     assert "Starting in place of Caleb Williams" in o["qb"]
+    assert "ran only about 3% more often" in o["rb"] and "carries and yards did not move" in o["rb"]
     assert o["other"] == "", "the other team's players are not told about CHI's quarterback"
+
+
+def test_the_carries_claim_was_measured_not_assumed():
+    """Both of Ethan's Eagles-Bears reports bet a back's carries on "Keenum
+    starting means more runs"; the harness now measures carries and the
+    team's run share beside the rest, and neither cleared the bar."""
+    qf = (ROOT / "engine" / "qbfit.py").read_text(encoding="utf-8")
+    assert '"rush_att": ("carries", 5.0)' in qf and 'TEAM_RUN_SHARE = "team_run_share"' in qf
+    assert 'if m in ("rush_yds", "rush_att") and pos != "RB":' in qf
+    assert ("rush_att", "RB", "downgrade") not in __import__("engine.qbchange", fromlist=["EFFECT"]).EFFECT
 
 
 if __name__ == "__main__":

@@ -12655,8 +12655,10 @@ function scanQbLine(x) {
     what = "Behind a quarterback this far below the starter, receivers lost about 10% of their yards and 9% of their catches over four seasons — taken off his numbers.";
   else if (pos === "WR")
     what = "The quarterback coming in has thrown like the starter, so his numbers are left as they are.";
+  else if (pos === "RB")
+    what = "Over five seasons (2021–25) teams behind a replacement ran only about 3% more often and their backs’ carries and yards did not move, so his numbers are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
   else
-    what = `Over four seasons a quarterback change did not move ${pos === "TE" ? "tight ends’" : pos === "RB" ? "running backs’" : "these"} numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.`;
+    what = `Over four seasons a quarterback change did not move ${pos === "TE" ? "tight ends’" : "these"} numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.`;
   return `<p class="ms-read-qb"><b>QB change:</b> ${escapeHtml(c.headline || "")}${what ? ` — ${what}` : ""}</p>`;
 }
 

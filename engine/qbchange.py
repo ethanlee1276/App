@@ -34,6 +34,13 @@ in (nfl_build):
     change and left alone.
   * THE CARD (`qb_card`) goes on every row of that team — props, touchdown
     rows, Most Likely rows — and the game cards say it too.
+  * "A BACKUP MEANS MORE RUNS" — Ethan's two Eagles-Bears research reports,
+    2026-09-28, both betting a back's carries on it — was measured the
+    same day (qbfit, 2021-2025): the team's run share behind a
+    replacement ×1.026 ± .016 (four of five seasons up, short of the bar),
+    the lead backs' carries ×1.014 ± .032 (seasons split). About one more
+    run in forty plays, and none of it reaching a back's line. Not applied;
+    the read says so.
 """
 from __future__ import annotations
 

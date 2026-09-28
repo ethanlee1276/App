@@ -33,7 +33,15 @@ MIN_ATTEMPTS = 50
 FIRST_WEEK = 4
 #: market -> (the player's column, form floor)
 MARKETS = {"rec_yds": ("receiving_yards", 15.0), "receptions": ("receptions", 1.5),
-           "rush_yds": ("rushing_yards", 15.0), "anytime_td": (("receiving_tds", "rushing_tds"), 0.0)}
+           "rush_yds": ("rushing_yards", 15.0), "anytime_td": (("receiving_tds", "rushing_tds"), 0.0),
+           # CARRIES (2026-09-28): the market went live on 2026-09-27, and both
+           # of Ethan's Eagles-Bears research reports bet a back's carries on
+           # "Keenum starting means more runs". Measured here like the rest.
+           "rush_att": ("carries", 5.0)}
+#: THE TEAM'S OWN RUN RATE behind a replacement — carries as a share of
+#: carries plus pass attempts — measured per team-game beside the players,
+#: so "a backup means more runs" is a number, not a sentence.
+TEAM_RUN_SHARE = "team_run_share"
 GROUPS = ("WR", "TE", "RB")
 
 
@@ -115,6 +123,16 @@ def samples(seasons: dict) -> list[dict]:
                 if now and (starter not in now or _f(now[starter], "attempts") == 0):
                     rep = max(now.values(), key=lambda r: _f(r, "attempts"))["player_display_name"]
                     tier = tier_of(passing_before(seasons, season, wk), starter, rep)[0]
+                # The team's run share: this game's against its games so far.
+                def _share(rows_):
+                    c = sum(_f(r, "carries") for r in rows_)
+                    a = sum(_f(r, "attempts") for r in rows_)
+                    return c / (c + a) if c + a else None
+                prior = [r for w in range(FIRST_WEEK - 1, wk) for r in by_tw.get((team, w), [])]
+                e_share, y_share = _share(prior), _share(by_tw[(team, wk)])
+                if e_share and y_share is not None and len({w for w in range(1, wk) if (team, w) in by_tw}) >= 3:
+                    out.append({"season": season, "m": TEAM_RUN_SHARE, "g": "TEAM", "e": e_share,
+                                "y": y_share, "tier": tier})
                 vol: dict = {}
                 for (t, name), g in games.items():
                     if t != team:
@@ -133,7 +151,7 @@ def samples(seasons: dict) -> list[dict]:
                         if len(prev) < 3 or wk not in g:
                             continue
                         for m, (col, floor) in MARKETS.items():
-                            if m == "rush_yds" and pos != "RB":
+                            if m in ("rush_yds", "rush_att") and pos != "RB":
                                 continue
                             e = sum(_v(p, col) for p in prev) / len(prev)
                             if e < floor or (m == "anytime_td" and e <= 0):

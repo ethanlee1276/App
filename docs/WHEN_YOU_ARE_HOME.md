@@ -33,6 +33,20 @@ For college or baseball, add the league: `python3 moneyprobe.py cfb` or
 fields differ from the parser's shows up as games with "no split" —
 missing bars, never wrong ones.
 
+**M2. Somebody else's legs, our numbers (2026-09-28).** Two Eagles-Bears
+research reports bet Hurts 200+, Wicks 40+, Smith 6+ catches, Raymond 3+
+catches, Monangai 10+ carries. This prices each at that exact number the
+way the Most Likely board prices a ladder rung, shows our best price there
+and what the board seated, then lists every Most Likely row on the game.
+Read-only, seconds; run it before kickoff (after, the picks have cleared):
+
+```
+cd /srv/qellys && python3 legcheck.py
+```
+
+Any legs: `python3 legcheck.py "Jalen Hurts" pass_yds over 199.5 "DeVonta Smith" receptions over 5.5`
+(markets: pass_yds, rec_yds, receptions, rush_yds, rush_att, pass_att, pass_cmp, anytime_td).
+
 ---
 
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)
