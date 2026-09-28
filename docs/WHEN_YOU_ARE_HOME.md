@@ -60,6 +60,22 @@ cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^ODDS_API
 Paste it back. If bet365 answers in a region we can use, adding it is a
 one-line change to the pull.
 
+**M4. Where the record loses (2026-09-28, read-only, seconds).** Every
+settled bet in the books the site publishes — Edge picks, Most Likely
+(staked and paper), the one board by tier — cut by sport, market, side,
+price, what we claimed, the close, the sportsbook and the week. It opens
+the ledger read-only; it cannot change a grade. The end of it is two
+lists: THE LEAKS (slices of 30+ bets losing by more than luck explains)
+and OVER-CLAIMED (slices where we said likelier than it was). Paste the
+whole thing back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 lossaudit.py
+```
+
+Also useful: `--sport nfl` for one league, `--since 2026-09-01` for a
+window.
+
 ---
 
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)
