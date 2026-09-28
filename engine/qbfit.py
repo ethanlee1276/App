@@ -42,6 +42,13 @@ MARKETS = {"rec_yds": ("receiving_yards", 15.0), "receptions": ("receptions", 1.
 #: carries plus pass attempts — measured per team-game beside the players,
 #: so "a backup means more runs" is a number, not a sentence.
 TEAM_RUN_SHARE = "team_run_share"
+#: THE TEAM'S OWN VOLUME behind a replacement (Ethan, 2026-09-28, on the
+#: Bears with their starter out: "they will probably be loosing which will
+#: cause more throwing … they might run more"). Per team-game against its
+#: own average in the games before, the same way as the run share:
+#: {market: (the passer's or the team's column, whose rows)}.
+TEAM_VOLUME = {"team_pass_att": ("attempts", "QB"), "team_completions": ("completions", "QB"),
+               "team_pass_yds": ("passing_yards", "QB"), "team_carries": ("carries", None)}
 GROUPS = ("WR", "TE", "RB")
 
 
@@ -133,6 +140,17 @@ def samples(seasons: dict) -> list[dict]:
                 if e_share and y_share is not None and len({w for w in range(1, wk) if (team, w) in by_tw}) >= 3:
                     out.append({"season": season, "m": TEAM_RUN_SHARE, "g": "TEAM", "e": e_share,
                                 "y": y_share, "tier": tier})
+                # The team's volume: this game's total against its per-game
+                # average in the same earlier weeks.
+                n_prior = len({w for w in range(FIRST_WEEK - 1, wk) if (team, w) in by_tw})
+                if n_prior >= 3:
+                    for m, (col, pos) in TEAM_VOLUME.items():
+                        def _tot(rows_, col=col, pos=pos):
+                            return sum(_f(r, col) for r in rows_ if pos is None or str(r.get("position")) == pos)
+                        e = _tot(prior) / n_prior
+                        if e > 0:
+                            out.append({"season": season, "m": m, "g": "TEAM", "e": e,
+                                        "y": _tot(by_tw[(team, wk)]), "tier": tier})
                 vol: dict = {}
                 for (t, name), g in games.items():
                     if t != team:

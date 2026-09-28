@@ -55,6 +55,42 @@ EFFECT = {
     ("receptions", "WR", "downgrade"): 0.912,   # ± .031, n 445
 }
 
+#: WHAT THE WHOLE TEAM DID behind a replacement, measured (engine/qbfit
+#: TEAM_VOLUME, 2021-2025, every team-game against its own average in the
+#: weeks before, over the same ratio in games with the usual starter).
+#: Ethan, 2026-09-28, on the Bears: "they will probably be loosing which
+#: will cause more throwing … they might run more" — and then, of putting
+#: the answer on the page, "you should do it for all the teams". Shown on
+#: every QB-change card and read; it moves no number (the receivers' step
+#: above is the part that prices).
+#:   tier: (games, {market: multiplier})
+TEAM_VOLUME = {
+    "downgrade": (236, {"team_pass_att": 0.975, "team_completions": 0.953,
+                        "team_pass_yds": 0.925, "team_carries": 1.010}),
+    "similar": (193, {"team_pass_att": 1.042, "team_completions": 1.040,
+                      "team_pass_yds": 1.081, "team_carries": 1.052}),
+}
+_VOLUME_WORDS = (("team_pass_att", "pass attempts"), ("team_completions", "completions"),
+                 ("team_pass_yds", "passing yards"), ("team_carries", "carries"))
+
+
+def volume_line(tier: str) -> str:
+    """The team's own volume behind this kind of replacement, in words —
+    "" for a tier that was not measured."""
+    got = TEAM_VOLUME.get(tier or "")
+    if not got:
+        return ""
+    n, m = got
+
+    def pct(v):
+        d = round((v - 1) * 100)
+        return "about the same" if d == 0 else f"{abs(d)}% {'more' if d > 0 else 'fewer'}"
+    who = ("a quarterback this far below the starter" if tier == "downgrade"
+           else "a quarterback who had thrown like the starter")
+    bits = ", ".join(f"{pct(m[k])} {w}" if pct(m[k]) != "about the same" else f"{w} about the same"
+                     for k, w in _VOLUME_WORDS)
+    return f"Teams behind {who} ({n} games, 2021–25): {bits}"
+
 
 def _norm(name: str) -> str:
     from .sources.oddsapi import normalize_name
@@ -248,7 +284,8 @@ def card(ch: dict, applied: float = 1.0, own: bool = False) -> dict:
     return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
             "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
             "detail": detail(ch), "applied": round(applied, 3), "note": note,
-            "reported": ch.get("reported")}
+            "reported": ch.get("reported"),
+            "volume": "" if ch.get("status") == "RETURNS" else volume_line(ch.get("tier"))}
 
 
 def effect(prop, game) -> tuple:

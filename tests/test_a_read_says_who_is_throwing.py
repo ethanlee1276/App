@@ -57,11 +57,48 @@ console.log(JSON.stringify(out));
     assert got.returncode == 0, got.stderr[-400:]
     import json
     o = json.loads(got.stdout)
-    assert "Tyson Bagent starts" in o["te"] and "tight ends’" in o["te"] and "left alone" in o["te"]
+    # Tight ends are named as the exception since 2026-09-28: their catches
+    # rose behind a backup (qbfit, 2021-25), not enough to price.
+    assert "Tyson Bagent starts" in o["te"] and "Tight ends are the exception" in o["te"] and "left alone" in o["te"]
     assert "taken off his numbers" in o["wr"]
     assert "Starting in place of Caleb Williams" in o["qb"]
     assert "ran only about 3% more often" in o["rb"] and "carries and yards did not move" in o["rb"]
     assert o["other"] == "", "the other team's players are not told about CHI's quarterback"
+    assert "ms-read-qb-vol" not in o["wr"], "no volume line on a card that carries none"
+
+
+def test_every_team_with_a_change_says_what_those_teams_did():
+    """Ethan, 2026-09-28, on the Bears: "they will probably be loosing which
+    will cause more throwing … they might run more" — then "you should do
+    it for all the teams". The measured team volume rides every QB-change
+    card (qbchange.card) and every read of that team."""
+    from engine import qbchange as Q
+    assert Q.volume_line("downgrade") == ("Teams behind a quarterback this far below the starter (236 games, "
+                                         "2021–25): 3% fewer pass attempts, 5% fewer completions, "
+                                         "7% fewer passing yards, 1% more carries")
+    assert Q.volume_line("similar").startswith("Teams behind a quarterback who had thrown like the starter (193 games")
+    assert Q.volume_line(None) == "" and Q.volume_line("unknown") == ""
+    ch = {"team": "CHI", "starter": "Caleb Williams", "status": "OUT", "replacement": "Case Keenum",
+          "tier": "downgrade", "starter_ypa": 7.1, "replacement_ypa": 5.9, "replacement_attempts": 40}
+    assert Q.card(ch)["volume"] == Q.volume_line("downgrade")
+    assert Q.card(dict(ch, status="RETURNS"))["volume"] == "", "a starter back gets no backup numbers"
+    fit = (ROOT / "engine" / "qbfit.py").read_text(encoding="utf-8")
+    assert '"team_pass_att": ("attempts", "QB")' in fit and '"team_carries": ("carries", None)' in fit, \
+        "the numbers are re-measurable, not typed in"
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert '${c.volume ? `<div class="mu-line">${escapeHtml(c.volume)}.</div>` : ""}' in app, "the pick card's QB box"
+    if not shutil.which("node"):
+        return
+    prog = "const escapeHtml = (s) => String(s);\n" + _fn("scanQbLine") + """
+const state = {data: {qb_changes: [{team: "CHI", starter: "Caleb Williams", status: "OUT", replacement: "Case Keenum",
+  tier: "downgrade", headline: "x", volume: "Teams behind a quarterback this far below the starter (236 games, 2021–25): 3% fewer pass attempts"}]}};
+console.log(JSON.stringify([scanQbLine({team: "CHI", pos: "WR", player: "A"}), scanQbLine({team: "CHI", pos: "RB", player: "B"})]));
+"""
+    got = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
+    import json
+    wr, rb = json.loads(got.stdout)
+    for line in (wr, rb):
+        assert '<span class="ms-read-qb-vol">Teams behind a quarterback this far below the starter' in line
 
 
 def test_the_carries_claim_was_measured_not_assumed():

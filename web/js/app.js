@@ -7814,6 +7814,7 @@ function qbCardHTML(c) {
     <div class="mu-head">${c.status === "RETURNS" ? "QB back" : "QB change"}<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
     <div class="mu-line"><b>${escapeHtml(c.headline || "")}</b></div>
     ${c.detail ? `<div class="mu-line">${escapeHtml(c.detail)}</div>` : ""}
+    ${c.volume ? `<div class="mu-line">${escapeHtml(c.volume)}.</div>` : ""}
     ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
   </div>`;
 }
@@ -12693,9 +12694,15 @@ function scanQbLine(x) {
     what = "The quarterback coming in has thrown like the starter, so his numbers are left as they are.";
   else if (pos === "RB")
     what = "Over five seasons (2021–25) teams behind a replacement ran only about 3% more often and their backs’ carries and yards did not move, so his numbers are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
+  else if (pos === "TE")
+    what = "Tight ends are the exception: behind a backup their catches rose about 5% over five seasons (2021–25) — the short, safe throw — but not by enough to price, so his numbers are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
   else
-    what = `Over four seasons a quarterback change did not move ${pos === "TE" ? "tight ends’" : "these"} numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.`;
-  return `<p class="ms-read-qb"><b>QB change:</b> ${escapeHtml(c.headline || "")}${what ? ` — ${what}` : ""}</p>`;
+    what = "Over four seasons a quarterback change did not move these numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
+  // THE TEAM'S OWN VOLUME, on every read of every team with a change
+  // (Ethan, 2026-09-28: "you should do it for all the teams") — so "they'll
+  // be losing and throw more" meets what those teams actually did.
+  const vol = c.status !== "RETURNS" && c.volume ? `<span class="ms-read-qb-vol">${escapeHtml(c.volume)}.</span>` : "";
+  return `<p class="ms-read-qb"><b>QB change:</b> ${escapeHtml(c.headline || "")}${what ? ` — ${what}` : ""}${vol ? ` ${vol}` : ""}</p>`;
 }
 
 function scanReadHTML(x) {
