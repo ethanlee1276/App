@@ -137,6 +137,8 @@ def parse_events(events: list[dict]) -> list[dict]:
             out.append({
                 "lines": parse_lines(ev),
                 "slug": str(m.get("slug") or ""),
+                # The market's id on the trade tape (engine/moneysplit).
+                "condition_id": str(m.get("conditionId") or ""),
                 "event_slug": str(ev.get("slug") or ""),
                 "question": str(m.get("question") or ev.get("title") or ""),
                 "teams": outs,
@@ -220,7 +222,8 @@ def parse_line(m: dict) -> dict | None:
         return None
     row.update({"p": round(row["p"], 4), "price_basis": basis, "spread_cents": spread,
                 "volume_24h": _num(m.get("volume24hr")) or 0.0,
-                "liquidity": _num(m.get("liquidity")) or 0.0})
+                "liquidity": _num(m.get("liquidity")) or 0.0,
+                "condition_id": str(m.get("conditionId") or "")})
     return row
 
 

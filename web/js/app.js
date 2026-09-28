@@ -9704,6 +9704,52 @@ function crowdLinesHTML(g, c) {
   return rows.length ? `<ul class="gp-crowd-lines">${rows.join("")}</ul>` : "";
 }
 
+/* WHERE THE MONEY IS GOING (engine/moneysplit). Ethan, 2026-09-28, with
+   DraftKings' "% of bets placed" bars beside our game page: show "what
+   percent of money is on what team and on what spread and on what
+   Moneyline." A book's split is its own customers' and has no free feed,
+   so these are the prediction markets' — Kalshi's and Polymarket's public
+   tapes, the side each trade's taker bought — and the section says so.
+   Away on the left, as the sportsbooks draw it. */
+function gameMoneyHTML(g) {
+  const m = (g && g.money) || null;
+  if (!m || !(m.ml || m.spread || m.total)) return "";
+  const pct = (p) => `${Math.round(Number(p) * 100)}%`;
+  const num = (x) => `${x > 0 ? "+" : x < 0 ? MINUS : ""}${Math.abs(Number(x)).toFixed(1)}`;
+  const usd = (x) => `$${Math.round(Number(x) || 0).toLocaleString("en-US")}`;
+  const row = (kind, l, lk, r, rk, s) => {
+    const lp = Number(s[lk]), rp = Number(s[rk]);
+    return `<div class="gp-money-row">
+      <div class="gp-money-top"><span><b>${pct(lp)}</b> ${escapeHtml(l)}</span>
+        <span class="gp-money-kind">${kind}</span>
+        <span>${escapeHtml(r)} <b>${pct(rp)}</b></span></div>
+      <div class="gp-money-bar" role="img" aria-label="${escapeAttr(`${kind}: ${pct(lp)} of the money on ${l}, ${pct(rp)} on ${r}`)}">
+        <i class="l" style="width:${(lp * 100).toFixed(1)}%"></i><i class="r" style="width:${(rp * 100).toFixed(1)}%"></i></div>
+      <div class="gp-money-sub"><span>${pct(s[`${lk}_bets`])} of trades</span>
+        <span>${usd(s.usd)} on ${Number(s.n).toLocaleString("en-US")} trades</span>
+        <span>${pct(s[`${rk}_bets`])} of trades</span></div>
+    </div>`;
+  };
+  const rows = [];
+  if (m.ml) rows.push(row("Moneyline", g.away, "away", g.home, "home", m.ml));
+  if (m.spread && m.spread.line != null) {
+    const hl = Number(m.spread.line);
+    rows.push(row("Spread", `${g.away} ${num(-hl)}`, "away", `${g.home} ${num(hl)}`, "home", m.spread));
+  }
+  if (m.total && m.total.line != null) {
+    const t = Number(m.total.line).toFixed(1);
+    rows.push(row("Total", `Over ${t}`, "over", `Under ${t}`, "under", m.total));
+  }
+  const venues = (m.venues || []).join(" and ") || "the prediction markets";
+  return `<div class="gp-money">
+    <div class="gp-crowd-head">Where the money is going <span class="mini">% of money</span></div>
+    ${rows.join("")}
+    <p class="mini gp-money-note">Traders on ${escapeHtml(venues)}: the side each trade’s taker bought,
+      over each market’s latest trades before kickoff${m.at ? ` · updated ${escapeHtml(m.at)}` : ""}.
+      Exchange traders, not sportsbook customers.</p>
+  </div>`;
+}
+
 function crowdStripHTML(g) {
   const c = (g && g.crowd) || null;
   if (!c) return "";
@@ -12920,6 +12966,7 @@ function renderGamePage() {
       isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal });
   const gpCrowd = isFinal ? "" : crowdStripHTML(g);
+  const gpMoney = isFinal ? "" : gameMoneyHTML(g);
   const gpScripts = gameScriptsHTML(g, likelies);
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
@@ -13129,6 +13176,7 @@ function renderGamePage() {
               favourite chips it replaces stay only when it draws nothing. */
           gpLines}
         ${gpCrowd}
+        ${gpMoney}
         <div class="chips gp-chips">
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
           ${gpLines ? "" : `<span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>`}

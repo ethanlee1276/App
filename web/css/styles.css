@@ -12526,6 +12526,24 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .ms-micro-price { font-family: var(--font-mono); color: var(--text-dim); font-size: var(--fs-xs); }
 .ms-micro-p { font-family: var(--font-mono); font-weight: 700; color: var(--text); }
 
+/* Where the money is going (moneySplitHTML) — the sportsbooks' split bars. */
+.gp-money { margin: 12px 0 4px; padding: 10px 12px; background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); }
+.gp-money-row + .gp-money-row { margin-top: 12px; }
+.gp-money-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: baseline;
+  font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.gp-money-top span:last-child { text-align: right; }
+.gp-money-top b { color: var(--text); font-weight: 800; }
+.gp-money-kind { color: var(--text-mute); font-size: var(--fs-xs); }
+.gp-money-bar { display: flex; gap: 3px; height: 6px; margin-top: 6px; }
+.gp-money-bar i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+.gp-money-bar i.l { background: var(--brand); }
+.gp-money-bar i.r { background: var(--plum); }
+.gp-money-sub { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
+  font-size: var(--fs-2xs); color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gp-money-note { margin: 10px 0 0; color: var(--text-mute); }
+@media (max-width: 420px) { .gp-money-sub span:nth-child(2) { display: none; } }
+
 /* Every market's price on a game (crowdStripHTML). */
 .gp-crowd { margin: 10px 0 4px; }
 .gp-crowd-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }

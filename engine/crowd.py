@@ -109,7 +109,7 @@ def home_spread(g: dict) -> float | None:
     return -size if fav == str(g.get("home") or "") else size
 
 
-def crowd_lines(row: dict, g: dict, first_is_home: bool) -> dict:
+def crowd_lines(row: dict, g: dict, first_is_home: bool, ids: bool = False) -> dict:
     """The venue's price on THE BOARD'S OWN spread and total — the same bet
     the books are quoting, and only that. A venue line half a point away is
     a different bet and is left out rather than stretched to fit.
@@ -118,6 +118,10 @@ def crowd_lines(row: dict, g: dict, first_is_home: bool) -> dict:
         poly_home_cover    P(home covers it), Polymarket
         total_line         the board's total
         poly_over          P(over it), Polymarket
+
+    ``ids`` adds the matched markets' condition ids (poly_spread_cid,
+    poly_total_cid) for the money split (engine/moneysplit); the board's
+    crowd block never carries them.
     """
     from .sources import polysports
     out: dict = {}
@@ -134,6 +138,8 @@ def crowd_lines(row: dict, g: dict, first_is_home: bool) -> dict:
             if abs(venue_home_line - hl) < 0.01:
                 p = float(ln["p"])
                 out.update(spread_home_line=hl, poly_home_cover=round(p if is_home else 1.0 - p, 4))
+                if ids and ln.get("condition_id"):
+                    out["poly_spread_cid"] = ln["condition_id"]
         elif ln.get("kind") == "total" and tot is not None and "poly_over" not in out:
             try:
                 same = abs(float(ln["line"]) - float(tot)) < 0.01
@@ -141,6 +147,8 @@ def crowd_lines(row: dict, g: dict, first_is_home: bool) -> dict:
                 same = False
             if same:
                 out.update(total_line=float(tot), poly_over=round(float(ln["p"]), 4))
+                if ids and ln.get("condition_id"):
+                    out["poly_total_cid"] = ln["condition_id"]
     return out
 
 
@@ -162,7 +170,7 @@ def _kalshi_event_game(event_ticker: str) -> tuple[str, str] | None:
     return f"20{m.group(1)}-{_MONTHS[m.group(2)]:02d}-{m.group(3)}", m.group(4)
 
 
-def kalshi_lines(markets, g: dict) -> dict:
+def kalshi_lines(markets, g: dict, ids: bool = False) -> dict:
     """Kalshi's price on THE BOARD'S OWN spread and total, by the rule
     `crowd_lines` holds Polymarket to: the same bet the books quote, never
     a neighbouring one. Ethan's box, 2026-09-27 (crowdprobe.py) confirmed
@@ -178,6 +186,10 @@ def kalshi_lines(markets, g: dict) -> dict:
 
         kalshi_home_cover   P(home covers the board's line)
         kalshi_over         P(over the board's total)
+
+    ``ids`` adds the matched tickers for the money split (engine/moneysplit):
+    kalshi_spread_ticker with kalshi_spread_yes ("home"/"away" — whose
+    cover its YES pays on), and kalshi_total_ticker (YES is the over).
     """
     out: dict = {}
     hl, tot = home_spread(g), g.get("total")
@@ -195,8 +207,12 @@ def kalshi_lines(markets, g: dict) -> dict:
             club = str(m.get("ticker") or "").upper().rsplit("-", 1)[-1].rstrip("0123456789")
             if club == home and abs(f + hl) < 0.01:
                 out.update(spread_home_line=hl, kalshi_home_cover=round(p, 4))
+                if ids:
+                    out.update(kalshi_spread_ticker=m.get("ticker"), kalshi_spread_yes="home")
             elif club == away and abs(f - hl) < 0.01:
                 out.update(spread_home_line=hl, kalshi_home_cover=round(1.0 - p, 4))
+                if ids:
+                    out.update(kalshi_spread_ticker=m.get("ticker"), kalshi_spread_yes="away")
         elif "TOTAL" in series and tot is not None and "kalshi_over" not in out:
             try:
                 same = abs(f - float(tot)) < 0.01
@@ -204,6 +220,8 @@ def kalshi_lines(markets, g: dict) -> dict:
                 same = False
             if same:
                 out.update(total_line=float(tot), kalshi_over=round(p, 4))
+                if ids:
+                    out["kalshi_total_ticker"] = m.get("ticker")
     return out
 
 
@@ -398,7 +416,8 @@ def store(conn, sport: str, games, now: float | None = None, game_bets=None) -> 
 
 
 def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None,
-                    conn=None, record: bool = True, kalshi_line_fetch=None) -> str:
+                    conn=None, record: bool = True, kalshi_line_fetch=None,
+                    kalshi_trades=None, poly_trades=None) -> str:
     """One hook, every build: fetch both venues, hang ``crowd`` on the
     games, record the pregame prices. NEVER RAISES — each venue is its own
     failure domain, and a crowd price is never the reason a board fails.
@@ -430,6 +449,19 @@ def attach_to_board(result: dict, sport: str, kalshi_fetch=None, poly_fetch=None
     except Exception as exc:                                   # noqa: BLE001
         result["crowd_error"] = f"{type(exc).__name__}: {exc}"
         return f"  ⚠️  {sport.upper()} crowd prices: {exc}"
+    # WHERE THE MONEY IS GOING (engine/moneysplit): the same matched
+    # markets' trade tapes. An injected feed (a test, a replay) reads tapes
+    # only when they are injected too — never the network behind its back.
+    injected = any(f is not None for f in (kalshi_fetch, poly_fetch, kalshi_line_fetch))
+    if not injected or kalshi_trades is not None or poly_trades is not None:
+        try:
+            from . import moneysplit
+            ms = moneysplit.attach(result, sport, kmk, kline, prow,
+                                   kalshi_trades=kalshi_trades, poly_trades=poly_trades)
+            result["money_census"] = ms
+            notes.append(f"money split on {ms['games']} game(s)")
+        except Exception as exc:                               # noqa: BLE001
+            notes.append(f"money split skipped ({type(exc).__name__}: {exc})")
     stored = 0
     if record:
         try:
