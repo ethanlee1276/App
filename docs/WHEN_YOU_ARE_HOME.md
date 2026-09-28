@@ -85,6 +85,18 @@ and what the league's calendar says. Paste it back:
 cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
 ```
 
+**M6. Are the Record page's numbers right? (2026-09-28, read-only,
+seconds).** Re-derives every grade on an in-memory copy of the ledger,
+lists any result that contradicts its own number, any bet graded
+differently in two sections, every NFL game-line bet with the section
+that counts it, and recounts each section. Paste it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 recordcheck.py
+```
+
+`--sport mlb` (or cfb, nba) for another league.
+
 ---
 
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)

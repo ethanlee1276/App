@@ -12576,3 +12576,34 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .mp-tier { margin: 12px 2px 6px; font-size: var(--fs-sm); font-weight: 700; color: var(--text-mute);
   letter-spacing: .02em; }
 .mp-tier:first-of-type { margin-top: 4px; }
+
+/* THE MOST LIKELY PAGE, 2026-09-28 (Ethan: "Is there any way too make this
+   page any better?" … "Do them all"). The price to take under the price,
+   the tier said in words under the ring, the same-story tag, and on a
+   phone the controls in one pinned strip so the picks start on the first
+   screen. */
+.ob-odds { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.ob-odds b { font-weight: 700; }
+.ob-fair { font-family: var(--font-sans); font-size: var(--fs-2xs); letter-spacing: 0; white-space: nowrap; }
+.ob-fair.good { color: var(--good); }
+.ob-fair.wait { color: var(--warn); }
+.ob-ringcol { grid-area: ring; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.ob-ringcol .ob-ring { grid-area: auto; }
+.ob-tierword { font-size: var(--fs-2xs); font-weight: 700; color: var(--text-mute); white-space: nowrap; }
+.ob-tierword.tier-top { color: var(--good); }
+.ob-tierword.tier-strong { color: var(--brand); }
+.ob-story { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.ob-sticky { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--bg);
+  padding: 6px 0 2px; margin: 0 0 6px; }
+@media (max-width: 760px) {
+  .ob-hero { padding: 10px 12px; }
+  .ob-lede { display: none; }
+  .ob-pills .ob-pill:first-child { display: none; }
+  .ob-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+  .ob-bar::-webkit-scrollbar { display: none; }
+  .ob-bar .ob-summary, .ob-bar .ob-controls { flex: none; }
+  .ob-view-btn { flex: none; white-space: nowrap; }
+  .ob-filters { margin-bottom: 4px; }
+  .ob-showing { margin: 2px 0 8px; }
+  .ob-tierword { font-size: var(--fs-2xs); letter-spacing: -.01em; }
+}

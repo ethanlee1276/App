@@ -9450,11 +9450,15 @@ const OB_TIERS = [["top", "Top picks", "Our number, the matchup and the market a
    is this our record thing and why is it not green? And is this something
    we need to fill in with data"). It fills itself as our own picks settle:
    under RECORD_MIN_N it counts toward the bar, past it the hit rate shows. */
+/* WHAT THE RECORD CHECK COUNTS, in words (Ethan, 2026-09-28, after "Record:
+   9 of 20 graded" read like a hit rate): picks like this one graded so far,
+   against the number the check waits for before it judges; then how often
+   they hit. */
 function obRecordLabel(r) {
   const s = r.record_seen;
   if (!s || s.n == null) return "Our record";
-  if (s.rate == null) return `Record: ${s.n} of ${s.need} graded`;
-  return `Record: hit ${Math.round(s.rate * 100)}% of ${s.n}`;
+  if (s.rate == null) return `Record: too new (${s.n} of ${s.need})`;
+  return `Record: picks like it hit ${Math.round(s.rate * 100)}% of ${s.n}`;
 }
 function obChecksHTML(r) {
   const c = r.checks || {}, n = r.check_notes || {};
@@ -9499,6 +9503,63 @@ function obBetLine(r) {
   const side = String(r.side || "").toLowerCase();
   return `${side ? side[0].toUpperCase() + side.slice(1) : ""} ${r.line ?? ""} ${r.market_label || r.market}`.trim();
 }
+/* THE PRICE TO TAKE (Ethan, 2026-09-28: "Do them all" — the list's second
+   item). Our chance as an American price: the worst number at which the
+   bet still pays for itself. At or better than it the card says so; worse,
+   it says what to wait for — Odunze at 55% and −130 needs −122. */
+function obFairAmerican(p) {
+  const q = Number(p);
+  if (!(q > 0 && q < 1)) return null;
+  return q >= 0.5 ? -Math.round((100 * q) / (1 - q)) : Math.round((100 * (1 - q)) / q);
+}
+function obImplied(odds) {
+  const o = Number(odds);
+  if (!o) return null;
+  return o < 0 ? -o / (-o + 100) : 100 / (o + 100);
+}
+function obPriceHTML(r) {
+  const fair = obFairAmerican(r.model_prob), imp = obImplied(r.odds);
+  if (fair == null || imp == null) return "";
+  const good = imp <= Number(r.model_prob) + 1e-9;
+  return `<small class="ob-fair ${good ? "good" : "wait"}" title="Our chance as a price: the worst number this bet still pays at">${
+    good ? `good price · fair ${american(fair)}` : `take at ${american(fair)} or better`}</small>`;
+}
+/* PICKS THAT RIDE TOGETHER (the list's third item): the same team, the same
+   side, the same half of its offence — three Bears receivers under is one
+   bet on the Bears' passing game, not three. */
+const OB_STORY = { receptions: "pass", rec_yds: "pass", pass_yds: "pass", pass_att: "pass", pass_cmp: "pass",
+  pass_td: "pass", rush_yds: "run", rush_att: "run" };
+let _obStoryCache = null;
+function obStoryKey(r) {
+  const fam = OB_STORY[String(r.market || "")];
+  const side = String(r.side || "").toUpperCase();
+  if (!fam || !r.team || !(side === "OVER" || side === "UNDER") || r.kind === "game") return "";
+  return `${r.game || ""}|${r.team}|${fam}|${side}`;
+}
+function obStories() {
+  const rows = oneBoardRows();
+  if (_obStoryCache && _obStoryCache.rows === rows) return _obStoryCache.map;
+  const map = {};
+  rows.forEach((r) => {
+    const k = obStoryKey(r);
+    if (!k) return;
+    (map[k] = map[k] || new Set()).add(r.player);
+  });
+  _obStoryCache = { rows, map };
+  return map;
+}
+function obStoryHTML(r) {
+  const k = obStoryKey(r);
+  if (!k) return "";
+  const others = [...(obStories()[k] || [])].filter((n) => n !== r.player);
+  if (!others.length) return "";
+  const [, team, fam, side] = k.split("|");
+  const what = `${teamName(team)}’ ${fam === "pass" ? "passing" : "running"} game going ${side === "UNDER" ? "under" : "over"}`;
+  const last = (n) => String(n).split(" ").slice(-1)[0];
+  return `<span class="ml-tag ob-story" title="${escapeAttr(`Rides with ${others.join(", ")}: all of them are a bet on the ${what}. If it goes the other way they tend to lose together.`)}">${
+    icon("warn", 11)} Same story as ${others.length === 1 ? last(others[0]) : `${others.length} others`}</span>`;
+}
+const OB_TIER_WORD = { top: "Top pick", strong: "Strong", look: "Worth a look" };
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
@@ -9513,10 +9574,11 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${tags}</span></button>
+        ${td}${tags}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
-    <span class="ob-odds">${r.odds != null ? american(r.odds) : "—"}</span>
-    ${obRingHTML(r)}
+    <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
+    <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
+      escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}</span></span>
     <button class="ob-door" type="button"${door} aria-label="Open this pick">${icon("chart", 18)}</button>
     <button class="ob-view" type="button"${door}>View details ${icon("rising", 12)}</button>
   </div>`;
@@ -9665,6 +9727,7 @@ function oneBoardHTML() {
   const tiers = [["all", "All tiers"], ...OB_TIERS].map(([t, title]) => [t, title, obPicked(all, t, f).length]);
   const tIcon = { all: "list", top: "shield", strong: "clock", look: "warn" };
   return `<div class="one-board">
+    <div class="ob-sticky">
     <div class="ob-bar">
       <div class="ob-summary">${tiers.map(([t, title, n]) => n || t === tier ? `<button type="button"
         class="ob-tier-chip tier-${t}${t === tier ? " on" : ""}" data-ob-tier="${t}" aria-pressed="${t === tier}">${
@@ -9677,6 +9740,7 @@ function oneBoardHTML() {
     ${filters.length > 2 ? `<div class="ob-filters">${filters.map(([k, label]) => `<button class="ob-filter${k === f ? " on" : ""}"
       type="button" data-ob-filter="${k}">${label}
       <span>${obPicked(all, tier, k).length}</span></button>`).join("")}</div>` : ""}
+    </div>
     ${obShowingHTML(rows, tier)}
     ${!rows.length ? `<div class="ls-note">No ${tier === "all" ? "" : "pick in this tier "}of this kind tonight — pick another chip.</div>`
       : view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
@@ -16067,9 +16131,10 @@ function recLikelySection(lk, scope) {
       probability — an average hides the shape, and the top of the board is what
       a reader actually bets.</div>
       <div class="card" style="padding:0;margin-top:6px">${bands}</div>` : ""}
-    ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">By market —
-      these are the shelves on the board. If one holds up and another does not,
-      that is a shelf-level decision.</div>
+    ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">Most Likely picks by market —
+      this board’s own picks only; Pick of the Day and the Edge picks are scored in
+      their own sections. If one market holds up and another does not, that is a
+      shelf-level decision.</div>
       <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}
     ${recLikelyGameLines(lk, sp)}`;
 }
@@ -16111,8 +16176,9 @@ function recLikelyGameLines(lk, sp) {
   // not being separated — there is only one — so promising a per-sport
   // split would describe a table the reader is not looking at.
   return `<div style="opacity:.7;font-size:.9em;margin-top:14px">${sp
-    ? `Game lines by market. Moneylines are ranked; spreads and totals ride as
-       leans and say so on the board.`
+    ? `Most Likely game lines by market — this board’s picks only (Pick of the
+       Day’s spreads and moneylines are counted in its own section). Moneylines
+       are ranked; spreads and totals ride as leans and say so on the board.`
     : `Game lines, per sport — the table above pools them, and an NFL moneyline
        and an MLB one are different models. Moneylines are ranked; spreads and
        totals ride as leans and say so on the board.`}</div>

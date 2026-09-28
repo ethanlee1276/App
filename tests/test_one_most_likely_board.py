@@ -269,8 +269,9 @@ def test_the_record_check_says_its_numbers_and_every_check_is_coloured():
     assert '"record_seen": record_seen(record, r.get("market"), _side(r), prob),' in src
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
-    assert "if (s.rate == null) return `Record: ${s.n} of ${s.need} graded`;" in js
-    assert "return `Record: hit ${Math.round(s.rate * 100)}% of ${s.n}`;" in js
+    # Reworded 2026-09-28 ("Record: 9 of 20 graded" read like a hit rate).
+    assert "if (s.rate == null) return `Record: too new (${s.n} of ${s.need})`;" in js
+    assert "return `Record: picks like it hit ${Math.round(s.rate * 100)}% of ${s.n}`;" in js
     assert 'k === "record" ? obRecordLabel(r) : label' in js
     # The colours are not scoped to one page.
     assert "\n.ob-check.yes { color: var(--good); }" in css and "\n.ob-check.no { color: var(--bad); }" in css
