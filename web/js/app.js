@@ -12779,7 +12779,12 @@ function matchupScanHTML(g) {
   const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
   const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, the big number is ${Math.round(u0.blend * 100)}% this season and ${100 - Math.round(u0.blend * 100)}% last season — the mix that best predicted the rest of a season when we tested it. “This season” under it is this season on its own.` : "";
   const edges = (scan.edges || []).slice(0, 5);
-  const inj = scan.injuries || [];
+  /* ONE INJURY LIST. The game plan's "Who is out, and where the work goes"
+     step is built from these same rows (engine/gameplan.absences), so with
+     a plan on the page this card was the list twice — Ethan, 2026-09-28,
+     PHI@CHI: "We show the injuries twice." Without a plan (locked, or none
+     built) the scan keeps its own. */
+  const inj = gamePlanFor(g) ? [] : (scan.injuries || []);
   const players = (reads && reads.players) || [];
   const micro = (reads && reads.microscope) || [];
   const n = scanTeams(scan);
