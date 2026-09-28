@@ -637,12 +637,65 @@ def mate_line(m, kind: str) -> tuple[str, bool]:
     return text, counted
 
 
+def _pct(v) -> str:
+    return f"{float(v):.0%}" if v is not None else "—"
+
+
+def charting_notes(group: str, opp: str, charting: dict | None, charting_def: dict | None,
+                   tracking: dict | None) -> list:
+    """The read's charted and tracked lines, in the reader's words.
+
+    ``charting`` is his own FTN season line (engine/sources/ftn.season_tables
+    — a receiver's or a passer's), ``charting_def`` the defence he faces,
+    ``tracking`` his Next Gen Stats line with ranks (ngs.season_tables).
+    Every one of these was measured (chartfit.py, ngsfit.py, 2026-09-28)
+    and none moved a projection, so they are notes: what a reader can
+    check, never a reason the number moved."""
+    out = []
+    c, d, t = charting or {}, charting_def or {}, tracking or {}
+    if group in ("wr", "te"):
+        if (c.get("catchable") or 0) >= 8:
+            out.append(f"Charted: {c.get('drops', 0)} drop{'s' if c.get('drops', 0) != 1 else ''} on "
+                       f"{c['catchable']} catchable balls this season ({_pct(c.get('drops_rate'))}), "
+                       f"{_pct(c.get('contested_rate'))} of his targets contested")
+        if t.get("avg_separation") is not None and t.get("n_ranked"):
+            out.append(f"Tracking: {t['avg_separation']:.1f} yd of separation at the throw "
+                       f"({_ord(t.get('avg_separation_rank'))} of {t['n_ranked']} {group.upper()}s), "
+                       f"{t['avg_cushion']:.1f} yd of cushion, "
+                       f"{t['avg_yac_above_expectation']:+.1f} yd after the catch over expected")
+        if d.get("blitz_rate") is not None:
+            out.append(f"{opp} blitzes on {_pct(d['blitz_rate'])} of dropbacks this season")
+    elif group == "rb":
+        if t.get("rush_yards_over_expected_per_att") is not None and t.get("n_ranked"):
+            out.append(f"Tracking: {t['rush_yards_over_expected_per_att']:+.2f} rushing yards over "
+                       f"expected a carry ({_ord(t.get('rush_yards_over_expected_per_att_rank'))} of "
+                       f"{t['n_ranked']} RBs), sees 8+ in the box on "
+                       f"{t['percent_attempts_gte_eight_defenders']:.0f}% of carries")
+        if d.get("heavy_box_rate") is not None:
+            out.append(f"{opp} stacks the box (8+) on {_pct(d['heavy_box_rate'])} of runs this season, "
+                       f"light boxes (6 or fewer) on {_pct(d['light_box_rate'])}")
+    elif group == "qb":
+        if (c.get("attempts") or 0) >= 30:
+            out.append(f"Charted: {c.get('iw', 0)} interception-worthy throw{'s' if c.get('iw', 0) != 1 else ''} "
+                       f"on {c['attempts']} attempts ({_pct(c.get('iw_rate'))}), "
+                       f"{_pct(c.get('catchable_rate'))} catchable, play action on "
+                       f"{_pct(c.get('play_action_rate'))} of dropbacks")
+        if t.get("completion_percentage_above_expectation") is not None and t.get("n_ranked"):
+            out.append(f"Tracking: completion rate {t['completion_percentage_above_expectation']:+.1f} "
+                       f"over expected ({_ord(t.get('completion_percentage_above_expectation_rank'))} of "
+                       f"{t['n_ranked']} QBs), {t['avg_time_to_throw']:.2f}s to throw")
+        if d.get("blitz_rate") is not None:
+            out.append(f"{opp} blitzes on {_pct(d['blitz_rate'])} of dropbacks this season")
+    return out
+
+
 def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 ratings: dict, room: dict | None, scheme: dict | None,
                 split: dict | None, tackling: dict | None, line_out: list | None,
                 mates_out: list | None, n_teams: int = 32,
                 allowed: dict | None = None, points: float | None = None,
-                line_words: str = "") -> dict:
+                line_words: str = "", charting: dict | None = None,
+                charting_def: dict | None = None, tracking: dict | None = None) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), what else the
     scan noticed, and the markets the read points at.
@@ -813,6 +866,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                    else f" against the {_ord(prot)} pass protection"))
     score = len(pro) - len(con)
     key, label = _label(score, volume)
+    # WHAT THE CHARTING AND THE TRACKING SAY (engine/sources/ftn, ngs):
+    # shown, never counted — chartfit and ngsfit found no lift in any of it.
+    notes += charting_notes(group, opp, charting, charting_def, tracking)
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
@@ -912,7 +968,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               scheme_season=None, opponent_adjusted: bool = True,
               allowed: dict | None = None, points: dict | None = None,
               line_words: dict | None = None, faces: dict | None = None,
-              evidence: list | None = None, pulled: list | None = None) -> dict:
+              evidence: list | None = None, pulled: list | None = None,
+              charting: dict | None = None, tracking: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
 
     ``evidence`` is every priced row of this game whose teammate-out notes
@@ -1047,13 +1104,20 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                 f"{who} ({ip}) is questionable — " + (
                     f"if he sits, our projection moves {', '.join(sorted(set(moves)))}"
                     if moves else f"{share:.0%} of the {kind} ride on it"))
+        ch, tr = charting or {}, tracking or {}
+        own_chart = ((ch.get("qbs") if group == "qb" else ch.get("receivers")) or {}).get((team, _abbr(name)))
+        own_track = ((tr.get("passers") if group == "qb" else tr.get("rushers") if group == "rb"
+                      else tr.get("receivers")) or {})
+        own_track = next((v for (t, n), v in own_track.items() if t == team and _key(n) == _key(name)), None)
         read = player_read(
             name, team, opp[team], pos, usage=u, ratings=ratings, room=rooms[opp[team]],
             scheme=(schemes or {}).get(opp[team]),
             split=(splits or {}).get((team, _abbr(name))),
             tackling=tackling, line_out=lines[team], mates_out=mates, n_teams=n_teams,
             allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
-            line_words=(line_words or {}).get(team, ""))
+            line_words=(line_words or {}).get(team, ""),
+            charting=own_chart, charting_def=(ch.get("defense") or {}).get(opp[team]),
+            tracking=own_track)
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
@@ -1090,6 +1154,14 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         "coverage": rooms,
         "scheme": {t: (schemes or {}).get(t) for t in teams if (schemes or {}).get(t)},
         "scheme_season": scheme_season,
+        # THIS SEASON'S CHARTING (engine/sources/ftn): the blitz and the box
+        # from FTN's file, current where the participation file is not.
+        "charting": {"season": (charting or {}).get("season"), "weeks": (charting or {}).get("weeks"),
+                     "partial": (charting or {}).get("partial"),
+                     "defense": {t: ((charting or {}).get("defense") or {}).get(t) for t in teams
+                                 if ((charting or {}).get("defense") or {}).get(t)},
+                     "offense": {t: ((charting or {}).get("offense") or {}).get(t) for t in teams
+                                 if ((charting or {}).get("offense") or {}).get(t)}} if charting else None,
         "rush": {t: _pass_rush(t, defenders_now, injuries) for t in teams},
         "line_out": lines,
         "injuries": inj_rows,
@@ -1143,6 +1215,27 @@ def scheme_tables(season: int) -> dict:
                 pass
         return out
     return {"season": None, "defense": {}, "receivers": {}}
+
+
+def charting_tables(season: int, week=None) -> dict:
+    """This season's FTN charting to date (engine/sources/ftn.season_tables),
+    the shares the scan shows and the reads quote — {} when nflverse has
+    no file yet or the pull fails; the scan never fails for it."""
+    try:
+        from .sources import ftn as F
+        return F.season_tables(season, before_week=week)
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
+def tracking_tables(season: int, week=None) -> dict:
+    """This season's Next Gen Stats to date with ranks (engine/sources/ngs.
+    season_tables) — {} when the pull fails; never a reason a scan fails."""
+    try:
+        from .sources import ngs as NGS
+        return NGS.season_tables(season, before_week=week)
+    except Exception:                                        # noqa: BLE001
+        return {}
 
 
 def implied_points(g) -> tuple[dict, dict]:
@@ -1313,6 +1406,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     tackling = N.team_tackling(now_rows)
     sch = scheme_tables(season)
     splits = {tuple(k.split("|", 1)): v for k, v in (sch.get("receivers") or {}).items()}
+    charting, tracking = charting_tables(season, week), tracking_tables(season, week)
 
     def _safe(fn, *a):
         try:
@@ -1353,6 +1447,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          allowed=allowed, points=pts, line_words=words, faces=faces,
                          evidence=gprops + [r for r in result.get("most_likely") or []
                                             if r.get("team") in (home, away)],
+                         charting=charting, tracking=tracking,
                          pulled=getattr(g, "pulled_players", None) or [])
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}

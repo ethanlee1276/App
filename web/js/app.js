@@ -12515,8 +12515,18 @@ function scanCoverageHTML(scan, team) {
   const room = (scan.coverage || {})[team] || {};
   const sch = (scan.scheme || {})[team];
   const rush = (scan.rush || {})[team] || [];
+  // THIS SEASON'S CHARTING (engine/sources/ftn, 2026-09-28): the blitz and
+  // the box from FTN's file, current where the coverage line is a season
+  // behind; and the offence's own habits under it.
+  const ch = scan.charting || {};
+  const cd = (ch.defense || {})[team];
+  const co = (ch.offense || {})[team];
   // College has no defender files: no room, no scheme, no rushers, no card.
-  if (!(room.corners || []).length && !(room.missing || []).length && !sch && !rush.length) return "";
+  if (!(room.corners || []).length && !(room.missing || []).length && !sch && !rush.length && !cd && !co) return "";
+  const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  const when = ch.season ? ` <span class="mini">(${escapeHtml(String(ch.season))} charting${ch.weeks ? `, ${ch.weeks} week${ch.weeks === 1 ? "" : "s"}` : ""}${ch.partial ? ` + part of week ${ch.partial}` : ""})</span>` : "";
+  const nowLine = cd ? `Blitz ${pct(cd.blitz_rate)} of dropbacks · 8+ in the box ${pct(cd.heavy_box_rate)} of runs · light boxes ${pct(cd.light_box_rate)}` : "";
+  const offLine = co ? `Play action ${pct(co.play_action_rate)} · motion ${pct(co.motion_rate)} · RPO ${pct(co.rpo_rate)} · screens ${pct(co.screen_rate)} · no-huddle ${pct(co.no_huddle_rate)}` : "";
   const corners = (room.corners || []).map((c) => {
     const spot = { LCB: "Left CB", RCB: "Right CB", NB: "Nickel" }[c.spot] || c.spot;
     const st = c.status ? ` <span class="chip down">${escapeHtml(c.status.toLowerCase())}</span>` : "";
@@ -12534,6 +12544,8 @@ function scanCoverageHTML(scan, team) {
   return `<div class="ms-cov card">
       <div class="ms-cov-head">${teamMark(team, 22)} <b>${escapeHtml(teamName(team))} defense</b></div>
       ${schLine ? `<p class="ms-cov-line"><b>How it covers</b> ${schLine}${scan.scheme_season ? ` <span class="mini">(${escapeHtml(String(scan.scheme_season))} charting)</span>` : ""}</p>` : ""}
+      ${nowLine ? `<p class="ms-cov-line"><b>This season</b> ${nowLine}${when}</p>` : ""}
+      ${offLine ? `<p class="ms-cov-line"><b>On offense</b> ${offLine}</p>` : ""}
       ${corners ? `<div class="ms-cbs">${corners}</div>` : ""}
       ${out.length ? `<p class="ms-cov-line"><b>Out</b> ${out.join(", ")}</p>` : ""}
       ${rushLine ? `<p class="ms-cov-line"><b>Pass rush</b> ${rushLine}</p>` : ""}

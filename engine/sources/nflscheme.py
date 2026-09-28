@@ -2,7 +2,9 @@
 
 Two free nflverse releases the site had not read:
 
-* **PFR advanced defense** (`pfr_advstats/advstats_week_def_<season>`),
+* **PFR advanced defense** (`pfr_advstats/advstats_week_def_<season>`;
+  the pass and rec files too since 2026-09-28 — read by chartfit.py, no
+  lift found, so nothing here prices with them),
   per defender per game: targets, completions, yards and touchdowns
   allowed, passer rating allowed, missed tackles, pressures, sacks. It is
   the free cousin of the coverage grades the Falcons @ Packers breakdown
@@ -58,6 +60,21 @@ def load_pfr_def(season: int, ttl: int = 12 * 3600) -> list[dict]:
 def load_pfr_rush(season: int, ttl: int = 12 * 3600) -> list[dict]:
     return _csv(f"{_BASE}/pfr_advstats/advstats_week_rush_{season}.csv",
                 f"pfr_rush_{season}.csv", ttl)
+
+
+def load_pfr_pass(season: int, ttl: int = 12 * 3600) -> list[dict]:
+    """PFR's weekly passing charting: times pressured (and the rate),
+    blitzed, hurried, hit, sacked; bad throws; drops by his receivers.
+    2026-09-28: the two PFR files the site had not read, with `rec`."""
+    return _csv(f"{_BASE}/pfr_advstats/advstats_week_pass_{season}.csv",
+                f"pfr_pass_{season}.csv", ttl)
+
+
+def load_pfr_rec(season: int, ttl: int = 12 * 3600) -> list[dict]:
+    """PFR's weekly receiving charting: drops and the drop rate, broken
+    tackles, interceptions when targeted, passer rating when targeted."""
+    return _csv(f"{_BASE}/pfr_advstats/advstats_week_rec_{season}.csv",
+                f"pfr_rec_{season}.csv", ttl)
 
 
 def load_participation(season: int, ttl: int = 7 * 24 * 3600) -> list[dict]:

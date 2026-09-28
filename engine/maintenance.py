@@ -525,6 +525,7 @@ KEEP_CACHE_PREFIXES = {
     "injuries_": "nflverse per-season bulk, same",
     "ngs_": ("nflverse Next Gen Stats, ALL seasons in one file per kind — three "
              "files, bounded, six-hour TTL (engine/sources/ngs)"),
+    "ftn_charting_": "nflverse per-season FTN charting bulk, one file a season (engine/sources/ftn)",
     "line_": "line_history.jsonl is accumulated history, not a fetch cache",
     "maintenance": "this module's own state",
 }
