@@ -15,6 +15,26 @@ as they are done.
 
 ---
 
+## MONEY SPLIT — 2026-09-28 (read-only, seconds)
+
+**M1. Is "Where the money is going" reading the real tapes?** The game
+page's money bars (engine/moneysplit) read Kalshi's and Polymarket's
+public trade tapes, which the build sandbox cannot reach — the parser was
+written to their documented shapes. Run this once a slate has games that
+have not started yet. It writes nothing; it prints one raw trade from
+each venue, then every game's split or why it has none:
+
+```
+cd /srv/qellys && python3 moneyprobe.py
+```
+
+For college or baseball, add the league: `python3 moneyprobe.py cfb` or
+`python3 moneyprobe.py mlb`. Paste the output back. A venue whose
+fields differ from the parser's shows up as games with "no split" —
+missing bars, never wrong ones.
+
+---
+
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)
 
 **A. Are the Polymarket tags real?** Prints how many game moneylines
