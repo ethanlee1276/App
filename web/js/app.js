@@ -12634,6 +12634,32 @@ function scanUsageBits(x) {
   return bits;
 }
 
+/* HIS QUARTERBACK, ON HIS READ. Ethan, 2026-09-28, on Colston Loveland with
+   Caleb Williams out: "are we using that in our picks … I don't see it
+   displayed here like it's a factor for these players." It was used where
+   it was measured (engine/qbchange: behind a downgrade a team's receivers
+   lost ~10% of their yards and ~9% of their catches, every season 2022-25;
+   tight ends, backs and touchdowns did not move enough to price) — and the
+   read said none of it. Now it says who is throwing and what that did to
+   this player's numbers, in the terms the board used. */
+function scanQbLine(x) {
+  const cards = ((state.data || {}).qb_changes) || [];
+  const c = cards.find((k) => k && k.team === x.team);
+  if (!c) return "";
+  const pos = String(x.pos || "").toUpperCase();
+  let what;
+  if (c.status === "RETURNS") what = "His usual quarterback is back — nothing adjusted.";
+  else if (pos === "QB") what = c.replacement && x.player === c.replacement
+    ? `Starting in place of ${escapeHtml(c.starter)}.` : "";
+  else if (pos === "WR" && c.tier === "downgrade")
+    what = "Behind a quarterback this far below the starter, receivers lost about 10% of their yards and 9% of their catches over four seasons — taken off his numbers.";
+  else if (pos === "WR")
+    what = "The quarterback coming in has thrown like the starter, so his numbers are left as they are.";
+  else
+    what = `Over four seasons a quarterback change did not move ${pos === "TE" ? "tight ends’" : pos === "RB" ? "running backs’" : "these"} numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.`;
+  return `<p class="ms-read-qb"><b>QB change:</b> ${escapeHtml(c.headline || "")}${what ? ` — ${what}` : ""}</p>`;
+}
+
 function scanReadHTML(x) {
   const bits = scanUsageBits(x);
   const door = scanDoor(x);
@@ -12643,6 +12669,7 @@ function scanReadHTML(x) {
           <span>${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos)}${bits.length ? ` · ${bits.join(" · ")}` : ""}</span></span>
         <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span></button>
       ${scanPickHTML(x)}${scanTdHTML(x)}
+      ${scanQbLine(x)}
       ${scanWhyList(x)}
       <span class="ms-open">Open ${escapeHtml(door.what)} →</span>
     </div>`;

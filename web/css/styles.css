@@ -12544,6 +12544,10 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .gp-money-note { margin: 10px 0 0; color: var(--text-mute); }
 @media (max-width: 420px) { .gp-money-sub span:nth-child(2) { display: none; } }
 
+/* His quarterback on a player read (scanQbLine). */
+.ms-read-qb { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.ms-read-qb b { color: var(--brand); }
+
 /* Every market's price on a game (crowdStripHTML). */
 .gp-crowd { margin: 10px 0 4px; }
 .gp-crowd-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
