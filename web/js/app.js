@@ -50,7 +50,7 @@ const state = {
   // The one Most Likely board's view (Best of the slate / By game), kept
   // per viewer; the filter resets with the page.
   obView: (() => { try { return localStorage.getItem("qb.obView") || "best"; } catch (e) { return "best"; } })(),
-  obFilter: "all", obTier: "all", obSort: "best",
+  obFilter: "all", obTier: "all", obSort: "prob",
   // Scoped to ONE GAME PAGE, and reversible there (#gp-showall reveals,
   // #gp-hideall puts it back). It used to be the board's global
   // checkbox; with that gone, a one-way flip would have left every
@@ -9557,15 +9557,22 @@ function obHeroHTML() {
    hard the matchup backs the pick, then our chance. Ethan, 2026-09-26:
    Kincaid, a Good matchup, sat #1 "with the breakout candidates below
    him" — the page re-sorted every tier by chance alone. */
-const OB_SORTS = [["best", "Strongest matchup"], ["prob", "Highest hit rate"], ["kick", "Kickoff"], ["price", "Best price"]];
+/* HIGHEST TO LOWEST, BY THE NUMBER ON THE CARD (Ethan, 2026-09-28, on the
+   By-game view: "This page should rank highest too lowest not randomly
+   placed"). The default was "Strongest matchup" (2026-09-26), a score the
+   card never prints — so inside a tier the rings read 61, 59, 55, 43, 76.
+   The tier is still the first key everywhere (the sections, and now each
+   game's own groups); inside it the hit rate leads and the matchup breaks
+   ties. "Strongest matchup" is one tap away in the menu. */
+const OB_SORTS = [["prob", "Highest hit rate"], ["best", "Strongest matchup"], ["kick", "Kickoff"], ["price", "Best price"]];
 function obSorted(rows) {
-  const k = state.obSort || "best";
+  const k = state.obSort || "prob";
   const t = (r) => Date.parse(r.kickoff || r.game_date || "") || 0;
   const m = (r) => Number(r.matchup_strength) || 0;
   return rows.slice().sort(k === "kick" ? (a, b) => t(a) - t(b) || b.model_prob - a.model_prob
     : k === "price" ? (a, b) => Number(b.odds || -9999) - Number(a.odds || -9999)
-    : k === "prob" ? (a, b) => b.model_prob - a.model_prob
-    : (a, b) => m(b) - m(a) || b.model_prob - a.model_prob);
+    : k === "best" ? (a, b) => m(b) - m(a) || b.model_prob - a.model_prob
+    : (a, b) => b.model_prob - a.model_prob || m(b) - m(a));
 }
 
 /* Football reads its props as touchdowns, yards and catches; every other
@@ -9614,13 +9621,25 @@ function obByGameHTML(rows) {
   const keyOf = (g) => `${g.away}@${g.home}`;
   const keys = games.map(keyOf).filter((k) => rows.some((r) => r.game === k));
   const rest = rows.filter((r) => !keys.includes(r.game));
+  // Each game in the board's own order: its Top picks, then Strong, then
+  // Worth a look, each under its name and highest hit rate first — a
+  // Worth-a-look 76% no longer sits between two Top picks unlabelled.
+  const tiered = (rs) => {
+    const groups = OB_TIERS.map(([t, title]) => [title, obSorted(rs.filter((r) => r.tier === t))])
+      .filter(([, g]) => g.length);
+    const loose = obSorted(rs.filter((r) => !OB_TIERS.some(([t]) => t === r.tier)));
+    if (loose.length) groups.push(["", loose]);
+    if (groups.length === 1) return `<div class="ob-cards">${groups[0][1].map((r) => obCardHTML(r, 0)).join("")}</div>`;
+    return groups.map(([title, g]) => `${title ? `<div class="mp-tier">${escapeHtml(title)} <span class="ob-count">${g.length}</span></div>` : ""}
+      <div class="ob-cards">${g.map((r) => obCardHTML(r, 0)).join("")}</div>`).join("");
+  };
   const block = (k, rs) => {
     const g = games.find((x) => keyOf(x) === k);
     return `<div class="mp-game">
       ${g ? `<div class="mp-head" data-team-game="${escapeAttr(gameId(g))}" role="button" tabindex="0">
         ${escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}
         <span class="mini">${escapeHtml(whenLabel(g.date, g.kickoff))}</span></div>` : ""}
-      <div class="ob-cards">${obSorted(rs).map((r) => obCardHTML(r, 0)).join("")}</div></div>`;
+      ${tiered(rs)}</div>`;
   };
   return `<div class="matchup-picks">${keys.map((k) => block(k, rows.filter((r) => r.game === k))).join("")}
     ${rest.length ? block("", rest) : ""}</div>`;
@@ -9665,7 +9684,7 @@ function oneBoardHTML() {
 }
 function obSortHTML() {
   return `<label class="ob-sort">Sorted by <select data-ob-sort aria-label="Sort the picks">${OB_SORTS.map(([k, label]) =>
-    `<option value="${k}"${(state.obSort || "best") === k ? " selected" : ""}>${label.toLowerCase()}</option>`).join("")}</select></label>`;
+    `<option value="${k}"${(state.obSort || "prob") === k ? " selected" : ""}>${label.toLowerCase()}</option>`).join("")}</select></label>`;
 }
 function bindOneBoard(host, rerender) {
   host.querySelectorAll("[data-ob-sort]").forEach((sel) => sel.addEventListener("change", () => {

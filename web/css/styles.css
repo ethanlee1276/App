@@ -12570,3 +12570,9 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .gp-crowd-t thead th { color: var(--text-mute); font-weight: 600; }
 .gp-crowd-gap { margin: 6px 0 0; color: var(--text-mute); }
 
+
+/* The By-game view's tier groups (Ethan, 2026-09-28: "rank highest too
+   lowest"): a quiet label over each group inside a game. */
+.mp-tier { margin: 12px 2px 6px; font-size: var(--fs-sm); font-weight: 700; color: var(--text-mute);
+  letter-spacing: .02em; }
+.mp-tier:first-of-type { margin-top: 4px; }

@@ -72,11 +72,15 @@ def test_a_sport_with_no_matchup_read_ranks_by_chance_as_before():
     assert {r["matchup_strength"] for r in rows} == {0}
 
 
-def test_the_page_default_sort_is_the_boards_order():
-    assert 'obSort: "best",' in APP
+def test_the_page_default_sort_is_the_number_on_the_card():
+    """Ethan, 2026-09-28, on the By-game view: "This page should rank highest
+    too lowest not randomly placed." The engine still ranks a breakout ahead
+    (the tests above); the page's default inside a tier is the hit rate the
+    card prints, and the matchup order is one tap away."""
+    assert 'obSort: "prob",' in APP
     i = APP.index("function obSorted(")
     fn = APP[i:APP.index("\n}\n", i) + 2]
-    assert 'const k = state.obSort || "best";' in fn
+    assert 'const k = state.obSort || "prob";' in fn
     if not shutil.which("node"):
         return
     rows = [{"player": "Kincaid", "model_prob": 0.70, "matchup_strength": 1},
@@ -90,8 +94,8 @@ def test_the_page_default_sort_is_the_boards_order():
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(prog)
     a, b = json.loads(subprocess.run(["node", path], capture_output=True, text=True, check=True).stdout)
-    assert a == ["Breakout", "Kincaid", "Old board"], a
-    assert b == ["Old board", "Kincaid", "Breakout"], "Highest hit rate is still one tap away"
+    assert a == ["Breakout", "Kincaid", "Old board"], "Strongest matchup is still one tap away"
+    assert b == ["Old board", "Kincaid", "Breakout"], a
 
 
 if __name__ == "__main__":
