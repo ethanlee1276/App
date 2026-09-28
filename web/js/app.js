@@ -9446,12 +9446,6 @@ function obWhyHTML(r) {
   const lines = (r.case_lines || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
   return checks || lines ? `<details class="td-why"><summary>Why?</summary><ul>${checks}${lines}</ul></details>` : "";
 }
-function obRowHTML(r, opts = {}) {
-  const td = r.lane === "td";
-  const shown = td ? { ...r, line: null,
-    market_label: `Anytime TD · hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10` } : r;
-  return `<div class="ob-row tier-${escapeAttr(r.tier || "look")}">${likelyRow(shown)}${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>`;
-}
 /* ETHAN'S RENDER (2026-09-26, two desktop renders of the Most Likely page:
    "For when you click on the most likely bets and it takes you to the full
    page, follow this render. And then obviously on the main dashboard, we
