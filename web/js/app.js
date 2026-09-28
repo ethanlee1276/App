@@ -11013,7 +11013,7 @@ function renderGameBetPage(b) {
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn-quiet gp-back" id="pp-back">← Back to the board</button>
+      <button class="btn-quiet gp-back" id="pp-back">${escapeHtml(detailBackLabel())}</button>
       <span class="pp-nav-right">
         ${b.odds != null ? `<button class="btn ghost"
           data-slip="${escapeAttr(gameBetId(b))}">${slipHas(b)
@@ -11052,7 +11052,7 @@ function renderGameBetPage(b) {
       <span class="sub">— the model’s own objections, not hidden.</span></div>
       <div class="card"><ul class="reasons">${warn}</ul></div>` : ""}`;
   const bk = document.getElementById("pp-back");
-  if (bk) bk.addEventListener("click", () => switchView("recommended"));
+  if (bk) bk.addEventListener("click", detailBack);
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
@@ -11605,9 +11605,9 @@ function renderPropPage() {
       <h3>That pick is not on tonight’s board</h3>
       <p>Props are rebuilt every slate, so a link to one only lives as long
       as the pick does.</p>
-      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button></div>`;
+      <button class="btn ghost gp-back" id="pp-back">${escapeHtml(detailBackLabel())}</button></div>`;
     const b0 = document.getElementById("pp-back");
-    if (b0) b0.addEventListener("click", () => switchView("recommended"));
+    if (b0) b0.addEventListener("click", detailBack);
     return;
   }
   /* OPENED FROM MOST LIKELY, the page is that board's pick (2026-09-23,
@@ -11657,7 +11657,7 @@ function renderPropPage() {
      moved. */
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn-quiet gp-back" id="pp-back">← Back to the board</button>
+      <button class="btn-quiet gp-back" id="pp-back">${escapeHtml(detailBackLabel())}</button>
       ${r.player ? `<button class="btn-quiet" data-player-page="${escapeAttr(slugify(r.player))}"
         >Player page →</button>` : ""}
     </div>
@@ -11775,7 +11775,7 @@ function renderPropPage() {
     ${compsHTML(r)}
     ${simLabHTML(r)}`;
   const b = document.getElementById("pp-back");
-  if (b) b.addEventListener("click", () => switchView("recommended"));
+  if (b) b.addEventListener("click", detailBack);
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
@@ -12903,9 +12903,9 @@ function renderGamePage() {
       <div class="es-title">That game isn’t on the current slate</div>
       <div class="es-sub">Slates roll over each day. Head back to the board for
       today’s games.</div></div>
-      <button class="btn ghost gp-back" id="gp-back" style="margin-top:14px">← Back to the board</button>`;
+      <button class="btn ghost gp-back" id="gp-back" style="margin-top:14px">${escapeHtml(detailBackLabel())}</button>`;
     const b = document.getElementById("gp-back");
-    if (b) b.addEventListener("click", () => switchView("recommended"));
+    if (b) b.addEventListener("click", detailBack);
     return;
   }
   const mlb = state.sport === "mlb";
@@ -13150,7 +13150,7 @@ function renderGamePage() {
   })() : "";
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn-quiet gp-back" id="gp-back">← Back to the board</button>
+      <button class="btn-quiet gp-back" id="gp-back">${escapeHtml(detailBackLabel())}</button>
       <span class="pp-nav-right">
         <span id="gp-pbp-slot"></span>
         ${shareBtn("game", gameSlug(g))}
@@ -13309,7 +13309,7 @@ function renderGamePage() {
         >Show only the picks</button></p>` : ""}`;
 
   const back = document.getElementById("gp-back");
-  if (back) back.addEventListener("click", () => switchView("recommended"));
+  if (back) back.addEventListener("click", detailBack);
   host.querySelectorAll(".gp-jump [data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
       const el = document.getElementById(b.dataset.jump);
@@ -37738,6 +37738,26 @@ function wallBlocked(name) {
    scrolling itself while the view transition plays over the top. Only
    "instant" overrides the sheet. */
 let _boardReturn = null;              // { view, y } while inside a detail
+
+/* BACK GOES WHERE YOU CAME FROM. Ethan, 2026-09-28, on a pick page opened
+   from the Most Likely page: "Back to the board … will just take me back
+   to the home screen. It should take me back to the page I was previously
+   on." Every detail page's Back used to switch to Home by name; it now
+   returns to the page the detail was opened from (_boardReturn, which
+   also restores the scroll), and says which page that is. A page opened
+   cold — a pasted link — still goes Home. */
+const BACK_NAMES = { recommended: "the board", likely: "Most Likely", edge: "Edge Picks",
+  live: "Live", tonight: "Tonight", longshots: "Long Shots", props: "Player Props",
+  scanner: "the scanner", futures: "Futures", team: "the team", players: "Players",
+  injuries: "Injuries", record: "the Record" };
+function detailBackView() {
+  const v = _boardReturn && _boardReturn.view;
+  return v && !DETAIL_VIEWS.includes(v) ? v : "recommended";
+}
+function detailBackLabel() {
+  return `← Back to ${BACK_NAMES[detailBackView()] || "the board"}`;
+}
+function detailBack() { switchView(detailBackView()); }
 
 const DETAIL_VIEWS = ["prop", "game", "pbp"];
 
