@@ -65,12 +65,42 @@ def _week_num(period: str) -> int | None:
     return None
 
 
+#: THE LEAGUE'S OWN CALENDAR, when a build can ask for it. The dates in
+#: POSTSEASON are one year's: MLB's (9, 30) was 2025's Wild Card opener, and
+#: 2026's is September 29 (the regular season ended the 27th) — so under
+#: the constant the first day of the 2026 postseason would have counted in
+#: the regular-season table and been missing from the bracket. Ethan,
+#: 2026-09-28: "mlb isn't showing any post season games or anything like
+#: that." standings_build asks MLB's stats API for the season's dates
+#: (engine/mlb/sources/mlbstats.season_dates) and sets the answer here;
+#: the constant is the fallback for a season nobody asked about.
+POST_START: dict[tuple[str, int], _dt.date] = {}
+
+
+def set_post_start(sport: str, season: int, first_day) -> None:
+    """Record when this season's postseason begins (ISO date or date)."""
+    d = first_day if isinstance(first_day, _dt.date) else _dt.date.fromisoformat(str(first_day)[:10])
+    POST_START[(sport, int(season))] = d
+
+
+def post_start(sport: str, season: int) -> _dt.date | None:
+    """The first postseason day of a date-bounded league's season."""
+    got = POST_START.get((sport, int(season)))
+    if got:
+        return got
+    spec = POSTSEASON.get(sport)
+    if not spec or spec[0] != "date":
+        return None
+    _kind, (month, day), next_year = spec
+    return _dt.date(int(season) + (1 if next_year else 0), month, day)
+
+
 def is_postseason(sport: str, season: int, period: str) -> bool:
     """Does this game belong to the postseason of that season?"""
     spec = POSTSEASON.get(sport)
     if not spec:
         return False
-    kind, value, next_year = spec
+    kind, value, _next_year = spec
     if kind == "week":
         wk = _week_num(period)
         return wk is not None and wk >= value
@@ -78,9 +108,8 @@ def is_postseason(sport: str, season: int, period: str) -> bool:
         d = _dt.date.fromisoformat(str(period))
     except (TypeError, ValueError):
         return False
-    month, day = value
-    start = _dt.date(season + (1 if next_year else 0), month, day)
-    return d >= start
+    start = post_start(sport, season)
+    return start is not None and d >= start
 
 
 def _matchups(sport: str, rows) -> list[dict]:

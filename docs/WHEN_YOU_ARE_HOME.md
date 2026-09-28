@@ -76,6 +76,15 @@ cd /srv/qellys && sudo -u qellys python3 lossaudit.py
 Also useful: `--sport nfl` for one league, `--since 2026-09-01` for a
 window.
 
+**M5. The MLB board on an off day, and the standings (2026-09-28,
+read-only, seconds).** Prints the board's date and `upcoming` stamp, the
+standings file's season, source and note, the last MLB final ingested,
+and what the league's calendar says. Paste it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
+```
+
 ---
 
 ## PREDICTION MARKETS — 2026-09-26 (read-only, a minute)

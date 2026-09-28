@@ -106,6 +106,20 @@ def build(sport: str, season: int | None = None,
             season += 1
     start, _ = window_of(sport, season)
     waiting = day < start
+    # WHEN THE POSTSEASON STARTS, from the league (engine/playoffs.POST_START):
+    # the constant was one year's date, and a Wild Card opener filed a day
+    # early counts in the regular-season table and is missing from the
+    # bracket. Unreachable means the constant stands, said in the log.
+    if sport == "mlb":
+        try:
+            from engine.mlb.sources.mlbstats import season_dates
+            first = (season_dates(season) or {}).get("post_start")
+            if first:
+                playoffs.set_post_start("mlb", season, first)
+                print(f"MLB {season}: postseason from {first} (league calendar).")
+        except Exception as exc:                                # noqa: BLE001
+            print(f"MLB {season}: postseason start from the constant "
+                  f"({playoffs.post_start('mlb', season)}) — calendar unreachable: {exc}")
     conn = connect()
     try:
         confs = cfb_conferences() if sport == "cfb" else None

@@ -27,6 +27,10 @@ from engine import bookvig
 from engine.rules import RuleConfig
 from engine import stagetime as _stg
 
+#: How far past a blank day the build looks for the next slate: the gaps
+#: between postseason rounds run to three days, the All-Star break to four.
+MLB_LOOKAHEAD_DAYS = 5
+
 
 def _shift_day(date: str, days: int) -> str:
     """YYYY-MM-DD ± n days. String arithmetic on dates is how the --stuck
@@ -86,6 +90,38 @@ def main() -> None:
         print(exc)
         sys.exit(2)
     _stg.stop(_tk)
+
+    # NOTHING TODAY? THE NEXT SLATE. Ethan, 2026-09-28 — the off day
+    # between the regular season and the Wild Card round: "mlb isn't
+    # showing any post season games or anything like that." The college
+    # build has advanced past a blank day since August; baseball built
+    # today alone, so every off day (this one, the gaps between rounds,
+    # the All-Star break) was an empty board. An honestly blank date
+    # moves to the next day the league lists a playable game, up to
+    # MLB_LOOKAHEAD_DAYS out. `args.date` moves with it so the odds, the
+    # tracker and the journal all run on the slate actually built and
+    # picks settle against the right results; `upcoming` on the payload
+    # is what the page's banner reads ("No games today — this is the next
+    # slate"). A window that cannot be read is skipped, never fatal: the
+    # fallback is today's truthful empty board.
+    upcoming = None
+    if not slate.games:
+        from engine.mlb.sources.mlbstats import next_game_day
+        try:
+            nd = next_game_day(args.date, MLB_LOOKAHEAD_DAYS)
+        except DataUnavailable:
+            nd = None
+        if nd:
+            try:
+                nslate = build_live_slate(nd)
+            except DataUnavailable:
+                nslate = None
+            if nslate is not None and nslate.games:
+                ahead = (datetime.date.fromisoformat(nd) - datetime.date.fromisoformat(args.date)).days
+                print(f"MLB: nothing on {args.date} — building the next slate, {nd} "
+                      f"({len(nslate.games)} game(s)).")
+                upcoming = {"date": nd, "days_ahead": ahead, "built_for": args.date}
+                slate, args.date = nslate, nd
 
     # Overlay live scores / inning state.
     from engine.mlb.sources.live import attach_live
@@ -461,6 +497,8 @@ def main() -> None:
 
     with _stg.stage("model (run_mlb_slate)"):
         result = run_mlb_slate(slate, config, il_map=il_map)
+        if upcoming:
+            result["upcoming"] = upcoming
 
     # THE MATCHUP SCAN (engine/mlb/scan): a tale of the tape per game and a
     # read on every hitter and starter — could shine, could struggle,

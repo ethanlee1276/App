@@ -487,6 +487,7 @@ def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
 PRUNABLE_CACHE_PREFIXES = (
     "mlb_box_", "mlb_line_", "mlb_live_", "mlb_schedule_", "mlb_teamsched_",
     "mlb_results_", "mlb_tx_", "mlb_log_", "mlb_person_", "mlb_splits_",
+    "mlb_season_",
     "mlb_pbp_", "mlb_roster_", "mlb_pensched_", "mlb_watchsched_",
     "standings_mlb_",
     "nba_box_", "wnba_box_", "wnba_schedule_",

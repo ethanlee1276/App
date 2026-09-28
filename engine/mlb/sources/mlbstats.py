@@ -554,6 +554,44 @@ def fetch_schedule(start: str, end: str) -> dict:
     return data
 
 
+#: The stats API's names for a season's four dates, and ours.
+_SEASON_DATES = (("regular_start", "regularSeasonStartDate"), ("regular_end", "regularSeasonEndDate"),
+                 ("post_start", "postSeasonStartDate"), ("post_end", "postSeasonEndDate"))
+
+
+def parse_season_dates(payload: dict) -> dict:
+    """``{"regular_start", "regular_end", "post_start", "post_end"}`` (ISO
+    dates, or None) from a ``/seasons`` payload."""
+    s = ((payload or {}).get("seasons") or [{}])[0] or {}
+    return {ours: (str(s.get(theirs))[:10] if s.get(theirs) else None) for ours, theirs in _SEASON_DATES}
+
+
+def season_dates(season: int, ttl: int = 86400) -> dict:
+    """When this season's regular season and postseason begin and end,
+    from the league's own calendar (``/api/v1/seasons``). Cached a day.
+    Raises DataUnavailable when the host cannot be reached and nothing
+    is cached — the caller keeps its fallback."""
+    url = f"{STATS_BASE}/seasons?sportId=1&season={int(season)}"
+    return parse_season_dates(_get_json(url, f"mlb_season_{int(season)}.json", ttl=ttl))
+
+
+def next_game_day(date: str, days: int = 5) -> str | None:
+    """The first day after ``date`` (within ``days``) on which the league
+    lists a game that is not postponed or cancelled — or None. One cached
+    request for the whole window. Raises DataUnavailable when the host
+    cannot be reached and nothing is cached."""
+    import datetime as _d
+    d0 = _d.date.fromisoformat(date[:10])
+    start, end = (d0 + _d.timedelta(days=1)).isoformat(), (d0 + _d.timedelta(days=max(1, days))).isoformat()
+    url = f"{STATS_BASE}/schedule?sportId=1&startDate={start}&endDate={end}"
+    data = _get_json(url, f"mlb_schedule_{start}_{end}.json", ttl=900)
+    for day in sorted(data.get("dates") or [], key=lambda x: str(x.get("date") or "")):
+        for g in day.get("games") or []:
+            if ((g.get("status") or {}).get("codedGameState") or "") not in DEAD_GAME_STATES:
+                return str(day.get("date") or "")[:10] or None
+    return None
+
+
 def fetch_results(start: str, end: str) -> list[dict]:
     """Final scores for every completed game between two dates (inclusive).
 
