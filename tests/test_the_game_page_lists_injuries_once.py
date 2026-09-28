@@ -29,8 +29,19 @@ def test_the_plan_step_is_built_from_the_scan_s_injuries():
 
 def test_the_scan_drops_its_card_when_the_plan_is_on_the_page():
     fn = _fn("matchupScanHTML")
-    assert re.search(r"const inj = gamePlanFor\(g\) \? \[\] : \(scan\.injuries \|\| \[\]\);", fn)
+    assert "const planOn = !!gamePlanFor(g);" in fn
+    assert "const inj = planOn ? [] : (scan.injuries || []);" in fn
     assert "Injuries and what they open" in fn, "the card itself stays for a page with no plan"
+
+
+def test_the_mismatches_are_listed_once_too():
+    """The plan's matchup step says the scan's top three edges; the scan's
+    box keeps only the ones after them when the plan is on the page."""
+    i = PLAN.index("def matchup_lines(")
+    assert '(scan.get("edges") or [])[:3]' in PLAN[i:i + 600]
+    fn = _fn("matchupScanHTML")
+    assert "const edges = (scan.edges || []).slice(planOn ? 3 : 0, 5);" in fn
+    assert '${planOn ? "More mismatches" : "Biggest mismatches"}' in fn
 
 
 if __name__ == "__main__":

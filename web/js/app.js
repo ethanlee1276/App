@@ -12778,13 +12778,18 @@ function matchupScanHTML(g) {
   const locked = !reads && d.locked && d.locked.scan_reads;
   const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
   const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, the big number is ${Math.round(u0.blend * 100)}% this season and ${100 - Math.round(u0.blend * 100)}% last season — the mix that best predicted the rest of a season when we tested it. “This season” under it is this season on its own.` : "";
-  const edges = (scan.edges || []).slice(0, 5);
+  /* ONE LIST OF MISMATCHES. The game plan's "The matchup" step says the
+     scan's top three edges (engine/gameplan.matchup_lines); with a plan on
+     the page this box keeps only the ones after them — Ethan, 2026-09-28:
+     "remove the other duplicate the same way." */
+  const planOn = !!gamePlanFor(g);
+  const edges = (scan.edges || []).slice(planOn ? 3 : 0, 5);
   /* ONE INJURY LIST. The game plan's "Who is out, and where the work goes"
      step is built from these same rows (engine/gameplan.absences), so with
      a plan on the page this card was the list twice — Ethan, 2026-09-28,
      PHI@CHI: "We show the injuries twice." Without a plan (locked, or none
      built) the scan keeps its own. */
-  const inj = gamePlanFor(g) ? [] : (scan.injuries || []);
+  const inj = planOn ? [] : (scan.injuries || []);
   const players = (reads && reads.players) || [];
   const micro = (reads && reads.microscope) || [];
   const n = scanTeams(scan);
@@ -12802,7 +12807,7 @@ function matchupScanHTML(g) {
         Treated as out: no read for ${scan.pulled.length === 1 ? "him" : "them"} below, until the report or the books say otherwise.</p>` : ""}
     <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
       : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
-    ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">Biggest mismatches</div>
+    ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">${planOn ? "More mismatches" : "Biggest mismatches"}</div>
       <ul>${edges.map((e) => { const [who, what] = scanEdgeLine(e);
         return `<li class="${e.gap > 0 ? "off" : "def"}"><b>${escapeHtml(who)}</b> — ${escapeHtml(what)}</li>`; }).join("")}</ul></div>` : ""}
     ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
