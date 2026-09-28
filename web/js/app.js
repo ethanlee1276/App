@@ -15536,8 +15536,36 @@ async function recCalDayOpen(date, curve, recent) {
     rows = (recent || []).filter((b) => b.date === date);
     note = `<p class="rail-quiet">The day’s full list could not be fetched — these are the rows this page already holds.</p>`;
   }
-  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}
-    <div class="rec-list">${rows.map(recSettledRow).join("") || panelEmpty("No settled bets on this day in this scope.")}</div>`;
+  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}${recCalDayBodyHTML(rows)}`;
+}
+
+/* A DAY OF 216 BETS IS NOT A PAGE (Ethan, 2026-09-28: "have a little pull
+   down menu or sum so they don't take up the whole page"). The day reads
+   as a summary — each league and market with its record and units, the
+   biggest swing first — and the bets themselves fold under it, a tap
+   away. A day of a handful shows them as they are. */
+const REC_DAY_OPEN_MAX = 6;
+function recCalDayBodyHTML(rows) {
+  if (!rows.length) return panelEmpty("No settled bets on this day in this scope.");
+  const list = rows.map(recSettledRow);
+  if (rows.length <= REC_DAY_OPEN_MAX) return `<div class="rec-list">${list.join("")}</div>`;
+  const groups = new Map();
+  rows.forEach((r) => {
+    const k = `${String(r.sport || "").toUpperCase()} · ${marketWord(r.market)}`;
+    const g = groups.get(k) || { k, w: 0, l: 0, p: 0, u: 0 };
+    if (r.status === "won") g.w += 1; else if (r.status === "lost") g.l += 1; else g.p += 1;
+    g.u += Number(r.pnl_units) || 0;
+    groups.set(k, g);
+  });
+  const sum = [...groups.values()].sort((a, b) => Math.abs(b.u) - Math.abs(a.u));
+  return `<div class="rc-sum" role="list">${sum.map((g) => `<div class="rc-sum-row" role="listitem">
+      <span class="rc-sum-k">${escapeHtml(g.k)}</span>
+      <span class="rc-sum-wl">${g.w}-${g.l}${g.p ? `-${g.p}` : ""}</span>
+      <b class="rc-sum-u ${toneOf(g.u)}">${recCalU(g.u)}u</b></div>`).join("")}</div>
+    <details class="row-fold rc-bets">
+      <summary><span class="row-fold-more">Show the day’s ${rows.length} bets</span><span class="row-fold-less">Hide the bets</span>
+        <span class="row-fold-chev" aria-hidden="true"></span></summary>
+      <div class="row-fold-body rec-list">${list.join("")}</div></details>`;
 }
 
 function raChips(avail, rk) {
@@ -31388,7 +31416,10 @@ async function openTeam(sport, team, vs, tab) {
   // opens on Home, or on Versus when it was opened against someone.
   _teamState = { sport, team, vs: vs || "",
                  tab: tab || (same ? _teamState.tab : (vs ? "vs" : "home")),
-                 data: same ? _teamState.data : null, loading: true };
+                 data: same ? _teamState.data : null, loading: true,
+                 // The Schedule tab's season chip and the seasons it has read.
+                 schedSeason: same ? _teamState.schedSeason : null,
+                 schedCache: same ? (_teamState.schedCache || {}) : {} };
   // `_switchViewNow` draws the page and writes the address bar — see the
   // `name === "team"` branch there, and the comment on why it cannot be
   // done from here.
@@ -31824,8 +31855,18 @@ function teamGameResult(g) {
   const cls = g.result === "W" ? "tm-w" : g.result === "L" ? "tm-l" : "";
   return `<b class="${cls}">${g.result}</b> ${Math.round(g.points_for)}-${Math.round(g.points_against)}`;
 }
+/* The NFL's playoff rounds, by the week number nflverse files them under
+   (the 18-week seasons, 2021 on). */
+const NFL_ROUNDS = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };
 function teamGameWhen(d, g) {
-  if (d.sport === "nfl" || d.sport === "cfb") return g.period ? `Wk ${g.period}` : "";
+  if (d.sport === "nfl" || d.sport === "cfb") {
+    // Stored as "001" so text sorts as numbers; read as "Wk 1".
+    const wk = Number(g.period);
+    if (!g.period) return "";
+    if (!Number.isFinite(wk)) return String(g.period);
+    if (d.sport === "nfl" && Number(g.season) >= 2021 && NFL_ROUNDS[wk]) return NFL_ROUNDS[wk];
+    return `Wk ${wk}`;
+  }
   return g.date ? String(g.date).slice(5).replace("-", "/") : "";
 }
 function teamGameDate(g) {
@@ -31921,16 +31962,76 @@ function teamScheduleRowHTML(d, g, p) {
   </button>`;
 }
 
+/* EVERY SEASON ON FILE (Ethan, 2026-09-28, on the Bears' schedule:
+   "Since we have 2021-2026 stats, we should be able too cycle from 2021 -
+   2026 here"). The answer carries `seasons`; a chip fetches that one
+   season's schedule alone (`only=schedule`) and keeps it, so flipping
+   back is instant. The current season stays `d.schedule` — the Home tab's
+   strip reads it. */
+function teamSchedFor(d) {
+  const st = _teamState;
+  const pick = st.schedSeason;
+  if (pick && (st.schedCache || {})[pick]) return st.schedCache[pick];
+  return d.schedule || {};
+}
+
+async function teamLoadSeason(season) {
+  const st = _teamState;
+  const d = st.data || {};
+  const cur = (d.schedule || {}).season;
+  st.schedCache = st.schedCache || {};
+  if (!season || Number(season) === Number(cur)) {
+    st.schedSeason = null;
+    return renderTeamPage();
+  }
+  st.schedSeason = Number(season);
+  if (st.schedCache[season]) return renderTeamPage();
+  st.schedLoading = Number(season);
+  renderTeamPage();
+  const who = [st.sport, st.team];
+  let out = null;
+  try {
+    const r = await fetch(`/api/team?sport=${encodeURIComponent(st.sport)}`
+      + `&team=${encodeURIComponent(st.team)}&season=${encodeURIComponent(season)}&only=schedule`);
+    const body = await r.json();
+    if (r.ok) out = body.schedule || null;
+  } catch (e) { out = null; }
+  // The same identity guard as the page's own load: a tap on another team
+  // while this was in flight must not draw into it.
+  if (_teamState !== st || st.sport !== who[0] || st.team !== who[1]) return;
+  st.schedLoading = null;
+  st.schedCache[season] = out || { season: Number(season), games: [], failed: true };
+  renderTeamPage();
+}
+
+function teamSeasonChipsHTML(d, sch) {
+  const seasons = ((d.schedule || {}).seasons || []).slice();
+  if (seasons.length < 2) return "";
+  const on = Number(sch.season);
+  return `<div class="std-chips tm-seasons" role="group" aria-label="Season">${seasons.map((y) =>
+    `<button type="button" class="al-cat${Number(y) === on ? " on" : ""}" aria-pressed="${Number(y) === on}"
+      data-team-season="${escapeAttr(String(y))}">${escapeHtml(String(y))}</button>`).join("")}</div>`;
+}
+
 function teamScheduleHTML(d, p) {
-  const sch = d.schedule || {};
+  const sch = teamSchedFor(d);
   const games = sch.games || [];
-  if (!games.length) return teamEmptyTab("No schedule yet", "No schedule on file for this team yet.");
+  const chips = teamSeasonChipsHTML(d, _teamState.schedLoading ? { season: _teamState.schedLoading } : sch);
+  if (_teamState.schedLoading) {
+    return `${chips}<p class="loading">Reading ${escapeHtml(String(_teamState.schedLoading))}…</p>`;
+  }
+  if (!games.length) {
+    return chips + teamEmptyTab("No schedule yet", sch.failed
+      ? `Couldn’t read ${sch.season} just now — tap it again.`
+      : `No ${sch.season ? `${sch.season} ` : ""}schedule on file for this team yet.`);
+  }
   const done = games.filter((g) => g.final);
   const w = done.filter((g) => g.result === "W").length, l = done.filter((g) => g.result === "L").length;
-  return `<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
-      <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games played;
+  const past = Number(sch.season) !== Number((d.schedule || {}).season);
+  return `${chips}<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
+      <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games ${past ? "played that season" : "played"};
       the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own;
-      the game on tonight’s board opens its game page, every other row opens the opponent.</span></div>
+      ${past ? "each row opens the opponent." : "the game on tonight’s board opens its game page, every other row opens the opponent."}</span></div>
     <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g, p)).join("")}</div>`;
 }
 
@@ -32042,6 +32143,8 @@ document.addEventListener("click", (e) => {
     if (strip && strip.getBoundingClientRect().top < 0) strip.scrollIntoView({ block: "start" });
     return;
   }
+  const seasonBtn = e.target.closest && e.target.closest("[data-team-season]");
+  if (seasonBtn) return teamLoadSeason(Number(seasonBtn.dataset.teamSeason));
   const more = e.target.closest && e.target.closest("[data-team-more]");
   if (more) {
     _teamOppAll = more.dataset.teamMore === "1";

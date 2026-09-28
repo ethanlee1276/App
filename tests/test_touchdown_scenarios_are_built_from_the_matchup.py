@@ -94,13 +94,16 @@ def test_the_journal_keeps_the_bucket_apart():
     conn = ledger.connect(":memory:")
     rows = [{"kind": "td", "player": "Chris Olave", "team": "NO", "opponent": "DET", "market": "anytime_td",
              "side": "YES", "line": 0.5, "odds": 165, "book": "DraftKings", "model_prob": 0.38,
-             "game_date": "2026-09-28", "kickoff": "2026-09-28T17:00:00Z"}]
-    n = ledger.log_most_likely(conn, {"sport": "nfl", "date": "2026-09-28", "most_likely": rows},
+             # A kickoff that never passes: journaling refuses a game already
+             # under way, and this fixture's first date (2026-09-28, 17:00Z)
+             # did exactly that at 1 PM that day.
+             "game_date": "2099-09-28", "kickoff": "2099-09-28T17:00:00Z"}]
+    n = ledger.log_most_likely(conn, {"sport": "nfl", "date": "2099-09-28", "most_likely": rows},
                                category="td_scenario", grade_label="Scenario")
     assert n == 1
     got = conn.execute("SELECT category, grade, stake_dollars FROM bets").fetchall()
     assert [tuple(r) for r in got] == [("td_scenario", "Scenario", 0.0)], [tuple(r) for r in got]
-    assert ledger.log_most_likely(conn, {"sport": "nfl", "date": "2026-09-28", "most_likely": rows},
+    assert ledger.log_most_likely(conn, {"sport": "nfl", "date": "2099-09-28", "most_likely": rows},
                                   category="td_scenario", grade_label="Scenario") == 0, "journaled once"
 
 

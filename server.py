@@ -773,13 +773,14 @@ def _squad_or_empty(teamdex, conn, sport, team):
                 "error": "player logs unavailable"}
 
 
-def _schedule_or_empty(teamdex, conn, sport, team):
+def _schedule_or_empty(teamdex, conn, sport, team, season=None):
     """`teamdex.season_schedule`, or an empty season — the same guard as
-    `_squad_or_empty`, and a module function for the same reason."""
+    `_squad_or_empty`, and a module function for the same reason.
+    ``season`` picks one of the seasons on file (the page's chips)."""
     try:
-        return teamdex.season_schedule(conn, sport, team)
+        return teamdex.season_schedule(conn, sport, team, season)
     except Exception:                                        # noqa: BLE001
-        return {"season": None, "games": []}
+        return {"season": season, "seasons": [], "games": []}
 
 
 def _depth_chart(sport, team):
@@ -3387,6 +3388,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         sport = (q.get("sport") or [""])[0].lower()[:5]
         name = (q.get("team") or [""])[0][:80]
         opp = (q.get("vs") or [""])[0][:80]
+        # ONE SEASON'S SCHEDULE, AND NOTHING ELSE (the Schedule tab's
+        # season chips): the rest of the page is already drawn.
+        season_q = (q.get("season") or [""])[0][:4]
+        season = int(season_q) if _re.fullmatch(r"(19|20)\d\d", season_q or "") else None
+        only = (q.get("only") or [""])[0][:12]
         if not _re.fullmatch(r"[a-z]{2,5}", sport or ""):
             return self._send(400, b'{"error":"unknown sport"}', ".json")
         if not name.strip():
@@ -3422,6 +3428,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                                      for t in hits],
                     }).encode(), ".json")
                 team = hits[0]
+                if only == "schedule":
+                    return self._send(200, json.dumps({
+                        "sport": sport, "team": team,
+                        "schedule": _schedule_or_empty(teamdex, conn, sport, team, season),
+                    }).encode(), ".json")
                 out = {"sport": sport, "team": team,
                        "name": teamdex.label(team, sport),
                        "profile": teamdex.profile(conn, sport, team),

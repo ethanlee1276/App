@@ -88,6 +88,34 @@ def test_the_sport_scope_narrows_and_an_empty_day_is_empty():
         "the book is a parameter, so a likely calendar could be built the same way"
 
 
+def test_an_nfl_day_filed_under_its_week_label_is_found_by_its_game_day():
+    """Ethan's screenshot, 2026-09-28: Sun, Sep 27 read "131-85 · +2.4u" and
+    its list said "No settled bets on this day". NFL rows carry `date`
+    "2026-W03" and the game day in `game_day`; the cell groups by the game
+    day, so the list has to look it up the same way."""
+    conn = _ledger()
+    conn.execute("INSERT INTO bets (ts,sport,date,game_day,player,market,side,line,odds,status,category,"
+                 "stake_units,pnl_units) VALUES ('t','nfl','2026-W03','2026-09-27','W','rec_yds','OVER',"
+                 "40.5,-110,'won','main',1.0,0.91)")
+    conn.commit()
+    curve = {p["date"]: p for p in L.pnl_curve(conn, sport="nfl")}
+    assert curve["2026-09-27"]["n"] == 1
+    assert [r["player"] for r in L.settled_on(conn, "2026-09-27", sport="nfl")] == ["W"]
+    assert L.settled_on(conn, "2026-W03") == [], "the week label is not a calendar day"
+
+
+def test_a_busy_day_reads_as_a_summary_with_its_bets_folded():
+    """ "have a little pull down menu or sum so they don't take up the whole
+    page" (Ethan, 2026-09-28)."""
+    body = _fn("recCalDayBodyHTML")
+    assert "if (rows.length <= REC_DAY_OPEN_MAX) return" in body, "a handful shows as they are"
+    assert "${String(r.sport || \"\").toUpperCase()} · ${marketWord(r.market)}" in body
+    assert "sort((a, b) => Math.abs(b.u) - Math.abs(a.u))" in body, "the biggest swing first"
+    assert '<details class="row-fold rc-bets">' in body and "Show the day’s ${rows.length} bets" in body
+    for sel in (".rc-sum-row", ".rc-sum-u", ".rc-bets"):
+        assert sel in CSS, sel
+
+
 def test_the_curve_and_the_day_agree():
     """The cell's number is the curve's day_u; the rows behind it must sum
     to the same thing, or the calendar contradicts its own tap."""
@@ -220,7 +248,9 @@ def test_the_record_page_draws_it_first_and_scopes_the_tap():
     assert "/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}" in day
     assert "if (_recCalDay !== date) return;" in day, "a slower fetch never overwrites a later tap"
     assert "rows = (recent || []).filter((b) => b.date === date);" in day, "a static host still shows what it holds"
-    assert "rows.map(recSettledRow)" in day, "the same row the receipts draw"
+    assert "${recCalDayBodyHTML(rows)}" in day
+    body = _fn("recCalDayBodyHTML")
+    assert "rows.map(recSettledRow)" in body, "the same row the receipts draw"
     assert "these are the rows this page already holds" in day
     for sel in (".rc-grid", ".rc-day.pos.rc-3", ".rc-day.neg.rc-1", ".rc-day.open", ".rc-foot", ".rc-dayhead"):
         assert sel in CSS, sel

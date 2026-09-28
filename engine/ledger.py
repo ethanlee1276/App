@@ -5864,11 +5864,16 @@ def settled_on(conn, date: str, sport: str | None = None,
     headline. Each row carries the side-aware CLV and process grade the
     receipts carry, so one cell's list reads like the list below it.
     """
+    # THE CELL'S OWN DAY. The cells are `pnl_curve`'s days, and it groups
+    # by `day_expr()` — the game day, falling back to `date`. This matched
+    # `date` alone, which for the NFL is a week label ("2026-W03"), so a
+    # Sunday cell read "131-85 · +2.4u" and its list said "No settled bets
+    # on this day" (Ethan's screenshot, 2026-09-28).
     marks = ",".join("?" * len(categories))
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
          "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
          "why_tag, why_note FROM bets "
-         "WHERE status IN ('won','lost','push') AND date=? "
+         f"WHERE status IN ('won','lost','push') AND {day_expr()}=? "
          f"AND category IN ({marks}) AND stake_units > 0")
     args: list = [date, *categories]
     if sport:

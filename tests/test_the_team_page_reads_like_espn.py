@@ -64,7 +64,8 @@ def test_the_schedule_is_this_season_played_and_to_come_in_order():
     assert won["final"] and won["result"] == "W" and won["opponent"] == "DET" and won["line"] == -2.5
     assert away_win["line"] == -3.0, "the line is the Packers' own when they are the away side"
     assert nxt["final"] is False and nxt["opponent"] == "DAL" and "result" not in nxt
-    assert T.season_schedule(_conn(), "nfl", "NOPE") == {"season": None, "games": []}
+    # `seasons` since 2026-09-28: the Schedule tab's chips (test_the_schedule_cycles_its_seasons).
+    assert T.season_schedule(_conn(), "nfl", "NOPE") == {"season": None, "seasons": [], "games": []}
 
 
 def test_the_published_depth_chart_reads_in_depth_order_from_the_newest_snapshot():

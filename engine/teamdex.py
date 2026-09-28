@@ -396,20 +396,28 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
     The season is the newest one this team has any game in, so a
     schedule loaded before Week 1 reads as this season rather than last.
     """
+    # EVERY SEASON ON FILE (Ethan, 2026-09-28, on the Bears' schedule: "Since
+    # we have 2021-2026 stats, we should be able too cycle from 2021 - 2026
+    # here"). The page draws them as chips; newest first.
+    try:
+        seasons = [int(r[0]) for r in conn.execute(
+            "SELECT DISTINCT season FROM games WHERE sport=? AND (home=? OR away=?) "
+            "AND season IS NOT NULL ORDER BY season DESC", (sport, team, team)).fetchall()]
+    except Exception:                                         # noqa: BLE001
+        seasons = []
     try:
         if season is None:
-            row = conn.execute(
-                "SELECT MAX(season) FROM games WHERE sport=? AND (home=? OR away=?)",
-                (sport, team, team)).fetchone()
-            season = row[0] if row and row[0] is not None else None
+            season = seasons[0] if seasons else None
+        elif seasons and int(season) not in seasons:
+            return {"season": int(season), "seasons": seasons, "games": []}
         if season is None:
-            return {"season": None, "games": []}
+            return {"season": None, "seasons": seasons, "games": []}
         rows = conn.execute(
             "SELECT season, period, date, home, away, home_score, away_score, "
             "spread, total FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
             (sport, season, team, team)).fetchall()
     except Exception:                                         # noqa: BLE001
-        return {"season": season, "games": []}
+        return {"season": season, "seasons": seasons, "games": []}
     games = []
     for r in rows:
         g = dict(r)
@@ -420,6 +428,12 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
             row.update(opponent=opp, final=True)
         else:
             spread = _num(g.get("spread"))
+            # NO LINE YET, NOT A PICK'EM. The schedule ingest stores a blank
+            # spread_line as 0.0 (engine/ingest), so a week months away read
+            # "line 0" — three Bears games in a row, 2026-09-28. A real
+            # pick'em that far out is rarer than a missing line.
+            if spread == 0:
+                spread = None
             row = {"season": g["season"], "period": g["period"], "date": g["date"],
                    "home": g["home"], "away": g["away"], "at_home": at_home,
                    "opponent": opp, "final": False,
@@ -427,7 +441,7 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
                    "total": _num(g.get("total"))}
         games.append(row)
     games.sort(key=lambda x: (x.get("date") or "", _period_key(x.get("period"))))
-    return {"season": season, "games": games}
+    return {"season": season, "seasons": seasons, "games": games}
 
 
 #: WHICH LINE LEADS A POSITION. A quarterback's row is about passing

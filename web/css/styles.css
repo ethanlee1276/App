@@ -8142,6 +8142,15 @@ button.rc-day b { font-size: var(--fs-sm); }
 .rc-day.open { border-color: var(--brand-2); }
 .rc-foot { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-mute); }
 .rc-dayhead { margin: 12px 0 6px; font-size: var(--fs-sm); color: var(--text-mute); }
+/* The day's summary: a line per league and market, the bets folded under it. */
+.rc-sum { display: grid; gap: 2px; margin: 4px 0 8px; }
+.rc-sum-row { display: grid; grid-template-columns: 1fr auto 4.5em; gap: 10px; align-items: baseline;
+  padding: 6px 2px; border-bottom: var(--hairline) solid var(--border-soft); font-size: var(--fs-sm); }
+.rc-sum-row:last-child { border-bottom: 0; }
+.rc-sum-k { color: var(--text-dim); min-width: 0; overflow-wrap: anywhere; }
+.rc-sum-wl { color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.rc-sum-u { text-align: right; font-variant-numeric: tabular-nums; }
+.rc-bets { margin-top: 4px; }
 .ra-main .rec-chart { margin-bottom: 0; }
 /* The 2026-08-17 declutter: the tile stacks that repeated the scoreboard
    became two ledger lines — every number once, in a sentence. */
