@@ -1615,10 +1615,33 @@ def relock_potd(payload: dict, most_likely=None, conn=None,
     try:
         if own:
             conn = read_only()
-        today = str(day or datetime.datetime.utcnow().strftime("%Y-%m-%d"))
-        locked = locked_potd_picks(conn, today, strict=True)
+        # THE LOCK IS SHOWN ON ITS GAME'S DAY, EASTERN, AND NO OTHER.
+        # Ethan, 2026-09-29: Monday night's NFL pick (PHI@CHI under,
+        # journaled 00:06 UTC — Monday 8:06 PM Eastern) was still the card
+        # all of Tuesday, game long over. The lock was looked up by the
+        # journal's UTC date, which for an evening pick in the East is
+        # the next day. Now: the Eastern day's picks are journaled on that
+        # UTC date or the one after, and only a pick whose game is TODAY
+        # (Eastern) is put back on the card.
+        if (payload or {}).get("off_day"):
+            return dict(payload or {})
+        today = str(day or _potd.slate_day())[:10]
+        try:
+            nxt = (datetime.date.fromisoformat(today)
+                   + datetime.timedelta(days=1)).isoformat()
+        except ValueError:
+            nxt = today
         sport = str((payload or {}).get("sport") or "")
-        entry = locked.get(sport)
+        entry = None
+        for utc_day in dict.fromkeys((today, nxt)):
+            got = locked_potd_picks(conn, utc_day, strict=True).get(sport)
+            if not got:
+                continue
+            gday = str(got.get("game_day") or "")[:10]
+            if gday and gday != today:
+                continue       # another day's pick — its game is not today
+            entry = got
+            break
         if not entry:
             return dict(payload or {})
         return _potd.relock(payload, most_likely, entry["_key"],
@@ -1696,13 +1719,21 @@ def locked_potd_picks(conn, day: str, strict: bool = False) -> dict:
     try:
         rows = conn.execute(
             "SELECT sport, player, market, side, line, book, odds, "
-            "hit_prob, edge, projection, date, ts FROM bets "
+            "hit_prob, edge, projection, date, ts, game_day FROM bets "
             "WHERE category=? AND substr(ts,1,10)=? ORDER BY ts",
             (POTD_CATEGORY, str(day or "")[:10])).fetchall()
     except Exception:                                         # noqa: BLE001
-        if strict:
-            raise
-        return {}
+        # A ledger from before `game_day` existed: the same query without it.
+        try:
+            rows = conn.execute(
+                "SELECT sport, player, market, side, line, book, odds, "
+                "hit_prob, edge, projection, date, ts, NULL FROM bets "
+                "WHERE category=? AND substr(ts,1,10)=? ORDER BY ts",
+                (POTD_CATEGORY, str(day or "")[:10])).fetchall()
+        except Exception:                                     # noqa: BLE001
+            if strict:
+                raise
+            return {}
     for r in rows:
         g = (lambda k, i: r[k] if hasattr(r, "keys") else r[i])
         sport = str(g("sport", 0) or "")
@@ -1725,6 +1756,10 @@ def locked_potd_picks(conn, day: str, strict: bool = False) -> dict:
             "projection": g("projection", 9),
             "game_date": str(g("date", 10) or ""),
             "locked_at": str(g("ts", 11) or ""),
+            # The calendar day the GAME is played (Eastern) — `date` is a
+            # week label for football. `relock_potd` shows a lock only on
+            # its game's day.
+            "game_day": str((r[12] if not hasattr(r, "keys") else r["game_day"]) or ""),
             # The tuple the lock is keyed on, carried so the two readers
             # cannot derive it two different ways.
             "_key": (str(g("player", 1) or ""), str(g("market", 2) or ""),

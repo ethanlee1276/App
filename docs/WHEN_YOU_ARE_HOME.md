@@ -15,6 +15,35 @@ as they are done.
 
 ---
 
+## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")
+
+**M9. The stuck MLB bets (read-only, seconds).** Nine MLB bets from
+2026-09-22 (eight staked Most Likely, one edge) are still open a week
+later. This groups every open bet by what is blocking it and names the
+fix. Paste it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --why-open 2>&1 | tee ~/whyopen.txt
+```
+
+**M10. Repair the NFL closing lines — dry run first (read-only).** Every
+settled NFL prop's close rebuilt from pregame prices only (the old ones
+were in-game lines). Lists every change; writes nothing:
+
+```
+cd /srv/qellys && sudo -u qellys python3 closerepair.py 2>&1 | tee ~/closerepair.txt
+```
+
+**M11. Then write it** (you said yes, 2026-09-29). Changes only the
+closing line and closing price on those rows — never a grade. Saves every
+old value to `data/closerepair_<time>.json` first:
+
+```
+cd /srv/qellys && sudo -u qellys python3 closerepair.py --apply
+```
+
+---
+
 ## GO OVER TOGETHER — saved 2026-09-29 (Ethan: "save everything for when I'm home so we can go over it")
 
 ### Step 1. One paste, read-only, a minute. Paste the output back.

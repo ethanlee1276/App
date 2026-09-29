@@ -33,6 +33,12 @@ os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import potd                                       # noqa: E402
 
+# These tests use the NFL as a stand-in league for the selector, with games
+# dated on whatever day the suite runs (or a fixed Wednesday). Which days
+# the NFL names a pick is its own rule (potd.PICK_WEEKDAYS, 2026-09-29),
+# pinned in tests/test_the_nfl_pick_is_thursday_sunday_monday_only.py.
+potd.PICK_WEEKDAYS = {}
+
 #: A Wednesday afternoon. NAIVE UTC, which is what the builds pass —
 #: `rules.clock_says_started` subtracts it from a naive kickoff instant
 #: and raises on an aware one, so a test handing it an aware stamp would

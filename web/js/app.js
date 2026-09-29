@@ -2777,6 +2777,13 @@ async function renderPickOfTheDay() {
   if (!got || typeof got !== "object" || !Object.keys(got).length) {
     host.innerHTML = ""; return;
   }
+  /* NOT A PICK DAY FOR THIS LEAGUE (Ethan, 2026-09-29: the NFL's picks
+     are Monday, Thursday and Sunday only — engine/potd.PICK_WEEKDAYS).
+     One line saying when the next one is, never an old pick. */
+  if (got.off_day) {
+    host.innerHTML = `<p class="list-note potd-offday" style="margin:0 0 12px">${icon('clock', 12)} ${escapeHtml(String(got.note || ""))}</p>`;
+    return;
+  }
   const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
   const pick = got.pick;
   const below = String((pick || {}).below_bar || "");

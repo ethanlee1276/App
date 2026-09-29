@@ -133,6 +133,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
     judged = {
         # names its failure (this file holds them)
         "_snapshot_closes", "_settled_props_with_close",
+        # prints "Pick of the Day lock not applied (<error>)" and returns
+        # the card unchanged — the build's own choice, not a blank card
+        # (the sweep caught it when its lookup grew a loop, 2026-09-29)
+        "relock_potd",
         # already names the ACTUAL reason in its own return value
         "_week_day_for", "_reason", "_with_records", "_hypothesis_lab_block",
         # telemetry whose caller reports the miss (lineledger.record_note)

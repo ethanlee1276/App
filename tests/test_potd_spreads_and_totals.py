@@ -46,6 +46,12 @@ from _slate_clock import kickoff as _kickoff                 # noqa: E402  (path
 
 from engine import likely, potd                               # noqa: E402
 
+# These tests use the NFL as a stand-in league for the selector, with games
+# dated on whatever day the suite runs (or a fixed Wednesday). Which days
+# the NFL names a pick is its own rule (potd.PICK_WEEKDAYS, 2026-09-29),
+# pinned in tests/test_the_nfl_pick_is_thursday_sunday_monday_only.py.
+potd.PICK_WEEKDAYS = {}
+
 ET = ZoneInfo("America/New_York")
 
 

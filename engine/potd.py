@@ -574,6 +574,49 @@ POTD_TZ = "America/New_York"
 ANY_DAY = "*any*"
 
 
+#: THE DAYS A LEAGUE NAMES A PICK, by weekday (Monday = 0). Ethan,
+#: 2026-09-29, with Monday night's pick still on the page on Tuesday:
+#: "we should only be showing pick of the days for NFL. Only on Mondays
+#: Thursdays and Sundays." A league not listed picks any day it plays.
+#: A late-season NFL Saturday is not a pick day under this rule — his
+#: call, one tuple to change.
+PICK_WEEKDAYS = {"nfl": (0, 3, 6)}
+_WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                  "Saturday", "Sunday")
+
+
+def off_day(sport: str, today: str) -> dict | None:
+    """``None`` on a day this league names a pick, else what the card
+    says instead: ``{"note", "next_day"}``."""
+    days = PICK_WEEKDAYS.get(str(sport or "").lower())
+    if not days:
+        return None
+    import datetime as _dt
+    try:
+        d = _dt.date.fromisoformat(str(today)[:10])
+    except ValueError:
+        return None
+    if d.weekday() in days:
+        return None
+    ahead = min((w - d.weekday()) % 7 for w in days)
+    nxt = d + _dt.timedelta(days=ahead)
+    league = str(sport).upper()
+    return {"note": (f"No {league} Pick of the Day on a {_WEEKDAY_NAMES[d.weekday()]} — "
+                     f"the {league}'s picks are Thursday, Sunday and Monday. "
+                     f"Next: {_WEEKDAY_NAMES[nxt.weekday()]}."),
+            "next_day": nxt.isoformat()}
+
+
+def _stamp_day(stamp) -> str:
+    """The Eastern calendar day of a card's UTC stamp ("…Z"), or ""."""
+    import datetime as _dt
+    try:
+        t = _dt.datetime.fromisoformat(str(stamp or "").replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    return slate_day(t)
+
+
 def slate_day(now=None) -> str:
     """Today, on the clock the schedule is written in."""
     import datetime as _dt
@@ -1238,7 +1281,10 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
     # so comparing a game's calendar day against it would refuse every
     # row in the league this gate was written for.
     today = slate_day(now)
-    pick, near, census = choose(rows, now, today=today)
+    # NOT A PICK DAY FOR THIS LEAGUE (PICK_WEEKDAYS): no candidate is even
+    # considered, so nothing can be shown, carried or journaled.
+    closed = off_day(sport, today)
+    pick, near, census = (None, None, {}) if closed else choose(rows, now, today=today)
     # THE CLOCK THIS CARD WAS JUDGED ON, read once and taken from `now`
     # when a caller supplied one — the same shape `top_pick` below
     # already uses.
@@ -1283,7 +1329,12 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         "decided_at": stamp,
         "open_candidates": max(0, len(rows) - int(census.get(STARTED, 0))),
     }
-    if pick is not None:
+    if closed:
+        out["pick"] = None
+        out["off_day"] = True
+        out["next_day"] = closed["next_day"]
+        out["note"] = closed["note"]
+    elif pick is not None:
         out["pick"] = _card(pick)
     elif near is not None:
         out["pick"] = _card(near, below=shortfall(near))
@@ -1344,11 +1395,16 @@ def carry(card: dict, prev: dict | None) -> dict:
     """
     if not isinstance(prev, dict) or not prev:
         return card
+    if card.get("off_day"):
+        return card
     # A different day is not this day's judgement at all. `date` is a
     # week label for football, so the comparison is `decided_at`'s
-    # calendar day — the one field both cards state in UTC.
-    if str(prev.get("decided_at") or "")[:10] != str(
-            card.get("decided_at") or "")[:10]:
+    # calendar day — on the EASTERN clock the day's pick is named on.
+    # It compared the UTC dates until 2026-09-29, and a Monday-night NFL
+    # pick decided at 00:06 UTC counted as TUESDAY's: every Tuesday build
+    # that found nothing carried Monday's finished game forward ("decided
+    # 00:06 UTC … this is still the best read we have").
+    if _stamp_day(prev.get("decided_at")) != _stamp_day(card.get("decided_at")):
         return card
     if str(prev.get("sport") or "") != str(card.get("sport") or ""):
         return card
