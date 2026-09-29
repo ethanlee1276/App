@@ -36,23 +36,10 @@ import launch                                                      # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class _FixedDate(dt.date):
-    """A date class whose `today()` is whatever the test says it is."""
-    _now = dt.date(2026, 8, 8)
-
-    @classmethod
-    def today(cls):
-        return cls._now
-
-
 def _week_on(day):
-    real = launch._dt.date
-    try:
-        _FixedDate._now = day
-        launch._dt.date = _FixedDate
-        return launch._current_nfl_week()
-    finally:
-        launch._dt.date = real
+    # The day is handed in (2026-09-29): the rule reads its date off the
+    # Eastern clock now, which a patched `date.today()` does not reach.
+    return launch._current_nfl_week(today=day)
 
 
 def _have_schedule():
@@ -73,9 +60,10 @@ def test_the_day_before_the_opener_still_builds():
     assert _week_on(dt.date(2026, 9, 8)) == (2026, 1)
 
 
-def test_in_season_the_nearest_game_still_wins():
-    """The run-up rule must not disturb the normal case — it only runs when
-    nothing is within a week."""
+def test_in_season_the_next_game_wins():
+    """In season the next game is days away, so the run-up window never
+    decides anything (the next-game rule since 2026-09-29 — see
+    test_the_nfl_week_turns_on_tuesday_morning)."""
     if not _have_schedule():
         return
     assert _week_on(dt.date(2026, 9, 13)) == (2026, 1)

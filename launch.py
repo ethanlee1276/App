@@ -784,52 +784,84 @@ def refresh_mlb(quiet: bool = False) -> bool:
 #:
 #: 45 days covers the gap from the preseason opener to Week 1 — 32 days on
 #: 2026-08-08 — without reaching so far that the board is built for a month
-#: of fixtures nobody is pricing yet. Only used when there is no game
-#: within a week; in season the nearest-game rule wins and this never
-#: applies.
+#: of fixtures nobody is pricing yet. In season the next game is never
+#: more than a few days out, so the window only matters in the run-up.
 SEASON_RUNUP_DAYS = 45
 
 
-def _current_nfl_week():
-    """Best-effort (season, week) for the games nearest today, or None in the
-    offseason / when the schedule can't be reached."""
-    try:
-        from engine.sources.nflverse import load_schedules, _s
-        rows = load_schedules()
-    except Exception:
-        return None
-    today = _dt.date.today()
-    best = None  # (abs_days, season, week)
-    for r in rows:
-        gd = _s(r, "gameday")
-        try:
-            d = _dt.date.fromisoformat(gd[:10])
-            season, week = int(_s(r, "season")), int(_s(r, "week"))
-        except Exception:
-            continue
-        diff = abs((d - today).days)
-        if best is None or diff < best[0]:
-            best = (diff, season, week)
-    # Only treat it as "current" if the nearest game is within a week.
-    if best and best[0] <= 7:
-        return best[1], best[2]
+#: WHEN THE NFL WEEK TURNS: Tuesday morning, 6 AM Eastern.
+#:
+#: Ethan, Tuesday 2026-09-29, 8:52 AM, with Monday's PHI@CHI still the
+#: Pick of the Day and the Thursday before still leading the stadiums:
+#: "It's a new nfl week so the board need to update for that. Every
+#: Tuesday morning it should update for the new week."
+#:
+#: The rule this replaced built the week of the game NEAREST today, in
+#: either direction. A Tuesday sits one day after Monday night and two
+#: before Thursday night, so every Tuesday of the season the board stayed
+#: on the week just played and only turned on Wednesday. The rule now is
+#: the week of the NEXT game still to be played — forward only, which
+#: is also what the run-up to Week 1 always needed (see below) — and
+#: "today" is the Eastern date, with the small hours still counted as the
+#: day before: a Monday night game can end past midnight, and the box
+#: runs on UTC, where Tuesday starts at 8 PM Eastern with Monday's game
+#: in its first quarter.
+NFL_WEEK_TURNS_HOUR_ET = 6
 
-    # THE RUN-UP TO A SEASON IS NOT THE OFFSEASON, and treating them the
-    # same is why the NFL page sat on the sample slate through August.
-    # Week 1 2026 is 32 days out on 2026-08-08, so the rule above returned
-    # None every launch, `refresh_nfl` printed "no current slate — kept
-    # existing data", and the board kept serving the illustrative sample
-    # with its Jan 4 fixtures. It was doing what it was told; nobody had
-    # told it that a buildable week existed.
-    #
-    # It is buildable now: the prior-season carry (engine/carry.py) exists
-    # precisely so weeks 1-3 have projections before this season has
-    # played a snap, and books post Week 1 lines all summer.
-    #
-    # FORWARD ONLY. Widening the window in both directions would, in
-    # March, find last February's Super Bowl nearer than September's opener
-    # and rebuild a board for a game five weeks gone. This looks at
-    # UPCOMING fixtures alone.
+
+def _nfl_slate_day(now=None):
+    """The date the NFL week is judged on: Eastern, and before
+    NFL_WEEK_TURNS_HOUR_ET still the day before."""
+    try:
+        from zoneinfo import ZoneInfo
+        east = ZoneInfo("America/New_York")
+    except Exception:                                         # noqa: BLE001
+        east = None
+    if now is None:
+        now = _dt.datetime.now(east) if east else _dt.datetime.now()
+    elif east and now.tzinfo is not None:
+        now = now.astimezone(east)       # a UTC stamp is read on the Eastern clock
+    return (now - _dt.timedelta(hours=NFL_WEEK_TURNS_HOUR_ET)).date()
+
+
+def _current_nfl_week(today=None, rows=None):
+    """(season, week) of the next NFL game still to be played, or None in
+    the offseason / when the schedule can't be reached.
+
+    ``today``: the date to judge from — `_nfl_slate_day()` when omitted.
+    ``rows``: schedule rows (nflverse's shape) — the cached schedule when
+    omitted.
+
+    THE RUN-UP TO A SEASON IS NOT THE OFFSEASON, and treating them the
+    same is why the NFL page sat on the sample slate through August.
+    Week 1 2026 was 32 days out on 2026-08-08, the old nearest-game rule
+    only looked a week either side, `refresh_nfl` printed "no current
+    slate — kept existing data", and the board kept serving the
+    illustrative sample with its Jan 4 fixtures. It is buildable: the
+    prior-season carry (engine/carry.py) exists precisely so weeks 1-3
+    have projections before this season has played a snap, and books post
+    Week 1 lines all summer. So an upcoming game up to SEASON_RUNUP_DAYS
+    out makes its week current.
+
+    FORWARD ONLY. Looking backwards would, in March, find last February's
+    Super Bowl nearer than September's opener and rebuild a board for a
+    game five weeks gone. Past the run-up window it is the offseason, and
+    the board keeps what it has.
+    """
+    if rows is None:
+        try:
+            from engine.sources.nflverse import load_schedules
+            rows = load_schedules()
+        except Exception:
+            return None
+    try:
+        from engine.sources.nflverse import _s
+    except Exception:                                         # noqa: BLE001
+        def _s(r, k):
+            v = r.get(k)
+            return "" if v is None else str(v)
+    if today is None:
+        today = _nfl_slate_day()
     upcoming = None
     for r in rows:
         gd = _s(r, "gameday")
@@ -840,7 +872,7 @@ def _current_nfl_week():
             continue
         days = (d - today).days
         if 0 <= days <= SEASON_RUNUP_DAYS:
-            if upcoming is None or days < upcoming[0]:
+            if upcoming is None or (days, week) < (upcoming[0], upcoming[2]):
                 upcoming = (days, season, week)
     if upcoming:
         return upcoming[1], upcoming[2]
