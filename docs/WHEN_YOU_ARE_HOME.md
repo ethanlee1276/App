@@ -15,6 +15,73 @@ as they are done.
 
 ---
 
+## GO OVER TOGETHER — saved 2026-09-29 (Ethan: "save everything for when I'm home so we can go over it")
+
+### Step 1. One paste, read-only, a minute. Paste the output back.
+
+```
+cd /srv/qellys && { echo "=== CODE ON THE BOX ==="; git log --oneline -1; echo "=== M8 LIVE TAB ==="; python3 homecheck.py live; echo "=== M7 THE CLOSE ==="; sudo -u qellys python3 closecheck.py; } 2>&1 | tee ~/gooverit.txt
+```
+
+- **CODE ON THE BOX** should read `b206506f` or later (the Live tab fix).
+  Older means the box has not pulled yet: wait five minutes and re-run.
+- **M8, the Live tab.** Per league, how many open bets the Live tab has
+  to draw and how many are Most Likely. Since the fix the Most Likely
+  count includes the one board's picks, so for a slate with games on it
+  the number should be close to the Most Likely page's count, not four.
+  It only moves after that league's next board build.
+- **M7, the close** — see below. If the paste is too long, `cat
+  ~/gooverit.txt` prints it again.
+
+### Step 2. What we decide together (nothing to run)
+
+1. **The picks that lost the close** (M7's answer). If they are
+   scratches graded 0, the fix is in the settler and changes past grades
+   on the public record — your yes first, and I show you every row that
+   would change. If it is news the market had, the fix is pulling a pick
+   when its line moves a point against it before kickoff. If it is a bad
+   close, the fix is in how the close is captured, and the record stands.
+2. **"Worth a look" claims 59% and hits 48%** on the one board (123-132).
+   Strong and Top pick hit 62%, about what they claim. Options: lower the
+   ring's number on that tier to its measured rate, stop showing the tier,
+   or keep it and let the record label carry the truth (it already says
+   "picks like it hit X%"). It is paper, no money on it.
+3. **Pinnacle for game lines.** The one sharp book, and the best close to
+   measure against. It is in The Odds API's `eu` region; pulling it for
+   game lines roughly doubles the game-line credit spend. Yes or no.
+4. **Edge picks on MLB overs lost 26 units** over the summer (MLB hits
+   overs 89-110). The season is over for the regular slate, so nothing
+   bleeds now; the question is whether MLB edge overs start next season
+   benched until a refit proves them.
+5. **Still on the list, not started:** touchdown picks the other AI's way
+   (goal-line usage, red-zone defence, game script), and the college
+   starting-QB read from the news feed.
+
+### What shipped 2026-09-28 into 09-29, all tested and pushed
+
+- **Most Likely page:** the fair price and "take at X or better" on every
+  card, the tier in words under the ring, the "same story as N others"
+  tag, a record label that reads as a count until 20 picks and a hit rate
+  after, the intro trimmed on phones, and the filters scrolling with the
+  page again (they covered the cards when pinned). By Game ranks highest
+  to lowest.
+- **Live tab:** the one board's picks now reach "Open Most Likely bets"
+  in every league, each wager once. This is why only four Bears rows
+  showed during PHI@CHI.
+- **Record page:** checked on the box (M6) — every grade right, every
+  section's totals right. The 2/2 spread row was the Most Likely board's
+  own two; the CAR loss was Pick of the Day's. Each section now names
+  which picks it counts.
+- **MLB:** the board builds the next game day on an off day, and the
+  postseason start comes from the league's own calendar.
+- **Team page:** schedule cycles 2021–2026. **Profit calendar:** settled
+  bets under each day, folded after six with a summary. **QB-out teams:**
+  the backup's team volume shown on every row of that team.
+- **Loss audit** (M4) and **close check** (M7) scripts; the audit now
+  labels football weeks as "NFL week 3", not January.
+
+---
+
 ## THE CLOSE — 2026-09-29 (read-only, seconds)
 
 M1–M6 ran on 2026-09-29 and are answered: the money bars read the real
