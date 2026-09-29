@@ -51,15 +51,21 @@ def test_the_cross_sport_count_stays_edge_only():
     i = BUILD.index("_all_open = _lpc.execute(")
     seg = BUILD[i:i + 300]
     assert "category IN ('main','longshot')" in seg and "'likely'" not in seg
-    assert 'if r.get("category") not in _lp_ledger.LIKELY_BOOKS)' in BUILD
+    # The one board's book is a Most Likely book too (2026-09-28), so the
+    # edge count leaves every book the Most Likely panel draws.
+    assert 'if r.get("category") not in _LIKELY_PANEL)' in BUILD
+    assert "LIVE_LIKELY_BOOKS as _LIKELY_PANEL" in BUILD
     assert 'max(0, _all_open - _edge_shown)' in BUILD, \
         "the subtraction still removes the likely rows from the elsewhere count"
 
 
 def test_the_sweat_selects_likely_rows():
-    i = SWEAT.index("cats = (")
+    # The tracker's own list since 2026-09-28 — both halves of the Most
+    # Likely book and the one board's — so the two cannot drift apart.
+    i = SWEAT.index("cats = TRACKER_CATEGORIES")
     seg = SWEAT[i:i + 200]
-    assert "tuple(ledger.LIKELY_BOOKS)" in seg and "for c in cats" in seg, seg
+    assert "for c in cats" in seg, seg
+    assert "rows = one_row_per_wager(rows)" in SWEAT
 
 
 def test_a_likely_row_is_journaled_under_that_category():
@@ -85,7 +91,8 @@ def test_a_likely_row_never_prints_a_stake_or_a_riding_warning():
     """Flat-staked and never sized: printing "0.10u" or "the price has
     moved off the bar" on a likelihood row would present it as a bet."""
     body = _fn("renderLivePicks")
-    assert 'r.category !== "likely" && r.stake_units > 0' in body
+    # Paper rows — the Most Likely book's and the one board's — print no units.
+    assert '!["likely", "board"].includes(r.category) && r.stake_units > 0' in body
     assert '!isLikelyBook(r.category) && offBoard(r)' in body
 
 

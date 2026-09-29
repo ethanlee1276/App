@@ -641,7 +641,9 @@ def main() -> None:
     _tk = _stg.start("live-pick tracker (boxscores)")
     try:
         from engine import ledger as _lp_ledger
-        from engine.livepicks import assemble_live_picks, TRACKER_CATEGORIES as _TRK
+        from engine.livepicks import (assemble_live_picks, TRACKER_CATEGORIES as _TRK,
+                                      LIVE_LIKELY_BOOKS as _LIKELY_PANEL,
+                                      one_row_per_wager as _one_row)
         from engine.mlb.livestats import (parse_live_stats, parse_situation,
                                           current_pitchers)
         from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
@@ -781,6 +783,9 @@ def main() -> None:
                                                 result["games"], progress, _ls,
                                                 _ident, sport="mlb")
                  if r["status"] != "unmapped"]
+        # The one board's picks ride along (TRACKER_CATEGORIES), and a
+        # wager in two books is drawn once — engine/livepicks.one_row_per_wager.
+        rows = _one_row(rows)
         result["live_picks"] = rows
         # Every other open bet, so the page's count always reconciles with
         # the Record's. Counted as "all open minus what we are showing"
@@ -803,7 +808,7 @@ def main() -> None:
         # subtracting them too would understate "open on other boards" by
         # exactly their number.
         _edge_shown = sum(1 for r in rows
-                          if r.get("category") not in _lp_ledger.LIKELY_BOOKS)
+                          if r.get("category") not in _LIKELY_PANEL)
         result["open_elsewhere"] = max(0, _all_open - _edge_shown)
         if result["live_picks"]:
             n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")

@@ -50,7 +50,7 @@ def _expr(src, start):
 def _ledger():
     db = sqlite3.connect(":memory:")
     db.execute("CREATE TABLE bets (sport TEXT, status TEXT, category TEXT, player TEXT)")
-    for cat in ("main", "longshot", "likely", "likely_live", "paper", "potd"):
+    for cat in ("main", "longshot", "likely", "likely_live", "board", "paper", "potd"):
         db.execute("INSERT INTO bets VALUES ('mlb', 'open', ?, ?)", (cat, cat))
     return db
 
@@ -59,23 +59,25 @@ def test_the_mlb_builds_tracker_asks_for_both_halves_of_the_book():
     where = eval(_expr(BUILD, "_where = ("), {"_TRK": TRACKER_CATEGORIES})
     got = {r[0] for r in _ledger().execute(f"SELECT category FROM bets WHERE {where}")}
     assert "likely_live" in got, "the staked Most Likely bets never reach MLB's Live tab"
-    assert got == set(TRACKER_CATEGORIES) == {"main", "longshot", "likely", "likely_live"}, got
+    # And the one board's book since 2026-09-28 — the Most Likely page draws it.
+    assert got == set(TRACKER_CATEGORIES) == {"main", "longshot", "likely", "likely_live", "board"}, got
 
 
 def test_the_sweat_asks_for_both_halves_too():
-    ns = {"ledger": ledger}
+    ns = {"ledger": ledger, "TRACKER_CATEGORIES": TRACKER_CATEGORIES}
     exec(re.search(r"^    cats = .*$", SWEAT, re.M).group(0).strip(), ns)
     where = eval(_expr(SWEAT, "where = ("), ns)
     got = {r[0] for r in _ledger().execute(f"SELECT category FROM bets WHERE {where}")}
-    assert got == {"main", "longshot", "likely", "likely_live"}, got
+    assert got == {"main", "longshot", "likely", "likely_live", "board"}, got
 
 
 def test_the_edge_count_leaves_both_halves_out():
-    assert 'if r.get("category") not in _lp_ledger.LIKELY_BOOKS)' in BUILD
+    assert 'if r.get("category") not in _LIKELY_PANEL)' in BUILD
     hc = (ROOT / "homecheck.py").read_text()
     assert 'n_likely = sum(1 for r in rows if r.get("category") in _LB)' in hc
     lp = (ROOT / "engine" / "livepicks.py").read_text()
-    assert 'n_likely = sum(1 for r in rows if r.get("category") in LIKELY_BOOKS)' in lp
+    assert 'n_likely = sum(1 for r in rows if r.get("category") in LIVE_LIKELY_BOOKS)' in lp
+    assert "from engine.livepicks import LIVE_LIKELY_BOOKS as _LB" in hc
 
 
 def test_nothing_retypes_the_likely_book_any_more():

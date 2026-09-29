@@ -91,7 +91,7 @@ def _tracker_block():
     """The whole try: body, not a fixed slice — a character budget silently
     stops covering the code it was written to check the moment anything
     above it grows."""
-    i = BUILD.index("from engine.livepicks import assemble_live_picks")
+    i = BUILD.index("from engine.livepicks import (assemble_live_picks")
     j = BUILD.index('result["live_picks_error"]', i)
     return BUILD[i:j]
 
@@ -146,7 +146,8 @@ def test_the_leftover_count_is_everything_not_shown():
     assert "_all_open - _edge_shown" in b
     # Both halves of the Most Likely book since 2026-09-22 — the staked
     # half journals as `likely_live` and is no edge bet either.
-    assert 'if r.get("category") not in _lp_ledger.LIKELY_BOOKS)' in b
+    # And the one board's book since 2026-09-28 (livepicks.LIVE_LIKELY_BOOKS).
+    assert 'if r.get("category") not in _LIKELY_PANEL)' in b
     assert "_all_open - len(rows)" not in b, "the likely rows are subtracted again"
     assert "AND date != ?" not in b
 

@@ -182,7 +182,8 @@ def build(today: str | None = None, quiet: bool = True,
     the page falls back to the board's own slower tracker if we vanish.
     """
     from . import gate, ledger
-    from .livepicks import assemble_live_picks
+    from .livepicks import (assemble_live_picks, TRACKER_CATEGORIES,
+                            one_row_per_wager)
     from .mlb.livestats import (current_pitchers, parse_live_stats,
                                 parse_situation)
     from .mlb.sources.live import fetch_live
@@ -251,7 +252,10 @@ def build(today: str | None = None, quiet: bool = True,
     # BOTH HALVES OF THE MOST LIKELY BOOK (2026-09-22), read off the
     # ledger: the staked half journals as `likely_live`, and a retyped
     # ('main','longshot','likely') left every staked row off the sweat.
-    cats = ("main", "longshot") + tuple(ledger.LIKELY_BOOKS)
+    # AND THE ONE BOARD'S BOOK (2026-09-28): the tracker's own list, so
+    # the sweat and the Live tab cannot disagree about which picks exist —
+    # see livepicks.TRACKER_CATEGORIES; a wager in two books is swept once.
+    cats = TRACKER_CATEGORIES
     where = ("status='open' AND sport='mlb' AND category IN ("
              + ",".join(f"'{c}'" for c in cats) + ")")
     dates = (day,
@@ -274,6 +278,7 @@ def build(today: str | None = None, quiet: bool = True,
     rows = assemble_live_picks(open_bets, board.get("recommendations") or [],
                                games, progress,
                                board.get("long_shots") or [], ident, pitching)
+    rows = one_row_per_wager(rows)
 
     now = now or _dt.datetime.now().isoformat(timespec="seconds")
     state = _load(STATE_PATH) or {}

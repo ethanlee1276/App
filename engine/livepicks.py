@@ -16,7 +16,7 @@ recommendations, and (optionally) live per-player stats.
 
 from __future__ import annotations
 
-from .ledger import LIKELY_BOOKS
+from .ledger import LIKELY_BOOKS, LIKELY_LIVE_CATEGORY
 from .sources.oddsapi import normalize_name
 
 #: Where `livescore_build` writes `live_{league}.json` every twelve seconds
@@ -654,7 +654,63 @@ TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
 #: describes, and the cure is the same: the list is DERIVED from
 #: `ledger.LIKELY_BOOKS` rather than retyped, so the next half of that
 #: book cannot be forgotten here.
-TRACKER_CATEGORIES = ("main", "longshot") + tuple(LIKELY_BOOKS)
+#:
+#: AND THE ONE BOARD'S BOOK. Since 2026-09-26 the Most Likely page draws
+#: the one board (engine/likelyboard), which journals every pick it posts
+#: to its own book — category `board`, the tier as the grade — so the
+#: record by tier is its own. The tracker still read the two books the
+#: Most Likely SHELVES journal to, so a board pick that came from the
+#: matchup picks, the touchdown scenarios or the bold list — anything the
+#: old shelves did not also post — was on the page before kickoff and
+#: gone from the Live tab after it. Ethan, 2026-09-28, PHI@CHI in the
+#: first quarter: "We are definitely missing bets on the most likely live
+#: bets here." The third time one tuple has hidden a book from this tab.
+BOARD_BOOK = "board"
+#: Every book the Live tab's Most Likely panel draws from.
+LIVE_LIKELY_BOOKS = tuple(LIKELY_BOOKS) + (BOARD_BOOK,)
+TRACKER_CATEGORIES = ("main", "longshot") + LIVE_LIKELY_BOOKS
+
+#: ONE ROW PER WAGER. A pick the old shelves posted AND the board posted
+#: is journaled twice — once in each book, each graded on its own — and a
+#: tracker built from both would draw it twice. The row kept is the one
+#: that says the most: staked money first, then the Most Likely book's
+#: paper row, then the board's copy.
+_BOOK_RANK = {LIKELY_LIVE_CATEGORY: 0, "likely": 1, BOARD_BOOK: 2}
+
+
+def _wager_key(r: dict) -> tuple:
+    try:
+        line = round(float(r.get("line") or 0), 1)
+    except (TypeError, ValueError):
+        line = r.get("line")
+    return (normalize_name(str(r.get("player") or "")), r.get("market") or "",
+            str(r.get("side") or "").upper(), line)
+
+
+def one_row_per_wager(rows: list[dict]) -> list[dict]:
+    """``rows`` with each Most Likely wager once (see `_BOOK_RANK`).
+
+    Only the Most Likely panel's books are folded; an edge bet and a Most
+    Likely pick on the same line are two products and both stay. Order is
+    kept — the survivor sits where the first copy of its wager sat."""
+    first: dict = {}
+    winner: dict = {}
+    for i, r in enumerate(rows):
+        cat = r.get("category")
+        if cat not in _BOOK_RANK:
+            continue
+        k = _wager_key(r)
+        first.setdefault(k, i)
+        if k not in winner or _BOOK_RANK[cat] < _BOOK_RANK[rows[winner[k]]["category"]]:
+            winner[k] = i
+    slot = {first[k]: winner[k] for k in first}
+    out = []
+    for i, r in enumerate(rows):
+        if r.get("category") not in _BOOK_RANK:
+            out.append(r)
+        elif i in slot:
+            out.append(rows[slot[i]])
+    return out
 
 #: THE PICK OF THE DAY IS NOT IN THE LIST ABOVE, and it is tracked all
 #: the same — separately, under `live_potd`, because it is not an open
@@ -897,6 +953,7 @@ def attach_tracker(result: dict, sport: str, conn=None,
                                                     progress, shots, identity,
                                                     sport=sport)
                      if r["status"] != "unmapped"]
+            rows = one_row_per_wager(rows)
             result["live_picks"] = rows
             # THE DAY'S HEADLINE PICK, TRACKED ON ITS OWN. Read from its
             # own book and published under its own key, so the Live tab
@@ -920,7 +977,7 @@ def attach_tracker(result: dict, sport: str, conn=None,
             # halves of it. Counting `likely_live` as edge here made the
             # "open elsewhere" figure go negative and clamp to zero.
             edge_shown = sum(1 for r in rows
-                             if r.get("category") not in LIKELY_BOOKS)
+                             if r.get("category") not in LIVE_LIKELY_BOOKS)
             result["open_elsewhere"] = max(0, all_open - edge_shown)
         finally:
             if own:
@@ -933,7 +990,7 @@ def attach_tracker(result: dict, sport: str, conn=None,
     if not rows and not potd:
         return ""
     n_live = sum(1 for r in rows if r["phase"] == "live")
-    n_likely = sum(1 for r in rows if r.get("category") in LIKELY_BOOKS)
+    n_likely = sum(1 for r in rows if r.get("category") in LIVE_LIKELY_BOOKS)
     note = (f"{len(rows)} on this card ({n_live} live"
             + (f", {n_likely} likely" if n_likely else "") + ")")
     if potd:

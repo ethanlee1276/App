@@ -166,6 +166,10 @@ def test_open_bets_are_this_sports_open_rows_in_the_tracked_categories():
     # bet was invisible on the Live tab at first pitch.
     _bet(conn, "nfl", "2026-W01", "Isiah Pacheco", "rush_yds", line=55.5,
          category="likely_live", stake=0.25)
+    # THE ONE BOARD'S BOOK (2026-09-28): the Most Likely page draws it, and
+    # a pick only the board posted vanished from the Live tab at kickoff.
+    _bet(conn, "nfl", "2026-W01", "Luther Burden", "rec_yds", line=24.5,
+         category="board", stake=0.1)
     _bet(conn, "nfl", "2026-W01", "Sam LaPorta", "receptions",
          category="longshot_watch")               # the calibration sample
     _bet(conn, "nfl", "2026-W01", "Patrick Mahomes", "pass_yds",
@@ -173,7 +177,7 @@ def test_open_bets_are_this_sports_open_rows_in_the_tracked_categories():
     _bet(conn, "mlb", "2026-W01", "Aaron Judge", "home_runs")   # other sport
     today, near = open_bets_for(conn, "nfl", "2026-W01")
     assert sorted(r["player"] for r in today) == \
-        ["Amon-Ra St. Brown", "Isiah Pacheco", "Jahmyr Gibbs", "Travis Kelce"], today
+        ["Amon-Ra St. Brown", "Isiah Pacheco", "Jahmyr Gibbs", "Luther Burden", "Travis Kelce"], today
     assert {r["category"] for r in today} == set(TRACKER_CATEGORIES)
     assert near == [], "a week label has no neighbours to ask for"
 
@@ -245,12 +249,18 @@ def test_the_elsewhere_count_is_every_open_edge_bet_minus_the_edge_rows_shown():
     # edge row. Counted as edge it made this figure go negative.
     _bet(conn, "nfl", "2026-W01", "Isiah Pacheco", "rush_yds", line=55.5,
          category="likely_live", stake=0.25)
+    # THE ONE BOARD'S BOOK (2026-09-28): the Most Likely page draws it, and
+    # a pick only the board posted vanished from the Live tab at kickoff.
+    _bet(conn, "nfl", "2026-W01", "Luther Burden", "rec_yds", line=24.5,
+         category="board", stake=0.1)
     _bet(conn, "mlb", "2026-09-05", "Aaron Judge", "home_runs", odds=300,
          category="longshot")
     _bet(conn, "cfb", "2026-09-06", "UGA", "moneyline", odds=-200)
     result = _board()
     attach_tracker(result, "nfl", conn=conn, progress={})
-    assert len(result["live_picks"]) == 3
+    # Four on the card — the board's pick among them — and the edge count
+    # untouched by it: a board pick is no edge bet either.
+    assert len(result["live_picks"]) == 4
     assert result["open_elsewhere"] == 2, result["open_elsewhere"]
 
 

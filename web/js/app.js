@@ -4643,9 +4643,14 @@ function trackerBetText(r) {
    on paper and to `likely_live` where it stakes real money (MLB since
    2026-09-19); every split between the edge book and this one reads
    both, or a staked Most Likely bet is drawn as an edge bet. The
-   ledger's LIKELY_BOOKS, spelled once for the page. */
+   ledger's LIKELY_BOOKS, spelled once for the page.
+   AND THE ONE BOARD'S BOOK, `board` (2026-09-28): the Most Likely page
+   draws the one board, which journals its picks there, and a board pick
+   the old shelves never posted was missing from the Live tab — Ethan,
+   PHI@CHI in the first quarter: "We are definitely missing bets on the
+   most likely live bets here." livepicks.LIVE_LIKELY_BOOKS. */
 function isLikelyBook(c) {
-  return c === "likely" || c === "likely_live";
+  return c === "likely" || c === "likely_live" || c === "board";
 }
 
 function renderLivePicks() {
@@ -5004,7 +5009,7 @@ function renderLivePicks() {
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               placed ? ` · ${escapeHtml(placed)}` : ""}${
-              r.category !== "likely" && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
+              !["likely", "board"].includes(r.category) && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
             ${!isLikelyBook(r.category) && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
