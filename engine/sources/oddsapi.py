@@ -2948,7 +2948,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # this same call returns IN-PLAY prices for games already running
         # (see this function's docstring), and an in-play price must never
         # be mistaken for a closing line.
-        record_snapshots(slate.props, slate=slate)
+        # An NFL kickoff is nflverse's bare Eastern clock ("20:15"); named
+        # here so the stamp exists — without it no NFL snapshot was ever
+        # cut as in-play, and in-game lines became "closes" (2026-09-29).
+        record_snapshots(slate.props, slate=slate,
+                         clock_tz="America/New_York" if sport == "nfl" else None)
 
     _priced.save()
     return result

@@ -27,7 +27,7 @@ from .sources.fetch import CACHE_DIR
 HISTORY_PATH = CACHE_DIR / "line_history.jsonl"
 
 
-def start_epoch(kickoff) -> float | None:
+def start_epoch(kickoff, date=None, clock_tz: str | None = None) -> float | None:
     """A game's start as a UNIX timestamp, or None when it cannot be known.
 
     Same rule as ``losspatterns.minutes_until``, for the same reason: a
@@ -35,23 +35,45 @@ def start_epoch(kickoff) -> float | None:
     "13:00" is not. Guessing a timezone onto a bare clock would silently
     decide which snapshots count as pre-game, and a wrong guess there is
     worse than no cut at all.
+
+    A BARE CLOCK IS READ ONLY WHEN THE CALLER NAMES ITS ZONE. ``date`` +
+    ``clock_tz`` turn "20:15" on "2026-09-28" into an instant; the caller
+    passes a zone only for a feed whose clock is documented — nflverse's
+    `gametime` is US Eastern. Without that, every NFL snapshot carried no
+    start at all (the NFL game's kickoff IS a bare clock), no snapshot
+    was ever cut as in-play, and on 2026-09-29 the close check found the
+    week-3 "closes" were in-game lines: Barner's receiving under 19.5
+    "closing" at 69.5 on a final of 69, Burrow 255.5 → 349.5, Saquon's
+    receiving yards 7.5 → 79.5 — the one board's picks that "lost the
+    close" hit 12% because the close was the result.
     """
     if not kickoff:
         return None
     import datetime as _dt
+    import re as _re
     try:
         start = _dt.datetime.fromisoformat(str(kickoff).replace("Z", "+00:00"))
     except (TypeError, ValueError):
-        return None
-    if start.tzinfo is None:
+        start = None
+    if start is not None and start.tzinfo is not None:
+        return start.timestamp()
+    m = _re.fullmatch(r"(\d{1,2}):(\d{2})(?::\d{2})?", str(kickoff).strip())
+    if not (m and date and clock_tz):
         return None                 # a naive stamp is a clock, not an instant
+    try:
+        from zoneinfo import ZoneInfo
+        day = _dt.date.fromisoformat(str(date)[:10])
+        start = _dt.datetime(day.year, day.month, day.day, int(m.group(1)),
+                             int(m.group(2)), tzinfo=ZoneInfo(clock_tz))
+    except Exception:                                         # noqa: BLE001
+        return None
     return start.timestamp()
 
 
 # --- recording --------------------------------------------------------------
 def record_snapshots(props, ts: float | None = None,
                      path: str | Path | None = None,
-                     slate=None) -> int:
+                     slate=None, clock_tz: str | None = None) -> int:
     """Append one row per (prop, book) with the current line. Skips proxy
     lines — only real book numbers are worth tracking.
 
@@ -72,8 +94,11 @@ def record_snapshots(props, ts: float | None = None,
             start = None
             if slate is not None:
                 try:
-                    start = start_epoch(getattr(slate.game_for(prop),
-                                                "kickoff", None))
+                    _g = slate.game_for(prop)
+                    # ``clock_tz``: the zone of a bare-clock kickoff, from
+                    # a caller that knows it (see `start_epoch`).
+                    start = start_epoch(getattr(_g, "kickoff", None),
+                                        getattr(_g, "date", None), clock_tz)
                 except Exception:                  # noqa: BLE001
                     start = None       # a slate that cannot locate its own
                                        # game must not cost the snapshot
