@@ -789,6 +789,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # the pick, so what lands in the row is what was actually applied
         # rather than whatever the store holds by the time it settles.
         temp, bias = cal_correction(sport, r["market"])
+        # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized.
+        row_book = prop_book(category, sport, r.get("side", "OVER"))
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
@@ -813,8 +815,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # Zero dollars in paper mode, and it must be zero rather than
              # small: `performance` sums this column for the dollar P&L,
              # and a paper book that moves the dollar line is not paper.
-             0.0 if (paper or benched) else round(stake_units * unit_dollars, 2),
-             category,
+             0.0 if (paper or benched or row_book == "paper")
+             else round(stake_units * unit_dollars, 2),
+             row_book,
              # Which doubleheader leg this bet belongs to — the settler
              # grades against that game's stat line, not a coin flip.
              r.get("game_number") if r.get("doubleheader") else None,
@@ -5238,6 +5241,23 @@ def is_benched(sport) -> bool:
     """Is this league's record benched — picks made, no money, not in the
     headline?"""
     return str(sport or "").lower() in BENCHED_SPORTS
+
+
+#: EDGE PROPS STILL PICKED, JOURNALED AND GRADED, BUT ON PAPER — no dollars.
+#: `(sport, side)`. Ethan, 2026-09-29, shown MLB edge overs losing 26
+#: units over the summer (hits overs 89-110, strikeout overs 18-32):
+#: "keep the bets but make it paper". Player props only; a game bet is
+#: journaled with side OVER whatever it is and is not what lost.
+PAPER_PROP_SIDES = {("mlb", "OVER")}
+
+
+def prop_book(category: str, sport, side) -> str:
+    """The book one Edge PROP row goes to: `category` (from `book_for`),
+    moved to paper when its sport and side are in PAPER_PROP_SIDES."""
+    if category == "main" and (str(sport or "").lower(),
+                               str(side or "OVER").upper()) in PAPER_PROP_SIDES:
+        return "paper"
+    return category
 
 
 def book_for(sport, paper: bool) -> str:

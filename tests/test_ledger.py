@@ -843,7 +843,9 @@ def test_longshot_markets_never_enter_the_main_record():
     ])
     assert ledger.log_recommendations(conn, res) == 1        # only the hits prop
     row = conn.execute("SELECT player, category FROM bets").fetchone()
-    assert row["player"] == "Contact" and row["category"] == "main"
+    # The edge book, not the long-shot bucket. Paper since 2026-09-29: an
+    # MLB edge OVER is journaled on paper (ledger.PAPER_PROP_SIDES).
+    assert row["player"] == "Contact" and row["category"] in ledger.EDGE_BOOKS
 
 
 def test_repair_moves_legacy_longshots_and_restates_bankroll():
@@ -2306,7 +2308,11 @@ def test_paper_mode_is_off_unless_it_was_turned_on():
     worse surprise than one that silently kept going."""
     conn = ledger.connect(":memory:")
     assert ledger.paper_mode(conn) is False
-    ledger.log_recommendations(conn, _paper_result())
+    # An UNDER: an MLB edge OVER is on paper by its own rule since
+    # 2026-09-29 (ledger.PAPER_PROP_SIDES), whatever the mode.
+    res = _paper_result()
+    res["recommendations"][0]["side"] = "UNDER"
+    ledger.log_recommendations(conn, res)
     row = conn.execute("SELECT category, stake_dollars FROM bets").fetchone()
     assert row[0] == "main"
     assert row[1] > 0, "real mode must still size dollars"

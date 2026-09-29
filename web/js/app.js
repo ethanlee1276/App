@@ -9495,10 +9495,21 @@ function obWhyHTML(r) {
    board already keeps (Since…, Locked in, the matchup read, QB change),
    the four checks with their "why?", the price, our chance as a ring, and
    the door to the pick's page. */
+/* THE NUMBER A CARD LEADS WITH. Our chance — except on a tier whose real
+   record runs under what it claims, where the tier's measured hit rate
+   takes its place (Ethan, 2026-09-29: "Worth a look" claimed 59% and hit
+   48% — "show the real hit rate"; engine/likelyboard.REAL_RATE_TIERS). The
+   ring and the price to take both read it, so they cannot disagree. */
+function obShownProb(r) {
+  return r.tier_rate != null ? Number(r.tier_rate) : Number(r.model_prob || 0);
+}
 function obRingHTML(r) {
-  const p = Math.max(0, Math.min(1, Number(r.model_prob || 0)));
+  const p = Math.max(0, Math.min(1, obShownProb(r)));
   const C = 2 * Math.PI * 21;
-  return `<span class="ob-ring tier-${escapeAttr(r.tier || "look")}" title="Our chance it hits">
+  const why = r.tier_rate != null
+    ? `${OB_TIER_WORD[r.tier] || "These"} picks have hit ${Math.round(r.tier_rate * 100)}% of ${r.tier_n} — our model said ${Math.round(Number(r.model_prob || 0) * 100)}% on this one`
+    : "Our chance it hits";
+  return `<span class="ob-ring tier-${escapeAttr(r.tier || "look")}${r.tier_rate != null ? " real" : ""}" title="${escapeAttr(why)}">
     <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" class="ob-ring-bg"/>
       <circle cx="24" cy="24" r="21" class="ob-ring-fg" stroke-dasharray="${(p * C).toFixed(1)} ${C.toFixed(1)}"/></svg>
     <b>${Math.round(p * 100)}%</b>${r.tier === "top" ? "<small>TOP</small>" : ""}</span>`;
@@ -9530,10 +9541,12 @@ function obImplied(odds) {
   return o < 0 ? -o / (-o + 100) : 100 / (o + 100);
 }
 function obPriceHTML(r) {
-  const fair = obFairAmerican(r.model_prob), imp = obImplied(r.odds);
+  const shown = obShownProb(r);
+  const fair = obFairAmerican(shown), imp = obImplied(r.odds);
   if (fair == null || imp == null) return "";
-  const good = imp <= Number(r.model_prob) + 1e-9;
-  return `<small class="ob-fair ${good ? "good" : "wait"}" title="Our chance as a price: the worst number this bet still pays at">${
+  const good = imp <= shown + 1e-9;
+  return `<small class="ob-fair ${good ? "good" : "wait"}" title="${r.tier_rate != null
+    ? "This tier’s real hit rate as a price" : "Our chance as a price"}: the worst number this bet still pays at">${
     good ? `good price · fair ${american(fair)}` : `take at ${american(fair)} or better`}</small>`;
 }
 /* PICKS THAT RIDE TOGETHER (the list's third item): the same team, the same
@@ -9590,7 +9603,7 @@ function obCardHTML(r, rank, opts = {}) {
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
-      escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}</span></span>
+      escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}${r.tier_rate != null ? "<small>real hit rate</small>" : ""}</span></span>
     <button class="ob-door" type="button"${door} aria-label="Open this pick">${icon("chart", 18)}</button>
     <button class="ob-view" type="button"${door}>View details ${icon("rising", 12)}</button>
   </div>`;

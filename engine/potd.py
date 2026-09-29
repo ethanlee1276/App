@@ -602,7 +602,7 @@ def off_day(sport: str, today: str) -> dict | None:
     nxt = d + _dt.timedelta(days=ahead)
     league = str(sport).upper()
     return {"note": (f"No {league} Pick of the Day on a {_WEEKDAY_NAMES[d.weekday()]} — "
-                     f"the {league}'s picks are Thursday, Sunday and Monday. "
+                     f"the {league}’s picks are Thursday, Sunday and Monday. "
                      f"Next: {_WEEKDAY_NAMES[nxt.weekday()]}."),
             "next_day": nxt.isoformat()}
 

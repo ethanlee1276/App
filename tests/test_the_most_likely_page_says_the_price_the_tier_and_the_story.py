@@ -38,7 +38,7 @@ def test_the_price_to_take():
     if not shutil.which("node"):
         return
     prog = ("const american = (o) => (o > 0 ? `+${o}` : `−${Math.abs(o)}`); const escapeAttr = (s) => s;\n"
-            + _fn("obFairAmerican") + _fn("obImplied") + _fn("obPriceHTML")
+            + _fn("obShownProb") + _fn("obFairAmerican") + _fn("obImplied") + _fn("obPriceHTML")
             + "\nconsole.log(JSON.stringify([obFairAmerican(0.55), obFairAmerican(0.43), obFairAmerican(0.5),"
               " obPriceHTML({model_prob: 0.55, odds: -130}), obPriceHTML({model_prob: 0.61, odds: -125}),"
               " obPriceHTML({model_prob: 0.43, odds: 110}), obPriceHTML({model_prob: 0.6})]));")

@@ -143,6 +143,40 @@ def record_table(conn, sport: str = "nfl") -> dict:
     return out
 
 
+#: THE TIERS WHOSE CARDS SHOW THEIR TIER'S REAL HIT RATE instead of our
+#: chance. Ethan, 2026-09-29, told "Worth a look" claims 59% and hits 48%
+#: (123-132 on the one board): "show the real hit rate". Top pick and
+#: Strong hit about what they claim (62% each), so they keep our number.
+REAL_RATE_TIERS = ("look",)
+
+
+def tier_record(conn, sport: str = "nfl") -> dict:
+    """``{tier key: {"n", "hits"}}`` — the one board's settled picks by
+    tier (journal book ``board``, the tier label as the grade)."""
+    label_to_key = {label: key for key, label in TIERS}
+    out: dict = {}
+    for grade, status in conn.execute(
+            "SELECT grade, status FROM bets WHERE sport=? AND category='board' "
+            "AND status IN ('won','lost')", (sport,)).fetchall():
+        key = label_to_key.get(str(grade or ""))
+        if not key:
+            continue
+        cell = out.setdefault(key, {"n": 0, "hits": 0})
+        cell["n"] += 1
+        cell["hits"] += 1 if status == "won" else 0
+    return out
+
+
+def real_rate(tiers_seen: dict | None, tier: str):
+    """``(rate, n)`` for a tier in REAL_RATE_TIERS with RECORD_MIN_N settled,
+    else ``(None, n)``."""
+    cell = (tiers_seen or {}).get(tier) or {}
+    n = int(cell.get("n") or 0)
+    if tier not in REAL_RATE_TIERS or n < RECORD_MIN_N:
+        return None, n
+    return round(cell["hits"] / n, 4), n
+
+
 def record_check(table: dict | None, market: str, side: str, prob: float):
     """(True/False/None, a sentence) from the record table."""
     band = _band(prob)
@@ -301,7 +335,8 @@ def _game_of(r: dict, games: list) -> str:
     return ""
 
 
-def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
+def build(result: dict, record: dict | None = None, sport: str = "nfl",
+          tiers_seen: dict | None = None) -> dict:
     """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
     "matchup_source": ...} — the pool, checked and tiered, ranked Top
     first, then by how hard the matchup backs it (`matchup_strength`),
@@ -412,6 +447,14 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl") -> dict:
                   "record_seen": record_seen(record, r.get("market"), _side(r), prob),
                   "matchup_strength": matchup_strength(r, leans, td_scores, checks["matchup"]),
                   "matchup_score": td_scores.get(r.get("player") or "") if lane == "td" else r.get("matchup_score")})
+        # THE TIER'S REAL HIT RATE, on the tiers that claim more than they
+        # hit (REAL_RATE_TIERS): the card shows it in place of our chance.
+        rate, n_seen = real_rate(tiers_seen, tier)
+        if rate is not None:
+            r["tier_rate"], r["tier_n"] = rate, n_seen
+        else:
+            r.pop("tier_rate", None)
+            r.pop("tier_n", None)
         rows.append(r)
         tiers[tier] += 1
         lanes[lane] = lanes.get(lane, 0) + 1
@@ -444,7 +487,11 @@ def attach(result: dict, sport: str, conn=None) -> str:
             rec = record_table(conn, sport) if conn is not None else {}
         except Exception:                                    # noqa: BLE001
             rec = {}
-        board = build(result, record=rec, sport=sport)
+        try:
+            seen = tier_record(conn, sport) if conn is not None else {}
+        except Exception:                                    # noqa: BLE001
+            seen = {}
+        board = build(result, record=rec, sport=sport, tiers_seen=seen)
         result["likely_board"] = board
         t = board["tiers"]
         return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "

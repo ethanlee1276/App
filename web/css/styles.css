@@ -12607,3 +12607,6 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
   .ob-showing { margin: 2px 0 8px; }
   .ob-tierword { font-size: var(--fs-2xs); letter-spacing: -.01em; }
 }
+
+/* "Worth a look" shows its tier's real hit rate (2026-09-29): said under the word. */
+.ob-tierword small { display: block; font-weight: 500; font-size: var(--fs-2xs); color: var(--text-mute); }
