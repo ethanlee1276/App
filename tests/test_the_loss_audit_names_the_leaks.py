@@ -127,6 +127,10 @@ def test_the_projection_lean_is_measured_per_market():
 def test_the_week_is_its_monday_and_the_causes_are_counted():
     assert LA._week({"date": "2026-09-27"}) == "week of 2026-09-21"
     assert LA._week({"date": "2026-09-21"}) == "week of 2026-09-21"
+    # A football week label is the week, not ISO week 3 of the year (which
+    # is how the box's first run came to file every NFL bet in January).
+    assert LA._week({"date": "2026-W03", "sport": "nfl"}) == "NFL week 3"
+    assert LA._week({"date": "2026-W12", "sport": "cfb"}) == "CFB week 12"
     rep, _ = _report()
     assert rep["books"]["Most Likely, paper"]["causes"] == {"variance": 22, "not tagged yet": 14}
 

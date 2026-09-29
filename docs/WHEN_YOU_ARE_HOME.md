@@ -15,87 +15,36 @@ as they are done.
 
 ---
 
-## MONEY SPLIT — 2026-09-28 (read-only, seconds)
+## THE CLOSE — 2026-09-29 (read-only, seconds)
 
-**M1. Is "Where the money is going" reading the real tapes?** The game
-page's money bars (engine/moneysplit) read Kalshi's and Polymarket's
-public trade tapes, which the build sandbox cannot reach — the parser was
-written to their documented shapes. Run this once a slate has games that
-have not started yet. It writes nothing; it prints one raw trade from
-each venue, then every game's split or why it has none:
+M1–M6 ran on 2026-09-29 and are answered: the money bars read the real
+tapes (PHI@CHI showed a split; started games show none, rightly), the
+Record page's numbers all check (M6: every grade matches its final, no
+bet graded two ways, every section's totals match), the MLB board built
+the 09-29 slate from the league calendar, and bet365 is in no region The
+Odds API serves — it cannot be added. Pinnacle is (the `eu` region), and
+is the one sharp book; pulling it for game lines would double the
+game-line credit spend, so it is a decision, not a fix.
 
-```
-cd /srv/qellys && python3 moneyprobe.py
-```
-
-For college or baseball, add the league: `python3 moneyprobe.py cfb` or
-`python3 moneyprobe.py mlb`. Paste the output back. A venue whose
-fields differ from the parser's shows up as games with "no split" —
-missing bars, never wrong ones.
-
-**M2. Somebody else's legs, our numbers (2026-09-28).** Two Eagles-Bears
-research reports bet Hurts 200+, Wicks 40+, Smith 6+ catches, Raymond 3+
-catches, Monangai 10+ carries. This prices each at that exact number the
-way the Most Likely board prices a ladder rung, shows our best price there
-and what the board seated, then lists every Most Likely row on the game.
-Read-only, seconds; run it before kickoff (after, the picks have cleared):
-
-```
-cd /srv/qellys && python3 legcheck.py
-```
-
-Any legs: `python3 legcheck.py "Jalen Hurts" pass_yds over 199.5 "DeVonta Smith" receptions over 5.5`
-(markets: pass_yds, rec_yds, receptions, rush_yds, rush_att, pass_att, pass_cmp, anytime_td).
-
-**M3. Is bet365 on offer? (2026-09-28, about six credits, read-only).** It
-was the best price on all three legs of a research report and it is not
-among the books we pull. This asks The Odds API for one market in each
-region and prints the bookmaker keys that answer, marking the ones we
-do not pull. The key is read from the environment and never printed:
+**M7. Why do the picks that lost the close hit 12–18%?** The loss audit
+(M4) found the only number that is not luck: Most Likely picks whose line
+moved AGAINST them before kickoff hit 18% staked (8-37) and 12% on the one
+board (9-63), where we claimed 62%. A move against a pick should cost a
+few points, not forty-five. Three things do that — a scratch the ledger
+graded at 0 instead of void, news the market had (the pick should have
+come off the board), or a "close" that is not one (a snapshot from the
+wrong day or market) — and each leaves a different mark on the rows. This
+sizes every close, lists every lost-the-close bet with its final number,
+flags the scratch suspects, says whether the finals sat nearer the close
+or our line, and counts the markets that never get a close at all (half
+the Edge picks and six in ten Most Likely picks carried none). Read-only,
+seconds; paste the whole thing back:
 
 ```
-cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^ODDS_API_KEY | xargs) python3 bookprobe.py
+cd /srv/qellys && sudo -u qellys python3 closecheck.py
 ```
 
-Paste it back. If bet365 answers in a region we can use, adding it is a
-one-line change to the pull.
-
-**M4. Where the record loses (2026-09-28, read-only, seconds).** Every
-settled bet in the books the site publishes — Edge picks, Most Likely
-(staked and paper), the one board by tier — cut by sport, market, side,
-price, what we claimed, the close, the sportsbook and the week. It opens
-the ledger read-only; it cannot change a grade. The end of it is two
-lists: THE LEAKS (slices of 30+ bets losing by more than luck explains)
-and OVER-CLAIMED (slices where we said likelier than it was). Paste the
-whole thing back:
-
-```
-cd /srv/qellys && sudo -u qellys python3 lossaudit.py
-```
-
-Also useful: `--sport nfl` for one league, `--since 2026-09-01` for a
-window.
-
-**M5. The MLB board on an off day, and the standings (2026-09-28,
-read-only, seconds).** Prints the board's date and `upcoming` stamp, the
-standings file's season, source and note, the last MLB final ingested,
-and what the league's calendar says. Paste it back:
-
-```
-cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
-```
-
-**M6. Are the Record page's numbers right? (2026-09-28, read-only,
-seconds).** Re-derives every grade on an in-memory copy of the ledger,
-lists any result that contradicts its own number, any bet graded
-differently in two sections, every NFL game-line bet with the section
-that counts it, and recounts each section. Paste it back:
-
-```
-cd /srv/qellys && sudo -u qellys python3 recordcheck.py
-```
-
-`--sport mlb` (or cfb, nba) for another league.
+`--sport nfl` for one league; `--all` lifts the 60-row cap on the lists.
 
 ---
 

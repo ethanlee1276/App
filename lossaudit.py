@@ -172,8 +172,17 @@ def score(bets: list) -> dict:
 
 
 def _week(b) -> str:
-    """The Monday of the bet's week — so a model change shows as a step."""
+    """The Monday of the bet's week — so a model change shows as a step.
+
+    A football bet is dated by its week label ("2026-W03"), and read as a
+    calendar date that is ISO week 3 — January. The box's first run
+    (2026-09-29) filed every NFL bet under "week of 2026-01-12". The
+    label is the week; say so."""
     import datetime as _dt
+    import re
+    m = re.match(r"^(\d{4})-W(\d{1,2})$", str(b["date"] or ""))
+    if m:
+        return f"{str(b.get('sport') or 'football').upper()} week {int(m.group(2))}"
     try:
         d = _dt.date.fromisoformat(str(b["date"])[:10])
     except ValueError:

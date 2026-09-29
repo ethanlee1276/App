@@ -40,12 +40,33 @@ CHROMIUM = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium-1194/chrom
 
 
 # --- the board ----------------------------------------------------------------
-def _today() -> str:
+def _now_et() -> datetime.datetime:
     try:
         from zoneinfo import ZoneInfo
-        return datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+        return datetime.datetime.now(ZoneInfo("America/New_York"))
     except Exception:                                           # noqa: BLE001
-        return datetime.date.today().isoformat()
+        return datetime.datetime.now()
+
+
+def _today() -> str:
+    return _now_et().date().isoformat()
+
+
+#: The fixture's kickoff, Eastern. Past this hour the game moves to
+#: tomorrow: a slate that kicked off at 20:15 "today" has STARTED by the
+#: evening gate, and every page then rightly hides it (2026-09-28, 20:26
+#: ET: the Most Likely page drew none of the six, and was right to).
+KICKOFF = "20:15"
+
+
+def _slate() -> str:
+    """The date the fixture's game is on: today while 20:15 ET is still
+    ahead, tomorrow once it has passed. The pick's `since` stays today —
+    it was posted today either way."""
+    now = _now_et()
+    if now.hour >= 20:
+        return (now.date() + datetime.timedelta(days=1)).isoformat()
+    return now.date().isoformat()
 
 
 def _row(player, pos, market, label, side, line, odds, prob, **kw):
@@ -53,7 +74,7 @@ def _row(player, pos, market, label, side, line, odds, prob, **kw):
          "market": market, "market_label": label, "side": side, "line": line, "odds": odds,
          "book": kw.pop("book", "FanDuel"), "model_prob": prob, "first_prob": prob,
          "rung": "main", "main_line": line, "main_side": side, "bettable": True,
-         "game_date": _today(), "kickoff": "20:15", "since": f"{_today()}T12:00:00Z",
+         "game_date": _slate(), "kickoff": KICKOFF, "since": f"{_today()}T12:00:00Z",
          "projection": kw.pop("projection", 1.0), "recent_values": kw.pop("recent", [1, 2, 1, 0, 1]),
          "reasons": [], "warnings": []}
     r.update(kw)
@@ -65,7 +86,7 @@ def _edge(player, pos, market, label, side, line, odds, recent, projection):
             "market_label": label, "side": side, "line": line, "odds": odds, "book": "DraftKings",
             "has_market": True, "recent_values": recent, "projection": projection,
             "hit_prob": 0.55, "fair_prob": 0.5, "edge": 0.01, "ev_per_unit": 0.01,
-            "game_date": _today(), "game_kickoff": "20:15", "reasons": [], "warnings": [],
+            "game_date": _slate(), "game_kickoff": KICKOFF, "reasons": [], "warnings": [],
             "recommended": False, "grade": "Pass", "confidence": 6.0, "quality": 60,
             "all_lines": [{"book": "DraftKings", "line": line, "over_odds": -110, "under_odds": -110}]}
 
@@ -103,11 +124,11 @@ WATCH = [dict(_edge("Kenneth Walker", "RB", "anytime_td", "Anytime TD", "OVER", 
 
 
 def board() -> dict:
-    game = {"home": "SEA", "away": "ARI", "date": _today(), "kickoff": "20:15", "spread": -3.5,
+    game = {"home": "SEA", "away": "ARI", "date": _slate(), "kickoff": KICKOFF, "spread": -3.5,
             "favorite": "SEA", "total": 44.5, "roof": "outdoors", "surface": "grass",
             "home_ml": -170, "away_ml": 145, "live": None,
             "weather": {"dome": False, "temp_f": 60, "wind_mph": 5, "measured": True, "forecast": True}}
-    return {"date": _today(), "generated_from": "live-oddsapi", "games": [game],
+    return {"date": _slate(), "generated_from": "live-oddsapi", "games": [game],
             "recommendations": EDGE, "longshot_watch": WATCH, "long_shots": [], "game_bets": [],
             "most_likely": ML,
             "board_shelves": [
