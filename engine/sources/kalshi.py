@@ -538,10 +538,19 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
                 # charges for it. Stated in points of probability, the same
                 # honest unit the futures board uses.
                 row["edge_pts"] = round((p_yes - m["prob"]) * 100, 1)
+                # NET OF THE FEE (audit 2026-09-30, B7-1): the gross gap
+                # stays on the row for the board; the recommendation is
+                # decided on what can actually be bought. The fee is
+                # symmetric in P, so YES and NO pay alike.
+                from ..exchangefees import fee_bps as _fee_bps, net_edge_pts as _net
+                side_p = m["prob"] if row["edge_pts"] > 0 else 1 - m["prob"]
+                side_fair = p_yes if row["edge_pts"] > 0 else 1 - p_yes
+                row["fee_bps"] = _fee_bps("kalshi", side_p)
+                row["net_edge_pts"] = round(_net(side_fair, side_p, "kalshi"), 2)
                 liquid = (m.get("price_basis") == "book"
                           and float(m.get("volume_24h") or 0) >= KALSHI_MIN_VOLUME
                           and (m.get("spread_cents") or 99) <= KALSHI_MAX_SPREAD_CENTS)
-                if liquid and abs(row["edge_pts"]) >= KALSHI_MIN_EDGE_PTS:
+                if liquid and row["net_edge_pts"] >= KALSHI_MIN_EDGE_PTS:
                     row["rec"] = True
                     row["rec_side"] = "YES" if row["edge_pts"] > 0 else "NO"
         rows.append(row)

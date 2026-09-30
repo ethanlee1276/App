@@ -549,6 +549,12 @@ def edge(row: dict) -> float | None:
     odds = row.get("odds")
     if fair is None or implied(odds) is None:
         return None
+    # ON AN EXCHANGE THE VENUE KEEPS A FEE (audit 2026-09-30, B7-1): the
+    # quote is a contract price, and the EV is what a unit buys after the
+    # fee. A sportsbook's price already has its margin in it.
+    from . import exchangefees
+    if exchangefees.is_exchange(row.get("book")):
+        return exchangefees.net_expected_value(fair, implied(odds), row.get("book"))
     from .odds import expected_value
     return expected_value(fair, int(float(odds)))
 
@@ -1071,10 +1077,15 @@ def price_gap_lines(gap: dict) -> list:
 def _card(row: dict, below: str = "") -> dict:
     """The row as the page draws it: the board's own fields, plus the
     numbers this feature exists to show together."""
+    from . import exchangefees
     fair = fair_prob(row)
     ev = edge(row)
     imp = implied(row.get("odds"))
     out = dict(row)
+    # What the venue keeps, when the book is an exchange (audit B7-1);
+    # absent on a sportsbook, whose margin is already in its price.
+    if imp is not None and exchangefees.is_exchange(row.get("book")):
+        out["fee_bps"] = exchangefees.fee_bps(row.get("book"), imp)
     out.update({
         # THE FAIR IS THE HEADLINE NUMBER, not the model's. Which
         # witness it came from is on the card beside it, because a
@@ -1102,6 +1113,7 @@ def _card(row: dict, below: str = "") -> dict:
         # mean the sharp fair and the shopped price had drifted apart
         # further than any real market allows, which is a bug.
         "ev_units": None if ev is None else round(ev, 4),
+
         "edge_points": (None if (fair is None or imp is None)
                         else round((fair - imp) * 100.0, 1)),
         # EMPTY ON A QUALIFYING PICK, and the reason on every other.

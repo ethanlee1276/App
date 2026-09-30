@@ -529,6 +529,13 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
+    # WHAT THE VENUE KEPT, in basis points of the stake (audit 2026-09-30,
+    # B7-1). Exchange rows only; NULL on a sportsbook and on every row
+    # written before fees were counted.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN fee_bps INTEGER")
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # The audit trail and the forecast log's version-2 columns — AFTER
     # every column the triggers name exists, BEFORE the first sweep below
     # writes, so that sweep's changes are logged like any other.
@@ -2235,6 +2242,14 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
             continue
         side = r.get("rec_side") or "YES"
         cost = float(r["prob"]) if side == "YES" else 1 - float(r["prob"])
+        # THE PRICE PAID, fee included (audit 2026-09-30, B7-1): ROI and
+        # CLV grade against what the contract actually cost. `line` keeps
+        # the quoted price the desk saw; `edge` is the net edge when the
+        # desk computed one; `fee_bps` says how much the venue kept.
+        from .exchangefees import fee_bps as _fee_bps, paid as _paid
+        fee = r.get("fee_bps")
+        fee = int(fee) if fee is not None else _fee_bps("kalshi", cost)
+        edge_net = r.get("net_edge_pts", r.get("edge_pts"))
         model_p = r.get("model_p")
         p_side = (float(model_p) if side == "YES" else 1 - float(model_p)) \
             if model_p is not None else None
@@ -2254,15 +2269,15 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, game_day, player, "
             "market, side, line, book, odds, hit_prob, edge, grade, "
-            "stake_units, stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'predmarket')",
+            "stake_units, stake_dollars, status, category, fee_bps) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'predmarket', ?)",
             (now, r.get("sport", "kalshi"), date,
              predmarket_event_date(r["ticker"]) or date, r["ticker"],
              r.get("desk", "kalshi_ml"), side, round(cost * 100, 1),
-             "kalshi", _price_to_american(cost), p_side,
-             (r.get("edge_pts") or 0) / 100.0,
+             "kalshi", _price_to_american(_paid("kalshi", cost)), p_side,
+             (edge_net or 0) / 100.0,
              r.get("title", "")[:60] or "Desk", PREDMARKET_FLAT_STAKE,
-             0.0))
+             0.0, fee))
         n += cur.rowcount
     conn.commit()
     return n

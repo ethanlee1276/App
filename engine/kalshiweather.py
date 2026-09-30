@@ -168,10 +168,17 @@ def weather_board(markets_by_series: dict, highs: dict,
             sigma = SIGMA_BY_LEAD.get(lead, SIGMA_BY_LEAD[MAX_LEAD_DAYS])
             p = bracket_prob(bracket[0], bracket[1], mu, sigma)
             edge_pts = round((p - m["prob"]) * 100, 1)
+            # Net of Kalshi's fee (audit 2026-09-30, B7-1), on the side
+            # the gap points to; the gross gap stays on the row.
+            from .exchangefees import fee_bps as _fee_bps, net_edge_pts as _net
+            side_p = m["prob"] if edge_pts > 0 else 1 - m["prob"]
+            side_fair = p if edge_pts > 0 else 1 - p
+            fee = _fee_bps("kalshi", side_p)
+            net = round(_net(side_fair, side_p, "kalshi"), 2)
             liquid = (m.get("price_basis") == "book"
                       and float(m.get("volume_24h") or 0) >= WX_MIN_VOLUME
                       and (m.get("spread_cents") or 99) <= WX_MAX_SPREAD_CENTS)
-            rec = liquid and abs(edge_pts) >= WX_MIN_EDGE_PTS
+            rec = liquid and net >= WX_MIN_EDGE_PTS
             rows.append({
                 "ticker": m["ticker"], "series": series,
                 "city": meta["city"], "date": date, "lead_days": lead,
@@ -181,7 +188,8 @@ def weather_board(markets_by_series: dict, highs: dict,
                 "prob": m["prob"], "price_basis": m.get("price_basis"),
                 "volume_24h": m.get("volume_24h"),
                 "spread_cents": m.get("spread_cents"),
-                "edge_pts": edge_pts, "rec": rec,
+                "edge_pts": edge_pts, "net_edge_pts": net, "fee_bps": fee,
+                "rec": rec,
                 "rec_side": ("YES" if edge_pts > 0 else "NO") if rec else None,
             })
     rows.sort(key=lambda r: (not r["rec"], -abs(r["edge_pts"])))
