@@ -81,6 +81,15 @@ cd /srv/qellys && sudo ./deploy/backup.sh && sudo ./deploy/backup.sh --check
 If the disk is tight, `sudo ./deploy/setenv.sh QB_BACKUP_HISTORY` and
 set it to `0` — everything else still backs up.
 
+**P9-a. The live overlay (look, no command).** During the next live MLB
+game, open the Live tab: "The sweat" should draw its picks with a live
+chance beside each. It had been blank since 2026-08-24 (a four-hour
+timestamp misread). If it is still blank with a game on, paste:
+
+```
+cd /srv/qellys && head -c 300 web/data/sweat.json; echo; date -u
+```
+
 ---
 
 ## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")

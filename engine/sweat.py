@@ -280,7 +280,11 @@ def build(today: str | None = None, quiet: bool = True,
                                board.get("long_shots") or [], ident, pitching)
     rows = one_row_per_wager(rows)
 
-    now = now or _dt.datetime.now().isoformat(timespec="seconds")
+    # UTC WITH ITS OFFSET (audit 2026-09-30, P1-5). A naive local stamp on
+    # a box whose clock is not UTC was read by the page as UTC, four hours
+    # off, so every sweat file looked older than its 3-minute freshness bar
+    # and the live win-probability overlay drew nothing from 2026-08-24.
+    now = now or _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
     state = _load(STATE_PATH) or {}
     state = bank_history(state, rows, now)
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)

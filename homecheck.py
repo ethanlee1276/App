@@ -231,8 +231,11 @@ def record() -> list:
     stamp = str(doc.get("generated_at") or "")
     age = ""
     try:
-        made = _dt.datetime.fromisoformat(stamp)
-        hrs = (_dt.datetime.now() - made).total_seconds() / 3600.0
+        made = _dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        # An aware stamp (a writer that carries its zone, audit P1-5) is
+        # compared with an aware now; a legacy naive one with local now.
+        now = _dt.datetime.now(made.tzinfo) if made.tzinfo else _dt.datetime.now()
+        hrs = (now - made).total_seconds() / 3600.0
         age = f"  ({hrs:.1f}h old)"
         if hrs > 6:
             age += "   !! STALE — the page is rendering an old export"

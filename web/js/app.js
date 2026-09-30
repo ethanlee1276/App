@@ -755,6 +755,29 @@ const trueMinus = (s) => String(s).replace(RE_SIGN, `$1${MINUS}`);
 
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`);
+/* A STAMP'S INSTANT (audit P1-5). A stamp with a zone (`Z`, `+00:00`,
+   `-04:00`) is read as written. One without is a legacy Python
+   `datetime.now()` from the box, whose clock is US Eastern — reading it as
+   UTC (the old `+ "Z"`) put it four hours in the past and switched the
+   live overlay off. NaN for nothing. */
+function stampMs(s) {
+  const t = String(s == null ? "" : s).trim();
+  if (!t) return NaN;
+  if (/(z|[+-]\d\d:?\d\d)$/i.test(t)) return Date.parse(t);
+  const asUtc = Date.parse(t + "Z");
+  if (!Number.isFinite(asUtc)) return NaN;
+  try {
+    const part = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" })
+      .formatToParts(new Date(asUtc)).find((p) => p.type === "timeZoneName");
+    const m = /GMT([+-])(\d+)(?::(\d+))?/.exec((part && part.value) || "");
+    if (m) {
+      const mins = (Number(m[2]) * 60 + Number(m[3] || 0)) * (m[1] === "-" ? -1 : 1);
+      return asUtc - mins * 60000;
+    }
+  } catch (e) { /* no Intl zone data: fall through */ }
+  return asUtc;
+}
+
 /* NULL IS NOT ZERO (audit P1-9). An ROI the engine did not compute — too
    few settled, or nothing staked — printed "+0.0%" in the good colour,
    which is a claim. One formatter, a dash for nothing. */
@@ -36357,7 +36380,7 @@ async function renderLiveFights(host) {
   // ago is 90 seconds old however recently we asked for it, and a smoothly
   // redrawn stale number next to a fight somebody is watching is the worst
   // thing this page could do.
-  const built = Date.parse(d.generated_at || "") || 0;
+  const built = stampMs(d.generated_at) || 0;
   const ageS = built ? Math.max(0, Math.round((Date.now() - built) / 1000)) : null;
   const stale = ageS != null && ageS > (d.stale_after_s || 75);
 
@@ -44969,9 +44992,7 @@ async function renderSweatZone() {
   // under the CFB button (Ethan, 2026-09-05). A file that names a sport
   // renders only there; one that does not is left as it was.
   if (d.sport && d.sport !== state.sport) { host.innerHTML = ""; return; }
-  const fresh = d.generated_at
-    && (Date.now() - Date.parse(d.generated_at.endsWith("Z")
-        ? d.generated_at : d.generated_at + "Z")) < 180000;
+  const fresh = d.generated_at && (Date.now() - stampMs(d.generated_at)) < 180000;
   const picks = fresh && !d.locked
     ? (d.picks || []).filter((r) => r.live_prob != null) : [];
   const parlays = fresh && !d.locked
