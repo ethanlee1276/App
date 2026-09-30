@@ -136,7 +136,10 @@ sudo apt update && sudo apt install -y python3-pip
 # typing_extensions ("RECORD file not found ... installed by debian",
 # 2026-09-05 on the box). --ignore-installed lays pip's newer copies
 # under /usr/local, which python reads first, and leaves apt's alone.
-sudo python3 -m pip install --break-system-packages --ignore-installed typing_extensions anthropic
+# PINNED, WITH HASHES (audit 2026-09-30, E-6): requirements.txt names the
+# exact SDK and every package it pulls in, and pip refuses any file whose
+# bytes do not match. `python3 launch.py --todo` says if the box drifts.
+cd /srv/qellys && sudo python3 -m pip install --break-system-packages --ignore-installed --require-hashes -r requirements.txt
 # Must print a version AS THE SERVICE USER, or the service will not see it:
 sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
 ```

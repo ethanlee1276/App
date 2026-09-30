@@ -472,10 +472,39 @@ def _legal_review() -> Item:
                 "interesting")
 
 
+def _sdk_pin(installed=None) -> Item:
+    """The Ask SDK on this box against the pin in requirements.txt (audit
+    2026-09-30, E-6). `anthropic` was installed unpinned, so nobody could
+    say which version was answering; now a drift from the pin is a line
+    here. `installed` is injectable for the tests."""
+    import re
+    try:
+        pin = re.search(r"^anthropic==([\w.]+)", (ROOT / "requirements.txt").read_text(),
+                        re.M).group(1)
+    except (OSError, AttributeError):
+        return Item("config", "Ask SDK pinned", UNKNOWN, "requirements.txt has no anthropic pin")
+    if installed is None:
+        try:
+            from importlib.metadata import version
+            installed = version("anthropic")
+        except Exception:                                     # noqa: BLE001
+            installed = ""
+    cmd = ("sudo python3 -m pip install --break-system-packages --ignore-installed "
+           "--require-hashes -r requirements.txt")
+    if not installed:
+        return Item("config", "Ask SDK pinned", UNKNOWN,
+                    f"anthropic is not installed here (pin {pin}) — Ask and the "
+                    "explainer are off on this machine", cmd)
+    if installed != pin:
+        return Item("config", "Ask SDK pinned", TODO,
+                    f"installed anthropic {installed}, requirements.txt pins {pin}", cmd)
+    return Item("config", "Ask SDK pinned", DONE, f"anthropic {installed}, as pinned")
+
+
 def config_items(env=None) -> list[Item]:
     """The settings whose absence is silent and expensive."""
     env = env if env is not None else os.environ
-    out = [_cloudflare_list(), _legal_blanks(), _legal_mailboxes(),
+    out = [_sdk_pin(), _cloudflare_list(), _legal_blanks(), _legal_mailboxes(),
            _legal_review()]
 
     if env.get("QB_BACKUP_REMOTE"):

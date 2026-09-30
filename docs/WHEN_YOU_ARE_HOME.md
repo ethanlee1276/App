@@ -113,6 +113,21 @@ the last few:
 cd /srv/qellys && tail -n 20 data/logs/security.jsonl
 ```
 
+**P30-a. Put the Ask SDK on its pin, then audit it (changes packages, 2
+minutes).** `anthropic` was installed unpinned. `requirements.txt` now pins
+it and everything it pulls in, with hashes:
+
+```
+cd /srv/qellys && sudo python3 -m pip install --break-system-packages --ignore-installed --require-hashes -r requirements.txt
+sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
+sudo python3 -m pip install --break-system-packages pip-audit && pip-audit -r requirements.txt
+sudo systemctl restart qellys && python3 launch.py --todo | grep -i "sdk"
+```
+
+The version line should print `1.11.0`; `pip-audit` should print "No known
+vulnerabilities found" (if it names one, paste it back); `--todo` should
+say "anthropic 1.11.0, as pinned".
+
 **P29-a. Retire the old name+PIN profiles if nobody uses them (changes a
 setting, a minute).** The PIN store from before real accounts is locked
 down now (one answer, a lockout, the sign-in rate limit), but if the box has
