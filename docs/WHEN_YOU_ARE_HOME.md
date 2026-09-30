@@ -81,6 +81,20 @@ cd /srv/qellys && sudo ./deploy/backup.sh && sudo ./deploy/backup.sh --check
 If the disk is tight, `sudo ./deploy/setenv.sh QB_BACKUP_HISTORY` and
 set it to `0` — everything else still backs up.
 
+**P10-a. The updater no longer runs new code as root (nothing to do).**
+The five-minute auto-update still ships every green push, exactly as
+before. The one step that ran code from the new checkout (the page trim)
+now runs as the `qellys` user. If you ever want pushes to need your say-so
+first, one line turns it on — then only a commit you tag `deploy-...`
+goes live:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_UPDATE_REQUIRE tag
+```
+
+(`off` puts it back. On GitHub, also turn on 2FA and branch protection for
+the deploy branch — Settings → Branches — so a stolen token cannot push.)
+
 **P9-a. The live overlay (look, no command).** During the next live MLB
 game, open the Live tab: "The sweat" should draw its picks with a live
 chance beside each. It had been blank since 2026-08-24 (a four-hour

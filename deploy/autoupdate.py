@@ -83,6 +83,92 @@ def _record(repo, ok, note):
     print(("ok: " if ok else "FAILED: ") + str(note))
 
 
+#: Who runs code from the pulled checkout (audit 2026-09-30, P1-7). This
+#: script is root — it needs the deploy key and systemctl — and it ran the
+#: trim straight from what it had just pulled, so any commit on the branch
+#: executed as root within five minutes.
+APP_USER = os.environ.get("QB_APP_USER", "qellys")
+
+
+def _user_exists(name) -> bool:
+    try:
+        import pwd
+        pwd.getpwnam(name)
+        return True
+    except (ImportError, KeyError):
+        return False
+
+
+def _as_app_user(args, euid=None, user_exists=_user_exists, have=None):
+    """``args`` wrapped in `runuser -u <app user> --` when this is root and
+    the user exists; unchanged otherwise (a laptop, a scratch box)."""
+    import shutil
+    euid = os.geteuid() if euid is None and hasattr(os, "geteuid") else euid
+    have = have or (lambda b: shutil.which(b) is not None)
+    if euid == 0 and user_exists(APP_USER) and have("runuser"):
+        return ["runuser", "-u", APP_USER, "--"] + list(args)
+    return list(args)
+
+
+def _hand_to_app_user(repo) -> None:
+    """The trim's output directory, owned by the app user, so the trim can
+    write it without root. Best effort: a failure leaves the originals
+    served, which is where the site was before the trim existed."""
+    if not (hasattr(os, "geteuid") and os.geteuid() == 0 and _user_exists(APP_USER)):
+        return
+    try:
+        import pwd
+        pw = pwd.getpwnam(APP_USER)
+        top = os.path.join(repo, "web", "min")
+        for sub in ("", "js", "css"):
+            d = os.path.join(top, sub)
+            os.makedirs(d, exist_ok=True)
+            os.chown(d, pw.pw_uid, pw.pw_gid)
+            for name in os.listdir(d):
+                f = os.path.join(d, name)
+                if os.path.isfile(f):
+                    os.chown(f, pw.pw_uid, pw.pw_gid)
+    except OSError:
+        pass
+
+
+def _setting(name, default=""):
+    """One value: the environment first, then /etc/qellys/env — read for
+    that one key, never sourced (it holds the payment keys; the update
+    unit deliberately does not load it). Same rule as deploy/backup.sh."""
+    if os.environ.get(name):
+        return os.environ[name]
+    try:
+        with open(os.environ.get("QB_ENV_FILE", "/etc/qellys/env"), encoding="utf-8") as fh:
+            for line in fh:
+                k, _, v = line.strip().partition("=")
+                if k.strip() == name:
+                    return v.strip().strip("'\"") or default
+    except OSError:
+        pass
+    return default
+
+
+def _allowed(repo, mode) -> str:
+    """Why FETCH_HEAD may not be deployed, or "" when it may.
+
+    QB_UPDATE_REQUIRE (audit P1-7): ``off`` (default) takes any head on the
+    branch — the ship-on-green pipeline; ``tag`` takes only a head that a
+    ``deploy-*`` tag points at; ``signed`` only a head `git verify-commit`
+    accepts against the keys in root's keyring."""
+    mode = (mode or "off").strip().lower()
+    if mode in ("", "off"):
+        return ""
+    if mode == "tag":
+        _git(repo, "fetch", "--tags", "origin")
+        ok, tags = _git(repo, "tag", "--points-at", "FETCH_HEAD", "--list", "deploy-*")
+        return "" if ok and tags.strip() else "no deploy-* tag on the pushed head"
+    if mode == "signed":
+        ok, out = _git(repo, "verify-commit", "FETCH_HEAD")
+        return "" if ok else "the pushed head is not signed by an allowed key"
+    return f"unknown QB_UPDATE_REQUIRE={mode!r} — refusing to guess"
+
+
 def _trim(repo, clear=False) -> str:
     """The comment-stripped shell (engine/shrink.py): clear it, or build it.
 
@@ -96,8 +182,10 @@ def _trim(repo, clear=False) -> str:
     args = [sys.executable, "-m", "engine.shrink", "--web", os.path.join(repo, "web")]
     if clear:
         args.append("--clear")
+    _hand_to_app_user(repo)
     try:
-        p = subprocess.run(args, cwd=repo, capture_output=True, text=True, timeout=120)
+        p = subprocess.run(_as_app_user(args), cwd=repo, capture_output=True, text=True,
+                           timeout=120)
     except Exception as exc:                                  # noqa: BLE001
         return f" · trim failed: {exc}"
     if p.returncode != 0:
@@ -157,6 +245,11 @@ def main() -> int:
         _, head = _git(repo, "rev-parse", "HEAD")
         _, incoming = _git(repo, "rev-parse", "FETCH_HEAD")
         if head and incoming and head != incoming:
+            why = _allowed(repo, _setting("QB_UPDATE_REQUIRE", "off"))
+            if why:
+                _record(repo, False, f"refused {incoming[:8]}: {why} "
+                                     "(QB_UPDATE_REQUIRE) — nothing pulled")
+                return 0
             _trim(repo, clear=True)
     ok, out = _git(repo, "pull", "--ff-only", "origin", branch)
     if not ok:

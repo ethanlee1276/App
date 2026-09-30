@@ -386,7 +386,9 @@ def _run_updater(repo, bindir):
                                                  "autoupdate.py"),
                     "--repo", repo, "--service", "qellys"),
                    env={**os.environ, "PATH": bindir + os.pathsep
-                        + os.environ["PATH"]},
+                        + os.environ["PATH"],
+                        # Never the box's own settings (QB_UPDATE_REQUIRE).
+                        "QB_ENV_FILE": "/nonexistent", "QB_UPDATE_REQUIRE": "off"},
                    check=True, capture_output=True, text=True)
     import json
     with open(os.path.join(repo, "data", "autoupdate.json")) as f:
