@@ -12628,3 +12628,11 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
   color: var(--warn); background: rgba(217, 165, 72, 0.12);
   border-color: rgba(217, 165, 72, 0.4);
 }
+
+/* Status: the verdict leads (audit O17). */
+.st-verdict { font-weight: 700; padding: 12px 14px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border-soft); margin: 0 0 12px; }
+.st-verdict.st-good { color: var(--good); }
+.st-verdict.st-warn { color: var(--warn); border-color: rgba(217, 165, 72, 0.4); }
+.st-verdict.st-bad { color: var(--bad); }
+.st-mech > summary { cursor: pointer; color: var(--text-dim); margin-bottom: 8px; }

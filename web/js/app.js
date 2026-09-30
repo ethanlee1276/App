@@ -37384,7 +37384,21 @@ const STATUS_BOARDS = [
   ["live_cfb.json", "Live scoreboard (college football)"],
   ["live_nba.json", "Live scoreboard (NBA)"],
   ["live_wnba.json", "Live scoreboard (WNBA)"],
+  /* The Lab's weekly backtest (audit O17): nine days overdue once with
+     nothing flagging it, because it was not on this list at all. */
+  ["backtest.json", "The Lab (weekly backtest)"],
 ];
+
+/* A FILE'S OWN CLOCK (audit 2026-09-30, F-13 / O17). The slate boards
+   rebuild every cycle and use the machine's measured floor; these move on
+   slower clocks and would read "stale" all week against it. Hours, the
+   same numbers as engine/freshness.MAX_AGE_H. */
+const STATUS_MAX_AGE_H = { "backtest.json": 192, "record.json": 6, "ufc.json": 12 };
+
+/* Which league a slate file is, so its row can say "off-season" from the
+   heartbeat rather than "never built" or a scary age. */
+const STATUS_SPORT_OF = { "recommendations.json": "nfl", "mlb_recommendations.json": "mlb",
+  "nba.json": "nba", "wnba.json": "wnba", "cfb.json": "cfb" };
 
 async function boardStamp(file) {
   try {
@@ -37484,13 +37498,18 @@ async function renderStatus() {
   const d = state.data || {};
   const os = d.odds_status || {};
   const inj = d.injury_status || {};
+  const runs = (hb && hb.boards) || {};
+  const offseason = (file) => !!(runs[STATUS_SPORT_OF[file]] || {}).offseason;
+  const lateFor = (file, age) => age != null
+    && age > Math.max(staleAfterMs(), (STATUS_MAX_AGE_H[file] || 0) * 3600000);
   const row = ([file, label], s) => {
     const age = s.at ? Date.now() - s.at : null;
     // The floor is this machine's own cycle time where we know it, so
     // "stale" means late for THIS box rather than late for a constant
     // that was true of somebody's laptop.
-    const bad = age != null && age > staleAfterMs();
-    const state_ = s.missing ? ["never built", "off"]
+    const bad = lateFor(file, age) && !offseason(file);
+    const state_ = offseason(file) ? ["off-season", "off"]
+      : s.missing ? ["never built", "off"]
       : s.unreachable ? ["unreachable", "bad"]
       : age == null ? ["built, time unknown", "off"]
       : bad ? [`${ageText(age / 1000)} ago`, "bad"]
@@ -37515,8 +37534,24 @@ async function renderStatus() {
        on a ${Math.round((hb.interval_s || 0) / 60)}-minute timer.`
     : `No heartbeat has been written — either the refresher is not running or
        it has not completed a cycle since it started.`;
+  /* THE VERDICT FIRST (audit O17). The page answered "is it working?"
+     only to a reader who could interpret a heartbeat, a cycle median and
+     sixteen ages. One sentence now leads; the mechanics sit beneath it. */
+  const beatAge = hb && hb.at_epoch ? Date.now() / 1000 - hb.at_epoch : null;
+  const loopDead = beatAge == null
+    || beatAge > Math.max(900, 3 * Math.max(hb.interval_s || 0, hb.cycle_p50_s || 0));
+  const late = STATUS_BOARDS.filter(([f], i) => !stamps[i].missing
+    && lateFor(f, stamps[i].at ? Date.now() - stamps[i].at : null) && !offseason(f));
+  const verdict = loopDead
+    ? ["bad", "The refresh loop is not running — boards below are frozen where it stopped."]
+    : late.length
+      ? ["warn", `Running, but ${plural(late.length, "board")} ${late.length === 1 ? "is" : "are"} behind: ${
+          late.slice(0, 4).map(([, l]) => l).join(", ")}${late.length > 4 ? "…" : ""}.`]
+      : ["good", "Everything is running and every board is current."];
   host.innerHTML = `
-    <div class="about-lede"><p>${beat} ${cycle}</p></div>
+    <div class="st-verdict st-${verdict[0]}" role="status">${escapeHtml(verdict[1])}</div>
+    <details class="st-mech"><summary>How this is measured</summary>
+      <div class="about-lede"><p>${beat} ${cycle}</p></div></details>
     ${buildsCardHTML(hb)}
     <div class="section-title">Every published board</div>
     <div class="card st-card">${STATUS_BOARDS.map((b, i) => row(b, stamps[i])).join("")}</div>

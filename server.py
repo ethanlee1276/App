@@ -637,6 +637,18 @@ def file_bytes(path, key: str = ""):
     return body, st.st_mtime, etag
 
 
+def stale_headers(name: str, mtime) -> list:
+    """`X-Board-Stale-Hours` on a board older than its limit in
+    engine/freshness.MAX_AGE_H (audit 2026-09-30, F-13). The page reads
+    Last-Modified and ages the board itself; this says the verdict for
+    any other reader of /api/board, in the response, not in a doc."""
+    if mtime is None:
+        return []
+    from engine import freshness
+    v = freshness.verdict(name, time.time() - float(mtime))
+    return [("X-Board-Stale-Hours", f"{v['age_h']:.1f}")] if v["stale"] else []
+
+
 def board_bytes(name: str):
     """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
 
@@ -2612,7 +2624,8 @@ class Handler(BaseHTTPRequestHandler):
         if etag and self.headers.get("If-None-Match") == etag:
             return self._send_not_modified(etag, mtime)
         return self._send(200, body, ".json", mtime=mtime,
-                          headers=[("ETag", etag)] if etag else None)
+                          headers=([("ETag", etag)] if etag else [])
+                          + stale_headers(public.name, mtime))
 
     def _api_board(self, name: str):
         """The subscriber's copy of a board, read from outside the web root.
@@ -2664,8 +2677,9 @@ class Handler(BaseHTTPRequestHandler):
         # have. app.js keeps the tag in memory and hands it back.
         if etag and self.headers.get("If-None-Match") == etag:
             return self._send_not_modified(etag, mtime)
-        return self._send(200, body, ".json",
-                          headers=[("ETag", etag)] if etag else None)
+        return self._send(200, body, ".json", mtime=mtime,
+                          headers=([("ETag", etag)] if etag else [])
+                          + stale_headers(name, mtime))
 
     def _billing_get(self, path: str):
         from engine import billing as BI

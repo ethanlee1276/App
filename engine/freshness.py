@@ -148,3 +148,51 @@ def stamp_board(board: dict, sport: str) -> None:
         board["data_freshness"] = rep
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  freshness check skipped: {exc}")
+
+
+# --- how old a BOARD may be (audit 2026-09-30, F-13) -------------------------
+#
+# There was no board-age policy anywhere server-side. `_serve_board`, the
+# /api/board path and Caddy served whatever was on disk: a college Saturday
+# with the feeds down served Friday's board with the heartbeat saying ok,
+# and an off-season NFL board printed "FROZEN" into the journal about seven
+# thousand times. One table, read by the heartbeat (`stale` per board), by
+# the server (an `X-Board-Stale-Hours` header on an over-age board) and by
+# the launcher's frozen-board warning (silent for an off-season board).
+#
+# Hours. A slate board rebuilds every cycle, so two hours is several missed
+# cycles; the weekly backtest and the season projections move on their own,
+# slower clocks.
+MAX_AGE_H = {
+    "nfl": 2.0, "cfb": 2.0, "mlb": 2.0, "nba": 2.0, "wnba": 2.0,
+    "ufc": 12.0, "record": 6.0, "futures": 48.0, "backtest": 24.0 * 8,
+}
+DEFAULT_MAX_AGE_H = 6.0
+
+#: A board file's name, mapped to its key in MAX_AGE_H.
+_BOARD_KEYS = {"recommendations": "nfl", "mlb_recommendations": "mlb"}
+
+
+def board_key(name: str) -> str:
+    stem = str(name or "").rsplit("/", 1)[-1]
+    stem = stem[:-5] if stem.endswith(".json") else stem
+    if stem in _BOARD_KEYS:
+        return _BOARD_KEYS[stem]
+    if stem.startswith("futures_"):
+        return "futures"
+    return stem
+
+
+def max_age_h(name: str) -> float:
+    return MAX_AGE_H.get(board_key(name), DEFAULT_MAX_AGE_H)
+
+
+def verdict(name: str, age_s: float | None, offseason: bool = False) -> dict:
+    """{"age_h", "max_age_h", "stale", "offseason"} for one board. An
+    off-season board is never stale: it is SUPPOSED to sit still."""
+    limit = max_age_h(name)
+    if age_s is None:
+        return {"age_h": None, "max_age_h": limit, "stale": False, "offseason": bool(offseason)}
+    age_h = max(0.0, float(age_s)) / 3600.0
+    return {"age_h": round(age_h, 2), "max_age_h": limit,
+            "stale": (not offseason) and age_h > limit, "offseason": bool(offseason)}

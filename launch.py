@@ -349,12 +349,18 @@ def _board_counts(path: str) -> dict:
     ev = lambda r: isinstance(r.get("ev_per_unit"), (int, float)) and r["ev_per_unit"] > 0.005  # noqa: E731
     recs = [r for r in b.get("recommendations") or [] if isinstance(r, dict)]
     games = [g for g in b.get("game_bets") or [] if isinstance(g, dict)]
-    return {
+    out = {
         "most_likely": len(b.get("most_likely") or []),
         "edge": sum(1 for r in recs if r.get("has_market") is not False and ev(r))
         + sum(1 for g in games if g.get("grade") != "Pass" and ev(g)),
         "staked": sum(1 for r in recs + games if r.get("recommended")),
     }
+    # Off-season boards are supposed to sit still (audit F-13): the
+    # heartbeat says so and the frozen-board warning stays quiet. Present
+    # only when true, so an in-season board's counts read as they did.
+    if b.get("status") == "offseason":
+        out["offseason"] = True
+    return out
 
 
 def _board_truth(name: str, path: str) -> dict:
@@ -1561,6 +1567,11 @@ def _warn_if_frozen(name: str) -> None:
     path = BOARD_FILES.get(name)
     if not path:
         return
+    # SILENT OUT OF SEASON (audit F-13). An off-season board is meant to
+    # sit still; saying "FROZEN" about it every half hour for five months
+    # (~7,000 lines) taught the journal's reader to skip the line.
+    if (_BOARD_RUNS.get(name) or {}).get("offseason"):
+        return
     try:
         age = time.time() - os.path.getmtime(path)
     except OSError:
@@ -1612,6 +1623,16 @@ def _note_board(name: str, ok) -> bool:
         # …and whether what it says holds against its own data
         # (engine/boardtruth), into the heartbeat for the Status page.
         _BOARD_RUNS[name]["truth"] = _board_truth(name, BOARD_FILES[name])
+        # THE AGE POLICY (audit F-13): the file's age against its limit, so
+        # a build that keeps "keeping the last board" reads stale here and
+        # on the Status page instead of ok.
+        try:
+            from engine import freshness as _fresh
+            age = time.time() - os.path.getmtime(BOARD_FILES[name])
+        except OSError:
+            age = None
+        _BOARD_RUNS[name].update(_fresh.verdict(
+            name, age, offseason=bool(_BOARD_RUNS[name].get("offseason"))))
     # AFTER the run is recorded, so the heartbeat is written even if this
     # raises, and unconditional because the loop that matters is quiet.
     _warn_if_frozen(name)
