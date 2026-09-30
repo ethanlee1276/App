@@ -124,6 +124,8 @@ data/sim_gate_failures.json
 data/explain_cache.json
 data/ask_cache.json
 data/ask_usage.json
+# Sentences the number check took out of model-written text (engine/numcheck.py).
+data/llm_drops.jsonl
 # Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
 # symlink is not a directory to git — so `node_modules/` alone let a symlink
 # named node_modules be committed, pointing at a scratchpad path that exists

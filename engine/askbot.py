@@ -3335,7 +3335,7 @@ def build_request(board: dict, question: str, history=None, pick: str = "",
         f"{question}\n\nFacts for this question:\n" + json.dumps(facts, sort_keys=True, separators=(",", ":"))}]
     return {"system": system, "messages": messages, "matched": len(rows),
             "focused": focus is not None, "sources": sources[:8], "about": about, "sections": sorted(facts),
-            "boards": boards, "league": sport, "data_dir": data_dir}
+            "boards": boards, "league": sport, "data_dir": data_dir, "facts": facts}
 
 
 # ---- the answer cache and the usage log -----------------------------------------
@@ -3608,6 +3608,8 @@ def converse(client, model: str, req: dict, rounds: list) -> tuple:
                 out = run_tool(getattr(b, "name", ""), getattr(b, "input", None), req["boards"], req["league"],
                                req.get("data_dir"))
                 req["used"].add(getattr(b, "name", ""))
+                # Kept for the answer's number check (engine.numcheck).
+                req.setdefault("tool_outputs", []).append(out)
                 src = tool_source(getattr(b, "name", ""), getattr(b, "input", None), out)
                 if src and src not in sources:
                     sources.append(src)
@@ -3697,6 +3699,19 @@ def ask(board: dict, question: str, history=None, pick: str = "", client=None,
         base["sources"] = shown_sources(merged, "", req["about"])
         return {**base, "text": "Ask declined to answer that one.", "refused": True, "cached": False}
     text = answer_text(response)
+    if text:
+        # OUR NUMBERS COME FROM OUR DATA (audit P0-3). A sentence stating
+        # the site's record, ROI, CLV or units must be accounted for by this
+        # turn's facts or lookups, or it is taken out; odds arithmetic and
+        # general sports talk are left alone (`numcheck.about_our_record`).
+        from . import numcheck
+        text, _dropped = numcheck.scrub(
+            text, {"facts": req.get("facts"), "lookups": req.get("tool_outputs") or []},
+            only=numcheck.about_our_record)
+        if _dropped:
+            numcheck.log_drops("ask", board_name or req.get("league") or "", _dropped)
+            text = text or ("I can't state that figure from the data I have here — "
+                            "the Record page carries every number we publish.")
     base["sources"] = shown_sources(merged, text, req["about"])
     if not text:
         raise _ex.Unavailable("the answer had no text")

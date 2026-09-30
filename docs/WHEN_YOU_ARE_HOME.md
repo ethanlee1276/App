@@ -36,6 +36,16 @@ Coverage may DROP on the next few days of settles. That is expected: a
 close that was an in-game price is now no close at all, which is the
 honest reading.
 
+**P3-a. What the number check took out (read-only, seconds).** Every
+sentence the nightly column, the weekly brief, the pick explainer or Ask
+wrote with a number not in its data is now dropped before it is shown,
+and logged. A week from now, paste this back — an empty file is the good
+answer:
+
+```
+cd /srv/qellys && tail -20 data/llm_drops.jsonl 2>/dev/null || echo "nothing dropped"
+```
+
 ---
 
 ## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")

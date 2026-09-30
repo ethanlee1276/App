@@ -295,7 +295,17 @@ def explain(board_name: str, board: dict, wanted: str, client=None) -> dict:
         if hit and hit.get("text"):
             return {"text": hit["text"], "cached": True, "pick": wanted, "stamp": stamp,
                     "refused": bool(hit.get("refused"))}
-        got = ask(facts_for(row), client=client)
+        facts = facts_for(row)
+        got = ask(facts, client=client)
+        # Every number in the explanation must be in the pick's own facts
+        # (audit P0-3): a sentence that quotes one that is not is dropped
+        # before it is cached or shown, and logged.
+        from . import numcheck
+        text, dropped = numcheck.scrub(got["text"], facts)
+        if dropped:
+            numcheck.log_drops("explain", key, dropped)
+            got["text"] = text or ("The explanation was withheld: it quoted a "
+                                   "number that is not on this pick's card.")
         remember(key, {"text": got["text"], "at": time.time(), "refused": got["refused"]})
     return {"text": got["text"], "cached": False, "pick": wanted, "stamp": stamp,
             "refused": got["refused"]}

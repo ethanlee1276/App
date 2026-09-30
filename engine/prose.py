@@ -240,6 +240,47 @@ def _ensure_coverage(out: dict, pack_sports: list[str],
             for sp in pack_sports}
 
 
+def _checked(out: dict, pack: dict, kind: str, key: str,
+             headline_fallback: str) -> dict:
+    """The model's reply with every sentence whose numbers the pack cannot
+    account for taken out (`engine.numcheck`, audit P0-3).
+
+    The prompt's "use ONLY numbers present in the JSON" was the only guard
+    between a model's invention and the public Record page. A headline
+    that fails is replaced by one built from the pack; an empty sport note
+    is back-filled by `_ensure_coverage` from the pack's own numbers, as a
+    missing one always was. Every drop is logged to `data/llm_drops.jsonl`.
+    """
+    from . import numcheck
+    ok = numcheck.allowed(pack)
+    dropped: list = []
+
+    def _one(text):
+        kept, d = numcheck.scrub(str(text or ""), pack, ok=ok)
+        dropped.extend(d)
+        return kept
+
+    head = _one(out.get("headline"))
+    rows = []
+    for row in (out.get("by_sport") or []):
+        if isinstance(row, dict):
+            rows.append({**row, "note": _one(row.get("note"))})
+    checked = {"headline": head.strip() or headline_fallback,
+               "overall": _one(out.get("overall")),
+               "by_sport": rows}
+    numcheck.log_drops(kind, key, dropped)
+    return checked
+
+
+def _night_headline(pack: dict) -> str:
+    """A headline from the pack alone, for when the model's fails the check."""
+    by = pack.get("by_sport") or {}
+    w = sum(int(v.get("won") or 0) for v in by.values())
+    lo = sum(int(v.get("lost") or 0) for v in by.values())
+    net = sum(float(v.get("net_units") or 0) for v in by.values())
+    return f"{pack.get('date')}: {w}-{lo}, {net:+.2f}u"
+
+
 def _load_list(path: Path) -> list:
     try:
         rows = json.loads(path.read_text()) if path.is_file() else []
@@ -361,7 +402,8 @@ def write_postmortem(lconn, date: str | None = None,
     pack = postmortem_pack(lconn, date)
     if not pack["sports"]:
         raise ProseUnavailable(f"nothing graded on {date}")
-    out = _call(SYSTEM_NIGHT, json.dumps(pack), SCHEMA_PROSE, "postmortem")
+    out = _checked(_call(SYSTEM_NIGHT, json.dumps(pack), SCHEMA_PROSE, "postmortem"),
+                   pack, "postmortem", date, _night_headline(pack))
     entry = {
         "date": date,
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -537,7 +579,9 @@ def _season_opened(prev: dict, now: dict) -> list:
 def write_brief(lconn, path: Path | str | None = None) -> dict:
     p = Path(path if path is not None else BRIEF_PATH)
     pack = brief_pack(lconn)
-    out = _call(SYSTEM_WEEK, json.dumps(pack), SCHEMA_PROSE, "brief")
+    out = _checked(_call(SYSTEM_WEEK, json.dumps(pack), SCHEMA_PROSE, "brief"),
+                   pack, "brief", pack["week_of"],
+                   f"The week of {pack['week_of']}: what the model did")
     entry = {
         "week_of": pack["week_of"],
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
