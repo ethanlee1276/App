@@ -151,3 +151,4 @@ logs/
 
 # The comment-stripped shell engine/shrink.py builds on the box (served by Caddy's @trimmed).
 web/min/
+audit/
