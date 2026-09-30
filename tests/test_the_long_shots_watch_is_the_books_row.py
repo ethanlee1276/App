@@ -8,8 +8,8 @@ phone's wrap rule, and even wrapped it was a table, not the book's row.
 
 It is the Edge Board's row now: rank, the face, the name over its
 reason, the chart against the 0.5 line, the price in the grey pill and
-the EV in the green one — grey when the price is not worth taking —
-with ours against the book's beneath. It wraps on a phone the way that
+(since audit V-18) a neutral pill with the model's chance beside the
+market's, and the EV as grey text beneath — never green on a non-pick. It wraps on a phone the way that
 row does, and each row rises with the rest.
 """
 import json
@@ -86,13 +86,15 @@ def test_the_watch_row_is_the_edge_boards_row():
         assert "nowrap" not in row and "rec-row" not in row, "the one-line table row is back"
         head = row[:row.index("</div>")]
         assert "style=" not in head, "an inline style on the row"
-    assert '<span class="hd-o">-139</span><span class="hd-p">+7% EV</span>' in first
+    # Not picks, so not painted as one (audit V-18): the pill is neutral and
+    # carries the two chances; the EV is grey text beneath.
+    assert '<span class="hd-o">-139</span><span class="hd-p flat">model 62% · market 56%</span>' in first
     fn = _fn("watchlistHTML")
     assert 'class="hd-o">${oddsTxt(r.odds)}</span>' in fn and "american(" not in fn, "the price goes through the one formatter, so the decimal setting reaches it"
-    assert '<span class="hd-vs">62% vs 56%</span>' in first
+    assert '<span class="hd-vs">+7% EV at this price</span>' in first
     assert 'data-w="92" data-h="34" data-line="0.5"' in first, "the chart fills the edge slot, against the 0.5 line"
     assert 'title="Touchdowns, last 7 games"' in first
-    assert '<span class="hd-o">+292</span><span class="hd-p flat">-13% EV</span>' in second, "a price not worth taking wears the pill in grey"
+    assert '<span class="hd-p flat">' in second and '<span class="hd-vs">-13% EV at this price</span>' in second
     assert '<span class="edge-spark"></span>' in second, "two games is not a chart"
     assert "Packers vs Bears" in first and "Soft run defence" in first and "▾" in first
     assert '<div class="watch-why" hidden>' in first and "style=" not in first[first.index("watch-why"):first.index("watch-why") + 40]

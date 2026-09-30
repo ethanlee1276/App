@@ -10079,7 +10079,7 @@ function renderLongShots() {
     shown for context and not journaled as bets.`
     : ` The most likely scorers ride below whatever their price —
     a near-lock at heavy juice is worth knowing about and rarely worth
-    betting, and the EV column says which is which. Not journaled as bets.`}</div>`;
+    betting, and the EV line says which is which. Not journaled as bets.`}</div>`;
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
@@ -10439,9 +10439,17 @@ function likelySpark(r, opts) {
 
 function watchlistHTML(watch, mlb) {
   if (!watch || !watch.length) return "";
+  /* NOT A PICK, SO NOT PAINTED AS ONE (audit 2026-09-30, V-18). The
+     paragraph above this list says these are not value picks and are not
+     journaled, and the pill beside each read "+12% EV" in the same green a
+     pick wears. The pill now carries the two numbers the list is actually
+     about, in neutral, and the EV sits in the grey line under it. */
+  const watchPct = (p, who) => (p == null || !isFinite(Number(p))
+    ? `${who} —` : `${who} ${(Number(p) * 100).toFixed(0)}%`);
   const rows = watch.map((r, i) => {
-    const ev = (r.ev_per_unit * 100).toFixed(0);
-    const evTxt = `${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV`;
+    const evOk = r.ev_per_unit != null && isFinite(Number(r.ev_per_unit));
+    const ev = evOk ? (Number(r.ev_per_unit) * 100).toFixed(0) : null;
+    const evTxt = evOk ? `${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV` : "EV —";
     // v5: THE BOOK'S ROW, the Edge Board's own — rank, the face, the
     // name over its reason, the chart against the 0.5 line, then the
     // price in the grey pill and the EV in the green one (grey when
@@ -10476,15 +10484,15 @@ function watchlistHTML(watch, mlb) {
         <span>${escapeHtml(teamName(r.team))} vs ${escapeHtml(teamName(r.opponent))}
           · ${escapeHtml(r.primary_reason || "")}${detail ? " ▾" : ""}</span></span>
       ${spark}
-      <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p${r.ev_per_unit > 0 ? "" : " flat"}">${evTxt}</span></span>
-        <span class="hd-vs">${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span></span>
+      <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p flat">${watchPct(r.model_prob, "model")} · ${watchPct(r.implied_prob, "market")}</span></span>
+        <span class="hd-vs">${evTxt} at this price</span></span>
       </div>${detail}</div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
     <div class="section-title">Most likely ${mlb ? "to homer" : "to score"} tonight
-      <span class="sub">— model % vs the book’s implied %. Tap a row for the reasoning.
-      Positive EV = price worth taking; negative = likely but overpriced.
-      Never a guarantee.</span></div>
+      <span class="sub">— the model’s chance beside the market’s. Tap a row for the reasoning.
+      Not picks and not journaled; the EV line says whether the price would
+      be worth taking. Never a guarantee.</span></div>
     <div class="card" style="padding:0">${rows}</div></div>`;
 }
 
