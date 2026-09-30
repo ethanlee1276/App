@@ -7148,6 +7148,9 @@ body.has-deck #rail-live { display: none; }
 .rail-slip .hd-rw .hd-big > * { overflow-wrap: normal; }
 /* v5: the Record page's lead — the deck's ribbons above the rooms. */
 .rec-ribbons { margin: 8px 0 16px; }
+/* The one-line responsible-gambling note, above every view (index.html). */
+.rg-line { margin: 4px 0 8px; font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
+.rg-line b { color: var(--text); font-weight: 600; }
 .hd-who { margin: -6px 0 12px; font-size: var(--fs-xs); color: var(--text-mute); max-width: var(--measure-tight); }
 /* v3: the live card's win-probability bar (home share filled). */
 .hd-wp { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }

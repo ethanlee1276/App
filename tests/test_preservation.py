@@ -99,7 +99,9 @@ def test_the_responsible_gambling_line_is_not_hidden():
     """Prominence, not just presence. `display:none`, `visibility:hidden`,
     `aria-hidden` or a zero opacity on this block would pass the test above
     while removing the line from the page."""
-    i = HTML.index("1-800-GAMBLER")
+    # The footer's full notice (the one-line note above every view,
+    # audit P1-8, is checked by tests/test_every_view_says_21_plus.py).
+    i = HTML.index("1-800-GAMBLER", HTML.index('<div class="footer-full">'))
     block = HTML[max(0, i - 700):i + 200]
     for bad in ("display:none", "display: none", "visibility:hidden",
                 "visibility: hidden", 'aria-hidden="true"', "opacity:0",
@@ -134,7 +136,7 @@ def test_the_full_notice_stays_on_every_page_with_a_pick_or_a_bet():
     assert "body.footer-quiet .footer-full { display: none; }" in css
     assert ".footer-links" not in css.split("body.footer-quiet .footer-full")[1].split("}")[0]
     # The links are outside the part that goes quiet.
-    assert HTML.index('<div class="footer-full">') < HTML.index("1-800-GAMBLER") \
+    assert HTML.index('<div class="footer-full">') < HTML.index("1-800-GAMBLER", HTML.index('<div class="footer-full">')) \
         < HTML.index('<p class="footer-links">') < HTML.index('href="privacy.html"')
 
 def test_every_routable_view_is_actually_drawn_by_the_router():

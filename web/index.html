@@ -5,18 +5,13 @@
   <!-- viewport-fit=cover + the safe-area insets in styles.css are what
        stop the notch and the home indicator eating the header and the
        tab bar once this runs WITHOUT Safari's chrome around it. -->
-  <!-- NO PINCH ZOOM. Ethan, 2026-08-22, with a recording of the fantasy
-       page sliding around at four different scales: "you should not be
-       able too zoom in or out like in this video."
-
-       `user-scalable=no` covers Android Chrome, and iOS honours it when
-       the site has been added to the home screen. It does NOT cover iOS
-       Safari in a tab: Apple has ignored this attribute since iOS 10, on
-       purpose, so that a page cannot lock someone out of reading it.
-       That half is done in app.js by refusing the gesture events, and
-       `touch-action: manipulation` in styles.css handles double-tap. All
-       three are needed; any one alone leaves a way in. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- PINCH ZOOM IS ALLOWED (audit 2026-09-30, P1-8; Ethan's yes). It was
+       locked on 2026-08-22 after the fantasy page slid around at four
+       scales — but a lock stops a reader enlarging text they cannot read
+       (WCAG 1.4.4), and the sliding was a layout that overflowed, which is
+       fixed where it overflows. `touch-action: manipulation` in
+       styles.css still stops the accidental double-tap zoom. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <!-- EVERY RELATIVE URL RESOLVES FROM THE ROOT, and this one line is what
        makes real addresses possible (2026-08-25). This document is now
        served at /player/juan-soto and /game/ne-sea-0909 as well as at /,
@@ -704,6 +699,13 @@
     <a class="wall-back" id="wall-back" href="#paywall" hidden>
       <span aria-hidden="true">←</span> Back to plans</a>
 
+    <!-- 21+ ON EVERY VIEW, IN THE FIRST SCREEN (audit 2026-09-30, P1-8).
+         The full notice lives in the footer and goes quiet on reference
+         pages at Ethan's call (2026-09-24); this one line never does, and
+         it sits above the content so a reader meets it without scrolling
+         to a footer on a page with 300 rows. -->
+    <p class="rg-line" role="note">21+ only · Gambling problem? Call or text
+      <b>1-800-GAMBLER</b> · Estimates, not advice</p>
     <!-- Recommended -->
     <section class="view active" id="view-recommended">
       <!-- The phone home deck (2026-09-22, from the Figma mock Ethan
