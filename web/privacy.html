@@ -21,16 +21,20 @@
     
 
     <h1>Privacy Policy</h1>
-    <p class="legal-date">Last updated 22 August 2026</p>
+    <p class="legal-date">Last updated 30 September 2026</p>
 
     <h2>1. The short version</h2>
     <ul>
       <li>We collect your email address, a hash of your password, and
         whatever you choose to put into the Service (a bet log, fantasy
         settings).</li>
-      <li><b>We run no analytics, no advertising, no tracking pixels and
-        no third-party scripts.</b> There is nothing on this site that
-        follows you anywhere else.</li>
+      <li><b>We run no advertising, no tracking pixels and no third-party
+        scripts.</b> We count how the site is used — visits, which pages are
+        opened, questions asked in Ask, plan buttons pressed, and trials and
+        subscriptions started or ended — as daily totals only. The totals
+        carry no cookie, no identifier and no IP address, and cannot say
+        what any one person did. Nothing on this site follows you anywhere
+        else.</li>
       <li><b>We never see your card details.</b> Stripe takes the payment
         on its own page; we hold a customer reference and a status.</li>
       <li><b>We do not sell or share your personal information</b>, and we
@@ -50,7 +54,8 @@
       <li><b>A password verifier</b> — a scrypt hash. <b>We do not store
         your password</b> and cannot recover it; we can only reset it.
         (<code>users.verifier</code>)</li>
-      <li><b>Account created and last seen timestamps.</b>
+      <li><b>Account created and last seen timestamps</b> (last seen is
+        refreshed at most once a day while you are signed in).
         (<code>users.created_at</code>, <code>users.last_seen</code>)</li>
       <li><b>That you confirmed you are 21 or over, and when you accepted
         the Terms.</b> (<code>users.age_confirmed</code>,
@@ -104,6 +109,23 @@
       request time to enforce security rules (for example, refusing a
       password over an unencrypted connection); <b>it is not written to
       any database table.</b></p>
+    <p><b>A security log</b> records sign-ins, failed passwords, refused
+      codes and blocked requests, so that an attack on an account can be
+      seen: the time, what happened, the network the request came from
+      (the first three parts of an IPv4 address, or the first three groups
+      of an IPv6 one — not your full address) and, for account events, a
+      short one-way tag made from the account’s email. It never holds a
+      password, a code, a session token or the email itself, it is not
+      joined to your account, and it is rotated as it grows.</p>
+
+    <h3>2.5 Usage counts</h3>
+    <ul>
+      <li><b>Usage counts</b> (<code>analytics.counts</code>): per day, an
+        event name, the name of the page, a broad source (direct, search,
+        social, another site, or a campaign link) and whether the visitor
+        was signed in or subscribed, with a count. No identifier of any
+        kind.</li>
+    </ul>
 
     <h2>3. What we do NOT collect</h2>
     <ul>
@@ -115,8 +137,8 @@
       <li><b>Card numbers, expiry dates or security codes.</b> These are
         typed on Stripe’s page and never reach our servers.</li>
       <li><b>Advertising or tracking cookies.</b> There are none. No
-        analytics tags, no pixels, no fingerprinting, no third-party
-        scripts of any kind.</li>
+        third-party analytics tags, no pixels, no fingerprinting, no
+        third-party scripts of any kind.</li>
       <li><b>Your location.</b> We do not request it, infer it, or store
         it.</li>
       <li><b>Your contacts, photos, files or device identifiers.</b></li>

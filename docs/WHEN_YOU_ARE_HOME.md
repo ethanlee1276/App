@@ -128,6 +128,20 @@ The version line should print `1.11.0`; `pip-audit` should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
+**P31-a. Turn on the usage counts (changes a setting, a minute).** You
+approved the wording; the Privacy Policy now describes the counts (daily
+totals, no cookie, no id, no IP). Check the live policy says so first,
+then flip the switch:
+
+```
+curl -s https://qellysbook.com/privacy.html | grep -c "as daily totals only"
+sudo ./deploy/setenv.sh QB_ANALYTICS 1 && sudo systemctl restart qellys
+```
+
+The first line must print `1` (if it prints `0`, the new page has not
+deployed yet — wait, don't flip). A week later:
+`sudo -u qellys python3 -m engine.analytics report 7`.
+
 **P29-a. Retire the old name+PIN profiles if nobody uses them (changes a
 setting, a minute).** The PIN store from before real accounts is locked
 down now (one answer, a lockout, the sign-in rate limit), but if the box has

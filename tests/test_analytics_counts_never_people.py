@@ -76,11 +76,14 @@ def test_off_by_default_and_the_policy_still_says_so():
     assert AN.enabled() is False
     assert AN.record("view", "record", "search", "visitor") is False
     assert not AN.DB_PATH.exists(), "switched off, not even a file"
+    # Ethan approved the wording (2026-09-30, "I approve everything"), so
+    # the policy now describes the counts; it goes out BEFORE the switch is
+    # flipped on the box, so the page never counts something the policy
+    # does not say. What it must still never claim is that it counts people.
     privacy = (ROOT / "web" / "privacy.html").read_text()
-    assert "We run no analytics, no advertising, no tracking pixels" in privacy, \
-        "the promise stays on the page until the switch and the new wording go live together"
-    audit = (ROOT / "docs" / "AUDIT_2026-09-23.md").read_text()
-    assert "Draft policy wording" in audit and "QB_ANALYTICS=1" in audit
+    assert "as daily totals only" in privacy and "analytics.counts" in privacy
+    assert "cannot say\n        what any one person did" in privacy or "cannot say what any one person did" in " ".join(privacy.split())
+    assert "We run no analytics, no advertising" not in privacy
 
 
 def test_on_it_counts_one_row_per_key_and_nothing_about_anyone():

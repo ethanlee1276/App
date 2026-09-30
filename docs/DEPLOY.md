@@ -252,8 +252,8 @@ nothing and the server stores nothing, so the Privacy Policy's "We run no
 analytics" stays true.
 
 Turning it on changes what the policy has to say, so the two go together.
-The wording is drafted in `docs/AUDIT_2026-09-23.md`, item 14. Once you
-approve it, Claude updates `web/privacy.html`, and after that deploy:
+You approved the wording on 2026-09-30 and `web/privacy.html` carries it
+(§1, §2.1, §2.5). The policy ships first; once that deploy is live:
 
 ```bash
 sudo ./deploy/setenv.sh QB_ANALYTICS 1
