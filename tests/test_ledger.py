@@ -881,8 +881,13 @@ def test_repair_drops_duplicates_already_in_the_longshot_bucket():
                  "0.1,0,'won',0.4,'longshot')")
     conn.commit()
     assert ledger.move_longshots_out_of_main(conn) == 1
-    # One row survives, in the long-shot bucket — no double count.
-    assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 1
+    # One row COUNTS, in the long-shot bucket — no double count. The main
+    # copy is kept as a void in `dropped:main` rather than deleted (audit
+    # P0-1, 2026-09-30: a public journal does not lose rows), so both rows
+    # are still on disk and only one is in any report.
+    assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM bets WHERE category='dropped:main' "
+                        "AND status='void'").fetchone()[0] == 1
     assert ledger.longshot_report(conn)["settled"] == 1
     assert ledger.performance(conn)["settled"] == 0
 

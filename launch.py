@@ -1785,15 +1785,27 @@ def _seal_forecasts(quiet: bool = False) -> None:
         conn = _led.connect()
         n = _led.seal_forecasts(conn)
         v = _led.verify_forecast_log(conn)
+        # The change log rides the same sweep (audit P0-1): seal what the
+        # triggers wrote, verify it, and once a day write both heads to
+        # data/forecast_heads.jsonl — and post them off the box when
+        # QB_HEADS_WEBHOOK is set, which is what makes them an anchor.
+        m = _led.seal_audit(conn)
+        a = _led.verify_audit_log(conn)
+        _led.record_heads(conn)
         conn.close()
         if not quiet and n:
             print(f"  forecast log   : +{n} sealed, {v['n']} total, "
                   f"head {(v['head'] or '')[:12]}")
+        if not quiet and m:
+            print(f"  change log     : +{m} sealed, {a['n']} total")
         if not v["ok"]:
             # Loud regardless of quiet: this is the one failure on the site
             # that means a published claim is no longer provable.
             print(f"  ⚠️  FORECAST LOG BROKEN at #{v['broken_at']} — "
                   f"verified through #{v.get('verified_through')}")
+        if not a["ok"]:
+            print(f"  ⚠️  CHANGE LOG BROKEN at #{a['broken_at']} — a logged "
+                  f"change to the record was edited or removed")
     except Exception as exc:                           # noqa: BLE001
         if not quiet:
             print(f"  ⚠️  forecast log seal failed: {exc}")

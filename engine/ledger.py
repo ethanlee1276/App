@@ -18,7 +18,9 @@ is idempotent per (sport, date, player, market).
 
 from __future__ import annotations
 
+import contextlib as _contextlib
 import datetime
+import functools as _functools
 import math
 import re
 import sqlite3
@@ -142,6 +144,152 @@ CREATE TABLE IF NOT EXISTS top_pick_log (
 SCHEMA = _BETS_TABLE + _FORECAST_LOG + _TOP_PICK_LOG + """
 CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
 """
+
+#: EVERY CHANGE TO A JOURNALED ROW, KEPT (audit P0-1, 2026-09-30).
+#:
+#: The site audit found the journal honest by convention and not by
+#: construction: twenty code paths rewrote settled rows — eight of them on
+#: the five-minute loop — two deleted rows every night, and nothing kept
+#: the old values. The forecast chain below proves what was CLAIMED; it
+#: never looked at what happened to the row afterwards. So a re-grade, a
+#: moved category or a deleted duplicate left no mark a reader could check.
+#:
+#: This is that mark. A DATABASE TRIGGER writes it, not the code paths,
+#: for the reason `seal_forecasts` is a sweep: a hook on each writer is a
+#: hook the next writer forgets, and a hand-typed UPDATE on the box would
+#: skip every one of them. The trigger cannot be skipped by anything short
+#: of dropping it, and `integrity_report` checks that it is still there.
+#:
+#: The rows are append-only (two more triggers refuse an edit or a delete
+#: of a sealed row) and hash-chained by `seal_audit`, so the log of changes
+#: is itself tamper-evident. `reason` is advisory: the code that knows why
+#: it is writing says so through `audit_reason`, and a write nobody
+#: labelled reads as NULL rather than as a guess.
+_BETS_AUDIT = """
+CREATE TABLE IF NOT EXISTS bets_audit (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    bet_id INTEGER, ts TEXT, action TEXT, reason TEXT,
+    old TEXT, new TEXT, prev_hash TEXT, hash TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_bets_audit_bet ON bets_audit(bet_id);
+"""
+
+#: The columns a change to which is a change to the record: what was
+#: claimed, what it was staked, how it was graded, what it closed at,
+#: which book it counts in, and when it was published relative to the
+#: game. Notes and tags (`why_note`, `loss_cause`, `team`, `evidence`)
+#: are metadata and do not open an audit row. The tuple is part of the
+#: trigger's SQL, so changing it means a new trigger name (the `_v1`).
+AUDIT_FIELDS = ("sport", "date", "player", "market", "side", "line", "book",
+                "odds", "hit_prob", "edge", "grade", "stake_units",
+                "stake_dollars", "status", "actual", "pnl_units",
+                "pnl_dollars", "closing_line", "closing_odds", "category",
+                "game_day", "lead_min", "leg")
+
+#: The fields a re-grade is reported on (`recent_regrades`).
+REGRADE_FIELDS = ("status", "actual", "pnl_units", "stake_units", "side",
+                  "line", "odds", "category", "closing_line", "closing_odds")
+
+AUDIT_GENESIS = "qellys-bets-audit-v1"
+
+
+def _audit_triggers_sql() -> str:
+    def obj(prefix):
+        return "json_object(" + ", ".join(
+            f"'{f}', {prefix}.{f}" for f in AUDIT_FIELDS) + ")"
+    changed = " OR ".join(f"OLD.{f} IS NOT NEW.{f}" for f in AUDIT_FIELDS)
+    reason = "(SELECT value FROM config WHERE key='audit_reason')"
+    now = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"
+    return f"""
+CREATE TRIGGER IF NOT EXISTS bets_audit_update AFTER UPDATE ON bets
+WHEN {changed}
+BEGIN
+  INSERT INTO bets_audit (bet_id, ts, action, reason, old, new)
+  VALUES (OLD.id, {now}, 'update', {reason}, {obj('OLD')}, {obj('NEW')});
+END;
+CREATE TRIGGER IF NOT EXISTS bets_audit_delete BEFORE DELETE ON bets
+BEGIN
+  INSERT INTO bets_audit (bet_id, ts, action, reason, old, new)
+  VALUES (OLD.id, {now}, 'delete', {reason}, {obj('OLD')}, NULL);
+END;
+CREATE TRIGGER IF NOT EXISTS bets_audit_no_update BEFORE UPDATE ON bets_audit
+WHEN OLD.hash IS NOT NULL
+BEGIN
+  SELECT RAISE(ABORT, 'bets_audit is append-only: a sealed row cannot change');
+END;
+CREATE TRIGGER IF NOT EXISTS bets_audit_no_delete BEFORE DELETE ON bets_audit
+BEGIN
+  SELECT RAISE(ABORT, 'bets_audit is append-only: rows cannot be deleted');
+END;
+"""
+
+
+AUDIT_TRIGGERS = ("bets_audit_update", "bets_audit_delete",
+                  "bets_audit_no_update", "bets_audit_no_delete")
+
+
+def _install_audit(conn) -> None:
+    """The audit table, its triggers, and the forecast log's version-2
+    columns. Idempotent; runs from `connect` after every column the
+    triggers name exists."""
+    conn.executescript(_BETS_AUDIT + _audit_triggers_sql())
+    for col, kind in (("v", "INTEGER"), ("lead_min", "REAL")):
+        try:
+            conn.execute(f"ALTER TABLE forecast_log ADD COLUMN {col} {kind}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column" not in str(exc):
+                raise
+
+
+@_contextlib.contextmanager
+def audit_reason(conn, reason: str):
+    """Label every journal write inside the block with `reason`.
+
+    Nests: the outer label comes back when the inner block ends. Cleared
+    and committed on the way out so a label never outlives its block and
+    lands on somebody else's write. A read-only connection (or none) just
+    runs the block unlabelled."""
+    prev = None
+    ok = conn is not None
+    if ok:
+        try:
+            row = conn.execute(
+                "SELECT value FROM config WHERE key='audit_reason'").fetchone()
+            prev = row[0] if row else None
+            conn.execute("INSERT INTO config (key, value) VALUES ('audit_reason', ?) "
+                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (reason,))
+        except sqlite3.Error:
+            ok = False
+    try:
+        yield
+    finally:
+        if ok:
+            try:
+                if prev is None:
+                    conn.execute("DELETE FROM config WHERE key='audit_reason'")
+                else:
+                    conn.execute("UPDATE config SET value=? WHERE key='audit_reason'",
+                                 (prev,))
+                conn.commit()
+            except sqlite3.Error:
+                pass
+
+
+def _audited(reason: str):
+    """Decorator: run a journal writer under `audit_reason(conn, reason)`.
+    The connection is the first positional argument or `conn=`."""
+    def deco(fn):
+        @_functools.wraps(fn)
+        def inner(*args, **kwargs):
+            conn = kwargs.get("conn", args[0] if args else None)
+            if not isinstance(conn, sqlite3.Connection):
+                return fn(*args, **kwargs)
+            with audit_reason(conn, reason):
+                return fn(*args, **kwargs)
+        return inner
+    return deco
+
 
 DEFAULTS = {"starting_bankroll": "1000", "unit_pct": "1.0",
             "bankroll": "1000",
@@ -375,6 +523,10 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
     except sqlite3.OperationalError:
         pass
+    # The audit trail and the forecast log's version-2 columns — AFTER
+    # every column the triggers name exists, BEFORE the first sweep below
+    # writes, so that sweep's changes are logged like any other.
+    _install_audit(conn)
     # THE BENCH, APPLIED WHEREVER THE LEDGER OPENS. Idempotent, and a
     # sweep rather than a command for the reason `seal_forecasts` is one:
     # a manual step gets run on one machine and forgotten on the next.
@@ -497,6 +649,7 @@ LONGSHOT_MARKETS = {"home_runs", "anytime_td"}
 SHRUNK_GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 
 
+@_audited("void_unmeasured")
 def void_unmeasured_game_bets(conn, sport: str = "nfl",
                               markets=SHRUNK_GAME_MARKETS,
                               dry_run: bool = True) -> list:
@@ -1023,6 +1176,7 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 LIKELY_JOURNAL_DEPTH = None
 
 
+@_audited("repair_inverted_sides")
 def repair_inverted_likely_sides(conn) -> dict:
     """Flip the home-run rows `log_most_likely` journaled on the wrong side.
 
@@ -2197,6 +2351,7 @@ PREDMARKET_LOST_NOTE = ("Voided: the exchange no longer lists this contract "
 PREDMARKET_CANCELLED_NOTE = "Voided: the exchange cancelled this contract."
 
 
+@_audited("settle_predmarket")
 def settle_predmarket(conn, fetch=None, today: str | None = None) -> dict:
     """Grade every open desk ticket the exchange has finalised.
 
@@ -2663,6 +2818,7 @@ UFC_UNRESOLVED_NOTE = ("Voided: no completed bout for this fighter within "
                        "moved, or unmatched in the results feed.")
 
 
+@_audited("settle_ufc")
 def settle_ufc(conn, fetch_result=None, today=None) -> int:
     """Settle open UFC picks from post-card results.
 
@@ -2972,6 +3128,7 @@ def _suspect(b, row) -> dict:
     }
 
 
+@_audited("repair_premature")
 def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
     """Reopen prematurely graded bets and drop the partial rows they used.
 
@@ -3189,6 +3346,7 @@ def close_dates(hist_conn, b, team: str | None = None) -> list:
         return []
 
 
+@_audited("backfill_game_days")
 def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
     """Give rows journalled before `game_day` existed the day they were played.
 
@@ -3530,6 +3688,7 @@ def _date_shift_repair_note(hist_conn, b, found_on: str,
             "python3 launch.py --settle all")
 
 
+@_audited("relabel_cross_league")
 def relabel_cross_league(conn, hist_conn) -> int:
     """Re-file open hoops bets journaled under the other league's name.
 
@@ -3562,6 +3721,7 @@ def relabel_cross_league(conn, hist_conn) -> int:
     return moved
 
 
+@_audited("relabel_football")
 def repair_football_filed_as_baseball(conn) -> int:
     """Re-file open bets journalled as baseball under an NFL week label.
 
@@ -3941,6 +4101,7 @@ def _bet_team(hist_conn, b) -> str | None:
     return None
 
 
+@_audited("void_unplayed")
 def void_unplayed(conn, rows: list[dict]) -> int:
     """Mark the given bets void — no action, zero P&L. Returns the count.
 
@@ -4333,6 +4494,7 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
     return rows, actual
 
 
+@_audited("settle")
 def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     """Auto-settle open bets straight from the history database.
 
@@ -4609,6 +4771,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     return settled + voided
 
 
+@_audited("regrade")
 def resettle_mismatches(conn, hist_conn) -> list[dict]:
     """Audit every settled stat bet against the CURRENT history rows and
     fix any wrong grade.
@@ -4634,6 +4797,16 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
     for b in conn.execute(
             f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
             f"AND market IN ({marks})", GAME_MARKETS).fetchall():
+        # NEVER OFF A GAME ROW FROM TODAY OR YESTERDAY (audit P0-1). The
+        # games table has held live scores (the NBA parser, above), and a
+        # settled total re-graded off a halftime number flips back later —
+        # a public record oscillating between cycles. A game two days old
+        # is final by any feed's clock; before that, leave the grade alone.
+        day = (b["game_day"] if "game_day" in b.keys() and b["game_day"]
+               else b["date"])
+        if str(day or "") >= (datetime.date.today()
+                              - datetime.timedelta(days=1)).isoformat():
+            continue
         where, wargs = _hist_where(b)
         rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
         g, _verdict = _pick_dh_game(rows, b, actual_fn)
@@ -4703,6 +4876,7 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
     return fixed
 
 
+@_audited("settle")
 def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None,
            date: str | None = None, closing: dict[tuple[str, str], float] | None = None) -> int:
     """Grade open bets against actual results. ``actuals`` maps (player, market)
@@ -4834,6 +5008,7 @@ def _harvested_closes(hist_conn) -> dict:
     return out
 
 
+@_audited("repair_closing_odds")
 def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     """Re-derive every settled bet's banked closing price, side- and
     line-aware, from the harvested closes and the raw snapshots.
@@ -5166,6 +5341,7 @@ BENCH_CATEGORY = "benched"
 BENCHED_SPORTS = ("wnba",)
 
 
+@_audited("bench")
 def bench_existing(conn) -> dict:
     """Move every benched league's Edge rows out of the headline book.
 
@@ -6117,16 +6293,40 @@ FORECAST_FIELDS = ("bet_id", "ts", "sport", "date", "player", "market",
 GENESIS_HASH = "qellys-forecast-log-v1"
 
 
-def _forecast_hash(prev_hash: str, row: dict) -> str:
+#: VERSION 2 of the chain (audit P0-1, 2026-09-30). Version 1 hashed what
+#: was claimed and nothing about WHEN relative to the game, and its seal
+#: time was a naive local clock outside the hash. Version 2 adds the lead
+#: time the journal stamped (minutes to the scheduled start) and the seal
+#: time, in UTC with its zone, so "published before kickoff" is under the
+#: hash too. Rows already sealed keep version 1 and still verify; the
+#: first version-2 row chains onto the last version-1 hash, so the chain
+#: is one chain. Never edit either tuple — add a version.
+FORECAST_FIELDS_V2 = FORECAST_FIELDS + ("lead_min", "sealed_ts")
+
+#: The journal fields a sealed forecast is compared against in
+#: `verify_forecast_log`: a difference is drift, and drift with no audit
+#: row behind it is a change nobody can account for.
+DRIFT_FIELDS = ("sport", "date", "player", "market", "side", "line", "odds",
+                "hit_prob", "category")
+
+
+def _fmt_hash_value(v) -> str:
+    return "" if v is None else (f"{v:.6f}" if isinstance(v, float) else str(v))
+
+
+def _forecast_hash(prev_hash: str, row: dict, v: int = 1) -> str:
     """One row's link. Values are rendered with repr-free, locale-free
     formatting so the same forecast hashes identically on any machine."""
     import hashlib
+    fields = FORECAST_FIELDS_V2 if int(v or 1) >= 2 else FORECAST_FIELDS
     parts = [prev_hash or GENESIS_HASH]
-    for f in FORECAST_FIELDS:
-        v = row.get(f)
-        parts.append("" if v is None else
-                     (f"{v:.6f}" if isinstance(v, float) else str(v)))
+    for f in fields:
+        parts.append(_fmt_hash_value(row.get(f)))
     return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+def _utc_now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def seal_forecasts(conn) -> int:
@@ -6139,33 +6339,43 @@ def seal_forecasts(conn) -> int:
     idempotent, so running it twice is free.
 
     Ordered by bet id so the chain is deterministic: two runs over the same
-    journal produce the same head hash.
+    journal produce the same head hash. New rows are version 2.
     """
     conn.executescript(_FORECAST_LOG)
+    _install_audit(conn)
     head = conn.execute(
         "SELECT hash FROM forecast_log ORDER BY seq DESC LIMIT 1").fetchone()
     prev = head["hash"] if head else GENESIS_HASH
     rows = conn.execute(
         "SELECT b.id AS bet_id, b.ts, b.sport, b.date, b.player, b.market, "
-        "b.side, b.line, b.odds, b.hit_prob, b.category FROM bets b "
+        "b.side, b.line, b.odds, b.hit_prob, b.category, b.lead_min FROM bets b "
         "LEFT JOIN forecast_log f ON f.bet_id = b.id "
         "WHERE f.bet_id IS NULL ORDER BY b.id").fetchall()
     n = 0
-    now = datetime.datetime.now().isoformat(timespec="seconds")
+    now = _utc_now_iso()
     for r in rows:
         d = dict(r)
-        h = _forecast_hash(prev, d)
+        d["sealed_ts"] = now
+        h = _forecast_hash(prev, d, 2)
         conn.execute(
             "INSERT OR IGNORE INTO forecast_log (sealed_ts, bet_id, ts, sport,"
             " date, player, market, side, line, odds, hit_prob, category,"
-            " prev_hash, hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " lead_min, v, prev_hash, hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,2,?,?)",
             (now, d["bet_id"], d["ts"], d["sport"], d["date"], d["player"],
              d["market"], d["side"], d["line"], d["odds"], d["hit_prob"],
-             d["category"], prev, h))
+             d["category"], d["lead_min"], prev, h))
         prev = h
         n += 1
     conn.commit()
     return n
+
+
+def _same(a, b) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(float(a) - float(b)) < 1e-9
+    return str(a) == str(b)
 
 
 def verify_forecast_log(conn) -> dict:
@@ -6173,21 +6383,221 @@ def verify_forecast_log(conn) -> dict:
 
     A chain that says only "broken" is nearly useless — the whole value is
     knowing where, because everything before the break is still proven.
+
+    And then checks the chain against the journal it protects (audit P0-1):
+    every sealed forecast is compared with its row in `bets`. `drifted`
+    counts forecasts the journal no longer matches (a moved side, line,
+    price, category — or a row that is gone, `missing`); `unexplained`
+    counts the drifts with no row in `bets_audit` behind them. Drift is not
+    by itself wrong — a duplicate moved to its own book drifts — but a
+    drift nobody logged is exactly what this exists to surface. Rows edited
+    before the audit trail existed show up here, once, as unexplained.
     """
     try:
         rows = conn.execute(
             "SELECT * FROM forecast_log ORDER BY seq").fetchall()
     except Exception:                                  # noqa: BLE001
-        return {"ok": True, "n": 0, "head": None, "broken_at": None}
+        return {"ok": True, "n": 0, "head": None, "broken_at": None,
+                "drifted": 0, "unexplained": 0, "missing": 0}
     prev = GENESIS_HASH
+    keys = rows[0].keys() if rows else []
     for r in rows:
-        d = {f: r[f] for f in FORECAST_FIELDS}
-        if r["prev_hash"] != prev or _forecast_hash(prev, d) != r["hash"]:
+        v = (r["v"] if "v" in keys else None) or 1
+        fields = FORECAST_FIELDS_V2 if v >= 2 else FORECAST_FIELDS
+        d = {f: r[f] for f in fields}
+        if r["prev_hash"] != prev or _forecast_hash(prev, d, v) != r["hash"]:
             return {"ok": False, "n": len(rows), "head": None,
                     "broken_at": r["seq"], "verified_through": r["seq"] - 1}
         prev = r["hash"]
-    return {"ok": True, "n": len(rows), "head": prev if rows else None,
-            "broken_at": None, "verified_through": len(rows)}
+    out = {"ok": True, "n": len(rows), "head": prev if rows else None,
+           "broken_at": None, "verified_through": len(rows)}
+    out.update(_forecast_drift(conn, rows))
+    return out
+
+
+def _forecast_drift(conn, rows) -> dict:
+    cur = {r["id"]: r for r in conn.execute(
+        "SELECT id, " + ", ".join(DRIFT_FIELDS) + " FROM bets")}
+    try:
+        audited = {r[0] for r in conn.execute(
+            "SELECT DISTINCT bet_id FROM bets_audit")}
+    except sqlite3.OperationalError:
+        audited = set()
+    drifted = unexplained = missing = 0
+    for r in rows:
+        b = cur.get(r["bet_id"])
+        if b is None:
+            missing += 1
+        elif all(_same(r[f], b[f]) for f in DRIFT_FIELDS):
+            continue
+        drifted += 1
+        if r["bet_id"] not in audited:
+            unexplained += 1
+    return {"drifted": drifted, "unexplained": unexplained, "missing": missing}
+
+
+def _audit_hash(prev_hash: str, r) -> str:
+    import hashlib
+    parts = [prev_hash or AUDIT_GENESIS] + [
+        _fmt_hash_value(r[k]) for k in ("seq", "bet_id", "ts", "action",
+                                        "reason", "old", "new")]
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+def seal_audit(conn) -> int:
+    """Chain every unsealed `bets_audit` row, in order. Idempotent."""
+    try:
+        head = conn.execute("SELECT hash FROM bets_audit WHERE hash IS NOT NULL "
+                            "ORDER BY seq DESC LIMIT 1").fetchone()
+        rows = conn.execute("SELECT * FROM bets_audit WHERE hash IS NULL "
+                            "ORDER BY seq").fetchall()
+    except sqlite3.OperationalError:
+        return 0
+    prev = head["hash"] if head else AUDIT_GENESIS
+    for r in rows:
+        h = _audit_hash(prev, r)
+        conn.execute("UPDATE bets_audit SET prev_hash=?, hash=? WHERE seq=?",
+                     (prev, h, r["seq"]))
+        prev = h
+    conn.commit()
+    return len(rows)
+
+
+def verify_audit_log(conn) -> dict:
+    """Recompute the audit chain; report the first break and how many rows
+    are still waiting to be sealed."""
+    try:
+        rows = conn.execute("SELECT * FROM bets_audit ORDER BY seq").fetchall()
+    except sqlite3.OperationalError:
+        return {"ok": True, "n": 0, "head": None, "broken_at": None, "pending": 0}
+    prev = AUDIT_GENESIS
+    n = pending = 0
+    for r in rows:
+        if r["hash"] is None:
+            pending += 1
+            continue
+        if pending or r["prev_hash"] != prev or _audit_hash(prev, r) != r["hash"]:
+            return {"ok": False, "n": len(rows), "head": None,
+                    "broken_at": r["seq"], "verified_through": n, "pending": pending}
+        prev = r["hash"]
+        n += 1
+    return {"ok": True, "n": n, "head": prev if n else None, "broken_at": None,
+            "verified_through": n, "pending": pending}
+
+
+def recent_regrades(conn, limit: int = 50) -> dict:
+    """Changes to picks that had already SETTLED, newest first, for the
+    public record: what changed, from what, to what, and why (when the
+    code said). A first grading (open → won) is not a re-grade and is not
+    listed; a deletion always is."""
+    import json as _json
+    try:
+        rows = conn.execute("SELECT * FROM bets_audit WHERE action IN "
+                            "('update', 'delete') ORDER BY seq DESC").fetchall()
+    except sqlite3.OperationalError:
+        return {"n": 0, "recent": []}
+    out = []
+    for r in rows:
+        old = _json.loads(r["old"] or "{}")
+        new = _json.loads(r["new"]) if r["new"] else None
+        if new is not None and old.get("status") not in ("won", "lost", "push", "void"):
+            continue
+        changes = ({f: [old.get(f), None] for f in ("status",)} if new is None else
+                   {f: [old.get(f), new.get(f)] for f in REGRADE_FIELDS
+                    if not _same(old.get(f), new.get(f))})
+        if not changes:
+            continue
+        out.append({"ts": r["ts"], "bet_id": r["bet_id"], "action": r["action"],
+                    "reason": r["reason"], "sport": old.get("sport"),
+                    "date": old.get("game_day") or old.get("date"),
+                    "player": old.get("player"), "market": old.get("market"),
+                    "side": old.get("side"), "line": old.get("line"),
+                    "changes": changes})
+    return {"n": len(out), "recent": out[:limit]}
+
+
+def _db_dir(conn) -> Path | None:
+    try:
+        f = conn.execute("PRAGMA database_list").fetchone()[2]
+    except Exception:                                  # noqa: BLE001
+        return None
+    return Path(f).parent if f else None
+
+
+HEADS_FILE = "forecast_heads.jsonl"
+
+
+def recent_heads(conn, n: int = 30) -> list:
+    """The last `n` daily chain heads written by `record_heads`."""
+    import json as _json
+    d = _db_dir(conn)
+    path = d / HEADS_FILE if d else None
+    if not path or not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-n:]:
+        try:
+            out.append(_json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+def record_heads(conn, post: bool = True) -> dict | None:
+    """Once per UTC day: write both chain heads to `forecast_heads.jsonl`
+    beside the ledger, and post them outside the box when
+    `QB_HEADS_WEBHOOK` is set (a Discord-style webhook: JSON `content`).
+
+    An archive the operator keeps beside the journal proves nothing on its
+    own — whoever can rewrite the journal can rewrite the file — which is
+    why the post exists and why the heads also ride the public
+    `record.json`, where anyone can save them. Returns the entry written,
+    or None when today's is already there."""
+    import json as _json
+    import os
+    d = _db_dir(conn)
+    if d is None:
+        return None
+    seal_forecasts(conn)
+    seal_audit(conn)
+    f, a = verify_forecast_log(conn), verify_audit_log(conn)
+    day = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    last = recent_heads(conn, 1)
+    if last and last[-1].get("day") == day:
+        return None
+    entry = {"day": day, "at": _utc_now_iso(),
+             "forecast_head": f.get("head"), "forecast_n": f.get("n"),
+             "audit_head": a.get("head"), "audit_n": a.get("n"),
+             "ok": bool(f.get("ok") and a.get("ok")),
+             "drifted": f.get("drifted"), "unexplained": f.get("unexplained")}
+    with open(d / HEADS_FILE, "a", encoding="utf-8") as fh:
+        fh.write(_json.dumps(entry, sort_keys=True) + "\n")
+    url = os.environ.get("QB_HEADS_WEBHOOK", "").strip()
+    if post and url:
+        try:
+            import urllib.request
+            body = _json.dumps({"content": (
+                f"Qellys Book chain heads {day}: forecasts {entry['forecast_n']} "
+                f"head {entry['forecast_head']} · changes {entry['audit_n']} "
+                f"head {entry['audit_head']}")}).encode("utf-8")
+            req = urllib.request.Request(url, data=body, method="POST",
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=10).read()
+        except Exception as exc:                       # noqa: BLE001
+            print(f"  ⚠️  chain heads not posted ({type(exc).__name__}) — "
+                  f"kept in {HEADS_FILE}")
+    return entry
+
+
+def integrity_report(conn) -> dict:
+    """Everything the nightly check asks of the journal: both chains
+    verify, the audit triggers are still installed, and how many sealed
+    forecasts drifted without a logged change."""
+    names = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='trigger'")}
+    return {"triggers": all(t in names for t in AUDIT_TRIGGERS),
+            "forecast": verify_forecast_log(conn),
+            "audit": verify_audit_log(conn)}
 
 
 def _prereg_block(conn) -> dict:
@@ -7806,6 +8216,7 @@ def unstaked_scorecard(conn) -> dict:
             "roi": round(net / len(rows), 4)}
 
 
+@_audited("resize_unstaked")
 def resize_unstaked(conn, stake_units: float = 0.1) -> int:
     """Give already-journaled zero-stake picks a flat stake and real P&L.
 
@@ -7852,6 +8263,23 @@ def recompute_bankroll(conn) -> float:
     return val
 
 
+def _drop_duplicate(conn, bet_id: int, kept_id: int) -> None:
+    """Retire a duplicate journal row WITHOUT deleting it (audit P0-1).
+
+    These sweeps used to DELETE the copy, which is the one change a public
+    journal cannot make and still call itself permanent: the row simply
+    stopped existing, its sealed forecast pointed at nothing, and nothing
+    said why. Now it moves to a `dropped:<book>` category that no report
+    reads, becomes a void so no settled-row query counts it, and says which
+    row it duplicated. The audit trigger keeps what it was."""
+    conn.execute(
+        "UPDATE bets SET category='dropped:' || category, status='void', "
+        "why_note=? WHERE id=?",
+        (f"duplicate of #{kept_id} — kept as a void so the journal loses no row",
+         bet_id))
+
+
+@_audited("split_watch")
 def split_watch_from_longshots(conn) -> int:
     """Repair: move watchlist rows out of the Long Shots record bucket.
 
@@ -7872,7 +8300,7 @@ def split_watch_from_longshots(conn) -> int:
             "AND market=? AND category='longshot_watch'",
             (r["sport"], r["date"], r["player"], r["market"])).fetchone()
         if dup:
-            conn.execute("DELETE FROM bets WHERE id=?", (r["id"],))
+            _drop_duplicate(conn, r["id"], dup["id"])
         else:
             conn.execute(
                 "UPDATE bets SET category='longshot_watch' WHERE id=?",
@@ -7882,6 +8310,7 @@ def split_watch_from_longshots(conn) -> int:
     return moved
 
 
+@_audited("move_longshots")
 def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
     """Relocate already-journaled long-shot markets into their own bucket.
 
@@ -7902,7 +8331,7 @@ def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
             "AND market=? AND category='longshot'",
             (r["sport"], r["date"], r["player"], r["market"])).fetchone()
         if dup:
-            conn.execute("DELETE FROM bets WHERE id=?", (r["id"],))
+            _drop_duplicate(conn, r["id"], dup["id"])
         else:
             if r["status"] == "won":
                 pnl = round((american_to_decimal(r["odds"]) - 1.0) * stake_units, 4)
@@ -8545,6 +8974,12 @@ def export_json(conn, path) -> None:
         # Sealed first, so the published head covers everything journaled up
         # to this export rather than lagging it by a run.
         "forecast_log": (seal_forecasts(conn), verify_forecast_log(conn))[1],
+        # Every change to a journaled row, chained (audit P0-1): the chain's
+        # head and length, the recent changes to SETTLED picks with their
+        # before and after, and the daily heads anyone can save.
+        "audit_log": (seal_audit(conn), verify_audit_log(conn))[1],
+        "regrades": recent_regrades(conn),
+        "forecast_heads": recent_heads(conn),
         # The learning loop, rendered: nightly temperatures, self-closed
         # markets, and the sweep trend. Own history connection, own guard —
         # a missing stats DB (CI, fresh clone) yields an empty block, never

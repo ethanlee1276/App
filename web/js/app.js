@@ -16496,19 +16496,82 @@ function recForecastLog(f) {
         longer provable. Shown rather than hidden — a tamper-evident log that
         hides its own alarm is decoration.</p></div>`;
   }
+  /* THE CHAIN, CHECKED AGAINST THE JOURNAL (audit P0-1, 2026-09-30). A
+     sealed forecast the journal no longer matches is "drifted"; one with
+     no logged change behind it is "unexplained" — edits made before the
+     change log existed land there once, and the nightly check fails if
+     that number ever grows. */
+  const drift = Number(f.drifted || 0), unexp = Number(f.unexplained || 0);
+  const driftLine = drift
+    ? `<p style="margin:6px 0 0;font-size:.84em">${drift.toLocaleString()} sealed
+        ${drift === 1 ? "forecast no longer matches" : "forecasts no longer match"} the
+        journal — ${(drift - unexp).toLocaleString()} with a logged change (listed
+        below), ${unexp.toLocaleString()} unexplained, from before every change was
+        logged.</p>` : "";
   return `<div class="card" style="padding:12px 14px;margin-top:12px">
     <div style="font-size:.8em;letter-spacing:.04em;text-transform:uppercase;
                 opacity:.55">Forecast log · ${f.n.toLocaleString()} sealed</div>
     <div style="font-family:var(--font-mono);font-size:.8em;word-break:break-all;
                 margin-top:4px;opacity:.85">${escapeHtml(f.head || "")}</div>
     <p style="margin:6px 0 0;font-size:.84em;opacity:.62">Every pick is hashed
-      together with the hash before it, so editing or deleting any past
-      forecast changes every hash after it and the chain reports where. The
-      log holds only what was CLAIMED — never the result, the P&amp;L or the
-      closing line, which arrive later and would mean writing into a row
-      that is supposed to be frozen. Write this number down: if it ever
-      covers a different past, that is detectable rather than deniable.</p>
+      together with the hash before it — what we claimed, the price, and (since
+      September 30) the lead time and the seal time — so editing or deleting any
+      past forecast changes every hash after it and the chain reports where.
+      Results arrive later, so they are not in this chain; every change to a
+      graded pick is logged in its own chain instead, below. Write this number
+      down: if it ever covers a different past, that is detectable rather than
+      deniable.</p>${driftLine}
   </div>`;
+}
+
+/* CHANGES TO SETTLED PICKS (audit P0-1). Every re-grade, moved book and
+   retired duplicate, with what it was and what it became, from a log the
+   database writes itself and chains like the forecasts. */
+function recRegrades(r, a, heads) {
+  if (!r && !a) return "";
+  const rows = (r && r.recent) || [];
+  const fmt = (v) => (v == null ? "—" : String(v));
+  const head = a && a.head
+    ? `<div style="font-family:var(--font-mono);font-size:.78em;word-break:break-all;
+         margin-top:4px;opacity:.8">${escapeHtml(a.head)}</div>` : "";
+  const broken = a && a.ok === false
+    ? `<p style="margin:6px 0 0;color:var(--bad)">Change log broken at #${a.broken_at}.</p>` : "";
+  const list = rows.slice(0, 12).map((x) => {
+    const ch = Object.entries(x.changes || {}).map(([k, [o, n]]) =>
+      `${escapeHtml(k)} ${escapeHtml(fmt(o))} → ${escapeHtml(fmt(n))}`).join(" · ");
+    return `<li><span class="mono">${escapeHtml(String(x.ts || "").slice(0, 10))}</span>
+      ${escapeHtml(x.player || "")} ${escapeHtml(x.market || "")} — ${ch}
+      <span style="opacity:.6">(${escapeHtml(x.reason || "unlabelled")})</span></li>`;
+  }).join("");
+  return `<div class="card" style="padding:12px 14px;margin-top:12px">
+    <div style="font-size:.8em;letter-spacing:.04em;text-transform:uppercase;
+                opacity:.55">Changes to settled picks · ${((r && r.n) || 0).toLocaleString()} logged</div>
+    ${head}${broken}
+    ${list ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:.84em">${list}</ul>`
+           : `<p style="margin:6px 0 0;font-size:.84em;opacity:.62">No settled pick has
+               changed since the change log began.</p>`}
+    <p style="margin:6px 0 0;font-size:.8em;opacity:.55">Written by the database on every
+      change, whatever made it, and chained so a removed entry breaks the chain.</p>
+    ${recHeadsList(heads)}
+  </div>`;
+}
+
+/* The daily chain heads (`forecast_heads` in record.json). One line a day,
+   newest first: save any of them and a later rewrite of the journal shows
+   up as a head that no longer matches. */
+function recHeadsList(heads) {
+  const hs = (heads || []).slice(-7).reverse();
+  if (!hs.length) return "";
+  const cut = (h) => (h ? String(h).slice(0, 16) + "…" : "—");
+  const li = hs.map((h) => `<li><span class="mono">${escapeHtml(String(h.day || ""))}</span>
+      forecasts ${Number(h.forecast_n || 0).toLocaleString()}
+      <span class="mono">${escapeHtml(cut(h.forecast_head))}</span> · changes
+      ${Number(h.audit_n || 0).toLocaleString()}
+      <span class="mono">${escapeHtml(cut(h.audit_head))}</span>${h.ok === false
+        ? ` <b style="color:var(--bad)">broken</b>` : ""}</li>`).join("");
+  return `<div style="margin-top:10px;font-size:.8em;opacity:.8">Daily chain heads
+      (save one; a rewritten journal will not match it):
+      <ul style="margin:4px 0 0;padding-left:18px">${li}</ul></div>`;
 }
 
 /* The learning loop, on the page.
@@ -19507,7 +19570,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + recCalibrationSection(src.calibration, src.calibration_era)
      + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))
-     + (scoped ? "" : recForecastLog(d.forecast_log))],
+     + (scoped ? "" : recForecastLog(d.forecast_log))
+     + (scoped ? "" : recRegrades(d.regrades, d.audit_log, d.forecast_heads))],
     ["learning", "What it learned",
      "the four-rung ladder, showing its work",
      recRestatedSection(d.restated, scoped ? scope : null) + recProseSection(d.prose, scoped ? scope : null)

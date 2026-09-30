@@ -645,6 +645,56 @@ def check_forecast_log(rep):
                     "was edited or deleted underneath it")
 
 
+def check_record_integrity(rep):
+    """Nothing about the record changed without a trace (audit P0-1).
+
+    Three things, each a hard failure: the audit triggers that log every
+    change to a journaled row are still installed (dropping one is the only
+    way to change a row silently); the audit log's own hash chain verifies;
+    and the count of sealed forecasts that drifted from the journal with NO
+    logged change has not grown since the last run. Rows edited before the
+    trail existed are counted once as the baseline and reported, not
+    failed — the point is that the number never goes up again.
+    """
+    @_check(rep, "record integrity")
+    def _():
+        if not has_journal():
+            rep.add("record integrity", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger
+        c = ledger.connect()
+        ledger.seal_audit(c)
+        r = ledger.integrity_report(c)
+        f, a = r["forecast"], r["audit"]
+        if not r["triggers"]:
+            rep.add("record integrity", FAIL, "the audit triggers are missing",
+                    "reopen the ledger with engine.ledger.connect() to reinstall "
+                    "them, then find out who dropped them")
+            return
+        if not a["ok"]:
+            rep.add("record integrity", FAIL,
+                    f"change log BROKEN at #{a['broken_at']}",
+                    "bets_audit is append-only; a break means a logged change "
+                    "was edited or removed")
+            return
+        base = ledger.get_cfg(c, "integrity_unexplained_baseline")
+        now = int(f.get("unexplained") or 0)
+        if base in (None, ""):
+            ledger.set_cfg(c, "integrity_unexplained_baseline", now)
+            base = now
+        base = int(float(base))
+        if now > base:
+            rep.add("record integrity", FAIL,
+                    f"{now - base} sealed forecast(s) changed with no logged "
+                    f"change since the last check ({now} in all)",
+                    "compare forecast_log with bets for the new drift")
+            return
+        rep.add("record integrity", OK,
+                f"{a['n']:,} logged change(s), chain verifies · "
+                f"{f.get('drifted', 0)} forecast(s) drifted, "
+                f"{now} of them before the trail existed")
+
+
 def check_clv_capture(rep):
     """Are closing lines actually being captured, and are they pre-game?
 
@@ -1196,10 +1246,10 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_market_coverage,
           check_ingest_freshness, check_football_weeks, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
-          check_parlay_agreement, check_forecast_log, check_clv_capture,
-          check_learning, check_correlation_priors,
+          check_parlay_agreement, check_forecast_log,
+          check_clv_capture, check_learning, check_correlation_priors,
           check_game_calibration, check_fitter_cadence,
-          check_league_days, check_git]
+          check_record_integrity, check_league_days, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -1210,7 +1260,8 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_league_days, check_football_weeks, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
-               check_forecast_log, check_clv_capture, check_learning,
+               check_forecast_log, check_record_integrity,
+               check_clv_capture, check_learning,
                check_correlation_priors, check_game_calibration,
                check_fitter_cadence)
 

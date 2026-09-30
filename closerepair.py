@@ -252,10 +252,12 @@ def apply_changes(conn, changes: list, backup_dir: Path) -> Path:
     path = backup_dir / f"closerepair_{time.strftime('%Y%m%dT%H%M%S')}.json"
     path.write_text(json.dumps([{"id": c["id"], "closing_line": c["old_line"],
                                  "closing_odds": c["old_odds"]} for c in changes]))
-    with conn:
-        for c in changes:
-            conn.execute("UPDATE bets SET closing_line=?, closing_odds=? WHERE id=?",
-                         (c["new_line"], c["new_odds"], c["id"]))
+    from engine.ledger import audit_reason
+    with audit_reason(conn, "closerepair"):
+        with conn:
+            for c in changes:
+                conn.execute("UPDATE bets SET closing_line=?, closing_odds=? WHERE id=?",
+                             (c["new_line"], c["new_odds"], c["id"]))
     return path
 
 
