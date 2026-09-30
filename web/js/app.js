@@ -785,7 +785,13 @@ function fmtRoi(x) {
   const v = x == null || x === "" ? NaN : Number(x);
   return Number.isFinite(v) ? signedPct(v) : "—";
 }
-const american = (o) => (o > 0 ? `+${o}` : trueMinus(`${o}`));
+/* ONE ODDS PRINTER (audit V-3). `american` printed 83 prices the reader's
+   American/decimal setting never reached — only `oddsTxt` honoured it, so
+   a decimal reader saw both formats on one card. It routes through
+   `oddsTxt` now (the typeof guard keeps the lifted-function test harnesses
+   that stub nothing else working), and a missing price is a dash, not
+   "null". */
+const american = (o) => (typeof oddsTxt === "function" && typeof settings === "function" ? trueMinus(oddsTxt(o)) : (o > 0 ? `+${o}` : trueMinus(`${o}`)));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";

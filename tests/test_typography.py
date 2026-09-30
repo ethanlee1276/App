@@ -251,7 +251,9 @@ def test_signed_numbers_use_a_real_minus_not_a_hyphen():
     the site."""
     assert 'const MINUS = "\u2212"' in APP or "const MINUS = \"−\"" in APP
     assert "const signedPct = (x) => trueMinus(" in APP
-    assert "const american = (o) => (o > 0 ? `+${o}` : trueMinus(" in APP
+    # Since 2026-09-30 it routes through oddsTxt (audit V-3) and still ends
+    # in trueMinus on both paths.
+    assert "const american = (o) => (typeof oddsTxt" in APP and "trueMinus(oddsTxt(o))" in APP
 
 
 def test_the_sign_regex_cannot_eat_a_date_or_a_score():
