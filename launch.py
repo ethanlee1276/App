@@ -611,8 +611,14 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
         return False
     try:
         from engine.oddsbudget import should_refresh
-    except Exception:
-        return True
+    except Exception as exc:                                  # noqa: BLE001
+        # FAIL CLOSED (audit 2026-09-30, F-7). This returned True: a broken
+        # pacer import meant EVERY refresh re-pulled paid odds with no
+        # budget at all — the one failure that can spend a month's credits
+        # in an evening. Scores still refresh; prices wait for the fix.
+        print(f"  ⚠️  odds pacer unavailable ({type(exc).__name__}: {exc}) — "
+              "odds not re-pulled this cycle")
+        return False
     # Cost is normally one request per game (player props are event-scoped).
     # A sport that pulls its whole board in one call passes its real cost
     # instead — charging CFB sixty credits for a three-credit request would
