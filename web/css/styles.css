@@ -12618,3 +12618,13 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 
 /* "Worth a look" shows its tier's real hit rate (2026-09-29): said under the word. */
 .ob-tierword small { display: block; font-weight: 500; font-size: var(--fs-2xs); color: var(--text-mute); }
+
+/* OUTAGE HONESTY (audit 2026-09-30, V-2 / O19). A failed fetch draws its
+   own card — never the empty-ledger copy — and the freshness chip turns
+   amber the moment any fetch on the page fails. */
+.empty-slate.outage .es-icon { color: var(--warn); }
+.outage-acts { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.live-refresh.failing {
+  color: var(--warn); background: rgba(217, 165, 72, 0.12);
+  border-color: rgba(217, 165, 72, 0.4);
+}

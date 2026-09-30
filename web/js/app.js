@@ -2260,6 +2260,58 @@ let _staleArgs = [null, ""];
 function refreshStaleBar() { renderStaleBar(_staleArgs[0], _staleArgs[1]); }
 
 /* ============================================================
+   OUTAGE HONESTY (audit 2026-09-30, V-2 / D-6 / O19)
+   ============================================================
+   With every data fetch failing, the Record said "No graded picks yet",
+   the Lab "No backtests published yet", Memes "No meme-coin data yet" —
+   the same words a genuinely empty file gets. A paying subscriber would
+   conclude the site has no record. A FAILED fetch and an EMPTY answer are
+   opposite facts and now read differently:
+
+     * `fetchJSON` says which it was. A 404 is "not built yet" — the file
+       does not exist, and the view's own empty copy is the true answer.
+       A throw, a gateway error or any other non-2xx is FAILED.
+     * `outageHTML` is the one card a failed view draws: what could not be
+       loaded, when this page last loaded it, Retry, and the Status page.
+
+   Retry re-runs the view in place (`data-retry`, delegated below). */
+const _lastGood = new Map();
+
+async function fetchJSON(fetcher, key) {
+  try {
+    const res = await fetcher();
+    if (res.ok) {
+      const data = await res.json();
+      if (key) _lastGood.set(key, Date.now());
+      return { data, failed: false, status: res.status };
+    }
+    return { data: null, failed: res.status !== 404, status: res.status };
+  } catch (e) {
+    return { data: null, failed: true, status: 0 };
+  }
+}
+
+function outageHTML(what, key) {
+  const at = key && _lastGood.get(key);
+  const seen = at
+    ? `The last copy this page loaded was ${escapeHtml(ageText(Math.max(0, (Date.now() - at) / 1000)))} ago.`
+    : "Nothing from it has loaded in this visit.";
+  return `<div class="empty-slate outage" role="status"><div class="es-icon">${icon("warn", 30)}</div>
+    <div class="es-title">Couldn’t load ${escapeHtml(what)}</div>
+    <div class="es-sub">This is a connection or server problem, not an empty result —
+      nothing here means there is nothing to show. ${seen}</div>
+    <div class="outage-acts"><button class="btn" type="button" data-retry>Retry</button>
+      <a class="btn ghost" href="#status">Status</a></div></div>`;
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-retry]");
+  if (!b) return;
+  b.disabled = true;
+  try { renderAll(); } catch (err) { crashNote(err && err.message); }
+});
+
+/* ============================================================
    When something breaks, say so
    ============================================================
    Ethan, 2026-08-25: "Error states that apologize instead of
@@ -2543,13 +2595,19 @@ function updateAgo() {
     // The phone form carries the WORD once it is properly stale. A bare
     // "216h" is a number; "Stale 9d" is a sentence, and the phone is
     // where this was invisible.
-    + `<span class="lr-short">${stale ? `Stale ${ago}` : ago}</span>`;
+    // "Updated 3m · LIVE" on a phone (audit V-12): a bare "3m" was a
+    // number nobody could read, and the source word was hidden at 390.
+    + `<span class="lr-short">${stale ? `Stale ${ago}` : `Updated ${ago}`} · ${
+        boardIsReal((state.data || {}).generated_from) ? "LIVE" : "DEMO"}</span>`;
   renderStaleBar(known ? Date.now() - state.builtAt : null, ago);
   // The picks come off the page past withholdAfterMs (styles.css,
   // body.picks-withheld) and return with the next build.
   document.body.classList.toggle("picks-withheld", picksWithheld());
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
+  // Amber the moment any fetch this page made has failed (audit O19):
+  // a green chip over a page that could not load is the lie V-2 found.
+  el.classList.toggle("failing", wireDown().length > 0);
   // The cadence, said out loud. An age with no yardstick is why sixteen
   // minutes read as broken: the reader has no way to know whether that is
   // late or simply what a rebuild costs here.
@@ -3506,10 +3564,14 @@ async function renderFutures() {
   let d = _futuresCache[sport];
   if (d === undefined) {
     host.innerHTML = `<p class="loading">Simulating the season…</p>`;
-    try {
-      const res = await paidFetch(`futures_${sport}.json`);
-      d = res.ok ? await res.json() : null;
-    } catch (e) { d = null; }
+    const got = await fetchJSON(() => paidFetch(`futures_${sport}.json`), `futures_${sport}`);
+    d = got.data;
+    if (!d && got.failed) {
+      if (state.view === "futures" && state.sport === sport) {
+        host.innerHTML = outageHTML("the season projections", `futures_${sport}`);
+      }
+      return;
+    }
     /* A FAILURE IS NOT AN ANSWER, and this cache was the only one on the
        page that treated it as one. `d = null` was stored unconditionally
        and the guard above is `=== undefined`, so a single refused fetch —
@@ -18303,12 +18365,10 @@ function labGameTable(games) {
 async function renderLab() {
   const host = document.getElementById("lab-body");
   if (!host) return;
-  let d = null;
-  try {
-    const res = await paidFetch("backtest.json");
-    if (res.ok) d = await res.json();
-  } catch (e) {}
+  const got = await fetchJSON(() => paidFetch("backtest.json"), "backtest");
+  const d = got.data;
   if (!d || !d.sports) {
+    if (got.failed) { host.innerHTML = outageHTML("the Lab’s backtests", "backtest"); return; }
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <div class="es-title">No backtests published yet</div>
       <div class="es-sub">The Lab replays the production model over stored history
@@ -19328,10 +19388,15 @@ async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
   let d = null, pmv = null;
+  // FAILED is not EMPTY (audit V-2): a 404 is "no record file yet", and
+  // anything else that is not a 2xx is an outage with its own card.
+  const got = { failed: false };
   try {
     const res = await boardFetch("data/record.json?t=" + Date.now());
     if (res.ok) d = adoptPooledRecord(await res.json());
-  } catch (e) {}
+    if (res.ok) _lastGood.set("record", Date.now());
+    else got.failed = res.status !== 404;
+  } catch (e) { got.failed = true; }
   /* THROUGH THE ENTITLED ENDPOINT FIRST. `predmarkets.json` is a wholly
      paid file — gate.PAID_FILES — so the copy Caddy serves off disk is a
      locked stub with no `validation` key at all once the paywall is on.
@@ -19347,6 +19412,7 @@ async function renderRecord() {
     const res = await paidFetch("predmarkets.json");
     if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
+  if (!d && got.failed) { host.innerHTML = outageHTML("the record", "record"); return; }
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">No graded picks yet</div>
@@ -20851,12 +20917,14 @@ function exitStandaloneMode() {
 /* The header badge reflects the ACTIVE page. The sports slate may be on
    sample data (offseason) while Polymarket/Fantasy run on real feeds —
    showing "Sample data" over live pages was a lie of scope. */
-function setStandaloneSource(label, dateLabel) {
+function setStandaloneSource(label, dateLabel, ok = true) {
   const el = document.getElementById("data-source");
   if (el) {
-    el.className = "data-source live";
-    el.innerHTML = `<span class="src-dot"></span>Live data`;
-    el.title = label;
+    // From the fetch result, never forced (audit V-2): Intel drew a green
+    // "Live data" badge over a page whose feeds had all failed.
+    el.className = `data-source ${ok ? "live" : "sample"}`;
+    el.innerHTML = `<span class="src-dot"></span>${ok ? "Live data" : "Couldn’t load"}`;
+    el.title = ok ? label : `${label} — the last fetch failed`;
   }
   const dt = document.getElementById("slate-date");
   if (dt && dateLabel) dt.textContent = dateLabel;
@@ -21736,15 +21804,15 @@ function pmxRailFade(rail) {
 async function renderIntel() {
   const host = document.getElementById("intel-body");
   if (!host) return;
-  let d = null, kx = null;
-  try {
-    const res = await paidFetch("predmarkets.json");
-    if (res.ok) d = await res.json();
-  } catch (e) {}
-  try {
-    const res = await paidFetch("kalshi.json");
-    if (res.ok) kx = await res.json();
-  } catch (e) {}
+  const [gp, gk] = await Promise.all([
+    fetchJSON(() => paidFetch("predmarkets.json"), "predmarkets"),
+    fetchJSON(() => paidFetch("kalshi.json"), "kalshi")]);
+  const d = gp.data, kx = gk.data;
+  if (!d && !kx && (gp.failed || gk.failed)) {
+    setStandaloneSource("Kalshi + Polymarket public feeds", "Prediction Market", false);
+    host.innerHTML = outageHTML("the prediction-market boards", "predmarkets");
+    return;
+  }
   // Polymarket silent does not mean the page is empty: Kalshi is half of
   // this board and renders on its own. Same merged table, one venue in it.
   if (!d || (!(d.flow || []).length && !(d.markets || []).length)) {
@@ -24037,14 +24105,11 @@ function memeRecordHTML(rec) {
 async function renderMemes() {
   const host = document.getElementById("memes-body");
   if (!host) return;
-  let d = null;
-  try {
-    // paidFetch: `coins`, `rocket` and `exits` are gated, so the public
-    // file carries the counts and none of the scan. The record below
-    // stays on boardFetch — it is free and it is the evidence.
-    const res = await paidFetch("memecoins.json");
-    if (res.ok) d = await res.json();
-  } catch (e) {}
+  // paidFetch: `coins`, `rocket` and `exits` are gated, so the public
+  // file carries the counts and none of the scan. The record below
+  // stays on boardFetch — it is free and it is the evidence.
+  const gotMc = await fetchJSON(() => paidFetch("memecoins.json"), "memecoins");
+  const d = gotMc.data;
   // The record is its own file and its own failure: a board with no
   // record still draws, and a record with no board is still readable.
   let rec = null;
@@ -24081,6 +24146,11 @@ async function renderMemes() {
       nothing is journaled as a bet, and none of it touches the sports model.</div>
     </details>`;
 
+  if (!d && gotMc.failed) {
+    setStandaloneSource("DexScreener + GeckoTerminal free feeds", "Meme coins", false);
+    host.innerHTML = honesty + outageHTML("the meme-coin board", "memecoins");
+    return;
+  }
   if (!d || !(d.coins || []).length) {
     host.innerHTML = honesty + `
       <div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
@@ -24353,7 +24423,7 @@ setInterval(() => {
 async function renderFantasy() {
   const host = document.getElementById("fantasy-body");
   if (!host) return;
-  let d = null;
+  let d = null, fantasyFailed = false;
   try {
     // The injury board rides along so every roster surface can tag a
     // designation — missing is fine, the tags just come back empty.
@@ -24366,8 +24436,9 @@ async function renderFantasy() {
     // shape of bug has been shipped, which is why paidFetch exists.
     const [res] = await Promise.all([
       paidFetch("fantasy.json"), loadInjuryBoard()]);
-    if (res.ok) d = await res.json();
-  } catch (e) {}
+    if (res.ok) { d = await res.json(); _lastGood.set("fantasy", Date.now()); }
+    else fantasyFailed = res.status !== 404;
+  } catch (e) { fantasyFailed = true; }
   if (!d || !d.season) {
     /* YOUR LEAGUE IS NOT DOWNSTREAM OF OUR USAGE FEED.
        This used to return here, which took the Around-the-league tab
@@ -24383,9 +24454,10 @@ async function renderFantasy() {
        league directly, and last season's target shares have nothing to
        do with it. The empty state stays too: it is true, and it says
        what to run. */
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
+    host.innerHTML = (fantasyFailed && !d ? outageHTML("the NFL usage board", "fantasy")
+      : `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
-      <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>
+      <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>`) + `
       <div class="ff-sync-alone">
         <div class="section-title">Your leagues
           <span class="sub">— these read your own league and do not wait on the
@@ -36552,14 +36624,16 @@ async function renderUFC() {
     if (state.view !== "ufc") { clearInterval(_liveTimer); _liveTimer = null; return; }
     renderLiveFights(liveHost);
   }, 10000);
-  let d = null;
-  try {
-    // Through paidFetch: gating UFC's pick keys without this would fix
-    // the leak by breaking the page for the people who pay for it, which
-    // is the mistake /api/<sport>/recommendations made for months.
-    const res = await paidFetch("ufc.json");
-    if (res.ok) d = await res.json();
-  } catch (e) {}
+  // Through paidFetch: gating UFC's pick keys without this would fix
+  // the leak by breaking the page for the people who pay for it, which
+  // is the mistake /api/<sport>/recommendations made for months.
+  const gotU = await fetchJSON(() => paidFetch("ufc.json"), "ufc");
+  const d = gotU.data;
+  if (!d && gotU.failed) {
+    setStandaloneSource("The Odds API MMA events + our fighter dossiers", "UFC", false);
+    host.innerHTML = outageHTML("the UFC card", "ufc");
+    return;
+  }
   if (!d) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("glove", 30)}</div>
       <div class="es-title">No UFC data yet</div>
@@ -37806,10 +37880,12 @@ async function renderWhy() {
 
   // Live receipts — the claims below link to real, current numbers.
   let rec = null;
+  const gotW = { failed: false };
   try {
     const res = await boardFetch("data/record.json?t=" + Date.now());
     if (res.ok) rec = adoptPooledRecord(await res.json());   // the same record as every other page
-  } catch (e) {}
+    else gotW.failed = res.status !== 404;
+  } catch (e) { gotW.failed = true; }
   const o = rec && rec.overall;
   const proc = (o && o.process) || {};
   const procN = (proc.good || 0) + (proc.bad || 0) + (proc.flat || 0);
@@ -37831,6 +37907,7 @@ async function renderWhy() {
         ${tile("Forecast test", cal && cal.brier_edge != null ? (cal.brier_edge > 0 ? "beating the close" : "not yet") : "—", brierLine)}
       </div>
       <p style="margin-top:8px"><button class="btn ghost" id="why-see-record">See the full record →</button></p>`
+    : gotW.failed ? outageHTML("the live record", "record")
     : `<p style="color:var(--text-mute);font-size:.92em;margin:0 0 4px">The journal is
         young — every pick logs automatically and this strip fills with real,
         ungroomed numbers.</p>`;
