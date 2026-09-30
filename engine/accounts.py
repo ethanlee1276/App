@@ -416,19 +416,43 @@ def _throttled(key: str) -> int:
 def _note_fail(key: str) -> None:
     _fails.setdefault(key, []).append(time.time())
     if len(_fails) > 4096:                       # bounded: this is memory
-        for k in list(_fails)[:1024]:
+        _evict()
+
+
+def _evict() -> None:
+    """Make room WITHOUT forgiving a target (audit 2026-09-30, E-3).
+
+    The old eviction dropped the first 1024 keys by insertion order, so a
+    spray of throwaway addresses pushed a real target's counter out and
+    reset its lockout. Now: expired windows go first, then the keys with
+    the FEWEST recent failures — a spray's single-guess keys evict
+    themselves, and an account under attack keeps its count."""
+    now = time.time()
+    for k in [k for k, v in _fails.items() if not v or now - v[-1] >= LOCKOUT_S]:
+        _fails.pop(k, None)
+    if len(_fails) > 3072:
+        for k in sorted(_fails, key=lambda k: len(_fails[k]))[:len(_fails) - 3072]:
             _fails.pop(k, None)
 
 
-def authenticate(conn, email, password) -> tuple[int, dict]:
+def authenticate(conn, email, password, where: str | None = None) -> tuple[int, dict]:
     """``(status, body)``. Never says which half was wrong.
 
     "No such account" and "wrong password" are the same message on
     purpose: told apart, they turn the login form into a way to check
     whether an address is registered here.
+
+    THE LOCKOUT IS PER ACCOUNT *AND* PER NETWORK (`where`, the caller's
+    /24 from the server; audit 2026-09-30, E-3). Keyed on the email alone,
+    eight wrong guesses from anywhere refused the real owner's CORRECT
+    password for fifteen minutes — a lockout-DoS of any known address.
+    Now the guesses lock out the network they came from; the owner signing
+    in from their own network is never refused. The per-IP auth bucket in
+    the server still caps how fast any one network can guess.
     """
     e = normalize_email(email)
-    wait = _throttled(e)
+    key = f"{e}|{where}" if where else e
+    wait = _throttled(key)
     if wait:
         return 429, {"error": f"Too many attempts. Try again in "
                               f"{max(1, wait // 60)} minute(s)."}
@@ -436,12 +460,12 @@ def authenticate(conn, email, password) -> tuple[int, dict]:
                        (e,)).fetchone()
     if row is None:
         _equalize(str(password or ""))
-        _note_fail(e)
+        _note_fail(key)
         return 403, {"error": "Wrong email or password."}
     if not verify_password(row["verifier"], str(password or "")):
-        _note_fail(e)
+        _note_fail(key)
         return 403, {"error": "Wrong email or password."}
-    _fails.pop(e, None)
+    _fails.pop(key, None)
     conn.execute("UPDATE users SET last_seen=? WHERE id=?",
                  (time.time(), row["id"]))
     conn.commit()

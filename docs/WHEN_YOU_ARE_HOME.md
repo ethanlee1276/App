@@ -104,6 +104,28 @@ timestamp misread). If it is still blank with a game on, paste:
 cd /srv/qellys && head -c 300 web/data/sweat.json; echo; date -u
 ```
 
+**P28-a. The security log (read-only, seconds).** Every sign-in, failed
+password, owner-token refusal, forged webhook, refused code and 429 is one
+line now — the account as a short tag, never the email or password. To see
+the last few:
+
+```
+cd /srv/qellys && tail -n 20 data/logs/security.jsonl
+```
+
+**P29-a. Retire the old name+PIN profiles if nobody uses them (changes a
+setting, a minute).** The PIN store from before real accounts is locked
+down now (one answer, a lockout, the sign-in rate limit), but if the box has
+no profiles in it there is no reason to leave the door there at all:
+
+```
+cd /srv/qellys && ls data/profiles 2>/dev/null | wc -l
+```
+
+If that prints `0`: `sudo ./deploy/setenv.sh QB_LEGACY_PROFILES off` and
+`sudo systemctl restart qellys`. If it prints more than 0, leave it — those
+are phones still syncing, and the store keeps working for them.
+
 ---
 
 ## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")

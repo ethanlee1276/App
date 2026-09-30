@@ -504,19 +504,52 @@ def _public(profile: dict) -> dict:
             "sections": profile.get("sections", {})}
 
 
-def profile_get(name, pin) -> tuple[int, dict]:
+#: ONE ANSWER FOR "NO SUCH NAME" AND "WRONG PIN" (audit 2026-09-30, E-4).
+#: 404 against 403 told anyone probing the store which names exist.
+_PROFILE_REFUSED = "No profile with that name and PIN."
+
+
+def legacy_profiles_on() -> bool:
+    """`QB_LEGACY_PROFILES=off` retires the name+PIN store on a public box
+    (audit E-4); anything else keeps it answering for existing phones."""
+    return os.environ.get("QB_LEGACY_PROFILES", "on").strip().lower() not in ("off", "0", "no")
+
+
+def _net_of(ip) -> str | None:
+    try:
+        from engine.seclog import mask_ip
+        return mask_ip(ip)
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def _profile_throttled(name: str, where) -> int:
+    """The accounts lockout, reused: 4-digit PINs are ten thousand guesses,
+    so eight wrong ones from a network lock that network out of that name
+    for fifteen minutes. A correct PIN from elsewhere is never refused."""
+    from engine import accounts as A
+    return A._throttled(f"profile:{name}|{where}")
+
+
+def _profile_fail(name: str, where) -> None:
+    from engine import accounts as A
+    A._note_fail(f"profile:{name}|{where}")
+
+
+def profile_get(name, pin, where=None) -> tuple[int, dict]:
     if not profile_name_ok(name):
         return 400, {"error": "account names are 2–24 letters, digits, - or _"}
+    if _profile_throttled(name, where):
+        return 429, {"error": "Too many attempts. Try again later."}
     with _PROFILE_LOCK:
         profile = _load_profile(name)
-    if profile is None:
-        return 404, {"error": f"no account named “{name}” — create it first"}
-    if not _pin_matches(profile, pin):
-        return 403, {"error": "wrong PIN for that account"}
+    if profile is None or not _pin_matches(profile, pin):
+        _profile_fail(name, where)
+        return 403, {"error": _PROFILE_REFUSED}
     return 200, _public(profile)
 
 
-def profile_sync(name, pin, sections) -> tuple[int, dict]:
+def profile_sync(name, pin, sections, where=None) -> tuple[int, dict]:
     """Create-or-merge. POSTing to a fresh name IS account creation (the
     PIN sent then becomes the account's PIN); POSTing to an existing one
     verifies the PIN, merges per the contract, and returns the result."""
@@ -528,6 +561,8 @@ def profile_sync(name, pin, sections) -> tuple[int, dict]:
         sections = {}
     if not isinstance(sections, dict):
         return 400, {"error": "sections must be an object"}
+    if _profile_throttled(name, where):
+        return 429, {"error": "Too many attempts. Try again later."}
     with _PROFILE_LOCK:
         profile = _load_profile(name)
         if profile is None:
@@ -537,7 +572,8 @@ def profile_sync(name, pin, sections) -> tuple[int, dict]:
                 salt = os.urandom(16).hex()
                 profile["pin"] = {"salt": salt, "hash": _pin_hash(pin, salt)}
         elif not _pin_matches(profile, pin):
-            return 403, {"error": "wrong PIN for that account"}
+            _profile_fail(name, where)
+            return 403, {"error": _PROFILE_REFUSED}
         profile["sections"] = merge_sections(profile.get("sections", {}), sections)
         _save_profile(profile)
     return 200, _public(profile)
@@ -995,8 +1031,16 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ("/unsubscribe", "/unsubscribe/"):
             return self._unsubscribe(parse_qs(parsed.query))
         if parsed.path.startswith("/api/profile/"):
+            # The auth bucket, not the 300/min read bucket (audit E-4).
+            if not legacy_profiles_on():
+                return self._send(410, b'{"error":"profiles are retired on this server"}', ".json")
+            if self._rate_limited(RATE_AUTH_PER_MIN, "auth"):
+                return
             code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
-                                     self.headers.get("X-Profile-Pin") or "")
+                                     self.headers.get("X-Profile-Pin") or "",
+                                     where=_net_of(self._client_ip()))
+            if code == 403:
+                _seclog("profile", "refused", self._client_ip())
             return self._send(code, json.dumps(body).encode(), ".json")
         if parsed.path in ("/api/zeno", "/api/zeno/"):
             return self._zeno_get()
@@ -1142,6 +1186,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._zeno_import()
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
+        if not legacy_profiles_on():
+            return self._send(410, b'{"error":"profiles are retired on this server"}', ".json")
+        if self._rate_limited(RATE_AUTH_PER_MIN, "auth"):
+            return
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
@@ -1163,7 +1211,9 @@ class Handler(BaseHTTPRequestHandler):
         code, out = profile_sync(
             parsed.path[len("/api/profile/"):].strip("/"),
             body.get("pin") or self.headers.get("X-Profile-Pin") or "",
-            body.get("sections"))
+            body.get("sections"), where=_net_of(self._client_ip()))
+        if code == 403:
+            _seclog("profile", "refused", self._client_ip())
         self._send(code, json.dumps(out).encode(), ".json")
 
     @staticmethod
@@ -1890,7 +1940,8 @@ class Handler(BaseHTTPRequestHandler):
                         confirmed=bool(body.get("confirmed")))
                 else:
                     code, out = A.authenticate(
-                        conn, body.get("email"), body.get("password"))
+                        conn, body.get("email"), body.get("password"),
+                        where=_net_of(self._client_ip()))
                 # THE SECURITY LOG (audit E-5): every sign-in and sign-up
                 # outcome, the account as a one-way tag, never the password.
                 _seclog(path, "ok" if code == 200 else "fail", self._client_ip(),

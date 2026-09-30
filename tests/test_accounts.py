@@ -85,7 +85,10 @@ def test_signin_typo_cannot_create_an_account():
     'no account', it does not mint one and strand the real account."""
     d = _tmpdir()
     code, out = profile_get("ethann", "")
-    assert code == 404 and "create" in out["error"]
+    # Since audit E-4 a missing name and a wrong PIN get ONE answer — a
+    # 404 here told anyone probing which names exist.
+    import server
+    assert code == 403 and out["error"] == server._PROFILE_REFUSED
     assert list(d.iterdir()) == []
 
 
