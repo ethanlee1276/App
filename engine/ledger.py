@@ -327,6 +327,72 @@ def _migrate(conn) -> None:
 _SCHEMA_DONE: dict = {}
 
 
+#: The repository root (data/models lives under it).
+ROOT_DIR = Path(__file__).resolve().parents[1]
+
+_MODEL_DIGEST: dict = {}
+
+
+def models_digest(folder: str | Path | None = None) -> str:
+    """Eight hex characters naming the model files as they stand: every
+    file directly under data/models (gitignored, so the commit alone does
+    not say which fit priced a row). Re-hashed only when a file's size or
+    mtime moves, so asking per connection costs a directory listing."""
+    import hashlib as _hl
+    folder = Path(folder) if folder is not None else ROOT_DIR / "data" / "models"
+    try:
+        files = sorted(f for f in folder.iterdir() if f.is_file())
+    except OSError:
+        files = []
+    key = (str(folder),) + tuple((f.name, f.stat().st_size, f.stat().st_mtime_ns) for f in files)
+    if key not in _MODEL_DIGEST:
+        h = _hl.sha256()
+        for f in files:
+            h.update(f.name.encode() + b"\0")
+            try:
+                h.update(f.read_bytes())
+            except OSError:
+                pass
+        _MODEL_DIGEST.clear()
+        _MODEL_DIGEST[key] = h.hexdigest()[:8]
+    return _MODEL_DIGEST[key]
+
+
+_CODE_SHA: list = []
+
+
+def model_sha() -> str:
+    """WHAT PRICED THIS ROW (audit 2026-09-30, B8-2): "<commit>[+dirty]:<models>".
+
+    The commit is read once per process — the code a process runs is the
+    code it loaded, and an update restarts it. The model digest is read
+    per call because the weekly fitters rewrite those files under a
+    running process."""
+    if not _CODE_SHA:
+        from .calibhistory import code_version
+        _CODE_SHA.append(code_version() or "nogit")
+    return f"{_CODE_SHA[0]}:{models_digest()}"
+
+
+def _stamp_model_sha(conn) -> None:
+    """A per-connection TEMP trigger that stamps `model_sha` on every row
+    inserted into `bets` without one — every insert path, present and
+    future, with nothing to remember. Only rows stamped as written in the
+    last day: a row copied in from an old table (a migration's INSERT ...
+    SELECT) was not priced by this code and must not be told it was.
+    `model_sha` is not an audited field, so the stamp opens no audit row."""
+    sha = model_sha().replace("'", "''")
+    try:
+        conn.execute("DROP TRIGGER IF EXISTS temp.bets_stamp_model_sha")
+        conn.execute(
+            "CREATE TEMP TRIGGER bets_stamp_model_sha AFTER INSERT ON bets "
+            "WHEN NEW.model_sha IS NULL AND NEW.ts >= "
+            "strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 day') "
+            f"BEGIN UPDATE bets SET model_sha = '{sha}' WHERE id = NEW.id; END")
+    except sqlite3.OperationalError:
+        pass                  # a connection without the column: nothing to stamp
+
+
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # WAL + a busy timeout, from the one place that explains why — see
     # engine/db.tune(). The refresher journals this file while the
@@ -346,6 +412,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # `db.needs_schema` for what that cost on the droplet.
     from .db import needs_schema as _needs_schema
     if not _needs_schema(conn, path, _SCHEMA_DONE):
+        _stamp_model_sha(conn)
         return conn
     _migrate(conn)
     conn.executescript(SCHEMA)
@@ -529,6 +596,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
+    # WHAT PRICED THIS ROW (audit 2026-09-30, B8-2) — see `model_sha`.
+    # NULL on every row written before it; nothing back-fills a guess.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN model_sha TEXT")
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # WHAT THE VENUE KEPT, in basis points of the stake (audit 2026-09-30,
     # B7-1). Exchange rows only; NULL on a sportsbook and on every row
     # written before fees were counted.
@@ -558,6 +631,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # about to move off.
     from .db import mark_schema as _mark_schema
     _mark_schema(conn, path, _SCHEMA_DONE)
+    _stamp_model_sha(conn)
     return conn
 
 
@@ -1078,8 +1152,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
             "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, rest_days, body_clock, lead_min, "
-            "wind_out, roofed, evidence, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)",
+            "wind_out, roofed, evidence, category, raw_prob, cal_temp) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (game_day_for(r, date),
              now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
@@ -1118,7 +1192,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # so a bench applied only at the props loop above would
              # have left every game bet on a benched league going
              # straight to the headline.
-             category))
+             category,
+             # THE RAW INPUTS, as a prop keeps them (audit 2026-09-30,
+             # B8-1): the engine's own number before the market blend,
+             # and the shrink in force — enough to re-derive the row.
+             r.get("engine_raw_prob"), r.get("cal_temp")))
         n += cur.rowcount
     conn.commit()
     return n
