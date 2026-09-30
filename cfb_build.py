@@ -2034,7 +2034,8 @@ def main() -> None:
         _matched, _total = _cfbprops.attach_lines(_prop_slate, prop_lines,
                                                   sharp=sharp_prop_lines,
                                                   alt=alt_prop_lines,
-                                                  alt_sharp=alt_sharp_prop_lines)
+                                                  alt_sharp=alt_sharp_prop_lines,
+                                                  record=bool(args.odds))
         prop_census["priced"] = _matched
         for _pg in getattr(_prop_slate, "games", None) or []:
             _pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]

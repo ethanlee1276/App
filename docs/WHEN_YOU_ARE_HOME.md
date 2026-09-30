@@ -15,6 +15,29 @@ as they are done.
 
 ---
 
+## PHASE 5 — the audit fixes (2026-09-30, Ethan: "I approve everything")
+
+Each fix below is pushed and live on the next auto-update. These are the
+halves that need the box. Nothing here changes a grade.
+
+**P2-a. Pre-game closes, every sport (read-only, seconds).** The paid
+harvest now skips a game already under way at its snapshot, every stored
+price carries its game's start, and the settle path refuses a harvested
+close taken after the bet's own kickoff. College football now writes line
+snapshots too. Run M10 and M11 above first if they are still open, then
+this, and paste both back. Every close should read before kickoff:
+
+```
+cd /srv/qellys && sudo -u qellys python3 closecheck.py --sport nfl 2>&1 | tail -40
+cd /srv/qellys && sudo -u qellys python3 closecheck.py --sport mlb 2>&1 | tail -40
+```
+
+Coverage may DROP on the next few days of settles. That is expected: a
+close that was an in-game price is now no close at all, which is the
+honest reading.
+
+---
+
 ## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")
 
 **M9. The stuck MLB bets (read-only, seconds).** Nine MLB bets from

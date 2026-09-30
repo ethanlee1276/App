@@ -3508,6 +3508,79 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
     return "", "", "no route placed it"
 
 
+def _bet_kickoff(b):
+    """The bet's scheduled start, as an aware UTC datetime, or None.
+
+    `ts` is the naive-UTC journal time and `lead_min` the minutes from it
+    to the scheduled start, stamped by `_lead_min` in the same write — so
+    their sum is the kickoff the bet was made against. Either missing (a
+    legacy row, a board with no clock) and there is nothing to cut at."""
+    try:
+        ts, lead = b["ts"], b["lead_min"]
+    except (IndexError, KeyError):
+        return None
+    if not ts or lead is None:
+        return None
+    try:
+        t = datetime.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        lead = float(lead)
+    except (TypeError, ValueError):
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=datetime.timezone.utc)
+    return t + datetime.timedelta(minutes=lead)
+
+
+def _pregame_close(close, b):
+    """``close`` when it was taken before the bet's own kickoff, else None.
+
+    THE HARVEST HAD NO PRE-GAME CUT (audit 2026-09-30, P0-2). It snapshots
+    one hour a day — 23:00 UTC by default — so an afternoon game's row is
+    a price from the seventh inning, and it was banked as that bet's close
+    with nothing checking it. Rows written since carry the game's start and
+    are cut where they are read (`db._in_play`); this is the cut for every
+    row that doesn't, made against the bet's own clock. No kickoff on the
+    bet, or no stamp on the row: the close stands, as it did before."""
+    if not close:
+        return None
+    ko = _bet_kickoff(b)
+    if ko is None:
+        return close
+    stamp = close.get("taken_at") if hasattr(close, "get") else None
+    if not stamp:
+        return close
+    try:
+        taken = datetime.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return close
+    if taken.tzinfo is None:
+        taken = taken.replace(tzinfo=datetime.timezone.utc)
+    return None if taken >= ko else close
+
+
+def _close_proven(close, b) -> bool:
+    """Whether a harvested close is KNOWN to be pre-game: its row carries
+    the game's start (so `db` cut it), or the bet's kickoff checked it."""
+    return bool(close and (close.get("commence_time")
+                           or _bet_kickoff(b) is not None))
+
+
+def _leg_key(index, key: tuple, b) -> tuple:
+    """The key to read a snapshot close under, for this bet's game.
+
+    `linemoves` files a doubleheader's games apart (``key + (leg,)``) as
+    well as the first game under the plain key. A bet that knows its leg
+    reads its own game on such a day; any other day, or a bet with no
+    leg, reads the plain key exactly as before."""
+    try:
+        leg = b["leg"]
+    except (IndexError, KeyError):
+        leg = None
+    if leg and (key + (1,)) in index:
+        return key + (int(leg),)
+    return key
+
+
 def close_at(index: dict, player: str, dates: list):
     """First close found for `player` across `dates`, or None.
 
@@ -4625,6 +4698,17 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         _team = row["team"] if "team" in row.keys() else None
         _dates = close_dates(hist_conn, b, _team)
         close = close_at(closes_cache[ck], normalize_name(b["player"]), _dates)
+        # Never a price from after this bet's own kickoff (audit P0-2).
+        close = _pregame_close(close, b)
+        _who = normalize_name(b["player"])
+        if close is not None and not _close_proven(close, b):
+            # Nothing proves this harvested row is pre-game. A free snapshot
+            # close cut at a RECORDED start is proven, so it wins.
+            if "_snapshots" not in closes_cache:
+                closes_cache["_snapshots"] = _snapshot_closes()
+            _stamped = getattr(closes_cache["_snapshots"], "stamped", ())
+            if any((_who, b["market"], _d) in _stamped for _d in _dates):
+                close = None
         close_line = float(close["line"]) if close else None
         if close_line is None:
             # No harvested close for this date — fall back to our own
@@ -4632,9 +4716,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             if "_snapshots" not in closes_cache:
                 closes_cache["_snapshots"] = _snapshot_closes()
             _snap = closes_cache["_snapshots"]
-            _who = normalize_name(b["player"])
             close_line = next(
-                (v for v in (_snap.get((_who, b["market"], _d))
+                (v for v in (_snap.get(_leg_key(_snap, (_who, b["market"], _d), b))
                              for _d in _dates) if v is not None), None)
         # The closing PRICE, which is the only thing that moves on a
         # fixed-line market.
@@ -4665,10 +4748,11 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # every pull that was already paid for.
             if "_snapshot_odds" not in closes_cache:
                 closes_cache["_snapshot_odds"] = _snapshot_close_odds()
-            _sides = closes_cache["_snapshot_odds"].get(
-                (normalize_name(b["player"]), b["market"], b["date"],
-                 round(float(b["line"]), 1) if b["line"] is not None else None)
-            ) or {}
+            _sides = closes_cache["_snapshot_odds"].get(_leg_key(
+                closes_cache["_snapshot_odds"],
+                (_who, b["market"], b["date"],
+                 round(float(b["line"]), 1) if b["line"] is not None else None),
+                b)) or {}
             close_odds = _sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
         # Capture the minutes actually played alongside the result, so the
@@ -5049,7 +5133,8 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     harvested = _harvested_closes(hist_conn)
     rows = conn.execute(
         "SELECT id, sport, player, market, date, side, line, odds, "
-        "closing_odds FROM bets WHERE status IN ('won','lost','push')"
+        "closing_odds, ts, lead_min, leg FROM bets "
+        "WHERE status IN ('won','lost','push')"
     ).fetchall()
     fixed = cleared = agreed = filled = 0
     changes: list = []      # filled: had nothing, gains a close
@@ -5057,15 +5142,22 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     clear_sample: list = [] # cleared: had a value, loses it
     for b in rows:
         _dates = close_dates(hist_conn, b)
-        want = _close_odds_from(
+        _who = normalize_name(b["player"])
+        # The settle path's cut, so the two never disagree: nothing from
+        # after the bet's own kickoff, and a stamped snapshot close beats
+        # a harvested one nothing proves pre-game (audit P0-2).
+        _hc = _pregame_close(
             close_at(harvested.get((b["sport"], b["market"]), {}),
-                     normalize_name(b["player"]), _dates),
-            b["line"], b["side"])
+                     _who, _dates), b)
+        if _hc is not None and not _close_proven(_hc, b) and any(
+                (_who, b["market"], _d) in getattr(snaps, "stamped", ())
+                for _d in _dates):
+            _hc = None
+        want = _close_odds_from(_hc, b["line"], b["side"])
         if want is None:
             _ln = round(float(b["line"]), 1) if b["line"] is not None else None
-            _who = normalize_name(b["player"])
             sides = next(
-                (v for v in (snaps.get((_who, b["market"], _d, _ln))
+                (v for v in (snaps.get(_leg_key(snaps, (_who, b["market"], _d, _ln), b))
                              for _d in _dates) if v is not None), None) or {}
             want = sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")

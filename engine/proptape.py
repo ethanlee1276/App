@@ -145,16 +145,16 @@ def last_seen(conn, sport: str, players: set,
         return {}
 
 
-def _games_by_team(games) -> dict:
-    """``{team: (event_id, home, away)}`` for the slate's games."""
-    from .lineledger import _f
+def _games_by_team(games, sport: str = "") -> dict:
+    """``{team: (event_id, home, away, commence_time)}`` for the slate's games."""
+    from .lineledger import _f, commence_iso
     out: dict = {}
     for g in games or []:
         home, away = _f(g, "home", "") or "", _f(g, "away", "") or ""
         if not home or not away:
             continue
         date = str(_f(g, "date", "") or "")[:10]
-        ev = (f"{date}-{away}@{home}", home, away)
+        ev = (f"{date}-{away}@{home}", home, away, commence_iso(sport, g))
         out[home] = ev
         out[away] = ev
     return out
@@ -164,7 +164,7 @@ def rows_for(sport: str, slate, watch: set, last: dict,
              now: _dt.datetime | None = None) -> list[dict]:
     """`odds_history` rows for the watched men whose number has moved."""
     taken = _stamp(now)
-    by_team = _games_by_team(getattr(slate, "games", []))
+    by_team = _games_by_team(getattr(slate, "games", []), sport)
     rows: list[dict] = []
     for prop in getattr(slate, "props", []) or []:
         player = _norm(getattr(prop, "player", ""))
@@ -174,7 +174,7 @@ def rows_for(sport: str, slate, watch: set, last: dict,
         game = by_team.get(getattr(prop, "team", "") or "")
         if not market or not game:
             continue
-        event_id, home, away = game
+        event_id, home, away, commence = game
         for ln in getattr(prop, "lines", []) or []:
             book = str(getattr(ln, "book", "") or "")
             line = getattr(ln, "line", None)
@@ -193,6 +193,7 @@ def rows_for(sport: str, slate, watch: set, last: dict,
                 "home": home, "away": away, "player": player,
                 "market": market, "book": book, "line": float(line),
                 "over_odds": over, "under_odds": under,
+                "commence_time": commence,
             })
             if len(rows) >= MAX_ROWS:
                 return rows

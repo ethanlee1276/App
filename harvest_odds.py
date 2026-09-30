@@ -33,6 +33,22 @@ from engine.sources import oddshistory as oh
 from engine.sources.oddsapi import OddsAPIError
 
 
+def _already_started(ev: dict, taken: str) -> bool:
+    """True when the event's start is at or before the snapshot's time.
+
+    No `commence_time` on the event = False: a missing start is not a
+    reason to refuse a price, and the settle path has its own cut."""
+    def _t(s):
+        try:
+            t = _dt.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+    start = _t(ev.get("commence_time")) if ev.get("commence_time") else None
+    at = _t(taken) if taken else None
+    return bool(start and at and start <= at)
+
+
 def daterange(start: str, end: str):
     a = _dt.date.fromisoformat(start)
     b = _dt.date.fromisoformat(end)
@@ -263,9 +279,19 @@ def main() -> None:
                 conn, args.sport, events_snap.taken)
 
         day_rows = 0
+        started = 0
         for ev in events:
             eid = str(ev.get("id", ""))
             if not eid:
+                continue
+            # UNDER WAY AT THE SNAPSHOT (audit 2026-09-30, P0-2). The events
+            # list holds every game not yet final, and the event-odds
+            # endpoint prices a running game in play — so the 23:00 UTC
+            # snapshot stored an afternoon game's live number, and the
+            # close reader took it as that game's close. Skipped before
+            # the call: no credits for a price that can never be a close.
+            if _already_started(ev, events_snap.taken):
+                started += 1
                 continue
             # A custom-books harvest re-visits stored snapshots on purpose:
             # the stored rows don't have these books' prices yet.
@@ -295,6 +321,8 @@ def main() -> None:
         total_rows += day_rows
         drift = events_snap.drift_minutes
         note = f" (snapshot {drift:.0f} min from requested)" if drift and drift > 30 else ""
+        if started:
+            note += f"; {started} already under way, skipped (no pre-game price)"
         print(f"  {day}: {len(events)} events → {day_rows} price rows{note}")
 
     _db.log_ingest(conn, args.sport, "odds_history",

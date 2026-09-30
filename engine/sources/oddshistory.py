@@ -244,6 +244,9 @@ class HistoricalOdds:
     # against a real closing number, only asserted about.
     total: tuple | None = None
     spread: tuple | None = None
+    #: The event's scheduled start as the API gives it (ISO, UTC). Stored on
+    #: every row so a price taken after it is never read as a close.
+    commence: str = ""
 
 
 def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
@@ -255,7 +258,7 @@ def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
     away = teams.get(body.get("away_team", ""), body.get("away_team", ""))
     return HistoricalOdds(
         sport=sport, taken=snap.taken, event_id=str(body.get("id", "")),
-        home=home, away=away,
+        home=home, away=away, commence=str(body.get("commence_time") or ""),
         props=parse_event_lines(body, cfg["markets"]),
         moneylines=parse_event_h2h(body, teams),
         moneylines_by_book=parse_event_h2h_by_book(body, teams),
@@ -329,4 +332,8 @@ def to_rows(hist: HistoricalOdds, include_best: bool = True) -> list[dict]:
                 "player": team, "market": "moneyline", "book": book,
                 "line": 0.0, "over_odds": price, "under_odds": None,
             })
+    # Every row carries the game's start (audit 2026-09-30, P0-2): the
+    # close readers drop a price taken at or after it.
+    for r in rows:
+        r["commence_time"] = hist.commence or None
     return rows

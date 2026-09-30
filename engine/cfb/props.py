@@ -507,7 +507,8 @@ def build_slate(conn, games: list[dict], date: str, season: int,
 
 def attach_lines(slate, lines: dict, sharp: dict | None = None,
                  alt: dict | None = None,
-                 alt_sharp: dict | None = None) -> tuple[int, int]:
+                 alt_sharp: dict | None = None,
+                 record: bool = False) -> tuple[int, int]:
     """Replace each prop's proxy line with the book's. ``(matched, total)``.
 
     ``sharp`` is the sharp book's own pairs in the same shape, from the
@@ -543,6 +544,19 @@ def attach_lines(slate, lines: dict, sharp: dict | None = None,
         # `oddsapi.apply_odds_to_slate`, the NFL's copy of this join.
         prop.alt_lines = list((alt or {}).get(key) or [])
         prop.alt_sharp_lines = list((alt_sharp or {}).get(key) or [])
+    # THE LINE SNAPSHOT every other league writes (audit 2026-09-30, P0-2):
+    # college never recorded one, so a college bet's only close was the
+    # paid harvest's — or none. ``record`` is the build saying this was a
+    # PAID pull; a cached re-read is an old snapshot under a new time.
+    # Each row carries its game's start, so an in-play re-price is never
+    # read as the close.
+    if record and matched:
+        try:
+            from ..linemoves import record_snapshots
+            record_snapshots([p for p in getattr(slate, "props", [])
+                              if getattr(p, "lines", None)], slate=slate)
+        except Exception as exc:                          # noqa: BLE001
+            print(f"  ⚠️  college line snapshot not written: {exc}")
     return matched, len(getattr(slate, "props", []))
 
 

@@ -75,6 +75,24 @@ def _f(g, name, default=None):
     return default if v is None else v
 
 
+def commence_iso(sport: str, g) -> str | None:
+    """The game's start as an ISO UTC stamp, or None when it can't be known.
+
+    An ISO kickoff with a zone is read as it is; a bare clock is read only
+    for the NFL, whose nflverse `gametime` is documented US Eastern — the
+    same rule `linemoves.start_epoch` keeps, for the same reason."""
+    from .linemoves import start_epoch
+    try:
+        ts = start_epoch(_f(g, "kickoff", "") or "", _f(g, "date", "") or "",
+                         "America/New_York" if sport == "nfl" else None)
+    except Exception:                                         # noqa: BLE001
+        ts = None
+    if ts is None:
+        return None
+    return _dt.datetime.fromtimestamp(ts, _dt.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
 def rows_for_games(sport: str, games, now: _dt.datetime | None = None) -> list[dict]:
     """``odds_history`` rows for every game carrying a real book number.
 
@@ -92,7 +110,11 @@ def rows_for_games(sport: str, games, now: _dt.datetime | None = None) -> list[d
         date = str(_f(g, "date", "") or "")[:10]
         event_id = f"{date}-{away}@{home}"
         base = {"sport": sport, "taken_at": taken, "event_id": event_id,
-                "home": home, "away": away, "book": BEST_BOOK}
+                "home": home, "away": away, "book": BEST_BOOK,
+                # The game's start on the row: this tape writes every
+                # cycle, in-play games included, and the close readers
+                # drop a price taken at or after it (audit P0-2).
+                "commence_time": commence_iso(sport, g)}
 
         total = _f(g, "total")
         if total is not None:

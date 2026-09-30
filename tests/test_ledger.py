@@ -2073,8 +2073,12 @@ def test_the_closing_price_comes_from_the_free_snapshots():
     from engine import linemoves
     src = inspect.getsource(linemoves.closing_odds_by_date)
     assert "over_odds" in src and "under_odds" in src
-    assert "_pregame_only" in src, "an in-play re-price could become the close"
-    assert "_median" in src, "one outlier book could define the close"
+    # Cut per game since 2026-09-30 (`_pregame_legs`, which keeps a
+    # doubleheader's second game); the medianing moved to `_price_close`.
+    assert "_pregame_legs" in src, "an in-play re-price could become the close"
+    assert "_price_close(" in src
+    assert "_median" in inspect.getsource(linemoves._price_close), \
+        "one outlier book could define the close"
 
 
 def _snap(player, market, ts, over=None, under=None):

@@ -226,6 +226,69 @@ def _pregame_only(items: list[dict]) -> list[dict]:
     return pre
 
 
+#: The zone the slate day is read in. Every league on the board journals
+#: its bets under the US Eastern date (the NFL's Sunday, MLB's slate), and
+#: the day a snapshot belongs to is its GAME's day, not the machine's.
+SLATE_TZ = "America/New_York"
+
+
+class _CloseIndex(dict):
+    """A close index that also names the keys whose close was cut at a
+    RECORDED start (`stamped`) — a close proven pre-game, which the settle
+    path prefers over a harvested price nothing proves (audit P0-2)."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.stamped: set = set()
+
+
+def _slate_day(r: dict) -> str:
+    """The day a snapshot is filed under.
+
+    A row stamped with its game's start files under that start's Eastern
+    date — the slate day the bet was journaled under. A 9:10 p.m. Eastern
+    first pitch is 01:10 UTC the next day, and the machine's clock (UTC on
+    the box) filed its whole pre-game run under the wrong day, where no
+    bet ever looked (audit 2026-09-30, P1-4).
+
+    An unstamped row keeps the machine-local day it always had: history
+    written before the stamp is not reinterpreted.
+    """
+    import datetime as _dt
+    st = r.get("start_ts")
+    if st is not None:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.fromtimestamp(float(st), ZoneInfo(SLATE_TZ)).strftime("%Y-%m-%d")
+    return _dt.datetime.fromtimestamp(float(r["ts"])).strftime("%Y-%m-%d")
+
+
+def _pregame_legs(items: list[dict]) -> list[tuple]:
+    """``[(start, pre-game rows)]``, one per game in the group, earliest first.
+
+    `_pregame_only` cuts every row at the EARLIEST start in the group, so on
+    a doubleheader every pre-game price of game two — all taken after game
+    one's first pitch — was dropped, and game two had no close at all. Each
+    stamped row is cut at its OWN game's start here. Unstamped rows belong
+    to the first game and are cut at it, which is what `_pregame_only` did.
+    No stamp anywhere: one game, no cut — legacy history reads as before.
+    """
+    starts = sorted({float(r["start_ts"]) for r in items
+                     if r.get("start_ts") is not None})
+    if not starts:
+        return [(None, items)]
+    first = starts[0]
+    out = []
+    for s in starts:
+        pre = []
+        for r in items:
+            own = r.get("start_ts")
+            own = float(own) if own is not None else first
+            if own == s and float(r.get("ts", 0)) < s:
+                pre.append(r)
+        out.append((s, pre))
+    return out
+
+
 def stream_history(path: str | Path | None = None):
     """Every snapshot, one at a time, without holding the file in memory.
 
@@ -274,8 +337,10 @@ def load_history(path: str | Path | None = None) -> list[dict]:
 
 def closing_lines_by_date(rows: list[dict]) -> dict:
     """``{(normalized player, market, YYYY-MM-DD): closing line}`` — the last
-    snapshot of each local day, medianed across the books quoted at that
-    final instant.
+    pre-game snapshot of each slate day (`_slate_day`), medianed across the
+    books quoted at that final instant. A doubleheader also carries
+    ``(…, leg)`` keys, and the index's ``stamped`` set names the closes cut
+    at a recorded start.
 
     This is the free CLV source for the journal: each day's last recorded
     snapshot is the nearest thing to that night's close, and it accrues on
@@ -287,25 +352,36 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     grouped: dict[tuple, list[dict]] = {}
     for r in rows:
         try:
-            ts = float(r["ts"])
-            date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            float(r["ts"])
+            date = _slate_day(r)
             key = (normalize_name(r["player"]), r["market"], date)
             float(r["line"])                       # reject unusable rows early
             grouped.setdefault(key, []).append(r)
         except (KeyError, TypeError, ValueError):
             continue
-    out: dict = {}
+    out = _CloseIndex()
     for key, items in grouped.items():
         # A price quoted after first pitch is not a closing line — see
         # _pregame_only. Without this cut the last in-play re-price of a
         # staggered slate became the "close", and every CLV computed off
         # it was fiction dressed as evidence.
-        items = _pregame_only(items)
-        if not items:
-            continue
-        last = max(float(r["ts"]) for r in items)
-        out[key] = _median([float(r["line"]) for r in items
-                            if float(r["ts"]) == last])
+        #
+        # One close per GAME (`_pregame_legs`): the plain key is the first
+        # game's, as it always was; a doubleheader also files each game
+        # under ``key + (leg,)`` so a leg-two bet reads its own.
+        legs = _pregame_legs(items)
+        for n, (start, pre) in enumerate(legs, 1):
+            if not pre:
+                continue
+            last = max(float(r["ts"]) for r in pre)
+            val = _median([float(r["line"]) for r in pre
+                           if float(r["ts"]) == last])
+            if n == 1:
+                out[key] = val
+                if start is not None:
+                    out.stamped.add(key)
+            if len(legs) > 1:
+                out[key + (n,)] = val
     return out
 
 
@@ -356,54 +432,68 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
     grouped: dict[tuple, list[dict]] = {}
     for r in rows:
         try:
-            ts = float(r["ts"])
+            float(r["ts"])                         # reject unusable rows early
             # A row is usable if EITHER side is quoted. Requiring the over
             # was what made the under invisible.
             if r.get("over_odds") in (None, "") and \
                     r.get("under_odds") in (None, ""):
                 continue
-            date = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            date = _slate_day(r)
             ln = round(float(r["line"]), 1)
             grouped.setdefault(
                 (normalize_name(r["player"]), r["market"], date, ln),
                 []).append(r)
         except (KeyError, TypeError, ValueError):
             continue
-    out: dict = {}
+    out = _CloseIndex()
     for key, items in grouped.items():
-        items = _pregame_only(items)
-        if not items:
-            continue
-        last = max(float(r["ts"]) for r in items)
-        at_close = [r for r in items if float(r["ts"]) == last]
-
-        def _side(col):
-            vals = []
-            for r in at_close:
-                v = r.get(col)
-                if v in (None, ""):
-                    continue
-                try:
-                    v = float(v)
-                except (TypeError, ValueError):
-                    continue
-                # A LEGAL AMERICAN PRICE HAS |odds| >= 100. There is no
-                # such quote as -5: the range between -100 and +100 does
-                # not exist, and a number landing there is a number that
-                # got into a price column, not a price.
-                #
-                # Found 2026-08-09 in the CLV worst decile — two closes
-                # recorded as -5, which `american_to_decimal` reads as
-                # decimal 21.0, a 4.8% longshot. Each produced a CLV
-                # around -45 points on its own and together they were a
-                # fifth of the reported mean.
-                if abs(v) < 100:
-                    continue
-                vals.append(v)
-            return _median(vals) if vals else None
-
-        out[key] = {"over": _side("over_odds"), "under": _side("under_odds")}
+        # Per game, as `closing_lines_by_date`: the plain key is the first
+        # game's close, and a doubleheader adds ``key + (leg,)``.
+        legs = _pregame_legs(items)
+        for n, (start, pre) in enumerate(legs, 1):
+            if not pre:
+                continue
+            val = _price_close(pre)
+            if n == 1:
+                out[key] = val
+                if start is not None:
+                    out.stamped.add(key)
+            if len(legs) > 1:
+                out[key + (n,)] = val
     return out
+
+
+def _price_close(items: list[dict]) -> dict:
+    """``{"over", "under"}`` medians at the last instant among ``items``."""
+    last = max(float(r["ts"]) for r in items)
+    at_close = [r for r in items if float(r["ts"]) == last]
+
+    def _side(col):
+        vals = []
+        for r in at_close:
+            v = r.get(col)
+            if v in (None, ""):
+                continue
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                continue
+            # A LEGAL AMERICAN PRICE HAS |odds| >= 100. There is no
+            # such quote as -5: the range between -100 and +100 does
+            # not exist, and a number landing there is a number that
+            # got into a price column, not a price.
+            #
+            # Found 2026-08-09 in the CLV worst decile — two closes
+            # recorded as -5, which `american_to_decimal` reads as
+            # decimal 21.0, a 4.8% longshot. Each produced a CLV
+            # around -45 points on its own and together they were a
+            # fifth of the reported mean.
+            if abs(v) < 100:
+                continue
+            vals.append(v)
+        return _median(vals) if vals else None
+
+    return {"over": _side("over_odds"), "under": _side("under_odds")}
 
 
 def todays_rows(rows: list[dict], now: float | None = None) -> list[dict]:

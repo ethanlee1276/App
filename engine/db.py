@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS odds_history (
     sport TEXT, taken_at TEXT, event_id TEXT, home TEXT, away TEXT,
     player TEXT, market TEXT, book TEXT,
     line REAL, over_odds INTEGER, under_odds INTEGER,
+    commence_time TEXT,
     PRIMARY KEY (sport, taken_at, event_id, player, market, book)
 );
 -- Who started each game. The game-level models are dominated by starting
@@ -285,7 +286,8 @@ GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
 LOG_COLS = ["sport", "season", "period", "game_id", "player", "team",
             "opponent", "position", "home", "market", "value"]
 ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
-                  "market", "book", "line", "over_odds", "under_odds"]
+                  "market", "book", "line", "over_odds", "under_odds",
+                  "commence_time"]
 
 
 #: Concurrency, and why this is not only a test concern.
@@ -540,6 +542,14 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         pass                              # column already there
     try:
         conn.execute("ALTER TABLE games ADD COLUMN date TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass                              # column already there
+    # The game's scheduled start on every stored price (audit 2026-09-30,
+    # P0-2): a price taken at or after it is in-play and never a close.
+    # Nullable — rows written before it keep reading as they always have.
+    try:
+        conn.execute("ALTER TABLE odds_history ADD COLUMN commence_time TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass                              # column already there
@@ -844,6 +854,50 @@ def markets_at_snapshot(conn, sport: str, taken_at: str) -> set:
         "WHERE sport=? AND taken_at=?", (sport, taken_at)) if r[0]}
 
 
+def _commence_sql(conn) -> str:
+    """``, commence_time`` when the table has the column, else ``""``.
+
+    A history.db from before the column (or a fixture that builds its own
+    table) must keep reading; `connect` adds it, a bare sqlite3 handle
+    does not."""
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(odds_history)")}
+    except sqlite3.Error:
+        return ""
+    return ", commence_time" if "commence_time" in cols else ""
+
+
+def _iso_epoch(stamp) -> float | None:
+    import datetime as _dt
+    if not stamp:
+        return None
+    try:
+        t = _dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=_dt.timezone.utc)   # stored stamps are UTC
+    return t.timestamp()
+
+
+def _commence_of(r):
+    try:
+        return r["commence_time"]
+    except (IndexError, KeyError):
+        return None
+
+
+def _in_play(r) -> bool:
+    """A stored price taken at or after its game's start (P0-2, audit
+    2026-09-30). The paid harvest snapshots one hour a day and the build
+    tapes write every cycle, so both caught games already under way — and
+    the last row of the day became the "close". No start on the row = no
+    cut: that row reads exactly as it did before the column existed."""
+    start = _iso_epoch(_commence_of(r))
+    taken = _iso_epoch(r["taken_at"])
+    return start is not None and taken is not None and taken >= start
+
+
 def closing_odds_by_date(conn, sport: str, market: str) -> dict:
     """Latest harvested price per (player, market) on EACH date.
 
@@ -857,16 +911,19 @@ def closing_odds_by_date(conn, sport: str, market: str) -> dict:
     "book", "taken_at"}}`` — within each date, the last snapshot wins, which is
     the closest thing to that day's closing number.
     """
-    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
+         f"{_commence_sql(conn)} "
          "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
     out: dict = {}
     for r in conn.execute(q, (sport, market)):
+        if _in_play(r):
+            continue
         date = str(r["taken_at"])[:10]
         # Ordered by taken_at, so later same-date rows overwrite earlier ones.
         out[(r["player"], date)] = {
             "line": r["line"], "over_odds": r["over_odds"],
             "under_odds": r["under_odds"], "book": r["book"],
-            "taken_at": r["taken_at"],
+            "taken_at": r["taken_at"], "commence_time": _commence_of(r),
         }
     return out
 
@@ -890,11 +947,14 @@ def closing_odds_all_books(conn, sport: str, market: str) -> dict:
 
     Each list is the latest snapshot for that date, one entry per book.
     """
-    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
+         f"{_commence_sql(conn)} "
          "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
     latest: dict = {}
     out: dict = {}
     for r in conn.execute(q, (sport, market)):
+        if _in_play(r):
+            continue
         stamp = str(r["taken_at"])
         key = (r["player"], stamp[:10])
         seen = latest.get(key)
@@ -908,7 +968,7 @@ def closing_odds_all_books(conn, sport: str, market: str) -> dict:
         out[key].append({
             "line": r["line"], "over_odds": r["over_odds"],
             "under_odds": r["under_odds"], "book": r["book"],
-            "taken_at": r["taken_at"],
+            "taken_at": r["taken_at"], "commence_time": _commence_of(r),
         })
     return out
 
