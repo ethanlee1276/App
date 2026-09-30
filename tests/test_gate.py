@@ -591,7 +591,9 @@ def test_a_broken_code_lookup_costs_a_code_holder_not_a_subscriber():
     code table is code holders alone."""
     src = _server()
     body = src[src.index("def _entitled"):][:2200]
-    head = body[body.index("RD.init("):body.index("BI.status_for")]
+    # "RD.init" not "RD.init(": the call is memoised per process since
+    # audit F-9 (`_acct().once_per_db(RD.init)(conn)`).
+    head = body[body.index("RD.init"):body.index("BI.status_for")]
     guard = head[head.index("except Exception"):]
     assert "return True" not in guard, \
         "a broken code lookup grants access — that is fail-OPEN"

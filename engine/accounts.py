@@ -262,6 +262,48 @@ def _equalize(password: str) -> None:
 
 
 # --- storage -----------------------------------------------------------------
+_ONCE: dict = {}
+
+
+def once_per_db(fn):
+    """Run a schema init once per database file per process (audit F-9).
+
+    `CREATE INDEX IF NOT EXISTS` takes the write lock even when the index is
+    there, and these inits ran on every request — so every signed-in board
+    poll queued behind every other one, and under load waited out the
+    10-second busy timeout and 502'd. Keyed on the file's path and identity;
+    a skip is confirmed by a READ of the schema (a deleted-and-recreated
+    file at a reused inode has fewer objects and is initialised again). An
+    in-memory database is always initialised."""
+    import functools
+
+    def _schema_n(conn):
+        return conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
+
+    @functools.wraps(fn)
+    def run(conn, *a, **k):
+        try:
+            f = conn.execute("PRAGMA database_list").fetchone()[2]
+            st = os.stat(f) if f else None
+        except Exception:                                     # noqa: BLE001
+            st = None
+        key = (fn.__module__, fn.__qualname__, f, st.st_dev, st.st_ino) if st else None
+        if key is not None and key in _ONCE:
+            try:
+                if _schema_n(conn) >= _ONCE[key]:
+                    return None
+            except Exception:                                 # noqa: BLE001
+                pass
+        out = fn(conn, *a, **k)
+        if key is not None:
+            try:
+                _ONCE[key] = _schema_n(conn)
+            except Exception:                                 # noqa: BLE001
+                _ONCE.pop(key, None)
+        return out
+    return run
+
+
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
     p = Path(path or DB_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +323,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+@once_per_db
 def _init(conn: sqlite3.Connection) -> None:
     conn.executescript("""
       CREATE TABLE IF NOT EXISTS users (

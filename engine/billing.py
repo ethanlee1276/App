@@ -883,6 +883,10 @@ def _period_end(obj: dict) -> float | None:
 
 
 # --- storage ------------------------------------------------------------------
+from .accounts import once_per_db as _once_per_db   # noqa: E402  (audit F-9)
+
+
+@_once_per_db
 def init(conn) -> None:
     conn.executescript("""
       CREATE TABLE IF NOT EXISTS subscriptions (

@@ -847,6 +847,10 @@ def _stats_or_empty(teamdex, conn, sport, team):
                 "error": "player logs unavailable"}
 
 
+#: When the streak fold last ran from the public leaders read (epoch s).
+_STREAK_FOLDED = [0.0]
+
+
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
     #: (audit 2026-09-30, E-2). Without it a slow client held a worker for
@@ -2322,7 +2326,12 @@ class Handler(BaseHTTPRequestHandler):
             slate = streak_slate()
             conn = A.connect()
             try:
-                S.fold_all(conn, slate)
+                # AN ANONYMOUS READ WROTE ON EVERY REQUEST (audit F-9): the
+                # fold takes the accounts write lock. Once a minute per
+                # process is enough — the fold only moves when a game ends.
+                if time.time() - _STREAK_FOLDED[0] > 60:
+                    _STREAK_FOLDED[0] = time.time()
+                    S.fold_all(conn, slate)
                 board = S.leaders(conn)
                 # A COUNT, not a roster — see playing_today's docstring
                 # for why the board is empty on day one and why this is
@@ -2432,7 +2441,7 @@ class Handler(BaseHTTPRequestHandler):
         # broken redemption lookup cannot cost a PAYING subscriber their
         # board — the billing check below still runs.
         try:
-            RD.init(conn)
+            _acct().once_per_db(RD.init)(conn)   # once per process (audit F-9)
             if RD.active(conn, who["id"]):
                 return True
         except Exception:                                    # noqa: BLE001
@@ -2721,7 +2730,7 @@ class Handler(BaseHTTPRequestHandler):
                 # it is would put a status on the page that no processor
                 # would recognise if support ever had to look it up.
                 from engine import redeem as RD
-                RD.init(conn)
+                _acct().once_per_db(RD.init)(conn)   # once per process (audit F-9)
                 out["codes"] = RD.describe(conn, who["id"])
                 if out["codes"]["active"]:
                     out["entitled"] = True
