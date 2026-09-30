@@ -674,6 +674,33 @@ def check_heartbeat(rep, path=None):
             rep.add("heartbeat", OK, f"{age:.0f}s old")
 
 
+def check_public_boards_sealed(rep, web_data=None):
+    """With the paywall on, no public board carries a paid row (audit F-14).
+
+    `gate.unsealed()` existed and nothing ran it against the live tree: a
+    build that adds a paid key not listed in PAID_KEYS — the failure the
+    gate's own docstring says has happened four times — would publish the
+    product and every check would stay green."""
+    @_check(rep, "paywall seal")
+    def _():
+        from engine import gate
+        if not gate.enabled():
+            rep.add("paywall seal", OK, "paywall off — the public boards are the full boards by design")
+            return
+        root = Path(web_data) if web_data else ROOT / "web" / "data"
+        if not root.is_dir() or not any(root.glob("*.json")):
+            rep.add("paywall seal", WARN, _no_data("public boards"))
+            return
+        bad = gate.unsealed(root)
+        if bad:
+            rep.add("paywall seal", FAIL,
+                    "paid rows on the public path: " + ", ".join(
+                        f"{b['board']} ({b['rows']})" for b in bad[:6]),
+                    "add the key to engine/gate.PAID_KEYS (or PAID_KEYS_BY_FILE) and rebuild")
+        else:
+            rep.add("paywall seal", OK, "every public board is sealed")
+
+
 def check_record_integrity(rep):
     """Nothing about the record changed without a trace (audit P0-1).
 
@@ -1278,7 +1305,8 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_parlay_agreement, check_forecast_log,
           check_clv_capture, check_learning, check_correlation_priors,
           check_game_calibration, check_fitter_cadence,
-          check_record_integrity, check_heartbeat, check_league_days, check_git]
+          check_record_integrity, check_heartbeat, check_public_boards_sealed,
+          check_league_days, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -1290,7 +1318,7 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log, check_record_integrity, check_heartbeat,
-               check_clv_capture, check_learning,
+               check_public_boards_sealed, check_clv_capture, check_learning,
                check_correlation_priors, check_game_calibration,
                check_fitter_cadence)
 

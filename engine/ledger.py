@@ -4932,8 +4932,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # Heal what the unguarded sweep already broke: a voided desk ticket
     # is always wrong (nothing legitimately voids predmarket rows today),
     # so reopen them for the exchange grader. Idempotent, no rows = free.
+    # ONLY THE UNEXPLAINED ONES (audit 2026-09-30, A2-2). `settle_predmarket`
+    # now voids on purpose — a cancelled market, a contract delisted past
+    # its event — and says why in `why_note`. Reopening those too was a
+    # void/reopen ping-pong every cycle; a void with a reason stays void.
     cur = conn.execute("UPDATE bets SET status='open' "
-                       "WHERE category='predmarket' AND status='void'")
+                       "WHERE category='predmarket' AND status='void' "
+                       "AND why_note IS NULL")
     if cur.rowcount:
         print(f"  reopened {cur.rowcount} desk ticket(s) a no-show sweep "
               f"had wrongly voided — the exchange grades those")
