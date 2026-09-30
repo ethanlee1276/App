@@ -155,18 +155,30 @@ def cfb_player_seasons(today, have: int) -> list[int]:
     return seasons
 
 
+def _backup_due(state: dict, today: _dt.date) -> bool:
+    last = state.get("last_backup")
+    if last:
+        try:
+            return (today - _dt.date.fromisoformat(last)).days >= BACKUP_EVERY_DAYS
+        except ValueError:
+            pass
+    return True
+
+
 def _maybe_backup(state: dict, today: _dt.date, log,
                   root: Path | None = None,
                   backup_dir: Path | None = None) -> None:
     """Weekly zip of everything irreplaceable. Live SQLite files are copied
-    through the sqlite backup API so a mid-write snapshot can't corrupt."""
-    last = state.get("last_backup")
-    if last:
-        try:
-            if (today - _dt.date.fromisoformat(last)).days < BACKUP_EVERY_DAYS:
-                return
-        except ValueError:
-            pass
+    through the sqlite backup API so a mid-write snapshot can't corrupt.
+
+    WRITTEN BESIDE, CHECKED, THEN RENAMED (audit 2026-09-30, F-5 / F-8).
+    The zip was written in place, so a chore list re-run after a failed
+    ingest rewrote the same `backup_<date>.zip` under a reader, and a
+    crash mid-write left a truncated archive with the backup's name on it.
+    It is now built as `.zip.tmp`, read back with `testzip()`, and only
+    then renamed into place; a bad archive is deleted and raises."""
+    if not _backup_due(state, today):
+        return
     import sqlite3
     import tempfile
     import zipfile
@@ -174,8 +186,9 @@ def _maybe_backup(state: dict, today: _dt.date, log,
     backup_dir = backup_dir or BACKUP_DIR
     backup_dir.mkdir(parents=True, exist_ok=True)
     out = backup_dir / f"backup_{today.isoformat()}.zip"
+    part = out.with_suffix(".zip.tmp")
     wrote = 0
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel in BACKUP_FILES:
             src = root / rel
             if not src.exists():
@@ -197,6 +210,12 @@ def _maybe_backup(state: dict, today: _dt.date, log,
             for src in sorted((root / head).glob(tail)):
                 zf.write(src, arcname=f"{head}/{src.name}")
                 wrote += 1
+    with zipfile.ZipFile(part) as zf:
+        bad = zf.testzip()
+    if bad is not None:
+        part.unlink(missing_ok=True)
+        raise RuntimeError(f"backup archive failed its read-back at {bad}")
+    os.replace(part, out)
     # Prune: keep the newest BACKUP_KEEP.
     zips = sorted(backup_dir.glob("backup_*.zip"))
     for old in zips[:-BACKUP_KEEP]:
@@ -383,7 +402,11 @@ def _maybe_harvest(day: _dt.date, log, budget_path=None, hconn=None) -> None:
             hconn = _hdb.connect()
         except Exception:                                    # noqa: BLE001
             hconn = None
-    queue = [(day, s, m) for s, m in _harvest_targets(day)]
+    # A DAY ALREADY HARVESTED IS NOT BOUGHT TWICE (audit F-8): the chores
+    # re-ran every cycle after a failed ingest, and each run re-asked for
+    # yesterday on a fresh day budget.
+    queue = [(day, s, m) for s, m in _harvest_targets(day)
+             if hconn is None or not _day_has_closes(hconn, s, day)]
     if hconn is not None:
         queue += _backfill_days(day, hconn)
     for d, sport, markets in queue:
@@ -1301,7 +1324,52 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
         return False
+    # ONE RUNNER AT A TIME (audit 2026-09-30, F-8). The startup thread and
+    # the refresher both call this at boot — every autoupdate restart — and
+    # nothing stopped them running the whole chore list side by side. A
+    # non-blocking lock: the second caller returns at once and the next
+    # cycle looks again.
+    lock = _chore_lock(state_path)
+    if lock is None:
+        log("Daily maintenance: already running in another thread — skipped")
+        return False
+    try:
+        return _run_chores(state, state_path, today, harvest, log)
+    finally:
+        _release(lock)
 
+
+def _chore_lock(state_path: Path):
+    """An exclusive, non-blocking lock beside the state file, or None when
+    another runner holds it. On a platform without fcntl the lock is a
+    no-op object — the race it closes is a Linux-box one."""
+    try:
+        import fcntl
+    except ImportError:                                       # pragma: no cover
+        return object()
+    try:
+        Path(state_path).parent.mkdir(parents=True, exist_ok=True)
+        fh = open(str(state_path) + ".lock", "a+")
+    except OSError:
+        return object()
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return None
+    return fh
+
+
+def _release(lock) -> None:
+    try:
+        import fcntl
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, log) -> bool:
     yesterday = today - _dt.timedelta(days=1)
     try:
         from . import db as _cdb
@@ -2023,16 +2091,27 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     except Exception as exc:                                  # noqa: BLE001
         log(f"  ⚠️  faces backfill skipped: {exc}")
 
+    # ONCE A DAY, WHATEVER HAPPENS AFTER (audit F-8). The day is marked done
+    # only on a good ingest, so a failed MLB ingest re-ran this whole list
+    # every cycle — and with it the PAID harvest, each run on a fresh day
+    # budget. The stamp is written BEFORE the call and saved at once, so a
+    # crash inside the harvest does not buy it again either.
     if harvest:
-        _maybe_harvest(yesterday, log)
+        if state.get("harvest_attempted") != today.isoformat():
+            state["harvest_attempted"] = today.isoformat()
+            _save_state(state_path, state)
+            _maybe_harvest(yesterday, log)
 
-    if state_path == STATE_PATH:
+    if state_path == STATE_PATH and _backup_due(state, today):
         # Real runs only — an injected state path means a test harness, and
         # tests must never write archives into the working tree.
-        try:
-            _maybe_backup(state, today, log)
-        except Exception as exc:  # noqa: BLE001 — never block the chores
-            log(f"  ⚠️  backup failed: {exc}")
+        # DETACHED (audit F-5): the sqlite backup API copied a ~3.5 GB
+        # history.db and deflated it on the refresher thread while every
+        # board waited. It is a weekly child like the fitters now, logged
+        # by reap_children when it lands; marked as attempted when started.
+        state["last_backup"] = today.isoformat()
+        for line in _spawn_module("engine.backupzip", log, (today.isoformat(),)):
+            log(f"  {line}")
 
     if ingest_ok:
         state["last_done"] = today.isoformat()

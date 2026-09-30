@@ -37,7 +37,9 @@ sys.path.insert(0, ROOT)
 
 from engine import maintenance                               # noqa: E402
 
-SRC = inspect.getsource(maintenance.run_if_due)
+# The chore list lives in `_run_chores` since audit F-8 put `run_if_due`
+# behind a lock; read both, so the block is found wherever it sits.
+SRC = inspect.getsource(maintenance.run_if_due) + inspect.getsource(maintenance._run_chores)
 
 
 def _block():
