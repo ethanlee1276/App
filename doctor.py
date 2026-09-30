@@ -498,7 +498,7 @@ def check_record_page(rep):
                     "python3 launch.py --settle all")
         else:
             note = (f" (+{unstaked} graded-but-unstaked, reported separately"
-                    f" — `--resize-unstaked` counts them at 0.1u)"
+                    f" — `--resize-unstaked --apply` counts them at 0.1u)"
                     if unstaked else "")
             rep.add("record page", OK,
                     f"{settled} settled bet(s), written {age_h:.0f}h ago"

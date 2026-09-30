@@ -29,8 +29,8 @@ What is defended here:
   * ITS JOURNALLING CANNOT DOUBLE-COUNT. That was the objection to
     pricing here at all (Ethan settled it on 2026-08-19: "yes I want the
     2nd -9th priced"), and the answer is structural rather than a
-    promise — bets is UNIQUE on (sport, date, player, market, category)
-    with INSERT OR IGNORE, and this payload stamps the same
+    promise — bets is unique on its pick key (sport, date, player,
+    market, category, side, leg) with INSERT OR IGNORE, and this payload stamps the same
     "<season>-W<week>" date key build_slate() does, so the full build's
     later re-offer of the same row is a no-op in SQLite.
   * IT SAYS WHICH LAYER IS MISSING, so the board reads as "no props
@@ -121,8 +121,12 @@ def test_the_priced_fallback_cannot_double_journal_the_slate():
     lands in the record twice."""
     ledger = open(os.path.join(ROOT, "engine", "ledger.py"),
                   encoding="utf-8").read()
-    assert "UNIQUE (sport, date, player, market, category)" in ledger, \
-        "the bets table lost the constraint the fallback relies on"
+    # The key moved from a table constraint to `bets_pick_key` on
+    # 2026-09-30 (audit A2-5: side and leg joined it). The fallback's
+    # guarantee is unchanged — the same slate row re-offered is refused.
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS bets_pick_key ON bets " in ledger \
+        and "(sport, date, player, market, category, " in ledger, \
+        "the bets table lost the key the fallback relies on"
     assert "INSERT OR IGNORE INTO bets" in ledger, \
         "an insert that is not OR IGNORE would raise instead of dedupe"
     # Same date key on both sides — a bare INSERT OR IGNORE dedupes

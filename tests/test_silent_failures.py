@@ -146,6 +146,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # must never cost the request it describes. It returns None either
         # way, so there is no value for a quiet day to be confused with.
         "event",
+        # THE JOURNAL'S DROP DIARY (ledger._insert_bet, audit A2-5): the
+        # INSERT itself runs outside the guard and raises as it always did;
+        # only the note about a refused re-quote is swallowed, and the
+        # cursor it returns is the insert's own either way.
+        "_insert_bet",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep

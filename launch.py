@@ -2174,21 +2174,43 @@ def repair_premature_cli(argv: list) -> None:
           "    python3 launch.py --settle all\n")
 
 
-def _backup_before_repair():
-    """Copy both databases somewhere safe. Returns the directory or None."""
-    import shutil
+def _backup_before_repair(what: str = "repair"):
+    """Copy both databases somewhere safe. Returns the directory or None.
+
+    EVERY `--apply` THAT REWRITES THE JOURNAL comes through here first
+    (audit A2-4): --repair-premature, --repair-closes, --void-unplayed and
+    --resize-unstaked. Each caller stops rather than edit with no way back
+    when this returns None.
+
+    Through SQLite's backup API, not a file copy: both databases run in
+    WAL mode, and a copy of the main file alone can miss every write
+    still sitting in the -wal beside it."""
+    import sqlite3 as _sq
     from engine import db as _db, ledger as _led
     try:
         stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        dest = ROOT / "data" / "backups" / f"pre-repair-{stamp}"
+        dest = ROOT / "data" / "backups" / f"pre-{what}-{stamp}"
         dest.mkdir(parents=True, exist_ok=True)
         for src in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)):
             if src.is_file():
-                shutil.copy2(src, dest / src.name)
+                a, b = _sq.connect(str(src)), _sq.connect(str(dest / src.name))
+                try:
+                    a.backup(b)
+                finally:
+                    a.close(); b.close()
         return dest
     except Exception as exc:  # noqa: BLE001
         print(f"  backup failed: {exc}")
         return None
+
+
+def _backed_up(what: str) -> bool:
+    """Take the pre-repair backup and say so; False means do not write."""
+    backup = _backup_before_repair(what)
+    print(f"  Backup written: {backup}" if backup else
+          "  ⚠️  Backup FAILED — stopping rather than editing the journal "
+          "with no way back.")
+    return bool(backup)
 
 
 def _goes_nowhere(skip: str) -> bool:
@@ -8519,6 +8541,8 @@ def repair_closes(apply: bool = False) -> None:
     from engine import db as hist_db
     from engine import ledger
     conn = ledger.connect()
+    if apply and not _backed_up("repair-closes"):
+        return
     # The HARVESTED closes as well as the free snapshots. This ran on
     # snapshots alone, so it could only recover what our own live pulls
     # happened to catch — while `odds_history` held tens of thousands of
@@ -8654,6 +8678,8 @@ def show_unplayed(apply: bool = False) -> None:
                   "  is what a book does with a game that was not played. "
                   "To write it:\n"
                   "      python3 launch.py --void-unplayed --apply")
+            return
+        if not _backed_up("void-unplayed"):
             return
         n = ledger.void_unplayed(lconn, rows)
         print(f"  Voided {n} pick(s) — no action, 0.00u each.")
@@ -9876,6 +9902,8 @@ def main() -> None:
     if "--repair-journal" in argv:
         from engine import ledger
         conn = ledger.connect()
+        if not _backed_up("repair-journal"):
+            return
         before, before_ls = ledger.performance(conn), ledger.longshot_report(conn)
         moved = ledger.move_longshots_out_of_main(conn)
         after, after_ls = ledger.performance(conn), ledger.longshot_report(conn)
@@ -9908,6 +9936,18 @@ def main() -> None:
                   + ("  ← they were genuinely profitable; tell me and I'll "
                      "loosen the thresholds" if card["roi"] > 0 else
                      "  ← they won often but still lost money to the juice"))
+        waiting = conn.execute(
+            "SELECT COUNT(*) FROM bets WHERE category='main' "
+            "AND (stake_units IS NULL OR stake_units <= 0)").fetchone()[0]
+        if "--apply" not in argv:
+            # A DRY RUN FIRST (audit A2-4): this rewrites stake and P&L on
+            # settled rows, so it says what it would do before it does it.
+            print(f"{waiting} zero-stake pick(s) would be sized at 0.1u. "
+                  f"Nothing was written. To write it:\n"
+                  f"    python3 launch.py --resize-unstaked --apply")
+            return
+        if not _backed_up("resize-unstaked"):
+            return
         n = ledger.resize_unstaked(conn)
         ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
         after = ledger.performance(conn)

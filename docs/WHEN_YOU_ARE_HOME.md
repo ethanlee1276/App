@@ -128,6 +128,25 @@ The version line should print `1.11.0`; `pip-audit` should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
+**P33-a. Check the journal re-keyed itself (read-only, a minute).** The
+first process to open the journal after this update rebuilds the `bets`
+table once so a doubleheader's second game and the other side of a pick
+are no longer dropped. It keeps every row and id and writes a full copy
+first. Check it happened and nothing was lost:
+
+```
+cd /srv/qellys && ls -la data/backups/ | grep pre-pick-key
+sudo -u qellys python3 -c "from engine import ledger as L; c=L.connect(); print(L.get_cfg(c,'pick_key_v2'), c.execute('select count(*) from bets').fetchone()[0], L._old_pick_key(c))"
+sqlite3 data/backups/ledger-pre-pick-key-*.db "select count(*) from bets"
+```
+
+The second line should print a date, a count, and `False`; the count must
+equal the third line's. Re-quotes the key still refuses (same pick, new
+price — the first price stays the claim) are now listed in
+`data/journal_dropped.jsonl`. Also: `--resize-unstaked` is now a dry run
+unless you add `--apply`, and every journal repair with `--apply` writes a
+`data/backups/pre-<repair>-<time>/` copy before it touches anything.
+
 **P31-a. Turn on the usage counts (changes a setting, a minute).** You
 approved the wording; the Privacy Policy now describes the counts (daily
 totals, no cookie, no id, no IP). Check the live policy says so first,

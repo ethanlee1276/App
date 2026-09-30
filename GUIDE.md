@@ -162,7 +162,7 @@ auto-settle last ran, so you can see the loop is alive.
 | Leave it running while you're out, picking up pushed fixes | `caffeinate -is python3 launch.py --auto-update` |
 | Force a settle right now (rarely needed — it's automatic) | `python3 launch.py --settle` |
 | Bets still open after the games ended | `python3 launch.py --settle all` |
-| Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` |
+| Fold old 0.00-unit picks back into the record (once) | `python3 launch.py --resize-unstaked` (dry run; add `--apply` to write) |
 | Separate long shots from the main record (once) | `python3 launch.py --repair-journal` |
 | Does the site still look like the renders? | `python3 launch.py --renders` (add `--shots out/` for a contact sheet) |
 | Why is the board empty? | `python3 launch.py --why-empty` |

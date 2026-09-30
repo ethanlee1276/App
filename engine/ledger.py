@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import contextlib as _contextlib
 import datetime
+import json
 import functools as _functools
 import math
 import re
@@ -67,8 +68,19 @@ GRADED_ELSEWHERE = ("predmarket", "ufc")
 # ``category`` separates the headline record ('main' — picks we stand
 # behind) from measurement-only buckets ('longshot' — the HR board, tracked
 # to learn whether it finds value, never mixed into the record). It is part
-# of the unique key so a player recommended AND watchlisted the same night
+# of the pick key so a player recommended AND watchlisted the same night
 # journals in both buckets.
+#
+# THE PICK KEY is `bets_pick_key` below, not a table constraint. Until
+# 2026-09-30 it was UNIQUE (sport, date, player, market, category), and
+# every writer is INSERT OR IGNORE, so three different picks collapsed
+# into the first one silently (audit A2-5): an MLB doubleheader's second
+# game (leg 2 is a different game), the other SIDE of a market the model
+# turned around on later in the day (a claim the board published and the
+# record never held), and — deliberately still collapsed — the same pick
+# re-quoted at a new price, where the FIRST price journaled is the claim.
+# The key now carries `side` and `leg`; a re-quote the key still refuses
+# is written to journal_dropped.jsonl beside the journal (`_insert_bet`).
 _BETS_TABLE = """
 CREATE TABLE IF NOT EXISTS bets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,10 +91,19 @@ CREATE TABLE IF NOT EXISTS bets (
     status TEXT DEFAULT 'open', actual REAL,
     pnl_units REAL, pnl_dollars REAL, closing_line REAL,
     category TEXT DEFAULT 'main',
-    game_day TEXT,
-    UNIQUE (sport, date, player, market, category)
+    game_day TEXT, leg INTEGER
 );
 """
+
+#: One pick per (sport, settle key, player, market, bucket, side, game).
+#: `leg` NULL is a single game and reads as leg 1, so a row written before
+#: the schedule named a doubleheader and one written after it are the
+#: same pick; only leg 2 is a new one. Side is upper-cased so an "Over"
+#: from one writer is the "OVER" of another.
+PICK_KEY_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS bets_pick_key ON bets "
+    "(sport, date, player, market, category, "
+    "UPPER(COALESCE(side, '')), COALESCE(leg, 1))")
 
 #: The forecast log: what we said, when we said it, chained.
 #:
@@ -316,6 +337,221 @@ def _migrate(conn) -> None:
         f"INSERT INTO bets ({keep}, category) "
         f"SELECT {keep}, 'main' FROM bets_v1;\n"
         "DROP TABLE bets_v1;")
+
+
+def _old_pick_key(conn) -> bool:
+    """True while `bets` still carries a table-level UNIQUE constraint —
+    the pre-2026-09-30 key without `side` and `leg`."""
+    try:
+        return any(r[3] == "u" for r in conn.execute("PRAGMA index_list(bets)"))
+    except sqlite3.OperationalError:
+        return False
+
+
+def _rekey(conn, path) -> dict:
+    """Rebuild `bets` without its old UNIQUE constraint, keeping every row,
+    every id and the id sequence (audit A2-5).
+
+    SQLite cannot drop a table constraint, so this is the documented
+    rebuild: new table, copy, drop, rename — in ONE transaction, after a
+    copy of the whole file is taken with the backup API, so a failure at
+    any step leaves the journal exactly as it was and a file to compare.
+    The audit triggers are dropped first (a DROP TABLE must not read as
+    every bet deleted) and re-installed by `_install_audit` straight
+    after. No row's content changes, so no audit row is owed; the day it
+    happened is kept in config as `pick_key_v2`."""
+    if not _old_pick_key(conn):
+        return {"rebuilt": False}
+    import time as _time
+    backup = None
+    if str(path) != ":memory:":
+        bdir = Path(path).parent / "backups"
+        bdir.mkdir(parents=True, exist_ok=True)
+        backup = bdir / f"{Path(path).stem}-pre-pick-key-{_time.strftime('%Y%m%d-%H%M%S')}.db"
+        dest = sqlite3.connect(str(backup))
+        try:
+            conn.commit()
+            conn.backup(dest)
+        finally:
+            dest.close()
+    info = conn.execute("PRAGMA table_info(bets)").fetchall()
+    defs, names = [], []
+    for _cid, name, ctype, notnull, dflt, pk in info:
+        names.append(f'"{name}"')
+        if pk:
+            defs.append(f'"{name}" INTEGER PRIMARY KEY AUTOINCREMENT')
+            continue
+        d = f'"{name}" {ctype or ""}'.rstrip()
+        if notnull:
+            d += " NOT NULL"
+        if dflt is not None:
+            d += f" DEFAULT {dflt}"
+        defs.append(d)
+    keep = [r[0] for r in conn.execute(
+        "SELECT sql FROM sqlite_master WHERE tbl_name='bets' AND sql IS NOT NULL "
+        "AND type IN ('index', 'trigger') AND name NOT LIKE 'bets_audit_%'")]
+    seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='bets'").fetchone()
+    n_before = conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0]
+    cols = ", ".join(names)
+    conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("DROP TRIGGER IF EXISTS temp.bets_stamp_model_sha")
+        for t in AUDIT_TRIGGERS[:2]:                   # the two ON bets
+            conn.execute(f"DROP TRIGGER IF EXISTS {t}")
+        conn.execute(f"CREATE TABLE bets_rekey ({', '.join(defs)})")
+        conn.execute(f"INSERT INTO bets_rekey ({cols}) SELECT {cols} FROM bets")
+        conn.execute("DROP TABLE bets")
+        conn.execute("ALTER TABLE bets_rekey RENAME TO bets")
+        if seq is not None:
+            conn.execute("UPDATE sqlite_sequence SET seq = MAX(seq, ?) "
+                         "WHERE name='bets'", (seq[0],))
+        for sql in keep:
+            conn.execute(sql)
+        n_after = conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0]
+        if n_after != n_before:
+            raise sqlite3.DatabaseError(
+                f"pick-key rebuild copied {n_after} of {n_before} rows")
+        conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES "
+                     "('pick_key_v2', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    print(f"  journal re-keyed: {n_before} rows kept; side and leg are in "
+          f"the pick key now" + (f" (backup {backup})" if backup else ""))
+    return {"rebuilt": True, "rows": n_before, "backup": str(backup or "")}
+
+
+def _ensure_pick_key(conn, path) -> None:
+    """The pick key, on a journal of any age: rebuild off the old
+    constraint once, then the index (a no-op every time after)."""
+    _rekey(conn, path)
+    conn.execute(PICK_KEY_SQL)
+
+
+#: WHERE A REFUSED RE-QUOTE IS WRITTEN — beside the journal file.
+DROPPED_LOG = "journal_dropped.jsonl"
+DROPPED_MAX_BYTES = 5 * 1024 * 1024
+_DROPPED_SEEN: set = set()
+
+
+def _insert_columns(sql: str, params) -> dict:
+    """Map an `INSERT ... (cols) VALUES (...)` onto its values: `?` takes
+    the next parameter, anything else is the literal written in the SQL."""
+    head, _, tail = sql.partition(") VALUES (")
+    cols = [c.strip() for c in head[head.index("(") + 1:].split(",")]
+    vals, depth, cur = [], 0, ""
+    for ch in tail[:tail.rindex(")")]:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            vals.append(cur.strip()); cur = ""
+        else:
+            cur += ch
+    vals.append(cur.strip())
+    it, out = iter(params), {}
+    for c, v in zip(cols, vals):
+        # An expression around parameters (`UPPER(?)`) consumes each of
+        # them; the column is read as the first — close enough for a log.
+        taken = [next(it) for _ in range(v.count("?"))]
+        out[c] = taken[0] if taken else v.strip("'")
+    return out
+
+
+def _db_file(conn) -> str:
+    try:
+        for row in conn.execute("PRAGMA database_list"):
+            if row[1] == "main":
+                return row[2] or ""
+    except sqlite3.Error:
+        pass
+    return ""
+
+
+class _Skipped:
+    """What `_insert_bet` hands back for a row it chose not to write."""
+    rowcount = 0
+    lastrowid = None
+
+
+#: THE MEASUREMENT BUCKETS KEEP ONE SIDE A DAY. Side joined the pick key
+#: for the claims a reader is shown (picks, the Most Likely board, the
+#: Pick of the Day): the other side, later in the day, is a second claim
+#: and the record should hold it. The samplers are not claims. Their
+#: docstrings have always said "one journal key per player and market"
+#: and both sides of one prop flagged on one day is the same observation
+#: twice, graded as a guaranteed split. These writers pass one_side=True.
+def _side_taken(conn, row: dict) -> bool:
+    """Is the OTHER side of this row already journaled today? (The same
+    side goes on to the insert, which refuses it and logs a re-quote.)"""
+    return conn.execute(
+        "SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? AND market=? "
+        "AND category=? AND COALESCE(leg, 1)=? AND UPPER(COALESCE(side, '')) != ? LIMIT 1",
+        (row.get("sport"), row.get("date"), row.get("player"), row.get("market"),
+         row.get("category") or "main", row.get("leg") or 1,
+         str(row.get("side") or "").upper())).fetchone() is not None
+
+
+def _insert_bet(conn, sql: str, params, one_side: bool = False):
+    """Every journal writer's INSERT OR IGNORE, with the ignore made
+    visible (audit A2-5). A row the pick key refuses because the SAME pick
+    is already journaled at the same line and price is the normal case on
+    a five-minute loop and says nothing. One refused at a DIFFERENT line
+    or price is a re-quote the record will not hold — the first price is
+    the claim, by design — and it is written once per process to
+    journal_dropped.jsonl beside the journal, with the row it lost to.
+    The log never raises: a journal write must not fail over its own
+    diary."""
+    if one_side and _side_taken(conn, _insert_columns(sql, params)):
+        return _Skipped()
+    cur = conn.execute(sql, params)
+    if cur.rowcount:
+        return cur
+    try:
+        row = _insert_columns(sql, params)
+        side = str(row.get("side") or "").upper()
+        leg = row.get("leg") or 1
+        kept = conn.execute(
+            "SELECT id, line, odds, ts FROM bets WHERE sport=? AND date=? "
+            "AND player=? AND market=? AND category=? "
+            "AND UPPER(COALESCE(side, ''))=? AND COALESCE(leg, 1)=?",
+            (row.get("sport"), row.get("date"), row.get("player"),
+             row.get("market"), row.get("category") or "main", side,
+             leg)).fetchone()
+        if kept is None:
+            return cur
+        same = (kept[1] == row.get("line")
+                and (kept[2] or 0) == int(row.get("odds") or 0))
+        if same:
+            return cur
+        key = (row.get("sport"), row.get("date"), row.get("player"),
+               row.get("market"), row.get("category"), side, leg,
+               row.get("line"), row.get("odds"))
+        if key in _DROPPED_SEEN:
+            return cur
+        _DROPPED_SEEN.add(key)
+        where = _db_file(conn)
+        if not where:
+            return cur
+        log = Path(where).parent / DROPPED_LOG
+        if log.exists() and log.stat().st_size > DROPPED_MAX_BYTES:
+            log.replace(log.with_suffix(".jsonl.1"))
+        entry = {"ts": datetime.datetime.now(datetime.timezone.utc)
+                 .isoformat(timespec="seconds"),
+                 "sport": row.get("sport"), "date": row.get("date"),
+                 "player": row.get("player"), "market": row.get("market"),
+                 "category": row.get("category") or "main", "side": side,
+                 "leg": leg, "line": row.get("line"), "odds": row.get("odds"),
+                 "book": row.get("book"), "kept_id": kept[0],
+                 "kept_line": kept[1], "kept_odds": kept[2], "kept_ts": kept[3]}
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except Exception:                                         # noqa: BLE001
+        pass
+    return cur
 
 
 #: Journals this PROCESS has already brought up to schema, and the
@@ -609,6 +845,9 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN fee_bps INTEGER")
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
+    # The pick key (audit A2-5) — after every column exists, before the
+    # audit triggers, which the one-time rebuild drops and this re-installs.
+    _ensure_pick_key(conn, path)
     # The audit trail and the forecast log's version-2 columns — AFTER
     # every column the triggers name exists, BEFORE the first sweep below
     # writes, so that sweep's changes are logged like any other.
@@ -1031,7 +1270,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         temp, bias = cal_correction(sport, r["market"])
         # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized.
         row_book = prop_book(category, sport, r.get("side", "OVER"))
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
@@ -1147,7 +1386,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         stake_units = float(r.get("stake_units", 0) or 0)
         if stake_units <= 0:
             continue                     # not a bet — see above
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
@@ -1311,9 +1550,15 @@ def repair_inverted_likely_sides(conn) -> dict:
             f"lives in {DEFAULT_DB}, so open it with `ledger.connect()`; "
             f"`db.connect()` opens the stats database and has no journal "
             f"in it") from exc
+    # A row whose UNDER twin is already journaled is left alone: since
+    # side joined the pick key (audit A2-5) the flip would collide, and
+    # the UNDER that exists is the claim that was actually made.
     rows = conn.execute(
-        "SELECT id FROM bets WHERE category='likely' AND market='home_runs' "
-        "AND side='OVER' AND hit_prob > 0.5").fetchall()
+        "SELECT id FROM bets b WHERE category='likely' AND market='home_runs' "
+        "AND side='OVER' AND hit_prob > 0.5 AND NOT EXISTS (SELECT 1 FROM bets u "
+        "WHERE u.sport=b.sport AND u.date=b.date AND u.player=b.player "
+        "AND u.market=b.market AND u.category=b.category AND u.side='UNDER' "
+        "AND COALESCE(u.leg, 1)=COALESCE(b.leg, 1))").fetchall()
     ids = [r["id"] for r in rows]
     if ids:
         conn.executemany(
@@ -1526,7 +1771,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             else grade_label
         if not stake_units:
             stake_units = flat_stake
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, lead_min, status, category, "
@@ -1667,7 +1912,7 @@ def log_pick_of_the_day(conn, payload: dict) -> int:
     # settle.
     row_date = date if sport == "nfl" \
         else str(pick.get("game_date") or "").strip() or date
-    cur = conn.execute(
+    cur = _insert_bet(conn,
         "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
         "side, line, book, odds, projection, hit_prob, edge, confidence, "
         "grade, stake_units, stake_dollars, lead_min, status, category, "
@@ -2125,7 +2370,7 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
         row_date = date if sport == "nfl" \
             else str(r.get("game_date") or "").strip() or date
         from .losspatterns import minutes_until
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category, lead_min, "
@@ -2147,7 +2392,8 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
              else None,
              r.get("lineup_slot"),
              1 if r.get("lineup_confirmed") else 0
-             if r.get("lineup_confirmed") is not None else None))
+             if r.get("lineup_confirmed") is not None else None),
+            one_side=True)
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     return n
@@ -2208,7 +2454,7 @@ def log_priced_out(conn, result: dict, flat_stake: float = 0.1) -> int:
                 or (r.get("book") or "").lower() == "proxy"
                 or r.get("has_market") is False):
             continue
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
@@ -2219,7 +2465,8 @@ def log_priced_out(conn, result: dict, flat_stake: float = 0.1) -> int:
              (r.get("side") or "OVER").upper(), float(r.get("line") or 0),
              r.get("book", ""), odds, r.get("projection"), r.get("hit_prob"),
              r.get("edge"), r.get("confidence"), r.get("grade", "?"),
-             flat_stake, 0.0))
+             flat_stake, 0.0),
+            one_side=True)
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
@@ -2255,7 +2502,7 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
             continue
         if not r.get("player") or not odds or (r.get("book") or "").lower() == "proxy":
             continue
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, move_delta, move_steam, status, category) "
@@ -2271,7 +2518,8 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
              # 70 and, without these two, is indistinguishable from a prop
              # that simply graded low. That is the whole population whose
              # outcomes say whether the veto earns its keep.
-             r.get("move_delta"), r.get("move_steam")))
+             r.get("move_delta"), r.get("move_steam")),
+            one_side=True)
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
@@ -2344,7 +2592,7 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
         # here is what stops the hole opening again on every new row.
         # Falls back to the slate date when a ticker carries no date,
         # which is the state every row was already in.
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (ts, sport, date, game_day, player, "
             "market, side, line, book, odds, hit_prob, edge, grade, "
             "stake_units, stake_dollars, status, category, fee_bps) "
@@ -2355,7 +2603,8 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
              "kalshi", _price_to_american(_paid("kalshi", cost)), p_side,
              (edge_net or 0) / 100.0,
              r.get("title", "")[:60] or "Desk", PREDMARKET_FLAT_STAKE,
-             0.0, fee))
+             0.0, fee),
+            one_side=True)
         n += cur.rowcount
     conn.commit()
     return n
@@ -2630,7 +2879,7 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
             line = float(r.get("line"))
         except (TypeError, ValueError):
             continue
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
@@ -2645,7 +2894,8 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
              # hit_prob = the field's consensus implied — what the flag
              # claims the true price is; edge = the gap being sampled.
              r.get("consensus"), (r.get("gap_pts") or 0) / 100.0,
-             None, grade, stake, 0.0, category))
+             None, grade, stake, 0.0, category),
+            one_side=True)
         _stamp_team(conn, cur, r)
         n += cur.rowcount
     conn.commit()
@@ -2851,7 +3101,7 @@ def log_form_picks(conn, result: dict, team_form: dict,
         odds = g.get("home_ml") if hot == home else g.get("away_ml")
         if not odds:
             continue                      # no real price — nothing to sample
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
@@ -2861,7 +3111,8 @@ def log_form_picks(conn, result: dict, team_form: dict,
              now, sport, slate_date or g.get("date"), hot, "moneyline",
              "OVER", 0.5, "best", int(odds), None,
              # edge column carries the form gap being sampled.
-             None, round(abs(sh - sa), 3), None, "Form", flat_stake, 0.0))
+             None, round(abs(sh - sa), 3), None, "Form", flat_stake, 0.0),
+            one_side=True)
         n += cur.rowcount
     conn.commit()
     return n
@@ -2904,7 +3155,7 @@ def log_ufc_picks(conn, result: dict) -> int:
         odds = p.get("odds")
         if not odds or not p.get("pick") or not date:
             continue
-        cur = conn.execute(
+        cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, "
             "line, book, odds, projection, hit_prob, edge, confidence, grade, "
             "stake_units, stake_dollars, status, category) "
@@ -2916,7 +3167,8 @@ def log_ufc_picks(conn, result: dict) -> int:
              now, "ufc", date, p["pick"], "moneyline", "OVER", 0.5,
              p.get("book", ""), int(odds), None, p.get("p_final"),
              p.get("edge"), None, "Pick",
-             float(p.get("stake_units") or 0), 0.0))
+             float(p.get("stake_units") or 0), 0.0),
+            one_side=True)
         n += cur.rowcount
     conn.commit()
     return n
