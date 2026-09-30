@@ -341,6 +341,21 @@ qellysbook.com {
 	@brand path /logo-qb.png /favicon.svg /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /manifest.webmanifest
 	header @brand Cache-Control "no-cache"
 
+	# BOARD ART AND FONTS (audit 2026-09-30, F-3). Nothing set a cache
+	# lifetime for /img or /fonts, so every visit revalidated megabytes of
+	# venue art. A week for images (a changed render gets a new name or
+	# waits a week at most); a year and immutable for the fonts, which
+	# never change under the same name.
+	@img path /img/*
+	header @img Cache-Control "public, max-age=604800"
+	@fonts path /fonts/*
+	header @fonts Cache-Control "public, max-age=31536000, immutable"
+
+	# The render inbox is not the site (audit F-3): 13 MB of unreferenced
+	# PNGs waiting for tools/venues_ingest.py sat under the web root.
+	@incoming path /img/venues/incoming/*
+	respond @incoming 404
+
 	# Caddy's built-in MIME table does not know .webmanifest, so without
 	# this it goes out as text/plain and the install prompt silently never
 	# appears — no error, no console message, just no prompt.

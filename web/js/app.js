@@ -2833,7 +2833,10 @@ const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba
 function potdBallArt() {
   const stem = POTD_BALL[state.sport];
   if (!stem) return "";
-  return `<div class="potd-ball" aria-hidden="true"><img alt="" loading="lazy" decoding="async"
+  // THE HOME HERO IS THE LARGEST THING ON THE FIRST SCREEN (audit
+  // 2026-09-30, P1-11 / F-3): eager and high priority, never lazy — lazily
+  // loading the page's LCP image is how the card paints empty first.
+  return `<div class="potd-ball" aria-hidden="true"><img alt="" fetchpriority="high" decoding="async"
     srcset="img/home/${stem}@800.webp 800w, img/home/${stem}.webp 1600w"
     sizes="(max-width: 720px) 100vw, 1000px" src="img/home/${stem}.webp"></div>`;
 }
@@ -2847,7 +2850,7 @@ function potdBallArt() {
    left. */
 function potdVenueArt(src) {
   if (!src) return "";
-  return `<div class="potd-ball potd-venue" aria-hidden="true"><img alt="" loading="lazy"
+  return `<div class="potd-ball potd-venue" aria-hidden="true"><img alt="" fetchpriority="high"
     decoding="async" src="${escapeHtml(src)}"></div>`;
 }
 
@@ -6267,7 +6270,7 @@ const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
    `tools/venues_ingest.py` writing new bytes under an old name is the
    whole failure mode, and nothing else in the chain can detect it. */
 const VENUE_ART_V = "20260907";
-const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
+const venueSrc = (path) => `${String(path).replace(/(\/variants\/[^/?]+)\.jpg$/, "$1.webp")}?v=${VENUE_ART_V}`;
 /* WHICH COLOUR SLOTS HOLD ART THAT MATCHES THE REST.
 //
 // Ethan, 2026-08-13, after the cache-bust shipped: "the stadium issue is

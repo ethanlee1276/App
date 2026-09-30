@@ -2094,8 +2094,31 @@ const FINGER = 46;
    animated, crosshair-scrubbing gradient area chart. One mount function,
    one visual grammar, colors read from the live theme tokens so the
    charts recolor with the theme like everything else. */
+/* LOADED ON FIRST USE, like ECharts (audit 2026-09-30, P1-11). The
+   library was a synchronous 152 KB-gz script on every visit, in front of
+   the first paint, for charts most first screens never draw. Now the first
+   page that has a [data-gloss-curve] injects it once; the SVG fallback is
+   on screen meanwhile, exactly as when the file is missing. */
+let _apexLoading = null;
+function loadApex() {
+  if (window.ApexCharts) return Promise.resolve(window.ApexCharts);
+  if (_apexLoading) return _apexLoading;
+  _apexLoading = new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "vendor/apexcharts.min.js";
+    s.onload = () => resolve(window.ApexCharts || null);
+    s.onerror = () => resolve(null);
+    document.head.appendChild(s);
+  });
+  return _apexLoading;
+}
+
 function mountGlossCharts(root) {
-  if (!window.ApexCharts) return;                 // vendored file absent
+  if (!window.ApexCharts) {
+    if (!(root || document).querySelector("[data-gloss-curve]")) return;
+    loadApex().then((lib) => { if (lib) mountGlossCharts(root); });
+    return;                                        // vendored file absent, or on its way
+  }
   ((root || document).querySelectorAll("[data-gloss-curve]")).forEach((el) => {
     if (el.dataset.glossed) return;
     let cfg;

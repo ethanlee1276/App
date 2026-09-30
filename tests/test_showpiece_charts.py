@@ -38,11 +38,12 @@ def test_both_engines_are_vendored_not_linked_from_a_cdn():
 
 
 def test_apex_rides_the_shell_and_echarts_stays_out_of_the_boot_path():
+    # Audit 2026-09-30 #32: Apex (148 KB gz) left the boot path too. It is
+    # fetched by loadApex() the first time a page carries a gloss curve,
+    # and stays in the service-worker shell so a return visit has it.
     html = _read("web", "index.html")
-    assert 'src="vendor/apexcharts.min.js"' in html
-    i = html.index("vendor/apexcharts.min.js")
-    assert i < html.index('src="js/visuals.js"'), \
-        "the mount helpers read window.ApexCharts — the engine loads first"
+    assert 'src="vendor/apexcharts.min.js"' not in html, \
+        "Apex loads on first use now — see loadApex in visuals.js"
     assert "echarts.min.js" not in html, \
         "a megabyte does not belong in the boot path; loadECharts lazies it"
     sw = _read("web", "sw.js")
@@ -53,7 +54,10 @@ def test_apex_rides_the_shell_and_echarts_stays_out_of_the_boot_path():
 def test_a_missing_vendor_file_leaves_the_fallbacks_standing():
     vis = _read("web", "js", "visuals.js")
     i = vis.index("function mountGlossCharts(")
-    assert "if (!window.ApexCharts) return;" in vis[i:i + 400]
+    head = vis[i:i + 400]
+    assert "if (!window.ApexCharts) {" in head and "if (lib) mountGlossCharts(root)" in head
+    k = vis.index("function loadApex(")
+    assert 's.onerror = () => resolve(null);' in vis[k:k + 500]
     j = vis.index("function loadECharts(")
     block = vis[j:j + 700]
     assert 's.onerror = () => resolve(null);' in block, \

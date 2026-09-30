@@ -258,6 +258,14 @@ def target_name(family: str, cls: str) -> str:
     return f"{family}-{cls}.jpg"
 
 
+def _webp(img, jpg_path: Path) -> None:
+    """The WebP the page actually serves, beside the JPEG (audit 2026-09-30,
+    F-3): about half the bytes. `venueSrc` in app.js asks for the .webp of
+    every variant, so a variant written without one would be a broken
+    image — this is called at every variant write."""
+    img.convert("RGB").save(jpg_path.with_suffix(".webp"), "WEBP", quality=80, method=6)
+
+
 def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,
            families: tuple = FAMILIES) -> list[str]:
     """Process every file; returns the printed report lines (tested on
@@ -302,6 +310,7 @@ def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,
                                   f"outranks new {done.width}px")
                     continue
             done.save(out, quality=87, optimize=True, progressive=True)
+            _webp(done, out)
             report.append(f"WROTE {out.name} <- {f.name} "
                           f"({done.width}x{done.height}, lighting={cls})")
     # No neutral octagon render exists, so the steel rotation slot is the
@@ -311,6 +320,7 @@ def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,
                          or Image.open(six).width < Image.open(two).width):
         muted = ImageEnhance.Color(Image.open(two).convert("RGB")).enhance(0.18)
         muted.save(six, quality=87, optimize=True, progressive=True)
+        _webp(muted, six)
         report.append(f"WROTE {six.name} <- {two.name} desaturated "
                       f"({muted.width}x{muted.height}, steel slot)")
     return report
