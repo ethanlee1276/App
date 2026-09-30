@@ -27,6 +27,7 @@ import sqlite3
 from pathlib import Path
 
 from . import markets as _markets
+from .db import column_exists_or_raise
 from .odds import american_to_decimal
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "ledger.db"
@@ -237,8 +238,7 @@ def _install_audit(conn) -> None:
         try:
             conn.execute(f"ALTER TABLE forecast_log ADD COLUMN {col} {kind}")
         except sqlite3.OperationalError as exc:
-            if "duplicate column" not in str(exc):
-                raise
+            column_exists_or_raise(exc)
 
 
 @_contextlib.contextmanager
@@ -353,8 +353,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # RIGHT game's stat line. NULL = single game or pre-migration row.
     try:
         conn.execute("ALTER TABLE bets ADD COLUMN leg INTEGER")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # Projected vs actual minutes — the basketball spec calls this the
     # single fastest diagnostic, and it is: if losses cluster on minutes
     # misses the rotation pipeline is broken, and if the minutes were right
@@ -443,21 +443,21 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 "move_delta", "move_steam"):
         try:
             conn.execute(f"ALTER TABLE bets ADD COLUMN {col} REAL")
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     try:
         # The measured cause of a loss (engine/causes.py): "blowout (…)",
         # "short run (…)", or "variance". NULL = not yet swept.
         conn.execute("ALTER TABLE bets ADD COLUMN loss_cause TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # §11's human layer: the tag is a controlled vocabulary (mineable),
     # the note is free text (readable). engine/whytags.py owns the menus.
     try:
         conn.execute("ALTER TABLE bets ADD COLUMN why_tag TEXT")
         conn.execute("ALTER TABLE bets ADD COLUMN why_note TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # THE DAY THE GAME WAS ACTUALLY PLAYED, beside the settle key.
     #
     # `date` is a JOIN KEY, not a calendar date, and for the NFL it is a
@@ -484,16 +484,16 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     # `day_expr` below falls back for.
     try:
         conn.execute("ALTER TABLE bets ADD COLUMN game_day TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # THE PLAYER'S TEAM, 2026-09-14. Five college rows sat open because
     # the player had no earlier stat row to read a team off, and without
     # a team the settler cannot find his game. Stamped by `_stamp_team`
     # at every prop writer; NULL on rows written before it existed.
     try:
         conn.execute("ALTER TABLE bets ADD COLUMN team TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     try:
         # WHICH WITNESS SAID THE PRICE WAS WRONG — "exchange", "sharp",
         # "market" or "model" (`potd.evidence`).
@@ -527,8 +527,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         # IT ONLY PAYS FORWARD: nothing retro-fills the rows already
         # settled, it makes the question answerable from here on.
         conn.execute("ALTER TABLE bets ADD COLUMN evidence TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # The audit trail and the forecast log's version-2 columns — AFTER
     # every column the triggers name exists, BEFORE the first sweep below
     # writes, so that sweep's changes are logged like any other.

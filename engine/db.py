@@ -517,6 +517,19 @@ def mark_schema(conn, path, done: dict = None) -> None:
         pass                           # unremembered simply means "redo it"
 
 
+def column_exists_or_raise(exc: sqlite3.OperationalError) -> None:
+    """The one error an `ALTER TABLE ... ADD COLUMN` probe may swallow.
+
+    Every probe caught `OperationalError` and read it as "already there" —
+    but "database is locked" is an OperationalError too, and the schema was
+    then memoised as done, so the column was missing for the rest of the
+    process and every insert naming it failed (audit 2026-09-30, F-10).
+    Only "duplicate column" means the column exists; anything else
+    re-raises, and the memo is never set."""
+    if "duplicate column" not in str(exc).lower():
+        raise exc
+
+
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     if str(path) != ":memory:":
@@ -533,26 +546,26 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         try:
             conn.execute(f"ALTER TABLE team_weeks ADD COLUMN {col} REAL")
             conn.commit()
-        except sqlite3.OperationalError:
-            pass                     # already there
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     try:
         conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass                              # column already there
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     try:
         conn.execute("ALTER TABLE games ADD COLUMN date TEXT")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass                              # column already there
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     # The game's scheduled start on every stored price (audit 2026-09-30,
     # P0-2): a price taken at or after it is in-play and never a close.
     # Nullable — rows written before it keep reading as they always have.
     try:
         conn.execute("ALTER TABLE odds_history ADD COLUMN commence_time TEXT")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass                              # column already there
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
     mark_schema(conn, path)
     return conn
 
