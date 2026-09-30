@@ -5910,20 +5910,23 @@ body.pk-open { overflow: hidden; }
   --text: #1E1811;
   --text-dim: #524434;
   --text-body: #362C20;
-  --text-mute: #7D6F5E;
+  /* WCAG 4.5:1 on --panel-3, the darkest light ground (audit 2026-09-30,
+     A-1): each of these three was 4.05-4.30 there. Solved by lightness
+     only, hue and saturation held; contrast.py --light measures them. */
+  --text-mute: #756858;
   --text-faint: #B9AA95;
   /* LIGHT WANTS A DEEPER GOLD. #FFB000 on white is Lc 30 — an accent
      nobody can read. The light theme drops to a bronze that carries
      against paper, and its ink goes back to white because THAT colour
      is dark. Same rule as dark, opposite answer, which is the whole
      reason these are two blocks. */
-  --brand: #9A6A00;
+  --brand: #8E6200;
   --brand-2: #7A5300;
   --brand-ink: #FFFFFF;
   --gold: #B87E10;
   /* Amber stays the material-conditions colour — but it can no longer
      alias --brand (violet since the pivot). Its own value, both themes. */
-  --warn: #B45309;
+  --warn: #AC4F09;
   /* The original light block declares its own --grad-brand (old amber)
      at higher specificity than the base :root — re-pin the violet here
      or TOP GAME and the active league chip go amber in light. */

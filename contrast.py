@@ -177,6 +177,76 @@ def audit(css: str | None = None) -> list[dict]:
     return sorted(out, key=lambda r: abs(r["lc"]))
 
 
+#: THE LIGHT THEME, measured the way a reader meets it (audit 2026-09-30,
+#: A-1). This checker covered the dark theme only and said so; the light
+#: `--text-mute`, `--brand` and `--warn` then sat at WCAG 4.05-4.30 on
+#: `--panel-3`. Paper is where WCAG 2.x is trustworthy (the dark-pair
+#: misjudgement APCA exists for does not arise), and 4.5:1 is the bar the
+#: audit asked for, so the light verdict is WCAG AA for normal text.
+#: `--text-faint` is decorative by design and is reported, not judged.
+LIGHT_INKS = ("text", "text-dim", "text-body", "text-mute", "brand", "good", "bad", "warn")
+LIGHT_AA = 4.5
+
+
+def light_tokens(css: str | None = None) -> dict:
+    """The light theme's custom properties as the cascade leaves them: every
+    `:root[data-theme="light"] {` block, in order, later winning."""
+    import re
+    from pathlib import Path
+    if css is None:
+        css = (Path(__file__).resolve().parent / "web" / "css"
+               / "styles.css").read_text(encoding="utf-8")
+    tok = {}
+    for m in re.finditer(r':root\[data-theme="light"\]\s*\{', css):
+        blk = re.sub(r"/\*.*?\*/", "", css[m.end():css.index("}", m.end())], flags=re.S)
+        for k, v in re.findall(r"--([\w-]+)\s*:\s*([^;]+);", blk):
+            tok[k] = v.strip()
+    return tok
+
+
+def _light_rgb(tok: dict, name: str, hops: int = 0) -> tuple:
+    import re
+    v = tok[name]
+    m = re.fullmatch(r"var\(--([\w-]+)\)", v)
+    if m and hops < 5:
+        return _light_rgb(tok, m.group(1), hops + 1)
+    m = re.fullmatch(r"#([0-9a-fA-F]{6})", v)
+    if not m:
+        raise ValueError(f"--{name}: {v}")
+    s = m.group(1)
+    return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def audit_light(css: str | None = None) -> list[dict]:
+    """Every light ink-on-ground pair, worst WCAG first."""
+    tok = light_tokens(css)
+    out = []
+    for ink in LIGHT_INKS:
+        for ground in GROUNDS:
+            try:
+                ic, gc = _light_rgb(tok, ink), _light_rgb(tok, ground)
+            except (KeyError, ValueError):
+                continue
+            out.append({"ink": ink, "ground": ground, "lc": lc(ic, gc), "wcag": wcag(ic, gc)})
+    return sorted(out, key=lambda r: r["wcag"])
+
+
+def report_light() -> int:
+    rows = audit_light()
+    print("=" * 74)
+    print(f"TEXT CONTRAST — light theme, WCAG AA {LIGHT_AA}:1 (APCA beside it)")
+    print("=" * 74)
+    for r in rows:
+        mark = "ok " if r["wcag"] >= LIGHT_AA else "LOW"
+        print(f"  {mark} {r['ink']:11}{r['ground']:10}{r['wcag']:6.2f}:1   Lc {abs(r['lc']):4.0f}")
+    low = [r for r in rows if r["wcag"] < LIGHT_AA]
+    print()
+    print("  Every light text pair clears 4.5:1." if not low
+          else f"  Under 4.5:1: {', '.join(sorted({r['ink'] for r in low}))}")
+    print()
+    return 1 if low else 0
+
+
 def report(show_wcag: bool = False) -> int:
     rows = audit()
     print("=" * 74)
@@ -225,8 +295,11 @@ def main(argv: list) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--wcag", action="store_true",
                    help="show WCAG 2.x beside APCA, for comparison only")
+    p.add_argument("--light", action="store_true",
+                   help="also measure the light theme against WCAG AA")
     a = p.parse_args(argv)
-    return report(show_wcag=a.wcag)
+    rc = report(show_wcag=a.wcag)
+    return report_light() or rc if a.light else rc
 
 
 if __name__ == "__main__":

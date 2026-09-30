@@ -246,6 +246,26 @@ def test_the_history_of_the_repair_is_written_down():
     assert "hierarchy" in flat
 
 
+def test_every_light_text_pair_clears_wcag_aa():
+    """Audit 2026-09-30, A-1 (roadmap #20). The light theme was never given
+    the checker; its --text-mute, --brand and --warn read 4.05-4.30:1 on
+    --panel-3. Measured the way the cascade leaves it — every light block,
+    later winning — against every ground."""
+    rows = ct.audit_light()
+    inks = {r["ink"] for r in rows}
+    assert {"text-mute", "brand", "warn", "text", "text-dim"} <= inks, inks
+    low = [(r["ink"], r["ground"], round(r["wcag"], 2)) for r in rows if r["wcag"] < ct.LIGHT_AA]
+    assert not low, f"light text under 4.5:1: {low}"
+
+
+def test_the_light_reader_follows_the_cascade():
+    css = (':root[data-theme="light"] { --text-mute: #000000; --bg: #FFFFFF; }\n'
+           ':root[data-theme="light"] { --text-mute: #111111; --warn: var(--text-mute); }')
+    tok = ct.light_tokens(css)
+    assert tok["text-mute"] == "#111111", "a later light block must win"
+    assert ct._light_rgb(tok, "warn") == (0x11, 0x11, 0x11)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
