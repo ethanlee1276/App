@@ -143,7 +143,8 @@ def test_the_address_is_escaped_where_it_is_interpolated():
     wall = _fn(_read(APP), "paywallHTML")
     j = wall.index("pw-ig")
     near = wall[j:j + 300]
-    assert "escapeAttr(status.instagram)" in near, (
+    # safeHref escapes AND refuses a non-http(s) value (audit D-4).
+    assert "safeHref(status.instagram)" in near, (
         "an unescaped attribute built from configuration")
 
 

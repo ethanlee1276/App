@@ -122,7 +122,7 @@ const EXTERNAL_MARKET_LINKS = true;
    The dress stays put and only the anchor moves. */
 function extLink(url, label) {
   return EXTERNAL_MARKET_LINKS
-    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener"
+    ? `<a href="${safeHref(url)}" target="_blank" rel="noopener"
          style="color:inherit">${label}</a>`
     : `<span>${label}</span>`;
 }
@@ -793,7 +793,7 @@ function fmtRoi(x) {
    "null". */
 const american = (o) => (typeof oddsTxt === "function" && typeof settings === "function" ? trueMinus(oddsTxt(o)) : (o > 0 ? `+${o}` : trueMinus(`${o}`)));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
-const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
+const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || String(a ?? "").replace(/[<>"'`]/g, "");
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
 
 /* THE SAME ABBREVIATION IS FOUR DIFFERENT CLUBS. CIN, ATL, SF and TB all
@@ -809,7 +809,7 @@ const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "va
    the board you are already looking at. */
 const teamsIn = (sport) => (sport && sport !== state.sport)
   ? teamsForSport(sport) : activeTeams();
-const teamNameIn = (sport, a) => (teamsIn(sport)[a] && teamsIn(sport)[a].nick) || a;
+const teamNameIn = (sport, a) => (teamsIn(sport)[a] && teamsIn(sport)[a].nick) || String(a ?? "").replace(/[<>"'`]/g, "");
 const teamPrimaryIn = (sport, a) =>
   (teamsIn(sport)[a] && teamsIn(sport)[a].primary) || "var(--brand)";
 const teamMarkIn = (sport, a, size = 20) =>
@@ -1174,6 +1174,19 @@ function panelEmpty(text, mark) {
    Only null and undefined. 0, false and "" are values a caller meant to
    print and are left exactly alone — swallowing those would turn "0"
    into a blank, which is a different lie. */
+/* A FEED'S URL IS NOT TRUSTED AS A URL (audit 2026-09-30, D-4).
+   Escaping stops a quote breaking out of the attribute; it does nothing
+   about `javascript:` or `data:` as the whole value — CSP blocks the
+   script today, but that is one header away from a click that runs one.
+   Only an absolute http(s) address becomes a link; anything else is "#".
+   Self-contained on purpose: harnesses lift the renderers without
+   visuals.js, where escapeAttr lives. */
+function safeHref(u) {
+  const s = String(u == null ? "" : u).trim();
+  if (!/^https?:\/\/[^\s]/i.test(s)) return "#";
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18956,7 +18969,7 @@ function zenoSnapshotHTML(snap, unit) {
       <div class="zeno-win-nums"><b style="color:${tone}">${pr >= 0 ? "+" : ""}${zenoMoney(pr)}</b>
         <span style="color:${tone}">${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(1)}u</span>
         <span style="color:${tone}">${roi == null ? "—" : `${roi >= 0 ? "+" : MINUS}${Math.abs(roi).toFixed(2)}%`} ROI</span></div>
-      ${w.receipt ? `<a class="zeno-receipt" href="${escapeAttr(w.receipt)}" target="_blank" rel="noopener">
+      ${w.receipt ? `<a class="zeno-receipt" href="${safeHref(w.receipt)}" target="_blank" rel="noopener">
         <img src="${escapeAttr(w.receipt)}" alt="${src}’s ${escapeAttr(w.label || "")} card, the receipt for these numbers" loading="lazy"/></a>` : ""}
     </figure>`;
   };
@@ -19004,7 +19017,7 @@ function zenoCalMonthHTML(w) {
     <p class="rc-foot"><b>${escapeHtml(w.label || "")}</b> · ${Object.keys(days).length} days bet
       · <b>${Number(w.wins)}-${Number(w.losses)}${Number(w.pushes) ? `-${Number(w.pushes)}` : ""}</b>
       · <b class="${toneOf(pr)}">${pr >= 0 ? "+" : MINUS}${zenoMoney(Math.abs(pr))}</b> (Pikkit’s total)
-      ${w.calendar_receipt ? ` · <a href="${escapeAttr(w.calendar_receipt)}" target="_blank" rel="noopener">Pikkit’s calendar</a>` : ""}</p></div>`;
+      ${w.calendar_receipt ? ` · <a href="${safeHref(w.calendar_receipt)}" target="_blank" rel="noopener">Pikkit’s calendar</a>` : ""}</p></div>`;
 }
 let _zenoCalMonth = null;    // "YYYY-MM" in view on his calendar; null = the latest
 window._zenoCalSetMonth = (ym) => { _zenoCalMonth = ym; renderZeno(); };
@@ -21292,7 +21305,7 @@ function pmDetailHTML(r) {
       <span class="pm-d-venue">${pmThumb(r, 26)}
         <span>${escapeHtml(String(r.venue || ""))}</span></span>
       <h3 class="pm-d-title">${r.url
-        ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`
+        ? `<a href="${safeHref(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`
         : escapeHtml(r.title)}</h3>
       ${r.sub ? `<div class="pm-d-sub">${escapeHtml(r.sub)}</div>` : ""}
     </div>
@@ -21307,7 +21320,7 @@ function pmDetailHTML(r) {
       <b>${Math.round(r.model * 100)}%</b>.</p>` : ""}
     ${summary}
     ${gates}
-    ${r.url ? `<a class="btn pm-d-out" href="${escapeAttr(r.url)}" target="_blank"
+    ${r.url ? `<a class="btn pm-d-out" href="${safeHref(r.url)}" target="_blank"
       rel="noopener">View on Polymarket ↗</a>` : ""}
     <p class="pm-d-note">Prices are the venues’ own. This panel is a read,
       not an order ticket — Qellys takes no wagers.</p>`;
@@ -21322,7 +21335,7 @@ function pmBoardRowHTML(r) {
   const basis = r.basis === "last_trade"
     ? ` <span class="chip" title="One side of the book is empty — this is the last trade, not a two-sided mid">last trade</span>` : "";
   const title = r.url
-    ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener"
+    ? `<a href="${safeHref(r.url)}" target="_blank" rel="noopener"
           style="color:inherit">${escapeHtml(r.title)}</a>`
     : escapeHtml(r.title);
   // The row's numbers, drawn as lengths — see the meter comment history.
@@ -21523,7 +21536,7 @@ function pmxPolyMark(size = 30) {
 const PMX_VENUE_URL = { kalshi: "https://kalshi.com/markets", polymarket: "https://polymarket.com" };
 function pmxDoor(venue, cls, inner) {
   return EXTERNAL_MARKET_LINKS
-    ? `<a class="${cls}" href="${escapeAttr(PMX_VENUE_URL[venue])}" target="_blank" rel="noopener">${inner}</a>`
+    ? `<a class="${cls}" href="${safeHref(PMX_VENUE_URL[venue])}" target="_blank" rel="noopener">${inner}</a>`
     : `<div class="${cls}">${inner}</div>`;
 }
 
@@ -23770,7 +23783,7 @@ function mcName(c) {
   const inner = `<b>${escapeHtml(label)}</b>${c.name && c.symbol
     ? ` <span style="color:var(--text-mute);font-weight:400">${escapeHtml(String(c.name).slice(0, 28))}</span>` : ""}`;
   const linked = (c.url && /^https:\/\//.test(c.url))
-    ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" style="color:inherit">${inner}</a>`
+    ? `<a href="${safeHref(c.url)}" target="_blank" rel="noopener" style="color:inherit">${inner}</a>`
     : inner;
   return linked + mcNewTag(c);
 }
@@ -24741,7 +24754,7 @@ async function renderFantasy() {
    map once rendered the Vikings as the Twins and the Ravens as the
    Orioles (both leagues use MIN and BAL). These helpers pin the map. */
 const nflMap = () => (typeof TEAMS !== "undefined" ? TEAMS : {});
-const nflName = (a) => (nflMap()[a] && nflMap()[a].nick) || a;
+const nflName = (a) => (nflMap()[a] && nflMap()[a].nick) || String(a ?? "").replace(/[<>"'`]/g, "");
 
 /* Camp watch — daily depth-chart snapshots diffed across the preseason.
    The chart is the coaching staff's own verdict; the DIFF is the signal:
@@ -26178,7 +26191,7 @@ function paywallHTML(rec, status) {
       <span class="pw-brand">${brandMarkHTML(30)}
         <span class="pw-brand-words">QELLYS <b>BOOK</b></span></span>
       ${status && status.instagram
-        ? `<a class="pw-ig" href="${escapeAttr(status.instagram)}"
+        ? `<a class="pw-ig" href="${safeHref(status.instagram)}"
              target="_blank" rel="noopener noreferrer"
              title="Qellys Book on Instagram"
              aria-label="Qellys Book on Instagram">${igIcon()}</a>`
@@ -26382,8 +26395,9 @@ function igMount() {
 function barLink(id, url) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (!url) { el.hidden = true; el.removeAttribute("href"); return; }
-  el.href = url;
+  // Only an http(s) address (audit D-4): a config typo is hidden, not a link.
+  if (!url || safeHref(url) === "#") { el.hidden = true; el.removeAttribute("href"); return; }
+  el.href = String(url).trim();
   el.hidden = false;
 }
 
@@ -26643,7 +26657,7 @@ function discordPageHTML(s, welcome) {
      being set up, and pretending otherwise wastes the reader's click.
      Not entitled: the plans. */
   const cta = invite
-    ? `<a class="btn primary dc-go" href="${escapeAttr(invite)}"
+    ? `<a class="btn primary dc-go" href="${safeHref(invite)}"
           target="_blank" rel="noopener noreferrer">
          ${iconMark("discord", 18)} Join the Discord</a>`
     : (s && s.entitled
@@ -26688,7 +26702,7 @@ function discordPageHTML(s, welcome) {
           and posts them as he takes them. Everything else — the alerts,
           the projections, the chat — is around that.</p>
         ${gram ? `<p class="dc-body">It is the same thing he has been
-          posting publicly on <a href="${escapeAttr(gram)}" target="_blank"
+          posting publicly on <a href="${safeHref(gram)}" target="_blank"
           rel="noopener noreferrer">Instagram</a> — he puts that run at
           <b>+400 units</b>. That is his own count, on his own page;
           what this site publishes is graded here, pick by pick, on the
@@ -28708,7 +28722,7 @@ function newsSectionHTML(sport, news) {
     <div class="card rec-list">
       ${rows.map((r) => `
         <div class="rb-row" style="gap:10px">
-          <a href="${escapeAttr(r.link)}" target="_blank"
+          <a href="${safeHref(r.link)}" target="_blank"
              rel="noopener noreferrer" style="flex:1;min-width:0">${escapeHtml(r.title)}</a>
           <span class="k" style="white-space:nowrap;opacity:.65">${escapeHtml(r.source)}${
             r.epoch ? ` · ${agoWord(r.epoch)}` : ""}</span>
