@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 from pathlib import Path
 
 from engine import rosters as _r
@@ -217,7 +218,11 @@ def write(sport: str, out_dir: Path = OUT_DIR, today: str | None = None) -> dict
             blob["team_meta"] = cfbdata.parse_teams(cfbdata.fetch_teams())
         except Exception:                                     # noqa: BLE001
             blob["team_meta"] = {}
-    (out_dir / f"rosters_{sport}.json").write_text(json.dumps(blob, indent=2))
+    # Atomic (audit F-12): a poll mid-write must never read half a file.
+    dest = out_dir / f"rosters_{sport}.json"
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    tmp.write_text(json.dumps(blob, indent=2))
+    os.replace(tmp, dest)
     return blob
 
 

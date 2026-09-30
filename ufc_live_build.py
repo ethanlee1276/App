@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from engine.ufc import live
@@ -40,7 +41,11 @@ def main() -> None:
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(blob, indent=2))
+    # Atomic (audit F-12): the page polls this every 12 s during a fight;
+    # a poll must see the old file or the new one, never half of one.
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(json.dumps(blob, indent=2))
+    os.replace(tmp, p)
 
     live_n = blob.get("live_count", 0)
     if blob["status"] == "live":
