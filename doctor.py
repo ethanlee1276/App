@@ -645,6 +645,35 @@ def check_forecast_log(rep):
                     "was edited or deleted underneath it")
 
 
+def check_heartbeat(rep, path=None):
+    """The loop is alive: the heartbeat is younger than three cycles.
+
+    Audit 2026-09-30, P1-13. A dead loop left the site serving the last
+    good files, and nothing anywhere said so — the Status page reads the
+    same file and a stale file cannot report its own staleness. Three of
+    the slower of the timer and the measured cycle, with a 15-minute
+    floor, so one slow sweep never cries wolf."""
+    @_check(rep, "heartbeat")
+    def _():
+        import json as _json
+        import time as _time
+        p = Path(path) if path else ROOT / "web" / "data" / "heartbeat.json"
+        if not p.exists():
+            rep.add("heartbeat", WARN, _no_data("heartbeat"))
+            return
+        hb = _json.loads(p.read_text(encoding="utf-8"))
+        age = _time.time() - float(hb.get("at_epoch") or 0)
+        cycle = max(float(hb.get("interval_s") or 0), float(hb.get("cycle_p50_s") or 0))
+        limit = max(900.0, 3 * cycle)
+        if age > limit:
+            rep.add("heartbeat", FAIL,
+                    f"last beat {age / 60:.0f} min ago (limit {limit / 60:.0f}) — "
+                    "the refresh loop is not running",
+                    "sudo systemctl status qellys; journalctl -u qellys -n 80")
+        else:
+            rep.add("heartbeat", OK, f"{age:.0f}s old")
+
+
 def check_record_integrity(rep):
     """Nothing about the record changed without a trace (audit P0-1).
 
@@ -1249,7 +1278,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_parlay_agreement, check_forecast_log,
           check_clv_capture, check_learning, check_correlation_priors,
           check_game_calibration, check_fitter_cadence,
-          check_record_integrity, check_league_days, check_git]
+          check_record_integrity, check_heartbeat, check_league_days, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -1260,7 +1289,7 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_league_days, check_football_weeks, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
-               check_forecast_log, check_record_integrity,
+               check_forecast_log, check_record_integrity, check_heartbeat,
                check_clv_capture, check_learning,
                check_correlation_priors, check_game_calibration,
                check_fitter_cadence)

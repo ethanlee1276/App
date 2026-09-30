@@ -46,6 +46,41 @@ answer:
 cd /srv/qellys && tail -20 data/llm_drops.jsonl 2>/dev/null || echo "nothing dropped"
 ```
 
+**P6-a. Hear about it when the box breaks (changes settings, 5 minutes).**
+Three switches, each one line. Keys never go in chat — only through
+`setenv.sh`, which prompts for the value.
+
+1. A dead-man's switch: make a free check at healthchecks.io (period 15
+   min, grace 15 min), copy its ping URL, then:
+   ```
+   cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEALTHCHECK_URL
+   ```
+   The site pings it only after a clean sweep; silence is what pages you.
+2. The failure mail (uses the site's own SMTP settings):
+   ```
+   cd /srv/qellys && sudo ./deploy/setenv.sh QB_ALERT_EMAIL
+   sudo cp deploy/qellys-alert@.service deploy/qellys.service deploy/qellys-update.service /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl restart qellys
+   sudo systemctl start qellys-alert@test.service   # a test mail should arrive
+   ```
+3. The daily chain heads, posted off the box (a Discord channel webhook):
+   ```
+   cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEADS_WEBHOOK
+   ```
+
+**P6-b. Backups now carry the CLV evidence (read-only check, a minute).**
+`history.db` (3 copies kept), Zeno's book, the line history, the odds
+budget, the feed state and the chain heads join accounts and the ledger.
+Run one now and check it; then add the weekly restore check to cron:
+
+```
+cd /srv/qellys && sudo ./deploy/backup.sh && sudo ./deploy/backup.sh --check
+( sudo crontab -l; echo '30 4 * * 0  /srv/qellys/deploy/backup.sh --check >> /var/log/qellys-backup.log 2>&1' ) | sudo crontab -
+```
+
+If the disk is tight, `sudo ./deploy/setenv.sh QB_BACKUP_HISTORY` and
+set it to `0` — everything else still backs up.
+
 ---
 
 ## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")

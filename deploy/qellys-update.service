@@ -17,6 +17,8 @@
 Description=Qellys auto-update (pull pushed code, restart on change)
 After=network-online.target
 Wants=network-online.target
+# A failed unit mails the owner (deploy/qellys-alert@.service, audit P1-13).
+OnFailure=qellys-alert@%n.service
 
 [Service]
 Type=oneshot

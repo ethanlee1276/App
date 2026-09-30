@@ -12,7 +12,17 @@
 #   accounts.db  — other people's accounts. IRREPLACEABLE.
 #   ledger.db    — the bet journal and the public record. IRREPLACEABLE:
 #                  it is the evidence the whole positioning rests on.
-#   history.db   — skipped. It is large and it rebuilds from `ingest.py`.
+#   zeno.db      — the owner's own tickets. IRREPLACEABLE.
+#   history.db   — BACKED UP since 2026-09-30 (audit P1-12). Most of it
+#                  rebuilds from `ingest.py`, but not `odds_history`: the
+#                  harvested and taped prices CLV is measured against were
+#                  bought or caught once and are gone with the disk. Fewer
+#                  copies kept (QB_BACKUP_KEEP_HISTORY, default 3), and
+#                  QB_BACKUP_HISTORY=0 turns it off on a disk too small.
+#   the evidence files — the free line history (every close the site has
+#                  graded CLV against), the odds budget, the feed state and
+#                  the daily chain heads (engine/ledger.record_heads), as
+#                  dated tarballs beside the databases.
 #   web/data/    — skipped. Rebuilds from the pipeline.
 #
 # THE BACKUP API RATHER THAN `cp`. Copying a live SQLite file gets you a
@@ -33,7 +43,11 @@ ROOT="$(pwd)"
 DEST="${QB_BACKUP_DIR:-$ROOT/backups}"
 KEEP="${QB_BACKUP_KEEP:-14}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-DBS=("data/accounts.db" "data/ledger.db")
+DBS=("data/accounts.db" "data/ledger.db" "data/zeno.db")
+if [[ "${QB_BACKUP_HISTORY:-1}" != "0" ]]; then DBS+=("data/history.db"); fi
+FILES=("data/cache/line_history.jsonl" "data/cache/odds_budget.json"
+       "data/forecast_heads.jsonl" "data/feedstate")
+KEEP_BIG="${QB_BACKUP_KEEP_HISTORY:-3}"
 
 # /etc/qellys/env IS WHERE THIS IS CONFIGURED, and until 2026-08-22 this
 # script was the one thing that never read it. `setenv.sh` writes there,
@@ -180,6 +194,11 @@ if [[ "${1:-}" == "--check" ]]; then
   for db in "${DBS[@]}"; do
     name="$(basename "$db" .db)"
     newest="$(ls -1t "$DEST/${name}-"*.db.gz 2>/dev/null | head -1 || true)"
+    # A database this box has never had (zeno.db before the first import)
+    # and no backup of it either: nothing was lost, so nothing is missing.
+    if [[ -z "$newest" && ! -f "$ROOT/$db" ]]; then
+      echo "skip (never here): $db"; continue
+    fi
     if [[ -z "$newest" ]]; then
       echo "MISSING: no backup of $name"; fail=1; continue
     fi
@@ -267,6 +286,15 @@ PYCHECK
     fi
     rm -f "$tmp"
   done
+  # THE EVIDENCE FILES: each present file has a tarball that lists.
+  for f in "${FILES[@]}"; do
+    [[ -e "$ROOT/$f" ]] || continue
+    tag="$(basename "$f" | tr '.' '_')"
+    newest="$(ls -1t "$DEST/${tag}-"*.tar.gz 2>/dev/null | head -1 || true)"
+    if [[ -z "$newest" ]]; then echo "MISSING: no backup of $f"; fail=1
+    elif tar -tzf "$newest" >/dev/null 2>&1; then echo "ok: $f  ($(basename "$newest"))"
+    else echo "CORRUPT: $newest"; fail=1; fi
+  done
   # AND THE OFFSITE LEG. A remote that quietly stopped accepting writes
   # looks exactly like one that is working, from here, until the day the
   # box dies — which is the only day it is asked for.
@@ -304,9 +332,23 @@ PY
   echo "backed up: $db -> ${out}.gz ($(du -h "${out}.gz" | cut -f1))"
 done
 
+for f in "${FILES[@]}"; do
+  [[ -e "$ROOT/$f" ]] || continue
+  tag="$(basename "$f" | tr '.' '_')"
+  out="$DEST/${tag}-${STAMP}.tar.gz"
+  tar -czf "$out" -C "$ROOT" "$f"
+  echo "backed up: $f -> $out ($(du -h "$out" | cut -f1))"
+done
+for f in "${FILES[@]}"; do
+  tag="$(basename "$f" | tr '.' '_')"
+  ls -1t "$DEST/${tag}-"*.tar.gz 2>/dev/null | tail -n "+$((KEEP_BIG + 1))" \
+    | xargs -r rm -f || true
+done
+
 # Keep the last N of each, drop the rest.
 for db in "${DBS[@]}"; do
   name="$(basename "$db" .db)"
+  keep="$KEEP"; [[ "$name" == "history" ]] && keep="$KEEP_BIG"
   # `|| true` BECAUSE OF `pipefail`. When a database has no backups yet —
   # a fresh install, or the first run after adding one — the glob matches
   # nothing, `ls` exits non-zero, pipefail propagates it and `set -e`
@@ -316,7 +358,7 @@ for db in "${DBS[@]}"; do
   #
   # Found while testing the remote leg on a tree with only one of the two
   # databases present.
-  ls -1t "$DEST/${name}-"*.db.gz 2>/dev/null | tail -n "+$((KEEP + 1))" \
+  ls -1t "$DEST/${name}-"*.db.gz 2>/dev/null | tail -n "+$((keep + 1))" \
     | xargs -r rm -f || true
 done
 

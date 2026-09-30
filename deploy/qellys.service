@@ -38,6 +38,8 @@ Wants=network-online.target
 # | grep -c oom-kill.
 StartLimitBurst=5
 StartLimitIntervalSec=60
+# A failed unit mails the owner (deploy/qellys-alert@.service, audit P1-13).
+OnFailure=qellys-alert@%n.service
 
 [Service]
 Type=simple

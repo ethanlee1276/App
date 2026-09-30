@@ -3846,6 +3846,38 @@ def _write_day_top_pick() -> None:
         print(f"  ⚠️  day top pick not written: {type(exc).__name__}: {exc}")
 
 
+#: When the dead-man's switch was last told all is well (epoch seconds).
+_LAST_PING = [0.0]
+#: A clean sweep is reported at most this often. A healthchecks-style
+#: service wants a ping inside its period, not one a minute.
+PING_EVERY_S = 300
+
+
+def _urlopen_ping(url: str) -> None:
+    import urllib.request
+    urllib.request.urlopen(url, timeout=5).read()
+
+
+def _ping_healthcheck(swept: str, step_fail: dict) -> None:
+    """Tell an outside dead-man's switch the loop is alive (audit P1-13).
+
+    `QB_HEALTHCHECK_URL` (a healthchecks.io-style URL; set on the box with
+    `deploy/setenv.sh`, never in source). Only a sweep that RAN with no
+    failed step counts: a skipped or half-failed cycle must not tell the
+    switch all is well, and silence is what makes it page. Never raises."""
+    url = os.environ.get("QB_HEALTHCHECK_URL", "").strip()
+    if not url or swept != "ran" or step_fail:
+        return
+    now = time.time()
+    if now - _LAST_PING[0] < PING_EVERY_S:
+        return
+    _LAST_PING[0] = now
+    try:
+        _urlopen_ping(url)
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -3896,6 +3928,7 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
         os.replace(tmp, p)
     except OSError:
         pass
+    _ping_healthcheck(swept, dict(_STEP_FAIL))
 
 
 # A fight moves in seconds, so the live card cannot ride the 60-second
