@@ -9552,6 +9552,14 @@ function obWhyHTML(r) {
 function obShownProb(r) {
   return r.tier_rate != null ? Number(r.tier_rate) : Number(r.model_prob || 0);
 }
+/* BOTH NUMBERS, IN THE OPEN (audit V-10). Where the ring shows the tier's
+   measured rate, the model's own number sat only in a tooltip no phone can
+   hover. The card prints both: "model 59% · tier hits 48% (n=210)". */
+function obBothHTML(r) {
+  if (r.tier_rate == null || r.model_prob == null) return "";
+  return `<small class="ob-both">model ${Math.round(Number(r.model_prob) * 100)}% · tier hits ${
+    Math.round(Number(r.tier_rate) * 100)}%${r.tier_n ? ` (n=${Number(r.tier_n)})` : ""}</small>`;
+}
 function obRingHTML(r) {
   const p = Math.max(0, Math.min(1, obShownProb(r)));
   const C = 2 * Math.PI * 21;
@@ -9653,7 +9661,7 @@ function obCardHTML(r, rank, opts = {}) {
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
-      escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}${r.tier_rate != null ? "<small>real hit rate</small>" : ""}</span></span>
+      escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}${r.tier_rate != null ? "<small>real hit rate</small>" : ""}</span>${obBothHTML(r)}</span>
     <button class="ob-door" type="button"${door} aria-label="Open this pick">${icon("chart", 18)}</button>
     <button class="ob-view" type="button"${door}>View details ${icon("rising", 12)}</button>
   </div>`;

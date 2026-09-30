@@ -12594,6 +12594,7 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .ob-ringcol { grid-area: ring; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
 .ob-ringcol .ob-ring { grid-area: auto; }
 .ob-tierword { font-size: var(--fs-2xs); font-weight: 700; color: var(--text-mute); white-space: nowrap; }
+.ob-both { display: block; font-size: var(--fs-2xs); color: var(--text-mute); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ob-tierword.tier-top { color: var(--good); }
 .ob-tierword.tier-strong { color: var(--brand); }
 .ob-story { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
