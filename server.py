@@ -649,6 +649,15 @@ def stale_headers(name: str, mtime) -> list:
     return [("X-Board-Stale-Hours", f"{v['age_h']:.1f}")] if v["stale"] else []
 
 
+def _seclog(kind, outcome, ip=None, **kw):
+    """engine.seclog.event, imported on use; never raises (audit E-5)."""
+    try:
+        from engine import seclog
+        seclog.event(kind, outcome, ip, **kw)
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
 def board_bytes(name: str):
     """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
 
@@ -917,6 +926,8 @@ class Handler(BaseHTTPRequestHandler):
         """
         if rate_ok(f"{bucket}:{self._client_ip()}", limit):
             return False
+        _seclog("rate_limit", "blocked", self._client_ip(), bucket=bucket,
+                path=urlparse(self.path).path)
         self._send(429, _RATE_LIMITED.encode(), ".json")
         return True
 
@@ -1880,6 +1891,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     code, out = A.authenticate(
                         conn, body.get("email"), body.get("password"))
+                # THE SECURITY LOG (audit E-5): every sign-in and sign-up
+                # outcome, the account as a one-way tag, never the password.
+                _seclog(path, "ok" if code == 200 else "fail", self._client_ip(),
+                        email=body.get("email"), status=code)
                 if code != 200:
                     return self._send(code, json.dumps(out).encode(), ".json")
                 token = A.start_session(conn, out["id"])
@@ -1932,6 +1947,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "password":
                 code, out = A.change_password(conn, who["id"],
                                               body.get("old"), body.get("new"))
+                _seclog("password_change", "ok" if code == 200 else "fail",
+                        self._client_ip(), email=who["email"], status=code)
                 if code != 200:
                     return self._send(code, json.dumps(out).encode(), ".json")
                 # change_password drops every session, this one included.
@@ -1943,6 +1960,8 @@ class Handler(BaseHTTPRequestHandler):
                 code, _ = A.authenticate(conn, who["email"],
                                          body.get("password"))
                 if code != 200:
+                    _seclog("account_delete", "wrong_password", self._client_ip(),
+                            email=who["email"])
                     # Shown to the person verbatim now that the client
                     # stopped inventing its own text for every failure.
                     return self._send(403, b'{"error":"Wrong password."}',
@@ -1999,6 +2018,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(503, b'{"error":"owner import is not '
                                    b'configured on this server"}', ".json")
         if not ok:
+            _seclog("owner_token", "refused", self._client_ip(),
+                    path=urlparse(self.path).path)
             return self._send(403, b'{"error":"not the owner"}', ".json")
         return self._send(200, json.dumps(Z.split(Z.block_or_empty())[1]).encode(), ".json")
 
@@ -2024,6 +2045,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(503, b'{"error":"owner import is not '
                                    b'configured on this server"}', ".json")
         if not ok:
+            _seclog("owner_token", "refused", self._client_ip(),
+                    path=urlparse(self.path).path)
             return self._send(403, b'{"error":"not the owner"}', ".json")
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -2882,6 +2905,8 @@ class Handler(BaseHTTPRequestHandler):
                 got = RD.redeem(conn, who["id"], code,
                                 elsewhere=_BI.promo_misdirect())
             except RD.RedeemError as exc:
+                _seclog("redeem", "refused", self._client_ip(),
+                        email=who["email"], reason=str(exc)[:80])
                 # 200 with an error field, not a 4xx: this is an expected
                 # answer to a normal question, and a 400 in the console on
                 # every mistyped promo code trains everyone to ignore the
@@ -3023,6 +3048,7 @@ class Handler(BaseHTTPRequestHandler):
                 ".json")
         sig = self.headers.get("Stripe-Signature") or ""
         if not BI.verify_signature(raw, sig, whsec):
+            _seclog("webhook", "bad_signature", self._client_ip(), provider="stripe")
             return self._send(400, b'{"error":"bad signature"}', ".json")
         try:
             payload = json.loads(raw or b"{}")

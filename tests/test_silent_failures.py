@@ -142,6 +142,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # telemetry whose caller reports the miss (lineledger.record_note)
         "_write", "record", "log_decision", "log_spend", "series",
         "code_version", "_journal", "record_top_pick_claim", "top_pick_line",
+        # THE SECURITY LOG (engine/seclog.event, audit E-5): a lost log line
+        # must never cost the request it describes. It returns None either
+        # way, so there is no value for a quiet day to be confused with.
+        "event",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep
