@@ -18590,14 +18590,27 @@ function recordVerdictHTML(src, scopeLabel, lk) {
            it claims</b>, across ${calN} graded pick${calN === 1 ? "" : "s"} —
            under-confident, which costs stake size rather than accuracy.`);
   }
+  /* WHICH MARKET (audit P1-3). `brier_market` is the de-vigged price of
+     the book we bet — the outlier shopping picked — so it is named as
+     such, and the field's own fair (`brier_consensus`) is the benchmark
+     that leads when it exists. */
+  if (cal && cal.brier_model != null && cal.brier_consensus != null) {
+    const e = cal.brier_edge_consensus;
+    lines.push(e == null ? "" : e > 0
+      ? `On its own picks it out-forecasts the field’s de-vigged price
+         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks).`
+      : `The field’s de-vigged price out-forecasts it on its own picks
+         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks) —
+         which means the edge story is not yet supported.`);
+  }
   if (cal && cal.brier_model != null && cal.brier_market != null) {
     const e = cal.brier_edge;
     lines.push(e == null ? "" : e > 0
-      ? `On its own picks it out-forecasts the de-vigged close
-         (Brier ${cal.brier_model} against the market’s ${cal.brier_market}).`
-      : `The de-vigged close out-forecasts it on its own picks
-         (Brier ${cal.brier_model} against the market’s ${cal.brier_market}) —
-         which means the edge story is not yet supported.`);
+      ? `Against the book we bet, de-vigged, it scores better
+         (Brier ${cal.brier_model} against ${cal.brier_market}) — the easier
+         benchmark, since shopping picks the book furthest from the field.`
+      : `Even the book we bet, de-vigged, out-forecasts it
+         (Brier ${cal.brier_model} against ${cal.brier_market}).`);
   }
   if (o.avg_clv != null && o.clv_n) {
     lines.push(o.avg_clv > 0
@@ -18615,9 +18628,14 @@ function recordVerdictHTML(src, scopeLabel, lk) {
      these tiles again, word for word. The strip is gone; the record,
      the win rate against its break-even and the price CLV live here,
      so a number appears once and the reader meets it once. */
-  const priceClv = o.avg_price_clv == null ? "" : ` · price ${
-    sign(o.avg_price_clv * 100, 2)} pts on ${o.price_clv_n ?? 0} over${
-    o.price_clv_n === 1 ? "" : "s"}`;
+  /* "on M bets", not "overs": the price CLV has scored both sides since
+     2026-08-09 (audit V-5). And the like-for-like figure beside it — the
+     field against the field (audit P1-2) — because the shopped price
+     against the median close reads as value with no movement at all. */
+  const priceClv = (o.avg_price_clv == null ? "" : ` · price ${
+    sign(o.avg_price_clv * 100, 2)} pts on ${o.price_clv_n ?? 0} bet${
+    o.price_clv_n === 1 ? "" : "s"}`) + (o.avg_matched_clv == null ? "" : ` · field vs field ${
+    sign(o.avg_matched_clv * 100, 2)} pts on ${o.matched_clv_n ?? 0}`);
 
   return `<section class="card rv-card">
     <div class="section-title">The verdict

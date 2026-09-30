@@ -419,6 +419,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
                 # see losspatterns.coverage_band.
                 "opp_zone_rate",
                 "fair_consensus", "consensus_books",
+                # The de-vigged CLOSE for the bet's own side (audit P1-2):
+                # the field at close, the same kind of number as
+                # `fair_consensus` at pick time, so CLV can compare the
+                # field with the field instead of our shopped price with
+                # the median. NULL where the close was one-sided.
+                "closing_fair",
                 # What line movement DID to this pick, which nothing
                 # recorded until 2026-08-07. engine/quality.apply_movement
                 # shifts the score by +/-4 (+/-7 on steam), can raise the
@@ -4758,6 +4764,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # bet, and reading one as CLV inverts exactly the cases where the
         # line moved — which is where the information is).
         close_odds = _close_odds_from(close, b["line"], b["side"])
+        # The de-vigged close for this side, from the SAME source as the
+        # price just taken (audit P1-2; `_bet_clv_matched`).
+        close_fair = (_close_fair_from(close, b["line"], b["side"])
+                      if close_odds is not None else None)
         if close_odds is None:
             # No harvested price for this side at this line — fall back to
             # our own recorded snapshots, which cost nothing and accrue on
@@ -4771,6 +4781,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 b)) or {}
             close_odds = _sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
+            close_fair = _close_fair_from(_sides, None, b["side"])
         # Capture the minutes actually played alongside the result, so the
         # journal can answer "did we lose because the rotation read was
         # wrong, or because she shot 3-for-12?" — the one question that
@@ -4798,6 +4809,9 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 continue
         _settle_one(conn, b, float(row["value"]), close_line,
                     actual_minutes=actual_minutes, closing_odds=close_odds)
+        if close_fair is not None:
+            conn.execute("UPDATE bets SET closing_fair=? WHERE id=?",
+                         (round(close_fair, 4), b["id"]))
         settled += 1
 
     # --- Void the no-shows ---------------------------------------------
@@ -5170,15 +5184,23 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
                 for _d in _dates):
             _hc = None
         want = _close_odds_from(_hc, b["line"], b["side"])
+        # The de-vigged close beside the price, same source (audit P1-2).
+        want_fair = _close_fair_from(_hc, b["line"], b["side"]) if want is not None else None
         if want is None:
             _ln = round(float(b["line"]), 1) if b["line"] is not None else None
             sides = next(
                 (v for v in (snaps.get(_leg_key(snaps, (_who, b["market"], _d, _ln), b))
                              for _d in _dates) if v is not None), None) or {}
+            want_fair = _close_fair_from(sides, None, b["side"])
             want = sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
             if want is not None and abs(float(want)) < 100:
                 want = None        # not a legal American price; see linemoves
+        if apply and want is not None and want_fair is not None:
+            # Fill-only: a de-vigged close is new evidence beside a price,
+            # never a rewrite of one.
+            conn.execute("UPDATE bets SET closing_fair=? WHERE id=? AND closing_fair IS NULL",
+                         (round(want_fair, 4), b["id"]))
         had = b["closing_odds"]
         if want is None and had is None:
             continue
@@ -5269,6 +5291,62 @@ def _bet_price_clv(b) -> float | None:
     return closed - took
 
 
+def _close_fair_from(src, bet_line, side: str | None) -> float | None:
+    """The de-vigged close for the bet's side, or None.
+
+    ``src`` is a harvested close (``line``, ``over_odds``, ``under_odds``)
+    or a snapshot close (``over``, ``under``). Both prices must be real
+    American prices: a one-sided close cannot be de-vigged without an
+    assumed hold, and an assumption is not a close. A close at another
+    line is another bet (`_close_odds_from`'s rule)."""
+    if not src or not hasattr(src, "get"):
+        return None
+    line = src.get("line")
+    if bet_line is not None and line is not None:
+        try:
+            if round(float(line), 1) != round(float(bet_line), 1):
+                return None
+        except (TypeError, ValueError):
+            return None
+    over = src.get("over_odds", src.get("over"))
+    under = src.get("under_odds", src.get("under"))
+    try:
+        over, under = int(float(over)), int(float(under))
+    except (TypeError, ValueError):
+        return None
+    if abs(over) < 100 or abs(under) < 100:
+        return None
+    from .odds import devig_two_way
+    fo, fu = devig_two_way(over, under)
+    return fu if (side or "OVER").upper() == "UNDER" else fo
+
+
+def _bet_clv_matched(b) -> float | None:
+    """CLV in probability points, THE FIELD AGAINST THE FIELD (audit P1-2).
+
+    `_bet_price_clv` scores the price we shopped to — the best on the
+    screen — against the field's median close, and shopping selects the
+    price furthest from the field: a +150 taken where the field sat at
+    +130 reads as value with no movement at all. Here the benchmark at
+    pick time is the field's de-vigged fair (`fair_consensus`, journaled
+    for the over) and at close the field's de-vigged close for the same
+    side (`closing_fair`). Positive = the field moved toward our side."""
+    def _get(k):
+        try:
+            return b[k]
+        except (KeyError, IndexError):
+            return None
+    fc, cf = _get("fair_consensus"), _get("closing_fair")
+    if fc is None or cf is None:
+        return None
+    try:
+        fc, cf = float(fc), float(cf)
+    except (TypeError, ValueError):
+        return None
+    at_pick = 1.0 - fc if (_get("side") or "OVER").upper() == "UNDER" else fc
+    return round(cf - at_pick, 6)
+
+
 def process_grade(b) -> str | None:
     """Grade the DECISION, not the outcome.
 
@@ -5338,10 +5416,14 @@ def clv_coverage(conn, category: str = "main",
         if not bets:
             continue
         clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
+        mclvs = [c for c in (_bet_clv_matched(b) for b in bets) if c is not None]
         settled = len(bets)
         out[sp] = {
             "settled": settled,
             "with_close": len(clvs),
+            # Field against field (audit P1-2), with its own count.
+            "matched_n": len(mclvs),
+            "avg_matched_clv": round(sum(mclvs) / len(mclvs), 4) if mclvs else None,
             "coverage": round(len(clvs) / settled, 3) if settled else 0.0,
             "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
             "beat_close": (round(sum(1 for c in clvs if c > 0) / len(clvs), 3)
@@ -5630,6 +5712,7 @@ def performance(conn, sport: str | None = None,
     net_d = sum(b["pnl_dollars"] or 0 for b in bets)
     clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
     pclvs = [c for c in (_bet_price_clv(b) for b in bets) if c is not None]
+    mclvs = [c for c in (_bet_clv_matched(b) for b in bets) if c is not None]
     # Process record: of the bets where we know the close, how many were
     # good decisions regardless of result — plus the two honesty counters
     # (wins that got lucky, losses that were still good bets).
@@ -5754,6 +5837,11 @@ def performance(conn, sport: str | None = None,
         # averaging them together would be arithmetic on two things.
         "avg_price_clv": (sum(pclvs) / len(pclvs)) if pclvs else None,
         "price_clv_n": len(pclvs),
+        # …and the like-for-like one (audit P1-2): the field's fair at pick
+        # against the field's de-vigged close. The price CLV above flatters
+        # a shopped book by construction; the two are shown side by side.
+        "avg_matched_clv": (sum(mclvs) / len(mclvs)) if mclvs else None,
+        "matched_clv_n": len(mclvs),
         "process": process,
         "by_grade": bucket("grade"), "by_market": bucket("market"),
         "by_side": bucket("side"), "by_book": bucket("book"),
@@ -6297,7 +6385,7 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
     typically", which neither Brier nor log loss answers, because both mix
     calibration together with resolution."""
     from math import sqrt
-    q = ("SELECT hit_prob, edge, status FROM bets "
+    q = ("SELECT hit_prob, edge, status, side, fair_consensus FROM bets "
          "WHERE status IN ('won','lost') AND category=? AND hit_prob IS NOT NULL")
     args: list = [category]
     if since:
@@ -6337,6 +6425,8 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
     ll_model = 0.0
     ll_market = 0.0
     n_market = 0
+    se_cons = ll_cons = 0.0
+    n_cons = 0
     for r in rows:
         p = min(max(float(r["hit_prob"]), 0.0), 1.0)
         won = 1.0 if r["status"] == "won" else 0.0
@@ -6351,6 +6441,16 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
             se_market += (fair - won) ** 2
             ll_market += _log_loss_one(fair, won)
             n_market += 1
+        # THE FIELD'S fair on the same bet (audit P1-3). `fair` above is
+        # the book we bet — the outlier shopping picked — so "the market"
+        # there is the one book most likely to be wrong in our favour.
+        if r["fair_consensus"] is not None:
+            fc = float(r["fair_consensus"])
+            fc = 1.0 - fc if (r["side"] or "OVER").upper() == "UNDER" else fc
+            fc = min(max(fc, 0.01), 0.99)
+            se_cons += (fc - won) ** 2
+            ll_cons += _log_loss_one(fc, won)
+            n_cons += 1
     out_buckets = []
     for b in buckets:
         if not b["n"]:
@@ -6372,6 +6472,12 @@ def calibration(conn, category: str = "main", bucket_pts: int = 5,
         "n": n, "bucket_pts": bucket_pts, "buckets": out_buckets, "since": since,
         "brier_model": round(se_model / n, 4) if n else None,
         "brier_market": round(se_market / n_market, 4) if n_market else None,
+        "brier_market_basis": "the book we bet",
+        "brier_consensus": round(se_cons / n_cons, 4) if n_cons else None,
+        "logloss_consensus": round(ll_cons / n_cons, 4) if n_cons else None,
+        "n_consensus": n_cons,
+        "brier_edge_consensus": (round(se_cons / n_cons - se_model / n, 4)
+                                 if n and n_cons else None),
         # Positive = the model out-forecasts the de-vigged market prices on
         # its own picks; negative = the market knew better.
         "brier_edge": (round(se_market / n_market - se_model / n, 4)
