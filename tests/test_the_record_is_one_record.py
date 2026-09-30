@@ -153,16 +153,21 @@ def test_the_site_seats_the_pooled_book_where_the_edge_book_sat():
       const twice = adoptPooledRecord(rec);
       const old = adoptPooledRecord({ overall: { settled: 3 } });
       return { top: rec.overall.settled, edge: rec.edge.overall.settled, curve: rec.curve.length, board: rec.edge_board,
+               pooled: rec.pooled_overall.settled, nflPooled: rec.by_sport.nfl.pooled_overall.settled,
                recent: rec.recent, nfl: rec.by_sport.nfl.overall.settled, nflEdge: rec.by_sport.nfl.edge.overall.settled,
                mlb: rec.by_sport.mlb.overall.settled, mlbEdge: !!rec.by_sport.mlb.edge,
                idempotent: twice.edge.overall.settled, oldFile: old.overall.settled, oldEdge: !!old.edge,
                nothing: adoptPooledRecord(null) };""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["top"] == 5 and got["edge"] == 3, "the pooled book is the record; the edge book keeps its seat"
+    # Since 2026-09-30 (audit P1-1, Ethan's yes): the EDGE BOARD is the
+    # headline, the pooled journal a labelled second line beside it.
+    assert got["top"] == 2 and got["edge"] == 3, "the edge board is the record; the old book keeps its seat"
     assert got["board"] == {"settled": 2}, "and the edge board alone rides beside it for the verdict"
-    assert got["curve"] == 2 and got["recent"] == ["e", "l"]
-    assert got["nfl"] == 4 and got["nflEdge"] == 3, "per sport too"
+    assert got["pooled"] == 5 and got["nflPooled"] == 4, "the pooled total is kept, per sport too"
+    assert got["curve"] == 1 and got["recent"] == ["e"], \
+        "no edge-board curve in the file: the curve stays the book's own, never the pooled one"
+    assert got["nfl"] == 3 and got["nflEdge"] == 3, "per sport too: no edge block, the headline is untouched"
     assert got["mlb"] == 0 and got["mlbEdge"] is False, "a scope without a pooled block is untouched"
     assert got["idempotent"] == 3, "adopting twice does not bury the edge book under the pooled one"
     assert got["oldFile"] == 3 and got["oldEdge"] is False, "a file from before this is left as it was"
@@ -195,7 +200,8 @@ def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     assert "const pooled = !!(src && src.edge && src.edge.overall);" in v
     assert "const edge = pooled ? (src.edge_board || src.edge.overall) : o;" in v, \
         "the edge card is the edge board alone, so the two cards add up to the number above them"
-    assert "the edge board and the Most Likely board as one book, " in v, "the sub-line says what the number pools"
+    assert "the model’s edge board, " in v, "the sub-line says whose number it is"
+    assert "combinedLineHTML(src.pooled_overall, need)" in v, "the pooled total, named, beneath it"
     assert ": pooled ? verdictBooksHTML(edge, lk, chart, lines)" in v
     assert '<div class="rv-read">${chart}' in v, "an unpooled file still gets the old reading"
     b = _fn("verdictBooksHTML")

@@ -57,7 +57,9 @@ def _node(js):
       const pikkitBadgeHTML = (t) => "<a class='pk-verified'>" + (t || "Zeno’s picks verified on Pikkit") + "</a>";
       {_const("PROOF_RATE_FLOOR")}
       {_fn("zenoMoney")}
+      {_fn("recFloor")}
       {_fn("recordRibbonsHTML")}
+      {_fn("zenoWhoHTML")}
       {_fn("adoptPooledRecord")}
       {_fn("pwResultsHTML")}
       console.log(JSON.stringify((() => {{ {js} }})()));
@@ -84,9 +86,13 @@ def test_the_results_strip_leads_with_the_ribbon_and_keeps_what_it_lacks():
     # Ethan, 2026-09-26: "we need to display the new combined record here
     # too on the paywall" — the combined line leads with its split, then
     # the model's tile, then Zeno's, as on the Record page.
-    assert ("const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno }, o,\n"
+    # Since 2026-09-30 (audit P1-1/P1-6) the call also hands over the
+    # labelled pooled total and the record's own floor, and Zeno is named.
+    assert ("const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno,\n"
+            "                                     pooled_overall: rec && rec.pooled_overall,\n"
+            "                                     min_graded: rec && rec.min_graded }, o,\n"
             "                                   (rec && rec.recent) || []);") in body
-    assert '<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>' in body
+    assert '<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>${zenoWhoHTML(rec)}' in body
     assert '<div class="pw-stats pw-stats-two">' in body
     assert 'stat(o.settled, `graded' not in body and '"record")' not in body and '"net, flat stakes"' not in body, \
         "the ribbon says these; a tile restating them makes the reader meet a number twice"
@@ -108,12 +114,16 @@ def test_the_wall_prints_the_pooled_book_then_zenos():
     if got is None:
         print("  SKIP node not installed"); return
     h = got["html"]
-    assert "35-24-1" in h and "+1.7% ROI" in h and "+7.6u · 60 settled" in h, "the pooled book, not the edge book"
-    assert "20-20" not in h, "the edge book's own record must not leak onto the wall"
-    assert h.count('class="hd-ribbon"') == 2 and "Zeno · his own book" in h, "the model's, then Zeno's (no combined in this file)"
-    assert h.index("Model") < h.index("Zeno · his own book"), "the model's tile before his"
-    assert 'data-pc="59"' in h and '<i class="w">W</i><i class="w">W</i><i class="l">L</i>' in h
-    assert "59.3%" in h and "52.9% needed at our prices" in h and "445.2u" in h and "+7.60u" in h
+    # Since 2026-09-30 (audit P1-1, Ethan's yes): the model's own book is
+    # the wall's headline; the pooled journal follows it, labelled.
+    assert "20-20" in h and "\u22122.5% ROI" in h, "the model's own book leads"
+    assert "35-24-1" in h and "+1.7% ROI" in h and "+7.6u · 60 settled" in h, "the pooled book, second and named"
+    assert h.count('class="hd-ribbon"') == 3 and "Zeno · his own book" in h
+    assert h.index("Model") < h.index("Combined · edge + Most Likely boards") < h.index("Zeno · his own book"), \
+        "the model's tile, then the pooled one, then his"
+    assert 'data-pc="50"' in h and '<i class="w">W</i>' in h
+    assert "50.0%" in h and "52.4% needed at our prices" in h and "40.0u" in h
+    assert "Zeno is the site owner’s own bets" in h, "who Zeno is"
     assert "hd-ribbon" in got["thin"] and "52.0%" in got["thin"] and "needed at the prices we took" in got["thin"], \
         "a thin sample still shows the ribbon and the bar, never a rate"
     assert got["none"] == ""
@@ -131,9 +141,12 @@ def test_the_wall_leads_with_the_combined_line_and_its_split():
       return pwResultsHTML(adoptPooledRecord(file));""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got.count('class="hd-ribbon"') == 3
-    assert got.index("Everything we’ve bet") < got.index("Model") < got.index("Zeno · his own book")
+    assert got.count('class="hd-ribbon"') == 4
+    assert (got.index("Model") < got.index("Combined · edge + Most Likely boards")
+            < got.index("Combined · Zeno’s book + ours") < got.index("Zeno · his own book")), \
+        "the model's own tile leads; every total follows, labelled (audit P1-1)"
     assert "1457-2008-36" in got and "model +4.3u · Zeno +800.2u (1u = $10)" in got, "the split rides the tile"
+    assert "+22.3% ROI" in got, "the combined tile's headline is its ROI, as the model's is"
     assert "the model’s win rate" in got and "the model staked to earn" in got, "the stats beneath are the model's"
 
 

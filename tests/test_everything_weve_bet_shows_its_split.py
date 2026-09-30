@@ -55,17 +55,23 @@ def test_the_export_ships_both_and_never_folds_zeno_into_overall():
     # so the combined tile adds up with the tile beneath it.
     assert '"combined": _zeno.combined(_pooled["overall"], _zeno_block),' in LEDGER
     assert '"pooled": _pooled,' in LEDGER
-    assert "s.overall = s.pooled.overall;" in APP, "the page's model tile is the pooled book"
+    # Since 2026-09-30 (audit P1-1) the page's headline is the edge board
+    # and the pooled book — this combined line's model half — is kept
+    # beside it as its own labelled tile, so the two still read together.
+    assert "s.pooled_overall = s.pooled.overall;" in APP, "the pooled book keeps its own seat"
     assert '"overall": scoped,' in LEDGER, "the model's overall stays its own"
 
 
 def test_the_page_shows_the_split_and_only_on_the_whole_record():
     i = APP.index("function recordRibbonsHTML(")
     fn = APP[i:APP.index("\n}\n", i)]
-    assert "Everything we’ve bet · model + Zeno" in fn
+    # Since 2026-09-30 (audit P1-1/V-5, Ethan's yes): the model's own tile
+    # leads and the combined line follows it, labelled for what it adds.
+    assert "Combined · Zeno’s book + ours" in fn
     assert "model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}" in fn
-    assert fn.index("const cb = (rec || {}).combined;") < fn.index("if (ov.settled) {"), "combined leads, model follows"
-    assert "const dAll = winO || scoped ? { ...d, combined: null } : d;" in APP
+    assert fn.index("if (ov.settled) {") < fn.index("const cb = (rec || {}).combined;"), "model leads, combined follows"
+    assert ("const dAll = winO || scoped\n"
+            "    ? { ...d, combined: null, pooled_overall: winO ? null : src.pooled_overall } : d;") in APP
 
 
 if __name__ == "__main__":

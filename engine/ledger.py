@@ -1723,6 +1723,22 @@ def top_pick_claims(conn, date: str) -> list:
     return [dict(r) for r in rows]
 
 
+def recent_top_pick_claims(conn, days: int = 14, today: str | None = None) -> list:
+    """``[{"date", "claims": [...]}]`` for the last ``days`` days, newest
+    first — every headline the Top Pick carried, in order, published so a
+    reader who saw a different pick at 9 a.m. can find it (audit A1-5).
+    Days with no claim at all are left out."""
+    import datetime as _dt
+    end = _dt.date.fromisoformat(today) if today else _dt.datetime.utcnow().date()
+    out = []
+    for k in range(days):
+        day = (end - _dt.timedelta(days=k)).isoformat()
+        claims = top_pick_claims(conn, day)
+        if claims:
+            out.append({"date": day, "claims": claims})
+    return out
+
+
 def read_only(path: str | Path | None = None) -> sqlite3.Connection:
     """`db.read_only` against the journal — see it for why a reader takes
     no schema locks. Kept as a name here because every caller in this
@@ -7502,6 +7518,12 @@ def pooled_report(conn, sport: str | None = None,
         "books": list(POOLED_BOOKS),
         "overall": performance(conn, sport, category=POOLED_BOOKS, since=since),
         "edge": performance(conn, sport, category=EDGE_BOOKS, since=since),
+        # The edge board's own curve and receipts: since 2026-09-30 it is
+        # the HEADLINE (audit P1-1), so its ribbon's form dots and the
+        # running P&L must be its own rows, not the pooled journal's.
+        "edge_curve": pnl_curve(conn, sport, since=since, category=EDGE_BOOKS),
+        "edge_recent": recent_settled(conn, RECENT_LIMIT, category=EDGE_BOOKS,
+                                      sport=sport, since=since),
         "curve": pnl_curve(conn, sport, since=since, category=POOLED_BOOKS),
         "recent": recent_settled(conn, RECENT_LIMIT, category=POOLED_BOOKS,
                                  sport=sport, since=since),
@@ -9071,6 +9093,7 @@ def export_json(conn, path) -> None:
         # before and after, and the daily heads anyone can save.
         "audit_log": (seal_audit(conn), verify_audit_log(conn))[1],
         "regrades": recent_regrades(conn),
+        "potd_claims": recent_top_pick_claims(conn),
         "forecast_heads": recent_heads(conn),
         # The learning loop, rendered: nightly temperatures, self-closed
         # markets, and the sweep trend. Own history connection, own guard —

@@ -39,6 +39,7 @@ def _node(js):
       const document = {{ getElementById: (id) => els[id] }};
       let REC = null;
       const loadRecordOnce = async () => REC;
+      {_fn("recFloor")}
       {_fn("renderStandingRecord")}
       (async () => {{ {js} }})().then((r) => console.log(JSON.stringify(r)));
     """
@@ -81,9 +82,13 @@ def test_under_the_floor_the_record_leads_and_no_roi_is_printed():
 
 def test_the_floor_is_the_engines_own():
     fn = _fn("renderStandingRecord")
-    assert "const need = rec.min_graded || _recMinGraded;" in fn, "the floor is retyped, or missing"
-    assert "const thin = o.settled < need;" in fn
-    assert not re.search(r"settled\s*<\s*\d", fn), "a hard-coded floor"
+    # Since 2026-09-30 (audit P1-6) the rail and the ribbons share one
+    # floor helper, `recFloor`, which reads the engine's own number.
+    assert "const { need, thin } = recFloor(rec, o);" in fn, "the floor is retyped, or missing"
+    floor = _fn("recFloor")
+    assert "(rec || {}).min_graded" in floor and "_recMinGraded" in floor
+    assert "thin: n < need" in floor
+    assert not re.search(r"settled\s*<\s*\d", fn + floor), "a hard-coded floor"
 
 
 if __name__ == "__main__":

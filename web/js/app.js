@@ -3733,14 +3733,22 @@ async function loadRecordOnce() {
    number). Per sport too. A file from before this carries no
    `pooled` and is left exactly as it was; a record already adopted is
    left alone. */
+/* THE HEADLINE IS THE MODEL'S OWN BOOK (audit 2026-09-30, P1-1; Ethan's
+   yes the same day). The pooled journal pooled four books with three
+   selection rules and two stake regimes — about half its wins were 0.1u
+   Most Likely favourites — and it sat in the headline seat on Home, the
+   Record page and the paywall. The edge board (`pooled.edge`, EDGE_BOOKS)
+   is the headline now, with its own curve and receipts; the pooled total
+   is kept as `pooled_overall`, a labelled second line. */
 function adoptPooledRecord(rec) {
   const lift = (s) => {
     if (!s || !s.pooled || !s.pooled.overall || s.edge) return s;
     s.edge = { overall: s.overall, curve: s.curve, recent: s.recent };
     s.edge_board = s.pooled.edge || null;   // the edge board alone (EDGE_BOOKS), for the verdict's card
-    s.overall = s.pooled.overall;
-    s.curve = s.pooled.curve || s.curve;
-    s.recent = s.pooled.recent || s.recent;
+    s.pooled_overall = s.pooled.overall;
+    s.overall = s.pooled.edge || s.overall;
+    s.curve = s.pooled.edge_curve || s.curve;
+    s.recent = s.pooled.edge_recent || s.recent;
     return s;
   };
   if (!rec) return rec;
@@ -17933,6 +17941,16 @@ function bindRecordScopes(host) {
    It is deliberately quiet type in a loud position. A figure that shouts on
    a good night shouts on a bad one, and the claim being made is that this
    one is always there, not that it is good. */
+/* ONE FLOOR, EVERY RIBBON (audit P1-6). Under `min_graded` settled bets a
+   book prints its W-L and how far it has to go — never an ROI or a filled
+   ring. The rail, the ribbons and the Record verdict read it from here. */
+function recFloor(rec, o) {
+  const need = Number((rec || {}).min_graded)
+    || (typeof _recMinGraded === "number" ? _recMinGraded : 30);
+  const n = Number((o || {}).settled) || 0;
+  return { need, n, thin: n < need };
+}
+
 async function renderStandingRecord() {
   const el = document.getElementById("standing-record");
   if (!el) return;
@@ -17960,8 +17978,7 @@ async function renderStandingRecord() {
      page — the one number on the site that flattered by accident.
      The record leads instead, with how far the sample has to go. The
      floor is the engine's own, carried in the payload. */
-  const need = rec.min_graded || _recMinGraded;
-  const thin = o.settled < need;
+  const { need, thin } = recFloor(rec, o);
   const wl = `${o.wins || 0}-${o.losses || 0}-${o.pushes || 0}`;
   if (thin) {
     el.innerHTML = `
@@ -18490,7 +18507,11 @@ function recEdgePanel(e, trend, overall) {
    worse than no sentence at all. */
 function moneySplitHTML(o) {
   const money = (o || {}).money_bets;
-  const paper = (o || {}).paper_bets;
+  /* PAPER IS WHAT SETTLED WITHOUT MONEY (audit V-5): `paper_bets` counts
+     a different population, and "1 money + 1 paper" of 1 settled was the
+     result. Read off `settled` when it is there. */
+  const paper = money != null && (o || {}).settled != null
+    ? Math.max(0, Number(o.settled) - Number(money)) : (o || {}).paper_bets;
   if (money == null || paper == null) return "";
   if (!money && !paper) return "";
   const d = o.net_dollars;
@@ -18601,7 +18622,7 @@ function recordVerdictHTML(src, scopeLabel, lk) {
   return `<section class="card rv-card">
     <div class="section-title">The verdict
       <span class="sub">— ${escapeHtml(scopeLabel)}, ${pooled
-        ? "the edge board and the Most Likely board as one book, " : ""}everything
+        ? "the model’s edge board, " : ""}everything
       journaled at its real price and graded in public</span></div>
     <div class="rv-tiles">
       ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
@@ -18630,6 +18651,7 @@ function recordVerdictHTML(src, scopeLabel, lk) {
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
     </div>
     ${moneySplitHTML(o)}
+    ${combinedLineHTML(src.pooled_overall, need)}
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
         against the ${need} this page needs before a rate means anything.
@@ -18640,6 +18662,20 @@ function recordVerdictHTML(src, scopeLabel, lk) {
           <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
         </div>`}
   </section>`;
+}
+
+/* THE POOLED TOTAL, NAMED AND SECOND (audit P1-1). The edge board is
+   the verdict; this is the line that adds the Most Likely board to it,
+   with the same floor on its ROI. Absent pool → nothing. */
+function combinedLineHTML(po, need) {
+  if (!po || !po.settled) return "";
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const wl = `${po.wins || 0}\u2011${po.losses || 0}${po.pushes ? `\u2011${po.pushes}` : ""}`;
+  const tail = po.settled < (need || 30)
+    ? `${po.settled} of ${need || 30} graded`
+    : `${sign(po.net_units || 0, 2)}u · ${sign((po.roi || 0) * 100)}% ROI`;
+  return `<p class="rv-split">Combined with the Most Likely board (flat-staked
+    favourites): <b>${wl}</b> · ${tail}.</p>`;
 }
 
 /* THE TWO BOOKS UNDER THE ONE NUMBER. Ethan, 2026-09-22: "we can show 2
@@ -19149,6 +19185,29 @@ async function renderZeno() {
   }));
 }
 
+/* EVERY HEADLINE THE TOP PICK CARRIED (audit A1-5): the log is written
+   every cycle and was never published, so a reader who saw a different
+   pick at 9 a.m. had nothing to check it against. Last 14 days, newest
+   first; a day the headline changed says how many times. */
+function recPotdClaims(days, scope) {
+  const rows = (days || []).map((d) => ({
+    date: d.date, claims: (d.claims || []).filter((c) => !scope || c.sport === scope),
+  })).filter((d) => d.claims.length);
+  if (!rows.length) return "";
+  const what = (c) => c.player
+    ? `${escapeHtml(c.player)} ${escapeHtml(String(c.side || ""))} ${c.line != null ? escapeHtml(String(c.line)) : ""} ${escapeHtml(String(c.market || ""))}`
+    : "no top pick";
+  return `<details class="card rec-claims" style="margin-top:8px">
+    <summary>Every headline pick, as it was shown — last ${rows.length} day${rows.length === 1 ? "" : "s"}</summary>
+    ${rows.map((d) => {
+      const last = d.claims[d.claims.length - 1];
+      const moved = d.claims.length > 1 ? ` · changed ${d.claims.length - 1}× that day, first ${what(d.claims[0])}` : "";
+      return `<div class="rec-row flush tight"><span style="width:64px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(String(d.date).slice(5))}</span>
+        <span style="flex:1;min-width:0">${what(last)}<span style="color:var(--text-mute)">${moved}</span></span></div>`;
+    }).join("")}
+  </details>`;
+}
+
 function recPotdSection(rep, scope, recent) {
   if (!rep || (!rep.settled && !rep.open)) return "";
   const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
@@ -19372,6 +19431,7 @@ async function renderRecord() {
        two provenances that shared a number would make both worthless.
        Scoped to a league when that league has rows; pooled on "All". */
     + recZenoSection(d.zeno, scope, _zenoTixRec)
+    + recPotdClaims(d.potd_claims, scoped ? scope : "")
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
                      scope, d.potd_recent || [])
     + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
@@ -19457,7 +19517,8 @@ async function renderRecord() {
   /* The combined line is the WHOLE record's (engine/zeno.combined): it
      shows only on the whole, unscoped record, never beside a sport, a
      book or a window it was not added up over. */
-  const dAll = winO || scoped ? { ...d, combined: null } : d;
+  const dAll = winO || scoped
+    ? { ...d, combined: null, pooled_overall: winO ? null : src.pooled_overall } : d;
   const ribbons = winO
     ? recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` },
         (src.recent || []).filter((r) => String((r || {}).date || "") >= from))
@@ -19469,7 +19530,7 @@ async function renderRecord() {
     : `<p class="rec-win-note">Nothing settled in the last ${winDays} days — the
         headline is the whole record.</p>`;
   host.innerHTML = scopeBar + winBar
-    + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>` : "")
+    + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>${zenoWhoHTML(dAll)}` : "")
     + winNote
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
     + `<p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
@@ -25758,10 +25819,12 @@ function pwResultsHTML(rec) {
      The tiles beneath are the MODEL's and say so: its win rate against
      the break-even its prices require — or the bar alone, while the
      sample cannot carry a rate — and how much it staked to earn its number. */
-  const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno }, o,
+  const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno,
+                                     pooled_overall: rec && rec.pooled_overall,
+                                     min_graded: rec && rec.min_graded }, o,
                                    (rec && rec.recent) || []);
   return `<div class="pw-results">
-    ${ribbon ? `<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>` : ""}
+    ${ribbon ? `<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>${zenoWhoHTML(rec)}` : ""}
     <div class="pw-stats pw-stats-two">
       ${/* The bar the prices we took actually require is a fact about
             those prices and true at any sample size, so it is what the
@@ -45902,33 +45965,59 @@ function recordRibbonsHTML(rec, ov, recent) {
     <div class="hd-rw"><span class="hd-eyebrow">${k}</span>
       <span class="hd-big"><span class="hd-rec">${rec}</span> <b style="color:${color}" data-count>${big}</b></span><span>${sub}</span></div>
     ${form ? `<span class="hd-form" aria-label="last five, newest first">${form}</span>` : ""}</div>`;
+  /* UNDER THE FLOOR (audit P1-6): the count and how far it has to go —
+     no ROI, no filled ring. `recFloor` is the rail's own floor. */
+  const thinRing = (f) => `<span class="hd-ring" style="--pc:0" data-pc="0" title="${f.n} of ${f.need} graded — too few to rate"><i>${f.n}</i></span>`;
+  const thinTile = (k, t, f, form) => tile(k, wl(t), `${f.n} of ${f.need}`, "var(--text)",
+    `graded — a return means little before ${f.need}`, form, 0, thinRing(f));
+  const roiBig = (roi) => `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`;
+  const units = (u) => `${sign(u)}${Math.abs(u).toFixed(1)}u`;
   const tiles = [];
+  /* THE MODEL'S OWN BOOK LEADS (audit P1-1): the edge board, graded in
+     public. Every wider total follows it, labelled for what it adds. */
+  if (ov.settled) {
+    const f = recFloor(rec, ov);
+    const roi = Number(ov.roi || 0);
+    const u = Number(ov.net_units || 0);
+    tiles.push(f.thin ? thinTile(ov.label || "Model · graded in public", ov, f, dots(recent, "status"))
+      : tile(ov.label || "Model · graded in public", wl(ov), roiBig(roi), tone(roi),
+             `${units(u)} · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
+  }
+  /* The edge board and the Most Likely board as one — the pooled journal,
+     second and named: its Most Likely half is flat-staked favourites. */
+  const po = (rec || {}).pooled_overall;
+  if (po && po.settled) {
+    const f = recFloor(rec, po);
+    const roi = Number(po.roi || 0), u = Number(po.net_units || 0);
+    const k = "Combined · edge + Most Likely boards";
+    tiles.push(f.thin ? thinTile(k, po, f, "")
+      : tile(k, wl(po), roiBig(roi), tone(roi),
+             `${units(u)} · ${po.settled} settled · Most Likely picks at their flat stake`, "", rate(po)));
+  }
   /* EVERYTHING WE'VE BET (engine/zeno.combined): the model's picks and
-     Zeno's own tickets in one line, in units — with the split always on
-     the tile, so the model's own record (the next tile) is never hidden
-     inside it. Ethan, 2026-09-26. */
+     Zeno's own tickets in one line — third, with the split on the tile,
+     and the same headline number as the model's tile (its ROI). */
   /* WHAT A UNIT OF HIS IS WORTH, said wherever his units are (Ethan,
      2026-09-26: "make sure users know 1 unit is $10 so we can put a
      dollar amount behind the 800 units"). engine/zeno.UNIT_DOLLARS. */
   const unitNote = (ud) => (Number(ud) > 0 ? ` (1u = $${Number(ud)})` : "");
   const cb = (rec || {}).combined;
   if (cb && cb.settled && cb.split) {
+    const f = recFloor(rec, cb);
     const u = Number(cb.net_units || 0), roi = Number(cb.roi || 0);
-    const part = (x) => `${sign(Number(x.net_units || 0))}${Math.abs(Number(x.net_units || 0)).toFixed(1)}u`;
-    tiles.push(tile("Everything we’ve bet · model + Zeno", wl(cb), `${sign(u)}${Math.abs(u).toFixed(1)}u`, tone(u),
-                    `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}${unitNote(cb.unit_dollars)}`,
-                    "", rate(cb), roiRing(roi)));
-  }
-  if (ov.settled) {
-    const roi = Number(ov.roi || 0);
-    const u = Number(ov.net_units || 0);
-    tiles.push(tile(ov.label || "Model · graded in public", wl(ov), `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`, tone(roi),
-                    `${sign(u)}${Math.abs(u).toFixed(1)}u · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
+    const part = (x) => units(Number(x.net_units || 0));
+    const k = "Combined · Zeno’s book + ours";
+    tiles.push(f.thin ? thinTile(k, cb, f, "")
+      : tile(k, wl(cb), roiBig(roi), tone(roi),
+             `${units(u)} · model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}${unitNote(cb.unit_dollars)}`,
+             "", rate(cb), roiRing(roi)));
   }
   if (zo.settled) {
     const pr = Number(zo.profit || 0);
     /* v5: the same tile serves a person's own book — Zeno's, or the
-       reader's hand-logged bets on My Bets — under its own label. */
+       reader's hand-logged bets on My Bets — under its own label. A
+       person's book is his record of what he bet, not a claim the site
+       makes about its model, so the model's floor does not apply. */
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
     const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u${unitNote(z.unit_dollars)} · `;
     const zeno = !z.label;          // Zeno's own tile, not a reader's book on My Bets
@@ -45940,6 +46029,15 @@ function recordRibbonsHTML(rec, ov, recent) {
   return tiles.join("");
 }
 
+/* WHO ZENO IS (audit V-5): a name with no introduction beside the model's
+   record read as a second model. One sentence, wherever his tile is. */
+function zenoWhoHTML(rec) {
+  const zo = (((rec || {}).zeno) || {}).overall || {};
+  return zo.settled ? `<p class="hd-who">Zeno is the site owner’s own bets — real
+    tickets at real sportsbooks, synced and verified by Pikkit. They are not the
+    model’s picks and are counted apart from them.</p>` : "";
+}
+
 async function deckRecordHTML() {
   let rec = null;
   try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
@@ -45948,7 +46046,7 @@ async function deckRecordHTML() {
   const tiles = recordRibbonsHTML(rec, rec.overall, rec.recent);
   const record = tiles
     ? `${deckHead("The record", "#record", "record", "Results")}
-       <div class="hd-stats">${tiles}</div>` : "";
+       <div class="hd-stats">${tiles}</div>${zenoWhoHTML(rec)}` : "";
   const tix = await zenoTickets();
   const open = tix.locked ? [] : (tix.open || []);
   const zeno = open.length

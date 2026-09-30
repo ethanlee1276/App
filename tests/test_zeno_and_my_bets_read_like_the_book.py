@@ -55,6 +55,7 @@ def _node(js):
       const PIKKIT_URL="https://links.pikkit.com/user/QellysBook"; const pikkitBadgeHTML=(t)=>"<a class=\\"pk-verified\\">"+(t||"Zeno’s picks verified on Pikkit")+"</a>";
       {_fn("zenoMoney")}
       {_fn("zenoTicketRow")}
+      {_fn("recFloor")}
       {_fn("recordRibbonsHTML")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -165,7 +166,7 @@ def test_a_persons_book_rings_its_roi_and_the_model_its_hit_rate():
       const zeno = recordRibbonsHTML({ zeno: { overall: { settled: 1389, wins: 221, losses: 1141, pushes: 27,
                                                 profit: 8001.64, roi: 0.2607, staked: 30692.9, net_units: 800.16 } } }, {}, []);
       const down = recordRibbonsHTML({ zeno: { overall: { settled: 10, wins: 3, losses: 7, profit: -40, roi: -0.4, staked: 100 } } }, {}, []);
-      const model = recordRibbonsHTML({}, { settled: 10, wins: 6, losses: 4, roi: 0.05, net_units: 0.5 }, []);
+      const model = recordRibbonsHTML({}, { settled: 40, wins: 24, losses: 16, roi: 0.05, net_units: 2.0 }, []);
       const both = recordRibbonsHTML({ combined: { settled: 1399, wins: 227, losses: 1145, pushes: 27, roi: 0.25, net_units: 800.66,
                                          split: { model: { net_units: 0.5 }, zeno: { net_units: 800.16 } } } },
                                      { settled: 10, wins: 6, losses: 4, roi: 0.05, net_units: 0.5 }, []);
@@ -175,9 +176,13 @@ def test_a_persons_book_rings_its_roi_and_the_model_its_hit_rate():
     assert 'data-pc="26"' in got["zeno"] and "<i data-count>+26%</i>" in got["zeno"], got["zeno"][:400]
     assert "return on the dollars risked" in got["zeno"] and "decisions won" not in got["zeno"]
     assert 'class="hd-ring neg"' in got["down"] and "<i data-count>\u221240%</i>" in got["down"]
+    # Over the floor (40 of 30): under it the tile shows its count, not a
+    # rate (audit P1-6, tests/test_the_headline_is_the_models_own_book.py).
     assert "decisions won" in got["model"] and "<i data-count>60%</i>" in got["model"], "the model keeps its hit rate"
-    first = got["both"][:got["both"].index("Model")]
-    assert "<i data-count>+25%</i>" in first, "the combined tile rings its ROI too"
+    # Since 2026-09-30 (audit P1-1) the model's tile leads and the
+    # combined one follows it.
+    after = got["both"][got["both"].index("Combined · Zeno’s book + ours") - 400:]
+    assert "<i data-count>+25%</i>" in after, "the combined tile rings its ROI too"
     assert ".hd-ring.neg {" in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "css",
                                                  "styles.css"), encoding="utf-8").read()
 

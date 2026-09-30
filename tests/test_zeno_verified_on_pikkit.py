@@ -52,7 +52,7 @@ def test_only_his_tile_carries_it_never_the_models_or_a_readers():
     if not shutil.which("node"):
         return
     prog = ('const MINUS="\\u2212"; const escapeHtml=(x)=>String(x==null?"":x); const iconMark=()=>"";\n'
-            f'const PIKKIT_URL="{URL}";\n' + _fn("pikkitBadgeHTML") + _fn("zenoMoney") + _fn("recordRibbonsHTML")
+            f'const PIKKIT_URL="{URL}";\n' + _fn("pikkitBadgeHTML") + _fn("zenoMoney") + _fn("recFloor") + _fn("recordRibbonsHTML")
             + "\nconst z={overall:{settled:1389,wins:221,losses:1141,pushes:27,profit:8001.64,roi:0.2607,staked:30692.9,net_units:800.16}};"
             "\nconsole.log(JSON.stringify({zeno: recordRibbonsHTML({zeno:z},{},[]),"
             " model: recordRibbonsHTML({}, {settled:10,wins:6,losses:4,roi:0.05,net_units:0.5}, []),"
