@@ -2339,14 +2339,19 @@ addEventListener("online", refreshStaleBar);
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
 const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "live",
-  "scanner", "game", "prop", "trending", "players", "futures"];
+  "scanner", "game", "prop", "pbp", "trending", "players", "futures"];
 function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
   if (!d) return null;
   if (!boardViewNow()) return null;
   const src = String(d.generated_from || "");
   if (src && !boardIsReal(src)) return { kind: "demo" };
-  if (!src || d.status === "offseason") return null;
+  if (d.status === "offseason") return null;
+  // GAMES WITH NO SOURCE ARE NOT A REAL BOARD (audit 2026-09-30, D-7). The
+  // corner pill already said "Demo data" for an empty `generated_from`
+  // while the banner said nothing. A board with no games at all (not
+  // built, locked) still has its own empty state and no banner.
+  if (!src) return (d.games || []).length ? { kind: "demo" } : null;
   const dates = (d.games || []).map((g) => String((g && g.date) || "").slice(0, 10))
     .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).sort();
   if (!dates.length) return null;
