@@ -755,6 +755,13 @@ const trueMinus = (s) => String(s).replace(RE_SIGN, `$1${MINUS}`);
 
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`);
+/* NULL IS NOT ZERO (audit P1-9). An ROI the engine did not compute — too
+   few settled, or nothing staked — printed "+0.0%" in the good colour,
+   which is a claim. One formatter, a dash for nothing. */
+function fmtRoi(x) {
+  const v = x == null || x === "" ? NaN : Number(x);
+  return Number.isFinite(v) ? signedPct(v) : "—";
+}
 const american = (o) => (o > 0 ? `+${o}` : trueMinus(`${o}`));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
@@ -3891,8 +3898,13 @@ function whyNotStaked(r) {
   const warn = (r.warnings || []).map(String)
     .find((x) => !/already started/i.test(x));
   if (warn) return warn;
-  const q = r.quality != null ? r.quality : null;
-  return q != null ? `Graded ${q}/100 — under the 70 a pick needs`
+  /* TRUE WHEN IT PRINTS (audit V-7): "Graded 71/100 — under the 70" was
+     the catch-all for any grade. The sentence is for a grade under the
+     bar; a row that cleared it and still was not staked failed a gate the
+     row does not name, and says so plainly. */
+  const q = r.quality != null ? Number(r.quality) : null;
+  if (q != null && q < 70) return `Graded ${q}/100 — under the 70 a pick needs`;
+  return q != null ? `Graded ${q}/100 — cleared the grade, held back by another gate`
                    : "Did not clear the gate";
 }
 
@@ -4037,7 +4049,7 @@ async function renderBestBets() {
 
   const perf = rec.overall || {};
   const journalNote = perf.settled
-    ? `The journal so far: ${perf.wins}-${perf.losses} (${signedPct(perf.roi || 0)} ROI) — every pick below is graded there nightly.`
+    ? `The journal so far: ${perf.wins}-${perf.losses} (${fmtRoi(perf.roi)} ROI) — every pick below is graded there nightly.`
     : "Every pick below is journaled at its real price and graded nightly on the Record page.";
   // Every probability below is post-haircut. Said once, here, rather than
   // on 26 rows: the numbers are already corrected, and a reader who does
@@ -4242,7 +4254,7 @@ async function renderBestBets() {
   }
   const lo = rec.loose_sampler || {};
   const looseRec = (lo.wins || 0) + (lo.losses || 0) > 0
-    ? ` · sampler so far ${lo.wins}-${lo.losses} (${signedPct(lo.roi || 0)})` : "";
+    ? ` · sampler so far ${lo.wins}-${lo.losses} (${fmtRoi(lo.roi)})` : "";
   for (const nm of ((state.data || {}).near_miss || []).slice(0, 3)) {
     signals.push({ tag: "NEAR",
       label: `${nm.player} ${nm.side} ${nm.line} ${nm.market_label} ${american(nm.odds)} (${nm.book})`,
@@ -4253,7 +4265,7 @@ async function renderBestBets() {
   }
   const st = rec.stale_flags || {};
   const staleRec = (st.wins || 0) + (st.losses || 0) > 0
-    ? ` · sampler so far ${st.wins}-${st.losses} (${signedPct(st.roi || 0)})` : "";
+    ? ` · sampler so far ${st.wins}-${st.losses} (${fmtRoi(st.roi)})` : "";
   const pickKeys = new Set(sig.props.map((r) => propKey(r.player, r.market)));
   for (const s of sig.stale.filter((x) => !pickKeys.has(propKey(x.player, x.market))).slice(0, 3)) {
     signals.push({ tag: "STALE",
@@ -5150,7 +5162,7 @@ async function renderTeamForm() {
   const gradedN = (fm.wins || 0) + (fm.losses || 0);
   const sampler = gradedN
     ? `sampler: backing hot teams at real prices is ${fm.wins}-${fm.losses} `
-      + `(${signedPct(fm.roi || 0)} ROI) — graded on the Record page`
+      + `(${fmtRoi(fm.roi)} ROI) — graded on the Record page`
     : `sampler journals the hot side’s moneyline in every hot-vs-cold matchup `
       + `at the real price — grades on the Record page`;
   const row = (r, tone) => `
@@ -5797,7 +5809,7 @@ function renderStats() {
       sub: d.counts.props_built > d.counts.props_analyzed
         ? `of ${d.counts.props_built} built from history — the rest have no book price yet`
         : "" },
-    { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
+    { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: avgEdge >= 0 ? "pos" : "neg" },
     // A reader who set stakes to units asked not to be shown money, and
     // the tile that leads with a dollar figure is the one that would say
     // it loudest.
@@ -8596,7 +8608,7 @@ function brandHeroHTML() {
         srcset="img/home/qb-helmet@800.webp 800w, img/home/qb-helmet.webp 1600w"
         sizes="(max-width: 720px) 100vw, 1100px" src="img/home/qb-helmet.webp"></div>
       <div class="qt-brand-t"><b>Qellys Book</b>
-        <span>Real data. Real edges. Real results.</span></div>
+        <span>Journaled at the price we found. Graded in public.</span></div>
     </div>`;
 }
 
@@ -9373,7 +9385,7 @@ function tdScenariosHTML() {
 }
 
 function likelyRow(r) {
-  const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
+  const pct = r.model_prob == null ? "—" : `${(Number(r.model_prob) * 100).toFixed(0)}%`;
   const game = r.kind === "game";
   const label = (game ? `${r.market_label || r.market} · ${r.matchup || ""}`
     : r.line == null ? (r.market_label || r.market)
@@ -9515,7 +9527,7 @@ function obRingHTML(r) {
   const p = Math.max(0, Math.min(1, obShownProb(r)));
   const C = 2 * Math.PI * 21;
   const why = r.tier_rate != null
-    ? `${OB_TIER_WORD[r.tier] || "These"} picks have hit ${Math.round(r.tier_rate * 100)}% of ${r.tier_n} — our model said ${Math.round(Number(r.model_prob || 0) * 100)}% on this one`
+    ? `${OB_TIER_WORD[r.tier] || "These"} picks have hit ${Math.round(r.tier_rate * 100)}% of ${r.tier_n} ${r.model_prob == null ? "" : `— our model said ${Math.round(Number(r.model_prob) * 100)}% on this one`}`
     : "Our chance it hits";
   return `<span class="ob-ring tier-${escapeAttr(r.tier || "look")}${r.tier_rate != null ? " real" : ""}" title="${escapeAttr(why)}">
     <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" class="ob-ring-bg"/>
@@ -9599,7 +9611,8 @@ function obCardHTML(r, rank, opts = {}) {
   const name = r.kind === "game" ? (r.pick_label || r.player) : r.player;
   /* A touchdown under 55% that the matchup put here says so (engine/
      likelyboard `backed_note`; Ethan, 2026-09-27: keep the tier, say it). */
-  const td = r.lane === "td" ? `<span class="ob-plain">hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10${
+  const td = r.lane === "td" ? `<span class="ob-plain">${r.model_prob == null ? "no probability on file"
+    : `hits about ${Math.max(1, Math.round(Number(r.model_prob) * 10))} in 10`}${
     r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : ""}</span>` : "";
   return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}">
     ${rank ? `<span class="ob-rank">#${rank}</span>` : ""}
@@ -14808,7 +14821,7 @@ function recEpochHTML(d, src) {
   const benched = at.benched_settled || 0;
   const cov = (d || {}).clv_coverage || {};
   if (!ep || (!hidden && !benched) || !o.settled) return "";
-  const roi = `${(o.roi || 0) >= 0 ? "+" : ""}${((o.roi || 0) * 100).toFixed(1)}%`;
+  const roi = fmtRoi(o.roi);
   const left = hidden + benched;
   return `<details class="rec-epoch">
     <summary>Record shown from ${escapeHtml(formatGameDate(ep) || ep)} —
@@ -15868,7 +15881,7 @@ function recParlaySection(pz) {
     <div class="stats rec-kpis">
       ${readable
         ? recTile("Flat-stake ROI",
-                  (rec.roi >= 0 ? "+" : "") + ((rec.roi || 0) * 100).toFixed(1) + "%",
+                  fmtRoi(rec.roi),
                   `${rec.net_units >= 0 ? "+" : ""}${
                     (rec.net_units || 0).toFixed(2)}u across ${
                     rec.graded} recommended`,
@@ -15926,7 +15939,7 @@ function parlaySplitHTML(pz, q) {
     // saying one ticket is not a record is the page arguing with itself,
     // and the percentage is the half that wins on a glance.
     const rate = b.graded >= PARLAY_RATE_FLOOR
-      ? `${(b.roi >= 0 ? "+" : "") + ((b.roi || 0) * 100).toFixed(1)}%` : "";
+      ? fmtRoi(b.roi) : "";
     return `<div class="pl-split-row">
       <span class="pl-split-label">${escapeHtml(label)}</span>
       <span class="pl-split-n">${b.graded} graded · ${b.wins}W-${b.losses}L</span>
@@ -17287,7 +17300,7 @@ function recHealthSection(h) {
         rather than implying a completeness this doesn’t have.</p>
     </details>`;
   return `<div class="section-title">Account health
-      <span class="sub">— books quietly limit winners; this estimates how limit-prone your action looks, per book.</span></div>
+      <span class="sub">— books quietly limit winners; this estimates how limit-prone our picks would look at each book if you tailed them. It reads our own journal, not your account.</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">${cards}</div>
     <p style="opacity:.55;font-size:.82em;margin-top:8px">${escapeHtml(h.disclaimer || "")}</p>
     ${blind}`;
@@ -17321,9 +17334,9 @@ function recUfcSection(u) {
       way like every other signal: its own bucket, its own ROI, and no place in the
       headline record until a real sample says it belongs there.`)}
     <div class="stats rec-kpis">
-      ${recTile("Flat-stake ROI", ((u.roi || 0) >= 0 ? "+" : "") + ((u.roi || 0) * 100).toFixed(1) + "%",
+      ${recTile("Flat-stake ROI", fmtRoi(u.roi),
                 `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u on ${(u.units_staked || 0).toFixed(1)}u staked`,
-                { lead: true, tone: toneOf(u.roi || 0) })}
+                { lead: true, tone: toneOf(u.roi) })}
       ${recTile("UFC record", `${u.wins || 0}-${u.losses || 0}`, `${u.open || 0} open`)}
       ${recTile("Hit rate", graded ? ((u.wins / graded) * 100).toFixed(1) + "%" : "—",
                 "cards are small samples — judge after 50+")}
@@ -17365,9 +17378,9 @@ function recLooseSection(lo) {
       become picks. If it burns, the gates were right and the argument is over.
       Same promotion bar as every other probation signal on this page.`)}
     <div class="stats rec-kpis">
-      ${recTile("Flat-stake ROI", graded ? (lo.roi >= 0 ? "+" : "") + (lo.roi * 100).toFixed(1) + "%" : "—",
+      ${recTile("Flat-stake ROI", graded ? fmtRoi(lo.roi) : "—",
                 `${(lo.net_units || 0) >= 0 ? "+" : ""}${(lo.net_units || 0).toFixed(2)}u on ${(lo.units_staked || 0).toFixed(1)}u`,
-                { lead: true, tone: toneOf(lo.roi || 0) })}
+                { lead: true, tone: toneOf(lo.roi) })}
       ${recTile("Record", `${lo.wins || 0}\u2011${lo.losses || 0}`, `${lo.open || 0} open`)}
       ${recTile("Toward the bar", `${graded}/100`,
                 graded >= 100 ? "sample reached — read the ROI" : "graded picks needed")}
@@ -17947,8 +17960,8 @@ async function renderStandingRecord() {
       price and graded here</span>`;
     return;
   }
-  const roi = o.roi || 0;
-  const neg = roi < 0;
+  const roi = o.roi == null ? null : Number(o.roi);
+  const neg = roi != null && roi < 0;
   /* UNDER THE SAMPLE FLOOR THE ROI IS NOT PRINTED. The Record page
      will not call a book this thin (recordVerdictHTML) and the wall
      prints no rate off it (PROOF_RATE_FLOOR); rendered on a 1-0 book
@@ -17973,7 +17986,7 @@ async function renderStandingRecord() {
   }
   el.innerHTML = `
     <span class="lbl">Running ROI</span>
-    <b class="${neg ? "neg" : ""}">${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}%</b>
+    <b class="${neg ? "neg" : ""}">${fmtRoi(roi)}</b>
     <span>${(o.net_units >= 0 ? "+" : "")}${(o.net_units || 0).toFixed(2)}u on
       ${(o.units_staked || 0).toFixed(1)}u staked</span>
     <span class="lbl">Record</span>
@@ -18624,7 +18637,7 @@ function recordVerdictHTML(src, scopeLabel, lk) {
       ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
              `${o.open || 0} open · ${settled} settled`)}
       ${tile("net", sign(o.net_units || 0, 2) + "u",
-             `${sign((o.roi || 0) * 100)}% ROI on ${(o.units_staked || 0).toFixed(1)}u at risk`,
+             `${o.roi == null ? "—" : sign(o.roi * 100) + "%"} ROI on ${(o.units_staked || 0).toFixed(1)}u at risk`,
              (o.net_units || 0) >= 0 ? "good" : "warn")}
       ${/* The break-even is read off the prices this book ACTUALLY took,
             not assumed to be -110: a book that buys short prices needs far
@@ -18669,7 +18682,7 @@ function combinedLineHTML(po, need) {
   const wl = `${po.wins || 0}\u2011${po.losses || 0}${po.pushes ? `\u2011${po.pushes}` : ""}`;
   const tail = po.settled < (need || 30)
     ? `${po.settled} of ${need || 30} graded`
-    : `${sign(po.net_units || 0, 2)}u · ${sign((po.roi || 0) * 100)}% ROI`;
+    : `${sign(po.net_units || 0, 2)}u · ${fmtRoi(po.roi)} ROI`;
   return `<p class="rv-split">Combined with the Most Likely board (flat-staked
     favourites): <b>${wl}</b> · ${tail}.</p>`;
 }
@@ -18689,7 +18702,7 @@ function verdictBooksHTML(edge, lk, chart, lines) {
   const line = (b) => {
     const n = ((b || {}).wins || 0) + ((b || {}).losses || 0);
     return n ? `${b.wins || 0}\u2011${b.losses || 0}${b.pushes ? `\u2011${b.pushes}` : ""}
-      · ${sign(b.net_units || 0, 2)}u · ${sign((b.roi || 0) * 100)}% ROI`
+      · ${sign(b.net_units || 0, 2)}u · ${fmtRoi(b.roi)} ROI`
       : "nothing settled yet";
   };
   const likelyBuckets = ((lk || {}).bands || []).map((b) => {
@@ -18898,14 +18911,14 @@ function zenoSnapshotHTML(snap, unit) {
   unit = Number(unit) || 10;
   const src = escapeHtml(snap.source || "Pikkit");
   const card = (w) => {
-    const pr = Number(w.profit || 0), u = Number(w.net_units || 0), roi = Number(w.roi || 0) * 100;
+    const pr = Number(w.profit || 0), u = Number(w.net_units || 0), roi = w.roi == null ? null : Number(w.roi) * 100;
     const tone = pr >= 0 ? "var(--good)" : "var(--bad)";
     return `<figure class="card zeno-win">
       <figcaption class="zeno-win-head"><b>${escapeHtml(w.label || "")}</b>
         <span class="mini">${Number(w.wins)}-${Number(w.losses)}${Number(w.pushes) ? `-${Number(w.pushes)}` : ""}</span></figcaption>
       <div class="zeno-win-nums"><b style="color:${tone}">${pr >= 0 ? "+" : ""}${zenoMoney(pr)}</b>
         <span style="color:${tone}">${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(1)}u</span>
-        <span style="color:${tone}">${roi >= 0 ? "+" : MINUS}${Math.abs(roi).toFixed(2)}% ROI</span></div>
+        <span style="color:${tone}">${roi == null ? "—" : `${roi >= 0 ? "+" : MINUS}${Math.abs(roi).toFixed(2)}%`} ROI</span></div>
       ${w.receipt ? `<a class="zeno-receipt" href="${escapeAttr(w.receipt)}" target="_blank" rel="noopener">
         <img src="${escapeAttr(w.receipt)}" alt="${src}’s ${escapeAttr(w.label || "")} card, the receipt for these numbers" loading="lazy"/></a>` : ""}
     </figure>`;
@@ -19557,7 +19570,7 @@ async function renderRecord() {
      By product     the buckets kept OUT of the main P&L on purpose
      Calibration    did the probabilities mean what they said
      What it learned the four-rung ladder, showing its work
-     Health         whether this account survives being right
+     Health         how limit-prone our picks look, book by book
 
    Which panels exist depends on scope, and that is why the groups are
    built as strings and handed to `subtabbedHTML` rather than declared as
@@ -19640,7 +19653,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "does the line move our way after we bet it — by sport and market",
      recClvBoard(d.clv_board)],
     ["health", "Health",
-     "whether this account survives being right",
+     "how limit-prone our picks look, book by book",
      (scoped ? "" : recHealthSection(d.account_health))],
   ]);
 }
@@ -20921,7 +20934,7 @@ function deskSectionHTML(k) {
   ].join("");
   const graded = paper.settled || 0;
   const paperLine = graded
-    ? `${paper.wins || 0}&ndash;${paper.losses || 0} graded · ${((paper.roi || 0) * 100).toFixed(1)}% ROI on flat paper stakes`
+    ? `${paper.wins || 0}&ndash;${paper.losses || 0} graded · ${fmtRoi(paper.roi)} ROI on flat paper stakes`
     : "nothing graded yet — daily weather markets settle same-day, so this record fills fast";
   return `
     <div class="section-title">The desk’s recommendations
@@ -21250,7 +21263,7 @@ function pmDetailHTML(r) {
       <div class="pm-d-price yes"><b>${yes == null ? "—" : yes + "¢"}</b><span>Yes</span></div>
       <div class="pm-d-price no"><b>${no == null ? "—" : no + "¢"}</b><span>No</span></div>
       ${modeled ? `<div class="pm-d-edge" style="color:var(--${(r.edge || 0) >= 0 ? "good" : "bad"})">
-        ${(r.edge || 0) >= 0 ? "+" : ""}${r.edge} pts<span>Qellys edge</span></div>` : ""}
+        ${r.edge == null ? "—" : `${r.edge >= 0 ? "+" : ""}${r.edge} pts`}<span>Qellys edge</span></div>` : ""}
     </div>
     ${pmTapeHTML(r)}
     ${modeled ? `<p class="pm-d-model">Our model prices the same claim at
@@ -36739,9 +36752,9 @@ async function renderUFC() {
             ${statCardHTML("trophy", "Record", `${wins}-${losses}`,
                            `${u.open || 0} open · units`)}
             ${statCardHTML("chart", "Flat ROI",
-                           `${(u.roi || 0) >= 0 ? "+" : ""}${((u.roi || 0) * 100).toFixed(1)}%`,
+                           fmtRoi(u.roi),
                            `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u return on investment`,
-                           (u.roi || 0) >= 0 ? "pos" : "neg")}
+                           u.roi == null ? "" : (u.roi >= 0 ? "pos" : "neg"))}
             ${statCardHTML("star", "Graded", graded, "judge after 50+, not 5")}
           </div>
           <div class="ufc-rb">
@@ -42445,7 +42458,7 @@ async function renderHomePerf() {
             ${o.breakeven != null ? `<span class="sub2">break-even ${
               (100 * o.breakeven).toFixed(1)}%</span>` : ""}</div>
           <div class="perf-tile"><span class="k">ROI</span>
-            <b style="color:${pcol(o.roi)}">${(o.roi > 0 ? "+" : "") + (100 * (o.roi || 0)).toFixed(1)}%</b></div>
+            <b style="color:${pcol(o.roi)}">${fmtRoi(o.roi)}</b></div>
           <div class="perf-tile"><span class="k">Record</span><b>${w}&#8211;${l}${p ? "&#8211;" + p : ""}</b></div>
         </div>
         ${spark}
@@ -45934,7 +45947,7 @@ function recordRibbonsHTML(rec, ov, recent) {
   const z = (rec || {}).zeno || {};
   const zo = z.overall || {};
   const sign = (v) => (v >= 0 ? "+" : MINUS);
-  const tone = (v) => (v >= 0 ? "var(--good)" : "var(--bad)");
+  const tone = (v) => (v == null ? "var(--text)" : v >= 0 ? "var(--good)" : "var(--bad)");
   const wl = (t) => `${t.wins}-${t.losses}${t.pushes ? `-${t.pushes}` : ""}`;
   /* v3: the ribbon every tracker leads with — a ring for the hit rate,
      the W-L, the headline number, and the last five as form dots. The
@@ -45954,7 +45967,7 @@ function recordRibbonsHTML(rec, ov, recent) {
      money is well up, and it dragged the combined tile's ring down with
      it. The ring fills to |ROI| (capped at 100%), red when it is below
      zero; the model's own tile keeps its hit rate. */
-  const roiRing = (roi) => { const v = Number(roi || 0);
+  const roiRing = (roi) => { const v = roi == null ? 0 : Number(roi);
     const pc = Math.max(0, Math.min(100, Math.round(Math.abs(v) * 100)));
     return `<span class="hd-ring${v < 0 ? " neg" : ""}" style="--pc:0" data-pc="${pc}" title="${sign(v)}${Math.abs(v * 100).toFixed(1)}% return on the dollars risked"><i data-count>${sign(v)}${Math.round(Math.abs(v) * 100)}%</i></span>`; };
   const tile = (k, rec, big, color, sub, form, r, ringHTML) => `<div class="hd-ribbon">${ringHTML || ring(r)}
@@ -45966,14 +45979,14 @@ function recordRibbonsHTML(rec, ov, recent) {
   const thinRing = (f) => `<span class="hd-ring" style="--pc:0" data-pc="0" title="${f.n} of ${f.need} graded — too few to rate"><i>${f.n}</i></span>`;
   const thinTile = (k, t, f, form) => tile(k, wl(t), `${f.n} of ${f.need}`, "var(--text)",
     `graded — a return means little before ${f.need}`, form, 0, thinRing(f));
-  const roiBig = (roi) => `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`;
+  const roiBig = (roi) => (roi == null ? "— ROI" : `${sign(roi)}${Math.abs(roi * 100).toFixed(1)}% ROI`);
   const units = (u) => `${sign(u)}${Math.abs(u).toFixed(1)}u`;
   const tiles = [];
   /* THE MODEL'S OWN BOOK LEADS (audit P1-1): the edge board, graded in
      public. Every wider total follows it, labelled for what it adds. */
   if (ov.settled) {
     const f = recFloor(rec, ov);
-    const roi = Number(ov.roi || 0);
+    const roi = ov.roi == null ? null : Number(ov.roi);
     const u = Number(ov.net_units || 0);
     tiles.push(f.thin ? thinTile(ov.label || "Model · graded in public", ov, f, dots(recent, "status"))
       : tile(ov.label || "Model · graded in public", wl(ov), roiBig(roi), tone(roi),
@@ -45984,7 +45997,7 @@ function recordRibbonsHTML(rec, ov, recent) {
   const po = (rec || {}).pooled_overall;
   if (po && po.settled) {
     const f = recFloor(rec, po);
-    const roi = Number(po.roi || 0), u = Number(po.net_units || 0);
+    const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     const k = "Combined · edge + Most Likely boards";
     tiles.push(f.thin ? thinTile(k, po, f, "")
       : tile(k, wl(po), roiBig(roi), tone(roi),
@@ -46000,7 +46013,7 @@ function recordRibbonsHTML(rec, ov, recent) {
   const cb = (rec || {}).combined;
   if (cb && cb.settled && cb.split) {
     const f = recFloor(rec, cb);
-    const u = Number(cb.net_units || 0), roi = Number(cb.roi || 0);
+    const u = Number(cb.net_units || 0), roi = cb.roi == null ? null : Number(cb.roi);
     const part = (x) => units(Number(x.net_units || 0));
     const k = "Combined · Zeno’s book + ours";
     tiles.push(f.thin ? thinTile(k, cb, f, "")

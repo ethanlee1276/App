@@ -7419,9 +7419,10 @@ def account_health(conn, since: str | None = None) -> dict:
     books.sort(key=lambda d: -d["score"])
     return {
         "books": books,
-        "disclaimer": ("Inferred from your own journaled betting patterns — "
-                       "an estimate of how sharp your action looks, not "
-                       "knowledge of any sportsbook's actual risk rules."),
+        "disclaimer": ("Inferred from this site's own journaled picks — "
+                       "an estimate of how sharp our action looks, not "
+                       "knowledge of any sportsbook's actual risk rules, "
+                       "and nothing about any reader's account."),
         # Shipped WITH the score, not buried under it. Four of the seven
         # signals a risk desk uses are not in this number, and a reader who
         # can't see which ones will over-trust it.

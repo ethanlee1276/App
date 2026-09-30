@@ -39,6 +39,9 @@ def _node(js):
       const document = {{ getElementById: (id) => els[id] }};
       let REC = null;
       const loadRecordOnce = async () => REC;
+      const MINUS = "\u2212"; const trueMinus = (s) => String(s).replace(/^-/, MINUS);
+      const signedPct = (x) => trueMinus(`${{x >= 0 ? "+" : ""}}${{(x * 100).toFixed(1)}}%`);
+      {_fn("fmtRoi")}
       {_fn("recFloor")}
       {_fn("renderStandingRecord")}
       (async () => {{ {js} }})().then((r) => console.log(JSON.stringify(r)));
@@ -72,7 +75,7 @@ def test_under_the_floor_the_record_leads_and_no_roi_is_printed():
     assert "<b>1-0-0</b>" in t["html"] and "1 settled · 30 needed before the ROI means anything · 2 open" in t["html"]
     assert t["brief"] == "1-0  ·  1 of 30" and not t["neg"]
     a = got["atFloor"]
-    assert "Running ROI" in a["html"] and "-12.0%" in a["html"] and "14-16-0" in a["html"], "at the floor the ROI prints, losing or not"
+    assert "Running ROI" in a["html"] and "\u221212.0%" in a["html"] and "14-16-0" in a["html"], "at the floor the ROI prints, losing or not"
     assert a["brief"] == "-12.0%  ·  14-16" and a["neg"]
     f = got["fed"]
     assert "+9.5%" in f["html"] and "+15.20u on 160.0u staked" in f["html"] and "92-66-2" in f["html"]

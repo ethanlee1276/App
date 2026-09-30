@@ -39,7 +39,8 @@ def test_the_book_names_itself_on_the_helmet_inside_the_tools():
     tools = _fn("renderQuickTools")
     assert "${brandHeroHTML()}" in tools
     hero = _fn("brandHeroHTML")
-    assert "<b>Qellys Book</b>" in hero and "Real data. Real edges. Real results." in hero
+    assert "<b>Qellys Book</b>" in hero and "Journaled at the price we found. Graded in public." in hero, \
+        "the hero's line is a fact, not a results promise (audit P1-10, 2026-09-30)"
     assert 'aria-hidden="true"' in hero and 'alt=""' in hero, "the art is decoration"
     assert tools.count("${go}</a>") == 4, "every quick link carries its chevron"
     assert "  chev: '<path" in APP

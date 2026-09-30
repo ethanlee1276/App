@@ -135,7 +135,8 @@ def test_the_page_draws_one_board_everywhere():
     # …every row carries its four checks and its why, a touchdown says it
     # in plain words, and a row opens its own pick page.
     for bit in ('["model", "Our number"]', '["matchup", "Matchup"]', '["market", "Market"]',
-                '["record", "Our record"]', "hits about ${Math.max(1, Math.round(Number(r.model_prob || 0) * 10))} in 10",
+                '["record", "Our record"]', # a missing probability says so rather than "1 in 10" (audit P1-9)
+                "hits about ${Math.max(1, Math.round(Number(r.model_prob) * 10))} in 10",
                 "((state.data || {}).likely_board || {}).rows || []);"):
         assert bit in js, bit
     # Best of the slate or By game, with lane filters.
