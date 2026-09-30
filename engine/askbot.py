@@ -3507,7 +3507,10 @@ def _client():
         import anthropic
     except ImportError as exc:
         raise _ex.NotConfigured("the anthropic package is not installed") from exc
-    return anthropic.Anthropic()
+    # A bounded wait per round and one retry (audit E-2): the SDK default is
+    # ten minutes and two retries. 60s, not 30: a round with a web search is
+    # legitimately slower than an explanation.
+    return anthropic.Anthropic(timeout=60.0, max_retries=1)
 
 
 def web_daily_cap() -> int:

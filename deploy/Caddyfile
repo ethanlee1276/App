@@ -13,6 +13,22 @@
 # Binding all interfaces would leave the plain-HTTP port reachable from
 # outside as well, and a proxy you can walk around protects nothing.
 
+# TIMEOUTS AND A BODY CAP (audit 2026-09-30, E-2). With none, a client
+# that trickles a request or never finishes its body holds a connection and
+# an app thread for as long as it likes — a handful of them is the whole
+# server on a one-core box. Nothing the site takes is bigger than a signup
+# form or an Ask question.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 90s
+			idle 2m
+		}
+	}
+}
+
 # BOTH NAMES, and the bare one is the canonical site. Caddy issues a
 # certificate for each. The www redirect is at the bottom of this file:
 # serving the same content on two hostnames splits sessions (a cookie set
@@ -21,6 +37,9 @@
 # copies of everything.
 qellysbook.com {
 	encode gzip zstd
+	request_body {
+		max_size 1MB
+	}
 
 	# --- the API: proxied to the app ---------------------------------
 	# X-Forwarded-* is what lets the app see the REAL caller. Without it

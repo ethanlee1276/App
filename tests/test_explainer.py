@@ -146,9 +146,16 @@ def test_one_call_per_pick_per_build_and_the_answer_is_cached_on_disk():
     EX._MEM = None                                                     # a restarted server
     d = EX.explain("recommendations.json", BOARD, pid, client=c)
     assert d["cached"] is True and len(c.calls) == 1
+    # Since 2026-09-30 (audit F-11) the key is the pick's FACTS, not the
+    # build stamp: a rebuild with the same facts reuses the answer (it was a
+    # new paid call every few minutes), and a changed fact is a new answer.
     fresh = dict(BOARD, built_at="2026-09-05T11:00:00")
-    e = EX.explain("recommendations.json", fresh, pid, client=c)
-    assert e["cached"] is False and len(c.calls) == 2, "a new build is a new answer"
+    same = EX.explain("recommendations.json", fresh, pid, client=c)
+    assert same["cached"] is True and len(c.calls) == 1, "a rebuild with the same facts is not a new call"
+    moved = dict(BOARD, built_at="2026-09-05T12:00:00",
+                 recommendations=[dict(ROW, odds=-130, hit_prob=0.61)])
+    e = EX.explain("recommendations.json", moved, pid, client=c)
+    assert e["cached"] is False and len(c.calls) == 2, "new facts are a new answer"
     other = EX.explain("mlb_recommendations.json", BOARD, pid, client=c)
     assert other["cached"] is False and len(c.calls) == 3, "keyed by board too"
 

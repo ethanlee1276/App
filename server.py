@@ -848,6 +848,12 @@ def _stats_or_empty(teamdex, conn, sport, team):
 
 
 class Handler(BaseHTTPRequestHandler):
+    #: Seconds a socket may sit idle mid-request before the thread gives up
+    #: (audit 2026-09-30, E-2). Without it a slow client held a worker for
+    #: ever; the bounded pool below turns a handful of those into a down
+    #: site. Caddy's own read timeouts sit in front of this.
+    timeout = 30
+
     def log_message(self, fmt, *args):  # quieter logging
         sys.stderr.write("  %s\n" % (fmt % args))
 

@@ -240,7 +240,44 @@ def _client():
         import anthropic
     except ImportError as exc:
         raise NotConfigured("the anthropic package is not installed") from exc
-    return anthropic.Anthropic()
+    # A bounded wait and one retry (audit E-2): the SDK's defaults are ten
+    # minutes and two retries, which on a page request is a held thread.
+    return anthropic.Anthropic(timeout=30.0, max_retries=1)
+
+
+#: Explanations in flight at once, and per UTC day (audit F-11/C-4). The
+#: explainer had no ceiling at all: a burst of taps on cold picks was that
+#: many paid calls in parallel. `QB_EXPLAIN_DAILY_MAX` overrides the cap.
+_SEM = threading.BoundedSemaphore(3)
+_DAY = {"day": "", "n": 0}
+
+
+def daily_max() -> int:
+    try:
+        return int(os.environ.get("QB_EXPLAIN_DAILY_MAX") or 400)
+    except ValueError:
+        return 400
+
+
+def _spend_ok() -> bool:
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    with _LOCK:
+        if _DAY["day"] != today:
+            _DAY.update(day=today, n=0)
+        if _DAY["n"] >= daily_max():
+            return False
+        _DAY["n"] += 1
+        return True
+
+
+def facts_digest(facts: dict) -> str:
+    """A stable key for WHAT the explanation is about (audit F-11). The board
+    stamp moved on every rebuild, so the same pick with the same facts was a
+    new paid call every few minutes; the facts change only when the pick
+    does."""
+    import hashlib
+    return hashlib.sha256(json.dumps(facts, sort_keys=True, default=str)
+                          .encode("utf-8")).hexdigest()[:16]
 
 
 def ask(facts: dict, client=None) -> dict:
@@ -289,14 +326,21 @@ def explain(board_name: str, board: dict, wanted: str, client=None) -> dict:
     if row is None:
         raise KeyError(wanted)
     stamp = board_stamp(board)
-    key = cache_key(board_name, wanted, stamp)
+    facts = facts_for(row)
+    key = cache_key(board_name, wanted, facts_digest(facts))
     with _key_lock(key):
         hit = cached(key)
         if hit and hit.get("text"):
             return {"text": hit["text"], "cached": True, "pick": wanted, "stamp": stamp,
                     "refused": bool(hit.get("refused"))}
-        facts = facts_for(row)
-        got = ask(facts, client=client)
+        if not _spend_ok():
+            raise Unavailable("the explainer has reached today's limit")
+        if not _SEM.acquire(timeout=20):
+            raise Unavailable("the explainer is busy — try again in a moment")
+        try:
+            got = ask(facts, client=client)
+        finally:
+            _SEM.release()
         # Every number in the explanation must be in the pick's own facts
         # (audit P0-3): a sentence that quotes one that is not is dropped
         # before it is cached or shown, and logged.
