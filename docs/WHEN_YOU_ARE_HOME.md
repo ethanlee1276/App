@@ -147,12 +147,19 @@ the last few:
 cd /srv/qellys && tail -n 20 data/logs/security.jsonl
 ```
 
+**P30-a: done 2026-10-01** (anthropic 1.11.0, pip-audit clean). Why the
+uninstall loop below comes first: `--ignore-installed` writes the new
+files over the old but leaves the old version's dist-info behind, so
+`pip list` and `--todo` kept reading 1.4.0 while Python ran 1.11.0. Use
+the same three lines next time the pins move.
+
 **P30-a. Put the Ask SDK on its pin, then audit it (changes packages, 2
 minutes).** `anthropic` was installed unpinned. `requirements.txt` now pins
 it and everything it pulls in, with hashes:
 
 ```
-cd /srv/qellys && sudo python3 -m pip install --break-system-packages --ignore-installed --require-hashes -r requirements.txt
+cd /srv/qellys && for i in 1 2 3; do sudo python3 -m pip uninstall -y --break-system-packages anthropic httpx2 httpcore2 jiter 2>&1 | grep -i uninstalled; done
+sudo python3 -m pip install --break-system-packages --ignore-installed --require-hashes -r requirements.txt
 sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
 sudo python3 -m pip install --break-system-packages pip-audit && pip-audit --disable-pip -r requirements.txt
 sudo systemctl restart qellys && python3 launch.py --todo | grep -i "sdk"
