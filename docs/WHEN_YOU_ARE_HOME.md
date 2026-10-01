@@ -49,6 +49,30 @@ Never delete a `.db` or `.db-wal` file. Old `backup_*.zip` files and
 
 ---
 
+## TD-RZ. Does red-zone defence belong in the touchdown chance? (#168, read-only, a few minutes)
+
+The last unmeasured part of the other model's touchdown method. Goal-line
+work was measured on 2026-09-27 (already in the chance) and game script is
+in the model; how a defence guards its red zone was only ever SHOWN. This
+replays five seasons of graded touchdown picks and scores two readings of
+the opponent's red zone on top of the model's own number: how often it
+lets offences in, and how often they score once there.
+
+The pass rule was fixed before any real run (engine/tdmatchfit): each
+reading is one test pooled over WR, TE and RB, it must improve every
+held-out season but one, and its cluster-robust t must be at least 2.5.
+Paste the last lines back; nothing moves until we read them together.
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 10 python3 -m engine.tdmatchfit 2>&1 | tee ~/tdmatchfit.txt | tail -25
+```
+
+Look at the two `ALL` rows (`rz_allowed`, `rz_td_allowed`). PASSES means
+it goes into the touchdown chance (and so into Most Likely); fails means it
+stays on the cards as context, where it is now.
+
+---
+
 ## PHASE 5 — the audit fixes (2026-09-30, Ethan: "I approve everything")
 
 Each fix below is pushed and live on the next auto-update. These are the
