@@ -73,9 +73,21 @@ def _load_state(path: Path) -> dict:
 
 
 def _save_state(path: Path, state: dict) -> None:
+    """Written beside, then swapped in. A plain write_text on a full disk
+    truncated this file to nothing on 2026-10-01, and with it the record
+    that the backup and the paid harvest had already run today."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state))
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(state))
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 #: Below this many graded college player-games, the CFB touchdown board
@@ -165,57 +177,96 @@ def _backup_due(state: dict, today: _dt.date) -> bool:
     return True
 
 
+#: Room the backup needs beyond its own estimate. A disk this close to full
+#: is one board build away from the outage of 2026-10-01.
+BACKUP_MARGIN_BYTES = 1024 ** 3
+
+
+def zipfile_testzip(zf):
+    """The archive's read-back; a seam so a test can fail it."""
+    return zf.testzip()
+
+
+def _backup_sources(root: Path) -> list:
+    out = [root / rel for rel in BACKUP_FILES if (root / rel).exists()]
+    for pattern in BACKUP_GLOBS:
+        head, _, tail = pattern.rpartition("/")
+        out += sorted((root / head).glob(tail))
+    return out
+
+
+def _free_bytes(path: Path) -> int:
+    import shutil
+    p = Path(path)
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    return shutil.disk_usage(p).free
+
+
 def _maybe_backup(state: dict, today: _dt.date, log,
                   root: Path | None = None,
-                  backup_dir: Path | None = None) -> None:
+                  backup_dir: Path | None = None,
+                  free_bytes=None) -> None:
     """Weekly zip of everything irreplaceable. Live SQLite files are copied
     through the sqlite backup API so a mid-write snapshot can't corrupt.
 
     WRITTEN BESIDE, CHECKED, THEN RENAMED (audit 2026-09-30, F-5 / F-8).
-    The zip was written in place, so a chore list re-run after a failed
-    ingest rewrote the same `backup_<date>.zip` under a reader, and a
-    crash mid-write left a truncated archive with the backup's name on it.
-    It is now built as `.zip.tmp`, read back with `testzip()`, and only
-    then renamed into place; a bad archive is deleted and raises."""
+    Built as `.zip.tmp`, read back with `testzip()`, and only then renamed
+    into place; a bad archive is deleted and raises.
+
+    AND NEVER THE THING THAT FILLS THE DISK (2026-10-01). It needs room for
+    one database copy and the archive, so it measures first and refuses,
+    loudly, without that much free plus a margin. The database copy sits
+    beside the backups, not in /tmp, and is deleted in a `finally` along
+    with any unrenamed archive; leftovers from a killed run are cleared
+    before it starts."""
     if not _backup_due(state, today):
         return
     import sqlite3
-    import tempfile
     import zipfile
     root = root or ROOT
     backup_dir = backup_dir or BACKUP_DIR
+    sources = _backup_sources(root)
+    total = sum(src.stat().st_size for src in sources)
+    biggest = max((src.stat().st_size for src in sources if src.suffix == ".db"), default=0)
+    need = total + biggest + BACKUP_MARGIN_BYTES
+    free = (free_bytes or _free_bytes)(backup_dir)
+    if free < need:
+        raise RuntimeError(
+            f"backup skipped: {free / 1e9:.1f} GB free, it needs about "
+            f"{need / 1e9:.1f} GB — free some space (data/backups keeps "
+            f"{BACKUP_KEEP} archives)")
     backup_dir.mkdir(parents=True, exist_ok=True)
+    for stale in list(backup_dir.glob("*.zip.tmp")) + list(backup_dir.glob(".scratch-*")):
+        stale.unlink(missing_ok=True)
     out = backup_dir / f"backup_{today.isoformat()}.zip"
     part = out.with_suffix(".zip.tmp")
+    scratch = backup_dir / f".scratch-{today.isoformat()}.db"
     wrote = 0
-    with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel in BACKUP_FILES:
-            src = root / rel
-            if not src.exists():
-                continue
-            if src.suffix == ".db":
-                with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-                    tmp_path = Path(tmp.name)
-                s = sqlite3.connect(str(src))
-                d = sqlite3.connect(str(tmp_path))
-                s.backup(d)
-                d.close(); s.close()
-                zf.write(tmp_path, arcname=rel)
-                tmp_path.unlink(missing_ok=True)
-            else:
-                zf.write(src, arcname=rel)
-            wrote += 1
-        for pattern in BACKUP_GLOBS:
-            head, _, tail = pattern.rpartition("/")
-            for src in sorted((root / head).glob(tail)):
-                zf.write(src, arcname=f"{head}/{src.name}")
+    try:
+        with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as zf:
+            for src in sources:
+                arc = src.relative_to(root).as_posix()
+                if src.suffix == ".db":
+                    s = sqlite3.connect(str(src))
+                    d = sqlite3.connect(str(scratch))
+                    try:
+                        s.backup(d)
+                    finally:
+                        d.close(); s.close()
+                    zf.write(scratch, arcname=arc)
+                    scratch.unlink(missing_ok=True)
+                else:
+                    zf.write(src, arcname=arc)
                 wrote += 1
-    with zipfile.ZipFile(part) as zf:
-        bad = zf.testzip()
-    if bad is not None:
+        with zipfile.ZipFile(part) as zf:
+            bad = zipfile_testzip(zf)
+        if bad is not None:
+            raise RuntimeError(f"backup archive failed its read-back at {bad}")
+        os.replace(part, out)
+    finally:
+        scratch.unlink(missing_ok=True)
         part.unlink(missing_ok=True)
-        raise RuntimeError(f"backup archive failed its read-back at {bad}")
-    os.replace(part, out)
     # Prune: keep the newest BACKUP_KEEP.
     zips = sorted(backup_dir.glob("backup_*.zip"))
     for old in zips[:-BACKUP_KEEP]:
@@ -1332,6 +1383,17 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     # Every cycle, before the once-a-day gate: the weekly children an
     # earlier cycle started are logged when they finish, or cut off.
     reap_children(log)
+    # And the throwaway lookups, every cycle (throttled inside): the meme
+    # loop writes them every fifteen seconds, and once a day let 18 GB pile
+    # up before anything looked (2026-10-01).
+    try:
+        from .sources.fetch import prune_ephemeral
+        pr = prune_ephemeral()
+        if pr["removed"]:
+            log(f"  cache: {pr['removed']:,} expired lookup(s) removed, "
+                f"{pr['freed'] / 1e6:,.0f} MB freed")
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  cache prune skipped: {exc}")
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
         return False

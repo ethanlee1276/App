@@ -3927,6 +3927,29 @@ def _ping_healthcheck(swept: str, step_fail: dict) -> None:
         pass
 
 
+#: Below this many GB free on the data disk, every cycle says so in the
+#: journal. 2026-10-01: the disk filled, every build failed to write, and
+#: the only sign was the boards' age.
+DISK_LOW_GB = 2.0
+
+
+def _disk_check(free_bytes=None, say=print) -> float | None:
+    """GB free on the disk holding data/, with a ⚠️ line when it is low."""
+    try:
+        if free_bytes is None:
+            import shutil as _sh
+            free = _sh.disk_usage(ROOT / "data" if (ROOT / "data").exists() else ROOT).free
+        else:
+            free = free_bytes(ROOT)
+    except OSError:
+        return None
+    gb = round(free / 1024 ** 3, 1)
+    if gb < DISK_LOW_GB:
+        say(f"  ⚠️  disk low: {gb} GB free — builds fail to write when it runs out. "
+            "See docs/WHEN_YOU_ARE_HOME.md, \"Disk full\".")
+    return gb
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -3973,6 +3996,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # question asked over SSH from a phone.
             "commit": _running_commit(),
             "auto_update": _UPDATER_ON[0],
+            # Free space on the data disk, in GB (2026-10-01: a full disk
+            # stopped every board and showed only as their age).
+            "disk_free_gb": _disk_check(),
         }))
         os.replace(tmp, p)
     except OSError:

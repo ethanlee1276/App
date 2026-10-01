@@ -106,6 +106,50 @@ def _cache_path(name: str) -> Path:
     return CACHE_DIR / name
 
 
+#: Cache files that are lookups, not data: a meme coin's pair snapshot or
+#: its RugCheck report, read for a few seconds or minutes and never again.
+#: Prefix → seconds a file is kept. Everything else in data/cache (season
+#: CSVs, play-by-play, line_history.jsonl) is data the models train on and
+#: is never touched here. 18 GB of these two prefixes filled the droplet's
+#: disk on 2026-10-01 and stopped every board.
+EPHEMERAL_CACHE = {"dex_pairs_": 3600, "rug_": 86400}
+#: How often the cycle's prune may walk the directory.
+PRUNE_EVERY_S = 600
+_PRUNED_AT = [0.0]
+
+
+def prune_ephemeral(cache_dir: Path | None = None, force: bool = False,
+                    now: float | None = None) -> dict:
+    """Delete EPHEMERAL_CACHE files past their age. Never raises.
+
+    Throttled to once per PRUNE_EVERY_S, because the refresh cycle calls
+    it every time. Returns {"ran", "removed", "freed"}."""
+    import os
+    now = time.time() if now is None else now
+    if not force and now - _PRUNED_AT[0] < PRUNE_EVERY_S:
+        return {"ran": False, "removed": 0, "freed": 0}
+    _PRUNED_AT[0] = now
+    removed = freed = 0
+    try:
+        with os.scandir(cache_dir or CACHE_DIR) as it:
+            for e in it:
+                keep = next((age for pre, age in EPHEMERAL_CACHE.items()
+                             if e.name.startswith(pre)), None)
+                if keep is None or not e.is_file(follow_symlinks=False):
+                    continue
+                try:
+                    st = e.stat(follow_symlinks=False)
+                    if now - st.st_mtime > keep:
+                        os.unlink(e.path)
+                        removed += 1
+                        freed += st.st_size
+                except OSError:
+                    continue
+    except OSError:
+        pass
+    return {"ran": True, "removed": removed, "freed": freed}
+
+
 def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
                timeout: int = 45, user_agent=USER_AGENT) -> str:
     """Return the text body of ``url``, caching it under ``cache_name``.

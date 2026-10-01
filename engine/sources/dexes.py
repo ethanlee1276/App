@@ -86,11 +86,25 @@ def fetch_top_boosts():
                      "dex_boosts_top.json", DISCOVERY_TTL)
 
 
+def pairs_cache_name(mints: list[str]) -> str:
+    """One name per set of coins, the same in every process.
+
+    THIS WAS `hash(batch)`, and Python randomises `hash()` for strings in
+    every new process. memes_build runs as a fresh process every fifteen
+    seconds, so each lookup wrote a file no later run could ever read:
+    384,283 of them, 13 GB, on the droplet that ran out of disk on
+    2026-10-01. A digest of the sorted mints is stable, and the cycle's
+    `fetch.prune_ephemeral` clears whatever is left past an hour."""
+    import hashlib
+    key = ",".join(sorted(mints[:30])).encode()
+    return f"dex_pairs_{hashlib.sha1(key).hexdigest()[:12]}.json"
+
+
 def fetch_pairs_for(mints: list[str], chain: str = "solana"):
     """DexScreener pair snapshots for up to 30 mints in ONE request."""
     batch = ",".join(mints[:30])
     return _get_json(f"{DEX_BASE}/tokens/v1/{chain}/{batch}",
-                     f"dex_pairs_{hash(batch) & 0xffffffff:x}.json", HOT_TTL)
+                     pairs_cache_name(mints), HOT_TTL)
 
 
 # --- pure parsers ------------------------------------------------------------

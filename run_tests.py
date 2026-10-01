@@ -54,6 +54,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -196,7 +197,26 @@ def _run_one(path, env, ceiling=None):
     return name, code, out, err, time.monotonic() - t0
 
 
+def sweep_stale_sandboxes(tmpdir=None, max_age_s: float = 86400) -> int:
+    """Remove `qellys-tests-*` sandboxes older than a day. The sweep at the
+    end of a run never happens when the run is cut off (a dropped SSH
+    session during deploy.sh), and on 2026-10-01 the droplet's /tmp held
+    2 GB of them on a full disk. A day old, so a run in progress is safe."""
+    import time as _time
+    base = Path(tmpdir or tempfile.gettempdir())
+    n = 0
+    for d in base.glob("qellys-tests-*"):
+        try:
+            if d.is_dir() and _time.time() - d.stat().st_mtime > max_age_s:
+                shutil.rmtree(d, ignore_errors=True)
+                n += 1
+        except OSError:
+            continue
+    return n
+
+
 def main() -> int:
+    sweep_stale_sandboxes()
     # Every fixture's tempfile.mkdtemp() outlives its test — a full run
     # leaves thousands of orphan directories, and repeated runs filled a
     # machine's /tmp to ENOSPC. Sandbox the children's TMPDIR for the run

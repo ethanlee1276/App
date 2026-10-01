@@ -15,6 +15,40 @@ as they are done.
 
 ---
 
+## Disk full — 2026-10-01 (read first if the site goes stale everywhere)
+
+What happened: the 48 GB disk filled at about 06:30 UTC and every build
+failed with "No space left on device". 18 GB of it was the meme radar's
+throwaway lookups in `data/cache` (`dex_pairs_*` and `rug_*`, about a
+million files) that nothing ever deleted. The midnight backup tipped it
+over, and the full disk emptied `data/cache/maintenance.json`.
+
+What the code does now: the cycle deletes those lookups once they are an
+hour (`dex_pairs_*`) or a day (`rug_*`) old; the backup measures free space
+first and refuses without room; the chore state can no longer be left
+empty; leftover test folders in /tmp are swept; and every cycle logs
+"⚠️ disk low" under 2 GB free. The heartbeat carries `disk_free_gb`.
+
+One-time cleanup of the pile that was already there (safe: lookups only,
+nothing the models read). It takes a minute or two:
+
+```
+cd /srv/qellys/data/cache && find . -maxdepth 1 -type f \( -name 'dex_pairs_*' -o -name 'rug_*' \) -mmin +60 -delete; df -h / | tail -1
+```
+
+If the disk is ever full again, check in this order:
+
+```
+df -h / | tail -1
+sudo du -xh --max-depth=1 /srv/qellys/data /tmp /var/log 2>/dev/null | sort -h | tail -8
+ls -lhS /srv/qellys/data/backups | head
+```
+
+Never delete a `.db` or `.db-wal` file. Old `backup_*.zip` files and
+`/tmp/qellys-tests-*` folders are safe to remove.
+
+---
+
 ## PHASE 5 — the audit fixes (2026-09-30, Ethan: "I approve everything")
 
 Each fix below is pushed and live on the next auto-update. These are the
