@@ -17334,6 +17334,44 @@ function recSelectionHaircut(sh, scope) {
     </div>`;
 }
 
+/* THE REPLAY, BESIDE THE JOURNAL (audit 2026-09-30, B1-1). The journal's
+   Brier above grades the picks the site published; this grades every prop
+   the model would have priced over stored history, walked forward — game i
+   priced from the games before it only. Calibration numbers only: Brier,
+   skill over always guessing the base rate, calibration error, and the
+   basis, because a replay against a trailing-average line measures
+   forecasting skill, never an edge over a book. */
+const REPLAY_SPORT = { mlb: "MLB", nfl: "NFL", cfb: "College", nba: "NBA", wnba: "WNBA" };
+
+function recReplaySection(rp, scope) {
+  if (!rp || typeof rp !== "object") return "";
+  const sports = Object.keys(REPLAY_SPORT)
+    .filter((k) => rp[k] && rp[k].n && (!scope || scope === k));
+  if (!sports.length) return "";
+  const pct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "\u2212" : ""}${Math.abs(x * 100).toFixed(1)}%`;
+  const basisWord = { book: "against harvested book lines", naive: "against a trailing-average line",
+                      outcomes: "against who actually scored", mixed: "partly against book lines" };
+  const rows = sports.map((k) => {
+    const r = rp[k];
+    const good = r.skill != null && r.skill > 0;
+    return `<div class="rec-row" style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
+      <span>${escapeHtml(REPLAY_SPORT[k])}
+        <span style="opacity:.6;font-size:.85em">· ${Number(r.n).toLocaleString()} priced · ${escapeHtml(basisWord[r.basis] || r.basis || "")}</span></span>
+      <span style="font-variant-numeric:tabular-nums">Brier ${r.brier == null ? "—" : Number(r.brier).toFixed(3)}
+        · <span style="color:var(--${good ? "good" : "warn"})">skill ${pct(r.skill)}</span></span>
+    </div>`;
+  }).join("");
+  const when = rp.generated_at ? ` Replayed ${escapeHtml(rp.generated_at)}.` : "";
+  return `<div class="section-title minor">Replay over stored history
+      <span class="sub">— every prop the model would have priced, not just the ones we bet</span></div>
+    <div class="rec-block">${rows}
+      <p style="margin:10px 0 0;font-size:.85em;opacity:.62">Walk-forward: each game is
+        priced only from the games before it, through the same pricer the boards use.
+        Skill is how much better than always guessing the base rate; above zero means
+        the forecasts carry information. This measures forecasting, not profit — the
+        replay places no bets.${when}</p></div>`;
+}
+
 function recCalibrationSection(cal, era) {
   if (!cal || !cal.n || !(cal.buckets || []).length) return "";
   const rows = calBucketRows(cal.buckets);
@@ -19770,6 +19808,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      (scoped ? "" : recLeadtimeSection(d.clv_leadtime))
      + (scoped ? "" : recEraSection(d.model_eras))
      + recCalibrationSection(src.calibration, src.calibration_era)
+     + recReplaySection(d.replay, scoped ? scope : null)
      + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))
      + (scoped ? "" : recForecastLog(d.forecast_log))

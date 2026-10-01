@@ -7577,6 +7577,16 @@ def self_tuning_report(hist_conn=None) -> dict:
     return out
 
 
+def _replay_summary() -> dict:
+    """The last Lab run's public summary; `{}` when absent or unreadable."""
+    try:
+        from .lab import published_summary
+        return published_summary()
+    except Exception as exc:                                  # noqa: BLE001
+        # Not {} — that is what "the Lab has not run yet" looks like.
+        return {"unreadable": type(exc).__name__}
+
+
 def calibration_splits(conn, category: str = "main", since: str | None = None,
                        sport: str | None = None, min_n: int = SPLIT_MIN_N) -> dict:
     """Calibration broken out by market and by horizon.
@@ -9534,6 +9544,11 @@ def export_json(conn, path) -> None:
         # on one market and cold on another, which is the pair of errors
         # most worth finding.
         "calibration_splits": calibration_splits(conn, since=since),
+        # THE REPLAY BESIDE THE JOURNAL (audit B1-1): the Lab's walk-forward
+        # over stored history, calibration numbers only, so the journal's
+        # Brier is not the only forecast evidence for a league. {} until
+        # the weekly Lab has run.
+        "replay": _replay_summary(),
         # The selection haircut. Sits beside the calibration chart because
         # it is the same question asked of a different population: that
         # chart grades the probability surface, this grades the SUBSET we

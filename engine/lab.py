@@ -67,8 +67,8 @@ MIN_HISTORY = 8
 #: Sports with no player-prop harness, and the honest reason. Absence
 #: rendered as an explicit row beats a sport quietly missing from a page.
 NO_PROP_HARNESS = {
-    "nba": "no walk-forward prop harness yet — projections ship unreplayed",
-    "wnba": "no walk-forward prop harness yet — projections ship unreplayed",
+    # NBA and WNBA left this dict on 2026-09-30 (audit B1-1): the board's
+    # own evaluate_prop is replayed over stored logs by engine.hoopsreplay.
     # CFB left this dict on 2026-08-31: engine.cfbtdfit IS a walk-forward
     # prop harness (29,047 graded player-weeks) and had been for days
     # while this page — the site's trust furniture — told subscribers
@@ -189,6 +189,65 @@ def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
         except Exception as exc:                   # noqa: BLE001
             log(f"  lab: mlb {market} skipped — {exc}")
     return out
+
+
+def hoops_props(conn, sport: str, log=print) -> list[dict]:
+    """The NBA / WNBA board's own pricer replayed over stored logs
+    (engine.hoopsreplay, audit B1-1)."""
+    from .hoopsreplay import replay
+    from .nba.pipeline import MARKET_LABELS
+    try:
+        return [report_to_dict(rep, m, MARKET_LABELS.get(m, m))
+                for m, rep, _counts in replay(conn, sport)]
+    except Exception as exc:                       # noqa: BLE001
+        log(f"  lab: {sport} props skipped — {exc}")
+        return []
+
+
+#: THE PUBLIC SUMMARY of the replay (audit B1-1): how well the models
+#: forecast stored history, beside the journal's own Brier on the Record
+#: page. Calibration numbers only — Brier, skill over the base rate, ECE,
+#: how many were priced and on what basis. The replay's simulated bets,
+#: ROI, grades and bins stay in backtest.json, which is sealed.
+SUMMARY_FIELDS = ("n", "brier", "ece", "skill", "basis")
+
+
+def replay_summary(doc: dict) -> dict:
+    """``{sport: {"n", "brier", "ece", "skill", "basis", "markets"}}``,
+    n-weighted over each sport's prop markets, plus ``generated_at``."""
+    out: dict = {}
+    for sport, blob in (doc.get("sports") or {}).items():
+        mk = [m for m in ((blob or {}).get("props") or {}).get("markets") or []
+              if m.get("n") and m.get("brier") is not None]
+        if not mk:
+            continue
+        n = sum(m["n"] for m in mk)
+
+        def wavg(get):
+            pairs = [(get(m), m["n"]) for m in mk if get(m) is not None]
+            w = sum(k for _, k in pairs)
+            return round(sum(v * k for v, k in pairs) / w, 4) if w else None
+
+        bases = {m.get("basis") or "naive" for m in mk}
+        out[sport] = {
+            "n": n,
+            "brier": wavg(lambda m: m.get("brier")),
+            "ece": wavg(lambda m: m.get("ece")),
+            "skill": wavg(lambda m: (m.get("skill") or {}).get("skill")),
+            "basis": bases.pop() if len(bases) == 1 else "mixed",
+            "markets": [m.get("label") or m.get("market") for m in mk],
+            "carried_from": ((blob.get("props") or {}).get("carried_from")
+                             or None),
+        }
+    if out:
+        out["generated_at"] = str(doc.get("generated_at") or "")[:10]
+    return out
+
+
+def published_summary() -> dict:
+    """The summary of the last Lab run, read from the sealed copy the
+    subscriber page is served. `{}` when there is none."""
+    return replay_summary(_previous_page(LAB_PATH))
 
 
 #: The NFL prop markets a harvested close can be joined to. The four
@@ -492,7 +551,10 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
         sports["cfb"] = {"props": cfb_props(log=log, conn=hconn),
                          "game_lines": game_lines(hconn, "cfb", log=log)}
         for sp in ("nba", "wnba"):
-            sports[sp] = {"props": {"unavailable": NO_PROP_HARNESS[sp]},
+            props = hoops_props(hconn, sp, log=log)
+            sports[sp] = {"props": {"markets": props} if props else
+                          {"unavailable": "no ingested game logs deep enough "
+                                          "to replay yet"},
                           "game_lines": game_lines(hconn, sp, log=log)}
         sports["ufc"] = {
             "props": {"unavailable": NO_PROP_HARNESS["ufc"]},
