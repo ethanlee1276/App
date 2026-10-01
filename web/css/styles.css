@@ -378,6 +378,14 @@
   --radius: 0;
   --radius-sm: 0;
   --radius-lg: 0;
+  /* SPACING (audit V-24, roadmap #50): the steps the sheet already uses
+     most, named, so a new rule picks a step instead of a number. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
   --shadow: none;
   --shadow-lg: none;
   --ring: 0 0 0 2px rgba(230, 220, 203, 0.30);
@@ -4358,12 +4366,12 @@ body.pk-open { overflow: hidden; }
     height: 44px; min-width: 44px;
   }
   .drow { flex-wrap: wrap; row-gap: 4px; }
-  .drow > * { min-width: 0 !important; }
+  .drow > *, .drow > .drow-num { min-width: 0; }
   /* The label column gets its OWN line. Sharing one with the numeric
      columns squeezed it to a ~45px stub whose text was ellipsed away to
      nothing ("Yank…"); wrapped, it reads in full and the numbers follow
      underneath. */
-  .drow > [style*="flex:1"] { flex: 1 1 100% !important; }
+  .drow > .drow-label { flex: 1 1 100%; }
   /* …but a full-width line is no use if the text can't use it. Several of
      these rows set white-space:nowrap inline (on the row, or on the label
      itself) so their columns hold one line on a desktop. On a phone that
@@ -4372,12 +4380,10 @@ body.pk-open { overflow: hidden; }
      Rockies · Elite barrel rate" ended somewhere around "Elite ba".
      Only the LABEL column is released; the numeric columns keep the row's
      nowrap so "48% vs 41%" can't break across two lines. */
-  .drow > [style*="flex:1"],
-  .drow > [style*="flex:1"] * { white-space: normal !important; }
-  .drow > [style*="flex:1"] {
-    overflow: visible !important; text-overflow: clip !important;
-  }
-  .drow > span[style*="text-align:right"] { text-align: left !important; }
+  .drow > .drow-label,
+  .drow > .drow-label * { white-space: normal; }
+  .drow > .drow-label { overflow: visible; text-overflow: clip; }
+  .drow > .drow-num { text-align: left; }
   /* Record page. The settled-pick row needs 414px of fixed columns before
      the label gets a pixel, so on a phone it clips its own P&L figure
      inside the card's overflow:hidden. Split into two lines: what the bet
@@ -4627,16 +4633,30 @@ body.pk-open { overflow: hidden; }
   }
 }
 
+/* The rows' columns as classes, not inline styles (audit D-2, roadmap
+   #50): the inline flex:1 and text-align were why the phone rules below
+   needed twelve !importants to reach them. */
+.ufc-verdict { min-width: 74px; text-align: center; font-weight: 800; flex-shrink: 0; color: var(--text-mute); }
+.ufc-verdict.bet { color: var(--good); }
+.ufc-what { flex: 1; min-width: 0; }
+.ufc-num { text-align: right; white-space: nowrap; font-size: var(--fs-sm); }
+.drow-lead { flex: 0 0 auto; }
+.drow-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drow-sub { color: var(--text-mute); }
+.drow-num { text-align: right; }
+.drow-usage { min-width: 150px; color: var(--text-dim); }
+.drow-ppg { min-width: 70px; color: var(--text-mute); }
+.drow-none { min-width: 220px; color: var(--text-mute); }
 /* The fight-by-fight edge board is a 640px-wide scroller, which is fine on
    a laptop and hides the most important column on a phone: a PASS row's
    REASON. That reason now carries the weigh-in gate ("missed weight by
    1.5 lb"), so a verdict you have to scroll sideways to read is a verdict
    that doesn't get read. On a phone the row wraps instead. */
 @media (max-width: 700px) {
-  .ufc-edge-row { flex-wrap: wrap; min-width: 0 !important; row-gap: 4px; }
-  .ufc-edge-row > span:first-child { min-width: 52px !important; text-align: left !important; }
-  .ufc-edge-row > span:nth-child(2) { flex: 1 1 100% !important; order: 3; }
-  .ufc-edge-row > span:last-child { text-align: left !important; white-space: normal !important; }
+  .ufc-edge-row { flex-wrap: wrap; min-width: 0; row-gap: 4px; }
+  .ufc-edge-row > .ufc-verdict { min-width: 52px; text-align: left; }
+  .ufc-edge-row > .ufc-what { flex: 1 1 100%; order: 3; }
+  .ufc-edge-row > .ufc-num { text-align: left; white-space: normal; }
 }
 
 /* UFC — the market board. Books derive method props off the moneyline, so

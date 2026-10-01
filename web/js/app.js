@@ -284,6 +284,41 @@ function tzTime(d, o) {
     tzOpts(o || { hour: "numeric", minute: "2-digit" }));
 }
 
+/* ONE STAMP (audit V-24, roadmap #50). A build time printed five ways —
+   raw ISO, ISO with the T replaced, the UTC hour sliced out of the string
+   (so "Updated 23:41" at 7:41pm Eastern), date-only — none in the zone the
+   Times setting names, and none saying which zone it was. Every "built /
+   updated / replayed" stamp goes through here: the reader's chosen zone,
+   with the zone printed. "time" for a clock alone, "date" for a day.
+   Unparseable or empty is a dash, never "Invalid Date". */
+function formatStamp(iso, kind) {
+  // A bare calendar day is a day, not midnight UTC — parsed as a stamp it
+  // would print as the evening before in every US zone.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  const t = Date.parse(String(iso || ""));
+  if (!Number.isFinite(t)) return "—";
+  const o = kind === "time" ? { hour: "numeric", minute: "2-digit", timeZoneName: "short" }
+    : kind === "date" ? { month: "short", day: "numeric", year: "numeric" }
+    : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
+  return new Date(t).toLocaleString(undefined, tzOpts(o));
+}
+
+/* ONE PLACE TO LOOK (audit V-24). The formatters a new renderer should
+   reach for, under one name, instead of the thirty-odd local `pct`s and
+   eight money helpers the audit counted. Getters, so each resolves the
+   site's own function when called rather than when this line runs. */
+const fmt = Object.freeze({
+  get odds() { return oddsTxt; },          // honours the American/decimal setting
+  get pct() { return pct; },               // 0.571 → "57.1%"
+  get money() { return money; },
+  get stamp() { return formatStamp; },     // honours the Times setting
+  get time() { return tzTime; },
+  get date() { return formatGameDate; },
+});
+
 /* Is this team one of the reader's? Sport-tagged, because CIN is the
    Bengals and the Reds and a favourites list that mixed them would star
    the wrong games all baseball season. */
@@ -3687,7 +3722,7 @@ async function renderFutures() {
     return;
   }
   host.innerHTML = futuresDoctrine(d) + futuresTeamTable(d) + futuresTotals(d)
-    + `<p class="rec-stamp">Built ${escapeHtml(d.generated_at || "")}
+    + `<p class="rec-stamp">Built ${escapeHtml(formatStamp(d.generated_at))}
        · ${plural(d.fixtures_remaining || 0, "game")} left to play
        · ${(d.trials || 0).toLocaleString()} simulations.</p>`;
   revealChildren(host);
@@ -18715,7 +18750,7 @@ async function renderLab() {
     ${gapBlock}
     <p class="mini" style="opacity:.6;margin-top:14px">Replayed automatically every
       ${d.every_days} days as part of the maintenance pass · last run
-      ${escapeHtml((d.generated_at || "").replace("T", " "))}</p>`;
+      ${escapeHtml(formatStamp(d.generated_at))}</p>`;
 }
 
 /* The edge test, rendered as a verdict rather than three AUCs.
@@ -19982,7 +20017,7 @@ async function renderRecord() {
     + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>${zenoWhoHTML(dAll)}` : "")
     + winNote
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
-    + `<p class="rec-stamp">Updated ${escapeHtml(d.generated_at || "")}
+    + `<p class="rec-stamp">Updated ${escapeHtml(formatStamp(d.generated_at))}
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
@@ -22251,7 +22286,7 @@ async function renderIntel() {
         ${pmxTile("Trades on tape", Number(tape.stored_total || 0).toLocaleString(), `+${tape.new_this_pull || 0} this pull`, "bars")}
         ${pmxTile("Wallets seen", Number(tape.wallets_seen || 0).toLocaleString(), "recording since day one", "line")}
         ${pmxTile("Flow flags · 24h", (d.flow || []).length, "$5K+ scored trades", "bars-good")}
-        ${pmxTile("Updated", escapeHtml((d.generated_at || "").slice(11, 16)), "refreshes with the site", "refresh")}
+        ${pmxTile("Updated", escapeHtml(formatStamp(d.generated_at, "time")), "refreshes with the site", "refresh")}
       </div>
       ${pmxFlowHTML(d, proven)}
       <div class="section-title">Top traders
@@ -24958,7 +24993,7 @@ async function renderMemes() {
       than silently scored as safe. Volume acceleration and the sparklines run off our own
       snapshot tape and need a few sightings of a coin — young boards under-read them
       honestly. The Live chart button opens the venue’s own candle chart for the pool.
-      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; this board rescans
+      Updated ${escapeHtml(formatStamp(d.generated_at, "time"))}; this board rescans
       every ~15 seconds (new-coin discovery ~25s — the free feeds’ rate-limit ceiling),
       and this page re-pulls on the same clock without disturbing an open chart.</p>`;
   bindSubtabs(host);
@@ -25328,7 +25363,7 @@ async function renderFantasy() {
   const _ffFoot = `    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
       fit from this season’s own data (league value per target and per carry by position) —
       volume-based, so a player can legitimately sustain a positive gap; only gaps beyond
-      ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+      ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(formatStamp(d.generated_at))}.</p>`;
   _mockKit = d.draft_kit || {};
   _ffData = d;
   /* THE SEASON THE NUMBERS CAME FROM, when it is not the season it
@@ -29531,7 +29566,7 @@ async function renderInjuries() {
       Fantasy page — this board is availability, league-wide.
       ${ageS != null
         ? `Designations collected ${escapeHtml(ageText(ageS))} ago.`
-        : `Page built ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.`}</p>`
+        : `Page built ${escapeHtml(formatStamp((d || {}).generated_at, "time"))}.`}</p>`
     + newsHTML;
 }
 
@@ -33123,7 +33158,7 @@ function teamInjuriesHTML(d, p) {
   if (!rows.length) return teamEmptyTab("No injuries listed", `Nobody on ${p.name || p.team}’s injury report right now.`);
   return `<div class="section-title">Injury report
       <span class="sub">— ${rows.length} listed${_injBoard.generated_at
-        ? `, as of ${escapeHtml(String(_injBoard.generated_at).slice(0, 16).replace("T", " "))}` : ""}.</span></div>
+        ? `, as of ${escapeHtml(formatStamp(_injBoard.generated_at))}` : ""}.</span></div>
     <div class="card tm-list">${rows.map(teamInjuryRowHTML).join("")}</div>`;
 }
 
@@ -36859,15 +36894,15 @@ function renderSleeperPanel(d, ctx) {
      calendar cells that have been claiming the same role since August. */
   const rowHTML = (r) => `
     <div class="drow ffrow-door rec-row mid nowrap" data-dossier="${escapeAttr(r.name)}" role="button" tabindex="0">
-      <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span class="drow-lead">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
+      <span class="drow-label">
         <strong>${escapeHtml(r.name)}</strong>${injTag("nfl", r.name)}
-        <span style="color:var(--text-mute)"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
+        <span class="drow-sub"> ${escapeHtml(r.pos)} · ${escapeHtml(r.team || "FA")}${r.starter ? " · starter" : ""}</span>
         ${r.flag ? `<span class="chip ${r.flag === "BUY LOW" ? "up" : "down"}" style="margin-left:6px">${r.flag}</span>` : ""}</span>
-      ${r.u ? `<span style="min-width:150px;text-align:right;color:var(--text-dim)"
+      ${r.u ? `<span class="drow-num drow-usage"
           title="season · 4-week · last week ${r.u.metric}">${pct(r.u.season)} → ${pct(r.u.l4)} → <b>${pct(r.u.last)}</b></span>
-        <span style="min-width:70px;text-align:right;color:var(--text-mute)">${r.u.fp_pg} ppg</span>`
-      : `<span style="min-width:220px;text-align:right;color:var(--text-mute)">not among the top usage movers</span>`}
+        <span class="drow-num drow-ppg">${r.u.fp_pg} ppg</span>`
+      : `<span class="drow-num drow-none">not among the top usage movers</span>`}
     </div>`;
 
   const waivers = (d.usage || []).filter((u) =>
@@ -37460,13 +37495,12 @@ async function renderUFC() {
         <div class="hd-card">
           ${rows.map((r) => `
             <div class="ufc-edge-row rec-row mid tall${r._pick ? "" : " dim"}">
-              <span style="min-width:74px;text-align:center;font-weight:800;flex-shrink:0;
-                    color:${r._pick ? "var(--good)" : "var(--text-mute)"}">${r._pick ? "BET" : "PASS"}</span>
-              <span style="flex:1;min-width:0"><strong>${escapeHtml(r.fight)}</strong>
+              <span class="ufc-verdict ${r._pick ? "bet" : "pass"}">${r._pick ? "BET" : "PASS"}</span>
+              <span class="ufc-what"><strong>${escapeHtml(r.fight)}</strong>
                 <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
                   ${r._pick ? `${escapeHtml(r.selection || (r.pick + " ML"))} ${american((r.best_market || {}).odds != null ? r.best_market.odds : r.odds)} (${escapeHtml(r.book || "")}) · stake ${r.stake_units}u`
                             : escapeHtml(r.why || "")}</span></span>
-              <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm)">
+              <span class="ufc-num">
                 model ${pctv(r.p_final)} · market ${pctv(r.p_market)}
                 <span style="display:block;color:${(r.edge || 0) > 0 ? "var(--good)" : "var(--text-mute)"};font-weight:700">
                   ${r.edge != null ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}pts vs break-even` : ""}</span></span>
@@ -37593,7 +37627,7 @@ async function renderUFC() {
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Every fight is priced
       off a dossier of measured records, and each one is reviewed before a card — a red flag on
       a fighter blocks a bet until it is resolved. The model refuses any fight missing a
-      dossier rather than guessing at it. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+      dossier rather than guessing at it. Updated ${escapeHtml(formatStamp(d.generated_at))}.</p>`;
 }
 
 /* ============================================================
