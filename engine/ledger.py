@@ -4549,6 +4549,10 @@ def void_unplayed(conn, rows: list[dict]) -> int:
     A settlement that surprises the person holding the journal is worse
     than one that waits for a keystroke.
     """
+    return _void_rows(conn, rows)
+
+
+def _void_rows(conn, rows: list[dict]) -> int:
     n = 0
     for r in rows:
         # rowcount off THIS statement's cursor. `conn.total_changes` is
@@ -4560,6 +4564,42 @@ def void_unplayed(conn, rows: list[dict]) -> int:
         n += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
     conn.commit()
     return n
+
+
+#: The leagues whose unplayed picks void on the settle clock (audit O4,
+#: roadmap #44). Baseball only: `never_resolving_game` rests on the MLB
+#: results ingest skipping C/D/T (cancelled, postponed, suspended) games,
+#: and the other leagues' ingests make no such promise — they keep the
+#: manual `--void-unplayed`.
+AUTO_VOID_SPORTS = ("mlb",)
+#: How old the game must be. A suspended game resumed inside this window
+#: grades normally when its final lands; past it the pick is waiting on
+#: nothing, and an open pick older than three days was the audit's metric.
+AUTO_VOID_AFTER_DAYS = 3
+
+
+@_audited("auto_void_unplayed")
+def auto_void_unplayed(conn, hist_conn, today=None) -> list[dict]:
+    """Void the picks `unplayed_bets` finds, for AUTO_VOID_SPORTS, once the
+    game is AUTO_VOID_AFTER_DAYS old. Returns the rows voided.
+
+    The same finder and the same write as `--void-unplayed --apply`; what
+    the command needed a person for — deciding the list was right — is the
+    two guards above. Every void lands in `bets_audit` under its own
+    reason, so a reader of the audit can tell the clock's voids from the
+    hand-run ones."""
+    import datetime as _dt
+    ref = _dt.date.fromisoformat(str(today)) if today else _dt.date.today()
+    cutoff = (ref - _dt.timedelta(days=AUTO_VOID_AFTER_DAYS)).isoformat()
+    rows = [r for r in unplayed_bets(conn, hist_conn, ref.isoformat())
+            if r["sport"] in AUTO_VOID_SPORTS and str(r["date"]) <= cutoff]
+    if not rows:
+        return []
+    _void_rows(conn, rows)
+    done = {r[0] for r in conn.execute(
+        "SELECT id FROM bets WHERE status='void' AND id IN (%s)"
+        % ",".join("?" * len(rows)), [r["id"] for r in rows])}
+    return [r for r in rows if r["id"] in done]
 
 
 def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):

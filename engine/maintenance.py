@@ -959,6 +959,17 @@ def settle_open(log=print, state_path: Path | None = None,
             log(f"  ⚠️  long-shot re-file skipped: {exc}")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         settled = ledger.settle_from_history(lconn, hconn)
+        # Postponed MLB games void themselves (audit O4, roadmap #44). After
+        # the grading pass, so a final that landed late grades first; the
+        # guards (baseball only, three days old) live with the function.
+        try:
+            voided = ledger.auto_void_unplayed(lconn, hconn, today.isoformat())
+            if voided:
+                log(f"  voided {len(voided)} pick(s) on unplayed MLB game(s): "
+                    + ", ".join(sorted({f"{r['team']} {r['date']}" for r in voided})))
+                settled += len(voided)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  unplayed-game void skipped: {exc}")
         # THE DESK, hourly. Its tickets grade against the exchange, not
         # the history database, and until 2026-09-15 nothing on any
         # clock asked the exchange (see `ledger.settle_predmarket`).

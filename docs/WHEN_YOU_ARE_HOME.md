@@ -128,6 +128,23 @@ The version line should print `1.11.0`; `pip-audit` should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
+**P44-a. Check postponed MLB picks cleared themselves (read-only, a minute).**
+The settle pass now voids a pick on an MLB game that was never played
+(postponed, cancelled or suspended) once the game is three days old. It
+uses the same finder as `--void-unplayed`, and each void is logged in
+the audit table as `auto_void_unplayed`. This should also clear the nine
+open picks from 2026-09-22 (task #183) on the first settle after the
+update. Check:
+
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --void-unplayed
+sudo -u qellys sqlite3 data/ledger.db "select count(*) from bets_audit where reason='auto_void_unplayed'"
+```
+
+The first command should list no MLB picks dated more than three days
+ago. The second gives how many the clock has voided so far. Other
+leagues still need `--void-unplayed --apply` by hand.
+
 **P33-a. Check the journal re-keyed itself (read-only, a minute).** The
 first process to open the journal after this update rebuilds the `bets`
 table once so a doubleheader's second game and the other side of a pick
