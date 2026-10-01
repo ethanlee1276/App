@@ -15257,11 +15257,26 @@ function recRangeTotals(curve, from) {
            net_units: net, units_staked: staked, roi: staked ? net / staked : 0 };
 }
 
-function recordWindowHTML(avail, rk) {
-  if (avail.length < 2) return "";
+/* The windows this curve can NOT fill yet, each with the reason (audit
+   V-22): a chip that silently is not there reads as a missing feature;
+   one that is there, greyed, says why. */
+function recRangesClosed(curve) {
+  const open = new Set(recRangesFor(curve).map(([k]) => k));
+  const pts = curve || [];
+  const span = pts.length >= 2
+    ? Math.round((new Date(pts[pts.length - 1].date) - new Date(pts[0].date)) / 864e5) : 0;
+  return recRanges().filter(([k]) => !open.has(k)).map(([k, d, label]) => [k, d, label,
+    pts.length < 2 ? "Not enough settled days for a window yet."
+      : `The record covers ${plural(span, "day")} so far — a ${d}-day window would be the whole record.`]);
+}
+
+function recordWindowHTML(avail, rk, closed = []) {
+  if (avail.length < 2 && !closed.length) return "";
   return `<div class="rec-windows" role="group" aria-label="Time window">${avail.map(([k, , label]) =>
     `<button type="button" class="rec-win${k === rk ? " active" : ""}" data-win="${k}"
-      aria-pressed="${k === rk ? "true" : "false"}">${label}</button>`).join("")}</div>`;
+      aria-pressed="${k === rk ? "true" : "false"}">${label}</button>`).join("")}${closed.map(([k, , label, why]) =>
+    `<button type="button" class="rec-win off" disabled aria-disabled="true" title="${escapeAttr(why)}">${label}</button>`).join("")}${
+    closed.length ? `<span class="rec-win-why">${escapeHtml(closed[closed.length - 1][3])}</span>` : ""}</div>`;
 }
 
 /* Splits — ONE table with a switcher, not four stacked (2026-08-17,
@@ -15504,6 +15519,43 @@ function recSplitsSection(o, booksDrawn) {
 let _recAllPicks = false;
 window._recShowPicks = () => { _recAllPicks = true; renderRecord(); };
 
+/* THIS MONTH, IN ONE CARD (audit V-22): what a reader asks first of a
+   young record — how is it going this month in this league — answered in
+   one card instead of fourteen panels. The month is the latest settled
+   day's; W-L, units and ROI are that month's, cut from the curve; CLV,
+   claimed-vs-landed and Brier are the whole graded record's and say so. */
+function recMonthCard(src, label) {
+  const curve = (src && src.curve) || [];
+  if (!curve.length) return "";
+  const month = String(curve[curve.length - 1].date || "").slice(0, 7);
+  const days = curve.filter((p) => String(p.date || "").startsWith(month));
+  const sum = (f) => days.reduce((a, p) => a + (Number(p[f]) || 0), 0);
+  const w = sum("w"), l = sum("l"), n = sum("n"), staked = sum("staked"), units = sum("day_u");
+  if (!n) return "";
+  const o = (src && src.overall) || {};
+  const cal = (src && src.calibration) || {};
+  const bk = (cal.buckets || []).filter((b) => b && b.n);
+  const tot = bk.reduce((a, b) => a + b.n, 0);
+  const claimed = tot ? bk.reduce((a, b) => a + b.predicted * b.n, 0) / tot : null;
+  const landed = tot ? bk.reduce((a, b) => a + b.actual * b.n, 0) / tot : null;
+  const monthName = new Date(`${month}-15T12:00:00Z`).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+  const cell = (k, v, sub) => `<div class="rec-mc-cell"><div class="k">${k}</div><div class="v">${v}</div>${
+    sub ? `<div class="s">${sub}</div>` : ""}</div>`;
+  return `<div class="card rec-month-card">
+    <div class="rec-mc-head">${escapeHtml(monthName)}, ${escapeHtml(label)}</div>
+    <div class="rec-mc-grid">
+      ${cell("Record", `${w}-${l}`, plural(n, "settled bet"))}
+      ${cell("Units", `${units > 0 ? "+" : units < 0 ? MINUS : ""}${Math.abs(units).toFixed(2)}u`,
+             staked ? `ROI ${fmtRoi(units / staked)}` : "")}
+      ${cell("CLV", o.clv_n ? `${o.avg_clv > 0 ? "+" : ""}${Number(o.avg_clv || 0).toFixed(2)}` : "—",
+             o.clv_n ? `on ${plural(o.clv_n, "bet")}, whole record` : "no closing lines yet")}
+      ${cell("Claimed → landed", claimed == null ? "—" : `${Math.round(claimed * 100)}% → ${Math.round(landed * 100)}%`,
+             tot ? `${tot} graded, whole record` : "")}
+      ${cell("Brier", cal.brier_model == null ? "—" : Number(cal.brier_model).toFixed(3),
+             cal.brier_market == null ? "" : `market ${Number(cal.brier_market).toFixed(3)}`)}
+    </div></div>`;
+}
+
 function recRecentSection(recent, settled) {
   const shown = _recAllPicks ? recent : recent.slice(0, 12);
   const more = recent.length - shown.length;
@@ -15525,7 +15577,12 @@ function recRecentSection(recent, settled) {
                : ""}</span></div>
     <div id="rec-bets-bar"></div>
     <div class="card rec-list" id="rec-bets">
-      ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
+      ${shown.map(recSettledRow).join("") || (settled
+        // NEVER BELOW THE VERDICT (audit V-5/V-22): "1 settled" over
+        // "Nothing settled yet" read as two records. The rows exist; they
+        // are not in this file.
+        ? panelEmpty(`${plural(settled, "settled bet")} — the rows are in the journal and the receipts CSV, not in this page’s recent list.`)
+        : panelEmpty("Nothing settled yet."))}
       ${more > 0 ? `<button class="rec-more" data-act="recShowPicks">
         Show ${more} more</button>` : ""}
     </div>`;
@@ -19650,11 +19707,24 @@ async function renderRecord() {
      it; it does now, and the page renders that sport's own report.
      An absent entry (a league with nothing in this book yet) renders
      nothing, exactly as before. */
+  /* UNDER THE FLOOR, THE PAGE COLLAPSES (audit V-22). At one settled bet
+     the room drew fourteen panels — 3,700 px to say "1-0, too early".
+     Below `min_graded` it shows the calendar, the verdict (which already
+     says too early), this month's card and the settled bets, and folds
+     everything else under one line that says why it is folded. */
+  const recNeed = src.min_graded || _recMinGraded;
+  const underFloor = (o.settled || 0) < recNeed;
+  const scopeName = scope === "all" ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase());
+  const foldOpen = (what) => !underFloor ? "" : `<details class="rec-fold"><summary>${what} — too early
+      to read (${o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
+  const foldClose = underFloor ? "</details>" : "";
+  const monthCard = underFloor ? recMonthCard(src, scopeName) : "";
   const receipts = calendar
     /* ZENO'S RECORD — a person's real tickets, beside the model's picks
        and never inside them. Its own store, its own block, its own card:
        two provenances that shared a number would make both worthless.
        Scoped to a league when that league has rows; pooled on "All". */
+    + foldOpen("Most Likely, Pick of the Day and Zeno")
     + recZenoSection(d.zeno, scope, _zenoTixRec)
     + recPotdClaims(d.potd_claims, scoped ? scope : "")
     + recPotdSection(scoped ? (d.potd_by_sport || {})[scope] : d.potd,
@@ -19662,11 +19732,15 @@ async function renderRecord() {
     + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)
-    + verdict + ridingNote + unstaked + small
+    + foldClose
+    + verdict + ridingNote + unstaked + small + monthCard
+    + foldOpen("By book, the running P&amp;L and the splits")
     + recBookSections(d.book_records, scope) + `
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recSplitsSection(o, !!scoped)}
+    ${foldClose}
     ${recRecentSection(src.recent || [], o.settled)}
+    ${foldOpen("The method behind the record, and the edge test")}
     <div class="section-title"><span class="st-ico">${icon("scale", 15)}</span>How this is measured
       <span class="sub">— the decisions behind the record, the model era, and
       what counts as a tracked bet</span></div>
@@ -19722,6 +19796,7 @@ async function renderRecord() {
       </div>
     </div>
     ${edgePanel}
+    ${foldClose}
   `;
   /* THE PAGE LEADS WITH THE RIBBONS (v5): the scope in view as a ring,
      a W-L and a headline number with its last five, and Zeno's book
@@ -19748,7 +19823,7 @@ async function renderRecord() {
     ? recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` },
         (src.recent || []).filter((r) => String((r || {}).date || "") >= from))
     : recordRibbonsHTML(dAll, o, src.recent);
-  const winBar = recordWindowHTML(avail, rk);
+  const winBar = recordWindowHTML(avail, rk, recRangesClosed(src.curve));
   const winNote = !from ? "" : winO
     ? `<p class="rec-win-note">The headline, the running P&amp;L and the settled bets are the last ${winDays} days,
         from ${escapeHtml(recWinDate(from))}. Everything else here is the whole record.</p>`

@@ -5043,6 +5043,21 @@ body.pk-open { overflow: hidden; }
 .rec-win.active { color: var(--text); border-color: var(--brand-2);
   background: color-mix(in oklab, var(--brand) 14%, transparent); }
 .rec-win-note { margin: -4px 0 14px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* A window the record cannot fill yet: there, greyed, with the reason
+   beside the row (audit V-22) — never silently missing. */
+.rec-win.off { opacity: .45; cursor: not-allowed; }
+.rec-win.off:hover { color: var(--text-mute); border-color: var(--border); }
+.rec-win-why { align-self: center; color: var(--text-mute); font-size: var(--fs-xs); }
+/* This month, in one card; and the fold below the sample floor. */
+.rec-month-card { padding: 14px 16px; margin: 12px 0; }
+.rec-mc-head { font-weight: 700; margin-bottom: 10px; }
+.rec-mc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 14px; }
+.rec-mc-cell .k { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+.rec-mc-cell .v { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05em; }
+.rec-mc-cell .s { color: var(--text-mute); font-size: var(--fs-xs); }
+.rec-fold { margin: 18px 0; border-top: var(--hairline) solid var(--border); padding-top: 12px; }
+.rec-fold > summary { cursor: pointer; color: var(--text-mute); font-weight: 700; min-height: 44px;
+  display: flex; align-items: center; }
 /* The settled list's filters (audit item 17): the window row's chip,
    in two groups — the market, then the result. */
 .rec-bets-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; }
