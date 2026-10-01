@@ -38805,7 +38805,37 @@ document.addEventListener("keydown", (e) => {
   el.click();
 });
 
+/* THE VENUE ON THE PROOF AND PICK PAGES (audit, brand; roadmap #51).
+   The renders were on the home cards, the hero and the game page, and
+   the Record, Live, Edge and Most Likely pages — the proof and pick
+   surfaces, where a signature asset carries most — were the plainest
+   on the site. A thin band of the league's render heads each, decorative
+   (aria-hidden, lazy), and only once per page; switching league swaps
+   the picture rather than adding a second. */
+const VENUE_BAND_VIEWS = ["record", "live", "edge", "likely"];
+function venueBandSrc(sport) {
+  const fam = VENUE_FAMILY[sport];
+  return fam ? venueSrc(`img/venues/variants/${fam}-gold.jpg`) : "";
+}
+function paintVenueBands() {
+  const src = venueBandSrc(state.sport);
+  for (const v of VENUE_BAND_VIEWS) {
+    const sec = document.getElementById(`view-${v}`);
+    if (!sec) continue;
+    let band = sec.querySelector(":scope > .venue-band");
+    if (!src) { if (band) band.remove(); continue; }
+    if (!band) {
+      sec.insertAdjacentHTML("afterbegin", `<div class="venue-band" aria-hidden="true"><img alt=""
+        loading="lazy" decoding="async" src="${escapeAttr(src)}" data-onerr="remove"/></div>`);
+      continue;
+    }
+    const img = band.querySelector("img");
+    if (img && img.getAttribute("src") !== src) img.setAttribute("src", src);
+  }
+}
+
 function enhanceSectionSubs(root) {
+  paintVenueBands();
   markPageTitles(root);
   wrapTables(root);
   enhanceDoors(root);

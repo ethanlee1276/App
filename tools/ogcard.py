@@ -45,7 +45,7 @@ sys.path.insert(0, ROOT)
 #: A new name is the only refresh that works everywhere on the first try.
 #: Bump the suffix on any change to the artwork, and update the two
 #: <meta> tags in web/index.html with it.
-OUT = os.path.join("web", "og-card-v2.png")
+OUT = os.path.join("web", "og-card-v3.png")
 SIZE = (1200, 630)
 
 CHROMIUM = os.environ.get(

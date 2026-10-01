@@ -434,13 +434,13 @@ def meta_block(route: dict) -> str:
     address with no second copy of the tag. These documents are served
     at two-segment paths, and a scraper is not a browser: most of them
     resolve a relative image against the page URL without reading the
-    `<base>` tag, so `og-card-v2.png` at /player/juan-soto is fetched
+    `<base>` tag, so `og-card-v3.png` at /player/juan-soto is fetched
     from /player/ and the link unfurls with no picture at all.
     """
     title = _esc(route.get("title") or "Qellys Book")
     desc = _esc(route.get("description") or "")
     url = _esc(route.get("canonical") or SITE)
-    img = f"{SITE}/og-card-v2.png"
+    img = f"{SITE}/og-card-v3.png"
     return "\n".join([
         META_OPEN,
         f"  <title>{title}</title>",

@@ -386,6 +386,8 @@
   --sp-4: 16px;
   --sp-5: 24px;
   --sp-6: 32px;
+  /* The venue band's fade into the page (#51), a token like every gradient. */
+  --venue-fade: linear-gradient(180deg, transparent 0%, var(--bg) 100%);
   --shadow: none;
   --shadow-lg: none;
   --ring: 0 0 0 2px rgba(230, 220, 203, 0.30);
@@ -12749,4 +12751,21 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
    on ~390 uses, the ribbon's model/Zeno split among them. */
 @media (max-width: 760px) {
   :root { --fs-2xs: 11px; --fs-xs: 12px; }
+}
+
+/* The league's venue render as a band over the proof and pick pages
+   (roadmap item 51). Decorative: low, darkened toward the page, never taller
+   than the page title it sits over. */
+.venue-band { position: relative; height: 64px; margin: 0 0 var(--sp-3); overflow: hidden;
+  border-bottom: var(--hairline) solid var(--border-soft); line-height: 0; }
+.venue-band img { width: 100%; height: 100%; object-fit: cover; object-position: center 40%; opacity: .55; }
+.venue-band::after { content: ""; position: absolute; inset: 0;
+  background: var(--venue-fade); }
+@media (max-width: 760px) {
+  .venue-band { height: 44px; }
+  /* ODDS FIRST ON A PHONE (roadmap item 51): the photo pushed the prices —
+     the part a bettor came for — under the fold. The render stays; the
+     lines lead the card's text. */
+  .game-card .game-info { display: flex; flex-direction: column; }
+  .game-card .game-info > .gc-mkts { order: -1; margin-bottom: 6px; }
 }

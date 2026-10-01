@@ -91,7 +91,14 @@
   .art { border: 1px solid color-mix(in srgb, var(--brand) 26%, transparent);
     border-radius: 6px; background: var(--panel); line-height: 0;
     padding: 10px; box-sizing: border-box; }
-  .art svg { width: 100%; height: auto; display: block; }
+  .art svg { width: 100%; height: auto; display: block; position: relative; }
+  /* The venue render behind the Overhead (roadmap #51): the signature
+     asset on the one image every shared link shows. Dimmed so the drawing
+     stays the subject. */
+  .art { position: relative; overflow: hidden; }
+  .art::before { content: ""; position: absolute; inset: 0;
+    background: url(img/venues/variants/football-gold.webp) center / cover no-repeat;
+    opacity: .35; }
 </style>
 </head>
 <body>
