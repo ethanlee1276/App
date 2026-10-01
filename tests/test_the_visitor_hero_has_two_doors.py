@@ -66,7 +66,9 @@ def test_the_hero_carries_them_and_only_offers_the_trial_it_can_grant():
     body = APP[APP.index("function paywallHTML("):]
     body = body[:body.index("\n}\n")]
     hero = body[body.index('<section class="pw-hero">'):body.index("</section>", body.index('<section class="pw-hero">'))]
-    assert "${pwHeroCtaHTML(trialOK ? trialDays : 0)}" in hero
+    # CHANGED 2026-09-30 (audit V-20 / roadmap #41): the label asks
+    # sellable() as the plan card does. Order unchanged.
+    assert "${pwHeroCtaHTML(trialOK && sellable(trialPlan) ? trialDays : 0," in hero
     assert hero.index("pw-sub") < hero.index("pwHeroCtaHTML") < hero.index("pwResultsHTML(rec)"), \
         "the promise, the two doors, then the receipts"
     assert "const trialOK = trialDays > 0" in body, "the same eligibility the plan card reads"

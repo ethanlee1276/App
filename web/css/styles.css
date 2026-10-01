@@ -12674,3 +12674,11 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .gloss-row dt { font-weight: 700; }
 .gloss-row dd { margin: 0; color: var(--text-mute); }
 @media (max-width: 600px) { .gloss-row { grid-template-columns: 1fr; } }
+
+/* One sentence on what is free and what the plan adds (audit V-20). */
+.free-vs-plan { margin: 6px 0 14px; color: var(--text-mute); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.free-vs-plan.pw { text-align: center; max-width: 640px; margin-left: auto; margin-right: auto; }
+.ask-locked { padding: 14px 16px; border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); }
+.ask-locked p { margin: 0 0 8px; }
+.ask-locked-acts { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -26395,6 +26395,18 @@ function pwAskHTML() {
   </section>`;
 }
 
+/* WHAT'S FREE AND WHAT THE PLAN ADDS — one sentence, one place (audit
+   V-20). The paywall, Ask and the Why page each told a slightly different
+   story ("No premium tier" on one, "Unlock the edge" on another); this is
+   the story all three now tell. */
+const FREE_VS_PLAN = "Free: the Record — every pick graded, wins and losses — the Methodology and the "
+  + "Status page. The plan adds tonight’s picks and prices on every board, Ask Qellys, "
+  + "Zeno’s bets and the tools.";
+
+function freeVsPlanHTML(cls = "") {
+  return `<p class="free-vs-plan${cls ? ` ${cls}` : ""}">${escapeHtml(FREE_VS_PLAN)}</p>`;
+}
+
 function paywallHTML(rec, status) {
   /* Same reasoning as the sport chips above: these ten cards are what a
      visitor scans to decide whether the site does the thing they came
@@ -26511,7 +26523,12 @@ function paywallHTML(rec, status) {
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
       <p class="pw-sub">Professional sports intelligence. Real-time edges.
         Every call graded in public.</p>
-      ${pwHeroCtaHTML(trialOK ? trialDays : 0)}
+      ${/* FROM sellable(), LIKE THE CARD (audit V-20): the hero promised
+            "Start 3 days free" off trialDays alone while the card below,
+            asking sellable(), drew "Not available yet" — the primary path
+            ended on a dead button. */""}
+      ${pwHeroCtaHTML(trialOK && sellable(trialPlan) ? trialDays : 0,
+                      PLANS.some((p) => sellable(p.id)))}
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -26524,6 +26541,10 @@ function paywallHTML(rec, status) {
             graded in public" and then showed nothing until below the
             plans, which is a claim asking to be taken on faith on the one
             page where it does not have to be. */""}
+      ${/* THE RECEIPTS STAY ABOVE THE PRICE (tests/test_paywall_proof):
+            "graded in public" is shown, not promised. What moved for the
+            audit (V-20) is everything else that stood before the price —
+            the twelve-card grid and the Ask demo now follow the FAQ. */""}
       ${pwResultsHTML(rec)}
       ${/* DON'T TAKE OUR WORD FOR IT (audit item 4): the one claim on
             this page a stranger can check, said as the four things that
@@ -26547,6 +26568,53 @@ function paywallHTML(rec, status) {
            aria-hidden="true">${mark}</span>
            <span>${escapeHtml(label)}</span></span>`).join("")}</div>
     </section>
+
+    <h2 class="pw-h2"><em>Simple pricing.</em> One product.</h2>
+    <p class="pw-h2sub">${iconMark("lock", 13)} Every plan is the same full
+      site. The only difference is how long you commit for and how much you
+      save.</p>
+    ${freeVsPlanHTML("pw")}
+    <div class="pw-plans" data-shape="one">
+      ${plan(PLANS.find((p) => p.id === "monthly") || PLANS[0])}
+      <div class="pw-longer">
+        <div class="pw-longer-h">Save with a longer plan</div>
+        ${PLANS.filter((p) => p.id !== "monthly").map(longer).join("")}
+        <p class="pw-longer-note">Every plan is the same product — the length
+         is the only difference.</p>
+      </div>
+    </div>
+
+    <div class="pw-trust">
+      <div class="pw-guar">
+        <div class="pw-guar-ic">${iconMark("lock", 22)}</div>
+        <div>
+          <b>Cancel whenever you like</b>
+          <p>One button on your account page, which opens Stripe’s own
+            portal. No phone call, no retention offer, and no refunds to
+            argue about — cancelling stops the next charge and you keep
+            everything you have already paid for, to the day.</p>
+        </div>
+      </div>
+      ${paywallProofHTML(rec)}
+    </div>
+
+
+    <h2 class="pw-h2">Questions</h2>
+    <div class="pw-faqgrid">
+      <aside class="card pw-unlock">
+        <div class="pw-unlock-ic">${iconMark("bolt", 24)}</div>
+        <h3>Unlock the edge</h3>
+        <p>Every number on this site is computed, dated and graded. Read the
+          <a href="#record">Record</a> page before you pay — it is free, it
+          stays free, and it is the only claim we make that you can check.</p>
+        ${sellable("sixmonth") ? `<button class="btn primary pw-unlock-go" data-plan="sixmonth"
+          data-act="coStart">Get started</button>` : `<a class="btn pw-unlock-go" href="#record">See the record</a>`}
+      </aside>
+      <div class="card pw-faq">${faqFor(status).map(([q, a], i) => `
+        <details class="pw-q"${i === 0 ? " open" : ""}>
+          <summary>${escapeHtml(q)}</summary>
+          <p>${escapeHtml(a)}</p></details>`).join("")}</div>
+    </div>
 
     ${pwAskHTML()}
 
@@ -26578,50 +26646,6 @@ function paywallHTML(rec, status) {
         "Every pick graded afterwards — wins and losses both — on a page that stays free whether you subscribe or not.")}
     </div>
 
-    <h2 class="pw-h2"><em>Simple pricing.</em> One product.</h2>
-    <p class="pw-h2sub">${iconMark("lock", 13)} Every plan is the same full
-      site. The only difference is how long you commit for and how much you
-      save.</p>
-    <div class="pw-plans" data-shape="one">
-      ${plan(PLANS.find((p) => p.id === "monthly") || PLANS[0])}
-      <div class="pw-longer">
-        <div class="pw-longer-h">Save with a longer plan</div>
-        ${PLANS.filter((p) => p.id !== "monthly").map(longer).join("")}
-        <p class="pw-longer-note">Every plan is the same product — the length
-         is the only difference.</p>
-      </div>
-    </div>
-
-    <div class="pw-trust">
-      <div class="pw-guar">
-        <div class="pw-guar-ic">${iconMark("lock", 22)}</div>
-        <div>
-          <b>Cancel whenever you like</b>
-          <p>One button on your account page, which opens Stripe’s own
-            portal. No phone call, no retention offer, and no refunds to
-            argue about — cancelling stops the next charge and you keep
-            everything you have already paid for, to the day.</p>
-        </div>
-      </div>
-      ${paywallProofHTML(rec)}
-    </div>
-
-    <h2 class="pw-h2">Questions</h2>
-    <div class="pw-faqgrid">
-      <aside class="card pw-unlock">
-        <div class="pw-unlock-ic">${iconMark("bolt", 24)}</div>
-        <h3>Unlock the edge</h3>
-        <p>Every number on this site is computed, dated and graded. Read the
-          <a href="#record">Record</a> page before you pay — it is free, it
-          stays free, and it is the only claim we make that you can check.</p>
-        <button class="btn primary pw-unlock-go" data-plan="sixmonth"
-          data-act="coStart">Get started</button>
-      </aside>
-      <div class="card pw-faq">${faqFor(status).map(([q, a], i) => `
-        <details class="pw-q"${i === 0 ? " open" : ""}>
-          <summary>${escapeHtml(q)}</summary>
-          <p>${escapeHtml(a)}</p></details>`).join("")}</div>
-    </div>
 
     <!-- ONE LINE AND TWO LINKS, which is how every site that takes money
          for this does it. Ethan, 2026-08-21: "like 2 links under the pay
@@ -27128,7 +27152,14 @@ async function renderDiscord() {
    $X a month on day N" is said before the click, and a hero button
    that skipped it would be the silent conversion the card exists to
    refuse. With no trial on offer it says what it does: the plans. */
-function pwHeroCtaHTML(trialDays) {
+function pwHeroCtaHTML(trialDays, anySellable = true) {
+  // Nothing on sale (the shop not switched on yet): the record is the one
+  // door that goes somewhere, so it is the primary one.
+  if (!anySellable) {
+    return `<div class="pw-cta">
+    <a class="btn primary pw-cta-rec" href="#record">See the record — it’s free</a>
+  </div>`;
+  }
   return `<div class="pw-cta">
     <button class="btn primary pw-cta-go" type="button" data-act="pwToPlans">${
       trialDays > 0 ? `Start ${trialDays} days free` : "See the plans"}</button>
@@ -38217,8 +38248,9 @@ async function renderWhy() {
         <li>No parlay pushing — the calculator below shows exactly what parlays cost, which is why books advertise them.</li>
         <li>No hiding losses — the Record page keeps every settled pick, and the lucky wins are labeled as lucky.</li>
         <li>No placing bets and no handling money — this recommends, journals, and grades. The decisions stay yours.</li>
-        <li>No "premium tier" where the real picks supposedly live — everything the models produce is on these pages.</li>
+        <li>No secret tier where better picks live — every pick the models publish is graded on the free Record page, wins and losses alike.</li>
       </ul>
+      ${freeVsPlanHTML("why")}
     </div>
 
     <div class="section-title">The open math layer
@@ -40142,6 +40174,27 @@ function askAttachHTML() {
     : `<p class="ask-attach-none">Nothing on tonight’s board to attach yet.</p>`}`;
 }
 
+/* GATED BEFORE TYPING (audit V-20). With the paywall on, a signed-out
+   reader could write a whole question and only then meet the 401. The
+   composer is replaced, up front, by what it takes to ask — and the one
+   line saying what is free. The server still refuses on its own. */
+function askLocked() {
+  return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
+}
+
+function askLockedHTML() {
+  const signedIn = !!(_pwStatus && _pwStatus.signed_in);
+  return `<div class="ask-locked">
+    <p><b>Ask is part of the plan.</b> ${signedIn ? "Your account is signed in without one."
+      : "Sign in with a subscription to ask."}</p>
+    ${freeVsPlanHTML("ask")}
+    <div class="ask-locked-acts">
+      <a class="btn primary" href="#paywall" data-view="paywall">See the plans</a>
+      ${signedIn ? "" : `<a class="btn ghost" href="#account" data-view="account">Log in</a>`}
+    </div>
+  </div>`;
+}
+
 function renderAsk() {
   const host = document.getElementById("ask-body");
   if (!host) return;
@@ -40179,13 +40232,13 @@ function renderAsk() {
       ${a.pick ? `<div class="ask-focus"><span>About <b>${escapeHtml(a.pickLabel || a.pick)}</b></span>
         <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
       <div class="ask-attach" id="ask-attach" role="dialog" aria-label="Attach a pick" hidden></div>
-      <form class="ask-form" id="ask-form">
+      ${askLocked() ? askLockedHTML() : `<form class="ask-form" id="ask-form">
         <button type="button" class="ask-clip" data-ask-clip aria-label="Attach one of tonight’s picks"
           aria-controls="ask-attach" aria-expanded="false">${askIcon("clip", 22)}</button>
         <textarea id="ask-input" rows="1" maxlength="400" placeholder="Ask about a player, a game or a bet…"
           aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
         <button class="ask-send" type="submit" aria-label="Send" disabled>${askIcon("plane", 22)}</button>
-      </form>
+      </form>`}
     </div>
   </div>`;
   const form = host.querySelector("#ask-form");
