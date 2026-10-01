@@ -13502,6 +13502,9 @@ function renderGamePage() {
     ? [e.home, e.away].includes(g.home) && [e.home, e.away].includes(g.away)
       || e.matchup === `${g.away} @ ${g.home}`
     : propInGame(e, g)));
+  // The old shelf's two folds (dropped, pulled), counted once for the
+  // jump row and the heading below.
+  const offHere = droppedHere.length + pulled.length;
 
   // The header re-uses the same art the strip card draws, at full width.
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
@@ -13745,7 +13748,12 @@ function renderGamePage() {
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
-      likelies.length || droppedHere.length || pulled.length ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
+      // ONE "Most likely" CHIP (Ethan, 2026-10-01: "Most likely · 15" beside
+      // "Most likely · 0"). With the one board on, the board's section is the
+      // chip; this section only holds the pulled/dropped folds, so it is
+      // offered only when the board has no picks in this game.
+      (oneBoardOn() ? !matchupPickCount(g) && offHere : likelies.length || offHere)
+        ? ["gp-sec-likely", `Most likely · ${likelies.length}`] : null,
       gpScripts ? ["gp-sec-scripts", "Game scripts"] : null,
       betsShown.length ? ["gp-sec-bets", `Game bets · ${betsShown.length}`] : null,
       ["gp-sec-props", shown.length ? `Edge picks · ${shown.length}` : "Edge picks"],
@@ -13777,9 +13785,16 @@ function renderGamePage() {
 
     ${gpMatchupHTML(g)}
 
-    ${likelies.length || droppedHere.length || pulled.length ? `<div id="gp-sec-likely"><div class="section-title">Most likely to hit
+    ${likelies.length || offHere ? `<div id="gp-sec-likely">${
+        // Under the one board's own section its folds need no second
+        // heading; without board picks here, the heading says so.
+        oneBoardOn() && matchupPickCount(g) ? ""
+        : oneBoardOn() ? `<div class="section-title">Most likely · this game
+        <span class="sub">— nothing on the board in this game right now; the picks
+        that came off are below</span></div>`
+        : `<div class="section-title">Most likely to hit
         <span class="sub">— ranked by how often they land, not by how good the
-        price is; kept in its own book, never in the headline record</span></div>
+        price is; kept in its own book, never in the headline record</span></div>`}
       ${likelies.length ? `<div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
       ${likelyDroppedHTML(droppedHere, { open: !likelies.length })}
       ${likelyPulledHTML(pulled, { title: "Pulled from this game", open: !likelies.length })}</div>` : ""}
