@@ -19,6 +19,7 @@ The properties that carry it, pinned rather than trusted:
 Run directly: `python3 tests/test_tailfade.py`
 """
 
+import datetime
 import os
 import sys
 import tempfile
@@ -56,7 +57,10 @@ def _ledger(status="won"):
         "INSERT INTO bets (ts, sport, date, player, market, side, line, "
         "book, odds, stake_units, stake_dollars, status, category) VALUES "
         "(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("2026-09-13T09:00:00", "nfl", "2026-09-13", "Jahmyr Gibbs",
+        # Journaled NOW, by the clock `me()` reads: the model's month is
+        # bets journaled since the 1st, and a fixed September stamp made
+        # this test fail every day from 1 October (gate, 2026-10-01).
+        (datetime.datetime.now().isoformat(timespec="seconds"), "nfl", "2026-09-13", "Jahmyr Gibbs",
          "rush_yds", "OVER", 88.5, "DraftKings", -110, 1.0, 0.0, status,
          "main"))
     conn.commit()
