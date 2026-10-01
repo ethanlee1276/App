@@ -127,7 +127,7 @@ Each prop flows through a pipeline of small, independently testable stages:
         │
         ▼
   ┌─────────────┐   best line across books → hit probability (normal model)
-  │ betting.py  │   → de-vigged edge → EV → 0–10 confidence → fractional-Kelly stake
+  │ betting.py  │   → de-vigged edge → EV → 0–10 confidence → price-ladder stake (Kelly vetoes)
   └─────────────┘
         │
         ▼
@@ -152,7 +152,10 @@ Each prop flows through a pipeline of small, independently testable stages:
 - **Confidence (0–10)** — driven by edge, discounted for thin samples and high
   variance, so a big edge on two games of data does **not** score like a big
   edge on a full season.
-- **Stake** — quarter-Kelly, capped, for bankroll safety.
+- **Stake** — a price ladder (1.0u at −110, from 0.35u to a 1.25u ceiling) set in
+  `engine/staking.py` since 2026-08-12. Kelly no longer sizes a main-board bet: a
+  non-positive Kelly fraction still VETOES the bet, but the price sets the size.
+  UFC alone still sizes by an eighth-to-quarter Kelly (`engine/ufc/grade.py`).
 
 ### Betting discipline (rules engine)
 
@@ -642,7 +645,7 @@ python3 ledger.py demo                            # runnable end-to-end demo
 ```
 
 - **Bankroll-aware sizing**: each unit is a set percent of the *current* bankroll,
-  so dollar stakes scale with the roll; the model's fractional-Kelly `stake_units`
+  so dollar stakes scale with the roll; the model's price-ladder `stake_units`
   sets how many units.
 - **On the website**: the Recommended tab has a **Bankroll** control — anyone
   enters their bankroll and unit %, and every pick shows its exact dollar stake

@@ -86,8 +86,15 @@ apologise for it.
 
 | Type | Name | Value | Proxy |
 |---|---|---|---|
-| A | `@` | the droplet's IPv4 | DNS only (grey) |
-| A | `www` | the droplet's IPv4 | DNS only (grey) |
+| A | `@` | the droplet's IPv4 | DNS only (grey) at first; Proxied (orange) since 2026-08-21 |
+| A | `www` | the droplet's IPv4 | same as `@` |
+
+**Live since 2026-08-21: orange cloud.** The proxy is on in production. Two things
+came with it and are already handled: the app trusts `CF-Connecting-IP` only from
+Cloudflare's published ranges (`engine/cfips.py`, installed by `deploy/cfips.sh`;
+check its age with `deploy/cfips.sh --check`), and Bot Fight Mode had to allow the
+Stripe webhook. **For a NEW box, start grey** and switch to orange once Caddy has its
+certificate, for the reasons below.
 
 **Grey cloud, not orange, at least to begin with.** Cloudflare's proxy
 terminates TLS itself, which means Caddy cannot complete its own

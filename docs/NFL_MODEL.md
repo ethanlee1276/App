@@ -409,6 +409,13 @@ describes *whether the bet makes money*.
   Leans are how discipline dies in public.
 
 ### Fractional Kelly Staking
+
+> **What ships (since 2026-08-12):** Kelly does not size the bet. `engine/staking.py`'s
+> price ladder does (1.0u at −110, 0.35u floor, 1.25u ceiling); a non-positive Kelly
+> fraction still vetoes the bet, and the quarter/half fraction below no longer sets a
+> size. Measured on 113 settled bets: sizing on conviction put the most money on the
+> worst bets. The section below is the original specification, kept for its reasoning.
+
 **What Kelly is:** The formula for the mathematically optimal bet size given
 your edge and the odds. **Why only a fraction of it:** Full Kelly assumes your
 edge estimate is exactly right; it never is. Overestimating edge with full

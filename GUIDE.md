@@ -101,7 +101,10 @@ total, and the game card already shows it.
   models actively hides that. A journal reading −7% overall can be MLB at
   +2% and NFL at −19%, and only one of those needs fixing.
   The samplers, account health and model eras stay on **All bets** — a
-  per-book limit risk is not a per-sport question — and Polymarket has its
+  per-book limit risk is not a per-sport question. (Account health scores
+  how sharp THE SITE'S OWN journaled action looks to each book — an
+  inference about limit risk from our patterns. It never reads a
+  visitor's sportsbook accounts; that sync is out of scope.) — and Polymarket has its
   own scope because its flags are graded by a report card, not staked as
   bets. Folding a flag rate into a betting P&L would make both meaningless.
 - **Calibration readouts** (Record tab, Polymarket report card) — "model

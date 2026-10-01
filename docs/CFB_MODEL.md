@@ -157,6 +157,10 @@ Same spine as every sport in this system:
 
 **Fractional Kelly:** quarter Kelly default; half Kelly only for A+ plays in Tier 1 spots. Kelly input = post-haircut edge.
 
+> **What ships:** CFB is on probation — graded, not staked (`engine/probation.py`). Where a
+> league is staked, `engine/staking.py`'s price ladder sets the size and Kelly only vetoes
+> (since 2026-08-12); the fractions above describe the original specification.
+
 **Bankroll caps:** 2% per play · 5% per game (correlated combined) · **12% per Saturday slate** — with 60+ games available, the slate cap is the structural defense against CFB's version of volume bleed: betting eight "pretty good" numbers instead of three great ones. After a 10% drawdown, halve stakes until the peak is recovered.
 
 ---

@@ -418,6 +418,13 @@ everything else measures confidence; edge alone measures money.
   public-facing discipline dies.
 
 ### Fractional Kelly Staking
+
+> **What ships (since 2026-08-12):** Kelly does not size the bet. `engine/staking.py`'s
+> price ladder does (1.0u at −110, 0.35u floor, 1.25u ceiling); a non-positive Kelly
+> fraction still vetoes the bet, and the quarter/half fraction below no longer sets a
+> size. Measured on 113 settled bets: sizing on conviction put the most money on the
+> worst bets. The section below is the original specification, kept for its reasoning.
+
 **What Kelly is:** the formula for optimal bet size given edge and odds.
 **Why only fractional:** full Kelly assumes your edge estimate is exact — it
 never is, and over-betting an overestimated edge is how bankrolls die even

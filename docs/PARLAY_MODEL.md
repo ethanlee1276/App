@@ -145,6 +145,10 @@ Per §1.3 Test 2.
 **Gate 7 — Exposure.**
 The ticket counts as **one bet** against per-slate bet-count caps, but at **full maximum loss** against bankroll exposure caps. Correlated legs also count against the underlying game's exposure cap.
 
+> **What ships:** Gate 7 computes the stake the ticket WOULD carry (`engine/parlays.py`,
+> "Gate 7 — exposure, and the stake we would have made") and records it; while parlays
+> are on probation nothing is staked, so the exposure caps are measured, not enforced on money.
+
 ---
 
 ## 3) CLASH TAXONOMY
@@ -491,6 +495,11 @@ RISK    [the honest case against — which leg is most likely to kill it and why
 Parlays enter the site under the **same probation architecture** already used for CFB and WNBA.
 
 **Probation bar:** parlays are **graded, not staked** until **100 graded tickets** clear all of: positive flat-stake ROI · aggregate leg-level CLV ≥ 0 · z ≥ 2. Until then every published ticket is a tracked observation, journals to the Record page, and stakes nothing.
+
+> **What ships:** the exit is not built. `engine/parlays.py` hard-codes `"probation": True`
+> and nothing computes the three-part bar above, so parlays stay on paper whatever their
+> record until that check is written. Promotion will be a code change, reviewed, not an
+> automatic switch.
 
 **Why this bar and not a softer one.** The Record page currently shows **−14.0% ROI across 154 settled bets** on singles. Adding a compounding-variance product on top of a book that hasn't yet demonstrated an edge on its simplest markets is the exact failure mode the probation system was built to prevent. **Singles must clear their own promotion bar before parlays leave probation.** Gate the parlay module behind the singles module — not behind a calendar.
 
