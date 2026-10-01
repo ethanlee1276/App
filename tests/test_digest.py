@@ -31,6 +31,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+os.environ.setdefault("QB_UNSUB_KEY", "test-only-unsub-key-0123456789")
 from engine import digest as D, mailer                       # noqa: E402
 
 
@@ -177,8 +178,9 @@ def test_every_message_carries_a_working_unsubscribe():
     try:
         for msg in (D.morning(web=web, token="abc123"),
                     D.nightly(web=web, token="abc123")):
-            assert "unsubscribe?t=abc123" in msg["text"]
-            assert "unsubscribe?t=abc123" in msg["html"]
+            # In the path since audit E-12 (it was ?t=, a query string).
+            assert "unsubscribe/abc123" in msg["text"]
+            assert "unsubscribe/abc123" in msg["html"]
     finally:
         shutil.rmtree(os.path.dirname(web), ignore_errors=True)
 

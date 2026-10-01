@@ -270,7 +270,12 @@ qellysbook.com {
 		}
 		rewrite @trimmed /min{path}
 		try_files {path} /index.html
-		file_server
+		# Editor and OS leftovers are never served (audit E-15). Not a
+		# blanket dot-file rule: /.well-known/assetlinks.json must stay
+		# reachable for the Android app (#45).
+		file_server {
+			hide .DS_Store *.bak *.orig *.swp *.tmp *~ .env .env.* .git .gitignore *.py *.pyc
+		}
 	}
 
 	# The app sets its own security headers on every response. These
@@ -293,6 +298,7 @@ qellysbook.com {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-src https://dexscreener.com https://www.dexscreener.com https://geckoterminal.com https://www.geckoterminal.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 		-Server
 	}

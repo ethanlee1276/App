@@ -992,6 +992,12 @@ def apply_event(conn, event: dict) -> bool:
     return True
 
 
+#: A Checkout Session id as Stripe issues them: cs_test_… or cs_live_…,
+#: then letters and digits only. Nothing that can reach a second path
+#: segment or a query string.
+_SESSION_ID = re.compile(r"cs_(test|live)_[A-Za-z0-9]{1,190}")
+
+
 def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     """Ask Stripe directly whether this Checkout Session was paid, and
     write the entitlement if it was. Returns the status dict either way.
@@ -1023,7 +1029,9 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     """
     out = status_for(conn, user_id)
     sid = str(session_id or "").strip()
-    if not sid.startswith("cs_") or len(sid) > 200:
+    # The whole shape, not a prefix (audit E-11): the id is put into the
+    # Stripe URL path, and "cs_x/../../v1/customers" passes a prefix check.
+    if not _SESSION_ID.fullmatch(sid):
         return out
     if out.get("entitled"):
         return out                    # already in; nothing to reconcile

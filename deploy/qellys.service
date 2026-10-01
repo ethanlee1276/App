@@ -199,6 +199,16 @@ LockPersonality=true
 MemoryDenyWriteExecute=true
 # Outbound HTTPS to the data feeds and Stripe; nothing exotic.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# No capabilities at all, and only the syscalls an ordinary service makes
+# (audit E-15). The app binds a port above 1024 and runs as its own user,
+# so it needs none; @system-service is systemd's curated set for exactly
+# that, and anything outside it is refused rather than run.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# @system-service, NOT minus @resources: launch.py and the chores lower
+# their own priority with os.nice(10), which is a @resources call.
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target

@@ -41050,7 +41050,12 @@ function routeFromPath(path) {
    half of what they typed. */
 function adoptCleanURL() {
   let hint = null;
-  try { hint = window.__QB_ROUTE__ || null; } catch (e) { hint = null; }
+  // The server's hint rides in <meta name="qb-route"> (audit E-10): an
+  // inline script carrying it was blocked by the CSP and never ran.
+  try {
+    const m = document.querySelector('meta[name="qb-route"]');
+    hint = m ? JSON.parse(m.getAttribute("content") || "null") : null;
+  } catch (e) { hint = null; }
   if (!hint) hint = routeFromPath(location.pathname);
   if (!hint || !hint.hash || location.hash) return;
   if (hint.sport && SPORT_CODES.includes(hint.sport)) state.sport = hint.sport;

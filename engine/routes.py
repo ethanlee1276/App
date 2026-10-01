@@ -49,6 +49,7 @@ here too.
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import unicodedata
@@ -479,8 +480,9 @@ def document(route: dict, index_html: str) -> str:
     hint = json.dumps({"hash": route.get("hash") or "",
                        "sport": route.get("sport") or "",
                        "kind": route.get("kind") or ""})
-    # `</` escaped so the payload can never close the script element it
-    # rides in — the one injection a JSON blob in a <script> still has.
-    hint = hint.replace("</", "<\\/")
-    tag = f'<script>window.__QB_ROUTE__ = {hint};</script>\n</head>'
+    # A <meta>, not an inline <script> (audit E-10): the CSP blocks inline
+    # script, so the hint never ran and every unfurled link logged a
+    # violation. An attribute is data the page reads, and HTML-escaping
+    # it is the whole of the injection defence.
+    tag = f'<meta name="qb-route" content="{html.escape(hint, quote=True)}" />\n</head>'
     return index_html.replace("</head>", tag, 1)

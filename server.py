@@ -145,6 +145,11 @@ SECURITY_HEADERS = (
     ("X-Content-Type-Options", "nosniff"),
     ("Referrer-Policy", "strict-origin-when-cross-origin"),
     ("X-Frame-Options", "DENY"),
+    # Nothing on this site uses a camera, microphone, location, payment
+    # request or USB, so no page — or anything injected into one — may ask
+    # (audit E-15). Mirrored in deploy/Caddyfile, compared by a test.
+    ("Permissions-Policy",
+     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"),
     ("Content-Security-Policy",
      "default-src 'self'; "
      # Headshots and team art come from ESPN/MLB CDNs at render time.
@@ -908,6 +913,34 @@ def _stats_or_empty(teamdex, conn, sport, team):
 _STREAK_FOLDED = [0.0]
 
 
+#: Per-league and per-draft Sleeper files kept in data/cache before the
+#: oldest are pruned (audit E-18). Every league id anybody types into the
+#: public desk wrote a file that was never removed.
+SLEEPER_CACHE_CAP = 400
+
+
+def sleeper_cache_name(path: str, cache_dir=None, cap: int = SLEEPER_CACHE_CAP) -> str:
+    """The cache file for a Sleeper path, making room first if it is new."""
+    name = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+    try:
+        from engine.sources.fetch import CACHE_DIR
+        d = Path(cache_dir) if cache_dir else CACHE_DIR
+        if not (d / name).exists() and d.is_dir():
+            files = [f for f in d.glob("sleeper_*.json")
+                     if f.name.startswith(("sleeper_league_", "sleeper_draft_", "sleeper_user_"))]
+            if len(files) >= cap:
+                files.sort(key=lambda f: f.stat().st_mtime)
+                for f in files[:len(files) - cap + 1]:
+                    f.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return name
+
+
+#: An unsubscribe bearer token in a logged request line (audit E-12).
+_UNSUB_IN_LOG = re.compile(r"(/unsubscribe/|/unsubscribe/?\?t=)[^\s\"&]+")
+
+
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
     #: (audit 2026-09-30, E-2). Without it a slow client held a worker for
@@ -916,7 +949,18 @@ class Handler(BaseHTTPRequestHandler):
     timeout = 30
 
     def log_message(self, fmt, *args):  # quieter logging
-        sys.stderr.write("  %s\n" % (fmt % args))
+        # An unsubscribe link is a bearer token (audit E-12): it never
+        # reaches the journal, in either its path or its old query form.
+        line = _UNSUB_IN_LOG.sub(r"\1…", fmt % args)
+        sys.stderr.write("  %s\n" % line)
+
+    def _fail(self, status: int, sentence: str, exc: BaseException, where: str):
+        """A FIXED SENTENCE TO THE CLIENT, THE DETAIL TO THE LOG (audit
+        E-14). An exception's text is written for whoever reads the log —
+        upstream URLs, SDK request ids, file paths — and it reached the
+        page verbatim on a dozen error paths."""
+        sys.stderr.write(f"  {where}: {type(exc).__name__}: {exc}\n")
+        return self._send(status, json.dumps({"error": sentence}).encode(), ".json")
 
     def handle_one_request(self):
         # A TLS ClientHello (first byte 0x16) on this plain-HTTP port means
@@ -1028,6 +1072,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._team(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
+        if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
+            return self._unsubscribe({"t": [parsed.path[13:]]})   # E-12: the path form
         if parsed.path in ("/unsubscribe", "/unsubscribe/"):
             return self._unsubscribe(parse_qs(parsed.query))
         if parsed.path.startswith("/api/profile/"):
@@ -1052,20 +1098,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        # The Paddle webhook is EXEMPT: it is already authenticated by
-        # signature, and a retry burst during an incident is exactly when
-        # we least want to start dropping payment events on the floor.
+        # The billing webhook (/api/billing/webhook — Stripe; Paddle is
+        # retired, audit E-19) is exempt from the rate limiter below: it is
+        # authenticated by signature, and a retry burst during an incident
+        # is exactly when we least want to drop payment events.
         # One-click unsubscribe (RFC 8058). Before the rate limiter and
         # before every auth path: a mail client POSTs here on the
         # reader's behalf with no cookie, and the header on every digest
         # promises it answers.
-        if parsed.path in ("/unsubscribe", "/unsubscribe/"):
+        if parsed.path in ("/unsubscribe", "/unsubscribe/") or parsed.path.startswith("/unsubscribe/"):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 length = 0
             if 0 < length <= MAX_PROFILE_BYTES:
                 self.rfile.read(length)          # read and discard the body
+            if len(parsed.path) > 13:            # E-12: the path form
+                return self.do_POST_unsubscribe({"t": [parsed.path[13:]]})
             return self.do_POST_unsubscribe(parse_qs(parsed.query))
         if not parsed.path.startswith("/api/billing/webhook"):
             auth = parsed.path.startswith("/api/account/")
@@ -1257,7 +1306,7 @@ class Handler(BaseHTTPRequestHandler):
         def grab(path, ttl):
             if not sleeper_path_ok(path):
                 raise DataUnavailable(f"path not allowlisted: {path}")
-            cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+            cache = sleeper_cache_name(path)
             return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
 
         try:
@@ -1268,8 +1317,8 @@ class Handler(BaseHTTPRequestHandler):
             draft = grab(f"draft/{draft_id}", ttl=300)
             raw = grab(f"draft/{draft_id}/picks", ttl=10)
         except (DataUnavailable, ValueError) as exc:
-            return self._send(502, json.dumps({"error": str(exc)}).encode(),
-                              ".json")
+            return self._fail(502, "Sleeper did not answer for that draft. Try again in a minute.",
+                              exc, "sleeper draft")
 
         picks = []
         for p in raw or []:
@@ -1452,7 +1501,7 @@ class Handler(BaseHTTPRequestHandler):
         def grab(path, ttl):
             if not sleeper_path_ok(path):
                 raise DataUnavailable(f"path not allowlisted: {path}")
-            cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+            cache = sleeper_cache_name(path)
             return json.loads(fetch_text(SLEEPER_BASE + path, cache, ttl=ttl))
 
         try:
@@ -1461,8 +1510,8 @@ class Handler(BaseHTTPRequestHandler):
             users = grab(f"league/{league_id}/users", ttl=600)
             players = grab("players/nfl", ttl=86400)
         except (DataUnavailable, ValueError) as exc:
-            return self._send(502, json.dumps({"error": str(exc)}).encode(),
-                              ".json")
+            return self._fail(502, "Sleeper did not answer for that league. Try again in a minute.",
+                              exc, "sleeper league desk")
 
         def rows_for(roster):
             # WHO HE HAS GOT IN, carried through. Sleeper's `starters` is
@@ -1605,8 +1654,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             lg = espnfantasy.league(season, league_id)
         except DataUnavailable as exc:
-            return self._send(502, json.dumps({"error": str(exc)}).encode(),
-                              ".json")
+            return self._fail(502, "ESPN did not answer for that league. Check the league is public, then try again.",
+                              exc, "espn league")
 
         conn = connect()
         try:
@@ -2053,8 +2102,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(Z.split(Z.block_or_empty())[0]).encode(),
                               ".json")
         except Exception as exc:                             # noqa: BLE001
-            return self._send(500, json.dumps(
-                {"error": f"{type(exc).__name__}: {exc}"}).encode(), ".json")
+            return self._fail(500, "Zeno's record could not be read right now.", exc, "zeno")
 
     def _zeno_tickets(self):
         """His bets, live from the store, FOR HIM: the owner token, the same
@@ -3152,8 +3200,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             lg = yahoofantasy.league(league_key)
         except DataUnavailable as exc:
-            return self._send(502, json.dumps({"error": str(exc)}).encode(),
-                              ".json")
+            return self._fail(502, "Yahoo did not answer for that league. Try again in a minute.",
+                              exc, "yahoo league")
 
         conn = connect()
         try:
@@ -3268,8 +3316,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 Path(yf.TOKEN_PATH).unlink(missing_ok=True)
             except OSError as exc:
-                return self._send(500, json.dumps({"error": str(exc)}).encode(),
-                                  ".json")
+                return self._fail(500, "Could not disconnect Yahoo on the server.", exc, "yahoo disconnect")
             return self._send(200, b'{"connected":false}', ".json")
         code = str((body or {}).get("code") or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9._~-]{4,128}", code):
@@ -3296,11 +3343,11 @@ class Handler(BaseHTTPRequestHandler):
         # rounds stale. Everything else can sit for five minutes.
         ttl = (86400 if path == "players/nfl"
                else 10 if path.endswith("/picks") else 300)
-        cache = "sleeper_" + re.sub(r"[^A-Za-z0-9]+", "_", path) + ".json"
+        cache = sleeper_cache_name(path)
         try:
             body = fetch_text(SLEEPER_BASE + path, cache, ttl=ttl)
         except DataUnavailable as exc:
-            return self._send(502, json.dumps({"error": str(exc)}).encode(), ".json")
+            return self._fail(502, "Sleeper did not answer. Try again in a minute.", exc, "sleeper proxy")
         self._send(200, body.encode(), ".json")
 
     # --- API ---------------------------------------------------------------
@@ -3356,8 +3403,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = run_slate(SLATE, config)
             from engine.served import served
             payload = json.dumps(served(result)).encode()
-        except Exception as exc:  # surface engine errors as JSON
-            self._send(500, json.dumps({"error": str(exc)}).encode(), ".json")
+        except Exception as exc:  # noqa: BLE001 — the engine's error, as JSON
+            self._fail(500, "The engine could not run that slate.", exc, "run slate")
             return
         self._send(200, payload, ".json")
 
@@ -3698,7 +3745,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"explainer not configured","configured":false}',
                               ".json")
         except EX.Unavailable as exc:
-            body = {"error": "explainer unavailable", "detail": str(exc)[:200]}
+            sys.stderr.write(f"  explainer: {type(exc).__name__}: {exc}\n")
+            body = {"error": "explainer unavailable"}       # detail to the log only (E-14)
             return self._send(503, json.dumps(body).encode(), ".json")
         return self._send(200, json.dumps(out).encode(), ".json")
 
@@ -3768,7 +3816,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"ask not configured","configured":false}',
                               ".json")
         except EX.Unavailable as exc:
-            err = {"error": "ask unavailable", "detail": str(exc)[:200]}
+            sys.stderr.write(f"  ask: {type(exc).__name__}: {exc}\n")
+            err = {"error": "ask unavailable"}              # detail to the log only (E-14)
             return self._send(503, json.dumps(err).encode(), ".json")
         keep = {k: out[k] for k in ("text", "refused", "matched", "focused", "sources", "cached")}
         # Signed, so the page can carry it back as context (audit C-3).
@@ -4166,14 +4215,66 @@ def seal_on_boot() -> None:
                   "at startup.")
         left = _gate.unsealed(web_data=WEB / "data")
         if left:
-            rows = sum(r["rows"] for r in left)
-            print(f"  WARNING: {len(left)} board(s) still carry {rows} "
-                  "paid row(s) after sealing. Anyone can read them. "
-                  "Run: python3 launch.py --seal")
+            _fail_closed(left, "paid rows remain after sealing")
+        else:
+            _clear_unsealed_flag()
     except Exception as exc:                                 # noqa: BLE001
-        print(f"  WARNING: could not seal the public boards at startup: "
-              f"{exc}\n  Run `python3 launch.py --seal` and check "
-              "`--todo` before letting anyone in.")
+        try:
+            from engine import gate as _gate
+            left = _gate.unsealed(web_data=WEB / "data")
+        except Exception:                                    # noqa: BLE001
+            left = []
+        _fail_closed(left, f"the seal raised: {type(exc).__name__}: {exc}")
+
+
+#: Where a board that could not be sealed is moved, and the flag that says
+#: so (audit E-13). Outside web/ on purpose: Caddy file-serves web/data,
+#: so a renamed file left beside the boards would still be public.
+UNSEALED_DIR = ROOT / "data" / "unsealed"
+UNSEALED_FLAG = ROOT / "data" / "UNSEALED.json"
+
+
+def _fail_closed(left: list, why: str) -> None:
+    """A board still carrying paid rows is taken OFF the public path.
+
+    THIS USED TO PRINT A WARNING AND SERVE THE BOARD (audit E-13). Caddy
+    serves web/data straight off disk, so a board the seal could not
+    redact was public until somebody read the journal. The site still
+    boots — the docstring above is right that refusing to start turns a
+    redaction problem into an outage — but the leaking boards move out of
+    web/ (the free pages show those boards as unavailable until the next
+    build writes a sealed copy), UNSEALED.json records what and why for
+    `--todo` and the status page, and the journal line says ALERT.
+    """
+    import datetime as _dt
+    moved = []
+    try:
+        UNSEALED_DIR.mkdir(parents=True, exist_ok=True)
+        for r in left or []:
+            src = WEB / "data" / r["board"]
+            if src.exists():
+                os.replace(src, UNSEALED_DIR / r["board"])
+                moved.append(r["board"])
+    except OSError as exc:
+        why += f"; moving the boards failed too: {exc}"
+    try:
+        UNSEALED_FLAG.write_text(json.dumps({
+            "at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+            "why": why, "moved": moved,
+            "rows": sum(int(r.get("rows") or 0) for r in left or [])}, indent=1))
+    except OSError:
+        pass
+    print(f"  ALERT: public boards could not be sealed ({why}). "
+          f"{len(moved)} board(s) taken off the public path into "
+          f"{UNSEALED_DIR}. Run `python3 launch.py --seal`, then restart.",
+          file=sys.stderr)
+
+
+def _clear_unsealed_flag() -> None:
+    try:
+        UNSEALED_FLAG.unlink()
+    except OSError:
+        pass
 
 
 def main() -> None:

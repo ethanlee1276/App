@@ -82,17 +82,91 @@ def ensure_tables(conn) -> None:
         token       TEXT NOT NULL,
         created_at  INTEGER NOT NULL DEFAULT 0
     )""")
+    # NO TOKEN AT REST (audit E-12, roadmap #52). A link's token is now an
+    # HMAC of (user, salt) under a key that is not in the database, so a
+    # copy of the accounts DB unsubscribes nobody. `token` keeps the clear
+    # tokens already sitting in inboxes, honoured until `legacy_until`
+    # (set when a row first gets a salt) and then blanked.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(digest_optin)")}
+    if "salt" not in cols:
+        conn.execute("ALTER TABLE digest_optin ADD COLUMN salt TEXT")
+    if "legacy_until" not in cols:
+        conn.execute("ALTER TABLE digest_optin ADD COLUMN legacy_until INTEGER")
     conn.commit()
+
+
+#: How long a clear token already delivered keeps working after its row
+#: moves to derived links — past any reasonable "I'll read it later".
+LEGACY_TOKEN_DAYS = 60
+_UNSUB_KEY: list = []
+_DERIVED = re.compile(r"(\d{1,12})\.([A-Za-z0-9_-]{24,64})")
+
+
+def unsub_key_path() -> Path:
+    return ROOT / "data" / "unsub.key"
+
+
+def _unsub_key() -> bytes:
+    """QB_UNSUB_KEY when set, else a random key kept at data/unsub.key
+    (0600, gitignored), minted on first use."""
+    if _UNSUB_KEY:
+        return _UNSUB_KEY[0]
+    env = os.environ.get("QB_UNSUB_KEY", "").strip()
+    key = env.encode() if env else b""
+    if not key:
+        try:
+            key = unsub_key_path().read_bytes().strip()
+        except OSError:
+            key = b""
+    if len(key) < 16:
+        key = secrets.token_hex(32).encode()
+        try:
+            unsub_key_path().parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(unsub_key_path()), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(key)
+        except OSError:
+            pass
+    _UNSUB_KEY.append(key)
+    return key
+
+
+def link_token(user_id: int, salt: str) -> str:
+    """The token a link carries: the user and a MAC over (user, salt)."""
+    import base64
+    import hashlib
+    import hmac
+    mac = hmac.new(_unsub_key(), f"unsub:{int(user_id)}:{salt}".encode(),
+                   hashlib.sha256).digest()
+    return f"{int(user_id)}." + base64.urlsafe_b64encode(mac).decode().rstrip("=")[:32]
+
+
+def _salt_for(conn, user_id: int) -> str:
+    """The row's salt, minting one (and starting the legacy clock) if the
+    row predates derived links."""
+    import time
+    row = conn.execute("SELECT salt, token FROM digest_optin WHERE user_id=?",
+                       (int(user_id),)).fetchone()
+    if row is None:
+        return ""
+    if row["salt"]:
+        return row["salt"]
+    salt = secrets.token_urlsafe(16)
+    until = int(time.time()) + LEGACY_TOKEN_DAYS * 86400 if row["token"] else None
+    conn.execute("UPDATE digest_optin SET salt=?, legacy_until=? WHERE user_id=?",
+                 (salt, until, int(user_id)))
+    conn.commit()
+    return salt
 
 
 def optin_get(conn, user_id: int) -> dict:
     ensure_tables(conn)
-    row = conn.execute("SELECT morning, nightly, token FROM digest_optin "
+    row = conn.execute("SELECT morning, nightly FROM digest_optin "
                        "WHERE user_id=?", (int(user_id),)).fetchone()
     if row is None:
         return {"morning": False, "nightly": False, "token": ""}
     return {"morning": bool(row["morning"]), "nightly": bool(row["nightly"]),
-            "token": row["token"]}
+            "token": link_token(user_id, _salt_for(conn, user_id))}
 
 
 def optin_set(conn, user_id: int, morning: bool, nightly: bool) -> dict:
@@ -104,15 +178,16 @@ def optin_set(conn, user_id: int, morning: bool, nightly: bool) -> dict:
     """
     import time
     ensure_tables(conn)
-    cur = optin_get(conn, user_id)
-    token = cur["token"] or secrets.token_urlsafe(24)
+    # A new row stores a salt and NO token; an existing row keeps its salt
+    # (and so its links) across every toggle.
     conn.execute(
-        "INSERT INTO digest_optin (user_id, morning, nightly, token, created_at) "
-        "VALUES (?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET "
+        "INSERT INTO digest_optin (user_id, morning, nightly, token, created_at, salt) "
+        "VALUES (?,?,?,'',?,?) ON CONFLICT(user_id) DO UPDATE SET "
         "morning=excluded.morning, nightly=excluded.nightly",
-        (int(user_id), 1 if morning else 0, 1 if nightly else 0, token,
-         int(time.time())))
+        (int(user_id), 1 if morning else 0, 1 if nightly else 0,
+         int(time.time()), secrets.token_urlsafe(16)))
     conn.commit()
+    token = link_token(user_id, _salt_for(conn, user_id))
     return {"morning": bool(morning), "nightly": bool(nightly), "token": token}
 
 
@@ -123,12 +198,28 @@ def unsubscribe(conn, token: str) -> bool:
     a password is an unsubscribe that becomes a spam report instead. The
     token is unguessable and can do exactly one thing.
     """
+    import hmac
+    import time
     tok = str(token or "").strip()
     if not tok or len(tok) < 16:
         return False
     ensure_tables(conn)
-    cur = conn.execute("UPDATE digest_optin SET morning=0, nightly=0 "
-                       "WHERE token=?", (tok,))
+    m = _DERIVED.fullmatch(tok)
+    if m:
+        uid = int(m.group(1))
+        row = conn.execute("SELECT salt FROM digest_optin WHERE user_id=?",
+                           (uid,)).fetchone()
+        if row is None or not row["salt"] or not hmac.compare_digest(
+                link_token(uid, row["salt"]), tok):
+            return False
+        cur = conn.execute("UPDATE digest_optin SET morning=0, nightly=0 "
+                           "WHERE user_id=?", (uid,))
+    else:
+        # A clear token from a message sent before derived links, honoured
+        # until its row's legacy window closes.
+        cur = conn.execute(
+            "UPDATE digest_optin SET morning=0, nightly=0 WHERE token=? AND token!='' "
+            "AND (legacy_until IS NULL OR legacy_until > ?)", (tok, int(time.time())))
     conn.commit()
     return cur.rowcount > 0
 
@@ -143,11 +234,17 @@ def recipients(conn, kind: str) -> list[dict]:
     """
     if kind not in ("morning", "nightly"):
         return []
+    import time
     ensure_tables(conn)
+    # Close the legacy windows that have run out: the clear token goes.
+    conn.execute("UPDATE digest_optin SET token='' WHERE legacy_until IS NOT NULL "
+                 "AND legacy_until < ? AND token!=''", (int(time.time()),))
+    conn.commit()
     rows = conn.execute(
-        f"SELECT u.id, u.email, d.token FROM digest_optin d "
+        f"SELECT u.id, u.email FROM digest_optin d "
         f"JOIN users u ON u.id = d.user_id WHERE d.{kind} = 1").fetchall()
-    return [{"user_id": r["id"], "email": r["email"], "token": r["token"]}
+    return [{"user_id": r["id"], "email": r["email"],
+             "token": link_token(r["id"], _salt_for(conn, r["id"]))}
             for r in rows]
 
 
@@ -322,7 +419,9 @@ def _wrap(subject: str, text: str, body_html: str, token: str) -> dict:
     opens earn. It rides here rather than in each builder so a new
     digest cannot ship without it.
     """
-    link = f"{SITE}/unsubscribe?t={token}" if token else f"{SITE}/account"
+    # In the PATH, not a query string (audit E-12): the server's request
+    # log redacts the segment, and nothing downstream logs it as a param.
+    link = f"{SITE}/unsubscribe/{token}" if token else f"{SITE}/account"
     foot_text = ("\n—\nYou are getting this because you asked for it on your "
                  f"Qellys Book account.\nStop these emails: {link}\n"
                  "This is analysis, not advice. No bets are taken here.\n")

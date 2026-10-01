@@ -128,6 +128,41 @@ The version line should print `1.11.0`; `pip-audit` should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
+**P52-a. Security housekeeping from the audit (on the box, ten minutes).**
+Four changes in this update need the box itself:
+
+1. **The unit's new syscall filter.** `deploy/qellys.service` now drops
+   every capability and allows only systemd's `@system-service` calls.
+   Install it, restart, and watch the first minute of the journal:
+
+   ```
+   cd /srv/qellys && sudo cp deploy/qellys.service /etc/systemd/system/ \
+     && sudo systemctl daemon-reload && sudo systemctl restart qellys
+   sudo journalctl -u qellys -n 50 --no-pager
+   systemd-analyze security qellys | tail -1
+   ```
+
+   If the service will not start and the journal says `SIGSYS` or "Bad
+   system call", take the two `SystemCallFilter`/`SystemCallArchitectures`
+   lines back out and tell me which call it was.
+2. **Caddy's new hide list and Permissions-Policy header.** Reload, then check:
+   `sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy`
+   then `curl -sI https://qellysbook.com/ | grep -i permissions-policy`.
+3. **The weekly Cloudflare list refresh.**
+   `sudo cp deploy/qellys-cfips.service deploy/qellys-cfips.timer /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now qellys-cfips.timer`
+   then `systemctl list-timers qellys-cfips.timer`.
+4. **A board the boot seal cannot redact now comes off the public path.**
+   If `data/UNSEALED.json` ever exists, read it, then reseal and restart:
+
+   ```
+   cd /srv/qellys && sudo -u qellys python3 launch.py --seal
+   sudo systemctl restart qellys
+   ```
+
+The unsubscribe links in new emails now look like `/unsubscribe/<id>.<code>`
+and carry no secret stored in the database. Links already in inboxes keep
+working for 60 days from the next send.
+
 **P45-a. The Android app (laptop, an hour; only after the policy read).**
 Read `docs/APP_STORES.md` first, including its four Google Play questions,
 which nobody has answered yet. If the answers allow it, follow the
@@ -1202,15 +1237,16 @@ cd /srv/qellys && sudo ./deploy/setenv.sh QB_OWNER_TOKEN
 sudo systemctl restart qellys
 ```
 
-Pick something long and random (`openssl rand -hex 24` is fine). Without
-it every import answers 503 — closed, not open.
+Pick something long and random — at least 32 bytes:
+`python3 -c "import secrets; print(secrets.token_urlsafe(32))"` (audit
+E-16). Without it every import answers 503 — closed, not open.
 
 **2. Import an export.** Two ways; the first needs no SSH at all.
 
 From your laptop, with the file next to you:
 
 ```bash
-export QB_OWNER_TOKEN='paste-the-token-here'
+read -rs QB_OWNER_TOKEN && export QB_OWNER_TOKEN   # paste, Enter; never in shell history (E-16)
 curl -sS -X POST https://qellys.com/api/zeno/import \
   -H "X-Owner-Token: $QB_OWNER_TOKEN" -H "X-Zeno-Source: juicereel" \
   --data-binary @juicereel.csv

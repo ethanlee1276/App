@@ -18,6 +18,7 @@ why this file exists rather than a few lines added to three others:
 Run directly: `python3 tests/test_routes.py`
 """
 
+import html
 import json
 import os
 import re
@@ -290,19 +291,24 @@ def test_the_swapped_document_is_the_app_not_a_landing_page():
     assert "Track record" in doc[:doc.index("</head>")]
     assert 'id="view-record"' in doc, "the app's own markup is gone"
     assert doc.count("<base href=\"/\" />") == 1
-    assert "__QB_ROUTE__" in doc
-    hint = json.loads(re.search(r"__QB_ROUTE__ = (\{.*?\});", doc).group(1))
+    # The hint is a <meta> since audit E-10 (an inline script was blocked
+    # by the CSP and never ran).
+    m = re.search(r'<meta name="qb-route" content="([^"]*)" />', doc)
+    assert m, "no route hint"
+    hint = json.loads(html.unescape(m.group(1)))
     assert hint["hash"] == "record"
+    assert "<script>window.__QB_ROUTE__" not in doc
 
 
 def test_the_hint_cannot_close_the_script_it_rides_in():
-    """The one injection a JSON blob in a <script> still has: a slug
-    containing `</script>` would end the element early and everything
-    after it becomes markup."""
-    doc = routes.document({"hash": "player/x</script><img src=x>",
+    """The injection a hint in the document still has: a slug carrying
+    markup or a quote must not end the attribute it rides in and become
+    markup. (A <meta> since audit E-10; the attribute is HTML-escaped.)"""
+    doc = routes.document({"hash": 'player/x"></script><img src=x>',
                            "sport": "", "kind": "player"}, HTML)
-    assert "</script><img" not in doc
-    assert "<\\/script>" in doc
+    assert "</script><img" not in doc and "<img src=x>" not in doc
+    m = re.search(r'<meta name="qb-route" content="([^"]*)" />', doc)
+    assert m and json.loads(html.unescape(m.group(1)))["hash"] == 'player/x"></script><img src=x>'
 
 
 def test_the_preview_image_is_absolute_on_an_entity_page():
