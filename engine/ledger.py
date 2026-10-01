@@ -4440,7 +4440,7 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
     return out
 
 
-def unplayed_bets(conn, hist_conn, today=None) -> list[dict]:
+def unplayed_bets(conn, hist_conn, today=None, sports=None) -> list[dict]:
     """Open bets whose own game was never played, and so can never grade.
 
     A prop on a postponed, cancelled or suspended fixture is no-action at
@@ -4454,14 +4454,40 @@ def unplayed_bets(conn, hist_conn, today=None) -> list[dict]:
     for bets that are merely ungraded, and it says nothing about a day still
     in play.
     """
+    # CHEAP FIRST (2026-10-01: 184.7 s a settle on the box once #44 ran
+    # this every cycle). A bet can only qualify on a PAST day that holds a
+    # scoreless game row AND a final (never_resolving_game's own terms), so
+    # that is asked once per (sport, day), only past open bets are read,
+    # and a day's player -> team map is built once instead of once per bet.
+    import datetime as _dt
+    ref = str(today or _dt.date.today().isoformat())
+    where, args = "status='open' AND date < ?", [ref]
+    if sports:
+        where += " AND sport IN (%s)" % ",".join("?" * len(sports))
+        args += list(sports)
+    day_ok: dict = {}
+    names: dict = {}
+
+    def _day_can_hold(sport, day):
+        k = (sport, day)
+        if k not in day_ok:
+            r = hist_conn.execute(
+                "SELECT COALESCE(SUM(home_score IS NULL), 0), "
+                "COALESCE(SUM(home_score IS NOT NULL), 0) FROM games "
+                "WHERE sport=? AND period=?", (sport, day)).fetchone()
+            day_ok[k] = int(r[0] or 0) > 0 and int(r[1] or 0) > 0
+        return day_ok[k]
+
     out: list[dict] = []
     for b in conn.execute(
-            "SELECT * FROM bets WHERE status='open' ORDER BY date, sport"
+            f"SELECT * FROM bets WHERE {where} ORDER BY date, sport", args
     ).fetchall():
         if not b["date"] or "-W" in str(b["date"]):
             continue
+        if not _day_can_hold(b["sport"], str(b["date"])):
+            continue
         team = _game_bet_team(b) if b["market"] in GAME_MARKETS \
-            else _bet_team(hist_conn, b)
+            else _bet_team(hist_conn, b, names)
         if not team:
             continue
         if not never_resolving_game(hist_conn, b, {"team": team}, today):
@@ -4511,7 +4537,7 @@ def _game_bet_team(b) -> str | None:
     return p
 
 
-def _bet_team(hist_conn, b) -> str | None:
+def _bet_team(hist_conn, b, cache: dict | None = None) -> str | None:
     """Which team the bet's player was on, from the results themselves.
 
     Read from the neighbouring day's log when the bet's own day has none —
@@ -4533,6 +4559,20 @@ def _bet_team(hist_conn, b) -> str | None:
         return None
     for off in (0, -1, 1):
         d = (d0 + _dt.timedelta(days=off)).isoformat()
+        if cache is not None:
+            # One pass per (sport, day), first team per name as before.
+            key = (b["sport"], d)
+            if key not in cache:
+                m: dict = {}
+                for r in hist_conn.execute(
+                        "SELECT player, team FROM player_game_logs "
+                        "WHERE sport=? AND period=?", (b["sport"], d)):
+                    if r[1]:
+                        m.setdefault(normalize_name(r[0]), r[1])
+                cache[key] = m
+            if want in cache[key]:
+                return cache[key][want]
+            continue
         for r in hist_conn.execute(
                 "SELECT player, team FROM player_game_logs "
                 "WHERE sport=? AND period=?", (b["sport"], d)):
@@ -4591,7 +4631,7 @@ def auto_void_unplayed(conn, hist_conn, today=None) -> list[dict]:
     import datetime as _dt
     ref = _dt.date.fromisoformat(str(today)) if today else _dt.date.today()
     cutoff = (ref - _dt.timedelta(days=AUTO_VOID_AFTER_DAYS)).isoformat()
-    rows = [r for r in unplayed_bets(conn, hist_conn, ref.isoformat())
+    rows = [r for r in unplayed_bets(conn, hist_conn, ref.isoformat(), sports=AUTO_VOID_SPORTS)
             if r["sport"] in AUTO_VOID_SPORTS and str(r["date"]) <= cutoff]
     if not rows:
         return []

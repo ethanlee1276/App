@@ -154,11 +154,13 @@ it and everything it pulls in, with hashes:
 ```
 cd /srv/qellys && sudo python3 -m pip install --break-system-packages --ignore-installed --require-hashes -r requirements.txt
 sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
-sudo python3 -m pip install --break-system-packages pip-audit && pip-audit -r requirements.txt
+sudo python3 -m pip install --break-system-packages pip-audit && pip-audit --disable-pip -r requirements.txt
 sudo systemctl restart qellys && python3 launch.py --todo | grep -i "sdk"
 ```
 
-The version line should print `1.11.0`; `pip-audit` should print "No known
+The version line should print `1.11.0` (done 2026-10-01). `--disable-pip`
+because the droplet has no `python3-venv` and the file is hash-pinned, so
+pip-audit has nothing to resolve; it should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
@@ -205,41 +207,10 @@ which nobody has answered yet. If the answers allow it, follow the
 `web/.well-known/assetlinks.json`, deploy, and upload to an internal
 testing track. Never put the keystore in the repo or on the droplet.
 
-**P44-a. Check postponed MLB picks cleared themselves (read-only, a minute).**
-The settle pass now voids a pick on an MLB game that was never played
-(postponed, cancelled or suspended) once the game is three days old. It
-uses the same finder as `--void-unplayed`, and each void is logged in
-the audit table as `auto_void_unplayed`. This should also clear the nine
-open picks from 2026-09-22 (task #183) on the first settle after the
-update. Check:
-
-```
-cd /srv/qellys && sudo -u qellys python3 launch.py --void-unplayed
-sudo -u qellys sqlite3 data/ledger.db "select count(*) from bets_audit where reason='auto_void_unplayed'"
-```
-
-The first command should list no MLB picks dated more than three days
-ago. The second gives how many the clock has voided so far. Other
-leagues still need `--void-unplayed --apply` by hand.
-
-**P33-a. Check the journal re-keyed itself (read-only, a minute).** The
-first process to open the journal after this update rebuilds the `bets`
-table once so a doubleheader's second game and the other side of a pick
-are no longer dropped. It keeps every row and id and writes a full copy
-first. Check it happened and nothing was lost:
-
-```
-cd /srv/qellys && ls -la data/backups/ | grep pre-pick-key
-sudo -u qellys python3 -c "from engine import ledger as L; c=L.connect(); print(L.get_cfg(c,'pick_key_v2'), c.execute('select count(*) from bets').fetchone()[0], L._old_pick_key(c))"
-sqlite3 data/backups/ledger-pre-pick-key-*.db "select count(*) from bets"
-```
-
-The second line should print a date, a count, and `False`; the count must
-equal the third line's. Re-quotes the key still refuses (same pick, new
-price — the first price stays the claim) are now listed in
-`data/journal_dropped.jsonl`. Also: `--resize-unstaked` is now a dry run
-unless you add `--apply`, and every journal repair with `--apply` writes a
-`data/backups/pre-<repair>-<time>/` copy before it touches anything.
+**P44-a and P33-a: done 2026-10-01.** The journal re-keyed itself
+(22,818 bets, old key gone), and the clock voided 28 rows: every one on
+the postponed 9/22 Orioles–Blue Jays game (9 staked, 19 on the paper
+boards). Nothing else is waiting on an unplayed game.
 
 **P31-a. Turn on the usage counts (changes a setting, a minute).** You
 approved the wording; the Privacy Policy now describes the counts (daily
@@ -270,32 +241,12 @@ are phones still syncing, and the store keeps working for them.
 
 ---
 
-## TONIGHT — 2026-09-29, after the go-over (Ethan: "repair the closes and dig into the MLB bets")
+## 2026-09-29 go-over: done 2026-10-01
 
-**M9. The stuck MLB bets (read-only, seconds).** Nine MLB bets from
-2026-09-22 (eight staked Most Likely, one edge) are still open a week
-later. This groups every open bet by what is blocking it and names the
-fix. Paste it back:
-
-```
-cd /srv/qellys && sudo -u qellys python3 launch.py --why-open 2>&1 | tee ~/whyopen.txt
-```
-
-**M10. Repair the NFL closing lines — dry run first (read-only).** Every
-settled NFL prop's close rebuilt from pregame prices only (the old ones
-were in-game lines). Lists every change; writes nothing:
-
-```
-cd /srv/qellys && sudo -u qellys python3 closerepair.py 2>&1 | tee ~/closerepair.txt
-```
-
-**M11. Then write it** (you said yes, 2026-09-29). Changes only the
-closing line and closing price on those rows — never a grade. Saves every
-old value to `data/closerepair_<time>.json` first:
-
-```
-cd /srv/qellys && sudo -u qellys python3 closerepair.py --apply
-```
+M9 (the stuck MLB bets) was the postponed 9/22 game, voided by the clock.
+M10/M11 (the NFL closing-line repair) was applied; the old values are in
+`data/closerepair_<time>.json`, and each change is in the Record page's
+change log as `closerepair`. No grade moved.
 
 ---
 
