@@ -61,6 +61,7 @@ def _node(js):
       {_fn("firstStartOnCard")}
       {_fn("boardEmptyFacts")}
       {_const("EMPTY_DOORS")}
+      {_fn("emptyDoorOpen")}
       {_fn("boardEmptyDoors")}
       let state = {{ sport: "nfl", data: null }};
       console.log(JSON.stringify((() => {{ {js} }})()));

@@ -1144,8 +1144,27 @@ function boardEmptyFacts() {
 }
 /* The doors: the pages that are never empty, minus the one you are on. */
 const EMPTY_DOORS = [["tonight", "Tonight’s picks", "view"], ["live", "Live now", "view"], ["record", "The record", "tool"]];
+/* A DOOR NEVER OPENS ONTO ANOTHER EMPTY PAGE (audit V-17, roadmap #48).
+   On an empty night "Tonight’s picks" from the Edge page led to the same
+   sentence on Tonight, and "Live now" before first pitch to a page with
+   nothing live. Only judged when the board is loaded: with no data the
+   doors are offered, since an unknown is not an empty. The record is
+   never empty. */
+function emptyDoorOpen(k) {
+  const d = state.data;
+  if (!d || k === "record") return true;
+  if (k === "tonight" && typeof tonightPick === "function") {
+    const t = tonightPick(d);
+    return !!(t.n || (t.shots || []).length || (t.ml || []).length);
+  }
+  if (k === "live") {
+    return (d.games || []).some((g) => g && g.live
+      && !["scheduled", "pre", "upcoming", "final", "post"].includes(String(g.live.state || "scheduled")));
+  }
+  return true;
+}
 function boardEmptyDoors(here) {
-  return `<div class="es-doors">${EMPTY_DOORS.filter(([k]) => k !== here).map(([k, label, kind]) =>
+  return `<div class="es-doors">${EMPTY_DOORS.filter(([k]) => k !== here && emptyDoorOpen(k)).map(([k, label, kind]) =>
     `<button type="button" class="btn es-door" data-es-${kind}="${k}">${label}</button>`).join("")}</div>`;
 }
 function bindEmptyDoors(host) {
@@ -2465,13 +2484,27 @@ function slateNotice(d) {
   return days >= 7 ? { kind: "old", newest, days } : null;
 }
 
-function slateNoticeHTML(n) {
+/* THE DEMO BANNER, ACKNOWLEDGED, IS A CHIP (audit V-17). ~110px over
+   the first content on a phone, every page, with no way to put it away.
+   "Got it" folds it to one line for the session — the line still says
+   Demo board and still says nothing here is a pick, so a demo board never
+   passes for today's (P1-1). */
+const DEMO_ACK_KEY = "qb_demo_ack";
+function demoAcked() {
+  try { return sessionStorage.getItem(DEMO_ACK_KEY) === "1"; } catch (e) { return false; }
+}
+function slateNoticeHTML(n, compact) {
+  if (n.kind === "demo" && compact) {
+    return `${icon("warn", 15)}
+      <span><b>Demo board.</b> Example games, not today’s slate — nothing here is a pick.</span>`;
+  }
   if (n.kind === "demo") {
     return `${icon("warn", 15)}
       <span><b>Demo board.</b> These are example games and prices, shown to
       demonstrate the site — not today’s slate, and nothing here is a pick.
       The public record is real: <a href="#record">every graded pick, at the
-      price it was taken</a>.</span>`;
+      price it was taken</a>.</span>
+      <button type="button" class="btn-quiet slate-ack" data-act="demoAck">Got it</button>`;
   }
   return `${icon("warn", 15)}
     <span><b>This board’s games are from ${escapeHtml(formatGameDate(n.newest))} —
@@ -2514,6 +2547,7 @@ function renderStaleBar(ageMs, ago) {
   _staleArgs = [ageMs, ago];
   const host = document.getElementById("stalebar");
   if (!host) return;
+  host.classList.remove("slate-chip");     // only the acknowledged demo line is a chip
   /* OFFLINE OUTRANKS EVERYTHING, because it is the only one of the three
      that names a cause the reader can do something about — and because
      it changes what the other two MEAN. Ethan, 2026-08-25: "Offline
@@ -2567,7 +2601,8 @@ function renderStaleBar(ageMs, ago) {
   const notice = slateNotice(state.data);
   if (notice && notice.kind === "demo") {
     host.hidden = false;
-    host.innerHTML = slateNoticeHTML(notice);
+    host.innerHTML = slateNoticeHTML(notice, demoAcked());
+    host.classList.toggle("slate-chip", demoAcked());
     return;
   }
   const bad = ageMs != null && ageMs > STALE_LOUD_MS;
@@ -38745,6 +38780,12 @@ function enhanceEmpties(root) {
     es.dataset.doors = "1";
     const view = es.closest(".view");
     const key = view ? String(view.id || "").replace(/^view-/, "") : "";
+    // ONE EMPTY STATE PER VIEW (audit V-17 and remove/merge #2): the Edge
+    // page said "nothing qualified" four ways with the doors twice. The
+    // first empty state on a view speaks; a later one shows its headline
+    // only (.es-also) and never gets a second set of doors.
+    const first = view && view.querySelector(".empty-slate");
+    if (first && first !== es) { es.classList.add("es-also"); return; }
     if (!EMPTY_DOOR_VIEWS.has(key) || es.querySelector(".es-doors")) return;
     es.insertAdjacentHTML("beforeend", boardEmptyDoors(key));
     bindEmptyDoors(es);
@@ -38767,6 +38808,10 @@ function enhanceNotes(root) {
     if (note.dataset.noteEnhanced) return;
     const text = (note.textContent || "").trim();
     if (text.length <= NOTE_FOLD_CHARS) return;
+    // One sentence is never folded (audit V-17): a two-line clamp cut an
+    // empty state's only sentence mid-word. The fold is for a caveat that
+    // runs on past its first full sentence.
+    if (!/[.!?](\s|$)/.test(text.replace(/[.!?]["’”)]*\s*$/, ""))) return;
     note.dataset.noteEnhanced = "1";
     note.classList.add("note-folded");
     const btn = document.createElement("button");
@@ -47474,6 +47519,12 @@ function buzzOnSettle(rows) {
    name in `data-arg` is data, apostrophes and all. */
 const ACTS = {
   freshDismiss: () => window._freshDismiss(),
+  demoAck: () => {
+    try { sessionStorage.setItem(DEMO_ACK_KEY, "1"); } catch (e) {}
+    const host = document.querySelector(".slate-ack");
+    const bar = host && host.parentElement;
+    if (bar) { bar.innerHTML = slateNoticeHTML({ kind: "demo" }, true); bar.classList.add("slate-chip"); }
+  },
   welcomeDismiss: () => window._welcomeDismiss(),
   openPlayer: (el, a) => openPlayer(a),
   openRoster: (el, a) => openRoster(a),
