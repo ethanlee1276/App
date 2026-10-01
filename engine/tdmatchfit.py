@@ -178,11 +178,18 @@ def rz_allowed_table(conn, keys) -> dict:
     return out
 
 
-def rz_td_rate_table(rows: list) -> dict:
+def rz_td_rate_table(rows: list, schedule: dict | None = None) -> dict:
     """{(season, week, opponent): touchdowns allowed per red-zone play
     allowed before that week, centred on the league} from player_game_logs
-    rows (season, period, opponent, market, value). A ratio of season sums,
-    leaning on last season's ratio until PRIOR_GAMES."""
+    rows (season, period, opponent, market, value; `team` when the opponent
+    is blank). A ratio of season sums, leaning on last season's ratio until
+    PRIOR_GAMES.
+
+    THE PLAY-BY-PLAY ROWS CARRY NO OPPONENT (engine/sources/nflpbp stores
+    rz_tgt / rz_car with opponent ""), so on the box's first run every
+    red-zone play was skipped and this reading printed nothing. A blank
+    opponent is looked up in ``schedule`` {(season, week, team): opponent},
+    the games table, the way engine/redzone pairs them."""
     td: dict = {}
     rz: dict = {}
     for r in rows:
@@ -191,6 +198,11 @@ def rz_td_rate_table(rows: list) -> dict:
             opp, mk, v = str(r["opponent"] or ""), str(r["market"]), float(r["value"] or 0.0)
         except (TypeError, ValueError, KeyError):
             continue
+        if not opp and schedule:
+            try:
+                opp = schedule.get((season, wk, str(r["team"] or "")), "")
+            except (KeyError, IndexError):
+                opp = ""
         if not opp:
             continue
         if mk in TD_MARKETS:
@@ -336,11 +348,19 @@ def run(conn, seasons=None) -> dict:
         "SELECT season, period, opponent, position, market, value FROM player_game_logs "
         "WHERE sport='nfl' AND market IN ('rec_td','rush_td')").fetchall()
     rz_rows = conn.execute(
-        "SELECT season, period, opponent, market, value FROM player_game_logs "
+        "SELECT season, period, team, opponent, market, value FROM player_game_logs "
         "WHERE sport='nfl' AND market IN ('rec_td','rush_td','rz_tgt','rz_car')").fetchall()
+    schedule: dict = {}
+    for g in conn.execute("SELECT season, period, home, away FROM games WHERE sport='nfl'"):
+        try:
+            yr, wk = int(g["season"]), int(g["period"])
+        except (TypeError, ValueError):
+            continue
+        schedule[(yr, wk, g["home"])] = g["away"]
+        schedule[(yr, wk, g["away"])] = g["home"]
     keys = {(int(r["season"]), int(r["week"])) for r in graded}
     pts = points(graded, defense_epa_table(epa_rows), td_allowed_table(allowed_rows),
-                 rz_allowed_table(conn, keys), rz_td_rate_table(rz_rows))
+                 rz_allowed_table(conn, keys), rz_td_rate_table(rz_rows, schedule))
     return study(pts)
 
 
@@ -352,6 +372,10 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     res = run(db.connect(), seasons=args.seasons)
     print(report(res) if res else "  no graded rows carried a defence reading")
+    # A reading that joined nothing is a wiring fault, not a verdict: say so.
+    for name in SIGNALS:
+        if res and not any(k[0] == name for k in res):
+            print(f"  {name:<14} no graded row carried this reading — not measured")
     return 0
 
 

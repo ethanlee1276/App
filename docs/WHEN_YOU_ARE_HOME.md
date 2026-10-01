@@ -67,6 +67,12 @@ Paste the last lines back; nothing moves until we read them together.
 cd /srv/qellys && sudo -u qellys nice -n 10 python3 -m engine.tdmatchfit 2>&1 | tee ~/tdmatchfit.txt | tail -25
 ```
 
+First run, 2026-10-01: `rz_allowed ALL` FAILS (clustered t 0.5, held-out
+gain zero every season; 1 SD of a softer red zone moves a chance -0.9%) —
+how often a defence lets teams in adds nothing the model lacks.
+`rz_td_allowed` printed nothing: the play-by-play rows carry no opponent,
+fixed by pairing them through the schedule. Run it once more for that row.
+
 Look at the two `ALL` rows (`rz_allowed`, `rz_td_allowed`). PASSES means
 it goes into the touchdown chance (and so into Most Likely); fails means it
 stays on the cards as context, where it is now.

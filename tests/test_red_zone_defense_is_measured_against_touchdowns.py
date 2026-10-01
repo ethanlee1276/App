@@ -51,6 +51,25 @@ def test_touchdowns_per_red_zone_play_is_a_ratio_of_sums_centred_and_blended():
     assert 0 < tab[(2026, 2, "DET")] < 0.15, "one even game pulls Detroit a fifth of the way back"
 
 
+def test_red_zone_plays_with_no_opponent_are_paired_by_the_schedule():
+    """The box's first run: nflpbp stores rz_tgt/rz_car with opponent "",
+    so every red-zone play was skipped and rz_td_allowed printed nothing."""
+    rows, sched = [], {}
+    for w in range(1, 6):
+        sched[(2025, w, "NYJ")] = "DET"
+        sched[(2025, w, "MIA")] = "BUF"
+        rows += [{"season": 2025, "period": f"{w:03d}", "team": "NYJ", "opponent": "", "market": "rz_car", "value": 8},
+                 {"season": 2025, "period": f"{w:03d}", "team": "NYJ", "opponent": "DET", "market": "rush_td", "value": 2},
+                 {"season": 2025, "period": f"{w:03d}", "team": "MIA", "opponent": "", "market": "rz_tgt", "value": 10},
+                 {"season": 2025, "period": f"{w:03d}", "team": "MIA", "opponent": "BUF", "market": "rec_td", "value": 1}]
+    assert M.rz_td_rate_table(rows) == {}, "without the schedule the plays have nowhere to go"
+    tab = M.rz_td_rate_table(rows, sched)
+    assert tab[(2025, 4, "DET")] > 0 > tab[(2025, 4, "BUF")]
+    import inspect
+    assert "rz_td_rate_table(rz_rows, schedule)" in inspect.getsource(M.run)
+    assert "not measured" in inspect.getsource(M.main), "a reading that joined nothing says so"
+
+
 def test_red_zone_plays_allowed_is_the_scenarios_own_number():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -144,7 +163,7 @@ def test_the_clustered_error_counts_an_opponent_season_once():
 def test_the_run_scores_all_four_readings():
     import inspect
     src = inspect.getsource(M.run)
-    assert "rz_allowed_table(conn, keys)" in src and "rz_td_rate_table(rz_rows)" in src
+    assert "rz_allowed_table(conn, keys)" in src and "rz_td_rate_table(rz_rows, schedule)" in src
     assert M.SIGNALS == ("defense_epa", "td_allowed", "rz_allowed", "rz_td_allowed")
 
 
