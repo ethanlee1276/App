@@ -38,7 +38,7 @@ except ModuleNotFoundError:
     print("SKIP Pillow is not installed; tools/venues_ingest.py is a "
           "hand-run laptop tool and the rest of the suite is stdlib-only")
     print("\n0 tests passed.")
-    raise SystemExit(0)
+    raise SystemExit(0) from None
 
 from tools.venues_ingest import (classify, ingest, slice_tiles,  # noqa: E402
                                  target_name)

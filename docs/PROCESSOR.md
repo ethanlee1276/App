@@ -13,13 +13,13 @@ if the categorisation is ever questioned again it is the argument to
 repeat. And §3–§4 are the plan if the account is ever closed — an event
 this business should be prepared for rather than surprised by.
 
-`engine/paddle.py` is still in the tree and is **not wired to anything**.
-Swapping back is four call sites in `server.py` — `start_checkout`,
-`open_portal`, `verify_signature`, `read_event` — plus the signature
-header name and the event-id field, both of which differ. Two test files
-pin the current direction: `tests/test_paddle.py` asserts no `PAY.` call
-survives in `server.py`, and `tests/test_stripe_wiring.py` asserts the
-Stripe ones are there.
+`engine/paddle.py` was retired on 2026-10-01 (audit remove/merge #3,
+roadmap #53): Paddle's own acceptable-use rules exclude this business, so
+it was never a working fallback. It is recoverable from git history (the
+commit that retired it names itself in its subject). The guard that
+matters survived it: `tests/test_one_payment_processor.py` asserts no
+`PAY.` call or paddle import survives in `server.py`, and
+`tests/test_stripe_wiring.py` asserts the Stripe ones are there.
 
 ---
 

@@ -697,5 +697,5 @@ error — so treat the first live run as the real test.
 | `tests/test_billing_e2e.py` | a real server, a real HTTP purchase, over the wire |
 | `tests/test_paywall_bypass.py` | every way somebody could read a paid board free |
 
-`engine/paddle.py` is **not wired to anything** — see its header, and
-`docs/PROCESSOR.md` for what it would take to swap back.
+`engine/paddle.py` was retired on 2026-10-01 (roadmap #53); see
+`docs/PROCESSOR.md` for why, and where it can be recovered from.

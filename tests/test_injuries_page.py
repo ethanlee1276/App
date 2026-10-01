@@ -71,8 +71,8 @@ def test_parser_survives_garbage():
                  {"injuries": [{"injuries": [None]}]}):
         try:
             assert inj.parse_injuries(junk) == []
-        except AttributeError:
-            raise AssertionError(f"choked on {junk!r}")
+        except AttributeError as exc:
+            raise AssertionError(f"choked on {junk!r}") from exc
 
 
 def test_every_league_has_a_feed_and_ufc_deliberately_does_not():

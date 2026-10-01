@@ -292,7 +292,7 @@ def main() -> None:
         trades = pm.parse_trades(pm.fetch_trades())
     except DataUnavailable as exc:
         print(f"⚠️  Polymarket unreachable — keeping last data.\n   {exc}")
-        raise SystemExit(2)
+        raise SystemExit(2) from None
     # Dedicated big-trade pull: the general feed is nearly all retail-sized
     # fills, so without this a 500-row slice can contain zero whales.
     try:

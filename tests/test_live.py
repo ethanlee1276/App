@@ -175,7 +175,7 @@ def test_corrupt_cache_file_is_a_miss_not_a_crash():
         except DataUnavailable as exc:
             raised = exc
         except _json.JSONDecodeError as exc:          # the old behaviour
-            raise AssertionError(f"corrupt cache still crashes: {exc}")
+            raise AssertionError(f"corrupt cache still crashes: {exc}") from exc
         assert raised is not None
 
         # A VALID cache still serves normally.

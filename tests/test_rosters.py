@@ -255,10 +255,8 @@ def test_the_page_shows_why_it_fell_back_instead_of_a_short_roster():
     is a wrong roster, which is the more expensive kind of wrong.
     """
     import os
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read() if "ROOT" in globals() else open(
-        os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), "web", "js", "app.js"),
+    app = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web", "js", "app.js"),
         encoding="utf-8").read()
     assert 'const stale = d.feed === "unavailable"' not in app
     assert 'const stale = (d.note || "")' in app

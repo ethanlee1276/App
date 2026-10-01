@@ -564,6 +564,14 @@ def describe(status: str, period_end: float | None = None) -> str:
         return "Cancelled. Nothing further will be charged."
     if st == "unpaid":
         return "Unpaid — access has stopped."
+    # Stripe pauses a subscription too (a trial that ended without a card,
+    # or a pause set from the dashboard), and rows stored under the old
+    # processor can still say it. "No subscription." would tell somebody
+    # who deliberately paused that they have nothing (moved here from the
+    # retired engine/paddle.py, roadmap #53).
+    if st == "paused":
+        return ("Paused — billing is suspended and access is off until you "
+                "resume it. Nothing has been cancelled.")
     return "No subscription."
 
 

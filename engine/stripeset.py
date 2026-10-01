@@ -596,7 +596,7 @@ def delete_webhook(secret_key: str, endpoint_id: str) -> None:
         with urllib.request.urlopen(req, timeout=20):
             return
     except Exception as exc:                                 # noqa: BLE001
-        raise BI.BillingUnavailable(f"could not remove the old endpoint: {exc}")
+        raise BI.BillingUnavailable(f"could not remove the old endpoint: {exc}") from exc
 
 
 def ensure_webhook(secret_key: str, url: str, recreate: bool = False) -> dict:

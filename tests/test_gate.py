@@ -481,8 +481,7 @@ def test_a_staked_row_under_any_key_is_reported():
 def test_the_audit_is_runnable_on_the_box():
     """A guard that only runs in CI does not protect a board added on the
     server. `--paywall-audit` reads the real public path."""
-    src = _read("launch.py") if "_read" in dir() else open(
-        os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     body = src[src.index("def _paywall_audit_cli("):]
     body = body[:body.index("\ndef ", 1)]
     assert "gate.leaks(" in body or "_gate.leaks(" in body

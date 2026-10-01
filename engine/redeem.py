@@ -9,7 +9,7 @@ A hundred-percent-off code means THERE IS NO PAYMENT. Routing a
 zero-dollar transaction through a merchant of record buys nothing and
 costs plenty: it needs a live Paddle account (there is not one yet), a
 price object, a coupon object, and a webhook round-trip whose signature
-verifier is still flagged UNVERIFIED in `paddle.py`. Every one of those is
+verifier was flagged UNVERIFIED in the (since retired) `paddle.py`. Every one of those is
 a way for a free grant to fail in production for a reason nobody can see.
 
 A grant that involves no money should not travel through a payment

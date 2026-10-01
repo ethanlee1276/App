@@ -292,7 +292,7 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
                     conn, "nfl", market).items():
                 out[(player, market, date)] = quote
         except Exception as exc:                   # noqa: BLE001
-            raise RuntimeError(f"nfl {market} closes unreadable — {exc}")
+            raise RuntimeError(f"nfl {market} closes unreadable — {exc}") from exc
     return out
 
 

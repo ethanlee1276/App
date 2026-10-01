@@ -216,7 +216,7 @@ if __name__ == "__main__":                       # pragma: no cover
                             force="--force" in argv)
         except ValueError as exc:
             print(str(exc))
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         print(f"{key} promoted"
               + ("  (FORCED — recorded as such)" if entry["forced"] else "")
               + f"\n  {note(key, conds)}")
