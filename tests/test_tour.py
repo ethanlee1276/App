@@ -53,8 +53,12 @@ def test_three_cards_say_the_three_things():
     if got is None:
         print("  SKIP node not installed"); return
     assert len(got) == 3
-    assert [s["title"] for s in got] == ["A pick card is one bet", "RIDING means we already hold it", "Two books, kept apart"]
-    assert "70 or better" in got[0]["body"] and "edge" in got[0]["body"]
+    # Card 1 REWRITTEN 2026-09-30 (audit V-15 / roadmap #39): it described
+    # one board of "pick cards" when the site has two boards answering two
+    # questions. The pin follows the new card and asks the same of it.
+    assert [s["title"] for s in got] == ["Two boards, two questions", "RIDING means we already hold it", "Two books, kept apart"]
+    assert "Most Likely" in got[0]["body"] and "Edge picks" in got[0]["body"]
+    assert "beats the book’s price" in got[0]["body"] and "Record page" in got[0]["body"]
     assert "earlier pull" in got[1]["body"] and "Don’t add more" in got[1]["body"]
     assert "separate books" in got[2]["body"] and "only ones we stake" in got[2]["body"]
     for s in got:

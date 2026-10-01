@@ -1061,6 +1061,12 @@
            and the cards moved here whole; the renderers write by id. The
            performance panel that sat beside them was crossed out and is
            gone — the Record rail and the Record page carry the record. -->
+      <!-- THE TWO-LINE LEGEND (audit V-15): what this board is, in words,
+           before the first number. The glossary holds the rest. -->
+      <p class="board-legend"><b>Edge picks</b> are bets where our number beats the book’s price — the
+        bets we stake, journaled at that price and graded on the Record page.
+        <b>Edge</b> is the gap in percentage points; <b>EV</b> is what a unit returns on average.
+        <a href="#features" data-glossary>Glossary</a></p>
       <div id="daycard-zone"></div>
       <div class="stats" id="stats"></div>
       <div id="best-bets"></div>
@@ -1272,6 +1278,9 @@
       <div class="section-title" id="likely-title">Most Likely to Hit
         <span class="sub" id="likely-sub">— grouped by the kind of bet, ranked by how likely it is</span>
       </div>
+      <p class="board-legend"><b>Most Likely</b> ranks bets by our chance they hit — Top, Strong, Solid,
+        Slight — not by whether the price is wrong; that is the Edge board’s job. Every row is
+        graded on the Record page in its own book. <a href="#features" data-glossary>Glossary</a></p>
       <div class="longshot-note" id="likely-note"></div>
       <!-- A plain block, not `.cards`: this host holds SHELVES now, each
            with its own card grid inside it. Leaving the grid on the host
@@ -1502,6 +1511,10 @@
       <div class="more-pills" id="more-switches"></div>
       <div class="more-pills" id="more-social"></div>
       <button type="button" class="more-pill" id="more-theme"></button>
+      <!-- The tour and the glossary, offered here on phones (audit V-15):
+           the tour never opens itself on a phone, so this is its door. -->
+      <button type="button" class="more-pill" id="more-tour">Take the tour</button>
+      <button type="button" class="more-pill" id="more-glossary" data-glossary>Glossary</button>
     </div>
   </div>
 

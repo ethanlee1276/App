@@ -12651,3 +12651,14 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .st-verdict.st-warn { color: var(--warn); border-color: rgba(217, 165, 72, 0.4); }
 .st-verdict.st-bad { color: var(--bad); }
 .st-mech > summary { cursor: pointer; color: var(--text-dim); margin-bottom: 8px; }
+
+/* Board legends and the glossary (audit V-15). */
+.board-legend { margin: 0 0 12px; color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.board-legend b { color: var(--text); }
+.board-legend a { color: var(--brand); font-weight: 700; white-space: nowrap; }
+.gloss { margin: 0; display: grid; gap: 2px; }
+.gloss-row { display: grid; grid-template-columns: minmax(110px, 180px) 1fr; gap: 4px 14px; padding: 9px 0;
+  border-top: var(--hairline) solid var(--border); }
+.gloss-row dt { font-weight: 700; }
+.gloss-row dd { margin: 0; color: var(--text-mute); }
+@media (max-width: 600px) { .gloss-row { grid-template-columns: 1fr; } }

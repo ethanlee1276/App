@@ -2084,10 +2084,59 @@ const FEATURES = [
     ["What this is", "What the site does, what it deliberately does not do, and the responsible-gambling terms.", "about"]]],
 ];
 
+/* THE GLOSSARY (audit V-15): every word the boards use without stopping
+   to define it, defined once, in plain English. It lives on the Features
+   page and has its own door in the menu and on each board's legend. */
+const GLOSSARY = [
+  ["Most Likely", "Tonight’s bets ranked by our chance they hit, in four tiers: Top, Strong, Solid, Slight. A ranking by likelihood, not a claim the price is wrong."],
+  ["Edge pick", "A bet where our probability beats the book’s price by enough to stake. The bets we put units on."],
+  ["Edge", "Our chance minus the chance the price implies, in percentage points. +4 means we think it hits four points more often than the price says."],
+  ["EV", "Expected value: what one unit returns on average at this price if our chance is right. +5% means five cents per dollar staked, over many bets."],
+  ["Worth a look", "Close to the bar but not over it. Shown so you can see what nearly made it; never staked."],
+  ["Pick of the Day", "The single strongest pick across every league, chosen once a day and graded in its own book."],
+  ["Riding", "A bet already placed on an earlier pull. It rides at the price it was taken at, even if today’s price no longer clears the bar."],
+  ["Journaled", "Written to the record at the moment it is published, at the price shown, with a timestamp that cannot be changed afterwards."],
+  ["u (unit)", "One standard stake. Results are in units so they read the same whatever your bankroll."],
+  ["Paper", "A bet tracked and graded with no money on it — measured before it is trusted."],
+  ["Probation", "A league or market being measured on paper until its record clears the bar to be staked."],
+  ["CLV", "Closing line value: whether the price moved our way before the game. Beating the close is the best early sign a pick was good, before results arrive."],
+  ["Calibration", "Whether our percentages come true: picks we called 60% should hit about 60% of the time."],
+  ["Brier", "A score for probability forecasts, lower is better. Compared against the market’s own score on the same bets."],
+  ["De-vig", "Removing the book’s margin from a pair of prices so they add to 100% and read as a fair chance."],
+  ["Long shot", "A bet at long odds tracked in its own bucket, never mixed into the headline record."],
+  ["Prediction market", "Kalshi and Polymarket: exchanges where traders buy contracts on outcomes. Their prices are shown as a chance and as odds, beside the books’."],
+  ["Zeno", "A person’s real tickets, shown beside the model’s picks and never inside them."],
+  ["Pikkit", "The app Zeno’s tickets are synced from, so they are his real bets at his real prices."],
+];
+
+function glossaryHTML() {
+  return `<section class="ft-sec" id="glossary">
+    <div class="section-title">Glossary <span class="sub">— every word the boards use, in plain English</span></div>
+    <dl class="gloss">${GLOSSARY.map(([t, d]) =>
+      `<div class="gloss-row"><dt>${escapeHtml(t)}</dt><dd>${escapeHtml(d)}</dd></div>`).join("")}</dl>
+  </section>`;
+}
+
+function openGlossary() {
+  switchView("features", true);
+  setTimeout(() => {
+    const el = document.getElementById("glossary");
+    if (el) el.scrollIntoView({ block: "start" });
+  }, 60);
+}
+
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("[data-glossary]");
+  if (!a) return;
+  e.preventDefault();
+  if (typeof moreSheetOpen === "function") moreSheetOpen(false);
+  openGlossary();
+});
+
 function renderFeatures() {
   const host = document.getElementById("features-body");
   if (!host) return;
-  const jump = FEATURES.map(([name]) =>
+  const jump = `<a class="ft-jump" href="#glossary" data-glossary>Glossary</a>` + FEATURES.map(([name]) =>
     `<a class="ft-jump" href="#features-${escapeAttr(slugify(name))}">${escapeHtml(name)}</a>`).join("");
   const count = FEATURES.reduce((a, [, , rows]) => a + rows.length, 0);
   host.innerHTML = `
@@ -2108,7 +2157,8 @@ function renderFeatures() {
             </div>
             ${view ? `<span class="ft-go" aria-hidden="true">&#8594;</span>` : ""}
           </${view ? "button" : "div"}>`).join("")}</div>
-      </section>`).join("")}`;
+      </section>`).join("")}
+    ${glossaryHTML()}`;
   host.querySelectorAll("[data-ftview]").forEach((el) =>
     el.addEventListener("click", () => switchView(el.dataset.ftview, true)));
 }
@@ -45611,12 +45661,16 @@ function noTourViews() { return ["paywall", "signup", "checkout"]; }
 
 function tourSteps() {
   return [
-    { icon: "list", title: "A pick card is one bet",
-      body: "Each card on the Home board is a bet the model would make tonight: " +
-        "the player, the side and the line, the real book price we found and " +
-        "where, and the edge — how far the model’s number sits from the " +
-        "market’s. Only picks graded 70 or better make the list. Tap a card " +
-        "for the bar chart, the game logs and every reason." },
+    // CARD 1, REWRITTEN (audit V-15): it described one board of "pick
+    // cards" when the site has two boards answering two questions, and a
+    // newcomer's first confusion is which is which.
+    { icon: "list", title: "Two boards, two questions",
+      body: "Most Likely ranks tonight’s bets by our chance they hit — Top, " +
+        "Strong, Solid, Slight. Edge picks are the bets where our number beats " +
+        "the book’s price; those are the ones we stake. Every pick is journaled " +
+        "at the price shown and graded in public on the Record page. Tap any " +
+        "row for the game logs and every reason, and the Glossary (in the menu) " +
+        "for any word you don’t know." },
     { icon: "warn", title: "RIDING means we already hold it",
       body: "A row marked RIDING is a bet placed on an earlier pull that no " +
         "longer clears the bar at today’s number. It rides as placed and " +
@@ -46033,6 +46087,8 @@ function moreSheetInit() {
   // ways out and the theme proxy.
   const scrim = document.getElementById("more-scrim");
   if (scrim) scrim.addEventListener("click", () => moreSheetOpen(false));
+  const tour = document.getElementById("more-tour");
+  if (tour) tour.addEventListener("click", () => { moreSheetOpen(false); tourOpen(0); });
   const theme = document.getElementById("more-theme");
   if (theme) theme.addEventListener("click", () => {
     const real = document.getElementById("theme-toggle");
