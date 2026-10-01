@@ -3771,6 +3771,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             err = {"error": "ask unavailable", "detail": str(exc)[:200]}
             return self._send(503, json.dumps(err).encode(), ".json")
         keep = {k: out[k] for k in ("text", "refused", "matched", "focused", "sources", "cached")}
+        # Signed, so the page can carry it back as context (audit C-3).
+        keep["sig"] = AB.sign_turn(out.get("text") or "")
         if not out.get("cached"):
             try:
                 AB.count_question(me)

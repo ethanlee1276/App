@@ -59,13 +59,12 @@ DEFAULT_PATH = Path(_modelstate.path("hypotheses.json"))
 #: data/cache — the cache is prunable by design, and a spend ledger that a
 #: cleanup can silently erase is not a ledger.
 SPEND_PATH = Path("data/llm_spend.json")
-#: claude-opus-5, $ per million tokens — the source of every cost figure
-#: printed or stored anywhere in the app.
-PRICE_IN, PRICE_OUT = 5.00, 25.00
-
-#: The skill-current default. Override with QELLYS_LLM_MODEL in
-#: secrets.local; pricing note in the CLI assumes this model.
-DEFAULT_MODEL = "claude-opus-5"
+#: The default model, by alias, and every price, from one table
+#: (engine/llmmodels.py, audit C-5). Override with QELLYS_LLM_MODEL in
+#: secrets.local; a call is priced at the model it actually ran on.
+from . import llmmodels as _models
+DEFAULT_MODEL = _models.ALIASES["lab"]
+PRICE_IN, PRICE_OUT = _models.price(DEFAULT_MODEL)
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 # A ceiling, not a spend — billing is on tokens actually produced, and the
@@ -321,13 +320,15 @@ def _api_key() -> str | None:
 def _model() -> str:
     from . import secrets
     secrets.load_local_secrets()
-    return os.environ.get("QELLYS_LLM_MODEL") or DEFAULT_MODEL
+    return _models.resolve(os.environ.get("QELLYS_LLM_MODEL") or DEFAULT_MODEL)
 
 
-def cost_usd(usage: dict) -> float:
-    """Dollars for one call's token usage, at this model's list price."""
-    return (usage.get("input_tokens", 0) * PRICE_IN
-            + usage.get("output_tokens", 0) * PRICE_OUT) / 1_000_000
+def cost_usd(usage: dict, model: str | None = None) -> float:
+    """Dollars for one call's token usage, at the list price of the model
+    that ran it (the default model's when none is named)."""
+    i, o = _models.price(model or DEFAULT_MODEL)
+    return (usage.get("input_tokens", 0) * i
+            + usage.get("output_tokens", 0) * o) / 1_000_000
 
 
 def log_llm_spend(usage: dict, model: str, kind: str = "propose",
@@ -343,7 +344,7 @@ def log_llm_spend(usage: dict, model: str, kind: str = "propose",
              "model": model, "kind": kind,
              "input_tokens": int(usage.get("input_tokens") or 0),
              "output_tokens": int(usage.get("output_tokens") or 0),
-             "cost_usd": round(cost_usd(usage), 6)}
+             "cost_usd": round(cost_usd(usage, model), 6)}
     try:
         rows = json.loads(p.read_text()) if p.is_file() else []
         if not isinstance(rows, list):
@@ -413,7 +414,7 @@ def call_claude(prompt: str, api_key: str, model: str | None = None,
     # the reply survives the parser. Its own guard — a full disk must not
     # turn a successful API call into a reported failure.
     try:
-        log_llm_spend(payload.get("usage") or {}, body["model"])
+        log_llm_spend(payload.get("usage") or {}, payload.get("model") or body["model"])
     except Exception:                              # noqa: BLE001
         pass
     return _parse_response(payload)
@@ -658,7 +659,15 @@ def blocked(sport: str, market: str, feats: dict, path=None) -> str | None:
             continue
         dims = h.get("dims") or {}
         if dims and all(feats.get(d) == v for d, v in dims.items()):
-            return ("The record confirmed a proposed blind spot here: "
+            # SAYS WHERE THE RULE CAME FROM (audit C-2). The claim was
+            # proposed by a language model and only CONFIRMED by the
+            # arithmetic; a reader seeing a pick refused is owed both
+            # halves, and the size of the sample that confirmed it.
+            n = h.get("n")
+            return ("Rule proposed by the hypothesis lab (an AI model) and "
+                    f"confirmed on {n} graded bets: " if n else
+                    "Rule proposed by the hypothesis lab (an AI model) and "
+                    "confirmed by the record: ") + (
                     f"{h.get('claim', 'this slice')} — "
                     f"{h.get('reading', 'ran hot under test')}")
     return None

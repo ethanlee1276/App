@@ -85,8 +85,8 @@ def under_cap() -> bool:
 def _model() -> str:
     from . import secrets
     secrets.load_local_secrets()
-    return (os.environ.get("QELLYS_PROSE_MODEL")
-            or os.environ.get("QELLYS_LLM_MODEL") or hyp.DEFAULT_MODEL)
+    return hyp._models.resolve(os.environ.get("QELLYS_PROSE_MODEL")
+                               or os.environ.get("QELLYS_LLM_MODEL") or hyp.DEFAULT_MODEL)
 
 
 # --- the call ----------------------------------------------------------------
@@ -124,7 +124,8 @@ def _call(system: str, prompt: str, schema: dict, kind: str,
         raise ProseUnavailable(f"network: {e}") from e
     # Billed whether or not the reply parses — meter first.
     try:
-        hyp.log_llm_spend(payload.get("usage") or {}, body["model"], kind=kind)
+        hyp.log_llm_spend(payload.get("usage") or {}, payload.get("model") or body["model"],
+                          kind=kind)
     except Exception:                              # noqa: BLE001
         pass
     stop = payload.get("stop_reason")

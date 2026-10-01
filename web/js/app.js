@@ -39745,8 +39745,8 @@ function askSourcesHTML(t) {
   const read = src.filter((s) => !isPick(s)).slice(0, 6);
   const picks = src.filter(isPick).slice(0, 3);
   const chip = (s) => /^https?:\/\//i.test(String(s.url || ""))
-    ? `<a class="ask-chip web" href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer"${
-      s.title ? ` title="${escapeAttr(s.title)}"` : ""}>${escapeHtml(s.label)} ↗</a>`
+    ? `<a class="ask-chip web" href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer"
+         title="A web page, not our data">web · ${escapeHtml(s.label)} ↗</a>`
     : s.prop
     ? `<span class="ask-chip pick" data-prop="${escapeAttr(s.prop)}" tabindex="0" role="link">${
       escapeHtml(s.label)} ›</span>`
@@ -40088,7 +40088,10 @@ async function askSend(text) {
   const question = String(text || "").trim().slice(0, 400);
   const meta = SPORT_META[state.sport];
   if (!question || a.busy || !meta) return;
-  const history = a.turns.filter((t) => !t.error).slice(-6).map((t) => ({ role: t.role, text: t.text }));
+  // An answer goes back with the server's tag on it; one without (an old
+  // saved conversation) is dropped as context by the server (audit C-3).
+  const history = a.turns.filter((t) => !t.error).slice(-6)
+    .map((t) => (t.sig ? { role: t.role, text: t.text, sig: t.sig } : { role: t.role, text: t.text }));
   a.turns.push({ role: "user", text: question });
   a.busy = true;
   track("ask", state.sport);
@@ -40103,7 +40106,7 @@ async function askSend(text) {
     });
     let body = {};
     try { body = await res.json(); } catch (e) { body = {}; }
-    turn = res.ok && body.text ? { role: "assistant", text: body.text, sources: body.sources || [] }
+    turn = res.ok && body.text ? { role: "assistant", text: body.text, sources: body.sources || [], sig: body.sig || "" }
       : { role: "assistant", text: askErrorText(res.status, body), error: true };
   } catch (e) {
     turn = { role: "assistant", text: askErrorText(0, null), error: true };

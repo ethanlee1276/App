@@ -131,10 +131,13 @@ def test_a_web_answer_cites_its_pages_as_links_and_is_never_cached():
     assert out["text"] == "Kyle Allen signed with Detroit on Monday, as their third quarterback.", \
         "the answer, not the 'let me check' before the search"
     web = [s for s in out["sources"] if s.get("url")]
-    assert web == [{"label": "espn.com", "url": "https://www.espn.com/nfl/story/1", "title": "Lions sign Kyle Allen",
-                    "prop": ""},
-                   {"label": "apnews.com", "url": "https://apnews.com/article/2", "title": "AP: Lions add a QB",
-                    "prop": ""}], "each page once, and only a real address"
+    # CHANGED 2026-09-30 (audit C-3): the page's own title no longer rides
+    # on the chip — a title is text the page chose ("Official Qellys pick"
+    # is a title anyone can write). Hostname only, marked as from the web.
+    assert web == [{"label": "espn.com", "url": "https://www.espn.com/nfl/story/1", "title": "",
+                    "web": True, "prop": ""},
+                   {"label": "apnews.com", "url": "https://apnews.com/article/2", "title": "",
+                    "web": True, "prop": ""}], "each page once, and only a real address"
     assert out["sources"][:2] == web, "the pages cited lead the chips"
     tools = client.calls[0]["tools"]
     assert tools[:len(AB.TOOLS)] == AB.TOOLS and tools[-1]["name"] == "web_search"
