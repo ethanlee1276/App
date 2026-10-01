@@ -45,7 +45,7 @@ def test_the_nightly_six_lead_and_nothing_else_does():
     # a fold on desktop: "move the ask qellys button … to be in a better
     # and more accessible spot".
     # Edge Picks joined it after Long Shots on 2026-09-26 — Ethan, 2026-09-26: "the edge bets can be its own menu or tab. We shouldn't show that on the main page anymore".
-    assert _labels(TIER1) == ["Dashboard", "Top Picks", "Ask Qellys", "Long Shots", "Edge Picks",
+    assert _labels(TIER1) == ["Dashboard", "Most Likely", "Ask Qellys", "Long Shots", "Edge Picks",
                               "Live Now", "My Bets", "Record"], _labels(TIER1)
 
 

@@ -97,7 +97,7 @@ def test_the_guide_quotes_the_pages_own_plans():
     assert len(plans) == 3, plans
     for _id, price, per in plans:
         assert f"${price} " in A.SITE_GUIDE, (price, per)
-    for page in ("Top Picks", "Edge Picks", "Long Shots", "Live Now", "My Bets", "Record", "Zeno's Picks",
+    for page in ("Most Likely", "Edge Picks", "Long Shots", "Live Now", "My Bets", "Record", "Zeno's Picks",
                  "Line Shopping", "Futures", "Predict", "Fantasy", "Bankroll"):
         assert page in A.SITE_GUIDE, page
     assert "The model's picks are not on Pikkit" in A.SITE_GUIDE, "the Pikkit claim is Zeno's alone"

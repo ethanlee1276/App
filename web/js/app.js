@@ -2000,7 +2000,7 @@ const FEATURES = [
   ["The boards", "What we publish every day, in every league",
    [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
     ["Ask Qellys", "Ask about any team, player or game in any sport we cover — tonight’s boards, or every past game we have stored, like how two teams have done against each other — and get an answer written from our own numbers. It says so when they have nothing on it, and never tells you to bet.", "ask"],
-    ["Top Picks", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
+    ["Most Likely", "The Most Likely board: ranked by how likely a bet is to hit, not by what it pays. Props, moneylines, spreads, totals, team totals and anytime-touchdown rows, each labelled with the figure it was ranked on.", "likely"],
     ["Long Shots", "Plus-money darts sized like lottery tickets — with the +455 to +800 band tracked separately, because that is where the market charges double.", "longshots"],
     ["Tonight", "Every bet on tonight’s slate across every league at once, with the charts — one page instead of six tabs.", "tonight"],
     ["Over / Under", "Every prop we price tonight with both sides side by side — the book’s price and our chance for the over and the under, as cards or a list.", "props"],
@@ -2071,7 +2071,7 @@ const FEATURES = [
     ["Install it", "Add it to your phone’s home screen. It works offline enough to read, and says so when it cannot reach us.", null]]],
 
   ["The receipts", "How you check whether any of it works",
-   [["Track record", "Every settled pick at the price we found it, graded in public, with a profit calendar and the verdict in units.", "record"],
+   [["Record", "Every settled pick at the price we found it, graded in public, with a profit calendar and the verdict in units.", "record"],
     ["Zeno’s Picks", "Zeno’s own tickets at FanDuel, DraftKings and theScore Bet — the record as the books settled it, and what he has riding now to tail.", "zeno"],
     ["By product", "Edge bets and Most Likely kept in separate books, so a good month on one cannot flatter the other.", null],
     ["Calibration", "When we say 60%, does it land 60% of the time — plotted, not claimed.", null],
@@ -5243,7 +5243,7 @@ function renderLivePicks() {
         : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${done.length
             ? `Nothing still playing — every bet on this card has finished.` : empty}</p>`}
       ${done.length ? `<details class="lv-done"><summary>${done.length} finished — waiting on
-          the official result<span class="lv-done-note">graded on the Results page</span></summary>
+          the official result<span class="lv-done-note">graded on the Record page</span></summary>
           ${done.map(rowHTML).join("")}</details>` : ""}
       <p class="list-note" style="padding:8px 14px 10px;margin:0">${foot}</p>
     </div>`;
@@ -5533,7 +5533,7 @@ async function renderTailFade() {
   host.innerHTML = `
     <div class="section-title">You vs the model
       <span class="sub">— every tail and fade you call, settled by the same journal
-      row the Results page grades the pick with. No money moves; the score is the point.</span>
+      row the Record page grades the pick with. No money moves; the score is the point.</span>
     </div>
     <div class="card tf-card">
       <div class="tf-stats">
@@ -7093,7 +7093,7 @@ function renderTonight() {
     <div class="tn-cols">
     ${ml.length ? `<section class="tn-col"><div class="section-title">Most likely to hit tonight
       <span class="sub">— ranked by probability, not by price · the full board
-      is under Top Picks</span></div>
+      is under Most Likely</span></div>
     ${boardGuide("most_likely")}
     <div class="hd-card tn-rows">${ml.map((r) => deckPickRow(r, { door: likelyOpen(r) })).join("")}</div></section>` : ""}
     <section class="tn-col"><div class="section-title">Our edge bets
@@ -8863,7 +8863,7 @@ function renderQuickTools() {
       <a class="qt-chip" href="#fantasy">${icon("trophy", 22)}<span class="qt-t">
         <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span>${go}</a>
       <a class="qt-chip" href="#likely">${icon("target", 22)}<span class="qt-t">
-        <b>All Most Likely picks</b><span class="k">every pick, by tier and by game</span></span>${go}</a>
+        <b>Most Likely</b><span class="k">every pick, by tier and by game</span></span>${go}</a>
       <a class="qt-chip" href="#edge">${icon("rising", 22)}<span class="qt-t">
         <b>Edge Picks</b><span class="k">where our number beats the price</span></span>${go}</a>
       <a class="qt-chip" href="#bankroll">${icon("chart", 22)}<span class="qt-t">
@@ -23648,7 +23648,7 @@ async function renderFeedZone() {
         ic: "trophy", tone: (e.net_u || 0) >= 0 ? "good" : "bad",
         title: `${(e.sport || "mlb").toUpperCase()} last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
           e.net_u >= 0 ? "+" : ""}${e.net_u}u`,
-        cond: `${e.date} fully graded — every pick is on the Results page`,
+        cond: `${e.date} fully graded — every pick is on the Record page`,
       };
       case "card_posted": return {
         ic: "calendar", tone: "good",
@@ -23675,8 +23675,8 @@ async function renderFeedZone() {
         ic: "book", tone: "",
         title: `The autopsy is up — what ${escapeHtml(e.date || "last night")} actually was`,
         cond: e.headline
-          ? `“${escapeHtml(e.headline)}” — the full postmortem is on the Results page`
-          : "what we got wrong and why, graded in public on the Results page",
+          ? `“${escapeHtml(e.headline)}” — the full postmortem is on the Record page`
+          : "what we got wrong and why, graded in public on the Record page",
       };
       default: return null;
     }
@@ -46800,7 +46800,7 @@ async function deckRecordHTML() {
   const z = rec.zeno || {};
   const tiles = recordRibbonsHTML(rec, rec.overall, rec.recent);
   const record = tiles
-    ? `${deckHead("The record", "#record", "record", "Results")}
+    ? `${deckHead("The record", "#record", "record", "Record")}
        <div class="hd-stats">${tiles}</div>${zenoWhoHTML(rec)}` : "";
   const tix = await zenoTickets();
   const open = tix.locked ? [] : (tix.open || []);
