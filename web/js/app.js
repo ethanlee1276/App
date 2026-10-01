@@ -38730,9 +38730,51 @@ function wrapTables(root) {
   });
 }
 
+/* EVERY CLICKABLE ROW IS A KEYBOARD STOP (audit V-21, roadmap #49).
+   Sixteen rows drawn as div/span/td answered a click through a delegated
+   listener and nothing else: no tab stop, no role, so a keyboard or a
+   screen reader could not reach the team page, the weather card, the
+   game row. `doorAttrs()` is the one place a new row gets its stop;
+   `enhanceDoors()` is the net for every row drawn before it existed. It
+   adds the stop and the role only where nothing set them, and Enter and
+   Space go through .click() — one behaviour, the mouse's. */
+const DOOR_SELECTORS = "[data-open],[data-gid],[data-player-page],[data-team-open],[data-team-game],"
+  + "[data-team-vs],[data-team-more],[data-parlay-card],[data-ufc-jump],[data-msg-open],[data-prop],"
+  + "[data-peek],[data-watch-toggle],[data-gs-toggle]";
+/* Keyboard already handled by their own listeners: the net only adds
+   the stop to these, never a second Enter. */
+const DOOR_OWN_KEYS = "[data-prop],[data-peek],[data-watch-toggle],[data-gs-toggle],[data-dossier],[data-calday],[data-calpick]";
+function doorAttrs(role) {
+  return ` tabindex="0" role="${role || "link"}"`;
+}
+function enhanceDoors(root) {
+  (root || document).querySelectorAll(DOOR_SELECTORS).forEach((el) => {
+    if (el.matches("a, button, input, select, textarea, summary, label, option")) return;
+    if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+    if (!el.hasAttribute("role")) {
+      el.setAttribute("role", el.matches("[data-watch-toggle],[data-gs-toggle],[data-peek]") ? "button" : "link");
+    }
+    el.dataset.doorKb = "1";
+  });
+  // An icon-only button names itself from its title (V-21: the delete
+  // and copy buttons, the top bar's bell). A screen reader reads the
+  // label; a sighted reader already had the tooltip.
+  (root || document).querySelectorAll("button[title]:not([aria-label])").forEach((b) => {
+    if (!(b.textContent || "").trim()) b.setAttribute("aria-label", b.getAttribute("title"));
+  });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target && e.target.closest && e.target.closest("[data-door-kb]");
+  if (!el || el !== e.target || el.matches(DOOR_OWN_KEYS)) return;
+  e.preventDefault();
+  el.click();
+});
+
 function enhanceSectionSubs(root) {
   markPageTitles(root);
   wrapTables(root);
+  enhanceDoors(root);
   (root || document).querySelectorAll(".section-title .sub").forEach((sub) => {
     /* THE DASH WAS A JOIN, AND THE LINE IT JOINED IS GONE (the site audit,
        2026-09-24). Two hundred and twenty-nine subtitles open "— …" from

@@ -11539,6 +11539,9 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .ask-form textarea { flex: 1; min-width: 0; min-height: 38px; max-height: 132px; padding: 9px 0; resize: none;
   border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-lg); }
 .ask-form textarea:focus-visible { outline: none; }
+/* The textarea hands its ring to the composer it sits in (V-21, #49):
+   removing it with nothing in its place left the keyboard with no mark. */
+.ask-form:focus-within { box-shadow: var(--glow); }
 .ask-send { flex-shrink: 0; width: 46px; height: 46px; border-radius: var(--radius); border: 0; cursor: pointer;
   display: grid; place-items: center; background: var(--gold); color: var(--brand-ink); }
 /* Gold whether or not there is anything to send yet, as the render draws
@@ -12716,3 +12719,14 @@ th[aria-sort] { cursor: pointer; user-select: none; }
 th[aria-sort="ascending"]::after { content: " \25B2"; font-size: .8em; color: var(--text-mute); }
 th[aria-sort="descending"]::after { content: " \25BC"; font-size: .8em; color: var(--text-mute); }
 th[aria-sort]:focus-visible { outline-offset: -2px; }   /* the site-wide ring, drawn inside the cell */
+
+/* ============================================================
+   Accessibility floor (audit V-21, roadmap item 49)
+   ============================================================ */
+/* A chip that is a control is a 28px target, not 22. */
+button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
+/* The two smallest steps are raised on a phone: 10px and 11.5px were
+   on ~390 uses, the ribbon's model/Zeno split among them. */
+@media (max-width: 760px) {
+  :root { --fs-2xs: 11px; --fs-xs: 12px; }
+}
