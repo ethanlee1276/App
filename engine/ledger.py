@@ -7670,7 +7670,7 @@ HEALTH_BLIND_SPOTS = [
      "we know when WE published a pick, not when you placed a bet — "
      "deriving one from the other would be inventing a number"),
     ("Promo and free-bet behavior", "not tracked; this tool takes no money"),
-    ("Deposit and withdrawal pattern", "same — no account is linked, by design"),
+    ("Funding pattern (money in and out)", "same — no account is linked, by design"),
     ("Device, IP and browser fingerprint",
      "deliberately out of scope: watching these is how you'd be tempted to "
      "spoof them, and that is account fraud rather than bankroll management"),

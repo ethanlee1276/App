@@ -22284,6 +22284,206 @@ function mbByBook(bets) {
   return books;
 }
 
+/* ---- Account health, from YOUR log (audit O12, roadmap #43). --------
+   The Record page scores the site's own journal per book; this is the
+   same score run over the bets YOU logged, in this browser, per book.
+   No sportsbook login and no scraping (docs/COMPETITIVE_RECIPE.md marks
+   account sync WON'T): the inputs are the rows on this page and nothing
+   leaves the device. The weights, the bands, the five-bet floor and the
+   wording of the drivers are ledger.account_health's, so the two scores
+   mean the same thing; tests/test_your_own_account_health.py runs both
+   on one set of bets and holds them equal.
+
+   Two things differ because your log differs. A logged bet has a
+   description, not a market column, so the market is READ from the
+   words (mbMarket) and a bet it cannot read is counted, not guessed.
+   And a logged bet has no closing line unless you gave one (a "close"
+   column in a CSV import), so the close-beating signal is scored at
+   the neutral half the ledger uses when it has no closes, and the card
+   says it is missing rather than implying it was measured. */
+const MB_HEALTH_MIN = 5;
+const MB_HEALTH_W = { clv: 40, conc: 20, mix: 15, stakes: 13, vol: 12 };
+const MB_GAME_MARKETS = ["moneyline", "spread", "total", "team total"];
+/* The same four signals ledger.HEALTH_BLIND_SPOTS names, said to the
+   reader about their own log. */
+const MB_HEALTH_BLIND = [
+  ["Bet timing after a line move",
+   "your log has the day you bet, not the minute against the line’s path"],
+  ["Promo and free-bet behavior", "not tracked; this page takes no money"],
+  ["Funding pattern (money in and out)", "same — no account is linked, by design"],
+  ["Device, IP and browser fingerprint",
+   "deliberately out of scope: watching these is how you’d be tempted to "
+   + "spoof them, and that is account fraud rather than bankroll management"],
+];
+
+/* Player-prop stat words, most specific first, each to the market label
+   the card prints. */
+const MB_PROP_WORDS = [
+  [/\b(pts\s*\+\s*reb\s*\+\s*ast|pra)\b/i, "points + rebounds + assists"],
+  [/\bpass(ing)?\s+(yds|yards)\b/i, "passing yards"],
+  [/\brush(ing)?\s+(yds|yards)\b/i, "rushing yards"],
+  [/\b(rec(eiving)?)\s+(yds|yards)\b/i, "receiving yards"],
+  [/\b(anytime|first|1st|last)\s+(td|touchdown)/i, "touchdown scorer"],
+  [/\b(td|tds|touchdowns?)\b/i, "touchdowns"],
+  [/\b(receptions?|catches)\b/i, "receptions"],
+  [/\b(completions?|pass attempts?|interceptions?|ints?)\b/i, "QB passing"],
+  [/\b(total bases|tb)\b/i, "total bases"],
+  [/\b(home runs?|hr|homers?)\b/i, "home runs"],
+  [/\b(strikeouts?|ks?)\b/i, "strikeouts"],
+  [/\b(rbis?|hits?|runs scored|stolen bases?|walks?|outs recorded)\b/i, "batting"],
+  [/\b(threes|3pm|3-pointers?|three pointers?)\b/i, "threes"],
+  [/\b(points?|pts)\b/i, "points"],
+  [/\b(rebounds?|reb|rebs)\b/i, "rebounds"],
+  [/\b(assists?|ast)\b/i, "assists"],
+  [/\b(yds|yards)\b/i, "yards"],
+  [/\b(shots on goal|saves|goals|sacks|tackles|blocks|steals)\b/i, "other props"],
+];
+
+/* What market a logged bet is, read from its description. {market,
+   prop} or null when the words do not say. A parlay is its own thing:
+   neither a prop habit nor a main-line one. */
+function mbMarket(desc) {
+  const d = String(desc || "");
+  if (!d.trim()) return null;
+  if (d.includes(" + ") || /\b(parlay|sgp|same game)\b/i.test(d)) {
+    return { market: "parlays", prop: false };
+  }
+  for (const [re, label] of MB_PROP_WORDS) {
+    if (re.test(d)) return { market: label, prop: true };
+  }
+  if (/\bteam total\b/i.test(d)) return { market: "team total", prop: false };
+  if (/\b(ml|moneyline|money line|to win)\b/i.test(d)) return { market: "moneyline", prop: false };
+  if (/\b(over|under)\b|\b[ou]\s?\d/i.test(d)) return { market: "total", prop: false };
+  if (/\bspread\b|\b(pk|pick ?em)\b|(^|\s)[+-−]\d+(\.5)?\b/i.test(d)) {
+    return { market: "spread", prop: false };
+  }
+  return null;
+}
+
+/* Did this bet beat its close? Only when the row carries a closing price.
+   Positive = you took a better price than the market settled at, in
+   implied-probability points (the close's minus yours). */
+function mbBetClv(b) {
+  if (b == null || b.close == null || b.close === "") return null;
+  const mine = mbDecimal(b.odds), close = mbDecimal(b.close);
+  if (mine == null || close == null) return null;
+  return 1 / close - 1 / mine;
+}
+
+function mbHealth(bets) {
+  const settled = (bets || []).filter((b) => ["win", "loss", "push"].includes(b.result));
+  const byBook = {};
+  for (const b of settled) (byBook[b.book || "Other"] = byBook[b.book || "Other"] || []).push(b);
+  const W = MB_HEALTH_W, out = [];
+  let closes = 0;
+  for (const [book, rows] of Object.entries(byBook)) {
+    if (rows.length < MB_HEALTH_MIN) continue;
+    const clvs = rows.map(mbBetClv).filter((c) => c != null);
+    closes += clvs.length;
+    const beat = clvs.length ? clvs.filter((c) => c > 0).length / clvs.length : null;
+    const clvPts = (beat == null ? 0.5 : beat) * W.clv;
+    // Read the markets. Unreadable bets are counted and left out of the
+    // two mix signals; with none readable those score the neutral half,
+    // never zero — a log the page cannot read is not a clean one.
+    const read = rows.map((b) => mbMarket(b.desc)).filter(Boolean);
+    const mkts = {};
+    for (const m of read) mkts[m.market] = (mkts[m.market] || 0) + 1;
+    const top = Object.entries(mkts).sort((a, b) => b[1] - a[1])[0] || null;
+    const conc = read.length ? top[1] / read.length : null;
+    const propShare = read.length ? read.filter((m) => m.prop).length / read.length : null;
+    const concPts = (conc == null ? 0.5 : conc) * W.conc;
+    const mixPts = (propShare == null ? 0.5 : propShare) * W.mix;
+    const staked = rows.map((b) => Number(b.stake)).filter((s) => s);
+    const sharp = staked.length
+      ? staked.filter((s) => Math.abs(s / 5 - Math.round(s / 5)) > 1e-9).length / staked.length : 0;
+    const stakePts = sharp * W.stakes;
+    const volPts = Math.min(rows.length / 100, 1) * W.vol;
+    const score = Math.round(clvPts + concPts + mixPts + stakePts + volPts);
+    const band = score < 35 ? "low" : score <= 65 ? "moderate" : "elevated";
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const drivers = [];
+    if (beat != null) {
+      drivers.push(`beats the close on ${pct(beat)} of the bets you logged a close for`
+        + (beat >= 0.55 ? " — the #1 pattern risk desks act on" : ""));
+    }
+    if (top) drivers.push(`${pct(conc)} of volume is ${top[0]}`);
+    if (propShare != null && propShare >= 0.8) {
+      drivers.push(`${pct(propShare)} of volume is player props — the lowest-limit `
+        + "markets on the board, and where limiting starts before it spreads");
+    } else if (propShare != null && propShare <= 0.4) {
+      drivers.push(`${pct(1 - propShare)} of volume is main lines, which is the `
+        + "deepest, most tolerant part of the book");
+    }
+    if (sharp > 0.5) drivers.push("stakes are precise amounts, not round numbers");
+    const actions = [];
+    if (conc != null && conc >= 0.5) {
+      actions.push(`mix in main-line bets (sides/totals) so ${top[0]} isn’t ${pct(conc)} of your volume here`);
+    } else if (propShare != null && propShare >= 0.8) {
+      actions.push("add sides and totals — spread across many prop markets still "
+        + "reads as an all-props account, and main lines are where a book has room to take you on");
+    }
+    if (sharp > 0.5) {
+      actions.push("round stakes to the nearest $5 — precision costs almost nothing in EV and reads recreational");
+    }
+    if (Object.keys(byBook).length === 1) {
+      actions.push("open a second book and split volume — one outlet is a single point of failure");
+    }
+    if (score > 65) {
+      actions.push("route your most limit-prone plays (props with big CLV) to the book you care least about keeping");
+    }
+    out.push({ book, bets: rows.length, score, band,
+               beat_close_rate: beat == null ? null : Math.round(beat * 1000) / 1000,
+               top_market: top ? top[0] : null,
+               concentration: conc == null ? null : Math.round(conc * 1000) / 1000,
+               prop_share: propShare == null ? null : Math.round(propShare * 1000) / 1000,
+               sharp_stake_rate: Math.round(sharp * 1000) / 1000,
+               unread: rows.length - read.length, drivers, actions });
+  }
+  out.sort((a, b) => b.score - a.score);
+  const blind = MB_HEALTH_BLIND.map(([signal, why]) => ({ signal, why }));
+  if (!closes) {
+    blind.unshift({ signal: "Beating the closing line",
+      why: "your log has no closing prices, so the strongest signal is scored at "
+        + "a neutral half; import a CSV with a close column to measure it" });
+  }
+  return { books: out, blind_spots: blind, closes,
+           short: Object.keys(byBook).filter((k) => byBook[k].length < MB_HEALTH_MIN).length };
+}
+
+function mbHealthHTML(bets) {
+  const h = mbHealth(bets);
+  const head = `<div class="section-title">Account health
+      <span class="sub">— how limit-prone your own logged betting looks at each book,
+      scored the way the Record page scores ours. Computed on this device from
+      the bets above; no login, nothing uploaded.</span></div>`;
+  if (!h.books.length) {
+    return `${head}<p class="list-note">Appears once a book has ${MB_HEALTH_MIN} settled bets
+      in your log.</p>`;
+  }
+  const cards = h.books.map((b) => `
+    <div class="card mbh-card">
+      <div class="mbh-top"><strong>${escapeHtml(b.book)}</strong>
+        <span class="mbh-score ${b.band}">${b.score}</span>
+        <span class="chip mbh-band ${b.band}">${b.band} limit risk</span></div>
+      <div class="mbh-facts">${plural(b.bets, "settled bet")} · beats the close ${
+        b.beat_close_rate == null ? "—" : Math.round(b.beat_close_rate * 100) + "%"}${
+        b.top_market ? ` · ${Math.round(b.concentration * 100)}% in ${escapeHtml(b.top_market)}` : ""}${
+        b.prop_share == null ? "" : ` · ${Math.round(b.prop_share * 100)}% props`}${
+        b.unread ? ` · ${plural(b.unread, "bet")} we couldn’t read a market from` : ""}</div>
+      ${b.drivers.length ? `<ul class="mbh-list">${b.drivers.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}
+      ${b.actions.length ? `<div class="mbh-act"><b>To stay welcome:</b>
+        <ul class="mbh-list">${b.actions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
+    </div>`).join("");
+  return `${head}<div class="mbh-grid">${cards}</div>
+    <p class="list-note">Inferred from the bets you logged — an estimate of how your
+      action could look to a risk desk, not knowledge of any sportsbook’s rules or
+      of your account.${h.short ? ` ${plural(h.short, "book")} with fewer than
+      ${MB_HEALTH_MIN} settled bets ${h.short === 1 ? "is" : "are"} not scored.` : ""}</p>
+    <details class="mbh-blind"><summary>What this score can’t see — and why</summary>
+      <ul class="mbh-list">${h.blind_spots.map((s) => `<li><strong>${escapeHtml(s.signal)}</strong>
+        — ${escapeHtml(s.why)}</li>`).join("")}</ul></details>`;
+}
+
 /* ---- The insights layer: what your own book says about you. --------
    Realized results only, grouped where the sample is real. This is the
    half of a bet tracker that actually changes behavior — the list
@@ -22538,6 +22738,7 @@ const MB_HEADERS = {
           "bet amount", "stake amount", "risk amount"],
   result: ["result", "status", "outcome", "settlement", "win/loss",
            "won/lost", "grade"],
+  close: ["close", "closing odds", "closing price", "closing line", "clv odds"],
 };
 
 /* Quote-aware CSV/TSV split. Bet descriptions contain commas ("Judge
@@ -22574,7 +22775,7 @@ function mbMapHeaders(headerRow) {
   const norm = (s) => String(s || "").toLowerCase()
     .replace(/[$()._-]/g, " ").replace(/\s+/g, " ").trim();
   const map = { date: null, book: null, sport: null, desc: null,
-                odds: null, stake: null, result: null };
+                odds: null, stake: null, result: null, close: null };
   (headerRow || []).forEach((cell, i) => {
     const h = norm(cell);
     for (const field of Object.keys(MB_HEADERS)) {
@@ -22710,6 +22911,8 @@ function mbRowsFromText(text, fallbackBook) {
       date: mbParseDate(cell("date")) || today,
       desc: desc.slice(0, 90), stake, odds,
       result: map.result == null ? "pending" : mbNormResult(cell("result")),
+      ...(map.close != null && mbParseOdds(cell("close")) != null
+        ? { close: mbParseOdds(cell("close")) } : {}),
     });
   }
   return { bets, skipped, mapping: map };
@@ -23087,6 +23290,7 @@ function renderMyBets() {
         <th class="num">Staked</th><th class="num">Profit</th>
         <th class="num">ROI</th></tr></thead>
         <tbody>${bookRows}</tbody></table></div>
+    ${mbHealthHTML(bets)}
     <div class="section-title">Every bet
       <span class="sub">— newest first. Tap Win/Loss/Push when a bet settles; the totals
       update as you go.</span>
