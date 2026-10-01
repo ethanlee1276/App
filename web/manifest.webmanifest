@@ -3,6 +3,8 @@
   "short_name": "Qellys",
   "description": "Sports betting models, journaled and graded in public. Player props, game bets, fantasy tools and a meme-coin radar.",
   "id": "/",
+  "lang": "en-US",
+  "dir": "ltr",
   "start_url": "/?sport=mlb#recommended",
   "scope": "/",
   "display": "standalone",
@@ -52,5 +54,6 @@
       "name": "The Record",
       "url": "/?sport=mlb#record"
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }

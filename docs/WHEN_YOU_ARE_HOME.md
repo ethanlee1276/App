@@ -128,6 +128,14 @@ The version line should print `1.11.0`; `pip-audit` should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
 
+**P45-a. The Android app (laptop, an hour; only after the policy read).**
+Read `docs/APP_STORES.md` first, including its four Google Play questions,
+which nobody has answered yet. If the answers allow it, follow the
+"Android build steps" section there: Bubblewrap on the laptop, then
+`tools/assetlinks.py` with the key's SHA-256, then commit the generated
+`web/.well-known/assetlinks.json`, deploy, and upload to an internal
+testing track. Never put the keystore in the repo or on the droplet.
+
 **P44-a. Check postponed MLB picks cleared themselves (read-only, a minute).**
 The settle pass now voids a pick on an MLB game that was never played
 (postponed, cancelled or suspended) once the game is three days old. It

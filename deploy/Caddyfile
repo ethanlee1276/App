@@ -362,6 +362,14 @@ qellysbook.com {
 	@manifest path /manifest.webmanifest
 	header @manifest Content-Type "application/manifest+json"
 
+	# The Android app's proof of ownership (roadmap #45, tools/assetlinks.py).
+	# Chrome reads it to decide whether the store app may hide the browser
+	# bar; it must be JSON and must revalidate, or a key rotation leaves
+	# the app showing an address bar until a cache expires.
+	@assetlinks path /.well-known/assetlinks.json
+	header @assetlinks Content-Type "application/json"
+	header @assetlinks Cache-Control "no-cache"
+
 	# Built JSON changes on a schedule, not per request. A minute of
 	# cache takes the repeat-visit load off the box without anyone ever
 	# seeing a board more than a minute stale.

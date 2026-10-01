@@ -126,6 +126,14 @@ data/ask_cache.json
 data/ask_usage.json
 # Ask's turn-signing key (audit C-3) — a secret; never committed.
 data/ask_turn.key
+# The Android app's signing keys (roadmap #45, docs/APP_STORES.md). Lose
+# one and the app can never be updated; commit one and anyone can ship
+# an update under our name.
+*.keystore
+*.jks
+deploy/twa/app/
+deploy/twa/*.apk
+deploy/twa/*.aab
 # Sentences the number check took out of model-written text (engine/numcheck.py).
 data/llm_drops.jsonl
 # Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
