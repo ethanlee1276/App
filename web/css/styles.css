@@ -7216,9 +7216,6 @@ body.has-deck #rail-live { display: none; }
 .rail-slip .hd-rw .hd-big > * { overflow-wrap: normal; }
 /* v5: the Record page's lead — the deck's ribbons above the rooms. */
 .rec-ribbons { margin: 8px 0 16px; }
-/* The one-line responsible-gambling note, above every view (index.html). */
-.rg-line { margin: 4px 0 8px; font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
-.rg-line b { color: var(--text); font-weight: 600; }
 .hd-who { margin: -6px 0 12px; font-size: var(--fs-xs); color: var(--text-mute); max-width: var(--measure-tight); }
 /* v3: the live card's win-probability bar (home share filled). */
 .hd-wp { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
@@ -11868,15 +11865,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
 .hd-field img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 52%; }
 .hd-field::after { content: ""; position: absolute; inset: 0; background: var(--grad-field-quiet); }
 .hd-quiet.has-field > :not(.hd-field) { position: relative; }
-/* The phone's first lines (audit O25): record, then tonight. */
-.hd-brief { display: none; }
 @media (max-width: 720px) {
-  .hd-brief { display: grid; gap: 4px; margin: 0 0 10px; }
-  .hd-brief[hidden] { display: none; }
-  .hd-brief-line { display: flex; gap: 8px; align-items: baseline; color: var(--text); text-decoration: none;
-    font-size: var(--fs-sm); font-variant-numeric: tabular-nums; min-height: 28px; }
-  .hd-brief-line .k { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
-    letter-spacing: .08em; text-transform: uppercase; min-width: 62px; }
   /* The banner art is off on phones (its <picture> fetches nothing
      there); the name and the promise stay as one slim line. */
   .qt-brand-art { display: none; }

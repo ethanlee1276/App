@@ -99,8 +99,8 @@ def test_the_responsible_gambling_line_is_not_hidden():
     """Prominence, not just presence. `display:none`, `visibility:hidden`,
     `aria-hidden` or a zero opacity on this block would pass the test above
     while removing the line from the page."""
-    # The footer's full notice (the one-line note above every view,
-    # audit P1-8, is checked by tests/test_every_view_says_21_plus.py).
+    # The footer's full notice (the pages that hide the footer carry their
+    # own line: tests/test_the_helpline_rides_the_footer.py).
     i = HTML.index("1-800-GAMBLER", HTML.index('<div class="footer-full">'))
     block = HTML[max(0, i - 700):i + 200]
     for bad in ("display:none", "display: none", "visibility:hidden",

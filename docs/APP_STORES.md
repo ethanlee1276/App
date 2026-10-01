@@ -19,8 +19,10 @@ It would be the same site in a store wrapper, not a new codebase:
 
 The site already does most of what a wrapper needs: a web manifest with
 `id`, `lang`, maskable and standard icons, standalone display and
-shortcuts; a service worker; the 21+ line and helpline on every view in
-the first screen (P1-8); and zoom that is not locked (O18).
+shortcuts; a service worker; the 21+ notice and helpline in the footer
+of every page with a pick or a bet, and on the paywall, checkout and
+Ask (the extra line above every view came off on 2026-10-01 at
+Ethan's call); and zoom that is not locked (O18).
 
 ## Apple: a read of the App Review Guidelines (fetched 2026-10-01)
 
