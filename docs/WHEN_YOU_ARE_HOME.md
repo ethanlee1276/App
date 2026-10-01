@@ -80,27 +80,41 @@ answer:
 cd /srv/qellys && tail -20 data/llm_drops.jsonl 2>/dev/null || echo "nothing dropped"
 ```
 
-**P6-a. Hear about it when the box breaks (changes settings, 5 minutes).**
-Three switches, each one line. Keys never go in chat — only through
-`setenv.sh`, which prompts for the value.
+**P6-a. Hear about it when the box breaks (5 minutes) — STILL TO DO.**
+On 2026-10-01 the site was 9 hours stale before anyone knew. Note: on
+2026-10-01 an email was pasted into QB_HEALTHCHECK_URL by mistake; step 4
+below replaces it (setenv says "updated"). The site never loaded it (no
+restart), and a bad value is skipped quietly anyway.
 
-1. A dead-man's switch: make a free check at healthchecks.io (period 15
-   min, grace 15 min), copy its ping URL, then:
+1. **Make the account.** https://healthchecks.io → Sign Up (email, Google
+   or GitHub; free, no card). Open the login link it emails you.
+2. **Set up the check.** It already made one, "My First Check". Click its
+   name to rename it "Qellys Book". Click **Change Schedule** (⏱/gear) and
+   set **Period 15 minutes**, **Grace 15 minutes**, then Save. Under the
+   **Integrations** tab, your email should be listed and switched on: that
+   is where the "site went quiet" mail goes.
+3. **Copy the ping URL** from the check's Details page; it looks like
+   `https://hc-ping.com/1a2b3c4d-...`.
+4. **Put it on the droplet** (paste the URL at the prompt), then confirm
+   it took (should print `1`):
    ```
    cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEALTHCHECK_URL
+   sudo grep -c '^QB_HEALTHCHECK_URL=https://hc-ping.com/' /etc/qellys/env
    ```
-   The site pings it only after a clean sweep; silence is what pages you.
-2. The failure mail (uses the site's own SMTP settings):
+5. **The failure email, then restart** (your email at the first prompt; a
+   test mail should arrive within a minute, check spam):
    ```
    cd /srv/qellys && sudo ./deploy/setenv.sh QB_ALERT_EMAIL
-   sudo cp deploy/qellys-alert@.service deploy/qellys.service deploy/qellys-update.service /etc/systemd/system/
+   sudo cp deploy/qellys-alert@.service deploy/qellys-update.service /etc/systemd/system/
    sudo systemctl daemon-reload && sudo systemctl restart qellys
-   sudo systemctl start qellys-alert@test.service   # a test mail should arrive
+   sudo systemctl start qellys-alert@test.service
    ```
-3. The daily chain heads, posted off the box (a Discord channel webhook):
-   ```
-   cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEADS_WEBHOOK
-   ```
+   No mail? `sudo journalctl -u qellys-alert@test -n 20 --no-pager`.
+6. **What you'll see.** 10–15 minutes after the restart the check turns
+   green (grey "new" until then). If the site ever stops refreshing it
+   turns red about 15 minutes later and emails you.
+7. Optional, later: `sudo ./deploy/setenv.sh QB_HEADS_WEBHOOK` (a Discord
+   channel webhook) posts the record's daily chain heads off the box.
 
 **P6-b. Backups now carry the CLV evidence (read-only check, a minute).**
 `history.db` (3 copies kept), Zeno's book, the line history, the odds
@@ -170,6 +184,12 @@ because the droplet has no `python3-venv` and the file is hash-pinned, so
 pip-audit has nothing to resolve; it should print "No known
 vulnerabilities found" (if it names one, paste it back); `--todo` should
 say "anthropic 1.11.0, as pinned".
+
+**P52-a: done 2026-10-01.** Unit installed (exposure 2.3 OK, no SIGSYS),
+Caddy reloaded (permissions-policy live), cfips timer enabled (first run
+Mon 2026-10-05 03:15 UTC). Backups of the old files: /root/*.before-p52.
+If not done yet, drop the old cron line:
+`sudo crontab -l | grep -v 'cfips.sh' | sudo crontab -`
 
 **P52-a. Security housekeeping from the audit (on the box, ten minutes).**
 Four changes in this update need the box itself:
