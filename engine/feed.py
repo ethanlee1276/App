@@ -349,8 +349,12 @@ def scan_all(boards: dict, quiet: bool = True,
             if not quiet:
                 print(f"  feed: {sport} scan failed — "
                       f"{type(exc).__name__}: {exc}")
-    if fresh:
-        n = publish(fresh, now=now)
-        if not quiet:
-            print(f"  feed: {len(fresh)} new event(s), {n} on the wire")
+    # EVERY SWEEP PUBLISHES, news or not (2026-10-01). Publishing only on a
+    # new event made the file's age "time since the last news", and the
+    # Status page read a quiet morning as a stopped loop ("The feed — 5
+    # hours ago"). An empty merge keeps the wire as it was, prunes what has
+    # aged out, and stamps the time, so the age now means "last checked".
+    n = publish(fresh, now=now)
+    if fresh and not quiet:
+        print(f"  feed: {len(fresh)} new event(s), {n} on the wire")
     return len(fresh)
