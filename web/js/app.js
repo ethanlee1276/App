@@ -8782,9 +8782,14 @@ function shelfByPosted(rows) {
    given (tests/test_board_order), and it is the dashboard's alone. */
 function brandHeroHTML() {
   return `<div class="qt-brand">
-      <div class="qt-brand-art" aria-hidden="true"><img alt="" decoding="async" fetchpriority="high"
+      <div class="qt-brand-art" aria-hidden="true"><picture>
+        <!-- OFF ON PHONES (audit O25): the banner art cost a phone ~105px of
+             its first screen and a 60 KB image before the first odds. An
+             empty source at phone width means the image is never fetched. -->
+        <source media="(max-width: 720px)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+        <img alt="" decoding="async" fetchpriority="high"
         srcset="img/home/qb-helmet@800.webp 800w, img/home/qb-helmet.webp 1600w"
-        sizes="(max-width: 720px) 100vw, 1100px" src="img/home/qb-helmet.webp"></div>
+        sizes="(max-width: 720px) 100vw, 1100px" src="img/home/qb-helmet.webp"></picture></div>
       <div class="qt-brand-t"><b>Qellys Book</b>
         <span>Journaled at the price we found. Graded in public.</span></div>
     </div>`;
@@ -46443,6 +46448,35 @@ function zenoWhoHTML(rec) {
     model’s picks and are counted apart from them.</p>` : "";
 }
 
+/* THE PHONE'S FIRST LINES (audit O25): one record line and tonight's
+   verdict, above the four doors, so the first screen says how the book
+   stands and whether there is anything tonight before it says anything
+   else. Two short lines; the full record is further down. */
+function deckBriefHTML(rec) {
+  const d = state.data || {};
+  // THE SAME BOOK AS THE FIRST RIBBON, and the same floor (recFloor): the
+  // model's own book when it has settled bets, else the combined boards —
+  // one record line must never disagree with the tile under it.
+  const ov = (rec && rec.overall) || {};
+  const o = ov.settled ? ov : ((rec && rec.pooled_overall) || ov);
+  const f = recFloor(rec, o);
+  const recLine = !rec ? "" : f.thin
+    ? `${o.wins || 0}-${o.losses || 0} · ${f.n} of ${f.need} graded — too early to judge`
+    : `${o.wins || 0}-${o.losses || 0}${o.roi == null ? "" : ` · ${fmtRoi(o.roi)} ROI`} over ${plural(f.n, "graded bet")}`;
+  let edgeN = 0, likelyN = 0;
+  try {
+    const t = tonightSignals();
+    edgeN = (t.props || []).length + (t.sharpBets || []).length + (t.modelBets || []).length;
+  } catch (e) { edgeN = 0; }
+  try { likelyN = oneBoardAllRows().length; } catch (e) { likelyN = 0; }
+  const tonight = !d || !Object.keys(d).length ? ""
+    : edgeN ? `${plural(edgeN, "edge pick")} tonight${likelyN ? ` · ${likelyN} on Most Likely` : ""}`
+    : likelyN ? `No edge tonight · ${likelyN} on Most Likely` : "No edge tonight — no bet is a result too";
+  if (!recLine && !tonight) return "";
+  return `${recLine ? `<a class="hd-brief-line" href="#record" data-view="record"><span class="k">Record</span> ${escapeHtml(recLine)}</a>` : ""}
+    ${tonight ? `<a class="hd-brief-line" href="#edge" data-view="edge"><span class="k">Tonight</span> ${escapeHtml(tonight)}</a>` : ""}`;
+}
+
 async function deckRecordHTML() {
   let rec = null;
   try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
@@ -46619,6 +46653,17 @@ async function renderHomeDeck(opts) {
     deckFill(host, "live", await deckLiveHTML(riding, rows));
   } else {
     const [live, rest] = await Promise.all([deckLiveHTML(riding, rows), deckRecordHTML()]);
+    // The brief rides at the top of the tools section, above the doors —
+    // a child of the deck, so the doors keep their place (Ethan, 09-26).
+    const toolsSec = host.querySelector('.hd-sec[data-sec="tools"]');
+    if (toolsSec) {
+      let br = toolsSec.querySelector(".hd-brief");
+      if (!br) { br = document.createElement("div"); br.className = "hd-brief"; toolsSec.prepend(br); }
+      let rec = null;
+      try { rec = await loadRecordOnce(); } catch (e) { rec = null; }
+      br.innerHTML = deckBriefHTML(rec);
+      br.hidden = !br.innerHTML.trim();
+    }
     deckFill(host, "live", live);
     deckFill(host, "record", rest.record);
     deckFill(host, "zeno", rest.zeno);
