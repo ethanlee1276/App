@@ -6335,7 +6335,11 @@ body.has-rail .shell {
    rotates rather than swaps. */
 .sb-fold { display: flex; align-items: center; gap: 6px; width: auto;
   background: none; border: 0; cursor: pointer; text-align: left;
-  font-family: inherit; padding: 0; }
+  font-family: inherit; padding: 0;
+  /* LEGIBLE AND HITTABLE (audit V-13): 10px labels with no height were
+     the targets for six whole boards. */
+  font-size: var(--fs-xs); min-height: 24px; }
+.sb-fold .sb-count { color: var(--text-mute); font-weight: 600; letter-spacing: 0; }
 .sb-fold:hover { color: var(--text); }
 .sb-fold svg { width: 13px; height: 13px; margin-left: auto; flex: 0 0 auto;
   transition: transform var(--dur-fast) var(--ease-out); }
@@ -12682,3 +12686,9 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
   background: var(--panel); }
 .ask-locked p { margin: 0 0 8px; }
 .ask-locked-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Sortable tables (audit V-23): the header says it sorts and which way. */
+th[aria-sort] { cursor: pointer; user-select: none; }
+th[aria-sort="ascending"]::after { content: " \25B2"; font-size: .8em; color: var(--text-mute); }
+th[aria-sort="descending"]::after { content: " \25BC"; font-size: .8em; color: var(--text-mute); }
+th[aria-sort]:focus-visible { outline-offset: -2px; }   /* the site-wide ring, drawn inside the cell */

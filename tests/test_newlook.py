@@ -186,18 +186,24 @@ def test_the_library_folds_and_remembers():
     assert sb.count('class="sb-label sb-fold"') == 4, \
         "the foldable heads changed — Odds, Research, My Book, Proof"
     assert sb.count('class="sb-label sb-fold sb-filters-head"') == 1
-    for fold in ('data-fold="library"', 'data-fold="proof"'):
+    # CHANGED 2026-09-30 (audit V-13 / roadmap #42): Odds (research) and
+    # Research (library) ship OPEN — Line Shopping, Game Lines, Players and
+    # Weather sat behind closed 10px labels. My Book and Proof still fold.
+    for fold in ('data-fold="proof"',):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="false"' in seg[:220], \
             f"{fold} no longer ships shut — it is a reference shelf"
-    for grp in ("library", "proof"):
+    for grp in ("proof",):
         assert f'<div class="sb-group" data-group="{grp}" hidden>' in sb, \
             f"{grp}'s group lost its markup-default [hidden]"
+    for fold in ('data-fold="research"', 'data-fold="library"'):
+        seg = sb[sb.index(fold):]
+        assert 'aria-expanded="true"' in seg[:220], f"{fold} ships open (audit V-13)"
     # research and tools shipped OPEN while they held the daily rows.
     # 2026-08-31: those rows (Top Picks, Long Shots, My Bets, Record)
     # were promoted to the always-open tier, and what remains in both
     # groups is reference — so they fold like Library and Proof now.
-    for fold in ('data-fold="research"', 'data-fold="tools"'):
+    for fold in ('data-fold="tools"',):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="false"' in seg[:220], \
             f"{fold} no longer ships shut — its daily rows moved out"

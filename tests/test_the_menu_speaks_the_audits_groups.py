@@ -35,7 +35,7 @@ def _fn(name):
 
 
 def test_the_folds_read_the_audits_words_and_keep_their_ids():
-    heads = re.findall(r'data-fold="([a-z]+)"\s+type="button" aria-expanded="false">([A-Za-z ]+)\n', SIDEBAR)
+    heads = re.findall(r'data-fold="([a-z]+)"\s+type="button" aria-expanded="(?:true|false)">([A-Za-z ]+)\n', SIDEBAR)
     assert heads == [("research", "Odds"), ("library", "Research"), ("tools", "My Book"),
                      ("proof", "Proof"), ("filters", "Filters")], heads
     assert ">Betting\n" not in SIDEBAR and ">Library\n" not in SIDEBAR

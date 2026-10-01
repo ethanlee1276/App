@@ -53,10 +53,15 @@ def test_every_group_below_the_tier_ships_folded():
     """A fold that ships open is a tier-1 row wearing a heading. All
     four reference groups start shut; the reader's own toggle is what
     opens them, and qb_sb_folds is what remembers it."""
-    for fold in ("research", "library", "tools", "proof"):
+    # CHANGED 2026-09-30 (audit V-13 / roadmap #42): Odds (research) and
+    # Research (library) ship open; My Book and Proof still start shut.
+    for fold in ("tools", "proof"):
         i = SIDEBAR.index(f'data-fold="{fold}"')
         assert 'aria-expanded="false"' in SIDEBAR[i:i + 240], fold
         assert f'data-group="{fold}" hidden' in SIDEBAR, fold
+    for fold in ("research", "library"):
+        i = SIDEBAR.index(f'data-fold="{fold}"')
+        assert 'aria-expanded="true"' in SIDEBAR[i:i + 240], fold
 
 
 def test_every_destination_survived_the_rework():

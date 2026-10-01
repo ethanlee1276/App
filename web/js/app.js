@@ -7693,6 +7693,63 @@ function quotesForSide(r) {
 /* The card's strip: the pick's side at every book quoting the pick's
    line, best first; a count of the books quoting another line. Nothing
    under two real quotes — one price is the card's own line, not a shop. */
+/* SORTABLE TABLES (audit V-23): every data table on the site sorted only
+   one way. A header click (or Enter on a focused header) sorts by that
+   column, numbers as numbers — signs, minus signs, %, $, "u" and commas
+   read through — and text as text; a second click reverses. Headers get
+   aria-sort and a tab stop as tables appear. */
+const SORTABLE_TABLES = "table.log-table, table.kx-table, table.sortable";
+
+function sortKey(text) {
+  const t = String(text || "").trim().replace(/\u2212/g, "-").replace(/[,$%u]/g, "");
+  const n = parseFloat(t);
+  return Number.isFinite(n) && /^[-+]?\d/.test(t) ? n : String(text || "").trim().toLowerCase();
+}
+
+function sortTableBy(th) {
+  const table = th.closest("table");
+  const body = table && table.tBodies[0];
+  if (!body) return;
+  const col = Array.from(th.parentElement.children).indexOf(th);
+  const dir = th.getAttribute("aria-sort") === "descending" ? "ascending" : "descending";
+  th.parentElement.querySelectorAll("th[aria-sort]").forEach((h) => h.setAttribute("aria-sort", "none"));
+  th.setAttribute("aria-sort", dir);
+  const rows = Array.from(body.rows);
+  rows.sort((a, b) => {
+    const x = sortKey((a.cells[col] || {}).textContent), y = sortKey((b.cells[col] || {}).textContent);
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+    return dir === "ascending" ? c : -c;
+  });
+  rows.forEach((r) => body.appendChild(r));
+}
+
+function armSortable(root) {
+  (root || document).querySelectorAll(SORTABLE_TABLES).forEach((tb) => {
+    tb.querySelectorAll("thead th").forEach((th) => {
+      if (th.hasAttribute("aria-sort") || !th.textContent.trim()) return;
+      th.setAttribute("aria-sort", "none");
+      th.tabIndex = 0;
+    });
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const th = e.target.closest && e.target.closest("th[aria-sort]");
+  if (th && th.closest(SORTABLE_TABLES)) sortTableBy(th);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const th = e.target.closest && e.target.closest("th[aria-sort]");
+  if (th && th.closest(SORTABLE_TABLES)) { e.preventDefault(); sortTableBy(th); }
+});
+if (typeof MutationObserver === "function" && typeof document !== "undefined" && document.body) {
+  let _sortT = null;
+  new MutationObserver(() => {
+    clearTimeout(_sortT);
+    _sortT = setTimeout(() => armSortable(document), 120);
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 function booksStripHTML(r) {
   const q = quotesForSide(r);
   if (q.same.length + q.other.length < 2) return "";
@@ -7700,9 +7757,11 @@ function booksStripHTML(r) {
     `<span class="bs-q${x === q.best ? " best" : ""}${x.outlier ? " off" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}${
       x.outlier ? " · off the field: more than ten points under the other books, not shopped" : ""}">${
       escapeHtml(x.book)} <b>${american(x.odds)}</b>${x.outlier ? " <i>off the field</i>" : ""}</span>`).join("");
+  // PRINTED, NOT TOOLTIP-ONLY (audit V-23): a phone has no hover, and the
+  // other books were the shop a reader came for.
   const others = q.other.length
-    ? `<span class="bs-more" title="${escapeAttr(q.other.map((x) => `${x.book} ${x.line} ${american(x.odds)}`).join(" · "))}">+${
-        q.other.length} at other line${q.other.length === 1 ? "" : "s"}</span>` : "";
+    ? `<span class="bs-more">+ at other lines: ${escapeHtml(q.other.slice(0, 3).map((x) =>
+        `${x.book} ${x.line} ${american(x.odds)}`).join(" · "))}${q.other.length > 3 ? ` · +${q.other.length - 3} more` : ""}</span>` : "";
   return `<div class="bs-strip" aria-label="The same side at each book">${
     icon("tag", 11)} <span class="bs-t">${escapeHtml(q.side)} ${q.line} by book</span>${atLine}${others}</div>`;
 }
@@ -46860,6 +46919,16 @@ function buzzOnSettle(rows) {
   };
   const navSearch = document.getElementById("nav-search");
   if (navSearch) navSearch.addEventListener("click", goSearch);
+  // "/" SEARCHES (audit V-14), the shortcut every line-shopping site has:
+  // from anywhere not already typing, to the player search, focused.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    e.preventDefault();
+    goSearch();
+    setTimeout(() => { const box = document.getElementById("player-search"); if (box) box.focus(); }, 60);
+  });
   const tbSearch = document.getElementById("tb-search");
   if (tbSearch) tbSearch.addEventListener("click", () => { moreSheetOpen(false); goSearch(); });
   moreSheetInit();
@@ -47036,6 +47105,14 @@ function buzzOnSettle(rows) {
   document.querySelectorAll(".sb-fold").forEach((head) => {
     const grp = head.nextElementSibling;
     if (!grp || !grp.classList.contains("sb-group")) return;
+    // WHAT'S INSIDE, BEFORE IT OPENS (audit V-13): "Odds (4)".
+    const n = grp.querySelectorAll(".sb-item").length;
+    if (n && !head.querySelector(".sb-count")) {
+      const c = document.createElement("span");
+      c.className = "sb-count";
+      c.textContent = `(${n})`;
+      head.insertBefore(c, head.querySelector("svg"));
+    }
     const paint = (open) => {
       head.setAttribute("aria-expanded", String(open));
       grp.hidden = !open;

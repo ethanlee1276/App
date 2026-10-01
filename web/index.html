@@ -433,10 +433,13 @@
            "research" so every reader's remembered choice
            (qb_sb_folds) survives the rename. -->
       <button class="sb-label sb-fold" data-head="research" data-fold="research"
-              type="button" aria-expanded="false">Odds
+              type="button" aria-expanded="true">Odds
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="sb-group" data-group="research" hidden>
+      <!-- ODDS AND RESEARCH SHIP OPEN (audit V-13): Line Shopping, Game
+           Lines, Players and Weather sat behind closed 10px labels. A
+           reader's own fold choice still wins (qb_sb_folds). -->
+      <div class="sb-group" data-group="research">
         <!-- ORDERED BY THE EVIDENCE BEHIND EACH BOARD, which is the order
              engine/boards.guide() has always used and this menu never did.
              Ethan, 2026-08-30: "i made the site and im getting confused on
@@ -465,13 +468,13 @@
       <!-- RESEARCH since 2026-09-23 (audit item 1); the id stays
            "library" for the same reason. -->
       <button class="sb-label sb-fold" data-head="library" data-fold="library"
-              type="button" aria-expanded="false">Research
+              type="button" aria-expanded="true">Research
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <!-- Ships [hidden] so the fold holds before app.js runs — the CSS
            .sb-group[hidden] rule is what makes it stick (display:flex on
            .sb-group would beat the UA's [hidden] otherwise). -->
-      <div class="sb-group" data-group="library" hidden>
+      <div class="sb-group" data-group="library">
         <button class="nav-btn sb-item" data-view="injuries" data-hint="who’s out, league-wide">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/></svg>
           Injuries &amp; News</button>

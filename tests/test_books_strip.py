@@ -96,7 +96,9 @@ def test_the_strip_and_the_table_say_the_shop_and_hide_under_two_quotes():
                one: booksStripHTML(one), oneT: booksTableHTML(one), none: booksStripHTML({{}}), nul: booksStripHTML(null) }};""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert got["strip"] == "UNDER 58.5 by book FanDuel −118 DraftKings −120 BetMGM −125 +1 at other line", got["strip"]
+    # CHANGED 2026-09-30 (audit V-23 / roadmap #42): the other-line books
+    # are printed, not tooltip-only — a phone has no hover.
+    assert got["strip"] == "UNDER 58.5 by book FanDuel −118 DraftKings −120 BetMGM −125 + at other lines: Caesars 57.5 −110", got["strip"]
     assert 'class="bs-q best"' in got["raw"] and got["raw"].count('class="bs-q') == 3
     assert "Shop the price" in got["table"] and "from the 10:40 AM odds pull" in got["table"]
     assert got["table"].count("<tr class=\"best\">") == 1 and "At another line — a different bet" in got["table"]
