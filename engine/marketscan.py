@@ -255,6 +255,9 @@ def stale_quotes(recs: list[dict], gap: float = STALE_GAP_PT,
                         "consensus": round(consensus, 4),
                         "gap_pts": round(edge * 100, 2),
                         "books_compared": len(quotes),
+                        # Named, not counted (audit V-19): "the other 2
+                        # books average -118" left the reader to guess which.
+                        "other_books": sorted(b for b, _o in quotes if b != book),
                         "fair_odds": _prob_to_american(consensus),
                     })
     # One flag per prop-side, keeping the biggest gap. With seven books

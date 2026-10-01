@@ -20801,6 +20801,59 @@ function scanSection(title, sub, rows, rowFn, emptyText) {
     </div>`;
 }
 
+/* A MIDDLE, IN DOLLARS (audit V-19, roadmap #47). The engine's numbers
+   are per 1u on EACH leg, so "+184% both win" read as a return on the
+   whole stake and the "Total stake" box above the section was ignored.
+   The split here is the equal-payout one: each leg staked in proportion
+   to 1/decimal price, so landing on either side alone returns the same
+   amount and the worst case is one number. */
+function scanMiddleSplit(m, stake) {
+  const dec = (a) => (a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a));
+  const dO = dec(Number(m.over.odds)), dU = dec(Number(m.under.odds));
+  const inv = 1 / dO + 1 / dU;
+  const so = stake * (1 / dO) / inv, su = stake - so;
+  const one = so * dO;                     // either leg alone pays this
+  return { so, su, worst: one - stake, both: 2 * one - stake };
+}
+
+/* Group the middles by player, best first, and flag a leg two rows share.
+   Sorted by EV where the sport has an outcome distribution and by window
+   width after that, and the row says which ranking it is under. The
+   engine sends overlapping permutations (one cheap Over against three
+   Unders is three rows); a reader who takes two of them has bet the
+   shared leg twice. */
+function scanMiddleGroups(middles) {
+  const legKey = (side, l) => `${side}|${l.book}|${l.line}|${l.odds}`;
+  const rows = (middles || []).slice().sort((a, b) =>
+    ((b.ev_per_unit != null) - (a.ev_per_unit != null))
+    || ((b.ev_per_unit ?? 0) - (a.ev_per_unit ?? 0))
+    || ((b.gap || 0) - (a.gap || 0)));
+  const seen = new Set();
+  const groups = new Map();
+  for (const m of rows) {
+    const legs = [legKey("Over", m.over), legKey("Under", m.under)];
+    const shared = legs.filter((k) => seen.has(k)).map((k) => k.split("|").slice(0, 2).join(" at "));
+    legs.forEach((k) => seen.add(k));
+    const who = m.player || m.bet;
+    if (!groups.has(who)) groups.set(who, []);
+    groups.get(who).push({ ...m, shared });
+  }
+  return [...groups.entries()].map(([who, list]) => ({ who, list }));
+}
+
+function scanMiddleRow(m, stake) {
+  const sp = scanMiddleSplit(m, stake);
+  const money = (v) => `${v < 0 ? "−" : "+"}$${Math.abs(v).toFixed(2)}`;
+  const head = m.ev_per_unit != null
+    ? `<b class="hd-pl" style="color:${m.ev_per_unit >= 0 ? "var(--good)" : "var(--text-mute)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</b>`
+    : `<b class="hd-pl">${escapeHtml(String(m.gap))}-point window</b>`;
+  const sub = `$${sp.so.toFixed(0)} Over / $${sp.su.toFixed(0)} Under · both win ${money(sp.both)} · one wins ${money(sp.worst)}${
+    m.middle_prob != null ? ` · lands in the window ${(m.middle_prob * 100).toFixed(0)}% of the time`
+                          : " · no outcome history for this market, so not EV-ranked"}${
+    m.shared.length ? `<span class="hd-warn">${icon("warn")} shares the ${escapeHtml(m.shared.join(" and "))} with a row above — fill one of them, not both</span>` : ""}`;
+  return scanPairRow(m, `${head}<span>${sub}</span>`);
+}
+
 function renderScanner() {
   const host = document.getElementById("scanner-body");
   if (!host) return;
@@ -20846,10 +20899,11 @@ function renderScanner() {
   };
 
   const staleRow = (t) => `<div class="hd-row hd-scan">${scanMark(t)}<div class="hd-what"><b>${escapeHtml(t.bet)}</b>
-      <span>${escapeHtml(t.book)} ${american(t.odds)} · the other
-        ${plural(t.books_compared - 1, "book")} ${t.books_compared - 1 === 1 ? "averages" : "average"} ${american(t.fair_odds)}</span></div>
-    <div class="hd-state"><b class="hd-pl" style="color:var(--good)">${t.gap_pts.toFixed(2)} pts cheap</b>
-      <span>${(t.implied * 100).toFixed(1)}% vs field ${(t.consensus * 100).toFixed(1)}%</span></div></div>`;
+      <span>${escapeHtml(t.book)} ${american(t.odds)} · ${(t.other_books || []).length
+        ? escapeHtml(t.other_books.join(", ")) : `the other ${plural(t.books_compared - 1, "book")}`} ${
+        t.books_compared - 1 === 1 ? "prices" : "average"} it ${american(t.fair_odds)}</span></div>
+    <div class="hd-state" title="How much less likely this book says the bet is than the other books do, in percentage points of implied probability"><b class="hd-pl" style="color:var(--good)">${t.gap_pts.toFixed(2)} pts cheaper</b>
+      <span>implied ${(t.implied * 100).toFixed(1)}% here, ${(t.consensus * 100).toFixed(1)}% elsewhere</span></div></div>`;
 
   const scanFoot = `<p class="list-note">Positive-EV bets live on the
       <b>Recommended</b> and <b>Edge Board</b> pages — that’s the model’s job. This page
@@ -20874,7 +20928,7 @@ function renderScanner() {
     bindEmptyDoors(host);
     return;
   }
-  host.innerHTML = freshness + (arbs.length || middles.length || lows.length ? stakeInput : "")
+  host.innerHTML = freshness + (arbs.length || middles.length ? stakeInput : "")
     + scanSection("Stale lines",
       staleNote()
       + "a book pricing a side cheaper than every other book. No forecast involved — "
@@ -20907,16 +20961,14 @@ function renderScanner() {
            <span>$${so.toFixed(0)} Over / $${su.toFixed(0)} Under</span>${suspect}`);
       },
       "No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
-    + scanSection("Middles", "Over at a low line + Under at a higher one: land between them and BOTH win; miss and you only pay the vig. Ranked by EV from the sport’s real outcome distribution — never by window width",
-      middles, (m) => {
-        const evLine = m.ev_per_unit != null
-          ? `<b class="hd-pl" style="color:${m.ev_per_unit >= 0 ? "var(--good)" : "var(--text-mute)"}">${m.ev_per_unit >= 0 ? "+" : ""}${(m.ev_per_unit * 100).toFixed(1)}% EV</b>
-             <span>hits ${(m.middle_prob * 100).toFixed(0)}% of the time · both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`
-          : `<b class="hd-pl">${escapeHtml(String(m.gap))} gap</b>
-             <span>both win +${(m.both_win_return * 100).toFixed(0)}% · worst ${(m.worst_case * 100).toFixed(0)}%</span>`;
-        return scanPairRow(m, evLine);
-      },
-      "No middle windows open — books currently agree on every line. Gaps open when one book moves before the others.")
+    + (middles.length ? `<div class="section-title">Middles
+        <span class="sub">— Over at a low line + Under at a higher one: land between them and BOTH win; miss and one leg pays for the other, less the vig. Grouped by player, best first; dollars are for the stake above</span></div>
+      <div class="hd-card">${scanMiddleGroups(middles).map(({ who, list }) =>
+        scanMiddleRow(list[0], stake) + (list.length > 1 ? `<details class="scan-more"><summary>${
+          plural(list.length - 1, "more window")} on ${escapeHtml(who)}</summary>${
+          list.slice(1).map((m) => scanMiddleRow(m, stake)).join("")}</details>` : "")).join("")}</div>`
+      : scanSection("Middles", "", [], null,
+        "No middle windows open — books currently agree on every line. Gaps open when one book moves before the others."))
     + scanSection("Low holds", "two-sided quotes under 2% combined juice — a turnover feature, not a profit feature: the cheapest way to churn promo/rollover volume or keep an account looking recreational",
       lows, (h) => scanPairRow(h,
         `<b class="hd-pl">${(h.hold_pct * 100).toFixed(1)}% hold</b>
@@ -21035,7 +21087,15 @@ async function renderBookReport() {
   // lesson, from the other side). The host is hidden with its view.
   const d = _brCache;
   const ranked = ((d || {}).books || []).filter((b) => b.ranked);
-  if (!ranked.length || document.getElementById("bookreport-card")) return;
+  if (document.getElementById("bookreport-card")) return;
+  if (!ranked.length) {
+    // Said once, in the empty-row voice (audit V-19), rather than a card
+    // that silently never appears on a box with too little line history.
+    host.insertAdjacentHTML("beforeend", `<div id="bookreport-card" class="scan-empty"><b>Book report card</b>
+      <span class="panel-empty">Not ranked yet — a book is ranked once enough of its early prices
+      have a closing consensus to be measured against.</span></div>`);
+    return;
+  }
   const worst = Math.max(...ranked.map((b) => b.mae_pts || 0), 0.1);
   host.insertAdjacentHTML("beforeend", `
     <div id="bookreport-card">

@@ -1030,6 +1030,9 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .scan-empty { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
   padding: 10px 0; border-bottom: var(--hairline) solid var(--border-soft); }
 .scan-empty b { color: var(--text); font-size: var(--fs-sm); font-weight: 700; flex: 0 0 auto; }
+/* A player's other middle windows fold under his best one (#47). */
+.scan-more > summary { cursor: pointer; padding: 8px 14px; font-size: var(--fs-sm); color: var(--text-mute); }
+.scan-more[open] > summary { color: var(--text); }
 .scan-empty .panel-empty { flex: 1 1 240px; padding: 0; }
 
 /* A drawn mark on a text baseline. */

@@ -52,7 +52,8 @@ def test_a_quiet_scanner_is_one_card_with_the_doors():
     i = body.index('<div class="hd-quiet lv-quiet"><i class="live-dot paused"></i>Nothing out of')
     assert '${boardEmptyDoors("scanner")}${scanFoot}`;\n    bindEmptyDoors(host);\n    return;' in body[i:i + 700], \
         "the doors, minus this page, wired; then the note; then nothing else"
-    assert 'host.innerHTML = freshness + (arbs.length || middles.length || lows.length ? stakeInput : "")' in body, \
+    # Low holds size nothing (audit V-19, roadmap #47): arbs and middles only.
+    assert 'host.innerHTML = freshness + (arbs.length || middles.length ? stakeInput : "")' in body, \
         "the stake box only when there is a split to size"
     assert 'const scanFoot = `<p class="list-note">' in body, "the foot is the note it always was, in the note's class"
     assert body.count("${scanFoot}") == 2, "the foot on both branches"
@@ -65,7 +66,7 @@ def test_every_scanner_row_is_the_books_row():
         assert 'style="display:flex' not in src and 'class="drow"' not in src, f"{what}: an inline-styled row survived"
         assert "rgba(255,255,255" not in src, f"{what}: a raw border survived"
     assert '<div class="hd-row hd-scan">${scanMark(t)}<div class="hd-what"><b>${escapeHtml(t.bet)}</b>' in body, "the stale line"
-    assert '<b class="hd-pl" style="color:var(--good)">${t.gap_pts.toFixed(2)} pts cheap</b>' in body
+    assert '<b class="hd-pl" style="color:var(--good)">${t.gap_pts.toFixed(2)} pts cheaper</b>' in body  # V-19 wording
     assert '<b class="hd-pl" style="color:var(--bad)">${(t.measured_roi * 100).toFixed(1)}% historically</b>' in body, "the plus-money prop"
     assert '<b class="hd-pl" style="color:var(--good)">+${(a.profit_pct * 100).toFixed(2)}% · $${ret.toFixed(2)} locked</b>' in body, "the arb"
     assert '<span class="hd-warn">${icon(\'warn\')} 5%+ edge' in body
