@@ -42,9 +42,12 @@ from engine import ledger, potd                               # noqa: E402
 
 
 def _today() -> str:
-    """From the clock, never a literal. `relock_potd` keys on the journal
-    day, so a frozen date here would pass or fail by the calendar."""
-    return datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    """From the clock, never a literal — and the SLATE day, not the UTC
+    one. Since 2026-09-29 `relock_potd` only re-points at a lock whose
+    game is on `potd.slate_day()` (the Eastern day), so a fixture dated
+    by UTC failed every night between 00:00 and 04:00 UTC, when the two
+    days differ (found by the gate at 00:01 UTC on 2026-10-01)."""
+    return potd.slate_day()
 
 
 def _journal():
