@@ -294,6 +294,9 @@ def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None,
               "kalshi_spread": 0, "kalshi_total": 0}
     if not games:
         return census
+    # WHEN THESE PRICES WERE READ (audit V-9): a probability with no time
+    # on it reads as live. The markets passed in were fetched for this run.
+    pulled = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="minutes")
     named = _xf.with_names(_board_names(games, result.get("teams")), sport)
     key = lambda g: (str(g.get("away") or ""), str(g.get("home") or ""))  # noqa: E731
     kx: dict = {}
@@ -350,6 +353,7 @@ def attach(result: dict, sport: str, kalshi_markets=None, poly_rows=None,
         if b is not None and c.get("crowd") is not None:
             # + means the crowd rates the home club higher than the books.
             c["gap_pts"] = round((c["crowd"] - b) * 100.0, 1)
+        c["at"] = pulled
         g["crowd"] = c
     return census
 

@@ -5724,6 +5724,21 @@ function renderGameBets() {
   host.querySelectorAll(".gb-group .cards").forEach(revealChildren);
 }
 
+/* THE EXCHANGE'S NUMBER ON THE PICK (audit V-9). `exchange_fair` has been
+   hung on game rows by engine/exchangefair for weeks and nothing read it:
+   what Kalshi/Polymarket's traders give this side, as a chance and as a
+   price, beside the book price the pick is taken at. Evidence, not the
+   pick's own number. */
+function exchangeFairLine(r) {
+  const f = Number(r && r.exchange_fair);
+  if (!(f > 0 && f < 1)) return "";
+  const ours = Number(r.win_prob);
+  const vs = ours > 0 && ours < 1
+    ? ` · our model ${Math.round(ours * 100)}%` : "";
+  return `<div class="mini gb-exchange">Prediction markets: ${pctPrice(f)} for this side${vs}
+    · the book price above is what the pick is taken at</div>`;
+}
+
 function gameBetCard(r) {
   // stakeText answers the no-bankroll case itself (units, because
   // dollars need one), so the branch that used to live here went with it.
@@ -5806,6 +5821,7 @@ function gameBetCard(r) {
       ${confMeter(r)}
       ${gameBetChart(r)}
       <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}${slipChip(r)}</div>
+      ${exchangeFairLine(r)}
       ${(r.qb_cards || []).map(qbCardHTML).join("")}
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
@@ -9956,9 +9972,33 @@ function oneBoardHomeHTML() {
    neighbouring one). A book's line is set to split the money about
    evenly, so a crowd that says 57% at that line is saying the line is
    off — recorded for crowdfit, shown here, moving no pick. */
+/* EXCHANGE AND BOOK IN ONE UNIT (audit 2026-09-30, V-9). An exchange
+   quotes a chance ("62%"), a book quotes a price ("−163"), and a reader
+   comparing the two had to do the conversion in their head. Every
+   exchange percentage now carries the price it is worth, in the reader's
+   chosen odds format, beside it. */
+function probPrice(p) {
+  const x = Number(p);
+  if (!(x > 0 && x < 1)) return "";
+  const am = x >= 0.5 ? -Math.round((x / (1 - x)) * 100) : Math.round(((1 - x) / x) * 100);
+  return american(am);
+}
+
+function pctPrice(p) {
+  const pr = probPrice(p);
+  return `${Math.round(Number(p) * 100)}%${pr ? ` <span class="mini">(${pr})</span>` : ""}`;
+}
+
+function pulledAgo(iso) {
+  const t = Date.parse(iso || "");
+  if (!isFinite(t)) return "";
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  return m < 1 ? "just now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+}
+
 function crowdLinesHTML(g, c) {
   const rows = [];
-  const pct = (p) => `${Math.round(p * 100)}%`;
+  const pct = pctPrice;
   // Polymarket's and, since 2026-09-27, Kalshi's (engine/crowd.kalshi_lines).
   for (const [cover, over, venue] of [["poly_home_cover", "poly_over", "Polymarket"],
                                       ["kalshi_home_cover", "kalshi_over", "Kalshi"]]) {
@@ -10033,11 +10073,17 @@ function crowdStripHTML(g) {
   if (!cells.some(([k]) => k === "kalshi" || k === "polymarket")) {
     return lines ? `<div class="gp-crowd"><div class="gp-crowd-head">The prediction markets on this line</div>${lines}</div>` : "";
   }
-  const pct = (p) => `${Math.round(p * 100)}%`;
-  const gap = c.gap_pts != null && Math.abs(c.gap_pts) >= 3
-    ? `<p class="mini gp-crowd-gap">The prediction markets rate ${escapeHtml(teamName(c.gap_pts > 0 ? g.home : g.away))}
-        ${Math.abs(c.gap_pts).toFixed(1)} points higher than the books do.</p>` : "";
-  return `<div class="gp-crowd"><div class="gp-crowd-head">Win chance, every market</div>
+  const pct = pctPrice;
+  // THE GAP, ALWAYS (V-9). It used to print only at 3 points or more, so
+  // "the markets agree" and "we did not say" looked the same.
+  const gap = c.gap_pts == null ? ""
+    : Math.abs(c.gap_pts) < 0.5
+    ? `<p class="mini gp-crowd-gap">The prediction markets and the books agree on this one (within half a point).</p>`
+    : `<p class="mini gp-crowd-gap">The prediction markets rate ${escapeHtml(teamName(c.gap_pts > 0 ? g.home : g.away))}
+        ${Math.abs(c.gap_pts).toFixed(1)} points higher than the books do.</p>`;
+  const when = pulledAgo(c.at);
+  return `<div class="gp-crowd"><div class="gp-crowd-head">Win chance, every market${
+      when ? ` <span class="mini">· exchange prices pulled ${escapeHtml(when)}</span>` : ""}</div>
     <table class="gp-crowd-t"><thead><tr><th scope="col" aria-label="Team"></th>${
       cells.map(([, l]) => `<th scope="col">${l}</th>`).join("")}</tr></thead>
     <tbody>${[["away", (p) => 1 - p], ["home", (p) => p]].map(([side, f]) => `<tr><th scope="row">${
