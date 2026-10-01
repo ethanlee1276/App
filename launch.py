@@ -900,10 +900,31 @@ def _current_nfl_week(today=None, rows=None):
 # and maintenance removes the stale copy from web/data (RETIRED_BOARDS).
 
 
+#: The last time refresh_nfl downloaded the schedule again because it
+#: found no current week. Hourly at most: in a real offseason there is no
+#: week to find and the file is not the problem.
+_SCHEDULE_RETRY_AT = [0.0]
+SCHEDULE_RETRY_EVERY_S = 3600
+
+
 def refresh_nfl(quiet: bool = False) -> bool:
     """Build the current NFL week into web/data/recommendations.json."""
     wk = _current_nfl_week()
+    # NO WEEK IS A CLAIM ABOUT THE SCHEDULE, SO CHECK THE SCHEDULE. On
+    # 2026-10-01 a cached games.csv cut short by a full disk had no upcoming
+    # games in it, and this returned before any build for ten hours of a
+    # game day, writing nothing to the heartbeat but "failed". One fresh
+    # read, then a note that says why the board was kept.
+    if not wk and time.time() - _SCHEDULE_RETRY_AT[0] > SCHEDULE_RETRY_EVERY_S:
+        _SCHEDULE_RETRY_AT[0] = time.time()
+        try:
+            from engine.sources.nflverse import load_schedules
+            wk = _current_nfl_week(rows=load_schedules(force=True))
+        except Exception:                                     # noqa: BLE001
+            wk = None
     if not wk:
+        _LAST_BUILD_NOTE[0] = ("no current NFL week in the schedule (offseason, or the "
+                               "schedule could not be read) — kept the existing board")
         if not quiet:
             print("  NFL  no current slate (offseason / schedule unavailable) — kept existing data")
         return False

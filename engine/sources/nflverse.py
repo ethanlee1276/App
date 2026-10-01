@@ -109,8 +109,43 @@ def _s(row: dict, *keys, default="") -> str:
 
 
 # --- schedules & weather ----------------------------------------------------
-def load_schedules() -> list[dict]:
-    return fetch_csv(SCHEDULES_URL, "games.csv")
+#: When a cut-short schedule was last downloaded again (epoch seconds).
+_SCHEDULE_REFETCHED = [0.0]
+#: At most this often, so an offline box does not re-ask every read.
+SCHEDULE_REFETCH_EVERY_S = 3600
+
+
+def _cut_short(rows: list[dict]) -> bool:
+    """A schedule with no rows, or whose last row lost columns (a file cut
+    mid-line: csv gives the missing fields as None)."""
+    if not rows:
+        return True
+    last = rows[-1]
+    return None in last or any(v is None for v in last.values())
+
+
+def load_schedules(force: bool = False) -> list[dict]:
+    """nflverse's games.csv, every season. `force` downloads it again.
+
+    A CUT-SHORT FILE IS DOWNLOADED AGAIN (2026-10-01). A full disk left the
+    cached copy truncated, and for its whole TTL every reader got a
+    schedule with no upcoming games: `launch._current_nfl_week` found no
+    week and the NFL board skipped its build on a game day. Now a file that
+    reads as cut short is fetched fresh, at most hourly, and the fresh copy
+    is kept only if it reads whole."""
+    import time
+    if force:
+        return fetch_csv(SCHEDULES_URL, "games.csv", ttl=0)
+    rows = fetch_csv(SCHEDULES_URL, "games.csv")
+    if _cut_short(rows) and time.time() - _SCHEDULE_REFETCHED[0] > SCHEDULE_REFETCH_EVERY_S:
+        _SCHEDULE_REFETCHED[0] = time.time()
+        try:
+            again = fetch_csv(SCHEDULES_URL, "games.csv", ttl=0)
+            if not _cut_short(again):
+                return again
+        except Exception:                                     # noqa: BLE001
+            pass
+    return rows
 
 
 def weather_from_row(row: dict) -> Weather:

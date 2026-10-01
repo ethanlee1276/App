@@ -38110,7 +38110,10 @@ function buildsCardHTML(hb) {
     return `<div class="st-row"><span class="st-k">${escapeHtml(label)}</span>
       <span class="st-v ${r.ok ? "st-good" : "st-bad"}">${r.ok
         ? `rebuilt ${escapeHtml(when)}` : `build failed ${escapeHtml(when)}`}</span>
-      <span class="st-sub">${r.ok ? "" : escapeHtml(String(r.note || "kept the last good board"))}</span></div>${boards}`;
+      <span class="st-sub">${r.ok ? "" : escapeHtml(String(r.note || "kept the last good board"))}</span>${
+        // The reason, on a phone too: .st-sub is hidden there, and a bare
+        // "build failed" is what Ethan saw on 2026-10-01 with no way to say why.
+        r.ok ? "" : `<span class="st-why">${escapeHtml(String(r.note || "kept the last good board"))}</span>`}</div>${boards}`;
   }).join("");
   return `<div class="section-title">Model builds
       <span class="sub">— the code running, each league’s last rebuild on it, and what its Most Likely

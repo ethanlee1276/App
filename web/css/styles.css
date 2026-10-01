@@ -2960,11 +2960,15 @@ select.calc-in { width: auto; font-weight: 600; }
 .st-indent .st-v { font-size: var(--fs-sm); }
 .st-off { color: var(--text-mute); }
 .st-sub { color: var(--text-mute); font-size: var(--fs-sm); text-align: right; }
+/* A failed build's reason, as its own line on a phone (desktop has .st-sub). */
+.st-why { display: none; }
 @media (max-width: 640px) {
   .cl-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .cl-when { flex-direction: row; align-items: baseline; gap: 8px; }
   .st-row { grid-template-columns: minmax(0, 1fr) auto; }
   .st-sub { display: none; }
+  .st-why { display: block; grid-column: 1 / -1; color: var(--text-mute); font-size: var(--fs-sm);
+    overflow-wrap: anywhere; }
   .mth-step { grid-template-columns: minmax(0, 1fr); }
 }
 .fresh-banner a { color: var(--brand); text-decoration: none; }

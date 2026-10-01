@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import gzip
 import io
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -172,7 +173,21 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
         if url.endswith(".gz") or raw[:2] == b"\x1f\x8b":
             raw = gzip.decompress(raw)
         text = raw.decode("utf-8", errors="replace")
-        path.write_text(text, encoding="utf-8")
+        # WRITTEN BESIDE, THEN SWAPPED IN. A plain write_text over the
+        # cache file on a full disk (2026-10-01) left nflverse's games.csv
+        # cut short, and every reader trusted the stub for its whole TTL:
+        # the NFL board skipped its build for ten hours on a game day. A
+        # failed write now leaves the last good copy whole; the fresh
+        # download is still returned to this caller.
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
         return text
     except Exception as exc:  # network blocked / offline
         if path.exists():
@@ -243,7 +258,30 @@ def fetch_csv(url: str, cache_name: str, **kw) -> list[dict]:
     breaks the quoting and shifts every column by one.
     """
     text = fetch_text(url, cache_name, **kw)
-    return list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
+    rows = list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
+    # A LAST ROW MISSING COLUMNS IS A FILE CUT MID-LINE (2026-10-01: a full
+    # disk truncated cached nflverse files). Download it again, at most
+    # hourly per file, and keep the fresh copy only if it reads whole.
+    if (rows and kw.get("ttl") != 0 and _cut_mid_line(rows)
+            and time.time() - _CSV_REFETCHED.get(cache_name, 0.0) > CSV_REFETCH_EVERY_S):
+        _CSV_REFETCHED[cache_name] = time.time()
+        try:
+            again = fetch_csv(url, cache_name, **{**kw, "ttl": 0})
+            if again and not _cut_mid_line(again):
+                return again
+        except Exception:                                     # noqa: BLE001
+            pass
+    return rows
+
+
+#: When each cut-short CSV was last downloaded again.
+_CSV_REFETCHED: dict = {}
+CSV_REFETCH_EVERY_S = 3600
+
+
+def _cut_mid_line(rows: list[dict]) -> bool:
+    last = rows[-1]
+    return None in last or any(v is None for v in last.values())
 
 
 def load_local_csv(path: str | Path) -> list[dict]:
