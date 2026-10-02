@@ -121,13 +121,15 @@ def test_the_top_bar_carries_the_name_line_the_leagues_and_a_search_box():
     the league tabs boxed beside it, search as a field. Wide screens only;
     the strip is moved, not copied, so every chip lookup still finds it."""
     assert '<span class="brand-tag">Data. Discipline. Edge.</span>' in HTML
-    assert '<span class="ns-label">Search players or teams…</span>' in HTML
+    # A real input since audit V-14, same words, not a button dressed as one.
+    assert 'id="nav-search-input" type="search"' in HTML
+    assert 'placeholder="Search players or teams…' in HTML
     assert 'const LEAGUES_MQ = "(min-width: 1280px)";' in APP
     place = _fn("placeLeagues")
     assert "brand.after(bar)" in place and "_leaguesHome.parent.insertBefore(bar" in place
     assert "placeLeagues();" in APP and 'window.matchMedia(LEAGUES_MQ).addEventListener("change", placeLeagues);' in APP
     assert ".topbar .sportbar-in .sport-btn.active { border-color: var(--brand); color: var(--brand);" in CSS
-    assert ".brand-tag { display: none; }" in CSS and ".ns-label { display: none; }" in CSS
+    assert ".brand-tag { display: none; }" in CSS and ".ns-input { display: none; }" in CSS
 
 
 def test_the_game_and_pick_pages_do_not_say_things_twice_on_a_phone():

@@ -181,6 +181,11 @@ class SportsbookLine:
     line: float
     over_odds: int = -110
     under_odds: int = -110
+    # When the book last moved this market, as the odds feed stamps it
+    # (ISO 8601, UTC). "" when the source has no stamp. Printed beside
+    # each price on the books strip (audit V-23): one pull time for the
+    # whole board hides a book that has not updated in hours.
+    updated: str = ""
 
 
 @dataclass

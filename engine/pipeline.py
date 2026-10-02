@@ -134,7 +134,8 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         "summary": summary(rec),
         "reasons": bullet_reasons(rec),
         "all_lines": [
-            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds,
+             **({"at": ln.updated} if getattr(ln, "updated", "") else {})}
             for ln in prop.lines
         ],
         # THE ALTERNATE LADDER, every rung with its own price, and the

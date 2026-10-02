@@ -407,12 +407,16 @@ def test_line_charts_scrub_under_a_finger():
     assert "data-tip" not in fn
 
 
-def test_the_rail_belongs_to_home_only():
-    """The render puts insights and live-now beside the dashboard. On
-    every other page the content gets the room back."""
+def test_the_rail_belongs_to_home_and_the_pick_boards_only():
+    """The render puts insights and live-now beside the dashboard. Audit
+    V-23 (2026-10-02) added the pick boards on a wide screen; every other
+    page still gets the content room back."""
     fn = APP[APP.index("function syncRail("):]
     fn = fn[:fn.index("\n}")]
     assert 'state.view === "recommended"' in fn
+    assert "RAIL_BOARDS.includes(state.view)" in fn
+    assert 'const RAIL_BOARDS = ["likely", "edge", "props", "longshots", "tonight", "scanner"];' in APP
+    assert "body.rail-wide-only .rail { display: none; }" in CSS, "the boards' rail folds away under 1280"
     assert APP.count("syncRail") >= 3          # def + switchView + boot
 
 

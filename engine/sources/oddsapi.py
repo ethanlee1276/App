@@ -1314,6 +1314,7 @@ def _parse_lines(event_json: dict, market_map: dict | None,
             market = market_map.get(mkt.get("key", ""))
             if not market:
                 continue
+            stamp = str(mkt.get("last_update") or bm.get("last_update") or "")
             # Index outcomes by (player, point) to pair Over/Under prices.
             overs: dict[tuple[str, float], int] = {}
             unders: dict[tuple[str, float], int] = {}
@@ -1337,7 +1338,7 @@ def _parse_lines(event_json: dict, market_map: dict | None,
                 key = (normalize_name(player), market)
                 out.setdefault(key, []).append(SportsbookLine(
                     book=book, line=float(point),
-                    over_odds=over_price, under_odds=under_price,
+                    over_odds=over_price, under_odds=under_price, updated=stamp,
                 ))
     return out
 

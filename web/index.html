@@ -209,12 +209,18 @@
            `display:none` on desktop and this is hidden under 760px, so
            they are never both on screen and the site never shows two
            search buttons. -->
+      <!-- A REAL FIELD ON A WIDE SCREEN (audit V-14). The field-shaped
+           button made you click, land on the player page and type into a
+           second box. Above 1280px the bar now holds the input itself:
+           typing searches as you go, "/" focuses it. Narrower screens keep
+           the icon, which opens the player page as before. -->
+      <div class="ns-field" role="search">
       <button class="meta-ico" id="nav-search" title="Player search" aria-label="Player search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
-        <!-- The render's search box: on a wide screen the icon grows into
-             a field-shaped door to the same search (styles.css .ns-label). -->
-        <span class="ns-label">Search players or teams…</span>
       </button>
+      <input class="ns-input" id="nav-search-input" type="search" autocomplete="off"
+             placeholder="Search players or teams…  /" aria-label="Search a player or a team" />
+      </div>
       <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>

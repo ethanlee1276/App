@@ -7778,7 +7778,12 @@ function quotesForSide(r) {
     if (!ln || !ln.book || String(ln.book).toLowerCase() === "proxy") return;
     const odds = side === "UNDER" ? ln.under_odds : ln.over_odds;
     if (odds == null || Number(odds) === 0 || !Number.isFinite(Number(odds))) return;
-    const q = { book: String(ln.book), line: Number(ln.line), odds: Number(odds) };
+    // WHEN THIS BOOK LAST MOVED THE PRICE (audit V-23), the feed's own
+    // stamp, as a clock time. One pull time for the board hides the book
+    // that has not touched its number in hours. "" with no stamp.
+    const t = ln.at ? Date.parse(ln.at) : NaN;
+    const q = { book: String(ln.book), line: Number(ln.line), odds: Number(odds),
+                at: Number.isFinite(t) ? tzTime(t) : "" };
     (Number.isFinite(line) && Number(ln.line) === line ? same : other).push(q);
   });
   fieldOutliers(same.map((q) => q.odds)).forEach((bad, i) => { same[i].outlier = bad; });
@@ -7854,10 +7859,14 @@ if (typeof MutationObserver === "function" && typeof document !== "undefined" &&
 function booksStripHTML(r) {
   const q = quotesForSide(r);
   if (q.same.length + q.other.length < 2) return "";
-  const atLine = q.same.map((x) =>
-    `<span class="bs-q${x === q.best ? " best" : ""}${x.outlier ? " off" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}${
+  const atLine = q.same.map((x) => {
+    const at = x.at;
+    return `<span class="bs-q${x === q.best ? " best" : ""}${x.outlier ? " off" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}${
+      at ? ` · price as of ${at}` : ""}${
       x.outlier ? " · off the field: more than ten points under the other books, not shopped" : ""}">${
-      escapeHtml(x.book)} <b>${american(x.odds)}</b>${x.outlier ? " <i>off the field</i>" : ""}</span>`).join("");
+      escapeHtml(x.book)} <b>${american(x.odds)}</b>${at ? ` <small class="bs-at">${escapeHtml(at)}</small>` : ""}${
+      x.outlier ? " <i>off the field</i>" : ""}</span>`;
+  }).join("");
   // PRINTED, NOT TOOLTIP-ONLY (audit V-23): a phone has no hover, and the
   // other books were the shop a reader came for.
   const others = q.other.length
@@ -7875,14 +7884,15 @@ function booksTableHTML(r) {
   if (q.same.length + q.other.length < 2) return "";
   const row = (x, best) => `<tr class="${best ? "best" : ""}${x.outlier ? " off" : ""}"><td>${escapeHtml(x.book)}</td>
       <td>${escapeHtml(q.side)} ${x.line}</td><td class="num">${american(x.odds)}</td>
+      <td class="num">${escapeHtml(x.at) || "—"}</td>
       <td>${best ? "best price" : x.outlier ? "off the field — not shopped" : ""}</td></tr>`;
   const asOf = ((state.data || {}).odds_status || {}).at;
   return `<div class="section-title minor">Shop the price
       <span class="sub">— ${escapeHtml(q.side)} ${q.line} at every book we saw${
         asOf ? `, from the ${escapeHtml(asOf)} odds pull` : ""}; confirm at the book before betting.</span></div>
-    <div class="card pp-books"><table class="agate"><thead><tr><th>Book</th><th>Bet</th><th class="num">Price</th><th></th></tr></thead>
+    <div class="card pp-books"><table class="agate"><thead><tr><th>Book</th><th>Bet</th><th class="num">Price</th><th class="num">As of</th><th></th></tr></thead>
       <tbody>${q.same.map((x) => row(x, x === q.best)).join("")}${
-        q.other.length ? `<tr class="bs-sep"><td colspan="4">At another line — a different bet</td></tr>${
+        q.other.length ? `<tr class="bs-sep"><td colspan="5">At another line — a different bet</td></tr>${
           q.other.map((x) => row(x, false)).join("")}` : ""}</tbody></table></div>`;
 }
 
@@ -21115,6 +21125,7 @@ function renderScanner() {
         ${!anchors.length && !steam.length ? `${panelEmpty("Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book’s price beats the sharp book’s fair value; steam appears when several books re-price together inside an hour.")}` : ""}
       </div>
       ${scanFoot}`;
+  armScanCopy(host);
 
   const inp = document.getElementById("scan-stake");
   if (inp) inp.addEventListener("change", () => {
@@ -21122,6 +21133,37 @@ function renderScanner() {
     renderScanner();
   });
   renderBookReport();
+}
+
+/* COPY A ROW (audit V-23 / O26). A shopper takes the two books and two
+   prices to the books' own apps; retyping them is where a −110 becomes a
+   −101. Every scanner row gets a Copy button that puts the row's own
+   words on the clipboard: the bet, both legs, and the number beside it. */
+function scanRowText(row) {
+  const clean = (el) => ((el || {}).textContent || "").replace(/\s+/g, " ").trim();
+  const st = row.querySelector(".hd-state");
+  const state = st ? [...st.children].map(clean).filter(Boolean).join(" · ") || clean(st) : "";
+  return [clean(row.querySelector(".hd-what b")), clean(row.querySelector(".hd-what span")), state]
+    .filter(Boolean).join(" · ");
+}
+
+function armScanCopy(host) {
+  if (!host) return;
+  host.querySelectorAll(".hd-row.hd-scan").forEach((row) => {
+    if (row.querySelector(".scan-copy")) return;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "scan-copy";
+    b.textContent = "Copy";
+    b.setAttribute("aria-label", "Copy this row");
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(scanRowText(row)); b.textContent = "Copied"; }
+      catch (err) { b.textContent = "Copy failed"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1500);
+    });
+    row.appendChild(b);
+  });
 }
 
 /* The book report card (roadmap #7) — which book prices sharpest,
@@ -43593,13 +43635,21 @@ async function renderRailDesk() {
     <a class="rail-more" href="#intel">The desk&rsquo;s full board &#8594;</a>`;
 }
 
-/* The rail belongs to Home. Everywhere else the content gets the room. */
+/* The rail belongs to Home, and (audit V-23) to the pick boards on a
+   wide screen: riding, the record and live now stay one glance away
+   while shopping a board, the way a book keeps its slip column. Below
+   1280px those boards get their full width back (rail-wide-only); Home
+   keeps the rail folded under its content as it always has. Every other
+   page gets the room. */
+const RAIL_BOARDS = ["likely", "edge", "props", "longshots", "tonight", "scanner"];
 function syncRail() {
   const rail = document.getElementById("rail");
   if (!rail) return;
   const home = state.view === "recommended";
-  document.body.classList.toggle("has-rail", home);
-  rail.style.display = home ? "" : "none";
+  const board = RAIL_BOARDS.includes(state.view);
+  document.body.classList.toggle("has-rail", home || board);
+  document.body.classList.toggle("rail-wide-only", board);
+  rail.style.display = home || board ? "" : "none";
   placeSlip();
 }
 
@@ -47350,13 +47400,32 @@ function buzzOnSettle(rows) {
   };
   const navSearch = document.getElementById("nav-search");
   if (navSearch) navSearch.addEventListener("click", goSearch);
+  // THE BAR'S OWN FIELD (audit V-14): typing in it IS the search. It
+  // drives the player page's box through that box's own input handler,
+  // so there is one search, and the focus stays in the bar.
+  const barBox = document.getElementById("nav-search-input");
+  const pageBox = document.getElementById("player-search");
+  if (barBox && pageBox) {
+    barBox.addEventListener("input", () => {
+      if (state.view !== "players") goSearch();
+      pageBox.value = barBox.value;
+      pageBox.dispatchEvent(new Event("input"));
+    });
+    barBox.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { barBox.value = ""; barBox.dispatchEvent(new Event("input")); barBox.blur(); }
+    });
+    pageBox.addEventListener("input", () => {
+      if (barBox.value !== pageBox.value) barBox.value = pageBox.value;
+    });
+  }
   // "/" SEARCHES (audit V-14), the shortcut every line-shopping site has:
-  // from anywhere not already typing, to the player search, focused.
+  // from anywhere not already typing, to the search field on screen.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
     e.preventDefault();
+    if (barBox && barBox.offsetParent !== null) { barBox.focus(); return; }
     goSearch();
     setTimeout(() => { const box = document.getElementById("player-search"); if (box) box.focus(); }, 60);
   });
