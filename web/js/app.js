@@ -6311,8 +6311,6 @@ function renderGames() {
     || fav(a) - fav(b)
     || (sortMode === "picks" ? gameBetCount(b) - gameBetCount(a) : 0)
     || startKey(a).localeCompare(startKey(b)));
-  const sportSel = document.getElementById("games-sport");
-  if (sportSel && sportSel.value !== state.sport) sportSel.value = state.sport;
   // TOP GAME — the render's ribbon, earned not asserted: the game the
   // model has the most recommended bets in tonight. Ties or an empty
   // board mean no ribbon; one game only.
@@ -6966,18 +6964,43 @@ function tonightPick(d) {
            any: props.length + bets.length + shots.length + ml.length > 0 };
 }
 
+/* ONE LEAGUE PICKER (audit V-16, roadmap #46). The Live tab, Tonight,
+   the Record and the player search each drew their own row of league
+   buttons, in four markups with four counts and two looks, and on a
+   phone each sat under the global league strip: two selectors stacked,
+   both saying NFL. One builder now draws every page-level row; the page
+   keeps its own class and data attribute so its handler is unchanged,
+   and on these pages the global strip steps aside under 1280px (styles:
+   "ONE LEAGUE PICKER"), so a phone shows one row of leagues, not two. */
+function leagueChipsHTML(items, o) {
+  const opt = o || {};
+  const chip = opt.chip || "lb-chip", attr = opt.attr || "data-chip";
+  return `<div class="league-chips ${opt.group || ""}" role="group" aria-label="${escapeHtml(opt.label || "League")}">${
+    items.map((it) => {
+      const on = it.key === opt.active;
+      const n = it.n == null ? ""
+        : opt.countClass ? ` <span class="${opt.countClass}">${it.n}</span>` : ` <b>${it.n}</b>`;
+      return `<button type="button" aria-pressed="${on}" class="${chip}${on ? " active" : ""}" ${attr}="${
+        escapeHtml(it.key)}">${escapeHtml(it.label)}${n}</button>`;
+    }).join("")}</div>`;
+}
+
 /* The current league first, then the nav's own order. */
 function tonightLeagueOrder(codes, current) {
   const rest = (codes || []).filter((c) => c !== current);
   return (codes || []).includes(current) ? [current, ...rest] : rest;
 }
 
+/* Tonight's row is the league picker itself: every league, the one on
+   screen first, then All sports. A league button switches the board the
+   way the strip does; All is this page's own scope. */
 function tonightChipsHTML(scope, sport) {
-  const lg = LEAGUE_LABEL[sport] || String(sport || "").toUpperCase();
-  return `<div class="lb-chips tn-chips">
-    <button type="button" class="lb-chip ${scope === "sport" ? "active" : ""}" data-tn-scope="sport">${escapeHtml(lg)}</button>
-    <button type="button" class="lb-chip ${scope === "all" ? "active" : ""}" data-tn-scope="all">All sports</button>
-  </div>`;
+  const lg = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
+  const items = tonightLeagueOrder([...SPORT_CODES, ...(SPORT_CODES.includes(sport) ? [] : [sport])], sport)
+    .map((s) => ({ key: s, label: lg(s) }));
+  items.push({ key: "all", label: "All sports" });
+  return leagueChipsHTML(items, { group: "lb-chips tn-chips", attr: "data-tn-scope",
+                                  active: scope === "all" ? "all" : sport });
 }
 
 /* Every league's light board, once a minute. A league whose light copy
@@ -7079,8 +7102,15 @@ async function renderTonightAll(host) {
 function bindTonightChips(host) {
   host.querySelectorAll("[data-tn-scope]").forEach((b) =>
     b.addEventListener("click", () => {
-      _tonightScope = b.dataset.tnScope === "all" ? "all" : "sport";
+      const want = b.dataset.tnScope;
+      _tonightScope = want === "all" ? "all" : "sport";
       try { localStorage.setItem("qb.tonight.scope", _tonightScope); } catch (e) {}
+      // A league is a board switch, through the strip's own button, so
+      // every side effect of changing league runs once, in one place.
+      if (want !== "all" && want !== "sport" && want !== state.sport) {
+        const btn = document.querySelector(`.sportbar-in .sport-btn[data-sport="${want}"]`);
+        if (btn) { btn.click(); return; }
+      }
       renderTonight();
     }));
 }
@@ -18005,9 +18035,7 @@ function recWinDate(iso) {
 
 function recordScopeHTML(d, scope) {
   const tracked = d.tracked_sports || [];
-  const btn = (key, label, n) => `<button class="rec-scope${
-    scope === key ? " active" : ""}" data-scope="${escapeHtml(key)}">${
-    escapeHtml(label)}${n != null ? ` <span class="rec-scope-n">${n}</span>` : ""}</button>`;
+  const btn = (key, label, n) => ({ key, label, n });
   /* EVERY CHIP COUNTS THE SAME THING — rows journaled in that scope,
      open and settled together.
 
@@ -18063,7 +18091,8 @@ function recordScopeHTML(d, scope) {
     parts.push(btn(sp, (SPORT_META[sp] || {}).name || sp.toUpperCase(),
                    journaled((jc.by_sport || {})[sp] || r.overall)));
   }
-  return `<div class="rec-scopes">${parts.join("")}</div>`;
+  return leagueChipsHTML(parts, { group: "rec-scopes", chip: "rec-scope", attr: "data-scope",
+                                  active: scope, countClass: "rec-scope-n", label: "Record scope" });
 }
 
 /* ============================================================
@@ -43654,23 +43683,9 @@ function syncRail() {
 }
 
 /* The strip's working controls — the render's row, with real handles.
-   The league select is a MIRROR of the sidebar chips: changing it clicks
-   the chip, so every side effect (hidden tabs, taglines, standalone
-   exits) runs through the one existing pipeline. */
+   No league select here any more (audit V-16, #46): it mirrored the
+   league strip, a second picker for the same choice. */
 function initGamesControls() {
-  const sportSel = document.getElementById("games-sport");
-  if (sportSel) {
-    ["nfl", "cfb", "mlb", "nba", "wnba", "ufc"].forEach((s) => {
-      const o = document.createElement("option");
-      o.value = s; o.textContent = s.toUpperCase();
-      sportSel.appendChild(o);
-    });
-    sportSel.value = state.sport;
-    sportSel.addEventListener("change", () => {
-      const chip = document.querySelector(`.sportbar-in .sport-btn[data-sport="${sportSel.value}"]`);
-      if (chip) chip.click();
-    });
-  }
   const sortSel = document.getElementById("games-sort");
   if (sortSel) {
     try { sortSel.value = localStorage.getItem("qb_games_sort") || "start"; } catch (e) {}
@@ -46133,8 +46148,10 @@ async function renderLiveBoard() {
   await pressureWarm(games.map((x) => x.sport));
   const bySport = {};
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });
-  const chips = ["all", ...Object.keys(LIVE_FEEDS)].filter(
-    (s) => s === "all" || bySport[s]);
+  // Every league with a live feed, at 0 too: with the strip stepped
+  // aside on this page (ONE LEAGUE PICKER), this row is how a phone
+  // changes league here, and a league with nothing live says so below.
+  const chips = ["all", ...Object.keys(LIVE_FEEDS)];
   // FOLLOW THE SPORT BUTTON (see `_liveChipSport`). A league without a
   // live feed (UFC) has no chip of its own, so it lands on "all".
   if (_liveChipSport !== state.sport) {
@@ -46188,11 +46205,9 @@ async function renderLiveBoard() {
   host.innerHTML = `
     <div class="section-title">Live now
       <span class="sub">— every game in progress across the sports we model</span></div>
-    <div class="lb-chips">${chips.map((s) => `
-      <button class="lb-chip ${(_liveChip === s) ? "active" : ""}" data-chip="${s}">
-        ${s === "all" ? "All" : s.toUpperCase()}
-        <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
-    </div>
+    ${leagueChipsHTML(chips.map((s) => ({ key: s, label: s === "all" ? "All" : s.toUpperCase(),
+                                          n: s === "all" ? games.length : (bySport[s] || 0) })),
+                      { group: "lb-chips", attr: "data-chip", active: _liveChip })}
     ${nothingHere}${shelved}`;
   /* A LEAGUE CHIP MOVES THE WHOLE TAB, NOT THE TOP HALF OF IT.
 

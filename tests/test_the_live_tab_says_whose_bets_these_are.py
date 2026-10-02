@@ -114,6 +114,7 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
         return m ? sportBtn(m[1]) : null;
       }} }};
 
+    {_fn("leagueChipsHTML")}
     {_fn("renderLiveBoard")}
     const _real = renderLiveBoard;
     async function _wrapped() {{

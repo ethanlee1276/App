@@ -243,10 +243,11 @@ def test_every_home_section_wears_the_decks_head_and_the_league_select_yields():
     sub = CSS[CSS.index("#home-deck .section-title .sub {"):]
     sub = sub[:sub.index("}")]
     assert "display: block" in sub and "text-transform: none" in sub, "the sub-line is kept, one line down"
-    phone = CSS[CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }")):]
-    assert "#home-deck #games-sport { display: none; }" in phone
-    wide = CSS[:CSS.index("@media (max-width: 760px) {", CSS.index(".tabbar { display: none; }"))]
-    assert "#games-sport { display: none" not in wide, "the desktop's Game Lines room keeps its select"
+    # The games row's league select is gone at every width (audit V-16,
+    # #46, 2026-10-02): it repeated the league strip, so a phone hid it
+    # and a desktop showed a second picker for the same choice.
+    assert 'id="games-sport"' not in (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    assert "games-sport" not in CSS
 
 
 def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():

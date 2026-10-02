@@ -96,7 +96,7 @@ def test_the_rooms_leave_the_deck_s_zones_in_the_deck():
 
 # --- Visual 2: the home's games are a strip ---------------------------------
 def test_the_home_game_cards_drop_the_dial_on_a_phone():
-    phone = CSS[CSS.index("#home-deck #games-sport { display: none; }"):][:1200]
+    phone = CSS[CSS.index('#home-deck .hd-sec[data-sec="riding"] { display: none; }'):][:1500]
     assert '#home-deck .hd-sec[data-sec="games"] .wind-wrap .wind { display: none; }' in phone
     assert '#home-deck .hd-sec[data-sec="games"] .gc-venue { display: none; }' in phone
 

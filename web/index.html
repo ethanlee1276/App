@@ -783,15 +783,14 @@
       <div id="quick-tools"></div>
 
       <!-- The render's strip header: title left, working controls right
-           (league, sort, strip/grid layout). The league select mirrors
-           the sidebar chips — one source of truth, two handles. -->
+           (sort, strip/grid layout). The league select that mirrored the
+           strip is gone (audit V-16, #46): the strip is the league picker. -->
       <div class="strip-head" id="games-head">
         <div class="section-title hero-title" id="games-title">Tonight’s ballparks
           <span class="sub">— real park shapes, roof state, live wind and the home-run
           factor each one is playing to right now</span>
         </div>
         <div class="strip-controls" id="games-controls">
-          <select id="games-sport" aria-label="Switch league"></select>
           <select id="games-sort" aria-label="Sort games">
             <option value="start">Sort: Start Time</option>
             <option value="picks">Sort: Most Picks</option>

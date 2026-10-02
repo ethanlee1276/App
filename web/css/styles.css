@@ -7606,9 +7606,6 @@ body.has-deck #rail-live { display: none; }
   /* The tray above the tab bar already says what is riding; the deck's
      Riding section under it was the same rows twice (Ethan, 2026-09-22). */
   #home-deck .hd-sec[data-sec="riding"] { display: none; }
-  /* The crest strip above the deck is the league picker; the games
-     row's own league select was it again. */
-  #home-deck #games-sport { display: none; }
   /* THE HOME'S GAMES ARE A STRIP, NOT A CAROUSEL OF POSTERS (the site
      audit, 2026-09-24, Visual 2): each card was 414px tall on a phone,
      112 of it the wind dial. On the home the dial and the venue line
@@ -9991,6 +9988,14 @@ body.walled .nav-btn { display: none !important; }
 body.walled .sportbar { display: none !important; }
 /* The league row leaves the pages that are not about a league (OFF_LEAGUE_VIEWS). */
 body.off-league .sportbar { display: none; }
+/* ONE LEAGUE PICKER (audit V-16, roadmap #46). Live, Tonight and the
+   Record draw their own league row (leagueChipsHTML), so under 1280px,
+   where the strip sits at the top of the page rather than in the bar,
+   it steps aside there: one row of leagues on a phone, not two stacked,
+   both saying NFL. On a wide screen the strip is chrome in the top bar. */
+@media (max-width: 1279px) {
+  body:has(#view-live.active, #view-tonight.active, #view-record.active) .sportbar { display: none; }
+}
 /* THE SITE MASTHEAD AND FOOTER GO TOO, and missing them was visible in a
    screenshot rather than in the markup: the wall draws its OWN lockup and
    its own legal block, so leaving the site's in place stacked two Qellys

@@ -37,6 +37,7 @@ def _node(js):
         return None
     prog = f"""
       const LEAGUE_LABEL = {{ nfl: "NFL", cfb: "College", mlb: "MLB" }};
+      const SPORT_CODES = ["mlb", "nfl", "cfb"];
       const passesFilters = (r) => r.grade !== "Pass";
       const passesGameBet = (b) => b.ok !== false;
       const heldForLongShots = (r) => r.market === "home_runs" && !r.hr_featured;
@@ -45,6 +46,7 @@ def _node(js):
       {_fn("escapeHtml")}
       {_fn("tonightPick")}
       {_fn("tonightLeagueOrder")}
+      {_fn("leagueChipsHTML")}
       {_fn("tonightChipsHTML")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -74,7 +76,7 @@ def test_one_reader_picks_what_the_tab_draws_from_a_board():
     assert got["empty"] == [0, False, 0, 0]
 
 
-def test_the_current_league_leads_and_the_chips_name_the_two_views():
+def test_the_current_league_leads_and_the_chips_are_the_league_picker():
     got = _node("""
       return { order: tonightLeagueOrder(["mlb", "nfl", "nba", "wnba", "cfb"], "cfb"),
                unknown: tonightLeagueOrder(["mlb", "nfl"], "ufc"), none: tonightLeagueOrder([], "nfl"),
@@ -82,8 +84,16 @@ def test_the_current_league_leads_and_the_chips_name_the_two_views():
     if got is None:
         print("  SKIP node not installed"); return
     assert got["order"] == ["cfb", "mlb", "nfl", "nba", "wnba"] and got["unknown"] == ["mlb", "nfl"] and got["none"] == []
-    assert 'class="lb-chip active" data-tn-scope="sport">College' in got["sport"] and 'class="lb-chip " data-tn-scope="all">All sports' in got["sport"]
-    assert 'class="lb-chip active" data-tn-scope="all">All sports' in got["all"]
+    # ONE LEAGUE PICKER (audit V-16, #46, 2026-10-02): the row names every
+    # league, the one on screen first, then All sports, so a phone (where
+    # the strip steps aside on this page) can change league from here.
+    sport, every = got["sport"], got["all"]
+    assert 'class="lb-chip active" data-tn-scope="cfb">College' in sport
+    assert sport.index(">College") < sport.index(">MLB") < sport.index(">NFL") < sport.index(">All sports")
+    assert 'class="lb-chip" data-tn-scope="all">All sports' in sport
+    assert 'class="lb-chip active" data-tn-scope="all">All sports' in every
+    assert 'class="lb-chip" data-tn-scope="nfl">NFL' in every, "under All, no league is lit"
+    assert 'class="league-chips lb-chips tn-chips"' in sport
 
 
 def test_every_league_is_fetched_once_from_its_light_board_with_a_fallback():

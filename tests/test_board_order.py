@@ -131,7 +131,7 @@ def test_nothing_new_slipped_in_above_the_picks():
                # header wrapper with its working controls, and the
                # scroller wrapper with its arrows. Chrome ON the strip,
                # not new content above the picks.
-               "games-head", "games-controls", "games-sport", "games-sort",
+               "games-head", "games-controls", "games-sort",
                "games-mode-strip", "games-mode-grid", "games-outer",
                "games-prev", "games-next",
                # Quick Tools (2026-08-31, Ethan's screenshot circling the
