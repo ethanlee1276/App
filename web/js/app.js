@@ -838,6 +838,14 @@ function fmtRoi(x) {
    "null". */
 const american = (o) => (typeof oddsTxt === "function" && typeof settings === "function" ? trueMinus(oddsTxt(o)) : (o > 0 ? `+${o}` : trueMinus(`${o}`)));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
+/* A PLAYER'S SHORT NAME: his surname, past any generational suffix.
+   "Oronde Gadsden II" was printed as "II" on a Most Likely row (Ethan's
+   screenshot, 2026-10-02: "Same story as II"); a Jr. read as "Jr.". */
+function surname(n) {
+  const parts = String(n || "").trim().split(/\s+/).filter(Boolean);
+  while (parts.length > 1 && /^(jr\.?|sr\.?|ii|iii|iv|v)$/i.test(parts[parts.length - 1])) parts.pop();
+  return parts.length ? parts[parts.length - 1] : "";
+}
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || String(a ?? "").replace(/[<>"'`]/g, "");
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
 
@@ -8346,7 +8354,7 @@ function propSpark(r, opts = {}) {
 function rippleChip(r) {
   const n = (r && r.ripples || [])[0];
   if (!n) return "";
-  const who = String(n.out || "").split(" ").pop();
+  const who = surname(n.out);
   const what = n.measured
     ? `${n.delta >= 0 ? "+" : ""}${Math.round(n.delta * 100)}% ${escapeHtml(n.kind || "")}`
     : "usage likely up";
@@ -9557,7 +9565,8 @@ function likelyTagsHTML(r) {
   /* THE MATCHUP READ THIS PICK AGREES WITH (engine/likely.READ_SEATS). */
   const sr = cardScanRead(r);
   if (sr) {
-    tags.push([sr.label, /tough|avoid/.test(sr.read || "") ? "down" : "up",
+    const said = scanReadForBet(sr, r.side) || { text: sr.label, tone: "up" };
+    tags.push([said.text, said.tone,
                "The matchup scan’s read on him — it chose this side, and never moved the number"]);
   }
   const qb = r.qb_card, mate = r.mate_card;
@@ -9568,7 +9577,7 @@ function likelyTagsHTML(r) {
   }
   if (mate && Number(mate.applied) && Number(mate.applied) !== 1) {
     const who = (mate.out || [])[0] || "Teammate";
-    tags.push([`${who.split(" ").slice(-1)[0]} out ${pct(Number(mate.applied))}`,
+    tags.push([`${surname(who)} out ${pct(Number(mate.applied))}`,
                Number(mate.applied) > 1 ? "up" : "down", mate.headline || ""]);
   }
   /* BOLDER THAN THE BOOKS (engine/boldcheck, 2026-09-27): our number is
@@ -10001,7 +10010,7 @@ function obStoryHTML(r) {
   if (!others.length) return "";
   const [, team, fam, side] = k.split("|");
   const what = `${teamName(team)}’ ${fam === "pass" ? "passing" : "running"} game going ${side === "UNDER" ? "under" : "over"}`;
-  const last = (n) => String(n).split(" ").slice(-1)[0];
+  const last = surname;
   return `<span class="ml-tag ob-story" title="${escapeAttr(`Rides with ${others.join(", ")}: all of them are a bet on the ${what}. If it goes the other way they tend to lose together.`)}">${
     icon("warn", 11)} Same story as ${others.length === 1 ? last(others[0]) : `${others.length} others`}</span>`;
 }
@@ -12058,7 +12067,8 @@ function whyLikelyHTML(v, r, lk) {
   { const x = pickScanRead(lk && lk.player ? { ...r, ...lk } : r);
     if (x) {
       const bits = scanUsageBits(x);
-      items.push([`The matchup — ${escapeHtml(x.label)}`,
+      const said = scanReadForBet(x, (lk && lk.side) || r.side);
+      items.push([`The matchup — ${escapeHtml(said ? said.text : x.label)}`,
         `${bits.length ? `<div class="ms-use">${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos || "")} · ${
           escapeHtml(bits.join(" · "))}</div>` : ""}${scanWhyList(x)}`]);
     } }
@@ -13288,6 +13298,30 @@ function scanMicroHTML(m) {
    turned leaves no tag. The stamp (`scan_label`, or a matchup pick's own
    `label`) is used only when the reads are not on the page. */
 const SCAN_READ_SIDE = { breakout: "over", good: "over", tough: "under", avoid: "under" };
+/* "AVOID" IS ABOUT THE PLAYER, NOT THE BET (Ethan, 2026-10-02, circling
+   four Most Likely top picks each wearing a red "Avoid": "What are we
+   saying to avoid these bets but then displaying them as the top bets").
+   The scan's labels grade a PLAYER's matchup — "Avoid" is its worst tier,
+   the over a reader should stay off. Every one of those picks was the
+   UNDER, chosen BECAUSE of that read (READ_SEATS seats only a read that
+   agrees with the side). So on a bet the read is said as what it means
+   for that bet: the word for the matchup, then whether it backs this side.
+   The scan's own pages, which are about players, keep their labels. */
+const SCAN_READ_WORD = { breakout: "Breakout candidate", good: "Good matchup", neutral: "Neutral matchup",
+                         tough: "Tough matchup", avoid: "Worst matchup" };
+function scanReadForBet(x, side) {
+  if (!x || !x.read) return null;
+  const word = SCAN_READ_WORD[x.read] || x.label || "";
+  const want = SCAN_READ_SIDE[x.read];
+  const s0 = String(side || "").toLowerCase();
+  const mine = s0 === "yes" ? "over" : s0 === "no" ? "under" : s0;
+  if (!want || !mine) return { text: word, tone: "" };
+  if (want === mine) {
+    return { text: x.read === "tough" || x.read === "avoid" ? `${word} · backs the under` : word, tone: "up" };
+  }
+  return { text: `${word} · against this side`, tone: "down" };
+}
+
 function cardScanRead(r) {
   if (!r || r.kind === "game" || r.no_read_tag) return null;
   const d = state.data || {};
@@ -33508,7 +33542,7 @@ function ffCalendarHTML(d, opts) {
       ${q ? `<span class="ffcal-mark ${q.tier}"></span>` : ""}
       ${q && q.best ? `<span class="ffcal-best">${playerAvatar(q.best.r.player,
           q.best.r.team, { size: 18, map: nflMap(), headshot: q.best.r.headshot })}
-        <b class="ffcal-name">${escapeHtml((q.best.r.player || "").split(" ").slice(-1)[0])}</b>
+        <b class="ffcal-name">${escapeHtml(surname(q.best.r.player))}</b>
         <span class="ffcal-pts">${q.best.score.toFixed(1)}</span></span>` : ""}
     </div>`);
   }

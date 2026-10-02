@@ -123,7 +123,7 @@ def _run(script, inj=None):
                                            "FFCAL_OPTS"))
            + "\n"
            + "\n".join(_fn(n) for n in (
-               "ffNorm", "pluralWord", "plural", "_ffCalS", "_ffImpliedAvg",
+               "surname", "ffNorm", "pluralWord", "plural", "_ffCalS", "_ffImpliedAvg",
                "_ffDayEnv", "_ffDayBoard", "_ffCalSay", "_ffCalQual",
                "ffCalendarHTML", "ffCalDayHTML", "ffCalPanelHTML",
                "ffDeskRoster", "ffRosterCalendarHTML"))

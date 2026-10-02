@@ -63,7 +63,7 @@ def test_picks_that_ride_together():
     head = APP[APP.index("const OB_STORY"):APP.index("let _obStoryCache")]
     prog = ("const escapeAttr = (s) => s; const icon = () => ''; const teamName = (t) => ({CHI: 'Bears', PHI: 'Eagles'})[t];\n"
             f"const ROWS = {json.dumps(rows)}; const oneBoardRows = () => ROWS;\n" + head + "let _obStoryCache = null;\n"
-            + _fn("obStoryKey") + _fn("obStories") + _fn("obStoryHTML")
+            + _fn("surname") + _fn("obStoryKey") + _fn("obStories") + _fn("obStoryHTML")
             + "\nconsole.log(JSON.stringify(ROWS.map(obStoryHTML)));")
     out = _node(prog)
     assert "Same story as 2 others" in out[0] and "Rides with Luther Burden III, Rome Odunze" in out[0]
