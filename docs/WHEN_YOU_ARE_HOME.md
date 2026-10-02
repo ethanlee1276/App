@@ -14,6 +14,23 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Start here — the order to run things (2026-10-02)
+
+Each step's commands are in its block below. Paste back the ones marked
+"paste".
+
+1. **R1** — recount the record (read-only, paste the whole output).
+2. **R2** — give old rows their date (dry run first, then `--apply`).
+3. **P2-a** — every close before kickoff (read-only, paste).
+4. **P6-a** — healthchecks.io, so you hear when the site goes stale
+   (5 minutes; step by step).
+5. **P6-b** — run a backup and check it, then add the weekly check.
+6. **P29-a** — count the old PIN profiles (paste the number).
+7. **P31-a** — turn on the usage counts (only if the first line prints 1).
+8. **P3-a** — a week from now: what the number check dropped (paste).
+9. Whenever: **P10-a** (optional deploy lock), **P9-a** (look at the Live
+   tab during a game), **P28-a** (security log), **P45-a** (Android, later).
+
 ---
 
 ## 0. THE SITE IS DOWN — run this first, before anything else

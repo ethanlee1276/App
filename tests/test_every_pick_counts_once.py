@@ -298,6 +298,27 @@ def test_the_staked_section_splits_the_scorer_row_and_stops_asking_for_a_verdict
     assert 'title="12 settled — too few to read either way"' in got
 
 
+def test_the_working_tables_sit_behind_one_tap():
+    """Ethan, 2026-10-02: "we honestly show too much" — then "yeah do
+    that". The chance-band table and the per-sport game lines fold, closed,
+    under one line; the verdict and the by-market table stay open."""
+    lk = {"sport": "nfl", "settled": 200, "open": 0, "wins": 130, "losses": 70, "roi": 0.01,
+          "needed": 100, "enough": True, "verdict": "v",
+          "calibration": {"n": 200, "claimed": 0.64, "actual": 0.65, "gap": 0.01, "real": False},
+          "bands": [{"lo": 0.6, "hi": 0.75, "n": 200, "claimed": 0.64, "actual": 0.65, "roi": 0.01}],
+          "by_market": {"rec_yds": {"n": 200, "w": 130, "claimed": 0.64, "actual": 0.65, "roi": 0.01,
+                                    "enough": True, "needed": 40}},
+          "staked": False, "staked_sports": []}
+    got = _node(_fn("recLikelySection"), "recLikelySection(a, 'nfl')", lk)
+    if got is None:
+        return
+    i = got.index('<details class="rec-fold rec-ml-more">')
+    assert "open" not in got[i:i + 45], "closed until tapped"
+    assert got.index("Receiving Yards") < i, "the by-market table stays above the fold"
+    assert got.index("60–75%") > i, "the chance bands are inside it"
+    assert "More — by chance band" in got
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

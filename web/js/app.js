@@ -16690,6 +16690,19 @@ function recLikelySection(lk, scope) {
   const moneyFrom = Number.isFinite(m0.getTime())
     ? m0.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
   const paperN = lk.paper_settled || 0, moneyN = lk.money_settled || 0;
+  /* BEHIND ONE TAP (Ethan, 2026-10-02: "we honestly show too much" —
+     "yeah do that"). The chance-band table and the per-sport game lines
+     are the working under the record, not the record: folded, closed,
+     under one summary line, the verdict and the by-market table above. */
+  const gameLines = recLikelyGameLines(lk, sp);
+  const moreHTML = bands || gameLines
+    ? `<details class="rec-fold rec-ml-more"><summary>More — ${[bands ? "by chance band" : "",
+        gameLines ? "game lines by sport" : ""].filter(Boolean).join(" and ")}</summary>
+      ${bands ? `<div style="opacity:.7;font-size:.9em;margin-top:10px">By claimed
+        probability — an average hides the shape, and the top of the board is what
+        a reader actually bets.</div>
+        <div class="card" style="padding:0;margin-top:6px">${bands}</div>` : ""}
+      ${gameLines}</details>` : "";
   const mix = money && paperN && moneyN
     ? ` Of the ${paperN + moneyN} settled, ${paperN} were on paper and ${moneyN} had real money on them${
         moneyFrom ? ` (from ${moneyFrom})` : ""}.` : "";
@@ -16745,10 +16758,6 @@ function recLikelySection(lk, scope) {
                   `${Math.max(0, lk.needed - (cal.n || 0))} more to go`,
                 { tone: lk.enough ? "good" : "" })}
     </div>
-    ${bands ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">By claimed
-      probability — an average hides the shape, and the top of the board is what
-      a reader actually bets.</div>
-      <div class="card" style="padding:0;margin-top:6px">${bands}</div>` : ""}
     ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">Most Likely picks by market —
       this book’s own picks only; Pick of the Day and the Edge picks are scored in
       their own sections. A scorer market is split by side, since “scores” and “no TD”
@@ -16756,7 +16765,7 @@ function recLikelySection(lk, scope) {
       too few to read either way. If one market holds up and another does not, that is a
       shelf-level decision.</div>
       <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}
-    ${recLikelyGameLines(lk, sp)}`;
+    ${moreHTML}`;
 }
 
 /* THE GAME ROWS, PER SPORT, because the table above pools them.
