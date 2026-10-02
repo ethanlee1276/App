@@ -91,7 +91,9 @@ def test_the_models_tile_leads_and_every_total_is_labelled_second():
                          "net_units": 2.0})
     if txt is None:
         return
-    a = txt.index("Model")
+    # The model's own book is the EDGE picks; named so since 2026-10-02,
+    # beside the Most Likely tile it adds up with.
+    a = txt.index("Edge picks · graded in public")
     b = txt.index("Combined · edge + Most Likely boards")
     c = txt.index("Combined · Zeno’s book + ours")
     assert a < b < c, txt

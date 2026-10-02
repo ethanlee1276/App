@@ -495,8 +495,12 @@ def test_a_positive_roi_inside_the_noise_is_not_called_a_result():
     It was a refusal whose own condition had been met, which tells a
     reader nothing about what would change the answer."""
     v = _verdict(0.021)
-    assert "z +0.75" in v, v
-    assert "not yet distinguishable from break-even" in v, v
+    # PLAIN WORDS since 2026-10-02 (Ethan: "we are not telling the
+    # truth"): the same call — inside the noise, not a result — said
+    # without a z-score the reader cannot use. The z itself is still
+    # pinned below, where the arithmetic is.
+    assert "too close to break-even to call" in v, v
+    assert "(z " not in v, v
     assert "money stays off until that is positive" not in v, v
 
 
@@ -509,17 +513,29 @@ def test_an_roi_clear_of_the_noise_is_allowed_to_say_so():
     """The hedge has to END, or it is just a verdict that cannot be
     passed."""
     v = _verdict(0.021, n=6000)
-    assert "clear of the noise band" in v, v
+    assert "a real profit, more than luck explains" in v, v
 
 
 def test_a_real_loss_is_named_as_one():
     v = _verdict(-0.09, n=4000, hit=0.60)
-    assert "LOSING" in v, v
+    assert "a real loss, more than bad luck explains" in v, v
 
 
 def test_the_verdict_says_whether_money_is_on_it():
     assert "No money is staked" in _verdict(0.021, staked=False)
     assert "Staked with real money" in _verdict(0.021, staked=True)
+
+
+def test_the_verdict_speaks_to_a_reader_not_to_the_code():
+    """Ethan, 2026-10-02, reading this sentence on the Record page: it
+    said "about 61,854 settled would settle it", a z-score and "see
+    LIKELY_LIVE_SPORTS". A horizon past ten times the sample is not a
+    plan anyone can act on, and a constant's name is not a sentence."""
+    v = _verdict(-0.006, n=372, hit=0.653, staked=True)
+    assert "LIKELY_LIVE_SPORTS" not in v and "(z " not in v, v
+    assert "would settle it" not in v, v
+    assert "before the record has shown it pays" in v, v
+    assert "too close to break-even" in v, v
 
 
 # --- the arithmetic behind the verdict ---------------------------------

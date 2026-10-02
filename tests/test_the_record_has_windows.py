@@ -154,17 +154,17 @@ def test_the_headline_reads_the_window_from_the_scopes_own_curve():
     assert "const avail = recRangesFor(src.curve);" in body, "the scope in view's curve, not the pooled one"
     assert "const rk = recRangeKey(avail);" in body and "const from = recRangeFrom(avail, rk);" in body
     assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
-    assert "recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` }," in body
-    assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from))' in body, \
+    assert "recordRibbonsHTML(dAll, { ...winO, label: `Edge picks · last ${winDays} days` }," in body
+    assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })' in body, \
         "the form dots are the window's own"
-    assert ": recordRibbonsHTML(dAll, o, src.recent);" in body, "no window, or an empty one: the whole record"
+    assert ": recordRibbonsHTML(dAll, o, src.recent, { parts: true });" in body, "no window, or an empty one: the whole record"
     j = body.rindex("host.innerHTML = scopeBar + winBar")
     tail = body[j:j + 400]
     assert tail.index("rec-ribbons") < tail.index("winNote") < tail.index("_recordRooms("), \
         "scopes, windows, headline, the note, then the rooms"
     assert "Everything else here is the whole record." in body
     assert "headline is the whole record." in body, "an empty window says the ribbon did not move"
-    assert 'tile(ov.label || "Model · graded in public", wl(ov),' in _fn("recordRibbonsHTML")
+    assert 'tile(ov.label || "Edge picks · graded in public", wl(ov),' in _fn("recordRibbonsHTML")
 
 
 def test_the_chart_and_the_headline_share_one_window():

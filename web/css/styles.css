@@ -3213,6 +3213,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .rl-row.won { border-left-color: color-mix(in srgb, var(--good) 65%, transparent); }
 .rl-row.lost { border-left-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .rl-row.push { border-left-color: var(--border); }
+/* The tier table's sum (recBoardSection): ruled off on a tinted row, and
+   the words weigh more. */
+.rl-row.rl-total { border-top: var(--hairline) solid var(--border); background: var(--fill-subtle); font-weight: 600; }
 @supports not (background: color-mix(in srgb, red 10%, transparent)) {
   .rl-row.won { border-left-color: rgba(47, 213, 140, .65); }
   .rl-row.lost { border-left-color: rgba(251, 90, 106, .45); }

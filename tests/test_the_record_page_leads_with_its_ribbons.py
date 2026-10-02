@@ -27,7 +27,9 @@ def _fn(name):
 
 def test_one_builder_draws_the_ribbons_for_the_deck_and_the_page():
     b = _fn("recordRibbonsHTML")
-    assert "function recordRibbonsHTML(rec, ov, recent)" in APP
+    # `opts.parts` since 2026-10-02: the Record page asks for the Most
+    # Likely tile beside the edge one, so the two add up to the combined.
+    assert "function recordRibbonsHTML(rec, ov, recent, opts)" in APP
     assert "if (ov.settled) {" in b and "if (zo.settled) {" in b, "no ribbon over nothing"
     assert 'dots(recent, "status")' in b and 'dots(z.recent, "result")' in b
     assert "return tiles.join(\"\");" in b
@@ -42,7 +44,7 @@ def test_the_page_opens_with_the_scope_in_view_above_the_rooms():
     # The scope in view, not the pooled number — or, with a window chosen
     # (audit item 5, 2026-09-23), that scope's last N days, cut from its
     # own curve (tests/test_the_record_has_windows.py).
-    assert ": recordRibbonsHTML(dAll, o, src.recent);" in body, "the scope in view, not the pooled number"
+    assert ": recordRibbonsHTML(dAll, o, src.recent, { parts: true });" in body, "the scope in view, not the pooled number"
     j = body.rindex("host.innerHTML = scopeBar")   # the main assembly; two empty branches use the same opener earlier
     tail = body[j:j + 400]
     assert '(ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>' in tail

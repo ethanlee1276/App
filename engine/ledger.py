@@ -1150,6 +1150,28 @@ def _kickoff_map(result: dict) -> dict:
     return kick
 
 
+def _game_day_map(result: dict) -> dict:
+    """team → the calendar day of its game, from the result's own games
+    list (the slate's local date, the same one `_kickoff_map` joins its
+    clock to); only ISO days, so a week label never becomes one.
+
+    THE ROWS THAT CARRY NO DAY OF THEIR OWN (Ethan, 2026-10-02: the
+    Record page read "The record covers NaN days so far"). A matchup pick
+    or a touchdown scenario row has no `game_date`, and on the NFL the
+    slate's `date` is a week label, so `game_day_for` found nothing and
+    the row was filed under "2026-W04" — a bucket no calendar or window
+    can hold. Its team's game is on the slate it was built from."""
+    days: dict = {}
+    for g in result.get("games") or []:
+        d = str(g.get("date") or "").strip()
+        if not _ISO_DAY_RE.match(d):
+            continue
+        for side in ("home", "away"):
+            if g.get(side):
+                days[g[side]] = d
+    return days
+
+
 def _weather_map(result: dict) -> dict:
     """team → (wind_mph, roofed) from the board's own games.
 
@@ -1599,6 +1621,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     if depth is not None:
         rows = rows[:max(0, int(depth))]
     kick = _kickoff_map(result)
+    team_days = _game_day_map(result)
     n = 0
     # STAKED, OR STILL A MEASUREMENT — and the BREAKER decides, not the
     # league list alone. `live_verdict` is asked ONCE here rather than
@@ -1790,7 +1813,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             # insert below this line. Ethan, that morning: "None of the nfl
             # bets from the past 2 nights for the most likely or the edge
             # bets have settled."
-            (game_day_for(r, date),
+            (game_day_for(r, date) or team_days.get(r.get("team") or "")
+             or team_days.get(player) or "",
              now, sport, row_date, player, market,
              side, line, r.get("book", ""), odds,
              r.get("projection"), r.get("model_prob"),
@@ -5927,11 +5951,62 @@ def _book_breakeven(bets) -> float | None:
 #: defined fifteen hundred lines below this. A test pins the two
 #: together so they cannot drift apart.
 BOOK = ("main", "paper", "likely_live")
+#: THE ONE MOST LIKELY BOARD'S JOURNAL (engine/likelyboard): every pick the
+#: board posts, at the tier it went up at, on paper.
+BOARD_CATEGORY = "board"
+
 #: The rows journaled at a nominal stake with no dollars behind them —
-#: the paper book, and the Most Likely board where it is not staked.
-#: `performance` counts them as `paper_bets`, so a record that pools
-#: them can say how much of itself was ever at risk (moneySplitHTML).
-PAPER_BOOKS = ("paper", "likely")
+#: the paper book, the Most Likely list where it is not staked, and the
+#: one board's own picks (all on paper). `performance` counts them as
+#: `paper_bets`, so a record that pools them can say how much of itself
+#: was ever at risk (moneySplitHTML).
+PAPER_BOOKS = ("paper", "likely", BOARD_CATEGORY)
+
+
+def books_sql(cats, table: str = "bets") -> tuple[str, list]:
+    """``(sql, args)`` selecting the rows of ``cats``, a tuple of books.
+
+    WITH THE BOARD, EACH PICK ONCE (Ethan, 2026-10-02: "it feels like all
+    these numbers are not adding up and we are not telling the truth").
+    Since 2026-09-26 the Most Likely picks a reader sees are the one
+    board's, journaled under `board`; the headline counted `likely` and
+    `likely_live` only, so every board pick that was not also at the top
+    of the old list (the matchup picks, the touchdown scenarios, the rest
+    of the tiers) was in no headline at all, and the Record led with a
+    number the board's own losses never reached.
+
+    The board carries the Most Likely book's picks too, so adding it
+    plainly would count those twice. A board row is therefore counted
+    only when the Most Likely book holds no staked row for the same pick
+    (sport, settle key, player, market — the key both books dedupe on —
+    and side, so the other side of a market is still its own pick); when
+    it does, that row stands for the pick, at its own stake. The rule
+    only applies when the tuple carries both; the board on its own is
+    every board row.
+    """
+    cats = tuple(cats)
+    plain = [c for c in cats if c != BOARD_CATEGORY]
+    parts, args = [], []
+    if plain:
+        parts.append(f"{table}.category IN ({','.join('?' * len(plain))})")
+        args += plain
+    if BOARD_CATEGORY in cats:
+        twins = [c for c in LIKELY_BOOKS if c in cats]
+        if twins:
+            parts.append(
+                f"({table}.category=? AND NOT EXISTS (SELECT 1 FROM bets t "
+                f"WHERE t.sport={table}.sport AND t.date={table}.date "
+                f"AND t.player={table}.player AND t.market={table}.market "
+                f"AND UPPER(COALESCE(t.side,''))=UPPER(COALESCE({table}.side,'')) "
+                f"AND t.category IN ({','.join('?' * len(twins))}) "
+                f"AND t.stake_units > 0))")
+            args += [BOARD_CATEGORY, *twins]
+        else:
+            parts.append(f"{table}.category=?")
+            args.append(BOARD_CATEGORY)
+    if not parts:
+        return "0", []
+    return "(" + " OR ".join(parts) + ")", args
 
 
 #: LEAGUES BENCHED FROM THE RECORD, and the book their rows go to.
@@ -6078,10 +6153,10 @@ def performance(conn, sport: str | None = None,
     # Counting them would inflate the W-L column with wagers nobody could
     # have won a unit on. They're reported separately as ``unstaked``.
     cats = (category,) if isinstance(category, str) else tuple(category)
-    marks = ",".join("?" * len(cats))
+    books, bargs = books_sql(cats)
     q = (f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
-         f"AND category IN ({marks}) AND stake_units > 0")
-    args: list = list(cats)
+         f"AND {books} AND stake_units > 0")
+    args: list = list(bargs)
     if sport:
         q += " AND sport=?"; args.append(sport)
     # A BENCHED LEAGUE LEAVES EVERY POOLED FIGURE, and it is the DEFAULT
@@ -6123,9 +6198,9 @@ def performance(conn, sport: str | None = None,
     bets = conn.execute(q, args).fetchall()
 
     uq = (f"SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
-          f"AND category IN ({marks}) "
+          f"AND {books} "
           f"AND (stake_units IS NULL OR stake_units <= 0)")
-    uargs: list = list(cats)
+    uargs: list = list(bargs)
     if sport:
         uq += " AND sport=?"; uargs.append(sport)
     uq += exq; uargs += list(ex)
@@ -6249,10 +6324,10 @@ def performance(conn, sport: str | None = None,
         # for a league the page is not supposed to know exists.
         "open": conn.execute(
             f"SELECT COUNT(*) FROM bets WHERE status='open' "
-            f"AND category IN ({marks})"
+            f"AND {books}"
             + (" AND sport=?" if sport else "") + exq
             + " AND stake_units > 0",
-            ((tuple(cats) + (sport,)) if sport else tuple(cats))
+            ((tuple(bargs) + (sport,)) if sport else tuple(bargs))
             + tuple(ex)).fetchone()[0],
         "unstaked": unstaked,
         "avg_clv": (sum(clvs) / len(clvs)) if clvs else None,
@@ -6473,6 +6548,7 @@ def pnl_curve(conn, sport: str | None = None,
     # week label whatever the window asked for. A one-month chart quietly
     # contained every NFL bet in the journal.
     day = day_expr()
+    _books, _bargs = books_sql(cats)
     q = (f"SELECT {day} AS date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
          "SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END) AS staked, "
@@ -6482,9 +6558,9 @@ def pnl_curve(conn, sport: str | None = None,
          f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
          "FROM bets "
          "WHERE status IN ('won','lost','push') "
-         f"AND category IN ({','.join('?' * len(cats))}) "
+         f"AND {_books} "
          "AND stake_units > 0")
-    args: list = list(cats)
+    args: list = list(_bargs)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -6599,13 +6675,14 @@ def recent_settled(conn, limit: int = 30,
     would go quiet on the day the board started playing for money.
     """
     cats = (category,) if isinstance(category, str) else tuple(category)
+    _books, _bargs = books_sql(cats)
     q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
          "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
          "why_tag, why_note FROM bets "
          "WHERE status IN ('won','lost','push') "
-         f"AND category IN ({','.join('?' * len(cats))}) "
+         f"AND {_books} "
          "AND stake_units > 0")
-    args: list = list(cats)
+    args: list = list(_bargs)
     if since:
         q += " AND date >= ?"
         args.append(since)
@@ -6661,10 +6738,10 @@ def settled_page(conn, sport: str | None = None, kind: str | None = None,
     lost or push. `total` counts every row the filters match, so the
     page can say how many there are rather than how many it has.
     """
-    cats = POOLED_BOOKS
+    books, bargs = books_sql(POOLED_BOOKS)
     where = ("WHERE status IN ('won','lost','push') AND stake_units > 0 "
-             f"AND category IN ({','.join('?' * len(cats))}) AND date >= ?")
-    args: list = [*cats, RECORD_EPOCH]
+             f"AND {books} AND date >= ?")
+    args: list = [*bargs, RECORD_EPOCH]
     if since and since > RECORD_EPOCH:
         where += f" AND {day_expr()} >= ?"
         args.append(since)
@@ -8045,13 +8122,14 @@ LIKELY_BOOKS = ("likely", LIKELY_LIVE_CATEGORY)
 #: the edge book beside it, so the two still read side by side. Nothing
 #: about how either book is graded changes; only which rows the top
 #: number counts, and the paper share is said next to it.
-POOLED_BOOKS = BOOK + ("likely",)
+POOLED_BOOKS = BOOK + ("likely", BOARD_CATEGORY)
 #: The edge board on its own — the rows the edge board journals, staked
 #: or paper — for the verdict's side-by-side. BOOK also carries the
 #: staked Most Likely rows, which the Most Likely report counts too, so
 #: two cards built from BOOK and LIKELY_BOOKS would count those rows
 #: twice and fail to add up to the one number above them. These two do:
-#: EDGE_BOOKS + LIKELY_BOOKS is POOLED_BOOKS, row for row.
+#: EDGE_BOOKS + LIKELY_BOOKS + the board's own picks (`books_sql`: a board
+#: pick the Most Likely book already holds counts once) is POOLED_BOOKS.
 EDGE_BOOKS = ("main", "paper")
 
 
@@ -8065,6 +8143,14 @@ def pooled_report(conn, sport: str | None = None,
         "books": list(POOLED_BOOKS),
         "overall": performance(conn, sport, category=POOLED_BOOKS, since=since),
         "edge": performance(conn, sport, category=EDGE_BOOKS, since=since),
+        # THE MOST LIKELY HALF, EACH PICK ONCE: the Most Likely list's own
+        # book and the one board's picks it does not hold (`books_sql`).
+        # EDGE_BOOKS and this are POOLED_BOOKS row for row, so the page's
+        # edge tile and Most Likely tile add up to the combined one —
+        # Ethan, 2026-10-02: "it feels like all these numbers are not
+        # adding up".
+        "likely": performance(conn, sport, category=LIKELY_BOOKS + (BOARD_CATEGORY,),
+                              since=since),
         # The edge board's own curve and receipts: since 2026-09-30 it is
         # the HEADLINE (audit P1-1), so its ribbon's form dots and the
         # running P&L must be its own rows, not the pooled journal's.
@@ -8325,12 +8411,14 @@ def board_report(conn, since: str | None = None, sport: str | None = None) -> di
     sw = " AND sport=?" if sport else ""
     sargs: tuple = (sport,) if sport else ()
     tiers = []
+    sums = {"w": 0, "l": 0, "push": 0, "open": 0, "pnl": 0.0, "staked": 0.0,
+            "claim_sum": 0.0}
     for label in BOARD_TIERS:
         r = conn.execute(
             "SELECT SUM(status='won') w, SUM(status='lost') l, SUM(status='push') p, "
             "SUM(status='open') o, AVG(CASE WHEN status IN ('won','lost') THEN hit_prob END) claimed, "
             "SUM(CASE WHEN status IN ('won','lost','push') THEN pnl_units ELSE 0 END) pnl, "
-            "SUM(CASE WHEN status IN ('won','lost','push') THEN stake_units ELSE 0 END) staked "
+            "SUM(CASE WHEN status IN ('won','lost') THEN stake_units ELSE 0 END) staked "
             "FROM bets WHERE category='board' AND grade=?" + win + sw,
             (label,) + wargs + sargs).fetchone()
         w, l = int(r["w"] or 0), int(r["l"] or 0)
@@ -8343,8 +8431,32 @@ def board_report(conn, since: str | None = None, sport: str | None = None) -> di
             "units": round(float(r["pnl"] or 0.0), 3),
             "roi": round(float(r["pnl"] or 0.0) / float(r["staked"]), 4) if r["staked"] else None,
         })
-    return {"sport": sport or "", "tiers": tiers,
-            "settled": sum(t["settled"] for t in tiers), "open": sum(t["open"] for t in tiers)}
+        sums["w"] += w
+        sums["l"] += l
+        sums["push"] += int(r["p"] or 0)
+        sums["open"] += int(r["o"] or 0)
+        sums["pnl"] += float(r["pnl"] or 0.0)
+        sums["staked"] += float(r["staked"] or 0.0)
+        sums["claim_sum"] += float(r["claimed"] or 0.0) * n
+    # THE WHOLE BOARD IN ONE LINE (Ethan, 2026-10-02: "all these numbers
+    # are not adding up"): the three tiers summed, so the total a reader
+    # adds up in their head is printed, and is the same total the
+    # headline's Most Likely half carries.
+    n = sums["w"] + sums["l"]
+    total = {"settled": n, "w": sums["w"], "l": sums["l"], "push": sums["push"],
+             "open": sums["open"],
+             "claimed": round(sums["claim_sum"] / n, 4) if n else None,
+             "actual": round(sums["w"] / n, 4) if n else None,
+             "units": round(sums["pnl"], 3),
+             "roi": round(sums["pnl"] / sums["staked"], 4) if sums["staked"] else None}
+    # FROM WHEN, so the page can say which picks these are: the board
+    # began on 2026-09-26, and the Most Likely book beside it goes back
+    # further. The earliest calendar day (a week label sorts after it).
+    first = conn.execute(
+        f"SELECT MIN({day_expr()}) FROM bets WHERE category='board'" + win + sw,
+        wargs + sargs).fetchone()[0]
+    return {"sport": sport or "", "tiers": tiers, "total": total,
+            "settled": n, "open": sums["open"], "first_day": first or ""}
 
 
 def likely_report(conn, since: str | None = None,
@@ -8494,8 +8606,36 @@ def likely_report(conn, since: str | None = None,
             # ENOUGH TO ACT ON is a separate question from the sign of
             # the ROI, and keeping them apart is the point: a shelf can
             # be deeply negative and still not be cuttable.
-            "enough": bool(n >= LIKELY_MARKET_MIN_N),
+            #
+            # THE SHELF'S OWN COUNT. This read `n`, the whole book's, so
+            # every shelf of a book past forty settled said "enough" —
+            # Anytime TD at 12 of 13 among them (Ethan, 2026-10-02).
+            "enough": bool(mn >= LIKELY_MARKET_MIN_N),
             "needed": LIKELY_MARKET_MIN_N}
+
+    # A YES/NO MARKET, BY SIDE. Ethan, 2026-10-02: "No way we have hit
+    # 12/13 TD picks bc I've seen more then that loose." A scorer row is
+    # either "he scores" (OVER 0.5) or "he does not" (UNDER 0.5): opposite
+    # bets at opposite prices, and one line for both read as twelve
+    # touchdowns out of thirteen. Each side is its own row on the page.
+    _yes_no = tuple(sorted(LONGSHOT_MARKETS))
+    for r in conn.execute(
+            "SELECT market, UPPER(COALESCE(side,'')) side, COUNT(*) n, "
+            "SUM(status='won') w, AVG(hit_prob) claimed, "
+            "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+            f"FROM bets WHERE market IN ({','.join('?' * len(_yes_no))}) "
+            + graded + win + sw + " GROUP BY market, UPPER(COALESCE(side,''))",
+            _yes_no + wargs + sargs):
+        shelf = p["by_market"].get(r["market"])
+        if shelf is None:
+            continue
+        shelf.setdefault("sides", {})[r["side"]] = {
+            "n": r["n"], "w": r["w"],
+            "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
+            "actual": round(r["actual"], 4) if r["actual"] is not None else None,
+            "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0,
+            "enough": bool(r["n"] >= LIKELY_MARKET_MIN_N)}
 
     # Per sport, with the same two tests the headline gets — Ethan,
     # 2026-09-01: "make sure you dont stop testing each sport until the
@@ -8577,6 +8717,18 @@ def likely_report(conn, since: str | None = None,
                           else [sp for sp in LIKELY_LIVE_SPORTS
                                 if not is_benched(sp)])
     p["stake_units"] = LIKELY_LIVE_STAKE
+    # WHICH ROWS HAD MONEY ON THEM, AND FROM WHEN. The section's title said
+    # "staked" over a book that is paper before 2026-09-19 (Ethan,
+    # 2026-10-02: "we are not telling the truth"); the page now says how
+    # many of the settled rows were paper and when the money began.
+    sp_row = conn.execute(
+        "SELECT SUM(category='likely') paper, SUM(category='likely_live') money, "
+        f"MIN(CASE WHEN category='likely_live' THEN {day_expr()} END) money_from "
+        "FROM bets WHERE status IN ('won','lost') AND category IN ('likely','likely_live')"
+        + win + sw, wargs + sargs).fetchone()
+    p["paper_settled"] = int(sp_row["paper"] or 0)
+    p["money_settled"] = int(sp_row["money"] or 0)
+    p["money_from"] = sp_row["money_from"] or ""
     p["verdict"] = _likely_verdict(p)
     return p
 
@@ -8601,23 +8753,25 @@ def _likely_verdict(p: dict) -> str:
                 f"anything. At this sample a ten-point miss and a run of "
                 f"luck look identical, so no verdict is offered.")
     roi = p.get("roi")
-    honest = (f"Claimed {cal['claimed']:.0%}, hit {cal['actual']:.0%} "
+    # PLAIN WORDS (Ethan, 2026-10-02, reading this sentence on the Record
+    # page: "we are not telling the truth"). It carried a z-score, a
+    # 61,854-bet horizon and a constant's name; a reader got none of it.
+    # The two tests below are unchanged — only how they are said.
+    honest = (f"We said {cal['claimed']:.0%}, they hit {cal['actual']:.0%} "
               f"over {n} settled")
     if not cal.get("real"):
-        honest += " — inside the noise band, so the number is holding up"
+        honest += " — the hit rate is holding up"
     elif cal["gap"] > 0:
-        honest += " — landing MORE than we claim, so the model is under-confident"
+        honest += " — hitting more often than we said"
     else:
-        honest += " — landing LESS than we claim, and that is a real miss"
+        honest += " — hitting less often than we said, a real miss"
     # THE SECOND TEST, NEVER FOLDED INTO THE FIRST. A calibrated board
     # that loses to the vig is the expected outcome, not a contradiction,
     # and money is gated on this half.
+    clear_win = False
     if roi is not None:
-        honest += f". At the prices shown it returned {roi:+.1%}"
+        honest += f". At the prices taken they returned {roi:+.1%}"
         z = _roi_z(cal.get("actual"), roi, n)
-        if z is not None:
-            honest += f" (z {z:+.2f})"
-        staked = p.get("staked")
         if z is not None and abs(z) < 2.0:
             # THE SENTENCE THIS REPLACED SAID "money stays off until that
             # is positive over a sample this size" — and on 2026-09-19 it
@@ -8625,18 +8779,23 @@ def _likely_verdict(p: dict) -> str:
             # a refusal whose own condition had already been met and told
             # a reader nothing about what would change the answer. A
             # positive sign is not the test; being distinguishable from
-            # zero is.
+            # zero is. The count that would tell is said only while it is
+            # within reach — ten times the sample at most; past that a
+            # number this close to zero is simply too small to tell.
             need = _roi_n_for_z(cal.get("actual"), roi, 2.0)
-            honest += (f" — inside the noise, so this is not yet "
-                       f"distinguishable from break-even"
-                       + (f"; about {need:,.0f} settled would settle it "
-                          f"if the number holds" if need else ""))
+            honest += (" — too close to break-even to call a profit or a loss yet"
+                       + (f"; about {need:,.0f} settled would settle it if "
+                          f"the number holds" if need and need <= 10 * n else ""))
         elif z is not None:
-            honest += (" — clear of the noise band" if roi > 0 else
-                       " — and it is clear of the noise band on the LOSING "
-                       "side")
-        honest += (". Staked with real money at Ethan's call, below this "
-                   "bar and knowingly — see LIKELY_LIVE_SPORTS."
+            clear_win = roi > 0
+            honest += (" — a real profit, more than luck explains" if roi > 0 else
+                       " — a real loss, more than bad luck explains")
+        staked = p.get("staked")
+        stake = p.get("stake_units")
+        honest += ((f". Staked with real money ({stake}u a pick)" if stake
+                    else ". Staked with real money")
+                   + ("." if clear_win else
+                      ", before the record has shown it pays.")
                    if staked else
                    ". No money is staked on this book.")
     return honest
@@ -9285,9 +9444,11 @@ def journaled_counts(conn, since: str | None = None) -> dict:
     """
     _bench, _bargs = off_record_sql()
     win = (" AND date >= ?" if since else "") + _bench
-    cats = RECOMMENDED_CATEGORIES
-    marks = ",".join("?" * len(cats))
-    args: tuple = tuple(cats) + ((since,) if since else ()) + _bargs
+    # THE BOARD'S PICKS COUNT HERE TOO, each once (`books_sql`): since
+    # 2026-09-26 they are the Most Likely picks a reader sees, and a chip
+    # that left them out could never add up to the sections under it.
+    books, bk_args = books_sql(RECOMMENDED_CATEGORIES + (BOARD_CATEGORY,))
+    args: tuple = tuple(bk_args) + ((since,) if since else ()) + _bargs
     out: dict = {}
     tot = {"settled": 0, "open": 0}
     for r in conn.execute(
@@ -9295,7 +9456,7 @@ def journaled_counts(conn, since: str | None = None) -> dict:
             "SUM(status IN ('won','lost','push')) s, "
             "SUM(status='open') o "
             "FROM bets WHERE status IN ('won','lost','push','open') "
-            f"AND category IN ({marks})"
+            f"AND {books}"
             + win + " GROUP BY sport", args):
         if not r["sport"]:
             continue

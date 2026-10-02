@@ -108,6 +108,37 @@ Never delete a `.db` or `.db-wal` file. Old `backup_*.zip` files and
 
 ---
 
+## The Record page's numbers — 2026-10-02 (R1 read-only; R2 fills a date column)
+
+Ethan, 2026-10-02: *"make sure we are recording everything and not
+missing anything ... No way we have hit 12/13 TD picks bc I've seen more
+then that loose."* The page fixes are pushed. These two need the box.
+
+**R1. Recount the record (read-only, about a minute).** Ten checks on an
+in-memory copy of the ledger. It re-derives every grade and lists every
+anytime-TD pick in every section with its side ("scores" or "no TD") and
+the touchdowns the box score credits. It shows where the board's picks
+came from, bets stuck open past their game, and rows with no calendar
+day. It recounts the headline by hand and checks today's board against
+the journal. Paste the whole output back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 recordcheck.py --sport nfl 2>&1 | tail -200
+```
+
+**R2. Give old rows their calendar day (writes only the `game_day`
+column — never a grade, never the settle key).** This is the "NaN days"
+fix for rows journaled before they carried their game's date. The first
+line is a dry run and prints what it would fill. Run the second only if
+that count looks like check 8 of R1:
+
+```
+cd /srv/qellys && sudo -u qellys python3 launch.py --backfill-days
+cd /srv/qellys && sudo -u qellys python3 launch.py --backfill-days --apply
+```
+
+---
+
 ## PHASE 5 — the audit fixes (2026-09-30, Ethan: "I approve everything")
 
 Each fix below is pushed and live on the next auto-update. These are the

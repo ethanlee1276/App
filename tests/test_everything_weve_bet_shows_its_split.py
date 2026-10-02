@@ -70,8 +70,13 @@ def test_the_page_shows_the_split_and_only_on_the_whole_record():
     assert "Combined · Zeno’s book + ours" in fn
     assert "model ${part(cb.split.model)} · Zeno ${part(cb.split.zeno)}" in fn
     assert fn.index("if (ov.settled) {") < fn.index("const cb = (rec || {}).combined;"), "model leads, combined follows"
+    # Re-anchored 2026-10-02: Zeno's all-sports tile leaves a league or a
+    # window too (it sat on the NFL page beside the NFL's own numbers), and
+    # the Most Likely half rides with the pooled one.
     assert ("const dAll = winO || scoped\n"
-            "    ? { ...d, combined: null, pooled_overall: winO ? null : src.pooled_overall } : d;") in APP
+            "    ? { ...d, combined: null, zeno: null,\n"
+            "        pooled_overall: winO ? null : src.pooled_overall,\n"
+            "        likely_overall: winO ? null : src.likely_overall } : d;") in APP
 
 
 if __name__ == "__main__":

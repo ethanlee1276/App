@@ -88,8 +88,11 @@ def test_the_results_strip_leads_with_the_ribbon_and_keeps_what_it_lacks():
     # the model's tile, then Zeno's, as on the Record page.
     # Since 2026-09-30 (audit P1-1/P1-6) the call also hands over the
     # labelled pooled total and the record's own floor, and Zeno is named.
+    # …and since 2026-10-02 the Most Likely half, so the pooled tile says
+    # what it adds: edge + Most Likely, each pick once.
     assert ("const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno,\n"
             "                                     pooled_overall: rec && rec.pooled_overall,\n"
+            "                                     likely_overall: rec && rec.likely_overall,\n"
             "                                     min_graded: rec && rec.min_graded }, o,\n"
             "                                   (rec && rec.recent) || []);") in body
     assert '<div class="hd-stats rec-ribbons pw-ribbon">${ribbon}</div>${zenoWhoHTML(rec)}' in body
@@ -119,7 +122,7 @@ def test_the_wall_prints_the_pooled_book_then_zenos():
     assert "20-20" in h and "\u22122.5% ROI" in h, "the model's own book leads"
     assert "35-24-1" in h and "+1.7% ROI" in h and "+7.6u · 60 settled" in h, "the pooled book, second and named"
     assert h.count('class="hd-ribbon"') == 3 and "Zeno · his own book" in h
-    assert h.index("Model") < h.index("Combined · edge + Most Likely boards") < h.index("Zeno · his own book"), \
+    assert h.index("Edge picks") < h.index("Combined · edge + Most Likely boards") < h.index("Zeno · his own book"), \
         "the model's tile, then the pooled one, then his"
     assert 'data-pc="50"' in h and '<i class="w">W</i>' in h
     assert "50.0%" in h and "52.4% needed at our prices" in h and "40.0u" in h
@@ -142,7 +145,7 @@ def test_the_wall_leads_with_the_combined_line_and_its_split():
     if got is None:
         print("  SKIP node not installed"); return
     assert got.count('class="hd-ribbon"') == 4
-    assert (got.index("Model") < got.index("Combined · edge + Most Likely boards")
+    assert (got.index("Edge picks") < got.index("Combined · edge + Most Likely boards")
             < got.index("Combined · Zeno’s book + ours") < got.index("Zeno · his own book")), \
         "the model's own tile leads; every total follows, labelled (audit P1-1)"
     assert "1457-2008-36" in got and "model +4.3u · Zeno +800.2u (1u = $10)" in got, "the split rides the tile"

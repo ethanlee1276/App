@@ -71,9 +71,12 @@ def _journal():
 
 
 def test_the_pooled_book_is_the_edge_book_plus_the_paper_most_likely_rows():
-    assert ledger.POOLED_BOOKS == ledger.BOOK + ("likely",)
+    # THE ONE BOARD JOINED BOTH on 2026-10-02 (Ethan: "it feels like all
+    # these numbers are not adding up"): its picks are the Most Likely
+    # picks a reader sees, all on paper, each counted once (`books_sql`).
+    assert ledger.POOLED_BOOKS == ledger.BOOK + ("likely", ledger.BOARD_CATEGORY)
     assert "likely_live" in ledger.BOOK, "the staked Most Likely rows were already in the edge book"
-    assert ledger.PAPER_BOOKS == ("paper", "likely")
+    assert ledger.PAPER_BOOKS == ("paper", "likely", ledger.BOARD_CATEGORY)
     conn = _journal()
     edge = ledger.performance(conn)
     pooled = ledger.pooled_report(conn)["overall"]
@@ -98,13 +101,17 @@ def test_the_pooled_curve_and_receipts_carry_the_same_rows():
     assert {r["player"] for r in rep["recent"]} >= {"Likely Paper", "Edge One", "Likely Live"}
     assert "Long Shot" not in {r["player"] for r in rep["recent"]}
     assert rep["books"] == list(ledger.POOLED_BOOKS)
-    both = ledger.EDGE_BOOKS + ledger.LIKELY_BOOKS
+    both = ledger.EDGE_BOOKS + ledger.LIKELY_BOOKS + (ledger.BOARD_CATEGORY,)
     assert ledger.EDGE_BOOKS == ("main", "paper") and set(both) == set(ledger.POOLED_BOOKS) \
         and len(both) == len(set(both)) == len(ledger.POOLED_BOOKS), \
         "the two cards under the number are disjoint and complete"
     likely = ledger.likely_report(conn)
     assert rep["edge"]["settled"] + likely["settled"] == rep["overall"]["settled"] == 5, "edge board + Most Likely = the one number"
     assert abs(rep["edge"]["net_units"] + likely["net_units"] - rep["overall"]["net_units"]) < 0.011
+    # …and the Most Likely card the page draws (`likely`, the board's
+    # picks with it, each once) is the same arithmetic.
+    assert rep["edge"]["settled"] + rep["likely"]["settled"] == rep["overall"]["settled"]
+    assert abs(rep["edge"]["net_units"] + rep["likely"]["net_units"] - rep["overall"]["net_units"]) < 0.011
     nfl = ledger.pooled_report(conn, "nfl")["overall"]
     assert nfl["settled"] == 4, "per sport, the same book"
 

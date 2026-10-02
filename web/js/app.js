@@ -4003,6 +4003,7 @@ function adoptPooledRecord(rec) {
     s.edge = { overall: s.overall, curve: s.curve, recent: s.recent };
     s.edge_board = s.pooled.edge || null;   // the edge board alone (EDGE_BOOKS), for the verdict's card
     s.pooled_overall = s.pooled.overall;
+    s.likely_overall = s.pooled.likely || null;   // the Most Likely half, each pick once
     s.overall = s.pooled.edge || s.overall;
     s.curve = s.pooled.edge_curve || s.curve;
     s.recent = s.pooled.edge_recent || s.recent;
@@ -15529,9 +15530,11 @@ function recRanges() {
    show a different window than the whole record. */
 function recRangesFor(curve) {
   const all = recRanges();
-  if (!curve || curve.length < 2) return all.slice(0, 1);
-  const spanDays = (new Date(curve[curve.length - 1].date)
-                    - new Date(curve[0].date)) / 864e5;
+  // Calendar days only — a week-labelled point is no date (recRangesClosed).
+  const pts = (curve || []).filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(String((p || {}).date || "")));
+  if (pts.length < 2) return all.slice(0, 1);
+  const spanDays = (new Date(pts[pts.length - 1].date)
+                    - new Date(pts[0].date)) / 864e5;
   return all.filter(([k, d]) => k === "all" || spanDays > d);
 }
 
@@ -15556,7 +15559,9 @@ function recRangeFrom(avail, rk) {
    a few hundredths off the record. */
 function recRangeTotals(curve, from) {
   const all = curve || [];
-  const rows = all.filter((p) => p && p.date >= from);
+  // A week label ("2026-W04") sorts after every day, so `>= from` let it
+  // into every window; a row with no day is in the whole record only.
+  const rows = all.filter((p) => p && /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || "")) && p.date >= from);
   if (!rows.length || !rows.every((p) => p.w != null)) return null;
   const sum = (f) => rows.reduce((a, p) => a + (Number(p[f]) || 0), 0);
   const wins = sum("w"), losses = sum("l"), settled = sum("n"), staked = sum("staked");
@@ -15575,7 +15580,13 @@ function recRangeTotals(curve, from) {
    one that is there, greyed, says why. */
 function recRangesClosed(curve) {
   const open = new Set(recRangesFor(curve).map(([k]) => k));
-  const pts = curve || [];
+  /* CALENDAR DAYS ONLY. An NFL row journaled without its game's day sits
+     in the curve under its week label ("2026-W04"), which sorts after
+     every real day and is no date at all — the page read "The record
+     covers NaN days so far" (Ethan, 2026-10-02). The span is measured
+     over the days that are days; the labelled rows still count in every
+     total. */
+  const pts = (curve || []).filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(String((p || {}).date || "")));
   const span = pts.length >= 2
     ? Math.round((new Date(pts[pts.length - 1].date) - new Date(pts[0].date)) / 864e5) : 0;
   return recRanges().filter(([k]) => !open.has(k)).map(([k, d, label]) => [k, d, label,
@@ -16587,22 +16598,31 @@ function recLeadtimeSection(lt) {
 function recBoardSection(bd, scope) {
   if (!bd || (!bd.settled && !bd.open)) return "";
   const pct = pctRoundOr;
-  const rows = (bd.tiers || []).map((t) => {
+  const line = (label, t, extra) => {
     const played = t.settled + (t.push || 0);
     const tone = t.actual == null ? "" : t.claimed != null && t.actual >= t.claimed ? "won" : "lost";
-    return `<div class="rl-row rl-cal ${tone}">
-      <span class="rl-date">${escapeHtml(t.tier)}</span>
+    return `<div class="rl-row rl-cal ${tone}${extra || ""}">
+      <span class="rl-date">${escapeHtml(label)}</span>
       <span class="rl-main">${t.settled ? `${t.w}–${t.l}${t.push ? `–${t.push}` : ""} · hit <strong>${pct(t.actual)}</strong> · we said ${pct(t.claimed)}`
         : "no results yet"}</span>
       <span class="rl-proc">${t.open ? `${t.open} open` : played ? `${played} settled` : ""}</span>
       <span class="rl-pnl ${t.roi == null ? "" : toneOf(t.roi)}">${t.roi == null ? "—" : `${t.roi >= 0 ? "+" : ""}${(t.roi * 100).toFixed(1)}%`}</span>
     </div>`;
-  }).join("");
+  };
+  /* THE THREE TIERS SUMMED, on a line of its own (Ethan, 2026-10-02: "it
+     feels like all these numbers are not adding up"): the total a reader
+     would otherwise add in their head, from the ledger's own sum. */
+  const total = bd.total && bd.total.settled ? line("All tiers", bd.total, " rl-total") : "";
+  const rows = (bd.tiers || []).map((t) => line(t.tier, t)).join("") + total;
   const waiting = !bd.settled
     ? `<p class="ls-note">${plural(bd.open, "pick is", "picks are")} waiting on their games. The first results land once
         they settle — then this shows whether Top picks hit more than the rest.</p>` : "";
+  const t0 = new Date(`${String(bd.first_day || "").slice(0, 10)}T12:00:00`);
+  const since = Number.isFinite(t0.getTime())
+    ? ` since ${t0.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
   return `<div class="section-title"><span class="st-ico">${icon("target", 15)}</span>Most Likely board · by tier
-      <span class="sub">— every pick tracked at the tier it went up at: Top pick, Strong, Worth a look</span></div>
+      <span class="sub">— every pick the board has posted${since}, at the tier it went up at (Top pick, Strong,
+      Worth a look), on paper at a flat 0.1u, so each tier’s return is a plain flat-stake return</span></div>
     ${waiting}
     <div class="card rec-board-tiers" style="padding:0;margin-top:6px">${rows}</div>`;
 }
@@ -16623,13 +16643,32 @@ function recLikelySection(lk, scope) {
       <span class="rl-proc">${b.n} settled</span>
       <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(1)}%</span>
     </div>`).join("");
-  const markets = Object.entries(lk.by_market || {}).map(([m, d]) => `
+  /* A SCORER MARKET, ONE ROW PER SIDE (ledger likely_report `sides`).
+     Ethan, 2026-10-02: "No way we have hit 12/13 TD picks bc I've seen
+     more then that loose." The row pooled "he scores" with "he does not"
+     — opposite bets at opposite prices — so it read as touchdowns. And a
+     return on fewer settled than the shelf's own bar is drawn uncoloured:
+     too few to read either way, whichever way it points. */
+  const sideWord = (m, sd) => {
+    const no = String(sd || "").toUpperCase() === "UNDER";
+    return m === "anytime_td" ? (no ? "no TD" : "scores")
+      : m === "home_runs" ? (no ? "no home run" : "homers") : (no ? "no" : "yes");
+  };
+  const mkRow = (label, d) => `
     <div class="rl-row rl-cal ${d.actual >= d.claimed ? "won" : "lost"}">
-      <span class="rl-date">${escapeHtml(marketWord(m))}</span>
+      <span class="rl-date">${label}</span>
       <span class="rl-main">said ${pct(d.claimed)} · hit <strong>${pct(d.actual)}</strong></span>
       <span class="rl-proc">${d.w}/${d.n}</span>
-      <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>
-    </div>`).join("");
+      <span class="rl-pnl ${d.enough === false ? "" : toneOf(d.roi)}"${d.enough === false
+        ? ` title="${d.n} settled — too few to read either way"` : ""}>${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>
+    </div>`;
+  const markets = Object.entries(lk.by_market || {}).map(([m, d]) => {
+    const sides = Object.entries(d.sides || {});
+    return sides.length
+      ? sides.map(([sd, x]) => mkRow(`${escapeHtml(marketWord(m))} · ${sideWord(m, sd)}`, x)).join("")
+      : mkRow(escapeHtml(marketWord(m)), d);
+  }).join("");
+  const shelfBar = (Object.values(lk.by_market || {})[0] || {}).needed || 40;
   /* WHETHER THERE IS MONEY ON THIS BOOK, ASKED BEFORE A WORD OF IT IS
      WRITTEN. Every sentence below used to be the paper version, hard
      coded — "ZERO dollars behind it", "nothing here is a position",
@@ -16643,13 +16682,24 @@ function recLikelySection(lk, scope) {
   const stake = lk.stake_units || 0.25;
   const whose = spName ? escapeHtml(spName)
                        : live.map((x) => x.toUpperCase()).join(", ");
+  /* WHICH ROWS HAD MONEY ON THEM (ledger likely_report). The title said
+     "staked" over a book whose first weeks were paper (Ethan, 2026-10-02:
+     "we are not telling the truth"); the count of each, and the day the
+     money began, are said under it. */
+  const m0 = new Date(`${String(lk.money_from || "").slice(0, 10)}T12:00:00`);
+  const moneyFrom = Number.isFinite(m0.getTime())
+    ? m0.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+  const paperN = lk.paper_settled || 0, moneyN = lk.money_settled || 0;
+  const mix = money && paperN && moneyN
+    ? ` Of the ${paperN + moneyN} settled, ${paperN} were on paper and ${moneyN} had real money on them${
+        moneyFrom ? ` (from ${moneyFrom})` : ""}.` : "";
   return `
     <div class="section-title">Most Likely — ${
-      money ? "staked" : "the paper record"}${
+      money ? "staked picks" : "the paper record"}${
       spName ? ` · ${escapeHtml(spName)}` : ""}
       <span class="sub">— ${money
-        ? `${stake}u a row of real money on ${whose}, graded like every other
-           bet`
+        ? `the Most Likely list’s own picks, ${stake}u a row of real money on ${whose}, graded like every other
+           bet.${mix} The board’s other picks are scored by tier above`
         : "journaled nightly at no risk, graded like every other bet"}${
       spName ? `. ${escapeHtml(spName)} rows only — every number in this
       section is that league’s own` : ""}</span></div>
@@ -16689,7 +16739,7 @@ function recLikelySection(lk, scope) {
                       : "at the price shown · no money staked",
                 { tone: toneOf(lk.roi) })}
       ${recTile("Settled", `${lk.wins}-${lk.losses}`,
-                `${lk.open} open · ${lk.needed} needed for a verdict`)}
+                lk.enough ? `${lk.open} open` : `${lk.open} open · ${lk.needed} needed for a verdict`)}
       ${recTile("Sample", `${cal.n || 0}`,
                 lk.enough ? "enough to judge" :
                   `${Math.max(0, lk.needed - (cal.n || 0))} more to go`,
@@ -16700,8 +16750,10 @@ function recLikelySection(lk, scope) {
       a reader actually bets.</div>
       <div class="card" style="padding:0;margin-top:6px">${bands}</div>` : ""}
     ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">Most Likely picks by market —
-      this board’s own picks only; Pick of the Day and the Edge picks are scored in
-      their own sections. If one market holds up and another does not, that is a
+      this book’s own picks only; Pick of the Day and the Edge picks are scored in
+      their own sections. A scorer market is split by side, since “scores” and “no TD”
+      are opposite bets, and a return on fewer than ${shelfBar} settled is left uncoloured —
+      too few to read either way. If one market holds up and another does not, that is a
       shelf-level decision.</div>
       <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}
     ${recLikelyGameLines(lk, sp)}`;
@@ -20128,13 +20180,19 @@ async function renderRecord() {
   const winO = from ? recRangeTotals(src.curve, from) : null;
   /* The combined line is the WHOLE record's (engine/zeno.combined): it
      shows only on the whole, unscoped record, never beside a sport, a
-     book or a window it was not added up over. */
+     book or a window it was not added up over. ZENO'S TILE TOO: his is
+     one all-sports count carried in from Pikkit, and on the NFL page it
+     sat beside the NFL's own numbers as if it were one of them (Ethan,
+     2026-10-02: "all these numbers are not adding up"). His league cut
+     is in his own section below. */
   const dAll = winO || scoped
-    ? { ...d, combined: null, pooled_overall: winO ? null : src.pooled_overall } : d;
+    ? { ...d, combined: null, zeno: null,
+        pooled_overall: winO ? null : src.pooled_overall,
+        likely_overall: winO ? null : src.likely_overall } : d;
   const ribbons = winO
-    ? recordRibbonsHTML(dAll, { ...winO, label: `Model · last ${winDays} days` },
-        (src.recent || []).filter((r) => String((r || {}).date || "") >= from))
-    : recordRibbonsHTML(dAll, o, src.recent);
+    ? recordRibbonsHTML(dAll, { ...winO, label: `Edge picks · last ${winDays} days` },
+        (src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })
+    : recordRibbonsHTML(dAll, o, src.recent, { parts: true });
   const winBar = recordWindowHTML(avail, rk, recRangesClosed(src.curve));
   const winNote = !from ? "" : winO
     ? `<p class="rec-win-note">The headline, the running P&amp;L and the settled bets are the last ${winDays} days,
@@ -26738,6 +26796,7 @@ function pwResultsHTML(rec) {
      sample cannot carry a rate — and how much it staked to earn its number. */
   const ribbon = recordRibbonsHTML({ combined: rec && rec.combined, zeno: rec && rec.zeno,
                                      pooled_overall: rec && rec.pooled_overall,
+                                     likely_overall: rec && rec.likely_overall,
                                      min_graded: rec && rec.min_graded }, o,
                                    (rec && rec.recent) || []);
   return `<div class="pw-results">
@@ -47034,8 +47093,9 @@ function potdHeroHTML(d) {
    record page"). `ov` and `recent` are the scope in view (the page hands
    a league's own overall and rows); Zeno's book is pooled, because it is
    his and not the model's. Returns the tiles' HTML, or "" over nothing. */
-function recordRibbonsHTML(rec, ov, recent) {
+function recordRibbonsHTML(rec, ov, recent, opts) {
   ov = ov || {};
+  const parts = !!(opts || {}).parts;
   const z = (rec || {}).zeno || {};
   const zo = z.overall || {};
   const sign = (v) => (v >= 0 ? "+" : MINUS);
@@ -47080,20 +47140,36 @@ function recordRibbonsHTML(rec, ov, recent) {
     const f = recFloor(rec, ov);
     const roi = ov.roi == null ? null : Number(ov.roi);
     const u = Number(ov.net_units || 0);
-    tiles.push(f.thin ? thinTile(ov.label || "Model · graded in public", ov, f, dots(recent, "status"))
-      : tile(ov.label || "Model · graded in public", wl(ov), roiBig(roi), tone(roi),
+    tiles.push(f.thin ? thinTile(ov.label || "Edge picks · graded in public", ov, f, dots(recent, "status"))
+      : tile(ov.label || "Edge picks · graded in public", wl(ov), roiBig(roi), tone(roi),
              `${units(u)} · ${ov.settled} settled`, dots(recent, "status"), rate(ov)));
   }
+  /* THE MOST LIKELY HALF, EACH PICK ONCE (ledger pooled_report.likely):
+     the one board's picks and the Most Likely list's own, a pick on both
+     counted once, at its staked row. Drawn where the page asks for the
+     parts (the Record page), so this tile and the edge tile add up to
+     the combined one beside them — Ethan, 2026-10-02: "it feels like all
+     these numbers are not adding up". */
+  const lo = (rec || {}).likely_overall;
+  if (parts && lo && lo.settled) {
+    const f = recFloor(rec, lo);
+    const roi = lo.roi == null ? null : Number(lo.roi), u = Number(lo.net_units || 0);
+    const k = "Most Likely · every pick once";
+    tiles.push(f.thin ? thinTile(k, lo, f, "")
+      : tile(k, wl(lo), roiBig(roi), tone(roi), `${units(u)} · ${lo.settled} settled · paper and staked`, "", rate(lo)));
+  }
   /* The edge board and the Most Likely board as one — the pooled journal,
-     second and named: its Most Likely half is flat-staked favourites. */
+     named, with the two halves it adds on the tile. */
   const po = (rec || {}).pooled_overall;
   if (po && po.settled) {
     const f = recFloor(rec, po);
     const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     const k = "Combined · edge + Most Likely boards";
+    const split = lo && lo.settled && ov.settled
+      ? ` · edge ${units(Number(ov.net_units || 0))} + Most Likely ${units(Number(lo.net_units || 0))}`
+      : " · each pick counted once";
     tiles.push(f.thin ? thinTile(k, po, f, "")
-      : tile(k, wl(po), roiBig(roi), tone(roi),
-             `${units(u)} · ${po.settled} settled · Most Likely picks at their flat stake`, "", rate(po)));
+      : tile(k, wl(po), roiBig(roi), tone(roi), `${units(u)} · ${po.settled} settled${split}`, "", rate(po)));
   }
   /* EVERYTHING WE'VE BET (engine/zeno.combined): the model's picks and
      Zeno's own tickets in one line — third, with the split on the tile,
@@ -47122,8 +47198,13 @@ function recordRibbonsHTML(rec, ov, recent) {
     const roi = zo.roi == null ? "" : `${sign(Number(zo.roi))}${(Math.abs(Number(zo.roi)) * 100).toFixed(1)}% ROI · `;
     const zu = zo.net_units == null ? "" : `${sign(Number(zo.net_units))}${Math.abs(Number(zo.net_units)).toFixed(1)}u${unitNote(z.unit_dollars)} · `;
     const zeno = !z.label;          // Zeno's own tile, not a reader's book on My Bets
+    /* AS OF WHEN (Ethan, 2026-10-02): the count is carried in from Pikkit
+       on a date, and a tile without it reads as today's. */
+    const asOf = String(((z.snapshot || {}).as_of) || "").slice(0, 10);
+    const asOfNote = zeno && /^\d{4}-\d{2}-\d{2}$/.test(asOf)
+      ? ` · Pikkit count as of ${new Date(`${asOf}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
     tiles.push(tile(z.label || "Zeno · his own book · verified on Pikkit", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
-                    `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}${
+                    `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}${asOfNote}${
                       zeno ? ` · ${pikkitBadgeHTML("check it on Pikkit")}` : ""}`,
                     dots(z.recent, "result"), rate(zo), zo.roi == null ? "" : roiRing(zo.roi)));
   }

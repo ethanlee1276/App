@@ -95,6 +95,76 @@ def test_the_sections_recount_clean_on_a_consistent_ledger():
     assert RC.recount(RC.copy_to_memory(lpath), "nfl") == [], "the report functions agree with a plain count"
 
 
+def _board_ledger():
+    """Ethan, 2026-10-02: "No way we have hit 12/13 TD picks bc I've seen
+    more then that loose." A ledger with the board, its twin in the staked
+    Most Likely book, a matchup scorer, a dateless row and a stuck one."""
+    conn = ledger.connect(":memory:")
+    ins = ("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, hit_prob, grade, "
+           "stake_units, stake_dollars, status, category, pnl_units, actual) "
+           "VALUES ('t','nfl',?,?,?,?,?,?,?,0.6,?,?,0,?,?,?,?)")
+    for r in [("2026-W04", "2026-09-28", "Twin", "rec_yds", "OVER", 40.5, -110, "", 0.25, "won", "likely_live", 0.227, 55),
+              ("2026-W04", "2026-09-28", "Twin", "rec_yds", "OVER", 40.5, -110, "Top pick", 0.1, "won", "board", 0.091, 55),
+              ("2026-W04", "2026-09-28", "Scorer", "anytime_td", "OVER", 0.5, 150, "Strong", 0.1, "lost", "board", -0.1, 0),
+              ("2026-W04", "2026-09-28", "Scorer", "anytime_td", "OVER", 0.5, 150, "Matchup", 0.1, "lost", "matchup_td", -0.1, 0),
+              ("2026-W04", "2026-09-28", "NoTD Guy", "anytime_td", "UNDER", 0.5, -170, "", 0.25, "won", "likely_live", 0.147, 0),
+              ("2026-W04", "", "Nodate", "rec_yds", "OVER", 30.5, -110, "Worth a look", 0.1, "lost", "board", -0.1, 20),
+              ("2026-W02", "2026-09-14", "Edge A", "pass_yds", "OVER", 245.5, -110, "A", 1.0, "won", "main", 0.909, 260),
+              ("2026-W03", "2026-09-21", "Stuck", "rec_yds", "OVER", 40.5, -110, "", 0.25, "open", "likely_live", 0, None)]:
+        conn.execute(ins, r)
+    conn.commit()
+    return conn
+
+
+def test_every_td_pick_is_listed_with_its_side_in_every_section():
+    rows = RC.td_rows(_board_ledger(), "nfl")
+    assert len(rows) == 3
+    summ = RC.td_summary(rows)
+    assert summ[("Most Likely", "no TD")] == [1, 0, 0], "a no-TD pick is never read as a touchdown"
+    assert summ[("Most Likely by tier", "scores")] == [0, 1, 0]
+    assert summ[("Matchup TD picks", "scores")] == [0, 1, 0]
+
+
+def test_the_boards_picks_are_traced_to_where_they_came_from():
+    src = RC.board_sources(_board_ledger(), "nfl")
+    assert (src["the Most Likely list"]["w"], src["the Most Likely list"]["l"]) == (1, 0)
+    assert (src["the matchup picks"]["w"], src["the matchup picks"]["l"]) == (0, 1)
+    assert src["the board only"]["tiers"] == {"Worth a look": [0, 1]}
+
+
+def test_stuck_bets_and_dateless_rows_are_found():
+    import datetime as dt
+    conn = _board_ledger()
+    assert RC.stuck_open(conn, "nfl", today=dt.date(2026, 10, 2)) == [("likely_live", 1, "2026-09-21")]
+    assert RC.stuck_open(conn, "nfl", today=dt.date(2026, 9, 22)) == [], "a game two days old is still settling"
+    assert RC.no_day(conn, "nfl") == [("board", 1, 0)]
+
+
+def test_the_headline_recounted_by_hand_matches_the_page():
+    conn = _board_ledger()
+    hand = RC.by_hand(conn, "nfl")
+    rep = ledger.pooled_report(conn, "nfl")
+    for k in ("edge", "likely", "overall"):
+        assert (hand[k]["wins"], hand[k]["losses"]) == (rep[k]["wins"], rep[k]["losses"]), k
+        assert abs(hand[k]["net_units"] - rep[k]["net_units"]) < 0.011, k
+    assert (hand["likely"]["wins"], hand["likely"]["losses"]) == (2, 2), "the board's twin is counted once"
+
+
+def test_a_published_board_pick_with_no_journal_row_is_named():
+    import json
+    conn = _board_ledger()
+    d = Path(tempfile.mkdtemp())
+    (d / "recommendations.json").write_text(json.dumps({"date": "2026-W04", "likely_board": {"rows": [
+        {"player": "Twin", "market": "rec_yds", "side": "OVER", "line": 40.5, "odds": -110, "model_prob": 0.6},
+        {"player": "Ghost", "market": "receptions", "side": "OVER", "line": 3.5, "odds": -120, "model_prob": 0.6},
+        {"player": "Reserve", "market": "receptions", "side": "OVER", "line": 2.5, "odds": -150,
+         "model_prob": 0.5, "reserve": True}]}}))
+    n, missing = RC.board_vs_journal(conn, "nfl", d)
+    assert n == 3
+    assert [(r["player"], why) for r, why in missing] == [("Ghost", "not journaled"),
+                                                         ("Reserve", "a reserve row (below the bar)")]
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
