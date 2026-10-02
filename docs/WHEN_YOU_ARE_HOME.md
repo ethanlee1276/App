@@ -49,35 +49,23 @@ Never delete a `.db` or `.db-wal` file. Old `backup_*.zip` files and
 
 ---
 
-## TD-RZ. Does red-zone defence belong in the touchdown chance? (#168, read-only, a few minutes)
+## TD-RZ: done 2026-10-01/02 (#168 closed)
 
-The last unmeasured part of the other model's touchdown method. Goal-line
-work was measured on 2026-09-27 (already in the chance) and game script is
-in the model; how a defence guards its red zone was only ever SHOWN. This
-replays five seasons of graded touchdown picks and scores two readings of
-the opponent's red zone on top of the model's own number: how often it
-lets offences in, and how often they score once there.
+Red-zone defence, measured on the box against the touchdown model's own
+number over 19,860 graded player-weeks (2021–2025), pooled, cluster-robust,
+on a rule fixed before the run:
 
-The pass rule was fixed before any real run (engine/tdmatchfit): each
-reading is one test pooled over WR, TE and RB, it must improve every
-held-out season but one, and its cluster-robust t must be at least 2.5.
-Paste the last lines back; nothing moves until we read them together.
+- `rz_allowed` (how often a defence lets offences in): FAILS — clustered
+  t 0.5, held-out gain 0.00% every season.
+- `rz_td_allowed` (touchdowns allowed per red-zone play): FAILS —
+  clustered t 1.5, mean held-out gain -0.004%, two seasons negative.
 
-```
-cd /srv/qellys && sudo -u qellys nice -n 10 python3 -m engine.tdmatchfit 2>&1 | tee ~/tdmatchfit.txt | tail -25
-```
+Neither goes into the chance; both stay on the touchdown cards as context.
+With goal-line work (measured 2026-09-27, already in the chance, shown on
+every card) and game script (in the model), all three parts of the other
+model's touchdown method are either in the number or shown to add nothing.
+To re-run after another season: `sudo -u qellys nice -n 10 python3 -m engine.tdmatchfit`.
 
-First run, 2026-10-01: `rz_allowed ALL` FAILS (clustered t 0.5, held-out
-gain zero every season; 1 SD of a softer red zone moves a chance -0.9%) —
-how often a defence lets teams in adds nothing the model lacks.
-`rz_td_allowed` printed nothing: the play-by-play rows carry no opponent,
-fixed by pairing them through the schedule. Run it once more for that row.
-
-Look at the two `ALL` rows (`rz_allowed`, `rz_td_allowed`). PASSES means
-it goes into the touchdown chance (and so into Most Likely); fails means it
-stays on the cards as context, where it is now.
-
----
 
 ## PHASE 5 — the audit fixes (2026-09-30, Ethan: "I approve everything")
 
