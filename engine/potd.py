@@ -394,14 +394,8 @@ def implied(odds) -> float | None:
     day. The converter that four other modules already agree on has
     been right the whole time.
     """
-    try:
-        o = float(odds)
-    except (TypeError, ValueError):
-        return None
-    if o == 0:
-        return None
-    from .odds import american_to_prob
-    return american_to_prob(o)
+    from .odds import implied_or_none
+    return implied_or_none(odds)
 
 
 def effective_max_odds(min_fair=None, max_ev=None) -> int:

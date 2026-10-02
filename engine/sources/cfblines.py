@@ -246,8 +246,8 @@ def parse_lines(rows, games: dict, seasons=None) -> dict:
 
 def _implied(american: float) -> float:
     """An American price as its implied probability, vig included."""
-    return (-american) / (-american + 100.0) if american < 0 \
-        else 100.0 / (american + 100.0)
+    from ..odds import american_to_prob
+    return american_to_prob(american)
 
 
 def _fair_home(home: float, away: float):

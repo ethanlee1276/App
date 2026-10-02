@@ -994,9 +994,9 @@ def main() -> None:
                 print("Pick of the Day: recorded.")
             if ml:
                 print(f"Most likely: {ml} row(s) journaled.")
-            settled = ledger.settle_from_history(lconn, connect(), sport=args.league)
+            settled = ledger.settle_and_export(lconn, connect(), sport=args.league,
+                                               logged=n + st)
             if n or st or settled:
-                ledger.export_json(lconn, "web/data/record.json")
                 print(f"Journal: {n} {args.league.upper()} pick(s) + {st} "
                       f"stale flag(s) logged, {settled} settled.")
         except Exception as exc:

@@ -9387,6 +9387,25 @@ def _benched_settled(conn, since: str | None = None) -> int:
 from . import zeno as _zeno                                      # noqa: E402
 
 
+def settle_and_export(conn, hist_conn, sport: str | None = None,
+                      logged: int | None = None,
+                      path="web/data/record.json") -> int:
+    """THE BUILDERS' ONE DOOR to the record (audit #53): settle this
+    league's open bets from history, then publish record.json. Returns the
+    number settled.
+
+    `logged` is what the build just journaled. None exports every time
+    (the NFL and MLB builders always did); a number exports only when
+    something was logged or settled (the NBA and college builders' rule),
+    so a quiet cycle does not rewrite the file for nothing. The order and
+    the rule now live here, not in five copies.
+    """
+    settled = settle_from_history(conn, hist_conn, sport=sport)
+    if logged is None or logged or settled:
+        export_json(conn, path)
+    return settled
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -9701,7 +9720,10 @@ def export_json(conn, path) -> None:
     # a truncated JSON (the same race gate.publish and the profiles
     # already guard against).
     import os as _os
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    # One temp file PER PROCESS (audit #53): five builders and the chores
+    # export here, and a shared "record.json.tmp" let one process swap in
+    # another's half-written copy.
+    tmp = p.with_suffix(p.suffix + f".{_os.getpid()}.tmp")
     tmp.write_text(_json.dumps(out, indent=2))
     _os.replace(tmp, p)
     # The paid half, beside it: web/data/zeno.json (a locked stub for the

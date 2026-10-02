@@ -1070,8 +1070,7 @@ def main() -> None:
                       f"not.\n  Paper-tracked at a flat stake, never staked: "
                       f"if this bucket wins at those prices, the sizing is "
                       f"too strict.")
-            settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
-            ledger.export_json(lconn, "web/data/record.json")
+            settled = ledger.settle_and_export(lconn, hist_connect(), sport="mlb")
             if logged or ls_logged or st_logged or fm_logged or settled:
                 print(f"Journal: {logged} new pick(s) + {ls_logged} long shot(s) "
                       f"+ {st_logged} stale flag(s) + {fm_logged} form sample(s) "

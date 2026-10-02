@@ -140,13 +140,8 @@ def _qid(date: str, sport: str, player: str, market: str, line) -> str:
 
 
 def _implied(odds) -> float | None:
-    try:
-        o = float(odds)
-    except (TypeError, ValueError):
-        return None
-    if o == 0:
-        return None
-    return 100.0 / (o + 100.0) if o > 0 else -o / (-o + 100.0)
+    from .odds import implied_or_none
+    return implied_or_none(odds)
 
 
 # --- the build half ---------------------------------------------------------

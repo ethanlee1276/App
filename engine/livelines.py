@@ -151,13 +151,8 @@ MIN_POINTS = 3
 
 def _implied(odds) -> float | None:
     """American odds → implied probability, vig included."""
-    try:
-        o = int(odds)
-    except (TypeError, ValueError):
-        return None
-    if o == 0:
-        return None                     # not a legal American price
-    return 100.0 / (o + 100.0) if o > 0 else -o / (-o + 100.0)
+    from .odds import implied_or_none
+    return implied_or_none(odds, parse=int)
 
 
 def _median(xs: list[float]) -> float:

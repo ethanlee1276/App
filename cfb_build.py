@@ -2575,9 +2575,9 @@ def main() -> None:
         st_n = ledger.log_stale_flags(
             lconn, {"sport": "cfb", "date": args.date,
                     "market_scan": out.get("market_scan") or {}})
-        settled = ledger.settle_from_history(lconn, conn, sport="cfb")
+        settled = ledger.settle_and_export(lconn, conn, sport="cfb",
+                                           logged=n + ls_n + ml_n + st_n)
         if n or ls_n or ml_n or st_n or settled:
-            ledger.export_json(lconn, "web/data/record.json")
             print(f"Journal: {n} CFB bet(s) + {ls_n} long shot(s) + "
                   f"{ml_n} likely row(s) + {st_n} stale flag(s) logged, "
                   f"{settled} settled.")

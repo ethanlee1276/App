@@ -766,13 +766,8 @@ def _print_market(m, indent="    ") -> None:
 
 
 def _implied(odds) -> float | None:
-    try:
-        o = int(odds)
-    except (TypeError, ValueError):
-        return None
-    if not o:
-        return None
-    return (-o) / ((-o) + 100.0) if o < 0 else 100.0 / (o + 100.0)
+    from .odds import implied_or_none
+    return implied_or_none(odds, parse=int)
 
 
 def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:

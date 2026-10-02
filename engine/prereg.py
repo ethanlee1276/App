@@ -162,8 +162,8 @@ def implied(odds: int) -> float:
     EXCLUDES -250 itself — its true implied is 0.714285… — so the band
     named "-250 or shorter" would quietly start at -251.
     """
-    odds = int(odds)
-    return (-odds) / ((-odds) + 100.0) if odds < 0 else 100.0 / (odds + 100.0)
+    from .odds import american_to_prob
+    return american_to_prob(int(odds))
 
 
 def _in_band(r, band) -> bool:

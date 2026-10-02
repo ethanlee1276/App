@@ -16,6 +16,26 @@ def american_to_prob(odds: int) -> float:
     return 100.0 / (odds + 100.0)
 
 
+def implied_or_none(odds, parse=float) -> float | None:
+    """American odds → implied probability (vig included), or None when the
+    price is unreadable or 0, which is not a legal American price.
+
+    THE ONE GUARDED CONVERTER (audit #53). Nine modules carried their own
+    copy of this one-liner, and one early copy had the plus-money case
+    inverted (engine/potd.py's docstring tells it). `parse` keeps each
+    caller's own reading: most take `float`; livelines, lab and linemoves
+    always read with `int`, which truncates a fractional price, and keep
+    doing so.
+    """
+    try:
+        o = parse(odds)
+    except (TypeError, ValueError):
+        return None
+    if not o:
+        return None
+    return american_to_prob(o)
+
+
 def american_to_decimal(odds: int) -> float:
     if odds < 0:
         return 1.0 + 100.0 / (-odds)

@@ -156,8 +156,7 @@ def _journal_game_bets(payload: dict) -> None:
         payload = dict(payload, sport="nfl")
         lconn = ledger.connect()
         logged = ledger.log_recommendations(lconn, payload)
-        settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
-        ledger.export_json(lconn, "web/data/record.json")
+        settled = ledger.settle_and_export(lconn, hist_connect(), sport="nfl")
         if logged or settled:
             print(f"Journal: {logged} new game bet(s) logged, {settled} "
                   f"settled — see the Record tab.")
@@ -1593,8 +1592,7 @@ def main() -> None:
             st_logged = ledger.log_stale_flags(
                 lconn, {"sport": "nfl", "date": result.get("date", ""),
                         "market_scan": result.get("market_scan") or {}})
-            settled = ledger.settle_from_history(lconn, hist_connect(), sport="nfl")
-            ledger.export_json(lconn, "web/data/record.json")
+            settled = ledger.settle_and_export(lconn, hist_connect(), sport="nfl")
             if logged or st_logged or settled:
                 print(f"Journal: {logged} new pick(s) + {st_logged} stale "
                       f"flag(s) logged, {settled} settled — see the Record "

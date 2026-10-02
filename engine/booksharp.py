@@ -66,7 +66,8 @@ def _implied(odds) -> float | None:
         return None
     if not o or abs(o) < 100:
         return None                     # an impossible price, not a price
-    return (-o) / ((-o) + 100.0) if o < 0 else 100.0 / (o + 100.0)
+    from .odds import american_to_prob
+    return american_to_prob(o)
 
 
 def _blank() -> dict:

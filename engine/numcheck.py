@@ -101,7 +101,8 @@ def _implied(v: float) -> float | None:
     number from nowhere."""
     if v != int(v) or not (100 <= abs(v) <= 20000):
         return None
-    return 100.0 / (v + 100.0) if v > 0 else -v / (-v + 100.0)
+    from .odds import american_to_prob
+    return american_to_prob(v)
 
 
 def allowed(pack) -> dict:
