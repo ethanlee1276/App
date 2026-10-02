@@ -21,14 +21,15 @@ Each step's commands are in its block below. Paste back the ones marked
 
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
-3. **P2-a** — every close before kickoff (read-only, paste).
-4. **P6-a** — healthchecks.io, so you hear when the site goes stale
+3. **L1** — which Most Likely picks to stop taking (read-only, paste).
+4. **P2-a** — every close before kickoff (read-only, paste).
+5. **P6-a** — healthchecks.io, so you hear when the site goes stale
    (5 minutes; step by step).
-5. **P6-b** — run a backup and check it, then add the weekly check.
-6. **P29-a** — count the old PIN profiles (paste the number).
-7. **P31-a** — turn on the usage counts (only if the first line prints 1).
-8. **P3-a** — a week from now: what the number check dropped (paste).
-9. Whenever: **P10-a** (optional deploy lock), **P9-a** (look at the Live
+6. **P6-b** — run a backup and check it, then add the weekly check.
+7. **P29-a** — count the old PIN profiles (paste the number).
+8. **P31-a** — turn on the usage counts (only if the first line prints 1).
+9. **P3-a** — a week from now: what the number check dropped (paste).
+10. Whenever: **P10-a** (optional deploy lock), **P9-a** (look at the Live
    tab during a game), **P28-a** (security log), **P45-a** (Android, later).
 
 ---
@@ -152,6 +153,31 @@ that count looks like check 8 of R1:
 ```
 cd /srv/qellys && sudo -u qellys python3 launch.py --backfill-days
 cd /srv/qellys && sudo -u qellys python3 launch.py --backfill-days --apply
+```
+
+**L1. Which Most Likely picks to stop taking (read-only, a minute or
+two).** Ethan, 2026-10-02: *"I feel like we have collected enough data
+for our most likely bets too make the models better."* The record says
+our Most Likely number is honest (said 65%, hit 65%) but does not beat
+the price, so the lever is which picks we take. Eight rules are tried:
+- a price cap
+- a minimum chance
+- beating the book's price
+- beating the market consensus
+- dropping losing shelves
+- overs or unders only
+- late bets only
+- (on the board) tiers
+
+Each one is chosen on the earlier weeks and judged on the later weeks it
+never saw. Nothing changes on the site from this run. A rule goes on the
+board only if it PASSES here twice, two weeks apart. Paste all three
+back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 likelyfit.py 2>&1 | tail -150
+cd /srv/qellys && sudo -u qellys python3 likelyfit.py --book board 2>&1 | tail -80
+cd /srv/qellys && sudo -u qellys python3 lossaudit.py 2>&1 | tail -150
 ```
 
 ---

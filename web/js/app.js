@@ -15657,7 +15657,13 @@ function recBookSections(br, scope, opts) {
   // push out of its denominator. A second copy of that arithmetic is
   // how one book ends up with two different ROIs on one screen.
   const O = opts || {};
-  const ORDER = O.order || [["edge", "Edge bets"], ["likely", "Most Likely"],
+  /* BOTH HALVES OF THE MOST LIKELY BOOK, named (Ethan, 2026-10-02). This
+     drew the paper half alone under the bare name "Most Likely" — 80-36,
+     +7.7% — while the section above it read 243-129, −0.6% for the same
+     book; the staked half was never drawn here at all. Named for what
+     each is, the two add up to the one above. */
+  const ORDER = O.order || [["edge", "Edge bets"], ["likely", "Most Likely — paper, before the money"],
+                            ["likely_live", "Most Likely — real money"],
                             ["longshots", "Long Shots"]];
   let books;
   if (scope && scope !== "all" && scope !== "intel") {
