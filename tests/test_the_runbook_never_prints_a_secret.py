@@ -34,6 +34,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOC = os.path.join(ROOT, "docs", "WHEN_YOU_ARE_HOME.md")
+#: Both files Ethan pastes from: the open list, and the history it was
+#: pruned into on 2026-10-02 (audit #13). The rule covers both.
+DOCS = (DOC, os.path.join(ROOT, "docs", "DROPLET_CHECKS.md"))
+
+
+def _text():
+    return "\n".join(open(d, encoding="utf-8").read() for d in DOCS)
 
 #: Commands that read a process environment, however they reach it.
 _ENVIRON = re.compile(r"[^\n]*/proc/[^\n]*environ[^\n]*(?:\n[^\n]*)?")
@@ -42,8 +49,7 @@ _ENVIRON = re.compile(r"[^\n]*/proc/[^\n]*environ[^\n]*(?:\n[^\n]*)?")
 def _environ_commands():
     """Each runbook line that reads /proc/<pid>/environ, with the line
     after it — the filter is usually on the continuation."""
-    text = open(DOC, encoding="utf-8").read()
-    return [m.group(0) for m in _ENVIRON.finditer(text)]
+    return [m.group(0) for m in _ENVIRON.finditer(_text())]
 
 
 # --- the rule -----------------------------------------------------------------
@@ -83,7 +89,7 @@ def test_no_block_echoes_the_promo_variable_by_name():
     """The other way to leak it: printing the variable itself. Reading
     `QB_PROMOS` to check it is SET is fine; printing its value is not,
     and neither is any command that would."""
-    text = open(DOC, encoding="utf-8").read()
+    text = _text()
     for line in text.splitlines():
         if "QB_PROMOS" not in line:
             continue
