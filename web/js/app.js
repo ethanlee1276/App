@@ -4140,6 +4140,28 @@ function whyNotStaked(r) {
                    : "Did not clear the gate";
 }
 
+/* ONE CANDIDATE SET, ONE ORDER (audit V-7 / #48). "Every market, the
+   best we have" and the Edge Board below it read the same rows, and they
+   used to pick differently: the box took the highest GRADE in each
+   market and printed its edge in points, the board sorted by EV and kept
+   rows the model calls its own error. So the box's "best" Total read
+   +1.2% (an Under 49 at −2.3% EV) while the board listed Over 43 at
+   +5.8% EV, a row graded 0 as not credible. Both now drop what this
+   drops and rank by edgeOrder, so a market's best row is the one the
+   board ranks first for that market. */
+function edgeCandidate(r) {
+  if (!r || r.odds == null) return false;
+  if (r.live || r.conditional) return false;        // cannot be bet now
+  if ((r.warnings || []).some((w) => /already started/i.test(String(w)))) return false;
+  if (r.credible === false || r.quality === 0) return false;   // our error, not our best
+  return true;
+}
+
+function edgeOrder(a, b) {
+  return (b.ev || b.ev_per_unit || 0) - (a.ev || a.ev_per_unit || 0)
+    || (b.quality || 0) - (a.quality || 0);
+}
+
 function marketBest(sig) {
   const d = state.data || {};
   const staked = new Set([...sig.props, ...sig.sharpBets, ...sig.modelBets]
@@ -4148,17 +4170,12 @@ function marketBest(sig) {
   const best = new Map();
   for (const r of rows) {
     const market = r.market || r.bet_type || "";
-    if (!market || r.odds == null) continue;
+    if (!market || !edgeCandidate(r) || rowStarted(r)) continue;
     const key = r.player ? betLabelKey(r) : gameBetId(r);
     if (staked.has(key)) continue;               // already a pick above
-    if (r.live || r.conditional) continue;        // cannot be bet now
-    if ((r.warnings || []).some((w) => /already started/i.test(String(w)))) continue;
-    if (r.credible === false || r.quality === 0) continue;   // our error, not our best
     if (r.injury_status) continue;                // the same hold the picks keep
     const cur = best.get(market);
-    const q = r.quality != null ? r.quality : (r.confidence || 0) * 10;
-    const curQ = cur ? (cur.quality != null ? cur.quality : (cur.confidence || 0) * 10) : -1;
-    if (!cur || q > curQ) best.set(market, r);
+    if (!cur || edgeOrder(r, cur) < 0) best.set(market, r);
   }
   return [...best.values()].sort(
     (a, b) => marketRank(a.market || a.bet_type) - marketRank(b.market || b.bet_type));
@@ -4182,20 +4199,34 @@ function marketBestHTML(sig) {
   if (!rows.length) return "";
   const row = (r) => {
     const door = r.player ? propAttrs(r) : gameBetAttrs(r);
-    const edge = r.edge != null ? signedPct(r.edge) : "—";
+    /* Two numbers, two names (audit V-7): EV is what a unit returns, in
+       per cent, the number the Edge Board sorts and prints; the edge is
+       our chance minus the book's, in points. Same type for both read as
+       one number disagreeing with itself. */
+    const ev = r.ev_per_unit != null ? Number(r.ev_per_unit) : null;
+    const evTxt = ev == null ? "—"
+      : `<span style="color:${ev > 0 ? "var(--good)" : ev < 0 ? "var(--bad)" : "inherit"}">EV ${signedPct(ev)}</span>`;
+    const edgePts = r.edge != null
+      ? `edge ${trueMinus(`${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}`)} pts` : "";
+    const game = r.player
+      ? (r.team && r.opponent ? `${teamName(r.team)} vs ${teamName(r.opponent)}` : "")
+      : (r.matchup || "");
+    const meta = [game, edgePts].filter(Boolean).join(" · ");
     return `<div class="rec-row top tall line${door ? " openable" : ""}"${door || ""}>
       <span class="chip" style="flex-shrink:0;min-width:96px">${escapeHtml(
         marketWord(r.market || r.bet_type))}</span>
       <span style="flex:1;min-width:0"><strong>${escapeHtml(marketBestLabel(r))}
         ${american(r.odds)}</strong>${r.book ? `<span class="book"> · ${escapeHtml(r.book)}</span>` : ""}
+        ${meta ? `<span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px"
+          >${escapeHtml(meta)}</span>` : ""}
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px"
           >${escapeHtml(whyNotStaked(r))}</span></span>
-      <span style="text-align:right;white-space:nowrap;font-weight:800">${edge}</span>
+      <span style="text-align:right;white-space:nowrap;font-weight:800">${evTxt}</span>
     </div>`;
   };
   return `
     <div class="section-title minor">Every market, the best we have
-      <span class="sub">— the strongest row in each market that did NOT clear the bar.
+      <span class="sub">— the top row in each market by EV, the Edge Board’s own order, that did NOT clear the bar.
       Shown so the board is readable, not because we would bet them. No stake, no journal.</span></div>
     <div class="card" style="padding:0;border-left:3px solid var(--text-mute)">
       ${rows.map(row).join("")}
@@ -20575,12 +20606,14 @@ function edgePropRow(r) {
 }
 
 function edgeBoardRows() {
+  // edgeCandidate: the rows "Every market, the best we have" reads too.
   const props = (state.data.recommendations || [])
-    .filter((r) => r.has_market !== false && (r.ev_per_unit || 0) > 0.005
+    .filter((r) => edgeCandidate(r) && r.has_market !== false && (r.ev_per_unit || 0) > 0.005
                    && r.odds >= state.maxJuice && !rowStarted(r))
     .map(edgePropRow);
   const games = (state.data.game_bets || [])
-    .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005 && !rowStarted(b))
+    .filter((b) => edgeCandidate(b) && b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005
+                   && !rowStarted(b))
     .map((b) => {
       const s = gameBetSeries(b);   // one call — it reads team_recent twice
       return {
@@ -20595,7 +20628,7 @@ function edgeBoardRows() {
         team: b.team || b.home,
       };
     });
-  return [...props, ...games].sort((a, b) => b.ev - a.ev);
+  return [...props, ...games].sort(edgeOrder);
 }
 
 function edgeRowHTML(r, i) {

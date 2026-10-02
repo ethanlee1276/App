@@ -117,10 +117,14 @@ def test_the_four_exclusions_are_all_enforced():
     same hold the picks keep, and a staked row belongs in one box."""
     body = _fn("marketBest")
     assert "staked.has(key)" in body
-    assert "r.live || r.conditional" in body
-    assert "already started" in body
-    assert "r.credible === false || r.quality === 0" in body
     assert "r.injury_status" in body
+    # The started / live / not-credible exclusions live in the filter the
+    # Edge Board shares (audit V-7), and marketBest must call it.
+    assert "edgeCandidate(r)" in body
+    shared = _fn("edgeCandidate")
+    assert "r.live || r.conditional" in shared
+    assert "already started" in shared
+    assert "r.credible === false || r.quality === 0" in shared
 
 
 def test_the_not_credible_exclusion_is_the_biggest_edge_on_the_board():
