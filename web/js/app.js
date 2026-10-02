@@ -789,6 +789,16 @@ const RE_SIGN = /(^|[^\w])-(?=[\d.])/g;
 const trueMinus = (s) => String(s).replace(RE_SIGN, `$1${MINUS}`);
 
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
+/* THE SHARED PERCENTS (audit V-24, #50). The local copies that were
+   character-for-character one of these now name it; the ones that differ
+   (a sign, a Number() coercion, a `|| 0`) keep their own, because
+   swapping them would change what prints. */
+const pctOr = (x) => (x == null ? "—" : pct(x));                    // 0.571 → "57.1%", null → "—"
+const pct0 = (x) => `${(x * 100).toFixed(0)}%`;                     // 0.571 → "57%"
+const pct0Or = (x) => (x == null ? "—" : pct0(x));
+const pctRound = (x) => `${Math.round(x * 100)}%`;                  // Math.round, not toFixed: they differ on −0.5
+const pctRoundOr = (x) => (x == null ? "—" : pctRound(x));
+const pctRoundZ = (x) => `${Math.round((x || 0) * 100)}%`;          // a missing value reads 0%
 const signedPct = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`);
 /* A STAMP'S INSTANT (audit P1-5). A stamp with a zone (`Z`, `+00:00`,
    `-04:00`) is read as written. One without is a legacy Python
@@ -10563,7 +10573,6 @@ function renderParlays(key = "parlays", hostId = "parlays-body") {
    case against it. `live` false means this is the closest miss on the
    board, shown as a record of what was looked at rather than as a play. */
 function parlayTicket(t, live) {
-  const pct = (x) => `${(x * 100).toFixed(1)}%`;
   const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
   return `<div class="card pz-ticket${live ? "" : " pz-miss"}">
     <div class="card-head">
@@ -13060,7 +13069,7 @@ function scanCoverageHTML(scan, team) {
   const co = (ch.offense || {})[team];
   // College has no defender files: no room, no scheme, no rushers, no card.
   if (!(room.corners || []).length && !(room.missing || []).length && !sch && !rush.length && !cd && !co) return "";
-  const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  const pct = pctRoundOr;
   const when = ch.season ? ` <span class="mini">(${escapeHtml(String(ch.season))} charting${ch.weeks ? `, ${ch.weeks} week${ch.weeks === 1 ? "" : "s"}` : ""}${ch.partial ? ` + part of week ${ch.partial}` : ""})</span>` : "";
   const nowLine = cd ? `Blitz ${pct(cd.blitz_rate)} of dropbacks · 8+ in the box ${pct(cd.heavy_box_rate)} of runs · light boxes ${pct(cd.light_box_rate)}` : "";
   const offLine = co ? `Play action ${pct(co.play_action_rate)} · motion ${pct(co.motion_rate)} · RPO ${pct(co.rpo_rate)} · screens ${pct(co.screen_rate)} · no-huddle ${pct(co.no_huddle_rate)}` : "";
@@ -13459,7 +13468,7 @@ function mlbScanHTML(g) {
   const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
   const locked = !reads && d.locked && d.locked.scan_reads;
   const players = (reads && reads.players) || [];
-  const pct = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
+  const pct = pctOr;
   const slg = (x) => x == null ? "—" : `.${Math.round(x * 1000)}`;
   const side = (team) => {
     const s = t.sides[team] || {}, sp = s.starter;
@@ -16543,7 +16552,7 @@ function recLeadtimeSection(lt) {
    up at; until one settles, the section says how many are waiting. */
 function recBoardSection(bd, scope) {
   if (!bd || (!bd.settled && !bd.open)) return "";
-  const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const pct = pctRoundOr;
   const rows = (bd.tiers || []).map((t) => {
     const played = t.settled + (t.push || 0);
     const tone = t.actual == null ? "" : t.claimed != null && t.actual >= t.claimed ? "won" : "lost";
@@ -16572,7 +16581,7 @@ function recLikelySection(lk, scope) {
   const sp = String((lk || {}).sport || "");
   const spName = sp ? ((SPORT_META[sp] || {}).name || sp.toUpperCase()) : "";
   const cal = lk.calibration || {};
-  const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+  const pct = pctOr;
   const bands = (lk.bands || []).map((b) => `
     <div class="rl-row rl-cal ${b.actual >= b.claimed ? "won" : "lost"}">
       <span class="rl-date">${(b.lo * 100).toFixed(0)}–${(b.hi * 100).toFixed(0)}%</span>
@@ -16681,7 +16690,7 @@ function recLikelyGameLines(lk, sp) {
   const by = (lk || {}).by_sport_market || {};
   const sports = Object.keys(by).sort();
   if (!sports.length) return "";
-  const pct1 = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+  const pct1 = pctOr;
   const rows = sports.map((sp) => {
     const markets = by[sp] || {};
     return Object.keys(markets).sort().map((m) => {
@@ -17607,7 +17616,7 @@ function recSelectionHaircut(sh, scope) {
         settle time; until a sport reaches ${sh.min_settled || 100} of them the
         board runs on the model’s own numbers.</p></div>`;
   }
-  const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
+  const pct = pctOr;
   // Deliberately NOT .rl-row: that grid has six fixed tracks sized for the
   // receipts table, and dropping three children into it crushes the middle
   // one to a 90px column. This is its own flex row.
@@ -17930,7 +17939,7 @@ function recLooseSection(lo) {
 
 function recPolymarketSection(v) {
   if (!v || !v.graded) return "";
-  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const pctv = pct;
   const rows = (v.recent || []).map((b) => `
     <div class="rl-row ${b.won ? "won" : "lost"}">
       <span class="rl-icon">${b.won ? icon('check') : icon('cross')}</span>
@@ -20243,7 +20252,7 @@ function recClvBoard(cb) {
   const rows = (cb && cb.rows) || [];
   if (!rows.length) return "";
   const t = cb.totals || {};
-  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const pct = pct0Or;
   const clv = (v) => v == null ? "—"
     : `${v >= 0 ? "+" : trueMinus("-")}${Math.abs(v).toFixed(2)}`;
   const verdict = (r) => r.with_close === 0
@@ -25203,7 +25212,7 @@ async function renderFantasy() {
   }
   setStandaloneSource(`Ingested NFL ${d.season} weekly stats (nflverse)`,
                       `NFL ${d.season} · ingested history`);
-  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const pct = pct0Or;
   const deltaChip = (dv) => {
     if (dv == null || Math.abs(dv) < 0.03) return `<span class="chip">steady</span>`;
     return dv > 0
@@ -28916,7 +28925,7 @@ setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
    claim about availability would be a guess with a number next to it.
    Role change is what we can measure, and it is the half a claim buys. */
 function waiverRowHTML(r) {
-  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const pct = pct0Or;
   const up = (r.delta || 0) > 0;
   return `<div class="dl-row">
     <span class="dl-main" data-dossier="${escapeAttr(r.player || "")}">
@@ -31710,7 +31719,7 @@ function dkPlanBodyHTML(plan) {
   if (!plan || !(plan.rounds || []).length) {
     return `<div class="dk-advice-note">No picks left to plan from this seat.</div>`;
   }
-  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const pct = pctRoundZ;
   const s = plan.summary || {};
   const who = (c) => c ? `<b>${escapeHtml(c.player)}</b>${mkt(c)} <span class="chip">${
     escapeHtml(c.position)}</span> <span class="mini">+${c.vorp} · ${pct(c.survives)} there</span>` : "";
@@ -31741,7 +31750,7 @@ function dkPlanBodyHTML(plan) {
 
 function dkAssistAdviceHTML(a, plan) {
   if (!a) return "";
-  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const pct = pctRoundZ;
   const tone = { gone: "down", "toss-up": "warn", safe: "up" };
   const take = a.take;
   const need = Object.entries(a.needs || {}).map(([p, n]) => `${p}×${n}`).join(" ");
@@ -36636,7 +36645,7 @@ async function dkAdvice(draftId) {
       ${me ? "" : "Connect your Sleeper username above to claim your seat."}</div>`;
     return;
   }
-  const pct = (x) => `${Math.round(x * 100)}%`;
+  const pct = pctRound;
   const tone = { gone: "down", "toss-up": "warn", safe: "up" };
   const take = a.take;
   host.innerHTML = `
@@ -36706,7 +36715,7 @@ function pmSignalProven(v) {
 }
 
 function intelVerdict(v) {
-  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const pctv = pct;
   const body = pmSignalProven(v)
     ? `<div style="font-weight:800;font-size:var(--fs-xl);color:var(--good)">${icon('check')} The signal has earned
          recommendation status</div>
@@ -36755,7 +36764,7 @@ function intelReportCard(v) {
   if (!v || !v.graded) {
     return `${head}<div class="card">${panelEmpty("No graded flags yet — flags settle when their markets resolve, so this fills as resolutions land. The recording started the moment the flow feed first ran.")}</div>`;
   }
-  const pctv = (x) => `${(x * 100).toFixed(1)}%`;
+  const pctv = pct;
   const zColor = v.z >= 1 ? "var(--good)" : v.z <= -1 ? "var(--bad)" : "var(--text)";
   const bandRows = (v.by_score || []).map((b) => `
     <div class="dl-row pm-band">
@@ -36981,7 +36990,7 @@ function renderSleeperPanel(d, ctx) {
     if (p) takenNames.add(ffNorm(`${p.first_name} ${p.last_name}`));
   }));
 
-  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const pct = pct0Or;
   const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5 };
   const myRows = (mine ? (mine.players || []) : []).map((pid) => {
     const p = players[pid];
@@ -37403,7 +37412,7 @@ async function renderUFC() {
   }
   setStandaloneSource("The Odds API MMA events + our fighter dossiers",
                       `UFC · ${escapeHtml(d.event_date || d.status || "")}`);
-  const pctv = (x) => x == null ? "—" : `${(x * 100).toFixed(1)}%`;
+  const pctv = pctOr;
 
   if (d.status !== "card") {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("glove", 30)}</div>
@@ -46021,7 +46030,7 @@ async function renderSweatZone() {
     ? (d.parlays || []).filter((t) => (t.legs || []).length) : [];
   if (!picks.length && !parlays.length) { host.innerHTML = ""; return; }
 
-  const pct = (p) => `${Math.round(p * 100)}%`;
+  const pct = pctRound;
   const delta = (r) => {
     if (r.pregame_prob == null || r.live_prob == null) return "";
     const dp = r.live_prob - r.pregame_prob;

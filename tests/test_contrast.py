@@ -219,10 +219,16 @@ def test_the_light_theme_was_not_given_the_dark_ladder():
     worse. Only the fourth tier is new there."""
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()
-    light = css[css.index(':root[data-theme="light"]'):]
-    light = light[:light.index("}")]
+    # The light TOKEN block (one since audit #50), not the first rule
+    # that happens to start with the light selector.
+    light = css[css.index(':root[data-theme="light"] {'):]
+    light = light[:light.index("\n}")]
     assert "--text-faint:" in light
-    assert "--text-dim: #3E3A31;" in light, "the light dim tier moved"
+    # #3E3A31 was the first light block's value; the new look's light
+    # block re-set it to #524434, which is what has painted since. The
+    # merge (audit #50, 2026-10-02) dropped the dead copy, so the pin
+    # reads the live value.
+    assert "--text-dim: #524434;" in light, "the light dim tier moved"
 
 
 def test_the_wcag_comparison_is_labelled_as_not_the_verdict():

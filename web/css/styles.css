@@ -97,13 +97,6 @@
      nothing here can change a contrast ratio; only the temperature moves.
      Written in oklch() so the next person can step L directly instead of
      guessing a hex, which is the actual argument for the notation. */
-  --bg: oklch(0.139 0.005 84);          /* was #08090B, hue 263 */
-  --bg-2: oklch(0.155 0.007 84);        /* was #0B0C0F, hue 271 */
-  --panel: oklch(0.155 0.007 84);
-  --panel-2: oklch(0.178 0.008 84);     /* was #101115, hue 274 */
-  --panel-3: oklch(0.197 0.010 84);     /* was #14151A, hue 277 */
-  --border: #3A352C;
-  --border-soft: #23201A;
 
   /* The quiet ladder, measured rather than picked. APCA on the darkest
      ground, solved against --panel-3 because the lightest panel is where
@@ -214,10 +207,6 @@
      it (.gb-line, .card.gamebet, .chip.books, .val.cyan), so it stays
      until those are re-pointed; the name is the bug, not the colour. */
   --cyan: #A8A090;
-  --text: #E8E4D9;
-  --text-dim: #BAB3A6;
-  --text-mute: #9E988B;
-  --text-faint: #7F786C;
 
   /* The accent is PARCHMENT, not periwinkle. Every colour left in this
      palette after green/amber/red are spoken for is either violet — the
@@ -226,17 +215,11 @@
      inversion: warm paper, dark ink, the way a printed tab is marked.
      It also frees the coloured slots to mean only what they mean, which
      on a page about money is worth more than a hue. */
-  --brand: #FFB000;
-  --brand-2: #4A3B14;
-  --brand-ink: #0A0907;            /* text ON the accent — the warm base */
-  --good: #29C878;
   /* Amber is ONE colour with one meaning — §1 of the redesign
      decisions: a condition is live or material. --brand is the
      active nav item, which is such a condition, so these were
      always the same hex. Written as an alias so editing one
      cannot silently split them. */
-  --warn: var(--brand);
-  --bad: #DC5455;
   /* The two status marks the STYLESHEET draws. Same geometry as the check
      and cross in ICON_PATHS (web/js/app.js) — if one moves, move both. Used
      as a mask, so the paint inside the URI is irrelevant; the element's
@@ -252,15 +235,12 @@
      different outcome and nowhere near the indigo everything else uses. */
   --plum: #8A8375;
 
-  --grad-brand: #FFB000;
   --grad-violet: #4A3B14;
   --grad-hot: #E5484D;
   --grad-cold: #A8A090;
 
   --fill-subtle: rgba(232,228,217,.022);
   --fill-hover: rgba(232,228,217,.05);
-  --text-body: #A8A090;
-  --topbar-bg: rgba(10,9,7,.97);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
@@ -298,7 +278,6 @@
   /* The Ask mascot's floor: the render's glow ends in a line, so it fades. */
   --mask-foot: linear-gradient(to bottom, #000 86%, transparent);
   /* The stub pages' big numeral, filled with the brand ramp. */
-  --grad-brand: linear-gradient(180deg, var(--brand-2), var(--brand));
   /* The draft room's hero strip. A token rather than a rule, because a
      gradient written inline is freelancing outside the system — and
      because this one has to flip with the theme, which a hard-coded pair
@@ -319,8 +298,6 @@
 
   --font-sans: "Archivo Narrow", "Arial Narrow", -apple-system,
                BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: "Bodoni Moda", "Iowan Old Style", "Palatino Linotype",
-                  Palatino, Georgia, serif;
   /* THE HERO'S HEADLINE. Ethan's August render set --font-display to
      Archivo Narrow (the NEW LOOK block below); the v3 prototype showed
      the Pick of the Day's bet in Bodoni and he chose it (2026-09-22:
@@ -375,9 +352,6 @@
      one decision, and writing it inline would be the 24th size the ramp
      exists to prevent. */
   --fs-price: clamp(34px, 5vw, 46px);
-  --radius: 0;
-  --radius-sm: 0;
-  --radius-lg: 0;
   /* SPACING (audit V-24, roadmap #50): the steps the sheet already uses
      most, named, so a new rule picks a step instead of a number. */
   --sp-1: 4px;
@@ -399,6 +373,121 @@
      the next person learns what it is for. `--panel-2` themes itself, so
      one definition covers light and dark. */
   --autofill-cover: 0 0 0 1000px var(--panel-2) inset;
+
+  /* ---- THE NEW LOOK PALETTE (2026-08-11, re-decided 2026-08-23 for the
+     gold site). Formerly a second bare :root at that section; one :root
+     now (audit #50). Where a token above lost its value to this layer,
+     the dead value was dropped and its history comment kept. ---- */
+  --bg: #090705;
+  --bg-2: #0D0A07;
+  --panel: #14110C;
+  --panel-2: #1C1710;
+  --panel-3: #241D16;
+  --border: #31281D;
+  --border-soft: #241D15;
+  --text: #F7F1E9;
+  /* THE SITE AUDIT, 2026-09-24 (M-5): the grey second line on every pick
+     row (--text-mute) read Lc 47 against APCA's 60 for secondary text,
+     and the loss red Lc 36 against 45 even for large bold text. Both
+     re-solved by lightness alone (palettefit.solve: hue and chroma held),
+     and --text-dim rose with them so the ladder keeps its steps:
+     text 97 · dim 73 · mute 60 · faint 32 (tests/test_contrast.py). */
+  --text-dim: #D6C8B8;
+  --text-body: #E1D6C9;
+  --text-mute: #C1B3A1;
+  --text-faint: #857C6F;
+  /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
+     "i say we switch everything to the gold color like the renders but
+     for the whole site. we should match everything."
+
+     This reverses the 08-11 violet pivot rather than sitting beside it.
+     The ink flips with it and that is the load-bearing half: gold is a
+     LIGHT accent, so text ON it must be dark. Measured — white on
+     #FFB000 is Lc 38 and unreadable; #0A0907 on it is Lc 70. Violet was
+     the other way round, which is why 22 rules carried a hardcoded
+     `color: #fff` on a brand fill and every one of them now reads
+     --brand-ink instead. */
+  --brand: #FFB000;
+  --brand-2: #FFC94D;
+  --brand-ink: #0A0907;
+  --gold: #F5B93B;
+  --good: #42C268;
+  --bad: #FF766E;
+  /* WARN STAYS AMBER, AND THAT IS A KNOWN COLLISION rather than an
+     oversight. With the accent gold, --warn at #F79D00 sits ~6 degrees
+     of hue from --brand and reads as the same paint, which is bad: a
+     warning the eye files as branding is not a warning.
+
+     It cannot be fixed from this end. tests/test_chroma.py requires the
+     three accents to be more than 40 degrees apart, and `bad` sits at
+     hue 26 — so warn cannot go below about 66 without colliding with
+     red instead, and 66 is already beside the brand's 76. Moving it to
+     orange (hue 49) was tried and refused by that test, correctly.
+
+     The two ways out are both design decisions, not repairs: swing the
+     BRAND yellower (~90) so warn has room, or accept the family overlap
+     and let role carry the distinction — warn is text and icons on a
+     conditions row, the brand is a fill. Left as it was, and written
+     down, so the next person meets the constraint rather than the
+     symptom. */
+  --warn: #F79D00;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 14px;
+  --topbar-bg: rgba(7, 7, 12, .96);
+  /* Light lives in tokens so every glow on the site is the SAME glow. */
+  --glow: 0 0 0 1px rgba(255, 176, 0, .28), 0 6px 28px rgba(255, 176, 0, .16);
+  --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
+  /* --brand-solid EXISTED BECAUSE VIOLET COULD NOT CARRY WHITE, and the
+     gold system does not have that problem — it has the opposite one.
+     Nothing gold carries white at any weight, so the answer is not a
+     darker fill, it is dark ink: --brand-ink is #0A0907 and measures
+     Lc 70 on the accent.
+
+     The token stays rather than being deleted, aliased to --brand, so
+     the 22 rules that name it keep working and the distinction it drew
+     is recorded rather than lost. If a future accent needs a
+     white-bearing variant again, this is where it goes. */
+  /* THE GOLD THAT CARRIES ITS INK. --brand is the render's #FFB000 and
+     stays put — it is the identity, and it is used where no text sits
+     on it (borders, glows, the accent tint). Near-black on it measures
+     Lc 69.8, which is contrast.py's "large or bold UI" tier, and the
+     filled controls print 10-13px labels. So the FILL moves, not the
+     brand — the same split this file has always had, in the opposite
+     direction now that the accent is light. #FFC02E reads 75.6 and is
+     the midpoint of --grad-brand below, so it is a colour the palette
+     already contains rather than a new one. */
+  --brand-solid: #FFC02E;
+  --grad-brand: linear-gradient(135deg, #FFD35C, #FFAD00);
+  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(255, 176, 0, .14), rgba(7, 7, 12, 0) 62%);
+  --grad-chip: linear-gradient(180deg, rgba(255, 176, 0, .20), rgba(255, 176, 0, .07));
+  --font-display: "Archivo Narrow", var(--font-sans);
+
+  /* ---- LAYOUT (formerly a third :root beside the top bar's rules). ---- */
+  --topbar-h: calc(64px + env(safe-area-inset-top));
+  /* The shell's two side columns. Both are written in three places —
+     the two-column shell, the three-column shell, and the breakpoint
+     where the rail drops below the content — and a shell whose columns
+     disagree is what once put main in the sidebar's track. See the
+     measurements beside `.shell`. */
+  --sidebar-w: 208px;
+  --rail-w: 280px;
+
+  /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
+     they are declared here only and never in the light block. Ink that
+     sits on a gold fill, the robot's own dark ground, and the night tones
+     of the stadium renders. White, the base-runner yellow and the live
+     reds stay literal on purpose: tests (test_brandfill, test_newlook,
+     test_freshness, test_live_situation) guard against those exact
+     values in the wrong place, and a token would walk past the guard. */
+  --ink-on-gold: #1C1204;
+  --ink-warm: #14120E;
+  --ink-neutral: #141414;
+  --qbot-ground: #0B0A08;
+  --night: #070B16;
+  --night-2: #08101F;
+  --night-3: #05060F;
+  --night-text: #DFE4F5;
 }
 
 * { box-sizing: border-box; }
@@ -793,7 +882,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 .game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
 .game-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
-.stadium-wrap { line-height: 0; background: #070b16; }
+.stadium-wrap { line-height: 0; background: var(--night); }
 /* THE STRIP GETS SHORTER, NOT EMPTIER. Ethan, 2026-08-31: the stadiums
    lead the page again "but it takes up way too much space so we need to
    make it look better and not take up so much space." The art was
@@ -940,7 +1029,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   /* The ramp's floor, scaled: this glyph is a mark, not text, and the
      smallest ramp step is still too tall for a 15px disc. */
   font-size: calc(var(--fs-2xs) * 0.8); font-weight: 900; line-height: 1;
-  color: #08101f;
+  color: var(--night-2);
   /* An OUTLINE, deliberately: this ring separates the pip from the mark
      under it and must not do the other two jobs. A 2px border would wear
      an accent stripe's weight on something that is not a rule, and a
@@ -1612,44 +1701,7 @@ svg[data-scrub] { touch-action: pan-y; }
    stadium/wind "media" SVGs stay dark on purpose (like broadcast
    graphics), which reads as intentional on a light card.
    ============================================================ */
-:root[data-theme="light"] {
-  --bg: #F2EFE6;
-  --bg-2: #EAE6DA;
-  --panel: #EFEBE0;
-  --panel-2: #EAE6DA;
-  --panel-3: #E1DCCC;
-  --border: #B9B1A0;
-  --border-soft: #D2CBB9;
-  /* Paper never had the dark theme's fault: measured, --text-mute here is
-     already Lc 52-64 and --text-dim Lc 76-87, both above their targets.
-     So the ladder is NOT copied across — lowering --text-dim to the 60
-     the dark side needed would make this side worse. Only the fourth
-     tier is new, and it is solved the same way, against the darkest
-     ground because on paper that is where contrast is lowest. */
-  --cyan: #5C564A;
-  --text: #14120E;
-  --text-dim: #3E3A31;
-  --text-mute: #7A7263;
-  --text-faint: #A7A194;
-  /* On paper the inversion runs the other way: ink on the accent. */
-  --brand: #B87400;
-  --brand-ink: #F2EFE6;
-  --brand-2: #E0C58A;
-  --good: #12734B;
-  --warn: var(--brand);
-  --bad: #C8102E;
-  --plum: #7A7263;                 /* darker: it sits on paper, not ink */
-  --grad-brand: #B87400;
-  --grad-violet: #E0C58A;
-  --fill-subtle: rgba(20,18,14,.035);
-  --fill-hover: rgba(20,18,14,.07);
-  --text-body: #3E3A31;
-  --topbar-bg: rgba(242,239,230,.97);
-  --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
-  --shadow: none;
-  --shadow-lg: none;
-  --ring: 0 0 0 2px rgba(58, 111, 216, 0.30);
-}
+/* (The light theme's tokens are in the one light block, after the new look's palette.) */
 :root[data-theme="light"] body {
   background: var(--bg);
 }
@@ -3000,7 +3052,7 @@ select.calc-in { width: auto; font-weight: 600; }
   border: var(--hairline) solid var(--border); background: var(--fill-subtle);
   color: var(--text-dim); cursor: pointer; }
 .tf-btn:hover { color: var(--text); }
-.tf-btn.on { background: var(--brand); color: #1c1204;
+.tf-btn.on { background: var(--brand); color: var(--ink-on-gold);
   border-color: var(--brand); font-weight: 800; }
 .tf-note { color: var(--text-mute); font-size: var(--fs-2xs); }
 .tf-card { padding: 12px 14px; }
@@ -3060,7 +3112,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .stk-side:hover { color: var(--text); }
 /* Dark ink on the amber fill, both themes — same move as the filled
    badges elsewhere; white on #FFB000 fails contrast. */
-.stk-side.on { background: var(--brand); color: #1c1204;
+.stk-side.on { background: var(--brand); color: var(--ink-on-gold);
   border-color: var(--brand); font-weight: 800; }
 .stk-side.done { cursor: default; opacity: .75; }
 .stk-side.done.hit { color: var(--good); font-weight: 800; opacity: 1; }
@@ -3431,7 +3483,7 @@ select.calc-in { width: auto; font-weight: 600; }
               border-color var(--dur-fast) var(--ease-out);
 }
 .set-opt:hover { border-color: var(--brand); }
-.set-opt.on { background: var(--brand); color: #1c1204; border-color: var(--brand); }
+.set-opt.on { background: var(--brand); color: var(--ink-on-gold); border-color: var(--brand); }
 .set-note { opacity: .65; font-size: .85em; font-variant-numeric: tabular-nums; }
 .set-note.wide { flex-basis: 100%; opacity: .6; line-height: var(--lh-snug);
   max-width: var(--measure); }
@@ -3480,7 +3532,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .msg-head { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .msg-tab-n { display: grid; place-items: center; min-width: 18px; height: 18px;
   padding: 0 5px; border-radius: 999px; background: var(--brand);
-  color: #14120E; font-size: var(--fs-2xs); }
+  color: var(--ink-warm); font-size: var(--fs-2xs); }
 .msg-search { flex: 1; min-width: 150px; padding: 8px 12px;
   background: var(--panel); color: var(--text);
   border: var(--hairline) solid var(--border-soft);
@@ -3568,7 +3620,7 @@ body.msg-thread-open .footer { display: none; }
 .msg-bub-row.mine { justify-content: flex-end; }
 .msg-bub-row .msg-ava { width: 34px; height: 34px;
   font-size: var(--fs-xs); flex-shrink: 0; }
-.msg-ava-me { background: var(--brand); color: #14120E;
+.msg-ava-me { background: var(--brand); color: var(--ink-warm);
   text-shadow: none; font-weight: 800; }
 .msg-bub { max-width: 82%; display: flex; flex-direction: column; gap: 5px;
   padding: 10px 13px; border-radius: var(--radius-lg);
@@ -3644,7 +3696,7 @@ body.msg-thread-open .footer { display: none; }
    from across the room. */
 .msg-badge { position: absolute; top: 2px; right: 2px; min-width: 15px;
   height: 15px; padding: 0 4px; border-radius: 999px; background: var(--brand);
-  color: #14120E; font-size: var(--fs-2xs); font-weight: 800; line-height: 15px;
+  color: var(--ink-warm); font-size: var(--fs-2xs); font-weight: 800; line-height: 15px;
   text-align: center; pointer-events: none; }
 #nav-msg { position: relative; }
 
@@ -3660,7 +3712,7 @@ body.msg-thread-open .footer { display: none; }
   font-weight: 700; cursor: pointer;
   box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
 .slip-n { display: grid; place-items: center; min-width: 22px; height: 22px;
-  border-radius: 999px; background: var(--brand); color: #14120E;
+  border-radius: 999px; background: var(--brand); color: var(--ink-warm);
   font-size: var(--fs-xs); font-weight: 800; }
 .slip-price { color: var(--brand); font-variant-numeric: tabular-nums; }
 .slip-open-hint { color: var(--text-mute); display: grid; }
@@ -5878,93 +5930,28 @@ body.pk-open { overflow: hidden; }
    slip-shaped hole is filled by the honest equivalents — My Bets
    (your own log) and Bankroll (your unit sizing).
    ============================================================ */
-:root {
-  --bg: #090705;
-  --bg-2: #0D0A07;
-  --panel: #14110C;
-  --panel-2: #1C1710;
-  --panel-3: #241D16;
-  --border: #31281D;
-  --border-soft: #241D15;
-  --text: #F7F1E9;
-  /* THE SITE AUDIT, 2026-09-24 (M-5): the grey second line on every pick
-     row (--text-mute) read Lc 47 against APCA's 60 for secondary text,
-     and the loss red Lc 36 against 45 even for large bold text. Both
-     re-solved by lightness alone (palettefit.solve: hue and chroma held),
-     and --text-dim rose with them so the ladder keeps its steps:
-     text 97 · dim 73 · mute 60 · faint 32 (tests/test_contrast.py). */
-  --text-dim: #D6C8B8;
-  --text-body: #E1D6C9;
-  --text-mute: #C1B3A1;
-  --text-faint: #857C6F;
-  /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
-     "i say we switch everything to the gold color like the renders but
-     for the whole site. we should match everything."
-
-     This reverses the 08-11 violet pivot rather than sitting beside it.
-     The ink flips with it and that is the load-bearing half: gold is a
-     LIGHT accent, so text ON it must be dark. Measured — white on
-     #FFB000 is Lc 38 and unreadable; #0A0907 on it is Lc 70. Violet was
-     the other way round, which is why 22 rules carried a hardcoded
-     `color: #fff` on a brand fill and every one of them now reads
-     --brand-ink instead. */
-  --brand: #FFB000;
-  --brand-2: #FFC94D;
-  --brand-ink: #0A0907;
-  --gold: #F5B93B;
-  --good: #42C268;
-  --bad: #FF766E;
-  /* WARN STAYS AMBER, AND THAT IS A KNOWN COLLISION rather than an
-     oversight. With the accent gold, --warn at #F79D00 sits ~6 degrees
-     of hue from --brand and reads as the same paint, which is bad: a
-     warning the eye files as branding is not a warning.
-
-     It cannot be fixed from this end. tests/test_chroma.py requires the
-     three accents to be more than 40 degrees apart, and `bad` sits at
-     hue 26 — so warn cannot go below about 66 without colliding with
-     red instead, and 66 is already beside the brand's 76. Moving it to
-     orange (hue 49) was tried and refused by that test, correctly.
-
-     The two ways out are both design decisions, not repairs: swing the
-     BRAND yellower (~90) so warn has room, or accept the family overlap
-     and let role carry the distinction — warn is text and icons on a
-     conditions row, the brand is a fill. Left as it was, and written
-     down, so the next person meets the constraint rather than the
-     symptom. */
-  --warn: #F79D00;
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 14px;
-  --topbar-bg: rgba(7, 7, 12, .96);
-  /* Light lives in tokens so every glow on the site is the SAME glow. */
-  --glow: 0 0 0 1px rgba(255, 176, 0, .28), 0 6px 28px rgba(255, 176, 0, .16);
-  --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
-  /* --brand-solid EXISTED BECAUSE VIOLET COULD NOT CARRY WHITE, and the
-     gold system does not have that problem — it has the opposite one.
-     Nothing gold carries white at any weight, so the answer is not a
-     darker fill, it is dark ink: --brand-ink is #0A0907 and measures
-     Lc 70 on the accent.
-
-     The token stays rather than being deleted, aliased to --brand, so
-     the 22 rules that name it keep working and the distinction it drew
-     is recorded rather than lost. If a future accent needs a
-     white-bearing variant again, this is where it goes. */
-  /* THE GOLD THAT CARRIES ITS INK. --brand is the render's #FFB000 and
-     stays put — it is the identity, and it is used where no text sits
-     on it (borders, glows, the accent tint). Near-black on it measures
-     Lc 69.8, which is contrast.py's "large or bold UI" tier, and the
-     filled controls print 10-13px labels. So the FILL moves, not the
-     brand — the same split this file has always had, in the opposite
-     direction now that the accent is light. #FFC02E reads 75.6 and is
-     the midpoint of --grad-brand below, so it is a colour the palette
-     already contains rather than a new one. */
-  --brand-solid: #FFC02E;
-  --grad-brand: linear-gradient(135deg, #FFD35C, #FFAD00);
-  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(255, 176, 0, .14), rgba(7, 7, 12, 0) 62%);
-  --grad-chip: linear-gradient(180deg, rgba(255, 176, 0, .20), rgba(255, 176, 0, .07));
-  --font-display: "Archivo Narrow", var(--font-sans);
-}
+/* (The palette that stood here is in the one :root at the top of the sheet.) */
 :root[data-theme="light"] {
+  /* Paper never had the dark theme's fault: measured, --text-mute here is
+     already Lc 52-64 and --text-dim Lc 76-87, both above their targets.
+     So the ladder is NOT copied across — lowering --text-dim to the 60
+     the dark side needed would make this side worse. Only the fourth
+     tier is new, and it is solved the same way, against the darkest
+     ground because on paper that is where contrast is lowest. */
+  --cyan: #5C564A;
+  /* On paper the inversion runs the other way: ink on the accent. */
+  --good: #12734B;
+  --bad: #C8102E;
+  --plum: #7A7263;                 /* darker: it sits on paper, not ink */
+  --grad-violet: #E0C58A;
+  --fill-subtle: rgba(20,18,14,.035);
+  --fill-hover: rgba(20,18,14,.07);
+  --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
+  --shadow: none;
+  --shadow-lg: none;
+  --ring: 0 0 0 2px rgba(58, 111, 216, 0.30);
+
+  /* ---- the new look's light values (formerly a second light block) ---- */
   --bg: #F8F4ED;
   --bg-2: #F2ECE5;
   --panel: #FFFFFF;
@@ -6021,16 +6008,7 @@ html, body { overflow-x: clip; }
    the safe-area inset on an installed iPhone, all four would have sat that
    many pixels too high — a gap under the header on exactly the devices
    this feature exists for. One token, so they cannot drift again. */
-:root {
-  --topbar-h: calc(64px + env(safe-area-inset-top));
-  /* The shell's two side columns. Both are written in three places —
-     the two-column shell, the three-column shell, and the breakpoint
-     where the rail drops below the content — and a shell whose columns
-     disagree is what once put main in the sidebar's track. See the
-     measurements beside `.shell`. */
-  --sidebar-w: 208px;
-  --rail-w: 280px;
-}
+/* (The layout tokens --topbar-h, --sidebar-w and --rail-w are in the one :root at the top.) */
 
 /* ---------------- The bar ---------------- */
 /* THE NOTCH. Installed to the home screen, this runs with no Safari
@@ -10902,7 +10880,7 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    as framed by us, and `overflow: hidden` keeps the photo, the wall
    marks and the arc all inside that frame. */
 .pbp-park { position: relative; width: auto; margin: 12px 14px;
-  aspect-ratio: 240 / 150; background: #05060F; overflow: hidden;
+  aspect-ratio: 240 / 150; background: var(--night-3); overflow: hidden;
   border: var(--hairline) solid color-mix(in srgb, var(--brand) 30%, var(--border));
   border-radius: var(--radius); }
 .pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -10931,7 +10909,7 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 @media (prefers-reduced-motion: reduce) { .pbp-onbase { animation: none; } }
 .pbp-parkchip { position: absolute; top: 10px; right: 10px; background: rgba(12,16,32,.82);
   border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 6px 9px;
-  font-size: var(--fs-xs); color: #dfe4f5; display: flex; flex-direction: column; gap: 2px; }
+  font-size: var(--fs-xs); color: var(--night-text); display: flex; flex-direction: column; gap: 2px; }
 /* THE CARD HEADER (Ethan's render): title left, venue and conditions
    right, on one row that wraps rather than crushes on a phone. */
 .pbp-parkhead { display: flex; align-items: center; justify-content: space-between;
@@ -11444,9 +11422,9 @@ body.ask-typing .tabbar, body.ask-typing .riding-tray { display: none; }
    The floor glow ends in a line in the render; it fades out instead. */
 .qbot-body { width: 118px; aspect-ratio: 860 / 1480; background: var(--bg); }
 .qbot-body img { mix-blend-mode: lighten; -webkit-mask-image: var(--mask-foot); mask-image: var(--mask-foot); }
-:root[data-theme="light"] .qbot-body { border-radius: var(--radius-lg); background: #0B0A08; }
+:root[data-theme="light"] .qbot-body { border-radius: var(--radius-lg); background: var(--qbot-ground); }
 .qbot-head { width: 40px; aspect-ratio: 1; border-radius: 50%; overflow: hidden;
-  border: var(--hairline) solid var(--brand-2); background: #0B0A08; }
+  border: var(--hairline) solid var(--brand-2); background: var(--qbot-ground); }
 .ask-ava { width: 32px; }
 .ask-head-bot { width: 36px; }
 .qbot-eye, .qbot-mouth, .qbot-look { transform-box: fill-box; transform-origin: 50% 50%; }
@@ -11604,7 +11582,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   font-weight: 700; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
 .tb-ask svg { width: 16px; height: 16px; }
 .tb-ask:hover, .tb-ask.active, .tb-ask[aria-current="page"] {
-  background: var(--brand); color: #141414; }
+  background: var(--brand); color: var(--ink-neutral); }
 .sb-item.sb-ask { color: var(--brand); }
 @media (max-width: 760px) { .tb-ask { display: none; } }
 

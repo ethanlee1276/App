@@ -62,7 +62,10 @@ def _hex(h):
 
 
 def _token(name):
-    block = CSS[CSS.index("NEW LOOK — 2026-08-11"):]
+    # The new look's dark palette is the tail of the one :root (audit #50
+    # merged its second bare :root into the first), so read it there.
+    start = CSS.index("THE NEW LOOK PALETTE")
+    block = CSS[start:CSS.index("\n}", start)]
     m = re.search(rf"--{name}:\s*(#[0-9A-Fa-f]{{6}})\s*;", block)
     assert m, f"--{name} is not defined in the new-look block"
     return _hex(m.group(1))

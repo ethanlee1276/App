@@ -117,7 +117,7 @@ def test_where_it_stands():
     assert 'srcset="img/ask/qbot-scene@640.webp 640w, img/ask/qbot-scene.webp 960w"' in pw
     assert re.search(r'\.qbot-body img \{ mix-blend-mode: lighten;', CSS), \
         "the render's black melts into the page's instead of drawing a box"
-    assert ':root[data-theme="light"] .qbot-body { border-radius: var(--radius-lg); background: #0B0A08; }' in CSS, \
+    assert ':root[data-theme="light"] .qbot-body { border-radius: var(--radius-lg); background: var(--qbot-ground); }' in CSS, \
         "on the light theme it stands on a dark card rather than a black smudge"
 
 
