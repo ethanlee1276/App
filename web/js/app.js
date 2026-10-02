@@ -16581,7 +16581,7 @@ function recLikelySection(lk, scope) {
   const sp = String((lk || {}).sport || "");
   const spName = sp ? ((SPORT_META[sp] || {}).name || sp.toUpperCase()) : "";
   const cal = lk.calibration || {};
-  const pct = pctOr;
+  const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
   const bands = (lk.bands || []).map((b) => `
     <div class="rl-row rl-cal ${b.actual >= b.claimed ? "won" : "lost"}">
       <span class="rl-date">${(b.lo * 100).toFixed(0)}–${(b.hi * 100).toFixed(0)}%</span>
@@ -16690,7 +16690,7 @@ function recLikelyGameLines(lk, sp) {
   const by = (lk || {}).by_sport_market || {};
   const sports = Object.keys(by).sort();
   if (!sports.length) return "";
-  const pct1 = pctOr;
+  const pct1 = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
   const rows = sports.map((sp) => {
     const markets = by[sp] || {};
     return Object.keys(markets).sort().map((m) => {

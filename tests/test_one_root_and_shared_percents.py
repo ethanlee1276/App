@@ -52,9 +52,11 @@ def test_the_shared_percents_and_no_exact_local_copy():
     exact = re.compile(r"^[ \t]+const pct\w* = \(?(\w)\)? => \(?(?:\1 == null \? \"—\" : )?"
                        r"`\$\{(?:\(\1 \* 100\)\.toFixed\([01]\)|Math\.round\(\1 \* 100\))\}%`\)?;$", re.M)
     left = [m.group(0).strip() for m in exact.finditer(APP)]
-    # Two stay local on purpose: node harnesses (test_your_own_account_health,
-    # test_the_paywall_shows_the_one_record) run those functions standalone.
-    assert len(left) == 2, left
+    # Four stay local on purpose: node harnesses run those functions
+    # standalone (mbHealth, pwResultsHTML, recLikelySection and
+    # recLikelyGameLines; see test_your_own_account_health,
+    # test_the_paywall_shows_the_one_record, test_the_likelihood_board_plays_for_money).
+    assert len(left) == 4, left
 
 
 if __name__ == "__main__":
