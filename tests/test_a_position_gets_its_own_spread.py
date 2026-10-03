@@ -98,6 +98,20 @@ def test_it_reads_the_history_database_by_position():
     assert set(res) == {"TE|receptions"} and res["TE|receptions"]["passed"] is False, res
 
 
+def test_the_current_season_counts_from_its_second_week():
+    from engine import db
+    hist = db.connect(Path(tempfile.mkdtemp()) / "history.db")
+    logs = [{"sport": "nfl", "season": season, "period": f"{w:03d}", "game_id": f"LV-{w:03d}",
+             "player": "Tight End", "team": "LV", "opponent": "KC", "position": "TE", "home": 0,
+             "market": "receptions", "value": float(2 + w % 4)}
+            for season, weeks in ((2025, range(12, 18)), (2026, range(1, 5))) for w in weeks]
+    db.upsert_player_logs(hist, logs)
+    hist.commit()
+    rows = P.carried_rows(hist, "receptions")
+    assert sorted({r["season"] for r in rows}) == [2025, 2026]
+    assert sum(1 for r in rows if r["season"] == 2026) == 4, "every 2026 week, carried from 2025"
+
+
 def test_the_weekly_job_runs_it():
     src = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
     body = src[src.index("def _run_deep_refit("):src.index("def _run_lab(")]

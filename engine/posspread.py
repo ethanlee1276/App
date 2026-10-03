@@ -199,9 +199,42 @@ def apply_vetoes(res: dict, report: dict | None = None) -> dict:
     return res
 
 
+#: Games of form behind a row, reaching back across seasons: about one season.
+CARRY_GAMES = 17
+
+
+def carried_rows(conn, market: str) -> list:
+    """yardagefit.rows, but his form reaches back into last season.
+
+    Ethan, 2026-10-04: "make sure ur using 2026 data too." Keyed by season,
+    a row needed four earlier games THAT season, so with four 2026 weeks
+    played no 2026 row existed. Keyed by player and team across seasons —
+    his last CARRY_GAMES games, as the live model carries a season over in
+    its first weeks — the current season counts from week 2."""
+    from .yardagefit import MIN_PRIOR, MIN_PROJECTION, blended
+    by: dict = defaultdict(list)
+    for season, period, player, team, value in conn.execute(
+            "SELECT season, period, player, team, value FROM player_game_logs "
+            "WHERE sport='nfl' AND market=?", (market,)):
+        by[(player, team)].append((season, str(period), float(value or 0.0)))
+    out = []
+    for (player, team), games in by.items():
+        games.sort()
+        for i in range(MIN_PRIOR, len(games)):
+            vals = [v for _s, _p, v in games[max(0, i - CARRY_GAMES):i]]
+            mean = sum(vals) / len(vals)
+            sd = math.sqrt(sum((v - mean) ** 2 for v in vals) / (len(vals) - 1)) if len(vals) > 1 else 0.0
+            mu = blended(vals)
+            if mu > MIN_PROJECTION:
+                season, period, actual = games[i]
+                out.append({"season": season, "mu": mu, "form_sd": sd, "actual": max(actual, 0.0),
+                            "player": player, "team": team, "period": period})
+    return out
+
+
 def measure(conn) -> dict:
     """{"POS|market": judge(...)} for every position and market."""
-    from .yardagefit import rows as yrows
+    yrows = lambda c, m: carried_rows(c, m)                          # noqa: E731
     pos = positions_of(conn)
     out = {}
     for market in MARKETS:

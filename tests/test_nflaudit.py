@@ -159,6 +159,27 @@ def test_a_fixture_that_recurs_every_season_is_a_new_game_each_season():
     assert h["seasons"] == [2023, 2024, 2025], h["seasons"]
 
 
+def test_the_current_season_counts_from_its_first_weeks():
+    # Ethan, 2026-10-04: "make sure ur using 2026 data too". A 2026 week-2
+    # game counts: his last five reach back into 2025.
+    tmp = tempfile.mkdtemp()
+    hist = db.connect(Path(tmp) / "history.db")
+    games, logs = [], []
+    for season, weeks in ((2025, range(10, 18)), (2026, range(1, 5))):
+        for w in weeks:
+            games.append({"sport": "nfl", "season": season, "period": f"{w:03d}", "game_id": "LV@KC", "home": "KC",
+                          "away": "LV", "spread": -3.0, "total": 45.0,
+                          "date": f"{season if w < 18 else season + 1}-{9 + w // 5:02d}-{1 + (w % 5) * 6:02d}"})
+            logs.append({"sport": "nfl", "season": season, "period": f"{w:03d}", "game_id": f"LV-{w:03d}",
+                         "player": "Back Raider", "team": "LV", "opponent": "KC", "position": "RB", "home": 0,
+                         "market": "rush_yds", "value": 50.0 + w})
+    db.upsert_games(hist, games)
+    db.upsert_player_logs(hist, logs)
+    hist.commit()
+    h = A.replay(A._ro(Path(tmp) / "history.db"))
+    assert 2026 in h["seasons"], h["seasons"]
+
+
 def test_it_never_writes():
     src = open(os.path.join(ROOT, "nflaudit.py"), encoding="utf-8").read()
     eng = open(os.path.join(ROOT, "engine", "likelyctx.py"), encoding="utf-8").read()

@@ -14,39 +14,45 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL touchdowns — run these now (2026-10-04, round 7)
+### NFL Most Likely + touchdowns — run these now (2026-10-04, round 7)
 
-The spreads are done (tight ends and backs widened, receivers vetoed by
-the record). Now the touchdown model. The record hints its chances do not
-follow the team's expected points hard enough: teams the books expected
-to score 18-22 went 1-for-12 on our touchdown picks at a claimed 43%, and
-teams at 26+ went 13-for-21 at a claimed 49%. This replays the real
-touchdown model over 2021-2025 and fits, per position, how much harder (or
-softer) a scorer's chance should follow his team's implied total. It is
-adopted only if it beats today's model on held-out seasons (4 of 5 and
-overall), judged after the calibration the board already uses.
+Two things in this round:
+- **The touchdown model.** The record hints a scorer's chance does not
+  follow his team's expected points hard enough (teams at 18-22 went
+  1-for-12 on our TD picks at a claimed 43%; teams at 26+ went 13-for-21
+  at 49%). This replays the real TD model over every stored season and
+  fits, per position, how much harder or softer a scorer's chance should
+  follow his team's implied total. It is adopted only if it beats today's
+  model on held-out seasons.
+- **2026 counts now.** The history fits needed a player to have 4-5
+  earlier games in the SAME season, so with four 2026 weeks played almost
+  no 2026 game counted. They now reach back into last season for his
+  recent form, the way the live model does in the first weeks, so 2026
+  counts from week 2. (The TD replay already counted 2026 from week 4.)
+  The record-based corrections were always 100% 2026.
 
 First make sure the box has the new code. This should print a line saying
-"touchdowns follow the team total", or anything newer:
+"2026 counts in the history fits", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**T1. Fit the team-total step, then refit the touchdown calibration on top
-of it** (paste both; a few minutes each). Both run by themselves every
-Wednesday from now on, in this order:
+**R1. Re-run every fit with 2026 in it** (paste all of it; ten minutes or
+so). All of these also run by themselves every Wednesday, in this order:
 
 ```
+cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist
+cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
 cd /srv/qellys && sudo -u qellys python3 -m engine.tdscale
 cd /srv/qellys && sudo -u qellys python3 -m engine.tdbacktest --fit
+cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
 ```
 
-To undo: `sudo -u qellys rm /srv/qellys/data/models/td_implied.json`
-(team-total step), `.../position_spread.json` (widths),
-`.../likely_calibration.json` (record) or `.../scout_history.json`
-(history), all under /srv/qellys/data/models/. Each comes back by itself if
-it is still proven.
+To undo any one: remove its file under /srv/qellys/data/models/ —
+`td_implied.json` (touchdown team-total step), `position_spread.json`
+(widths), `likely_calibration.json` (record), `scout_history.json`
+(history). Each comes back by itself if it is still proven.
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 

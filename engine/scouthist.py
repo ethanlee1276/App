@@ -9,7 +9,9 @@ defense and game script and past picks wins and losses and who can
 struggle and do good".
 
 THE REPLAY (moved here from nflaudit.py, which still prints it): every
-2021+ player-game in HISTORY_MARKETS with five earlier games that season,
+stored player-game (2021 through the current season) in HISTORY_MARKETS
+with five earlier games — reaching back into last season when this one is
+young, so the current season counts from its first weeks —
 his last-five average as the line, each flag's side scored against the
 same side in unflagged games. That is the football effect before any
 model.
@@ -69,7 +71,8 @@ def _week_no(period) -> int:
 
 
 def replay(hist, seasons=None) -> dict:
-    """Every 2021+ player-game in HISTORY_MARKETS with five earlier games
+    """Every stored player-game in HISTORY_MARKETS with five earlier games
+    (across seasons)
     that season: the line is his last-five average (0.5 for touchdowns),
     and each flag's side is scored against the same side in unflagged
     games of the same market. A negative gap that holds in both halves of
@@ -88,23 +91,31 @@ def replay(hist, seasons=None) -> dict:
         g = log_game(r, games, by_key)       # the ids differ ("LV-004" / "LV@KC")
         if g is None:
             continue
-        series[(r["player"], r["season"], r["market"])].append((g["_d"], r["value"], r["team"], r["position"], g))
+        # ACROSS SEASONS (2026-10-04, Ethan: "make sure ur using 2026 data
+        # too"). Keyed per season, a game needed five earlier games THAT
+        # season, so with four 2026 weeks played not one 2026 game counted.
+        # His last-five now reaches back into last season, as the live model
+        # carries a season over in its first weeks (engine/carry).
+        series[(r["player"], r["market"])].append((g["_d"], r["value"], r["team"], r["position"], g,
+                                                   r["season"]))
         played[(r["player"], r["season"])].add(g["game_id"])
     cells = defaultdict(lambda: defaultdict(lambda: [0, 0]))      # flag -> half -> [hits, n]
     base = defaultdict(lambda: defaultdict(lambda: [0, 0]))       # (market, side) -> half -> [hits, n]
     flagged_ms = defaultdict(set)
     # The seasons the replay can actually score (a game needs five earlier
-    # ones that season). With two or more, the halves are seasons; with
+    # ones, any season). With two or more, the halves are seasons; with
     # one — the 2026-10-03 run had only 2025 to score — they are its first
     # and second nine weeks, so "both halves" still means something.
-    all_seasons = sorted({k[1] for k, v in series.items() if len(v) > 5})
+    for rows in series.values():
+        rows.sort(key=lambda x: x[0])
+    all_seasons = sorted({row[5] for rows in series.values() for row in rows[5:]})
     by_season = len(all_seasons) >= 2
     mid = all_seasons[len(all_seasons) // 2] if by_season else "week 10"
-    for (player, season, market), rows in series.items():
-        rows.sort(key=lambda x: x[0])
+    for (player, market), rows in series.items():
         for i in range(5, len(rows)):
-            d, value, team, pos, g = rows[i]
-            prior = [v for _d, v, *_ in rows[:i]][::-1]
+            d, value, team, pos, g, season = rows[i]
+            prior = [row[1] for row in rows[:i]][::-1]
+            in_season = sum(1 for row in rows[:i] if row[5] == season)
             line = 0.5 if market == "anytime_td" else sum(prior[:5]) / 5
             if market != "anytime_td" and line <= 0:
                 continue
@@ -117,7 +128,7 @@ def replay(hist, seasons=None) -> dict:
                 s = SC.situation(market, side, line=line, position=pos, values=prior,
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
-                                 weekday=None if g.get("_approx") else d.weekday(), games_season=i,
+                                 weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
                                  missed_last=missed)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
