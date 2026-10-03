@@ -438,8 +438,8 @@ def probe(date: str = "2025-10-08") -> list[dict]:
         out.append({"label": f"power-play ice time {date}", "ok": "ppTimeOnIce" in first,
                     "detail": (f"{len(rows)} player-game row(s); keys: {', '.join(sorted(first)[:14])}"
                                if rows else "no rows")})
-    except DataUnavailable as exc:
-        out.append({"label": "power-play ice time", "ok": False, "detail": str(exc)})
+    except Exception as exc:                             # noqa: BLE001 — one probe line, never the probe
+        out.append({"label": "power-play ice time", "ok": False, "detail": f"{type(exc).__name__}: {exc}"})
     # LINE COMBINATIONS (Y4): one final's shift chart from the stats host —
     # shifts read, players on each side, and a sample shift.
     if final:
@@ -450,8 +450,8 @@ def probe(date: str = "2025-10-08") -> list[dict]:
             out.append({"label": f"shift charts {final['game_id']}", "ok": bool(n),
                         "detail": (f"{n} shifts, " + ", ".join(f"{t} {len(v)} players" for t, v in sorted(sh.items()))
                                    if n else "no shifts parsed")})
-        except DataUnavailable as exc:
-            out.append({"label": "shift charts", "ok": False, "detail": str(exc)})
+        except Exception as exc:                         # noqa: BLE001 — one probe line, never the probe
+            out.append({"label": "shift charts", "ok": False, "detail": f"{type(exc).__name__}: {exc}"})
     # ANNOUNCED STARTING GOALIES (X4): ESPN's scoreboard for today, since
     # starters are only named on a game day. Names the sides it found and,
     # when none, what a competitor carries — the field may simply be empty
@@ -468,8 +468,8 @@ def probe(date: str = "2025-10-08") -> list[dict]:
                     "detail": (", ".join(f"{t} {v['name']} ({v['status']})" for t, v in sorted(named.items()))
                                if named else f"{len(board.get('events') or [])} game(s), none named yet; "
                                f"a side carries: {', '.join(sorted(side)[:16])}")})
-    except DataUnavailable as exc:
-        out.append({"label": "starting goalies", "ok": False, "detail": str(exc)})
+    except Exception as exc:                             # noqa: BLE001 — one probe line, never the probe
+        out.append({"label": "starting goalies", "ok": False, "detail": f"{type(exc).__name__}: {exc}"})
     return out
 
 

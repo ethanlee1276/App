@@ -45,15 +45,23 @@ def parse_probables(payload: dict) -> dict:
                 team = (side or {}).get("team") or {}
                 abbr = NHL_TEAM_ABBR.get(_txt(team.get("displayName")), "")
                 for pr in (side or {}).get("probables") or []:
+                    if not isinstance(pr, dict):
+                        continue
                     kind = (_txt(pr.get("name")) + " " + _txt(pr.get("displayName"))).lower()
                     ath = (pr or {}).get("athlete") or {}
-                    pos = _txt(((ath.get("position") or {}).get("abbreviation"))).upper()
+                    if not isinstance(ath, dict):
+                        ath = {"displayName": ath}
+                    # ESPN sends the position as an object on some boards
+                    # and as plain text ("G") on the hockey one — the box
+                    # probe crashed on the second (2026-10-03).
+                    raw_pos = ath.get("position")
+                    pos = _txt(raw_pos.get("abbreviation") if isinstance(raw_pos, dict) else raw_pos).upper()
                     if "goalie" not in kind and pos != "G":
                         continue
                     name = _txt(ath.get("displayName") or ath.get("fullName"))
                     if not (abbr and name):
                         continue
-                    st = (pr.get("status") or {})
+                    st = (pr.get("status") or {}) if isinstance(pr, dict) else {}
                     word = (_txt(st.get("name")) + " " + _txt(st.get("type")) + " "
                             + _txt(st.get("description"))).lower() if isinstance(st, dict) else _txt(st).lower()
                     out[abbr] = {"name": name, "status": "confirmed" if "confirm" in word else "probable"}
@@ -66,4 +74,7 @@ def tonight(date: str, fetch=None) -> dict:
     try:
         return parse_probables((fetch or fetch_scoreboard)(date))
     except DataUnavailable:
+        return {}
+    except Exception:                                     # noqa: BLE001
+        # A shape we have not seen must cost the starters, never the board.
         return {}

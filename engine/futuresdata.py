@@ -358,13 +358,26 @@ def title_prices(sport: str, cache_only: bool = True) -> dict:
     Never raises — a futures board with no prices is still a futures board,
     and it is the model that is the product here.
     """
+    global LAST_PRICE_NOTE
+    LAST_PRICE_NOTE = ""
     try:
         from .sources import oddsapi
         payload, _ = oddsapi.fetch_outrights(sport, cache_only=cache_only)
         cfg = oddsapi.SPORT_CONFIG.get(sport) or {}
-        return oddsapi.parse_outrights(payload, cfg.get("teams") or {})
-    except Exception:                              # noqa: BLE001
+        got = oddsapi.parse_outrights(payload, cfg.get("teams") or {})
+        if not got:
+            LAST_PRICE_NOTE = ("no futures prices in the cache — run with --odds" if cache_only
+                               else "the futures market answered with no prices for this league")
+        return got
+    except Exception as exc:                       # noqa: BLE001
+        # SAID, NOT SWALLOWED (2026-10-03: a hand run printed "0 priced"
+        # and nothing about why). The board still builds without prices.
+        LAST_PRICE_NOTE = f"{type(exc).__name__}: {exc}"
         return {}
+
+
+#: Why the last title_prices call came back empty ("" when it did not).
+LAST_PRICE_NOTE = ""
 
 
 def project(conn, sport: str, season: int | None = None, trials: int = 20000,
@@ -394,6 +407,8 @@ def project(conn, sport: str, season: int | None = None, trials: int = 20000,
     if prices:
         mkt = title_prices(sport, cache_only=not live_odds)
         out["priced"] = len(mkt)
+        if not mkt and LAST_PRICE_NOTE:
+            out["price_note"] = LAST_PRICE_NOTE
         for row in out["teams"]:
             p = mkt.get(row["team"])
             if not p:

@@ -113,7 +113,8 @@ def main(argv: list[str]) -> None:
         note = data.get("note") or ""
         print(f"  {sport.upper():>4}: {n} team(s), {data.get('fixtures_remaining', 0)} "
               f"game(s) left, {priced} priced"
-              + (f"  — {note}" if note else ""))
+              + (f"  — {note}" if note else "")
+              + (f"\n        prices: {data['price_note']}" if data.get("price_note") else ""))
     conn.close()
 
 

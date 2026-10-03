@@ -90,6 +90,18 @@ def test_the_cup_price_rides_the_weekly_one_credit_pull_and_the_page_reads_point
     assert "nhl" in futures_build.SPORTS and futures_build.SEASON_MARKETS["nhl"]
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert 'd.points_league ? "W-L-OT" : "W-L"' in js and "t.proj_points" in js
+    # A failed price pull says why (a hand run printed "0 priced" and nothing else).
+    from engine import futuresdata as FD
+    real = oddsapi.fetch_outrights
+    def boom(sport, cache_only=False):
+        raise RuntimeError("no odds key in this shell")
+    oddsapi.fetch_outrights = boom
+    try:
+        assert FD.title_prices("nhl", cache_only=False) == {}
+        assert "no odds key in this shell" in FD.LAST_PRICE_NOTE
+    finally:
+        oddsapi.fetch_outrights = real
+    assert "prices: {data['price_note']}" in open(os.path.join(ROOT, "futures_build.py"), encoding="utf-8").read()
 
 
 if __name__ == "__main__":

@@ -326,6 +326,13 @@ def test_espn_names_a_goalie_only_where_it_names_one():
     got = ST.parse_probables(board)
     assert got == {"EDM": {"name": "Calvin Pickard", "status": "confirmed"},
                    "CGY": {"name": "Dustin Wolf", "status": "probable"}}, got
+    hockey_shape = _espn(("Edmonton Oilers", [{"name": "probableStartingGoalie",
+                                               "athlete": {"displayName": "Stuart Skinner", "position": "G"},
+                                               "status": "Confirmed"}]))
+    assert ST.parse_probables(hockey_shape) == {"EDM": {"name": "Stuart Skinner", "status": "confirmed"}}, \
+        "ESPN's hockey board sends the position as text — the box probe crashed on it"
+    assert ST.tonight("2025-10-30", fetch=lambda d: {"events": [{"competitions": [{"competitors": [
+        {"team": {"displayName": "Edmonton Oilers"}, "probables": [{"athlete": 7}]}]}]}]}) == {}
     assert ST.parse_probables({}) == {} and ST.tonight("2025-10-30", fetch=lambda d: (_ for _ in ()).throw(
         __import__("engine.sources.fetch", fromlist=["x"]).DataUnavailable("down"))) == {}
 
