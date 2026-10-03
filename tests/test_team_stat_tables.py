@@ -165,19 +165,22 @@ def test_a_section_nobody_qualifies_for_is_not_drawn_empty():
     assert [s["key"] for s in t["sections"]] == ["rushing"]
 
 
-def test_a_sport_with_no_football_shape_gets_no_tables():
-    """A pitching line is not a passing line. Baseball and basketball
-    get nothing here until they get their own sections, which is a
-    better answer than a table that fits the wrong sport.
+def test_every_sport_gets_its_own_shape_never_footballs():
+    """A pitching line is not a passing line. Until 2026-10-03 baseball
+    and basketball got no table at all rather than one that fit the wrong
+    sport; now each league has its own sections (Ethan: "I want every
+    single sport to have the same thing"), and a baseball team's table is
+    a batting table — no yards in it anywhere.
 
-    The mapping is asserted directly rather than through an empty
-    result: a baseball team has no passing yards either way, so an
-    MLB fixture comes back empty whether the sport is mapped or not,
-    and a test that reads that as a pass is not testing anything."""
-    assert set(teamdex.STAT_SPORTS) == {"nfl", "cfb"}, teamdex.STAT_SPORTS
-    rows = [("Shohei Ohtani", "DH", "hits", 2, "g1")]
+    The mapping is asserted directly as well as through a result, so a
+    sport falling back to football's shape cannot pass by accident."""
+    assert teamdex.STAT_SPORTS == {"nfl": "football", "cfb": "football", "nhl": "hockey",
+                                   "nba": "basketball", "wnba": "basketball",
+                                   "mlb": "baseball"}, teamdex.STAT_SPORTS
+    rows = [("Shohei Ohtani", "DH", "hits", 2, "g1"), ("Shohei Ohtani", "DH", "pa", 4, "g1")]
     t = teamdex.stat_tables(_db("mlb", "LAD", rows), "mlb", "LAD")
-    assert t["sections"] == [] and t["leaders"] == []
+    assert [s["key"] for s in t["sections"]] == ["batting"], t["sections"]
+    assert "YDS" not in t["sections"][0]["columns"] and "H" in t["sections"][0]["columns"]
 
 
 # --- one identity across both sections --------------------------------------

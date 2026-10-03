@@ -46,7 +46,16 @@ from engine.seasons import season_of
 # fall back to appearances; NBA and WNBA are appearance-built outright,
 # where it costs far less — basketball counts a minute played, so anyone
 # who got off the bench is on the page.
-FROM_LOGS = ("mlb", "nba", "wnba", "cfb")
+FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl")
+
+#: The league's current roster first (2026-10-03, Ethan: "make sure we're
+#: pulling all live data for NHL, like all live rosters and injuries ... I
+#: want every single sport to have the same thing"): the NHL's own feed
+#: for hockey, ESPN's per-club rosters for basketball. Appearances stay the
+#: fallback and still fill the games column.
+LIVE_FEEDS = ("nhl", "nba", "wnba")
+#: A man counts as appearing in a game through these markets.
+GAME_MARKETS = {"nhl": ("toi",), "nba": ("min",), "wnba": ("min",)}
 NO_SOURCE = {
     "ufc": "MMA has fighters, not rosters. Each fighter's measured record "
            "lives in his dossier on the UFC card itself.",
@@ -144,6 +153,27 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
             # reason. A silent fall-back here would put the page straight
             # back into the state Ethan reported and say nothing.
             feed_err = f"the roster feed failed ({type(exc).__name__}: {exc})"
+    if sport in LIVE_FEEDS:
+        try:
+            feed, missed = _league_feed(sport)
+            injuries = _injury_board(sport)
+            games = _r.games_by_player(conn, sport, GAME_MARKETS[sport],
+                                       seasons=[season, season - 1])
+            out = _r.feed_rosters(sport, feed, games, faces=_r._faces(conn, sport),
+                                  injuries=injuries, today=day)
+            if out["player_count"]:
+                out.update({
+                    "sport": sport, "season": season,
+                    "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                    "feed": "live", "source": "league" if sport == "nhl" else "roster",
+                    "note": "" if not missed else (
+                        f"{len(missed)} club rosters would not load and are missing "
+                        f"from this page: {', '.join(sorted(missed))}"),
+                })
+                return out
+            feed_err = "the roster feed returned no players"
+        except Exception as exc:                   # noqa: BLE001
+            feed_err = f"the roster feed failed ({type(exc).__name__}: {exc})"
     # This season, falling back to last: in the first weeks of a year the
     # current season has barely any appearances on file, and an empty
     # roster page is worse than a slightly stale one that says its date.
@@ -181,6 +211,30 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
                        f"is missing from this view until the feed recovers. "
                        + (out["note"] or "")).strip()
     return out
+
+
+def _league_feed(sport: str) -> tuple[dict, list]:
+    """``({team: [people]}, [teams that would not load])`` — the league's
+    own current rosters, normalised to one person shape."""
+    if sport == "nhl":
+        from engine.sources import nhldata
+        feed, missed = nhldata.fetch_league_rosters()
+        return ({t: [dict(p, player=p["name"]) for p in people] for t, people in feed.items()},
+                missed)
+    from engine.sources import espnrosters
+    return espnrosters.fetch_league(sport)
+
+
+def _injury_board(sport: str) -> dict:
+    """``{player: {status, injury}}`` off the injury board this site already
+    publishes (web/data/injuries.json), or {} — a roster never waits on it."""
+    try:
+        blob = json.loads((OUT_DIR / "injuries.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return {r["player"]: {"status": r.get("status") or "", "injury": r.get("injury") or ""}
+            for r in ((blob.get("sports") or {}).get(sport) or [])
+            if isinstance(r, dict) and r.get("player")}
 
 
 def unavailable_payload(sport: str) -> dict:

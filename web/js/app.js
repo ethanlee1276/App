@@ -9323,7 +9323,7 @@ function renderScanTop() {
         a read on every key player with the reasons for and against — is part of the subscription.</div>`
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
     <p class="ms-note">A player who could shine gets his likeliest over on Most Likely, one who could
-      struggle his likeliest under — when one clears the board’s bars (${state.sport === "nhl" ? "65" : "55"}% or better, −250 or better).
+      struggle his likeliest under — when one clears the board’s bars (55% or better, −250 or better).
       The read picks the side; it never moves our number. Tap a player for his pick. The full read is on
       each game’s page.</p>`}`;
 }
@@ -29499,7 +29499,7 @@ function standingsRowHTML(t, label) {
     <span class="std-mark">${teamMarkIn(state.sport, t.team, 24)}</span>
     <span class="std-name">${teamLinkHTML(state.sport, t.team, meta.name || meta.nick || t.team)}</span>
     <span class="std-n std-rec">${escapeHtml(t.record)}</span>
-    <span class="std-n">${t.pct.toFixed(3).replace(/^0/, "")}</span>
+    <span class="std-n">${t.points != null ? t.points : t.pct.toFixed(3).replace(/^0/, "")}</span>
     <span class="std-n ${cls}">${escapeHtml(diff)}</span>
     <span class="std-n std-wide">${t.pf_per_game}/${t.pa_per_game}</span>
     <span class="std-n std-wide">${escapeHtml(t.home)}</span>
@@ -29515,7 +29515,8 @@ function standingsGroupHTML(g, scoreLabel) {
     <div class="std-head">
       <span class="std-rank">#</span><span class="std-mark"></span>
       <span class="std-name">TEAM</span>
-      <span class="std-n std-rec">W-L</span><span class="std-n">PCT</span>
+      <span class="std-n std-rec">${state.sport === "nhl" ? "W-L-OTL" : "W-L"}</span><span class="std-n">${
+        state.sport === "nhl" ? "PTS" : "PCT"}</span>
       <span class="std-n">DIFF</span>
       <span class="std-n std-wide">${escapeHtml(scoreLabel || "PF/PA")}</span>
       <span class="std-n std-wide">HOME</span><span class="std-n std-wide">AWAY</span>
@@ -32869,19 +32870,21 @@ function teamStatsHTML(st, sport) {
           role="link" data-player-page="${escapeAttr(slugify(r.player))}">
         <td class="rank-name">${escapeHtml(r.player)}${r.position
           ? ` <span class="tst-pos">${escapeHtml(r.position)}</span>` : ""}</td>
-        ${(r.cells || []).map((v) => `<td>${num(v)}</td>`).join("")}
+        ${(r.cells || []).map((v, i) => `<td>${sec.columns[i] === "SV%" && v != null
+          ? v.toFixed(3).replace(/^0/, "") : num(v)}</td>`).join("")}
       </tr>`).join("")}
       </tbody></table></div>`).join("");
   return `
     ${teamLeadersHTML(st)}
     <div class="section-title">Team stats${st.season ? ` · ${st.season}` : ""}
       <span class="sub">— every player with a game logged for this team,
-      ranked by yards. Tap a row for his own page.</span></div>
+      ranked by ${escapeHtml(({ nhl: "points", nba: "points", wnba: "points",
+        mlb: "playing time" })[sport] || "yards")}. Tap a row for his own page.</span></div>
     ${body}
     <p class="rank-help">Totals and averages are computed from the game
-      logs this site ingests, which is why there is no longest-play or
+      logs this site ingests${["nfl", "cfb"].includes(sport) ? `, which is why there is no longest-play or
       20-plus column: a game log holds the yards, not the plays that
-      made them. A column nobody on this team has a number for is left
+      made them` : ""}. A column nobody on this team has a number for is left
       out rather than filled with dashes.</p>`;
 }
 
@@ -33119,7 +33122,7 @@ function renderTeamPage() {
     home: () => teamHomeHTML(d, p),
     stats: () => statsTab || teamEmptyTab("No stats yet", "No player stats on file for this team yet."),
     schedule: () => teamScheduleHTML(d, p),
-    roster: () => rosterTab ? rosterTab + teamInjKeyHTML(d.sport)
+    roster: () => (teamLiveRosterHTML(d) || rosterTab) ? (teamLiveRosterHTML(d) || rosterTab) + teamInjKeyHTML(d.sport)
       : teamEmptyTab("No roster yet", "No one has played for this team in the games we hold yet."),
     depth: () => teamDepthHTML(d),
     injuries: () => teamInjuriesHTML(d, p),
@@ -33388,8 +33391,50 @@ function teamScheduleHTML(d, p) {
     <div class="card tm-list">${games.map((g) => teamScheduleRowHTML(d, g, p)).join("")}</div>`;
 }
 
-/* The published chart where there is one (the NFL's, as filed); every
-   other league, and the NFL before a chart is on the box, reads the
+/* WHO IS ON THE TEAM TODAY, the way ESPN's roster tab lays it out
+   (Ethan, 2026-10-03: "remember how I had you do it when you search a
+   team ... the ESPN looking page with the depth chart and the injuries
+   and the roster ... I want every single sport to have the same thing").
+   The league's live roster board — the NHL's own feed, ESPN's per-club
+   rosters for basketball and college, the league's for baseball, the
+   players file for the NFL — grouped by position, with the bio columns
+   the feed carries and the injury letter beside each name. A column no
+   player on this club has is left out. */
+const TEAM_ROSTER_COLS = [["number", "#"], ["age", "Age"], ["height", "Ht"],
+  ["weight", "Wt"], ["shoots", "Shot"], ["college", "College"], ["birthplace", "Birthplace"]];
+function teamLiveRosterHTML(d) {
+  const r = d.roster;
+  const players = ((r || {}).players || []).filter((p) => p && p.player);
+  if (!players.length) return "";
+  const cols = TEAM_ROSTER_COLS.filter(([k]) => players.some((p) => p[k] != null && p[k] !== ""));
+  const groups = [];
+  for (const p of players) {
+    const pos = p.position || "—";
+    let g = groups.find((x) => x.pos === pos);
+    if (!g) groups.push(g = { pos, rows: [] });
+    g.rows.push(p);
+  }
+  const src = ({ league: "the league’s own roster feed", roster: "ESPN’s published rosters",
+    appearances: "who has played in the games we hold" })[r.source] || "the published roster";
+  return `<div class="section-title">Roster · ${players.length} players
+      <span class="sub">— from ${escapeHtml(src)}${r.generated_at
+        ? `, updated ${escapeHtml(String(r.generated_at).replace("T", " ").slice(0, 16))}` : ""}.
+      Tap a name for his own page.</span></div>
+    ${groups.map((g) => `<div class="section-title minor">${escapeHtml(g.pos)}</div>
+      <div class="rank-scroll"><table class="rank-table"><thead><tr><th>Name</th>${
+        cols.map(([, lab]) => `<th>${escapeHtml(lab)}</th>`).join("")}<th>Status</th></tr></thead><tbody>
+        ${g.rows.map((p) => `<tr class="tst-row" tabindex="0" role="link"
+            data-player-page="${escapeAttr(slugify(p.player))}">
+          <td class="rank-name">${escapeHtml(p.player)}${teamInjMark(p.player)}</td>
+          ${cols.map(([k]) => `<td>${p[k] != null && p[k] !== "" ? escapeHtml(String(p[k])) : "—"}</td>`).join("")}
+          <td>${p.status ? escapeHtml(p.status) : (p.unavailable ? "Out" : "Active")}</td>
+        </tr>`).join("")}
+      </tbody></table></div>`).join("")}`;
+}
+
+/* The published chart where there is one (the NFL's, as filed); hockey
+   and basketball read the club's live roster ordered by ice time or
+   minutes over each man's newest games; every other league reads the
    order measured from the games played — and says which it is. */
 function teamDepthHTML(d) {
   const pub = d.depth && (d.depth.positions || []).length ? d.depth : null;
@@ -33399,7 +33444,10 @@ function teamDepthHTML(d) {
   if (!rows.length) return teamEmptyTab("No depth chart yet", "No depth chart on file for this team yet.");
   const cols = Math.min(4, Math.max(...rows.map((r) => r.names.length)));
   return `<div class="section-title">Depth chart
-      <span class="sub">— ${pub ? `as the team filed it${pub.as_of ? `, ${escapeHtml(String(pub.as_of))}` : ""}`
+      <span class="sub">— ${pub && pub.source === "usage"
+        ? `today’s roster, ordered by ${pub.market === "toi" ? "ice time" : "minutes"} a game over each player’s last ${
+            pub.window} games — the lines the coach actually sends out, since no club publishes a chart`
+        : pub ? `as the team filed it${pub.as_of ? `, ${escapeHtml(String(pub.as_of))}` : ""}`
         : "ordered by who has actually played: games first, then the position’s main stat"}.</span></div>
     <div class="card tm-depth"><table class="rank-table"><thead><tr><th>Pos</th>${
       Array.from({ length: cols }, (_x, i) => `<th>${ordinal(i + 1)}</th>`).join("")}</tr></thead><tbody>

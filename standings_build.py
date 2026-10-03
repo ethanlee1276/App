@@ -28,7 +28,7 @@ from engine import playoffs, pressure, standings
 from engine.db import connect
 from engine.seasons import season_of, window as window_of
 
-SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb")
+SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb", "nhl")
 OUT_DIR = Path("web/data")
 
 

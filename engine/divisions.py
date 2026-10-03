@@ -90,7 +90,16 @@ WNBA = {
     "SEA": ("West", ""), "POR": ("West", ""),
 }
 
-MAPS = {"nfl": NFL, "mlb": MLB, "nba": NBA, "wnba": WNBA}
+# Hockey (2026-10-03): the NHL's own abbreviations, which is what our
+# games table stores (api-web.nhle.com keys every club this way).
+NHL = {
+    **{t: ("Eastern", "Atlantic") for t in ("BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR")},
+    **{t: ("Eastern", "Metropolitan") for t in ("CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH")},
+    **{t: ("Western", "Central") for t in ("CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG")},
+    **{t: ("Western", "Pacific") for t in ("ANA", "CGY", "EDM", "LAK", "SEA", "SJS", "VAN", "VGK")},
+}
+
+MAPS = {"nfl": NFL, "mlb": MLB, "nba": NBA, "wnba": WNBA, "nhl": NHL}
 
 # Abbreviations that mean the same club. Our history spans six seasons and
 # relocations are in it: a 2021 Oakland game and a 2026 Las Vegas game are
@@ -102,9 +111,13 @@ ALIASES = {
     "mlb": {"WAS": "WSH", "TB": "TBR", "CHW": "CWS", "SDP": "SD",
             "SFG": "SF", "KCR": "KC", "ATH": "OAK"},
     "nba": {"NO": "NOP", "NY": "NYK", "GS": "GSW", "SA": "SAS",
-            "PHO": "PHX", "BRK": "BKN", "CHO": "CHA", "WSH": "WAS"},
+            "PHO": "PHX", "BRK": "BKN", "CHO": "CHA", "WSH": "WAS",
+            "UTAH": "UTA"},
     "wnba": {"LV": "LVA", "NY": "NYL", "LA": "LAS", "GS": "GSV",
              "CONN": "CON"},
+    # ESPN's hockey spellings onto the league's own.
+    "nhl": {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL",
+            "UTAH": "UTA", "WAS": "WSH"},
 }
 
 

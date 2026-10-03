@@ -846,11 +846,36 @@ def _schedule_or_empty(teamdex, conn, sport, team, season=None):
         return {"season": season, "seasons": [], "games": []}
 
 
-def _depth_chart(sport, team):
-    """The team's published depth chart (NFL; nfl_build writes the file),
-    or None — the page then shows the order measured from the logs."""
-    if sport != "nfl":
+def _live_roster(sport, team):
+    """This club's entry on the league's roster board (web/data/
+    rosters_<sport>.json — the live feed where the league has one), or
+    None. The Roster tab draws it; the depth chart orders it."""
+    try:
+        with open(ROOT / "web" / "data" / f"rosters_{sport}.json", encoding="utf-8") as fh:
+            blob = json.load(fh)
+    except (OSError, ValueError):
         return None
+    entry = (blob.get("teams") or {}).get(team) or {}
+    players = entry.get("players") or []
+    if not players:
+        return None
+    return {"players": players, "source": blob.get("source") or "",
+            "generated_at": blob.get("generated_at") or "", "season": blob.get("season")}
+
+
+def _depth_chart(sport, team, conn=None, roster=None):
+    """The team's published depth chart (NFL; nfl_build writes the file);
+    for hockey and basketball, the club's live roster ordered by ice time
+    or minutes (`teamdex.usage_depth`); or None — the page then shows the
+    order measured from the logs."""
+    if sport != "nfl":
+        if conn is None or not roster:
+            return None
+        try:
+            from engine import teamdex
+            return teamdex.usage_depth(conn, sport, roster.get("players") or [])
+        except Exception:                                    # noqa: BLE001
+            return None
     try:
         from engine.sources.depthcharts import CHART_FILE
         with open(ROOT / CHART_FILE, encoding="utf-8") as fh:
@@ -3612,7 +3637,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                        # 2026-09-24, beside ESPN's Packers page). Same
                        # guard: either failing costs its own tab.
                        "schedule": _schedule_or_empty(teamdex, conn, sport, team),
-                       "depth": _depth_chart(sport, team)}
+                       # WHO IS ON IT TODAY (Ethan, 2026-10-03: "make sure
+                       # our rosters are good ... every single sport"):
+                       # the league's live roster board where there is one.
+                       "roster": _live_roster(sport, team)}
+                out["depth"] = _depth_chart(sport, team, conn, out["roster"])
                 if opp.strip():
                     rivals = teamdex.resolve(opp, sport, known)
                     if rivals:

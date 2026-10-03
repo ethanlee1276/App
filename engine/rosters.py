@@ -420,6 +420,107 @@ def cfb_feed_rosters(feed: dict, games_by_player: dict | None = None,
             "player_count": sum(t["count"] for t in teams.values())}
 
 
+#: Hockey positions in page order: centres, wings, defence, goalies. The
+#: league's feed files wings as L and R; the page says LW and RW.
+NHL_POSITION_ORDER = {"C": 0, "LW": 1, "RW": 2, "D": 3, "G": 4}
+NHL_POSITION_NAME = {"L": "LW", "R": "RW"}
+
+#: Basketball positions in page order, as ESPN files them.
+HOOPS_POSITION_ORDER = {"PG": 0, "G": 1, "SG": 2, "SF": 3, "F": 4, "PF": 5,
+                        "C": 6}
+
+
+def _age_on(born: str, today: str | None = None) -> int | None:
+    """Whole years old on ``today`` from an ISO birth date, or None."""
+    import datetime as _dt
+    try:
+        b = _dt.date.fromisoformat(str(born)[:10])
+    except ValueError:
+        return None
+    t = _dt.date.fromisoformat(today) if today else _dt.date.today()
+    return t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+
+
+def games_by_player(conn, sport: str, markets: tuple,
+                    seasons: list[int] | None = None) -> dict:
+    """``{(team, normalised name): (games, last period)}`` from our logs
+    for any league — the `cfb_games_by_player` join, with the appearance
+    markets named by the caller."""
+    q = ("SELECT player, team, MAX(period) AS last_seen, "
+         "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
+         "WHERE sport=? AND market IN (%s) "
+         "AND team IS NOT NULL AND team != ''" % ",".join("?" * len(markets)))
+    args: list = [sport, *markets]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " GROUP BY player, team"
+    return {(r["team"], _norm_key(r["player"])): (int(r["games"]), str(r["last_seen"]))
+            for r in conn.execute(q, args)}
+
+
+def feed_rosters(sport: str, feed: dict, games_by: dict | None = None,
+                 faces: dict | None = None, injuries: dict | None = None,
+                 today: str | None = None) -> dict:
+    """A league's own current rosters, in the page's payload shape.
+
+    Ethan, 2026-10-03: "make sure we're pulling all live data for NHL,
+    like all live rosters and injuries ... I want every single sport to
+    have the same thing." The NHL's roster comes from the league
+    (`nhldata.fetch_league_rosters`), the NBA's and WNBA's from ESPN's
+    per-team rosters (`espnrosters.fetch_league`). Before this both were
+    built from appearances, which for a league in its off-season is last
+    season's team: every summer signing absent, every departed player
+    still listed.
+
+    ``feed`` is ``{team: [person]}`` with ``player``/``name``, position,
+    number, height, weight, born/age, headshot. ``games_by`` decorates each
+    man with what we have logged for him; ``injuries`` (``{name: {status,
+    injury}}`` from ESPN's board) stamps the designation the way the NFL
+    page shows Sleeper's.
+    """
+    games = games_by or {}
+    inj = {_norm_key(k): v for k, v in (injuries or {}).items()}
+    order = NHL_POSITION_ORDER if sport == "nhl" else HOOPS_POSITION_ORDER
+    teams: dict[str, dict] = {}
+    for ab, people in (feed or {}).items():
+        rows = []
+        for p in people or []:
+            name = str(p.get("player") or p.get("name") or "").strip()
+            if not name:
+                continue
+            pos = str(p.get("position") or "").upper()
+            pos = NHL_POSITION_NAME.get(pos, pos) if sport == "nhl" else pos
+            played = games.get((ab, _norm_key(name)))
+            hurt = inj.get(_norm_key(name)) or {}
+            status = str(hurt.get("status") or p.get("status") or "")
+            low = status.lower()
+            rows.append({
+                "player": name, "team": ab, "position": pos, "depth_pos": pos,
+                "depth_order": None, "status": status,
+                "injury_status": status if hurt else "",
+                "questionable": low in INJURY_FLAG or "day-to-day" in low,
+                "unavailable": low in INJURY_OUT or low.startswith("out")
+                or "injured reserve" in low or low == "ir",
+                "injury": str(hurt.get("injury") or ""),
+                "rookie": False, "years_exp": None,
+                "number": p.get("number") if p.get("number") not in ("", None) else None,
+                "age": p.get("age") if isinstance(p.get("age"), int) else _age_on(p.get("born") or "", today),
+                "height": p.get("height") or None, "weight": p.get("weight") or None,
+                "shoots": p.get("shoots") or None, "birthplace": p.get("birthplace") or None,
+                "games": int(played[0]) if played else 0,
+                "last_seen": str(played[1]) if played else "",
+                "headshot": str(p.get("headshot") or "") or face_of(faces, name),
+            })
+        rows.sort(key=lambda r: (order.get(r["position"], 99), r["unavailable"],
+                                 -r["games"], r["player"]))
+        teams[ab] = {"players": rows, "count": len(rows),
+                     "unavailable": sum(1 for r in rows if r["unavailable"]),
+                     "rookies": 0}
+    return {"teams": teams, "team_count": len(teams),
+            "player_count": sum(t["count"] for t in teams.values())}
+
+
 def cfb_games_by_player(conn, seasons: list[int] | None = None) -> dict:
     """``{(team, normalised name): (games, last period)}`` from our logs.
 

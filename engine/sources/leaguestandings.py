@@ -54,6 +54,10 @@ ESPN_PATHS = {
     "wnba": "basketball/wnba",
 }
 
+#: Hockey: the league's own feed (the host every NHL score and box score
+#: here already comes from), keyed by the same abbreviations our games use.
+NHL_URL = "https://api-web.nhle.com/v1/standings/{date}"
+
 MLB_URL = ("https://statsapi.mlb.com/api/v1/standings"
            "?leagueId=103,104&season={season}&standingsTypes=regularSeason")
 
@@ -202,6 +206,11 @@ def fetch(sport: str, season: int) -> list[dict]:
         return parse_mlb(fetch_json(url, f"standings_mlb_{season}.json",
                                     ttl=STANDINGS_TTL,
                                     user_agent=DEFAULT_AGENT))
+    if sport == "nhl":
+        import datetime as _dt
+        day = _dt.date.today().isoformat()
+        return parse_nhl(fetch_json(NHL_URL.format(date=day), f"standings_nhl_{day}.json",
+                                    ttl=STANDINGS_TTL, user_agent=DEFAULT_AGENT), season)
     path = ESPN_PATHS.get(sport)
     if not path:
         raise DataUnavailable(f"no standings feed wired for {sport}")
@@ -218,3 +227,35 @@ def fetch(sport: str, season: int) -> list[dict]:
     return parse_espn(fetch_json(url, f"standings_{sport}_{season}_t2.json",
                                  ttl=STANDINGS_TTL,
                                  user_agent=DEFAULT_AGENT))
+
+
+def parse_nhl(payload, season: int | None = None) -> list[dict]:
+    """The NHL's standings envelope -> flat rows, one per club.
+
+    Overtime and shootout losses ride in ``ties`` (see
+    `engine.standings.OTL_SPORTS`). BEFORE OPENING NIGHT the league answers
+    with last season's final table; a row from another season is shown as
+    0-0-0 rather than as this year's record, because that is what this
+    season's standings are until a puck drops.
+    """
+    want = f"{season}{season + 1}" if season else ""
+    rows = []
+    for e in (payload or {}).get("standings") or []:
+        if not isinstance(e, dict):
+            continue
+        abbr = e.get("teamAbbrev")
+        abbr = abbr.get("default") if isinstance(abbr, dict) else abbr
+        if not abbr:
+            continue
+        fresh = not want or str(e.get("seasonId") or want) == want
+        n = (lambda k: int(_num(e.get(k), 0) or 0)) if fresh else (lambda k: 0)
+        code, count = str(e.get("streakCode") or ""), n("streakCount")
+        rows.append({
+            "team": str(abbr), "wins": n("wins"), "losses": n("losses"), "ties": n("otLosses"),
+            "points_for": float(n("goalFor")), "points_against": float(n("goalAgainst")),
+            "streak": count if code == "W" else -count if code in ("L", "OT") else 0,
+            "home_wins": n("homeWins"), "home_losses": n("homeLosses") + n("homeOtLosses"),
+            "away_wins": n("roadWins"), "away_losses": n("roadLosses") + n("roadOtLosses"),
+            "last10": (f"{n('l10Wins')}-{n('l10Losses')}-{n('l10OtLosses')}" if fresh else ""),
+        })
+    return rows

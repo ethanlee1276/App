@@ -235,7 +235,7 @@ def test_the_launcher_builds_them():
 
 def test_every_sport_with_a_board_gets_standings_except_ufc():
     import standings_build
-    assert set(standings_build.SPORTS) == {"nfl", "mlb", "nba", "wnba", "cfb"}
+    assert set(standings_build.SPORTS) == {"nfl", "mlb", "nba", "wnba", "cfb", "nhl"}
 
 
 

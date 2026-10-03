@@ -563,7 +563,7 @@ PRUNABLE_CACHE_PREFIXES = (
     "mlb_results_", "mlb_tx_", "mlb_log_", "mlb_person_", "mlb_splits_",
     "mlb_season_",
     "mlb_pbp_", "mlb_roster_", "mlb_pensched_", "mlb_watchsched_",
-    "standings_mlb_",
+    "standings_mlb_", "standings_nhl_",
     "nba_box_", "wnba_box_", "wnba_schedule_",
     # Hockey (2026-10-03): a final's box score is stored in history the day
     # it lands; a player's name and photo land in player_assets. All three

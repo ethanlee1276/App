@@ -136,6 +136,8 @@ def name_map(sport: str) -> dict:
         return dict(getattr(oddsapi, "NBA_TEAM_ABBR", {}) or {})
     if sport == "wnba":
         return dict(getattr(oddsapi, "WNBA_TEAM_ABBR", {}) or {})
+    if sport == "nhl":
+        return dict(getattr(oddsapi, "NHL_TEAM_ABBR", {}) or {})
     if sport == "cfb":
         try:
             from . import cfbteams
@@ -619,9 +621,13 @@ def squad(conn, sport: str, team: str, season: int | None = None,
     if season is None:
         return {"season": None, "positions": [], "players": 0}
     by_player = _roster(conn, sport, team, season)
+    hockey = sport == "nhl"
     groups: dict = {}
     for who in by_player.values():
-        lead = LEAD_MARKET.get(who["position"])
+        if hockey:
+            who["position"] = HOCKEY_POSITION_NAME.get(who["position"], who["position"])
+        lead = (("saves" if who["position"] == "G" else "points") if hockey
+                else LEAD_MARKET.get(who["position"]))
         stats = who["stats"]
         if lead not in stats:
             # The player's own biggest number, which is what a reader
@@ -639,6 +645,14 @@ def squad(conn, sport: str, team: str, season: int | None = None,
         groups.setdefault(who["position"], []).append(who)
     out = []
     for pos, players in groups.items():
+        if hockey:
+            # ICE TIME IS HOCKEY'S DEPTH CHART. No club publishes one;
+            # who the coach sends out most is the line he trusts, so a
+            # position reads by minutes a game, the first line first.
+            players.sort(key=lambda w: (-_toi_per_game(w), -w["games"], w["player"]))
+            out.append({"position": pos or "—", "players": players[:max(1, per_position)],
+                        "listed": len(players)})
+            continue
         players.sort(key=lambda w: (-w["games"],
                                     -((w["stats"][0]["total"] or 0.0)
                                       if w["stats"] else 0.0),
@@ -646,9 +660,21 @@ def squad(conn, sport: str, team: str, season: int | None = None,
         out.append({"position": pos or "—",
                     "players": players[:max(1, per_position)],
                     "listed": len(players)})
-    out.sort(key=lambda g: (_POSITION_ORDER.get(g["position"], 99),
-                            g["position"]))
+    order = HOCKEY_POSITION_ORDER if hockey else _POSITION_ORDER
+    out.sort(key=lambda g: (order.get(g["position"], 99), g["position"]))
     return {"season": season, "positions": out, "players": len(by_player)}
+
+
+#: Hockey's positions as a roster reads them, and the feed's wing codes.
+HOCKEY_POSITION_ORDER = {"C": 0, "LW": 1, "RW": 2, "D": 3, "G": 4}
+HOCKEY_POSITION_NAME = {"L": "LW", "R": "RW"}
+
+
+def _toi_per_game(who: dict) -> float:
+    for st in who.get("stats") or []:
+        if st.get("market") == "toi":
+            return float(st.get("per_game") or 0.0)
+    return 0.0
 
 
 def _position_order() -> dict:
@@ -724,12 +750,62 @@ STAT_SECTIONS = {
     ),
 }
 
-#: Which set of sections a sport gets. Only football has one today —
-#: baseball and basketball box scores are a different shape and a
-#: pitching table pretending to be a passing table would be worse than
-#: no table. `stat_tables` returns nothing for them and the page draws
-#: nothing, which is the honest answer until they get their own.
-STAT_SPORTS = {"nfl": "football", "cfb": "football"}
+# EVERY LEAGUE GETS ITS OWN (Ethan, 2026-10-03: "I want every single sport
+# to have the same thing"). Each from the markets that league's ingest
+# actually writes — baseball's box score carries hits, total bases, home
+# runs and plate appearances for a hitter and strikeouts and outs for a
+# pitcher; basketball's minutes, points, rebounds, assists and threes;
+# hockey's goals, assists, points, shots, power-play goals, blocks, hits
+# and ice time for a skater and saves, shots against and goals against for
+# a goalie. No column is estimated from one the feed does not carry.
+STAT_SECTIONS["hockey"] = (
+    {"key": "skaters", "title": "Skaters", "sort": "points", "rows": 20,
+     "columns": (("GP", "gp", None, None),
+                 ("G", "sum", "goals", None),
+                 ("A", "sum", "assists", None),
+                 ("PTS", "sum", "points", None),
+                 ("SOG", "sum", "sog", None),
+                 ("PPG", "sum", "ppg", None),
+                 ("BLK", "sum", "blocks", None),
+                 ("HIT", "sum", "hits", None),
+                 ("TOI/G", "per_game", "toi", None))},
+    {"key": "goalies", "title": "Goalies", "sort": "saves",
+     "columns": (("GP", "gp", None, None),
+                 ("GS", "sum", "started", None),
+                 ("SV", "sum", "saves", None),
+                 ("SA", "sum", "shots_against", None),
+                 ("GA", "sum", "goals_against", None),
+                 ("SV%", "pct3", "saves", "shots_against"),
+                 ("GAA", "per_game", "goals_against", None))},
+)
+STAT_SECTIONS["basketball"] = (
+    {"key": "scoring", "title": "Players", "sort": "pts", "rows": 15,
+     "columns": (("GP", "gp", None, None),
+                 ("MIN", "per_game", "min", None),
+                 ("PTS", "per_game", "pts", None),
+                 ("REB", "per_game", "reb", None),
+                 ("AST", "per_game", "ast", None),
+                 ("3PM", "per_game", "fg3m", None),
+                 ("TOTAL PTS", "sum", "pts", None))},
+)
+STAT_SECTIONS["baseball"] = (
+    {"key": "batting", "title": "Batting", "sort": "pa", "rows": 15,
+     "columns": (("GP", "gp", None, None),
+                 ("PA", "sum", "pa", None),
+                 ("H", "sum", "hits", None),
+                 ("TB", "sum", "total_bases", None),
+                 ("HR", "sum", "home_runs", None),
+                 ("H/G", "per_game", "hits", None))},
+    {"key": "pitching", "title": "Pitching", "sort": "outs", "rows": 15,
+     "columns": (("GP", "gp", None, None),
+                 ("IP", "ip", "outs", None),
+                 ("K", "sum", "strikeouts", None),
+                 ("K/9", "per9", "strikeouts", "outs"))},
+)
+
+#: Which set of sections a sport gets.
+STAT_SPORTS = {"nfl": "football", "cfb": "football", "nhl": "hockey",
+               "nba": "basketball", "wnba": "basketball", "mlb": "baseball"}
 
 #: How many rows a section prints. ESPN lists everyone who touched the
 #: ball; a page does not need the punter who took one snap.
@@ -754,10 +830,18 @@ def _cell(who: dict, kind: str, market, second):
         return st["total"]
     if kind == "per_game":
         return round(st["total"] / max(1, who.get("games") or 1), 1)
-    if kind == "ratio":
+    if kind == "ip":
+        # Innings the way a box score writes them: 6.2 is six and two outs.
+        outs = int(round(st["total"]))
+        return float(f"{outs // 3}.{outs % 3}")
+    if kind in ("ratio", "pct3", "per9"):
         den = stats.get(second)
         if den is None or not den.get("total"):
             return None
+        if kind == "pct3":
+            return round(st["total"] / den["total"], 3)
+        if kind == "per9":
+            return round(st["total"] * 27 / den["total"], 1)
         return round(st["total"] / den["total"], 1)
     return None
 
@@ -792,7 +876,7 @@ def stat_tables(conn, sport: str, team: str, season: int | None = None,
         if not here:
             continue
         here.sort(key=lambda w: -(w["stats"][spec["sort"]]["total"] or 0.0))
-        here = here[:max(1, rows)]
+        here = here[:max(1, spec.get("rows", rows))]
         cells = [[_cell(w, kind, m, m2) for _lab, kind, m, m2
                   in spec["columns"]] for w in here]
         keep = [i for i, _c in enumerate(spec["columns"])
@@ -808,3 +892,58 @@ def stat_tables(conn, sport: str, team: str, season: int | None = None,
                         "market": spec["sort"],
                         "value": here[0]["stats"][spec["sort"]]["total"]})
     return {"season": season, "sections": sections, "leaders": leaders}
+
+
+#: The market a league's playing time is logged under, for the measured
+#: depth chart.
+USAGE_MARKET = {"nhl": "toi", "nba": "min", "wnba": "min"}
+#: Each player's newest this-many games set his place.
+USAGE_WINDOW = 20
+
+
+def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW) -> dict | None:
+    """THE DEPTH CHART THE COACH ACTUALLY USES, for leagues with no
+    published one (Ethan, 2026-10-03: "make sure ... all the depth charts
+    is good ... I want every single sport to have the same thing").
+
+    Everyone on the club's CURRENT roster (the live feed — so a summer
+    signing is listed and a traded player is gone), grouped by roster
+    position and ordered by ice time / minutes a game over his own newest
+    ``window`` games, WHICHEVER TEAM he played them for. A newcomer is
+    placed by what he did last season elsewhere; a man with no logged
+    games sits at the bottom of his position, not off the chart.
+    """
+    market = USAGE_MARKET.get(sport)
+    if not market or not roster:
+        return None
+    from .rosters import _norm_key
+    top = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()
+    if not top or top[0] is None:
+        top = (0,)
+    # This season and last: enough for a twenty-game window, and a page
+    # request should not read three seasons of minutes to draw one club.
+    rows = conn.execute(
+        "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
+        "AND season>=? ORDER BY period DESC", (sport, market, int(top[0]) - 1)).fetchall()
+    per: dict = {}
+    for r in rows:
+        k = _norm_key(r["player"])
+        got = per.setdefault(k, [])
+        if len(got) < window:
+            got.append(float(r["value"] or 0.0))
+    order = HOCKEY_POSITION_ORDER if sport == "nhl" else {}
+    groups: dict = {}
+    for p in roster:
+        name = p.get("player") or ""
+        if not name:
+            continue
+        vals = [v for v in per.get(_norm_key(name), []) if v > 0]
+        avg = sum(vals) / len(vals) if vals else 0.0
+        groups.setdefault(p.get("position") or "—", []).append((avg, len(vals), name))
+    positions = []
+    for pos, people in groups.items():
+        people.sort(key=lambda x: (-x[0], -x[1], x[2]))
+        positions.append({"position": pos, "players": [n for _a, _g, n in people],
+                          "usage": [round(a, 1) for a, _g, _n in people]})
+    positions.sort(key=lambda g: (order.get(g["position"], 99), g["position"]))
+    return {"positions": positions, "source": "usage", "market": market, "window": window}

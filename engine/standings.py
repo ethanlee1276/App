@@ -45,12 +45,19 @@ from .seasons import season_of
 # Points/runs per game are worth showing; the label differs by sport and
 # so does what a bettor reads it for.
 SCORE_LABEL = {"nfl": "PF/PA", "cfb": "PF/PA",
-               "nba": "PPG", "wnba": "PPG", "mlb": "R/RA"}
+               "nba": "PPG", "wnba": "PPG", "mlb": "R/RA", "nhl": "GF/GA"}
 
 #: Leagues that actually play ties. Everywhere else an equal-score row is
 #: a game that did not finish (suspended, postponed) or one whose score we
 #: never got — counting it as a tie is how baseball ended up with 70-69-1.
 TIES_EXIST = {"nfl", "cfb"}
+
+#: Hockey has no ties but an overtime/shootout loss is its own column and
+#: worth a point. The league's feed carries it; it rides in ``ties`` so the
+#: win percentage below is hockey's points percentage exactly
+#: ((2W + OTL) / 2GP = (W + OTL/2) / GP). Our own count (``compute``)
+#: cannot tell an overtime loss from a regulation one and stays W-L.
+OTL_SPORTS = {"nhl"}
 
 
 @dataclass
@@ -225,7 +232,7 @@ def from_feed(sport: str, rows: list[dict], season: int,
         rec = Record(team=key, conference=conf, division=div)
         rec.wins = int(r.get("wins") or 0)
         rec.losses = int(r.get("losses") or 0)
-        rec.ties = int(r.get("ties") or 0) if sport in TIES_EXIST else 0
+        rec.ties = int(r.get("ties") or 0) if sport in TIES_EXIST | OTL_SPORTS else 0
         rec.points_for = float(r.get("points_for") or 0.0)
         rec.points_against = float(r.get("points_against") or 0.0)
         rec.home_wins = int(r.get("home_wins") or 0)
@@ -281,7 +288,7 @@ def _row(sport: str, rank: int, r: Record) -> dict:
         "pf_per_game": round(r.points_for / n, 1),
         "pa_per_game": round(r.points_against / n, 1),
         "record": (f"{r.wins}-{r.losses}"
-                   + (f"-{r.ties}" if r.ties else "")),
+                   + (f"-{r.ties}" if r.ties or sport in OTL_SPORTS else "")),
         "home": f"{r.home_wins}-{r.home_losses}",
         "away": f"{r.away_wins}-{r.away_losses}",
         "streak_label": ("—" if not r.streak else
@@ -293,6 +300,9 @@ def _row(sport: str, rank: int, r: Record) -> dict:
                      if r.last10.count('T') else "")) if r.last10
             else "—"),
     })
+    if sport in OTL_SPORTS:
+        d["otl"] = r.ties
+        d["points"] = 2 * r.wins + r.ties
     d.pop("results", None)              # ordering detail, not page content
     return d
 

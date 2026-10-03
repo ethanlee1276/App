@@ -200,10 +200,32 @@ def parse_roster(payload: dict, team: str) -> list[dict]:
             name = f"{_txt(p.get('firstName'))} {_txt(p.get('lastName'))}".strip()
             if not name or not p.get("id"):
                 continue
+            inches, pounds = p.get("heightInInches"), p.get("weightInPounds")
+            where = ", ".join(x for x in (_txt(p.get("birthCity")),
+                                          _txt(p.get("birthStateProvince")) or str(p.get("birthCountry") or "")) if x)
             out.append({"pid": str(p["id"]), "name": name, "team": team,
                         "position": str(p.get("positionCode") or ("G" if group == "goalies" else "")),
-                        "headshot": str(p.get("headshot") or "")})
+                        "headshot": str(p.get("headshot") or ""),
+                        # The bio ESPN's roster table prints, as the league files it.
+                        "number": p.get("sweaterNumber") if isinstance(p.get("sweaterNumber"), int) else None,
+                        "shoots": str(p.get("shootsCatches") or ""),
+                        "height": f"{inches // 12}'{inches % 12}\"" if isinstance(inches, int) and inches else None,
+                        "weight": f"{pounds} lb" if isinstance(pounds, int) and pounds else None,
+                        "born": str(p.get("birthDate") or ""), "birthplace": where})
     return out
+
+
+def fetch_league_rosters(teams=TEAMS, fetch=None) -> tuple[dict, list]:
+    """({team: [people]}, [teams that would not load]) — every club's current
+    roster off the same six-hour cache the nightly face refresh fills."""
+    fetch = fetch or fetch_roster
+    out, missed = {}, []
+    for team in teams:
+        try:
+            out[team] = parse_roster(fetch(team), team)
+        except DataUnavailable:
+            missed.append(team)
+    return out, missed
 
 
 def refresh_rosters(conn, date: str, teams=TEAMS, fetch=fetch_roster, out_dir=None) -> dict:

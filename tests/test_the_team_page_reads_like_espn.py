@@ -98,7 +98,7 @@ def test_the_build_writes_it_and_the_server_serves_it():
         server.ROOT = was
     body = (ROOT / "server.py").read_text(encoding="utf-8")
     assert '"schedule": _schedule_or_empty(teamdex, conn, sport, team),' in body
-    assert '"depth": _depth_chart(sport, team)}' in body
+    assert 'out["depth"] = _depth_chart(sport, team, conn, out["roster"])' in body
 
 
 # --- the page -----------------------------------------------------------------
@@ -205,7 +205,7 @@ def test_a_key_says_what_the_letters_mean():
     what the letters mean". Under the depth chart and the roster; the
     league's own letters; every letter the mark can draw is in a key."""
     assert "${teamInjKeyHTML(d.sport)}" in _fn("teamDepthHTML")
-    assert "rosterTab + teamInjKeyHTML(d.sport)" in _fn("renderTeamPage")
+    assert "(teamLiveRosterHTML(d) || rosterTab) + teamInjKeyHTML(d.sport)" in _fn("renderTeamPage")
     key = _fn("teamInjKeyHTML")
     assert 'sport === "nfl" || sport === "cfb" ? "football" : "other"' in key
     i = APP.index("const TEAM_INJ_KEY = ")
