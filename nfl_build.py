@@ -1579,6 +1579,10 @@ def main() -> None:
                     depth=None, category="board", grade_label=_label)
                 if _n:
                     print(f"Most Likely board ({_label}): {_n} row(s) journaled on paper.")
+            from engine.likelyboard import journal_held as _lb_held
+            _n = _lb_held(lconn, result, "nfl", result.get("date", ""))
+            if _n:
+                print(f"Most Likely board (held back): {_n} row(s) journaled on paper.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             #

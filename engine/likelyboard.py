@@ -93,6 +93,37 @@ RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "boa
 BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 
 TIERS = (("top", "Top pick"), ("strong", "Strong"), ("look", "Worth a look"))
+#: The paper bucket for picks the board held back (see `held_reason`).
+HELD_CATEGORY, HELD_LABEL = "held", "Held back"
+
+
+def held_reason(r: dict, checks: dict) -> str | None:
+    """Why this pick comes OFF the board, or None — it stays.
+
+    Ethan, 2026-10-04: "the point of most likely is to give picks to what
+    we think is going to happen based off all data we collect ... offense
+    and defense and game script and past picks wins and losses ... I don't
+    wanna take picks off because they are going bad, only if they also
+    don't link to what we are trying to achieve."
+
+    So a losing record ALONE never takes a pick off; the record's
+    correction lowers its chance and its tier, and it stays. It comes off
+    only when TWO of our own reads say no and only the model says yes:
+
+      * the record has PROVEN that picks like it over-claim — likelycal
+        (its maker on its side) or likelyctx (a football flag) lowered
+        its chance on games the fit never saw; and
+      * the offence-against-defence read leans the OTHER way (the matchup
+        check says no — not "cannot say", which keeps it).
+
+    A pick already posted (``locked``) is never taken off; it keeps its
+    seat until its game, as every posted pick does."""
+    if r.get("locked") or checks.get("matchup") is not False:
+        return None
+    proven = r.get("ctx_note") or r.get("cal_note")
+    if not proven:
+        return None
+    return f"held back: {proven}, and our matchup read leans the other way"
 TIER_LABEL = dict(TIERS)
 
 
@@ -455,7 +486,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             _ctx.apply(_rows, sport)
     except Exception:                                        # noqa: BLE001
         pass
-    rows, tiers, lanes = [], {t: 0 for t, _ in TIERS}, {}
+    rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
         lane = lane_of(r)
@@ -480,6 +511,12 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
                                 " so it does not count as a second opinion")
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
+        why_held = held_reason(r, checks)
+        if why_held:
+            r.update({"lane": lane, "checks": checks, "check_notes": notes, "held_note": why_held,
+                      "tier": "held", "tier_label": HELD_LABEL})
+            held.append(r)
+            continue
         tier = tier_of(checks)
         # A TOUCHDOWN UNDER THE MAIN LIST'S BAR, BACKED BY THE MATCHUP.
         # Ethan, 2026-09-27, on Breece Hall at 42% reading "Top pick" beside
@@ -510,7 +547,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
     return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
-            "capped": capped}
+            "capped": capped, "held": held}
 
 
 def _past(odds, cap: int) -> bool:
@@ -559,7 +596,20 @@ def journal(lconn, result: dict, sport: str, date: str = "") -> int:
             lconn, {"sport": sport, "date": date or result.get("date", ""), "games": result.get("games") or [],
                     "most_likely": journal_rows(result.get("likely_board"), tier)},
             depth=None, category="board", grade_label=label) or 0
+    n += journal_held(lconn, result, sport, date)
     return n
+
+
+def journal_held(lconn, result: dict, sport: str, date: str = "") -> int:
+    """The held-back picks on paper in their own bucket, so the record — not
+    the argument in `held_reason` — says whether holding them was right."""
+    from . import ledger
+    held = (result.get("likely_board") or {}).get("held") or []
+    if not held:
+        return 0
+    return ledger.log_most_likely(
+        lconn, {"sport": sport, "date": date or result.get("date", ""), "games": result.get("games") or [],
+                "most_likely": held}, depth=None, category=HELD_CATEGORY, grade_label=HELD_LABEL) or 0
 
 
 def journal_rows(board: dict, tier: str) -> list:

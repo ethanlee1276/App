@@ -59,7 +59,7 @@ from engine import ledger as L                                  # noqa: E402
 SECTION = {"main": "Edge picks", "paper": "Edge picks", "likely": "Most Likely", "likely_live": "Most Likely",
            "board": "Most Likely by tier", "potd": "Pick of the Day", "matchup_td": "Matchup TD picks",
            "matchup_prop": "Matchup picks", "td_scenario": "TD scenarios", "bold": "Bolder than the books",
-           "longshot": "Long shots", "plan_gap": "Market gaps"}
+           "longshot": "Long shots", "plan_gap": "Market gaps", "held": "Held back by the board"}
 
 #: Where each league's board is published (engine/boardlint's map).
 BOARD_FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "mlb": "mlb_recommendations.json",

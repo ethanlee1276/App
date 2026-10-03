@@ -144,6 +144,16 @@ def _verdict(res: dict) -> dict:
             "held_out": {k: ho.get(k) for k in ("n", "games", "raw", "corrected", "gain", "lo", "hi")}}
 
 
+def held_record(lconn, sport: str) -> dict:
+    """The picks the board HELD BACK (likelyboard.held_reason), graded at
+    the chance they carried. If they hit about as often as we claimed,
+    holding them cost us picks that were fine, and the page says so."""
+    rows = [{"won": r["status"] == "won", "p": float(r["p"])} for r in lconn.execute(
+        "SELECT status, COALESCE(raw_prob, hit_prob) p FROM bets WHERE LOWER(sport)=? AND category='held' "
+        "AND status IN ('won','lost') AND COALESCE(raw_prob, hit_prob) IS NOT NULL", (sport,))]
+    return grade(rows)
+
+
 def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
     """Refit one league's corrections and grade its record. Returns the
     report entry."""
@@ -151,6 +161,7 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
     rows = likelyctx.journal(lconn, sport)
     entry = {"sport": sport, "settled": len(rows), "record": grade(rows), "slices": slices(rows),
              "at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")}
+    entry["held"] = held_record(lconn, sport)
     cal = likelycal.fit(lconn, sport)
     if cal["passed"]:
         likelycal.save(cal)

@@ -10245,7 +10245,28 @@ function oneBoardHTML() {
     ${obShowingHTML(rows, tier)}
     ${!rows.length ? `<div class="ls-note">No ${tier === "all" ? "" : "pick in this tier "}of this kind tonight — pick another chip.</div>`
       : view === "game" ? obByGameHTML(rows) : obTierSections(rows)}
+    ${obHeldHTML()}
   </div>`;
+}
+/* HELD BACK (engine/likelyboard.held_reason). Ethan, 2026-10-04: "I don't
+   wanna take picks off bc they are going bad only if they also don't link
+   to what we are trying to achieve." A pick comes off only when our record
+   has proven its kind over-claims AND the matchup read leans the other way;
+   it is listed here with that reason and graded on paper like any other. */
+function obHeldHTML() {
+  const held = ((((state.data || {}).likely_board || {}).held) || []).filter((r) => !rowStarted(r));
+  if (!held.length) return "";
+  return `<details class="ls-note likely-pulled">
+      <summary><b>Held back</b> <span class="mini">${held.length}</span></summary>
+      <p class="likely-pulled-lede">Our model liked these, but two of our other reads said no: our record
+        shows picks like them have been losing, and the offense-against-defense matchup leans the other
+        way. A losing record alone never takes a pick off. These are still graded, so the record says
+        whether holding them back was right.</p>
+      ${held.map((r) => `<div class="ml-pulled-row"><span class="ml-pulled-what">
+        <b>${escapeHtml((r.kind === "game" ? (r.pick_label || r.player) : r.player) || "")}</b>
+        <span class="ml-pulled-facts">${escapeHtml(obBetLine(r))}</span>
+        <span class="ml-pulled-why">${escapeHtml(r.held_note || "")}</span></span></div>`).join("")}
+    </details>`;
 }
 function obSortHTML() {
   return `<label class="ob-sort">Sorted by <select data-ob-sort aria-label="Sort the picks">${OB_SORTS.map(([k, label]) =>
@@ -17633,6 +17654,10 @@ function recBoardLearningSection(bl, sport) {
         ? moved.map(([g, v]) => `<div class="rec-note">${escapeHtml(g.replace("|", " · "))}: hit ${pct(v.hit)} of ${v.n} where we said ${pct(v.claimed)} — now pulled ${Math.round((1 - v.k) * 100)}% of the way to the price</div>`).join("")
         : `<div class="rec-note">The record backs every group’s numbers as they are — nothing pulled.</div>`)
       : `<div class="rec-note">No correction proven yet on games the fit never saw — the board shows its own numbers.</div>`;
+    const h = e.held || {};
+    const held = h.n ? `
+      <div class="mini" style="padding:8px 14px 2px;opacity:.75">Picks the board held back (our record and the matchup both said no)</div>
+      ${sliceRow({ ...h, key: "Held back, graded anyway" })}` : "";
     const sc = e.scout;
     const scout = sc ? `
       <div class="mini" style="padding:8px 14px 2px;opacity:.75">The scout’s flags (${sc.matched} picks matched to their game)${sc.passed ? " — correction adopted" : ""}</div>
@@ -17646,7 +17671,7 @@ function recBoardLearningSection(bl, sport) {
         <div class="rec-row tall"><b style="flex:1">${escapeHtml(sp.toUpperCase())} — ${r.won ?? 0}-${(r.n ?? 0) - (r.won ?? 0)} on ${(r.n ?? 0).toLocaleString()} graded picks</b>
           <span>hit ${pct(r.hit)} · said ${pct(r.said)}</span>
           <span style="color:${tone(r.verdict)}">${escapeHtml(r.verdict || "")}</span></div>
-        ${cuts}${scout}
+        ${cuts}${scout}${held}
         <div class="mini" style="padding:8px 14px 2px;opacity:.75">What it corrected by itself · last run ${escapeHtml((e.at || "").replace("T", " "))} UTC</div>
         ${corrected}
       </div>`;

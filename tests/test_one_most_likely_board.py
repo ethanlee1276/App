@@ -328,6 +328,31 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     assert 'if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";' in js
 
 
+
+def test_a_losing_pick_comes_off_only_when_our_reads_also_say_no():
+    """Ethan, 2026-10-04: "I don't wanna take picks off bc they are going bad
+    only if they also don't link to what we are trying to achieve." Losing
+    alone keeps a pick; losing AND the matchup leaning the other way takes
+    it off, into the held list with the reason; a posted pick never."""
+    against = {"kind": "prop", "player": "Garrett Wilson", "team": "NYJ", "opponent": "DET", "sources": ["likely"],
+               "market": "rec_yds", "side": "OVER", "line": 60.5, "odds": -110, "model_prob": 0.66,
+               "implied_prob": 0.52}
+    backed = {"kind": "prop", "player": "Amon-Ra St. Brown", "team": "DET", "opponent": "NYJ", "sources": ["likely"],
+              "market": "receptions", "side": "OVER", "line": 6.5, "odds": -130, "model_prob": 0.70,
+              "implied_prob": 0.57}
+    losing = {"nfl": {"groups": {"list|over": {"k": 0.5, "n": 80, "hit": 0.50, "claimed": 0.66}}}}
+    b = B.build(_result(most_likely=[dict(against), dict(backed)]), calibration=losing)
+    shown = {r["player"] for r in b["rows"]}
+    assert shown == {"Amon-Ra St. Brown"}, "losing, but the matchup backs him: he stays"
+    assert [r["player"] for r in b["held"]] == ["Garrett Wilson"]
+    assert "matchup read leans the other way" in b["held"][0]["held_note"]
+    # The matchup against him, but no proven losing record: he stays.
+    b = B.build(_result(most_likely=[dict(against)]))
+    assert [r["player"] for r in b["rows"]] == ["Garrett Wilson"] and b["held"] == []
+    # Already posted: never taken off.
+    b = B.build(_result(most_likely=[dict(against, locked=True)]), calibration=losing)
+    assert [r["player"] for r in b["rows"]] == ["Garrett Wilson"] and b["held"] == []
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

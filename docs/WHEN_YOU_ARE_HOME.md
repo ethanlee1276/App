@@ -14,46 +14,59 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL deep audit — round 2, after the first run (2026-10-03, evening)
+### NFL Most Likely — run these when you're home (2026-10-04)
 
-What the first run showed: the Most Likely list itself holds up (hit 70%
-where it said 65%, 171 picks). The losses are the picks the board adds
-from elsewhere: the "bolder than the books" picks went about 23-38 while
-claiming 75%, the matchup picks hit 30% where they said 49%, and the
-board's unders hit 45% where they said 66%. That is exactly what M1's
-calibration corrects, and it now runs by itself (M1). The first run also had a
-bug: the player logs never joined to their games (the two tables write
-different game ids). That is why every pick read "thin sample" and the
-history replay came back empty. It is fixed now, so wait until the box
-has pulled the new code (`git -C /srv/qellys log --oneline -1` shows
-"likelycal finds the bold picks" or anything newer).
+First make sure the box has the new code. This should print a line saying
+"Most Likely: a losing pick comes off only when our reads also say no",
+or anything newer:
 
-**M1. Nothing to run any more — it runs itself.** After every settle
-pass that grades a new Most Likely pick, the site refits the record's
-correction for every league (and the scout's flags for the NFL). It saves
-a correction only if it scores better on games it never learned from, and
-removes it the day it stops. It also regrades the record by where the pick
-came from, by market and by the chance claimed. All of it shows on the
-Record page under **What it learned → Where Most Likely wins and loses**.
+```
+git -C /srv/qellys log --oneline -1
+```
 
-If you want it before Sunday's board instead of after the next settle,
-this does the same thing now and prints what it found (optional; paste it
-if you like):
+**N1. Make it learn now, and see what it learns** (paste the output). It
+runs by itself after every settle; this just does it now instead of after
+Sunday's games. For every league it refits the record's correction and
+the NFL scout's flags, saves only what passes on games it never saw,
+and prints where each league wins and loses:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
 ```
 
-To undo a correction: `sudo -u qellys rm /srv/qellys/data/models/likely_calibration.json`
-(it comes back on its own if the record still proves it).
+**N2. The football history check, with every season this time** (paste).
+Read-only. The first run only reached 2025 because of a bug that is now
+fixed:
 
-**N1 (optional deep dive, read-only).** The full football breakdown by
-game script, spread and total, plus the 2021-2025 replay:
+```
+cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
+```
+
+**N3. The full record breakdown again** (paste). Read-only. Game script,
+spread, total, position, where each pick came from:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 nflaudit.py
-cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
 ```
+
+**N4. The NHL shots load that ended instantly** (paste):
+
+```
+tail -20 /tmp/nhl_shots.log
+```
+
+What changes on the board, so you know what you're looking at:
+- No pick comes off for losing alone. The record's correction lowers its
+  chance, which can move it down a tier, and it stays.
+- A pick comes off only when our record proves picks like it lose AND the
+  offense-vs-defense matchup leans the other way. Those go in a closed
+  **Held back** section at the bottom of the Most Likely page with the
+  reason, and they are still graded (Record page → What it learned) so
+  we can see whether holding them was right.
+- A pick that was already posted never comes off.
+
+To undo a correction: `sudo -u qellys rm /srv/qellys/data/models/likely_calibration.json`
+(it comes back on its own if the record still proves it).
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 
