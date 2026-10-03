@@ -117,9 +117,9 @@ def test_the_game_page_draws_the_tape_and_the_reads():
                 "Facing a lineup that strikes out ${pct(lineK)}", "${players.map(scanReadHTML).join(\"\")}",
                 'id="gp-sec-scan"'):
         assert bit in fn, bit
-    assert "${matchupScanHTML(g) || mlbScanHTML(g)}" in js
-    assert '(g.scan && g.scan.units) || g.mlb_tape ? ["gp-sec-scan", "Matchup scan"] : null,' in js
-    assert 'Also noticed — not counted${state.sport === "mlb" ? "" : ", no lift when tested"}' in js, \
+    assert "${matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}" in js
+    assert '(g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape ? ["gp-sec-scan", "Matchup scan"] : null,' in js
+    assert 'Also noticed — not counted${["mlb", "nhl"].includes(state.sport) ? "" : ", no lift when tested"}' in js, \
         "baseball's noticed items were never tested; the page must not say they were"
     assert ".mlb-tape { display: grid;" in css
     src = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()

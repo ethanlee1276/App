@@ -13149,8 +13149,7 @@ function scanWhyList(x) {
   return `<ul class="ms-why">
         ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
         ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
-        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${
-          state.sport === "mlb" || state.sport === "nhl" ? "" : ", no lift when tested"}</li>
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${["mlb", "nhl"].includes(state.sport) ? "" : ", no lift when tested"}</li>
           ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>`;
 }
 
@@ -13946,7 +13945,7 @@ function renderGamePage() {
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       gamePlanHTML(g) ? ["gp-sec-plan", "Game plan"] : null,
-      (g.scan && g.scan.units) || g.mlb_tape ? ["gp-sec-scan", "Matchup scan"] : null,
+      (g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
       matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,

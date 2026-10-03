@@ -288,7 +288,7 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     sport's own — the scan in football, the projection's Matchup step in
     baseball, nothing yet in basketball (whose picks top out at Strong,
     and the check says why)."""
-    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model"}
+    assert B.MATCHUP_SOURCE == {"nfl": "scan", "cfb": "scan", "mlb": "scan+model", "nhl": "scan"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,
                 "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},
