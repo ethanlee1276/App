@@ -151,6 +151,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # only the note about a refused re-quote is swallowed, and the
         # cursor it returns is the insert's own either way.
         "_insert_bet",
+        # THE TOUCHDOWN TEAM-TOTAL FIT (engine/deepfit, 2026-10-04): its
+        # failure is a "⚠️ touchdown team-total fit skipped: <error>" log
+        # line, which no quiet week prints.
+        "refit_td_scale",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep
