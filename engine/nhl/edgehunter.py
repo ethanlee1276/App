@@ -26,14 +26,17 @@ THE 100-POINT EDGE SCORE uses Ethan's weights (EDGE_WEIGHTS). Where our
 data carries the factor it is scored; where it does not apply to a market
 (a goalie's edge on a blocked-shots prop) its weight is left out and the
 score is rescaled over the factors that do — so a prop is never marked
-down for a factor that cannot touch it. WHAT OUR DATA DOES NOT CARRY YET,
-said rather than faked: 5-on-5 expected goals, high-danger chances, GSAx /
-xSV%, line combinations and PP units (NHL EDGE / MoneyPuck are not wired).
-The "process" factor reads shots for and against a game from our box
-scores; "goalie" reads the probable starter's REGRESSED save rate (and
-names it when his raw rate runs hot or cold against it — the regression
-hunting ground); "deployment" reads ice time and its trend; "special
-teams" reads power-play goals. Opening lines and CLV are tracked by the
+down for a factor that cannot touch it. SHOT QUALITY comes from our own
+expected-goals model (engine/nhl/xg.py, fitted on the league's play-by-play):
+where it has the shots, "process" reads the opponent's 5-on-5 expected goals
+against a game for a goal-driven prop and each side's 5-on-5 xG share for a
+game line, and "goalie" reads goals saved above expected (goals allowed ÷
+expected, regressed); without it they fall back to shots for and against
+from our box scores and the REGRESSED save rate (named when his raw rate
+runs hot or cold against it — the regression hunting ground). WHAT OUR
+DATA DOES NOT CARRY YET, said rather than faked: line combinations and PP
+units (NHL EDGE / MoneyPuck are not wired). "deployment" reads ice time and
+its trend; "special teams" reads power-play goals. Opening lines and CLV are tracked by the
 journal like every board's.
 
 Tiers (Ethan's): Elite 8%+ with strong support and low/moderate variance;
@@ -79,6 +82,8 @@ MIN_GAMES = 10
 #: markets read the OPPOSING starter; saves read his own).
 GOALIE_DEPENDENT = {"goals", "anytime_goal", "points", "assists", "saves",
                     "moneyline", "spread", "total"}
+#: Skater markets that turn on goals (process reads chances allowed).
+GOAL_DRIVEN = {"goals", "anytime_goal", "points", "assists"}
 #: The player's own record at the line is "Model B"; it is shrunk toward
 #: the market by this many phantom games before it votes.
 RECORD_PRIOR_GAMES = 10
@@ -200,10 +205,16 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
 
     parts["discrepancy"] = (EDGE_WEIGHTS["discrepancy"] * _clamp(edge / 0.10),
                             f"model {win:.0%} vs market {fair:.0%} ({edge:+.1%})")
-    # PROCESS — shots for and against a game, from our box scores.
+    # PROCESS — for a goal-driven prop, the chances the opponent allows at
+    # 5-on-5 (our expected goals); otherwise shots for and against a game.
+    xavg, xopp = _league_avg(teams, "xga_ev"), (teams.get(opponent) or {}).get("xga_ev")
     key = "sog_for" if goalie else "sog_against"
     avg, opp_rate = _league_avg(teams, key), (teams.get(opponent) or {}).get(key)
-    if avg and opp_rate:
+    if market in GOAL_DRIVEN and xavg and xopp:
+        z = xopp / xavg - 1
+        parts["process"] = (EDGE_WEIGHTS["process"] * _clamp(d * z / 0.12),
+                            f"{opponent} allows {xopp:.2f} expected goals a game at 5-on-5 ({z:+.0%} vs the league)")
+    elif avg and opp_rate:
         z = opp_rate / avg - 1
         what = "takes" if goalie else "allows"
         parts["process"] = (EDGE_WEIGHTS["process"] * _clamp(d * z / 0.08),
@@ -214,10 +225,19 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
         diff = me["sv"] - lsv
         parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * diff / 0.02),
                            f"{me.get('starter') or 'the starter'} saves .{round(me['sv'] * 1000):03d} "
-                           f"regressed ({diff:+.3f} vs the league)")
+                           f"regressed ({diff:+.3f} vs the league)"
+                           + (f", {me['gsax']:+.1f} goals saved above expected lately"
+                              if me.get("gsax") is not None else ""))
     elif market in GOALIE_DEPENDENT and not goalie:
         if not them.get("starter_sure"):
             passes.append(f"{opponent}'s starting goalie is not settled — no goalie-dependent bet")
+        elif them.get("gskill") is not None:
+            # Goals allowed ÷ expected, regressed: above 1 lets in more than
+            # his shots were worth — more goals for this skater.
+            lean = them["gskill"] - 1
+            note = (f"faces {them.get('starter')}, {them.get('gsax', 0):+.1f} goals saved above expected "
+                    f"lately (lets in {them['gskill']:.2f}× what his shots were worth, regressed)")
+            parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * lean / 0.10), note)
         elif them.get("sv") is not None and lsv:
             diff = lsv - them["sv"]
             note = (f"faces {them.get('starter')}, .{round(them['sv'] * 1000):03d} regressed "
@@ -319,7 +339,12 @@ def assess_game(card: dict, home: str, away: str, ctx: dict | None = None,
             parts["process"] = (EDGE_WEIGHTS["process"] * _clamp(0.5 + d * z / 0.10),
                                 f"the two clubs take {sum(both):.0f} shots a game together ({z:+.0%} vs the league)")
         lsv = league.get("sv")
-        if lsv and hc.get("sv") is not None and ac.get("sv") is not None:
+        if hc.get("gskill") is not None and ac.get("gskill") is not None:
+            lean = (hc["gskill"] + ac["gskill"]) / 2 - 1
+            parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * lean / 0.08),
+                               f"starters {hc.get('gsax', 0):+.1f} and {ac.get('gsax', 0):+.1f} goals saved "
+                               f"above expected")
+        elif lsv and hc.get("sv") is not None and ac.get("sv") is not None:
             diff = lsv - (hc["sv"] + ac["sv"]) / 2
             parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * diff / 0.015),
                                f"starters .{round(hc['sv'] * 1000):03d} and .{round(ac['sv'] * 1000):03d} regressed")
@@ -327,13 +352,24 @@ def assess_game(card: dict, home: str, away: str, ctx: dict | None = None,
         team = card.get("team") or ""
         other = away if team == home else home
         mine, theirs = teams.get(team) or {}, teams.get(other) or {}
-        if mine.get("sog_for") and theirs.get("sog_for"):
+        if mine.get("xgf_ev") and theirs.get("xgf_ev") and mine.get("xga_ev") and theirs.get("xga_ev"):
+            xshare = lambda t: t["xgf_ev"] / (t["xgf_ev"] + t["xga_ev"])  # noqa: E731
+            gap = xshare(mine) - xshare(theirs)
+            parts["process"] = (EDGE_WEIGHTS["process"] * _clamp(0.5 + gap / 0.08),
+                                f"{team} holds {xshare(mine):.0%} of its games' 5-on-5 expected goals, "
+                                f"{other} {xshare(theirs):.0%}")
+        elif mine.get("sog_for") and theirs.get("sog_for"):
             share = lambda t: t["sog_for"] / max(t["sog_for"] + t.get("sog_against", t["sog_for"]), 1)  # noqa: E731
             gap = share(mine) - share(theirs)
             parts["process"] = (EDGE_WEIGHTS["process"] * _clamp(0.5 + gap / 0.06),
                                 f"{team} wins {share(mine):.0%} of its games' shots, {other} {share(theirs):.0%}")
         mc, tc = ctx.get(team) or {}, ctx.get(other) or {}
-        if mc.get("sv") is not None and tc.get("sv") is not None:
+        if mc.get("gskill") is not None and tc.get("gskill") is not None:
+            gap = tc["gskill"] - mc["gskill"]
+            parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + gap / 0.10),
+                               f"{mc.get('starter')} {mc.get('gsax', 0):+.1f} vs "
+                               f"{tc.get('starter')} {tc.get('gsax', 0):+.1f} goals saved above expected")
+        elif mc.get("sv") is not None and tc.get("sv") is not None:
             gap = mc["sv"] - tc["sv"]
             parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + gap / 0.02),
                                f"{mc.get('starter')} .{round(mc['sv'] * 1000):03d} vs "

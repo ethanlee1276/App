@@ -13583,9 +13583,10 @@ function mlbScanHTML(g) {
 
 /* THE NHL MATCHUP SCAN on the game page (engine/nhl/scan; Ethan,
    2026-10-03: "the who could do good and who could struggle and all that").
-   Scalpy NHL 1.0's order: each side's probable starter first, then goals
-   and shots for and against a game with their league ranks, rest and the
-   expected goals; who is out; then the read on every key skater and both
+   Scalpy NHL 1.0's order: each side's probable starter first (goals saved
+   above expected when the shot model has him), then goals, shots and 5-on-5
+   expected goals for and against a game with their league ranks, rest and
+   the expected goals; who is out; then the read on every key skater and both
    starters, in the football scan's own rows. */
 function nhlScanHTML(g) {
   const t = g && g.nhl_tape;
@@ -13604,9 +13605,11 @@ function nhlScanHTML(g) {
     return `<div class="card mlb-tape-side">
       <div class="ms-sub">${escapeHtml(teamName(team))}</div>
       <div class="mlb-tape-row">${s.starter ? `<b>${escapeHtml(s.starter)}</b>${sv(s.starter_sv)}${
+        s.starter_gsax != null ? ` · ${Number(s.starter_gsax) > 0 ? "+" : ""}${num(s.starter_gsax, 1)} saved above expected` : ""}${
         s.starter_sure ? "" : ` <span class="chip">not settled</span>`}` : `<span class="mini">Starter not known yet</span>`}</div>
       <div class="mlb-tape-row">Goals a game ${num(s.gf)}${rk(r.gf)} · allowed ${num(s.ga)}${rk(r.ga)}</div>
       <div class="mlb-tape-row">Shots a game ${num(s.sog_for, 1)}${rk(r.sog_for)} · allowed ${num(s.sog_against, 1)}${rk(r.sog_against)}</div>
+      ${s.xgf_ev != null ? `<div class="mlb-tape-row">5-on-5 expected goals ${num(s.xgf_ev)}${rk(r.xgf_ev)} · allowed ${num(s.xga_ev)}${rk(r.xga_ev)}</div>` : ""}
       ${s.xg != null ? `<div class="mlb-tape-row">Expected tonight: ${num(s.xg)} regulation goals</div>` : ""}
       ${s.b2b ? `<div class="mlb-tape-row"><span class="chip down">second night of a back-to-back</span></div>` : ""}
       ${inj.length ? `<div class="mlb-tape-row mini">Injury report: ${inj.map((i) => `${escapeHtml(i.player)} (${escapeHtml(String(i.status || "").toLowerCase())})`).join(", ")}</div>` : ""}

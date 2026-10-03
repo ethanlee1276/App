@@ -174,8 +174,11 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     elif them.get("starter"):
         sv = them.get("sv")
         if them.get("starter_sure") and sv is not None:
+            gsax = them.get("gsax")
             reasons.append(f"Goalie impact: faces {them['starter']} (.{round(sv * 1000):03d} save rate, "
-                           f"regressed over his recent seasons)")
+                           f"regressed over his recent seasons"
+                           + (f"; {gsax:+.1f} goals saved above expected lately" if gsax is not None else "")
+                           + ")")
         else:
             flags.append("opposing starter unsure")
             reasons.append(f"Goalie impact: {opponent}'s starter is not settled — read from the team's "
@@ -190,8 +193,17 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         elif swing > M.ROLE_SWING:
             passes.append(f"ice time moved {swing:.0%} over his last 5 games")
         if proj.get("sh") is not None:
-            reasons.append(f"Finishing regressed: {proj['sh']:.1%} shooting, pulled toward the league rate "
+            toward = (f"what his shots were worth ({proj['xsh']:.1%})" if proj.get("xsh") is not None
+                      else "the league rate")
+            reasons.append(f"Finishing regressed: {proj['sh']:.1%} shooting, pulled toward {toward} "
                            f"— volume over finishing")
+        xp = proj.get("xg_player")
+        if xp and xp.get("iff"):
+            luck = xp["goals"] - xp["ixg"]
+            reasons.append(f"Shot quality: {xp['ixg']:.1f} expected goals on {xp['iff']} unblocked attempts "
+                           f"over his last {xp['games']} games, {xp['goals']} scored"
+                           + (f" — running {'hot' if luck > 0 else 'cold'} by {abs(luck):.1f}"
+                              if abs(luck) >= M.LUCK_GOALS else ""))
     if me.get("xg") is not None and them.get("xg") is not None:
         reasons.append(f"Game script: {prop.team} {me['xg']:.2f} – {opponent} {them['xg']:.2f} expected "
                        f"regulation goals")
@@ -273,8 +285,13 @@ def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = Non
         lam = list(lam)
     goalie_note = []
     for i, side in ((1, hc), (0, ac)):          # the home goalie faces the away goals, and back
-        if side.get("starter_sure") and side.get("sv") is not None and side.get("team_sv") is not None:
+        if side.get("starter_sure") and side.get("gskill") and side.get("team_gskill"):
+            f = side["gskill"] / side["team_gskill"]          # against chances, when the xG model has them
+        elif side.get("starter_sure") and side.get("sv") is not None and side.get("team_sv") is not None:
             f = (1 - side["sv"]) / max(1 - side["team_sv"], 1e-6)
+        else:
+            f = None
+        if f is not None:
             f = max(1 - M.GOALIE_CAP, min(1 + M.GOALIE_CAP, f))
             lam[i] *= f
             if abs(f - 1) >= 0.03:
@@ -283,7 +300,9 @@ def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = Non
     probs = M.game_probs(*lam)
     out = []
     why = (f"Expected goals {g.home} {lam[0]:.2f} – {g.away} {lam[1]:.2f} (regulation), "
-           f"from each side's goals for and against" + ("; " + "; ".join(goalie_note) if goalie_note else ""))
+           f"from each side's goals"
+           + (" and expected goals" if (teams.get(g.home) or {}).get("xgf") is not None else "")
+           + " for and against" + ("; " + "; ".join(goalie_note) if goalie_note else ""))
     if g.home_ml and g.away_ml:
         fh, fa = devig_two_way(int(g.home_ml), int(g.away_ml))
         best = None
@@ -405,10 +424,17 @@ def build_slate(games: list[dict], players: dict, date: str, rosters: dict | Non
     return slate
 
 
-def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, date: str) -> dict:
+def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, date: str,
+                   xs: dict | None = None) -> dict:
     """SCALPY NHL 1.0's per-team read, in its order of importance: the
     starting goalie first (who, how sure, how good), then rest, then the
-    expected game. {team: {...}}."""
+    expected game. {team: {...}}.
+
+    ``xs`` is engine.nhl.xg.board_summaries: with it each starter also
+    carries goals saved above expected ("gsax") and his skill against
+    chances ("gskill", goals allowed ÷ expected, regressed), beside the
+    team's pooled goaltending ("team_gskill")."""
+    from engine.nhl import xg as X
     import datetime as _dt
     try:
         yday = (_dt.date.fromisoformat(date) - _dt.timedelta(days=1)).isoformat()
@@ -440,6 +466,10 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
                          "raw_sv": M.raw_sv(players.get(starter)) if starter else None,
                          "team_sv": M.team_sv(players, team, league),
                          "last10": set(sorted(team_days.get(team, ()), reverse=True)[:10])}
+            gk = ((xs or {}).get("goalies") or {})
+            if starter and starter in gk:
+                ctx[team].update(gsax=gk[starter]["gsax"], gskill=M.goalie_skill(gk[starter]),
+                                 team_gskill=M.goalie_skill(X.team_goalie_pool(gk, players, team)))
     for g in games:
         lam = M.team_lambdas(teams, g["home"], g["away"],
                              rested={t: not ctx[t]["b2b"] for t in (g["home"], g["away"])})
@@ -449,9 +479,11 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
 
 
 def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, teams: dict,
-                assets: dict, date: str, ctx: dict | None = None) -> tuple[list[dict], dict]:
-    """(recommendations, census) for every prop with a real price."""
-    ctx = ctx if ctx is not None else scalpy_context(games, players, league, teams, date)
+                assets: dict, date: str, ctx: dict | None = None, xs: dict | None = None) -> tuple[list[dict], dict]:
+    """(recommendations, census) for every prop with a real price. ``xs``
+    = engine.nhl.xg.board_summaries (shot quality), None without it."""
+    ctx = ctx if ctx is not None else scalpy_context(games, players, league, teams, date, xs=xs)
+    xplayers = (xs or {}).get("players") or {}
     opp_of = {}
     for g in games:
         opp_of[g["home"]], opp_of[g["away"]] = g["away"], g["home"]
@@ -471,8 +503,13 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
                 continue
             proj = M.goalie_projection(p, league, teams, prop.team, opp) if p else None
         else:
-            opp_sv = them.get("sv") if them.get("starter_sure") else None
-            proj = M.skater_projection(p, prop.market, league, teams, opp, opp_sv=opp_sv) if p else None
+            sure = them.get("starter_sure")
+            opp_sv = them.get("sv") if sure else None
+            proj = M.skater_projection(p, prop.market, league, teams, opp, opp_sv=opp_sv,
+                                       xp=xplayers.get(prop.player),
+                                       opp_skill=them.get("gskill") if sure else None) if p else None
+            if proj is not None and prop.player in xplayers:
+                proj["xg_player"] = xplayers[prop.player]
         if proj is None:
             census["no_history"] += 1
             continue
@@ -562,9 +599,16 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     odds_note = "no odds requested"
     if attach_odds is not None:
         odds_note = attach_odds(slate) or "odds attached"
-    ctx = scalpy_context(games, players, league, teams, date)
+    # SHOT QUALITY (engine/nhl/xg.py): our expected goals from the stored
+    # play-by-play — None until `ingest.py nhl --shots` has run and a model
+    # is fitted, and then every number below reads as it did without it.
+    from engine.nhl import xg as X
+    xs = X.board_summaries(conn, seasons=seasons, window=M.RECENT_GAMES)
+    M.attach_xg(teams, (xs or {}).get("teams"))
+    out["shot_quality"] = bool(xs)
+    ctx = scalpy_context(games, players, league, teams, date, xs=xs)
     assets = player_assets(conn, SPORT)
-    recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx)
+    recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx, xs=xs)
     for r in recs:
         inj = injuries.get(r["player"])
         if inj and r["player"] not in ruled_out:
@@ -578,7 +622,8 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     pulled_names = {n for n in players if normalize_name(n) in pulled}
     from engine.nhl import scan as S
     sc = S.scan(games, players, teams, ctx, league, assets=assets,
-                key_players={r["player"] for r in recs}, out_players=pulled_names)
+                key_players={r["player"] for r in recs}, out_players=pulled_names,
+                xg_players=(xs or {}).get("players"))
     out["scan_reads"] = sc["reads"]
     inj_by_team: dict = {}
     for n, i in injuries.items():
@@ -797,6 +842,11 @@ def main() -> None:
     # "0 priced props" and nothing about why.
     if games:
         print(f"  Odds: {out.get('odds_note') or 'none'} · {c.get('props_built', 0)} props built from history")
+        rs = out.get("recommendations") or []
+        print("  Shot quality: " + (
+            f"on — {sum(1 for r in rs if any('Shot quality' in x for x in r.get('reasons') or []))} of "
+            f"{len(rs)} priced rows read their shooter's expected goals"
+            if out.get("shot_quality") else "off — no fitted model yet (python3 ingest.py nhl --shots)"))
         ec = out.get("edge_census") or {}
         if ec.get("by_class"):
             print(f"  {out.get('edge_model')}: " + ", ".join(f"{k} {v}" for k, v in ec["by_class"].items())

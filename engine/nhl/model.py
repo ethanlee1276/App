@@ -40,6 +40,14 @@ goal count; home ice is HOME_EDGE. Regulation is two Poissons; a tie goes
 to overtime/shootout, won by the home side OT_HOME of the time, and adds
 one goal to the total. The puck line can only be covered in regulation.
 
+SHOT QUALITY (engine/nhl/xg.py, our own expected goals from the league's
+play-by-play). Where the model has a player's shots, his shooting % regresses
+toward what his shots were worth rather than a flat position rate; a goal
+market reads the chances the opponent allows a game times how its starter
+does against chances (goals allowed ÷ expected); and team strength mixes
+expected goals for and against into goals for and against
+(XG_TEAM_BLEND). With no shot data everything reads as before.
+
 Nothing here is fitted to a backtest: every constant below is a plain
 prior, written down, and the record and the walk-forward ranking measure
 (engine.rankfit, which turns each market's Most Likely shelf on by itself)
@@ -94,6 +102,26 @@ STARTER_SHARE = 0.60
 #: on the board since the NHL floor came down to the other leagues', and
 #: graded so a reader can see it is not a B.
 GRADES = ((0.75, "A+"), (0.70, "A"), (0.65, "B"), (0.55, "C"))
+# --- Shot quality (engine/nhl/xg.py, 2026-10-03) ----------------------------
+#: Every number below is a plain prior, written down before any backtest —
+#: the walk-forward ranking (engine.rankfit) judges whether they help.
+#: A goal-market shooting % is regressed toward the percentage HIS SHOTS
+#: WERE WORTH (his expected goals ÷ his shots on goal) instead of his
+#: position's flat rate — a net-front tipper and a point shooter do not
+#: share a prior. That expected rate is itself shrunk toward the position
+#: rate by this many shots on goal.
+XSH_PRIOR_SHOTS = 60.0
+#: A team's strength reads its goals AND its expected goals: this share of
+#: each side's for/against ratio comes from xG (chances are steadier than
+#: finishing over a month of games), the rest from goals.
+XG_TEAM_BLEND = 0.5
+#: A goalie's skill is goals allowed ÷ expected goals faced (below 1 =
+#: he stops more than the shots were worth), shrunk toward 1 by this many
+#: expected goals of league-average goaltending — about ten games' worth.
+GSAX_PRIOR_XGA = 30.0
+#: Finishing luck worth naming: goals this far above or below expected.
+LUCK_GOALS = 2.5
+
 #: The prop hierarchy — the most stable market first.
 PROP_TIER = {"sog": 1, "saves": 2, "points": 3, "assists": 4, "blocks": 4, "goals": 5, "anytime_goal": 5}
 
@@ -304,26 +332,77 @@ def _league_avg(teams: dict, key: str) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
+def attach_xg(teams: dict, xg_teams: dict | None) -> dict:
+    """Each team's expected goals for and against a game (all strengths and
+    5-on-5) from engine.nhl.xg.summaries, beside its goals. In place."""
+    for team, s in (xg_teams or {}).items():
+        t, n = teams.get(team), s.get("games") or 0
+        if t is None or not n:
+            continue
+        t.update(xgf=s["xgf"] / n, xga=s["xga"] / n, xgf_ev=s["xgf_ev"] / n, xga_ev=s["xga_ev"] / n,
+                 xg_games=n)
+    return teams
+
+
+def _blend_xg(teams: dict, t: dict, key: str, raw: float) -> float:
+    """``raw`` (this side's goals ratio to the league) with XG_TEAM_BLEND of
+    its expected-goals ratio mixed in, when both the team and the league
+    carry xG — each ratio against its own league average, so the scales
+    never mix."""
+    xkey = "x" + key
+    xavg = _league_avg(teams, xkey)
+    if t.get(xkey) is None or not xavg:
+        return raw
+    return (1 - XG_TEAM_BLEND) * raw + XG_TEAM_BLEND * t[xkey] / xavg
+
+
+def goalie_skill(g: dict | None) -> float | None:
+    """Goals he allowed ÷ the expected goals he faced, shrunk toward 1 by
+    GSAX_PRIOR_XGA (None without a record). Below 1 stops more than
+    the shots were worth."""
+    if not g or not g.get("xga"):
+        return None
+    return (g["ga"] + GSAX_PRIOR_XGA) / (g["xga"] + GSAX_PRIOR_XGA)
+
+
+def expected_sh(xp: dict | None, league_sh: float) -> float | None:
+    """The shooting percentage his shots on goal were worth (ixG ÷ shots
+    on goal), shrunk toward his position's rate by XSH_PRIOR_SHOTS."""
+    if not xp or not xp.get("sog"):
+        return None
+    return (xp["ixg"] + league_sh * XSH_PRIOR_SHOTS) / (xp["sog"] + XSH_PRIOR_SHOTS)
+
+
 def opp_factor(teams: dict, opponent: str, kind: str) -> float:
     """How much more (or less) of a stat this opponent gives up than the
     league, shrunk toward 1 and capped at ±OPP_CAP."""
-    key = {"sog": "sog_against", "goals": "ga", "sog_for": "sog_for"}[kind]
+    key = {"sog": "sog_against", "goals": "ga", "sog_for": "sog_for", "xga": "xga"}[kind]
     t, avg = teams.get(opponent) or {}, _league_avg(teams, key)
     if not t or t.get(key) is None or not avg:
         return 1.0
-    n = t.get("n", 0)
+    n = t.get("n", 0) if kind != "xga" else t.get("xg_games", 0)
     raw = t[key] / avg
+    if kind == "goals":
+        raw = _blend_xg(teams, t, "ga", raw)
     shrunk = 1.0 + (raw - 1.0) * n / (n + OPP_PRIOR_GAMES)
     return max(1 - OPP_CAP, min(1 + OPP_CAP, shrunk))
 
 
 # --- skaters ------------------------------------------------------------------
 def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent: str,
-                      opp_sv: float | None = None) -> dict | None:
+                      opp_sv: float | None = None, xp: dict | None = None,
+                      opp_skill: float | None = None) -> dict | None:
     """{"mean", "disp", "toi", "rate60", "opp", "n", ...} for one skater and
     market. ``opp_sv`` is the opposing probable starter's regressed save%:
     when given, a goal-driven market reads shots allowed × that goalie in
-    place of the team's raw goals-against."""
+    place of the team's raw goals-against.
+
+    SHOT QUALITY, when the xG model has his shots: ``xp`` is his
+    engine.nhl.xg player summary (his finishing regresses toward what his
+    shots were worth), and ``opp_skill`` the opposing starter's
+    goalie_skill — then a goal-driven market reads the chances that team
+    allows (its xG against a game) × how that goalie does against them,
+    which replaces both the shots-allowed tilt and the save rate."""
     games = [g for g in p["games"] if g.get("toi", 0) > 0]
     if len(games) < 3:
         return None
@@ -343,12 +422,14 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
         td += w
     toi = tn / td
     goal_market = market in ("goals", "anytime_goal", "points", "assists")
-    if goal_market and opp_sv is not None:
+    if goal_market and opp_skill is not None and (teams.get(opponent) or {}).get("xga") is not None:
+        opp = opp_factor(teams, opponent, "xga") * max(1 - GOALIE_CAP, min(1 + GOALIE_CAP, opp_skill))
+    elif goal_market and opp_sv is not None:
         opp = opp_factor(teams, opponent, "sog") * goalie_factor(opp_sv, league)
     else:
         opp = opp_factor(teams, opponent, _OPP_KIND[market])
     mean = rate60 * toi / 60.0 * opp
-    sh = None
+    sh = xsh = None
     if market in ("goals", "anytime_goal"):
         # VOLUME OVER FINISHING: shots per 60 × ice time × a shooting % that
         # is regressed hard toward his position's league rate.
@@ -363,7 +444,8 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
             s_n += g.get("sog", 0.0)
         sog60 = (sn + sog_prior * PRIOR_MINUTES / 60.0) / (sd + PRIOR_MINUTES) * 60.0
         lsh = (league.get(grp) or {}).get("sh", 0.09)
-        sh = (g_n + lsh * SH_PRIOR_SHOTS) / (s_n + SH_PRIOR_SHOTS)
+        xsh = expected_sh(xp, lsh)
+        sh = (g_n + (xsh if xsh is not None else lsh) * SH_PRIOR_SHOTS) / (s_n + SH_PRIOR_SHOTS)
         mean = sog60 * toi / 60.0 * sh * opp
         rate60 = sog60 * sh
     vals = [g.get(stat, 0.0) for g in games]
@@ -380,7 +462,10 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
              if len(t5) == 5 and len(t10) >= 5 and sum(t10) else 0.0)
     return {"mean": round(mean, 4), "disp": round(disp, 3), "toi": round(toi, 2), "rate60": round(rate60, 3),
             "opp": round(opp, 3), "n": len(games), "recent": vals[:12],
-            "sh": round(sh, 4) if sh is not None else None, "toi_swing": round(swing, 3)}
+            "sh": round(sh, 4) if sh is not None else None, "toi_swing": round(swing, 3),
+            "xsh": round(xsh, 4) if xsh is not None else None,
+            "shot_model": "xg" if goal_market and opp_skill is not None
+            and (teams.get(opponent) or {}).get("xga") is not None else "shots"}
 
 
 def skater_prob(proj: dict, market: str, line: float, side: str) -> float:
@@ -460,9 +545,12 @@ def team_lambdas(teams: dict, home: str, away: str, rested: dict | None = None) 
     if not avg or not h or not a:
         return None
 
+    ga_avg = _league_avg(teams, "ga") or avg
+
     def strength(t, key):
         n = t.get("n", 0)
-        return 1.0 + ((t[key] / avg) - 1.0) * n / (n + TEAM_PRIOR_GAMES)
+        raw = _blend_xg(teams, t, key, t[key] / (avg if key == "gf" else ga_avg))
+        return 1.0 + (raw - 1.0) * n / (n + TEAM_PRIOR_GAMES)
     # Regulation goals: the per-game figures include overtime and shootout
     # goals, about 0.1 a game — taken back out here.
     reg = avg * 0.97

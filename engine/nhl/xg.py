@@ -154,7 +154,9 @@ def game_rows(conn, model: dict, seasons=None) -> list[dict]:
 def summaries(rows: list[dict], window: int = 20) -> dict:
     """Per player, team and goalie, over each one's newest ``window`` games:
 
-    players  {name: {"ixg", "iff", "goals", "games"}}   (unblocked attempts)
+    players  {name: {"ixg", "iff", "sog", "goals", "games"}}   (iff = unblocked
+             attempts, sog = on goal, goals included — ixg / sog is the
+             shooting percentage his shots were worth)
     teams    {abbr: {"xgf", "xga", "xgf_ev", "xga_ev", "gf", "ga", "games"}}
     goalies  {name: {"xga", "ga", "shots", "gsax", "games"}}  (no empty nets)
     """
@@ -165,10 +167,11 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
         if r["kind"] in UNBLOCKED and r.get("shooter"):
             g = by_player.setdefault(r["shooter"], {})
             if r["game_id"] in g or len(g) < window:
-                acc = g.setdefault(r["game_id"], [0.0, 0, 0])
+                acc = g.setdefault(r["game_id"], [0.0, 0, 0, 0])
                 acc[0] += r["xg"]
                 acc[1] += 1
                 acc[2] += r["is_goal"]
+                acc[3] += r["kind"] in ("goal", "sog")
         for team, side in ((r["team"], "f"), (r["opponent"], "a")):
             t = by_team.setdefault(team, {})
             if r["game_id"] in t or len(t) < window:
@@ -186,7 +189,8 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
                 acc[1] += r["is_goal"]
                 acc[2] += 1
     players = {n: {"ixg": round(sum(v[0] for v in g.values()), 3), "iff": sum(v[1] for v in g.values()),
-                   "goals": sum(v[2] for v in g.values()), "games": len(g)} for n, g in by_player.items()}
+                   "sog": sum(v[3] for v in g.values()), "goals": sum(v[2] for v in g.values()), "games": len(g)}
+               for n, g in by_player.items()}
     teams = {}
     for team, g in by_team.items():
         tot = {k: sum(v[k] for v in g.values()) for k in ("xgf", "xga", "xgf_ev", "xga_ev", "gf", "ga")}
@@ -199,6 +203,53 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
         goalies[name] = {"xga": round(xga, 3), "ga": ga, "shots": sum(v[2] for v in g.values()),
                          "gsax": round(xga - ga, 2), "games": len(g)}
     return {"players": players, "teams": teams, "goalies": goalies}
+
+
+#: The board's summaries, kept beside the model: reading every stored shot
+#: takes seconds and they only change when the nightly job adds shots or
+#: refits, so a build reuses them while that key holds.
+BOARD_FILE = "nhl_xg_board.json"
+
+
+def board_summaries(conn, seasons=None, window: int = 40) -> dict | None:
+    """The summaries a board build reads, over each one's newest ``window``
+    games — None until a model is fitted and shots are stored, and then the
+    board reads exactly as it did before shot quality."""
+    model = load()
+    if not model:
+        return None
+    q, args = "SELECT COUNT(*), MAX(game_id) FROM nhl_shots", []
+    if seasons:
+        q += " WHERE season IN (%s)" % ",".join("?" * len(seasons))
+        args = list(seasons)
+    count, newest = conn.execute(q, args).fetchone()
+    if not count:
+        return None
+    key = [model.get("n"), model.get("league"), count, newest, sorted(seasons or []), window]
+    path = _models_dir() / BOARD_FILE
+    try:
+        kept = json.loads(path.read_text())
+        if kept.get("key") == key:
+            return kept["summaries"]
+    except (OSError, ValueError, AttributeError):
+        pass
+    out = summaries(game_rows(conn, model, seasons), window)
+    try:
+        save({"key": key, "summaries": out}, path)
+    except OSError:
+        pass
+    return out
+
+
+def team_goalie_pool(goalies: dict, players: dict, team: str) -> dict | None:
+    """Every goalie of ``team`` pooled ({"xga", "ga"}) — what the team's
+    goals against already carries, so tonight's starter is measured
+    against it (the save-rate twin is model.team_sv)."""
+    pool = [goalies[n] for n, p in players.items()
+            if p.get("position") == "G" and p.get("team") == team and n in goalies]
+    if not pool:
+        return None
+    return {"xga": sum(g["xga"] for g in pool), "ga": sum(g["ga"] for g in pool)}
 
 
 def main(argv=None) -> int:

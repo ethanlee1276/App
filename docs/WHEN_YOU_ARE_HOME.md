@@ -130,12 +130,44 @@ badge until the map is corrected):
 cd /srv/qellys && sudo -u qellys python3 assets.py --audit --sport nhl
 ```
 
+**H11. Shot quality: does the play-by-play read?** (paste the
+play-by-play line). The probe now opens one game's play-by-play and
+reports its attempts, goals, named shooters and the first shot's type and
+distance:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --probe
+```
+
+**H12. Load every NHL shot, then fit our expected-goals model** (paste the
+last three lines). About 4,200 games from the league's free play-by-play.
+It is safe to stop and rerun, because a stored game is skipped. It runs in
+the background, so closing the terminal does not stop it. Nothing else
+calls the NHL host while it runs, and no odds credits are used:
+
+```
+cd /srv/qellys && sudo -u qellys nohup python3 ingest.py nhl --shots > /tmp/nhl_shots.log 2>&1 &
+tail -f /tmp/nhl_shots.log
+```
+
+Ctrl-C stops the `tail`, not the load. When it finishes, the log names the
+attempts and the league rate. From then on the nightly job stores each
+final's shots and refits.
+
+**H13. The board reads shot quality** (paste the "Shot quality" line and
+the last line). This is one build from the saved odds, so no credits are
+used and nothing is journaled. It should say `Shot quality: on`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
+```
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H10** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos.
+0. **H1–H13** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos, shots + expected goals.
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).
