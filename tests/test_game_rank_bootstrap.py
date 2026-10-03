@@ -72,7 +72,7 @@ def test_the_pass_measures_with_the_marker_written_first():
 
 def test_one_sports_failed_walk_no_longer_skips_the_game_markets():
     src = _src()
-    at = src.index('for _sp in ("mlb", "wnba", "nba", "cfb"):')
+    at = src.index('for _sp in ("mlb", "wnba", "nba", "cfb", "nhl"):')
     block = src[at:src.index("_rkc.close()", at)]
     assert "try:\n                        _rank_measure(_rkc, _sp, log=log)" in block
     assert 'log(f"  ⚠️  rank fit {_sp} skipped: {_rexc}")' in block

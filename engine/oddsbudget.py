@@ -78,7 +78,7 @@ CREDITS_PER_EVENT = 8
 #: and the three game markets; both leagues buy the same request.
 #: Sixteen since 2026-09-27: pass attempts, completions and carries joined
 #: the request (`oddsapi.VOLUME_ODDS_KEYS`), measured before bought.
-EVENT_CREDITS = {"nfl": 16, "mlb": 11, "nba": 13, "wnba": 13}
+EVENT_CREDITS = {"nfl": 16, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
 
 
 def credits_per_event(sport: str | None = None) -> int:

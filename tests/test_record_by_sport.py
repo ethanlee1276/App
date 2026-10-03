@@ -124,7 +124,7 @@ def test_a_sport_with_nothing_journaled_still_reports():
 
 def test_every_board_that_journals_a_bet_is_tracked():
     assert set(ledger.TRACKED_SPORTS) == {"nfl", "cfb", "mlb", "nba",
-                                          "wnba", "ufc"}
+                                          "wnba", "nhl", "ufc"}
     # Polymarket is deliberately absent: its flags are not wagers in this
     # ledger, and folding a flag rate into a betting P&L would make both
     # numbers mean nothing.

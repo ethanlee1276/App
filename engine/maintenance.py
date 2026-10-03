@@ -565,6 +565,10 @@ PRUNABLE_CACHE_PREFIXES = (
     "mlb_pbp_", "mlb_roster_", "mlb_pensched_", "mlb_watchsched_",
     "standings_mlb_",
     "nba_box_", "wnba_box_", "wnba_schedule_",
+    # Hockey (2026-10-03): a final's box score is stored in history the day
+    # it lands; a player's name and photo land in player_assets. All three
+    # re-fetch on a miss.
+    "nhl_box_", "nhl_player_", "nhl_score_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the
@@ -701,7 +705,7 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  MLB results ingest skipped ({exc}) — settling on "
                 "what's already ingested")
-    for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day)):
+    for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day), ("nhl", _nhl_day)):
         if ingest_day is None:
             continue
         for d in days:
@@ -914,6 +918,19 @@ def _hoops_ingesters():
 
 
 _nba_day, _wnba_day = _hoops_ingesters()
+
+
+def _nhl_ingester():
+    """The NHL day-ingest callable, or None — same degrade-don't-crash
+    rule as `_hoops_ingesters`."""
+    try:
+        from .sources.nhldata import ingest_day
+        return ingest_day
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_nhl_day = _nhl_ingester()
 
 
 def settle_open(log=print, state_path: Path | None = None,
@@ -1553,6 +1570,32 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  wnba results ingest failed: {exc}")
 
+    # NHL results (2026-10-03) — the NHL's own keyless feed, one date at a
+    # time from the league's last stored final, in its season window
+    # (October–June). This is what settles NHL picks and grows the history
+    # the rank fit measures.
+    if today.month >= 10 or today.month <= 6:
+        hstart = _catch_up_start(_hconn, "nhl", yesterday)
+        if hstart <= yesterday:
+            try:
+                from . import db as _hdb
+                from .sources import nhldata as _nhl
+                hconn2 = _hdb.connect()
+                tot_g = tot_l = 0
+                d = hstart
+                while d <= yesterday:
+                    res = _nhl.ingest_day(hconn2, d.isoformat())
+                    tot_g += res["games"]
+                    tot_l += res["player_logs"]
+                    if any("scores" in str(x) for x in res.get("skipped", [])):
+                        log(f"  ⚠️  {res['skipped'][0]}")
+                        break
+                    d += _dt.timedelta(days=1)
+                if tot_g or tot_l:
+                    log(f"  nhl results: {tot_g} game(s), {tot_l:,} log rows")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  nhl results ingest failed: {exc}")
+
     # NFL weekly results — the layer that settles NFL props and TDs. The
     # nflverse weekly-stats file updates within a day of games, so a daily
     # pull keeps the journal graded all season. Skipped March–July: no new
@@ -1922,7 +1965,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 # markets, and the log said "rank fit skipped" once. The
                 # MLB moneyline shelf depends on the last thing in this
                 # block running, so it has to run whatever came before.
-                for _sp in ("mlb", "wnba", "nba", "cfb"):
+                for _sp in ("mlb", "wnba", "nba", "cfb", "nhl"):
                     try:
                         _rank_measure(_rkc, _sp, log=log)
                     except Exception as _rexc:  # noqa: BLE001
@@ -2012,7 +2055,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         _rbs = _rank_load()
         _rbc = _rbdb.connect()
         try:
-            for _sp in ("mlb", "wnba", "nba"):
+            for _sp in ("mlb", "wnba", "nba", "nhl"):
                 if any(k.startswith(f"{_sp}:") for k in _rbs):
                     continue
                 have = _rbc.execute(

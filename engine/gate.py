@@ -393,7 +393,7 @@ FREE_FILES = (
 #: tuple should be a failing test, not a silent default.
 KNOWN_BOARDS = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
-    "wnba.json", "cfb.json", "ufc.json",
+    "wnba.json", "cfb.json", "ufc.json", "nhl.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "injuries.json", "news.json", "fantasy.json",
@@ -424,7 +424,7 @@ KNOWN_BOARDS = (
 #: paid picks in one object, handled by stripping keys rather than by name.
 MIXED_FILES = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
-    "wnba.json", "cfb.json", "ufc.json",
+    "wnba.json", "cfb.json", "ufc.json", "nhl.json",
     # Not sports boards, same shape of problem: a feed's facts and the
     # model's read of them in one object. Their paid keys are named in
     # PAID_KEYS_BY_FILE rather than in PAID_KEYS, because `coins` and

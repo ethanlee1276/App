@@ -273,7 +273,7 @@ def _walk_days(conn, sport: str, dates: list, ingest_day, scores_only: bool,
 def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport",
-                    choices=["nfl", "nflpre", "mlb", "nba", "wnba", "cfb",
+                    choices=["nfl", "nflpre", "mlb", "nba", "wnba", "nhl", "cfb",
                              "cfbhist", "ufc", "status"])
     # NO default. It used to carry the NFL's "last five seasons", which
     # meant `python3 ingest.py nba` with no arguments silently launched a
@@ -438,6 +438,45 @@ def main() -> None:
               "bet a fighter it has no measured record for. Draft the next "
               "card's fighters with:\n  python3 ufc_dossiers.py\n"
               "  python3 ufc_dossiers.py \"Fighter Name\"   (one fighter)")
+    elif args.sport == "nhl":
+        # THE LEAGUE'S OWN API (engine/sources/nhldata): finals and every
+        # skater's and goalie's line, per date, resumable like the
+        # basketball walk. Ethan, 2026-10-03: "at least three years worth
+        # of NHL data". --probe fetches one of each first.
+        from engine.sources import nhldata
+        if args.probe:
+            print("Probing the NHL API — what each endpoint ACTUALLY returns:\n")
+            for row in nhldata.probe():
+                print(f"  {'✅' if row['ok'] else '✗'} {row['label']}: {row['detail']}")
+            return
+        import datetime as _dt
+        from engine.seasons import parse_seasons as _ps, dates_for, describe
+        if args.seasons:
+            yrs = _ps(args.seasons)
+            dates = dates_for("nhl", yrs)
+            print(describe("nhl", yrs, len(dates)))
+        elif args.start and args.end:
+            day, last = _dt.date.fromisoformat(args.start), _dt.date.fromisoformat(args.end)
+            dates = []
+            while day <= last:
+                dates.append(day.isoformat())
+                day += _dt.timedelta(days=1)
+        else:
+            dates = [d.strip() for d in args.dates.split(",") if d.strip()]
+        if not dates:
+            print("Provide --seasons 2023-2025, --dates, or --from/--to for NHL.")
+            return
+        print(f"Ingesting NHL {dates[0]} → {dates[-1]} → {args.db}")
+        total_g, total_p, skipped, empty = _walk_days(
+            conn, "nhl", dates,
+            lambda c, d: nhldata.ingest_day(c, d, scores_only=args.scores_only),
+            args.scores_only, args.refresh)
+        print(f"  games: {total_g:,} new   player-log rows: {total_p:,} new")
+        if skipped:
+            print(f"  {skipped:,} of {len(dates):,} day(s) were already stored — skipped.")
+        if empty:
+            print(f"  {empty:,} day(s) had no NHL games (off days, the All-Star "
+                  f"break, the gaps between playoff rounds).")
     elif args.sport in ("nba", "wnba"):
         # One path, two leagues. Both publish the same JSON shapes on their
         # own CDN, so the only thing that differs is which day-ingester to

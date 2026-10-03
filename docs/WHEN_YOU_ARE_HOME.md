@@ -31,11 +31,50 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport mlb
 
 To undo it: `sudo -u qellys rm /srv/qellys/data/likely_calibration.json`
 
+### NHL — load three seasons, then it runs itself (2026-10-03)
+
+The code is on the box once the auto-updater pulls it. The NHL board builds
+in the launcher's cycle from today, but it has no players until history
+lands. Every NHL Edge pick goes on **paper** until its record earns money.
+
+**H1. Disk, then a probe** (paste). The probe fetches one day, one box
+score and one player from the NHL's own free feed, which this sandbox
+cannot reach:
+
+```
+df -h / | tail -1
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --probe
+```
+
+**H2. Load 2023-24, 2024-25 and 2025-26** (an hour or more, in the
+background; it is safe to stop and rerun, finished days are skipped):
+
+```
+cd /srv/qellys && sudo -u qellys nohup python3 ingest.py nhl --seasons 2023-2025 > /tmp/nhl_ingest.log 2>&1 &
+tail -3 /tmp/nhl_ingest.log
+```
+
+**H3. When H2 ends: open the Most Likely shelves** (paste). Each hockey
+market goes on the Most Likely board only if it ranks on its own walk
+(the same 2,000-pair, 0.60 bar as every sport). The nightly job does this
+too; this just does it now:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, rankfit; rankfit.measure(db.connect(), 'nhl')"
+```
+
+**H4. Build tonight's board once by hand** (paste the last line):
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --odds
+```
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
+0. **H1–H4** — NHL (block above): probe, load three seasons, rank, build.
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).

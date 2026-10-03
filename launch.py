@@ -160,6 +160,7 @@ MLB_OUT = "web/data/mlb_recommendations.json"
 NFL_OUT = "web/data/recommendations.json"
 NBA_OUT = "web/data/nba.json"
 WNBA_OUT = "web/data/wnba.json"
+NHL_OUT = "web/data/nhl.json"
 UFC_OUT = "web/data/ufc.json"
 CFB_OUT = "web/data/cfb.json"
 # One bulk request covers h2h + spreads + totals for the whole
@@ -443,7 +444,7 @@ def _games_on_slate(path: str) -> int:
 #: day the three overlap, football takes the larger slices and baseball
 #: draws behind it.
 SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 0.6,
-                "nba": 0.15, "wnba": 0.15, "ufc": 0.15}
+                "nba": 0.15, "wnba": 0.15, "nhl": 0.15, "ufc": 0.15}
 DEFAULT_WEIGHT = 0.15
 
 #: How many days a week each league actually plays.
@@ -461,7 +462,7 @@ DEFAULT_WEIGHT = 0.15
 #: and could not reach. It is also self-limiting — every refresh requires
 #: games on the slate, so a league cannot claim a game-day share on a day
 #: it is not playing.
-PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0,
+PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0, "nhl": 7.0,
                       "nfl": 3.0, "cfb": 2.0, "ufc": 1.0}
 
 
@@ -469,7 +470,7 @@ def _live_sports() -> list[str]:
     """Which leagues have a slate on the board right now."""
     return [name for name, path in (("mlb", MLB_OUT), ("nfl", NFL_OUT),
                                     ("nba", NBA_OUT), ("wnba", WNBA_OUT),
-                                    ("cfb", CFB_OUT))
+                                    ("nhl", NHL_OUT), ("cfb", CFB_OUT))
             if _slate_games(path) > 0]
 
 
@@ -1228,6 +1229,25 @@ def refresh_nba(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_nhl(quiet: bool = False) -> bool:
+    """NHL board (2026-10-03) — paced like the hoops boards: the schedule
+    is the NHL's own free feed, so the games>0 gate answers "is there a
+    slate tonight" before a credit is spent. No live-line lane yet."""
+    args = ["nhl_build.py", _slate_date(), "--out", NHL_OUT]
+    spend = _slate_games(NHL_OUT) > 0 and _odds_affordable(NHL_OUT, quiet, sport="nhl")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NHL", sport="nhl")
+    if not quiet:
+        print(f"  NHL  {_slate_date()}: {_board_word(NHL_OUT, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_wnba(quiet: bool = False) -> bool:
     """WNBA slate — the same Scalpy build with --league wnba.
 
@@ -1538,10 +1558,10 @@ _LAST_BUILD_NOTE = [""]
 #: cycle is a sequential sum on one core: whoever builds first is
 #: freshest when a cycle is cut short, and does not wait four minutes
 #: behind a league he cares about less.
-SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
+SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
 
 BOARD_FILES = {"nfl": NFL_OUT, "cfb": CFB_OUT, "mlb": MLB_OUT,
-               "nba": NBA_OUT, "wnba": WNBA_OUT}
+               "nba": NBA_OUT, "wnba": WNBA_OUT, "nhl": NHL_OUT}
 
 #: How long a board may go without being rewritten before that is worth
 #: saying out loud. The loop rebuilds every board every cycle, so the
@@ -1752,6 +1772,8 @@ def refresh_all(quiet: bool = False) -> None:
     lap("nba")
     with _isolated("wnba"): _note_board("wnba", refresh_wnba(quiet=quiet))
     lap("wnba")
+    with _isolated("nhl"): _note_board("nhl", refresh_nhl(quiet=quiet))
+    lap("nhl")
     with _isolated("ufc"): _note_board("ufc", refresh_ufc(quiet=quiet))
     lap("ufc")
     with _isolated("predmarkets"):
@@ -1792,7 +1814,7 @@ def _publish_feed(quiet: bool = False) -> None:
     try:
         from engine import feed as _feed
         _feed.scan_all({"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-                        "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+                        "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}, quiet=quiet)
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  feed: skipped — {type(exc).__name__}: {exc}")
@@ -1996,7 +2018,7 @@ def why_live(sport: str = "mlb") -> None:
     from engine.sources.oddsapi import normalize_name
 
     path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
     try:
         d = _json.loads(Path(path).read_text())
     except Exception as exc:
@@ -2268,7 +2290,7 @@ def why_pick(name: str, sport: str = "mlb") -> None:
     from engine.sources.oddsapi import normalize_name
 
     path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
     try:
         d = _json.loads(Path(path).read_text())
     except Exception as exc:
@@ -6289,7 +6311,7 @@ def side_bias(sport: str = "mlb") -> None:
     import json as _json
     from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
     rel = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-           "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+           "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
     try:
         recs = _json.loads((ROOT / rel).read_text()).get("recommendations", [])
     except (OSError, ValueError):
@@ -8328,7 +8350,7 @@ def show_unbuilt() -> None:
 #: than for all six.
 _SPORT_REFRESH = {
     "mlb": "refresh_mlb", "nfl": "refresh_nfl", "nba": "refresh_nba",
-    "wnba": "refresh_wnba", "cfb": "refresh_cfb", "ufc": "refresh_ufc",
+    "wnba": "refresh_wnba", "nhl": "refresh_nhl", "cfb": "refresh_cfb", "ufc": "refresh_ufc",
 }
 
 
@@ -10741,7 +10763,7 @@ def _board_size_cli() -> None:
     from engine import gate as _gate
     rows = []
     for label, path in (("MLB", MLB_OUT), ("NFL", NFL_OUT), ("NBA", NBA_OUT),
-                        ("WNBA", WNBA_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT)):
+                        ("WNBA", WNBA_OUT), ("NHL", NHL_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT)):
         full = ROOT / "data" / "built" / Path(path).name
         src = full if full.is_file() else ROOT / path
         if not src.is_file():

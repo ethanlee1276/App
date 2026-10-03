@@ -32,6 +32,7 @@ from engine.cfb.pipeline import MARKET_LABELS as _CFB
 from engine.mlb.models import MARKET_LABELS as _MLB
 from engine.models import MARKET_LABELS as _NFL
 from engine.nba.pipeline import MARKET_LABELS as _NBA
+from engine.nhl.model import MARKET_LABELS as _NHL
 
 #: Markets no single board owns. Game lines are priced on every sport,
 #: and the UFC card's markets live in its own pipeline rather than a
@@ -70,7 +71,9 @@ OVERRIDES = {"side": "Spread", "total": "Game Total",
 
 def _merged() -> dict[str, str]:
     out: dict[str, str] = {}
-    for src in (_CFB, _NFL, _MLB, _NBA, SHARED, EXTRA, OVERRIDES):
+    # Hockey first, so a word another board already spells ("hits") keeps
+    # its spelling; every hockey id is otherwise its own.
+    for src in (_NHL, _CFB, _NFL, _MLB, _NBA, SHARED, EXTRA, OVERRIDES):
         out.update(src)
     return out
 

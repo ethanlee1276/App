@@ -280,7 +280,7 @@ def test_the_search_page_wears_its_scope_and_a_hop_keeps_the_typed_name():
     js = _js()
     i = js.index("const SEARCH_SCOPES")
     decl = js[i:js.index(";", i) + 1]
-    assert '"nfl", "cfb", "mlb", "nba", "wnba", "ufc"' in decl, \
+    assert '"nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc"' in decl, \
         "the row is the honest list of where the box can look, in his order"
     fn = js[js.index("function renderSearchScope("):]
     fn = fn[:fn.index("\n}")]

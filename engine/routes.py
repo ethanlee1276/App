@@ -67,6 +67,7 @@ BOARD_FILES = {
     "nba": "nba.json",
     "wnba": "wnba.json",
     "cfb": "cfb.json",
+    "nhl": "nhl.json",
 }
 
 #: Search order when a two-segment URL does not say which league it means.
@@ -74,7 +75,7 @@ BOARD_FILES = {
 #: sport — so the resolver looks through the boards in this order and
 #: takes the first hit. In season the busiest league is first, which is
 #: both the common case and the cheapest one.
-SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "wnba")
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "nhl", "wnba")
 
 SITE = "https://qellysbook.com"
 

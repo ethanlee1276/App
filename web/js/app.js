@@ -60,7 +60,7 @@ const state = {
   // Every sport with its own board. This list is the reason ?sport=wnba
   // silently fell back to NFL — a new league has to be added here too, or
   // the deep link and the launcher's own preflight URLs quietly lie.
-  sport: (["mlb", "nba", "wnba", "cfb"].includes(new URLSearchParams(location.search).get("sport"))
+  sport: (["mlb", "nba", "wnba", "cfb", "nhl"].includes(new URLSearchParams(location.search).get("sport"))
     ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
@@ -391,6 +391,15 @@ const SPORT_META = {
                    + "game the way it prices Ohio State – Michigan — so the "
                    + "haircut on our own edge is a dial, not a constant",
          api: "/api/cfb/recommendations", fallback: "data/cfb.json" },
+  // HOCKEY (2026-10-03): a per-60 rate times ice time for every skater,
+  // the probable starter's saves, and the three game lines — every Edge
+  // pick on paper until the league's record earns a stake.
+  nhl: { logo: "🏒",
+         gamesTitle: "Tonight’s slate",
+         gamesSub: "ice time × per-60 rates for every skater, the probable "
+                   + "starter’s saves, and every Edge pick on paper until "
+                   + "the league’s own record earns a stake",
+         api: "/api/nhl/recommendations", fallback: "data/nhl.json" },
 };
 
 /* Pages a sport has no engine for. Listed here rather than as conditions
@@ -448,6 +457,9 @@ const HIDDEN_VIEWS = {
   // projects them through the same chain the NFL's run through. The
   // page needs no college branch because there is no longer a college
   // difference for it to branch on.
+  // Hockey has no long-shot board (the anytime scorer rides the props and
+  // Most Likely) and no futures pull yet; every rink is indoors.
+  nhl: ["longshots", "futures", "weather"],
   cfb: [],
 };
 
@@ -463,6 +475,7 @@ function teamsForSport(sport) {
   if (sport === "nba") return typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {};
   if (sport === "wnba") return typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {};
   if (sport === "cfb") return _cfbTeams || (state.data && state.data.teams) || {};
+  if (sport === "nhl") return typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : {};
   return typeof TEAMS !== "undefined" ? TEAMS : {};
 }
 
@@ -487,7 +500,7 @@ function closeMoreMenu() {
    (aria-hidden, no text), so the button's name and every reader of its
    textContent are unchanged; desktop hides it and keeps its text tabs. */
 const LEAGUE_GLYPH = { nfl: "football", cfb: "football", mlb: "baseball",
-                       nba: "basketball", wnba: "basketball", ufc: "octagon" };
+                       nba: "basketball", wnba: "basketball", nhl: "hockey", ufc: "octagon" };
 function leagueCrests() {
   document.querySelectorAll('.sportbar-in .sport-btn[data-kind="league"]').forEach((b) => {
     if (b.querySelector(".crest")) return;
@@ -604,6 +617,9 @@ const HIDDEN_WHY = {
   wnba: { longshots: "no long-shot market exists in basketball",
           futures: "no outrights market is published for the league",
           weather: "played indoors" },
+  nhl: { longshots: "the anytime goal scorer rides the props and Most Likely instead",
+         futures: "no hockey outrights are pulled yet",
+         weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
          futures: "a fight card has no season-long market",
@@ -626,7 +642,7 @@ const HIDDEN_WHY = {
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
-                      wnba: "the WNBA", cfb: "college football",
+                      wnba: "the WNBA", nhl: "the NHL", cfb: "college football",
                       ufc: "UFC", polymarket: "prediction markets",
                       fantasy: "fantasy" };
 
@@ -872,7 +888,7 @@ const teamMarkIn = (sport, a, size = 20) =>
 //: it a cross-league result list is a pile of names with no way to tell a
 //: Bengal from a Red.
 const LEAGUE_LABEL = { nfl: "NFL", mlb: "MLB", nba: "NBA", wnba: "WNBA",
-                       cfb: "CFB", ufc: "UFC" };
+                       nhl: "NHL", cfb: "CFB", ufc: "UFC" };
 function leagueBadge(sport) {
   const k = String(sport || "").toLowerCase();
   if (!LEAGUE_LABEL[k]) return "";
@@ -1087,6 +1103,9 @@ const ICON_PATHS = {
   basketball: '<circle cx="8" cy="8" r="6.4"/>'
           + '<path d="M1.6 8h12.8M8 1.6v12.8M3.5 3.5c2.6 2.6 2.6 6.4 0 9M12.5 3.5c-2.6 2.6-2.6 6.4 0 9"/>',
   octagon: '<path d="M5.4 1.6h5.2l3.8 3.8v5.2l-3.8 3.8H5.4l-3.8-3.8V5.4z"/>',
+  // A stick and the puck beside it.
+  hockey: '<path d="M10.6 1.8L6.4 11.6a1.6 1.6 0 01-1.5 1H2v-1.8h2.4l4.3-9"/>'
+        + '<ellipse cx="12" cy="12.2" rx="2.2" ry="1.1"/>',
   // Two for the batted-ball tiles (Ethan's park render, 2026-09-06): how
   // hard it was hit and at what angle it left. A dial with a needle, and
   // a ray off a baseline with the angle's own arc between them — both
@@ -6661,6 +6680,7 @@ function gameCard(g) {
   // A game under way has no pre-game line to wait for.
   const inPlay = (g.live || {}).state === "live";
   const nba = state.sport === "nba" || state.sport === "wnba";
+  const nhl = state.sport === "nhl";
   const cfb = state.sport === "cfb";
   const w = g.weather || {};
   const windTxt = mlb && w.wind_dir && !w.dome
@@ -6681,7 +6701,7 @@ function gameCard(g) {
   // showing 62° read as the weather there now). The model reads the same
   // kickoff-hour forecast — never the conditions today.
   const wxKnown = !!(w.dome || w.measured || g.weather_checked);
-  const cond = nba ? "Indoor hardwood"
+  const cond = nba ? "Indoor hardwood" : nhl ? "Indoor ice"
     : w.dome ? "Indoor"
     : !g.weather || !wxKnown
       ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
@@ -6713,11 +6733,11 @@ function gameCard(g) {
       } else if (!g.qb_confirmed) bits.push(`${icon('warn')} QB unconfirmed`);
     }
     sub = bits.join(" · ") || (mkts || inPlay ? "" : "line not posted yet");
-  } else if (nba) {
+  } else if (nba || nhl) {
     const bits = [];
     if (!mkts && g.total != null) bits.push(`O/U ${Number(g.total).toFixed(1)}`);
     if (!mkts && g.spread) bits.push(`${esc(teamName(g.spread < 0 ? g.home : g.away))} ${-Math.abs(g.spread)}`);
-    sub = bits.join(" · ") || (mkts || inPlay ? "" : "lines post closer to tip-off");
+    sub = bits.join(" · ") || (mkts || inPlay ? "" : nhl ? "lines post closer to puck drop" : "lines post closer to tip-off");
   } else if (mlb) {
     // The park name moved up to the card's venue line (fidelity pass) —
     // repeating it here printed "Coors Field" twice on one card.
@@ -6739,7 +6759,7 @@ function gameCard(g) {
     const ouTxt = mkts || inPlay ? "" : g.total != null ? `O/U ${g.total.toFixed(1)}` : "line not posted yet";
     sub = [favTxt, ouTxt].filter(Boolean).join(" · ");
   }
-  const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
+  const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);
   // A ranked college team is called by its rank — that IS the identity.
   const ranked = (side) => (cfb && g[`${side}_rank`]
     ? `<span class="cfb-rank">#${g[`${side}_rank`]}</span> ` : "");
@@ -13622,8 +13642,8 @@ function renderGamePage() {
   const offHere = droppedHere.length + pulled.length;
 
   // The header re-uses the same art the strip card draws, at full width.
-  const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
-  const cond = nba ? "Indoor hardwood"
+  const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);
+  const cond = nba ? "Indoor hardwood" : state.sport === "nhl" ? "Indoor ice"
     : w.dome ? "Indoor"
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
@@ -13852,7 +13872,7 @@ function renderGamePage() {
             closed: "Roof closed", dome: "Dome", retractable: "Retractable roof" })[g.roof] || `Roof ${g.roof}`)}</span>` : ""}
           ${g.lineups_confirmed === false ? `<span class="chip">${icon('clock')} ${escapeHtml(lineupPendingWords(g, true))}</span>` : ""}
         </div>
-        ${mlb ? parkPanel(g) : nba ? "" : stadiumPanel(g)}
+        ${mlb ? parkPanel(g) : nba || state.sport === "nhl" ? "" : stadiumPanel(g)}
       </div>
     </div>
 
@@ -13895,7 +13915,7 @@ function renderGamePage() {
         oneBoardOn() ? matchupPickCount(g) : likelies.length}</div>
         <div class="tile-sub">on the Most Likely board · own book</div></div>
       <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
-        <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
+        <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : state.sport === "nhl" ? "none for NHL" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
     ${gpMatchupHTML(g)}
@@ -14091,7 +14111,7 @@ let _playersSeq = 0;
    a label, because showing the scope and offering to change it are the
    same control — and every league the search can reach gets one, so the
    row is also the honest list of where the box is able to look. */
-const SEARCH_SCOPES = ["nfl", "cfb", "mlb", "nba", "wnba", "ufc"];   // his order of importance
+const SEARCH_SCOPES = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc"];   // his order of importance
 
 function renderSearchScope() {
   const host = document.getElementById("search-scope");
@@ -18899,7 +18919,7 @@ async function renderLab() {
       appears here after the first run.</div></div>`;
     return;
   }
-  const order = ["mlb", "nfl", "cfb", "nba", "wnba", "ufc"];
+  const order = ["mlb", "nfl", "cfb", "nba", "wnba", "nhl", "ufc"];
   const has = (sport) => {
     const s = d.sports[sport];
     return (s.props || {}).markets || ((s.game_lines || {}).markets);
@@ -38245,6 +38265,7 @@ const STATUS_BOARDS = [
   ["mlb_recommendations.json", "MLB board"],
   ["nba.json", "NBA board"],
   ["wnba.json", "WNBA board"],
+  ["nhl.json", "NHL board"],
   ["cfb.json", "College football board"],
   ["ufc.json", "UFC card"],
   ["record.json", "The record"],
@@ -38275,7 +38296,7 @@ const STATUS_MAX_AGE_H = { "backtest.json": 192, "record.json": 6, "ufc.json": 1
 /* Which league a slate file is, so its row can say "off-season" from the
    heartbeat rather than "never built" or a scary age. */
 const STATUS_SPORT_OF = { "recommendations.json": "nfl", "mlb_recommendations.json": "mlb",
-  "nba.json": "nba", "wnba.json": "wnba", "cfb.json": "cfb" };
+  "nba.json": "nba", "wnba.json": "wnba", "nhl.json": "nhl", "cfb.json": "cfb" };
 
 async function boardStamp(file) {
   try {
@@ -38304,7 +38325,7 @@ async function boardStamp(file) {
    carried the commit and each board's last run since August; --boards
    read them over SSH and nothing on the site did. */
 const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB"],
-  ["nba", "NBA"], ["wnba", "WNBA"], ["ufc", "UFC"]];
+  ["nba", "NBA"], ["wnba", "WNBA"], ["nhl", "NHL"], ["ufc", "UFC"]];
 
 /* THE BOARD'S SELF-CHECK (engine/boardtruth, run by launch._board_truth
    after every build): how many of the claims the page makes held against
@@ -43879,7 +43900,7 @@ function syncStripArrows() {
 const LIVE_FEEDS = {
   nfl: "data/recommendations.json", cfb: "data/cfb.json",
   mlb: "data/mlb_recommendations.json",
-  nba: "data/nba.json", wnba: "data/wnba.json",
+  nba: "data/nba.json", wnba: "data/wnba.json", nhl: "data/nhl.json",
 };
 
 /* SCORES DO NOT COME FROM THE MODEL BOARD ANY MORE — measured 2026-08-16.
@@ -44977,6 +44998,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
     art = league === "mlb" ? pbpPhotoHTML(game)
       : isFootball ? pbpFieldHTML(d, league, hitRow)
       : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
+      : league === "nhl" ? rink(game, { w: 640, h: 400 })
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
   window.ACTIVE_TEAMS = keep;

@@ -45,12 +45,16 @@ SEASON_WINDOWS = {
     # not used to walk days — it is here so anything asking "has this
     # season started" gets the same answer for every sport.
     "nfl": (9, 1, 2, 20, True),
+    # Opening night in early October through the Stanley Cup Final in June.
+    # Preseason (late September) is outside the window and is never stored
+    # anyway (engine/sources/nhldata.KEEP_TYPES).
+    "nhl": (10, 1, 6, 30, True),
 }
 
 # Sports whose day-by-day ingest is worth warning about before it starts.
 # A basketball season is ~1,200 games and each one costs a box-score
 # request; six of them is an afternoon, not a coffee break.
-HEAVY = {"nba", "wnba"}
+HEAVY = {"nba", "wnba", "nhl"}
 
 
 def window(sport: str, season: int) -> tuple[str, str]:
@@ -141,7 +145,7 @@ def describe(sport: str, seasons: list[int], days: int) -> str:
             else f"{seasons[0]}-{seasons[-1]}")
     note = ""
     if sport in HEAVY:
-        note = ("  This one is slow: a basketball season is ~1,200 games and "
+        note = ("  This one is slow: a season is over a thousand games and "
                 "each needs its own box score. Expect a long run, leave it "
                 "going, and re-run it any time — days already stored are "
                 "skipped.")

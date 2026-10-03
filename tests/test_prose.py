@@ -91,7 +91,7 @@ def test_the_weekly_brief_pack_lists_every_tracked_sport():
     """Ethan's requirement, verbatim: mlb, nba, wnba, nfl, cfb, ufc —
     every sport we offer, every week, journaled or not."""
     pack = P.brief_pack(_journal())
-    assert set(pack["sports"]) == {"mlb", "nfl", "cfb", "nba", "wnba", "ufc"}
+    assert set(pack["sports"]) == {"mlb", "nfl", "cfb", "nba", "wnba", "nhl", "ufc"}
     fb = P._week_fallback(pack)
     assert "Nothing journaled yet" in fb("cfb")
     by = P._ensure_coverage({"by_sport": []}, pack["sports"], fb)
@@ -177,7 +177,7 @@ def test_the_brief_holds_its_weekly_cadence():
         assert len(calls) == 1
         stored = json.loads(open(p).read())
         assert set(stored[-1]["by_sport"]) == {"mlb", "nfl", "cfb", "nba",
-                                               "wnba", "ufc"}
+                                               "wnba", "nhl", "ufc"}
     finally:
         P._call = orig
         if keep_key is None:

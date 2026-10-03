@@ -6127,6 +6127,13 @@ def is_benched(sport) -> bool:
 #: journaled with side OVER whatever it is and is not what lost.
 PAPER_PROP_SIDES = {("mlb", "OVER")}
 
+#: A NEW LEAGUE STARTS ON PAPER. Every Edge row it makes — props and game
+#: bets — is journaled, sized and graded like any other, under `paper`, so
+#: its record exists before a dollar does. Hockey joined 2026-10-03 with a
+#: model nothing has graded yet; it leaves this tuple when its paper
+#: record earns it, and nothing else has to move.
+PAPER_SPORTS = ("nhl",)
+
 
 def prop_book(category: str, sport, side) -> str:
     """The book one Edge PROP row goes to: `category` (from `book_for`),
@@ -6147,6 +6154,8 @@ def book_for(sport, paper: bool) -> str:
     """
     if is_benched(sport):
         return BENCH_CATEGORY
+    if str(sport or "").lower() in PAPER_SPORTS:
+        return "paper"
     return "paper" if paper else "main"
 
 
@@ -9182,7 +9191,7 @@ def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
 # `predmarkets.json` by their own report card, and folding a
 # prediction-market flag rate into a betting P&L would make both numbers
 # mean nothing.
-TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
+TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
 
 
 def sport_report(conn, sport: str,

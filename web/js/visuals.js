@@ -785,6 +785,58 @@ function court(game, opts = {}) {
 }
 
 
+/* A stylized NHL rink for the hero strip (2026-10-03) — white ice, the red
+   centre line, both blue lines, the faceoff circles, and each goal crease
+   in its own team's colour. Same 240x150 card art contract as court(). */
+function rink(game, opts = {}) {
+  const w = opts.w || 240, h = opts.h || 150;
+  const home = team(game.home), away = team(game.away);
+  const uid = "r" + Math.random().toString(36).slice(2, 7);
+  const nfx = nightFx(uid, home, away,
+                      { bowl: { cx: 120, cy: 80, rx: 114, ry: 62 } });
+  const circle = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="#c8102e" stroke-width="1.2" opacity="0.75"/>
+      <circle cx="${cx}" cy="${cy}" r="1.6" fill="#c8102e" opacity="0.85"/>`;
+  return `
+  <svg class="field" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img"
+       aria-label="${escapeAttr(game.away)} at ${escapeAttr(game.home)}">
+    <defs>
+      <radialGradient id="${uid}hall" cx="50%" cy="34%" r="85%">
+        <stop offset="0%" stop-color="#101226"/>
+        <stop offset="100%" stop-color="#05060F"/>
+      </radialGradient>
+      <linearGradient id="${uid}ice" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F4F8FC"/>
+        <stop offset="100%" stop-color="#D7E3EE"/>
+      </linearGradient>
+      ${nfx.defs}
+    </defs>
+    <rect x="0" y="0" width="240" height="150" fill="url(#${uid}hall)"/>
+    ${nfx.under}
+    <rect x="16" y="30" width="208" height="100" rx="30" fill="url(#${uid}ice)"
+          stroke="#9fb3c8" stroke-width="2.5"/>
+    <!-- goal lines, the crease in each team's colour (away left, home right) -->
+    <line x1="30" y1="36" x2="30" y2="124" stroke="#c8102e" stroke-width="1" opacity="0.7"/>
+    <line x1="210" y1="36" x2="210" y2="124" stroke="#c8102e" stroke-width="1" opacity="0.7"/>
+    <path d="M30 72 a8 8 0 0 1 0 16 z" fill="${away.primary}" opacity="0.85"/>
+    <path d="M210 72 a8 8 0 0 0 0 16 z" fill="${home.primary}" opacity="0.85"/>
+    <!-- blue lines and the red centre line -->
+    <rect x="86" y="30" width="3" height="100" fill="#0033a0" opacity="0.8"/>
+    <rect x="151" y="30" width="3" height="100" fill="#0033a0" opacity="0.8"/>
+    <rect x="119" y="30" width="2.4" height="100" fill="#c8102e" opacity="0.85"/>
+    <circle cx="120" cy="80" r="13" fill="none" stroke="#0033a0" stroke-width="1.2" opacity="0.75"/>
+    <circle cx="120" cy="80" r="6" fill="${shade(home.primary, 6)}" opacity="0.9"/>
+    ${circle(54, 56)}${circle(54, 104)}${circle(186, 56)}${circle(186, 104)}
+    <text x="58" y="84" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10"
+          font-weight="800" fill="${shade(away.primary, -10)}" opacity="0.9">${escapeAttr(game.away)}</text>
+    <text x="182" y="84" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10"
+          font-weight="800" fill="${shade(home.primary, -10)}" opacity="0.9">${escapeAttr(game.home)}</text>
+    <text x="120" y="24" text-anchor="middle" font-family="system-ui, sans-serif"
+          font-size="10" font-weight="700" fill="#c9d2e8" opacity="0.9">${escapeAttr(team(game.home).nick || game.home)} home ice</text>
+  ${nfx.over}
+  </svg>`;
+}
+
+
 // The base state, said in words. The lit bases are a colour difference on a
 // 240px drawing, which is nothing at all to a screen reader — and the mini
 // diamond that used to carry an aria-label is gone.

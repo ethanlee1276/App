@@ -87,6 +87,10 @@ SPORT_MARKETS = {
             ("rec_yds", "Receiving Yards"), ("receptions", "Receptions"),
             ("carries", "Carries"), ("targets", "Targets"),
             ("pass_td", "Passing TDs")),
+    # Hockey joined 2026-10-03, off the NHL's own box scores
+    # (engine/sources/nhldata). Labels match engine/nhl/model.MARKET_LABELS.
+    "nhl": (("sog", "Shots on Goal"), ("points", "Points"), ("goals", "Goals"),
+            ("assists", "Assists"), ("blocks", "Blocked Shots"), ("saves", "Saves")),
 }
 
 N_GAMES = 10       # what a profile chart can legibly hold

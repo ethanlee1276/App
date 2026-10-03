@@ -80,7 +80,8 @@ def _sports(block):
     return re.findall(r'data-sport="([a-z]+)"', block)
 
 
-LEAGUES = ["nfl", "cfb", "mlb", "nba", "wnba", "ufc"]
+# The NHL joined 2026-10-03, after the WNBA.
+LEAGUES = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc"]
 MARKETS = ["intel", "fantasy", "memes"]
 
 
@@ -100,7 +101,7 @@ def test_the_strip_carries_every_league_and_only_leagues():
     second row, the separator and the type size. They are drawer rows
     now; the strip answers one question."""
     got = _sports(_strip())
-    assert got == LEAGUES, f"the strip is not the six leagues in order: {got}"
+    assert got == LEAGUES, f"the strip is not the leagues in order: {got}"
     for code in MARKETS:
         assert code not in got, f"{code} is back in the league strip"
 

@@ -82,6 +82,10 @@ MARKETS = {
     "nba": ("pts", "reb", "ast", "fg3m", "pra"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
     "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions"),
+    # HOCKEY (2026-10-03) walks its OWN model (engine/nhl/backtest) — a
+    # per-60 rate times ice time is not the football chain logwalk hands
+    # every other sport, so the branch in `measure` sends it there.
+    "nhl": ("sog", "points", "assists", "goals", "blocks", "anytime_goal", "saves"),
 }
 
 
@@ -211,20 +215,37 @@ def measure(conn, sport: str, markets=None, log=print,
     lines: list[str] = []
     store = load(path)
     changed = False
+    _nhl_players = None          # every NHL game, read once for all markets
     for market in markets or MARKETS.get(sport, ()):
         key = f"{sport}:{market}"
         try:
-            entries = _db.entries_for_market(conn, sport, market)
-            if not entries:
-                lines.append(f"rank fit {key}: no ingested logs")
-                continue
-            # Raw probabilities: a monotone calibration cannot change an
-            # AUC, and fitting on corrected output would re-measure the
-            # store's own influence — same reason calibrate.fit_market
-            # walks with the correction off.
-            with _cal.disabled():
-                report = walk(sport, entries, market)
-            pairs = report.pairs
+            if sport == "nhl":
+                from .nhl import backtest as _nhl_bt
+                if _nhl_players is None:
+                    # This season and last: two seasons is ~100,000 pairs a
+                    # market, far past MIN_PAIRS, and holding every stored
+                    # season in memory at once is not a cost a one-core
+                    # droplet should pay for no gain in the measurement.
+                    from .seasons import recent_seasons
+                    _nhl_players = _nhl_bt._all_games(
+                        conn, seasons=recent_seasons("nhl", _dt.date.today().isoformat()))
+                if not _nhl_players:
+                    lines.append(f"rank fit {key}: no ingested logs")
+                    continue
+                with _cal.disabled():
+                    pairs = _nhl_bt.walk(conn, market, players=_nhl_players).pairs
+            else:
+                entries = _db.entries_for_market(conn, sport, market)
+                if not entries:
+                    lines.append(f"rank fit {key}: no ingested logs")
+                    continue
+                # Raw probabilities: a monotone calibration cannot change an
+                # AUC, and fitting on corrected output would re-measure the
+                # store's own influence — same reason calibrate.fit_market
+                # walks with the correction off.
+                with _cal.disabled():
+                    report = walk(sport, entries, market)
+                pairs = report.pairs
         except Exception as exc:                          # noqa: BLE001
             lines.append(f"rank fit {key}: walk failed — {exc}")
             continue

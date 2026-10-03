@@ -30,7 +30,7 @@ def test_one_game_page_for_every_team_sport():
         assert f"{sport}:" in fam, sport
     page = _fn("renderGamePage")
     assert '<div class="gp-hero is-hero">' in page, "no sport is left on the old boxed art"
-    assert "const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);" in page
+    assert 'const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);' in page
     for family in ("football", "baseball", "basketball"):
         assert list((ROOT / "web" / "img" / "venues" / "variants").glob(f"{family}-*.jpg")), family
 

@@ -132,13 +132,14 @@ MAX_INJURIES = 15
 #: Every league's board, by the name the page asks for it with. A question
 #: is read against all of them, whichever league the reader has open.
 BOARD_FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "nba": "nba.json",
-               "wnba": "wnba.json", "mlb": "mlb_recommendations.json"}
+               "wnba": "wnba.json", "mlb": "mlb_recommendations.json", "nhl": "nhl.json"}
 #: The order leagues are tried in when a name could be more than one team;
 #: the reader's own league always goes first.
-LEAGUES = ("nfl", "nba", "mlb", "wnba", "cfb")
+LEAGUES = ("nfl", "nba", "mlb", "nhl", "wnba", "cfb")
 #: A league named in the question, for the record's per-league line.
 LEAGUE_WORDS = {"nfl": r"\bnfl\b", "cfb": r"\b(?:cfb|college football|ncaaf?)\b",
-                "nba": r"\bnba\b", "wnba": r"\bwnba\b", "mlb": r"\b(?:mlb|baseball)\b"}
+                "nba": r"\bnba\b", "wnba": r"\bwnba\b", "mlb": r"\b(?:mlb|baseball)\b",
+                "nhl": r"\b(?:nhl|hockey)\b"}
 
 #: The lookups: rounds of tool calls one question may take, calls in all,
 #: and how much each answer carries.

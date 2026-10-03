@@ -219,6 +219,49 @@ HOOPS_ALT_ODDS_TO_MARKET = {
 UNPROVEN_MARKETS = (UNPROVEN_MARKETS | frozenset(MLB_ALT_ODDS_TO_MARKET)
                     | frozenset(HOOPS_ALT_ODDS_TO_MARKET))
 
+#: HOCKEY, 2026-10-03. Ethan: "every single feature we have for NFL and
+#: college football and MLB for NHL as well." The Odds API's NHL player
+#: markets, mapped to the stat names `engine/sources/nhldata` stores, so
+#: a quote lands on the same key a box score settles. Goals and blocked
+#: shots are documented but thinly hung; the drop-and-retry guard makes
+#: asking for them safe.
+NHL_ODDS_TO_MARKET = {
+    "player_points": "points",
+    "player_assists": "assists",
+    "player_shots_on_goal": "sog",
+    "player_blocked_shots": "blocks",
+    "player_goals": "goals",
+    "player_total_saves": "saves",
+}
+#: "Does he score" — Yes/No like the anytime touchdown, parsed by the
+#: scorer parser and landed as a 0.5 line.
+NHL_SCORER_ODDS_TO_MARKET = {"player_goal_scorer_anytime": "anytime_goal"}
+#: The ladders: a shots or points line is hung near the median, so the
+#: Most Likely floor needs the lower rungs, as every other sport did.
+NHL_ALT_ODDS_TO_MARKET = {
+    "player_points_alternate": "points",
+    "player_assists_alternate": "assists",
+    "player_shots_on_goal_alternate": "sog",
+    "player_blocked_shots_alternate": "blocks",
+    "player_total_saves_alternate": "saves",
+}
+UNPROVEN_MARKETS = (UNPROVEN_MARKETS | frozenset({"player_goals", "player_blocked_shots"})
+                    | frozenset(NHL_ALT_ODDS_TO_MARKET))
+NHL_TEAM_ABBR = {
+    "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
+    "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
+    "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
+    "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
+    "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
+    "Montréal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
+    "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
+    "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
+    "Seattle Kraken": "SEA", "St Louis Blues": "STL", "St. Louis Blues": "STL",
+    "Tampa Bay Lightning": "TBL", "Toronto Maple Leafs": "TOR", "Utah Hockey Club": "UTA",
+    "Utah Mammoth": "UTA", "Vancouver Canucks": "VAN", "Vegas Golden Knights": "VGK",
+    "Washington Capitals": "WSH", "Winnipeg Jets": "WPG",
+}
+
 # Default books to shop, matching the project vision. Keys are The Odds API's.
 # Pinnacle rides along as the SHARP REFERENCE — its de-vigged price is the
 # best free estimate of a bet's true probability, which is what the
@@ -549,6 +592,13 @@ SPORT_CONFIG = {
             "markets": ODDS_TO_MARKET, "teams": {},
             "scorers": SCORER_ODDS_TO_MARKET,
             "alternates": ALT_ODDS_TO_MARKET},
+    # Hockey (2026-10-03): the same three kinds — stat props, the Yes/No
+    # scorer, the ladders. Player props bill per market per event, so an
+    # NHL event is 12 markets; `oddsbudget` sets how many events.
+    "nhl": {"sport_key": "icehockey_nhl",
+            "markets": NHL_ODDS_TO_MARKET, "teams": NHL_TEAM_ABBR,
+            "scorers": NHL_SCORER_ODDS_TO_MARKET,
+            "alternates": NHL_ALT_ODDS_TO_MARKET},
 }
 
 

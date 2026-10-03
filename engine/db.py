@@ -1086,7 +1086,7 @@ def date_ranges(conn) -> dict:
 #: Reported first, in this order, whether or not they have rows — a board
 #: with an EMPTY history is the single most useful thing this summary can
 #: say, and omitting it makes "no data" and "no such sport" identical.
-CORE_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba")
+CORE_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
 
 
 def sports_present(conn) -> list[str]:
