@@ -55,7 +55,7 @@ def test_every_sport_the_site_renders_has_a_league_key():
     js = _js()
     m = re.search(r"const ESPN_LEAGUE = \{([^}]*)\}", js)
     assert m, "the league map is gone"
-    for sport in ("nfl", "cfb", "mlb", "nba", "wnba"):
+    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
         assert re.search(rf"\b{sport}:", m.group(1)), sport
 
 
@@ -166,13 +166,14 @@ def test_the_audit_reads_the_map_out_of_the_javascript():
     assert m, "the audit can no longer read ESPN_ABBR out of visuals.js"
     assert m.get("nfl", {}).get("WAS") == "wsh"
     assert m.get("wnba", {}).get("CON") == "conn"
+    assert m.get("nhl", {}).get("LAK") == "la" and m.get("nhl", {}).get("TBL") == "tb"
 
 
 def test_the_audit_covers_every_team_the_site_can_render():
     """Keyed off the same teams_*.js the page reads, so it cannot check a
     list that has fallen behind the site."""
     import assets
-    for sport, want in (("nfl", 30), ("mlb", 30), ("nba", 30), ("wnba", 12)):
+    for sport, want in (("nfl", 30), ("mlb", 30), ("nba", 30), ("wnba", 12), ("nhl", 32)):
         got = assets._teams_for(sport)
         assert len(got) >= want, f"{sport}: only found {len(got)} teams"
 

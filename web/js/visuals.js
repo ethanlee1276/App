@@ -317,13 +317,18 @@ function playerAvatar(name, abbr, opts = {}) {
    `assets.py --audit` walks every abbreviation in every teams file and
    reports which ones 404, so the misses get fixed from a measurement
    rather than from memory. Run it before trusting this map. */
-const ESPN_LEAGUE = { nfl: "nfl", cfb: "ncaa", mlb: "mlb", nba: "nba", wnba: "wnba" };
+const ESPN_LEAGUE = { nfl: "nfl", cfb: "ncaa", mlb: "mlb", nba: "nba", wnba: "wnba", nhl: "nhl" };
 
+/* Hockey (2026-10-03): `nhl` is the NHL feed's abbreviations where ESPN's
+   logo path spells the club differently; every other club is its own name.
+   No comments INSIDE this object: assets.py parses it as JSON to audit
+   every logo against ESPN. */
 const ESPN_ABBR = {
   nfl:  { WAS: "wsh", LA: "lar", ARZ: "ari", SD: "lac", STL: "lar", OAK: "lv" },
   mlb:  { CWS: "chw", TBR: "tb" },
   nba:  { NOP: "no", NYK: "ny", GSW: "gs", SAS: "sa", UTA: "utah", PHX: "phx" },
   wnba: { CON: "conn", GSV: "gs", LAS: "la", LVA: "lv", NYL: "ny", WAS: "wsh" },
+  nhl:  { LAK: "la", NJD: "nj", SJS: "sj", TBL: "tb", UTA: "utah" },
   cfb:  {},
 };
 

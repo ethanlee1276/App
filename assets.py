@@ -58,6 +58,7 @@ SPORTS = {
     "mlb":  ("mlb",  ["nyy", "bos", "laa"]),
     "nba":  ("nba",  ["bos", "lal", "gs"]),
     "wnba": ("wnba", ["min", "lv", "ny"]),
+    "nhl":  ("nhl",  ["edm", "la", "utah"]),
     "cfb":  ("ncaa", ["333", "130", "2"]),   # ESPN uses numeric team ids here
 }
 

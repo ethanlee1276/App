@@ -121,12 +121,21 @@ its config is reloaded. Validates first — a bad file is never installed:
 cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy && ls -la web/min/index.html
 ```
 
+**H10. Every NHL logo resolves** (paste the summary line). The site now
+draws ESPN's NHL logos everywhere a team mark appears; this fetches all 32
+and names any club whose spelling misses (that club shows its coloured
+badge until the map is corrected):
+
+```
+cd /srv/qellys && sudo -u qellys python3 assets.py --audit --sport nhl
+```
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H9** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy.
+0. **H1–H10** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos.
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).
