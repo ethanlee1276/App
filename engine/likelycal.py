@@ -213,7 +213,7 @@ def fit(conn, sport: str) -> dict:
     groups = fit_groups(rows)
     passed = bool(ho.get("n") and ho.get("lo", 0) > 0)
     return {"sport": sport, "n": len(rows), "held_out": ho, "groups": groups, "passed": passed,
-            "fitted_at": _dt.datetime.utcnow().isoformat(timespec="seconds")}
+            "fitted_at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")}
 
 
 # --- the store and the board -----------------------------------------------

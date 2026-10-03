@@ -442,6 +442,17 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         notes["model"] = (f"our chance {prob:.0%} (the bar here is {MODEL_BAR[lane]:.0%})"
                           + (f" — {r['cal_note']}" if r.get("cal_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
+        # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
+        # tier change"). A pick only the matchup picks or the touchdown
+        # scenarios made was made BY the matchup read, so that read agreeing
+        # with it is the same opinion counted twice — which is how the NFL
+        # matchup picks reached Top pick and went 4-14 there. Its matchup
+        # check says nothing either way; the pick stays on the board, and it
+        # can still be Strong on the model, the market and the record.
+        if checks["matchup"] is True and not ({"likely"} & set(r.get("sources") or ())):
+            checks["matchup"] = None
+            notes["matchup"] = (notes["matchup"] + " — but this pick came from the matchup read itself,"
+                                " so it does not count as a second opinion")
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         tier = tier_of(checks)

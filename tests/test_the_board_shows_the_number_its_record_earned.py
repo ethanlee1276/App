@@ -120,6 +120,25 @@ def test_the_store_round_trips():
     assert got["nfl"]["groups"]["matchup|over"]["k"] == res["groups"]["matchup|over"]["k"]
 
 
+def test_the_matchup_read_is_not_a_second_opinion_on_its_own_pick():
+    """Ethan, 2026-10-03, "yeah make the tier change": a pick only the
+    matchup picks made was made BY the matchup read, so that read agreeing
+    is one opinion counted twice (the NFL matchup picks went 4-14 at Top).
+    The same pick from the Most Likely list keeps the matchup's vote."""
+    td = {"player": "Scorer", "team": "T0", "market": "anytime_td", "side": "yes", "odds": -110,
+          "model_prob": 0.52, "matchup_score": 8}
+    own = LB.build({"most_likely": [], "td_scenarios": [], "matchup_picks": [{"td": [dict(td)]}]},
+                   sport="nfl", calibration={})
+    (r,) = own["rows"]
+    assert r["checks"]["matchup"] is None and r["tier"] != "top", (r["checks"], r["tier"])
+    assert "does not count as a second opinion" in r["check_notes"]["matchup"]
+    assert len(own["rows"]) == 1, "the pick stays on the board"
+    lst = LB.build({"most_likely": [dict(td)], "td_scenarios": [], "matchup_picks": []},
+                   sport="nfl", calibration={})
+    (r2,) = lst["rows"]
+    assert r2["checks"]["matchup"] is True and r2["tier"] == "top", (r2["checks"], r2["tier"])
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
