@@ -668,6 +668,12 @@ LIMIT = 40
 #: which shelves these are. He was shown the collision and chose 0.55
 #: everywhere rather than scoping it to props.
 MIN_PROB = 0.55
+#: A LEAGUE'S OWN BAR, where its model sets a stricter one. Scalpy NHL 1.0
+#: (Ethan, 2026-10-03): "We rank them by modeled hit probability ... Pass
+#: below 65%. We generally don't touch it." The reserve pass below still
+#: tops a thin shelf up, labelled reserve and never journaled, so the page
+#: is never blank and the record only ever holds rows that cleared 65%.
+SPORT_MIN_PROB = {"nhl": 0.65}
 
 #: THE FLOOR WHEN THE ALTERNATIVE IS AN EMPTY PAGE. Ethan, 2026-09-08:
 #: "Also I don't want an empty boar either we need to have picks period."
@@ -2818,7 +2824,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return out
 
     seated_keys: set = set()
-    out = one_pass(None, funnel, seated_keys, why_left)
+    out = one_pass(SPORT_MIN_PROB.get(sport), funnel, seated_keys, why_left)
     # NO SHELF GOES BLANK. Ethan, 2026-09-08: "Also I don't want an empty
     # boar either we need to have picks period", and then, the night
     # before the opener: "We have barely any moneylines show and barley

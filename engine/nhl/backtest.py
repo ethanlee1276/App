@@ -69,7 +69,8 @@ def _league_by_date(players: dict) -> dict:
     tot: dict = {}
     out: dict = {}
     for day in sorted(by_day):
-        snap = {grp: {s: t.get(s, 0.0) / max(t["toi"], 1.0) * 60.0 for s in _RATE_STATS}
+        snap = {grp: {**{s: t.get(s, 0.0) / max(t["toi"], 1.0) * 60.0 for s in _RATE_STATS},
+                      "sh": (t.get("goals", 0.0) / t["sog"]) if t.get("sog") else 0.09}
                 for grp, t in tot.items() if grp != "G"}
         gk = tot.get("G") or {}
         snap["sv"] = (gk["saves"] / gk["shots_against"]) if gk.get("shots_against") else M.LEAGUE_SV

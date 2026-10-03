@@ -97,7 +97,7 @@ def _odds(slate):
 
 def _board():
     conn = _history()
-    out, slate = B.build("2025-10-30", TONIGHT, conn, attach_odds=_odds)
+    out, slate = B.build("2025-10-30", TONIGHT, conn, attach_odds=_odds, injuries={})
     return out, slate
 
 

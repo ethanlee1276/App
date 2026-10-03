@@ -42,6 +42,8 @@ LEAGUES = {
     "nba": f"{ROOT}/basketball/nba/injuries",
     "wnba": f"{ROOT}/basketball/wnba/injuries",
     "cfb": f"{ROOT}/football/college-football/injuries",
+    # Hockey (2026-10-03): ESPN's NHL board, same envelope.
+    "nhl": f"{ROOT}/hockey/nhl/injuries",
 }
 
 #: How long a fetched injury board is believed before ESPN is asked again.

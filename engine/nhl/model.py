@@ -65,6 +65,35 @@ TEAM_HALF_LIFE = 25.0
 TEAM_PRIOR_GAMES = 15.0
 MAX_GOALS = 14
 
+# --- Scalpy NHL 1.0 (Ethan, 2026-10-03) -------------------------------------
+#: "Volume over finishing": a goal is a SHOT times a shooting percentage, and
+#: the percentage is regressed toward his position's league rate by this
+#: many shots — 5 goals on 14 shots is not a 35% shooter.
+SH_PRIOR_SHOTS = 200.0
+#: How far the opposing starter can move a goal-driven market, either way.
+#: Goals against = shots against × (1 − save%), so the goalie REPLACES the
+#: team goals-against tilt (which already carried him) rather than stacking.
+GOALIE_CAP = 0.20
+#: Early-season mode: the share of a team's strength taken from THIS season
+#: by games played, the rest from last season — "we absolutely cannot look
+#: at five games and say Team A is massively better".
+SEASON_BLEND = ((6, 0.25), (12, 0.35), (25, 0.50), (29, 0.60))
+SEASON_BLEND_LATE = 0.70
+#: Second night of a back-to-back: the tired side's expected goals.
+B2B_FACTOR = 0.97
+#: A role is "unstable" when his last 5 games' ice time is this far off the
+#: 10 before them, or he dressed in fewer than ROLE_MIN_GAMES of his last 10
+#: team games — Scalpy passes the prop.
+ROLE_SWING = 0.25
+ROLE_MIN_GAMES = 6
+#: A probable starter must hold at least this share of his team's last
+#: STARTER_WINDOW starts before a saves (or goalie-driven) bet stands.
+STARTER_SHARE = 0.60
+#: Scalpy's win-first grades, by modeled hit probability.
+GRADES = ((0.75, "A+"), (0.70, "A"), (0.65, "B"))
+#: The prop hierarchy — the most stable market first.
+PROP_TIER = {"sog": 1, "saves": 2, "points": 3, "assists": 4, "blocks": 4, "goals": 5, "anytime_goal": 5}
+
 SKATER_MARKETS = ("sog", "points", "goals", "assists", "blocks", "anytime_goal")
 GOALIE_MARKETS = ("saves",)
 MARKET_LABELS = {"sog": "Shots on Goal", "points": "Points", "goals": "Goals", "assists": "Assists",
@@ -158,43 +187,105 @@ def league_rates(players: dict) -> dict:
     for grp, t in tot.items():
         mins = max(t["toi"], 1.0)
         out[grp] = {s: t.get(s, 0.0) / mins * 60.0 for s in ("sog", "points", "goals", "assists", "blocks")}
+        out[grp]["sh"] = (t.get("goals", 0.0) / t["sog"]) if t.get("sog") else 0.09
     g = tot.get("G") or {}
     out["sv"] = (g.get("saves", 0) / g["shots_against"]) if g.get("shots_against") else LEAGUE_SV
     return out
 
 
+def season_weight(gp: int) -> float:
+    """This season's share of a team's strength after ``gp`` games — the
+    Scalpy early-season schedule (75/25 the first two weeks, 30/70 by game
+    30). The rest is last season."""
+    for upto, w in SEASON_BLEND:
+        if gp <= upto:
+            return w
+    return SEASON_BLEND_LATE
+
+
+def _profile(games: list) -> dict:
+    acc = {"gf": [0.0, 0.0], "ga": [0.0, 0.0], "sog_for": [0.0, 0.0], "sog_against": [0.0, 0.0]}
+    for i, (gf, ga, sf, sa) in enumerate(games):
+        w = _w(i, TEAM_HALF_LIFE)
+        for k, v in (("gf", gf), ("ga", ga), ("sog_for", sf), ("sog_against", sa)):
+            if v is not None:
+                acc[k][0] += w * float(v)
+                acc[k][1] += w
+    out = {k: (s / wt if wt else None) for k, (s, wt) in acc.items()}
+    out["n"] = len(games)
+    return out
+
+
 def team_profiles(conn, seasons=None) -> dict:
-    """{team: {"gf", "ga", "sog_for", "sog_against", "n"}} per game, decay
-    weighted, from the games table (goals) and the box-score shots carried
-    in each game's extra."""
+    """{team: {"gf", "ga", "sog_for", "sog_against", "n", "gp_season"}} per
+    game, decay weighted, from the games table (goals) and the box-score
+    shots carried in each game's extra.
+
+    EARLY-SEASON MODE (Scalpy NHL 1.0): the newest season and the one before
+    are profiled SEPARATELY and blended by how many games the newest has —
+    `season_weight` — so five October games cannot overrule a full season."""
     import json as _json
-    q = "SELECT home, away, home_score, away_score, extra, period FROM games WHERE sport='nhl' " \
+    q = "SELECT home, away, home_score, away_score, extra, period, season FROM games WHERE sport='nhl' " \
         "AND home_score IS NOT NULL"
     args: list = []
     if seasons:
         q += f" AND season IN ({','.join('?' * len(seasons))})"
         args += list(seasons)
     by: dict = {}
-    for home, away, hs, as_, extra, _day in conn.execute(q + " ORDER BY period DESC", args):
+    for home, away, hs, as_, extra, _day, season in conn.execute(q + " ORDER BY period DESC", args):
         try:
             ex = _json.loads(extra or "{}")
         except ValueError:
             ex = {}
         for team, gf, ga, sf, sa in ((home, hs, as_, ex.get("home_sog"), ex.get("away_sog")),
                                     (away, as_, hs, ex.get("away_sog"), ex.get("home_sog"))):
-            by.setdefault(team, []).append((float(gf), float(ga), sf, sa))
+            by.setdefault(team, {}).setdefault(int(season or 0), []).append((float(gf), float(ga), sf, sa))
+    newest = max((s for t in by.values() for s in t), default=0)
     out = {}
-    for team, games in by.items():
-        acc = {"gf": [0.0, 0.0], "ga": [0.0, 0.0], "sog_for": [0.0, 0.0], "sog_against": [0.0, 0.0]}
-        for i, (gf, ga, sf, sa) in enumerate(games):
-            w = _w(i, TEAM_HALF_LIFE)
-            for k, v in (("gf", gf), ("ga", ga), ("sog_for", sf), ("sog_against", sa)):
-                if v is not None:
-                    acc[k][0] += w * float(v)
-                    acc[k][1] += w
-        out[team] = {k: (s / wt if wt else None) for k, (s, wt) in acc.items()}
-        out[team]["n"] = len(games)
+    for team, per in by.items():
+        cur, prior = per.get(newest, []), [g for s in sorted(per, reverse=True) if s != newest for g in per[s]]
+        if not prior or not cur:
+            prof = _profile(cur or prior)
+            prof["gp_season"] = len(cur)
+            out[team] = prof
+            continue
+        a, b, w = _profile(cur), _profile(prior), season_weight(len(cur))
+        prof = {k: (w * a[k] + (1 - w) * b[k]) if a[k] is not None and b[k] is not None else (a[k] if a[k] is not None else b[k])
+                for k in ("gf", "ga", "sog_for", "sog_against")}
+        prof["n"], prof["gp_season"], prof["season_weight"] = a["n"] + b["n"], len(cur), w
+        out[team] = prof
     return out
+
+
+def regressed_sv(p: dict, league: dict) -> float | None:
+    """A goalie's save rate over his recent games, shrunk toward the league
+    by PRIOR_SHOTS — "never let a three-game hot streak overpower a
+    multi-season baseline"."""
+    games = [g for g in (p or {}).get("games") or [] if g.get("shots_against", 0) > 0]
+    if not games:
+        return None
+    lsv = league.get("sv", LEAGUE_SV)
+    saves = sum(g.get("saves", 0) for g in games)
+    shots = sum(g.get("shots_against", 0) for g in games)
+    return (saves + lsv * PRIOR_SHOTS) / (shots + PRIOR_SHOTS)
+
+
+def team_sv(players: dict, team: str, league: dict) -> float | None:
+    """Every goalie of this team pooled — what the team's goals-against
+    already carries, so tonight's starter is measured against it."""
+    pool = {"position": "G", "games": [g for p in players.values() if p["position"] == "G"
+                                       and p["team"] == team for g in p["games"]]}
+    return regressed_sv(pool, league)
+
+
+def goalie_factor(opp_sv: float | None, league: dict) -> float:
+    """How many more (or fewer) goals the opposing starter lets in than a
+    league-average one: (1 − his save%) ÷ (1 − league save%), capped."""
+    if opp_sv is None:
+        return 1.0
+    lsv = league.get("sv", LEAGUE_SV)
+    f = (1.0 - opp_sv) / max(1.0 - lsv, 1e-6)
+    return max(1 - GOALIE_CAP, min(1 + GOALIE_CAP, f))
 
 
 def _league_avg(teams: dict, key: str) -> float | None:
@@ -216,8 +307,12 @@ def opp_factor(teams: dict, opponent: str, kind: str) -> float:
 
 
 # --- skaters ------------------------------------------------------------------
-def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent: str) -> dict | None:
-    """{"mean", "disp", "toi", "rate60", "opp", "n"} for one skater and market."""
+def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent: str,
+                      opp_sv: float | None = None) -> dict | None:
+    """{"mean", "disp", "toi", "rate60", "opp", "n", ...} for one skater and
+    market. ``opp_sv`` is the opposing probable starter's regressed save%:
+    when given, a goal-driven market reads shots allowed × that goalie in
+    place of the team's raw goals-against."""
     games = [g for g in p["games"] if g.get("toi", 0) > 0]
     if len(games) < 3:
         return None
@@ -236,8 +331,30 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
         tn += w * g["toi"]
         td += w
     toi = tn / td
-    opp = opp_factor(teams, opponent, _OPP_KIND[market])
+    goal_market = market in ("goals", "anytime_goal", "points", "assists")
+    if goal_market and opp_sv is not None:
+        opp = opp_factor(teams, opponent, "sog") * goalie_factor(opp_sv, league)
+    else:
+        opp = opp_factor(teams, opponent, _OPP_KIND[market])
     mean = rate60 * toi / 60.0 * opp
+    sh = None
+    if market in ("goals", "anytime_goal"):
+        # VOLUME OVER FINISHING: shots per 60 × ice time × a shooting % that
+        # is regressed hard toward his position's league rate.
+        sog_prior = (league.get(grp) or {}).get("sog", 0.0)
+        sn = sd = 0.0
+        g_n = s_n = 0.0
+        for i, g in enumerate(games):
+            w = _w(i, RATE_HALF_LIFE)
+            sn += w * g.get("sog", 0.0)
+            sd += w * g["toi"]
+            g_n += g.get("goals", 0.0)
+            s_n += g.get("sog", 0.0)
+        sog60 = (sn + sog_prior * PRIOR_MINUTES / 60.0) / (sd + PRIOR_MINUTES) * 60.0
+        lsh = (league.get(grp) or {}).get("sh", 0.09)
+        sh = (g_n + lsh * SH_PRIOR_SHOTS) / (s_n + SH_PRIOR_SHOTS)
+        mean = sog60 * toi / 60.0 * sh * opp
+        rate60 = sog60 * sh
     vals = [g.get(stat, 0.0) for g in games]
     disp = 1.0
     if market in ("sog", "blocks") and len(vals) >= 5:
@@ -246,8 +363,13 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
         own = (v / m) if m > 0 else SOG_DISPERSION
         k = len(vals) / (len(vals) + 20.0)
         disp = max(1.0, k * own + (1 - k) * SOG_DISPERSION)
+    t5 = [g["toi"] for g in games[:5]]
+    t10 = [g["toi"] for g in games[5:15]]
+    swing = (abs(sum(t5) / len(t5) / (sum(t10) / len(t10)) - 1.0)
+             if len(t5) == 5 and len(t10) >= 5 and sum(t10) else 0.0)
     return {"mean": round(mean, 4), "disp": round(disp, 3), "toi": round(toi, 2), "rate60": round(rate60, 3),
-            "opp": round(opp, 3), "n": len(games), "recent": vals[:12]}
+            "opp": round(opp, 3), "n": len(games), "recent": vals[:12],
+            "sh": round(sh, 4) if sh is not None else None, "toi_swing": round(swing, 3)}
 
 
 def skater_prob(proj: dict, market: str, line: float, side: str) -> float:
@@ -275,6 +397,26 @@ def probable_starter(players: dict, team: str) -> str | None:
     return max(starts, key=starts.get) if starts else None
 
 
+def starter_share(players: dict, team: str, name: str) -> float:
+    """``name``'s share of his team's last STARTER_WINDOW starts."""
+    dates = []
+    for n, p in players.items():
+        if p["position"] != "G" or p["team"] != team:
+            continue
+        dates += [(g["date"], n) for g in p["games"] if g.get("started")]
+    recent = sorted(dates, reverse=True)[:STARTER_WINDOW]
+    return (sum(1 for _d, n in recent if n == name) / len(recent)) if recent else 0.0
+
+
+def scalpy_grade(prob: float, flags=()) -> str:
+    """A+ / A / B / Pass by modeled hit probability; any risk flag keeps a
+    row out of A+ ("requires stable role ... no major goalie uncertainty")."""
+    for bar, label in GRADES:
+        if prob >= bar:
+            return "A" if (label == "A+" and flags) else label
+    return "Pass"
+
+
 def goalie_projection(p: dict, league: dict, teams: dict, team: str, opponent: str) -> dict | None:
     games = [g for g in p["games"] if g.get("shots_against", 0) > 0]
     if len(games) < 3:
@@ -298,8 +440,10 @@ def goalie_prob(proj: dict, line: float, side: str) -> float:
 
 
 # --- games ------------------------------------------------------------------
-def team_lambdas(teams: dict, home: str, away: str) -> tuple[float, float] | None:
-    """Expected regulation goals (home, away)."""
+def team_lambdas(teams: dict, home: str, away: str, rested: dict | None = None) -> tuple[float, float] | None:
+    """Expected regulation goals (home, away). ``rested`` = {team: False}
+    marks the second night of a back-to-back (B2B_FACTOR) — an adjustment,
+    never a thesis on its own."""
     avg = _league_avg(teams, "gf")
     h, a = teams.get(home), teams.get(away)
     if not avg or not h or not a:
@@ -313,6 +457,11 @@ def team_lambdas(teams: dict, home: str, away: str) -> tuple[float, float] | Non
     reg = avg * 0.97
     lh = reg * strength(h, "gf") * strength(a, "ga") * HOME_EDGE
     la = reg * strength(a, "gf") * strength(h, "ga") / HOME_EDGE
+    rested = rested or {}
+    if rested.get(home) is False and rested.get(away) is not False:
+        lh *= B2B_FACTOR
+    if rested.get(away) is False and rested.get(home) is not False:
+        la *= B2B_FACTOR
     return lh, la
 
 

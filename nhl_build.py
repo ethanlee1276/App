@@ -116,7 +116,8 @@ def rung_probs(proj: dict, market: str, alts) -> dict:
 
 
 # --- one prop ---------------------------------------------------------------
-def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str) -> dict | None:
+def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str,
+               ctx: dict | None = None) -> dict | None:
     """The shared-schema recommendation for one priced prop, or None."""
     from engine.betting import _kelly_stake, temper_edge
     from engine.odds import devig_two_way, expected_value
@@ -156,10 +157,46 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     if not goalie and abs(proj.get("opp", 1.0) - 1.0) >= 0.02:
         reasons.append(f"{opponent} allows {abs(proj['opp'] - 1):.0%} "
                        f"{'more' if proj['opp'] > 1 else 'less'} than an average team")
-    if goalie:
-        reasons.append("Probable starter — the goalie who started most of his team's recent games; "
-                       "starters are not confirmed this early")
     games = p.get("games") or []
+    me, them = (ctx or {}).get(prop.team) or {}, (ctx or {}).get(opponent) or {}
+    flags, passes = [], []
+    # THE SCALPY READ, in its output order: goalie impact, ice time, game
+    # script, then the risk factors.
+    if goalie:
+        reasons.append(f"Probable starter: {me.get('starter_share', 0):.0%} of {prop.team}'s last "
+                       f"{M.STARTER_WINDOW} starts — not confirmed this early")
+    elif them.get("starter"):
+        sv = them.get("sv")
+        if them.get("starter_sure") and sv is not None:
+            reasons.append(f"Goalie impact: faces {them['starter']} (.{round(sv * 1000):03d} save rate, "
+                           f"regressed over his recent seasons)")
+        else:
+            flags.append("opposing starter unsure")
+            reasons.append(f"Goalie impact: {opponent}'s starter is not settled — read from the team's "
+                           f"goals allowed instead")
+    if not goalie:
+        swing = proj.get("toi_swing") or 0.0
+        dressed = sum(1 for g in games if g.get("date") in (me.get("last10") or ()))
+        reasons.append(f"Ice time: {proj['toi']:.1f} min a game"
+                       + (" — steady" if swing < 0.10 else f" — moved {swing:.0%} lately"))
+        if me.get("last10") and dressed < M.ROLE_MIN_GAMES:
+            passes.append(f"dressed in only {dressed} of {prop.team}'s last 10 games")
+        elif swing > M.ROLE_SWING:
+            passes.append(f"ice time moved {swing:.0%} over his last 5 games")
+        if proj.get("sh") is not None:
+            reasons.append(f"Finishing regressed: {proj['sh']:.1%} shooting, pulled toward the league rate "
+                           f"— volume over finishing")
+    if me.get("xg") is not None and them.get("xg") is not None:
+        reasons.append(f"Game script: {prop.team} {me['xg']:.2f} – {opponent} {them['xg']:.2f} expected "
+                       f"regulation goals")
+        if goalie and them["xg"] - me["xg"] >= 1.0:
+            passes.append("blowout risk — a lopsided game can pull the goalie or change the script")
+    if me.get("b2b"):
+        flags.append("second night of a back-to-back")
+    if them.get("b2b"):
+        reasons.append(f"{opponent} is on the second night of a back-to-back")
+    if flags or passes:
+        reasons.append("Risk factors: " + "; ".join(flags + passes))
     warnings = [] if pick else ([] if credible else ["Our number disagrees with the market by more than we credit"])
     return {
         "player": prop.player, "team": prop.team, "opponent": opponent,
@@ -193,21 +230,47 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
                  "last10": (sum(vals[:10]) / 10 if len(vals) >= 10 else None),
                  "season": (sum(vals) / len(vals) if vals else None), "career": None, "vs_opponent": None},
         "game_date": date,
+        # SCALPY NHL 1.0 — the win-first grade, the prop's tier, the risk
+        # flags that keep it out of A+, and the reason a prop is passed.
+        "scalpy_grade": M.scalpy_grade(win, flags + passes) if not passes else "Pass",
+        "prop_tier": M.PROP_TIER.get(prop.market),
+        "scalpy_flags": flags,
+        "scalpy_pass": "; ".join(passes),
     }
 
 
 # --- game lines ---------------------------------------------------------------
-def game_bets(g, teams: dict) -> list[dict]:
-    """Moneyline, puck line and total for one game with a real price."""
+def game_bets(g, teams: dict, ctx: dict | None = None) -> list[dict]:
+    """Moneyline, puck line and total for one game with a real price.
+
+    SCALPY's game order: the starting goalies first — each side's expected
+    goals moves by how tonight's confirmed-probable starter compares with
+    the team's goaltending as a whole (a backup in net is more goals) —
+    then rest (the back-to-back factor in the team lambdas)."""
     from engine.gamebets import _game_bet, temper
     from engine.odds import devig_two_way
-    lam = M.team_lambdas(teams, g.home, g.away)
-    if not lam:
-        return []
+    ctx = ctx or {}
+    hc, ac = ctx.get(g.home) or {}, ctx.get(g.away) or {}
+    if hc.get("xg") is not None and ac.get("xg") is not None:
+        lam = [hc["xg"], ac["xg"]]
+    else:
+        lam = M.team_lambdas(teams, g.home, g.away)
+        if not lam:
+            return []
+        lam = list(lam)
+    goalie_note = []
+    for i, side in ((1, hc), (0, ac)):          # the home goalie faces the away goals, and back
+        if side.get("starter_sure") and side.get("sv") is not None and side.get("team_sv") is not None:
+            f = (1 - side["sv"]) / max(1 - side["team_sv"], 1e-6)
+            f = max(1 - M.GOALIE_CAP, min(1 + M.GOALIE_CAP, f))
+            lam[i] *= f
+            if abs(f - 1) >= 0.03:
+                goalie_note.append(f"{side['starter']} in net moves the other side's goals {f - 1:+.0%}")
+    lam = tuple(lam)
     probs = M.game_probs(*lam)
     out = []
     why = (f"Expected goals {g.home} {lam[0]:.2f} – {g.away} {lam[1]:.2f} (regulation), "
-           f"from each side's recent goals for and against")
+           f"from each side's goals for and against" + ("; " + "; ".join(goalie_note) if goalie_note else ""))
     if g.home_ml and g.away_ml:
         fh, fa = devig_two_way(int(g.home_ml), int(g.away_ml))
         best = None
@@ -316,13 +379,56 @@ def build_slate(games: list[dict], players: dict, date: str, rosters: dict | Non
     return slate
 
 
+def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, date: str) -> dict:
+    """SCALPY NHL 1.0's per-team read, in its order of importance: the
+    starting goalie first (who, how sure, how good), then rest, then the
+    expected game. {team: {...}}."""
+    import datetime as _dt
+    try:
+        yday = (_dt.date.fromisoformat(date) - _dt.timedelta(days=1)).isoformat()
+    except ValueError:
+        yday = ""
+    played_yday: set = set()
+    started_yday: set = set()
+    team_days: dict = {}
+    for name, p in players.items():
+        for g in p.get("games") or []:
+            if g["date"] < date:
+                team_days.setdefault(p["team"], set()).add(g["date"])
+            if g["date"] == yday:
+                played_yday.add(p["team"])
+                if p["position"] == "G" and g.get("started"):
+                    started_yday.add(name)
+    ctx: dict = {}
+    for g in games:
+        for team, opp, home in ((g["home"], g["away"], True), (g["away"], g["home"], False)):
+            starter = M.probable_starter(players, team)
+            share = M.starter_share(players, team, starter) if starter else 0.0
+            b2b = team in played_yday
+            # THE BACK-TO-BACK GOALIE RULE: the man who started last night
+            # rarely starts tonight, so "probable" is not probable at all.
+            sure = bool(starter) and share >= M.STARTER_SHARE and not (b2b and starter in started_yday)
+            ctx[team] = {"opponent": opp, "home": home, "starter": starter, "starter_share": round(share, 2),
+                         "starter_sure": sure, "b2b": b2b,
+                         "sv": M.regressed_sv(players.get(starter), league) if starter else None,
+                         "team_sv": M.team_sv(players, team, league),
+                         "last10": set(sorted(team_days.get(team, ()), reverse=True)[:10])}
+    for g in games:
+        lam = M.team_lambdas(teams, g["home"], g["away"],
+                             rested={t: not ctx[t]["b2b"] for t in (g["home"], g["away"])})
+        if lam:
+            ctx[g["home"]]["xg"], ctx[g["away"]]["xg"] = lam[0], lam[1]
+    return ctx
+
+
 def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, teams: dict,
-                assets: dict, date: str) -> tuple[list[dict], dict]:
+                assets: dict, date: str, ctx: dict | None = None) -> tuple[list[dict], dict]:
     """(recommendations, census) for every prop with a real price."""
+    ctx = ctx if ctx is not None else scalpy_context(games, players, league, teams, date)
     opp_of = {}
     for g in games:
         opp_of[g["home"]], opp_of[g["away"]] = g["away"], g["home"]
-    census = {"no_real_price": 0, "no_history": 0}
+    census = {"no_real_price": 0, "no_history": 0, "starter_unconfirmed": 0}
     recs = []
     for prop in slate.props:
         if not prop.lines:
@@ -330,14 +436,20 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
             continue
         p = players.get(prop.player)
         opp = opp_of.get(prop.team, "")
+        me, them = ctx.get(prop.team) or {}, ctx.get(opp) or {}
         if prop.market in M.GOALIE_MARKETS:
+            # "Unknown starting goalie — no goalie-dependent bet."
+            if not me.get("starter_sure") or me.get("starter") != prop.player:
+                census["starter_unconfirmed"] += 1
+                continue
             proj = M.goalie_projection(p, league, teams, prop.team, opp) if p else None
         else:
-            proj = M.skater_projection(p, prop.market, league, teams, opp) if p else None
+            opp_sv = them.get("sv") if them.get("starter_sure") else None
+            proj = M.skater_projection(p, prop.market, league, teams, opp, opp_sv=opp_sv) if p else None
         if proj is None:
             census["no_history"] += 1
             continue
-        r = price_prop(prop, proj, p, opp, assets, date)
+        r = price_prop(prop, proj, p, opp, assets, date, ctx=ctx)
         if r is None:
             census["no_real_price"] += 1
             continue
@@ -356,6 +468,32 @@ def _live_block(g: dict) -> dict | None:
     return None
 
 
+#: ESPN statuses that mean he is not playing tonight; anything else listed
+#: (day-to-day) holds his picks until the lineup says otherwise.
+OUT_STATUSES = ("out", "injured reserve", "ir", "long term injured reserve", "ltir", "suspended",
+                "injured reserve-long term")
+
+
+def nhl_injuries(fetch=None) -> dict:
+    """{player: {"status", "team", "injury"}} from ESPN's NHL board, the
+    newest filing per player and no cleared-to-play notices; {} when the
+    feed cannot be read (a gap on our side, never a claim of health)."""
+    from engine.sources import espninjuries as E
+    from engine.sources.oddsapi import NHL_TEAM_ABBR
+    try:
+        rows = E.parse_injuries((fetch or (lambda: E.fetch_injuries("nhl")))())
+    except Exception:                                    # noqa: BLE001
+        return {}
+    rows = E.drop_stale_returns(E.current_rows(rows))
+    out = {}
+    for r in rows:
+        if E.is_return(r):
+            continue
+        out[r["player"]] = {"status": r.get("status") or "", "injury": r.get("injury") or "",
+                            "team": NHL_TEAM_ABBR.get(r.get("team") or "", r.get("team") or "")}
+    return out
+
+
 def empty_board(date: str) -> dict:
     return {"generated_at": datetime.datetime.now().isoformat(timespec="seconds"), "date": date,
             "sport": SPORT, "generated_from": "live-nhl", "probation": True,
@@ -367,7 +505,7 @@ def empty_board(date: str) -> dict:
             "counts": {"props_analyzed": 0, "recommended": 0}, "games": []}
 
 
-def build(date: str, games: list[dict], conn, attach_odds=None) -> tuple[dict, _Slate | None]:
+def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict | None = None) -> tuple[dict, _Slate | None]:
     """The board for one date. ``attach_odds(slate)`` lands the prices (the
     Odds API in production, fixture lines in the tests); None = no prices."""
     from engine.db import player_assets
@@ -379,6 +517,12 @@ def build(date: str, games: list[dict], conn, attach_odds=None) -> tuple[dict, _
         return out, None
     seasons = recent_seasons(SPORT, date)
     players = M.player_games(conn, seasons=seasons)
+    # THE INJURY REPORT FIRST (ESPN's NHL board): a man ruled out has no
+    # prop, no read and cannot be the probable starter; a day-to-day man
+    # keeps his number and his picks are held (likely.admissible).
+    injuries = nhl_injuries() if injuries is None else injuries
+    ruled_out = {n for n, i in injuries.items() if str(i.get("status") or "").strip().lower() in OUT_STATUSES}
+    players = {n: p for n, p in players.items() if n not in ruled_out}
     teams = M.team_profiles(conn, seasons=seasons)
     league = M.league_rates(players)
     from engine.sources import nhldata
@@ -390,15 +534,41 @@ def build(date: str, games: list[dict], conn, attach_odds=None) -> tuple[dict, _
     odds_note = "no odds requested"
     if attach_odds is not None:
         odds_note = attach_odds(slate) or "odds attached"
-    recs, census = price_slate(slate, games, players, league, teams, player_assets(conn, SPORT), date)
+    ctx = scalpy_context(games, players, league, teams, date)
+    assets = player_assets(conn, SPORT)
+    recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx)
+    for r in recs:
+        inj = injuries.get(r["player"])
+        if inj and r["player"] not in ruled_out:
+            r["injury_status"] = inj["status"]
+            r.setdefault("warnings", []).append(f"Listed {inj['status']} — held until the lineup confirms")
+    # EVERY BOOK TOOK HIM DOWN (engine/pricedplayers, the NFL's Zay Flowers
+    # rule): priced in an earlier pull, on no book now, before puck drop.
+    from engine.sources.oddsapi import normalize_name
+    pulled = {normalize_name(n) for g in slate.games for n in (getattr(g, "pulled_players", None) or [])}
+    pulled_names = {n for n in players if normalize_name(n) in pulled}
+    from engine.nhl import scan as S
+    sc = S.scan(games, players, teams, ctx, league, assets=assets,
+                key_players={r["player"] for r in recs}, out_players=pulled_names)
+    out["scan_reads"] = sc["reads"]
+    inj_by_team: dict = {}
+    for n, i in injuries.items():
+        inj_by_team.setdefault(i.get("team") or "", []).append({"player": n, "status": i["status"],
+                                                                "injury": i.get("injury") or ""})
     bets = []
     for g in slate.games:
-        bets.extend(game_bets(g, teams))
+        bets.extend(game_bets(g, teams, ctx))
     by_pair = {(g.home, g.away): g for g in slate.games}
     for gd in out["games"]:
         g = by_pair.get((gd["home"], gd["away"]))
         if g is not None:
             gd.update(spread=g.spread, total=g.total, home_ml=g.home_ml or None, away_ml=g.away_ml or None)
+        t = sc["tapes"].get(f"{gd['away']}@{gd['home']}")
+        if t:
+            for team in (gd["away"], gd["home"]):
+                t["sides"][team]["injuries"] = inj_by_team.get(team, [])
+            t["pulled"] = sorted(n for n in pulled_names if (players.get(n) or {}).get("team") in (gd["home"], gd["away"]))
+            gd["nhl_tape"] = t
     from engine.marketscan import scan_recommendations
     out.update(status="slate", recommendations=recs, game_bets=bets, gate_census=census,
                odds_note=odds_note, market_scan=scan_recommendations(recs))
@@ -415,9 +585,28 @@ def attach_most_likely(out: dict, out_path: str, date: str) -> None:
     from engine.likely import build as likely_build, previous_board
     census, kinds, turn = {}, {}, {}
     out[_potd_keys.POOL_KEY] = cut = []
-    out["most_likely"] = likely_build(out.get("recommendations") or [], sport=SPORT, census=census,
-                                      census_by_kind=kinds, cut=cut,
-                                      previous=previous_board(out_path, date), turnover=turn)
+    recs = out.get("recommendations") or []
+    # SCALPY'S NO-BET CONDITIONS keep a prop off this list (an unstable
+    # role, a blowout risk on saves); the Edge board still prices it.
+    passed = [r for r in recs if r.get("scalpy_pass")]
+    if passed:
+        census[f"Scalpy pass — {len(passed)} prop(s): unstable role or blowout risk"] = len(passed)
+    from engine.gamescan import leans_from_reads, stamp_picks
+    lean_report: dict = {}
+    out["most_likely"] = likely_build([r for r in recs if not r.get("scalpy_pass")], sport=SPORT,
+                                      census=census, census_by_kind=kinds, cut=cut,
+                                      previous=previous_board(out_path, date), turnover=turn,
+                                      leans=leans_from_reads(out.get("scan_reads") or {}),
+                                      lean_report=lean_report)
+    if out.get("scan_reads"):
+        stamp_picks(out["scan_reads"], lean_report, board=out["most_likely"])
+    by_key = {(r["player"], r["market"]): r for r in recs}
+    for row in out["most_likely"]:
+        src = by_key.get((row.get("player"), row.get("market"))) or {}
+        flags = list(src.get("scalpy_flags") or [])
+        row["scalpy_flags"] = flags
+        row["scalpy_grade"] = M.scalpy_grade(float(row.get("model_prob") or 0.0), flags)
+        row["prop_tier"] = M.PROP_TIER.get(row.get("market"))
     if not out["most_likely"]:
         from engine.rankfit import load as rank_store
         if not any(k.startswith(f"{SPORT}:") for k in rank_store()):

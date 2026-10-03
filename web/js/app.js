@@ -9323,7 +9323,7 @@ function renderScanTop() {
         a read on every key player with the reasons for and against — is part of the subscription.</div>`
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
     <p class="ms-note">A player who could shine gets his likeliest over on Most Likely, one who could
-      struggle his likeliest under — when one clears the board’s bars (55% or better, −250 or better).
+      struggle his likeliest under — when one clears the board’s bars (${state.sport === "nhl" ? "65" : "55"}% or better, −250 or better).
       The read picks the side; it never moves our number. Tap a player for his pick. The full read is on
       each game’s page.</p>`}`;
 }
@@ -13149,7 +13149,8 @@ function scanWhyList(x) {
   return `<ul class="ms-why">
         ${(x.pro || []).map((t) => `<li class="pro">${escapeHtml(t)}</li>`).join("")}
         ${(x.con || []).map((t) => `<li class="con">${escapeHtml(t)}</li>`).join("")}
-        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${state.sport === "mlb" ? "" : ", no lift when tested"}</li>
+        ${(x.notes || []).length ? `<li class="ms-why-k">Also noticed — not counted${
+          state.sport === "mlb" || state.sport === "nhl" ? "" : ", no lift when tested"}</li>
           ${x.notes.map((t) => `<li class="note">${escapeHtml(t)}</li>`).join("")}` : ""}</ul>`;
 }
 
@@ -13257,6 +13258,8 @@ function scanUsageBits(x) {
   if (u.tgt_share) bits.push(`${Math.round(u.tgt_share * 100)}% of targets`);
   if (u.carry_share) bits.push(`${Math.round(u.carry_share * 100)}% of carries`);
   if (u.snap_pct) bits.push(`${Math.round(u.snap_pct * 100)}% of snaps`);
+  if (u.toi) bits.push(`${Number(u.toi).toFixed(1)} min a game`);
+  if (u.starter_share != null) bits.push(`started ${Math.round(u.starter_share * 100)}% of the last 10`);
   return bits;
 }
 
@@ -13574,6 +13577,57 @@ function mlbScanHTML(g) {
       the slugging the starter allows to his side, expected stats, the park by the batter’s hand, the wind,
       the pens and the umpire — is already inside the model’s chance. The read picks a side; career numbers
       against tonight’s starter are shown and never counted, the samples are too small.</p>
+  </div>`;
+}
+
+/* THE NHL MATCHUP SCAN on the game page (engine/nhl/scan; Ethan,
+   2026-10-03: "the who could do good and who could struggle and all that").
+   Scalpy NHL 1.0's order: each side's probable starter first, then goals
+   and shots for and against a game with their league ranks, rest and the
+   expected goals; who is out; then the read on every key skater and both
+   starters, in the football scan's own rows. */
+function nhlScanHTML(g) {
+  const t = g && g.nhl_tape;
+  if (!t || !t.sides) return "";
+  const d = state.data || {};
+  const reads = (d.scan_reads || {})[`${g.away}@${g.home}`];
+  const locked = !reads && d.locked && d.locked.scan_reads;
+  const players = (reads && reads.players) || [];
+  const n = t.teams || 32;
+  const num = (v, dp = 2) => (v == null || !isFinite(Number(v)) ? "—" : Number(v).toFixed(dp));
+  const rk = (r) => (r ? ` <span class="mini">${r} of ${n}</span>` : "");
+  const sv = (v) => (v == null ? "" : ` · .${String(Math.round(Number(v) * 1000)).padStart(3, "0")} save rate`);
+  const side = (team) => {
+    const s = t.sides[team] || {}, r = s.ranks || {};
+    const inj = (s.injuries || []).slice(0, 4);
+    return `<div class="card mlb-tape-side">
+      <div class="ms-sub">${escapeHtml(teamName(team))}</div>
+      <div class="mlb-tape-row">${s.starter ? `<b>${escapeHtml(s.starter)}</b>${sv(s.starter_sv)}${
+        s.starter_sure ? "" : ` <span class="chip">not settled</span>`}` : `<span class="mini">Starter not known yet</span>`}</div>
+      <div class="mlb-tape-row">Goals a game ${num(s.gf)}${rk(r.gf)} · allowed ${num(s.ga)}${rk(r.ga)}</div>
+      <div class="mlb-tape-row">Shots a game ${num(s.sog_for, 1)}${rk(r.sog_for)} · allowed ${num(s.sog_against, 1)}${rk(r.sog_against)}</div>
+      ${s.xg != null ? `<div class="mlb-tape-row">Expected tonight: ${num(s.xg)} regulation goals</div>` : ""}
+      ${s.b2b ? `<div class="mlb-tape-row"><span class="chip down">second night of a back-to-back</span></div>` : ""}
+      ${inj.length ? `<div class="mlb-tape-row mini">Injury report: ${inj.map((i) => `${escapeHtml(i.player)} (${escapeHtml(String(i.status || "").toLowerCase())})`).join(", ")}</div>` : ""}
+    </div>`;
+  };
+  const s0 = t.sides[g.home] || t.sides[g.away] || {};
+  const blend = s0.season_weight != null && s0.gp_season
+    ? `After ${s0.gp_season} game${s0.gp_season === 1 ? "" : "s"} this season, team strength is ${Math.round(s0.season_weight * 100)}% this season and ${100 - Math.round(s0.season_weight * 100)}% last season — early nights lean on the bigger sample.` : "";
+  return `<div id="gp-sec-scan" class="ms">
+    <div class="section-title">Matchup scan
+      <span class="sub">— the starters, each side’s goals and shots, and who could shine or struggle</span></div>
+    <div class="mlb-tape">${side(g.away)}${side(g.home)}</div>
+    ${(t.pulled || []).length ? `<p class="ms-note ms-pulled"><b>Taken down by the books:</b> ${
+      escapeHtml(t.pulled.join(", "))} — priced earlier, on no book now. Treated as out: no read below.</p>` : ""}
+    ${blend ? `<p class="ms-note">${escapeHtml(blend)}</p>` : ""}
+    ${players.length ? `<div class="ms-sub ms-sub-top">Who could shine, who could struggle</div>
+      <div class="ms-reads">${players.map(scanReadHTML).join("")}</div>` : locked
+      ? `<div class="card ms-locked"><b>Who could shine and who could struggle</b> — a read on every key skater and
+          both starters, with the reasons for and against, is part of the subscription.</div>` : ""}
+    <p class="ms-note">None of this moves our numbers: the opposing starter, the shots each side gives up,
+      the expected goals and rest are already inside the model’s chance. The read picks a side for the Most
+      Likely board, and a player who is out — on the report or taken down by every book — gets no read.</p>
   </div>`;
 }
 
@@ -13910,7 +13964,7 @@ function renderGamePage() {
     ${linesCard || notesCard ? `<div class="gp-row" id="gp-sec-lines">${linesCard}${notesCard}</div>` : ""}
     ${pressurePairHTML(state.sport, g)}
     ${gamePlanHTML(g)}
-    ${matchupScanHTML(g) || mlbScanHTML(g)}
+    ${matchupScanHTML(g) || mlbScanHTML(g) || nhlScanHTML(g)}
     ${simCard ? `<div id="gp-sec-replay">${simCard}</div>` : ""}
     ${shapeCard ? `<div id="gp-sec-shapes">${shapeCard}</div>` : ""}
 

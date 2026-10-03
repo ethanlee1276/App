@@ -48,6 +48,9 @@ from __future__ import annotations
 
 #: Our chance a pick needs for the model check, by lane.
 MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
+#: A league whose own model sets a stricter bar (Scalpy NHL 1.0: B starts
+#: at 65%). Its model check asks for that, not the shared 58%.
+SPORT_MODEL_BAR = {"nhl": {"td": 0.40, "prop": 0.65, "game": 0.65}}
 #: The main Most Likely list's bar (likely.MIN_PROB) — a touchdown under it
 #: here is said as matchup-backed (see `build`).
 LIKELY_BAR = 0.55
@@ -78,7 +81,10 @@ RECORD_MISS = 0.08
 #:              projection's own Matchup step, when it moved the number at
 #:              least MODEL_MATCHUP_STEP toward this side;
 #:   nba, wnba  none yet.
-MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "scan+model"}
+MATCHUP_SOURCE = {"nfl": "scan", "cfb": "scan", "mlb": "scan+model",
+                  # Hockey's read (engine/nhl/scan, 2026-10-03): the opposing
+                  # starter, shots allowed, expected goals, rest, ice time.
+                  "nhl": "scan"}
 MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
 RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board", "bold")
@@ -438,8 +444,9 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         lane = lane_of(r)
         prob = float(r["model_prob"])
         checks, notes = {}, {}
-        checks["model"] = prob >= MODEL_BAR[lane]
-        notes["model"] = (f"our chance {prob:.0%} (the bar here is {MODEL_BAR[lane]:.0%})"
+        bar = SPORT_MODEL_BAR.get(sport, MODEL_BAR)[lane]
+        checks["model"] = prob >= bar
+        notes["model"] = (f"our chance {prob:.0%} (the bar here is {bar:.0%})"
                           + (f" — {r['cal_note']}" if r.get("cal_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
