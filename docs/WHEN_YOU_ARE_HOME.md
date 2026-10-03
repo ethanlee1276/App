@@ -26,7 +26,7 @@ bug: the player logs never joined to their games (the two tables write
 different game ids). That is why every pick read "thin sample" and the
 history replay came back empty. It is fixed now, so wait until the box
 has pulled the new code (`git -C /srv/qellys log --oneline -1` shows
-"Most Likely learns from its own record, every league, by itself" or anything newer).
+"likelycal finds the bold picks" or anything newer).
 
 **M1. Nothing to run any more — it runs itself.** After every settle
 pass that grades a new Most Likely pick, the site refits the record's

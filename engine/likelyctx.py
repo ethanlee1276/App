@@ -116,8 +116,21 @@ def history_index(hist, players: set) -> tuple[dict, dict, dict]:
         g = dict(g)
         d = _date(g.get("date") or "")
         if d is None:
-            continue
+            # Older schedule rows were written before the kickoff date was
+            # kept (engine/ingest.nfl_game_rows). The week still orders
+            # them; the weekday is unknown and says so.
+            wk = _week(g.get("period"))
+            if not isinstance(wk, int) or not g.get("season"):
+                continue
+            d = _dt.date(int(g["season"]), 9, 7) + _dt.timedelta(weeks=wk - 1)
+            g["_approx"] = True
         g["_d"] = d
+        # "BUF@KC" IS NOT A GAME, it is a fixture that recurs every season.
+        # Keyed on it alone, each season's game overwrote the last one's,
+        # and the 2026-10-03 replay found only 2025-26. The id carries its
+        # season and week from here on.
+        g["raw_id"] = g["game_id"]
+        g["game_id"] = f"{g.get('season')}|{g.get('period')}|{g['game_id']}"
         games[g["game_id"]] = g
         for t in (g["home"], g["away"]):
             by_team[t].append(g)
@@ -190,7 +203,8 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict) -> dict | None:
     s = SC.situation(pick["market"], pick.get("side") or "", line=pick.get("line"), position=position,
                      values=vals, game_spread=game.get("spread"), home=(team == game["home"]),
                      total=game.get("total"), wind=game.get("wind"), outdoor=_outdoor(game.get("roof")),
-                     weekday=gd.weekday(), games_season=games_season, missed_last=missed)
+                     weekday=None if game.get("_approx") else gd.weekday(), games_season=games_season,
+                     missed_last=missed)
     s["team"], s["game_id"] = team, game["game_id"]
     if game.get("home_score") is not None and game.get("away_score") is not None:
         mine_pts = game["home_score"] if team == game["home"] else game["away_score"]

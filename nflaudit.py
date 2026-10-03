@@ -180,6 +180,13 @@ def audit(ledger, hist) -> dict:
 
 
 # --- the history replay ---------------------------------------------------------
+def _week_no(period) -> int:
+    try:
+        return int(str(period).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
 def replay(hist, seasons=None) -> dict:
     """Every 2021+ player-game in HISTORY_MARKETS with five earlier games
     that season: the line is his last-five average (0.5 for touchdowns),
@@ -205,8 +212,13 @@ def replay(hist, seasons=None) -> dict:
     cells = defaultdict(lambda: defaultdict(lambda: [0, 0]))      # flag -> half -> [hits, n]
     base = defaultdict(lambda: defaultdict(lambda: [0, 0]))       # (market, side) -> half -> [hits, n]
     flagged_ms = defaultdict(set)
-    all_seasons = sorted({k[1] for k in series})
-    mid = all_seasons[len(all_seasons) // 2] if all_seasons else 0
+    # The seasons the replay can actually score (a game needs five earlier
+    # ones that season). With two or more, the halves are seasons; with
+    # one — the 2026-10-03 run had only 2025 to score — they are its first
+    # and second nine weeks, so "both halves" still means something.
+    all_seasons = sorted({k[1] for k, v in series.items() if len(v) > 5})
+    by_season = len(all_seasons) >= 2
+    mid = all_seasons[len(all_seasons) // 2] if by_season else "week 10"
     for (player, season, market), rows in series.items():
         rows.sort(key=lambda x: x[0])
         for i in range(5, len(rows)):
@@ -218,12 +230,14 @@ def replay(hist, seasons=None) -> dict:
             prev = [x for x in by_team.get(team, []) if x["_d"] < d and x.get("season") == season]
             missed = bool(prev) and prev[-1]["game_id"] not in played[(player, season)]
             roof = str(g.get("roof") or "").lower()
-            half = "early" if season < mid else "late"
+            half = (("early" if season < mid else "late") if by_season
+                    else ("early" if _week_no(g.get("period")) < 10 else "late"))
             for side in (("YES",) if market == "anytime_td" else ("OVER", "UNDER")):
                 s = SC.situation(market, side, line=line, position=pos, values=prior,
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
-                                 weekday=d.weekday(), games_season=i, missed_last=missed)
+                                 weekday=None if g.get("_approx") else d.weekday(), games_season=i,
+                                 missed_last=missed)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)

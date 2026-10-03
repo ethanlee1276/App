@@ -17621,7 +17621,8 @@ function recBoardLearningSection(bl, sport) {
       <span style="font-variant-numeric:tabular-nums">hit ${pct(s.hit)} · said ${pct(s.said)}</span>
       <span style="color:${tone(s.verdict)}">${escapeHtml(s.verdict)}</span>
     </div>`;
-  const cutNames = { maker: "By where the pick came from", market: "By market", claimed: "By the chance we claimed" };
+  const cutNames = { maker: "By where the pick came from", market: "By market", position: "By position",
+    claimed: "By the chance we claimed" };
   const blocks = sports.map((sp) => {
     const e = bl[sp];
     const r = e.record || {};

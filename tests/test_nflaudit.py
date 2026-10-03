@@ -125,6 +125,38 @@ def test_the_settle_pass_reads_the_scouts_flags_by_itself():
     e = boardlearn.learn_sport(LG.connect(lp), db.connect(hp), "nfl", log=lambda *_: None)
     assert e["scout"]["matched"] == 6 and e["settled"] == 6
     assert e["scout"]["passed"] is False, "six picks prove nothing"
+    assert e["slices"]["position"] == [], "a slice needs fifteen picks before the page grades it"
+    boardlearn.MIN_SLICE, keep = 5, boardlearn.MIN_SLICE
+    try:
+        e = boardlearn.learn_sport(LG.connect(lp), db.connect(hp), "nfl", log=lambda *_: None)
+        assert [s["key"] for s in e["slices"]["position"]] == ["RB · over"]
+    finally:
+        boardlearn.MIN_SLICE = keep
+
+
+def test_a_fixture_that_recurs_every_season_is_a_new_game_each_season():
+    # 2026-10-03: games keyed on "LV@KC" alone overwrote each season with
+    # the next, and the replay found only 2025-26. 2023 here also has no
+    # kickoff dates, as the box's oldest schedule rows do not.
+    tmp = tempfile.mkdtemp()
+    hist = db.connect(Path(tmp) / "history.db")
+    games, logs = [], []
+    for season in (2023, 2024, 2025):
+        for w in range(1, 9):
+            games.append({"sport": "nfl", "season": season, "period": f"{w:03d}", "game_id": "LV@KC", "home": "KC",
+                          "away": "LV", "spread": -3.0, "total": 45.0,
+                          "date": "" if season == 2023 else f"{season}-09-{w * 3 + 1:02d}"})
+            logs.append({"sport": "nfl", "season": season, "period": f"{w:03d}", "game_id": f"LV-{w:03d}",
+                         "player": "Back Raider", "team": "LV", "opponent": "KC", "position": "RB", "home": 0,
+                         "market": "rush_yds", "value": 50.0 + w})
+    db.upsert_games(hist, games)
+    db.upsert_player_logs(hist, logs)
+    hist.commit()
+    games_ix, _bt, logs_ix = A.history_index(A._ro(Path(tmp) / "history.db"), {"Back Raider"})
+    assert len(games_ix) == 24, "three seasons of the same fixture are 24 games"
+    assert len(logs_ix["Back Raider"]) == 24
+    h = A.replay(A._ro(Path(tmp) / "history.db"))
+    assert h["seasons"] == [2023, 2024, 2025], h["seasons"]
 
 
 def test_it_never_writes():

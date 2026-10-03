@@ -169,6 +169,16 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
         elif _drop(likelyctx, sport):
             log(f"  board learning ({sport}): the scout's correction no longer holds — removed")
         found = [r for r in flagged if r.get("ctx")]
+        # BY POSITION, which only the football join knows (the journal
+        # keeps no position). The 2026-10-03 audit found tight ends
+        # over-claiming on BOTH sides — a spread too narrow, not a lean —
+        # and that is the kind of thing this has to keep watching.
+        pos = defaultdict(list)
+        for r in found:
+            if r["ctx"].get("position"):
+                pos[f"{r['ctx']['position']} · {_side(r)}"].append(r)
+        entry["slices"]["position"] = sorted(({"key": k, **grade(v)} for k, v in pos.items() if len(v) >= MIN_SLICE),
+                                             key=lambda s: s["z"])
         by_flag = defaultdict(list)
         for r in found:
             for f in r["flags"]:

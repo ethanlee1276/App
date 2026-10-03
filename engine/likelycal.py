@@ -118,44 +118,32 @@ def _ll(p: float, won: bool) -> float:
 
 # --- the journal ----------------------------------------------------------
 def journal_rows(conn, sport: str) -> list[dict]:
-    """Settled picks with what each group is fitted on: the Most Likely
-    list's own book, and the board's picks the list did not hold, each
-    tagged with the book that made it."""
+    """Settled Most Likely picks, each ONCE, tagged with the maker the board
+    credits it to (bold first, then the list, the matchup picks, the
+    scenarios — `source_of_row`'s order), at the raw claim.
+
+    It reads the journal through engine/likelyctx.journal, the same reading
+    nflaudit.py reports from. Until 2026-10-04 it matched a board row to the
+    other books on the `date` column, and the box's first fit (494 NFL
+    picks) printed no bold group at all while the audit, keyed on the game
+    day, found 61 bold picks hitting 38% where we said 75%: the worst maker
+    on the board was invisible to the one correction built for it."""
+    from .likelyctx import journal, maker
     out = []
-    for r in conn.execute(
-            "SELECT game_day, date, team, player, odds, COALESCE(raw_prob, hit_prob) hit_prob, side, status "
-            "FROM bets WHERE LOWER(sport)=? AND category IN ('likely','likely_live') "
-            "AND status IN ('won','lost') AND COALESCE(raw_prob, hit_prob) IS NOT NULL", (sport,)):
-        out.append(_row(r, "list"))
-    for r in conn.execute(
-            "SELECT b.game_day, b.date, b.team, b.player, b.odds, COALESCE(b.raw_prob, b.hit_prob) hit_prob, "
-            "b.side, b.status, b.market FROM bets b WHERE LOWER(b.sport)=? AND b.category='board' "
-            "AND b.status IN ('won','lost') AND COALESCE(b.raw_prob, b.hit_prob) IS NOT NULL "
-            "AND NOT EXISTS (SELECT 1 FROM bets t WHERE t.sport=b.sport AND t.date=b.date "
-            "AND t.player=b.player AND t.market=b.market "
-            "AND UPPER(COALESCE(t.side,''))=UPPER(COALESCE(b.side,'')) "
-            "AND t.category IN ('likely','likely_live'))", (sport,)):
-        src = "board"
-        for label, cats in SOURCE_BOOKS:
-            marks = ",".join("?" * len(cats))
-            if conn.execute(
-                    f"SELECT 1 FROM bets WHERE LOWER(sport)=? AND date=? AND player=? AND market=? "
-                    f"AND UPPER(COALESCE(side,''))=UPPER(COALESCE(?,'')) AND category IN ({marks}) LIMIT 1",
-                    (sport, r["date"], r["player"], r["market"], r["side"], *cats)).fetchone():
-                src = label
-                break
-        if src != "board":
-            out.append(_row(r, src))
-    return [x for x in out if x is not None]
+    for r in journal(conn, sport):
+        row = _row(r, maker(r["sources"]))
+        if row is not None:
+            out.append(row)
+    return out
 
 
 def _row(r, source):
     q = price_chance(r["odds"])
     if q is None:
         return None
-    return {"group": f"{source}|{side_of(r['side'])}", "p": float(r["hit_prob"]), "q": q,
-            "won": r["status"] == "won",
-            "game": f"{r['game_day'] or r['date']}|{r['team'] or r['player']}"}
+    return {"group": f"{source}|{side_of(r['side'])}", "p": float(r["p"]), "q": q,
+            "won": bool(r["won"]),
+            "game": f"{r['day']}|{r.get('team') or r['player']}"}
 
 
 # --- the fit ----------------------------------------------------------------

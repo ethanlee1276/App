@@ -66,6 +66,20 @@ def test_a_settle_pass_adopts_what_the_record_proves_and_grades_every_maker():
     assert any("adopted" in ln for ln in lines)
 
 
+def test_a_bold_pick_is_found_however_its_books_dated_it():
+    # The box, 2026-10-04: the audit found 61 bold picks and likelycal's
+    # fit printed no bold group, because it matched books on `date`.
+    path = Path(tempfile.mkdtemp()) / "ledger.db"
+    led = LG.connect(path)
+    for cat, date in (("board", "2026-W04"), ("bold", "2026-09-27")):
+        led.execute("INSERT INTO bets (sport, date, game_day, player, team, market, side, line, odds, hit_prob, "
+                    "status, category) VALUES ('nfl',?,'2026-09-27','X','LV','rush_yds','OVER',40.5,-120,0.75,"
+                    "'lost',?)", (date, cat))
+    led.commit()
+    rows = likelycal.journal_rows(led, "nfl")
+    assert [r["group"] for r in rows] == ["bold|over"], rows
+
+
 def test_nothing_new_graded_means_nothing_refitted():
     rep = Path(tempfile.mkdtemp()) / "board_learning.json"
     led = _ledger(7)
