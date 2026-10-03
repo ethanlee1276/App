@@ -17602,6 +17602,64 @@ function recSelfTuningSection(st, sport) {
       structurally cannot copy.</p>`)}`;
 }
 
+/* THE MOST LIKELY BOARD, GRADING ITSELF (engine/boardlearn). Ethan,
+   2026-10-03: "we shouldn't have to constantly run tests for every sport
+   like this to make it better and see where it's winning and losing." Every
+   settle pass regrades each league's Most Likely record by maker, market
+   and claimed chance, refits the record's corrections, and this draws the
+   last run: where it holds up, where it over-claims, what it corrected. */
+function recBoardLearningSection(bl, sport) {
+  if (!bl) return "";
+  const sports = Object.keys(bl).filter((s) => (!sport || s === sport) && bl[s] && bl[s].record);
+  if (!sports.length) return "";
+  const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
+  const tone = (v) => v === "over-claims" ? "var(--bad)" : v === "beats its claim" ? "var(--good)" : "var(--text-mute)";
+  const sliceRow = (s) => `
+    <div class="rec-row">
+      <span style="flex:1;min-width:150px">${escapeHtml(s.key)}</span>
+      <span style="font-variant-numeric:tabular-nums">${s.won}-${s.n - s.won}</span>
+      <span style="font-variant-numeric:tabular-nums">hit ${pct(s.hit)} · said ${pct(s.said)}</span>
+      <span style="color:${tone(s.verdict)}">${escapeHtml(s.verdict)}</span>
+    </div>`;
+  const cutNames = { maker: "By where the pick came from", market: "By market", claimed: "By the chance we claimed" };
+  const blocks = sports.map((sp) => {
+    const e = bl[sp];
+    const r = e.record || {};
+    const cal = e.calibration || {};
+    const moved = Object.entries(cal.groups || {}).filter(([, g]) => (g.k ?? 1) < 1);
+    const corrected = cal.passed
+      ? (moved.length
+        ? moved.map(([g, v]) => `<div class="rec-note">${escapeHtml(g.replace("|", " · "))}: hit ${pct(v.hit)} of ${v.n} where we said ${pct(v.claimed)} — now pulled ${Math.round((1 - v.k) * 100)}% of the way to the price</div>`).join("")
+        : `<div class="rec-note">The record backs every group's numbers as they are — nothing pulled.</div>`)
+      : `<div class="rec-note">No correction proven yet on games the fit never saw — the board shows its own numbers.</div>`;
+    const sc = e.scout;
+    const scout = sc ? `
+      <div class="mini" style="padding:8px 14px 2px;opacity:.75">The scout’s flags (${sc.matched} picks matched to their game)${sc.passed ? " — correction adopted" : ""}</div>
+      ${(sc.flags || []).map((f) => sliceRow({ ...f, key: f.note })).join("")
+        || `<div class="rec-note">No flag has ${15} graded picks yet.</div>`}` : "";
+    const cuts = Object.entries(e.slices || {}).filter(([, rows]) => rows.length).map(([cut, rows]) => `
+      <div class="mini" style="padding:8px 14px 2px;opacity:.75">${escapeHtml(cutNames[cut] || cut)}</div>
+      ${rows.map(sliceRow).join("")}`).join("");
+    return `
+      <div class="card" style="padding:0;margin-bottom:12px">
+        <div class="rec-row tall"><b style="flex:1">${escapeHtml(sp.toUpperCase())} — ${r.won ?? 0}-${(r.n ?? 0) - (r.won ?? 0)} on ${(r.n ?? 0).toLocaleString()} graded picks</b>
+          <span>hit ${pct(r.hit)} · said ${pct(r.said)}</span>
+          <span style="color:${tone(r.verdict)}">${escapeHtml(r.verdict || "")}</span></div>
+        ${cuts}${scout}
+        <div class="mini" style="padding:8px 14px 2px;opacity:.75">What it corrected by itself · last run ${escapeHtml((e.at || "").replace("T", " "))} UTC</div>
+        ${corrected}
+      </div>`;
+  }).join("");
+  return `
+    <div class="section-title">Where Most Likely wins and loses
+      <span class="sub">— regraded after every settle, every league, nobody
+      running anything. Each slice is judged against the chance we claimed
+      for it, so long shots that land as often as we said read as holding
+      up. A correction is adopted only when it scores better on games it
+      never learned from, and dropped the day it stops.</span></div>
+    ${blocks}`;
+}
+
 function recLossPatternsSection(lp, sport) {
   if (!lp || !(lp.n_records ?? 0)) return "";
   // Sport scope: each league's page shows the patterns mined from ITS
@@ -20423,6 +20481,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      "the four-rung ladder, showing its work",
      recRestatedSection(d.restated, scoped ? scope : null) + recProseSection(d.prose, scoped ? scope : null)
      + recSelfTuningSection(d.self_tuning, scoped ? scope : null)
+     + recBoardLearningSection(d.board_learning, scoped ? scope : null)
      + recLossPatternsSection(d.loss_patterns, scoped ? scope : null)
      + recPrereg(d.prereg)
      + recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)],

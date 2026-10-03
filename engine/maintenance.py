@@ -1135,6 +1135,19 @@ def settle_open(log=print, state_path: Path | None = None,
                             f"shift {e['shift']:+.3f} log-odds")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  selection haircut skipped: {exc}")
+            # THE MOST LIKELY BOARD'S OWN CORRECTIONS, every league. Ethan,
+            # 2026-10-03: "we shouldn't have to constantly run tests for
+            # every sport like this ... the site should automatically be
+            # able to do this by itself." likelycal (by maker and side) and
+            # likelyctx (the NFL scout's flags) were commands typed on the
+            # box; they refit here now, on raw claims, saved only when they
+            # pass on games they never saw, removed when they stop passing.
+            # A league whose graded picks did not change is not refitted.
+            try:
+                from . import boardlearn
+                boardlearn.refresh(lconn, hconn, log=log)
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  board learning skipped: {exc}")
             # The correlation priors, refit against our own history. The
             # last fitter on this site that a human had to remember to
             # run: you typed the command, read a table and hand-copied

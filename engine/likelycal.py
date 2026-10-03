@@ -61,8 +61,13 @@ FOLDS = 5
 BOOT = 2000
 SEED = 20261003
 K_GRID = tuple(round(i * 0.05, 2) for i in range(21))
-STORE = Path(os.environ.get("QB_LIKELY_CAL", "").strip()
-             or (Path(__file__).resolve().parents[1] / "data" / "likely_calibration.json"))
+def _store() -> Path:
+    """data/models/likely_calibration.json (engine/modelstate: a fit belongs
+    to the box that measured it, and the suite sandboxes the directory —
+    engine/boardlearn refits this nightly, so a test must never reach the
+    real one). Read at call time, so the sandbox is honoured."""
+    from . import modelstate
+    return Path(os.environ.get("QB_LIKELY_CAL", "").strip() or modelstate.path("likely_calibration.json"))
 #: The other books a board pick can also sit in, asked in this order.
 SOURCE_BOOKS = (("bold", ("bold",)), ("matchup", ("matchup_td", "matchup_prop")),
                 ("scenario", ("td_scenario",)))
@@ -118,9 +123,9 @@ def journal_rows(conn, sport: str) -> list[dict]:
     tagged with the book that made it."""
     out = []
     for r in conn.execute(
-            "SELECT game_day, date, team, player, odds, hit_prob, side, status FROM bets "
-            "WHERE LOWER(sport)=? AND category IN ('likely','likely_live') AND status IN ('won','lost') "
-            "AND hit_prob IS NOT NULL", (sport,)):
+            "SELECT game_day, date, team, player, odds, COALESCE(raw_prob, hit_prob) hit_prob, side, status "
+            "FROM bets WHERE LOWER(sport)=? AND category IN ('likely','likely_live') "
+            "AND status IN ('won','lost') AND COALESCE(raw_prob, hit_prob) IS NOT NULL", (sport,)):
         out.append(_row(r, "list"))
     for r in conn.execute(
             "SELECT b.game_day, b.date, b.team, b.player, b.odds, COALESCE(b.raw_prob, b.hit_prob) hit_prob, "
@@ -218,7 +223,7 @@ def fit(conn, sport: str) -> dict:
 
 # --- the store and the board -----------------------------------------------
 def load(path=None) -> dict:
-    p = Path(path) if path else STORE
+    p = Path(path) if path else _store()
     try:
         return json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -226,7 +231,8 @@ def load(path=None) -> dict:
 
 
 def save(res: dict, path=None) -> None:
-    p = Path(path) if path else STORE
+    p = Path(path) if path else _store()
+    p.parent.mkdir(parents=True, exist_ok=True)
     store = load(p)
     store[res["sport"]] = {"groups": {g: {"k": v["k"], "n": v["n"], "hit": v["hit"], "claimed": v["claimed"]}
                                       for g, v in res["groups"].items()},

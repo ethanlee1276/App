@@ -51,8 +51,10 @@ from . import scout as SC
 from .likelycal import BOOT, FOLDS, K_GRID, SEED, _ll, price_chance, shrink
 
 MIN_GROUP = 30
-STORE = Path(os.environ.get("QB_LIKELY_CTX", "").strip()
-             or (Path(__file__).resolve().parents[1] / "data" / "likely_context.json"))
+def _store() -> Path:
+    """data/models/likely_context.json — see likelycal._store."""
+    from . import modelstate
+    return Path(os.environ.get("QB_LIKELY_CTX", "").strip() or modelstate.path("likely_context.json"))
 #: The Most Likely books, in the order a pick is credited to one.
 BOOKS = ("likely_live", "likely", "board", "td_scenario", "matchup_td", "matchup_prop", "bold")
 SOURCE = {"likely_live": "list", "likely": "list", "board": "board", "td_scenario": "scenario",
@@ -356,13 +358,14 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
             "lo": round(boots[int(0.025 * BOOT)], 5), "hi": round(boots[int(0.975 * BOOT) - 1], 5)}
 
 
-def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None) -> dict:
+def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None, flagged: list | None = None) -> dict:
     """``cal`` = the likelycal groups the board applies first (default: its
     store), so "raw" below means what the board shows after likelycal."""
     if cal is None:
         from . import likelycal
         cal = (likelycal.load().get(sport) or {}).get("groups") or {}
-    flagged = flagged_journal(ledger, hist, sport)
+    if flagged is None:
+        flagged = flagged_journal(ledger, hist, sport)
     rows = _rows_for_fit(flagged, cal)
     ho = held_out(rows) if rows else {"n": 0}
     flags = fit_flags(rows)
@@ -379,13 +382,14 @@ def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None) -> dict:
 
 def load(path=None) -> dict:
     try:
-        return json.loads(Path(path or STORE).read_text(encoding="utf-8"))
+        return json.loads(Path(path or _store()).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def save(res: dict, path=None) -> None:
-    p = Path(path or STORE)
+    p = Path(path or _store())
+    p.parent.mkdir(parents=True, exist_ok=True)
     store = load(p)
     store[res["sport"]] = {"flags": res["flags"], "held_out": res["held_out"], "fitted_at": res["fitted_at"]}
     tmp = p.with_suffix(p.suffix + ".tmp")

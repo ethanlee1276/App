@@ -21,36 +21,38 @@ where it said 65%, 171 picks). The losses are the picks the board adds
 from elsewhere: the "bolder than the books" picks went about 23-38 while
 claiming 75%, the matchup picks hit 30% where they said 49%, and the
 board's unders hit 45% where they said 66%. That is exactly what M1's
-calibration corrects, so **M1 comes first**. The first run also had a
+calibration corrects, and it now runs by itself (M1). The first run also had a
 bug: the player logs never joined to their games (the two tables write
 different game ids). That is why every pick read "thin sample" and the
 history replay came back empty. It is fixed now, so wait until the box
 has pulled the new code (`git -C /srv/qellys log --oneline -1` shows
-"NFL audit: the logs meet their games").
+"Most Likely learns from its own record, every league, by itself" or anything newer).
 
-**M1. Make the board's chances honest from its own record.** This keeps
-every pick. It pulls each pick's chance toward its price by as much as
-picks from the same maker (the Most Likely list, the matchup picks, the
-TD scenarios, the bold picks) on the same side have earned. It saves only
-if it scores better on games it never learned from. The next board build
-uses it. Paste the output back:
+**M1. Nothing to run any more — it runs itself.** After every settle
+pass that grades a new Most Likely pick, the site refits the record's
+correction for every league (and the scout's flags for the NFL). It saves
+a correction only if it scores better on games it never learned from, and
+removes it the day it stops. It also regrades the record by where the pick
+came from, by market and by the chance claimed. All of it shows on the
+Record page under **What it learned → Where Most Likely wins and loses**.
+
+If you want it before Sunday's board instead of after the next settle,
+this does the same thing now and prints what it found (optional; paste it
+if you like):
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nfl
-cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport cfb
-cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport mlb
+cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
 ```
 
-To undo it: `sudo -u qellys rm /srv/qellys/data/likely_calibration.json`
+To undo a correction: `sudo -u qellys rm /srv/qellys/data/models/likely_calibration.json`
+(it comes back on its own if the record still proves it).
 
-**N1. Then paste back the whole output of all three again** (read-only;
-nothing changes, nothing spends). The scout's correction now measures
-itself on top of M1, so it can never correct the same loss twice:
+**N1 (optional deep dive, read-only).** The full football breakdown by
+game script, spread and total, plus the 2021-2025 replay:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 nflaudit.py
 cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
-cd /srv/qellys && sudo -u qellys python3 -m engine.likelyctx fit --sport nfl --dry-run
 ```
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)

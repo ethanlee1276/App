@@ -7509,6 +7509,15 @@ def _loss_patterns_block(conn) -> dict:
         return {"n_records": 0, "tested": 0, "findings": [], "closed": []}
 
 
+def _board_learning_block() -> dict:
+    """engine/boardlearn's last report. Guarded: never costs the export."""
+    try:
+        from . import boardlearn
+        return boardlearn.report()
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
 def _selection_haircut_block() -> dict:
     """selectionfit's stored verdict, for export_json.
 
@@ -9853,6 +9862,10 @@ def export_json(conn, path) -> None:
         # the record it sits on; the persisted store the pick-time veto
         # reads is refreshed at settle time.
         "loss_patterns": _loss_patterns_block(conn),
+        # The Most Likely board's own record, sliced by maker, market and
+        # claim, and the corrections it adopted from it — engine/boardlearn
+        # runs on every settle pass; this reads its last report.
+        "board_learning": _board_learning_block(),
         # The hypothesis lab: LLM-proposed slice intersections and the
         # tribunal's verdicts. Read from the store — the export never
         # calls an API; the paid propose step is CLI-only.

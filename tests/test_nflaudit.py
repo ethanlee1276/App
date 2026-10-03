@@ -117,6 +117,16 @@ def test_the_history_replay_scores_a_flagged_side_against_the_same_side():
     assert h["flags"] == {} or all(r["n"] >= 30 for f in h["flags"].values() for v in f.values() for r in v.values())
 
 
+def test_the_settle_pass_reads_the_scouts_flags_by_itself():
+    os.environ["QB_MODELS_DIR"] = tempfile.mkdtemp()                # never the box's stores
+    from engine import boardlearn
+    tmp = tempfile.mkdtemp()
+    lp, hp = _build(tmp)
+    e = boardlearn.learn_sport(LG.connect(lp), db.connect(hp), "nfl", log=lambda *_: None)
+    assert e["scout"]["matched"] == 6 and e["settled"] == 6
+    assert e["scout"]["passed"] is False, "six picks prove nothing"
+
+
 def test_it_never_writes():
     src = open(os.path.join(ROOT, "nflaudit.py"), encoding="utf-8").read()
     eng = open(os.path.join(ROOT, "engine", "likelyctx.py"), encoding="utf-8").read()
