@@ -71,7 +71,7 @@ def _run():
         return None
     body = "\n".join(_fn(n) for n in (
         "edgeCandidate", "edgeOrder", "marketRank", "marketBest", "betLabelKey",
-        "edgePropRow", "edgeBoardRows"))
+        "ehGrade", "edgePropRow", "edgeBoardRows"))
     order = re.search(r"const MARKET_ORDER = \[.*?\];", APP, re.S).group(0)
     harness = f"""
 const slugify = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
