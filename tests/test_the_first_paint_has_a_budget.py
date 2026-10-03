@@ -24,8 +24,13 @@ WEB = ROOT / "web"
 HTML = (WEB / "index.html").read_text()
 
 #: KB, gzip -9 of the TRIMMED copy (engine/shrink), i.e. what a phone gets.
-APP_JS_BUDGET_KB = 470
-BOOT_BUDGET_KB = 600
+#: Raised 2026-10-03 from 470 / 600 by the NHL team page (live roster
+#: table) and the Edge Hunter panel, ~1 KB together — told to Ethan with
+#: the follow-up that pays it back many times over: index.html carries
+#: ~18 KB gz of comments, and serving it trimmed like app.js is a Caddy +
+#: shrink change for the box, not a code cut.
+APP_JS_BUDGET_KB = 472
+BOOT_BUDGET_KB = 603
 
 
 def _gz_trimmed(rel: str) -> int:

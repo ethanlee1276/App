@@ -6009,6 +6009,7 @@ function gameBetCard(r) {
         <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
       ${confMeter(r)}
+      ${edgeHunterHTML(r)}
       ${gameBetChart(r)}
       <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}${slipChip(r)}</div>
       ${exchangeFairLine(r)}
@@ -8466,6 +8467,7 @@ function cardHTML(r) {
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.has_market === false ? "" : (r.ev_per_unit >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.ev_per_unit)}</div></div>
       </div>
       ${confMeter(r)}
+      ${edgeHunterHTML(r)}
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${rippleChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${booksStripHTML(r)}
@@ -20818,6 +20820,44 @@ const EDGE_BANDS = [
   ["Long odds (+151 and up)", (o) => o > 150],
 ];
 
+/* SCALPY NHL — EDGE HUNTER 1.0 (Ethan, 2026-10-03: "here is the model to
+   use for nhl EDGE bets"). Where a row carries its verdict the Edge row
+   says the classification and the 100-point score in place of the plain
+   grade, and the card opens on the numbers Ethan asked every Edge play to
+   show: market and model probability, the edge, fair odds, EV, the score,
+   why the market could be wrong, and the main risk. */
+function ehGrade(r) {
+  const eh = r.edge_hunter;
+  if (!eh) return r.grade;
+  return eh.play ? `${eh.classification} · ${eh.edge_score}` : "Pass";
+}
+
+function edgeHunterHTML(r) {
+  const eh = r.edge_hunter;
+  if (!eh) return "";
+  const pct = (v) => `${(v * 100).toFixed(1)}%`;
+  const rows = [
+    ["Market", `${pct(eh.market_prob)} de-vigged · ${eh.best_book || r.book || "best book"} ${american(eh.best_price)}`],
+    ["Model", pct(eh.model_prob)],
+    ["Edge", `${eh.edge >= 0 ? "+" : ""}${pct(eh.edge)} (this market needs ${pct(eh.min_edge)})`],
+    ["Fair odds", eh.fair_odds != null ? american(eh.fair_odds) : "—"],
+    ["EV", `${eh.ev >= 0 ? "+" : ""}${pct(eh.ev)} per $1`],
+    ["Edge score", `${eh.edge_score} / 100 · ${eh.support} supporting reason${eh.support === 1 ? "" : "s"}`],
+    ["Variance", eh.variance]];
+  if (eh.goalie) rows.push(["Goalie", eh.goalie]);
+  if (eh.role) rows.push(["Role", eh.role]);
+  if (eh.game_script) rows.push(["Game script", eh.game_script]);
+  return `<div class="eh-box">
+    <div class="eh-head"><b>${escapeHtml(eh.model)}</b>
+      <span class="ml-tag">${escapeHtml(eh.play ? eh.classification : "Pass")}</span></div>
+    <dl class="eh-grid">${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd>`).join("")}</dl>
+    ${(eh.why_market_wrong || []).length ? `<div class="eh-k">Why the market could be wrong</div>
+      <ul class="eh-why">${eh.why_market_wrong.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : ""}
+    <div class="eh-k">${eh.play ? "Main risk" : "Why it is not an Edge play"}</div>
+    <p class="eh-risk">${escapeHtml(eh.main_risk || "")}</p>
+  </div>`;
+}
+
 /* One edge prop as an Edge-board row (edgeRowHTML) — the Edge page and the
    game page's edge section draw the same row from the same fields. */
 function edgePropRow(r) {
@@ -20828,7 +20868,7 @@ function edgePropRow(r) {
       market: r.market_label || r.market || "Props",
       // The check means "on the Recommended page RIGHT NOW", so it must apply the
       // user's sliders — the build-time flag can disagree with them.
-      ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),
+      ev: r.ev_per_unit, grade: ehGrade(r), rec: passesFilters(r),
       open: propAttrs(r),
       // Ethan, 2026-08-13: "we need to show headshots on this page." Every
       // other board leads with the player; this one was a wall of text,
@@ -20861,7 +20901,7 @@ function edgeBoardRows() {
         label: b.pick_label, sub: `${b.matchup} · ${b.market_label}`,
         odds: b.odds, model: b.win_prob, implied: b.fair_prob,
         market: "Game lines",
-        ev: b.ev_per_unit, grade: b.grade, rec: passesGameBet(b),
+        ev: b.ev_per_unit, grade: ehGrade(b), rec: passesGameBet(b),
         open: gameBetAttrs(b),
         mark: (b.bet_type === "total" ? leagueMark(state.sport, 30)
                : teamMark(b.team || b.home, 30)),

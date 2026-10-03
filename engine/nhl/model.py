@@ -273,6 +273,14 @@ def regressed_sv(p: dict, league: dict) -> float | None:
     return (saves + lsv * PRIOR_SHOTS) / (shots + PRIOR_SHOTS)
 
 
+def raw_sv(p: dict, last: int = 15) -> float | None:
+    """His plain save rate over his newest ``last`` games in net — the hot
+    or cold run Edge Hunter sets against the regressed baseline above."""
+    games = [g for g in (p or {}).get("games") or [] if g.get("shots_against", 0) > 0][:last]
+    shots = sum(g.get("shots_against", 0) for g in games)
+    return sum(g.get("saves", 0) for g in games) / shots if shots else None
+
+
 def team_sv(players: dict, team: str, league: dict) -> float | None:
     """Every goalie of this team pooled — what the team's goals-against
     already carries, so tonight's starter is measured against it."""

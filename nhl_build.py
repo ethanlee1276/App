@@ -35,8 +35,9 @@ from engine.nhl import model as M
 from engine.sources.fetch import DataUnavailable
 
 SPORT = "nhl"
-#: A real Edge pick needs this much over the de-vigged price AFTER the
-#: market haircut — the same bar the hoops boards started on.
+#: The least edge any NHL market accepts (a moneyline's minimum). Each
+#: market's own, higher bar is Edge Hunter's (edgehunter.MARKET_MIN_EDGE),
+#: and Edge Hunter decides every Edge play since 2026-10-03.
 EDGE_BAR = 0.03
 #: A player is projected only if he dressed in one of his team's last this
 #: many games — counted in the TEAM's games, not in days, so the summer
@@ -117,9 +118,15 @@ def rung_probs(proj: dict, market: str, alts) -> dict:
 
 # --- one prop ---------------------------------------------------------------
 def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str,
-               ctx: dict | None = None) -> dict | None:
-    """The shared-schema recommendation for one priced prop, or None."""
-    from engine.betting import _kelly_stake, temper_edge
+               ctx: dict | None = None, teams: dict | None = None, league: dict | None = None) -> dict | None:
+    """The shared-schema recommendation for one priced prop, or None.
+
+    WHETHER IT IS AN EDGE PLAY is Scalpy NHL — Edge Hunter 1.0's call
+    (engine/nhl/edgehunter.py): the per-market edge minimum, positive EV,
+    and the false-edge filter. Its verdict rides on the row as
+    ``edge_hunter``; Win-First's grade rides beside it, never blended."""
+    from engine.nhl import edgehunter as EH
+    from engine.betting import temper_edge
     from engine.odds import devig_two_way, expected_value
     scorer = prop.market == "anytime_goal"
     got = best_price(prop.lines, one_sided_ok=scorer)
@@ -139,7 +146,6 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
             best = cand
     edge, side, raw, win, odds, fair, credible = best
     ev = expected_value(win, odds)
-    pick = bool(credible and edge >= EDGE_BAR and ev > 0)
     label = M.MARKET_LABELS.get(prop.market, prop.market)
     vals = [float(v) for v in proj.get("recent") or []]
     recent3 = sum(vals[:3]) / 3 if len(vals) >= 3 else None
@@ -197,6 +203,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         reasons.append(f"{opponent} is on the second night of a back-to-back")
     if flags or passes:
         reasons.append("Risk factors: " + "; ".join(flags + passes))
+    eh = EH.assess_prop(prop.market, side, line, win, fair, edge, odds, book, credible, proj, p,
+                        prop.team, opponent, ctx=ctx, teams=teams, league=league,
+                        quotes=_lines_dicts(prop.lines), scalpy_pass="; ".join(passes))
+    pick = eh["play"]
     warnings = [] if pick else ([] if credible else ["Our number disagrees with the market by more than we credit"])
     return {
         "player": prop.player, "team": prop.team, "opponent": opponent,
@@ -210,13 +220,14 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "edge": round(edge, 4), "ev_per_unit": round(ev, 4),
         "confidence": (round(7.0 + min(max(edge, 0.0), 0.05) * 40, 1) if pick
                        else round(min(6.9, win * 10), 1)),
-        "stake_units": round(_kelly_stake(win, odds), 2) if pick else 0.0,
+        "stake_units": eh["stake_units"] if pick else 0.0,
         "grade": "Play" if pick else "Pass", "has_market": True,
         "recent_values": vals[:12], "trend": trend, "trend_delta": delta,
         "recommended": pick, "warnings": warnings,
         "headline": f"{prop.player} {side} {line:g} {label}",
         "summary": (f"Model {win:.0%} vs market {fair:.0%} after the market haircut — "
-                    f"{edge:+.1%} at {odds:+d}."),
+                    f"{edge:+.1%} at {odds:+d}, fair {EH.fair_odds(win) or 0:+d}. "
+                    f"Edge Hunter: {eh['classification']} (score {eh['edge_score']})."),
         "reasons": reasons,
         "all_lines": _lines_dicts(prop.lines),
         "alt_lines": _lines_dicts(getattr(prop, "alt_lines", None)),
@@ -236,11 +247,13 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "prop_tier": M.PROP_TIER.get(prop.market),
         "scalpy_flags": flags,
         "scalpy_pass": "; ".join(passes),
+        # SCALPY NHL — EDGE HUNTER 1.0: the Edge board's verdict.
+        "edge_hunter": eh,
     }
 
 
 # --- game lines ---------------------------------------------------------------
-def game_bets(g, teams: dict, ctx: dict | None = None) -> list[dict]:
+def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = None) -> list[dict]:
     """Moneyline, puck line and total for one game with a real price.
 
     SCALPY's game order: the starting goalies first — each side's expected
@@ -320,11 +333,24 @@ def game_bets(g, teams: dict, ctx: dict | None = None) -> list[dict]:
                                       f"{float(tot):g} total", why],
                              headline=f"{side} {float(tot):g} goals", credible=cred, other_odds=other,
                              raw_win=raw))
+    from engine.nhl import edgehunter as EH
     for c in out:
         for attr in ("home_ml_book", "away_ml_book", "home_spread_book", "away_spread_book",
                      "total_over_book", "total_under_book"):
             if getattr(g, attr, None):
                 c[attr] = getattr(g, attr)
+        # EDGE HUNTER decides whether a game line is an Edge play, and its
+        # quarter-Kelly stake by tier.
+        eh = EH.assess_game(c, g.home, g.away, ctx, teams, league)
+        side = ("home" if c.get("team") == g.home else "away") if c["bet_type"] != "total" else \
+            ("over" if str(c.get("side")).lower() == "over" else "under")
+        kind = {"moneyline": "ml", "spread": "spread", "total": "total"}[c["bet_type"]]
+        eh["best_book"] = c.get(f"{side}_{kind}_book") or c.get(f"total_{side}_book") or ""
+        c["edge_hunter"] = eh
+        if not eh["play"]:
+            c["grade"], c["stake_units"] = "Pass", 0.0
+        else:
+            c["stake_units"] = eh["stake_units"]
     return out
 
 
@@ -411,6 +437,7 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
             ctx[team] = {"opponent": opp, "home": home, "starter": starter, "starter_share": round(share, 2),
                          "starter_sure": sure, "b2b": b2b,
                          "sv": M.regressed_sv(players.get(starter), league) if starter else None,
+                         "raw_sv": M.raw_sv(players.get(starter)) if starter else None,
                          "team_sv": M.team_sv(players, team, league),
                          "last10": set(sorted(team_days.get(team, ()), reverse=True)[:10])}
     for g in games:
@@ -449,12 +476,13 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
         if proj is None:
             census["no_history"] += 1
             continue
-        r = price_prop(prop, proj, p, opp, assets, date, ctx=ctx)
+        r = price_prop(prop, proj, p, opp, assets, date, ctx=ctx, teams=teams, league=league)
         if r is None:
             census["no_real_price"] += 1
             continue
         recs.append(r)
-    recs.sort(key=lambda x: (x["recommended"], x["confidence"], x["edge"]), reverse=True)
+    recs.sort(key=lambda x: (x["recommended"], (x.get("edge_hunter") or {}).get("edge_score", 0),
+                             x["edge"]), reverse=True)
     return recs, census
 
 
@@ -542,6 +570,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
         if inj and r["player"] not in ruled_out:
             r["injury_status"] = inj["status"]
             r.setdefault("warnings", []).append(f"Listed {inj['status']} — held until the lineup confirms")
+            _edge_pass(r, f"listed {inj['status']} — lineup uncertain")
     # EVERY BOOK TOOK HIM DOWN (engine/pricedplayers, the NFL's Zay Flowers
     # rule): priced in an earlier pull, on no book now, before puck drop.
     from engine.sources.oddsapi import normalize_name
@@ -557,7 +586,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                                                                 "injury": i.get("injury") or ""})
     bets = []
     for g in slate.games:
-        bets.extend(game_bets(g, teams, ctx))
+        bets.extend(game_bets(g, teams, ctx, league))
     by_pair = {(g.home, g.away): g for g in slate.games}
     for gd in out["games"]:
         g = by_pair.get((gd["home"], gd["away"]))
@@ -569,6 +598,16 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                 t["sides"][team]["injuries"] = inj_by_team.get(team, [])
             t["pulled"] = sorted(n for n in pulled_names if (players.get(n) or {}).get("team") in (gd["home"], gd["away"]))
             gd["nhl_tape"] = t
+    # THE CORRELATION ENGINE: two Edge plays on one game that argue
+    # opposite ways — the weaker one is passed.
+    from engine.nhl import edgehunter as EH
+    for gm in slate.games:
+        here = [r for r in recs if r["recommended"] and r["team"] in (gm.home, gm.away)]
+        here += [b for b in bets if b.get("grade") != "Pass" and b.get("home") == gm.home]
+        for weak, _strong, why in EH.contradictions(here):
+            _edge_pass(weak, f"contradicts a stronger edge on this game: {why}")
+    out["edge_model"] = EH.MODEL
+    out["edge_census"] = _edge_census(recs + bets)
     from engine.marketscan import scan_recommendations
     out.update(status="slate", recommendations=recs, game_bets=bets, gate_census=census,
                odds_note=odds_note, market_scan=scan_recommendations(recs))
@@ -576,6 +615,31 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                      "recommended": sum(1 for r in recs if r["recommended"]),
                      "game_bets": sum(1 for b in bets if b.get("grade") != "Pass")}
     return out, slate
+
+
+def _edge_pass(r: dict, why: str) -> None:
+    """Take a row off the Edge board after pricing (an injury designation, a
+    contradiction), saying why on its Edge Hunter verdict."""
+    eh = r.get("edge_hunter")
+    if eh is not None:
+        eh["passes"] = list(eh.get("passes") or []) + [why]
+        eh.update(play=False, classification="Pass", stake_units=0.0, main_risk=why)
+    if "recommended" in r:
+        r["recommended"] = False
+    r["grade"], r["stake_units"] = "Pass", 0.0
+
+
+def _edge_census(rows: list[dict]) -> dict:
+    """{classification: n} plus the commonest reasons a priced bet was not
+    an Edge play — printed by the build and kept on the board."""
+    by, why = {}, {}
+    for r in rows:
+        eh = r.get("edge_hunter") or {}
+        by[eh.get("classification", "unassessed")] = by.get(eh.get("classification", "unassessed"), 0) + 1
+        for p in (eh.get("passes") or [])[:1]:
+            key = p.split(" — ")[0].split(":")[0]
+            why[key] = why.get(key, 0) + 1
+    return {"by_class": by, "top_passes": dict(sorted(why.items(), key=lambda kv: -kv[1])[:6])}
 
 
 def attach_most_likely(out: dict, out_path: str, date: str) -> None:
@@ -733,6 +797,11 @@ def main() -> None:
     # "0 priced props" and nothing about why.
     if games:
         print(f"  Odds: {out.get('odds_note') or 'none'} · {c.get('props_built', 0)} props built from history")
+        ec = out.get("edge_census") or {}
+        if ec.get("by_class"):
+            print(f"  {out.get('edge_model')}: " + ", ".join(f"{k} {v}" for k, v in ec["by_class"].items())
+                  + ("; most passed for: " + ", ".join(f"{k} ({v})" for k, v in ec["top_passes"].items())
+                     if ec.get("top_passes") else ""))
     print(f"NHL {args.date}: {len(games)} game(s), {c.get('props_analyzed', 0)} priced props → "
           f"{c.get('recommended', 0)} Edge pick(s), {c.get('game_bets', 0)} game bet(s), "
           f"{len(out.get('most_likely') or [])} Most Likely. Wrote {args.out}")
