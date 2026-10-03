@@ -1297,12 +1297,16 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                             and now - 12 * 3600 < k < now + 36 * 3600) - PRIME_BEFORE_S
                 when = (f"opens ~{_fmt_clock(opens)}" if opens > now
                         else "closed for tonight — resumes with tomorrow's slate")
-                return False, (f"quota very low ({state.remaining} credits) — "
-                               f"holding today's one paid pull for the pre-game "
-                               f"window ({when})")
-            return True, (f"quota very low ({state.remaining} credits) — sparse "
-                          f"mode: one paid pull per {SPARSE_INTERVAL // 3600}h, "
-                          f"cached prices in between")
+                # SAID AS WHAT IT IS (2026-10-03): the box printed "quota
+                # very low (89172 credits)" — the month was fine; what was
+                # small was this league's SHARE of today's allowance.
+                return False, (f"this league's share of today's budget covers one "
+                               f"paid pull ({state.remaining} credits left this "
+                               f"month) — holding it for the pre-game window ({when})")
+            return True, (f"this league's share of today's budget is under one "
+                          f"pull ({state.remaining} credits left this month) — "
+                          f"sparse mode: one paid pull per "
+                          f"{SPARSE_INTERVAL // 3600}h, cached prices in between")
         return False, (f"odds budget spent for today ({state.remaining} credits "
                        f"left this month; cached prices keep the board filled)")
     # THE HARD DAILY CEILING. Everything below this line — the ordinary
