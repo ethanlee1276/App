@@ -13,6 +13,7 @@ tonight; an unstable role is a pass; a lopsided game is a pass on saves.
 
 Run directly: `python3 tests/test_scalpy_nhl.py`
 """
+import importlib
 import sys
 import tempfile
 from pathlib import Path
@@ -22,9 +23,9 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import nhl_build as B                                          # noqa: E402
-import test_nhl_board_builds as T                              # noqa: E402
 from engine import db, likely, rankfit                         # noqa: E402
 from engine.nhl import model as M                              # noqa: E402
+T = importlib.import_module("test_nhl_board_builds")   # the board fixture, shared
 
 
 def test_the_grades_and_what_keeps_a_row_out_of_a_plus():

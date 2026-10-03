@@ -13,6 +13,7 @@ one is held; ESPN's NHL board is in the injury feed's league list.
 
 Run directly: `python3 tests/test_nhl_scan_and_injuries.py`
 """
+import importlib
 import sys
 from pathlib import Path
 
@@ -21,10 +22,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import nhl_build as B                                          # noqa: E402
-import test_nhl_board_builds as T                              # noqa: E402
 from engine import likelyboard                                 # noqa: E402
 from engine.nhl import scan as S                               # noqa: E402
 from engine.sources import espninjuries                        # noqa: E402
+T = importlib.import_module("test_nhl_board_builds")   # the board fixture, shared
 
 
 def _built(injuries=None):
