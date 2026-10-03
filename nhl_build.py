@@ -522,6 +522,12 @@ def main() -> None:
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {exc}")
     c = out["counts"]
+    # THE ODDS LINE, ALWAYS. A board with no prices looks the same whether
+    # no book had posted yet or the pull never happened (a hand run without
+    # /etc/qellys/env has no key) — the first hand build on the box said
+    # "0 priced props" and nothing about why.
+    if games:
+        print(f"  Odds: {out.get('odds_note') or 'none'} · {c.get('props_built', 0)} props built from history")
     print(f"NHL {args.date}: {len(games)} game(s), {c.get('props_analyzed', 0)} priced props → "
           f"{c.get('recommended', 0)} Edge pick(s), {c.get('game_bets', 0)} game bet(s), "
           f"{len(out.get('most_likely') or [])} Most Likely. Wrote {args.out}")
