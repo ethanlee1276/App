@@ -32887,7 +32887,8 @@ function teamLeadersHTML(st) {
   return `<div class="tld">${rows.map((L) => `
     <button class="tld-card" type="button"
             data-player-page="${escapeAttr(slugify(L.player))}">
-      <span class="tld-k">${escapeHtml(L.title)} yards</span>
+      <span class="tld-k">${escapeHtml(L.title)} ${escapeHtml(/_yds$/.test(L.market || "") ? "yards"
+        : String(marketWord(L.market) || "").toLowerCase())}</span>
       <span class="tld-who">${escapeHtml(L.player)}${L.position
         ? ` <span class="tld-pos">${escapeHtml(L.position)}</span>` : ""}</span>
       <span class="tld-v">${Math.round(L.value).toLocaleString()}</span>

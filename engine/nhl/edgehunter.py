@@ -106,6 +106,12 @@ def ev_per_dollar(p: float, odds: int) -> float:
     return p * profit - (1 - p)
 
 
+def _a(market: str) -> str:
+    """"a points" / "an anytime goal" — the market named with its article."""
+    word = market.replace("_", " ")
+    return ("an " if word[:1] in "aeiou" else "a ") + word
+
+
 def _clamp(x: float) -> float:
     return max(0.0, min(1.0, x))
 
@@ -143,7 +149,7 @@ def _finish(market: str, side_word: str, win: float, fair: float, edge: float, o
     if not credible:
         passes.append("our number disagrees with the market by more than we credit")
     if edge < need:
-        passes.append(f"edge {edge:+.1%} is under the {need:.0%} a {market.replace('_', ' ')} bet needs")
+        passes.append(f"edge {edge:+.1%} is under the {need:.0%} {_a(market)} bet needs")
     if ev <= 0:
         passes.append("no positive expected value at the best price")
     if len(supports) < MIN_SUPPORT and edge >= need:
