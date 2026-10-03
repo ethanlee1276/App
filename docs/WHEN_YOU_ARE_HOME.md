@@ -14,31 +14,31 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL Most Likely — run these when you're home (2026-10-04, round 4)
+### NFL Most Likely — run these when you're home (2026-10-04, round 5)
 
-Round 3 is done: the record correction was adopted (7 groups, bold
-included), and five first-game-back and shootout findings were saved.
+Round 4: the spread fit said every position's games run 20-40% wider than
+the model thinks. But it judged that on lines far from a player's
+average, and the record disagrees where it can speak (receiver overs
+are hitting MORE than we say). So the widths it saved are switched off
+by the new code, and it re-measures only on lines near the projection,
+where a book actually hangs them.
 
 First make sure the box has the new code. This should print a line saying
-"tight ends get their own spread", or anything newer:
+"judge the spread where books hang the line", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**N1. Measure how wide each position's games really are** (paste; it
-takes a few minutes). Tight ends missed on both sides of the line. This
-replays 2021-2025 for catches, receiving yards and rushing yards by
-position, and saves a wider (or narrower) spread for a position only if
-it predicted the held-out seasons better. It also runs by itself every
-Wednesday from now on:
+**N1. Re-measure the spreads near the line** (paste; a few minutes). It
+saves a width for a position only if it predicted held-out seasons better
+on book-like lines:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
 ```
 
-**N2. Make the board learn again** (paste) — so the record's numbers are
-refitted on top of whatever N1 adopted:
+**N2. Make the board learn again** (paste):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
@@ -50,8 +50,8 @@ What changes on the board:
 - First game back after missing his team's last game: his overs and his
   touchdown chance are lowered by what five seasons measured, never
   below the book's price.
-- If N1 adopts a tight-end width, every tight end's chance on both sides
-  comes closer to 50%. The card's projection notes say so.
+- If N1 adopts a width for a position, that position's chances on both
+  sides come closer to 50%, and the card's projection notes say so.
 - A pick comes off only when our record proves picks like it lose AND the
   offense-vs-defense matchup leans the other way. It goes in a closed
   **Held back** section with the reason, and is still graded.

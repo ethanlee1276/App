@@ -31,7 +31,7 @@ def _data(true_mult: float, seasons=(2021, 2022, 2023, 2024, 2025), per=900, see
             mu = rng.uniform(30, 60)
             actual = rng.gauss(mu, 10 * true_mult)
             for line in (25.5, 40.5, 60.5):
-                if 0.4 * line < mu < 3.0 * line:
+                if P.NEAR_LO * mu <= line <= P.NEAR_HI * mu:
                     out.append((s, 10.0, mu, line, actual > line))
     return out
 
@@ -53,10 +53,22 @@ def test_the_projection_widens_that_position_only_and_says_so():
     assert P.width_mult("TE", "receptions") == 1.3
     assert P.width_mult("WR", "receptions") == 1.0, "a width that did not pass is not used"
     assert P.width_mult("te", "rec_yds") == 1.0
+    # The first (far-tail) version's store carries no version: never read.
+    path.write_text('{"widths": {"TE|receptions": {"m": 1.35}}}', encoding="utf-8")
+    import time
+    time.sleep(0.01)
+    os.utime(path, None)
+    assert P.width_mult("TE", "receptions") == 1.0, "a store from the far-tail version is ignored"
     src = open(os.path.join(ROOT, "engine", "projection.py"), encoding="utf-8").read()
     i = src.index("from .posspread import width_mult")
     assert 'if sport == "nfl":' in src[i - 200:i], "measured on NFL games, used on NFL props"
     assert "adj_std *= _w" in src[i:i + 300] and "Spread:" in src[i:i + 500]
+
+
+def test_only_lines_near_his_projection_are_scored():
+    rows = [{"season": 2025, "mu": 40.0, "form_sd": 12.0, "actual": 50.0}]
+    lines = sorted(line for _s, _sd, _mu, line, _h in P.samples(rows, "rec_yds"))
+    assert lines == [40.5], "15.5, 25.5 and 60.5 are far tails a book would not hang for a 40-yard man"
 
 
 def test_it_reads_the_history_database_by_position():

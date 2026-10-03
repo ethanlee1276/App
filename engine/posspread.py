@@ -51,6 +51,18 @@ POSITIONS = ("RB", "WR", "TE")
 WIDTH_GRID = tuple(round(0.80 + 0.05 * i, 2) for i in range(17))      # 0.80 .. 1.60
 MIN_ROWS = 2000
 MIN_SEASONS_BETTER = 4
+#: WHERE A BOOK HANGS THE LINE: within this band of his projection. The
+#: first box run (2026-10-04) scored lines from 0.4x to 3x his average —
+#: yardagefit's band — and adopted x1.20-x1.40 for every position. Most of
+#: that gain lives in the far tails, where the normal curve is already known
+#: to be the wrong shape (the zero-yard spike; engine/yardagefit), not
+#: around the line a pick is made at. The record disagreed where it can
+#: speak: receiver overs hit 67% where we said 63%, and widening them would
+#: have made a well-calibrated group worse. So the width is judged only on
+#: lines near the projection. Written before the re-run.
+NEAR_LO, NEAR_HI = 0.75, 1.33
+#: Stores written by the far-tail version are never read.
+STORE_VERSION = 2
 
 
 def _store() -> Path:
@@ -77,7 +89,9 @@ def width_mult(position: str, market: str) -> float:
     except OSError:
         stamp = (str(p), None)
     if _CACHE.get("stamp") != stamp:
-        _CACHE["stamp"], _CACHE["w"] = stamp, (load(p).get("widths") or {})
+        store = load(p)
+        _CACHE["stamp"] = stamp
+        _CACHE["w"] = (store.get("widths") or {}) if store.get("version") == STORE_VERSION else {}
     return float((_CACHE["w"].get(f"{str(position or '').upper()}|{market}") or {}).get("m", 1.0))
 
 
@@ -101,15 +115,16 @@ def positions_of(conn) -> dict:
 
 
 def samples(rows: list, market: str) -> list:
-    """(season, base_sd, mu, line, hit) for every row at every book-plausible line."""
+    """(season, base_sd, mu, line, hit) for every row at every line near
+    his projection (NEAR_LO..NEAR_HI), where a book would hang it."""
     from .projection import CV_FLOOR
-    from .yardagefit import LINE_HI, LINE_LO, MARKETS as LINES
+    from .yardagefit import MARKETS as LINES
     cv = CV_FLOOR.get(market, 0.35)
     out = []
     for r in rows:
         sd = max(r["form_sd"], cv * max(r["mu"], 1.0))
         for line in LINES.get(market, ()):
-            if LINE_LO * line < r["mu"] < LINE_HI * line:
+            if NEAR_LO * r["mu"] <= line <= NEAR_HI * r["mu"]:
                 out.append((r["season"], sd, r["mu"], line, r["actual"] > line))
     return out
 
@@ -167,7 +182,7 @@ def save(res: dict, path=None) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     widths = {k: {"m": v["m"], "n": v["n"], "gain": v["gain"]} for k, v in res.items() if v["passed"]}
     tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps({"widths": widths, "at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
+    tmp.write_text(json.dumps({"version": STORE_VERSION, "widths": widths, "at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
                                .isoformat(timespec="seconds")}, indent=1), encoding="utf-8")
     tmp.replace(p)
     _CACHE.clear()
