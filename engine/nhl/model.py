@@ -89,8 +89,11 @@ ROLE_MIN_GAMES = 6
 #: A probable starter must hold at least this share of his team's last
 #: STARTER_WINDOW starts before a saves (or goalie-driven) bet stands.
 STARTER_SHARE = 0.60
-#: Scalpy's win-first grades, by modeled hit probability.
-GRADES = ((0.75, "A+"), (0.70, "A"), (0.65, "B"))
+#: Scalpy's win-first grades, by modeled hit probability. C (2026-10-03)
+#: is the band between the board's shared 55% bar and Scalpy's 65% B line —
+#: on the board since the NHL floor came down to the other leagues', and
+#: graded so a reader can see it is not a B.
+GRADES = ((0.75, "A+"), (0.70, "A"), (0.65, "B"), (0.55, "C"))
 #: The prop hierarchy — the most stable market first.
 PROP_TIER = {"sog": 1, "saves": 2, "points": 3, "assists": 4, "blocks": 4, "goals": 5, "anytime_goal": 5}
 
@@ -409,7 +412,7 @@ def starter_share(players: dict, team: str, name: str) -> float:
 
 
 def scalpy_grade(prob: float, flags=()) -> str:
-    """A+ / A / B / Pass by modeled hit probability; any risk flag keeps a
+    """A+ / A / B / C / Pass by modeled hit probability; any risk flag keeps a
     row out of A+ ("requires stable role ... no major goalie uncertainty")."""
     for bar, label in GRADES:
         if prob >= bar:

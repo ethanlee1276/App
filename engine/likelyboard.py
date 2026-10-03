@@ -48,9 +48,10 @@ from __future__ import annotations
 
 #: Our chance a pick needs for the model check, by lane.
 MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
-#: A league whose own model sets a stricter bar (Scalpy NHL 1.0: B starts
-#: at 65%). Its model check asks for that, not the shared 58%.
-SPORT_MODEL_BAR = {"nhl": {"td": 0.40, "prop": 0.65, "game": 0.65}}
+#: A league whose own model sets a different bar. Empty since 2026-10-03:
+#: the NHL's 65% went with its Most Likely floor (see likely.SPORT_MIN_PROB)
+#: and hockey's model check asks for the shared 58% like every league.
+SPORT_MODEL_BAR: dict = {}
 #: The main Most Likely list's bar (likely.MIN_PROB) — a touchdown under it
 #: here is said as matchup-backed (see `build`).
 LIKELY_BAR = 0.55

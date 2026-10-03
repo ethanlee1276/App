@@ -2,9 +2,9 @@
 
 Ethan, 2026-10-03: "here is the model to use for most likely nhl betting ...
 We are hunting the outcome with the highest realistic probability of
-cashing." Checked here, one rule each: the grades (A+ 75 / A 70 / B 65,
-a risk flag keeps a row out of A+); the 65% Most Likely floor for the NHL
-only; early-season mode (last season carries 75% of a team's strength
+cashing." Checked here, one rule each: the grades (A+ 75 / A 70 / B 65 /
+C 55, a risk flag keeps a row out of A+); the NHL on the other leagues'
+55% Most Likely floor (it was 65% for a day); early-season mode (last season carries 75% of a team's strength
 through the first two weeks, 30% by game 30); volume over finishing (a
 goal is shots × a hard-regressed shooting %); the opposing goalie replaces
 the team goals-against tilt instead of stacking on it; no saves bet on an
@@ -29,13 +29,16 @@ T = importlib.import_module("test_nhl_board_builds")   # the board fixture, shar
 
 
 def test_the_grades_and_what_keeps_a_row_out_of_a_plus():
-    assert [M.scalpy_grade(p) for p in (0.80, 0.72, 0.66, 0.64)] == ["A+", "A", "B", "Pass"]
+    assert [M.scalpy_grade(p) for p in (0.80, 0.72, 0.66, 0.60, 0.54)] == ["A+", "A", "B", "C", "Pass"]
     assert M.scalpy_grade(0.80, ["second night of a back-to-back"]) == "A"
     assert M.PROP_TIER["sog"] < M.PROP_TIER["saves"] < M.PROP_TIER["points"] < M.PROP_TIER["anytime_goal"]
 
 
-def test_the_nhl_floor_is_sixty_five_and_nobody_elses_moves():
-    assert likely.SPORT_MIN_PROB == {"nhl": 0.65}
+def test_the_nhl_floor_is_the_other_leagues_55():
+    """Ethan, 2026-10-03: "drop that to like 50% or something, how we have
+    the other sports" — hockey is on the shared bar, so a 60% row is a pick
+    on the NHL board exactly as it is on the NBA's."""
+    assert likely.SPORT_MIN_PROB == {} and likely.MIN_PROB == 0.55
     row = {"player": "A", "team": "EDM", "opponent": "CGY", "market": "sog", "market_label": "Shots on Goal",
            "side": "OVER", "line": 2.5, "odds": -150, "book": "DraftKings", "hit_prob": 0.60, "fair_prob": 0.58,
            "has_market": True, "projection": 3.1, "recent_values": [3, 4, 2]}
@@ -46,8 +49,8 @@ def test_the_nhl_floor_is_sixty_five_and_nobody_elses_moves():
         nba = likely.build([dict(row, market="pts")], sport="nba")
     finally:
         rankfit.rank_auc = real
-    assert all(r.get("reserve") for r in nhl), "60% is a reserve on the NHL board, never a pick"
-    assert nba and not nba[0].get("reserve"), "every other league keeps its 55% bar"
+    assert nhl and not nhl[0].get("reserve"), "60% is a pick on the NHL board now"
+    assert nba and not nba[0].get("reserve"), "and on every other league's"
 
 
 def test_early_season_leans_on_last_season():

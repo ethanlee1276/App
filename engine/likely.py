@@ -668,12 +668,16 @@ LIMIT = 40
 #: which shelves these are. He was shown the collision and chose 0.55
 #: everywhere rather than scoping it to props.
 MIN_PROB = 0.55
-#: A LEAGUE'S OWN BAR, where its model sets a stricter one. Scalpy NHL 1.0
-#: (Ethan, 2026-10-03): "We rank them by modeled hit probability ... Pass
-#: below 65%. We generally don't touch it." The reserve pass below still
-#: tops a thin shelf up, labelled reserve and never journaled, so the page
-#: is never blank and the record only ever holds rows that cleared 65%.
-SPORT_MIN_PROB = {"nhl": 0.65}
+#: A LEAGUE'S OWN BAR, where one is wanted. Empty: every league uses
+#: MIN_PROB. The NHL had 65% (Scalpy NHL 1.0's B line) for one day — and
+#: Ethan, 2026-10-03, the same evening: "I see we have a 65% floor for the
+#: NHL most likely builder. I feel like we should drop that to like 50% or
+#: something, how we have the other sports, because we've learned that 65%
+#: doesn't really display that many bets." So hockey is back on the shared
+#: bar; Scalpy's grade still says which rows clear 65 (B and up) and which
+#: only clear the board's 55 (C). The mechanism stays for the next league
+#: that needs its own number.
+SPORT_MIN_PROB: dict = {}
 
 #: THE FLOOR WHEN THE ALTERNATIVE IS AN EMPTY PAGE. Ethan, 2026-09-08:
 #: "Also I don't want an empty boar either we need to have picks period."
