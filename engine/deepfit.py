@@ -148,6 +148,25 @@ def refit_nfl_props(db: str = "data/history.db") -> list[str]:
     return propcal.report_lines(out)
 
 
+def refit_td_scale(db: str = "data/history.db") -> list[str]:
+    """engine/tdscale: how hard a scorer's chance follows his team's
+    expected points, per position, adopted only on held-out seasons."""
+    try:
+        import sqlite3
+        from .tdscale import refit
+        path = db if os.path.isabs(db) else os.path.join(ROOT, db)
+        if not os.path.isfile(path):
+            return []
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        try:
+            return [f"deep refit:{line}" for line in refit(conn)]
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  touchdown team-total fit skipped: {exc}"]
+
+
 def refit_touchdowns(db: str = "data/history.db") -> list[str]:
     """The touchdown market, which no other fitter can reach.
 
@@ -269,6 +288,9 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     # own replays rather than by the three CLIs above, because a
     # touchdown has no line for `calibrate.fit_market` to walk.
     lines.extend(refit_yardage_mixture(db))
+    # The team-total exponent FIRST (engine/tdscale), so the temperature
+    # below is always fitted on top of it.
+    lines.extend(refit_td_scale(db))
     lines.extend(refit_touchdowns(db))
     lines.extend(refit_cfb_touchdowns(db))
     # AFTER the three CLIs above, deliberately. `calibrate.py` fits these

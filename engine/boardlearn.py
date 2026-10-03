@@ -188,6 +188,16 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
         for r in found:
             if r["ctx"].get("position"):
                 pos[f"{r['ctx']['position']} · {_side(r)}"].append(r)
+        # TOUCHDOWN PICKS BY THEIR TEAM'S EXPECTED POINTS — the cut that
+        # sent engine/tdscale looking (1-for-12 at 18-22 points, 13-for-21
+        # at 26+), kept on the page so it keeps answering.
+        tdb = defaultdict(list)
+        for r in found:
+            imp = r["ctx"].get("implied")
+            if r.get("market") == "anytime_td" and imp is not None:
+                tdb["under 21 points" if imp < 21 else "21-25.9 points" if imp < 26 else "26+ points"].append(r)
+        entry["slices"]["td_team_total"] = sorted(({"key": k, **grade(v)} for k, v in tdb.items()
+                                                   if len(v) >= MIN_SLICE), key=lambda s: s["z"])
         entry["slices"]["position"] = sorted(({"key": k, **grade(v)} for k, v in pos.items() if len(v) >= MIN_SLICE),
                                              key=lambda s: s["z"])
         by_flag = defaultdict(list)

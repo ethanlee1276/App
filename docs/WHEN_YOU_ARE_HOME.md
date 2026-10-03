@@ -14,33 +14,39 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL Most Likely — run these now (2026-10-04, round 6)
+### NFL touchdowns — run these now (2026-10-04, round 7)
 
-Round 5: near the line, history still says widen every position, but
-your record says receivers are NOT over-sure (their overs hit 67% where we
-said 63%), and the record's correction can only ever lower a chance — it
-could never undo a width that made receivers too shy. So the record now
-gets a veto: a position is widened only if history proves it AND its own
-graded picks are not already hitting at or above what we said. The store
-from round 5 is switched off by the new code until you re-run this.
+The spreads are done (tight ends and backs widened, receivers vetoed by
+the record). Now the touchdown model. The record hints its chances do not
+follow the team's expected points hard enough: teams the books expected
+to score 18-22 went 1-for-12 on our touchdown picks at a claimed 43%, and
+teams at 26+ went 13-for-21 at a claimed 49%. This replays the real
+touchdown model over 2021-2025 and fits, per position, how much harder (or
+softer) a scorer's chance should follow his team's implied total. It is
+adopted only if it beats today's model on held-out seasons (4 of 5 and
+overall), judged after the calibration the board already uses.
 
 First make sure the box has the new code. This should print a line saying
-"the record can veto a spread", or anything newer:
+"touchdowns follow the team total", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**N1. Re-measure with the record's veto** (paste; a few minutes):
+**T1. Fit the team-total step, then refit the touchdown calibration on top
+of it** (paste both; a few minutes each). Both run by themselves every
+Wednesday from now on, in this order:
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
+cd /srv/qellys && sudo -u qellys python3 -m engine.tdscale
+cd /srv/qellys && sudo -u qellys python3 -m engine.tdbacktest --fit
 ```
 
-To undo: `sudo -u qellys rm /srv/qellys/data/models/position_spread.json`
-(widths), `.../likely_calibration.json` (record) or
-`.../scout_history.json` (history), all under /srv/qellys/data/models/.
-Each comes back by itself if it is still proven.
+To undo: `sudo -u qellys rm /srv/qellys/data/models/td_implied.json`
+(team-total step), `.../position_spread.json` (widths),
+`.../likely_calibration.json` (record) or `.../scout_history.json`
+(history), all under /srv/qellys/data/models/. Each comes back by itself if
+it is still proven.
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 

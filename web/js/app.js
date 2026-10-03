@@ -17643,7 +17643,7 @@ function recBoardLearningSection(bl, sport) {
       <span style="color:${tone(s.verdict)}">${escapeHtml(s.verdict)}</span>
     </div>`;
   const cutNames = { maker: "By where the pick came from", market: "By market", position: "By position",
-    claimed: "By the chance we claimed" };
+    td_team_total: "Touchdown picks by the team’s expected points", claimed: "By the chance we claimed" };
   const blocks = sports.map((sp) => {
     const e = bl[sp];
     const r = e.record || {};

@@ -502,6 +502,14 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     prob = prob_at_least_one(rate)
     if pos == "RB":
         prob = rb_steepened(prob)
+    # HOW HARD HIS CHANCE FOLLOWS HIS TEAM'S EXPECTED POINTS (engine/tdscale):
+    # the record had low-total teams' scorers far under what we claimed and
+    # high-total teams' over it; an exponent per position, adopted only if
+    # it ordered scorers better on held-out seasons. 0 where none passed.
+    from .tdscale import adjust as _td_adjust, gamma_for as _td_gamma
+    td_gamma = _td_gamma(pos)
+    if td_gamma:
+        prob = _td_adjust(prob, implied, td_gamma)
 
     reasons = [
         f"Team implied total {implied:.1f} → {team_tds:.2f} expected offensive TDs",
@@ -536,6 +544,13 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         reasons.append("Running back: read on the measured back curve — over 2021-2025 the backs "
                        "the model called 45%+ scored 56% against 52% claimed; fitted on seasons it "
                        "was not tested on")
+    if td_gamma:
+        from .longshots import NFL_AVG_TEAM_POINTS as _avg_pts
+        reasons.append(f"Team total: {pos or 'scorer'} touchdown chances follow the team's expected points more "
+                       f"steeply than the base model ({implied:.1f} against a {_avg_pts:.1f} average) — "
+                       f"measured on 2021+ seasons it was not fitted on" if td_gamma > 0 else
+                       f"Team total: {pos or 'scorer'} touchdown chances follow the team's expected points less "
+                       f"steeply than the base model — measured on 2021+ seasons it was not fitted on")
     if pos == "QB":
         reasons.append(f"Quarterback: scoring rate ×{QB_TD_RATE_SCALE:.2f} — over 2021-2025 the model "
                        f"under-called quarterbacks' touchdowns (25% claimed, 34% scored among the "
