@@ -309,6 +309,18 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # a small man's variance, and ×1.65 on the mean with his old spread
     # would claim a certainty nothing measured.
     adj_std *= lineup_mult
+    # HOW WIDE THIS POSITION'S GAMES REALLY ARE (engine/posspread): the
+    # CV floor is per market, the same for a tight end as for a WR1, and the
+    # 2026-10-04 record had tight ends over-claiming on BOTH sides — too
+    # sure, not wrong-way. A width measured on 2021+ seasons and adopted
+    # only if it predicted held-out seasons better; 1.0 everywhere else.
+    if sport == "nfl":
+        from .posspread import width_mult
+        _w = width_mult(prop.position, prop.market)
+        if _w != 1.0:
+            adj_std *= _w
+            reasons.append(f"Spread: {prop.position} {prop.market} outcomes run ×{_w:.2f} wider than the "
+                           f"market's typical range in 2021+ games — measured, so the chance is less sure")
 
     if abs(player_mult - 1.0) >= 0.02:
         direction = "high" if player_mult < 1.0 else "low"

@@ -1379,7 +1379,8 @@ def _run_deep_refit(log) -> list[str]:
     both halves, which the Most Likely board reads on its next build — so
     the history behind a "first game back" correction re-measures itself
     as seasons are added, with nobody pasting it."""
-    return _spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
+    return (_spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
+            + _spawn_module("engine.posspread", log))
 
 
 def _run_lab(log) -> list[str]:

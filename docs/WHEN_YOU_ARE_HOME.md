@@ -14,28 +14,31 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL Most Likely — run these when you're home (2026-10-04, round 3)
+### NFL Most Likely — run these when you're home (2026-10-04, round 4)
+
+Round 3 is done: the record correction was adopted (7 groups, bold
+included), and five first-game-back and shootout findings were saved.
 
 First make sure the box has the new code. This should print a line saying
-"Most Likely learns what football history proves", or anything newer:
+"tight ends get their own spread", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**N1. Save what five seasons of football prove** (paste). It replays the
-scout's flags on every 2021-2025 game and saves only the ones that held
-in both halves on 100+ games each, leaving out wind and team totals
-(the model already prices those). The board reads it on its next build.
-It also runs by itself every Wednesday from now on:
+**N1. Measure how wide each position's games really are** (paste; it
+takes a few minutes). Tight ends missed on both sides of the line. This
+replays 2021-2025 for catches, receiving yards and rushing yards by
+position, and saves a wider (or narrower) spread for a position only if
+it predicted the held-out seasons better. It also runs by itself every
+Wednesday from now on:
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist
+cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
 ```
 
-**N2. Make the board learn now** (paste). It runs after every settle
-anyway. This run is the first one where the bold picks can be fitted (on
-their overs and unders together, since neither side alone has enough):
+**N2. Make the board learn again** (paste) — so the record's numbers are
+refitted on top of whatever N1 adopted:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
@@ -44,18 +47,19 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
 What changes on the board:
 - No pick comes off for losing alone. The record's correction lowers its
   chance, which can move it down a tier, and it stays.
-- A player in his first game back after missing his team's last game:
-  his overs and his touchdown chance are lowered by what five seasons
-  measured, never below the book's price. The card says why.
+- First game back after missing his team's last game: his overs and his
+  touchdown chance are lowered by what five seasons measured, never
+  below the book's price.
+- If N1 adopts a tight-end width, every tight end's chance on both sides
+  comes closer to 50%. The card's projection notes say so.
 - A pick comes off only when our record proves picks like it lose AND the
   offense-vs-defense matchup leans the other way. It goes in a closed
-  **Held back** section at the bottom of the Most Likely page with the
-  reason, and is still graded.
-- A pick that was already posted never comes off.
+  **Held back** section with the reason, and is still graded.
 
-To undo a correction: `sudo -u qellys rm /srv/qellys/data/models/likely_calibration.json`
-(record) or `sudo -u qellys rm /srv/qellys/data/models/scout_history.json`
-(history). Each comes back on its own if it is still proven.
+To undo: `sudo -u qellys rm /srv/qellys/data/models/position_spread.json`
+(widths), `.../likely_calibration.json` (record) or
+`.../scout_history.json` (history), all under /srv/qellys/data/models/.
+Each comes back by itself if it is still proven.
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 
