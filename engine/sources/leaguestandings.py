@@ -207,10 +207,23 @@ def fetch(sport: str, season: int) -> list[dict]:
                                     ttl=STANDINGS_TTL,
                                     user_agent=DEFAULT_AGENT))
     if sport == "nhl":
+        # "now" FIRST. The box, 2026-10-03, four days before opening night:
+        # the dated table answered with no teams and the page fell back to
+        # counting our own (empty) season. "now" is the league's current
+        # table — last season's final until a puck drops, which parse_nhl
+        # turns into this season's 0-0-0 — and the dated one is the backup.
         import datetime as _dt
         day = _dt.date.today().isoformat()
-        return parse_nhl(fetch_json(NHL_URL.format(date=day), f"standings_nhl_{day}.json",
-                                    ttl=STANDINGS_TTL, user_agent=DEFAULT_AGENT), season)
+        rows: list = []
+        for when in ("now", day):
+            try:
+                rows = parse_nhl(fetch_json(NHL_URL.format(date=when), f"standings_nhl_{when}.json",
+                                            ttl=STANDINGS_TTL, user_agent=DEFAULT_AGENT), season)
+            except DataUnavailable:
+                rows = []
+            if rows:
+                break
+        return rows
     path = ESPN_PATHS.get(sport)
     if not path:
         raise DataUnavailable(f"no standings feed wired for {sport}")

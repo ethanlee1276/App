@@ -68,6 +68,25 @@ def test_nhl_standings_carry_the_overtime_loss_and_never_last_seasons_table():
     assert "nhl" in standings_build.SPORTS
 
 
+def test_before_opening_night_the_table_is_this_seasons_zeros_not_empty():
+    """The box, 2026-10-03: the dated table came back with no teams and the
+    page fell back to an empty count. "now" is read first — last season's
+    final, shown as this season's 0-0-0 — and the dated one only after."""
+    asked = []
+    real = leaguestandings.fetch_json
+
+    def fake(url, name, **kw):
+        asked.append(url.rsplit("/", 1)[-1])
+        return {"standings": [_nhl_row("EDM", season="20252026", wins=50)]} if url.endswith("/now") \
+            else {"standings": []}
+    leaguestandings.fetch_json = fake
+    try:
+        rows = leaguestandings.fetch("nhl", 2026)
+    finally:
+        leaguestandings.fetch_json = real
+    assert asked == ["now"] and rows[0]["team"] == "EDM" and rows[0]["wins"] == 0
+
+
 def _nhl_roster_payload():
     return {"forwards": [
         {"id": 8478402, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"},
