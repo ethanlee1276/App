@@ -9938,7 +9938,13 @@ function obWhyHTML(r) {
   const n = r.check_notes || {};
   const checks = OB_CHECKS.map(([k, label]) => n[k] ? `<li><b>${label}:</b> ${escapeHtml(n[k])}</li>` : "").join("");
   const lines = (r.case_lines || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
-  return checks || lines ? `<details class="td-why"><summary>Why?</summary><ul>${checks}${lines}</ul></details>` : "";
+  /* THE SCOUT'S READ (engine/likelyctx): the spots a football person
+     would hesitate in, said plainly, and — once the record has proven a
+     flag over-claims — what that did to the number. */
+  const scout = (r.scout_notes || []).map((t) => `<li><b>Scout:</b> ${escapeHtml(t)}</li>`).join("")
+    + (r.ctx_note ? `<li><b>Our record:</b> ${escapeHtml(r.ctx_note)}</li>` : "");
+  return checks || lines || scout ? `<details class="td-why"><summary>Why?${
+    (r.scout_notes || []).length ? ` · ${r.scout_notes.length} caution${r.scout_notes.length === 1 ? "" : "s"}` : ""}</summary><ul>${checks}${lines}${scout}</ul></details>` : "";
 }
 /* ETHAN'S RENDER (2026-09-26, two desktop renders of the Most Likely page:
    "For when you click on the most likely bets and it takes you to the full

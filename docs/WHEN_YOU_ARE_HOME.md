@@ -14,6 +14,22 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### NFL deep audit — the record read like a football person would (2026-10-03)
+
+**N1. Paste back the whole output of all three** (read-only; nothing
+changes, nothing spends). The first joins every graded NFL Most Likely,
+board and touchdown pick to its game: spread, total, weather, whether he
+was just back, and the line against his recent form. It then says which
+of the scout's flags actually lost more than we claimed. The second asks
+the same of every 2021-2025 game, which is the bigger and rougher sample.
+The third shows what the correction WOULD do, without saving it:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nflaudit.py
+cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelyctx fit --sport nfl --dry-run
+```
+
 ### Today, before Sunday's NFL board (2026-10-03)
 
 **M1. Make the board's chances honest from its own record.** This keeps

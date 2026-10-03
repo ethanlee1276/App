@@ -439,6 +439,22 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         _calibrate([pool[k] for k in order], sport, calibration)
     except Exception:                                        # noqa: BLE001
         pass
+    # THE SCOUT'S READ (engine/likelyctx; Ethan, 2026-10-03: "think like a
+    # human ... general football knowledge"). Every football row gets the
+    # flags a football person would raise — an under in a projected
+    # shootout, a rushing over on a team expected to trail, his first game
+    # back — written on the card. A flag lowers a chance only where the
+    # graded record has proven, out of sample, that picks carrying it
+    # over-claim; until that store exists the flags are notes and nothing
+    # moves.
+    try:
+        from . import likelyctx as _ctx
+        if sport in _ctx.SPORTS:
+            _rows = [pool[k] for k in order]
+            _ctx.annotate(_rows, result)
+            _ctx.apply(_rows, sport)
+    except Exception:                                        # noqa: BLE001
+        pass
     rows, tiers, lanes = [], {t: 0 for t, _ in TIERS}, {}
     for k in order:
         r = pool[k]
@@ -448,7 +464,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         bar = SPORT_MODEL_BAR.get(sport, MODEL_BAR)[lane]
         checks["model"] = prob >= bar
         notes["model"] = (f"our chance {prob:.0%} (the bar here is {bar:.0%})"
-                          + (f" — {r['cal_note']}" if r.get("cal_note") else ""))
+                          + (f" — {r['cal_note']}" if r.get("cal_note") else "")
+                          + (f" — {r['ctx_note']}" if r.get("ctx_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         # NOT A SECOND OPINION ON ITSELF (Ethan, 2026-10-03, "yeah make the
         # tier change"). A pick only the matchup picks or the touchdown
