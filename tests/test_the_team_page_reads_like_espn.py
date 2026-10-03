@@ -154,7 +154,7 @@ def test_the_depth_chart_says_which_it_is():
         "const escapeHtml = (s) => String(s); const escapeAttr = escapeHtml;",
         "const slugify = (s) => String(s).toLowerCase().replace(/ /g, '-');",
         "const teamEmptyTab = (m) => 'EMPTY:' + m;", "const teamInjMark = (n) => n === 'C D' ? ' <abbr>Q</abbr>' : '';", "const teamInjKeyHTML = () => '<KEY>';",
-        _fn("ordinal"), _fn("teamDepthHTML"),
+        _fn("ordinal"), _fn("teamLinesHTML"), _fn("teamDepthHTML"),
         "const measured = teamDepthHTML({ squad: { positions: [{ position: 'QB', players: [{ player: 'A B' }, { player: 'C D' }] }] } });",
         "const filed = teamDepthHTML({ depth: { as_of: '2026-09-22', positions: [{ position: 'QB', players: ['Jordan Love'] }] }, squad: { positions: [] } });",
         "process.stdout.write(JSON.stringify([measured, filed, teamDepthHTML({})]));"])
