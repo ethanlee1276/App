@@ -57,8 +57,8 @@ HISTORY_MARKETS = ("rush_yds", "rec_yds", "receptions", "pass_yds", "rush_att", 
 
 # --- reading (engine/likelyctx owns the join, so the audit, the fit and the
 # board can never disagree about what a flag meant) -----------------------------
-from engine.likelyctx import (BOOKS, SOURCE, context, history_index,      # noqa: E402,F401
-                              journal as picks, ro as _ro_engine)
+from engine.likelyctx import (BOOKS, SOURCE, context, game_keys, history_index,      # noqa: E402,F401
+                              journal as picks, log_game, ro as _ro_engine)
 
 
 def _ro(path: Path) -> sqlite3.Connection:
@@ -187,7 +187,8 @@ def replay(hist, seasons=None) -> dict:
     games of the same market. A negative gap that holds in both halves of
     the seasons is a football effect form alone does not carry."""
     games, by_team, _ = history_index(hist, set())
-    q = ("SELECT player, season, game_id, team, position, market, value FROM player_game_logs "
+    by_key = game_keys(games)
+    q = ("SELECT player, season, period, game_id, team, position, market, value FROM player_game_logs "
          f"WHERE sport='nfl' AND market IN ({','.join('?' * len(HISTORY_MARKETS))})")
     args = list(HISTORY_MARKETS)
     if seasons:
@@ -196,11 +197,11 @@ def replay(hist, seasons=None) -> dict:
     series = defaultdict(list)
     played = defaultdict(set)
     for r in hist.execute(q, args):
-        g = games.get(r["game_id"])
+        g = log_game(r, games, by_key)       # the ids differ ("LV-004" / "LV@KC")
         if g is None:
             continue
         series[(r["player"], r["season"], r["market"])].append((g["_d"], r["value"], r["team"], r["position"], g))
-        played[(r["player"], r["season"])].add(r["game_id"])
+        played[(r["player"], r["season"])].add(g["game_id"])
     cells = defaultdict(lambda: defaultdict(lambda: [0, 0]))      # flag -> half -> [hits, n]
     base = defaultdict(lambda: defaultdict(lambda: [0, 0]))       # (market, side) -> half -> [hits, n]
     flagged_ms = defaultdict(set)

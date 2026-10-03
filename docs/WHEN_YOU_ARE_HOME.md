@@ -14,23 +14,19 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL deep audit — the record read like a football person would (2026-10-03)
+### NFL deep audit — round 2, after the first run (2026-10-03, evening)
 
-**N1. Paste back the whole output of all three** (read-only; nothing
-changes, nothing spends). The first joins every graded NFL Most Likely,
-board and touchdown pick to its game: spread, total, weather, whether he
-was just back, and the line against his recent form. It then says which
-of the scout's flags actually lost more than we claimed. The second asks
-the same of every 2021-2025 game, which is the bigger and rougher sample.
-The third shows what the correction WOULD do, without saving it:
-
-```
-cd /srv/qellys && sudo -u qellys python3 nflaudit.py
-cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
-cd /srv/qellys && sudo -u qellys python3 -m engine.likelyctx fit --sport nfl --dry-run
-```
-
-### Today, before Sunday's NFL board (2026-10-03)
+What the first run showed: the Most Likely list itself holds up (hit 70%
+where it said 65%, 171 picks). The losses are the picks the board adds
+from elsewhere: the "bolder than the books" picks went about 23-38 while
+claiming 75%, the matchup picks hit 30% where they said 49%, and the
+board's unders hit 45% where they said 66%. That is exactly what M1's
+calibration corrects, so **M1 comes first**. The first run also had a
+bug: the player logs never joined to their games (the two tables write
+different game ids). That is why every pick read "thin sample" and the
+history replay came back empty. It is fixed now, so wait until the box
+has pulled the new code (`git -C /srv/qellys log --oneline -1` shows
+"NFL audit: the logs meet their games").
 
 **M1. Make the board's chances honest from its own record.** This keeps
 every pick. It pulls each pick's chance toward its price by as much as
@@ -46,6 +42,16 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport mlb
 ```
 
 To undo it: `sudo -u qellys rm /srv/qellys/data/likely_calibration.json`
+
+**N1. Then paste back the whole output of all three again** (read-only;
+nothing changes, nothing spends). The scout's correction now measures
+itself on top of M1, so it can never correct the same loss twice:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nflaudit.py
+cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelyctx fit --sport nfl --dry-run
+```
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 

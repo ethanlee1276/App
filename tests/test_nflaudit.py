@@ -51,14 +51,17 @@ def _build(tmp):
     hist = db.connect(Path(tmp) / "history.db")
     games, logs = [], []
     # Two teams, eight weeks; KC home every week, favoured by 9.5; total 51.
+    # The ids are the box's own two shapes, which do not match: the games
+    # table writes "LV@KC", the player logs "LV-004" (2026-10-03: the first
+    # box run joined on the id and found no logs at all).
     for w in range(1, 9):
         d = f"2025-09-{w * 3 + 1:02d}"
-        gid = f"g{w}"
-        games.append({"sport": "nfl", "season": 2025, "period": str(w), "game_id": gid, "home": "KC", "away": "LV",
-                      "home_score": 31, "away_score": 10, "spread": -9.5, "total": 51.0, "roof": "outdoors",
-                      "wind": 5.0, "date": d})
+        games.append({"sport": "nfl", "season": 2025, "period": f"{w:03d}", "game_id": f"LV@KC-{w}", "home": "KC",
+                      "away": "LV", "home_score": 31, "away_score": 10, "spread": -9.5, "total": 51.0,
+                      "roof": "outdoors", "wind": 5.0, "date": d})
         if w != 7:                                                   # he misses week 7
-            logs.append({"sport": "nfl", "season": 2025, "period": str(w), "game_id": gid, "player": "Back Raider",
+            logs.append({"sport": "nfl", "season": 2025, "period": f"{w:03d}", "game_id": f"LV-{w:03d}",
+                         "player": "Back Raider",
                          "team": "LV", "opponent": "KC", "position": "RB", "home": 0, "market": "rush_yds",
                          "value": 50.0 + w})
     db.upsert_games(hist, games)
@@ -88,6 +91,8 @@ def test_a_settled_pick_meets_its_own_game_and_his_results_before_it():
     assert dog["n"] == 6 and round(dog["claimed"], 2) == 0.70
     back = out["flags"]["back_from_absence"]
     assert back["n"] == 1, "only week 8 follows the game he missed"
+    assert out["flags"]["thin_sample"]["n"] == 1, "only week 3 (two games before it) is thin"
+    assert out["bands"]["position/side"].get("RB OVER", {}).get("n") == 6, "his position comes off his logs"
     rows = A.picks(A._ro(lp))
     assert any(r["sources"] == {"list", "board"} for r in rows)
 

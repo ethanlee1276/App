@@ -100,7 +100,15 @@ def _date(s):
 
 
 def history_index(hist, players: set) -> tuple[dict, dict, dict]:
-    """(games by id, games by team in date order, {player: [log rows]})."""
+    """(games by id, games by team in date order, {player: [log rows]}).
+
+    THE TWO TABLES DO NOT SHARE A GAME ID: games writes "LV@KC", the
+    player logs write "LV-004" (engine/corrfit.py found the same). The
+    first box run of the audit (2026-10-03) joined on the id, found no
+    log for anyone, and so called every pick a thin sample. A log row
+    meets its game on what both tables do share: season, week, team.
+    Each log row's ``game_id`` is rewritten to its game's, so everything
+    downstream compares like with like."""
     games, by_team = {}, defaultdict(list)
     for g in hist.execute("SELECT * FROM games WHERE sport='nfl'"):
         g = dict(g)
@@ -113,17 +121,41 @@ def history_index(hist, players: set) -> tuple[dict, dict, dict]:
             by_team[t].append(g)
     for t in by_team:
         by_team[t].sort(key=lambda g: g["_d"])
+    by_key = game_keys(games)
     logs = defaultdict(list)
     names = sorted(players)
     for i in range(0, len(names), 400):
         chunk = names[i:i + 400]
-        q = ("SELECT player, season, game_id, team, position, market, value FROM player_game_logs "
+        q = ("SELECT player, season, period, game_id, team, position, market, value FROM player_game_logs "
              f"WHERE sport='nfl' AND player IN ({','.join('?' * len(chunk))})")
         for r in hist.execute(q, chunk):
-            g = games.get(r["game_id"])
+            g = log_game(r, games, by_key)
             if g is not None:
-                logs[r["player"]].append({**dict(r), "_d": g["_d"]})
+                logs[r["player"]].append({**dict(r), "game_id": g["game_id"], "_d": g["_d"]})
     return games, by_team, logs
+
+
+def _week(period):
+    """"004", "4" and 4 are the same week."""
+    try:
+        return int(str(period).strip())
+    except (TypeError, ValueError):
+        return str(period or "")
+
+
+def log_game(r, games: dict, by_key: dict) -> dict | None:
+    """The game a player-log row belongs to: by id where the ids agree,
+    else by (season, week, team)."""
+    return games.get(r["game_id"]) or by_key.get((r["season"], _week(r["period"]), r["team"]))
+
+
+def game_keys(games: dict) -> dict:
+    """{(season, week, team): game} — the key log rows meet games on."""
+    out = {}
+    for g in games.values():
+        for t in (g["home"], g["away"]):
+            out[(g.get("season"), _week(g.get("period")), t)] = g
+    return out
 
 
 def _outdoor(roof):
@@ -230,26 +262,56 @@ def annotate(rows: list[dict], result: dict) -> int:
 
 
 # --- the correction ----------------------------------------------------------------
-def _rows_for_fit(flagged: list[dict]) -> list[dict]:
+#: A "flag" up on more than this share of the record is not a situation, it
+#: is the record — whose over-claiming is engine/likelycal's to correct, by
+#: maker and side. Written 2026-10-03 after the first box run, where a broken
+#: join raised thin_sample on 395 of 395 picks and the fit "proved" it by
+#: pulling every pick to its price.
+MAX_SHARE = 0.5
+
+
+def maker(sources) -> str:
+    """The likelycal group a journal pick falls in, read the way the board
+    reads a row (likelycal.source_of_row): bold first, then the list, the
+    matchup picks, the scenarios."""
+    src = set(sources or ())
+    for name in ("bold", "list", "matchup", "scenario"):
+        if name in src:
+            return name
+    return "list"
+
+
+def _cal_base(r: dict, q: float, cal: dict) -> float:
+    """What the board shows once likelycal has run — the number this
+    correction is stacked on, so the two never correct the same loss twice."""
+    from .likelycal import side_of
+    g = cal.get(f"{maker(r.get('sources'))}|{side_of(r.get('side'))}") or {}
+    k = g.get("k", 1.0)
+    return float(r["p"]) if k >= 1.0 else shrink(float(r["p"]), q, k)
+
+
+def _rows_for_fit(flagged: list[dict], cal: dict | None = None) -> list[dict]:
     out = []
     for r in flagged:
         q = price_chance(r.get("odds"))
         if q is None:
             continue
         game = f"{r['day']}|{(r.get('ctx') or {}).get('game_id') or r.get('team') or r['player']}"
-        out.append({"flags": list(r["flags"]), "p": float(r["p"]), "q": q, "won": bool(r["won"]), "game": game})
+        out.append({"flags": list(r["flags"]), "p": _cal_base(r, q, cal or {}), "q": q,
+                    "won": bool(r["won"]), "game": game})
     return out
 
 
 def fit_flags(rows: list[dict]) -> dict:
-    """{flag: {"k", "n", "hit", "claimed"}} for flags on MIN_GROUP+ picks."""
+    """{flag: {"k", "n", "hit", "claimed"}} for flags on MIN_GROUP+ picks
+    and on no more than MAX_SHARE of them."""
     by: dict = defaultdict(list)
     for r in rows:
         for f in r["flags"]:
             by[f].append(r)
     out = {}
     for f, rs in by.items():
-        if len(rs) < MIN_GROUP:
+        if len(rs) < MIN_GROUP or len(rs) > MAX_SHARE * len(rows):
             continue
         best = min(K_GRID, key=lambda k: sum(_ll(shrink(x["p"], x["q"], k), x["won"]) for x in rs))
         out[f] = {"k": best, "n": len(rs), "hit": round(sum(x["won"] for x in rs) / len(rs), 4),
@@ -294,11 +356,23 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
             "lo": round(boots[int(0.025 * BOOT)], 5), "hi": round(boots[int(0.975 * BOOT) - 1], 5)}
 
 
-def fit(ledger, hist, sport: str = "nfl") -> dict:
-    rows = _rows_for_fit(flagged_journal(ledger, hist, sport))
+def fit(ledger, hist, sport: str = "nfl", cal: dict | None = None) -> dict:
+    """``cal`` = the likelycal groups the board applies first (default: its
+    store), so "raw" below means what the board shows after likelycal."""
+    if cal is None:
+        from . import likelycal
+        cal = (likelycal.load().get(sport) or {}).get("groups") or {}
+    flagged = flagged_journal(ledger, hist, sport)
+    rows = _rows_for_fit(flagged, cal)
     ho = held_out(rows) if rows else {"n": 0}
     flags = fit_flags(rows)
-    return {"sport": sport, "n": len(rows), "held_out": ho, "flags": flags,
+    seen = defaultdict(int)
+    for r in rows:
+        for f in r["flags"]:
+            seen[f] += 1
+    return {"sport": sport, "n": len(rows), "held_out": ho, "flags": flags, "after_cal": bool(cal),
+            "too_common": sorted(f for f, n in seen.items() if n > MAX_SHARE * len(rows)),
+            "with_context": sum(1 for r in flagged if r.get("ctx")),
             "passed": bool(ho.get("n") and ho.get("lo", 0) > 0),
             "fitted_at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")}
 
@@ -352,7 +426,12 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
 # --- the command ---------------------------------------------------------------------
 def _report(res: dict) -> None:
     ho = res["held_out"]
-    print(f"\n=== {res['sport'].upper()}: {res['n']} settled picks with a price, read for the scout's flags")
+    print(f"\n=== {res['sport'].upper()}: {res['n']} settled picks with a price, read for the scout's flags "
+          f"({res.get('with_context', 0)} matched to their game)")
+    print("    stacked on the record's calibration (likelycal) already in the store" if res.get("after_cal")
+          else "    no likelycal store yet — measured against the board's raw numbers")
+    for f in res.get("too_common") or []:
+        print(f"    {f:20} up on more than half the picks — that is the whole record, likelycal's job; skipped")
     for f, v in sorted(res["flags"].items(), key=lambda kv: kv[1]["k"]):
         what = "left alone" if v["k"] >= 1.0 else f"pulled {1 - v['k']:.0%} of the way to the price"
         print(f"    {f:20} n {v['n']:4}  said {v['claimed']:.0%}  hit {v['hit']:.0%}  → {what}")
@@ -361,8 +440,12 @@ def _report(res: dict) -> None:
         return
     print(f"    held out (5 folds by game, {ho['games']} games): log loss {ho['raw']} raw → {ho['corrected']} "
           f"corrected; gain {ho['gain']:+.4f}, 95% {ho['lo']:+.4f} to {ho['hi']:+.4f}")
-    print("    PASSES — saved; the board reads it on its next build." if res["passed"]
-          else "    NOT PROVEN — nothing saved; the flags stay notes on the card.")
+    if not res["passed"]:
+        print("    NOT PROVEN — nothing saved; the flags stay notes on the card.")
+    elif res.get("dry_run"):
+        print("    PASSES — dry run, nothing saved; run it without --dry-run to save.")
+    else:
+        print("    PASSES — saved; the board reads it on its next build.")
 
 
 def main(argv=None) -> int:
@@ -378,10 +461,9 @@ def main(argv=None) -> int:
         return 0
     from . import db, ledger
     res = fit(ro(a.ledger or ledger.DEFAULT_DB), ro(a.history_db or db.DEFAULT_DB), a.sport.lower())
+    res["dry_run"] = a.dry_run
     if res["passed"] and not a.dry_run:
         save(res)
-    elif res["passed"]:
-        print("(dry run: it would be saved)")
     _report(res)
     return 0
 

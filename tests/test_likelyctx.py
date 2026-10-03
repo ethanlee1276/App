@@ -87,6 +87,27 @@ def test_the_correction_passes_on_a_real_effect_and_not_on_noise():
     assert not noise["lo"] > 0, noise
 
 
+def test_a_flag_on_most_of_the_record_is_the_record_and_is_not_fitted():
+    rows = _picks(True)
+    for r in rows:
+        r["flags"] = r["flags"] + ["thin_sample"]                   # up on every pick
+    ks = C.fit_flags(rows)
+    assert "thin_sample" not in ks, "the whole record's over-claim is likelycal's, not a flag's"
+    assert "dog_run_over" in ks
+
+
+def test_the_correction_stacks_on_likelycal_and_never_corrects_twice():
+    pick = {"flags": ["dog_run_over"], "p": 0.70, "odds": -120, "won": False, "day": "2026-09-27",
+            "player": "x", "team": "LV", "side": "OVER", "sources": {"board", "bold"}, "ctx": None}
+    q = C.price_chance(-120)
+    cal = {"bold|over": {"k": 0.25}, "list|over": {"k": 1.0}}
+    base = C._rows_for_fit([pick], cal)[0]["p"]
+    assert abs(base - (q + 0.25 * (0.70 - q))) < 1e-9, "the fit starts from what the board shows after likelycal"
+    listed = dict(pick, sources={"list", "board"})
+    assert C._rows_for_fit([listed], cal)[0]["p"] == 0.70, "the list's pick, left alone by likelycal, stays raw"
+    assert C.maker({"board", "matchup"}) == "matchup" and C.maker({"list", "bold"}) == "bold"
+
+
 def test_the_store_round_trips_and_the_board_runs_the_read():
     p = Path(tempfile.mkdtemp()) / "ctx.json"
     C.save({"sport": "nfl", "flags": {"thin_sample": {"k": 0.6, "n": 31, "hit": 0.5, "claimed": 0.6}},
