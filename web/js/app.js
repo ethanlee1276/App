@@ -2986,8 +2986,8 @@ function potdCallStrip(payload) {
    on its dark left. Each league its own (2026-09-27: "we are using an NFL
    render on the CFB page" — and MLB had none); a league without one keeps
    the venue band above. */
-const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball",
-                    nhl: "nhl-ball" };   // the puck at centre ice (Ethan, 2026-10-03)
+// nhl: the puck at centre ice (Ethan, 2026-10-03).
+const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball", nhl: "nhl-ball" };
 function potdBallArt() {
   const stem = POTD_BALL[state.sport];
   if (!stem) return "";
@@ -10041,6 +10041,14 @@ function obStoryHTML(r) {
     icon("warn", 11)} Same story as ${others.length === 1 ? last(others[0]) : `${others.length} others`}</span>`;
 }
 const OB_TIER_WORD = { top: "Top pick", strong: "Strong", look: "Worth a look" };
+/* SCALPY NHL 1.0's grade (Ethan, 2026-10-03): A+ at 75%+ with nothing in
+   the way, A 70–75, B 65–70. Only a league whose model grades its rows
+   carries the field, so every other board draws nothing here. */
+function obScalpyHTML(r) {
+  if (!r.scalpy_grade || r.scalpy_grade === "Pass") return "";
+  const flags = (r.scalpy_flags || []).join("; ");
+  return `<span class="ml-tag" title="${escapeAttr(`Scalpy grade by modeled hit probability${flags ? ` — kept out of A+ by: ${flags}` : ""}`)}">Scalpy ${escapeHtml(r.scalpy_grade)}</span>`;
+}
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
@@ -10056,7 +10064,7 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${tags}${obStoryHTML(r)}</span></button>
+        ${td}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${

@@ -49,7 +49,7 @@ def test_the_book_names_itself_on_the_helmet_inside_the_tools():
 def test_each_league_draws_its_own_ball_and_the_rest_keep_their_venue():
     """2026-09-27: "we are using an NFL render on the CFB page" — and MLB
     had none."""
-    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball",\n                    nhl: "nhl-ball" };' in APP
+    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball", nhl: "nhl-ball" };' in APP
     art = _fn("potdBallArt")
     assert "POTD_BALL[state.sport]" in art and 'return "";' in art
     potd = _fn("renderPickOfTheDay")
