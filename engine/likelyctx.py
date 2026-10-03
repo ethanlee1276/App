@@ -367,11 +367,11 @@ def _report(res: dict) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m engine.likelyctx")
-    ap.add_argument("cmd", choices=("fit", "show"))
-    ap.add_argument("--sport", default="nfl")
-    ap.add_argument("--ledger", default="")
-    ap.add_argument("--history-db", default="")
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("cmd", choices=("fit", "show"), help="fit: measure and save if it holds; show: the store")
+    ap.add_argument("--sport", default="nfl", help="the league to fit (default nfl)")
+    ap.add_argument("--ledger", default="", help="ledger path (default data/ledger.db)")
+    ap.add_argument("--history-db", default="", help="history path (default data/history.db)")
+    ap.add_argument("--dry-run", action="store_true", help="measure and report, save nothing")
     a = ap.parse_args(argv)
     if a.cmd == "show":
         print(json.dumps(load(), indent=1) or "{}")
