@@ -307,6 +307,57 @@ def test_a_game_stored_before_assists_is_read_again():
     assert got == "Leon Draisaitl" and P.backfill(conn, fetch=lambda gid: PBP)["todo"] == 0
 
 
+
+# --- X4: announced starting goalies ---------------------------------------------
+from engine.sources import nhlstarters as ST                     # noqa: E402
+
+
+def _espn(*sides):
+    return {"events": [{"competitions": [{"competitors": [
+        {"team": {"displayName": team}, "probables": probables} for team, probables in sides]}]}]}
+
+
+def test_espn_names_a_goalie_only_where_it_names_one():
+    board = _espn(("Edmonton Oilers", [{"name": "probableStartingGoalie", "athlete": {"displayName": "Calvin Pickard"},
+                                        "status": {"name": "Confirmed"}}]),
+                  ("Calgary Flames", [{"name": "probableStartingGoalie", "athlete": {"displayName": "Dustin Wolf"}}]),
+                  ("Vancouver Canucks", [{"name": "probableStartingPitcher", "athlete": {"displayName": "Nobody"}}]),
+                  ("Seattle Kraken", []))
+    got = ST.parse_probables(board)
+    assert got == {"EDM": {"name": "Calvin Pickard", "status": "confirmed"},
+                   "CGY": {"name": "Dustin Wolf", "status": "probable"}}, got
+    assert ST.parse_probables({}) == {} and ST.tonight("2025-10-30", fetch=lambda d: (_ for _ in ()).throw(
+        __import__("engine.sources.fetch", fromlist=["x"]).DataUnavailable("down"))) == {}
+
+
+def test_an_announced_starter_replaces_the_ten_game_guess():
+    import nhl_build as B
+    def g(date, started):
+        return {"date": date, "toi": 60.0, "started": started, "saves": 25.0, "shots_against": 27.0}
+    days = [f"2025-10-{d:02d}" for d in range(29, 9, -1)]
+    players = {
+        "Stuart Skinner": {"team": "EDM", "position": "G", "games": [g(d, 1) for d in days]},
+        "Calvin Pickard": {"team": "EDM", "position": "G", "games": [g(days[0], 1)] + [g(d, 0) for d in days[1:4]]},
+        "Dustin Wolf": {"team": "CGY", "position": "G", "games": [g(d, i % 2) for i, d in enumerate(days)]},
+        "Dan Vladar": {"team": "CGY", "position": "G", "games": [g(d, 1 - i % 2) for i, d in enumerate(days)]},
+    }
+    games = [{"home": "EDM", "away": "CGY"}]
+    league, teams = {"sv": 0.9}, {}
+    guess = B.scalpy_context(games, players, league, teams, "2025-10-30", starters={})
+    assert guess["EDM"]["starter"] == "Stuart Skinner" and guess["EDM"]["starter_source"] == "recent starts"
+    assert guess["CGY"]["starter_sure"] is False, "a split crease is not settled by the guess"
+    named = B.scalpy_context(games, players, league, teams, "2025-10-30",
+                             starters={"EDM": {"name": "Calvin Pickard", "status": "confirmed"},
+                                       "CGY": {"name": "Dustin Wolf", "status": "probable"}})
+    assert named["EDM"]["starter"] == "Calvin Pickard" and named["EDM"]["starter_sure"] is True
+    assert named["CGY"]["starter_sure"] is True and named["CGY"]["starter_source"] == "probable"
+    unknown = B.scalpy_context(games, players, league, teams, "2025-10-30",
+                               starters={"EDM": {"name": "Somebody New", "status": "confirmed"}})
+    assert unknown["EDM"]["starter"] == "Stuart Skinner", "a name we have never seen is not invented into net"
+    src = open(os.path.join(ROOT, "nhl_build.py"), encoding="utf-8").read()
+    assert "nhlstarters.tonight(date)" in src
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

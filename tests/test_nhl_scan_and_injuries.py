@@ -30,7 +30,7 @@ T = importlib.import_module("test_nhl_board_builds")   # the board fixture, shar
 
 def _built(injuries=None):
     conn = T._history()
-    out, slate = B.build("2025-10-30", T.TONIGHT, conn, attach_odds=T._odds, injuries=injuries or {})
+    out, slate = B.build("2025-10-30", T.TONIGHT, conn, attach_odds=T._odds, injuries=injuries or {}, starters={})
     return out, slate
 
 

@@ -130,8 +130,11 @@ badge until the map is corrected):
 cd /srv/qellys && sudo -u qellys python3 assets.py --audit --sport nhl
 ```
 
-**H11. Shot quality and power-play time: what reads?** (paste the
-play-by-play and power-play ice time lines). The probe now opens one
+**H11. Shot quality, power-play time, starting goalies: what reads?**
+(paste the play-by-play, power-play ice time and starting goalies lines).
+The starting-goalies line asks ESPN's scoreboard for today's announced
+starters. On a morning before any team has announced, it lists what a side
+carries instead, which tells me the field's name. The probe now opens one
 game's play-by-play and reports its attempts, goals, named shooters and the
 first shot's type and distance. It also asks the league's stats host for
 power-play ice time. If that line says ok, I can wire minutes on the power
@@ -164,12 +167,22 @@ used and nothing is journaled. It should say `Shot quality: on`:
 cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
 ```
 
+**H14. Later — once NHL picks have graded for a couple of weeks.** This
+makes the NHL Most Likely chances honest from their own record. It is the
+same fit as M1 and saves only if it scores better on games it never
+learned from. It needs 40 settled picks in a group before it touches that
+group:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl
+```
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H13** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos, shots + expected goals.
+0. **H1–H13** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos, shots + expected goals. (H14 waits for graded picks.)
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).

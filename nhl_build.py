@@ -169,8 +169,12 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     # THE SCALPY READ, in its output order: goalie impact, ice time, game
     # script, then the risk factors.
     if goalie:
-        reasons.append(f"Probable starter: {me.get('starter_share', 0):.0%} of {prop.team}'s last "
-                       f"{M.STARTER_WINDOW} starts — not confirmed this early")
+        src = me.get("starter_source") or "recent starts"
+        if src == "recent starts":
+            reasons.append(f"Probable starter: {me.get('starter_share', 0):.0%} of {prop.team}'s last "
+                           f"{M.STARTER_WINDOW} starts — not confirmed yet")
+        else:
+            reasons.append(f"Starter {'confirmed' if src == 'confirmed' else 'named probable'} by {prop.team} (ESPN)")
     elif them.get("starter"):
         sv = them.get("sv")
         if them.get("starter_sure") and sv is not None:
@@ -433,7 +437,7 @@ def build_slate(games: list[dict], players: dict, date: str, rosters: dict | Non
 
 
 def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, date: str,
-                   xs: dict | None = None) -> dict:
+                   xs: dict | None = None, starters: dict | None = None) -> dict:
     """SCALPY NHL 1.0's per-team read, in its order of importance: the
     starting goalie first (who, how sure, how good), then rest, then the
     expected game. {team: {...}}.
@@ -441,8 +445,16 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
     ``xs`` is engine.nhl.xg.board_summaries: with it each starter also
     carries goals saved above expected ("gsax") and his skill against
     chances ("gskill", goals allowed ÷ expected, regressed), beside the
-    team's pooled goaltending ("team_gskill")."""
+    team's pooled goaltending ("team_gskill").
+
+    ``starters`` is engine.sources.nhlstarters.tonight — the goalie each
+    team has announced, as ESPN carries it. A named goalie we know on that
+    team replaces the ten-game guess: "confirmed" settles him outright, a
+    plain probable unless he started last night. ``starter_source`` says
+    which ("confirmed", "probable", or "recent starts")."""
     from engine.nhl import xg as X
+    from engine.sources.oddsapi import normalize_name
+    goalies_by_key = {(normalize_name(n), p["team"]): n for n, p in players.items() if p["position"] == "G"}
     import datetime as _dt
     try:
         yday = (_dt.date.fromisoformat(date) - _dt.timedelta(days=1)).isoformat()
@@ -463,13 +475,25 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
     for g in games:
         for team, opp, home in ((g["home"], g["away"], True), (g["away"], g["home"], False)):
             starter = M.probable_starter(players, team)
-            share = M.starter_share(players, team, starter) if starter else 0.0
             b2b = team in played_yday
+            named = (starters or {}).get(team) or {}
+            known = goalies_by_key.get((normalize_name(named.get("name") or ""), team))
+            if known:
+                starter, source = known, named.get("status") or "probable"
+            else:
+                source = "recent starts"
+            share = M.starter_share(players, team, starter) if starter else 0.0
             # THE BACK-TO-BACK GOALIE RULE: the man who started last night
-            # rarely starts tonight, so "probable" is not probable at all.
-            sure = bool(starter) and share >= M.STARTER_SHARE and not (b2b and starter in started_yday)
+            # rarely starts tonight, so "probable" is not probable at all —
+            # unless his team has confirmed him.
+            if source == "confirmed":
+                sure = True
+            elif source == "probable":
+                sure = not (b2b and starter in started_yday)
+            else:
+                sure = bool(starter) and share >= M.STARTER_SHARE and not (b2b and starter in started_yday)
             ctx[team] = {"opponent": opp, "home": home, "starter": starter, "starter_share": round(share, 2),
-                         "starter_sure": sure, "b2b": b2b,
+                         "starter_sure": sure, "starter_source": source, "b2b": b2b,
                          "sv": M.regressed_sv(players.get(starter), league) if starter else None,
                          "raw_sv": M.raw_sv(players.get(starter)) if starter else None,
                          "team_sv": M.team_sv(players, team, league),
@@ -582,9 +606,12 @@ def empty_board(date: str) -> dict:
             "counts": {"props_analyzed": 0, "recommended": 0}, "games": []}
 
 
-def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict | None = None) -> tuple[dict, _Slate | None]:
+def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict | None = None,
+          starters: dict | None = None) -> tuple[dict, _Slate | None]:
     """The board for one date. ``attach_odds(slate)`` lands the prices (the
-    Odds API in production, fixture lines in the tests); None = no prices."""
+    Odds API in production, fixture lines in the tests); None = no prices.
+    ``starters`` = announced goalies (engine/sources/nhlstarters); None
+    reads ESPN, {} uses the ten-game guess alone."""
     from engine.db import player_assets
     from engine.seasons import recent_seasons
     out = empty_board(date)
@@ -618,7 +645,11 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     xs = X.board_summaries(conn, seasons=seasons, window=M.RECENT_GAMES)
     M.attach_xg(teams, (xs or {}).get("teams"))
     out["shot_quality"] = bool(xs)
-    ctx = scalpy_context(games, players, league, teams, date, xs=xs)
+    if starters is None:
+        from engine.sources import nhlstarters
+        starters = nhlstarters.tonight(date)
+    out["starters_announced"] = len(starters)
+    ctx = scalpy_context(games, players, league, teams, date, xs=xs, starters=starters)
     assets = player_assets(conn, SPORT)
     recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx, xs=xs)
     for r in recs:
@@ -855,6 +886,8 @@ def main() -> None:
     if games:
         print(f"  Odds: {out.get('odds_note') or 'none'} · {c.get('props_built', 0)} props built from history")
         rs = out.get("recommendations") or []
+        print(f"  Starting goalies: {out.get('starters_announced', 0)} of {2 * len(games)} named by their teams "
+              f"(ESPN); the rest read from recent starts")
         print("  Shot quality: " + (
             f"on — {sum(1 for r in rs if any('Shot quality' in x for x in r.get('reasons') or []))} of "
             f"{len(rs)} priced rows read their shooter's expected goals"

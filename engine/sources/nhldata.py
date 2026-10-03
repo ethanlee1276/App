@@ -440,6 +440,24 @@ def probe(date: str = "2025-10-08") -> list[dict]:
                                if rows else "no rows")})
     except DataUnavailable as exc:
         out.append({"label": "power-play ice time", "ok": False, "detail": str(exc)})
+    # ANNOUNCED STARTING GOALIES (X4): ESPN's scoreboard for today, since
+    # starters are only named on a game day. Names the sides it found and,
+    # when none, what a competitor carries — the field may simply be empty
+    # before teams announce.
+    try:
+        import datetime as _dt
+        from . import nhlstarters
+        today = _dt.date.today().isoformat()
+        board = nhlstarters.fetch_scoreboard(today, ttl=0)
+        named = nhlstarters.parse_probables(board)
+        comp = next((c for ev in board.get("events") or [] for c in (ev.get("competitions") or [])), {})
+        side = (comp.get("competitors") or [{}])[0]
+        out.append({"label": f"starting goalies {today}", "ok": bool(named),
+                    "detail": (", ".join(f"{t} {v['name']} ({v['status']})" for t, v in sorted(named.items()))
+                               if named else f"{len(board.get('events') or [])} game(s), none named yet; "
+                               f"a side carries: {', '.join(sorted(side)[:16])}")})
+    except DataUnavailable as exc:
+        out.append({"label": "starting goalies", "ok": False, "detail": str(exc)})
     return out
 
 
