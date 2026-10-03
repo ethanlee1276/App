@@ -157,7 +157,7 @@ def test_nfl_takes_the_regular_season_only_and_only_unplayed():
 
 
 def test_every_league_has_an_adapter():
-    assert set(FD.FIXTURES) == {"mlb", "nba", "nfl", "cfb"}
+    assert set(FD.FIXTURES) == {"mlb", "nba", "nfl", "cfb", "nhl"}
 
 
 # --- never take the sport down ---------------------------------------------
@@ -372,7 +372,7 @@ def test_a_build_cannot_spend_by_accident():
 
 def test_every_futures_sport_has_a_key():
     from engine.sources.oddsapi import FUTURES_KEYS
-    assert set(FUTURES_KEYS) == {"nfl", "mlb", "nba", "cfb"}
+    assert set(FUTURES_KEYS) == {"nfl", "mlb", "nba", "cfb", "nhl"}
 
 
 def test_the_best_price_for_the_bettor_wins():

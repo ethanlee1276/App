@@ -65,7 +65,7 @@ HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 # --- the build --------------------------------------------------------------
 def test_all_four_sports_build():
     import futures_build
-    assert set(futures_build.SPORTS) == {"nfl", "mlb", "cfb", "nba"}
+    assert set(futures_build.SPORTS) == {"nfl", "mlb", "cfb", "nba", "nhl"}
 
 
 def test_college_football_has_no_season_totals_on_purpose():
@@ -74,7 +74,7 @@ def test_college_football_has_no_season_totals_on_purpose():
     do, so the market list is empty rather than optimistic."""
     import futures_build
     assert futures_build.SEASON_MARKETS["cfb"] == []
-    for sport in ("mlb", "nfl", "nba"):
+    for sport in ("mlb", "nfl", "nba", "nhl"):
         assert futures_build.SEASON_MARKETS[sport], sport
 
 

@@ -39,7 +39,7 @@ from .seasons import season_of
 from .teamrates import compute_team_ratings
 
 #: Games after which this season and last carry equal weight.
-PRIOR_GAMES = {"nfl": 6, "cfb": 5, "mlb": 40, "nba": 20, "wnba": 12}
+PRIOR_GAMES = {"nfl": 6, "cfb": 5, "mlb": 40, "nba": 20, "wnba": 12, "nhl": 20}
 
 #: How much of last season's rating survives into the prior. Rosters turn
 #: over; leaning on a stale number at full strength is how a preseason
@@ -64,6 +64,25 @@ def blended_ratings(conn, sport: str, season: int) -> tuple[dict, float, int]:
         b = (prior[team].net * PRIOR_DECAY) if team in prior else 0.0
         out[team] = w * a + (1.0 - w) * b
     return out, round(1.0 - w, 3), played
+
+
+def points_banked(conn, sport: str, season: int) -> tuple[dict, dict]:
+    """({team: points}, {team: overtime losses}) for a points league —
+    two for a win, one for a loss past regulation — so the season starts
+    from the table that actually seeds it."""
+    from . import standings
+    try:
+        table = standings.compute(conn, sport, season=season)
+    except Exception:
+        return {}, {}
+    pts, otl = {}, {}
+    for group in table.get("groups", []) or []:
+        for row in group.get("rows", []) or []:
+            t = row.get("team")
+            if t:
+                o = int(row.get("otl", 0) or 0)
+                pts[t], otl[t] = 2 * int(row.get("wins", 0)) + o, o
+    return pts, otl
 
 
 def records(conn, sport: str, season: int, conferences: dict | None = None
@@ -181,8 +200,16 @@ def _cfb_fixtures(season: int) -> list[Fixture]:
     return out
 
 
+def _nhl_fixtures(season: int) -> list[Fixture]:
+    """Every unplayed NHL game, from each club's season page on the
+    league's own keyless host (one call a club, cached a day)."""
+    from .divisions import MAPS
+    from .sources import nhldata
+    return [Fixture(h, a) for h, a in nhldata.remaining_fixtures(season, MAPS["nhl"])]
+
+
 FIXTURES = {"mlb": _mlb_fixtures, "nba": _nba_fixtures,
-            "nfl": _nfl_fixtures, "cfb": _cfb_fixtures}
+            "nfl": _nfl_fixtures, "cfb": _cfb_fixtures, "nhl": _nhl_fixtures}
 
 
 def build(conn, sport: str, season: int | None = None,
@@ -350,10 +377,14 @@ def project(conn, sport: str, season: int | None = None, trials: int = 20000,
     credit every time it rebuilt would be exactly the failure that burned
     20,000 of them.
     """
-    from .futures import simulate
+    from .futures import POINTS_SPORTS, simulate
     data = build(conn, sport, season=season, conferences=conferences)
+    pts, otl = points_banked(conn, sport, data["season"]) if sport in POINTS_SPORTS else ({}, {})
     out = simulate(sport, data["ratings"], data["records"], data["fixtures"],
-                   trials=trials)
+                   trials=trials, banked_points=pts or None)
+    for row in out["teams"]:
+        if row["team"] in otl:
+            row["otl"] = otl[row["team"]]
     out.update(season=data["season"], note=data["note"],
                prior_share=data["prior_share"],
                games_played=data["games_played"],

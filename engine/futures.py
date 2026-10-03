@@ -63,12 +63,20 @@ from .divisions import group_of, has_divisions
 #: elsewhere in this repo for the game-bet models and reused rather than
 #: re-derived, so a futures number and a moneyline cannot disagree about
 #: what home advantage is worth.
-HOME_EDGE = {"nfl": 1.8, "mlb": 0.20, "nba": 2.4, "wnba": 2.2, "cfb": 2.5}
+HOME_EDGE = {"nfl": 1.8, "mlb": 0.20, "nba": 2.4, "wnba": 2.2, "cfb": 2.5, "nhl": 0.20}
 
 #: Margin-to-probability slope. A rating gap of this many points is one
 #: logistic unit — i.e. about 73% to win. Per sport because a run and a
 #: point are not the same size of thing.
-MARGIN_SCALE = {"nfl": 7.0, "mlb": 1.35, "nba": 8.5, "wnba": 8.0, "cfb": 10.0}
+MARGIN_SCALE = {"nfl": 7.0, "mlb": 1.35, "nba": 8.5, "wnba": 8.0, "cfb": 10.0, "nhl": 1.4}
+
+# Hockey (2026-10-03). A goal of margin is a big thing: a club a goal a
+# game better than an average one wins about two in three, which a slope of
+# 1.4 gives; home ice is worth about 0.2 of a goal (home teams win ~54%).
+#: Leagues whose table is POINTS, not wins: two for a win, one for a loss
+#: past regulation. About OT_SHARE of NHL games go past sixty minutes.
+POINTS_SPORTS = {"nhl"}
+OT_SHARE = 0.23
 
 
 @dataclass(frozen=True)
@@ -94,7 +102,13 @@ SHAPES = {
                        series_len=5),
     "nba": LeagueShape("NBA", berths=8, divisions_seed=False, series_len=7),
     "wnba": LeagueShape("WNBA", berths=4, divisions_seed=False, series_len=5),
+    # Eight a conference: the top three of each division, then two wild
+    # cards (``_seed_field``'s hockey branch), every round best of seven.
+    "nhl": LeagueShape("NHL", berths=8, divisions_seed=True, series_len=7),
 }
+
+#: Division places that make the NHL playoffs before the wild cards.
+NHL_DIVISION_BERTHS = 3
 
 
 @dataclass
@@ -158,6 +172,16 @@ def _seed_field(shape: LeagueShape, table: dict, teams: list[str],
     def rec(t):                       # wins, then a coin flip for ties
         return (-table[t], rng.random())
 
+    if sport == "nhl" and has_divisions(sport):
+        # The top three of each division, then the best two left over —
+        # seeded by points for the bracket (the league's own bracket keeps
+        # division pairings; seeding by points is the approximation here).
+        by_div: dict[str, list[str]] = {}
+        for t in teams:
+            by_div.setdefault(group_of(sport, t)[1], []).append(t)
+        tops = [t for v in by_div.values() for t in sorted(v, key=rec)[:NHL_DIVISION_BERTHS]]
+        wild = sorted((t for t in teams if t not in set(tops)), key=rec)[:max(0, shape.berths - len(tops))]
+        return sorted(tops + wild, key=rec)[:shape.berths]
     if shape.divisions_seed and has_divisions(sport):
         by_div: dict[str, list[str]] = {}
         for t in teams:
@@ -216,7 +240,7 @@ def _run_bracket(sport: str, shape: LeagueShape, field: list[str],
 
 def simulate(sport: str, ratings: dict, records: dict,
              fixtures: list, trials: int = 20000,
-             seed: int | None = 7) -> dict:
+             seed: int | None = 7, banked_points: dict | None = None) -> dict:
     """Play the rest of the season ``trials`` times.
 
     ``ratings``  {team: net rating}
@@ -248,6 +272,13 @@ def simulate(sport: str, ratings: dict, records: dict,
     second is uncertain. It would also take a four-sport build from about 15
     seconds to 72. If these numbers ever need revisiting, revisit them when
     the RATINGS get better, not when the CPU does.
+
+    A POINTS LEAGUE (POINTS_SPORTS — hockey): the table that seeds the
+    playoffs is points, two for a win and one for the loser of a game that
+    went past regulation (OT_SHARE of them). ``banked_points`` {team:
+    points so far} carries the overtime losses already banked; wins are
+    still counted and reported, and each team also gets projected points
+    with their 10th-90th band.
     """
     rng = random.Random(seed)
     played_n = {t: sum(records.get(t, (0, 0))) for t in records}
@@ -271,7 +302,10 @@ def simulate(sport: str, ratings: dict, records: dict,
     fixtures = [f for f in fixtures if f.home in set(teams) and f.away in set(teams)]
     shape = SHAPES.get(sport) or LeagueShape(sport.upper())
 
+    pts_league = sport in POINTS_SPORTS
     base = {t: records.get(t, (0, 0))[0] for t in teams}
+    base_pts = {t: (banked_points or {}).get(t, 2 * base[t]) for t in teams}
+    pts_seen: dict[str, list[int]] = {t: [] for t in teams}
     rem = {t: 0 for t in teams}
     for f in fixtures:
         rem[f.home] = rem.get(f.home, 0) + 1
@@ -295,14 +329,20 @@ def simulate(sport: str, ratings: dict, records: dict,
     n_title = {t: 0 for t in teams}
 
     for _ in range(trials):
-        table = dict(base)
+        wins = dict(base)
+        pts = dict(base_pts)
         for home, away, p in probs:
-            if rng.random() < p:
-                table[home] += 1
-            else:
-                table[away] += 1
+            won, lost = (home, away) if rng.random() < p else (away, home)
+            wins[won] += 1
+            if pts_league:
+                pts[won] += 2
+                if rng.random() < OT_SHARE:
+                    pts[lost] += 1
         for t in teams:
-            wins_seen[t].append(table[t])
+            wins_seen[t].append(wins[t])
+            if pts_league:
+                pts_seen[t].append(pts[t])
+        table = pts if pts_league else wins
 
         # Division winners — reported for every league that has divisions,
         # even where they no longer gate a playoff seed.
@@ -334,9 +374,15 @@ def simulate(sport: str, ratings: dict, records: dict,
             n_title[champs[0]] += 1
 
     out = []
+    extra: dict[str, dict] = {}
     for t in teams:
         w, l = records.get(t, (0, 0))
         seq = sorted(wins_seen[t])
+        if pts_league:
+            ps = sorted(pts_seen[t])
+            extra[t] = {"points": base_pts[t], "proj_points": round(sum(ps) / len(ps), 1),
+                        "proj_points_lo": ps[int(0.10 * (len(ps) - 1))],
+                        "proj_points_hi": ps[int(0.90 * (len(ps) - 1))]}
         out.append(TeamOutlook(
             team=t,
             conference=conf_of[t],
@@ -354,7 +400,8 @@ def simulate(sport: str, ratings: dict, records: dict,
     out.sort(key=lambda o: (-o.p_title, -o.p_conference, -o.proj_wins))
     return {
         "sport": sport, "trials": trials,
-        "teams": [o.as_dict() for o in out],
+        "teams": [dict(o.as_dict(), **extra.get(o.team, {})) for o in out],
+        "points_league": pts_league,
         "divisions_seed": shape.divisions_seed,
         "berths": shape.berths,
         # How much of this rests on games that have not been played. 1.0 in

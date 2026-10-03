@@ -464,6 +464,38 @@ def probe(date: str = "2025-10-08") -> list[dict]:
 STATS_API = "https://api.nhle.com/stats/rest/en"
 
 
+def fetch_club_season(team: str, season: int, ttl: int = 86400) -> dict:
+    """One club's whole regular season (``season`` = the year it starts)."""
+    code = f"{season}{season + 1}"
+    return fetch_json(f"{API}/club-schedule-season/{team}/{code}", f"nhl_club_{team}_{code}.json", ttl=ttl)
+
+
+#: States the league marks a game finished with.
+FINAL_STATES = {"OFF", "FINAL"}
+
+
+def remaining_fixtures(season: int, teams, fetch=None) -> list[tuple[str, str]]:
+    """Every unplayed regular-season game as (home, away), from each club's
+    season schedule — deduplicated by game id, since each game appears on
+    both clubs' pages. A club whose page will not load is skipped (its
+    games still arrive from its opponents' pages)."""
+    fetch = fetch or fetch_club_season
+    seen: dict = {}
+    for team in sorted(teams):
+        try:
+            payload = fetch(team, season)
+        except DataUnavailable:
+            continue
+        for g in (payload or {}).get("games") or []:
+            if int(g.get("gameType") or 0) != 2 or str(g.get("gameState") or "") in FINAL_STATES:
+                continue
+            home = str(((g.get("homeTeam") or {}).get("abbrev")) or "")
+            away = str(((g.get("awayTeam") or {}).get("abbrev")) or "")
+            if home and away and g.get("id"):
+                seen[g["id"]] = (home, away)
+    return list(seen.values())
+
+
 def fetch_pp_toi(date: str, ttl: int = 86400) -> dict:
     """Every skater's ice time by strength for one date's games, from the
     league's stats host (probe-only until its shape is confirmed on the box)."""

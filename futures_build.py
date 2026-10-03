@@ -31,7 +31,7 @@ from engine import db as hist_db                        # noqa: E402
 from engine import futuresdata as FD                    # noqa: E402
 from engine import gate
 
-SPORTS = ("nfl", "mlb", "cfb", "nba")
+SPORTS = ("nfl", "mlb", "cfb", "nba", "nhl")
 
 #: Season-total markets worth publishing per sport — the ones a book posts
 #: futures on and our logs already carry. CFB is absent on purpose: there
@@ -43,6 +43,7 @@ SEASON_MARKETS = {
     "nfl": [("rush_yds", "Rushing yards"), ("rec_yds", "Receiving yards"),
             ("pass_yds", "Passing yards"), ("receptions", "Receptions")],
     "nba": [("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists")],
+    "nhl": [("goals", "Goals"), ("points", "Points"), ("assists", "Assists"), ("saves", "Saves (G)")],
     "cfb": [],
 }
 

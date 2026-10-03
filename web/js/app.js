@@ -3792,9 +3792,12 @@ function futuresTeamTable(d) {
     return `<div class="fx-row">
       <span class="fx-team">${escapeHtml(t.team)}</span>
       <span class="fx-grp">${escapeHtml(t.conference || "")}${t.division ? " " + escapeHtml(t.division) : ""}</span>
-      <span class="fx-rec">${t.wins}-${t.losses}</span>
-      <span class="fx-proj">${t.proj_wins.toFixed(1)}
-        <span class="fx-band">${t.proj_wins_lo}–${t.proj_wins_hi}</span></span>
+      <span class="fx-rec">${t.wins}-${t.losses}${t.otl != null ? "-" + t.otl : ""}</span>
+      ${d.points_league && t.proj_points != null
+        ? `<span class="fx-proj">${Number(t.proj_points).toFixed(0)}
+        <span class="fx-band">${t.proj_points_lo}–${t.proj_points_hi}</span></span>`
+        : `<span class="fx-proj">${t.proj_wins.toFixed(1)}
+        <span class="fx-band">${t.proj_wins_lo}–${t.proj_wins_hi}</span></span>`}
       <span class="fx-div">${fxPct(t.p_division)}</span>
       <span class="fx-po">${fxPct(t.p_playoffs)}</span>
       <span class="fx-ttl">${fxPct(t.p_title)}</span>
@@ -3804,12 +3807,12 @@ function futuresTeamTable(d) {
   }).join("");
   return `
     <div class="section-title">Season outlook
-      <span class="sub">— projected wins with a 10th–90th band, and how often each
+      <span class="sub">— projected ${d.points_league ? "points" : "wins"} with a 10th–90th band, and how often each
       finish happens across ${(d.trials || 0).toLocaleString()} simulated seasons.</span></div>
     <div class="card fx-table${priced ? " priced" : ""}" style="padding:0">
       <div class="fx-row fx-head">
         <span class="fx-team">Team</span><span class="fx-grp">Group</span>
-        <span class="fx-rec">W-L</span><span class="fx-proj">Proj</span>
+        <span class="fx-rec">${d.points_league ? "W-L-OT" : "W-L"}</span><span class="fx-proj">${d.points_league ? "Pts" : "Proj"}</span>
         <span class="fx-div">Div</span><span class="fx-po">Playoff</span>
         <span class="fx-ttl">Title</span>
         ${priced ? `<span class="fx-odds">Book</span><span class="fx-edge">Edge</span>` : ""}

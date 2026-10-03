@@ -607,8 +607,9 @@ SPORT_CONFIG = {
 # Futures live under their OWN sport keys, not as a market on the league's
 # board — "who wins the World Series" is a different endpoint from "tonight's
 # Mets game". One market, one region, so `_classify` bills each of these at
-# ONE credit per call. Four sports pulled once a week is four credits a week,
-# about seventeen a month, against a 20,000-credit plan.
+# ONE credit per call. Five sports pulled once a week is five credits a week,
+# about twenty-two a month, against a 20,000-credit plan. Hockey (2026-10-03)
+# rides the same weekly pull, last in line like every other NHL spend.
 #
 # That cheapness is the entire reason this is safe to automate, and it is
 # also fragile: adding a second market or a second region to this call
@@ -619,6 +620,7 @@ FUTURES_KEYS = {
     "mlb": "baseball_mlb_world_series_winner",
     "nba": "basketball_nba_championship_winner",
     "cfb": "americanfootball_ncaaf_championship_winner",
+    "nhl": "icehockey_nhl_championship_winner",
 }
 
 #: A week. Futures are the slowest market a book runs — a division number
