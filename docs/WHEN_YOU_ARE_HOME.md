@@ -14,47 +14,28 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL Most Likely — run these when you're home (2026-10-04, round 5)
+### NFL Most Likely — run these now (2026-10-04, round 6)
 
-Round 4: the spread fit said every position's games run 20-40% wider than
-the model thinks. But it judged that on lines far from a player's
-average, and the record disagrees where it can speak (receiver overs
-are hitting MORE than we say). So the widths it saved are switched off
-by the new code, and it re-measures only on lines near the projection,
-where a book actually hangs them.
+Round 5: near the line, history still says widen every position, but
+your record says receivers are NOT over-sure (their overs hit 67% where we
+said 63%), and the record's correction can only ever lower a chance — it
+could never undo a width that made receivers too shy. So the record now
+gets a veto: a position is widened only if history proves it AND its own
+graded picks are not already hitting at or above what we said. The store
+from round 5 is switched off by the new code until you re-run this.
 
 First make sure the box has the new code. This should print a line saying
-"judge the spread where books hang the line", or anything newer:
+"the record can veto a spread", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**N1. Re-measure the spreads near the line** (paste; a few minutes). It
-saves a width for a position only if it predicted held-out seasons better
-on book-like lines:
+**N1. Re-measure with the record's veto** (paste; a few minutes):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
 ```
-
-**N2. Make the board learn again** (paste):
-
-```
-cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
-```
-
-What changes on the board:
-- No pick comes off for losing alone. The record's correction lowers its
-  chance, which can move it down a tier, and it stays.
-- First game back after missing his team's last game: his overs and his
-  touchdown chance are lowered by what five seasons measured, never
-  below the book's price.
-- If N1 adopts a width for a position, that position's chances on both
-  sides come closer to 50%, and the card's projection notes say so.
-- A pick comes off only when our record proves picks like it lose AND the
-  offense-vs-defense matchup leans the other way. It goes in a closed
-  **Held back** section with the reason, and is still graded.
 
 To undo: `sudo -u qellys rm /srv/qellys/data/models/position_spread.json`
 (widths), `.../likely_calibration.json` (record) or

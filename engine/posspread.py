@@ -20,6 +20,10 @@ would hang near him (yardagefit.MARKETS, inside LINE_LO..LINE_HI of the
 mean). For each position and market, one width multiplier m (WIDTH_GRID)
 is chosen by log loss on the over/under outcome.
 
+THE RECORD CAN VETO (record_veto, added 2026-10-04): a position whose
+graded Most Likely picks already hit at or above their claim on a side
+(VETO_N or more) is not widened, whatever history says.
+
 THE BAR, WRITTEN BEFORE ANY BOX RUN. Leave one season out: m fitted on
 the other seasons, scored on the held-out one, against m = 1. A position
 and market adopts its m only if held-out log loss improves POOLED and in
@@ -61,8 +65,8 @@ MIN_SEASONS_BETTER = 4
 #: have made a well-calibrated group worse. So the width is judged only on
 #: lines near the projection. Written before the re-run.
 NEAR_LO, NEAR_HI = 0.75, 1.33
-#: Stores written by the far-tail version are never read.
-STORE_VERSION = 2
+#: Stores written before the record could veto (versions 1-2) are never read.
+STORE_VERSION = 3
 
 
 def _store() -> Path:
@@ -160,6 +164,41 @@ def judge(data: list) -> dict:
             "gain": round((pooled_raw - pooled_fit) / n, 5) if n else 0.0, "passed": passed}
 
 
+#: A side of the record this deep that already hits at or above its claim
+#: vetoes widening that position (`record_veto`).
+VETO_N = 30
+
+
+def record_veto(position: str, report: dict | None = None) -> str | None:
+    """Why the board's own record forbids widening this position, or None.
+
+    Written 2026-10-04, after the near-line re-run adopted x1.25-x1.50 for
+    receivers while their overs were hitting 67% where we said 63% (94
+    picks). Widening pulls every chance toward 50%; the record's correction
+    (engine/likelycal) can only ever LOWER a chance, never raise it — so a
+    width that makes an honest group shy is a mistake nothing downstream can
+    undo. History proposes; the record of the picks we actually make can
+    say no. It reads engine/boardlearn's last report (position by side)."""
+    if report is None:
+        from . import boardlearn
+        report = boardlearn.report()
+    for s in ((report.get("nfl") or {}).get("slices") or {}).get("position") or []:
+        pos, _, side = str(s.get("key", "")).partition(" · ")
+        if pos == position and s.get("n", 0) >= VETO_N and s.get("hit", 0) >= s.get("said", 1):
+            return (f"the record's {position} {side}s hit {s['hit']:.0%} of {s['n']} where we said "
+                    f"{s['said']:.0%} — not over-sure, so not widened")
+    return None
+
+
+def apply_vetoes(res: dict, report: dict | None = None) -> dict:
+    """Mark every passing width the record vetoes as not passed, with why."""
+    for k, v in res.items():
+        why = record_veto(k.split("|")[0], report) if v.get("passed") else None
+        if why:
+            v["passed"], v["veto"] = False, why
+    return res
+
+
 def measure(conn) -> dict:
     """{"POS|market": judge(...)} for every position and market."""
     from .yardagefit import rows as yrows
@@ -173,7 +212,7 @@ def measure(conn) -> dict:
                 by[p].append(r)
         for p, rs in by.items():
             out[f"{p}|{market}"] = judge(samples(rs, market))
-    return out
+    return apply_vetoes(out)
 
 
 def save(res: dict, path=None) -> None:
@@ -195,7 +234,8 @@ def main(argv=None) -> int:
     from . import db
     res = measure(db.connect())
     for k, v in sorted(res.items()):
-        verdict = f"ADOPT ×{v['m']:.2f}" if v["passed"] else "keep ×1.00"
+        verdict = (f"ADOPT ×{v['m']:.2f}" if v["passed"] else
+                   f"keep ×1.00 ({v['veto']})" if v.get("veto") else "keep ×1.00")
         print(f"  {k:16} n {v['n']:6}  fitted ×{v['m']:.2f}  held-out gain {v['gain']:+.5f}  "
               f"better in {v['better']}/{len(v['seasons'])} seasons  → {verdict}")
     if not a.dry_run:

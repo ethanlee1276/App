@@ -65,6 +65,21 @@ def test_the_projection_widens_that_position_only_and_says_so():
     assert "adj_std *= _w" in src[i:i + 300] and "Spread:" in src[i:i + 500]
 
 
+def test_the_record_vetoes_widening_a_position_it_shows_is_not_over_sure():
+    rep = {"nfl": {"slices": {"position": [
+        {"key": "WR · over", "n": 94, "hit": 0.67, "said": 0.63},
+        {"key": "WR · under", "n": 28, "hit": 0.43, "said": 0.68},
+        {"key": "TE · over", "n": 53, "hit": 0.47, "said": 0.64},
+        {"key": "RB · under", "n": 15, "hit": 0.70, "said": 0.63}]}}}
+    res = {"WR|rec_yds": {"m": 1.5, "passed": True}, "TE|rec_yds": {"m": 1.4, "passed": True},
+           "RB|rush_yds": {"m": 1.45, "passed": True}, "RB|rec_yds": {"m": 1.0, "passed": False}}
+    P.apply_vetoes(res, rep)
+    assert res["WR|rec_yds"]["passed"] is False and "67%" in res["WR|rec_yds"]["veto"]
+    assert res["TE|rec_yds"]["passed"] is True, "tight ends over-claim: history's width stands"
+    assert res["RB|rush_yds"]["passed"] is True, "fifteen picks are too few to veto"
+    assert "veto" not in res["RB|rec_yds"]
+
+
 def test_only_lines_near_his_projection_are_scored():
     rows = [{"season": 2025, "mu": 40.0, "form_sd": 12.0, "actual": 50.0}]
     lines = sorted(line for _s, _sd, _mu, line, _h in P.samples(rows, "rec_yds"))
