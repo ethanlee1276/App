@@ -33503,7 +33503,26 @@ function teamDepthHTML(d) {
           ? `<td><button type="button" class="tm-name" data-player-page="${escapeAttr(slugify(r.names[i]))}">${
               escapeHtml(r.names[i])}</button>${teamInjMark(r.names[i])}</td>` : "<td></td>").join("")}</tr>`).join("")}
     </tbody></table></div>
+    ${teamLinesHTML(pub && pub.lines)}
     ${teamInjKeyHTML(d.sport)}`;
+}
+
+/* Hockey's lines and pairs, read off the club's newest shift charts
+   (engine/nhl/lines): who actually played together, with how much of
+   their ice they shared — a settled line reads high, a shuffled one low. */
+function teamLinesHTML(ln) {
+  if (!ln || !((ln.forwards || []).length || (ln.defence || []).length)) return "";
+  const grp = (rows, tag) => rows.map((g, i) => `<tr><td class="tm-pos">${tag}${i + 1}</td>${
+    (g.players || []).map((n) => `<td><button type="button" class="tm-name" data-player-page="${
+      escapeAttr(slugify(n))}">${escapeHtml(n)}</button>${teamInjMark(n)}</td>`).join("")}${
+    tag === "D" ? "<td></td>" : ""}<td class="mini">${Math.round(Number(g.together || 0) * 100)}%</td></tr>`).join("");
+  return `<div class="section-title">Lines and pairs
+      <span class="sub">— who played together, off the club’s last ${ln.games || 1} game${
+        (ln.games || 1) === 1 ? "" : "s"} of shift charts${ln.as_of ? ` (as of ${escapeHtml(String(ln.as_of))})` : ""};
+      the last column is how much of their ice they shared.</span></div>
+    <div class="card tm-depth"><table class="rank-table"><thead><tr><th>Unit</th><th>Skater</th><th></th><th></th><th>Together</th></tr></thead><tbody>
+      ${grp(ln.forwards || [], "F")}${grp(ln.defence || [], "D")}
+    </tbody></table></div>`;
 }
 
 /* The injury board's rows for this team — ESPN files them under the

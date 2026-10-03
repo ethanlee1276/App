@@ -606,12 +606,72 @@ def empty_board(date: str) -> dict:
             "counts": {"props_analyzed": 0, "recommended": 0}, "games": []}
 
 
+#: Newest games read per team for its lines, and where they are kept for
+#: the team pages (public: who plays with whom is a fact, not a pick).
+LINES_GAMES = 2
+LINES_FILE = Path("web/data/nhl_lines.json")
+
+
+def team_lines(conn, teams, players: dict, fetch=None) -> dict:
+    """{team: engine.nhl.lines.build(...)} from each team's LINES_GAMES
+    newest finals' shift charts (the league's stats host, keyless, cached a
+    month per game). A team whose charts will not load is left out — the
+    board reads as it did without lines."""
+    import json as _json
+    from engine.nhl import lines as LN
+    from engine.sources import nhlshifts
+    from engine.sources.fetch import DataUnavailable as _DU
+    fetch = fetch or nhlshifts.fetch_shifts
+    positions = {n: p.get("position") or "" for n, p in players.items()}
+    out = {}
+    for team in sorted(teams):
+        rows = conn.execute(
+            "SELECT extra FROM games WHERE sport='nhl' AND home_score IS NOT NULL AND (home=? OR away=?) "
+            "ORDER BY date DESC, period DESC LIMIT ?", (team, team, LINES_GAMES)).fetchall()
+        charts = []
+        for (extra,) in rows:
+            try:
+                gid = int((_json.loads(extra or "{}")).get("nhl_id") or 0)
+            except (ValueError, TypeError):
+                gid = 0
+            if not gid:
+                continue
+            try:
+                got = nhlshifts.parse_shifts(fetch(gid)).get(team)
+            except _DU:
+                got = None
+            if got:
+                charts.append(got)
+        if charts:
+            out[team] = LN.build(charts, positions)
+    return out
+
+
+def save_lines(lines: dict, path: Path = LINES_FILE, date: str = "") -> None:
+    """Merge tonight's teams into the kept file, so every club the board
+    has seen keeps its newest lines for its team page."""
+    import json as _json
+    import os as _os
+    try:
+        kept = _json.loads(path.read_text())
+    except (OSError, ValueError):
+        kept = {}
+    teams = kept.get("teams") or {}
+    for t, v in lines.items():
+        teams[t] = dict(v, as_of=date)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(_json.dumps({"teams": teams}))
+    _os.replace(tmp, path)
+
+
 def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict | None = None,
-          starters: dict | None = None) -> tuple[dict, _Slate | None]:
+          starters: dict | None = None, lines: dict | None = None) -> tuple[dict, _Slate | None]:
     """The board for one date. ``attach_odds(slate)`` lands the prices (the
     Odds API in production, fixture lines in the tests); None = no prices.
     ``starters`` = announced goalies (engine/sources/nhlstarters); None
-    reads ESPN, {} uses the ten-game guess alone."""
+    reads ESPN, {} uses the ten-game guess alone. ``lines`` = {team:
+    engine.nhl.lines result}; None reads the shift charts, {} none."""
     from engine.db import player_assets
     from engine.seasons import recent_seasons
     out = empty_board(date)
@@ -652,6 +712,25 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     ctx = scalpy_context(games, players, league, teams, date, xs=xs, starters=starters)
     assets = player_assets(conn, SPORT)
     recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx, xs=xs)
+    # LINE COMBINATIONS (engine/nhl/lines): who each skater plays with, off
+    # the shift charts of his team's newest games. A row says it, and a
+    # ticket of two linemates reads their shared ice (engine/parlays).
+    from engine.nhl import lines as LN
+    if lines is None:
+        try:
+            lines = team_lines(conn, {t for g in games for t in (g["home"], g["away"])}, players)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  lines skipped: {exc}")
+            lines = {}
+    out["lines"] = lines
+    for r in recs:
+        slot = LN.slot_of(lines.get(r["team"]) or {}, r["player"])
+        if slot:
+            r["line"] = slot
+            r["line_unit"] = f"{r['team']}-{slot['unit']}"
+            r.setdefault("reasons", []).append(
+                f"Line: {slot['unit']} with {' and '.join(slot['mates'])} "
+                f"({slot['together']:.0%} of their ice together lately)")
     for r in recs:
         inj = injuries.get(r["player"])
         if inj and r["player"] not in ruled_out:
@@ -667,6 +746,11 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     sc = S.scan(games, players, teams, ctx, league, assets=assets,
                 key_players={r["player"] for r in recs}, out_players=pulled_names,
                 xg_players=(xs or {}).get("players"), pp=(xs or {}).get("pp"))
+    for rd in (x for v in sc["reads"].values() for x in v.get("players") or []):
+        slot = LN.slot_of(lines.get(rd.get("team")) or {}, rd.get("player") or "")
+        if slot:
+            rd["line"] = slot
+            rd.setdefault("notes", []).append(f"Line {slot['unit']} with {' and '.join(slot['mates'])}")
     out["scan_reads"] = sc["reads"]
     inj_by_team: dict = {}
     for n, i in injuries.items():
@@ -834,6 +918,12 @@ def main() -> None:
 
     conn = connect()
     out, slate = build(args.date, games, conn, attach_odds=attach)
+    if out.get("lines"):
+        try:
+            save_lines(out["lines"], date=args.date)
+            print(f"  Lines: {len(out['lines'])} team(s) read off their newest shift charts")
+        except OSError as exc:
+            print(f"⚠️  lines file skipped: {exc}")
     if not games:
         out.update(status="no games today",
                    note=("Preseason games only — no picks until the regular season."

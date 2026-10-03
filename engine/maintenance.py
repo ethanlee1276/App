@@ -568,7 +568,7 @@ PRUNABLE_CACHE_PREFIXES = (
     # Hockey (2026-10-03): a final's box score is stored in history the day
     # it lands; a player's name and photo land in player_assets. All three
     # re-fetch on a miss.
-    "nhl_box_", "nhl_player_", "nhl_score_", "nhl_roster_", "nhl_pbp_", "nhl_toi_", "espn_nhl_starters_", "nhl_club_",
+    "nhl_box_", "nhl_player_", "nhl_score_", "nhl_roster_", "nhl_pbp_", "nhl_toi_", "espn_nhl_starters_", "nhl_club_", "nhl_shifts_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the

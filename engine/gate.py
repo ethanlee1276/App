@@ -363,7 +363,7 @@ FREE_FILES = (
     "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
-    "rosters_nhl.json",
+    "rosters_nhl.json", "nhl_lines.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json", "standings_nhl.json",
     # The book report card (engine/booksharp.payload, written by the
@@ -412,7 +412,7 @@ KNOWN_BOARDS = (
     "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
-    "rosters_nhl.json",
+    "rosters_nhl.json", "nhl_lines.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json", "standings_nhl.json",
     # The day's one pick across every league, written by the refresh

@@ -873,9 +873,20 @@ def _depth_chart(sport, team, conn=None, roster=None):
             return None
         try:
             from engine import teamdex
-            return teamdex.usage_depth(conn, sport, roster.get("players") or [])
+            depth = teamdex.usage_depth(conn, sport, roster.get("players") or [])
         except Exception:                                    # noqa: BLE001
             return None
+        if depth is not None and sport == "nhl":
+            # LINE COMBINATIONS (engine/nhl/lines, kept by nhl_build): who
+            # plays with whom, off the club's newest shift charts.
+            try:
+                with open(ROOT / "web" / "data" / "nhl_lines.json", encoding="utf-8") as fh:
+                    got = (json.load(fh).get("teams") or {}).get(team)
+                if got:
+                    depth["lines"] = got
+            except (OSError, ValueError, AttributeError):
+                pass
+        return depth
     try:
         from engine.sources.depthcharts import CHART_FILE
         with open(ROOT / CHART_FILE, encoding="utf-8") as fh:

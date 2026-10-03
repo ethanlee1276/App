@@ -1196,6 +1196,10 @@ def _relate_hockey(a, b, fa, fb, ua, ub, same_team) -> Relation | None:
             return Relation(0.0, "different ends of the ice", 0, "ok")
         return None
     if same_team and not (_is_game_leg(a) or _is_game_leg(b)) and ua and ub:
+        linemates = bool(a.get("line_unit")) and a.get("line_unit") == b.get("line_unit")
+        if linemates and fa in HOCKEY_SCORING and fb in HOCKEY_SCORING:
+            return Relation(0.30, "linemates — the same shifts, so a goal on their line is "
+                                  "usually a point for both (engine/nhl/lines)", 0, "ok")
         if fa in HOCKEY_SCORING and fb in HOCKEY_SCORING:
             return Relation(0.20, "one goal is a point for up to three skaters "
                                   "on one team — the scoring moves together", 0, "ok")

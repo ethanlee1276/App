@@ -167,6 +167,20 @@ used and nothing is journaled. It should say `Shot quality: on`:
 cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
 ```
 
+**H15. NHL futures, lines and live, once** (paste each last line). The
+probe in H11 now also prints a `shift charts` line: if it says ok, the
+board reads every team's lines from it. The first command projects the
+season for free. The second adds the Stanley Cup price, at one credit a
+week (the cache holds it seven days). Live scores, win probability and the
+live line run by themselves. Hockey's live line is never pulled while an
+NFL or college game is live:
+
+```
+cd /srv/qellys && sudo -u qellys python3 futures_build.py nhl
+cd /srv/qellys && sudo -u qellys python3 futures_build.py nhl --odds
+cd /srv/qellys && sudo -u qellys python3 livescore_build.py --league nhl
+```
+
 **H14. Later — once NHL picks have graded for a couple of weeks.** This
 makes the NHL Most Likely chances honest from their own record. It is the
 same fit as M1 and saves only if it scores better on games it never
@@ -182,7 +196,7 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H13** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos, shots + expected goals. (H14 waits for graded picks.)
+0. **H1–H13** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings, Caddy, logos, shots + expected goals, futures + lines + live (H15). (H14 waits for graded picks.)
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).
