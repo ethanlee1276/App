@@ -108,6 +108,56 @@ def test_the_correction_stacks_on_likelycal_and_never_corrects_twice():
     assert C.maker({"board", "matchup"}) == "matchup" and C.maker({"list", "bold"}) == "bold"
 
 
+def test_history_proves_a_flag_only_in_both_halves_and_never_one_the_model_prices():
+    from engine import scouthist as H
+    cell = lambda g1, g2, n=500: {"early": {"n": n, "rate": 0.3, "base": 0.3 - g1, "gap": g1},
+                                  "late": {"n": n, "rate": 0.3, "base": 0.3 - g2, "gap": g2}}
+    h = {"flags": {"back_from_absence": {"rec_yds OVER": cell(-0.076, -0.069), "rec_yds UNDER": cell(0.07, 0.06),
+                                         "anytime_td YES": cell(-0.065, -0.084),
+                                         "rush_att OVER": {"late": cell(-0.1, -0.1)["late"]}},
+                   "wind_pass_over": {"pass_yds OVER": cell(-0.16, -0.19)},
+                   "shootout_under": {"pass_att UNDER": cell(-0.03, -0.06, n=140), "rec_yds UNDER": cell(-0.05, 0.01)},
+                   "boom_bust": {"pass_yds UNDER": cell(-0.09, -0.04, n=40)}}}
+    found = H.proven(h)
+    assert set(found) == {"back_from_absence", "shootout_under"}, found
+    assert found["back_from_absence"]["rec_yds OVER"]["shift"] == -0.069, "the smaller half's gap"
+    assert "rush_att OVER" not in found["back_from_absence"], "one half is not proof"
+    assert "wind_pass_over" not in found, "the model already prices wind"
+    assert "pass_att UNDER" in found["shootout_under"] and "rec_yds UNDER" not in found["shootout_under"]
+
+
+def test_a_proven_history_shift_lowers_the_pick_and_says_why():
+    hist = {"flags": {"back_from_absence": {"rec_yds OVER": {"shift": -0.069, "n": 1557},
+                                            "anytime_td YES": {"shift": -0.065, "n": 1803}}}}
+    over = {"market": "rec_yds", "side": "OVER", "odds": -150, "model_prob": 0.68, "scout_flags": ["back_from_absence"]}
+    td = {"market": "anytime_td", "odds": +150, "model_prob": 0.45, "scout_flags": ["back_from_absence"]}
+    under = {"market": "rec_yds", "side": "UNDER", "odds": -150, "model_prob": 0.68,
+             "scout_flags": ["back_from_absence"]}
+    assert C.apply([over, td, under], "nfl", store={}, history=hist) == 2
+    assert over["model_prob"] == round(0.68 - 0.069, 4) and "first game back" in over["ctx_note"]
+    assert td["model_prob"] < 0.45, "a scorer with no side written is read as a yes"
+    assert under["model_prob"] == 0.68, "an under is never raised, and this one has no proven shift"
+    cheap = {"market": "rec_yds", "side": "OVER", "odds": -110, "model_prob": 0.53,
+             "scout_flags": ["back_from_absence"]}
+    C.apply([cheap], "nfl", store={}, history=hist)
+    assert cheap["model_prob"] == round(C.price_chance(-110), 4), "lowered, but never below the price"
+    priced = {"market": "anytime_td", "odds": +110, "model_prob": 0.45, "scout_flags": ["back_from_absence"]}
+    assert C.apply([priced], "nfl", store={}, history=hist) == 0, "the price already says less: left as it is"
+
+
+def test_the_history_store_round_trips_and_runs_weekly():
+    from engine import scouthist as H
+    p = Path(tempfile.mkdtemp()) / "scout_history.json"
+    H.save({"back_from_absence": {"receptions OVER": {"shift": -0.046, "n": 1569}}}, [2021, 2025], p)
+    store = H.load(p)
+    assert H.shift_for(["thin_sample", "back_from_absence"], "receptions", "over", store) == (-0.046,
+                                                                                               "back_from_absence")
+    assert H.shift_for(["back_from_absence"], "receptions", "UNDER", store) == (0.0, None)
+    src = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
+    body = src[src.index("def _run_deep_refit("):src.index("def _run_lab(")]
+    assert '_spawn_module("engine.scouthist", log)' in body, "re-measured every week with the deep fitters"
+
+
 def test_the_store_round_trips_and_the_board_runs_the_read():
     p = Path(tempfile.mkdtemp()) / "ctx.json"
     C.save({"sport": "nfl", "flags": {"thin_sample": {"k": 0.6, "n": 31, "hit": 0.5, "claimed": 0.6}},

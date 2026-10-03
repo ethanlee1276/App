@@ -1372,8 +1372,14 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
 
 def _run_deep_refit(log) -> list[str]:
     """The Wednesday deep fitters, out of process and detached.
-    Injectable for tests, which must never spawn the real fitters."""
-    return _spawn_module("engine.deepfit", log)
+    Injectable for tests, which must never spawn the real fitters.
+
+    engine.scouthist rides along (2026-10-04): it replays the scout's
+    football flags over every stored season and saves the ones proven in
+    both halves, which the Most Likely board reads on its next build — so
+    the history behind a "first game back" correction re-measures itself
+    as seasons are added, with nobody pasting it."""
+    return _spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
 
 
 def _run_lab(log) -> list[str]:

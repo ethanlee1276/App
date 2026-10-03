@@ -80,6 +80,31 @@ def test_a_bold_pick_is_found_however_its_books_dated_it():
     assert [r["group"] for r in rows] == ["bold|over"], rows
 
 
+def test_a_maker_too_small_on_each_side_is_fitted_on_both():
+    # The box, 2026-10-04: bold went 13-20 on unders and 17-25 on overs,
+    # claiming 71-74%, and neither side reached a fit inside a fold.
+    path = Path(tempfile.mkdtemp()) / "ledger.db"
+    led = LG.connect(path)
+    for i in range(160):
+        day = f"2026-{9 + i // 28:02d}-{1 + i % 28:02d}"
+        rows = [(f"Lister {i}", "rec_yds", "OVER", 0.65, -150, i % 20 < 13, ("likely", "board"))]
+        if i % 3 == 0:                                            # 54 bold: 27 a side
+            rows.append((f"Bold {i}", "rush_yds", "OVER" if i % 6 == 0 else "UNDER", 0.74, -120, i % 20 < 8,
+                         ("board", "bold")))
+        for player, market, side, p, odds, won, cats in rows:
+            for cat in cats:
+                led.execute("INSERT INTO bets (sport, date, game_day, player, team, market, side, line, odds, "
+                            "hit_prob, status, category) VALUES ('nfl',?,?,?,'T',?,?,40.5,?,?,?,?)",
+                            (day, day, player, market, side, odds, p, "won" if won else "lost", cat))
+    led.commit()
+    res = likelycal.fit(led, "nfl")
+    assert "bold|over" not in res["groups"] and "bold|under" not in res["groups"], "27 a side is too few"
+    assert res["groups"]["bold|both"]["k"] < 1.0 and res["passed"], res["held_out"]
+    row = {"model_prob": 0.74, "odds": -120, "side": "UNDER", "bold": True, "sources": ["likely"]}
+    assert likelycal.apply([row], "nfl", {"nfl": {"groups": res["groups"]}}) == 1
+    assert row["model_prob"] < 0.74 and "overs and unders together" in row["cal_note"]
+
+
 def test_nothing_new_graded_means_nothing_refitted():
     rep = Path(tempfile.mkdtemp()) / "board_learning.json"
     led = _ledger(7)

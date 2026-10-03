@@ -147,12 +147,32 @@ def _row(r, source):
 
 
 # --- the fit ----------------------------------------------------------------
+#: A maker's overs and unders together — read only when its own side is
+#: too small to fit (`k_for`).
+BOTH = "both"
+
+
+def k_for(groups: dict, group: str) -> dict | None:
+    """The fitted group a pick reads: its maker on its side, else — when
+    that side has too few settled picks to fit — its maker on both sides.
+
+    Added 2026-10-04 after the box's run: the bold picks went 13-20 on
+    unders and 17-25 on overs while claiming 71-74%, and neither side alone
+    reached MIN_GROUP inside a training fold, so the held-out test never
+    saw a bold correction at all. Same bar, same held-out test; the group
+    is just the maker when the side cannot carry one."""
+    return groups.get(group) or groups.get(f"{group.split('|')[0]}|{BOTH}")
+
+
 def fit_groups(rows: list[dict]) -> dict:
     """{group: {"k", "n", "hit", "claimed", "price"}} for groups of
-    MIN_GROUP or more; smaller groups are left alone (absent)."""
+    MIN_GROUP or more; smaller groups are left alone (absent). Each maker
+    is also fitted on both sides together (``maker|both``), read only where
+    its side has no fit of its own."""
     by: dict = {}
     for r in rows:
         by.setdefault(r["group"], []).append(r)
+        by.setdefault(f"{r['group'].split('|')[0]}|{BOTH}", []).append(r)
     out = {}
     for g, rs in by.items():
         if len(rs) < MIN_GROUP:
@@ -178,7 +198,7 @@ def held_out(rows: list[dict], folds=FOLDS, seed=SEED) -> dict:
         for r in rows:
             if fold_of[r["game"]] != f:
                 continue
-            k = (ks.get(r["group"]) or {}).get("k", 1.0)
+            k = (k_for(ks, r["group"]) or {}).get("k", 1.0)
             raw, adj = _ll(r["p"], r["won"]), _ll(shrink(r["p"], r["q"], k), r["won"])
             cell = per_game.setdefault(r["game"], [0.0, 0.0, 0])
             cell[0] += raw
@@ -239,7 +259,7 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
     for r in rows:
         if r.get("model_prob") is None:
             continue
-        g = groups.get(f"{source_of_row(r)}|{side_of(r.get('side'))}")
+        g = k_for(groups, f"{source_of_row(r)}|{side_of(r.get('side'))}")
         q = price_chance(r.get("odds"))
         if not g or q is None or g["k"] >= 1.0:
             continue
@@ -250,7 +270,9 @@ def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
         r["board_raw_prob"] = raw
         r["model_prob"] = adj
         src = source_of_row(r)
-        r["cal_note"] = (f"{SOURCE_WORDS.get(src, src)} on the {side_of(r.get('side'))} have hit "
+        side = side_of(r.get("side"))
+        on = f"on the {side}" if groups.get(f"{src}|{side}") else "(overs and unders together)"
+        r["cal_note"] = (f"{SOURCE_WORDS.get(src, src)} {on} have hit "
                          f"{g['hit']:.0%} of {g['n']} where we said {g['claimed']:.0%}, so this shows "
                          f"{adj:.0%} (our raw number was {raw:.0%})")
         moved += 1

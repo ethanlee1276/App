@@ -14,59 +14,48 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### NFL Most Likely — run these when you're home (2026-10-04)
+### NFL Most Likely — run these when you're home (2026-10-04, round 3)
 
 First make sure the box has the new code. This should print a line saying
-"Most Likely: a losing pick comes off only when our reads also say no",
-or anything newer:
+"Most Likely learns what football history proves", or anything newer:
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**N1. Make it learn now, and see what it learns** (paste the output). It
-runs by itself after every settle; this just does it now instead of after
-Sunday's games. For every league it refits the record's correction and
-the NFL scout's flags, saves only what passes on games it never saw,
-and prints where each league wins and loses:
+**N1. Save what five seasons of football prove** (paste). It replays the
+scout's flags on every 2021-2025 game and saves only the ones that held
+in both halves on 100+ games each, leaving out wind and team totals
+(the model already prices those). The board reads it on its next build.
+It also runs by itself every Wednesday from now on:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist
+```
+
+**N2. Make the board learn now** (paste). It runs after every settle
+anyway. This run is the first one where the bold picks can be fitted (on
+their overs and unders together, since neither side alone has enough):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
 ```
 
-**N2. The football history check, with every season this time** (paste).
-Read-only. The first run only reached 2025 because of a bug that is now
-fixed:
-
-```
-cd /srv/qellys && sudo -u qellys python3 nflaudit.py --history
-```
-
-**N3. The full record breakdown again** (paste). Read-only. Game script,
-spread, total, position, where each pick came from:
-
-```
-cd /srv/qellys && sudo -u qellys python3 nflaudit.py
-```
-
-**N4. The NHL shots load that ended instantly** (paste):
-
-```
-tail -20 /tmp/nhl_shots.log
-```
-
-What changes on the board, so you know what you're looking at:
+What changes on the board:
 - No pick comes off for losing alone. The record's correction lowers its
   chance, which can move it down a tier, and it stays.
+- A player in his first game back after missing his team's last game:
+  his overs and his touchdown chance are lowered by what five seasons
+  measured, never below the book's price. The card says why.
 - A pick comes off only when our record proves picks like it lose AND the
-  offense-vs-defense matchup leans the other way. Those go in a closed
+  offense-vs-defense matchup leans the other way. It goes in a closed
   **Held back** section at the bottom of the Most Likely page with the
-  reason, and they are still graded (Record page → What it learned) so
-  we can see whether holding them was right.
+  reason, and is still graded.
 - A pick that was already posted never comes off.
 
 To undo a correction: `sudo -u qellys rm /srv/qellys/data/models/likely_calibration.json`
-(it comes back on its own if the record still proves it).
+(record) or `sudo -u qellys rm /srv/qellys/data/models/scout_history.json`
+(history). Each comes back on its own if it is still proven.
 
 ### NHL — load three seasons, then it runs itself (2026-10-03)
 

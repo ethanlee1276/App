@@ -300,8 +300,8 @@ def maker(sources) -> str:
 def _cal_base(r: dict, q: float, cal: dict) -> float:
     """What the board shows once likelycal has run — the number this
     correction is stacked on, so the two never correct the same loss twice."""
-    from .likelycal import side_of
-    g = cal.get(f"{maker(r.get('sources'))}|{side_of(r.get('side'))}") or {}
+    from .likelycal import k_for, side_of
+    g = k_for(cal, f"{maker(r.get('sources'))}|{side_of(r.get('side'))}") or {}
     k = g.get("k", 1.0)
     return float(r["p"]) if k >= 1.0 else shrink(float(r["p"]), q, k)
 
@@ -411,32 +411,46 @@ def save(res: dict, path=None) -> None:
     tmp.replace(p)
 
 
-def apply(rows: list[dict], sport: str, store: dict | None = None) -> int:
-    """Lower each flagged row's chance toward its price by its most
-    cautious proven flag; returns how many moved. The chance before rides
-    along as ``ctx_raw_prob`` and the reason as ``ctx_note``."""
+def apply(rows: list[dict], sport: str, store: dict | None = None, history: dict | None = None) -> int:
+    """Lower each flagged row's chance by what is proven about its flags,
+    taking whichever of two corrections lowers it more (never both):
+
+      * the RECORD's (``fit``): toward its price by its most cautious flag's k;
+      * HISTORY's (engine/scouthist): by the shift 2021+ games proved for
+        that flag on this market and side, never below its price.
+
+    Returns how many moved. The chance before rides along as
+    ``ctx_raw_prob`` and the reason as ``ctx_note``."""
+    from . import scouthist
     ks = ((store if store is not None else load()).get(sport) or {}).get("flags") or {}
+    hist = history if history is not None else (scouthist.load() if sport == "nfl" else {})
     moved = 0
     for r in rows:
         codes = r.get("scout_flags") or []
-        if not codes or r.get("model_prob") is None:
-            continue
-        k = _k_for(codes, ks)
         q = price_chance(r.get("odds"))
-        if k >= 1.0 or q is None:
+        if not codes or r.get("model_prob") is None or q is None:
             continue
         raw = float(r["model_prob"])
-        adj = round(shrink(raw, q, k), 4)
+        k = _k_for(codes, ks)
+        by_record = round(shrink(raw, q, k), 4) if k < 1.0 else raw
+        side = r.get("side") or ("YES" if r.get("market") == "anytime_td" else "")
+        shift, hflag = scouthist.shift_for(codes, r.get("market") or "", side, hist)
+        by_history = round(max(min(raw, q), raw + shift), 4) if shift < 0 else raw
+        adj = min(by_record, by_history)
         if adj >= raw:
             continue
-        worst = min(codes, key=lambda f: (ks.get(f) or {}).get("k", 1.0))
-        g = ks[worst]
         r["ctx_raw_prob"], r["model_prob"] = raw, adj
         # The journal keeps the FIRST claim (ledger reads board_raw_prob), so
         # the next fit judges what we said, never its own correction.
         r.setdefault("board_raw_prob", raw)
-        r["ctx_note"] = (f"picks like this one ({SC.FLAGS[worst]}) have hit {g['hit']:.0%} of {g['n']} where we "
-                         f"said {g['claimed']:.0%}, so this shows {adj:.0%} (it was {raw:.0%})")
+        if by_history <= by_record:
+            r["ctx_note"] = (f"{SC.FLAGS[hflag]}: in 2021+ games picks like this hit {abs(shift):.0%} less "
+                             f"often than usual, so this shows {adj:.0%} (it was {raw:.0%})")
+        else:
+            worst = min(codes, key=lambda f: (ks.get(f) or {}).get("k", 1.0))
+            g = ks[worst]
+            r["ctx_note"] = (f"picks like this one ({SC.FLAGS[worst]}) have hit {g['hit']:.0%} of {g['n']} where "
+                             f"we said {g['claimed']:.0%}, so this shows {adj:.0%} (it was {raw:.0%})")
         moved += 1
     return moved
 
