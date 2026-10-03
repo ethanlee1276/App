@@ -130,10 +130,12 @@ badge until the map is corrected):
 cd /srv/qellys && sudo -u qellys python3 assets.py --audit --sport nhl
 ```
 
-**H11. Shot quality: does the play-by-play read?** (paste the
-play-by-play line). The probe now opens one game's play-by-play and
-reports its attempts, goals, named shooters and the first shot's type and
-distance:
+**H11. Shot quality and power-play time: what reads?** (paste the
+play-by-play and power-play ice time lines). The probe now opens one
+game's play-by-play and reports its attempts, goals, named shooters and the
+first shot's type and distance. It also asks the league's stats host for
+power-play ice time. If that line says ok, I can wire minutes on the power
+play. Until then, PP1/PP2 is read from who scores and shoots on it:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --probe

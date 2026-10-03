@@ -197,6 +197,14 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
                       else "the league rate")
             reasons.append(f"Finishing regressed: {proj['sh']:.1%} shooting, pulled toward {toward} "
                            f"— volume over finishing")
+        pr = proj.get("pp_row")
+        if pr and pr.get("unit"):
+            ratio = M.opp_pp_ratio(teams or {}, opponent)
+            reasons.append(f"Power play: unit {pr['unit']} — {pr['pp_points']} power-play point(s) in "
+                           f"{prop.team}'s last {pr.get('team_games') or 20} games"
+                           + (f"; {opponent} concedes {abs(ratio - 1):.0%} "
+                              f"{'more' if ratio > 1 else 'fewer'} power-play chances than average"
+                              if ratio is not None and abs(ratio - 1) >= 0.05 else ""))
         xp = proj.get("xg_player")
         if xp and xp.get("iff"):
             luck = xp["goals"] - xp["ixg"]
@@ -484,6 +492,7 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
     = engine.nhl.xg.board_summaries (shot quality), None without it."""
     ctx = ctx if ctx is not None else scalpy_context(games, players, league, teams, date, xs=xs)
     xplayers = (xs or {}).get("players") or {}
+    pp_teams = (xs or {}).get("pp") or {}
     opp_of = {}
     for g in games:
         opp_of[g["home"]], opp_of[g["away"]] = g["away"], g["home"]
@@ -505,11 +514,14 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
         else:
             sure = them.get("starter_sure")
             opp_sv = them.get("sv") if sure else None
+            pp = ((pp_teams.get(prop.team) or {}).get("players") or {}).get(prop.player)
             proj = M.skater_projection(p, prop.market, league, teams, opp, opp_sv=opp_sv,
                                        xp=xplayers.get(prop.player),
-                                       opp_skill=them.get("gskill") if sure else None) if p else None
+                                       opp_skill=them.get("gskill") if sure else None, pp=pp) if p else None
             if proj is not None and prop.player in xplayers:
                 proj["xg_player"] = xplayers[prop.player]
+            if proj is not None and pp:
+                proj["pp_row"] = dict(pp, team_games=(pp_teams.get(prop.team) or {}).get("games"))
         if proj is None:
             census["no_history"] += 1
             continue
@@ -623,7 +635,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     from engine.nhl import scan as S
     sc = S.scan(games, players, teams, ctx, league, assets=assets,
                 key_players={r["player"] for r in recs}, out_players=pulled_names,
-                xg_players=(xs or {}).get("players"))
+                xg_players=(xs or {}).get("players"), pp=(xs or {}).get("pp"))
     out["scan_reads"] = sc["reads"]
     inj_by_team: dict = {}
     for n, i in injuries.items():

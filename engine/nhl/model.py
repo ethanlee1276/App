@@ -43,10 +43,13 @@ one goal to the total. The puck line can only be covered in regulation.
 SHOT QUALITY (engine/nhl/xg.py, our own expected goals from the league's
 play-by-play). Where the model has a player's shots, his shooting % regresses
 toward what his shots were worth rather than a flat position rate; a goal
-market reads the chances the opponent allows a game times how its starter
-does against chances (goals allowed ÷ expected); and team strength mixes
-expected goals for and against into goals for and against
-(XG_TEAM_BLEND). With no shot data everything reads as before.
+market reads the 5-on-5 chances the opponent allows a game times how its
+starter does against chances (goals allowed ÷ expected); team strength
+mixes expected goals for and against into goals for and against
+(XG_TEAM_BLEND); and THE POWER PLAY is its own step — a skater on a unit
+(PP1/PP2, read from who scores and shoots on it) has the power-play share
+of his output moved by the power-play chances tonight's opponent concedes
+(pp_factor). With no shot data everything reads as before.
 
 Nothing here is fitted to a backtest: every constant below is a plain
 prior, written down, and the record and the walk-forward ranking measure
@@ -121,6 +124,19 @@ XG_TEAM_BLEND = 0.5
 GSAX_PRIOR_XGA = 30.0
 #: Finishing luck worth naming: goals this far above or below expected.
 LUCK_GOALS = 2.5
+
+# --- The power-play role (engine/nhl/xg.power_play, 2026-10-03) ------------
+#: Only the power-play share of a skater's output moves with how many
+#: power-play chances tonight's opponent concedes (its PP expected goals
+#: against a game — penalties taken and penalty kill in one number). The
+#: share is his PP points ÷ points (PP attempts ÷ attempts for shots),
+#: shrunk toward PP_SHARE_PRIOR by PP_SHARE_PRIOR_N; the opponent's ratio
+#: is shrunk toward 1 by PP_OPP_PRIOR_GAMES; the move is capped at PP_CAP.
+#: A skater on neither unit is not moved.
+PP_SHARE_PRIOR = 0.20
+PP_SHARE_PRIOR_N = 5.0
+PP_OPP_PRIOR_GAMES = 20.0
+PP_CAP = 0.08
 
 #: The prop hierarchy — the most stable market first.
 PROP_TIER = {"sog": 1, "saves": 2, "points": 3, "assists": 4, "blocks": 4, "goals": 5, "anytime_goal": 5}
@@ -341,7 +357,36 @@ def attach_xg(teams: dict, xg_teams: dict | None) -> dict:
             continue
         t.update(xgf=s["xgf"] / n, xga=s["xga"] / n, xgf_ev=s["xgf_ev"] / n, xga_ev=s["xga_ev"] / n,
                  xg_games=n)
+        if s.get("xga_pp") is not None:
+            t.update(xgf_pp=s["xgf_pp"] / n, xga_pp=s["xga_pp"] / n)
     return teams
+
+
+def pp_share(pp: dict | None, market: str) -> float | None:
+    """The share of his output that comes on the power play, shrunk."""
+    if not pp or market == "blocks":
+        return None
+    num, den = (pp["pp_iff"], pp["iff"]) if market == "sog" else (pp["pp_points"], pp["points"])
+    return (num + PP_SHARE_PRIOR * PP_SHARE_PRIOR_N) / (den + PP_SHARE_PRIOR_N)
+
+
+def opp_pp_ratio(teams: dict, opponent: str) -> float | None:
+    """The power-play chances this opponent concedes a game against the
+    league (shrunk toward 1), or None without shot data."""
+    t, avg = teams.get(opponent) or {}, _league_avg(teams, "xga_pp")
+    if t.get("xga_pp") is None or not avg:
+        return None
+    n = t.get("xg_games", 0)
+    return 1.0 + (t["xga_pp"] / avg - 1.0) * n / (n + PP_OPP_PRIOR_GAMES)
+
+
+def pp_factor(pp: dict | None, market: str, teams: dict, opponent: str) -> float:
+    """1 + (his PP share) × (the opponent's PP ratio − 1), capped; 1 for a
+    skater on neither unit or without shot data."""
+    share, ratio = pp_share(pp, market), opp_pp_ratio(teams, opponent)
+    if share is None or ratio is None or not (pp or {}).get("unit"):
+        return 1.0
+    return max(1 - PP_CAP, min(1 + PP_CAP, 1.0 + share * (ratio - 1.0)))
 
 
 def _blend_xg(teams: dict, t: dict, key: str, raw: float) -> float:
@@ -376,7 +421,7 @@ def expected_sh(xp: dict | None, league_sh: float) -> float | None:
 def opp_factor(teams: dict, opponent: str, kind: str) -> float:
     """How much more (or less) of a stat this opponent gives up than the
     league, shrunk toward 1 and capped at ±OPP_CAP."""
-    key = {"sog": "sog_against", "goals": "ga", "sog_for": "sog_for", "xga": "xga"}[kind]
+    key = {"sog": "sog_against", "goals": "ga", "sog_for": "sog_for", "xga": "xga_ev"}[kind]
     t, avg = teams.get(opponent) or {}, _league_avg(teams, key)
     if not t or t.get(key) is None or not avg:
         return 1.0
@@ -391,7 +436,7 @@ def opp_factor(teams: dict, opponent: str, kind: str) -> float:
 # --- skaters ------------------------------------------------------------------
 def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent: str,
                       opp_sv: float | None = None, xp: dict | None = None,
-                      opp_skill: float | None = None) -> dict | None:
+                      opp_skill: float | None = None, pp: dict | None = None) -> dict | None:
     """{"mean", "disp", "toi", "rate60", "opp", "n", ...} for one skater and
     market. ``opp_sv`` is the opposing probable starter's regressed save%:
     when given, a goal-driven market reads shots allowed × that goalie in
@@ -402,7 +447,10 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
     shots were worth), and ``opp_skill`` the opposing starter's
     goalie_skill — then a goal-driven market reads the chances that team
     allows (its xG against a game) × how that goalie does against them,
-    which replaces both the shots-allowed tilt and the save rate."""
+    which replaces both the shots-allowed tilt and the save rate. The
+    chances read are 5-on-5; the power play is its own step: ``pp`` is his
+    engine.nhl.xg.power_play row, and pp_factor moves only the power-play
+    share of his output by the chances the opponent concedes shorthanded."""
     games = [g for g in p["games"] if g.get("toi", 0) > 0]
     if len(games) < 3:
         return None
@@ -422,12 +470,14 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
         td += w
     toi = tn / td
     goal_market = market in ("goals", "anytime_goal", "points", "assists")
-    if goal_market and opp_skill is not None and (teams.get(opponent) or {}).get("xga") is not None:
+    if goal_market and opp_skill is not None and (teams.get(opponent) or {}).get("xga_ev") is not None:
         opp = opp_factor(teams, opponent, "xga") * max(1 - GOALIE_CAP, min(1 + GOALIE_CAP, opp_skill))
     elif goal_market and opp_sv is not None:
         opp = opp_factor(teams, opponent, "sog") * goalie_factor(opp_sv, league)
     else:
         opp = opp_factor(teams, opponent, _OPP_KIND[market])
+    ppf = pp_factor(pp, market, teams, opponent)
+    opp *= ppf
     mean = rate60 * toi / 60.0 * opp
     sh = xsh = None
     if market in ("goals", "anytime_goal"):
@@ -465,7 +515,8 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
             "sh": round(sh, 4) if sh is not None else None, "toi_swing": round(swing, 3),
             "xsh": round(xsh, 4) if xsh is not None else None,
             "shot_model": "xg" if goal_market and opp_skill is not None
-            and (teams.get(opponent) or {}).get("xga") is not None else "shots"}
+            and (teams.get(opponent) or {}).get("xga_ev") is not None else "shots",
+            "pp_unit": (pp or {}).get("unit"), "pp_factor": round(ppf, 3)}
 
 
 def skater_prob(proj: dict, market: str, line: float, side: str) -> float:

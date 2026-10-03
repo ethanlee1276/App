@@ -34,9 +34,11 @@ game line, and "goalie" reads goals saved above expected (goals allowed ÷
 expected, regressed); without it they fall back to shots for and against
 from our box scores and the REGRESSED save rate (named when his raw rate
 runs hot or cold against it — the regression hunting ground). WHAT OUR
-DATA DOES NOT CARRY YET, said rather than faked: line combinations and PP
-units (NHL EDGE / MoneyPuck are not wired). "deployment" reads ice time and
-its trend; "special teams" reads power-play goals. Opening lines and CLV are tracked by the
+DATA DOES NOT CARRY YET, said rather than faked: line combinations and
+power-play ice time (NHL EDGE / MoneyPuck are not wired). "deployment"
+reads ice time and its trend; "special teams" reads his power-play unit
+(who scores and shoots on it, engine/nhl/xg.power_play) against the
+power-play chances the opponent concedes, else his power-play goals. Opening lines and CLV are tracked by the
 journal like every board's.
 
 Tiers (Ethan's): Elite 8%+ with strong support and low/moderate variance;
@@ -273,8 +275,21 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
         parts["roster"] = (0.0, f"listed {injury_status}")
     else:
         parts["roster"] = (float(EDGE_WEIGHTS["roster"]), "no injury designation")
-    # SPECIAL TEAMS — power-play goals as the PP-role signal.
-    if not goalie and games:
+    # SPECIAL TEAMS — his power-play unit and the chances tonight's
+    # opponent concedes shorthanded, when the shot model has them; else
+    # power-play goals as the PP-role signal.
+    pr = proj.get("pp_row") or {}
+    ratio = None
+    if not goalie and pr:
+        from .model import opp_pp_ratio
+        ratio = opp_pp_ratio(teams, opponent)
+    if not goalie and pr and ratio is not None:
+        unit = pr.get("unit") or 0
+        lean = {1: 1.0, 2: 0.5}.get(unit, 0.0) * (ratio - 1)
+        parts["special_teams"] = (EDGE_WEIGHTS["special_teams"] * _clamp(0.5 + d * lean / 0.15),
+                                  (f"power-play unit {unit}" if unit else "not on a power-play unit")
+                                  + f"; {opponent} concedes {ratio:.2f}× the league's power-play chances")
+    elif not goalie and games:
         ppg = sum(g.get("ppg", 0.0) for g in games[:20])
         share = 1.0 if ppg >= 3 else 0.5 if ppg >= 1 else 0.0
         parts["special_teams"] = (EDGE_WEIGHTS["special_teams"] * (share if d > 0 else 1 - share),

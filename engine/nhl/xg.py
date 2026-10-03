@@ -138,7 +138,7 @@ def fit_from_db(conn, seasons=None) -> dict:
 def game_rows(conn, model: dict, seasons=None) -> list[dict]:
     """Every stored attempt with its xG, newest game first."""
     q = ("SELECT game_id, date, season, team, opponent, shooter, goalie, kind, empty_net, is_goal, "
-         "dist, angle, shot_type, rebound, rush, strength FROM nhl_shots")
+         "dist, angle, shot_type, rebound, rush, strength, assist1, assist2 FROM nhl_shots")
     args: list = []
     if seasons:
         q += " WHERE season IN (%s)" % ",".join("?" * len(seasons))
@@ -157,7 +157,9 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
     players  {name: {"ixg", "iff", "sog", "goals", "games"}}   (iff = unblocked
              attempts, sog = on goal, goals included — ixg / sog is the
              shooting percentage his shots were worth)
-    teams    {abbr: {"xgf", "xga", "xgf_ev", "xga_ev", "gf", "ga", "games"}}
+    teams    {abbr: {"xgf", "xga", "xgf_ev", "xga_ev", "xgf_pp", "xga_pp", "gf", "ga", "games"}}
+             (xga_pp: the power-play chances it concedes — how often it is
+             shorthanded and how well it kills, in one number)
     goalies  {name: {"xga", "ga", "shots", "gsax", "games"}}  (no empty nets)
     """
     by_player: dict = {}
@@ -176,10 +178,12 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
             t = by_team.setdefault(team, {})
             if r["game_id"] in t or len(t) < window:
                 acc = t.setdefault(r["game_id"], {"xgf": 0.0, "xga": 0.0, "xgf_ev": 0.0, "xga_ev": 0.0,
-                                                  "gf": 0, "ga": 0})
+                                                  "xgf_pp": 0.0, "xga_pp": 0.0, "gf": 0, "ga": 0})
                 acc[f"xg{side}"] += r["xg"]
                 if r["strength"] == "EV" and not r["empty_net"]:
                     acc[f"xg{side}_ev"] += r["xg"]
+                elif r["strength"] == "PP" and not r["empty_net"]:
+                    acc[f"xg{side}_pp"] += r["xg"]
                 acc[f"g{side}"] += r["is_goal"]
         if r.get("goalie") and not r["empty_net"] and r["kind"] in ("goal", "sog"):
             gk = by_goalie.setdefault(r["goalie"], {})
@@ -193,7 +197,8 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
                for n, g in by_player.items()}
     teams = {}
     for team, g in by_team.items():
-        tot = {k: sum(v[k] for v in g.values()) for k in ("xgf", "xga", "xgf_ev", "xga_ev", "gf", "ga")}
+        tot = {k: sum(v[k] for v in g.values())
+               for k in ("xgf", "xga", "xgf_ev", "xga_ev", "xgf_pp", "xga_pp", "gf", "ga")}
         tot["games"] = len(g)
         teams[team] = {k: (round(v, 3) if isinstance(v, float) else v) for k, v in tot.items()}
     goalies = {}
@@ -202,13 +207,73 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
         ga = sum(v[1] for v in g.values())
         goalies[name] = {"xga": round(xga, 3), "ga": ga, "shots": sum(v[2] for v in g.values()),
                          "gsax": round(xga - ga, 2), "games": len(g)}
-    return {"players": players, "teams": teams, "goalies": goalies}
+    return {"players": players, "teams": teams, "goalies": goalies, "pp": power_play(rows)}
+
+
+#: Team games the power-play role reads, and the size of each unit.
+PP_WINDOW = 20
+PP_UNIT = 5
+
+
+def power_play(rows: list[dict], window: int = PP_WINDOW) -> dict:
+    """WHO IS ON THE POWER PLAY, from the play-by-play — the league's
+    power-play ice time is not on the host we read, but its results are:
+    over each team's newest ``window`` games, every skater's power-play
+    points (goals and assists on power-play goals) and unblocked attempts.
+    The top PP_UNIT by points + a fifth of attempts are unit 1, the next
+    PP_UNIT unit 2. All-strength points and attempts ride beside them,
+    so a model can say what share of a player's output comes on the
+    power play.
+
+    {team: {"games", "pp_goals", "pp_iff", "players": {name: {"unit",
+    "pp_points", "pp_goals", "pp_assists", "pp_iff", "points", "iff"}}}}"""
+    recent: dict = {}
+    for r in rows:
+        for team in (r["team"], r["opponent"]):
+            g = recent.setdefault(team, [])
+            if r["game_id"] not in g and len(g) < window:
+                g.append(r["game_id"])
+    keep = {t: set(g) for t, g in recent.items()}
+    out: dict = {}
+    for r in rows:
+        team = r["team"]
+        if r["game_id"] not in keep.get(team, ()):
+            continue
+        t = out.setdefault(team, {"games": len(keep[team]), "pp_goals": 0, "pp_iff": 0, "players": {}})
+        pp = r["strength"] == "PP" and not r["empty_net"]
+        blank = {"pp_points": 0, "pp_goals": 0, "pp_assists": 0, "pp_iff": 0, "points": 0, "iff": 0}
+        if r["kind"] in UNBLOCKED and r.get("shooter"):
+            me = t["players"].setdefault(r["shooter"], dict(blank))
+            me["iff"] += 1
+            me["pp_iff"] += pp
+            t["pp_iff"] += pp
+            if r["is_goal"]:
+                me["points"] += 1
+                me["pp_goals"] += pp
+                me["pp_points"] += pp
+        if r["is_goal"]:
+            t["pp_goals"] += pp
+            for a in (r.get("assist1"), r.get("assist2")):
+                if a:
+                    me = t["players"].setdefault(a, dict(blank))
+                    me["points"] += 1
+                    me["pp_assists"] += pp
+                    me["pp_points"] += pp
+    for t in out.values():
+        ranked = sorted(((p["pp_points"] + p["pp_iff"] / 5.0, n) for n, p in t["players"].items()), reverse=True)
+        ranked = [n for score, n in ranked if score > 0]
+        for n, p in t["players"].items():
+            i = ranked.index(n) if n in ranked else None
+            p["unit"] = 1 if i is not None and i < PP_UNIT else 2 if i is not None and i < 2 * PP_UNIT else 0
+    return out
 
 
 #: The board's summaries, kept beside the model: reading every stored shot
 #: takes seconds and they only change when the nightly job adds shots or
 #: refits, so a build reuses them while that key holds.
 BOARD_FILE = "nhl_xg_board.json"
+#: Raised whenever the summaries' shape changes, so a kept copy is rebuilt.
+BOARD_VERSION = 2
 
 
 def board_summaries(conn, seasons=None, window: int = 40) -> dict | None:
@@ -225,7 +290,7 @@ def board_summaries(conn, seasons=None, window: int = 40) -> dict | None:
     count, newest = conn.execute(q, args).fetchone()
     if not count:
         return None
-    key = [model.get("n"), model.get("league"), count, newest, sorted(seasons or []), window]
+    key = [BOARD_VERSION, model.get("n"), model.get("league"), count, newest, sorted(seasons or []), window]
     path = _models_dir() / BOARD_FILE
     try:
         kept = json.loads(path.read_text())

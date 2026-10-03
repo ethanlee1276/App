@@ -43,13 +43,14 @@ PBP = {
         {"teamId": 22, "playerId": 97, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"}},
         {"teamId": 20, "playerId": 13, "firstName": {"default": "Jonathan"}, "lastName": {"default": "Huberdeau"}},
         {"teamId": 20, "playerId": 800, "firstName": {"default": "Dan"}, "lastName": {"default": "Vladar"}},
-        {"teamId": 22, "playerId": 900, "firstName": {"default": "Stuart"}, "lastName": {"default": "Skinner"}}],
+        {"teamId": 22, "playerId": 900, "firstName": {"default": "Stuart"}, "lastName": {"default": "Skinner"}},
+        {"teamId": 22, "playerId": 29, "firstName": {"default": "Leon"}, "lastName": {"default": "Draisaitl"}}],
     "plays": [
         # EDM (home) defends the right end in period 1, so attacks x = -89.
         {"eventId": 1, "typeDescKey": "faceoff", "timeInPeriod": "00:00",
          "details": {"xCoord": 0, "yCoord": 0}, "periodDescriptor": {"number": 1, "periodType": "REG"}},
         _play(2, "shot-on-goal", "00:03", -80, 3, 22, 97),                 # rush: 3s after the centre faceoff
-        _play(3, "goal", "00:05", -85, -2, 22, 97, shot="tip-in"),         # rebound, 2s after the last
+        _play(3, "goal", "00:05", -85, -2, 22, 97, shot="tip-in", assist1PlayerId=29),  # rebound, 2s after
         _play(4, "missed-shot", "05:00", 60, 20, 20, 13, code="1541"),     # CGY on the PP (5 v 4)
         _play(5, "blocked-shot", "06:00", 50, 0, 20, 13),
         _play(6, "shot-on-goal", "19:30", -30, 0, 22, 97, code="0651", goalie=None),   # CGY net empty
@@ -68,6 +69,7 @@ def test_a_shot_is_placed_against_the_net_its_team_attacks():
     assert sog["dist"] == 9.5 and sog["team"] == "EDM" and sog["opponent"] == "CGY"
     assert sog["shooter"] == "Connor McDavid" and sog["goalie"] == "Dan Vladar"
     assert goal["is_goal"] == 1 and goal["rebound"] == 1 and goal["shot_type"] == "tip-in"
+    assert goal["assist1"] == "Leon Draisaitl" and goal["assist2"] == "" and sog["assist1"] == ""
     assert miss["strength"] == "PP" and miss["team"] == "CGY" and miss["dist"] == round((29 ** 2 + 20 ** 2) ** .5, 1)
     assert block["kind"] == "block" and en["empty_net"] == 1
     assert sog["rush"] == 1, "three seconds after a faceoff at centre ice"
@@ -236,6 +238,73 @@ def test_no_model_no_change_and_the_build_reads_it_when_there_is_one():
     src = open(os.path.join(ROOT, "nhl_build.py"), encoding="utf-8").read()
     for wired in ("X.board_summaries(", "M.attach_xg(teams", "xs=xs", "xg_players="):
         assert wired in src, wired
+
+
+
+# --- X3: the power-play role ----------------------------------------------------
+def test_an_extra_attacker_is_not_a_power_play():
+    assert P._strength("0651", home_shooter=False) == ("EV", 0), "six against five, goalie pulled"
+    assert P._strength("0651", home_shooter=True) == ("EV", 1), "at the empty net, still even"
+    assert P._strength("0641", home_shooter=False) == ("PP", 0), "pulled on a 5-on-4: still the power play"
+    assert P._strength("1451", home_shooter=True) == ("PP", 0)
+
+
+def _pp_row(gid, team, opp, shooter, kind="sog", strength="PP", goal=0, a1="", a2=""):
+    return {"game_id": gid, "team": team, "opponent": opp, "shooter": shooter, "kind": kind,
+            "strength": strength, "empty_net": 0, "is_goal": goal, "assist1": a1, "assist2": a2, "xg": 0.1}
+
+
+def test_the_units_are_read_from_who_scores_and_shoots_on_the_power_play():
+    rows = []
+    for gid in range(30, 0, -1):                       # newest first, as game_rows gives them
+        rows.append(_pp_row(gid, "AAA", "BBB", "Sniper", kind="goal", goal=1, a1="Quarterback", a2="Point"))
+        rows += [_pp_row(gid, "AAA", "BBB", n) for n in ("Net", "Slot", "Point")]
+        rows += [_pp_row(gid, "AAA", "BBB", n) for n in ("Second1", "Second2")][: gid % 2 + 1]
+        rows.append(_pp_row(gid, "AAA", "BBB", "Grinder", strength="EV"))
+    pp = X.power_play(rows)["AAA"]
+    assert pp["games"] == X.PP_WINDOW and pp["pp_goals"] == X.PP_WINDOW
+    pl = pp["players"]
+    assert pl["Sniper"]["unit"] == pl["Quarterback"]["unit"] == pl["Point"]["unit"] == 1
+    assert pl["Grinder"]["unit"] == 0 and pl["Grinder"]["pp_points"] == 0
+    assert pl["Quarterback"]["pp_assists"] == X.PP_WINDOW and pl["Quarterback"]["points"] == X.PP_WINDOW
+    assert pl["Second2"]["unit"] == 2, "the sixth man on the list is the second unit"
+
+
+def test_only_the_power_play_share_moves_with_what_the_opponent_concedes():
+    teams = _teams()
+    xs = {t: {"xgf": 60.0, "xga": 60.0, "xgf_ev": 45.0, "xga_ev": 45.0, "xgf_pp": 10.0, "xga_pp": 10.0,
+              "games": 20} for t in teams}
+    xs["BBB"].update(xga_pp=20.0)                      # takes penalties and kills them badly
+    xs["CCC"].update(xga_pp=5.0)
+    M.attach_xg(teams, xs)
+    top = {"unit": 1, "pp_points": 8, "points": 16, "pp_iff": 20, "iff": 60}
+    assert M.pp_factor(top, "points", teams, "BBB") > 1 > M.pp_factor(top, "points", teams, "CCC")
+    assert M.pp_factor(dict(top, unit=0), "points", teams, "BBB") == 1.0, "not on a unit, not moved"
+    assert M.pp_factor(top, "blocks", teams, "BBB") == 1.0
+    assert M.pp_factor(dict(top, pp_points=16), "points", teams, "BBB") <= 1 + M.PP_CAP
+    assert M.pp_factor(top, "points", _teams(), "BBB") == 1.0, "no shot data, nothing moves"
+    games = [{"date": f"2025-11-{i + 1:02d}", "toi": 18.0, "sog": 3.0, "points": 0.8} for i in range(20)]
+    p = {"position": "C", "games": games}
+    league = {"F": {"sog": 8.0, "goals": 1.0, "points": 2.5, "assists": 1.5, "blocks": 1.0, "sh": 0.10}}
+    on = M.skater_projection(p, "points", league, teams, "BBB", pp=top)
+    off = M.skater_projection(p, "points", league, teams, "BBB")
+    assert on["mean"] > off["mean"] and on["pp_unit"] == 1 and off["pp_factor"] == 1.0
+    r = SC.read_skater("Top", p, "AAA", "BBB", teams, {}, {"sv": 0.9}, pp=top)
+    assert any("power-play chances" in x for x in r["pro"]) and any("unit 1" in x for x in r["notes"])
+
+
+def test_a_game_stored_before_assists_is_read_again():
+    conn = db.connect(Path(tempfile.mkdtemp()) / "h.db")
+    db.upsert_games(conn, [{"sport": "nhl", "season": 2025, "period": "2025-10-30", "game_id": "CGY@EDM",
+                            "home": "EDM", "away": "CGY", "home_score": 2, "away_score": 1, "date": "2025-10-30",
+                            "extra": json.dumps({"nhl_id": 2025020101})}])
+    rows = P.parse_shots(PBP, "2025-10-30", 2025)
+    for r in rows:
+        r["assist1"] = r["assist2"] = None             # the old parse carried no assists
+    db.upsert_nhl_shots(conn, rows)
+    assert P.backfill(conn, fetch=lambda gid: PBP)["todo"] == 1
+    got = conn.execute("SELECT assist1 FROM nhl_shots WHERE is_goal = 1").fetchone()[0]
+    assert got == "Leon Draisaitl" and P.backfill(conn, fetch=lambda gid: PBP)["todo"] == 0
 
 
 if __name__ == "__main__":

@@ -288,6 +288,7 @@ CREATE TABLE IF NOT EXISTS nhl_shots (
     goalie_id TEXT, goalie TEXT, kind TEXT,
     x REAL, y REAL, dist REAL, angle REAL, shot_type TEXT, strength TEXT,
     empty_net INTEGER, rebound INTEGER, rush INTEGER, is_goal INTEGER, period INTEGER,
+  assist1 TEXT, assist2 TEXT,
     PRIMARY KEY (game_id, event_id)
 );
 CREATE INDEX IF NOT EXISTS nhl_shots_date ON nhl_shots (date);
@@ -579,6 +580,14 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         conn.commit()
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
+    # The assists on a goal (2026-10-03, the power-play role): who set up
+    # each power-play goal is half of who is on the top unit.
+    for col in ("assist1", "assist2"):
+        try:
+            conn.execute(f"ALTER TABLE nhl_shots ADD COLUMN {col} TEXT")
+            conn.commit()
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     mark_schema(conn, path)
     return conn
 
@@ -827,7 +836,8 @@ TEAM_UNIT_COLS = ["sport", "season", "period", "team", "side", "opp",
 
 NHL_SHOT_COLS = ["game_id", "event_id", "date", "season", "team", "opponent", "shooter_id",
                  "shooter", "goalie_id", "goalie", "kind", "x", "y", "dist", "angle",
-                 "shot_type", "strength", "empty_net", "rebound", "rush", "is_goal", "period"]
+                 "shot_type", "strength", "empty_net", "rebound", "rush", "is_goal", "period",
+                 "assist1", "assist2"]
 
 
 def upsert_nhl_shots(conn, rows: list[dict]) -> int:

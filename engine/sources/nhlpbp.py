@@ -15,7 +15,9 @@ is missing). Strength is the shooter's: "EV" level, "PP" up a skater, "SH"
 down one; ``empty_net`` when the other side had pulled its goalie.
 ``rebound`` is a second attempt by the same team within 3 seconds of the
 first; ``rush`` an attempt within 4 seconds of play at the other end or in
-the neutral zone. Shootouts are not shots and are never stored.
+the neutral zone. A goal carries its assists (names), which is how the
+power-play role reads who sets up the top unit. Shootouts are not shots
+and are never stored.
 
 Pure parsers, read by key name; a play with no shooter or no coordinates
 is not a row. This sandbox cannot reach the API — `probe` runs on the box.
@@ -51,11 +53,14 @@ def _secs(period: int, clock: str) -> int:
 
 def _strength(code: str, home_shooter: bool) -> tuple[str, int]:
     """("EV"|"PP"|"SH", empty_net) from a 4-digit situation code:
-    away goalie, away skaters, home skaters, home goalie."""
+    away goalie, away skaters, home skaters, home goalie. A side with its
+    goalie pulled counts one skater fewer — six against five with an extra
+    attacker is even strength, not a power play."""
     c = str(code or "")
     if len(c) != 4 or not c.isdigit():
         return "EV", 0
     ag, ask, hsk, hg = (int(ch) for ch in c)
+    ask, hsk = ask - (ag == 0), hsk - (hg == 0)
     mine, theirs = (hsk, ask) if home_shooter else (ask, hsk)
     their_goalie = ag if home_shooter else hg
     strength = "EV" if mine == theirs else "PP" if mine > theirs else "SH"
@@ -131,6 +136,8 @@ def parse_shots(payload: dict, date: str = "", season: int | None = None) -> lis
             "x": float(x), "y": float(y), "dist": dist, "angle": angle,
             "shot_type": str(d.get("shotType") or ""), "strength": strength, "empty_net": empty,
             "rebound": rebound, "rush": rush, "is_goal": int(kind == "goal"), "period": period,
+            "assist1": names.get(str(d.get("assist1PlayerId") or ""), "") if kind == "goal" else "",
+            "assist2": names.get(str(d.get("assist2PlayerId") or ""), "") if kind == "goal" else "",
         })
         if kind != "block":
             last_attempt[team] = t
@@ -152,7 +159,10 @@ def backfill(conn, seasons=None, fetch=fetch_pbp, limit: int | None = None) -> d
     """Shots for every stored NHL final that has none yet — safe to stop and
     rerun, a game already stored is skipped. ``limit`` caps one run."""
     import json as _json
-    have = {r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots")}
+    # A game stored before goals carried their assists (NULL, never "") is
+    # read again, so the power-play role sees who set up every goal.
+    have = {r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots")} - {
+        r[0] for r in conn.execute("SELECT DISTINCT game_id FROM nhl_shots WHERE is_goal = 1 AND assist1 IS NULL")}
     q = "SELECT date, season, extra FROM games WHERE sport='nhl' AND home_score IS NOT NULL"
     args: list = []
     if seasons:

@@ -428,4 +428,28 @@ def probe(date: str = "2025-10-08") -> list[dict]:
                                   if shots else "no attempts parsed"})
         except DataUnavailable as exc:
             out.append({"label": "play-by-play", "ok": False, "detail": str(exc)})
+    # POWER-PLAY ICE TIME (X3): the league's stats host, if it answers with
+    # a ppTimeOnIce per player per game, gives the power-play role in
+    # minutes; until it is seen here, the role is read from who scores
+    # and shoots on the power play (engine/nhl/xg.power_play).
+    try:
+        rows = (fetch_pp_toi(date, ttl=0).get("data") or [])
+        first = rows[0] if rows else {}
+        out.append({"label": f"power-play ice time {date}", "ok": "ppTimeOnIce" in first,
+                    "detail": (f"{len(rows)} player-game row(s); keys: {', '.join(sorted(first)[:14])}"
+                               if rows else "no rows")})
+    except DataUnavailable as exc:
+        out.append({"label": "power-play ice time", "ok": False, "detail": str(exc)})
     return out
+
+
+STATS_API = "https://api.nhle.com/stats/rest/en"
+
+
+def fetch_pp_toi(date: str, ttl: int = 86400) -> dict:
+    """Every skater's ice time by strength for one date's games, from the
+    league's stats host (probe-only until its shape is confirmed on the box)."""
+    from urllib.parse import quote
+    exp = quote(f'gameDate<="{date} 23:59:59" and gameDate>="{date}"')
+    return fetch_json(f"{STATS_API}/skater/timeonice?isAggregate=false&isGame=true&start=0&limit=100"
+                      f"&cayenneExp={exp}", f"nhl_toi_{date}.json", ttl=ttl)
