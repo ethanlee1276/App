@@ -290,6 +290,9 @@ def main() -> None:
                          "which makes a long backfill resumable)")
     ap.add_argument("--faces", action="store_true",
                     help="NHL: refresh every current player's headshot from the 32 team rosters")
+    ap.add_argument("--shots", action="store_true",
+                    help="NHL: backfill every stored final's play-by-play shots (resumable), "
+                         "then fit the expected-goals model")
     ap.add_argument("--probe", action="store_true",
                     help="report what each candidate feed endpoint "
                          "actually returns, then exit")
@@ -452,6 +455,22 @@ def main() -> None:
             print(f"NHL rosters: {rr['teams']} team(s), {rr['players']} player(s), "
                   f"{rr['faces_changed']} photo(s) new or changed"
                   + (f"; unreachable: {', '.join(rr['failed'])}" if rr["failed"] else ""))
+            return
+        if args.shots:
+            # EVERY SHOT OF EVERY STORED FINAL (engine/sources/nhlpbp), then
+            # the expected-goals model fitted on them (engine/nhl/xg). One
+            # call per game; stop and rerun any time — done games are skipped.
+            from engine.nhl import xg as _xg
+            from engine.sources import nhlpbp
+            seasons = parse_seasons(args.seasons) if args.seasons else None
+            print("NHL shots: walking every stored final without play-by-play …", flush=True)
+            r = nhlpbp.backfill(conn, seasons=seasons)
+            print(f"  {r['games']} game(s) · {r['shots']:,} shots stored"
+                  + (f" · {r['failed']} would not load (rerun picks them up)" if r["failed"] else ""))
+            m = _xg.fit_from_db(conn)
+            if m["n"]:
+                print(f"  xG model: {m['n']:,} unblocked attempts, league rate {m['league']:.3f} -> "
+                      f"{_xg.save(m)}")
             return
         if args.probe:
             print("Probing the NHL API — what each endpoint ACTUALLY returns:\n")

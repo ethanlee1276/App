@@ -328,7 +328,7 @@ def log_rows(players: list[dict], names: dict, date: str) -> list[dict]:
 
 
 def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxscore,
-               fetch_day=fetch_score, fetch_person=fetch_player) -> dict:
+               fetch_day=fetch_score, fetch_person=fetch_player, fetch_pbp=None) -> dict:
     """Store one date's finals and, unless ``scores_only``, every player's
     line. Shape matches the other daily sports' ingesters (ingest._walk_days)."""
     from .. import db
@@ -361,6 +361,13 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
             continue
         names = full_names(conn, {p["pid"] for p in players}, fetch=fetch_person)
         prows += log_rows(players, names, date)
+        # EVERY SHOT TOO (engine/sources/nhlpbp): where it came from and what
+        # kind, for the expected-goals model. One more call per final; a
+        # play-by-play that will not load costs the shots, not the game.
+        from . import nhlpbp
+        result["shots"] = result.get("shots", 0) + nhlpbp.ingest_game(
+            conn, g["game_id"], date, season_of("nhl", date),
+            **({"fetch": fetch_pbp} if fetch_pbp else {}))
         arows += [{"sport": "nhl", "player": n, "espn_id": pid, "headshot": h, "seen": date}
                   for pid, (n, h) in names.items() if n]
     result["games"] = db.upsert_games(conn, grows)
@@ -407,4 +414,18 @@ def probe(date: str = "2025-10-08") -> list[dict]:
                                       f"headshot {'yes' if info['headshot'] else 'no'}"})
         except DataUnavailable as exc:
             out.append({"label": "boxscore", "ok": False, "detail": str(exc)})
+        # The play-by-play the xG model is built from (engine/sources/nhlpbp).
+        try:
+            from . import nhlpbp
+            shots = nhlpbp.parse_shots(nhlpbp.fetch_pbp(final["game_id"], ttl=0))
+            located = [s for s in shots if s["dist"] > 0]
+            goals = sum(s["is_goal"] for s in shots)
+            out.append({"label": f"play-by-play {final['game_id']}", "ok": bool(located),
+                        "detail": f"{len(shots)} attempts ({goals} goals), "
+                                  f"{sum(1 for s in shots if s['shooter'])} with a named shooter, "
+                                  f"{sum(1 for s in shots if s['strength'] == 'PP')} on the power play; "
+                                  f"first: {shots[0]['shot_type'] or '?'} from {shots[0]['dist']} ft"
+                                  if shots else "no attempts parsed"})
+        except DataUnavailable as exc:
+            out.append({"label": "play-by-play", "ok": False, "detail": str(exc)})
     return out

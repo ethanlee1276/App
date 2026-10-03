@@ -54,6 +54,11 @@ PEOPLE = {"8478402": ("Connor", "McDavid"), "8480803": ("Evan", "Bouchard"), "84
           "8477496": ("Nazem", "Kadri"), "8480045": ("Dan", "Vladar")}
 
 
+
+def _no_pbp(game_id):
+    """No play-by-play in these tests — the network is never touched."""
+    raise N.DataUnavailable("no play-by-play in tests")
+
 def _person(pid):
     f, l = PEOPLE[str(pid)]
     return {"firstName": {"default": f}, "lastName": {"default": l}, "headshot": f"https://img/{pid}.png"}
@@ -62,7 +67,7 @@ def _person(pid):
 def _ingest():
     conn = db.connect(Path(tempfile.mkdtemp()) / "history.db")
     res = N.ingest_day(conn, "2025-10-08", fetch_day=lambda d: DAY, fetch_box=lambda g: BOX,
-                       fetch_person=_person)
+                       fetch_person=_person, fetch_pbp=_no_pbp)
     return conn, res
 
 
@@ -100,7 +105,8 @@ def test_a_player_is_looked_up_once():
     conn, _ = _ingest()
     calls = []
     N.ingest_day(conn, "2025-10-08", fetch_day=lambda d: DAY, fetch_box=lambda g: BOX,
-                 fetch_person=lambda pid: calls.append(pid) or _person(pid))
+                 fetch_person=lambda pid: calls.append(pid) or _person(pid),
+                 fetch_pbp=_no_pbp)
     assert calls == [], "names come from player_assets the second time"
     assert conn.execute("SELECT headshot FROM player_assets WHERE sport='nhl' AND player='Connor McDavid'"
                         ).fetchone()[0] == "https://img/8478402.png"

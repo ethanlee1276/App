@@ -278,6 +278,19 @@ CREATE TABLE IF NOT EXISTS team_units (
     sacks INTEGER, hits INTEGER,
     PRIMARY KEY (sport, season, period, team, side)
 );
+-- HOCKEY SHOTS (2026-10-03, Ethan: "the opposing goalie, the shot quality,
+-- the power play role"). One row per shot attempt from the league's
+-- play-by-play: where it came from, what kind, at what strength, and
+-- whether it went in. engine/nhl/xg.py fits expected goals on these.
+CREATE TABLE IF NOT EXISTS nhl_shots (
+    game_id INTEGER, event_id INTEGER, date TEXT, season INTEGER,
+    team TEXT, opponent TEXT, shooter_id TEXT, shooter TEXT,
+    goalie_id TEXT, goalie TEXT, kind TEXT,
+    x REAL, y REAL, dist REAL, angle REAL, shot_type TEXT, strength TEXT,
+    empty_net INTEGER, rebound INTEGER, rush INTEGER, is_goal INTEGER, period INTEGER,
+    PRIMARY KEY (game_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS nhl_shots_date ON nhl_shots (date);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
@@ -810,6 +823,15 @@ TEAM_UNIT_COLS = ["sport", "season", "period", "team", "side", "opp",
                   "dropbacks", "pass_epa", "pass_success", "pass_expl",
                   "rushes", "rush_epa", "rush_success", "rush_yds", "rush_expl",
                   "sacks", "hits"]
+
+
+NHL_SHOT_COLS = ["game_id", "event_id", "date", "season", "team", "opponent", "shooter_id",
+                 "shooter", "goalie_id", "goalie", "kind", "x", "y", "dist", "angle",
+                 "shot_type", "strength", "empty_net", "rebound", "rush", "is_goal", "period"]
+
+
+def upsert_nhl_shots(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "nhl_shots", NHL_SHOT_COLS, rows)
 
 
 def upsert_team_units(conn, rows: list[dict]) -> int:

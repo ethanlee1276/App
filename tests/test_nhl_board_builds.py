@@ -33,6 +33,11 @@ SOG = [4, 5, 3, 6, 4, 2, 5, 4, 3, 5]
 GOALS = [1, 0, 1, 1, 0, 0, 2, 0, 1, 0]
 
 
+
+def _no_pbp(game_id):
+    """No play-by-play in these tests — the network is never touched."""
+    raise N.DataUnavailable("no play-by-play in tests")
+
 def _day(i):
     d = (datetime.date(2025, 10, 8) + datetime.timedelta(days=2 * i)).isoformat()
     home_edm = i % 2 == 0
@@ -70,7 +75,7 @@ def _history():
     for i in range(10):
         d, day, box = _day(i)
         N.ingest_day(conn, d, fetch_day=lambda _d, day=day: day, fetch_box=lambda _g, box=box: box,
-                     fetch_person=_person)
+                     fetch_person=_person, fetch_pbp=_no_pbp)
     return conn
 
 

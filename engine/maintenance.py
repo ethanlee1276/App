@@ -568,7 +568,7 @@ PRUNABLE_CACHE_PREFIXES = (
     # Hockey (2026-10-03): a final's box score is stored in history the day
     # it lands; a player's name and photo land in player_assets. All three
     # re-fetch on a miss.
-    "nhl_box_", "nhl_player_", "nhl_score_", "nhl_roster_",
+    "nhl_box_", "nhl_player_", "nhl_score_", "nhl_roster_", "nhl_pbp_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the
@@ -1593,6 +1593,13 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     d += _dt.timedelta(days=1)
                 if tot_g or tot_l:
                     log(f"  nhl results: {tot_g} game(s), {tot_l:,} log rows")
+                # THE xG MODEL, refitted on every stored shot (engine/nhl/xg)
+                # — a few seconds, and last night's shots are in it.
+                from .nhl import xg as _xg
+                _m = _xg.fit_from_db(hconn2)
+                if _m["n"]:
+                    _xg.save(_m)
+                    log(f"  nhl xG: refitted on {_m['n']:,} attempts")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nhl results ingest failed: {exc}")
     # THE FACES AND THE ROSTERS, once a day from September (camp rosters)
