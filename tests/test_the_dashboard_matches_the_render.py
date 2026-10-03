@@ -24,7 +24,7 @@ def _fn(name):
 
 
 def test_the_two_backgrounds_ship_small_with_a_phone_size():
-    for stem in ("qb-helmet", "nfl-ball", "cfb-ball", "mlb-ball", "nba-ball", "wnba-ball", "stadium-field"):
+    for stem in ("qb-helmet", "nfl-ball", "cfb-ball", "mlb-ball", "nba-ball", "wnba-ball", "nhl-ball", "stadium-field"):
         big, small = IMG / f"{stem}.webp", IMG / f"{stem}@800.webp"
         assert big.read_bytes()[8:12] == b"WEBP" and small.read_bytes()[8:12] == b"WEBP"
         assert big.stat().st_size < 400_000 and small.stat().st_size < 120_000
@@ -49,7 +49,7 @@ def test_the_book_names_itself_on_the_helmet_inside_the_tools():
 def test_each_league_draws_its_own_ball_and_the_rest_keep_their_venue():
     """2026-09-27: "we are using an NFL render on the CFB page" — and MLB
     had none."""
-    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball" };' in APP
+    assert 'const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball",\n                    nhl: "nhl-ball" };' in APP
     art = _fn("potdBallArt")
     assert "POTD_BALL[state.sport]" in art and 'return "";' in art
     potd = _fn("renderPickOfTheDay")

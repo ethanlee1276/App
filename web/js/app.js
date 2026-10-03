@@ -2986,7 +2986,8 @@ function potdCallStrip(payload) {
    on its dark left. Each league its own (2026-09-27: "we are using an NFL
    render on the CFB page" — and MLB had none); a league without one keeps
    the venue band above. */
-const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball" };
+const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball",
+                    nhl: "nhl-ball" };   // the puck at centre ice (Ethan, 2026-10-03)
 function potdBallArt() {
   const stem = POTD_BALL[state.sport];
   if (!stem) return "";
