@@ -69,12 +69,36 @@ cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, rankfit; ran
 cd /srv/qellys && sudo -u qellys python3 nhl_build.py --odds
 ```
 
+**H5. Headshots, now** (paste the last line). Every club's current roster
+fills the faces and moves traded players; the nightly job repeats it from
+September to June:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --faces
+```
+
+**H6. Re-rank after Scalpy NHL 1.0** (paste). Goals are now shots times a
+regressed shooting rate and the opposing starter tilts goals and points,
+so each market earns its shelf again on its own walk:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, rankfit; rankfit.measure(db.connect(), 'nhl')"
+```
+
+**H7. One build from the saved odds** (paste the Odds line and the last
+line). Shows the odds result, the scan's reads and how many rows each
+Scalpy rule passed, without journaling anything:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
+```
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H4** — NHL (block above): probe, load three seasons, rank, build.
+0. **H1–H7** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check.
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).
