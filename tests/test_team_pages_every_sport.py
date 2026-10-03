@@ -85,6 +85,20 @@ def test_before_opening_night_the_table_is_this_seasons_zeros_not_empty():
     finally:
         leaguestandings.fetch_json = real
     assert asked == ["now"] and rows[0]["team"] == "EDM" and rows[0]["wins"] == 0
+    src = open(os.path.join(ROOT, "engine", "sources", "leaguestandings.py"), encoding="utf-8").read()
+    nhl = src[src.index('if sport == "nhl":'):src.index("path = ESPN_PATHS.get(sport)")]
+    assert "DEFAULT_AGENT" not in nhl.split("try:")[1], "the NHL call uses the agent every other NHL fetch uses"
+
+    def down(url, name, **kw):
+        raise leaguestandings.DataUnavailable(f"403 for {url.rsplit('/', 1)[-1]}")
+    leaguestandings.fetch_json = down
+    try:
+        leaguestandings.fetch("nhl", 2026)
+        raise AssertionError("a failed feed must say why, not answer empty")
+    except leaguestandings.DataUnavailable as exc:
+        assert "403 for now" in str(exc)
+    finally:
+        leaguestandings.fetch_json = real
 
 
 def test_an_opened_season_with_no_game_played_is_every_club_at_zero():

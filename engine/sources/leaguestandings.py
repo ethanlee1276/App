@@ -212,17 +212,29 @@ def fetch(sport: str, season: int) -> list[dict]:
         # counting our own (empty) season. "now" is the league's current
         # table — last season's final until a puck drops, which parse_nhl
         # turns into this season's 0-0-0 — and the dated one is the backup.
+        #
+        # THE SAME USER AGENT AS EVERY OTHER NHL CALL (engine/sources/
+        # nhldata: scores, box scores, rosters, all answered on the box).
+        # This call alone sent DEFAULT_AGENT — no header, so urllib's
+        # "Python-urllib" — and came back with nothing while `curl` on the
+        # same box got the whole table. And a failure is RAISED with its
+        # reason, never swallowed into an empty list: the build line then
+        # says what went wrong instead of "answered with no teams".
         import datetime as _dt
         day = _dt.date.today().isoformat()
         rows: list = []
+        errors: list = []
         for when in ("now", day):
             try:
                 rows = parse_nhl(fetch_json(NHL_URL.format(date=when), f"standings_nhl_{when}.json",
-                                            ttl=STANDINGS_TTL, user_agent=DEFAULT_AGENT), season)
-            except DataUnavailable:
+                                            ttl=STANDINGS_TTL), season)
+            except DataUnavailable as exc:
+                errors.append(str(exc))
                 rows = []
             if rows:
                 break
+        if not rows and errors:
+            raise DataUnavailable("; ".join(errors))
         return rows
     path = ESPN_PATHS.get(sport)
     if not path:
