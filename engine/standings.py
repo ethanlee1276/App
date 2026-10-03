@@ -258,6 +258,17 @@ def from_feed(sport: str, rows: list[dict], season: int,
     }
 
 
+def zero_table(sport: str, season: int) -> dict:
+    """Every club in the league's alignment at 0-0 — the honest table for
+    a season that has opened with no game finished yet. Built through
+    `from_feed` so it is the same shape as the league's own table."""
+    rows = [{"team": t} for t in divisions.MAPS.get(sport, {})]
+    out = from_feed(sport, rows, season)
+    out["source"] = "alignment"
+    out["order_note"] = "no game finished yet — every club 0-0, in the league's divisions"
+    return out
+
+
 def _sort_key(r: Record):
     return (-r.pct, -r.diff, -r.wins, r.team)
 

@@ -87,6 +87,22 @@ def test_before_opening_night_the_table_is_this_seasons_zeros_not_empty():
     assert asked == ["now"] and rows[0]["team"] == "EDM" and rows[0]["wins"] == 0
 
 
+def test_an_opened_season_with_no_game_played_is_every_club_at_zero():
+    """The box, 2026-10-03: inside the NHL's window, no finals, the league's
+    table empty — the page got nothing. It now gets the 32 clubs at 0-0-0
+    in their divisions, and the build line says why the feed was not used."""
+    import standings_build as SB
+    real = SB._live_table
+    SB._live_table = lambda sport, season, confs: (None, "the standings feed answered with no teams")
+    try:
+        b = SB.build("nhl", today="2026-10-03")
+    finally:
+        SB._live_table = real
+    assert b["team_count"] == 32 and b["source"] == "alignment" and not b["note"]
+    assert b["feed_error"] == "the standings feed answered with no teams"
+    assert 'd.source === "alignment"' in APP
+
+
 def _nhl_roster_payload():
     return {"forwards": [
         {"id": 8478402, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"},

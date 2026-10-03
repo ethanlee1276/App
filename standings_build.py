@@ -24,11 +24,14 @@ import json
 import os
 from pathlib import Path
 
-from engine import playoffs, pressure, standings
+from engine import divisions, playoffs, pressure, standings
 from engine.db import connect
 from engine.seasons import season_of, window as window_of
 
 SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb", "nhl")
+#: How long after a season's window opens an empty table is shown as every
+#: club at 0-0 (the league's own table not out yet, no final on file).
+ZERO_TABLE_DAYS = 14
 OUT_DIR = Path("web/data")
 
 
@@ -152,6 +155,20 @@ def build(sport: str, season: int | None = None,
                 table = standings.compute(conn, sport, season=season,
                                           today=day, conferences=confs)
                 table["feed_error"] = feed_error
+                # THE SEASON HAS OPENED AND NOTHING IS PLAYED YET (the box,
+                # 2026-10-03: NHL inside its window, four days before the
+                # first puck, the league's table empty and ours too). Every
+                # club IS 0-0 — that is this season's table, and the page
+                # shows the league's alignment at zero instead of a blank.
+                # ONLY AT THE START: two weeks in, an empty count means a
+                # missing ingest, not an unplayed season, and 0-0 would be
+                # a lie over every game already played.
+                opened = (datetime.date.fromisoformat(day)
+                          - datetime.date.fromisoformat(start)).days
+                if (not table.get("groups") and divisions.has_divisions(sport)
+                        and 0 <= opened <= ZERO_TABLE_DAYS):
+                    table = standings.zero_table(sport, season)
+                    table["feed_error"] = feed_error
         bracket = playoffs.bracket(conn, sport, season=season, today=day)
         # Ethan, 2026-09-05: "under pressure data for teams, like clutch
         # win % and reliability % and comeback % and choke %". Counted
@@ -246,7 +263,9 @@ def main() -> None:
         if b["bracket"]["started"]:
             bits.append(f"bracket: {len(b['bracket']['rounds'])} round(s)")
         print(f"Standings {sport.upper()}: " + ", ".join(bits)
-              + (f" — {b['note']}" if b["note"] else ""))
+              + (f" — {b['note']}" if b["note"] else "")
+              # WHY THE LEAGUE'S TABLE WAS NOT USED, on the line itself.
+              + (f" [league feed: {b['feed_error']}]" if b.get("feed_error") else ""))
         # A COLLEGE TABLE UNDER ONE HEADING IS A 188-ROW WALL. Measured in
         # Chromium at 390x844 on 2026-09-10: one "League" card, 10,430px,
         # 12.4 phone screens, 71% of the page — and the conference chips

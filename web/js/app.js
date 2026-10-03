@@ -30441,6 +30441,7 @@ async function renderStandings() {
       ? `— ${d.season} regular season · `
         + (live
           ? "the league’s own records, refreshed with the site"
+          : d.source === "alignment" ? "the season has opened and no game has finished"
           : `${(d.games_counted || 0).toLocaleString()} games counted from our own results (the league’s feed was unavailable)`)
         + ` · ${d.order_note || ""}`
       : (live ? "— the league’s own records."
