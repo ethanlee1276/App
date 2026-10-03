@@ -93,12 +93,31 @@ Scalpy rule passed, without journaling anything:
 cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
 ```
 
+That build now prints a second line, Scalpy NHL — Edge Hunter 1.0's census
+(how many Elite / Strong / Small edges and passes, and the commonest pass
+reasons). Paste it: it is how we will tune the Edge bar on real prices.
+
+**H8. Live rosters and standings, now** (paste the four lines). The NHL's
+own rosters and standings, and ESPN's NBA/WNBA rosters, for the team pages;
+the launcher's cycle repeats both:
+
+```
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport nhl
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport nba
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport wnba
+cd /srv/qellys && sudo -u qellys python3 standings_build.py --sport nhl
+```
+
+Each roster line should say `from league` (NHL) or `from roster`
+(basketball). `from appearances` means the feed failed, and the line says
+why.
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked
 "paste".
 
-0. **H1–H7** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check.
+0. **H1–H8** — NHL (block above): probe, load three seasons, rank, build, faces, re-rank, check, rosters + standings.
 1. **R1** — recount the record (read-only, paste the whole output).
 2. **R2** — give old rows their date (dry run first, then `--apply`).
 3. **L1** — which Most Likely picks to stop taking (read-only, paste).
