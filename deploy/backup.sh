@@ -319,6 +319,20 @@ for db in "${DBS[@]}"; do
   [[ -f "$ROOT/$db" ]] || { echo "skip (absent): $db"; continue; }
   name="$(basename "$db" .db)"
   out="$DEST/${name}-${STAMP}.db"
+  # A BIG FILE SAYS IT IS STARTING, AND CHECKS THE DISK FIRST. history.db
+  # runs to gigabytes; on the droplet its copy and gzip take minutes with
+  # nothing printed, which read as a frozen deploy (2026-10-03), and the
+  # raw copy needs its own size free on a disk that has filled before
+  # (2026-10-01). Skipped, loudly, when it would not fit.
+  size_mb=$(( $(stat -c %s "$ROOT/$db" 2>/dev/null || stat -f %z "$ROOT/$db") / 1048576 ))
+  if [[ "$size_mb" -ge 200 ]]; then
+    free_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $4}')
+    if [[ "${free_mb:-0}" -lt $(( size_mb * 3 / 2 )) ]]; then
+      echo "SKIPPED: $db is ${size_mb} MB and only ${free_mb} MB is free — free some space first"
+      continue
+    fi
+    echo "backing up $db (${size_mb} MB — this takes a few minutes, nothing prints until it is done)"
+  fi
   python3 - "$ROOT/$db" "$out" <<'PY'
 import sqlite3, sys
 src, dst = sys.argv[1], sys.argv[2]
@@ -328,7 +342,9 @@ with d:
     s.backup(d)          # consistent even while the app is writing
 d.close(); s.close()
 PY
-  gzip -f "$out"
+  # The fastest gzip for the big one: its size is the cost that matters
+  # on one core, and level 1 still shrinks a database by most of the way.
+  if [[ "$size_mb" -ge 200 ]]; then gzip -1 -f "$out"; else gzip -f "$out"; fi
   echo "backed up: $db -> ${out}.gz ($(du -h "${out}.gz" | cut -f1))"
 done
 

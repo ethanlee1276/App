@@ -52,7 +52,14 @@ if [ -z "$RESUMED" ]; then
   # Before the code changes, not after. A migration that goes wrong is
   # exactly when the pre-migration copy is the only useful thing on the box.
   say "backing up"
-  ./deploy/backup.sh
+  # THE SMALL, IRREPLACEABLE DATABASES ONLY (accounts, ledger, zeno). On
+  # 2026-10-03 a deploy sat silent for many minutes after "backed up:
+  # data/zeno.db" — it was copying and then gzipping the multi-gigabyte
+  # history.db on a one-core, 1 GB box, with nothing on screen to say so.
+  # A code pull does not touch history.db, and the nightly 04:00 backup
+  # (docs/BACKUPS.md) still takes it. QB_BACKUP_HISTORY=1 ./deploy/deploy.sh
+  # puts it back for one run.
+  QB_BACKUP_HISTORY="${QB_BACKUP_HISTORY:-0}" ./deploy/backup.sh
 
   # --- 3. new code ----------------------------------------------------
   say "pulling"
