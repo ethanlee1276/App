@@ -48,6 +48,7 @@ SUMMARY = {
             "college-football/summary"),
     "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
     "wnba": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary",
+    "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary",
 }
 
 #: The blocks a play-by-play could plausibly live under. Reported

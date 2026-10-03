@@ -31,6 +31,9 @@ ESPN_SCOREBOARD = {
             "college-football/scoreboard"),
     "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "wnba": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
+    # Hockey (2026-10-03): scores, state and the period clock only — no
+    # play-by-play parser for it, which `attach_plays` says on the card.
+    "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
 }
 
 #: What the scoreboard needs ASKED FOR, per league. Appended by
@@ -104,11 +107,14 @@ def _side_key(team: dict, league: str = "nfl") -> str:
     name = (team.get("displayName") or "").strip()
     abbr = (team.get("abbreviation") or "").strip()
     try:
-        from .oddsapi import TEAM_ABBR, NBA_TEAM_ABBR, WNBA_TEAM_ABBR
+        from .oddsapi import TEAM_ABBR, NBA_TEAM_ABBR, WNBA_TEAM_ABBR, NHL_TEAM_ABBR
         table = {"nfl": TEAM_ABBR, "nba": NBA_TEAM_ABBR,
-                 "wnba": WNBA_TEAM_ABBR}.get(league) or {}
+                 "wnba": WNBA_TEAM_ABBR, "nhl": NHL_TEAM_ABBR}.get(league) or {}
     except Exception:                                       # noqa: BLE001
         table = {}
+    if league == "nhl" and not table.get(name):
+        from ..divisions import canonical
+        return canonical("nhl", abbr)          # ESPN's TB / NJ / LA onto the league's own
     return table.get(name) or (_abbr(abbr) if league == "nfl" else abbr)
 
 
@@ -319,7 +325,8 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
                 yard = spot_to_yard_line(sit.get("downDistanceText", ""), home, away)
         live = LiveStatus(
             state=state, home_score=hs, away_score=as_,
-            period=(f"Q{status.get('period')}" if state == "live" and status.get("period") else period),
+            period=(f"{'P' if league == 'nhl' else 'Q'}{status.get('period')}"
+                    if state == "live" and status.get("period") else period),
             # NO CLOCK AND NO DOWN THROUGH A HOLD. The feed freezes both
             # where the game stopped, and a frozen "2nd & 7 · 4:12" reads
             # as a live one. The hold word is what the card shows instead.

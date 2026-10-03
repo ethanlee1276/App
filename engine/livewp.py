@@ -57,7 +57,7 @@ from .statmath import normal_cdf
 #: not route around it — a live panel is not a licence to invent a
 #: number the pregame model would not print. Measure the SD and NBA
 #: turns on with no change here.
-REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400}
+REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400, "nhl": 3600}
 
 #: Inside this many seconds, with the margin inside one score, possession
 #: decides more than anything this model can see. Not a refusal — the
@@ -68,13 +68,24 @@ REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400}
 #: not gradual: it arrives the moment the trailing team's only path is
 #: "get the ball back", which is a possession fact, not a margin one.
 BLIND_S = 300
-BLIND_MARGIN = {"nfl": 8, "cfb": 8, "nba": 6, "wnba": 6}
+BLIND_MARGIN = {"nfl": 8, "cfb": 8, "nba": 6, "wnba": 6, "nhl": 1}
 
 
 #: How many periods a regulation game has, and how long each runs.
 #: Derived from REGULATION_S rather than repeated, so the two cannot
 #: disagree about how long a game is.
-PERIODS = {"nfl": 4, "cfb": 4, "nba": 4, "wnba": 4}
+PERIODS = {"nfl": 4, "cfb": 4, "nba": 4, "wnba": 4, "nhl": 3}
+
+# HOCKEY IS NOT A MARGIN GAME (2026-10-03). Goals are rare and come one at
+# a time, so a Normal on the margin is the wrong shape; what is left of the
+# game is two Poisson counts, each side's league scoring rate times the
+# share of regulation still to play. A tie at the horn goes to overtime and
+# a shootout, won by the home side OT_HOME of the time — the pregame
+# model's own figure (engine/nhl/model.OT_HOME).
+#: Goals a side scores in sixty minutes, league-wide, and home ice.
+NHL_GOALS_60 = 3.05
+NHL_HOME_EDGE = 1.04
+NHL_OT_HOME = 0.52
 
 
 def seconds_left(sport: str, period, clock) -> float | None:
@@ -98,9 +109,14 @@ def seconds_left(sport: str, period, clock) -> float | None:
     total = REGULATION_S.get(key)
     if not periods or not total:
         return None
+    # THE FEED'S PERIOD IS A LABEL — "Q2", "P2", "2nd" — and this read it
+    # with int(), which refused every one of them: the fast scoreboard's
+    # football win probability never appeared at all (found 2026-10-03,
+    # wiring hockey in). The number in the label is the period.
+    digits = "".join(ch for ch in str(period if period is not None else "") if ch.isdigit())
     try:
-        per = int(period)
-    except (TypeError, ValueError):
+        per = int(digits)
+    except ValueError:
         return None
     if per < 1 or per > periods:
         return None                    # pre-game, or overtime — see above
@@ -156,6 +172,36 @@ def win_prob(sport: str, margin: float, seconds_left: float,
     return max(0.001, min(0.999, normal_cdf(expected / sd)))
 
 
+def _pois(k: int, lam: float) -> float:
+    import math
+    return math.exp(-lam) * lam ** k / math.factorial(k) if lam > 0 else (1.0 if k == 0 else 0.0)
+
+
+def hockey_win_prob(margin: float, seconds_left: float, regulation_s: float = 3600.0,
+                    lam_home_60: float | None = None, lam_away_60: float | None = None) -> float:
+    """P(home wins) from the goal margin now and the clock: the rest of
+    regulation as two Poisson counts, a tie going to overtime/shootout.
+    ``lam_*_60`` are each side's expected goals over sixty minutes (the
+    pregame model's, when a caller has them; the league rate otherwise)."""
+    total = float(regulation_s)
+    left = max(0.0, min(float(seconds_left), total))
+    frac = left / total if total > 0 else 0.0
+    lh = (lam_home_60 if lam_home_60 is not None else NHL_GOALS_60 * NHL_HOME_EDGE) * frac
+    la = (lam_away_60 if lam_away_60 is not None else NHL_GOALS_60 / NHL_HOME_EDGE) * frac
+    m = int(round(float(margin)))
+    win = tie = 0.0
+    for i in range(16):
+        pi = _pois(i, lh)
+        for j in range(16):
+            pr = pi * _pois(j, la)
+            d = m + i - j
+            if d > 0:
+                win += pr
+            elif d == 0:
+                tie += pr
+    return max(0.001, min(0.999, win + tie * NHL_OT_HOME))
+
+
 def possession_blind(sport: str, margin: float, seconds_left: float) -> bool:
     """Is the game inside the window this model demonstrably misreads?"""
     one_score = BLIND_MARGIN.get(str(sport or "").lower(), 8)
@@ -174,7 +220,9 @@ def reading(sport: str, home: str, away: str, margin: float,
     basis in words, because "win probability" on a sports site is assumed
     to mean a fitted play-by-play model and this one is not that.
     """
-    p = win_prob(sport, margin, seconds_left, pregame_margin, regulation_s)
+    hockey = str(sport or "").lower() == "nhl"
+    p = (hockey_win_prob(margin, seconds_left, regulation_s or REGULATION_S["nhl"]) if hockey
+         else win_prob(sport, margin, seconds_left, pregame_margin, regulation_s))
     blind = possession_blind(sport, margin, seconds_left)
     return {
         "home": home, "away": away,
@@ -183,10 +231,14 @@ def reading(sport: str, home: str, away: str, margin: float,
         "leader": home if p >= 0.5 else away,
         "margin": round(float(margin), 1),
         "seconds_left": None if seconds_left is None else int(seconds_left),
-        "basis": "score and clock against the pregame line",
+        "basis": ("score and clock against the league's scoring rate" if hockey
+                  else "score and clock against the pregame line"),
         "possession_blind": blind,
-        "caveat": ("Inside the last five minutes of a one-score game this "
-                   "reads the scoreboard but not the ball — possession "
-                   "decides more here than the margin does."
+        "caveat": (("Inside the last five minutes of a one-goal game the trailing "
+                    "side pulls its goalie, and goals come faster than this reads."
+                    if hockey else
+                    "Inside the last five minutes of a one-score game this "
+                    "reads the scoreboard but not the ball — possession "
+                    "decides more here than the margin does.")
                    if blind else ""),
     }

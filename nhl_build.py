@@ -799,6 +799,8 @@ def main() -> None:
     ap.add_argument("--cached-odds", action="store_true", help="use the odds already on disk — no purchase")
     ap.add_argument("--out", default="web/data/nhl.json", help="where the public board is written")
     ap.add_argument("--no-journal", action="store_true", help="build and publish without journaling")
+    ap.add_argument("--live-lines", action="store_true",
+                    help="pull the live market for in-progress games (three credits, the launcher's call)")
     args = ap.parse_args()
 
     from engine.sources import nhldata
@@ -844,6 +846,24 @@ def main() -> None:
             attach_most_likely(out, args.out, args.date)
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  Most Likely skipped: {exc}")
+    # THE LIVE LINE (engine/livelines), as the hoops boards carry it: the
+    # pull is three credits for the whole slate and only on the launcher's
+    # say-so (--live-lines, its own lane behind football) or a full odds
+    # run; charting from the history on disk is free and runs every build.
+    try:
+        from engine import livelines as _ll
+        from engine.sources.oddsapi import NHL_TEAM_ABBR
+        _live_games = [g for g in out.get("games") or [] if (g.get("live") or {}).get("state") == "live"]
+        if _live_games and (args.odds or args.live_lines):
+            _n, _note = _ll.pull_and_record(SPORT, NHL_TEAM_ABBR)
+            if _n:
+                print(f"  Live line: {_note}")
+        _midnight = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        _tracked = _ll.attach(out.get("games") or [], SPORT, since=_midnight)
+        if _tracked:
+            print(f"  Live line: charting {_tracked} game(s)")
+    except Exception as exc:                                # noqa: BLE001
+        print(f"⚠️  live line tracking unavailable: {exc}")
     # The shared after-hooks, as every other build runs them; each one is
     # its own try so one failing never costs the board.
     for label, fn in (

@@ -44093,7 +44093,7 @@ const LIVE_FEEDS = {
    to the board exactly as before. */
 const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
                     cfb: "data/live_cfb.json", nba: "data/live_nba.json",
-                    wnba: "data/live_wnba.json" };
+                    wnba: "data/live_wnba.json", nhl: "data/live_nhl.json" };
 let _liveAll = { at: 0, games: [], finals: [] };
 let _liveChip = "all";
 //: The sport the chip was chosen under. Ethan, 2026-09-05: "the live page

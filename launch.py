@@ -245,6 +245,25 @@ MLB_LINES_CLOCK = "mlb_lines"
 #: its own money.
 NBA_LINES_CLOCK = "nba_lines"
 WNBA_LINES_CLOCK = "wnba_lines"
+#: …AND HOCKEY'S (2026-10-03), last in line: the same three-credit board
+#: pull on its own clock and the NHL's own (small) share of the money, and
+#: NEVER while a football game is live — the live history shares one
+#: cadence clock (`livelines.last_pull_ts`), and a hockey pull must not be
+#: the reason a Sunday's NFL live line waited.
+NHL_LINES_CLOCK = "nhl_lines"
+
+
+def _football_live() -> bool:
+    """Is an NFL or college game in progress on its board right now?"""
+    for path in (NFL_OUT, CFB_OUT):
+        try:
+            with open(path) as fh:
+                if any((g.get("live") or {}).get("state") == "live"
+                       for g in json.load(fh).get("games") or []):
+                    return True
+        except Exception:                                    # noqa: BLE001
+            continue
+    return False
 
 
 def _live_lines_due(path: str) -> bool:
@@ -1232,15 +1251,26 @@ def refresh_nba(quiet: bool = False) -> bool:
 def refresh_nhl(quiet: bool = False) -> bool:
     """NHL board (2026-10-03) — paced like the hoops boards: the schedule
     is the NHL's own free feed, so the games>0 gate answers "is there a
-    slate tonight" before a credit is spent. No live-line lane yet."""
+    slate tonight" before a credit is spent. The live line rides its own
+    lane behind football (NHL_LINES_CLOCK)."""
     args = ["nhl_build.py", _slate_date(), "--out", NHL_OUT]
     spend = _slate_games(NHL_OUT) > 0 and _odds_affordable(NHL_OUT, quiet, sport="nhl")
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-    elif _with_odds():
+    live_spend, live_before = False, ""
+    if not spend and _with_odds():
         args.append("--cached-odds")
+        # THE LIVE LINE ON ITS OWN LANE (NHL_LINES_CLOCK), as the hoops
+        # boards': a game under way, the live cadence round, the pacer's
+        # yes on the NHL's money — and no football game live.
+        if (not _football_live() and _live_lines_due(NHL_OUT)
+                and _odds_affordable(NHL_OUT, quiet, sport=NHL_LINES_CLOCK, credits=BOARD_ODDS_COST)):
+            args.append("--live-lines")
+            live_spend = True
+            live_before = _paid_pull_baseline()
     ok, tail = _run_build(args)
+    _finish_paid_pull(live_spend, live_before, ok, tail, "NHL live lines", sport=NHL_LINES_CLOCK)
     _finish_paid_pull(spend, before_seen, ok, tail, "NHL", sport="nhl")
     if not quiet:
         print(f"  NHL  {_slate_date()}: {_board_word(NHL_OUT, ok)}"
@@ -4145,7 +4175,7 @@ def _live_scores_refresher() -> None:
         try:
             ok, _tail = _run_build(["livescore_build.py"])
             if ok:
-                for lg in ("nfl", "cfb", "nba", "wnba"):
+                for lg in ("nfl", "cfb", "nba", "wnba", "nhl"):
                     f = ROOT / "web" / "data" / f"live_{lg}.json"
                     if not f.is_file():
                         continue

@@ -360,7 +360,7 @@ FREE_FILES = (
     # than taking this sentence on trust). The same file now asserts
     # every league the builder writes is registered HERE, so the next
     # league added cannot repeat this without the sandbox suite saying so.
-    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "rosters_nhl.json",
@@ -409,7 +409,7 @@ KNOWN_BOARDS = (
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
     "streak.json", "bookreport.json", "ufc_live.json", "live_mlb.json",
-    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "rosters_nhl.json",

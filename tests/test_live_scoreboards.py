@@ -136,7 +136,7 @@ def test_one_parse_not_two():
 
 # --- the build --------------------------------------------------------------
 def test_every_configured_league_is_reachable_by_name():
-    assert set(L.ESPN_SCOREBOARD) == {"nfl", "cfb", "nba", "wnba"}
+    assert set(L.ESPN_SCOREBOARD) == {"nfl", "cfb", "nba", "wnba", "nhl"}
     for lg, url in L.ESPN_SCOREBOARD.items():
         assert url.startswith("https://site.api.espn.com/"), (lg, url)
         assert url.endswith("/scoreboard"), (lg, url)
