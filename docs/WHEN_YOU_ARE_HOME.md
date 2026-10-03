@@ -177,9 +177,13 @@ NFL or college game is live:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 futures_build.py nhl
-cd /srv/qellys && sudo -u qellys python3 futures_build.py nhl --odds
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^ODDS_API_KEY | xargs) python3 futures_build.py nhl --odds
 cd /srv/qellys && sudo -u qellys python3 livescore_build.py --league nhl
 ```
+
+The `--odds` line reads the one key it needs from `/etc/qellys/env`, the
+same way the JuiceReel check does. A plain hand run has no key (the box
+printed "prices: OddsAPIError: No Odds API key", 2026-10-03).
 
 **H14. Later — once NHL picks have graded for a couple of weeks.** This
 makes the NHL Most Likely chances honest from their own record. It is the
