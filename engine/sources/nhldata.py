@@ -57,6 +57,19 @@ def fetch_player(pid, ttl: int = 90 * 86400) -> dict:
     return fetch_json(f"{API}/player/{pid}/landing", f"nhl_player_{pid}.json", ttl=ttl)
 
 
+def fetch_roster(team: str, ttl: int = 6 * 3600) -> dict:
+    return fetch_json(f"{API}/roster/{team}/current", f"nhl_roster_{team}.json", ttl=ttl)
+
+
+#: Every club, by the feed's own abbreviation — the roster pull's walk list.
+TEAMS = ("ANA", "BOS", "BUF", "CAR", "CBJ", "CGY", "CHI", "COL", "DAL", "DET", "EDM", "FLA",
+         "LAK", "MIN", "MTL", "NJD", "NSH", "NYI", "NYR", "OTT", "PHI", "PIT", "SEA", "SJS",
+         "STL", "TBL", "TOR", "UTA", "VAN", "VGK", "WPG", "WSH")
+#: Where the day's rosters are kept for the board (nhl_build reads it to put
+#: a traded player on his new team before he has played a game for it).
+ROSTER_FILE = "nhl_rosters.json"
+
+
 def _txt(v) -> str:
     """The API wraps names as {"default": "..."}; take the text either way."""
     if isinstance(v, dict):
@@ -177,6 +190,76 @@ def parse_player(landing: dict) -> dict:
     first, last = _txt(p.get("firstName")), _txt(p.get("lastName"))
     return {"name": f"{first} {last}".strip(), "headshot": str(p.get("headshot") or ""),
             "position": str(p.get("position") or "")}
+
+
+def parse_roster(payload: dict, team: str) -> list[dict]:
+    """[{pid, name, position, headshot, team}] from /roster/{team}/current."""
+    out = []
+    for group in ("forwards", "defensemen", "goalies"):
+        for p in (payload or {}).get(group) or []:
+            name = f"{_txt(p.get('firstName'))} {_txt(p.get('lastName'))}".strip()
+            if not name or not p.get("id"):
+                continue
+            out.append({"pid": str(p["id"]), "name": name, "team": team,
+                        "position": str(p.get("positionCode") or ("G" if group == "goalies" else "")),
+                        "headshot": str(p.get("headshot") or "")})
+    return out
+
+
+def refresh_rosters(conn, date: str, teams=TEAMS, fetch=fetch_roster, out_dir=None) -> dict:
+    """THE FACES, KEPT CURRENT (Ethan, 2026-10-03: "make sure we are pulling
+    all the up to date headshots for nhl"). A headshot was stored the first
+    time a player was seen and never asked for again — and the league's
+    photo address carries the SEASON and the TEAM, so every trade and every
+    new season left a face behind. One roster call per club (32 a day)
+    re-states every current player's photo, and the day's rosters are kept
+    in ROSTER_FILE for the board. A club whose call fails keeps yesterday's."""
+    import json as _json
+    from pathlib import Path as _P
+    from .. import db
+    rows, roster, failed = [], {}, []
+    for team in teams:
+        try:
+            players = parse_roster(fetch(team), team)
+        except DataUnavailable:
+            failed.append(team)
+            continue
+        roster[team] = [{"name": p["name"], "pid": p["pid"], "position": p["position"]} for p in players]
+        rows += [{"sport": "nhl", "player": p["name"], "espn_id": p["pid"], "headshot": p["headshot"],
+                  "seen": date} for p in players]
+    before = {r[0]: r[1] for r in conn.execute(
+        "SELECT player, headshot FROM player_assets WHERE sport='nhl'")}
+    db.upsert_player_assets(conn, rows)
+    changed = sum(1 for r in rows if r["headshot"] and before.get(r["player"]) != r["headshot"])
+    if roster:
+        d = _P(out_dir) if out_dir else _P(__file__).resolve().parents[2] / "data"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / ROSTER_FILE
+        old = {}
+        try:
+            old = _json.loads(path.read_text()).get("teams") or {}
+        except (OSError, ValueError):
+            pass
+        old.update(roster)
+        path.write_text(_json.dumps({"date": date, "teams": old}))
+    return {"teams": len(roster), "players": len(rows), "faces_changed": changed, "failed": failed}
+
+
+def load_rosters(max_age_days: int = 3, path=None) -> dict:
+    """{player: team} from ROSTER_FILE when it is recent; {} otherwise, and
+    the board then goes by each player's last game as before."""
+    import datetime as _dt
+    import json as _json
+    from pathlib import Path as _P
+    p = _P(path) if path else _P(__file__).resolve().parents[2] / "data" / ROSTER_FILE
+    try:
+        d = _json.loads(p.read_text())
+        age = (_dt.date.today() - _dt.date.fromisoformat(d["date"])).days
+    except (OSError, ValueError, KeyError):
+        return {}
+    if age > max_age_days:
+        return {}
+    return {pl["name"]: team for team, players in (d.get("teams") or {}).items() for pl in players}
 
 
 def full_names(conn, pids: set, fetch=fetch_player) -> dict:

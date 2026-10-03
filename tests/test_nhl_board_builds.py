@@ -165,6 +165,16 @@ def test_opening_night_keeps_last_seasons_players_and_drops_the_gone():
     assert not any(p.player == "Gone Guy" for p in slate.props)
 
 
+def test_a_traded_player_moves_with_the_roster_and_a_released_one_leaves():
+    conn = _history()
+    players = B.M.player_games(conn)
+    live = B.current_players(players, "2026-10-08", rosters={"Connor McDavid": "CGY", "Stuart Skinner": "EDM",
+                                                            "Nazem Kadri": "CGY", "Dan Vladar": "CGY"})
+    assert live["Connor McDavid"]["team"] == "CGY" and live["Connor McDavid"]["traded_from"] == "EDM"
+    assert "Evan Bouchard" not in live, "on no current roster of a club whose roster was read"
+    assert B.current_players(players, "2026-10-08", rosters={})["Evan Bouchard"], "no rosters, no change"
+
+
 def test_the_walk_never_sees_a_game_before_projecting_it():
     conn = _history()
     rows = BT.settled(conn, "sog")

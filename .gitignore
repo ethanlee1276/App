@@ -56,6 +56,8 @@ data/*.bak-*
 # lists untracked files — unignored, the state file the updater writes
 # would jam the updater itself on its second run.
 data/autoupdate.json
+# The NHL rosters the nightly pull writes (engine/sources/nhldata.refresh_rosters).
+data/nhl_rosters.json
 # Rocket Radar's own record — the calls, their marks and their
 # paths. Same reasoning as the bet ledger: it is the machine's
 # memory of what it said, not source, and it only means anything

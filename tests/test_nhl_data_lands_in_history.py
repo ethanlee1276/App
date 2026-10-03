@@ -106,6 +106,33 @@ def test_a_player_is_looked_up_once():
                         ).fetchone()[0] == "https://img/8478402.png"
 
 
+def test_the_roster_pull_keeps_every_face_current():
+    """Ethan, 2026-10-03: "make sure we are pulling all the up to date
+    headshots for nhl." The first photo stored for a player was never asked
+    for again, and the league's photo address carries the season and team."""
+    conn, _ = _ingest()
+    old = conn.execute("SELECT headshot FROM player_assets WHERE player='Connor McDavid'").fetchone()[0]
+    roster = {"forwards": [{"id": 8478402, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"},
+                            "positionCode": "C", "headshot": "https://assets.nhle.com/mugs/nhl/20262027/EDM/8478402.png"}],
+              "defensemen": [], "goalies": [{"id": 8479973, "firstName": {"default": "Stuart"},
+                                             "lastName": {"default": "Skinner"}, "headshot": ""}]}
+    out = Path(tempfile.mkdtemp())
+    res = N.refresh_rosters(conn, "2026-10-03", teams=("EDM", "CGY"),
+                            fetch=lambda t: roster if t == "EDM" else (_ for _ in ()).throw(N.DataUnavailable("down")),
+                            out_dir=out)
+    assert res["teams"] == 1 and res["failed"] == ["CGY"] and res["faces_changed"] == 1, res
+    new = conn.execute("SELECT headshot FROM player_assets WHERE player='Connor McDavid'").fetchone()[0]
+    assert new != old and "20262027" in new
+    kept = conn.execute("SELECT headshot FROM player_assets WHERE player='Stuart Skinner'").fetchone()[0]
+    assert kept == "https://img/8479973.png", "a blank photo never erases one we have"
+    import json
+    import datetime
+    data = json.loads((out / N.ROSTER_FILE).read_text())
+    data["date"] = datetime.date.today().isoformat()
+    (out / N.ROSTER_FILE).write_text(json.dumps(data))
+    assert N.load_rosters(path=out / N.ROSTER_FILE) == {"Connor McDavid": "EDM", "Stuart Skinner": "EDM"}
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

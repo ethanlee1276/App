@@ -288,6 +288,8 @@ def main() -> None:
     ap.add_argument("--refresh", action="store_true",
                     help="re-ingest dates already stored (default: skip them, "
                          "which makes a long backfill resumable)")
+    ap.add_argument("--faces", action="store_true",
+                    help="NHL: refresh every current player's headshot from the 32 team rosters")
     ap.add_argument("--probe", action="store_true",
                     help="report what each candidate feed endpoint "
                          "actually returns, then exit")
@@ -444,6 +446,13 @@ def main() -> None:
         # basketball walk. Ethan, 2026-10-03: "at least three years worth
         # of NHL data". --probe fetches one of each first.
         from engine.sources import nhldata
+        if args.faces:
+            import datetime as _dtf
+            rr = nhldata.refresh_rosters(conn, _dtf.date.today().isoformat())
+            print(f"NHL rosters: {rr['teams']} team(s), {rr['players']} player(s), "
+                  f"{rr['faces_changed']} photo(s) new or changed"
+                  + (f"; unreachable: {', '.join(rr['failed'])}" if rr["failed"] else ""))
+            return
         if args.probe:
             print("Probing the NHL API — what each endpoint ACTUALLY returns:\n")
             for row in nhldata.probe():

@@ -266,9 +266,15 @@ def game_bets(g, teams: dict) -> list[dict]:
 
 
 # --- the slate ----------------------------------------------------------------
-def current_players(players: dict, date: str) -> dict:
+def current_players(players: dict, date: str, rosters: dict | None = None) -> dict:
     """The players who dressed in one of their team's last CURRENT_GAMES
-    games before ``date`` — see CURRENT_GAMES for why games, not days."""
+    games before ``date`` — see CURRENT_GAMES for why games, not days.
+
+    ``rosters`` ({player: team}, the nightly roster pull) puts a traded
+    player on his NEW team before he has played for it, and leaves off a
+    player no current roster carries (sent down, released, retired) — but
+    only for a club whose roster was actually read, so a failed pull costs
+    nothing."""
     team_days: dict = {}
     for p in players.values():
         for g in p.get("games") or []:
@@ -280,16 +286,24 @@ def current_players(players: dict, date: str) -> dict:
         last = next((g["date"] for g in p.get("games") or [] if g["date"] < date), None)
         if last and p["team"] in cutoff and last >= cutoff[p["team"]]:
             out[name] = p
+    if rosters:
+        listed = set(rosters.values())
+        for name in list(out):
+            team = rosters.get(name)
+            if team and team != out[name]["team"]:
+                out[name] = {**out[name], "team": team, "traded_from": out[name]["team"]}
+            elif not team and out[name]["team"] in listed:
+                del out[name]
     return out
 
 
-def build_slate(games: list[dict], players: dict, date: str) -> _Slate:
+def build_slate(games: list[dict], players: dict, date: str, rosters: dict | None = None) -> _Slate:
     """Every current skater in every market, and each team's probable
     starter in saves — the props the odds pull can land on."""
     slate = _Slate([_Game(g["home"], g["away"], g.get("start", ""), g.get("home_name", ""),
                           g.get("away_name", "")) for g in games], [])
     teams = {t for g in games for t in (g["home"], g["away"])}
-    live = current_players(players, date)
+    live = current_players(players, date, rosters)
     for name, p in live.items():
         if p["team"] not in teams or p["position"] == "G":
             continue
@@ -367,7 +381,9 @@ def build(date: str, games: list[dict], conn, attach_odds=None) -> tuple[dict, _
     players = M.player_games(conn, seasons=seasons)
     teams = M.team_profiles(conn, seasons=seasons)
     league = M.league_rates(players)
-    slate = build_slate(games, players, date)
+    from engine.sources import nhldata
+    rosters = nhldata.load_rosters()
+    slate = build_slate(games, players, date, rosters)
     if not slate.props:
         out["history_gap"] = {"teams": sorted({t for g in games for t in (g["home"], g["away"])}),
                               "players_found": len(players), "seasons": seasons}

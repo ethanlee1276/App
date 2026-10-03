@@ -568,7 +568,7 @@ PRUNABLE_CACHE_PREFIXES = (
     # Hockey (2026-10-03): a final's box score is stored in history the day
     # it lands; a player's name and photo land in player_assets. All three
     # re-fetch on a miss.
-    "nhl_box_", "nhl_player_", "nhl_score_",
+    "nhl_box_", "nhl_player_", "nhl_score_", "nhl_roster_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the
@@ -1595,6 +1595,18 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     log(f"  nhl results: {tot_g} game(s), {tot_l:,} log rows")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nhl results ingest failed: {exc}")
+    # THE FACES AND THE ROSTERS, once a day from September (camp rosters)
+    # through June — see nhldata.refresh_rosters.
+    if today.month >= 9 or today.month <= 6:
+        try:
+            from . import db as _rdb2
+            from .sources import nhldata as _nhl2
+            rr = _nhl2.refresh_rosters(_rdb2.connect(), today.isoformat())
+            log(f"  nhl rosters: {rr['teams']} team(s), {rr['players']} player(s), "
+                f"{rr['faces_changed']} new photo(s)"
+                + (f" — {len(rr['failed'])} team(s) unreachable" if rr["failed"] else ""))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  nhl roster refresh failed: {exc}")
 
     # NFL weekly results — the layer that settles NFL props and TDs. The
     # nflverse weekly-stats file updates within a day of games, so a daily
