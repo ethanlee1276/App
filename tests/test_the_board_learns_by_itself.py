@@ -126,7 +126,11 @@ def test_the_settle_pass_runs_it_and_the_record_page_draws_it():
     src = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
     body = src[src.index("def settle_open("):]
     body = body[:body.index("\ndef ", 10)]
-    assert "boardlearn.refresh(lconn, hconn" in body, "every settle pass, not a command on the box"
+    assert "_run_board_learning(lconn, hconn, log)" in body, "the settle pass, not a command on the box"
+    assert "BOARDLEARN_EVERY_S" in body, "throttled, so a game day does not refit every few minutes"
+    helper = src[src.index("def _run_board_learning("):src.index("def _run_deep_refit(")]
+    assert '_spawn_module("engine.boardlearn", log, args=("--auto",))' in helper, \
+        "on the box it runs in its own niced process, never the web server's"
     led = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
     assert '"board_learning": _board_learning_block()' in led
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()

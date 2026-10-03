@@ -1143,11 +1143,25 @@ def settle_open(log=print, state_path: Path | None = None,
             # box; they refit here now, on raw claims, saved only when they
             # pass on games they never saw, removed when they stop passing.
             # A league whose graded picks did not change is not refitted.
-            try:
-                from . import boardlearn
-                boardlearn.refresh(lconn, hconn, log=log)
-            except Exception as exc:  # noqa: BLE001
-                log(f"  ⚠️  board learning skipped: {exc}")
+            #
+            # OUT OF THE SERVER'S PROCESS, AND NOT EVERY PASS (2026-10-04).
+            # Ethan, the same evening: "the site is so laggy and slow and
+            # basically unusable". The web server and this settle loop are
+            # threads of ONE Python process on a one-CPU box, and these fits
+            # (two held-out bootstraps per league, the NFL's whole history
+            # index) held the interpreter for seconds on every pass that
+            # graded something — every few minutes on a game day. Now a
+            # niced, detached child, at most every BOARDLEARN_EVERY_S, like
+            # the weekly fitters (`_spawn_module`).
+            last_bl = state.get("last_boardlearn_ts")
+            if not (isinstance(last_bl, (int, float)) and now - last_bl < BOARDLEARN_EVERY_S):
+                try:
+                    for line in _run_board_learning(lconn, hconn, log):
+                        log(f"  {line}")
+                except Exception as exc:  # noqa: BLE001
+                    log(f"  ⚠️  board learning skipped: {exc}")
+                state["last_boardlearn_ts"] = now
+                _save_state(state_path, state)
             # The correlation priors, refit against our own history. The
             # last fitter on this site that a human had to remember to
             # run: you typed the command, read a table and hand-copied
@@ -1368,6 +1382,23 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
     for line in out:
         log(f"  {line}")
     return out
+
+
+#: How often the Most Likely board's own corrections may refit (engine/boardlearn).
+BOARDLEARN_EVERY_S = 3 * 3600
+
+
+def _run_board_learning(lconn, hconn, log) -> list[str]:
+    """engine/boardlearn, as a niced detached child on the box. Inside a
+    sandbox (the suite sets engine.modelstate's directory, which production
+    never does) it runs inline, so a test sees its result and no test ever
+    starts a real child."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        from . import boardlearn
+        boardlearn.refresh(lconn, hconn, log=log)
+        return []
+    return _spawn_module("engine.boardlearn", log, args=("--auto",))
 
 
 def _run_deep_refit(log) -> list[str]:

@@ -14,6 +14,25 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Site speed — run this first (2026-10-04)
+
+The web server and the background work (settling, refits, board builds)
+share one Python process on a one-CPU box, so anything heavy in the
+background makes pages wait. The automatic learning job now runs in its
+own low-priority process, at most every three hours. This shows what
+else is eating the box (paste all of it):
+
+```
+uptime; free -m
+ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
+for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
+journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build" | tail -15
+```
+
+Run it while the site feels slow. The load average (`uptime`) and the
+top processes tell whether it is the box; the `curl` times tell whether
+it is the server or your phone.
+
 ### NFL Most Likely + touchdowns — run these now (2026-10-04, round 7)
 
 Two things in this round:

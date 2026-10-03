@@ -240,9 +240,14 @@ def main(argv=None) -> int:
     from . import db, ledger
     ap = argparse.ArgumentParser(prog="python3 -m engine.boardlearn")
     ap.add_argument("--sport", default="", help="one league (default: every league with a board)")
+    ap.add_argument("--auto", action="store_true",
+                    help="the settle loop's run: only leagues with new graded picks, short output")
     a = ap.parse_args(argv)
     sports = (a.sport.lower(),) if a.sport else SPORTS
-    ran = refresh(ledger.connect(), db.connect(), sports=sports, force=True)
+    ran = refresh(ledger.connect(), db.connect(), sports=sports, force=not a.auto)
+    if a.auto:
+        print(f"board learning: refitted {', '.join(ran) or 'nothing (no new graded picks)'}")
+        return 0
     for sport, e in ran.items():
         r = e["record"]
         print(f"\n=== {sport.upper()}: {r.get('won', 0)}-{r.get('n', 0) - r.get('won', 0)} on {r.get('n', 0)} graded "
