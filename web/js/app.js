@@ -6444,7 +6444,10 @@ const findGame = (gid) => dashLiveGames()
    colours instead of falling all the way back to the drawing. Live games
    never show a photo — the drawing carries the ball spot, bases, wind. */
 const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
-                       nba: "basketball", wnba: "basketball" };
+                       nba: "basketball", wnba: "basketball",
+                       // Ethan's five rink renders (2026-10-03); the blue one
+                       // also fills the violet slot, which he did not send.
+                       nhl: "hockey" };
 
 /* THE RENDER VERSION, and why every venue URL has to carry it.
    ------------------------------------------------------------------
@@ -6795,7 +6798,8 @@ function gameCard(g) {
     liveDetail = `<div class="live-detail"><span class="live-dot sm"></span>${escapeHtml(live.detail)}</div>`;
   }
   // The wind gauge and (for MLB live) the base diamond share the footer row.
-  const footer = (nba || cfb)
+  // No wind dial indoors: hockey and basketball read "Indoor …" alone.
+  const footer = (nba || nhl || cfb)
     ? `<div class="wind-wrap"><span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`
     : isLive && mlb
     ? `<div class="wind-wrap live-footer">${windGauge(w)}<span class="cond">${escapeHtml(cond)}</span>${liveDetail}</div>`

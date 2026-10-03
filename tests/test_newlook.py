@@ -576,7 +576,9 @@ def test_ethans_venue_renders_are_plugged_in():
     octagon picked by card identity, since no fight has a home team."""
     vdir = os.path.join(ROOT, "web/img/venues/variants")
     hues = ("red", "gold", "green", "blue", "violet", "steel")
-    expected = {f"{fam}-{h}.jpg" for fam in ("football", "basketball", "baseball")
+    # Hockey joined 2026-10-03 with Ethan's five rink renders (blue also
+    # fills violet), so it carries the same six slots.
+    expected = {f"{fam}-{h}.jpg" for fam in ("football", "basketball", "baseball", "hockey")
                 for h in hues} | {f"octagon-{i}.jpg" for i in range(1, 7)}
     have = {f for f in os.listdir(vdir) if f.endswith(".jpg")}
     assert have == expected, f"variant art drifted: {have ^ expected}"

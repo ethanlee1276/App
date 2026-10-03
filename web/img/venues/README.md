@@ -12,7 +12,8 @@ below. No build step, no code change.
    home team's colours: first team colour with real chroma maps to the
    nearest of red / gold / green / blue / violet; black-and-silver
    kits get steel. Families: football (NFL + CFB), baseball (MLB),
-   basketball (NBA + WNBA).
+   basketball (NBA + WNBA), hockey (NHL — five renders, 2026-10-03;
+   the blue one also fills the violet slot).
 3. The drawn night scene, if both files are missing.
 
 LIVE games always use the drawn scene — it carries the ball spot, the

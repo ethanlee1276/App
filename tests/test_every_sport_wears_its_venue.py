@@ -26,12 +26,12 @@ def _fn(name):
 def test_one_game_page_for_every_team_sport():
     i = APP.index("const VENUE_FAMILY = ")
     fam = APP[i:APP.index("};", i)]
-    for sport in ("nfl", "cfb", "mlb", "nba", "wnba"):
+    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
         assert f"{sport}:" in fam, sport
     page = _fn("renderGamePage")
     assert '<div class="gp-hero is-hero">' in page, "no sport is left on the old boxed art"
     assert 'const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);' in page
-    for family in ("football", "baseball", "basketball"):
+    for family in ("football", "baseball", "basketball", "hockey"):
         assert list((ROOT / "web" / "img" / "venues" / "variants").glob(f"{family}-*.jpg")), family
 
 
