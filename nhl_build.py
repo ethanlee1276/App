@@ -767,6 +767,10 @@ def attach_most_likely(out: dict, out_path: str, date: str) -> None:
                board_guide=_boards.guide(SPORT), board_shelves=_boards.shelves(SPORT, out["most_likely"]))
     from engine import likelyboard
     print(f"  {likelyboard.attach(out, SPORT)}")
+    # THE PARLAY ZONE, TWO LEGS (engine/parlays RULES["nhl"]): screened
+    # over the board that just cleared the singles gates, as every sport's.
+    from engine.parlays import attach as _parlays
+    _parlays(out, SPORT)
 
 
 def journal(out: dict, date: str) -> None:

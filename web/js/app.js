@@ -41653,6 +41653,9 @@ function initialView() {
    keep their own page. */
 const SLIP_KEY = "qb_slip_v1";
 const SLIP_MAX = 3;   // the engine's own cap — Ethan, 2026-09-01: "3 legs"
+/* Hockey's slip is two legs (engine/parlays RULES["nhl"].slip_legs —
+   Ethan, 2026-10-03, "the parlay 2-leg mode"); every other board keeps 3. */
+const SLIP_MAX_BY_SPORT = { nhl: 2 };
 let _slip = null;
 let _slipOpen = false;
 
@@ -41731,8 +41734,9 @@ function slipToggle(r) {
       tfToast("The slip holds one board at a time — clear it to start another.");
       return false;
     }
-    if (s.legs.length >= SLIP_MAX) {
-      tfToast(`${SLIP_MAX} legs is the ceiling — the same rule the model’s own tickets follow.`);
+    const cap = SLIP_MAX_BY_SPORT[state.sport] || SLIP_MAX;
+    if (s.legs.length >= cap) {
+      tfToast(`${cap} legs is the ceiling — the same rule the model’s own tickets follow.`);
       return false;
     }
     const kind = r.bet_type || r.market || "";

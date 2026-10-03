@@ -347,6 +347,7 @@ class SportRules:
     anchor_tier1: bool = False      # §4 NFL anchor rule
     max_per_slate: int = 1          # §10.2, tightened to 1/Saturday for CFB
     unavailable: str = ""           # non-empty = we cannot screen this sport
+    slip_legs: int = MAX_LEGS       # the most legs a reader's own slip may carry
 
     def threshold(self, legs: int) -> float:
         return (self.two_leg_points if legs <= 2 else self.three_leg_points) / 100.0
@@ -377,6 +378,12 @@ RULES: dict[str, SportRules] = {
     # §9.1 bans every cross-fight construction. Saying that plainly beats
     # inventing a market we do not model — and §9.2 points the same way:
     # most correct MMA correlations belong in a single method bet anyway.
+    # Hockey (Ethan, 2026-10-03: "the parlay 2-leg mode"). Two legs, one
+    # game, at the CFB/UFC bar: a single goal decides most nights, the
+    # board is a week old and nothing hockey-specific is measured yet, so
+    # the ticket stays short and has to clear the higher threshold.
+    "nhl": SportRules("nhl", "NHL", max_legs=2, two_leg_points=2.5, three_leg_points=4.0,
+                      slip_legs=2),
     "ufc": SportRules(
         "ufc", "UFC", max_legs=2, two_leg_points=2.5, three_leg_points=4.0,
         kelly=KELLY_FRACTION_UFC,
@@ -405,6 +412,10 @@ FAMILY = {
     "total_bases": "bat", "hits": "bat", "home_runs": "bat",
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
     "fg3m": "three", "stl": "stops", "blk": "stops",
+    # Hockey: shots, the scoring chain (a goal is a point for up to three
+    # skaters), blocks and the goalie's saves.
+    "sog": "nhlshot", "points": "nhlpoint", "assists": "nhlpoint",
+    "goals": "nhlgoal", "anytime_goal": "nhlgoal", "blocks": "nhlblock", "saves": "nhlsave",
     # Game lines. Almost every construction the doc permits has one of these
     # in it — §4.2's passing-game stack ends on a team total, §5.2's pitcher
     # stack ends on the opposing team total, and §6.3's CFB ticket is two
@@ -418,6 +429,7 @@ TIER = {
     "anytime_td": 3, "pass_td": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
+    "sog": 1, "saves": 1, "blocks": 2, "points": 2, "assists": 2, "goals": 3, "anytime_goal": 3,
     # Sides and totals are the most modelable markets on the board and the
     # least variance-contaminated — tier tracks beatability, and these are
     # the numbers a book prices most carefully and we price most carefully.
@@ -431,7 +443,8 @@ HITTER_FAMILIES = {"bat"}
 # slates carry a `volatility` field, but a leg missing it must not slip
 # through — the whole point of the ban is that these are the legs that turn a
 # process into a lottery ticket.
-EXTREME_MARKETS = {"anytime_td", "home_runs", "fg3m", "stl", "blk"}
+EXTREME_MARKETS = {"anytime_td", "home_runs", "fg3m", "stl", "blk", "goals", "anytime_goal"}
+HOCKEY_SCORING = {"nhlpoint", "nhlgoal"}
 
 
 # --- §1: the maths -----------------------------------------------------------
@@ -639,9 +652,10 @@ def check_ticket(sport: str, legs: list[dict]) -> dict:
              and isinstance(l.get("market"), str) and l.get("market")
              and ((isinstance(l.get("player"), str) and l.get("player"))
                   or (l.get("home") and l.get("away")))]
-    if len(clean) > MAX_LEGS:
+    cap = RULES[sport].slip_legs if sport in RULES else MAX_LEGS
+    if len(clean) > cap:
         return {"ok": False, "legs": len(clean), "pair": None,
-                "reason": f"{MAX_LEGS} legs is the ceiling",
+                "reason": f"{cap} legs is the ceiling",
                 "warnings": []}
     warnings: list[dict] = []
     for i in range(len(clean)):
@@ -1010,6 +1024,11 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
         # to kill, which is the gate that exists to kill it.
         return Relation(0.0, "different games — no shared mechanism", 0, "ok")
 
+    if sport == "nhl":
+        rel = _relate_hockey(a, b, fa, fb, ua, ub, same_team)
+        if rel is not None:
+            return rel
+
     # --- pairs involving a game line ----------------------------------------
     # These carry most of the doc's permitted constructions, so they are
     # classified before the player-only rules rather than falling through to
@@ -1143,6 +1162,48 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     return Relation(-SAME_GAME_BASELINE_RHO,
                     "two unders in one game share pace the wrong way for a "
                     "ticket that needs both", 2, "kill")
+
+
+def _relate_hockey(a, b, fa, fb, ua, ub, same_team) -> Relation | None:
+    """Same-game hockey pairs the generic taxonomy reads wrong (2026-10-03).
+
+    Two mechanisms carry almost every hockey ticket. ONE GOAL IS SEVERAL
+    POINTS: a goal credits its scorer and up to two teammates, so two
+    skaters' scoring overs on one team move TOGETHER — the generic
+    "possession pie" rule would kill the most natural hockey pair. EVERY
+    SHOT IS A SAVE TO MAKE: a goalie's saves over and the opposing
+    shooters' shots over share one quantity, while a goal against him is a
+    shot he did not save. Not measured on our games yet — published
+    estimates, read low; None leaves the pair to the generic rules."""
+    if {fa, fb} == {"nhlsave"}:
+        if not same_team and ua and ub:
+            return Relation(0.15, "both goalies busy is one up-tempo game", 0, "ok")
+        return None
+    if "nhlsave" in (fa, fb):
+        g, o = (a, b) if fa == "nhlsave" else (b, a)
+        fo, go_up, o_up = _family(o), _side_up(g), _side_up(o)
+        facing = (o.get("team") or "") == (g.get("opponent") or "") and not _is_game_leg(o)
+        if facing and fo == "nhlshot" and go_up and o_up:
+            return Relation(0.30, "every shot he takes is a save to make — the "
+                                  "shooter's volume is the goalie's", 0, "ok")
+        if facing and fo in HOCKEY_SCORING and go_up and o_up:
+            return Relation(-0.10, "a goal is a shot he did not save — his saves "
+                                   "and their scoring pull apart", 7, "ok")
+        if _is_game_leg(o) and fo == "side" and (o.get("team") or "") == (g.get("team") or "") and go_up:
+            return Relation(-0.10, "a busy goalie usually means his team is being "
+                                   "outshot — the side wants the other script", 2, "ok")
+        if not _is_game_leg(o) and (o.get("team") or "") == (g.get("team") or ""):
+            return Relation(0.0, "different ends of the ice", 0, "ok")
+        return None
+    if same_team and not (_is_game_leg(a) or _is_game_leg(b)) and ua and ub:
+        if fa in HOCKEY_SCORING and fb in HOCKEY_SCORING:
+            return Relation(0.20, "one goal is a point for up to three skaters "
+                                  "on one team — the scoring moves together", 0, "ok")
+        if {fa, fb} == {"nhlshot"}:
+            return Relation(0.10, "one team's shot volume, two shooters", 0, "ok")
+        if "nhlshot" in (fa, fb) and ({fa, fb} & HOCKEY_SCORING):
+            return Relation(0.15, "the team that shoots more scores more", 0, "ok")
+    return None
 
 
 # --- Gate 1: standalone eligibility -----------------------------------------
