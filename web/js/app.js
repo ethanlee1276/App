@@ -20835,7 +20835,6 @@ function ehGrade(r) {
 function edgeHunterHTML(r) {
   const eh = r.edge_hunter;
   if (!eh) return "";
-  const pct = (v) => `${(v * 100).toFixed(1)}%`;
   const rows = [
     ["Market", `${pct(eh.market_prob)} de-vigged · ${eh.best_book || r.book || "best book"} ${american(eh.best_price)}`],
     ["Model", pct(eh.model_prob)],
