@@ -3,7 +3,7 @@
 The site audit, 2026-09-24 (docs/AUDIT_2026-09-24.md, M-2). A first visit
 downloads about 1.1 MB compressed before any board, and most of it is
 explanation: `app.js` is 727 KB gzipped and 404 KB without its comments,
-`styles.css` 177 KB and 62 KB. The comments are this codebase's memory
+`styles.css` 177 KB and 62 KB, and (2026-10-03) `index.html` 29 KB and 11. The comments are this codebase's memory
 and stay in the repository; the browser has no use for them.
 
 WHAT IT DOES. `build()` writes comment-stripped copies of the shell's
@@ -40,8 +40,14 @@ import os
 from pathlib import Path
 
 #: The shell files served trimmed: the page's own code, not vendor bundles
-#: (already minified) and not the small team tables.
-FILES = ("js/app.js", "js/visuals.js", "css/styles.css")
+#: (already minified) and not the small team tables. The document itself
+#: since 2026-10-03: index.html carried ~47 KB of comments (18 KB of its
+#: 29 KB gzipped) that every first visit downloaded.
+FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html")
+
+#: HTML comments that are not commentary: `engine/routes.document` splices
+#: an entity's preview tags between these two markers, so they stay.
+KEEP_HTML_COMMENTS = ("<!-- QB:", "<!-- /QB:")
 
 #: Where the trimmed copies go, under the web root, mirroring the paths.
 MIN_DIR = "min"
@@ -219,6 +225,40 @@ def strip_css(src: str) -> str:
     return "".join(out)
 
 
+def strip_html(src: str) -> str:
+    """``src`` without its ``<!-- -->`` comments, the QB: markers kept.
+
+    REFUSES RATHER THAN GUESSES where a comment could be content: inside
+    ``<script>``/``<style>`` bodies, ``<pre>``, ``<textarea>`` or a
+    ``<template>``, ``<!--`` is not (or not only) a comment, and an
+    unterminated comment is a page this will not rewrite. The CSP forbids
+    inline script and style, so the document has none of the first two;
+    if one ever appears, ``build()`` serves the original."""
+    low = src.lower()
+    for tag in ("<pre", "<textarea", "<template", "<xmp"):
+        if tag in low:
+            raise Unreadable(f"{tag}> in the document — whitespace and comments there are content")
+    import re as _re
+    for m in _re.finditer(r"<(script|style)\b[^>]*>(.*?)</\1>", src, _re.I | _re.S):
+        if m.group(2).strip():
+            raise Unreadable(f"inline <{m.group(1)}> in the document")
+    out: list = []
+    i = 0
+    while True:
+        j = src.find("<!--", i)
+        if j < 0:
+            out.append(src[i:])
+            break
+        k = src.find("-->", j + 4)
+        if k < 0:
+            raise Unreadable(f"unterminated comment at offset {j}")
+        out.append(src[i:j])
+        if src.startswith(KEEP_HTML_COMMENTS, j):
+            out.append(src[j:k + 3])
+        i = k + 3
+    return "".join(out)
+
+
 def _tidy(text: str) -> str:
     """Trailing spaces off every line and runs of blank lines to one. Safe in
     both languages only OUTSIDE strings and templates — so it is applied to
@@ -241,6 +281,8 @@ def trimmed(rel: str, src: str) -> str:
     """The served text for one shell file."""
     if rel.endswith(".js"):
         return strip_js(src)
+    if rel.endswith(".html"):
+        return _tidy(strip_html(src))
     return _tidy(strip_css(src))
 
 

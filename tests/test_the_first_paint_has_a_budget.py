@@ -24,13 +24,12 @@ WEB = ROOT / "web"
 HTML = (WEB / "index.html").read_text()
 
 #: KB, gzip -9 of the TRIMMED copy (engine/shrink), i.e. what a phone gets.
-#: Raised 2026-10-03 from 470 / 600 by the NHL team page (live roster
-#: table) and the Edge Hunter panel, ~1 KB together — told to Ethan with
-#: the follow-up that pays it back many times over: index.html carries
-#: ~18 KB gz of comments, and serving it trimmed like app.js is a Caddy +
-#: shrink change for the box, not a code cut.
+#: app.js was raised 2026-10-03 from 470 by the NHL team page and the Edge
+#: Hunter panel (~1 KB). The first visit came DOWN the same day, 603 -> 590:
+#: index.html is served without its comments now (29 -> 11 KB gz), and the
+#: budget keeps the saving rather than spending it.
 APP_JS_BUDGET_KB = 472
-BOOT_BUDGET_KB = 603
+BOOT_BUDGET_KB = 590
 
 
 def _gz_trimmed(rel: str) -> int:
@@ -50,7 +49,7 @@ def test_the_boot_path_stays_inside_its_budget_and_carries_no_chart_library():
     scripts = re.findall(r'<script src="([^"]+)"', HTML)
     assert not any("apexcharts" in s or "echarts" in s for s in scripts), \
         "a chart library is back in the boot path"
-    total = len(gzip.compress(HTML.encode(), 9)) + _gz_trimmed("css/styles.css")
+    total = _gz_trimmed("index.html") + _gz_trimmed("css/styles.css")
     for s in scripts:
         rel = s.split("?")[0]
         total += _gz_trimmed(rel) if (WEB / rel).exists() else 0

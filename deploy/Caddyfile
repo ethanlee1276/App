@@ -264,11 +264,22 @@ qellysbook.com {
 		# safe state, never a broken one. The trimmed copy is the same
 		# program: tests/test_the_served_code_is_the_same_code.py parses
 		# both and requires identical output.
+		#
+		# THE DOCUMENT TOO (2026-10-03): index.html without its comments
+		# (29 KB -> 11 KB gzipped), at /index.html and at /, which is the
+		# document for every view (the app routes on the hash). The QB:META
+		# markers the preview pages splice into are kept. An unknown path's
+		# SPA fallback still gets the original — the same page, longer.
 		@trimmed {
-			path /js/app.js /js/visuals.js /css/styles.css
+			path /js/app.js /js/visuals.js /css/styles.css /index.html
 			file /min{path}
 		}
 		rewrite @trimmed /min{path}
+		@trimmedroot {
+			path /
+			file /min/index.html
+		}
+		rewrite @trimmedroot /min/index.html
 		try_files {path} /index.html
 		# Editor and OS leftovers are never served (audit E-15). Not a
 		# blanket dot-file rule: /.well-known/assetlinks.json must stay

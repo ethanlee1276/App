@@ -3977,7 +3977,12 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         target = (WEB / path.strip("/")).resolve()
         if target.is_relative_to(WEB.resolve()) and target.is_file():
             return False
-        index = WEB / "index.html"
+        # THE TRIMMED DOCUMENT WHEN THERE IS ONE (engine/shrink): the same
+        # page without its ~47 KB of comments, preview markers kept — what
+        # Caddy serves at / — and the original when it has not been built.
+        index = WEB / "min" / "index.html"
+        if not index.is_file():
+            index = WEB / "index.html"
         if not index.is_file():
             return False
         try:

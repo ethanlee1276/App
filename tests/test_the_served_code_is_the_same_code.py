@@ -111,6 +111,53 @@ def test_the_tokenizer_reads_what_a_regex_cannot():
     assert shrink.strip_css('p::after{content:"/* kept */"}') == 'p::after{content:"/* kept */"}'
 
 
+def _html_events(doc: str) -> list:
+    """Every tag, attribute and non-blank text run, in order — the document
+    a browser builds, minus comments and the whitespace between tags."""
+    from html.parser import HTMLParser
+    out: list = []
+
+    class P(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            out.append(("<", tag, tuple(attrs)))
+
+        def handle_endtag(self, tag):
+            out.append((">", tag))
+
+        def handle_data(self, data):
+            if data.strip():
+                out.append(("t", " ".join(data.split())))
+    P(convert_charrefs=True).feed(doc)
+    return out
+
+
+def test_the_document_is_the_same_page_without_its_comments():
+    """2026-10-03: index.html is served trimmed too. Same tags, same
+    attributes, same text in the same order; the comments gone except the
+    QB:META markers the preview pages splice between."""
+    src = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    out = shrink.trimmed("index.html", src)
+    assert _html_events(out) == _html_events(src)
+    assert out.count("<!--") == 2 and "<!-- QB:META -->" in out and "<!-- /QB:META -->" in out
+    assert len(out) < 0.6 * len(src)
+    assert shrink.strip_html("a<!-- x -->b<!-- QB:META -->c") == "ab<!-- QB:META -->c"
+    for bad in ("<p><!-- open", "<pre>  <!-- kept? --></pre>", "<script>var a=1</script>"):
+        try:
+            shrink.strip_html(bad)
+        except shrink.Unreadable:
+            continue
+        raise AssertionError(f"guessed at {bad!r}")
+
+
+def test_the_preview_pages_read_the_trimmed_document_and_caddy_serves_it_at_root():
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert 'index = WEB / "min" / "index.html"' in srv and 'index = WEB / "index.html"' in srv
+    conf = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    i = conf.index("@trimmedroot {")
+    block = conf[i:conf.index("rewrite @trimmedroot /min/index.html", i)]
+    assert "path /\n" in block and "file /min/index.html" in block
+
+
 def _web(app='const a = 1; // note\n'):
     web = Path(tempfile.mkdtemp())
     for rel in shrink.FILES:
