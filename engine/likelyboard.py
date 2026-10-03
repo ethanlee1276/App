@@ -336,7 +336,7 @@ def _game_of(r: dict, games: list) -> str:
 
 
 def build(result: dict, record: dict | None = None, sport: str = "nfl",
-          tiers_seen: dict | None = None) -> dict:
+          tiers_seen: dict | None = None, calibration: dict | None = None) -> dict:
     """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
     "matchup_source": ...} — the pool, checked and tiered, ranked Top
     first, then by how hard the matchup backs it (`matchup_strength`),
@@ -420,6 +420,18 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             if t not in r["case_lines"]:
                 r["case_lines"].append(t)
 
+    # THE RECORD'S CORRECTION, BEFORE A SINGLE CHECK (engine/likelycal;
+    # Ethan, 2026-10-03: "make the picks better ... I don't want to really
+    # get rid of any most likely bets"). Each pick's chance is pulled
+    # toward its price by as much as picks from the same maker on the same
+    # side have earned in the journal, so the checks, the tier and the
+    # order all read the honest number. Nothing leaves the pool. No store
+    # (or a correction that failed its held-out test) changes nothing.
+    try:
+        from .likelycal import apply as _calibrate
+        _calibrate([pool[k] for k in order], sport, calibration)
+    except Exception:                                        # noqa: BLE001
+        pass
     rows, tiers, lanes = [], {t: 0 for t, _ in TIERS}, {}
     for k in order:
         r = pool[k]
@@ -427,7 +439,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         prob = float(r["model_prob"])
         checks, notes = {}, {}
         checks["model"] = prob >= MODEL_BAR[lane]
-        notes["model"] = f"our chance {prob:.0%} (the bar here is {MODEL_BAR[lane]:.0%})"
+        notes["model"] = (f"our chance {prob:.0%} (the bar here is {MODEL_BAR[lane]:.0%})"
+                          + (f" — {r['cal_note']}" if r.get("cal_note") else ""))
         checks["matchup"], notes["matchup"] = matchup_check(r, leans, td_scores, steps, source)
         checks["market"], notes["market"] = market_check(r)
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)

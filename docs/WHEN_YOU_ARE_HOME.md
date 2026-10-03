@@ -14,6 +14,23 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Today, before Sunday's NFL board (2026-10-03)
+
+**M1. Make the board's chances honest from its own record.** This keeps
+every pick. It pulls each pick's chance toward its price by as much as
+picks from the same maker (the Most Likely list, the matchup picks, the
+TD scenarios, the bold picks) on the same side have earned. It saves only
+if it scores better on games it never learned from. The next board build
+uses it. Paste the output back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nfl
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport cfb
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport mlb
+```
+
+To undo it: `sudo -u qellys rm /srv/qellys/data/likely_calibration.json`
+
 ### Start here — the order to run things (2026-10-02)
 
 Each step's commands are in its block below. Paste back the ones marked

@@ -1798,8 +1798,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, lead_min, status, category, "
-            "evidence) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?)",
+            "evidence, raw_prob) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -1841,7 +1841,13 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # row ranked on the market's number and one a sharp
              # book anchored are different bets with the same
              # shape, and the record could not tell them apart.
-             evidence_for(r)))
+             evidence_for(r),
+             # THE BOARD'S RAW CHANCE beside the shown one, when the
+             # record's correction moved it (engine/likelycal) — the claim
+             # before that shrink, as `raw_prob` is for the edge book's
+             # market shrink, so the next fit reads the raw claim and never
+             # compounds its own correction.
+             r.get("board_raw_prob")))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()
