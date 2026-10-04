@@ -10060,6 +10060,15 @@ function obScalpyHTML(r) {
   const flags = (r.scalpy_flags || []).join("; ");
   return `<span class="ml-tag" title="${escapeAttr(`Scalpy grade by modeled hit probability${flags ? ` — kept out of A+ by: ${flags}` : ""}`)}">Scalpy ${escapeHtml(r.scalpy_grade)}</span>`;
 }
+/* THE STRONGEST REASON, ON THE CARD (Ethan, 2026-10-04: "do all of it" —
+   the why in the row, not only behind "Why?"). A scorer leads with his
+   goal-line work; anything else with the first line of its case, then the
+   matchup check's sentence. */
+function obWhyLine(r) {
+  const t = String((r.lane === "td" && r.goal_line_text) || (r.case_lines || [])[0]
+    || (r.check_notes || {}).matchup || "");
+  return t ? `<span class="ob-plain ob-why1">${escapeHtml(t.length > 96 ? `${t.slice(0, 93)}…` : t)}</span>` : "";
+}
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
@@ -10075,7 +10084,7 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${td}${obWhyLine(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
@@ -20155,7 +20164,7 @@ function zenoOwnerHTML(tix) {
    scores, our chance and the price once the week settles. Owner only. */
 function researchBoxHTML() {
   return `<div class="section-title"><span class="st-ico">${icon("chart", 15)}</span>Research picks
-      <span class="sub">— paste a report's picks before kickoff; graded after the games</span></div>
+      <span class="sub">— paste a report’s picks before kickoff; graded after the games</span></div>
     <form class="card mb-form zeno-research" autocomplete="off">
       <div class="mb-form-row"><label>Season<input name="season" inputmode="numeric" value="${new Date().getFullYear()}" required/></label>
         <label>Week<input name="week" inputmode="numeric" placeholder="5" required/></label></div>
@@ -20383,6 +20392,24 @@ function recPotdSection(rep, scope, recent) {
     </div>`;
 }
 
+/* THE WEEK IN ONE CARD (engine/recap; Ethan, 2026-10-04: "do all of it").
+   Each published book's last seven days: the record, the units, the hit
+   rate against our claim and the price, the best hit and the toughest miss. */
+function weekRecapHTML(w) {
+  const books = ((w || {}).books || []).filter((b) => b.w + b.l + b.p);
+  if (!books.length) return "";
+  const pc = (v) => v == null ? "—" : `${Math.round(v * 100)}%`;
+  const bet = (x) => `${escapeHtml(x.player || "")} ${escapeHtml(String(x.side || "").toLowerCase())} ${x.line ?? ""} ${
+    escapeHtml(String(x.market || "").replace(/_/g, " "))} (${american(x.odds)})`;
+  return `<section class="card wk-recap" aria-label="This week">
+    <div class="section-title">${icon("calendar", 15)} This week <span class="sub">— ${escapeHtml(recWinDate(w.from))} to ${escapeHtml(recWinDate(w.to))}</span></div>
+    ${books.map((b) => `<div class="wk-book"><b>${escapeHtml(b.book)}</b>
+      <span class="wk-line">${b.w}-${b.l}${b.p ? `-${b.p}` : ""} · <span class="${b.units >= 0 ? "pos" : "neg"}">${b.units >= 0 ? "+" : trueMinus("-")}${Math.abs(b.units).toFixed(1)}u</span>
+        · hit ${pc(b.hit)} (we said ${pc(b.claimed)}, the price said ${pc(b.price)})</span>
+      ${b.best ? `<span class="wk-pick">Best hit: ${bet(b.best)}</span>` : ""}
+      ${b.worst ? `<span class="wk-pick">Toughest miss: ${bet(b.worst)} at ${pc(b.worst.claim)}</span>` : ""}</div>`).join("")}
+  </section>`;
+}
 async function renderRecord() {
   /* His bets for the Zeno card below, members only (zenoTickets). */
   const _zenoTixRec = await zenoTickets();
@@ -20694,6 +20721,7 @@ async function renderRecord() {
         headline is the whole record.</p>`;
   host.innerHTML = scopeBar + winBar
     + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>${zenoWhoHTML(dAll)}` : "")
+    + weekRecapHTML(d.weekly_recap)
     + winNote
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
     + `<p class="rec-stamp">Updated ${escapeHtml(formatStamp(d.generated_at))}
@@ -24367,7 +24395,7 @@ function feedIcon(kind) {
   return kind === "edge_appeared" ? "gem"
     : kind === "edge_died" ? "warn"
     : kind === "line_move" ? "rising"
-    : kind === "price_move" ? "falling"
+    : kind === "price_move" || kind === "likely_price" ? "falling"
     : kind === "stale_line" ? "signal" : "clock";
 }
 
@@ -24505,6 +24533,12 @@ async function renderFeedZone() {
         ic: "tag", tone: "",
         title: `Price move: ${who} ${mkt} ${px(e.frm)} → ${px(e.to)}`,
         cond: `${Math.abs((e.imp_delta || 0) * 100).toFixed(1)} implied pts at ${escapeHtml(e.book || "")}`,
+      };
+      case "likely_price": return {
+        ic: "tag", tone: e.worth ? "good" : "",
+        title: `Better price: ${who} ${escapeHtml(e.side || "")} ${e.line ?? ""} ${mkt} ${px(e.frm)} → ${px(e.to)}`,
+        cond: `${e.worth ? "now inside the price it is worth" : "closer to its fair price"} · ${escapeHtml(e.book || "")}${
+          e.p != null ? ` · our chance ${Math.round(e.p * 100)}%` : ""}`,
       };
       case "released": return {
         ic: "list", tone: "good",

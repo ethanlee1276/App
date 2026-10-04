@@ -6673,6 +6673,16 @@ def receipts(conn, since: str | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _recap_or_empty(conn) -> dict:
+    """The week's recap, or an empty one: a recap that fails must never
+    cost the Record page its export."""
+    try:
+        from .recap import recap
+        return recap(conn)
+    except Exception:                                        # noqa: BLE001
+        return {"books": []}
+
+
 def recent_settled(conn, limit: int = 30,
                    category: str | tuple[str, ...] = "main",
                    sport: str | None = None,
@@ -9753,6 +9763,9 @@ def export_json(conn, path) -> None:
         # every other unproven bucket. See docs/PREDICTION_DESK.md.
         "predmarket": predmarket_report(conn, since=since),
         "ufc_record": ufc_report(conn, since=since),
+        # THE WEEK IN ONE CARD (engine/recap; Ethan, 2026-10-04): the last
+        # seven days of each published book, which the Record page leads with.
+        "weekly_recap": _recap_or_empty(conn),
         # IS THERE AN EDGE AT ALL — the 2026-08-09 finding, kept live
         # rather than re-derived by hand. `edge_now` is the latest run,
         # `edge_trend` the series. See docs/THE_INFORMATION_TEST.md.

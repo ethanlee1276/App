@@ -76,7 +76,9 @@ def test_every_outcome_the_audit_named_is_logged():
                  '_seclog("password_change"', '_seclog("account_delete", "wrong_password"',
                  '_seclog("redeem", "refused"', '_seclog("webhook", "bad_signature"'):
         assert kind in SERVER, kind
-    assert SERVER.count('_seclog("owner_token", "refused"') == 2, "both owner doors"
+    # Three owner doors, each logging a refusal: Zeno's tickets, Zeno's
+    # import, and the research-picks check (2026-10-04) both its routes share.
+    assert SERVER.count('_seclog("owner_token", "refused"') == 3, "every owner door"
     # The login line carries the account as a tag, never the password.
     i = SERVER.index('_seclog(path, "ok" if code == 200 else "fail"')
     assert "password" not in SERVER[i:i + 200]

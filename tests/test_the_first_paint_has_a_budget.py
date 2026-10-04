@@ -31,10 +31,14 @@ HTML = (WEB / "index.html").read_text()
 #: 472 -> 476 on 2026-10-04 by the pick page's case section (pickCaseHTML:
 #: the facts sorted for the bet, the corners he sees, the back-and-forth
 #: script — ~2.5 KB), the change Ethan asked for that day.
-APP_JS_BUDGET_KB = 476
+#: 476 -> 477 on 2026-10-04 by Ethan's "do all of it" list: the research
+#: box, the price-move alert, the why line on Most Likely rows and the
+#: Record page's "This week" card (+0.6 KB gz together).
+APP_JS_BUDGET_KB = 477
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
-BOOT_BUDGET_KB = 591
+#: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
+BOOT_BUDGET_KB = 592
 
 
 def _gz_trimmed(rel: str) -> int:

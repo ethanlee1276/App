@@ -76,6 +76,14 @@ VELO_FLAG = -1.0
 #: feed stops being read.
 STALE_MAX_PER_BUILD = 3
 
+#: A Most Likely pick's price getting this much BETTER for the bettor, in
+#: implied points, is worth a line in the feed (Ethan, 2026-10-04: "do all
+#: of it" — the price-move alert). "Worth it" is the pick page's own rule:
+#: the price now asks less than our chance minus LIKELY_CUSHION, the same
+#: cushion as its "don't take it past" number.
+LIKELY_PRICE_PTS = 0.02
+LIKELY_CUSHION = 0.03
+
 
 def _key(r: dict) -> str:
     return f"{r.get('player', '')}|{r.get('market', '')}"
@@ -112,6 +120,42 @@ def digest(board: dict) -> dict:
             "velo": r.get("velo_delta"),
         }
     return out
+
+
+def likely_digest(board: dict) -> dict:
+    """The Most Likely picks of one build: their best price and our chance."""
+    out: dict = {}
+    for r in board.get("most_likely") or []:
+        if not r.get("player") or r.get("odds") in (None, ""):
+            continue
+        k = f"{r.get('player')}|{r.get('market', '')}|{r.get('side', '')}|{r.get('line')}"
+        p = r.get("model_prob", r.get("hit_prob"))
+        out[k] = {"player": r.get("player", ""), "team": (r.get("team") or "").upper(),
+                  "opponent": (r.get("opponent") or "").upper(), "market": r.get("market", ""),
+                  "label": r.get("market_label", "") or r.get("market", ""), "side": r.get("side", ""),
+                  "line": r.get("line"), "odds": r.get("odds"), "book": r.get("book", ""),
+                  "p": float(p) if isinstance(p, (int, float)) else None}
+    return out
+
+
+def likely_diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
+    """A posted Most Likely pick whose price got LIKELY_PRICE_PTS better."""
+    events = []
+    for key, c in cur.items():
+        pr = prev.get(key)
+        if not pr:
+            continue
+        pi, ci = _imp(pr["odds"]), _imp(c["odds"])
+        if pi is None or ci is None or pi - ci < LIKELY_PRICE_PTS:
+            continue
+        worth = c["p"] is not None and ci <= c["p"] - LIKELY_CUSHION
+        events.append({"id": _eid("likely_price", key, ts, str(c["odds"])), "ts": ts, "sport": sport,
+                       "kind": "likely_price", "player": c["player"], "label": c["label"],
+                       "team": c["team"], "opponent": c["opponent"], "side": c["side"],
+                       "line": c["line"], "book": c["book"], "odds": c["odds"],
+                       "frm": pr["odds"], "to": c["odds"], "imp_delta": round(ci - pi, 3),
+                       "p": c["p"], "worth": worth})
+    return events
 
 
 def _eid(kind: str, key: str, ts: str, extra: str = "") -> str:
@@ -287,6 +331,7 @@ def scan(sport: str, board_path, now: str | None = None) -> list[dict]:
         return []
     ts = now or _dt.datetime.now().isoformat(timespec="seconds")
     cur = digest(board)
+    cur_likely = likely_digest(board)
     if not cur and not board.get("recommendations"):
         # An empty slate is a fact, not a wave of edge_died events —
         # but only when the board itself says so. A missing file above
@@ -299,12 +344,13 @@ def scan(sport: str, board_path, now: str | None = None) -> list[dict]:
     stale_events, stale_keys = stale_diff(prev_stale, stale_rows, sport, ts)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = sp.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"ts": ts, "digest": cur,
+    tmp.write_text(json.dumps({"ts": ts, "digest": cur, "likely": cur_likely,
                                "stale": stale_keys}), encoding="utf-8")
     tmp.replace(sp)
     if prev_doc is None:
         return []                       # cold start is silent
-    return diff(prev_doc.get("digest") or {}, cur, sport, ts) + stale_events
+    return (diff(prev_doc.get("digest") or {}, cur, sport, ts) + stale_events
+            + likely_diff(prev_doc.get("likely") or {}, cur_likely, sport, ts))
 
 
 def prune(events: list[dict], now: str | None = None) -> list[dict]:
