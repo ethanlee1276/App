@@ -49,6 +49,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 LEDGER = ROOT / "data" / "ledger.db"
 BOOKS = (("The one board", ("board",)), ("Most Likely, staked", ("likely_live",)),
          ("Most Likely, paper", ("likely",)), ("Edge picks", ("main",)))
@@ -155,6 +156,8 @@ def _line(label: str, s: dict) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="bandcheck.py")
     ap.add_argument("--db", default=str(LEDGER))
+    ap.add_argument("--save", action="store_true",
+                    help="save the tier-cap verdict for the board to read (engine/bandcap)")
     a = ap.parse_args(argv)
     conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
     print(f"NEAR-EVEN PICKS (+120 to −149): does a claim {GAP_PTS * 100:.0f}+ pts over the price lose?\n")
@@ -183,6 +186,23 @@ def main(argv=None) -> int:
         names = ("pooled z ≤ −2", "every sport but one", "both halves", "small gaps do better")
         marks = ", ".join(f"{n} {'yes' if c else 'NO'}" for n, c in zip(names, j["checks"]))
         print(f"  RULE: {'HOLDS — move these to paper' if j['holds'] else 'does not hold'}  ({marks})\n")
+    from engine import bandcap
+    v = bandcap.judge(bandcap.load_rows(conn))
+    print("TIER CAP — the one board's Top pick + Strong at +120 to −149 (rule in engine/bandcap.py)")
+    for name, sc in (("Top + Strong, in the band", v["high"]), ("Worth a look, in the band", v["look"]),
+                     ("Top + Strong, −150 to −300", v["outside"]),
+                     (f"Top + Strong, before {v['cut']}", v["halves"]["earlier"]),
+                     (f"Top + Strong, from {v['cut']}", v["halves"]["later"])):
+        if sc["n"]:
+            print(f"    {name:30} {sc['w']:4}-{sc['n'] - sc['w']:<4} hit {sc['hit']:.0%}  needed {sc['need']:.0%}  "
+                  f"z {sc['z']:+.1f}")
+    names = ("z ≤ −2 on 60+", "both halves", "no better than Worth a look", "fine at −150 to −300")
+    print(f"  RULE: {'HOLDS — cap the label at Worth a look' if v['holds'] else 'does not hold'}  ("
+          + ", ".join(f"{n} {'yes' if c else 'NO'}" for n, c in zip(names, v["checks"])) + ")")
+    if a.save:
+        bandcap.save(v)
+        print("  saved — the next board build " + ("caps those labels" if v["holds"] else "changes nothing"))
+    print()
     print("GRADING RECHECK — every settled over/under pick, its stat against its line and side")
     for label, cats in BOOKS:
         g = regrade(conn, cats)

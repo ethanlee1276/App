@@ -10078,13 +10078,14 @@ function obCardHTML(r, rank, opts = {}) {
   const td = r.lane === "td" ? `<span class="ob-plain">${r.model_prob == null ? "no probability on file"
     : `hits about ${Math.max(1, Math.round(Number(r.model_prob) * 10))} in 10`}${
     r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : ""}</span>` : "";
+  const band = r.band_note ? `<span class="ob-plain">${escapeHtml(r.band_note)}</span>` : "";
   return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}">
     ${rank ? `<span class="ob-rank">#${rank}</span>` : ""}
     <button class="ob-who" type="button"${door}>${obFaceHTML(r)}
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${obWhyLine(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${td}${band}${obWhyLine(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${

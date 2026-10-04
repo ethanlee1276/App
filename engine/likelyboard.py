@@ -46,6 +46,8 @@ Standard library only.
 """
 from __future__ import annotations
 
+from . import bandcap as _bandcap
+
 #: Our chance a pick needs for the model check, by lane.
 MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
 #: A league whose own model sets a different bar. Empty since 2026-10-03:
@@ -374,11 +376,14 @@ def _game_of(r: dict, games: list) -> str:
 
 
 def build(result: dict, record: dict | None = None, sport: str = "nfl",
-          tiers_seen: dict | None = None, calibration: dict | None = None) -> dict:
+          tiers_seen: dict | None = None, calibration: dict | None = None,
+          band_verdict: dict | None | str = "saved") -> dict:
     """{"rows": [...], "tiers": {tier: n}, "lanes": {lane: n},
     "matchup_source": ...} — the pool, checked and tiered, ranked Top
     first, then by how hard the matchup backs it (`matchup_strength`),
     then by our chance."""
+    if band_verdict == "saved":
+        band_verdict = _bandcap.verdict()
     source = MATCHUP_SOURCE.get(sport, "none")
     steps = model_matchups(result.get("recommendations") or []) if source in ("model", "scan+model") else {}
     from .gamescan import leans_from_reads
@@ -518,6 +523,16 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             held.append(r)
             continue
         tier = tier_of(checks)
+        # NEAR EVEN MONEY THE LABEL RAN BACKWARDS (engine/bandcap; Ethan,
+        # 2026-10-04: "lets do what we need to do"). Only once a saved
+        # verdict has proven it: the pick stays, marked Worth a look, and
+        # says why.
+        _cap = _bandcap.cap_note(band_verdict, r.get("odds")) if tier in ("top", "strong") else None
+        if _cap:
+            tier = "look"
+            r["band_note"] = _cap
+        else:
+            r.pop("band_note", None)
         # A TOUCHDOWN UNDER THE MAIN LIST'S BAR, BACKED BY THE MATCHUP.
         # Ethan, 2026-09-27, on Breece Hall at 42% reading "Top pick" beside
         # St. Brown at 52% reading "reserve — ranked, not recommended": he

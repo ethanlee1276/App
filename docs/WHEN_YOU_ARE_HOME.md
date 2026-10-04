@@ -33,7 +33,28 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Betting checks, round 4: the near-even tier cap (2026-10-04, late night)
+
+Round 3 settled two things: grading is right (0 of ~4,700 picks
+disagree with their own stat), and near even money the one board's
+tiers run backwards (Top pick 18-40, Strong 38-52, Worth a look
+158-176). One command — it judges the written-down rule and SAVES the
+verdict; the next board build caps those labels only if it holds:
+
+```
+cd /srv/qellys && sudo -u qellys python3 bandcheck.py --save 2>&1 | sed -n '/TIER CAP/,/^$/p'
+```
+
+Paste back the TIER CAP block. If it says HOLDS, near-even Top/Strong
+picks show as "Worth a look" with a line saying why, from the next
+build on. Nothing is removed. Rerun it every week or two so the verdict
+keeps up with the record.
+
 ### Betting checks, round 3: where the one board's near-even losses come from (2026-10-04, night)
+
+**Ran 2026-10-04.** Grading: 0 wrong. B1 same-book: NFL one board −1.6
+pts (waiting pays), NFL Most Likely staked −2.0, Edge picks +2.7/+2.5
+(the only book beating its close). B4: by tier, backwards (round 4).
 
 Round 2 found the same-book close in the wrong store (NFL closes live in
 our own line snapshots, not the bought history) and showed the one
