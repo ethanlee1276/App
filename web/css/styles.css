@@ -5611,7 +5611,7 @@ body.pk-open { overflow: hidden; }
 /* The owner forms' paste boxes (Zeno legs, research picks) in the page's
    type, not the browser's default monospace; the size stays the phone's
    16px no-zoom rule's. */
-.mb-form textarea { font-family: inherit; line-height: 1.45; padding: 7px 9px;
+.mb-form textarea { font-family: inherit; line-height: var(--lh-snug); padding: 7px 9px;
   background: var(--bg-2); color: var(--text); border: var(--hairline) solid var(--border);
   text-transform: none; letter-spacing: 0; }
 .mb-add { align-self: flex-end; }
