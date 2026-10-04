@@ -46,6 +46,9 @@ CATCH_UP_DAYS = 7
 # start from the DB heals any gap; the cap keeps a machine that was off for
 # a whole off-season from grinding through months of slates on first boot.
 MAX_CATCH_UP_DAYS = 45
+#: How long one night's NHL results catch-up may run before it stops and
+#: leaves the rest to the next run (see run_if_due).
+NHL_CATCHUP_BUDGET_S = 20 * 60
 # Never auto-harvest below this measured remaining quota — live odds for
 # today's picks always come first. Was 3000; Ethan, 2026-09-07, setting the
 # credit budget the data plan asked him for: "set the harvest floor to 1000
@@ -1510,6 +1513,39 @@ def _release(lock) -> None:
         pass
 
 
+def nhl_catch_up(ingest, start: _dt.date, end: _dt.date, log=print,
+                 budget_s: float = None, clock=None) -> tuple[int, int, str | None]:
+    """Ingest NHL results day by day from ``start`` to ``end`` with
+    ``ingest(iso_day) -> {"games", "player_logs", "skipped"}``. Returns
+    (games, log rows, the day it stopped early at, or None).
+
+    A WALL-CLOCK BUDGET (2026-10-04). The first night after the NHL feed
+    landed walked up to 45 days of preseason, each game a box score,
+    play-by-play, shift chart and power-play pull, and the night the boards
+    stopped the chores were somewhere in this stretch. The start is
+    gap-aware (`_catch_up_start`), so whatever one run leaves, the next run
+    picks up from the last stored final."""
+    import time as _time
+    budget_s = NHL_CATCHUP_BUDGET_S if budget_s is None else budget_s
+    clock = clock or _time.time
+    budget_end = clock() + budget_s
+    tot_g = tot_l = 0
+    d = start
+    while d <= end:
+        if clock() > budget_end:
+            log(f"  nhl results: stopped at {d} after {int(budget_s // 60)} min — the rest resumes "
+                f"on the next run")
+            return tot_g, tot_l, d.isoformat()
+        res = ingest(d.isoformat())
+        tot_g += res["games"]
+        tot_l += res["player_logs"]
+        if any("scores" in str(x) for x in res.get("skipped", [])):
+            log(f"  ⚠️  {res['skipped'][0]}")
+            break
+        d += _dt.timedelta(days=1)
+    return tot_g, tot_l, None
+
+
 def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, log) -> bool:
     yesterday = today - _dt.timedelta(days=1)
     try:
@@ -1632,16 +1668,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 from . import db as _hdb
                 from .sources import nhldata as _nhl
                 hconn2 = _hdb.connect()
-                tot_g = tot_l = 0
-                d = hstart
-                while d <= yesterday:
-                    res = _nhl.ingest_day(hconn2, d.isoformat())
-                    tot_g += res["games"]
-                    tot_l += res["player_logs"]
-                    if any("scores" in str(x) for x in res.get("skipped", [])):
-                        log(f"  ⚠️  {res['skipped'][0]}")
-                        break
-                    d += _dt.timedelta(days=1)
+                tot_g, tot_l, _stopped = nhl_catch_up(
+                    lambda day: _nhl.ingest_day(hconn2, day), hstart, yesterday, log)
                 if tot_g or tot_l:
                     log(f"  nhl results: {tot_g} game(s), {tot_l:,} log rows")
                 # THE xG MODEL, refitted on every stored shot (engine/nhl/xg)

@@ -38614,6 +38614,40 @@ function truthRowHTML(t, sub) {
   return sub("Self-check", `${t.count} of ${t.checked} claims fail`, "st-bad", what);
 }
 
+/* THE LOOP AND THE CHORES, said outright (2026-10-04). Ethan's 4:26 a.m.
+   screenshots showed every board four hours old and nothing saying why:
+   the board loop had stopped inside a daily chore. The loop's own last
+   cycle and the two chores lanes — the daily pass and the settle — (which
+   step, for how long, and when one is stuck, the line it is waiting on)
+   now sit under the code row. */
+function loopRowsHTML(hb, now) {
+  const rowOf = (k, v, cls, why) => `<div class="st-row"><span class="st-k">${k}</span>
+      <span class="st-v ${cls}">${escapeHtml(v)}</span><span class="st-sub">${escapeHtml(why || "")}</span>${
+        why && cls === "st-bad" ? `<span class="st-why">${escapeHtml(why)}</span>` : ""}</div>`;
+  let out = "";
+  if (hb.at_epoch) {
+    const age = now - hb.at_epoch;
+    const late = age > Math.max(20 * 60, 3 * (hb.cycle_p50_s || 0));
+    out += rowOf("Refresh loop", `last cycle ${ageText(age)} ago`, late ? "st-bad" : "st-good",
+      late ? "the board loop has not finished a cycle lately — the watchdog restarts it after 90 minutes" : "");
+  }
+  const lanes = [["daily", "Daily chores"], ["settle", "Settling"]];
+  lanes.forEach(([key, label]) => {
+    const c = (hb.chores || {})[key];
+    if (!c) return;
+    if (c.stuck) {
+      const at = (c.stack || []).slice(-2).join(" ← ");
+      out += rowOf(label, `stuck in ${c.step} for ${ageText(c.running_s || 0)}`, "st-bad",
+        at ? `waiting at ${at} — the boards keep rebuilding meanwhile` : "the boards keep rebuilding meanwhile");
+    } else if (c.step) {
+      out += rowOf(label, `running ${c.step} (${ageText(c.running_s || 0)})`, "st-good", "");
+    } else if (c.done_epoch) {
+      out += rowOf(label, `idle · last finished ${ageText(now - c.done_epoch)} ago`, "st-good", "");
+    }
+  });
+  return out;
+}
+
 function buildsCardHTML(hb) {
   if (!hb) return "";
   const runs = hb.boards || {};
@@ -38650,6 +38684,7 @@ function buildsCardHTML(hb) {
       <div class="st-row"><span class="st-k">Code running</span>
         <span class="st-v ${hb.commit ? "st-good" : "st-off"}">${escapeHtml(hb.commit || "unknown")}</span>
         <span class="st-sub">${hb.auto_update ? "updates itself" : ""}</span></div>
+      ${loopRowsHTML(hb, now)}
       ${rows}
     </div>`;
 }

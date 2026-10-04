@@ -14,6 +14,34 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### The overnight stall — what happened, and one check (2026-10-04)
+
+At about 12:26 AM every board stopped rebuilding (your 4:26 AM status
+screenshots). That was the first loop cycle of the new day, the one that
+runs the daily chores, and the chores ran INSIDE the board loop, so one
+chore that would not come back stopped every board and every settle. The
+fix is already on the box once it updates (it restarts itself, rebuilds
+every board first, then carries on):
+- the chores now run on their own threads, in two lanes (the daily pass,
+  and settling), so nothing they do can stop the boards again;
+- the status page has two new rows under "Code running": **Refresh loop**
+  (when the board loop last finished a cycle) and **Daily chores** /
+  **Settling** (which step each is on; if one is stuck, the exact line);
+- a watchdog restarts the board loop if no board step finishes for 90
+  minutes, writing every thread's stack to the log first;
+- the overnight NHL catch-up stops after 20 minutes and resumes the next
+  night (its first run, last night, walked up to 45 days of preseason);
+- a code update now waits for the board build in progress before it
+  restarts, instead of abandoning it.
+
+**S0. When you're home, paste this** (read-only). It shows which chore
+was stuck last night, from the box's own log:
+
+```
+journalctl -u qellys --since "2026-10-04 00:00" --no-pager | grep -iE "chore|stuck at|watchdog|nhl results|nhl xG|daily maintenance|auto-update|startup build" | tail -40
+python3 -c "import json; print(json.dumps(json.load(open('/srv/qellys/web/data/heartbeat.json')).get('chores'), indent=1))"
+```
+
 ### Site speed — run this first (2026-10-04)
 
 The web server and the background work (settling, refits, board builds)

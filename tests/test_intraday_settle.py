@@ -136,8 +136,13 @@ def test_the_launcher_calls_it_every_cycle():
     launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     fn = launch[launch.index("def _background_refresher("):]
     fn = fn[:fn.index("\n\n\n")]
-    assert "_run_autosettle()" in fn, \
+    # Since 2026-10-04 the settle runs on its own lane (a chore that hung in
+    # the board loop had stopped every board and every settle with it): the
+    # refresher kicks the lanes every cycle, and the settle lane settles.
+    assert "_kick_chores()" in fn, \
         "nothing settles tonight's bets until tomorrow's first cycle"
+    lanes = launch[launch.index("def _lane_steps("):]
+    assert "_run_autosettle(force=force_settle)" in lanes[:lanes.index("\ndef ", 10)]
 
 
 def test_a_settle_writes_the_record_page():

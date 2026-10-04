@@ -228,7 +228,13 @@ def test_the_launcher_runs_the_check_itself_once_a_day():
     src = _launch()
     fn = src[src.index("def _background_refresher("):]
     fn = fn[:fn.index("\n\n\n")]
-    assert "_run_doctor()" in fn
+    # Since 2026-10-04 the check runs on the CHORES thread the refresher
+    # kicks every cycle (a chore that hung had stopped every board), so the
+    # guarantee is: the refresher kicks the chores, and the chores run it.
+    assert "_kick_chores()" in fn
+    lanes = src[src.index("def _lane_steps("):]
+    lanes = lanes[:lanes.index("\ndef ", 10)]
+    assert "_run_doctor()" in lanes
 
 
 def test_one_bad_cycle_does_not_kill_the_refresher():
@@ -888,10 +894,19 @@ def test_the_daily_chores_are_not_reachable_only_through_the_server():
     """The shape of the bug, pinned so it cannot come back: a chore that
     only runs while someone is watching is not automation."""
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
-    callers = src.count("_run_maintenance()")
-    # def + background refresher + startup chores + nightly
-    assert callers >= 4, (
-        f"only {callers} references — the nightly path must call it too")
+    # Since 2026-10-04 the server reaches the chores through their lanes,
+    # each on its own thread (`_lane_steps`, started by `_kick_chores` from
+    # the background refresher and from the startup chores) — a chore that
+    # hung in the board loop had stopped every board. The nightly path
+    # still calls the chores itself, so they never depend on the server.
+    def body_of(name):
+        i = src.index(f"def {name}(")
+        return src[i:src.index("\ndef ", i + 10)]
+    assert "_run_maintenance()" in body_of("_lane_steps")
+    refresher = src[src.index("def _background_refresher("):]
+    assert "_kick_chores()" in refresher[:refresher.index("\n\n\n")]
+    assert "_kick_chores(force_settle=True)" in src, "the startup chores take the same runner"
+    assert "_run_maintenance()" in body_of("nightly_run"), "the nightly path must call it too"
 
 
 # --- the render sweep, and the checklist's duty to say why it failed --------

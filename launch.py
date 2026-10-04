@@ -1789,6 +1789,7 @@ def refresh_all(quiet: bool = False) -> None:
     def lap(step: str) -> None:
         _STEP_S[step] = round(time.time() - _lap[0], 1)
         _lap[0] = time.time()
+        _note_progress()                 # the watchdog's proof of a moving sweep
 
     # In SPORT_PRIORITY order — the leagues first, as he ranks them,
     # then the tool boards. See the tuple's own comment.
@@ -2017,7 +2018,7 @@ def _run_futures(quiet: bool = False) -> None:
             print(f"  ⚠️  futures rebuild skipped: {exc}")
 
 
-def _run_autosettle() -> None:
+def _run_autosettle(force: bool = False) -> None:
     """Grade tonight's picks as the games finish, without being asked.
 
     The daily chores only reach yesterday and only fire once per calendar
@@ -2026,7 +2027,7 @@ def _run_autosettle() -> None:
     nothing recent is open, so it is cheap to call on every cycle."""
     try:
         from engine.maintenance import settle_open
-        settle_open()
+        settle_open(force=force)
     except Exception as exc:  # noqa: BLE001 — chores must never take the site down
         print(f"  ⚠️  auto-settle failed: {exc}")
 
@@ -3568,14 +3569,103 @@ def _restart_into_new_code() -> None:
 
 
 def _auto_updater() -> None:
-    """Check for pushed code every few minutes, and restart when it lands."""
+    """Check for pushed code every few minutes, and restart when it lands —
+    once the board build in progress has finished (`_restart_when_idle`)."""
     while True:
         time.sleep(AUTO_UPDATE_EVERY_S)
         try:
             if _auto_update():
-                _restart_into_new_code()
+                _restart_when_idle()
         except Exception as exc:                   # noqa: BLE001
             print(f"  ⚠️  auto-update error: {exc}")
+
+
+#: How long a pulled update waits for the board build in progress before it
+#: restarts regardless — longer than a whole sweep takes on this box, short
+#: enough that a fix never waits on a build that has wedged.
+RESTART_MAX_WAIT_S = 45 * 60
+#: True while an update waits: the refresher starts no NEW sweep meanwhile,
+#: so the wait ends at the next gap rather than chasing build after build.
+_RESTART_PENDING = [False]
+
+
+def _restart_when_idle(max_wait: float = RESTART_MAX_WAIT_S, poll: float = 15.0,
+                       sleep=None, now=None, restart=None) -> str:
+    """Restart into pulled code at the first moment no board build runs.
+
+    2026-10-04: a run of pushes a few minutes apart restarted the process
+    in the middle of its sweep every time — execv does not wait for the
+    build subprocess it abandons, so the boards started over, and old and
+    new builds ran side by side on one core. Now the restart takes the
+    build lock first (holding it, so nothing new starts), and only gives up
+    waiting after RESTART_MAX_WAIT_S. Returns "restarted" or "forced" —
+    which only a test, with a stub ``restart``, ever sees."""
+    sleep = sleep or time.sleep
+    now = now or time.time
+    restart = restart or _restart_into_new_code
+    _RESTART_PENDING[0] = True
+    deadline = now() + max_wait
+    told = False
+    while True:
+        if _BUILD_LOCK.acquire(blocking=False):
+            try:
+                restart()
+            finally:
+                _BUILD_LOCK.release()
+                _RESTART_PENDING[0] = False
+            return "restarted"
+        if now() >= deadline:
+            print(f"  ⚠️  auto-update: a board build has run past {int(max_wait // 60)} min — "
+                  f"restarting into the new code anyway")
+            try:
+                restart()
+            finally:
+                _RESTART_PENDING[0] = False
+            return "forced"
+        if not told:
+            print("  ↻ auto-update: new code pulled — waiting for the board build in progress "
+                  "to finish before restarting into it")
+            told = True
+        sleep(poll)
+
+
+#: THE LOOP'S WATCHDOG. No board step finishing for this long means the
+#: board loop is wedged — every build has a 10-minute ceiling and every
+#: in-process step a network timeout, so a healthy sweep lands a step
+#: every few minutes. 2026-10-04: the loop sat four hours in one place and
+#: the only symptom was every board's age.
+LOOP_STUCK_S = 90 * 60
+#: When a board step last finished (refresh_all's `lap`), or the process
+#: started.
+_PROGRESS_AT = [time.time()]
+
+
+def _note_progress() -> None:
+    _PROGRESS_AT[0] = time.time()
+
+
+def _loop_wedged(now: float | None = None) -> bool:
+    return ((time.time() if now is None else now) - _PROGRESS_AT[0]) > LOOP_STUCK_S
+
+
+def _loop_watchdog(check_every: float = 300.0) -> None:
+    """Every few minutes: has a board step finished lately? If not, write
+    every thread's stack to the log — the answer to "stuck where" — and
+    restart into a fresh process, whose first act is a full sweep."""
+    import faulthandler
+    while True:
+        time.sleep(check_every)
+        try:
+            if _loop_wedged():
+                mins = round((time.time() - _PROGRESS_AT[0]) / 60)
+                print(f"  ⚠️  watchdog: no board step has finished in {mins} min — every "
+                      f"thread's stack follows, then a restart")
+                sys.stdout.flush()
+                faulthandler.dump_traceback(all_threads=True)
+                sys.stderr.flush()
+                _restart_into_new_code()
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  ⚠️  watchdog error: {exc}")
 
 
 #: ONE BUILD AT A TIME. The startup build now runs in the background, so
@@ -3621,6 +3711,106 @@ def _cycle_p50() -> float | None:
     return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
 
 
+# --- THE CHORES, ON THEIR OWN THREADS ------------------------------------------
+# Ethan, 2026-10-04, 4:26 in the morning, two screenshots of the status page:
+# every board "rebuilt 4 hours ago", NFL through the injury board, all red.
+# The boards stopped together at about half past midnight — the first cycle
+# of a new day, which is the cycle that runs the daily chores. The chores
+# (results ingest for six leagues, the xG refit, the daily check) and the
+# settle ran IN the board loop, ahead of the sweep, so one chore that would
+# not come back stopped every board on the site — and every settle with it —
+# while the status page could only show the boards' age.
+#
+# Now two LANES, each on its own thread, neither of them the board loop's:
+#   daily   the daily pass (run_if_due) and the once-a-day check;
+#   settle  the auto-settle that grades tonight's games as they end.
+# A lane still running when the loop comes round is left to finish; the
+# heartbeat says which step each lane is on and for how long, and a step
+# past CHORES_STUCK_S publishes the exact line it is waiting on.
+_LANES: dict = {name: {"step": None, "since": None, "done_at": None, "thread": None,
+                       "last_s": {}, "stack_logged_at": 0.0} for name in ("daily", "settle")}
+#: A chore step running longer than this is reported as stuck, with its stack.
+CHORES_STUCK_S = 45 * 60
+
+
+def _lane_steps(lane: str, force_settle: bool = False) -> tuple:
+    if lane == "daily":
+        return (("maintenance", lambda: _run_maintenance()),
+                ("doctor", lambda: _run_doctor()))
+    return (("autosettle", lambda: _run_autosettle(force=force_settle)),)
+
+
+def _lane_run(lane: str, force_settle: bool = False) -> None:
+    """One lane's steps, in order. Each step already swallows its own
+    failure; this times them and says which is running."""
+    st = _LANES[lane]
+    try:
+        for name, fn in _lane_steps(lane, force_settle):
+            t = time.time()
+            st.update(step=name, since=t)
+            try:
+                fn()
+            except Exception as exc:                     # noqa: BLE001
+                print(f"  ⚠️  chore {name} failed: {exc}")
+            st["last_s"][name] = round(time.time() - t, 1)
+    finally:
+        st.update(step=None, since=None, done_at=time.time())
+
+
+def _kick_chores(force_settle: bool = False) -> dict:
+    """Start each chores lane on its own thread unless it is still running —
+    in which case it is left to finish and the boards carry on regardless.
+    Returns {lane: "started" | "still running"}."""
+    out = {}
+    for lane, st in _LANES.items():
+        th = st.get("thread")
+        if th is not None and th.is_alive():
+            out[lane] = "still running"
+            continue
+        th = threading.Thread(target=_lane_run, args=(lane, force_settle), daemon=True,
+                              name=f"chores-{lane}")
+        st["thread"] = th
+        th.start()
+        out[lane] = "started"
+    return out
+
+
+def _chores_last_s() -> dict:
+    """Every chore step's last duration, across the lanes."""
+    out: dict = {}
+    for st in _LANES.values():
+        out.update(st.get("last_s") or {})
+    return out
+
+
+def _chores_status(now: float | None = None) -> dict:
+    """What each lane is doing, for the heartbeat. A step running past
+    CHORES_STUCK_S carries the last frames of its stack — the answer to
+    "stuck where" as a paste instead of an SSH session."""
+    import traceback
+    now = time.time() if now is None else now
+    frames = sys._current_frames()
+    out = {}
+    for lane, st in _LANES.items():
+        step, since = st.get("step"), st.get("since")
+        cur = {"step": step, "running_s": round(now - since) if step and since else None,
+               "done_epoch": round(st["done_at"]) if st.get("done_at") else None,
+               "last_s": dict(st.get("last_s") or {}), "stuck": False}
+        if step and since and now - since > CHORES_STUCK_S:
+            cur["stuck"] = True
+            th = st.get("thread")
+            frame = frames.get(th.ident) if th is not None and th.ident else None
+            if frame is not None:
+                cur["stack"] = [ln.strip().replace(str(ROOT) + "/", "")
+                                for ln in traceback.format_stack(frame)[-6:]]
+                if now - st.get("stack_logged_at", 0.0) > 30 * 60:
+                    st["stack_logged_at"] = now
+                    print(f"  ⚠️  chore {step} ({lane} lane) has run {round((now - since) / 60)} min — "
+                          f"stuck at:\n    " + "\n    ".join(cur["stack"]))
+        out[lane] = cur
+    return out
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup).
 
@@ -3653,26 +3843,26 @@ def _background_refresher(interval: int) -> None:
         # the long cycle" case they were added to catch.
         _STEP_S.clear()
         try:
-            # Catches the date rolling over while the server runs overnight.
-            # Clocked like the builds: the first cycle of the day carries
-            # the daily chores — and on fitter days those chores ARE the
-            # long cycle, which the step ledger must be able to say.
-            _t = time.time()
-            _run_maintenance()
-            _STEP_S["maintenance"] = round(time.time() - _t, 1)
-            # Closes out tonight's games as they end, rather than tomorrow.
-            _t = time.time()
-            _run_autosettle()
-            _STEP_S["autosettle"] = round(time.time() - _t, 1)
-            # Once a day, and only when something is wrong.
-            _t = time.time()
-            _run_doctor()
-            _STEP_S["doctor"] = round(time.time() - _t, 1)
+            # THE CHORES — the daily pass (catching the date rolling over),
+            # the settle that closes tonight's games as they end, and the
+            # once-a-day check — on their OWN threads (see `_LANES`). A
+            # chore that will not come back no longer stops the boards; the
+            # heartbeat says which step each lane is on. Their last timings
+            # ride in the step ledger as before, cleared above first.
+            _kick_chores()
+            _last = _chores_last_s()
+            _STEP_S["maintenance"] = _last.get("maintenance", 0.0)
+            _STEP_S["autosettle"] = _last.get("autosettle", 0.0)
+            _STEP_S["doctor"] = _last.get("doctor", 0.0)
             # Skips rather than queues when the startup build is still
             # going: this loop runs on a timer, so the next tick is a
             # better moment than piling up behind a build that is already
             # writing the very files this one would write.
-            if _BUILD_LOCK.acquire(blocking=False):
+            if _RESTART_PENDING[0]:
+                # New code is waiting for this gap (see _restart_when_idle):
+                # starting a sweep now would only make it wait again.
+                _swept = "skipped — restarting into new code"
+            elif _BUILD_LOCK.acquire(blocking=False):
                 try:
                     refresh_all(quiet=True)
                     _swept = "ran"
@@ -4072,6 +4262,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # Free space on the data disk, in GB (2026-10-01: a full disk
             # stopped every board and showed only as their age).
             "disk_free_gb": _disk_check(),
+            # THE CHORES LANES: which step each is on, for how long, and —
+            # past CHORES_STUCK_S — the line it is stuck on (2026-10-04).
+            "chores": _chores_status(),
         }))
         os.replace(tmp, p)
     except OSError:
@@ -10232,19 +10425,15 @@ def main() -> None:
             _WARMING = False
             print(f"  Boards built — the site is fully current "
                   f"({time.time() - _BOOT_AT:.0f}s after start).")
-        _run_maintenance()
-        try:
-            from engine.maintenance import settle_open
-            # settle_open re-exports record.json itself when it grades
-            # anything, and this thread starts strictly AFTER the initial
-            # refresh_all() above — so a morning launch that can grade last
-            # night does grade it, and the served page catches up when this
-            # finishes. If bets still show open afterwards, they could not
-            # be graded from what exists: `--why-open` says which of the
-            # three reasons it is (results not in, DNP, or nothing running).
-            settle_open(force=True)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  ⚠️  auto-settle failed: {exc}")
+        # The chores, on their lanes (see `_LANES`): the daily pass, and a
+        # FORCED settle — settle_open re-exports record.json itself when it
+        # grades anything, and this runs strictly AFTER the initial
+        # refresh_all() above, so a morning launch that can grade last night
+        # does grade it. One run per lane at a time: the refresher's own
+        # cycles find a lane running and leave it be. If bets still show
+        # open afterwards, they could not be graded from what exists:
+        # `--why-open` says which of the three reasons it is.
+        _kick_chores(force_settle=True)
 
     threading.Thread(target=_startup_chores, daemon=True).start()
 
@@ -10261,6 +10450,9 @@ def main() -> None:
     if interval > 0:
         t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
         t.start()
+        # The refresher's watchdog (see LOOP_STUCK_S): a wedged loop is
+        # logged with every thread's stack and restarted, not left to age.
+        threading.Thread(target=_loop_watchdog, daemon=True, name="watchdog").start()
         print(f"Auto-refresh every {interval}s (scores free; odds budgeted).")
         # Its own clock: a fight moves in seconds, and this feed is free.
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
