@@ -647,7 +647,8 @@ def main() -> None:
         from engine.mlb.livestats import (parse_live_stats, parse_situation,
                                           current_pitchers)
         from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
-        _lpc = _lp_ledger.connect()
+        # Reads only — no schema locks (engine/livepicks.attach_tracker, 2026-10-04).
+        _lpc = _lp_ledger.read_only()
         # Two filters used to sit here, and between them they hid most of a
         # normal night.
         #

@@ -5064,7 +5064,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
     closes_cache: dict = {}
     settled = 0
-    for b in conn.execute(q, args).fetchall():
+    _open_rows = conn.execute(q, args).fetchall()
+    for b in _open_rows:
         where, wargs = _hist_where(b)
         if b["market"] in GAME_MARKETS:
             rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
@@ -5262,6 +5263,14 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                              "WHERE id=?", (b["id"],))
                 settled += 1
                 continue
+        # THE SAME BOOK'S CLOSE, else the best one (engine/closebook; Ethan,
+        # 2026-10-04: "yes do it"). The lookups above bank one arbitrary
+        # book's quote, or the median of them, beside the best price on the
+        # screen — which reads as the market moving toward us when nothing
+        # moved. The fair close (`close_fair`) stays the market's, as it was.
+        _px = _same_book_close(closes_cache, hist_conn, _open_rows, b, _dates)
+        if _px is not None:
+            close_odds = _px
         _settle_one(conn, b, float(row["value"]), close_line,
                     actual_minutes=actual_minutes, closing_odds=close_odds)
         if close_fair is not None:
@@ -5583,6 +5592,29 @@ def _harvested_closes(hist_conn) -> dict:
 
 
 @_audited("repair_closing_odds")
+def _same_book_close(cache: dict, hist_conn, bets, b, dates):
+    """The close of the book ``b`` was posted at, else the best close across
+    books, or None (engine/closebook). Built once per run over ``bets`` —
+    one stream of the snapshot file — and kept in ``cache``. Never raises:
+    a close is bookkeeping, and bookkeeping must not stop a settle."""
+    try:
+        if b["market"] in GAME_MARKETS or not b["player"]:
+            return None
+        sb = cache.get("_samebook")
+        if sb is None:
+            from .closebook import SameBookCloses
+            sb = SameBookCloses(hist_conn)
+            sb.prepare([dict(r) for r in bets if r["market"] not in GAME_MARKETS])
+            cache["_samebook"] = sb
+        def _stamped():
+            if "_snapshots" not in cache:
+                cache["_snapshots"] = _snapshot_closes()
+            return getattr(cache["_snapshots"], "stamped", ())
+        return sb.close_for(dict(b), list(dates or []), _stamped)
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
 def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     """Re-derive every settled bet's banked closing price, side- and
     line-aware, from the harvested closes and the raw snapshots.
@@ -5623,9 +5655,10 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     harvested = _harvested_closes(hist_conn)
     rows = conn.execute(
         "SELECT id, sport, player, market, date, side, line, odds, "
-        "closing_odds, ts, lead_min, leg FROM bets "
+        "closing_odds, ts, lead_min, leg, book, game_day FROM bets "
         "WHERE status IN ('won','lost','push')"
     ).fetchall()
+    _sb_cache: dict = {}
     fixed = cleared = agreed = filled = 0
     changes: list = []      # filled: had nothing, gains a close
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
@@ -5656,6 +5689,11 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
             if want is not None and abs(float(want)) < 100:
                 want = None        # not a legal American price; see linemoves
+        # The same book's close, else the best one — the rule settling
+        # banks by (engine/closebook). The fair close is untouched.
+        _px = _same_book_close(_sb_cache, hist_conn, rows, b, _dates)
+        if _px is not None:
+            want = _px
         if apply and want is not None and want_fair is not None:
             # Fill-only: a de-vigged close is new evidence beside a price,
             # never a rewrite of one.

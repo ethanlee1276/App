@@ -33,6 +33,38 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Run next: tier cap, then the same-book closes (2026-10-04, late night)
+
+**1. The near-even tier cap** — judges the written-down rule and saves the
+verdict; the next board build caps the labels only if it holds. Paste the
+TIER CAP block back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 bandcheck.py --save 2>&1 | sed -n '/TIER CAP/,/^$/p'
+```
+
+**2. Same-book closes for past bets** (Ethan said yes, 2026-10-04). New
+bets now bank the close of the book we posted at (else the best close
+across books) by themselves. This re-derives it for bets already settled.
+Results, units and records do not change — only the stored closing price
+and the CLV figures built on it. First the dry run, paste back the
+summary (the counts and the OVERWRITTEN sample):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes 2>&1 | head -60
+```
+
+Then, once we've looked at it together, the real one (it backs the
+journal up first):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
+```
+
+**3. Live tab "database is locked"** — nothing to run. The open-bet
+tracker now reads the journal read-only and retries a lock once; the box
+picks it up on its own.
+
 ### Betting checks, round 4: the near-even tier cap (2026-10-04, late night)
 
 Round 3 settled two things: grading is right (0 of ~4,700 picks

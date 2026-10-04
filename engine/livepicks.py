@@ -927,11 +927,40 @@ def attach_tracker(result: dict, sport: str, conn=None,
     swallows build output, and a tracker that died silently reads as a
     night with no bets.
     """
+    # A READER, AND IT WAITS ITS TURN ONCE (Ethan's Live tab, 2026-10-04:
+    # "Open-bet tracker hit an error this build: database is locked"). The
+    # tracker only SELECTs, but it opened the journal with `ledger.connect`,
+    # whose first call in a process runs the schema script and the column
+    # probes — writes, queued behind the settler's write lock past the busy
+    # timeout. `ledger.read_only` takes no schema locks (db.read_only says
+    # why it exists: this exact error, 2026-09-15). A lock that still lands
+    # — a checkpoint, a long settle — gets one more try before it is
+    # written onto the board.
+    import sqlite3 as _sqlite3
+    import time as _time
+    for attempt in range(1 + TRACKER_LOCK_RETRIES):
+        try:
+            return _attach_tracker_once(result, sport, conn, progress, identity, fetcher, fast_dir)
+        except _sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == TRACKER_LOCK_RETRIES:
+                result["live_picks_error"] = str(exc)
+                return f"tracker error: {exc}"
+            _time.sleep(TRACKER_LOCK_WAIT_S)
+    return ""
+
+
+#: One retry, a few seconds apart, for a lock the busy timeout outlasted.
+TRACKER_LOCK_RETRIES = 1
+TRACKER_LOCK_WAIT_S = 5.0
+
+
+def _attach_tracker_once(result, sport, conn, progress, identity, fetcher, fast_dir) -> str:
+    import sqlite3 as _sqlite3
     try:
         from . import ledger as _ledger
         own = conn is None
         if own:
-            conn = _ledger.connect()
+            conn = _ledger.read_only()
         try:
             date = str(result.get("date") or "")
             today, near = open_bets_for(conn, sport, date)
@@ -982,9 +1011,15 @@ def attach_tracker(result: dict, sport: str, conn=None,
         finally:
             if own:
                 conn.close()
+    except _sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower():
+            raise                                # the caller waits and tries again
+        result["live_picks_error"] = str(exc)
+        return f"tracker error: {exc}"
     except Exception as exc:                                  # noqa: BLE001
         result["live_picks_error"] = str(exc)
         return f"tracker error: {exc}"
+    result.pop("live_picks_error", None)
     rows = result["live_picks"]
     potd = result.get("live_potd") or []
     if not rows and not potd:
