@@ -6222,3 +6222,43 @@ print(d.get('plays_note') or d.get('note') or '')
 45.6/46.6; top 40 41.3/41.7. The top under-claims and the rest is on the
 number — the temperature (T ≈ 1.12) squeezes the spread. Tested as one
 hinge above a fixed 40% knee: `engine.tdtop` (runbook M2).
+
+## M1 + M2: done 2026-10-04 (night), neither proven
+
+M1 (engine.tdmanfit, red-zone man coverage → WR/TE touchdowns, 2022–2025):
+5,585 player-weeks; scored ÷ model 1.269 in the top third of x (good vs man,
+facing a red-zone man defence) against 1.377 the rest — the wrong way; b
+−0.84, clustered t −0.93, better 2/4. With the yardage version (scanfit
+zone_fit, t 0.1, 2026-09-24), the "beats man" argument has now failed for
+yards, catches and touchdowns.
+
+M2 (engine.tdtop, one hinge above a raw 40%): 22,193 player-weeks, 1,048
+above the knee. Held-out top 5 per slate: today's calibration claims 57.1%,
+lands 60.0%; hinged claims 58.1%, lands 60.0%. c 0.09, clustered t 0.52,
+better 3/6. The top under-claims by about three points on held-out seasons,
+not the five or six of the in-sample replay, and the hinge does not close
+it. Calibration unchanged; re-test when T3 has a larger live sample.
+
+The blocks as they were:
+
+**M1. Red-zone man coverage and touchdowns, four seasons** (paste it back;
+10–20 minutes in the background). The touchdown scans' "Higgins beats man,
+Jacksonville plays man in the red zone" on top of our TD model, on the
+pre-registered bar. Nothing it finds moves a number:
+
+```
+cd /srv/qellys && sudo -u qellys nohup nice -n 19 python3 -m engine.tdmanfit > /tmp/tdmanfit.log 2>&1 &
+```
+Check with `tail -8 /tmp/tdmanfit.log`; done when a line starts `saved;`.
+
+**M2. Is the top of our TD board too shy? One held-out fix** (paste it back;
+a few minutes). The five-season replay said our top 1/3/5 picks per slate
+land 5–6 points over their claim. This fits one extra term above a 40% knee
+and keeps it only if it wins on held-out seasons and closes that gap. It
+saves its verdict; nothing on the board changes until I wire a passing fit
+in:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdtop
+```
+
