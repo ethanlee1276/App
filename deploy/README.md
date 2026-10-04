@@ -260,6 +260,13 @@ sudo chmod 750 /var/backups/qellys
 sudo -u qellys env QB_BACKUP_DIR=/var/backups/qellys /srv/qellys/deploy/backup.sh
 sudo -u qellys env QB_BACKUP_DIR=/var/backups/qellys /srv/qellys/deploy/backup.sh --check
 
+#    ONE NIGHTLY JOB, NEVER TWO (2026-10-04). The droplet ended up with
+#    this line in the qellys crontab AND a root crontab line from
+#    backup.sh's own header — two 5 GB history copies at 04:00 UTC, and a
+#    full disk that stopped every board at 04:26. Check `sudo crontab -l`
+#    first; if root already runs backup.sh, skip this step. (backup.sh
+#    now also refuses to run while another backup holds its lock.)
+#
 #    Then nightly. The variable has to be IN the cron line — cron runs
 #    with almost no environment and nothing exported in this shell
 #    survives into it. The redirect matters too: without it cron mails

@@ -83,6 +83,32 @@ fi
 
 mkdir -p "$DEST"
 
+# ONE BACKUP AT A TIME, BOX-WIDE (2026-10-04). The droplet had TWO nightly
+# jobs at 04:00 UTC — root's crontab (this file's own example line) and
+# the qellys user's (deploy/README) — and each took a raw 5 GB copy of
+# history.db at the same moment. The disk filled at 04:26 UTC and every
+# board on the site stopped. A second run now waits its turn by skipping:
+# a lock both users can take (flock on a read-only descriptor).
+LOCK="${QB_BACKUP_LOCK:-/tmp/qellys-backup.lock}"
+[[ -e "$LOCK" ]] || ( umask 000; : > "$LOCK" ) 2>/dev/null || true
+if [[ -r "$LOCK" ]] && command -v flock >/dev/null 2>&1; then
+  exec 9<"$LOCK"
+  if ! flock -n 9; then
+    echo "SKIPPED: another backup is running right now — one at a time"
+    exit 0
+  fi
+fi
+
+# A RAW COPY NEVER OUTLIVES THE RUN. The database is copied raw, then
+# gzipped; a gzip that dies on a full disk leaves the raw copy (5 GB of
+# history) behind, and the retention sweep only knew `.db.gz` — so the
+# copies that filled the disk were never pruned. Whatever this run is
+# holding raw is deleted on any exit.
+RAW=""
+trap '[[ -n "$RAW" ]] && rm -f "$RAW" "$RAW.gz.partial" 2>/dev/null; true' EXIT
+#: The share of the disk a backup must leave free after itself.
+FLOOR_PCT="${QB_BACKUP_FLOOR_PCT:-15}"
+
 # OFFSITE IS THE PART THAT MATTERS. A backup on the same disk as the
 # database survives a mistake and not a dead server, and the dead server
 # is the case you are actually buying insurance against.
@@ -327,12 +353,18 @@ for db in "${DBS[@]}"; do
   size_mb=$(( $(stat -c %s "$ROOT/$db" 2>/dev/null || stat -f %z "$ROOT/$db") / 1048576 ))
   if [[ "$size_mb" -ge 200 ]]; then
     free_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $4}')
-    if [[ "${free_mb:-0}" -lt $(( size_mb * 3 / 2 )) ]]; then
-      echo "SKIPPED: $db is ${size_mb} MB and only ${free_mb} MB is free — free some space first"
+    total_mb=$(df -Pm "$DEST" | awk 'NR==2 {print $2}')
+    # Room for the raw copy and its gzip, AND the disk still FLOOR_PCT
+    # free afterwards — a backup that leaves the site no room to build
+    # its boards is the outage it was meant to insure against.
+    if [[ "${free_mb:-0}" -lt $(( size_mb * 3 / 2 )) ]] || \
+       [[ $(( ${free_mb:-0} - size_mb * 3 / 2 )) -lt $(( ${total_mb:-0} * FLOOR_PCT / 100 )) ]]; then
+      echo "SKIPPED: $db is ${size_mb} MB and only ${free_mb} MB is free — the disk must keep ${FLOOR_PCT}% free after a backup; free some space first"
       continue
     fi
     echo "backing up $db (${size_mb} MB — this takes a few minutes, nothing prints until it is done)"
   fi
+  RAW="$out"
   python3 - "$ROOT/$db" "$out" <<'PY'
 import sqlite3, sys
 src, dst = sys.argv[1], sys.argv[2]
@@ -345,6 +377,7 @@ PY
   # The fastest gzip for the big one: its size is the cost that matters
   # on one core, and level 1 still shrinks a database by most of the way.
   if [[ "$size_mb" -ge 200 ]]; then gzip -1 -f "$out"; else gzip -f "$out"; fi
+  rm -f "$out"; RAW=""
   echo "backed up: $db -> ${out}.gz ($(du -h "${out}.gz" | cut -f1))"
 done
 
@@ -376,6 +409,13 @@ for db in "${DBS[@]}"; do
   # databases present.
   ls -1t "$DEST/${name}-"*.db.gz 2>/dev/null | tail -n "+$((keep + 1))" \
     | xargs -r rm -f || true
+done
+# Raw copies an older run left when its gzip died — every database this
+# script has ever backed up, whether or not this run covers it, and
+# stamped names only: a hand-made `ledger-before-void-….db` is someone's,
+# and stays.
+for name in accounts ledger zeno history; do
+  rm -f "$DEST/${name}-"20[0-9][0-9][01][0-9][0-3][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z.db 2>/dev/null || true
 done
 
 # `|| true` BECAUSE push_remote IS THE LAST COMMAND. Its return code was
