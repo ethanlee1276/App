@@ -131,6 +131,7 @@ def test_the_page_sorts_the_case_for_the_under_and_says_why_it_stands():
     assert "shown — not in our number" in html and "in our number" in html
     assert "pull the other way" in html or "pulls the other way" in html, "the verdict says why it still stands"
     assert "Who covers him" in html and "Tyson Campbell" in html and "171" in html
+    assert "this is worth" in html and "take it past" in html, "the fair price and the worst one to take"
     assert "back-and-forth" in over_for, "the same script backs the over"
 
 
@@ -179,6 +180,40 @@ def test_a_scorer_reads_the_red_zone_and_a_receiver_reads_the_secondary():
     sec = next(f for f in facts if f["kind"] == "secondary")
     assert "Jalen Davis" in sec["text"] and "Dax Hill fills in" in sec["text"] and sec["sign"] == 1
     assert not sec["in_number"] and "rec_yds" in sec["markets"]
+
+
+def test_the_season_numbers_table_is_the_plain_record():
+    # Every breakdown's table: points for and against a game, run defence,
+    # third downs, red-zone TD rate both ways, run rate — raw, ranked.
+    from engine import db
+    conn = db.connect(":memory:")
+    conn.executemany("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score) "
+                     "VALUES ('nfl', 2026, ?, ?, ?, ?, ?, ?)",
+                     [("001", "A@B", "JAX", "CLE", 26, 10), ("002", "C@D", "DEN", "JAX", 20, 13),
+                      ("003", "E@F", "JAX", "NE", 35, 6), ("001", "G@H", "CIN", "TB", 28, 21)])
+    rows = [dict(sport="nfl", season=2026, period="001", team="JAX", side="def", opp="CLE", plays=60, rushes=20,
+                 rush_yds=70, sacks=3, third_att=12, third_conv=3, rz_drives=4, rz_tds=1),
+            dict(sport="nfl", season=2026, period="001", team="JAX", side="off", opp="CLE", plays=64, rushes=33,
+                 third_att=11, third_conv=6, rz_drives=3, rz_tds=2)]
+    db.upsert_team_units(conn, rows)
+    nums = G.season_numbers(conn, 2026, before_week=4)
+    jax = nums["JAX"]
+    assert jax["games"] == 3 and round(jax["pts_against"]["value"], 1) == 12.0
+    assert jax["pts_against"]["rank"] == 1, "fewest allowed ranks first"
+    assert jax["rz_def"]["value"] == 0.25 and round(jax["third_off"]["value"], 3) == 0.545
+    assert jax["run_rate"]["rank"] is None, "a run rate is a style, not a ranking"
+
+
+def test_a_teammate_out_and_a_questionable_corner_reach_the_case():
+    room = {"corners": [{"name": "Montaric Brown", "spot": "RCB", "status": "QUESTIONABLE", "next_man_up": False}],
+            "missing": []}
+    read = G.player_read("Tee Higgins", "CIN", "JAX", "WR", usage={"games": 3, "tgt_share": 0.225, "targets_pg": 7.7},
+                         ratings={}, room=room, scheme=None, split=None, tackling=None, line_out=None,
+                         mates_out=[{"name": "Colbie Young", "pos": "WR", "share": 0.08, "same_pos": True}],
+                         allowed={}, points=27.0)
+    kinds = {f["kind"]: f for f in read["facts"]}
+    assert "Colbie Young" in kinds["teammate"]["text"] and kinds["teammate"]["sign"] == 1
+    assert "Montaric Brown" in kinds["watch"]["text"] and kinds["watch"]["sign"] == 0
 
 
 if __name__ == "__main__":

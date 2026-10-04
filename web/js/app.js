@@ -12155,6 +12155,14 @@ function pickCaseHTML(r, lk, x, g, p) {
     verdict += ` ${inAg.length === 1 ? "One thing in our number pulls" : `${inAg.length} things in our number pull`} the other way, and ${
       inAg.length === 1 ? "it is" : "they are"} why this sits at ${Number.isFinite(p) ? wholePct(p) : "its chance"} and not higher.`;
   }
+  /* THE PRICE IT IS WORTH (every breakdown's "fair -186, max playable
+     -175"): our chance as odds, and the worst price that still leaves a
+     3-point cushion over what the book's price implies. */
+  if (Number.isFinite(p) && p > 0.05 && p < 0.97) {
+    const am = (q) => q >= 0.5 ? `${MINUS}${Math.round(100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`;
+    const cap = Math.max(0.05, p - 0.03);
+    verdict += ` At ${wholePct(p)} this is worth ${am(p)}; don’t take it past ${am(cap)}.`;
+  }
   const li = (f) => `<li class="pc-fact${f.in_number ? "" : " pc-shown"}"><span>${escapeHtml(f.text)}</span><em>${
     f.in_number ? "in our number" : "shown — not in our number"}</em></li>`;
   const col = (title, list, cls) => list.length ? `<div class="pc-col ${cls}"><div class="pc-col-k">${title}</div>
@@ -13279,6 +13287,27 @@ function tapeChanges(scan, away, home) {
   return lines.map((l) => `<p class="tp-basis tp-changed">${escapeHtml(l)}</p>`).join("");
 }
 
+/* THIS SEASON'S RAW NUMBERS beside the adjusted ranks (engine/gamescan.
+   season_numbers): the table every bettor's breakdown leads with. */
+const SEASON_NUMBER_ROWS = [["pts_for", "Points scored a game", "n"], ["pts_against", "Points allowed a game", "n"],
+  ["rush_allowed", "Rushing yards allowed a game", "n"], ["ypc_allowed", "Yards a carry allowed", "d"],
+  ["third_off", "Third-down conversions", "p"], ["third_def", "Third downs allowed", "p"],
+  ["rz_off", "Red-zone TD rate", "p"], ["rz_def", "Red-zone TD rate allowed", "p"],
+  ["run_rate", "Run rate", "p"], ["sacks", "Sacks a game", "d"]];
+function seasonNumbersHTML(scan, away, home) {
+  const nums = (scan && scan.numbers) || {};
+  if (!nums[away] && !nums[home]) return "";
+  const fmt = (c, kind) => !c || c.value == null ? "—"
+    : kind === "p" ? `${Math.round(c.value * 100)}%` : kind === "d" ? Number(c.value).toFixed(1) : Number(c.value).toFixed(1);
+  const cellOf = (t, k, kind) => { const c = (nums[t] || {})[k];
+    return `<span class="tp-num">${fmt(c, kind)}${c && c.rank ? ` <em>${ordinal(c.rank)}</em>` : ""}</span>`; };
+  const rows = SEASON_NUMBER_ROWS.filter(([k]) => (nums[away] || {})[k] || (nums[home] || {})[k])
+    .map(([k, label, kind]) => `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>${cellOf(away, k, kind)}${cellOf(home, k, kind)}</div>`).join("");
+  if (!rows) return "";
+  const g = Math.max((nums[away] || {}).games || 0, (nums[home] || {}).games || 0);
+  return `<div class="tp-group">This season, as played${g ? ` (${g} game${g === 1 ? "" : "s"})` : ""} — raw numbers, league rank</div>${rows}`;
+}
+
 function scanTapeHTML(scan, away, home) {
   const n = scanTeams(scan);
   const u = (t, side, k) => (((((scan.units || {})[t] || {})[side] || {})[k]) || {}).rank;
@@ -13301,6 +13330,7 @@ function scanTapeHTML(scan, away, home) {
         <span class="tp-team">${teamMark(home, 22)}<b>${escapeHtml(teamName(home))}</b></span></div>
       ${group("off", "Offense")}
       ${group("def", "Defense")}
+      ${seasonNumbersHTML(scan, away, home)}
     </div>`;
 }
 

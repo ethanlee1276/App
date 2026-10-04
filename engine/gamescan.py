@@ -275,6 +275,69 @@ def ratings_from_rows(current: list[dict], prior: list[dict] | None = None,
     return blended
 
 
+#: THE RAW SEASON NUMBERS a bettor's breakdown quotes (Ethan brought four
+#: Bengals @ Jaguars breakdowns on 2026-10-04; every one had the same table:
+#: points scored and allowed a game, rushing yards and yards a carry
+#: allowed, third-down rate, red-zone touchdown rate both ways, run rate).
+#: This season only, unadjusted, each with its league rank (1 = best for
+#: that side). The tale of the tape ranks the opponent-adjusted blend; this
+#: is the plain record beside it.
+NUMBER_SPECS = (
+    # key, label, value(team_sums, games), higher is better
+    ("pts_for", "Points scored a game", lambda c, g: c["pf"] / g if g else None, True),
+    ("pts_against", "Points allowed a game", lambda c, g: c["pa"] / g if g else None, False),
+    ("rush_allowed", "Rushing yards allowed a game", lambda c, g: c["d_rush_yds"] / g if g else None, False),
+    ("ypc_allowed", "Yards a carry allowed", lambda c, g: c["d_rush_yds"] / c["d_rushes"] if c["d_rushes"] else None, False),
+    ("third_off", "Third-down conversion rate", lambda c, g: c["o_3c"] / c["o_3a"] if c["o_3a"] else None, True),
+    ("third_def", "Third-down rate allowed", lambda c, g: c["d_3c"] / c["d_3a"] if c["d_3a"] else None, False),
+    ("rz_off", "Red-zone TD rate", lambda c, g: c["o_rzt"] / c["o_rzd"] if c["o_rzd"] else None, True),
+    ("rz_def", "Red-zone TD rate allowed", lambda c, g: c["d_rzt"] / c["d_rzd"] if c["d_rzd"] else None, False),
+    ("run_rate", "Run rate (runs per play)", lambda c, g: c["o_rush"] / c["o_plays"] if c["o_plays"] else None, None),
+    ("sacks", "Sacks a game", lambda c, g: c["d_sacks"] / g if g else None, True),
+)
+
+
+def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
+    """``{team: {"games", key: {"value", "rank", "of"}}}`` for this season's
+    weeks before ``before_week``, from team_units and the final scores."""
+    cells: dict = {}
+
+    def cell(t):
+        return cells.setdefault(t, {"pf": 0.0, "pa": 0.0, "g": 0, "d_rush_yds": 0.0, "d_rushes": 0,
+                                    "o_3a": 0, "o_3c": 0, "d_3a": 0, "d_3c": 0, "o_rzd": 0, "o_rzt": 0,
+                                    "d_rzd": 0, "d_rzt": 0, "o_rush": 0, "o_plays": 0, "d_sacks": 0})
+    wk = " AND CAST(period AS INTEGER) < ?" if before_week else ""
+    args = (int(season),) + ((int(before_week),) if before_week else ())
+    try:
+        for r in conn.execute("SELECT home, away, home_score, away_score FROM games WHERE sport='nfl' "
+                              "AND season=? AND home_score IS NOT NULL" + wk, args):
+            h, a = cell(r["home"]), cell(r["away"])
+            h["pf"] += r["home_score"]; h["pa"] += r["away_score"]; h["g"] += 1
+            a["pf"] += r["away_score"]; a["pa"] += r["home_score"]; a["g"] += 1
+        for r in conn.execute("SELECT * FROM team_units WHERE sport='nfl' AND season=?" + wk, args):
+            c, side = cell(r["team"]), r["side"]
+            v = lambda k: (r[k] if k in r.keys() and r[k] is not None else 0)    # noqa: E731
+            if side == "off":
+                c["o_3a"] += v("third_att"); c["o_3c"] += v("third_conv")
+                c["o_rzd"] += v("rz_drives"); c["o_rzt"] += v("rz_tds")
+                c["o_rush"] += v("rushes"); c["o_plays"] += v("plays")
+            else:
+                c["d_rush_yds"] += v("rush_yds"); c["d_rushes"] += v("rushes")
+                c["d_3a"] += v("third_att"); c["d_3c"] += v("third_conv")
+                c["d_rzd"] += v("rz_drives"); c["d_rzt"] += v("rz_tds"); c["d_sacks"] += v("sacks")
+    except Exception:                                        # noqa: BLE001
+        return {}
+    out = {t: {"games": c["g"]} for t, c in cells.items()}
+    for key, _label, fn, higher in NUMBER_SPECS:
+        vals = {t: fn(c, c["g"]) for t, c in cells.items()}
+        have = sorted(((t, v) for t, v in vals.items() if v is not None),
+                      key=lambda tv: -tv[1] if higher else tv[1])
+        n = len(have)
+        for i, (t, v) in enumerate(have):
+            out[t][key] = {"value": round(v, 3), "rank": i + 1 if higher is not None else None, "of": n}
+    return out
+
+
 def unit_ratings(conn, season: int, before_week: int | None = None,
                  sport: str = "nfl", changes: dict | None = None) -> dict:
     """The ratings a game in ``season`` week ``before_week`` is priced
@@ -819,6 +882,16 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
     # out is a lift for a receiver's over — shown, not in the number.
     if group in ("wr", "te") and room:
         fill = {c["spot"]: c["name"] for c in room.get("corners") or [] if c.get("next_man_up")}
+        # A starter on the injury report but not ruled out: the "if Cook
+        # sits" line every breakdown carried into its inactives plan.
+        for c in room.get("corners") or []:
+            st = str(c.get("status") or "").upper()
+            if st in ("QUESTIONABLE", "Q", "LIMITED") and not c.get("next_man_up"):
+                spot = "slot corner" if c["spot"] == "NB" else f"{c['spot']} corner"
+                facts.append({"text": f"{opp}'s {spot} {c['name']} is questionable — if he sits, the backup covers "
+                                      f"his side; check the inactives 90 minutes before kickoff",
+                              "sign": 0, "markets": ["rec_yds", "receptions"], "in_number": False,
+                              "kind": "watch"})
         for m in room.get("missing") or []:
             spot = "slot corner" if m["spot"] == "NB" else f"{m['spot']} corner"
             sub = fill.get(m["spot"])
@@ -1018,6 +1091,13 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d,
                        points=points, line_words=line_words, n_teams=n_teams, room=room,
                        ratings_off=o)
+    # TEAMMATES OUT (engine/teammates, measured): the breakdowns' "Colbie
+    # Young out and Iosivas on IR — the Bengals have no WR3" read as a fact
+    # for this bet, in the number where the model counted it.
+    for m in mates_out or []:
+        text, counted = mate_line(m, "carries" if group == "rb" else (u.get("share_of") or "targets"))
+        facts.append({"text": text, "sign": 1 if counted else 0, "markets": lean or None,
+                      "in_number": bool(counted), "kind": "teammate"})
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "facts": facts,
@@ -1542,6 +1622,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     except Exception:                                        # noqa: BLE001
         changes = {}
     ratings = unit_ratings(conn, season, before_week=week, changes=changes)
+    numbers = season_numbers(conn, season, before_week=week)
     # RED-ZONE TRIPS, offence and defence (engine/redzone), for the
     # touchdown scenarios' fifth reading.
     try:
@@ -1602,6 +1683,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}
+        scan["numbers"] = {t: numbers[t] for t in (home, away) if t in numbers}
         gd["scan"] = scan
         n += 1
     stamp_touchdowns(reads, result)
