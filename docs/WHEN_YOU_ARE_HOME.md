@@ -33,7 +33,34 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Betting checks, round 2: the fair close and the near-even leak (2026-10-04, night)
+
+Round 1's results are in (below). Two follow-ups, both read-only, paste
+them back:
+
+```
+cd /srv/qellys
+echo "=== B1 again: same-book close ==="; sudo -u qellys nice -n 19 python3 bettiming.py --sport nfl
+echo "=== B4: near-even leak ==="; sudo -u qellys python3 bandcheck.py
+```
+
+- **B1 again.** Round 1 compared our price (the best on the screen) with
+  ONE arbitrary book's close, which reads as "the price moved our way"
+  even when nothing moved. It now compares with the SAME book's close.
+  NFL only first, because it reads the odds history and the box is small;
+  drop `--sport nfl` for every sport once that finishes fine.
+- **B4.** The one board's −149 to −111 picks went 147-177 (claimed 62%,
+  price 56%, hit 45%). This checks whether that holds by sport and in
+  both halves of the season, against a rule written down before the run.
+  If it says HOLDS for the one board, those picks move to paper.
+
 ### Betting checks: when to bet, the heavy favourites, the parlays (2026-10-04, late)
+
+**Ran 2026-10-04.** B1 said "bet when posted" for NFL/MLB, but read off a
+biased close (see round 2). B2: the one board loses near even money
+(−149 to −111: 147-177, z −3.8); heavy favourites land on their claim.
+B3: parlay legs 29 of 66 (expected 34), correlated tickets 0 of 9
+(expected 2.8) — too few to act on yet.
 
 All three are read-only and take seconds. Paste all of it back:
 

@@ -33,6 +33,16 @@ the mirror; otherwise "no difference yet". It moves nothing on the site;
 a verdict that holds is a change to how the alerts and the cards word it,
 made by hand.
 
+THE CLOSE, CORRECTED 2026-10-04 (after the first run on the box). The
+journal's `closing_odds` is ONE book's last quote — whichever the harvest
+wrote last (engine/db.closing_odds_by_date says so) — while the price we
+post is the BEST on the screen. Best-of-six against an arbitrary one reads
+as the price "moving toward us" when nothing moved at all. So the verdict
+is now read off the SAME BOOK's close (the book we posted at, from the
+harvested odds history, pre-game rows only, same line and side), with the
+best close across every book beside it as the strict version. The
+journal-close numbers still print, marked as the biased reading.
+
 A second table repeats the loss audit's sharpest finding on this data:
 picks whose price moved AGAINST them by MOVE_PTS or more, their hit rate
 against their claim. A large gap there is news the market had and we did
@@ -43,6 +53,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import math
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -57,6 +68,8 @@ VERDICT_PTS = 0.5
 MIN_N = 100
 MOVE_PTS = 0.02
 ET_OFFSET_H = -4          # the journal stamps UTC; game days are Eastern
+COLS = ("sport", "category", "ts", "game_day", "odds", "closing_odds", "status", "hit_prob",
+        "player", "market", "side", "line", "book", "date", "lead_min")
 
 
 def implied(o) -> float | None:
@@ -100,8 +113,57 @@ def bucket(d: int | None) -> str:
     return "same day" if d <= 0 else "day before" if d == 1 else "2+ days"
 
 
-def rows(conn, sport: str | None = None, since: str | None = None) -> list[dict]:
-    q = ("SELECT sport, category, ts, game_day, odds, closing_odds, status, hit_prob FROM bets "
+def _bookkey(b) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(b or "").lower())
+
+
+class BookCloses:
+    """Closing quotes per book from the harvested odds history, read once
+    per (sport, market), for the same-book and best-book CLV."""
+
+    def __init__(self, hist):
+        self.hist = hist
+        self._cache: dict = {}
+
+    def quotes(self, b: dict) -> list:
+        if not b.get("player") or not b.get("market"):
+            return []
+        from engine import db, ledger
+        from engine.sources.oddsapi import normalize_name
+        ck = (b["sport"], b["market"])
+        if ck not in self._cache:
+            try:
+                self._cache[ck] = db.closing_odds_all_books(self.hist, *ck)
+            except sqlite3.Error:
+                self._cache[ck] = {}
+        try:
+            dates = ledger.close_dates(self.hist, b)
+        except Exception:                                   # noqa: BLE001
+            dates = [str(b.get("game_day") or b.get("date") or "")[:10]]
+        got = ledger.close_at(self._cache[ck], normalize_name(b["player"] or ""), dates) or []
+        out = []
+        for q in got:
+            if ledger._pregame_close(q, b) is None:
+                continue
+            price = ledger._close_odds_from(q, b["line"], b["side"])
+            if price is not None:
+                out.append((_bookkey(q.get("book")), price))
+        return out
+
+    def same_and_best(self, b: dict):
+        qs = self.quotes(b)
+        if not qs:
+            return None, None
+        mine = _bookkey(b.get("book"))
+        same = next((p for k, p in qs if k and k == mine), None)
+        best = min((p for _k, p in qs), key=lambda p: implied(p))   # longest price = least implied
+        return same, best
+
+
+def rows(conn, sport: str | None = None, since: str | None = None, closes: BookCloses | None = None) -> list[dict]:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
+    sel = ", ".join(c if c in have else f"NULL AS {c}" for c in COLS)
+    q = (f"SELECT {sel} FROM bets "
          "WHERE status IN ('won','lost','push') AND category IN (%s)" % ",".join("?" * len(BOOKS)))
     args: list = list(BOOKS)
     if sport:
@@ -110,13 +172,20 @@ def rows(conn, sport: str | None = None, since: str | None = None) -> list[dict]
     if since:
         q += " AND COALESCE(game_day, substr(ts,1,10)) >= ?"
         args.append(since)
+    conn.row_factory = sqlite3.Row
     out = []
     for r in conn.execute(q, args):
-        took, close = implied(r[4]), implied(r[5])
-        out.append({"sport": r[0], "book": r[1], "when": bucket(days_ahead(r[2], r[3])),
-                    "status": r[6], "claim": r[7], "odds": r[4], "close": r[5],
-                    "clv": None if took is None or close is None else close - took,
-                    "pnl": profit(r[4], r[6]), "pnl_close": profit(r[5], r[6]) if r[5] else None})
+        took, close = implied(r["odds"]), implied(r["closing_odds"])
+        same = best = None
+        if closes is not None:
+            same, best = closes.same_and_best({**dict(r), "category": r["category"]})
+        out.append({"sport": r["sport"], "book": r["category"], "when": bucket(days_ahead(r["ts"], r["game_day"])),
+                    "status": r["status"], "claim": r["hit_prob"], "odds": r["odds"], "close": r["closing_odds"],
+                    "clv_journal": None if took is None or close is None else close - took,
+                    "clv": None if took is None or same is None else implied(same) - took,
+                    "clv_best": None if took is None or best is None else implied(best) - took,
+                    "pnl": profit(r["odds"], r["status"]),
+                    "pnl_close": profit(same, r["status"]) if same else None})
     return out
 
 
@@ -124,6 +193,8 @@ def summarize(rs: list[dict]) -> dict:
     with_close = [r for r in rs if r["clv"] is not None]
     clvs = [r["clv"] for r in with_close]
     n = len(clvs)
+    jn = [r["clv_journal"] for r in rs if r.get("clv_journal") is not None]
+    bs = [r["clv_best"] for r in rs if r.get("clv_best") is not None]
     mean = sum(clvs) / n if n else None
     se = (math.sqrt(sum((c - mean) ** 2 for c in clvs) / (n - 1)) / math.sqrt(n)) if n > 1 else None
     posted = [r["pnl"] for r in with_close if r["pnl"] is not None]
@@ -133,13 +204,15 @@ def summarize(rs: list[dict]) -> dict:
             "against": sum(1 for c in clvs if c < 0) / n if n else None,
             "avg_clv": mean, "se": se,
             "roi_posted": sum(posted) / len(posted) if posted else None,
-            "roi_close": sum(closed) / len(closed) if closed else None}
+            "roi_close": sum(closed) / len(closed) if closed else None,
+            "journal_n": len(jn), "journal_clv": sum(jn) / len(jn) if jn else None,
+            "best_n": len(bs), "best_clv": sum(bs) / len(bs) if bs else None}
 
 
 def verdict(s: dict) -> str:
     m, se, n = s["avg_clv"], s["se"], s["with_close"]
     if m is None or se is None or n < MIN_N:
-        return f"not enough closes yet ({n} of {MIN_N})"
+        return f"not enough same-book closes yet ({n} of {MIN_N})"
     pts = m * 100
     if pts >= VERDICT_PTS and m >= 2 * se:
         return f"BET WHEN POSTED — the price moves toward us {pts:+.1f} pts on average"
@@ -172,19 +245,31 @@ def main(argv=None) -> int:
     ap.add_argument("--sport")
     ap.add_argument("--since")
     ap.add_argument("--db", default=str(ROOT / "data" / "ledger.db"))
+    ap.add_argument("--hist", default=str(ROOT / "data" / "history.db"), help="the odds history (same-book closes)")
     a = ap.parse_args(argv)
     conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
-    rs = rows(conn, a.sport, a.since)
+    try:
+        hist = sqlite3.connect(f"file:{a.hist}?mode=ro", uri=True)
+        hist.row_factory = sqlite3.Row
+        hist.execute("SELECT 1 FROM odds_history LIMIT 1")
+        closes = BookCloses(hist)
+    except sqlite3.Error as exc:
+        print(f"(no odds history at {a.hist}: {exc}; same-book closes unavailable)")
+        closes = None
+    rs = rows(conn, a.sport, a.since, closes)
     by = defaultdict(list)
     for r in rs:
         by[(r["sport"], r["book"])].append(r)
-    print("WHEN TO BET — posted price vs closing price, settled picks with a close\n")
+    print("WHEN TO BET — posted price vs the SAME BOOK's closing price, settled picks\n")
     for (sport, book), group in sorted(by.items()):
         s = summarize(group)
-        if not s["with_close"]:
+        if not s["with_close"] and not s["journal_n"]:
             continue
-        print(f"{sport.upper()} · {BOOKS.get(book, book)} — {s['with_close']} of {s['n']} with a close")
+        print(f"{sport.upper()} · {BOOKS.get(book, book)} — {s['with_close']} of {s['n']} with a same-book close")
         print(f"  verdict: {verdict(s)}")
+        pts = lambda v: "—" if v is None else f"{v * 100:+.1f}"
+        print(f"  best close across books: {pts(s['best_clv'])} pts on {s['best_n']}   "
+              f"(journal close, one arbitrary book — biased: {pts(s['journal_clv'])} pts on {s['journal_n']})")
         for when in ("2+ days", "day before", "same day", "unknown"):
             sub = [r for r in group if r["when"] == when]
             t = summarize(sub)
