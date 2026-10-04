@@ -58,14 +58,15 @@ git -C /srv/qellys log --oneline -1
 ```
 
 **R1. Re-run every fit with 2026 in it** (paste all of it; ten minutes or
-so). All of these also run by themselves every Wednesday, in this order:
+so). `nice -n 19` runs them at the lowest priority, so the site stays
+quick while they work. All of these also run by themselves every Wednesday, in this order:
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist
-cd /srv/qellys && sudo -u qellys python3 -m engine.posspread
-cd /srv/qellys && sudo -u qellys python3 -m engine.tdscale
-cd /srv/qellys && sudo -u qellys python3 -m engine.tdbacktest --fit
-cd /srv/qellys && sudo -u qellys python3 -m engine.boardlearn
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.scouthist
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.posspread
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdscale
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdbacktest --fit
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.boardlearn
 ```
 
 To undo any one: remove its file under /srv/qellys/data/models/ —
