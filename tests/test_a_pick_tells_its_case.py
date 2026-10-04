@@ -140,7 +140,8 @@ def test_the_game_script_names_a_back_and_forth_game():
     assert "a close, back-and-forth game" in app
     fn = app[app.index("function whyLikelyHTML("):]
     fn = fn[:fn.index("\nfunction ", 10)]
-    assert "pickCaseHTML(rr, lk, x, g, p)" in fn, "the pick page leads with the case"
+    assert "pickCaseHTML(rr, lk, x," in fn and "whySectionHTML(items, p, board, caseHTML)" in fn, \
+        "the pick page leads with the case"
 
 
 if __name__ == "__main__":

@@ -28,7 +28,10 @@ HTML = (WEB / "index.html").read_text()
 #: Hunter panel (~1 KB). The first visit came DOWN the same day, 603 -> 590:
 #: index.html is served without its comments now (29 -> 11 KB gz), and the
 #: budget keeps the saving rather than spending it.
-APP_JS_BUDGET_KB = 472
+#: 472 -> 476 on 2026-10-04 by the pick page's case section (pickCaseHTML:
+#: the facts sorted for the bet, the corners he sees, the back-and-forth
+#: script — ~2.5 KB), the change Ethan asked for that day.
+APP_JS_BUDGET_KB = 476
 BOOT_BUDGET_KB = 590
 
 

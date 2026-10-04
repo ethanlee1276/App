@@ -268,10 +268,14 @@ def test_the_child_runs_its_steps_says_what_it_did_and_cleans_up():
 def test_a_fitter_started_by_an_exited_chore_is_still_guarded_and_cut_off():
     from engine import maintenance as M
     d = tempfile.mkdtemp()
-    saved = M._child_dir
+    saved = (M._child_dir, M._child_log_path)
     M._child_dir = lambda: launch.Path(d)
+    M._child_log_path = lambda module: launch.Path(d) / f"weekly_{module.rsplit('.', 1)[-1]}.log"
     live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "engine.fakefit"],
                             start_new_session=True)
+    # Until the child has exec'd, /proc shows the parent's command line; a
+    # loaded machine can ask in that window, so wait for the real one.
+    assert _wait_for(lambda: M._pid_runs(live.pid, "engine.fakefit"), timeout=10)
     try:
         with open(os.path.join(d, "weekly_fakefit.pid"), "w") as fh:
             json.dump({"pid": live.pid, "module": "engine.fakefit", "started": time.time()}, fh)
@@ -287,7 +291,7 @@ def test_a_fitter_started_by_an_exited_chore_is_still_guarded_and_cut_off():
         assert any("engine.gonefit: finished" in ln for ln in out), out
         assert not os.listdir(d) or all(not f.endswith(".pid") for f in os.listdir(d))
     finally:
-        M._child_dir = saved
+        M._child_dir, M._child_log_path = saved
         if live.poll() is None:
             live.kill()
 

@@ -12014,7 +12014,7 @@ function whyHeldItem(lk, p) {
 /* The section itself, one shape for every bet. A pick under 50% is not
    "likely" and the heading does not say it is: a long shot's case is the
    price, and its heading says so. */
-function whySectionHTML(items, p, board) {
+function whySectionHTML(items, p, board, lead = "") {
   const under = Number.isFinite(p) && p < 0.5;
   const head = under ? "Why it’s worth it" : "Why it’s likely";
   const foot = board === "likely"
@@ -12028,7 +12028,7 @@ function whySectionHTML(items, p, board) {
       bar. Every priced bet shows its reasons, picked or not.`
     : `On the Edge board because the price pays more than this chance says it
       should. The Record page grades every one at the price it was posted.`;
-  return `<section class="why-likely" aria-label="${head}">
+  return `${lead}<section class="why-likely" aria-label="${head}">
     <div class="wl-head">${head}</div>
     <dl class="wl-list">${items.map(([k, x]) => `<div class="wl-item"><dt>${k}</dt><dd>${x}</dd></div>`).join("")}</dl>
     <p class="wl-foot">${foot}</p>
@@ -12274,9 +12274,9 @@ function whyLikelyHTML(v, r, lk) {
   /* THE CASE (pickCaseHTML) replaces the read's flat list here: the same
      facts, sorted for this bet and each marked in-our-number or shown. */
   const rr = lk && lk.player ? { ...r, ...lk } : r;
-  const x = pickScanRead(rr);
-  const g = scriptGameOf(rr);
-  const caseHTML = pickCaseHTML(rr, lk, x, g, p);
+  const x = pickScanRead(lk && lk.player ? { ...r, ...lk } : r);
+  const caseHTML = typeof pickCaseHTML === "function"
+    ? pickCaseHTML(rr, lk, x, typeof scriptGameOf === "function" ? scriptGameOf(rr) : null, p) : "";
   if (x && !caseHTML) {
     const bits = scanUsageBits(x);
     const said = scanReadForBet(x, (lk && lk.side) || r.side);
@@ -12284,7 +12284,7 @@ function whyLikelyHTML(v, r, lk) {
       `${bits.length ? `<div class="ms-use">${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos || "")} · ${
         escapeHtml(bits.join(" · "))}</div>` : ""}${scanWhyList(x)}`]);
   }
-  return caseHTML + whySectionHTML(items, p, board);
+  return whySectionHTML(items, p, board, caseHTML);
 }
 
 /* A moneyline, spread or total's reasons that are about the OTHER side's
