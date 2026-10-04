@@ -63,6 +63,11 @@ DAY = dt.date.fromtimestamp(NOW).isoformat()
 # this file; the readiness pull is the one football exemption from it
 # and has its own file (tests/test_ready_window.py).
 KICKOFFS = [NOW + 3.25 * 3600]
+# NFL's guaranteed floor (oddsbudget.PRIORITY_PULLS, 2026-10-04) lifts its
+# share on a game day; this file is about the ceiling's arithmetic and uses
+# NFL only as its example league, so the floor is off here. The floor has
+# its own file (tests/test_nfl_is_always_in_the_budget.py).
+B.PRIORITY_PULLS = {}
 
 
 def _ledger(credits: int) -> Path:

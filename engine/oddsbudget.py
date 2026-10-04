@@ -886,6 +886,17 @@ READY_SPORTS = ("nfl", "cfb")
 # (1pm, 4pm, the night game), NFL only — college posts no inactive list.
 INACTIVES_BEFORE_S = 80 * 60
 INACTIVES_SPORTS = ("nfl",)
+#: NFL IS ALWAYS IN THE BUDGET (Ethan, 2026-10-04: "as ive said before nfl
+#: is most important so we need NFL in the budget at all times"). On a day
+#: with an NFL kickoff inside the next 24 hours, the day's ceiling for NFL
+#: is never below this many full pulls, whatever the shares say. The box
+#: that morning: "today's odds budget is spent for this slate (331 of 528
+#: credits; a pull costs 272)" at 10:57 on a Sunday, because college —
+#: weighted for its one game day a week — still claimed the largest slice
+#: of a day it does not play. The month's RESERVE and the fifteen-minute
+#: floor still bind; this only lifts the day's ceiling.
+PRIORITY_PULLS = {"nfl": 6}
+PRIORITY_HORIZON_S = 24 * 3600
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
 # A flat 1/31st-of-the-balance-per-day is the wrong shape for how this is
@@ -1231,6 +1242,17 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # THE DAY'S BUDGET IS SET BEFORE THE BURST, and that is the whole
     # point of the cap: PRIME_BURST and the touchpoints redistribute the
     # day's credits toward the window, they do not add to them.
+    # NFL'S FLOOR (PRIORITY_PULLS), applied to its SHARE so the cadence,
+    # the starvation rule and the day's ceiling all see the same slice: on
+    # a day with an NFL kickoff inside PRIORITY_HORIZON_S, NFL's slice of
+    # the day covers at least that many full pulls.
+    floor_pulls = PRIORITY_PULLS.get(budget_sport(sport) if sport else "", 0)
+    if floor_pulls and any(isinstance(k, (int, float)) and now <= k <= now + PRIORITY_HORIZON_S
+                           for k in (kickoffs or [])):
+        allowance = daily_allowance(state, kw.get("today") or _dt.date.fromtimestamp(now))
+        need = floor_pulls * close_cost
+        if allowance > 0:
+            share = max(share, min(1.0, need / allowance))
     base_share = share
     if state.remaining <= RESERVE:
         # …except for the close. A month spent down to its reserve still
