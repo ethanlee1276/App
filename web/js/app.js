@@ -12035,6 +12035,147 @@ function whySectionHTML(items, p, board) {
   </section>`;
 }
 
+/* THE CASE FOR THIS BET (Ethan, 2026-10-04, on Ja'Marr Chase: "we're
+   labeling him as a good matchup, but then suggesting his under … it all
+   feels like it's fighting itself"). Every matchup fact the scan holds,
+   sorted for THIS bet: what backs this side, what works against it, and —
+   on each — whether our number is built on it or it is only shown. A fact
+   pointing the other way that was never in the number was measured and
+   found not to predict (engine/defensevs; engine/tdmatchfit for
+   touchdowns), and the page now says so instead of leaving two true
+   sentences to argue. Facts come from the read's `facts`
+   (engine/gamescan.read_facts), oriented from the over's side; the
+   script fact and his own games are added here. */
+const CASE_CLOSE_SPREAD = 3.5, CASE_WIDE_SPREAD = 6.5;
+function caseHighTotal() { return state.sport === "cfb" ? 56 : GS_HIGH_TOTAL; }
+function caseLowTotal() { return state.sport === "cfb" ? 46 : 41; }
+
+/* What the lines say about how the game goes, for this market, from the
+   over's side. A close spread with a high total is its own script — a
+   back-and-forth game — not "the favourite ahead". */
+function caseScriptFact(r, g, chainWhy) {
+  if (!g || !["nfl", "cfb"].includes(state.sport)) return null;
+  const exp = scriptExpected(g);
+  const tot = exp.total, sp = exp.spread;
+  if (tot == null && sp == null) return null;
+  const mkt = String(r.market || "").toLowerCase();
+  const mine = r.team ? teamName(r.team) : "his team";
+  const fav = exp.fav && exp.fav === r.team, dog = exp.fav && exp.fav !== r.team;
+  const lines = [sp != null && exp.fav ? `${teamName(exp.fav)} ${MINUS}${sp.toFixed(1)}` : "",
+    tot != null ? `total ${tot}` : ""].filter(Boolean).join(", ");
+  const close = sp != null && sp <= CASE_CLOSE_SPREAD, wide = sp != null && sp >= CASE_WIDE_SPREAD;
+  const high = tot != null && tot >= caseHighTotal(), low = tot != null && tot <= caseLowTotal();
+  let sign = 0, text = "";
+  if (GS_CATCH.test(mkt) || GS_PASS.test(mkt)) {
+    if (close && high) { sign = 1; text = `The lines expect a close, high-scoring game (${lines}) — a back-and-forth game keeps both teams throwing to the end`; }
+    else if (wide && dog) { sign = 1; text = `${mine} are ${sp.toFixed(1)}-point underdogs (${lines}) — a team playing from behind throws more`; }
+    else if (wide && fav) { sign = -1; text = `${mine} are ${sp.toFixed(1)}-point favorites (${lines}) — a team that gets ahead throws less late`; }
+    else if (low) { sign = -1; text = `A low total (${lines}) — fewer plays and fewer throws for everyone`; }
+    else if (high) { sign = 1; text = `A high total (${lines}) — more plays and more throws`; }
+    else { text = `The lines expect a close, middling game (${lines}) — no strong lean either way`; }
+  } else if (GS_RUSH.test(mkt)) {
+    if (wide && fav) { sign = 1; text = `${mine} are ${sp.toFixed(1)}-point favorites (${lines}) — a team ahead runs the clock`; }
+    else if (wide && dog) { sign = -1; text = `${mine} are ${sp.toFixed(1)}-point underdogs (${lines}) — a team behind passes more and runs less`; }
+    else if (close && high) { text = `A close, high-scoring game (${lines}) — both teams lean on the pass, but the carries stay`; }
+    else { text = `The lines expect a close game (${lines}) — no strong lean on the carries`; }
+  } else {
+    return null;
+  }
+  const inNum = /script|ahead|behind|trail|lead|favou?red|underdog|spread/i.test(chainWhy || "");
+  return { text, sign, in_number: inNum, kind: "script" };
+}
+
+function pickCase(r, lk, x, g) {
+  const side = String((lk && lk.side) || r.side || "").toLowerCase();
+  const over = !/under|^no$/.test(side);
+  const mkt = String(r.market || "").toLowerCase();
+  const scorer = WHY_SCORER.test(mkt);
+  const facts = ((x && x.facts) || []).filter((f) => !f.markets || f.markets.includes(mkt)
+    || (scorer && f.markets.some((m) => WHY_SCORER.test(m))));
+  const steps = ((r.chain && r.chain.steps) || []);
+  const chainWhy = steps.filter((st) => /matchup|context/.test(String(st.key || ""))).map((st) => st.why || "").join(" ");
+  const sf = caseScriptFact(r, g, chainWhy);
+  const all = facts.slice();
+  if (sf) all.push(sf);
+  // His own games against this line.
+  const line = Number((lk && lk.line != null ? lk.line : r.line));
+  const logs = (r.logs || []).filter((gm) => Number.isFinite(Number(gm.value))).slice(0, 10);
+  if (logs.length >= 4) {
+    const anytime = scorer || !Number.isFinite(line);
+    const hits = logs.filter((gm) => anytime ? Number(gm.value) > 0 : Number(gm.value) > line).length;
+    const rate = hits / logs.length;
+    all.push({ text: anytime ? `Scored in ${hits} of his last ${logs.length} games`
+        : `Went over ${String(line)} in ${hits} of his last ${logs.length} games`,
+      sign: rate >= 0.6 ? 1 : rate <= 0.4 ? -1 : 0, in_number: true, kind: "form" });
+  }
+  const dir = over ? 1 : -1;
+  const forBet = all.filter((f) => f.sign * dir > 0);
+  const against = all.filter((f) => f.sign * dir < 0);
+  const neutral = all.filter((f) => !f.sign);
+  const opp = r.opponent || (g ? (g.home === r.team ? g.away : g.home) : "");
+  const cov = g && g.scan && g.scan.coverage && g.scan.coverage[opp];
+  const wr = /^(WR)$/i.test(String((x && x.pos) || r.position || ""));
+  const te = /^(TE)$/i.test(String((x && x.pos) || r.position || ""));
+  return { side, over, scorer, forBet, against, neutral, opp,
+           corners: (wr || te) && cov ? (cov.corners || []) : [], te,
+           lead: x && x.usage && (x.usage.tgt_share || 0) >= 0.2 };
+}
+
+function pickCaseHTML(r, lk, x, g, p) {
+  const c = pickCase(r, lk, x, g);
+  if (!c.forBet.length && !c.against.length && !c.corners.length) return "";
+  const sideWord = c.scorer ? (c.over ? "touchdown" : "no touchdown")
+    : `${c.over ? "over" : "under"}${(lk && lk.line != null) || r.line != null ? ` ${(lk && lk.line != null) ? lk.line : r.line}` : ""}`;
+  const proj = Number(r.projection), line = Number(lk && lk.line != null ? lk.line : r.line);
+  const num = (v) => Number(v).toFixed(1).replace(/\.0$/, "");
+  const what = String(r.market_label || r.market || "").toLowerCase();
+  let verdict = "";
+  if (!c.scorer && Number.isFinite(proj) && Number.isFinite(line)) {
+    const gap = proj - line;
+    verdict = `We project ${num(proj)} ${escapeHtml(what)} — ${num(Math.abs(gap))} ${gap >= 0 ? "above" : "below"} the ${num(line)} line.`;
+  } else if (Number.isFinite(p)) {
+    verdict = `We give it ${wholePct(p)}.`;
+  }
+  const inAg = c.against.filter((f) => f.in_number), shownAg = c.against.filter((f) => !f.in_number);
+  if (!c.against.length) {
+    verdict += " Everything we read on this game points the same way.";
+  } else if (!inAg.length) {
+    verdict += ` What points the other way isn’t part of our number: each of ${shownAg.length === 1 ? "those facts" : "those facts"} was tested over four seasons and did not predict this stat — so it is shown, not counted.`;
+  } else {
+    verdict += ` ${inAg.length === 1 ? "One thing in our number pulls" : `${inAg.length} things in our number pull`} the other way, and ${
+      inAg.length === 1 ? "it is" : "they are"} why this sits at ${Number.isFinite(p) ? wholePct(p) : "its chance"} and not higher.`;
+  }
+  const li = (f) => `<li class="pc-fact${f.in_number ? "" : " pc-shown"}"><span>${escapeHtml(f.text)}</span><em>${
+    f.in_number ? "in our number" : "shown — not in our number"}</em></li>`;
+  const col = (title, list, cls) => list.length ? `<div class="pc-col ${cls}"><div class="pc-col-k">${title}</div>
+    <ul>${list.map(li).join("")}</ul></div>` : "";
+  let corners = "";
+  if (c.corners.length) {
+    const who = c.te
+      ? `Tight ends draw linebackers and safeties more than corners; these are ${escapeHtml(c.opp)}’s corners for the snaps he lines up wide.`
+      : c.lead
+      ? `As his team’s lead receiver he lines up outside on most snaps, so he sees ${escapeHtml(c.opp)}’s outside corners most, and the nickel when he moves inside.`
+      : `${escapeHtml(c.opp)}’s corners — outside and in the slot.`;
+    corners = `<div class="pc-cover"><div class="pc-col-k">Who covers him</div><p class="pc-cover-note">${who}
+      No free data publishes which corner shadows which receiver, so this is the room, not a confirmed assignment.</p>
+      <div class="pc-table" role="table">
+        <div class="pc-tr pc-th" role="row"><span>Corner</span><span>Targets</span><span>Catches</span><span>Yards</span><span>Yds/target</span><span>Rating</span><span>TD</span></div>
+        ${c.corners.map((k) => `<div class="pc-tr" role="row"><span><b>${escapeHtml(k.name)}</b> ${escapeHtml(k.spot === "NB" ? "slot" : k.spot)}${
+          k.status ? ` · ${escapeHtml(String(k.status).toLowerCase())}` : ""}${k.next_man_up ? " · fills in" : ""}</span><span>${k.targets ?? "—"}</span><span>${
+          k.cmp ?? "—"}</span><span>${k.yds ?? "—"}</span><span>${k.yds_per_tgt != null ? num(k.yds_per_tgt) : "—"}</span><span>${
+          k.rating != null ? Math.round(k.rating) : "—"}</span><span>${k.td ?? "—"}</span></div>`).join("")}
+      </div><p class="pc-cover-note">This season, in coverage (passer rating allowed: 158 is perfect, about 90 is league average).</p></div>`;
+  }
+  return `<section class="pick-case" aria-label="The case for the ${escapeHtml(sideWord)}">
+    <div class="pc-head">The case for the ${escapeHtml(sideWord)}</div>
+    ${verdict ? `<p class="pc-verdict">${verdict}</p>` : ""}
+    <div class="pc-cols">${col(`Backs the ${escapeHtml(c.scorer ? (c.over ? "touchdown" : "no") : (c.over ? "over" : "under"))}`, c.forBet, "pc-for")}${
+      col("Works against it", c.against, "pc-against")}</div>
+    ${c.neutral.length ? `<details class="pc-more"><summary>Neutral here (${c.neutral.length})</summary><ul>${c.neutral.map(li).join("")}</ul></details>` : ""}
+    ${corners}
+  </section>`;
+}
+
 function whyLikelyHTML(v, r, lk) {
   const board = lk ? (lk.board || "likely") : whyBoardOf(r);
   if (!lk) {
@@ -12130,15 +12271,20 @@ function whyLikelyHTML(v, r, lk) {
   /* THE MATCHUP SCAN'S READ ON HIM, here with the rest of the reasons
      (Ethan, 2026-09-25: the scan said why St. Brown could do well and
      "Why it's likely" did not). */
-  { const x = pickScanRead(lk && lk.player ? { ...r, ...lk } : r);
-    if (x) {
-      const bits = scanUsageBits(x);
-      const said = scanReadForBet(x, (lk && lk.side) || r.side);
-      items.push([`The matchup — ${escapeHtml(said ? said.text : x.label)}`,
-        `${bits.length ? `<div class="ms-use">${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos || "")} · ${
-          escapeHtml(bits.join(" · "))}</div>` : ""}${scanWhyList(x)}`]);
-    } }
-  return whySectionHTML(items, p, board);
+  /* THE CASE (pickCaseHTML) replaces the read's flat list here: the same
+     facts, sorted for this bet and each marked in-our-number or shown. */
+  const rr = lk && lk.player ? { ...r, ...lk } : r;
+  const x = pickScanRead(rr);
+  const g = scriptGameOf(rr);
+  const caseHTML = pickCaseHTML(rr, lk, x, g, p);
+  if (x && !caseHTML) {
+    const bits = scanUsageBits(x);
+    const said = scanReadForBet(x, (lk && lk.side) || r.side);
+    items.push([`The matchup — ${escapeHtml(said ? said.text : x.label)}`,
+      `${bits.length ? `<div class="ms-use">${escapeHtml(teamName(x.team))} ${escapeHtml(x.pos || "")} · ${
+        escapeHtml(bits.join(" · "))}</div>` : ""}${scanWhyList(x)}`]);
+  }
+  return caseHTML + whySectionHTML(items, p, board);
 }
 
 /* A moneyline, spread or total's reasons that are about the OTHER side's
@@ -12779,10 +12925,15 @@ function scriptNeed(r) {
   } else if (GS_CATCH.test(mkt)) {
     // The margin lean only: the pace link (+0.15 to +0.30, measured
     // between the two teams' receivers) is too weak to call a clash on.
-    set("margin", -s * t, up ? `the ${who} chasing — trailing teams throw, and catches rise when a team is behind`
-      : `the ${who} ahead — a leading team throws less`);
+    set("margin", -s * t, up ? `the ${who} chasing, or a back-and-forth game — teams throw when behind or trading scores`
+      : `the ${who} ahead, not a back-and-forth game — a leading team throws less late`);
+    // A BACK-AND-FORTH GAME (Ethan, 2026-10-04: "we never show if it could
+    // be a back and forth game"): a close score with points on the board
+    // keeps both teams throwing — a catch over fits it, an under does not.
+    out.shoot = s;
   } else if (GS_PASS.test(mkt)) {
     set("points", s, up ? "points — a quarterback’s yards rise with his team’s score" : "a low-scoring game for his team");
+    out.shoot = s;
   } else if (GS_TD.test(mkt)) {
     set("points", s, up ? "points — a touchdown is points" : "a low-scoring game");
   } else if (GS_K.test(mkt)) {
@@ -12822,7 +12973,11 @@ function scriptExpected(g) {
   const margin = fav === g.home ? 1 : fav === g.away ? -1 : 0;
   const tot = Number(g.total);
   const points = state.sport === "nfl" && Number.isFinite(tot) && tot > 0 ? (tot >= GS_HIGH_TOTAL ? 1 : -1) : 0;
-  return { margin, points, fav, spread: Number.isFinite(sp) ? Math.abs(sp) : null, total: Number.isFinite(tot) ? tot : null };
+  const spread = Number.isFinite(sp) ? Math.abs(sp) : null;
+  /* A close spread and a high total: the lines expect the teams to trade
+     scores, not one side to sit on a lead. */
+  const shootout = points > 0 && spread != null && spread <= CASE_CLOSE_SPREAD;
+  return { margin, points, fav, spread, total: Number.isFinite(tot) ? tot : null, shootout };
 }
 
 /* Every pair in one game that needs opposite directions on an axis. */
@@ -12861,12 +13016,17 @@ function gameScriptsHTML(g, rows) {
   const directional = need.filter((x) => x.n.margin || x.n.points);
   const scen = scriptScenarios(g).map(([m, p, name]) => ({ m, p, name,
     picks: directional.filter((x) => fits(x.n, m, p)),
-    expected: exp.margin === m && (exp.points === p || !exp.points) }))
+    expected: !exp.shootout && exp.margin === m && (exp.points === p || !exp.points) }))
+    .concat([{ m: 0, p: 1, name: "Close · back-and-forth, high-scoring",
+      picks: directional.filter((x) => x.n.shoot > 0 || (!x.n.margin && x.n.points > 0)),
+      expected: !!exp.shootout }])
     .filter((sc) => sc.picks.length)
     .sort((a, b) => (b.expected - a.expected) || (b.picks.length - a.picks.length));
   const clashes = scriptClashes(rows);
-  const expTxt = [exp.fav ? `${teamName(exp.fav)} ahead${exp.spread != null ? ` (${MINUS}${exp.spread.toFixed(1)})` : ""}` : "",
-    exp.points ? `${exp.points > 0 ? "high" : "low"}-scoring (total ${exp.total})` : ""].filter(Boolean).join(" · ");
+  const expTxt = exp.shootout
+    ? `a close, back-and-forth game (${exp.fav ? `${teamName(exp.fav)} ${MINUS}${exp.spread.toFixed(1)}, ` : ""}total ${exp.total})`
+    : [exp.fav ? `${teamName(exp.fav)} ahead${exp.spread != null ? ` (${MINUS}${exp.spread.toFixed(1)})` : ""}` : "",
+       exp.points ? `${exp.points > 0 ? "high" : "low"}-scoring (total ${exp.total})` : ""].filter(Boolean).join(" · ");
   return `<div class="card gs-card">
     ${expTxt ? `<div class="gs-expect">The lines expect <b>${escapeHtml(expTxt)}</b></div>` : ""}
     ${scen.map((sc) => `<div class="gs-scn${sc.expected ? " is-expected" : ""}">
@@ -12891,7 +13051,14 @@ function scriptWhyItem(r) {
     && scriptPickLabel(x) !== scriptPickLabel(r));
   const against = scriptClashes([r, ...same]).filter((c) => c.a === r || c.b === r)
     .map((c) => scriptPickLabel(c.a === r ? c.b : c.a));
-  return ["Game script", `Needs ${needs}.${against.length
+  const exp = scriptExpected(n.game);
+  const helps = exp.shootout && n.shoot ? (n.shoot > 0 ? "helps" : "hurts")
+    : exp.margin && n.margin ? (exp.margin === n.margin ? "helps" : "hurts")
+    : exp.points && n.points ? (exp.points === n.points ? "helps" : "hurts") : "";
+  const expect = exp.shootout ? `a close, back-and-forth game (total ${exp.total})`
+    : exp.fav ? `${teamName(exp.fav)} ahead${exp.spread != null ? ` by about ${exp.spread.toFixed(1)}` : ""}${
+      exp.points ? `, ${exp.points > 0 ? "high" : "low"}-scoring` : ""}` : "";
+  return ["Game script", `Needs ${needs}.${expect ? ` The lines expect ${expect} — that ${helps || "is neutral for"} this pick${helps ? "" : ""}.` : ""}${against.length
     ? ` It pulls against ${against.slice(0, 3).join(", ")} in the same game — keep them off one parlay.` : ""}`];
 }
 

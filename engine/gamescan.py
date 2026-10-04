@@ -467,6 +467,8 @@ def coverage_room(team: str, chart: list[dict], defenders_now: dict,
         corners.append({"name": name, "spot": spot, "status": st,
                         "next_man_up": depth > 0,
                         "targets": int(now.get("targets") or 0),
+                        "cmp": int(now.get("cmp") or 0), "yds": int(now.get("yds") or 0),
+                        "games": int(now.get("games") or 0),
                         "yds_per_tgt": now.get("yds_per_tgt"), "rating": now.get("rating"),
                         "td": int(now.get("td") or 0),
                         "last": ({"targets": int(last.get("targets") or 0),
@@ -689,6 +691,104 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
     return out
 
 
+#: THE MARKETS EACH DEFENCE STAT SPEAKS TO, and the stat a bet on that
+#: market is about — the facts a pick page sorts into "backs this bet" and
+#: "works against it" (web/js/app.js pickCaseHTML).
+_FACT_STATS = {
+    "wr": (("rec_yds", "wr_rec_yds"), ("receptions", "wr_rec"), ("anytime_td", "wr_td")),
+    "te": (("rec_yds", "te_rec_yds"), ("receptions", "te_rec"), ("anytime_td", "te_td")),
+    "rb": (("rush_yds", "rb_rush_yds"), ("rush_att", "rb_rush_yds"), ("anytime_td", "rb_td"),
+           ("rec_yds", "rb_rec_yds"), ("receptions", "rb_rec")),
+    "qb": (("pass_yds", "qb_pass_yds"), ("pass_att", "qb_pass_yds"), ("pass_cmp", "qb_pass_yds"),
+           ("pass_td", "qb_pass_td")),
+}
+
+
+def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
+    """(sign, sentence) for what ``opp`` gives up in one engine/defensevs
+    stat, at ANY rank — +1 in the softest third (good for an over), −1 in
+    the stingiest third, 0 between. Rank 1 gives up the most."""
+    r = (allowed or {}).get(stat) or {}
+    rank, n = r.get("rank"), r.get("of") or n_default
+    if not rank:
+        return 0, ""
+    words = D_STAT_WORDS.get(stat, stat)
+    pg = r.get("pg")
+    per = (f"{pg:.1f}" if pg < 10 else f"{pg:.0f}") if isinstance(pg, (int, float)) else ""
+    where = (f"the {_ord(rank)}-most of {n}" if rank <= (n + 1) / 2
+             else f"the {_ord(n - rank + 1)}-fewest of {n}")
+    text = (f"{opp} gives up {per} {words} a game — {where}" if per
+            else f"{opp} gives up {where} {words}")
+    sign = 1 if rank <= n / 3 else -1 if rank > n * 2 / 3 else 0
+    return sign, text
+
+
+def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowed: dict | None,
+               ratings_def: dict, points: float | None, line_words: str, n_teams: int,
+               room: dict | None) -> list[dict]:
+    """Every matchup fact about this player as a pick page needs it:
+    ``{"text", "sign", "markets", "in_number", "kind"}``. ``sign`` is from
+    the OVER's side (+1 helps the over); the page flips it for an under.
+    ``in_number`` says whether our projection is built on it — so a fact
+    that points the other way and was never in the number (measured over
+    four seasons and found not to predict, engine/defensevs) reads as
+    exactly that, not as the model arguing with itself (Ethan, 2026-10-04:
+    "it all feels like it's fighting itself")."""
+    from . import defensevs as _D
+    facts: list[dict] = []
+    if not group:
+        return facts
+    u = usage or {}
+    lean = [m for m, _st in _FACT_STATS.get(group, ())]
+    # His role — always part of the number.
+    if group in ("wr", "te"):
+        share, word = u.get("tgt_share") or 0.0, u.get("share_of") or "targets"
+        per = u.get("targets_pg") if word == "targets" else u.get("rec_pg")
+        if u.get("games"):
+            sign = 1 if share >= 0.22 else -1 if share < 0.12 else 0
+            facts.append({"text": f"Gets {share:.0%} of {team}'s {word} ({per or 0:g} a game)",
+                          "sign": sign, "markets": lean, "in_number": True, "kind": "role"})
+    elif group == "rb":
+        cs = u.get("carry_share") or 0.0
+        if u.get("games"):
+            sign = 1 if cs >= 0.55 else -1 if cs < 0.30 else 0
+            facts.append({"text": f"Takes {cs:.0%} of {team}'s carries ({u.get('carries_pg', 0):g} a game)",
+                          "sign": sign, "markets": lean, "in_number": True, "kind": "role"})
+    # What the defence gives up — the stat our number reads, and the one
+    # the bet is literally about where that differs.
+    seen: dict = {}
+    for market, own in _FACT_STATS.get(group, ()):
+        used = _D.model_stat(pos, market) if _D.transfer(pos, market) > 0 else None
+        for stat, in_num in ((used, True), (own, used == own)):
+            if not stat:
+                continue
+            k = (stat, in_num)
+            if k in seen:
+                seen[k]["markets"].append(market)
+                continue
+            sign, text = rank_fact(allowed, stat, opp, n_teams)
+            if not text:
+                continue
+            seen[k] = {"text": text, "sign": sign, "markets": [market], "in_number": in_num,
+                       "kind": "defense", "stat": stat}
+            facts.append(seen[k])
+    # The unit rank (play-by-play EPA): shown, measured flat in the NFL.
+    unit_name = "rushing" if group == "rb" else "passing"
+    rank = _rank(ratings_def or {}, "def", unit_name)
+    if rank:
+        sign = 1 if _weak(rank, n_teams) else -1 if _strong(rank, n_teams) else 0
+        facts.append({"text": f"{opp}'s {'run' if group == 'rb' else 'pass'} defense ranks {_ord(rank)} of "
+                              f"{n_teams} by play-by-play efficiency",
+                      "sign": sign, "markets": lean, "in_number": not allowed, "kind": "unit"})
+    # The points the lines expect his team to score.
+    if points is not None:
+        sign = 1 if points >= POINTS_HIGH else -1 if points <= POINTS_LOW else 0
+        where = f" ({line_words})" if line_words else ""
+        facts.append({"text": f"The lines expect {team} to score about {points:.0f}{where}",
+                      "sign": sign, "markets": lean, "in_number": True, "kind": "points"})
+    return facts
+
+
 def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 ratings: dict, room: dict | None, scheme: dict | None,
                 split: dict | None, tackling: dict | None, line_out: list | None,
@@ -869,8 +969,11 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # WHAT THE CHARTING AND THE TRACKING SAY (engine/sources/ftn, ngs):
     # shown, never counted — chartfit and ngsfit found no lift in any of it.
     notes += charting_notes(group, opp, charting, charting_def, tracking)
+    facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d,
+                       points=points, line_words=line_words, n_teams=n_teams, room=room)
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
+            "facts": facts,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
                                             "snap_pct", "games", "rec_pg", "share_of")

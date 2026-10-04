@@ -11978,6 +11978,42 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .wl-item { grid-template-columns: 1fr; gap: 2px; }
 }
 
+/* THE CASE FOR THIS BET (pickCaseHTML, 2026-10-04): the verdict, then what
+   backs the side and what works against it, each marked in-our-number or
+   shown; then the corners he will see. */
+.pick-case { margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2); }
+.pc-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text); margin-bottom: 6px; }
+.pc-verdict { margin: 0 0 10px; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--text); }
+.pc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pc-col { padding: 10px 12px; border-radius: var(--radius); }
+.pc-for { border: var(--hairline) solid color-mix(in srgb, var(--good) 40%, transparent);
+  background: color-mix(in srgb, var(--good) 6%, transparent); }
+.pc-against { border: var(--hairline) solid color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 6%, transparent); }
+.pc-col-k { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-mute); margin-bottom: 6px; }
+.pc-for .pc-col-k { color: var(--good); }
+.pc-against .pc-col-k { color: var(--bad); }
+.pick-case ul { margin: 0; padding-left: 16px; display: grid; gap: 6px; }
+.pc-fact span { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text); }
+.pc-fact em { display: block; font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
+.pc-shown span { color: var(--text-dim); }
+.pc-more { margin-top: 8px; font-size: var(--fs-sm); }
+.pc-more > summary { cursor: pointer; color: var(--text-mute); }
+.pc-cover { margin-top: 12px; }
+.pc-cover-note { margin: 4px 0 6px; font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
+.pc-table { display: grid; gap: 2px; font-size: var(--fs-xs); overflow-x: auto; }
+.pc-tr { display: grid; grid-template-columns: minmax(9em, 2fr) repeat(6, minmax(3.2em, 1fr)); gap: 6px;
+  padding: 4px 0; border-bottom: var(--hairline) solid var(--border-soft); align-items: baseline; }
+.pc-th { color: var(--text-mute); font-weight: 700; }
+.pc-tr span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .pc-cols { grid-template-columns: 1fr; }
+  .pc-tr { grid-template-columns: minmax(8em, 2fr) repeat(6, minmax(2.6em, 1fr)); gap: 4px; }
+}
+
 /* Finished bets on the Live tab: one closed line under the list (2026-09-24). */
 .lv-done { border-top: var(--hairline) solid var(--border-soft); }
 .lv-done > summary { cursor: pointer; padding: 10px 14px; font-size: var(--fs-sm);
