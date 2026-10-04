@@ -137,16 +137,53 @@ def report(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def claims_for(season: int, week: int, files=(DEFAULT,), store=None) -> list[dict]:
+    """Every written-down claim for one week: the JSON files' and the ones
+    pasted into the owner box (engine/researchlog), each pick once."""
+    from . import researchlog as R
+    out, seen = [], set()
+    pool = []
+    for f in files:
+        try:
+            spec = json.loads(Path(f).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if int(spec.get("season", 0)) == season and int(spec.get("week", 0)) == week:
+            pool += spec.get("claims", [])
+    pool += R.load(season, week, store)
+    for c in pool:
+        k = (c["source"].lower(), name_key(c["player"]), c["market"], c["side"].upper(), float(c["line"]))
+        if k not in seen:
+            seen.add(k)
+            out.append(c)
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m engine.scancard")
-    ap.add_argument("claims", nargs="?", default=str(DEFAULT))
+    ap.add_argument("claims", nargs="?", default=str(DEFAULT), help="a claims file (its season and week are the default)")
+    ap.add_argument("--season", type=int)
+    ap.add_argument("--week", type=int)
     a = ap.parse_args(argv)
     import sqlite3
     from . import db, ledger as L
-    spec = json.loads(Path(a.claims).read_text(encoding="utf-8"))
+    try:
+        spec = json.loads(Path(a.claims).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        spec = {}
+    season = a.season or int(spec.get("season") or 0)
+    week = a.week or int(spec.get("week") or 0)
+    if not season or not week:
+        print("name the week: python3 -m engine.scancard --season 2026 --week 5")
+        return 2
+    claims = claims_for(season, week, files=(a.claims,))
+    if not claims:
+        print(f"no research picks written down for {season} week {week}")
+        return 0
     hist = db.connect()
     led = sqlite3.connect(f"file:{L.DEFAULT_DB}?mode=ro", uri=True)
-    print(report(grade(spec["claims"], int(spec["season"]), int(spec["week"]), hist, led)))
+    print(f"{season} week {week}: {len(claims)} research picks\n")
+    print(report(grade(claims, season, week, hist, led)))
     return 0
 
 

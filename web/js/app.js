@@ -20148,9 +20148,43 @@ function zenoOwnerHTML(tix) {
       <div class="mb-form-row"><button class="btn primary" type="submit">Post it</button>
         <button class="btn ghost zeno-owner-out" type="button">Sign out</button></div>
       <p class="list-note zeno-post-msg"></p>
-    </form>`;
+    </form>${researchBoxHTML()}`;
+}
+/* RESEARCH PICKS, WRITTEN DOWN BEFORE KICKOFF (Ethan, 2026-10-04: "do all
+   of it"). One pick a line; engine.scancard grades them against the box
+   scores, our chance and the price once the week settles. Owner only. */
+function researchBoxHTML() {
+  return `<div class="section-title"><span class="st-ico">${icon("chart", 15)}</span>Research picks
+      <span class="sub">— paste a report's picks before kickoff; graded after the games</span></div>
+    <form class="card mb-form zeno-research" autocomplete="off">
+      <div class="mb-form-row"><label>Season<input name="season" inputmode="numeric" value="${new Date().getFullYear()}" required/></label>
+        <label>Week<input name="week" inputmode="numeric" placeholder="5" required/></label></div>
+      <div class="mb-form-row"><label class="mb-grow">One pick a line: Source | Player | TEAM | market | over/under | line | chance | price
+        <textarea name="text" rows="5" placeholder="TD scan | Chase Brown | CIN | anytime td | over | 0.5 | 60-62% | -145"></textarea></label></div>
+      <div class="mb-form-row"><button class="btn primary" type="submit">Save picks</button></div>
+      <p class="list-note zeno-research-msg"></p></form>`;
+}
+function bindResearchBox(host) {
+  const form = host.querySelector(".zeno-research");
+  if (!form) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(form), msg = form.querySelector(".zeno-research-msg");
+    msg.textContent = "Saving…";
+    try {
+      const r = await fetch("/api/research", { method: "POST",
+        headers: { "X-Owner-Token": zenoOwnerToken(), "Content-Type": "application/json" },
+        body: JSON.stringify({ season: Number(f.get("season")), week: Number(f.get("week")), text: f.get("text") }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `the site answered ${r.status}`);
+      const bad = (j.errors || []).map((x) => `line ${x.line}: ${x.error}`).join("; ");
+      msg.textContent = `Saved ${j.added} (${j.week_total} this week)${j.kept_first ? `, ${j.kept_first} already saved` : ""}${bad ? ` — skipped ${bad}` : ""}`;
+      if (j.added) form.querySelector('[name="text"]').value = "";
+    } catch (err) { msg.textContent = `Not saved: ${err.message}`; }
+  });
 }
 function bindZenoOwner(host, tix) {
+  bindResearchBox(host);
   const tokForm = host.querySelector(".zeno-owner-token");
   if (tokForm) tokForm.addEventListener("submit", async (e) => {
     e.preventDefault();

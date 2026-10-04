@@ -33,6 +33,27 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Betting checks: when to bet, the heavy favourites, the parlays (2026-10-04, late)
+
+All three are read-only and take seconds. Paste all of it back:
+
+```
+cd /srv/qellys
+echo "=== B1: when to bet (posted price vs close) ==="
+sudo -u qellys python3 bettiming.py
+echo "=== B2: profit by price band (the loss audit) ==="
+sudo -u qellys python3 lossaudit.py 2>&1 | awk '/^=== /{print} /-- by price/{f=1;print;next} /-- by /{f=0} f'
+echo "=== B3: do our parlay legs and tickets hit as claimed? ==="
+sudo -u qellys python3 -c "import json; from engine import ledger, parlayledger as P; print(json.dumps(P.calibration(ledger.connect()), indent=1, default=str))"
+```
+
+**Research picks box.** On Zeno's page, signed in with your owner token,
+there is now a "Research picks" form under "Post a bet". Paste a report's
+picks before kickoff, one a line:
+`Source | Player | TEAM | market | over/under | line | chance | price`.
+After the week settles, `python3 -m engine.scancard --season 2026 --week 5`
+grades them.
+
 ### NFL research: the weekend's scorecard (2026-10-04, night)
 
 **S1. Score the six research reports against the results — Tuesday**, once
@@ -61,10 +82,11 @@ Already done and moved to DROPLET_CHECKS: the record recount and dates
 (R1, R2), L1, the pre-game closes (P2-a), the backup check (P6-b), NHL
 H1–H13/H15, the round-7 fits, the corner rules, and the TD injury test.
 
-1. **S1** — Tuesday: score the six reports against the results (paste).
-2. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
+1. **B1–B3** — when to bet, heavy favourites, parlays (read-only, paste).
+2. **S1** — Tuesday: score the six reports against the results (paste).
+3. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
    (5 minutes; step by step below). Still not set up.
-3. Later: **T3** again in a week or two (the TD record against the prices; its
+4. Later: **T3** again in a week or two (the TD record against the prices; its
    command is in DROPLET_CHECKS under "N1 + T3"), the
    usage-count report (`sudo -u qellys python3 -m engine.analytics report 7`), **H14** (NHL calibration, once NHL picks have graded for two
    weeks), **P9-a** (look at the Live tab during a game), **P45-a**

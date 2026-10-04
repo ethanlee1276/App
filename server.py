@@ -1131,6 +1131,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._zeno_get()
         if parsed.path in ("/api/zeno/tickets", "/api/zeno/tickets/"):
             return self._zeno_tickets()
+        if parsed.path in ("/api/research", "/api/research/"):
+            return self._research_get(parsed)
         if self._entity_page(parsed.path):
             return
         return self._static(parsed.path)
@@ -1272,6 +1274,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._event()
         if parsed.path in ("/api/zeno/import", "/api/zeno/import/"):
             return self._zeno_import()
+        if parsed.path in ("/api/research", "/api/research/"):
+            return self._research_post()
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         if not legacy_profiles_on():
@@ -2222,6 +2226,60 @@ class Handler(BaseHTTPRequestHandler):
             got["publish_error"] = f"{type(exc).__name__}: {exc}"[:200]
         got["unknown_headers"] = unknown
         return self._send(200, json.dumps(got).encode(), ".json")
+
+    # --- Research picks, written down before kickoff (owner only) -------------
+    def _owner_refused(self) -> bool:
+        """True after answering, when the caller is not the owner. The same
+        door as Zeno's import: QB_OWNER_TOKEN, failing closed."""
+        from engine import zeno as Z
+        ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
+                              or self.headers.get("Authorization", "")
+                              .replace("Bearer ", "", 1))
+        if ok is None:
+            self._send(503, b'{"error":"owner access is not configured on this server"}', ".json")
+            return True
+        if not ok:
+            _seclog("owner_token", "refused", self._client_ip(), path=urlparse(self.path).path)
+            self._send(403, b'{"error":"not the owner"}', ".json")
+            return True
+        return False
+
+    def _research_post(self):
+        """Ethan, 2026-10-04: paste a research report's picks before the
+        games; engine.scancard grades them after. Body: JSON {season, week,
+        text}, one pick a line (engine/researchlog)."""
+        if self._owner_refused():
+            return
+        from engine import researchlog as R
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_PROFILE_BYTES:
+            self.close_connection = length > MAX_PROFILE_BYTES
+            return self._send(413, b'{"error":"payload too large or empty"}', ".json")
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8", "replace"))
+            season, week = int(body["season"]), int(body["week"])
+            if not (2020 <= season <= 2100 and 1 <= week <= 23):
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            return self._send(400, b'{"error":"send JSON with season, week and text"}', ".json")
+        claims, errors = R.parse(str(body.get("text") or ""))
+        got = R.add(claims, season, week) if claims else {"added": 0, "kept_first": 0,
+                                                           "week_total": len(R.load(season, week))}
+        return self._send(200, json.dumps({**got, "errors": errors}).encode(), ".json")
+
+    def _research_get(self, parsed):
+        if self._owner_refused():
+            return
+        from engine import researchlog as R
+        q = parse_qs(parsed.query)
+        try:
+            season, week = int(q.get("season", ["0"])[0]), int(q.get("week", ["0"])[0])
+        except ValueError:
+            return self._send(400, b'{"error":"season and week must be numbers"}', ".json")
+        return self._send(200, json.dumps({"claims": R.load(season, week)}).encode(), ".json")
 
     def _tailfade_get(self, path: str):
         if path != "me":
