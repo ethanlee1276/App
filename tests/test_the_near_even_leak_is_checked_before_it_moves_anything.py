@@ -31,9 +31,11 @@ def _rows(spec):
 
 def test_the_band_is_plus_120_to_minus_149():
     c = sqlite3.connect(":memory:")
-    c.execute("CREATE TABLE bets (sport, date, game_day, odds, hit_prob, status, pnl_units, category)")
+    c.execute("CREATE TABLE bets (sport, date, game_day, odds, hit_prob, status, pnl_units, category, "
+              "market, side, grade)")
     for odds in (-200, -149, -111, 120, 150):
-        c.execute("INSERT INTO bets VALUES ('nfl','2026-10-04',NULL,?,0.6,'won',1,'board')", (odds,))
+        c.execute("INSERT INTO bets VALUES ('nfl','2026-10-04',NULL,?,0.6,'won',1,'board','receptions',"
+                  "'OVER','Strong')", (odds,))
     assert sorted(r["need"] for r in B.load(c, ("board",))) == sorted(B.implied(o) for o in (-149, -111, 120))
 
 
@@ -78,6 +80,22 @@ def test_small_gaps_losing_as_badly_means_the_gap_is_not_the_cause():
                      (s, d, -130, 0.58, True, 4), (s, d, -130, 0.58, False, 8)]
     j = B.judge(_rows(spec))
     assert not j["checks"][3] and not j["holds"]
+
+
+
+def test_the_regrade_finds_a_result_recorded_on_the_wrong_side():
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE bets (id, sport, market, side, line, actual, status, category)")
+    c.executemany("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?)", [
+        (1, "nfl", "receptions", "OVER", 4.5, 6, "won", "board"),
+        (2, "nfl", "receptions", "UNDER", 4.5, 6, "lost", "board"),
+        (3, "nfl", "rush_yds", "UNDER", 55.5, 40, "lost", "board"),      # wrong: should be won
+        (4, "nfl", "pass_td", "OVER", 2.0, 2, "push", "board"),
+        (5, "nfl", "spread", "BUF", -3.5, 7, "won", "board"),            # not an over/under: skipped
+        (6, "nfl", "receptions", "OVER", 4.5, 6, "won", "likely")])      # another book
+    g = B.regrade(c, ("board",))
+    assert (g["checked"], g["wrong"]) == (4, 1)
+    assert g["by"][("NFL", "rush_yds", "UNDER")] == [1, 1] and g["sample"][0][-1] == "won"
 
 
 if __name__ == "__main__":

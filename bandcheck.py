@@ -30,6 +30,14 @@ THE RULE HOLDS, for a book, only if all four are true:
 If it holds for the one board, the change proposed is: those picks go to
 paper (still posted, still graded on the Record page, no stake), made by
 hand in a separate commit. Read-only; it writes nothing.
+
+FIRST RUN, 2026-10-04: does not hold — check 4 failed. The one board's
+band picks hit 44-46% in EVERY gap bucket (435 picks, about 10 points
+under the price), so the gap is not the cause. A pick set hitting about
+1 − price is what grading on the wrong side would look like, so two
+sections were added after that run: the band by tier and by market and
+side, and a GRADING RECHECK that re-grades every settled over/under pick
+from its own stored stat, line and side.
 """
 from __future__ import annotations
 
@@ -63,17 +71,45 @@ def implied(o) -> float | None:
 
 
 def load(conn, cats) -> list[dict]:
-    q = ("SELECT sport, COALESCE(game_day, date) AS day, odds, hit_prob, status, pnl_units FROM bets "
+    q = ("SELECT sport, COALESCE(game_day, date) AS day, odds, hit_prob, status, pnl_units, "
+         "market, side, grade FROM bets "
          f"WHERE status IN ('won','lost') AND category IN ({','.join('?' * len(cats))}) "
          "AND hit_prob IS NOT NULL ORDER BY day")
     out = []
-    for sp, day, odds, claim, status, pnl in conn.execute(q, cats):
+    for sp, day, odds, claim, status, pnl, market, side, grade in conn.execute(q, cats):
         need = implied(odds)
         if need is None or not (BAND[0] <= need < BAND[1]):
             continue
         out.append({"sport": (sp or "").upper(), "day": str(day or ""), "need": need,
                     "claim": float(claim), "gap": float(claim) - need, "won": status == "won",
-                    "pnl": float(pnl or 0.0)})
+                    "pnl": float(pnl or 0.0), "market": str(market or ""),
+                    "side": str(side or "").upper(), "grade": str(grade or "")})
+    return out
+
+
+def regrade(conn, cats) -> dict:
+    """Every settled over/under pick re-graded from its own row: the stat
+    it landed (``actual``) against its line and side. A row whose result
+    disagrees is a grading fault, whatever the model said.
+    {"checked": n, "wrong": n, "by": {(sport, market, side): [checked, wrong]}, "sample": [...]}"""
+    q = ("SELECT id, sport, market, side, line, actual, status FROM bets WHERE status IN ('won','lost','push') "
+         f"AND category IN ({','.join('?' * len(cats))}) AND actual IS NOT NULL AND line IS NOT NULL "
+         "AND UPPER(side) IN ('OVER','UNDER')")
+    out = {"checked": 0, "wrong": 0, "by": defaultdict(lambda: [0, 0]), "sample": []}
+    for bid, sp, mk, side, line, actual, status in conn.execute(q, cats):
+        try:
+            a, ln = float(actual), float(line)
+        except (TypeError, ValueError):
+            continue
+        want = "push" if a == ln else ("won" if (a > ln) == (side.upper() == "OVER") else "lost")
+        k = ((sp or "").upper(), mk, side.upper())
+        out["checked"] += 1
+        out["by"][k][0] += 1
+        if want != status:
+            out["wrong"] += 1
+            out["by"][k][1] += 1
+            if len(out["sample"]) < 8:
+                out["sample"].append((bid, sp, mk, side, line, actual, status, want))
     return out
 
 
@@ -136,9 +172,27 @@ def main(argv=None) -> int:
         print(f"  by time (split at {j['cut']}):")
         for h, sc in j["halves"].items():
             print(_line(h, sc))
+        print("  every band pick, by tier and by market and side (10+ picks):")
+        for key, name in (("grade", "tier"), (None, "market")):
+            groups = defaultdict(list)
+            for r in rs:
+                groups[r["grade"] or "(none)" if key else f"{r['sport']} {r['market']} {r['side']}"].append(r)
+            for g, v in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+                if len(v) >= 10:
+                    print(_line(g[:24], score(v)))
         names = ("pooled z ≤ −2", "every sport but one", "both halves", "small gaps do better")
         marks = ", ".join(f"{n} {'yes' if c else 'NO'}" for n, c in zip(names, j["checks"]))
         print(f"  RULE: {'HOLDS — move these to paper' if j['holds'] else 'does not hold'}  ({marks})\n")
+    print("GRADING RECHECK — every settled over/under pick, its stat against its line and side")
+    for label, cats in BOOKS:
+        g = regrade(conn, cats)
+        print(f"  {label}: {g['wrong']} of {g['checked']} disagree with their recorded result")
+        for k, (n, w) in sorted(g["by"].items(), key=lambda kv: -kv[1][1]):
+            if w:
+                print(f"      {' '.join(k)}: {w} of {n}")
+        for row in g["sample"]:
+            print(f"      e.g. bet {row[0]} {row[1]} {row[2]} {row[3]} {row[4]}: landed {row[5]}, "
+                  f"recorded {row[6]}, should be {row[7]}")
     return 0
 
 

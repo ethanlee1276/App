@@ -33,7 +33,28 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Betting checks, round 3: where the one board's near-even losses come from (2026-10-04, night)
+
+Round 2 found the same-book close in the wrong store (NFL closes live in
+our own line snapshots, not the bought history) and showed the one
+board's near-even picks hit ~44% at EVERY claim size. Paste back:
+
+```
+cd /srv/qellys
+echo "=== B1 again: same-book close ==="; sudo -u qellys nice -n 19 python3 bettiming.py --sport nfl
+echo "=== B4 again: band breakdown + grading recheck ==="; sudo -u qellys python3 bandcheck.py
+```
+
+- **B1.** Now reads each book's own close from the line snapshots. It
+  streams the snapshot file once (a minute or two, low priority).
+- **B4.** Adds the band split by tier and by market and side, and re-grades
+  every settled over/under pick from its own stored stat — any "N of M
+  disagree" above 0 is a grading bug, and that is the first thing to fix.
+
 ### Betting checks, round 2: the fair close and the near-even leak (2026-10-04, night)
+
+**Ran 2026-10-04.** B1: 0 same-book closes (wrong store, fixed in round 3).
+B4: rule does not hold — the one board's band hits 44-46% at every gap.
 
 Round 1's results are in (below). Two follow-ups, both read-only, paste
 them back:

@@ -119,6 +119,26 @@ def test_the_same_book_close_is_found_pregame_at_the_same_line():
     assert none is None, "no Caesars quote: no same-book close"
 
 
+
+def test_the_same_book_close_is_read_from_our_own_snapshots_too():
+    import datetime as dt
+    start = dt.datetime(2026, 10, 4, 17, 0, tzinfo=dt.timezone.utc).timestamp()
+    snap = lambda book, mins, over, under, line=4.5: {
+        "player": "Tee Higgins", "market": "receptions", "line": line, "book": book,
+        "over_odds": over, "under_odds": under, "ts": start + mins * 60, "start_ts": start}
+    rows = [snap("FanDuel", -120, -115, -105), snap("FanDuel", -30, -130, 110),     # FanDuel's close: -130
+            snap("DraftKings", -30, -110, -110), snap("williamhill_us", -30, -125, 105),
+            snap("FanDuel", 45, -300, 240),                                       # in play: never a close
+            snap("BetMGM", -30, 140, -170, line=5.5)]                              # another line
+    c = T.BookCloses(None, snapshots=rows)
+    b = _bet_row()
+    c.prepare([b])
+    same, best = c.same_and_best(b)
+    assert same == -130 and best == -110
+    assert c.same_and_best(_bet_row(book="Caesars"))[0] == -125, "williamhill_us is Caesars"
+    assert c.same_and_best(_bet_row(side="UNDER"))[0] == 110
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
