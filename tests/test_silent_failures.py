@@ -155,6 +155,14 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # failure is a "⚠️ touchdown team-total fit skipped: <error>" log
         # line, which no quiet week prints.
         "refit_td_scale",
+        # THE LIVE TAB'S TRACKER (engine/livepicks, 2026-10-04): a failure
+        # is written onto the board as `live_picks_error` and returned as
+        # "tracker error: …"; a lock is raised to its caller, which retries.
+        "_attach_tracker_once",
+        # THE SAME-BOOK CLOSE (ledger, 2026-10-04): on failure the bet keeps
+        # the close it already had, and the run prints "same-book close
+        # skipped, older close kept: <error>" once.
+        "_same_book_close",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep

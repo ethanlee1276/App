@@ -5611,7 +5611,12 @@ def _same_book_close(cache: dict, hist_conn, bets, b, dates):
                 cache["_snapshots"] = _snapshot_closes()
             return getattr(cache["_snapshots"], "stamped", ())
         return sb.close_for(dict(b), list(dates or []), _stamped)
-    except Exception:                                         # noqa: BLE001
+    except Exception as exc:                                  # noqa: BLE001
+        # Named once a run: the bet keeps the older close it already had,
+        # which a quiet night also produces, so the miss must say so.
+        if not cache.get("_samebook_warned"):
+            cache["_samebook_warned"] = True
+            print(f"  ⚠️  same-book close skipped, older close kept: {exc}")
         return None
 
 
