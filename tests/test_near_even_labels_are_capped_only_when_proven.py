@@ -24,8 +24,29 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 from engine import bandcap as C                                     # noqa: E402
 from engine import likelyboard as B                                 # noqa: E402
 
-sys.path.insert(0, str(ROOT / "tests"))
-from test_one_most_likely_board import _result, _td                 # noqa: E402
+#: The one-board fixtures (as tests/test_one_most_likely_board.py): a game
+#: with a scan that backs St. Brown's touchdown, so the pick tiers Top.
+GAME = {"home": "DET", "away": "NYJ",
+        "scan": {"units": {"NYJ": {"def": {"passing": {"rank": 27}, "rushing": {"rank": 25}}},
+                           "DET": {"def": {"passing": {"rank": 10}, "rushing": {"rank": 12}}}},
+                 "redzone": {"DET": {"off": 12.6, "off_rel": 0.44, "def": 10.6, "def_rel": 0.2},
+                             "NYJ": {"off": 6.7, "off_rel": -0.23, "def": 8.2, "def_rel": -0.07}}}}
+
+
+def _result(**kw):
+    base = {"games": [GAME], "recommendations": [{"player": "Amon-Ra St. Brown", "position": "WR"}],
+            "scan_reads": {"NYJ@DET": {"players": [
+                {"player": "Amon-Ra St. Brown", "team": "DET", "opp": "NYJ", "pos": "WR", "read": "good",
+                 "label": "Good matchup", "lean": ["receptions"], "usage": {"tgt_share": 0.30}}]}},
+            "most_likely": [], "matchup_picks": [], "td_scenarios": []}
+    base.update(kw)
+    return base
+
+
+def _td(player="Amon-Ra St. Brown", prob=0.52, odds=-115, **kw):
+    return {"kind": "td", "player": player, "team": "DET", "opponent": "NYJ", "market": "anytime_td",
+            "side": "YES", "line": 0.5, "odds": odds, "book": "BetMGM", "model_prob": prob,
+            "implied_prob": 0.50, "rz_chances": 3.1, "implied_total": 27.5, **kw}
 
 
 def _rows(spec):
