@@ -25,6 +25,16 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.gamescan backfill 
 cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan show 2026 4 CIN JAX
 ```
 
+**C1. Test the breakdowns' two corner rules on five seasons** (paste it
+back). H1: a WR1 against a shutdown corner keeps his catches better than
+his yards. H2: the WR2 catches more when his team faces one. Each must
+hold in both halves of the seasons on 100+ games a half, or it is left
+alone. Nothing it finds moves a number:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cbfit
+```
+
 **G2. Our picks for Bengals–Jaguars**, to line up against your two
 research cards (paste it back):
 

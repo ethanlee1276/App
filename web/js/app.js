@@ -12981,6 +12981,37 @@ function scriptScenarios(g) {
           [-1, 1, `${A} ahead · high-scoring`], [-1, -1, `${A} ahead · low-scoring`]];
 }
 
+/* HOW LIKELY EACH SCRIPT IS (Ethan, 2026-10-04: "yeah lets do those", the
+   breakdowns' "Cincinnati controls the game ~45%, close game ~25%"). From
+   the posted spread and total, with the spread of outcomes the game-bets
+   model uses (engine/gamebets: 13.5 points on the margin and the total),
+   margin and total read as independent. Football only — the axis the
+   other sports' scripts lack is the total cut. */
+const GS_SD = 13.5;
+function gsPhi(z) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t
+    * Math.exp(-(z * z) / 2);
+  return z >= 0 ? (1 + y) / 2 : (1 - y) / 2;
+}
+function scriptOdds(g) {
+  const exp = scriptExpected(g);
+  if (!["nfl", "cfb"].includes(state.sport) || exp.spread == null) return null;
+  const mean = exp.fav === g.home ? exp.spread : exp.fav === g.away ? -exp.spread : 0;   // home margin
+  const home = gsPhi(mean / GS_SD);
+  const cut = state.sport === "cfb" ? 56 : GS_HIGH_TOTAL;
+  const high = exp.total != null ? 1 - gsPhi((cut - exp.total) / GS_SD) : null;
+  const close = gsPhi((7 - mean) / GS_SD) - gsPhi((-7 - mean) / GS_SD);
+  return { home, away: 1 - home, high, close, shootout: high != null ? close * high : null };
+}
+function scriptScenarioOdds(g, m, p) {
+  const o = scriptOdds(g);
+  if (!o) return null;
+  if (m === 0) return o.shootout;
+  const side = m > 0 ? o.home : o.away;
+  return o.high == null ? side : side * (p > 0 ? o.high : 1 - o.high);
+}
+
 /* What the lines expect: the favourite ahead, and — football, where the
    model has a measured cut (engine/gamescript.HIGH_TOTAL) — the total
    read as high or low. Null on either axis when the line cannot say. */
@@ -13046,9 +13077,12 @@ function gameScriptsHTML(g, rows) {
     : [exp.fav ? `${teamName(exp.fav)} ahead${exp.spread != null ? ` (${MINUS}${exp.spread.toFixed(1)})` : ""}` : "",
        exp.points ? `${exp.points > 0 ? "high" : "low"}-scoring (total ${exp.total})` : ""].filter(Boolean).join(" · ");
   return `<div class="card gs-card">
-    ${expTxt ? `<div class="gs-expect">The lines expect <b>${escapeHtml(expTxt)}</b></div>` : ""}
+    ${expTxt ? `<div class="gs-expect">The lines expect <b>${escapeHtml(expTxt)}</b>${(() => { const o = typeof scriptOdds === "function" ? scriptOdds(g) : null;
+      return o ? ` <span class="gs-odds-line">— ${escapeHtml(teamName(g.home))} win ~${Math.round(o.home * 100)}%, a one-score game ~${
+        Math.round(o.close * 100)}%${o.high != null ? `, ${state.sport === "cfb" ? 56 : GS_HIGH_TOTAL}+ points ~${Math.round(o.high * 100)}%` : ""}</span>` : ""; })()}</div>` : ""}
     ${scen.map((sc) => `<div class="gs-scn${sc.expected ? " is-expected" : ""}">
-      <div class="gs-scn-k">${escapeHtml(sc.name)}${sc.expected ? ` <span class="gs-tag">expected</span>` : ""}
+      <div class="gs-scn-k">${escapeHtml(sc.name)}${(() => { const q = typeof scriptScenarioOdds === "function" ? scriptScenarioOdds(g, sc.m, sc.p) : null;
+        return q != null ? ` <span class="gs-odds">~${Math.round(q * 100)}%</span>` : ""; })()}${sc.expected ? ` <span class="gs-tag">expected</span>` : ""}
         <span class="gs-n">${sc.picks.length === 1 ? "1 pick" : `${sc.picks.length} picks win together`}</span></div>
       <div class="gs-picks">${sc.picks.map(chip).join("")}</div></div>`).join("")}
     ${any.length ? `<div class="gs-scn"><div class="gs-scn-k">Fits any script</div>

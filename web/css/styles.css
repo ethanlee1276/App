@@ -11978,6 +11978,8 @@ a.ask-chip.web:hover { color: var(--text); border-color: var(--brand-2); }
   .wl-item { grid-template-columns: 1fr; gap: 2px; }
 }
 
+.gs-odds { font-size: var(--fs-xs); font-weight: 700; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gs-odds-line { color: var(--text-mute); font-weight: 400; }
 .tp-num { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); color: var(--text); }
 .tp-num em { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
 

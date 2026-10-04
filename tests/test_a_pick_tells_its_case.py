@@ -216,6 +216,28 @@ def test_a_teammate_out_and_a_questionable_corner_reach_the_case():
     assert "Montaric Brown" in kinds["watch"]["text"] and kinds["watch"]["sign"] == 0
 
 
+def test_each_game_script_carries_how_likely_it_is():
+    # The breakdowns' "Cincinnati controls the game ~45%, close game ~25%":
+    # from the posted spread and total, 13.5 points of spread on each.
+    node = shutil.which("node")
+    if not node:
+        return
+    src = _js(["scriptExpected", "gsPhi", "scriptOdds", "scriptScenarioOdds"],
+              ["GS_HIGH_TOTAL", "GS_SD"]).replace("const CASE_CLOSE_SPREAD", "var CASE_CLOSE_SPREAD")
+    prog = (src + "\nvar CASE_CLOSE_SPREAD = 3.5;\nconst state = {sport: 'nfl'};"
+            "\nconst g = {home: 'CIN', away: 'JAX', spread: -2.5, favorite: 'CIN', total: 51.5};"
+            "\nconst o = scriptOdds(g);"
+            "\nconsole.log(JSON.stringify([o.home, o.close, o.high, scriptScenarioOdds(g, 1, 1), scriptScenarioOdds(g, 0, 1)]));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+    out = subprocess.run([node, fh.name], capture_output=True, text=True, timeout=30)
+    os.unlink(fh.name)
+    assert out.returncode == 0, out.stderr
+    home, close, high, cin_high, shoot = json.loads(out.stdout)
+    assert abs(home - 0.573) < 0.01 and abs(close - 0.389) < 0.01 and abs(high - 0.630) < 0.01
+    assert abs(cin_high - home * high) < 1e-9 and abs(shoot - close * high) < 1e-9
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
