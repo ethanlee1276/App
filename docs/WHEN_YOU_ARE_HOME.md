@@ -70,23 +70,24 @@ group:
 cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl
 ```
 
-### Start here — the order to run things (2026-10-02)
+### Start here — what is still open (2026-10-04, evening)
 
-Each step's commands are in its block below. Paste back the ones marked
-"paste".
+Already done and moved to DROPLET_CHECKS: the record recount and dates
+(R1, R2), L1, the pre-game closes (P2-a), the backup check (P6-b), NHL
+H1–H13/H15, the round-7 fits, the corner rules, and the TD injury test.
 
-1. **R1** — recount the record (read-only, paste the whole output).
-2. **R2** — give old rows their date (dry run first, then `--apply`).
-3. **L1** — which Most Likely picks to stop taking (read-only, paste).
-4. **P2-a** — every close before kickoff (read-only, paste).
-5. **P6-a** — healthchecks.io, so you hear when the site goes stale
-   (5 minutes; step by step).
-6. **P6-b** — run a backup and check it, then add the weekly check.
-7. **P29-a** — count the old PIN profiles (paste the number).
-8. **P31-a** — turn on the usage counts (only if the first line prints 1).
-9. **P3-a** — a week from now: what the number check dropped (paste).
-10. Whenever: **P10-a** (optional deploy lock), **P9-a** (look at the Live
-   tab during a game), **P28-a** (security log), **P45-a** (Android, later).
+1. **T3** — tonight, once today's games settle: our TD record against the
+   prices (read-only, paste). It says whether our touchdown chances run low
+   on favourites, as the four TD scans claim.
+2. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
+   (5 minutes; step by step below). Still not set up.
+3. **P29-a** — count the old name+PIN profiles (paste the number).
+4. **P3-a** — what the number check dropped this week (read-only, paste).
+5. **P28-a** — the security log (read-only, paste).
+6. **P31-a** — the usage counts, only if you have not turned them on yet.
+7. Later: **H14** (NHL calibration, once NHL picks have graded for two
+   weeks), **P9-a** (look at the Live tab during a game), **P45-a**
+   (Android), **P10-a** (nothing to do).
 
 ---
 
