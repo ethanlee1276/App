@@ -5832,3 +5832,33 @@ for l in sys.stdin:
 
 The last one prints how long each recent request actually took. Anything
 over ~200ms on an `/api/` path is worth me seeing.
+
+## G1 + C1: done 2026-10-04
+
+G1 (red-zone and third-down backfill, CIN–JAX tape) ran: JAX's offence against CIN's defence matched the research's model; the CIN run game against JAX's run defence did not; red-zone ranks read softer because this season is only a third of the blend.
+
+C1 (corner rules, engine.cbfit): neither proven. H1 (WR1 keeps catches better than yards against an elite corner) +0.020 overall; halves +0.046 (n 405) and −0.026 (n 211). H2 (WR2 catches more) −0.026 overall; halves −0.032 (n 403) and +0.001 (n 203).
+
+The blocks as they were:
+
+#### Red zone + third downs, and our Bengals–Jaguars card (2026-10-04, later)
+
+**G1. Fill the new red-zone and third-down numbers** for last season and
+this one (otherwise they arrive with Tuesday's weekly refresh). A few
+minutes; read-only for everything else:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.gamescan backfill 2025 2026
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan show 2026 4 CIN JAX
+```
+
+**C1. Test the breakdowns' two corner rules on five seasons** (paste it
+back). H1: a WR1 against a shutdown corner keeps his catches better than
+his yards. H2: the WR2 catches more when his team faces one. Each must
+hold in both halves of the seasons on 100+ games a half, or it is left
+alone. Nothing it finds moves a number:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cbfit
+```
+

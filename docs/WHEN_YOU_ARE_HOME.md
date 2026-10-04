@@ -14,25 +14,33 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### Red zone + third downs, and our Bengals–Jaguars card (2026-10-04, later)
+### Touchdown picks: the injury test, and our scorers next to your four TD scans (2026-10-04, latest)
 
-**G1. Fill the new red-zone and third-down numbers** for last season and
-this one (otherwise they arrive with Tuesday's weekly refresh). A few
-minutes; read-only for everything else:
-
-```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.gamescan backfill 2025 2026
-cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan show 2026 4 CIN JAX
-```
-
-**C1. Test the breakdowns' two corner rules on five seasons** (paste it
-back). H1: a WR1 against a shutdown corner keeps his catches better than
-his yards. H2: the WR2 catches more when his team faces one. Each must
-hold in both halves of the seasons on 100+ games a half, or it is left
-alone. Nothing it finds moves a number:
+**T1. Test your TD scans' injury moves on four seasons** (paste it back).
+Three claims, each on top of our touchdown model: opponent starting DBs out
+→ his receivers score more (Cook and Dugger out → Washington); opponent
+starting linemen out → his backs score more (Bosa out → McCaffrey); a
+starting WR or TE out → his teammates score more (Evans out → Kittle).
+Each must beat the model on held-out seasons, hold in all but one, and
+clear a clustered t of 2 on 300+ flagged games, or it is left alone.
+Nothing it finds moves a number. About 10–20 minutes:
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cbfit
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdinjfit
+```
+
+**T2. Every scorer we price in Bengals–Jaguars and Broncos–49ers**, to line
+up against the four TD scans (paste it back):
+
+```
+cd /srv/qellys && python3 -c "
+import json
+d = json.load(open('web/data/recommendations.json'))
+games = ({'CIN','JAX'}, {'DEN','SF'})
+rows = [r for r in d.get('td_field') or [] if any({r.get('team'), r.get('opponent')} <= g for g in games)]
+for r in sorted(rows, key=lambda r: (r.get('team') or '', -(r.get('model_prob') or 0))):
+    print(f\"{str(r.get('team')):4} {(r.get('player') or ''):22} {round(100*(r.get('model_prob') or 0)):3}%  {str(r.get('odds')):6} {r.get('book') or '':11} rz/wk {r.get('rz_chances')}  {r.get('goal_line_text') or ''}\")
+"
 ```
 
 **G2. Our picks for Bengals–Jaguars**, to line up against your two

@@ -237,6 +237,41 @@ def test_each_game_script_carries_how_likely_it_is():
     assert abs(home - 0.573) < 0.01 and abs(close - 0.389) < 0.01 and abs(high - 0.630) < 0.01
     assert abs(cin_high - home * high) < 1e-9 and abs(shoot - close * high) < 1e-9
 
+def test_a_scorer_case_opens_with_his_red_zone_role():
+    """Every touchdown scan starts a scorer at "6 red-zone carries, 3 inside
+    the 5": the case shows it, in our number, backing a back with real
+    goal-line work and working against a receiver with none."""
+    node = shutil.which("node")
+    if not node:
+        return
+    src = _js(["caseHighTotal", "caseLowTotal", "scriptExpected", "caseScriptFact", "pickCase"],
+              ["MINUS", "WHY_SCORER", "GS_HIGH_TOTAL", "GS_CATCH", "GS_PASS", "GS_RUSH"])
+    src = src.replace("const CASE_CLOSE_SPREAD", "var CASE_CLOSE_SPREAD")
+    brown = {"player": "Chase Brown", "team": "CIN", "opponent": "JAX", "market": "anytime_td",
+             "side": "YES", "position": "RB", "rz_chances": 2.1,
+             "goal_line": {"games": 3, "rz_car": 6, "i5_car": 3, "rz_tgt": 1, "i10_tgt": 0},
+             "goal_line_text": "6 red-zone carries (3 inside the 5), 1 red-zone target in his last 3 games"}
+    quiet = {**brown, "player": "Depth Receiver", "position": "WR",
+             "goal_line": {"games": 3, "rz_car": 0, "i5_car": 0, "rz_tgt": 0, "i10_tgt": 0},
+             "goal_line_text": "No red-zone touches in his last 3 games", "rz_chances": 0}
+    prog = (src + "\nvar CASE_CLOSE_SPREAD = 3.5, CASE_WIDE_SPREAD = 6.5;"
+            "\nconst state = {sport: 'nfl'};"
+            "\nconst teamName = (t) => t;"
+            f"\nconst a = pickCase({json.dumps(brown)}, null, null, null);"
+            f"\nconst b = pickCase({json.dumps(quiet)}, null, null, null);"
+            "\nconsole.log(JSON.stringify({brown: a.forBet.map(f => [f.text, f.in_number]),"
+            " quiet: b.against.map(f => f.text)}));")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+    out = subprocess.run([node, fh.name], capture_output=True, text=True, timeout=30)
+    os.unlink(fh.name)
+    assert out.returncode == 0, out.stderr
+    got = json.loads(out.stdout)
+    role = [t for t, inn in got["brown"] if "inside the 5" in t]
+    assert role and all(inn for t, inn in got["brown"] if "inside the 5" in t), got
+    assert "2.1 red-zone chances expected this week" in role[0]
+    assert any("No red-zone touches" in t for t in got["quiet"]), got
+
 
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

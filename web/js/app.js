@@ -12097,6 +12097,20 @@ function pickCase(r, lk, x, g) {
   const sf = caseScriptFact(r, g, chainWhy);
   const all = facts.slice();
   if (sf) all.push(sf);
+  /* HIS RED-ZONE ROLE, first on a scorer (every touchdown scan opens with
+     "6 red-zone carries, 3 inside the 5"). In our number: the chain reads
+     it through his red-zone share and xFP. A back needs more touches a
+     game than a receiver to count as a real goal-line role. */
+  const gl = scorer && r.goal_line;
+  if (gl && gl.games) {
+    const per = ((gl.rz_car || 0) + (gl.rz_tgt || 0)) / gl.games;
+    const rb = /^RB$/i.test(String((x && x.pos) || r.position || ""));
+    const hi = rb ? 1.5 : 1.0, lo = rb ? 0.5 : 0.3;
+    const chances = Number(r.rz_chances);
+    all.push({ text: `${r.goal_line_text || "Red-zone work measured"}${
+        Number.isFinite(chances) && chances > 0 ? ` — about ${chances.toFixed(1)} red-zone chances expected this week` : ""}`,
+      sign: per >= hi ? 1 : per <= lo ? -1 : 0, in_number: true, kind: "goal_line" });
+  }
   // His own games against this line.
   const line = Number((lk && lk.line != null ? lk.line : r.line));
   const logs = (r.logs || []).filter((gm) => Number.isFinite(Number(gm.value))).slice(0, 10);
