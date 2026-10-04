@@ -16,6 +16,12 @@ nflverse play-by-play the site already reads:
   offensive line allows and a pass rush generates. (The per-play
   pressure charting lives in the participation file, which nflverse
   publishes a season behind; hits and sacks are in every week.)
+* **third down** — third downs converted per third down run or thrown;
+* **red zone** — drives that reached the opponent's 20 and ended in a
+  touchdown, per such drive. Both added 2026-10-04: the two Bengals @
+  Jaguars breakdowns Ethan brought each led with "Jacksonville allows a
+  touchdown on 20% of red-zone trips" and third-down rank, and the site
+  had neither.
 
 One row per team-week per side, as SUMS, so the reader can blend weeks
 and seasons exactly (engine/gamescan divides). Standard library only.
@@ -26,7 +32,9 @@ from __future__ import annotations
 #: The play-by-play columns this reads, beside `nflpbp.NEEDED`.
 UNIT_COLS = ("week", "season_type", "posteam", "defteam", "play_type",
              "qb_dropback", "rush", "qb_scramble", "epa", "success",
-             "yards_gained", "sack", "qb_hit", "two_point_attempt")
+             "yards_gained", "sack", "qb_hit", "two_point_attempt",
+             "game_id", "drive", "yardline_100", "fixed_drive_result",
+             "third_down_converted", "third_down_failed")
 
 #: What counts as explosive: the conventional cut, dropbacks and runs apart.
 PASS_EXPLOSIVE_YDS = 20
@@ -46,7 +54,8 @@ def _blank() -> dict:
     return {"plays": 0, "epa": 0.0, "success": 0.0,
             "dropbacks": 0, "pass_epa": 0.0, "pass_success": 0.0, "pass_expl": 0,
             "rushes": 0, "rush_epa": 0.0, "rush_success": 0.0, "rush_yds": 0.0,
-            "rush_expl": 0, "sacks": 0, "hits": 0}
+            "rush_expl": 0, "sacks": 0, "hits": 0,
+            "third_att": 0, "third_conv": 0, "rz_drives": 0, "rz_tds": 0}
 
 
 class Units:
@@ -56,6 +65,7 @@ class Units:
     def __init__(self):
         self.cells: dict = {}          # (team, week, side) -> sums
         self.opp: dict = {}            # (team, week) -> opponent
+        self.drives: dict = {}         # (game, offence, drive) -> red-zone facts
 
     def add(self, r: dict) -> None:
         if (r.get("season_type") or "REG") != "REG":
@@ -66,6 +76,15 @@ class Units:
             return
         if _f(r.get("two_point_attempt")) == 1:
             return
+        # THE DRIVE, for the red zone: did it reach the 20, and how did it end.
+        gid, drv = r.get("game_id") or "", r.get("drive")
+        if gid and drv not in (None, "", "NA"):
+            d = self.drives.setdefault((gid, off, str(drv)), {"wk": wk, "off": off, "def": dfn,
+                                                               "rz": False, "td": False})
+            if _f(r.get("yardline_100"), 99.0) <= 20:
+                d["rz"] = True
+            if (r.get("fixed_drive_result") or "") == "Touchdown":
+                d["td"] = True
         dropback = _f(r.get("qb_dropback")) == 1
         rush = _f(r.get("rush")) == 1 and not dropback
         if not (dropback or rush):
@@ -77,9 +96,13 @@ class Units:
         yds = _f(r.get("yards_gained"))
         self.opp[(off, wk)] = dfn
         self.opp[(dfn, wk)] = off
+        conv, fail = _f(r.get("third_down_converted")) == 1, _f(r.get("third_down_failed")) == 1
         for team, side in ((off, "off"), (dfn, "def")):
             c = self.cells.setdefault((team, wk, side), _blank())
             c["plays"] += 1
+            if conv or fail:
+                c["third_att"] += 1
+                c["third_conv"] += int(conv)
             c["epa"] += epa
             c["success"] += succ
             if dropback:
@@ -97,6 +120,15 @@ class Units:
                 c["rush_expl"] += int(yds >= RUSH_EXPLOSIVE_YDS)
 
     def rows(self, season: int, sport: str = "nfl") -> list[dict]:
+        for d in self.drives.values():
+            if not d["rz"]:
+                continue
+            for team, side in ((d["off"], "off"), (d["def"], "def")):
+                c = self.cells.get((team, d["wk"], side))
+                if c is not None:
+                    c["rz_drives"] += 1
+                    c["rz_tds"] += int(d["td"])
+        self.drives = {}
         out = []
         for (team, wk, side), c in sorted(self.cells.items()):
             out.append({"sport": sport, "season": int(season), "period": f"{wk:03d}",

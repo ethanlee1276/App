@@ -109,12 +109,17 @@ UNITS = {
     "explosive": (("pass_expl", "rush_expl"), "plays", True),
     "pressure": (("sacks", "hits"), "dropbacks", False),
     "ypc": (("rush_yds",), "rushes", True),
+    # 2026-10-04 (engine/sources/nflunits): conversions per third down, and
+    # touchdowns per drive that reached the 20. Shown, not priced with.
+    "third_down": (("third_conv",), "third_att", True),
+    "redzone": (("rz_tds",), "rz_drives", True),
 }
 
 #: How the page names them.
 UNIT_LABELS = {"overall": "Overall", "passing": "Passing", "rushing": "Rushing",
                "success": "Success rate", "explosive": "Explosive plays",
-               "pressure": "Pressure", "ypc": "Yards per carry"}
+               "pressure": "Pressure", "ypc": "Yards per carry",
+               "third_down": "Third downs", "redzone": "Red-zone TDs"}
 
 
 def _num(row: dict, fields) -> float:
@@ -725,7 +730,7 @@ def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
 
 def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowed: dict | None,
                ratings_def: dict, points: float | None, line_words: str, n_teams: int,
-               room: dict | None) -> list[dict]:
+               room: dict | None, ratings_off: dict | None = None) -> list[dict]:
     """Every matchup fact about this player as a pick page needs it:
     ``{"text", "sign", "markets", "in_number", "kind"}``. ``sign`` is from
     the OVER's side (+1 helps the over); the page flips it for an under.
@@ -780,6 +785,47 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
         facts.append({"text": f"{opp}'s {'run' if group == 'rb' else 'pass'} defense ranks {_ord(rank)} of "
                               f"{n_teams} by play-by-play efficiency",
                       "sign": sign, "markets": lean, "in_number": not allowed, "kind": "unit"})
+    # THE SITUATIONAL UNITS (2026-10-04): red-zone touchdown rate for a
+    # scoring bet, yards a carry for a run bet, the pass rush for a passer.
+    def unit_fact(rt, side, unit, words, markets, good_high=True):
+        cell = ((rt or {}).get(side) or {}).get(unit) or {}
+        rank, val = cell.get("rank"), cell.get("value")
+        if not rank:
+            return
+        weak, strong = _weak(rank, n_teams), _strong(rank, n_teams)
+        sign = (1 if strong else -1 if weak else 0) if side == "off" else (1 if weak else -1 if strong else 0)
+        facts.append({"text": words(rank, val), "sign": sign, "markets": markets,
+                      "in_number": False, "kind": unit})
+    td_mk = [m for m in lean if m in ("anytime_td", "pass_td")]
+    if td_mk:
+        unit_fact(ratings_def, "def", "redzone",
+                  lambda r, v: (f"{opp}'s red-zone defense ranks {_ord(r)} of {n_teams}"
+                                + (f" — opponents score a touchdown on about {v:.0%} of trips inside its 20"
+                                   if isinstance(v, (int, float)) else "")), td_mk)
+        unit_fact(ratings_off, "off", "redzone",
+                  lambda r, v: (f"{team}'s red-zone offense ranks {_ord(r)} of {n_teams}"
+                                + (f" — a touchdown on about {v:.0%} of its trips inside the 20"
+                                   if isinstance(v, (int, float)) else "")), td_mk)
+    if group == "rb":
+        unit_fact(ratings_def, "def", "ypc",
+                  lambda r, v: (f"{opp} allows " + (f"{v:.1f} yards a carry, " if isinstance(v, (int, float)) else "")
+                                + f"{_ord(r)}-best of {n_teams} against the run"), ["rush_yds", "rush_att"])
+    if group == "qb":
+        unit_fact(ratings_def, "def", "pressure",
+                  lambda r, v: f"{opp}'s pass rush ranks {_ord(r)} of {n_teams} in sacks and hits per dropback",
+                  ["pass_yds", "pass_att", "pass_cmp", "pass_td"])
+    # WHO IS MISSING FROM THE SECONDARY, AND WHO FILLS IN (the breakdowns'
+    # "Jalen Davis on IR moves Dax Hill into the slot"): a starting corner
+    # out is a lift for a receiver's over — shown, not in the number.
+    if group in ("wr", "te") and room:
+        fill = {c["spot"]: c["name"] for c in room.get("corners") or [] if c.get("next_man_up")}
+        for m in room.get("missing") or []:
+            spot = "slot corner" if m["spot"] == "NB" else f"{m['spot']} corner"
+            sub = fill.get(m["spot"])
+            facts.append({"text": f"{opp}'s starting {spot} {m['name']} is {str(m['status']).lower()}"
+                                  + (f" — {sub} fills in" if sub else ""),
+                          "sign": 1, "markets": ["rec_yds", "receptions", "anytime_td"],
+                          "in_number": False, "kind": "secondary"})
     # The points the lines expect his team to score.
     if points is not None:
         sign = 1 if points >= POINTS_HIGH else -1 if points <= POINTS_LOW else 0
@@ -970,7 +1016,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # shown, never counted — chartfit and ngsfit found no lift in any of it.
     notes += charting_notes(group, opp, charting, charting_def, tracking)
     facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d,
-                       points=points, line_words=line_words, n_teams=n_teams, room=room)
+                       points=points, line_words=line_words, n_teams=n_teams, room=room,
+                       ratings_off=o)
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
             "facts": facts,

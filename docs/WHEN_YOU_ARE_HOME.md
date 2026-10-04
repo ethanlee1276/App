@@ -14,6 +14,34 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Red zone + third downs, and our Bengals–Jaguars card (2026-10-04, later)
+
+**G1. Fill the new red-zone and third-down numbers** for last season and
+this one (otherwise they arrive with Tuesday's weekly refresh). A few
+minutes; read-only for everything else:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.gamescan backfill 2025 2026
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan show 2026 4 CIN JAX
+```
+
+**G2. Our picks for Bengals–Jaguars**, to line up against your two
+research cards (paste it back):
+
+```
+cd /srv/qellys && python3 -c "
+import json
+d = json.load(open('web/data/recommendations.json'))
+rows = [r for r in (d.get('most_likely') or []) + (d.get('recommendations') or []) if {r.get('team'), r.get('opponent')} & {'CIN','JAX'}]
+seen = set()
+for r in sorted(rows, key=lambda r: -(r.get('model_prob') or r.get('hit_prob') or 0)):
+    k = (r.get('player'), r.get('market'), r.get('side'), r.get('line'))
+    if k in seen: continue
+    seen.add(k)
+    print(f\"{(r.get('player') or r.get('pick_label') or ''):22} {str(r.get('market')):12} {str(r.get('side')):6} {str(r.get('line')):6} chance {round(100*(r.get('model_prob') or r.get('hit_prob') or 0))}%  proj {r.get('projection')}  {r.get('category') or r.get('board') or ''}\")
+"
+```
+
 ### The overnight stall — what happened, and one check (2026-10-04)
 
 At about 12:26 AM every board stopped rebuilding (your 4:26 AM status

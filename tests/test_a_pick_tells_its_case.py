@@ -144,6 +144,43 @@ def test_the_game_script_names_a_back_and_forth_game():
         "the pick page leads with the case"
 
 
+def test_red_zone_and_third_downs_are_counted_from_the_play_by_play():
+    # Both breakdowns led with "Jacksonville allows a touchdown on 20% of
+    # red-zone trips"; the site had no red-zone touchdown rate at all.
+    from engine.sources.nflunits import Units
+    base = dict(week="4", season_type="REG", posteam="CIN", defteam="JAX", epa="0.1", success="1",
+                yards_gained="4", sack="0", qb_hit="0", two_point_attempt="0", game_id="2026_04_JAX_CIN")
+    plays = [dict(base, qb_dropback="1", rush="0", drive="2", yardline_100="12", fixed_drive_result="Touchdown",
+                  third_down_converted="1", third_down_failed="0"),
+             dict(base, qb_dropback="0", rush="1", drive="6", yardline_100="9", fixed_drive_result="Field goal",
+                  third_down_converted="0", third_down_failed="1"),
+             dict(base, qb_dropback="0", rush="1", drive="8", yardline_100="60", fixed_drive_result="Punt",
+                  third_down_converted="0", third_down_failed="0")]
+    u = Units()
+    for p in plays:
+        u.add(p)
+    rows = {(r["team"], r["side"]): r for r in u.rows(2026)}
+    off, dfn = rows[("CIN", "off")], rows[("JAX", "def")]
+    assert (off["rz_drives"], off["rz_tds"], off["third_att"], off["third_conv"]) == (2, 1, 2, 1)
+    assert (dfn["rz_drives"], dfn["rz_tds"]) == (2, 1), "the defence allowed what the offence got"
+    assert "redzone" in G.UNITS and "third_down" in G.UNITS
+
+
+def test_a_scorer_reads_the_red_zone_and_a_receiver_reads_the_secondary():
+    ratings_def = {"def": {"passing": {"rank": 5}, "redzone": {"rank": 2, "value": 0.2}}}
+    ratings_off = {"off": {"redzone": {"rank": 20, "value": 0.5}}}
+    room = {"corners": [{"name": "Dax Hill", "spot": "NB", "next_man_up": True}],
+            "missing": [{"name": "Jalen Davis", "spot": "NB", "status": "IR"}]}
+    facts = G.read_facts("wr", "WR", "JAX", "CIN", usage={"games": 3, "tgt_share": 0.299, "targets_pg": 7.7},
+                         allowed={}, ratings_def=ratings_def, ratings_off=ratings_off, points=24.5,
+                         line_words="", n_teams=32, room=room)
+    rz = [f for f in facts if f["kind"] == "redzone"]
+    assert any("20%" in f["text"] and f["sign"] == -1 and f["markets"] == ["anytime_td"] for f in rz), rz
+    sec = next(f for f in facts if f["kind"] == "secondary")
+    assert "Jalen Davis" in sec["text"] and "Dax Hill fills in" in sec["text"] and sec["sign"] == 1
+    assert not sec["in_number"] and "rec_yds" in sec["markets"]
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

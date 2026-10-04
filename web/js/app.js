@@ -12108,6 +12108,16 @@ function pickCase(r, lk, x, g) {
         : `Went over ${String(line)} in ${hits} of his last ${logs.length} games`,
       sign: rate >= 0.6 ? 1 : rate <= 0.4 ? -1 : 0, in_number: true, kind: "form" });
   }
+  // THE LINE'S OWN MOVE (the breakdowns' "pushed from 78.5 to 84.5 — the
+  // market already knows"): a line that rose has made the over dearer.
+  const tape = (r.line_tape || []).filter((t) => t && t.line != null);
+  if (tape.length >= 2 && !scorer) {
+    const a = Number(tape[0].line), b = Number(tape[tape.length - 1].line);
+    if (Number.isFinite(a) && Number.isFinite(b) && Math.abs(b - a) >= 0.5) {
+      all.push({ text: `The line moved ${a} → ${b} in the last day — the market moved ${b > a ? "toward the over, so the over needs more now" : "toward the under, so the over needs less now"}`,
+        sign: b > a ? -1 : 1, in_number: false, kind: "line" });
+    }
+  }
   const dir = over ? 1 : -1;
   const forBet = all.filter((f) => f.sign * dir > 0);
   const against = all.filter((f) => f.sign * dir < 0);
@@ -13150,6 +13160,9 @@ const SCAN_UNITS = [["overall", "Overall", "offense", "defense"],
   ["explosive", "Explosive plays", "big-play offense", "big-play defense"],
   ["pressure", "Protection vs pass rush", "pass protection", "pass rush"],
   ["success", "Success rate", "offense", "defense"],
+  // 2026-10-04: conversions per third down; touchdowns per red-zone trip.
+  ["third_down", "Third downs", "third-down offense", "third-down defense"],
+  ["redzone", "Red-zone touchdowns", "red-zone offense", "red-zone defense"],
   // College only (CFBD's advanced table): havoc is sacks, tackles for
   // loss and takeaways; line yards credit the blocking, stuffs the front.
   ["havoc", "Havoc", "ball security", "havoc"],
@@ -13175,6 +13188,8 @@ const TAPE_LABELS = {
   pressure: ["Pass protection", "Pass rush"], success: ["Play success rate", "Stopping plays"],
   havoc: ["Ball security", "Havoc (sacks, TFLs, takeaways)"], line: ["Run blocking", "Run front"],
   stuff: ["Avoiding stuffed runs", "Stuffing runs"],
+  third_down: ["Third-down conversions", "Third-down stops"],
+  redzone: ["Red-zone TD rate", "Red-zone TDs allowed"],
 };
 
 //: What a rank means, in a word, by quarter of the league.

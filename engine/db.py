@@ -276,6 +276,7 @@ CREATE TABLE IF NOT EXISTS team_units (
     dropbacks INTEGER, pass_epa REAL, pass_success REAL, pass_expl INTEGER,
     rushes INTEGER, rush_epa REAL, rush_success REAL, rush_yds REAL, rush_expl INTEGER,
     sacks INTEGER, hits INTEGER,
+    third_att INTEGER, third_conv INTEGER, rz_drives INTEGER, rz_tds INTEGER,
     PRIMARY KEY (sport, season, period, team, side)
 );
 -- HOCKEY SHOTS (2026-10-03, Ethan: "the opposing goalie, the shot quality,
@@ -580,6 +581,13 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         conn.commit()
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
+    # Third downs and red-zone trips (2026-10-04, engine/sources/nflunits).
+    for col in ("third_att", "third_conv", "rz_drives", "rz_tds"):
+        try:
+            conn.execute(f"ALTER TABLE team_units ADD COLUMN {col} INTEGER")
+            conn.commit()
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     # The assists on a goal (2026-10-03, the power-play role): who set up
     # each power-play goal is half of who is on the top unit.
     for col in ("assist1", "assist2"):
@@ -831,7 +839,7 @@ TEAM_UNIT_COLS = ["sport", "season", "period", "team", "side", "opp",
                   "plays", "epa", "success",
                   "dropbacks", "pass_epa", "pass_success", "pass_expl",
                   "rushes", "rush_epa", "rush_success", "rush_yds", "rush_expl",
-                  "sacks", "hits"]
+                  "sacks", "hits", "third_att", "third_conv", "rz_drives", "rz_tds"]
 
 
 NHL_SHOT_COLS = ["game_id", "event_id", "date", "season", "team", "opponent", "shooter_id",
