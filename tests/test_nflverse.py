@@ -1,0 +1,322 @@
+"""Tests for the nflverse source layer.
+
+Network feeds are stubbed with fixtures so these run offline and deterministically.
+They verify the schema mapping (weather, spread sign), log extraction, defense
+aggregation and full slate assembly.
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.sources import nflverse as nv
+from engine.models import PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS
+
+
+def approx(a, b, tol=1e-6):
+    return abs(a - b) < tol
+
+
+# --- weather + spread mapping ----------------------------------------------
+def test_weather_dome_and_closed():
+    assert nv.weather_from_row({"roof": "dome"}).dome is True
+    assert nv.weather_from_row({"roof": "closed"}).dome is True
+
+
+def test_weather_outdoor_uses_reported_values():
+    w = nv.weather_from_row({"roof": "outdoors", "temp": "28", "wind": "22"})
+    assert w.dome is False and w.temp_f == 28 and w.wind_mph == 22
+
+
+def test_weather_outdoor_blank_defaults():
+    w = nv.weather_from_row({"roof": "open", "temp": "", "wind": ""})
+    assert w.dome is False and w.wind_mph == 6.0
+
+
+def test_a_blank_row_is_flagged_unmeasured_rather_than_mild():
+    """The defaults above are a PRIOR, and for a season they wore a
+    measurement's clothes.
+
+    nflverse fills a schedule row's temp and wind from the PLAYED game,
+    so every outdoor game on a forward board is blank — which meant the
+    card printed "60°F · 6mph" as a forecast all season, the journal
+    recorded 6.0 as the wind each bet was made in (putting every outdoor
+    football pick in the miner's "calm (<8mph)" band, a constant it
+    could convict or exonerate a slice on), and the 25-mph deep-passing
+    warning in engine/rules.py could never fire because the number it
+    tested was a constant three times below its own threshold.
+
+    The numbers stay — the pricing paths need one, and a mild day is the
+    right prior — and everything that SHOWS or JOURNALS them checks the
+    flag first."""
+    assert nv.weather_from_row({"roof": "open", "temp": "", "wind": ""}).measured is False
+    assert nv.weather_from_row({"roof": "outdoors"}).measured is False
+    # One half reported is a real reading of that half.
+    assert nv.weather_from_row({"roof": "outdoors", "wind": "19"}).measured is True
+    assert nv.weather_from_row({"roof": "outdoors", "temp": "41"}).measured is True
+
+
+def test_a_dome_is_measured_because_it_is_a_fact_about_a_building():
+    for roof in ("dome", "closed"):
+        assert nv.weather_from_row({"roof": roof}).measured is True
+
+
+def test_build_games_negates_spread(monkeypatch):
+    # nflverse spread_line +3 means home favored -> engine spread -3.
+    rows = [{
+        "season": "2024", "week": "5", "home_team": "KC", "away_team": "NO",
+        "roof": "outdoors", "temp": "70", "wind": "1",
+        "spread_line": "3", "total_line": "43",
+    }]
+    monkeypatch.setattr(nv, "load_schedules", lambda: rows)
+    g = nv.build_games(2024, 5)[0]
+    assert g.home == "KC" and g.away == "NO"
+    assert approx(g.spread, -3.0) and approx(g.total, 43.0)
+
+
+# --- game logs --------------------------------------------------------------
+def _stat(name, pos, team, opp, week, **vals):
+    row = {
+        "player_display_name": name, "position": pos, "recent_team": team,
+        "opponent_team": opp, "week": str(week), "season": "2024", "season_type": "REG",
+        "passing_yards": "0", "rushing_yards": "0", "receiving_yards": "0",
+        "receptions": "0", "attempts": "0", "carries": "0", "targets": "0",
+    }
+    row.update({k: str(v) for k, v in vals.items()})
+    return row
+
+
+def test_player_game_logs_order_and_market():
+    rows = [
+        _stat("RB One", "RB", "AAA", "BBB", 1, rushing_yards=60),
+        _stat("RB One", "RB", "AAA", "CCC", 2, rushing_yards=80),
+        _stat("RB One", "RB", "AAA", "DDD", 3, rushing_yards=100),
+    ]
+    logs = nv.player_game_logs(rows, "RB One", RUSH_YDS, upto_week=4)
+    assert [l.value for l in logs] == [100, 80, 60]  # most recent first
+    assert [l.week for l in logs] == [3, 2, 1]
+    # upto_week excludes the target week and beyond
+    assert len(nv.player_game_logs(rows, "RB One", RUSH_YDS, upto_week=3)) == 2
+
+
+# --- defense profiles -------------------------------------------------------
+def test_defense_profiles_relative_to_league():
+    # Two defenses: BBB gives up lots of rush yards to RBs, CCC very little.
+    rows = []
+    for wk in (1, 2, 3):
+        rows.append(_stat("RB A", "RB", "AAA", "BBB", wk, rushing_yards=120))
+        rows.append(_stat("RB B", "RB", "DDD", "CCC", wk, rushing_yards=40))
+    profiles = nv.build_defense_profiles(rows, upto_week=4)
+    assert profiles["BBB"].vs_rb_rush > 1.0   # generous
+    assert profiles["CCC"].vs_rb_rush < 1.0   # stingy
+    # Toughest run defense ranks #1.
+    assert profiles["CCC"].rush_rank < profiles["BBB"].rush_rank
+
+
+# --- full slate assembly ----------------------------------------------------
+def test_build_slate_end_to_end(monkeypatch):
+    sched = [{
+        "season": "2024", "week": "5", "home_team": "AAA", "away_team": "BBB",
+        "roof": "outdoors", "temp": "30", "wind": "24",
+        "spread_line": "-4", "total_line": "45",
+    }]
+    stats = []
+    for wk in (1, 2, 3, 4):
+        stats.append(_stat("QB Aaa", "QB", "AAA", "ZZZ", wk, passing_yards=270, attempts=34))
+        stats.append(_stat("WR Aaa", "WR", "AAA", "ZZZ", wk, receiving_yards=85, targets=9))
+        stats.append(_stat("RB Bbb", "RB", "BBB", "ZZZ", wk, rushing_yards=78, carries=17))
+        # opponents concede so defense profiles are populated
+        stats.append(_stat("WR Opp", "WR", "ZZZ", "AAA", wk, receiving_yards=70, targets=8))
+        stats.append(_stat("RB Opp", "RB", "ZZZ", "BBB", wk, rushing_yards=65, carries=15))
+
+    monkeypatch.setattr(nv, "load_schedules", lambda: sched)
+    monkeypatch.setattr(nv, "load_weekly_stats", lambda season: stats)
+    monkeypatch.setattr(nv, "roster_teams", lambda season: {})
+
+    slate = nv.build_slate(2024, 5, upto_week=5)
+    assert slate.games and slate.props
+    # Weather propagated from the schedule (windy outdoor game).
+    assert slate.games[0].weather.wind_mph == 24
+    # Every YARDAGE prop carries real logs and a proxy line. Anytime-TD
+    # props (2026-08-25) are the deliberate exception: a Yes/No scorer
+    # market priced against a made-up -110 would fabricate edges on the
+    # long-shot board, so their lines stay EMPTY until a real book quote
+    # attaches (see build_slate's own comment).
+    from engine.models import ANYTIME_TD
+    td_props = [p for p in slate.props if p.market == ANYTIME_TD]
+    yardage = [p for p in slate.props if p.market != ANYTIME_TD]
+    for p in yardage:
+        assert len(p.logs) >= 3
+        assert p.lines and p.lines[0].book == "proxy"
+    # One TD prop per non-QB skill player on the board, unpriced.
+    assert td_props, "the TD layer vanished from the slate"
+    assert all(p.lines == [] for p in td_props)
+    assert all(p.market == ANYTIME_TD for p in td_props)
+    assert not any(p.position == "QB" and p.player.startswith("QB")
+                   for p in td_props), "passing-yards QBs got TD props"
+
+    # And the full model pipeline runs on the real-shaped slate — the
+    # yardage loop skips scorer props, so the analyzed count is the
+    # yardage count, not the prop-list length.
+    from engine.pipeline import run_slate
+    result = run_slate(slate)
+    assert result["counts"]["props_analyzed"] == len(yardage)
+
+
+# --- where a man plays now (2026-09-15) ---------------------------------------
+def _two_game_week(monkeypatch, stats, homes):
+    sched = [{"season": "2024", "week": "5", "home_team": h, "away_team": a,
+              "roof": "dome", "temp": "", "wind": "", "spread_line": "-3", "total_line": "45"}
+             for h, a in (("AAA", "BBB"), ("CCC", "DDD"))]
+    for wk in (1, 2, 3, 4):
+        # Enough volume on every side that the RB in question is built.
+        for tm, opp in (("AAA", "BBB"), ("BBB", "AAA"), ("CCC", "DDD"), ("DDD", "CCC")):
+            stats.append(_stat(f"WR {tm}", "WR", tm, opp, wk, receiving_yards=80, targets=9))
+    monkeypatch.setattr(nv, "load_schedules", lambda: sched)
+    monkeypatch.setattr(nv, "load_weekly_stats", lambda season: stats)
+    monkeypatch.setattr(nv, "roster_teams", lambda season: homes)
+    return nv.build_slate(2024, 5, upto_week=5)
+
+
+def _mover(slate):
+    return [p for p in slate.props if p.player == "RB Mover" and p.market == "rush_yds"]
+
+
+def test_a_player_is_homed_where_the_roster_says_now(monkeypatch):
+    """Ethan, 2026-09-15: "we are showing props for players not even on
+    the team any more. Isaiah pachaceo is on the lions now, not the
+    chiefs." `team_of` returned the FIRST stat row of the season — Week
+    1's team — before it asked the roster. The roster is asked first."""
+    stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+             for wk in (1, 2, 3, 4)]
+    got = _mover(_two_game_week(monkeypatch, stats, {"RB Mover": "CCC"}))
+    assert got and got[0].team == "CCC" and got[0].opponent == "DDD",         [(p.team, p.opponent) for p in got]
+
+
+def test_without_a_roster_the_newest_stat_row_wins_not_the_first():
+    """A man traded after Week 3 has three rows for the old team and one
+    for the new; the old code filed him under the old team for the rest
+    of the season because it stopped at the first row it saw."""
+    class MP:
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name))); setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+    mp = MP()
+    try:
+        stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+                 for wk in (1, 2, 3)]
+        stats.append(_stat("RB Mover", "RB", "CCC", "ZZZ", 4, rushing_yards=80, carries=18))
+        got = _mover(_two_game_week(mp, stats, {}))
+        assert got and got[0].team == "CCC", [(p.team, p.opponent) for p in got]
+        # And a folded roster name still finds him: "RB Mover Jr." on the file.
+        mp.undo(); mp = MP()
+        got = _mover(_two_game_week(mp, list(stats), {"rb mover": "AAA"}))
+        assert got and got[0].team == "AAA", [(p.team, p.opponent) for p in got]
+    finally:
+        mp.undo()
+
+
+def test_a_roster_that_cannot_be_read_costs_nothing():
+    class MP:
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name))); setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+    mp = MP()
+    try:
+        from engine.sources.fetch import DataUnavailable
+        stats = [_stat("RB Mover", "RB", "AAA", "ZZZ", wk, rushing_yards=80, carries=18)
+                 for wk in (1, 2, 3, 4)]
+
+        def boom(season):
+            raise DataUnavailable("no roster here")
+        sched_stats = list(stats)
+        # `_two_game_week` installs its own roster stub; override after.
+        slate = _two_game_week(mp, sched_stats, {})
+        mp.setattr(nv, "roster_teams", boom)
+        slate = nv.build_slate(2024, 5, upto_week=5)
+        got = _mover(slate)
+        assert got and got[0].team == "AAA", [(p.team, p.opponent) for p in got]
+    finally:
+        mp.undo()
+
+
+# --- the outage of 2026-09-10 -----------------------------------------------
+def test_every_market_a_position_gets_can_be_placed_at_a_position():
+    """THE OUTAGE. `build_slate` carried its own hand-written map from
+    market to position — `{PASS_YDS: "QB", RUSH_YDS: "RB", …}` — beside
+    `POSITION_MARKETS`, the table that decides which markets a position
+    is given. Passing touchdowns were added to the TABLE and not to the
+    literal, so the first quarterback with a second spec raised
+    `KeyError: 'pass_td'` out of `build_slate`. Not one prop came back,
+    so the NFL board and the Most Likely board were both empty for two
+    hours on the Thursday of Week 1.
+
+    Ethan, 17:58: "all the edge bets and most likely bets for nfl
+    disappeared." Player search kept working the whole time, which was
+    the tell: it reads `player_game_logs` and never touches the slate.
+
+    THE ASSERTION IS THE INVARIANT, not the market that broke it: every
+    market any position is given must resolve to a position. A sixth
+    market added tomorrow is covered by this without anybody editing it.
+    """
+    from engine.sources.nflverse import POSITION_MARKETS, position_of, top_players_for_week
+    rows = []
+    for pos, name in (("QB", "Q"), ("RB", "R"), ("WR", "W"), ("TE", "T")):
+        for wk in (1, 2, 3):
+            rows.append({"season_type": "REG", "week": str(wk), "recent_team": "BUF", "position": pos,
+                         "player_display_name": name, "attempts": "30" if pos == "QB" else "0",
+                         "carries": "15" if pos == "RB" else "0", "targets": "8" if pos in ("WR", "TE") else "0"})
+    specs = top_players_for_week(rows, {"BUF"}, 4)
+    got = {(s.position, s.market) for s in specs}
+    for position, markets in POSITION_MARKETS.items():
+        for market, _role in markets:
+            assert (position, market) in got, (position, market)
+            assert position_of(market), market
+    # A market two positions hold says whose OWN market it is.
+    assert position_of("rec_yds") == "WR" and position_of("receptions") == "TE"
+
+
+def test_the_position_lookup_is_derived_and_not_a_second_copy():
+    """A literal here is the defect itself: two tables that must agree,
+    one of which nobody remembers to edit. This module's own
+    `resolve_market_keys` note already carries the lesson — "THE SECOND
+    COPY OF THIS MAP WAS THE BUG". The spec carries the table row it was
+    made from (2026-09-23: a market can belong to two positions)."""
+    import os
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "sources", "nflverse.py"),
+               encoding="utf-8").read()
+    code = re.sub(r"#.*$", "", src, flags=re.M)
+    assert "pos = spec.position or position_of(spec.market)" in code
+    # No hand-written market->position literal anywhere in the CODE.
+    assert not re.search(r"\{\s*PASS_YDS:\s*\"QB\"", code), \
+        "the second copy of the map is back"
+
+
+if __name__ == "__main__":
+    import types
+    class MP:  # minimal monkeypatch shim so the file runs without pytest
+        def __init__(self): self._undo = []
+        def setattr(self, obj, name, val):
+            self._undo.append((obj, name, getattr(obj, name)))
+            setattr(obj, name, val)
+        def undo(self):
+            for obj, name, val in reversed(self._undo): setattr(obj, name, val)
+
+    fns = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for name, fn in fns:
+        needs_mp = fn.__code__.co_argcount == 1
+        mp = MP() if needs_mp else None
+        try:
+            fn(mp) if needs_mp else fn()
+            print(f"  ok  {name}")
+        finally:
+            if mp:
+                mp.undo()
+    print(f"\n{len(fns)} tests passed.")

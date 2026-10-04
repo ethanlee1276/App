@@ -1,0 +1,484 @@
+"""The football field, and the play drawn on it.
+
+Ethan, 2026-09-07, with three renders: "follow these renders for the nfl
+play by play page for live games. The last 2 renders of just the field
+and players will the the EXACT renders you will use for the field on the
+play by play screens. The black team with represent the away team and
+white will represent the home team." Then, mid-build: "this is also for
+cfb as well. all this work should be for both nfl and cfb."
+
+Two photographs of one generic stadium wearing our own branding — the
+same call as the ballpark, for the same two reasons: we do not hold
+thirty-two stadium photographs, and we do not want anybody else's marks
+on our card. Which one draws is decided by POSSESSION, because that is
+the only difference between them.
+
+WHAT IS DELIBERATELY NOT DRAWN, and why these are tests rather than
+comments:
+
+  * His annotated render shows EXIT VELOCITY and LAUNCH ANGLE beside the
+    yards. Those are Statcast numbers. Football does not have them —
+    ESPN's play carries `event`, `yards`, `down`, `distance` and
+    `yard_line` and nothing else. The four-up keeps its shape and is
+    filled with four numbers we hold.
+  * His render bows the ball out to a receiver. The feed does not say
+    where across the field the ball went, so the flight runs straight
+    downfield by the distance the play actually gained.
+  * A play that lost yards draws no line at all: the camera model is
+    fitted downfield from three measured anchors and says nothing about
+    the backfield.
+
+The camera model itself is exercised in node against the anchors it was
+fitted to, which were read off a 240x150 grid laid over the render.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+APP = (ROOT / "web" / "js" / "app.js").read_text()
+
+
+def _fn(name):
+    i = APP.index(f"function {name}(")
+    ends = [APP.find(m, i + 10) for m in ("\nfunction ", "\nasync function ", "\nconst ", "\nlet ", "\n/* ")]
+    return APP[i:min([e for e in ends if e != -1])]
+
+
+def _const(name):
+    i = APP.index(f"const {name}")
+    first = APP[i:APP.index("\n", i)]
+    return first if first.rstrip().endswith(";") else APP[i:APP.index("\n};", i) + 3]
+
+
+def _node(js):
+    node = shutil.which("node")
+    if not node:
+        return None
+    src = "\n".join([
+        "function escapeHtml(s){return String(s);}",
+        "function icon(){return '';}",
+        # The REAL list, not a stub: the picker reads it to decide which
+        # league's pair of frames to reach for, so a stub here would let
+        # a college game quietly fall back to the pro field in the one
+        # test written to catch exactly that.
+        _const("PBP_FOOTBALL"),
+        _const("pbpOrd"), _const("PBP_FIELD"), _const("PBP_PLAY_HUE"),
+        _fn("pbpFieldY"), _fn("pbpFieldHTML"), _fn("pbpFieldPosHTML"),
+        _fn("pbpCalloutBox"), _fn("pbpPlaySVG"),
+    ])
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(src + "\n" + js); path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip())
+
+
+# ------------------------------------------------------------ both codes ---
+def test_college_and_pro_are_one_list_not_two_wirings():
+    """Every football bug in this file has been 'fixed in one league'."""
+    assert 'const PBP_FOOTBALL = new Set(["nfl", "cfb"]);' in APP
+    for site in ("const isFootball = PBP_FOOTBALL.has(league);",):
+        assert site in APP, site
+    # No league-by-name branch may decide the field art or the tiles.
+    art = _fn("pbpParkHTML")
+    assert '"nfl"' not in art and '"cfb"' not in art, art
+    # And the call site HANDS THE LEAGUE OVER. Testing the picker
+    # directly cannot see this: a call site that drops the argument
+    # leaves every college game on the pro field, with the picker itself
+    # still perfectly correct.
+    assert "pbpFieldHTML(d, league, hitRow)" in art, art
+
+
+# -------------------------------------------------------- which photo ------
+def test_the_photo_follows_the_league_and_then_who_has_the_ball():
+    """Two axes. Ethan, after the first pass put an NFL shield at
+    midfield on a college game: "Good catch on the nfl logos. Here is the
+    correct renders for CFB." A picker that reads possession and forgets
+    the league is exactly how that happened."""
+    got = _node("""
+      const g = {home: "DET", away: "CHI"};
+      const pick = (s) => (s.match(/field-(nfl|cfb)-(away|home)-ball/) || []).slice(1).join("-");
+      console.log(JSON.stringify({
+        nflAway: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "nfl")),
+        nflHome: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "nfl")),
+        cfbAway: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb")),
+        cfbHome: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "cfb")),
+        cfbNone: pick(pbpFieldHTML({...g, live: {}}, "cfb")),
+      }));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    # Black jerseys are the away team in BOTH sets of renders, and that
+    # frame draws when the away team has the ball.
+    assert got["nflAway"] == "nfl-away", got
+    assert got["nflHome"] == "nfl-home", got
+    assert got["cfbAway"] == "cfb-away", got
+    assert got["cfbHome"] == "cfb-home", got
+    # A college game never reaches for the pro field, whatever else is
+    # unknown — that is the defect this test exists for.
+    assert got["cfbNone"].startswith("cfb"), got
+
+
+def test_the_frame_follows_the_play_the_card_is_captioning():
+    """Ethan's Louisville-Ole Miss card, 2026-09-07: the tiles read
+    POSSESSION LOU — the away side — while the photograph showed white
+    jerseys, which is the HOME frame. Two sources for one fact, and the
+    one the picture used was empty: `live.possession` comes from the
+    scoreboard's `situation` block, which college payloads routinely
+    omit, while the play's `team` comes from its drive and was right.
+
+    So the play wins. The arc, the caption and the tiles all describe one
+    play; the field under them is that play's field."""
+    got = _node("""
+      const g = {home: "DET", away: "CHI"};
+      const pick = (s) => (s.match(/field-(nfl|cfb)-(away|home)-ball/) || [])[2];
+      console.log(JSON.stringify({
+        // The situation block is empty — the college case.
+        playOnly: pick(pbpFieldHTML({...g, live: {}}, "cfb", {team: "CHI"})),
+        // The play wins even when the scoreboard disagrees.
+        playWins: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "cfb", {team: "CHI"})),
+        // No play yet: the scoreboard is still read.
+        fallsBack: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb", null)),
+        // A play with no team of its own does not blank the scoreboard.
+        teamless: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb", {yards: 4})),
+      }));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["playOnly"] == "away", got
+    assert got["playWins"] == "away", got
+    assert got["fallsBack"] == "away", got
+    assert got["teamless"] == "away", got
+    # And the call site hands the play over, which testing the picker
+    # alone cannot see.
+    assert "pbpFieldHTML(d, league, hitRow)" in _fn("pbpParkHTML")
+
+
+def test_all_four_frames_ship_in_both_formats_and_both_sizes():
+    img = ROOT / "web" / "img" / "field"
+    for stem in ("field-nfl-away-ball", "field-nfl-home-ball",
+                 "field-cfb-away-ball", "field-cfb-home-ball"):
+        for suf in (".webp", ".jpg", "@640.webp", "@640.jpg"):
+            assert (img / f"{stem}{suf}").exists(), stem + suf
+        # The one a phone downloads has to be small, same budget as the park.
+        assert (img / f"{stem}@640.webp").stat().st_size < 120_000
+        assert (img / f"{stem}.webp").stat().st_size < 400_000
+
+
+# ----------------------------------------------------- the camera model ----
+def test_the_college_frames_are_not_the_pro_ones_renamed():
+    """The whole point of the second pair is a different mark at
+    midfield. Identical bytes would mean the copy went wrong."""
+    img = ROOT / "web" / "img" / "field"
+    pro = (img / "field-nfl-away-ball.webp").read_bytes()
+    college = (img / "field-cfb-away-ball.webp").read_bytes()
+    assert pro != college
+    assert (img / "field-cfb-away-ball.webp").read_bytes() \
+        != (img / "field-cfb-home-ball.webp").read_bytes()
+
+
+def test_the_field_maps_yards_the_way_the_render_was_measured():
+    """The three anchors read off the grid: the line the linemen stand
+    on, midfield, and the goal line."""
+    got = _node("""
+      const at = {};
+      for (const d of [0, 5, 10, 20, 40, 70, 100]) at[d] = pbpFieldY(d);
+      console.log(JSON.stringify(at));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert abs(got["0"] - 108) < 0.05, got      # line of scrimmage
+    assert abs(got["20"] - 84) < 0.05, got      # midfield
+    assert abs(got["70"] - 62) < 0.05, got      # the goal line
+    # Monotone downfield, and compressing — a lens, not a ruler.
+    ys = [got[str(d)] for d in (0, 5, 10, 20, 40, 70, 100)]
+    assert all(b < a for a, b in zip(ys, ys[1:])), ys
+    # Compression is a PER-YARD claim. The first version compared a
+    # five-yard span against a thirty-yard one and called the model
+    # broken when it was the test that was.
+    near = (got["0"] - got["5"]) / 5
+    far = (got["40"] - got["70"]) / 30
+    assert near > far * 3, (near, far)
+    # Nothing runs off the back of the picture.
+    assert got["100"] >= 58 - 0.01, got
+
+
+def test_a_play_that_lost_yards_draws_no_flight():
+    got = _node("""
+      const sack = pbpPlaySVG({kind: "football", event: "Sack", yards: -7, down: 3, distance: 15});
+      const gain = pbpPlaySVG({kind: "football", event: "Rush", yards: 7, down: 1, distance: 10});
+      const markY = (s) => +(s.match(/<circle cx="[\d.]+" cy="([\d.]+)"/) || [])[1];
+      console.log(JSON.stringify({
+        sackPath: /<path /.test(sack), gainPath: /<path /.test(gain),
+        sackSaysLoss: sack.includes("7 YDS"), sackHasMark: /<circle /.test(sack),
+        sackMarkY: markY(sack), gainMarkY: markY(gain), los: PBP_FIELD.los}));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["gainPath"] is True
+    assert got["sackPath"] is False, "the model does not describe the backfield"
+    assert got["sackSaysLoss"] and got["sackHasMark"], "but the play is still reported"
+    # AND the mark stays on the line. Taking the absolute value would put
+    # a seven-yard LOSS seven yards downfield, which is the same picture
+    # as a seven-yard gain — a mutant that survived the first version of
+    # this test because it only looked for the line, not for where the
+    # ball ended up.
+    assert got["sackMarkY"] == got["los"], got
+    assert got["gainMarkY"] < got["los"], got
+
+
+def test_the_flight_runs_straight_downfield():
+    """Bowing it to one side would invent the one number the feed does
+    not carry — where across the field the ball went."""
+    got = _node("""
+      const svg = pbpPlaySVG({kind: "football", event: "Pass", yards: 22});
+      const m = svg.match(/d="M([\\d.]+) ([\\d.]+) L([\\d.]+) ([\\d.]+)"/);
+      console.log(JSON.stringify({x0: +m[1], y0: +m[2], x1: +m[3], y1: +m[4]}));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["x0"] == got["x1"], got
+    assert got["y1"] < got["y0"], "downfield is up the picture"
+    body = _fn("pbpPlaySVG")
+    assert " Q" not in body.split("return")[1], "no quadratic — no invented curve"
+
+
+# --------------------------------------------------- where the ball is -----
+#
+# Ethan, 2026-09-07: "is there a way for both nfl and cfb to move the
+# players up the field depending on where the ball is on the field. its a
+# little hard to judge where the ball is on the field since the players
+# on the render stay in the same spot."
+#
+# The players are pixels and cannot move. Field position gets drawn as a
+# field instead.
+
+def _strip(yard, poss="", home="DET", away="CHI"):
+    return _node("""
+      const d = {home: %r, away: %r, live: {%s possession: %r}};
+      const s = pbpFieldPosHTML(d);
+      const ball = (s.match(/<circle cx="([\d.]+)"/) || [])[1];
+      const arrow = (s.match(/<path d="M([\d.]+) 16 L([\d.]+) 12.6/) || []).slice(1);
+      console.log(JSON.stringify({empty: s === "", ball: ball ? +ball : null,
+        arrow: arrow.length ? {tip: +arrow[0], base: +arrow[1]} : null}));"""
+      % (home, away, "" if yard is None else f"yard_line: {yard},", poss))
+
+
+def _strip2(js):
+    """Drive the strip and read back what it actually drew: the caption,
+    the ball's x, and which way the arrowhead points."""
+    return _node("""
+      const g = {home: "LOU", away: "MISS"};
+      const read = (s) => {
+        if (s === "") return {empty: true};
+        const dot = Number((s.match(/<circle cx="([\d.]+)"/) || [])[1]);
+        const tip = (s.match(/<path d="M([\d.]+) 16/) || [])[1];
+        return {cap: (s.match(/pbp-fpos-cap">([^<]*)</) || [])[1],
+                x: dot,
+                dir: tip === undefined ? 0 : Math.sign(Number(tip) - dot)};
+      };
+      console.log(JSON.stringify(""" + js + """));""")
+
+
+def test_the_strip_draws_when_only_the_play_knows_where_the_ball_is():
+    """Ethan, 2026-09-07, on a live Louisville card: "I'm not seeing that
+    yard line marker thing to show where the ball is at."
+
+    Nothing was broken in the drawing. `live.yard_line` comes from
+    ESPN's scoreboard `situation` block, college payloads routinely omit
+    that block, and a strip with no number returns "" — correctly, and
+    invisibly. The play alongside it carries the same fact as
+    `yardsToEndzone`, stamped onto the row as `spot`, and that is the
+    second source."""
+    got = _strip2("""{
+      college: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      board: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}}, null)),
+      neither: read(pbpFieldPosHTML({...g, live: {}}, null)),
+      playWithNoSpot: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU"})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["college"]["x"] == 78.4, got          # 16 + .30 * 208
+    assert got["board"]["x"] == 145, got             # 16 + .62 * 208
+    # And with neither source there is still nothing to draw, which is
+    # the honest answer and not a bug to paper over.
+    assert got["neither"] == {"empty": True}, got
+    assert got["playWithNoSpot"] == {"empty": True}, got
+
+
+def test_the_scoreboard_leads_because_the_two_sources_are_different_facts():
+    """`live.yard_line` is where the ball sits for the NEXT snap. A
+    play's `spot` is where THAT play was snapped from. On a long
+    completion they are a long way apart, so the scoreboard — which
+    answers the question the strip asks — wins whenever it has an
+    answer, and the caption always says which one drew. They are never
+    averaged and never silently swapped."""
+    got = _strip2("""{
+      both: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}},
+                                 {team: "LOU", spot: 30})),
+      playOnly: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      homeHalf: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      awayHalf: read(pbpFieldPosHTML({...g, live: {}}, {team: "MISS", spot: 62})),
+      mid: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 50})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    # With both in hand the scoreboard's number is the one drawn.
+    assert got["both"]["x"] == 145, got
+    assert got["both"]["cap"] == "BALL ON MISS 38", got
+    assert got["playOnly"]["cap"] == "SNAP AT LOU 30", got
+    # The caption names the half of the field a person would name: under
+    # fifty is home's, over fifty is away's, and the marker counts back
+    # down from midfield.
+    assert got["homeHalf"]["cap"] == "SNAP AT LOU 30", got
+    assert got["awayHalf"]["cap"] == "SNAP AT MISS 38", got
+    assert got["mid"]["cap"] == "SNAP AT MIDFIELD", got
+
+
+def test_the_spot_and_the_arrow_come_from_the_same_reading():
+    """Home defends 0 and drives toward 100; away drives the other way.
+    Taking the position from one source and the direction from the other
+    is how a strip ends up drawing a team running the wrong way up a
+    field, so whichever source supplied the yard supplies the arrow —
+    and a source that named no team draws no arrow at all rather than
+    borrowing one."""
+    got = _strip2("""{
+      playHome: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      playAway: read(pbpFieldPosHTML({...g, live: {}}, {team: "MISS", spot: 62})),
+      boardHome: read(pbpFieldPosHTML({...g, live: {yard_line: 30, possession: "LOU"}}, null)),
+      boardAway: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}}, null)),
+      noBorrow: read(pbpFieldPosHTML({...g, live: {yard_line: 30}},
+                                     {team: "MISS", spot: 62})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["playHome"]["dir"] == 1 and got["playAway"]["dir"] == -1, got
+    assert got["boardHome"]["dir"] == 1 and got["boardAway"]["dir"] == -1, got
+    # The scoreboard gave the spot and named nobody. The play's team is
+    # right there and must NOT be borrowed to point an arrow at a
+    # position it did not measure.
+    assert got["noBorrow"]["dir"] == 0, got
+    # And the spot drawn is still the board's, not the play's.
+    assert got["noBorrow"]["x"] == 78.4, got
+
+
+def test_the_strip_gets_the_play_the_card_is_captioning():
+    """Testing the function alone cannot see this: a call site that
+    drops the second argument leaves every college game with no strip
+    at all, with the strip itself still perfectly correct. The same
+    trap the field photograph fell into an hour earlier."""
+    assert "pbpFieldPosHTML(d, hitRow)" in _fn("pbpParkHTML")
+
+
+def test_the_strip_reads_the_parsed_spot_and_never_the_raw_one():
+    """engine/sources/livescores.py refuses to draw with ESPN's numeric
+    yardLine: "its zero point is not documented and differs between the
+    endpoints — read wrong it puts the ball on the opposite forty, which
+    on a drawing is not a rounding error, it is the other team driving."
+    """
+    body = _fn("pbpFieldPosHTML")
+    assert "lv.yard_line" in body
+    code = "\n".join(ln for ln in body.splitlines() if not ln.strip().startswith("*")
+                     and not ln.strip().startswith("//"))
+    assert "p.yard_line" not in code and "start.yardLine" not in code
+
+
+def test_the_ball_sits_where_the_convention_says_it_does():
+    """engine/models.py: 0-100 from the HOME team's own goal line, drawn
+    left to right with the home end zone on the left."""
+    got = [(_strip(y, "DET") or {}) for y in (0, 25, 50, 75, 100)]
+    if any(g is None for g in got) or not got[0]:
+        print("  SKIP node not installed"); return
+    xs = [g["ball"] for g in got]
+    assert all(a < b for a, b in zip(xs, xs[1:])), xs
+    # Midfield is the middle of the playing surface, and the two goal
+    # lines sit at the inside edges of the end zones.
+    assert abs(xs[2] - 120) < 0.6, xs
+    assert abs(xs[0] - 16) < 0.6 and abs(xs[4] - 224) < 0.6, xs
+    # Equal spacing: x is a STRAIGHT function of the number, not eased.
+    gaps = [round(b - a, 1) for a, b in zip(xs, xs[1:])]
+    assert len(set(gaps)) == 1, gaps
+
+
+def test_each_side_drives_at_the_other_end_zone():
+    home = _strip(50, "DET")
+    if home is None:
+        print("  SKIP node not installed"); return
+    away = _strip(50, "CHI")
+    blank = _strip(50, "")
+    # Home defends 0, so home's offence drives toward 100 — to the right.
+    assert home["arrow"]["tip"] > home["arrow"]["base"], home
+    assert away["arrow"]["tip"] < away["arrow"]["base"], away
+    # Unknown possession picks no direction rather than guessing one.
+    assert blank["arrow"] is None, blank
+
+
+def test_no_spot_means_no_strip():
+    """`yard_line` is written only when the parse resolved the side, so
+    its absence is a fact about the feed and not a gap to paper over."""
+    got = _strip(None)
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["empty"] is True
+    for bad in (-1, 101):
+        assert _strip(bad, "DET")["empty"] is True, bad
+
+
+# ------------------------------------------------------------- the tiles ---
+def test_the_tiles_carry_only_numbers_football_actually_has():
+    body = _fn("pbpPlayTilesHTML")
+    for real in ("p.yards", "p.event", "p.down", "p.distance", "p.team"):
+        assert real in body, real
+    # NOT the play's own yard_line. It is ESPN's raw start.yardLine, whose
+    # zero point livescore's parser calls undocumented and endpoint-
+    # dependent; a bare "34" on a card hands that ambiguity to the reader.
+    # Where the ball is has its own strip, on the parsed number.
+    assert "p.yard_line" not in body
+    code = "\n".join(ln for ln in body.splitlines() if not ln.strip().startswith("//"))
+    for invented in ("launch_speed", "launch_angle", "EXIT VELOCITY", "LAUNCH ANGLE"):
+        assert invented not in code, invented
+
+
+def test_every_football_tile_wears_a_mark_the_site_draws_itself():
+    body = _fn("pbpPlayTilesHTML")
+    names = re.findall(r'tile\("([a-z]+)"', body)
+    assert len(names) == 4, names
+    assert "glove" not in names, "a baseball glove is not a football mark"
+    for n in names:
+        assert f"\n  {n}:" in APP, f"{n} is not in ICON_PATHS"
+
+
+def test_the_wind_word_tells_the_two_leagues_fields_apart():
+    """Baseball ships the wind's relation to the park; football ships a
+    compass bearing. Both are real, neither is the other, and anything
+    that is neither prints nothing."""
+    body = _fn("pbpWindWord")
+    assert "PBP_WIND" in body and "[NSEW]" in body
+    head = _fn("pbpParkHeadHTML")
+    assert "isFootball ? g.stadium : g.park" in head, "each league's own venue field"
+    assert '"THE FIELD" : "THE PARK"' in head
+
+
+if __name__ == "__main__":
+    fails = ran = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                ran += 1
+                print(f"  ok  {name}")
+            except AssertionError as exc:
+                fails += 1
+                print(f"  FAIL {name}: {exc}")
+            except Exception as exc:                          # noqa: BLE001
+                fails += 1
+                print(f"  FAIL {name}: {type(exc).__name__}: {exc}")
+    print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
+    sys.exit(1 if fails else 0)

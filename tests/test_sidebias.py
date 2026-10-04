@@ -1,0 +1,350 @@
+"""Is the model leaning on a side — and can anything currently correct it?
+
+Two things are pinned here, and the first is a trap rather than a bug.
+
+**Projection versus actual on the bets we made is contaminated.** We bet
+OVER when the projection sits above the line, so the overs we select are
+disproportionately the ones where the projection's own noise ran high.
+Actuals regress, a gap appears, and a perfectly unbiased model produces
+it. Any test built on that comparison finds a bias every time, which is
+the same as finding nothing.
+
+What survives is the ASYMMETRY: both sides clear the same edge bar, so
+both carry the same selection effect, and differencing them removes it.
+The tests below check that an unbiased-but-selected book reports no
+finding, and that a genuine lean planted on one side still does.
+
+**And a real defect in journalfit**, found while writing this: the fit
+paired each bet's own hit_prob with won/lost, so an over's claim and an
+under's entered the same bucket as the same number. A directional lean
+contributes opposite gaps on the two sides and cancels — the intercept,
+the only parameter that can push a model off a side, was blind to the
+thing it exists to correct.
+
+Run directly: `python3 tests/test_sidebias.py`
+"""
+
+import math
+import os
+import random
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import sidebias as sb                                         # noqa: E402
+from engine.journalfit import as_over                         # noqa: E402
+
+
+def bet(side="OVER", p=0.58, won=True, market="total_bases", sport="mlb"):
+    return {"sport": sport, "market": market, "side": side, "hit_prob": p,
+            "status": "won" if won else "lost", "projection": 1.8,
+            "actual": 2.0, "line": 1.5, "odds": -110}
+
+
+def side_book(side, n, p, realised, market="total_bases"):
+    """`n` bets claiming `p`, of which `realised` fraction actually won."""
+    wins = round(n * realised)
+    return ([bet(side, p, True, market) for _ in range(wins)]
+            + [bet(side, p, False, market) for _ in range(n - wins)])
+
+
+# --- the restatement journalfit was missing ----------------------------------
+def test_an_under_bet_is_restated_as_the_over_not_landing():
+    def check(side, status, p_over, hit):
+        got = as_over(0.58, side, status)
+        assert abs(got[0] - p_over) < 1e-9 and got[1] == hit, (side, status, got)
+
+    check("OVER", "won", 0.58, 1)
+    check("OVER", "lost", 0.58, 0)
+    # The two that were wrong: a winning UNDER is an over that MISSED.
+    check("UNDER", "won", 0.42, 0)
+    check("UNDER", "lost", 0.42, 1)
+
+
+def test_the_restatement_guards_degenerate_claims():
+    for bad in (None, 0.0, 1.0, -0.2, 1.4):
+        assert as_over(bad, "OVER", "won") is None
+
+
+def test_a_directional_lean_survives_the_restatement():
+    """The whole point. Pooling raw hit_prob makes a leaning book look
+    calibrated; restating to P(over) leaves the lean visible.
+
+    **The first fixture here did not demonstrate that, and passed for two
+    months on a floating-point accident.** It had 100 unders claiming 0.60
+    of which exactly 60 won — unders landing precisely at their claim. Work
+    it through and the two gaps are algebraically identical: with `w_u`
+    under-wins out of `n_u` at claim `p`, the naive and restated gaps differ
+    by exactly `2*(n_u*p - w_u)/N`, which is zero when the unders are
+    calibrated. Both sides came to -12/220, and `abs(a) < abs(b)` between
+    two equal numbers turned on the order the sums accumulated: it held by
+    2.7e-15 on x86 Linux and failed on an ARM Mac.
+
+    The repair is the fixture, not the tolerance. To show restatement
+    exposing something, the two sides have to CANCEL when pooled naively:
+    overs landing under their claim and unders landing over theirs. Then
+    the naive gap is 0.0 — a book that looks perfectly calibrated — and the
+    restated gap is -15 points, because every under now counts as evidence
+    about the over instead of quietly offsetting it.
+    """
+    rows = []
+    # Overs claim 60% and land 45%.
+    for _ in range(45):
+        rows.append(("OVER", 0.60, True))
+    for _ in range(55):
+        rows.append(("OVER", 0.60, False))
+    # Unders claim 60% and land 75% — the mirror miss, which is what makes
+    # the naive pooling cancel to nothing.
+    for _ in range(75):
+        rows.append(("UNDER", 0.60, True))
+    for _ in range(25):
+        rows.append(("UNDER", 0.60, False))
+
+    naive = [(p, 1 if won else 0) for _, p, won in rows]
+    restated = [as_over(p, s, "won" if won else "lost") for s, p, won in rows]
+
+    # Pooled on raw hit_prob the book looks exactly calibrated…
+    naive_gap = sum(o for _, o in naive) / len(naive) - 0.60
+    assert abs(naive_gap) < 1e-9, naive_gap
+
+    # …restated to P(over) it does not, because the unders now count as
+    # evidence ABOUT the over and stop cancelling.
+    over_claim = sum(p for p, _ in restated) / len(restated)
+    over_real = sum(o for _, o in restated) / len(restated)
+    restated_gap = over_real - over_claim
+    assert abs(restated_gap - (-0.15)) < 1e-9, restated_gap
+
+    # A margin, not a strict inequality between two quantities that could
+    # be equal. This is the assertion that had no business being tight.
+    assert abs(restated_gap) > abs(naive_gap) + 0.10, \
+        "restating did not expose the lean"
+
+
+def test_the_restatement_adds_nothing_when_the_unders_are_calibrated():
+    """The case the old fixture accidentally built, kept deliberately so
+    the equality is documented rather than rediscovered as a flake.
+
+    When the unders land exactly at their claim there is nothing for the
+    restatement to expose, and the two gaps agree to the last bit that
+    floating point allows. A test asserting a strict difference here is
+    asserting noise.
+    """
+    rows = ([("OVER", 0.60, True)] * 60 + [("OVER", 0.60, False)] * 60
+            + [("UNDER", 0.60, True)] * 60 + [("UNDER", 0.60, False)] * 40)
+    naive = [(p, 1 if won else 0) for _, p, won in rows]
+    restated = [as_over(p, s, "won" if won else "lost") for s, p, won in rows]
+    naive_gap = sum(o for _, o in naive) / len(naive) - 0.60
+    over_claim = sum(p for p, _ in restated) / len(restated)
+    over_real = sum(o for _, o in restated) / len(restated)
+    assert abs(abs(naive_gap) - abs(over_real - over_claim)) < 1e-9
+    assert abs(naive_gap - (-12 / 220)) < 1e-9
+
+
+# --- the asymmetry test ------------------------------------------------------
+def test_a_big_but_unproven_difference_is_not_called_no_lean():
+    """The branch easiest to write badly, and the one this journal lands in.
+
+    Overs missing their claim by twelve points more than unders, at z ≈ 1.8,
+    is not "the two sides look alike" — it is a large difference the sample
+    cannot yet confirm. The first draft printed "the two sides miss their
+    claims by similar amounts", which would have thrown away the strongest
+    hypothesis on the page.
+    """
+    rows = (side_book("OVER", 142, 0.58, 61 / 142)
+            + side_book("UNDER", 85, 0.58, 47 / 85))
+    o, u = sb._split(rows)
+    a = sb.asymmetry(sb.calibration_gap(o), sb.calibration_gap(u))
+    assert 1.0 < abs(a["z"]) < 2.0, a          # the fixture is in the branch
+    assert abs(a["diff"]) > 0.10, "not actually a big difference"
+
+    out = _run(rows)
+    assert "SUGGESTIVE, NOT PROVEN" in out
+    assert "similar amounts" not in out
+    assert "leading hypothesis, not a finding" in out
+    assert "to reach two sigma" in out
+
+
+def test_a_genuinely_flat_pair_of_sides_says_no_lean():
+    """The other side of that branch — it must still be able to say no."""
+    rows = (side_book("OVER", 150, 0.58, 0.52)
+            + side_book("UNDER", 150, 0.58, 0.53))
+    out = _run(rows)
+    assert "NO LEAN VISIBLE" in out
+    assert "SUGGESTIVE" not in out
+
+
+def test_a_selected_but_unbiased_book_reports_no_finding():
+    """Both sides miss their claim by the same amount — the winner's curse
+    applied evenly. That is not a side bias and must not read as one."""
+    rows = (side_book("OVER", 120, 0.58, 0.50)
+            + side_book("UNDER", 90, 0.58, 0.50))
+    o, u = sb._split(rows)
+    a = sb.asymmetry(sb.calibration_gap(o), sb.calibration_gap(u))
+    assert abs(a["z"]) < 2, a
+    assert abs(a["diff"]) < 0.02
+
+
+def test_a_genuine_over_lean_is_found():
+    rows = (side_book("OVER", 150, 0.58, 0.40)
+            + side_book("UNDER", 150, 0.58, 0.58))
+    o, u = sb._split(rows)
+    a = sb.asymmetry(sb.calibration_gap(o), sb.calibration_gap(u))
+    assert a["diff"] < 0, "the over side should be the one missing"
+    assert a["z"] < -2, a
+
+
+def test_the_gap_is_realised_minus_claimed():
+    """Sign convention, stated once so the report cannot invert it: negative
+    means the model claimed more than it delivered."""
+    s = sb.calibration_gap(side_book("OVER", 100, 0.60, 0.45))
+    assert abs(s["claimed"] - 0.60) < 1e-9
+    assert abs(s["realised"] - 0.45) < 1e-9
+    assert s["gap"] < 0
+
+
+def test_the_error_is_poisson_binomial_not_a_pooled_rate():
+    """Each bet carries its own claim, so the variance is the sum of
+    p(1-p). A book of near-certain claims has a much smaller error than a
+    book of coin flips at the same count, and a pooled rate would miss it."""
+    tight = [bet("OVER", 0.95, i < 95) for i in range(100)]
+    loose = [bet("OVER", 0.50, i < 50) for i in range(100)]
+    assert sb.calibration_gap(tight)["se"] < sb.calibration_gap(loose)["se"]
+
+
+# --- the report --------------------------------------------------------------
+def _run(rows, **kw):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        sb.report(rows, **kw)
+    return " ".join(buf.getvalue().split())
+
+
+def test_the_report_warns_that_the_levels_are_contaminated():
+    """Someone reading only the per-side gaps would conclude both sides are
+    broken. The selection effect has to be named where it is visible."""
+    out = _run(side_book("OVER", 60, 0.58, 0.50)
+               + side_book("UNDER", 60, 0.58, 0.50))
+    assert "Read the DIFFERENCE, not the levels" in out
+    assert "selection effect" in out
+
+
+def test_a_thin_side_blocks_the_test_rather_than_guessing():
+    out = _run(side_book("OVER", 200, 0.58, 0.40)
+               + side_book("UNDER", 5, 0.58, 0.60))
+    assert "Not enough on one side" in out
+    assert "REAL." not in out
+
+
+def test_a_found_lean_says_the_temperature_cannot_fix_it():
+    out = _run(side_book("OVER", 150, 0.58, 0.40)
+               + side_book("UNDER", 150, 0.58, 0.58))
+    assert "REAL." in out
+    assert "temperature cannot correct this" in out
+
+
+def test_the_explainer_names_both_fitters_and_how_they_differ():
+    assert "engine/backtest.py" in sb.EXPLAIN
+    assert "engine/journalfit.py" in sb.EXPLAIN
+    assert "intercept" in sb.EXPLAIN
+
+
+def test_every_market_is_listed_even_when_it_cannot_be_tested():
+    """Showing only the testable markets let the aggregate be driven by
+    bets that never appeared on the page.
+
+    On the real journal the table printed hits +0.9% and total_bases -7.6%
+    under a book-wide -9.7%, and the 40 bets it had silently dropped
+    carried -36.7%. A reader would have concluded the lean lived in
+    total_bases. It did not — it lived entirely in what the table hid.
+    """
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "hits")
+            + side_book("OVER", 8, 0.58, 0.10, "strikeouts")
+            + side_book("UNDER", 6, 0.58, 0.90, "strikeouts"))
+    out = _run(rows)
+    assert "strikeouts" in out, "a market too thin to test was hidden"
+    assert "thin" in out
+    assert "(all thin, pooled)" in out
+
+
+def test_a_book_leaning_harder_than_any_of_its_markets_is_flagged():
+    """Simpson's check. A whole that leans harder than every part is not
+    those parts leaning, and acting on the aggregate would aim at the
+    wrong market."""
+    rows = (side_book("OVER", 60, 0.58, 0.55, "hits")
+            + side_book("UNDER", 40, 0.58, 0.56, "hits")
+            + side_book("OVER", 60, 0.58, 0.54, "total_bases")
+            + side_book("UNDER", 40, 0.58, 0.55, "total_bases")
+            # The thin market carrying the whole signal.
+            + side_book("OVER", 15, 0.58, 0.10, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.95, "strikeouts"))
+    out = _run(rows)
+    assert "sits OUTSIDE the range" in out
+    assert "not those parts leaning" in out
+
+
+def test_no_simpson_warning_when_the_book_sits_inside_its_markets():
+    """It must be able to stay quiet, or the warning means nothing."""
+    rows = (side_book("OVER", 60, 0.58, 0.45, "hits")
+            + side_book("UNDER", 40, 0.58, 0.58, "hits")
+            + side_book("OVER", 60, 0.58, 0.46, "total_bases")
+            + side_book("UNDER", 40, 0.58, 0.57, "total_bases"))
+    out = _run(rows)
+    assert "sits OUTSIDE the range" not in out
+
+
+def test_markets_sharing_a_mechanism_are_grouped_and_labelled():
+    """The cut that made 40 scattered thin bets add up to something.
+
+    strikeouts and outs are both pitcher props, and a pitcher prop lives on
+    how long the manager leaves him in — a decision, not a talent
+    measurement. Individually neither market has the bets to say anything;
+    together they are a hypothesis with a mechanism.
+    """
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases")
+            + side_book("OVER", 20, 0.58, 0.30, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.60, "outs"))
+    out = _run(rows)
+    assert "BY FAMILY" in out
+    assert "(pitcher)" in out and "(hitter)" in out
+    # The label must not be truncated back into meaninglessness.
+    assert "(pitch)" not in out and "(hitte)" not in out
+
+
+def test_the_family_cut_admits_it_was_chosen_after_the_fact():
+    """It uses engine/parlays.FAMILY, which predates this file — but the
+    decision to look was made after reading the per-market table, so it
+    generates a hypothesis rather than confirming one. Saying so is the
+    difference between a lead and a licence."""
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases")
+            + side_book("OVER", 20, 0.58, 0.30, "strikeouts")
+            + side_book("UNDER", 10, 0.58, 0.60, "outs"))
+    out = _run(rows)
+    assert "chosen after reading the table" in out
+    assert "needs confirming on bets not yet made" in out
+
+
+def test_the_family_section_is_skipped_when_there_is_only_one():
+    """A single family is the headline again, and a table of one row that
+    restates the total teaches nobody anything."""
+    rows = (side_book("OVER", 60, 0.58, 0.50, "hits")
+            + side_book("UNDER", 40, 0.58, 0.52, "total_bases"))
+    out = _run(rows)
+    assert "BY FAMILY" not in out
+
+
+def test_an_empty_journal_does_not_divide_by_zero():
+    assert sb.report([]) == 0
+    s = sb.calibration_gap([])
+    assert s["n"] == 0 and s["z"] == 0.0
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
