@@ -85,6 +85,31 @@ def _rule(block: str, selector: str) -> str:
     return block[start:block.index("}", start)]
 
 
+def _coarse_anchor_rules():
+    """(selector, body) for every rule inside a `@media (pointer: coarse)`
+    block that targets a descendant anchor.
+
+    Every coarse block, not the first: the file has several, and which one
+    carries this rule is not a promise the stylesheet makes."""
+    out = []
+    for m in re.finditer(r"@media \(pointer: coarse\)[^{]*\{", CSS):
+        depth, k = 0, m.end() - 1
+        while k < len(CSS):
+            if CSS[k] == "{":
+                depth += 1
+            elif CSS[k] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        block = _rules_only(CSS[m.end():k])
+        for r in re.finditer(r"([^{}]+)\{([^{}]*)\}", block):
+            sel = " ".join(r.group(1).split())
+            if "> a" in sel:
+                out.append((sel, r.group(2)))
+    return out
+
+
 def test_the_drawer_group_heads_are_thumb_sized():
     """13px of text was the whole target. Padding buys the height and a
     negative margin gives most of it back, so the drawer grows ~8px per
@@ -131,6 +156,55 @@ def test_the_retired_footer_class_left_no_css_behind():
     assert ".sb-foot-links {" not in CSS
     assert ".sb-foot-links .sport-btn" not in _rules_only(CSS), \
         "a live rule still targets the retired class"
+
+
+def test_the_standalone_link_targets_name_classes_that_exist():
+    """The coarse-pointer rule for standalone inline links grew its hit
+    box for three named elements: a trader handle, a market question, a
+    wallet address. Two of the three selectors still matched; the market
+    question's class had been renamed `.pm-title` -> `.pm-d-title` and the
+    rule quietly stopped applying to it, found by the nightly sweep on
+    2026-10-04.
+
+    That is the WORST shape a tap-target defect can take, because nothing
+    looks wrong: the element renders, the rule parses, the stylesheet is
+    green, and the only symptom is a 16px link on a phone. A dead
+    selector cannot report itself — so read the selector's class names
+    back out and require that the renderer actually emits each one.
+
+    Source-level and store-free on purpose: a tap-target claim that
+    needed a browser, a database or a built slate to check would pass on
+    CI and rot on the laptop, or the reverse."""
+    rendered = "\n".join(
+        open(os.path.join(ROOT, *parts), encoding="utf-8").read()
+        for parts in (("web", "js", "app.js"),
+                      ("web", "js", "visuals.js"),
+                      ("web", "index.html")))
+
+    rules = _coarse_anchor_rules()
+    assert rules, "the standalone-link tap target rule is gone"
+    for selector, body in rules:
+        assert "padding" in body, f"{selector!r} no longer grows a hit box"
+        classes = re.findall(r"\.(-?[_a-zA-Z][\w-]*)", selector)
+        assert classes, f"{selector!r} names no class to check"
+        for cls in classes:
+            # The class as the renderer would write it. A bare substring
+            # search would call `.pm-title` live off `pm-d-title`, which
+            # is the exact rename that caused this defect.
+            assert re.search(r"[\"'` ]" + re.escape(cls) + r"[\"'` ]",
+                             rendered), \
+                (f".{cls} in {selector!r} matches no element the site "
+                 f"renders — the rule is dead and the link is unpadded")
+
+
+def test_the_market_question_link_is_one_of_those_targets():
+    """The specific regression, named so a later pass cannot 'simplify'
+    the check above by dropping the market question from the rule."""
+    sels = " ".join(sel for sel, _body in _coarse_anchor_rules())
+    assert ".pm-d-title > a" in sels, \
+        "the Polymarket question link lost its thumb target"
+    assert ".pm-title >" not in sels, \
+        "the retired class name is back; the rule matches nothing again"
 
 
 def test_the_add_to_bets_button_is_reachable():

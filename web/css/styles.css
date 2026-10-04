@@ -4553,7 +4553,7 @@ body.pk-open { overflow: hidden; }
    padding grows the hit box; the matching negative margin keeps the line
    box the size it was, so nothing on the page moves. */
 @media (pointer: coarse) {
-  .player > a, .dl-main > a, .pm-title > a {
+  .player > a, .dl-main > a, .pm-d-title > a {
     display: inline-block; padding: 8px 0; margin: -8px 0;
   }
 }
