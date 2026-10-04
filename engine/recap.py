@@ -8,7 +8,9 @@ arithmetic the Record page does not already trust.
 
 Settled picks only (won, lost, push; voids out), by their game's calendar
 day, the last DAYS days ending today (Eastern). The books are the ones the
-site publishes, each on its own, never pooled. Standard library only.
+site publishes, each on its own, never pooled. A benched league stays out,
+as it does from every other figure on the Record page (ledger.off_record_sql).
+Standard library only.
 """
 from __future__ import annotations
 
@@ -38,13 +40,15 @@ def recap(conn, now=None, days: int = DAYS) -> dict:
     end = _today(now)
     start = end - _dt.timedelta(days=days - 1)
     out = {"from": start.isoformat(), "to": end.isoformat(), "books": []}
+    from .ledger import off_record_sql
+    bench_sql, bench_args = off_record_sql()
     for label, cats in BOOKS:
         marks = ",".join("?" * len(cats))
         rows = conn.execute(
             f"SELECT sport, player, market, side, line, odds, hit_prob, status, pnl_units, "
             f"COALESCE(game_day, date) AS day FROM bets WHERE category IN ({marks}) "
-            f"AND status IN ('won','lost','push') AND COALESCE(game_day, date) BETWEEN ? AND ?",
-            (*cats, start.isoformat(), end.isoformat())).fetchall()
+            f"AND status IN ('won','lost','push') AND COALESCE(game_day, date) BETWEEN ? AND ?{bench_sql}",
+            (*cats, start.isoformat(), end.isoformat(), *bench_args)).fetchall()
         if not rows:
             continue
         w = sum(1 for r in rows if r[7] == "won")

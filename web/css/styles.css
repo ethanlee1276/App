@@ -5608,6 +5608,12 @@ body.pk-open { overflow: hidden; }
   border: var(--hairline) solid var(--border); text-transform: none;
   letter-spacing: 0; }
 .mb-form input[type="number"] { max-width: 100px; }
+/* The owner forms' paste boxes (Zeno legs, research picks) in the page's
+   type, not the browser's default monospace; the size stays the phone's
+   16px no-zoom rule's. */
+.mb-form textarea { font-family: inherit; line-height: 1.45; padding: 7px 9px;
+  background: var(--bg-2); color: var(--text); border: var(--hairline) solid var(--border);
+  text-transform: none; letter-spacing: 0; }
 .mb-add { align-self: flex-end; }
 .mb-warn { color: var(--warn); font-size: var(--fs-sm); min-height: 1em; }
 .mb-io { font-size: var(--fs-xs); padding: 4px 10px; margin-left: 6px; }

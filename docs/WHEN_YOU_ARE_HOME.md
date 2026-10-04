@@ -54,6 +54,16 @@ picks before kickoff, one a line:
 After the week settles, `python3 -m engine.scancard --season 2026 --week 5`
 grades them.
 
+**Nothing to run for these three; they show up by themselves.**
+- *Better-price alert:* when a posted Most Likely pick's price gets 2+
+  points better, it appears on the Alerts page ("Better price: …"), and a
+  player or team watch catches it. "Now inside the price it is worth"
+  means the new price is worth taking by the pick page's own rule.
+- *This week:* the Record page now opens with a card for the last seven
+  days, one per book: record, units, hit rate vs what we said vs what the
+  price said, the best hit and the toughest miss.
+- *Why line:* every Most Likely row shows its first reason under the bet.
+
 ### NFL research: the weekend's scorecard (2026-10-04, night)
 
 **S1. Score the six research reports against the results — Tuesday**, once

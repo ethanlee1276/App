@@ -4,7 +4,7 @@ Ethan, 2026-10-04: "do all of it" — the weekly recap. engine/recap reads
 the journal's settled picks from the last seven Eastern days, per published
 book, and the export carries it as weekly_recap for the Record page's
 "This week" card. Checks: the window is seven days by game day; voids and
-open picks stay out; the books never pool; the best hit is the longest
+open picks stay out; the books never pool; a benched league stays out; the best hit is the longest
 price that won and the toughest miss the highest claim that lost; the
 export carries it; the card draws it and draws nothing for an empty week.
 
@@ -86,6 +86,14 @@ def test_the_best_hit_and_the_toughest_miss():
     assert b["best"]["odds"] == 135 and b["worst"]["claim"] == 0.7
     assert b["hit"] == 0.5 and b["claimed"] == round((0.62 + 0.45 + 0.70 + 0.50) / 4, 3)
     assert b["by_sport"] == {"nfl": {"w": 2, "l": 2}}
+
+
+def test_a_benched_league_stays_out():
+    c = _conn()
+    _bet(c, "likely_live", "won", "2026-10-04", pnl=0.8)
+    _bet(c, "likely_live", "lost", "2026-10-04", pnl=-1, sport="wnba")
+    b = _book(recap.recap(c, now=NOW), "Most Likely")
+    assert (b["w"], b["l"]) == (1, 0) and "wnba" not in b["by_sport"]
 
 
 def test_the_export_carries_it():
