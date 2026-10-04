@@ -111,6 +111,17 @@ FOOTBALL = ("nfl", "cfb")
 #: and is served on the same inference: confirmed by its first live game.
 HOOPS = ("nba", "wnba")
 
+#: Hockey: the same `sports/{sport}/{league}/summary` family, read with
+#: the basketball reader (a top-level `plays` list, each play naming its
+#: period, clock, team, participants, type and the score after it). Ethan,
+#: 2026-10-04: "Nhl play by plays are not working" — the league had no
+#: source at all and every live card said so. The shape is ESPN's shared
+#: summary shape, not yet seen on a live hockey game from this box; a
+#: summary that carries no `plays` list is reported as such
+#: (`livescore_build.attach_plays`, state "no_feed"), never as a quiet
+#: game. The rows are `kind: "hockey"` so the page words them as hockey.
+HOCKEY = ("nhl",)
+
 #: ONE FETCH PER POLL, which is the floor: the scoreboard loop runs
 #: every `LIVE_FAST_S` — twelve seconds — and nothing is gained by
 #: caching a summary for longer than the gap between the two builds
@@ -511,7 +522,7 @@ def hoops_plays(payload: dict, league: str = "wnba", limit: int = 6,
         aid = str((first or {}).get("id") or "")
         ptype = p.get("type") or {}
         rows.append({
-            "kind": "hoops",
+            "kind": "hockey" if league in HOCKEY else "hoops",
             "id": pid,
             "period": _int((p.get("period") or {}).get("number")),
             "clock": str((p.get("clock") or {}).get("displayValue") or ""),

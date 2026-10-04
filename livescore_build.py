@@ -349,7 +349,7 @@ def attach_plays(games: list[dict], league: str,
     from engine.sources import espnplays
     if league in espnplays.FOOTBALL:
         noun = "drives"
-    elif league in espnplays.HOOPS:
+    elif league in espnplays.HOOPS or league in espnplays.HOCKEY:
         noun = "plays"
     else:
         for g in games:
@@ -378,7 +378,7 @@ def attach_plays(games: list[dict], league: str,
     served, waiting = live[:PLAYS_MAX_GAMES], live[PLAYS_MAX_GAMES:]
     for g in waiting:
         g["plays_state"] = "capped"
-    got = failed = deep = boxes = 0
+    got = failed = deep = boxes = nofeed = 0
     for g in served:
         try:
             payload = espnplays.fetch_summary(league, g["event_id"])
@@ -392,6 +392,13 @@ def attach_plays(games: list[dict], league: str,
                 drive = espnplays.current_drive(payload, league)
                 if drive:
                     g["drive"] = drive
+            elif not isinstance((payload or {}).get("plays"), list):
+                # The summary came back without a play list: say so,
+                # rather than "No plays yet." on a game in its second
+                # period (hockey's first live games from this box).
+                g["plays_state"] = "no_feed"
+                nofeed += 1
+                continue
             else:
                 g["plays"] = espnplays.hoops_plays(payload, league,
                                                    PLAYS_PER_GAME, sides=sides)
@@ -431,6 +438,8 @@ def attach_plays(games: list[dict], league: str,
     note = f"{noun}: {got} of {len(live)} live game(s)"
     if failed:
         note += f", {failed} feed(s) unreachable"
+    if nofeed:
+        note += f", {nofeed} summary(ies) with no play list"
     if skipped:
         note += (f", {skipped} past the {PLAYS_MAX_GAMES}-game cap "
                  f"({carried} carried forward, "

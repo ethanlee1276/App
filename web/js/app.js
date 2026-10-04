@@ -46282,6 +46282,8 @@ function pbpGroups(d) {
   // (T6 / Q3), in the order the plays arrived, then show newest first.
   const label = d.league === "mlb"
     ? (p) => `${p.half || ""}${p.inning || ""}`
+    : d.league === "nhl"
+    ? (p) => (!p.period ? "" : p.period <= 3 ? `P${p.period}` : p.period === 4 ? "OT" : p.period === 5 ? "SO" : `${p.period - 3}OT`)
     : (p) => (p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "");
   const groups = [];
   const byKey = {};
@@ -46539,6 +46541,9 @@ const PLAYS_EMPTY = {
   capped: "Waiting its turn for the play feed — the score above is still live.",
   carried: "Waiting its turn for the play feed — the score above is still live.",
   no_source: "No play-by-play source for this league yet.",
+  /* The game feed answered without a play list (hockey's first live
+     games, 2026-10-04): a different fact from a quiet game. */
+  no_feed: "The game feed is not carrying plays for this game yet. The score above is still live.",
   ok: "No plays yet.",
 };
 
@@ -46616,6 +46621,23 @@ function playsHTML(g) {
       <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
       ${at}</div>`;
   };
+  /* HOCKEY ROWS (Ethan, 2026-10-04: "Nhl play by plays are not
+     working" — the league had no source). The same structured row as
+     basketball, read in hockey's words: periods P1-P3, then OT (a
+     regular-season shootout is ESPN's period 5), and a goal tagged as a
+     goal rather than as points. */
+  const hockeyPeriod = (n) => !n ? "" : n <= 3 ? `P${n}` : n === 4 ? "OT" : n === 5 ? "SO" : `${n - 3}OT`;
+  const hockeyRow = (p) => {
+    const when = `${hockeyPeriod(p.period)}${p.clock ? ` ${p.clock}` : ""}`;
+    const tag = p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "";
+    const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
+      <span class="lb-inn">${escapeHtml(when)}</span>
+      <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
+      ${at}</div>`;
+  };
   const d = g.drive;
   const driveLine = d && d.team ? `<div class="lb-drive">${escapeHtml(d.team)} drive
       · ${d.plays} play${d.plays === 1 ? "" : "s"} · ${d.yards} yd${
@@ -46623,6 +46645,7 @@ function playsHTML(g) {
   const row = (p) => {
     if (p.kind === "football") return footballRow(p);
     if (p.kind === "hoops") return hoopsRow(p);
+    if (p.kind === "hockey") return hockeyRow(p);
     const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
     const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
     const at = (p.away_score != null && p.home_score != null)
@@ -46950,7 +46973,12 @@ async function renderLiveBoard() {
     b.addEventListener("click", () => {
       const want = b.dataset.chip;
       _liveChip = want;
-      if (want !== "all" && want !== state.sport && SPORT_CODES.includes(want)) {
+      /* LIVE_FEEDS, NOT SPORT_CODES: the route list never carried hockey,
+         so the NHL chip filtered the cards and left the MLB bets under
+         them (Ethan, 2026-10-04: "MLB bets are showing in the live tab
+         for nhl bets"). Every league with a live feed has a sportbar
+         button to switch through. */
+      if (want !== "all" && want !== state.sport && (SPORT_CODES.includes(want) || LIVE_FEEDS[want])) {
         // `_liveChipSport` IS DELIBERATELY NOT TOUCHED HERE. Setting it
         // to the chosen league looked like belt and braces and was a
         // dead guard: on the fallback below it makes the follow rule at
