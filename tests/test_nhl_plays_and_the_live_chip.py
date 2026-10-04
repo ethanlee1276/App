@@ -108,7 +108,7 @@ def test_the_page_words_hockey_in_periods_and_goals():
     if not node:
         return
     rows = E.hoops_plays(_payload(), "nhl", 0, sides={EDM: "EDM", CGY: "CGY"})
-    prog = (_js(["playsHTML", "pbpGroups"])
+    prog = (_js(["hockeyPeriod", "playsHTML", "pbpGroups"])
             + "\nconst escapeHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');"
             + "\nconst trueMinus = (s) => s;"
             + f"\nconst rows = {json.dumps(rows)};"

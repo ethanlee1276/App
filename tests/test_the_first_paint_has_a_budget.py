@@ -32,7 +32,9 @@ HTML = (WEB / "index.html").read_text()
 #: the facts sorted for the bet, the corners he sees, the back-and-forth
 #: script — ~2.5 KB), the change Ethan asked for that day.
 APP_JS_BUDGET_KB = 476
-BOOT_BUDGET_KB = 590
+#: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
+#: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
+BOOT_BUDGET_KB = 591
 
 
 def _gz_trimmed(rel: str) -> int:

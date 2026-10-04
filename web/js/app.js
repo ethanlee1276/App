@@ -46282,8 +46282,7 @@ function pbpGroups(d) {
   // (T6 / Q3), in the order the plays arrived, then show newest first.
   const label = d.league === "mlb"
     ? (p) => `${p.half || ""}${p.inning || ""}`
-    : d.league === "nhl"
-    ? (p) => (!p.period ? "" : p.period <= 3 ? `P${p.period}` : p.period === 4 ? "OT" : p.period === 5 ? "SO" : `${p.period - 3}OT`)
+    : d.league === "nhl" ? (p) => hockeyPeriod(p.period)
     : (p) => (p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "");
   const groups = [];
   const byKey = {};
@@ -46547,6 +46546,12 @@ const PLAYS_EMPTY = {
   ok: "No plays yet.",
 };
 
+/* Hockey's periods: P1-P3, then OT; a regular-season shootout is ESPN's
+   period 5. */
+function hockeyPeriod(n) {
+  return !n ? "" : n <= 3 ? `P${n}` : n === 4 ? "OT" : n === 5 ? "SO" : `${n - 3}OT`;
+}
+
 function playsHTML(g) {
   const plays = (g.plays || []).filter((p) => p && p.event);
   if (!plays.length) {
@@ -46608,28 +46613,16 @@ function playsHTML(g) {
      is what the play put on the board and `p.shot` tells a miss from a
      rebound. Composed from those numbers and the type label, never from
      the play's written account, which the parser does not read. */
+  /* HOCKEY RIDES THE SAME ROW (Ethan, 2026-10-04: "Nhl play by plays
+     are not working" — the league had no source): its periods, and a
+     goal tagged as a goal rather than as points. */
   const hoopsRow = (p) => {
-    const q = p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
+    const ice = p.kind === "hockey";
+    const q = ice ? hockeyPeriod(p.period) : p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
     const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
-    const tag = p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
+    const tag = ice ? (p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "")
+      : p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
       : p.shot ? ` <span class="lb-miss">miss</span>` : "";
-    const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
-    const at = (p.away_score != null && p.home_score != null)
-      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
-    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
-      <span class="lb-inn">${escapeHtml(when)}</span>
-      <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
-      ${at}</div>`;
-  };
-  /* HOCKEY ROWS (Ethan, 2026-10-04: "Nhl play by plays are not
-     working" — the league had no source). The same structured row as
-     basketball, read in hockey's words: periods P1-P3, then OT (a
-     regular-season shootout is ESPN's period 5), and a goal tagged as a
-     goal rather than as points. */
-  const hockeyPeriod = (n) => !n ? "" : n <= 3 ? `P${n}` : n === 4 ? "OT" : n === 5 ? "SO" : `${n - 3}OT`;
-  const hockeyRow = (p) => {
-    const when = `${hockeyPeriod(p.period)}${p.clock ? ` ${p.clock}` : ""}`;
-    const tag = p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "";
     const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
@@ -46644,8 +46637,7 @@ function playsHTML(g) {
       d.elapsed ? ` · ${escapeHtml(d.elapsed)}` : ""}</div>` : "";
   const row = (p) => {
     if (p.kind === "football") return footballRow(p);
-    if (p.kind === "hoops") return hoopsRow(p);
-    if (p.kind === "hockey") return hockeyRow(p);
+    if (p.kind === "hoops" || p.kind === "hockey") return hoopsRow(p);
     const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
     const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
     const at = (p.away_score != null && p.home_score != null)
