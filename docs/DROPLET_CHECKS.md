@@ -6214,3 +6214,11 @@ print(d.get('plays_note') or d.get('note') or '')
 "
 ```
 
+## TD board top, five-season replay: 2026-10-04 (night)
+
+`engine.tdbacktest --board`, 96 slates: top 1 claimed 62.7% / landed 67.7%
+(+5.0, 95% [-4.0, +14.1]); top 2 60.1/64.6; top 3 58.1/64.2 (+6.1, [+0.2,
++11.7]); top 5 55.5/59.8 (+4.3, [-0.3, +8.8]); top 10 51.1/53.0; top 20
+45.6/46.6; top 40 41.3/41.7. The top under-claims and the rest is on the
+number — the temperature (T ≈ 1.12) squeezes the spread. Tested as one
+hinge above a fixed 40% knee: `engine.tdtop` (runbook M2).

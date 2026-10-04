@@ -45,6 +45,17 @@ cd /srv/qellys && sudo -u qellys nohup nice -n 19 python3 -m engine.tdmanfit > /
 ```
 Check with `tail -8 /tmp/tdmanfit.log`; done when a line starts `saved;`.
 
+**M2. Is the top of our TD board too shy? One held-out fix** (paste it back;
+a few minutes). The five-season replay said our top 1/3/5 picks per slate
+land 5–6 points over their claim. This fits one extra term above a 40% knee
+and keeps it only if it wins on held-out seasons and closes that gap. It
+saves its verdict; nothing on the board changes until I wire a passing fit
+in:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdtop
+```
+
 **S1. Score the six research reports against the results — Tuesday**, once
 Monday night's game has settled (paste it back). Every report pick, our
 chance on the same bet, the price, and who was closer:
@@ -72,6 +83,7 @@ Already done and moved to DROPLET_CHECKS: the record recount and dates
 H1–H13/H15, the round-7 fits, the corner rules, and the TD injury test.
 
 1. **M1** — red-zone man coverage and touchdowns (background, paste).
+   **M2** — the top-of-board TD fix, held-out (paste).
 2. **S1** — Tuesday: score the six reports against the results (paste).
 3. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
    (5 minutes; step by step below). Still not set up.
