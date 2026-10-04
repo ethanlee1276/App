@@ -1,0 +1,48 @@
+{
+ "about": "Every pick with a stated chance in the six research reports Ethan pasted on 2026-10-04 (Jaguars @ Bengals and Broncos @ 49ers), for engine.scancard. prob is the midpoint of the report's stated range; price is the American price the report quoted (null when it quoted none). Ranges and prices are the reports' own, not checked.",
+ "season": 2026, "week": 4,
+ "claims": [
+  {"source": "Matchup scan", "team": "JAX", "player": "Bhayshul Tuten", "market": "rush_yds", "side": "OVER", "line": 55.5, "prob": 0.72, "price": -110},
+  {"source": "Matchup scan", "team": "JAX", "player": "Trevor Lawrence", "market": "pass_yds", "side": "UNDER", "line": 260.5, "prob": 0.69, "price": -111},
+  {"source": "Matchup scan", "team": "JAX", "player": "Parker Washington", "market": "rec_yds", "side": "OVER", "line": 74.5, "prob": 0.67, "price": -113},
+  {"source": "Matchup scan", "team": "CIN", "player": "Joe Burrow", "market": "pass_td", "side": "OVER", "line": 1.5, "prob": 0.65, "price": -194},
+
+  {"source": "Deep scan", "team": "JAX", "player": "Bhayshul Tuten", "market": "rush_yds", "side": "OVER", "line": 55.5, "prob": 0.735, "price": -110},
+  {"source": "Deep scan", "team": "CIN", "player": "Tee Higgins", "market": "receptions", "side": "OVER", "line": 4.5, "prob": 0.67, "price": 106},
+  {"source": "Deep scan", "team": "CIN", "player": "Ja'Marr Chase", "market": "receptions", "side": "OVER", "line": 6.5, "prob": 0.66, "price": -122},
+
+  {"source": "Odds card", "team": "CIN", "player": "Tee Higgins", "market": "receptions", "side": "OVER", "line": 3.5, "prob": 0.75, "price": null},
+  {"source": "Odds card", "team": "JAX", "player": "Bhayshul Tuten", "market": "rush_att", "side": "OVER", "line": 12.5, "prob": 0.64, "price": -132},
+  {"source": "Odds card", "team": "JAX", "player": "Parker Washington", "market": "receptions", "side": "OVER", "line": 4.5, "prob": 0.65, "price": null},
+  {"source": "Odds card", "team": "CIN", "player": "Tee Higgins", "market": "receptions", "side": "OVER", "line": 4.5, "prob": 0.58, "price": 110},
+  {"source": "Odds card", "team": "CIN", "player": "Ja'Marr Chase", "market": "receptions", "side": "OVER", "line": 6.5, "prob": 0.55, "price": -160},
+  {"source": "Odds card", "team": "CIN", "player": "Joe Burrow", "market": "pass_cmp", "side": "OVER", "line": 24.5, "prob": 0.53, "price": -112},
+  {"source": "Odds card", "team": "CIN", "player": "Mike Gesicki", "market": "receptions", "side": "OVER", "line": 2.5, "prob": 0.50, "price": -115},
+  {"source": "Odds card", "team": "JAX", "player": "Bhayshul Tuten", "market": "rush_yds", "side": "OVER", "line": 54.5, "prob": 0.58, "price": -114},
+
+  {"source": "Four props", "team": "CIN", "player": "Tee Higgins", "market": "receptions", "side": "OVER", "line": 4.5, "prob": 0.56, "price": 100},
+  {"source": "Four props", "team": "JAX", "player": "Parker Washington", "market": "receptions", "side": "OVER", "line": 5.5, "prob": 0.52, "price": 113},
+  {"source": "Four props", "team": "CIN", "player": "Chase Brown", "market": "rush_att", "side": "OVER", "line": 16.5, "prob": 0.53, "price": -105},
+  {"source": "Four props", "team": "JAX", "player": "Brenton Strange", "market": "rec_yds", "side": "OVER", "line": 35.5, "prob": 0.54, "price": -110},
+
+  {"source": "TD scan CIN-JAX 1", "team": "CIN", "player": "Chase Brown", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.54, "price": 105},
+  {"source": "TD scan CIN-JAX 1", "team": "CIN", "player": "Ja'Marr Chase", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.55, "price": 120},
+  {"source": "TD scan CIN-JAX 1", "team": "JAX", "player": "Bhayshul Tuten", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.50, "price": 100},
+  {"source": "TD scan CIN-JAX 1", "team": "CIN", "player": "Mike Gesicki", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.265, "price": 300},
+  {"source": "TD scan CIN-JAX 1", "team": "JAX", "player": "Parker Washington", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.355, "price": 140},
+  {"source": "TD scan CIN-JAX 1", "team": "CIN", "player": "Tee Higgins", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.375, "price": 155},
+
+  {"source": "TD scan CIN-JAX 2", "team": "CIN", "player": "Chase Brown", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.61, "price": -145},
+  {"source": "TD scan CIN-JAX 2", "team": "CIN", "player": "Ja'Marr Chase", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.565, "price": -120},
+  {"source": "TD scan CIN-JAX 2", "team": "JAX", "player": "Bhayshul Tuten", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.495, "price": 105},
+
+  {"source": "TD scan DEN-SF", "team": "SF", "player": "George Kittle", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.455, "price": 150},
+  {"source": "TD scan DEN-SF", "team": "SF", "player": "Christian McCaffrey", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.69, "price": -190},
+  {"source": "TD scan DEN-SF", "team": "DEN", "player": "J.K. Dobbins", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.465, "price": 130},
+  {"source": "TD scan DEN-SF", "team": "SF", "player": "Deebo Samuel Sr.", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.415, "price": 155},
+  {"source": "TD scan DEN-SF", "team": "SF", "player": "Mike Evans", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.405, "price": 155},
+  {"source": "TD scan DEN-SF", "team": "DEN", "player": "Jaylen Waddle", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.335, "price": 180},
+  {"source": "TD scan DEN-SF", "team": "DEN", "player": "Courtland Sutton", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.295, "price": 210},
+  {"source": "TD scan DEN-SF", "team": "DEN", "player": "RJ Harvey", "market": "anytime_td", "side": "OVER", "line": 0.5, "prob": 0.235, "price": 235}
+ ]
+}

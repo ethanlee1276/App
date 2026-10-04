@@ -33,48 +33,27 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
-### Touchdown picks: is our number or the price closer? (2026-10-04, latest)
+### NFL research: two new studies and the weekend's scorecard (2026-10-04, night)
 
-**T3. Our touchdown record against the prices we took** (paste it back).
-Every settled NFL anytime-TD pick on the Most Likely boards, one row per
-player per week, banded by the chance we claimed: what we said, what the
-price said, and how often he actually scored. Read-only, seconds:
+**M1. Red-zone man coverage and touchdowns, four seasons** (paste it back;
+10–20 minutes in the background). The touchdown scans' "Higgins beats man,
+Jacksonville plays man in the red zone" on top of our TD model, on the
+pre-registered bar. Nothing it finds moves a number:
 
 ```
-cd /srv/qellys && python3 - <<'PY'
-import sqlite3
-c = sqlite3.connect('file:data/ledger.db?mode=ro', uri=True)
-rows = c.execute("""SELECT date, player, MAX(hit_prob), MAX(status='won'), MAX(odds) FROM bets
-  WHERE sport='nfl' AND market='anytime_td' AND UPPER(side)='OVER'
-  AND category IN ('board','likely','likely_live','matchup_td') AND status IN ('won','lost')
-  GROUP BY date, player""").fetchall()
-imp = lambda o: 100 / (o + 100) if o > 0 else -o / (100 - o)
-for lo, hi in ((0, .3), (.3, .4), (.4, .5), (.5, .6), (.6, 1.01)):
-    b = [r for r in rows if r[2] is not None and r[4] and lo <= r[2] < hi]
-    if b:
-        print(f"{lo:.0%}-{min(hi,1):.0%}  n {len(b):3}  we said {sum(r[2] for r in b)/len(b):.0%}  "
-              f"price said {sum(imp(r[4]) for r in b)/len(b):.0%}  scored {sum(r[3] for r in b)/len(b):.0%}")
-print("all:", len(rows), "picks,", sum(r[3] for r in rows), "scored")
-PY
+cd /srv/qellys && sudo -u qellys nohup nice -n 19 python3 -m engine.tdmanfit > /tmp/tdmanfit.log 2>&1 &
+```
+Check with `tail -8 /tmp/tdmanfit.log`; done when a line starts `saved;`.
+
+**S1. Score the six research reports against the results — Tuesday**, once
+Monday night's game has settled (paste it back). Every report pick, our
+chance on the same bet, the price, and who was closer:
+
+```
+cd /srv/qellys && python3 -m engine.scancard
 ```
 
 ### NHL — later
-
-**N1. NHL play-by-play, during a live NHL game** (paste it back). Each
-live game should say `ok` with plays. `no_feed` means ESPN's hockey summary
-came back without a play list (then I switch the source to the NHL's own
-feed); `unreachable` means the fetch failed:
-
-```
-cd /srv/qellys && python3 -c "
-import json
-d = json.load(open('web/data/live_nhl.json'))
-for g in d.get('games') or []:
-    if (g.get('live') or {}).get('state') == 'live':
-        print(g.get('away'), '@', g.get('home'), g.get('plays_state'), len(g.get('plays') or []), [p.get('event') for p in (g.get('plays') or [])][-3:])
-print(d.get('plays_note') or d.get('note') or '')
-"
-```
 
 **H14. Later — once NHL picks have graded for a couple of weeks.** This
 makes the NHL Most Likely chances honest from their own record. It is the
@@ -92,17 +71,13 @@ Already done and moved to DROPLET_CHECKS: the record recount and dates
 (R1, R2), L1, the pre-game closes (P2-a), the backup check (P6-b), NHL
 H1–H13/H15, the round-7 fits, the corner rules, and the TD injury test.
 
-1. **N1** — next live NHL game: is the new play-by-play coming through?
-2. **T3** — tonight, once today's games settle: our TD record against the
-   prices (read-only, paste). It says whether our touchdown chances run low
-   on favourites, as the four TD scans claim.
+1. **M1** — red-zone man coverage and touchdowns (background, paste).
+2. **S1** — Tuesday: score the six reports against the results (paste).
 3. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
    (5 minutes; step by step below). Still not set up.
-4. **P29-a** — count the old name+PIN profiles (paste the number).
-5. **P3-a** — what the number check dropped this week (read-only, paste).
-6. **P28-a** — the security log (read-only, paste).
-7. **P31-a** — the usage counts, only if you have not turned them on yet.
-8. Later: **H14** (NHL calibration, once NHL picks have graded for two
+4. Later: **T3** again in a week or two (the TD record against the prices; its
+   command is in DROPLET_CHECKS under "N1 + T3"), the
+   usage-count report (`sudo -u qellys python3 -m engine.analytics report 7`), **H14** (NHL calibration, once NHL picks have graded for two
    weeks), **P9-a** (look at the Live tab during a game), **P45-a**
    (Android), **P10-a** (nothing to do).
 

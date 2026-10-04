@@ -6162,3 +6162,55 @@ group:
 cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl
 ```
 
+## N1 + T3 + P3-a + P28-a + P29-a + P31-a: done 2026-10-04 (night)
+
+N1: NHL play-by-play live — WPG @ DET `ok`, 6 plays, deep file and box score written.
+
+T3: 49 settled NFL TD picks, 20 scored. 50%+ claims: 16 picks, said 62%, price 64%, scored 81% (13 of 16; p ≈ 0.08 at our number). 30–50%: 32 picks, said 38%, price 42%, scored 22%. All: expected 22.3, price 24.0, actual 20. Our chances look too bunched; likelycal can only pull toward the price, so the five-season replay (`engine.tdbacktest --board`) is the test of record.
+
+P3-a: nothing dropped. P28-a: 10/03 rate-limit hits on a Cloudflare edge range (before the Cloudflare list was installed); 10/04 3:50 and 4:15 AM ET real visitors over 300 reads a minute during the outage (reload storm); 10/03 sign-ups from the box itself. P29-a: 0 profiles, QB_LEGACY_PROFILES off. P31-a: privacy page live, QB_ANALYTICS 1. Both restarted.
+
+The blocks as they were:
+
+#### Touchdown picks: is our number or the price closer? (2026-10-04, latest)
+
+**T3. Our touchdown record against the prices we took** (paste it back).
+Every settled NFL anytime-TD pick on the Most Likely boards, one row per
+player per week, banded by the chance we claimed: what we said, what the
+price said, and how often he actually scored. Read-only, seconds:
+
+```
+cd /srv/qellys && python3 - <<'PY'
+import sqlite3
+c = sqlite3.connect('file:data/ledger.db?mode=ro', uri=True)
+rows = c.execute("""SELECT date, player, MAX(hit_prob), MAX(status='won'), MAX(odds) FROM bets
+  WHERE sport='nfl' AND market='anytime_td' AND UPPER(side)='OVER'
+  AND category IN ('board','likely','likely_live','matchup_td') AND status IN ('won','lost')
+  GROUP BY date, player""").fetchall()
+imp = lambda o: 100 / (o + 100) if o > 0 else -o / (100 - o)
+for lo, hi in ((0, .3), (.3, .4), (.4, .5), (.5, .6), (.6, 1.01)):
+    b = [r for r in rows if r[2] is not None and r[4] and lo <= r[2] < hi]
+    if b:
+        print(f"{lo:.0%}-{min(hi,1):.0%}  n {len(b):3}  we said {sum(r[2] for r in b)/len(b):.0%}  "
+              f"price said {sum(imp(r[4]) for r in b)/len(b):.0%}  scored {sum(r[3] for r in b)/len(b):.0%}")
+print("all:", len(rows), "picks,", sum(r[3] for r in rows), "scored")
+PY
+```
+
+
+**N1. NHL play-by-play, during a live NHL game** (paste it back). Each
+live game should say `ok` with plays. `no_feed` means ESPN's hockey summary
+came back without a play list (then I switch the source to the NHL's own
+feed); `unreachable` means the fetch failed:
+
+```
+cd /srv/qellys && python3 -c "
+import json
+d = json.load(open('web/data/live_nhl.json'))
+for g in d.get('games') or []:
+    if (g.get('live') or {}).get('state') == 'live':
+        print(g.get('away'), '@', g.get('home'), g.get('plays_state'), len(g.get('plays') or []), [p.get('event') for p in (g.get('plays') or [])][-3:])
+print(d.get('plays_note') or d.get('note') or '')
+"
+```
+
