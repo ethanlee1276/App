@@ -3742,8 +3742,11 @@ _LANES: dict = {name: {"step": None, "since": None, "done_at": None, "thread": N
 #: A chore step running longer than this is reported as stuck, with its stack.
 CHORES_STUCK_S = 45 * 60
 #: A lane's child is killed past this. The daily pass walks six leagues'
-#: results (the NHL's alone budgeted at 20 minutes); a settle is minutes.
-CHORE_TIMEOUT_S = {"daily": 60 * 60, "settle": 20 * 60}
+#: results (the NHL's alone budgeted at 20 minutes). A settle was minutes
+#: until an NFL Sunday: 15.6 of them on 2026-10-04 with every early game
+#: live, against a 20-minute ceiling — and a killed settle rests two hours,
+#: which on a game day is two hours of ungraded bets. 45 leaves room.
+CHORE_TIMEOUT_S = {"daily": 60 * 60, "settle": 45 * 60}
 #: A lane killed at its ceiling rests this long before it runs again. A
 #: daily pass killed halfway never marked the day done, so without a rest
 #: it would start straight back into whatever hung it.

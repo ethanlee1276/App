@@ -5862,3 +5862,303 @@ alone. Nothing it finds moves a number:
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cbfit
 ```
 
+## T1 + T2 + G2 + S0 + R1 (round 7) + NHL H1–H13/H15: done 2026-10-04
+
+T1 (engine.tdinjfit, 2021–2024, on top of the touchdown model): none proven.
+- SECONDARY (opponent starting DBs out → receivers): 2,522 of 11,026 flagged; scored ÷ model 1.327 flagged vs 1.345 rest; b 0.014, clustered t 0.3; better 0/4 seasons.
+- FRONT (opponent starting linemen out → backs): 582 of 4,622; 1.243 vs 1.243; t 0.12; better 0/4.
+- CATCHERS (a starting WR/TE out → teammates): 2,640 of 15,648; 1.374 vs 1.29; b 0.054, t 1.28; better 3/4; held-out gain +0.000026. A hint (+6%), same direction as engine/matefit; below the bar. Stays shown, not priced.
+
+T2/G2 printed nothing: the 1 PM games had started and left the board. Read from the journal instead (week 4 TD board: Brown 53.8% at −145, Chase 47.3% at +100, Tuten 44.5% at +105, P. Washington 40.5% at +165, McCaffrey 60.8% at −170, Kittle 34.3% at +150, Dobbins 31.9% at +120, Sutton 28.6% at +233, Harvey 28.1% at +225).
+
+Box: disk 45%, one nightly backup plus the Sunday check, settle took 936 s (ceiling raised 20 → 45 min).
+
+The blocks as they were:
+
+#### Touchdown picks: the injury test, and our scorers next to your four TD scans (2026-10-04, latest)
+
+**T1. Test your TD scans' injury moves on four seasons** (paste it back).
+Three claims, each on top of our touchdown model: opponent starting DBs out
+→ his receivers score more (Cook and Dugger out → Washington); opponent
+starting linemen out → his backs score more (Bosa out → McCaffrey); a
+starting WR or TE out → his teammates score more (Evans out → Kittle).
+Each must beat the model on held-out seasons, hold in all but one, and
+clear a clustered t of 2 on 300+ flagged games, or it is left alone.
+Nothing it finds moves a number. About 10–20 minutes:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdinjfit
+```
+
+**T2. Every scorer we price in Bengals–Jaguars and Broncos–49ers**, to line
+up against the four TD scans (paste it back):
+
+```
+cd /srv/qellys && python3 -c "
+import json
+d = json.load(open('web/data/recommendations.json'))
+games = ({'CIN','JAX'}, {'DEN','SF'})
+rows = [r for r in d.get('td_field') or [] if any({r.get('team'), r.get('opponent')} <= g for g in games)]
+for r in sorted(rows, key=lambda r: (r.get('team') or '', -(r.get('model_prob') or 0))):
+    print(f\"{str(r.get('team')):4} {(r.get('player') or ''):22} {round(100*(r.get('model_prob') or 0)):3}%  {str(r.get('odds')):6} {r.get('book') or '':11} rz/wk {r.get('rz_chances')}  {r.get('goal_line_text') or ''}\")
+"
+```
+
+**G2. Our picks for Bengals–Jaguars**, to line up against your two
+research cards (paste it back):
+
+```
+cd /srv/qellys && python3 -c "
+import json
+d = json.load(open('web/data/recommendations.json'))
+rows = [r for r in (d.get('most_likely') or []) + (d.get('recommendations') or []) if {r.get('team'), r.get('opponent')} & {'CIN','JAX'}]
+seen = set()
+for r in sorted(rows, key=lambda r: -(r.get('model_prob') or r.get('hit_prob') or 0)):
+    k = (r.get('player'), r.get('market'), r.get('side'), r.get('line'))
+    if k in seen: continue
+    seen.add(k)
+    print(f\"{(r.get('player') or r.get('pick_label') or ''):22} {str(r.get('market')):12} {str(r.get('side')):6} {str(r.get('line')):6} chance {round(100*(r.get('model_prob') or r.get('hit_prob') or 0))}%  proj {r.get('projection')}  {r.get('category') or r.get('board') or ''}\")
+"
+```
+
+
+#### The overnight stall — what happened, and one check (2026-10-04)
+
+At about 12:26 AM every board stopped rebuilding (your 4:26 AM status
+screenshots). That was the first loop cycle of the new day, the one that
+runs the daily chores, and the chores ran INSIDE the board loop, so one
+chore that would not come back stopped every board and every settle. The
+fix is already on the box once it updates (it restarts itself, rebuilds
+every board first, then carries on):
+- the chores now run in their OWN PROCESSES, in two lanes (the daily pass,
+  and settling), at the same low priority as the builds. (The first fix put
+  them on threads of the server's process; you reported the site still
+  stale an hour later. A thread shares the server's CPU priority and memory
+  and can never be stopped, so a busy chore still starved every build.) A
+  lane past its limit (daily 60 min, settle 20) is killed, its stack goes
+  to the log, and it rests two hours before it runs again;
+- the status page has two new rows under "Code running": **Refresh loop**
+  (when the board loop last finished a cycle) and **Daily chores** /
+  **Settling** (which step each is on; if one is stuck, the exact line);
+- a watchdog restarts the board loop if no board step finishes for 90
+  minutes, writing every thread's stack to the log first;
+- the overnight NHL catch-up stops after 20 minutes and resumes the next
+  night (its first run, last night, walked up to 45 days of preseason);
+- a code update now waits for the board build in progress before it
+  restarts, instead of abandoning it.
+
+**S0. When you're home, paste this** (read-only). It shows which chore
+was stuck last night, from the box's own log:
+
+```
+journalctl -u qellys --since "2026-10-04 00:00" --no-pager | grep -iE "chore|stuck at|watchdog|nhl results|nhl xG|daily maintenance|auto-update|startup build" | tail -40
+python3 -c "import json; print(json.dumps(json.load(open('/srv/qellys/web/data/heartbeat.json')).get('chores'), indent=1))"
+```
+
+
+#### NFL Most Likely + touchdowns — run these now (2026-10-04, round 7)
+
+Two things in this round:
+- **The touchdown model.** The record hints a scorer's chance does not
+  follow his team's expected points hard enough (teams at 18-22 went
+  1-for-12 on our TD picks at a claimed 43%; teams at 26+ went 13-for-21
+  at 49%). This replays the real TD model over every stored season and
+  fits, per position, how much harder or softer a scorer's chance should
+  follow his team's implied total. It is adopted only if it beats today's
+  model on held-out seasons.
+- **2026 counts now.** The history fits needed a player to have 4-5
+  earlier games in the SAME season, so with four 2026 weeks played almost
+  no 2026 game counted. They now reach back into last season for his
+  recent form, the way the live model does in the first weeks, so 2026
+  counts from week 2. (The TD replay already counted 2026 from week 4.)
+  The record-based corrections were always 100% 2026.
+
+First make sure the box has the new code. This should print a line saying
+"2026 counts in the history fits", or anything newer:
+
+```
+git -C /srv/qellys log --oneline -1
+```
+
+**R1. Re-run every fit with 2026 in it** (paste all of it; ten minutes or
+so). `nice -n 19` runs them at the lowest priority, so the site stays
+quick while they work. All of these also run by themselves every Wednesday, in this order:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.scouthist
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.posspread
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdscale
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.tdbacktest --fit
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.boardlearn
+```
+
+To undo any one: remove its file under /srv/qellys/data/models/ —
+`td_implied.json` (touchdown team-total step), `position_spread.json`
+(widths), `likely_calibration.json` (record), `scout_history.json`
+(history). Each comes back by itself if it is still proven.
+
+
+#### NHL — load three seasons, then it runs itself (2026-10-03)
+
+The code is on the box once the auto-updater pulls it. The NHL board builds
+in the launcher's cycle from today, but it has no players until history
+lands. Every NHL Edge pick goes on **paper** until its record earns money.
+
+**H1. Disk, then a probe** (paste). The probe fetches one day, one box
+score and one player from the NHL's own free feed, which this sandbox
+cannot reach:
+
+```
+df -h / | tail -1
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --probe
+```
+
+**H2. Load 2023-24, 2024-25 and 2025-26** (an hour or more, in the
+background; it is safe to stop and rerun, finished days are skipped):
+
+```
+cd /srv/qellys && sudo -u qellys nohup python3 ingest.py nhl --seasons 2023-2025 > /tmp/nhl_ingest.log 2>&1 &
+tail -3 /tmp/nhl_ingest.log
+```
+
+**H3. When H2 ends: open the Most Likely shelves** (paste). Each hockey
+market goes on the Most Likely board only if it ranks on its own walk
+(the same 2,000-pair, 0.60 bar as every sport). The nightly job does this
+too; this just does it now:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, rankfit; rankfit.measure(db.connect(), 'nhl')"
+```
+
+**H4. Build tonight's board once by hand** (paste the last line):
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --odds
+```
+
+**H5. Headshots, now** (paste the last line). Every club's current roster
+fills the faces and moves traded players; the nightly job repeats it from
+September to June:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --faces
+```
+
+**H6. Re-rank after Scalpy NHL 1.0** (paste). Goals are now shots times a
+regressed shooting rate and the opposing starter tilts goals and points,
+so each market earns its shelf again on its own walk:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, rankfit; rankfit.measure(db.connect(), 'nhl')"
+```
+
+**H7. One build from the saved odds** (paste the Odds line and the last
+line). Shows the odds result, the scan's reads and how many rows each
+Scalpy rule passed, without journaling anything:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
+```
+
+That build now prints a second line, Scalpy NHL — Edge Hunter 1.0's census
+(how many Elite / Strong / Small edges and passes, and the commonest pass
+reasons). Paste it: it is how we will tune the Edge bar on real prices.
+
+**H8. Live rosters and standings, now** (paste the four lines). The NHL's
+own rosters and standings, and ESPN's NBA/WNBA rosters, for the team pages;
+the launcher's cycle repeats both:
+
+```
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport nhl
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport nba
+cd /srv/qellys && sudo -u qellys python3 rosters_build.py --sport wnba
+cd /srv/qellys && sudo -u qellys python3 standings_build.py --sport nhl
+```
+
+Each roster line should say `from league` (NHL) or `from roster`
+(basketball). `from appearances` means the feed failed, and the line says
+why.
+
+**H9. Install the new Caddyfile** (paste the last line). The page itself
+is now served without its comments (29 KB -> 11 KB gzipped on every first
+visit); the updater builds the trimmed copy, but Caddy only serves it once
+its config is reloaded. Validates first — a bad file is never installed:
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy && ls -la web/min/index.html
+```
+
+**H10. Every NHL logo resolves** (paste the summary line). The site now
+draws ESPN's NHL logos everywhere a team mark appears; this fetches all 32
+and names any club whose spelling misses (that club shows its coloured
+badge until the map is corrected):
+
+```
+cd /srv/qellys && sudo -u qellys python3 assets.py --audit --sport nhl
+```
+
+**H11. Shot quality, power-play time, starting goalies: what reads?**
+(paste the play-by-play, power-play ice time and starting goalies lines).
+The starting-goalies line asks ESPN's scoreboard for today's announced
+starters. On a morning before any team has announced, it lists what a side
+carries instead, which tells me the field's name. The probe now opens one
+game's play-by-play and reports its attempts, goals, named shooters and the
+first shot's type and distance. It also asks the league's stats host for
+power-play ice time. If that line says ok, I can wire minutes on the power
+play. Until then, PP1/PP2 is read from who scores and shoots on it:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py nhl --probe
+```
+
+**H12. Load every NHL shot, then fit our expected-goals model** (paste the
+last three lines). About 4,200 games from the league's free play-by-play.
+It is safe to stop and rerun, because a stored game is skipped. It runs in
+the background, so closing the terminal does not stop it. Nothing else
+calls the NHL host while it runs, and no odds credits are used:
+
+```
+cd /srv/qellys && sudo -u qellys nohup python3 ingest.py nhl --shots > /tmp/nhl_shots.log 2>&1 &
+tail -f /tmp/nhl_shots.log
+```
+
+Ctrl-C stops the `tail`, not the load. When it finishes, the log names the
+attempts and the league rate. From then on the nightly job stores each
+final's shots and refits.
+
+**H13. The board reads shot quality** (paste the "Shot quality" line and
+the last line). This is one build from the saved odds, so no credits are
+used and nothing is journaled. It should say `Shot quality: on`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 nhl_build.py --cached-odds --no-journal
+```
+
+**H15. NHL futures, lines and live, once** (paste each last line). The
+probe in H11 now also prints a `shift charts` line: if it says ok, the
+board reads every team's lines from it. The first command projects the
+season for free. The second adds the Stanley Cup price, at one credit a
+week (the cache holds it seven days). Live scores, win probability and the
+live line run by themselves. Hockey's live line is never pulled while an
+NFL or college game is live:
+
+```
+cd /srv/qellys && sudo -u qellys python3 futures_build.py nhl
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep ^ODDS_API_KEY | xargs) python3 futures_build.py nhl --odds
+cd /srv/qellys && sudo -u qellys python3 livescore_build.py --league nhl
+```
+
+The `--odds` line reads the one key it needs from `/etc/qellys/env`, the
+same way the JuiceReel check does. A plain hand run has no key (the box
+printed "prices: OddsAPIError: No Odds API key", 2026-10-03).
+
+**H14. Later — once NHL picks have graded for a couple of weeks.** This
+makes the NHL Most Likely chances honest from their own record. It is the
+same fit as M1 and saves only if it scores better on games it never
+learned from. It needs 40 settled picks in a group before it touches that
+group:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl
+```
+
