@@ -22,8 +22,13 @@ runs the daily chores, and the chores ran INSIDE the board loop, so one
 chore that would not come back stopped every board and every settle. The
 fix is already on the box once it updates (it restarts itself, rebuilds
 every board first, then carries on):
-- the chores now run on their own threads, in two lanes (the daily pass,
-  and settling), so nothing they do can stop the boards again;
+- the chores now run in their OWN PROCESSES, in two lanes (the daily pass,
+  and settling), at the same low priority as the builds. (The first fix put
+  them on threads of the server's process; you reported the site still
+  stale an hour later. A thread shares the server's CPU priority and memory
+  and can never be stopped, so a busy chore still starved every build.) A
+  lane past its limit (daily 60 min, settle 20) is killed, its stack goes
+  to the log, and it rests two hours before it runs again;
 - the status page has two new rows under "Code running": **Refresh loop**
   (when the board loop last finished a cycle) and **Daily chores** /
   **Settling** (which step each is on; if one is stuck, the exact line);

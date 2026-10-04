@@ -1312,6 +1312,42 @@ def _child_log_path(module: str) -> Path:
     return ROOT / "data" / "cache" / f"weekly_{module.rsplit('.', 1)[-1]}.log"
 
 
+# THE CHILDREN ON DISK TOO (2026-10-04). The chores now run in a short-lived
+# child of the server (launch.py's lanes), so the process that spawns a
+# fitter has usually exited by the next cycle, and `_CHILDREN` with it. A
+# pid file per job carries "still running — not started again" and the
+# one-hour ceiling across processes.
+def _child_dir() -> Path:
+    return ROOT / "data" / "cache"
+
+
+def _child_pid_path(module: str) -> Path:
+    return _child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.pid"
+
+
+def _pid_runs(pid: int, module: str) -> bool:
+    """Is ``pid`` alive and still this module (not a reused pid)?"""
+    try:
+        cmd = Path(f"/proc/{int(pid)}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+        return module in cmd
+    except OSError:
+        if not Path("/proc").is_dir():
+            try:
+                os.kill(int(pid), 0)
+                return True
+            except OSError:
+                return False
+        return False
+
+
+def _read_pid_file(module: str) -> dict | None:
+    try:
+        d = json.loads(_child_pid_path(module).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) and d.get("pid") else None
+    except (OSError, ValueError):
+        return None
+
+
 def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
     """Start ``python3 -m module`` as a niced, DETACHED child.
 
@@ -1335,6 +1371,9 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
     import time as _time
     if module in _CHILDREN:
         return [f"{module}: still running from an earlier cycle — not started again"]
+    kept = _read_pid_file(module)
+    if kept and _pid_runs(kept["pid"], module):
+        return [f"{module}: still running from an earlier cycle (pid {kept['pid']}) — not started again"]
     cmd = [sys.executable, "-m", module, *args]
     nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
     path = _child_log_path(module)
@@ -1346,6 +1385,11 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
     except Exception as exc:  # noqa: BLE001
         return [f"⚠️  {module}: could not start — {exc}"]
     _CHILDREN[module] = {"proc": proc, "started": _time.time(), "log": path, "fh": fh}
+    try:
+        _child_pid_path(module).write_text(json.dumps({"pid": proc.pid, "module": module,
+                                                       "started": _time.time()}), encoding="utf-8")
+    except OSError:
+        pass
     return [f"{module}: started in the background (pid {proc.pid}), "
             f"output in {path.relative_to(ROOT)}"]
 
@@ -1382,8 +1426,49 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
                    + ("" if code == 0 else " ⚠️"))
         out.extend(f"  {ln}" for ln in tail)
         del _CHILDREN[module]
+        try:
+            _child_pid_path(module).unlink()
+        except OSError:
+            pass
+    out.extend(_reap_pid_files(now))
     for line in out:
         log(f"  {line}")
+    return out
+
+
+def _reap_pid_files(now: float) -> list[str]:
+    """The jobs an earlier, since-exited process started: log the ones that
+    finished, cut off the ones past WEEKLY_JOB_TIMEOUT_S."""
+    import signal
+    out = []
+    for pf in sorted(_child_dir().glob("weekly_*.pid")):
+        try:
+            d = json.loads(pf.read_text(encoding="utf-8"))
+            module, pid, started = d["module"], int(d["pid"]), float(d["started"])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if module in _CHILDREN:
+            continue
+        if _pid_runs(pid, module):
+            if now - started <= WEEKLY_JOB_TIMEOUT_S:
+                continue
+            try:
+                os.killpg(pid, signal.SIGKILL)        # its own session: pgid == pid
+            except OSError:
+                pass
+            out.append(f"⚠️  {module}: cut off after {WEEKLY_JOB_TIMEOUT_S}s")
+        else:
+            try:
+                tail = [ln for ln in (_child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.log")
+                        .read_text(encoding="utf-8").splitlines() if ln.strip()][-12:]
+            except OSError:
+                tail = []
+            out.append(f"{module}: finished in about {(now - started) / 60.0:.0f} min")
+            out.extend(f"  {ln}" for ln in tail)
+        try:
+            pf.unlink()
+        except OSError:
+            pass
     return out
 
 

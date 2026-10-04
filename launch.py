@@ -3711,7 +3711,7 @@ def _cycle_p50() -> float | None:
     return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
 
 
-# --- THE CHORES, ON THEIR OWN THREADS ------------------------------------------
+# --- THE CHORES, IN THEIR OWN PROCESSES ----------------------------------------
 # Ethan, 2026-10-04, 4:26 in the morning, two screenshots of the status page:
 # every board "rebuilt 4 hours ago", NFL through the injury board, all red.
 # The boards stopped together at about half past midnight — the first cycle
@@ -3721,7 +3721,17 @@ def _cycle_p50() -> float | None:
 # not come back stopped every board on the site — and every settle with it —
 # while the status page could only show the boards' age.
 #
-# Now two LANES, each on its own thread, neither of them the board loop's:
+# The first fix moved them onto their own THREADS. Ethan, an hour later:
+# "site is still not working… everything's stale." A thread is not enough on
+# this box. It shares the server's interpreter and memory, it runs at the
+# server's priority while every build runs niced below it — so a chore busy
+# on the one CPU starves each build into its timeout, and slows every page —
+# and a thread can never be stopped. So each lane is now a CHILD PROCESS
+# (`launch.py --chore <lane>`): niced like the builds, its memory handed back
+# when it exits, and killed, with its stack written to the log first, if it
+# runs past its ceiling.
+#
+# Two LANES, neither of them the board loop's:
 #   daily   the daily pass (run_if_due) and the once-a-day check;
 #   settle  the auto-settle that grades tonight's games as they end.
 # A lane still running when the loop comes round is left to finish; the
@@ -3731,6 +3741,17 @@ _LANES: dict = {name: {"step": None, "since": None, "done_at": None, "thread": N
                        "last_s": {}, "stack_logged_at": 0.0} for name in ("daily", "settle")}
 #: A chore step running longer than this is reported as stuck, with its stack.
 CHORES_STUCK_S = 45 * 60
+#: A lane's child is killed past this. The daily pass walks six leagues'
+#: results (the NHL's alone budgeted at 20 minutes); a settle is minutes.
+CHORE_TIMEOUT_S = {"daily": 60 * 60, "settle": 20 * 60}
+#: A lane killed at its ceiling rests this long before it runs again. A
+#: daily pass killed halfway never marked the day done, so without a rest
+#: it would start straight back into whatever hung it.
+CHORE_REST_S = 2 * 3600
+#: Where a lane's child says what it is doing, and where its stack goes
+#: once it has run past CHORES_STUCK_S. data/, never web/data/: a stack is
+#: not for the public.
+CHORE_STATE_DIR = ROOT / "data" / "cache"
 
 
 def _lane_steps(lane: str, force_settle: bool = False) -> tuple:
@@ -3740,21 +3761,129 @@ def _lane_steps(lane: str, force_settle: bool = False) -> tuple:
     return (("autosettle", lambda: _run_autosettle(force=force_settle)),)
 
 
+def _chore_files(lane: str) -> tuple[Path, Path]:
+    return CHORE_STATE_DIR / f"chores_{lane}.json", CHORE_STATE_DIR / f"chores_{lane}.stack"
+
+
+def _chores_in_process() -> bool:
+    """The suite's sandbox (engine.modelstate's directory set, which
+    production never does) runs the lanes on threads, so a test can stub a
+    chore and never starts a real child."""
+    from engine import modelstate
+    return bool(os.environ.get(modelstate.ENV_VAR))
+
+
+def _lane_steps_run(lane: str, force_settle: bool, st: dict, publish=None) -> None:
+    """Run one lane's steps in order, timing each. Each step already
+    swallows its own failure; ``publish`` (the child's) writes what is
+    running where the server can read it."""
+    for name, fn in _lane_steps(lane, force_settle):
+        t = time.time()
+        st.update(step=name, since=t)
+        if publish:
+            publish()
+        try:
+            fn()
+        except Exception as exc:                     # noqa: BLE001
+            print(f"  ⚠️  chore {name} failed: {exc}")
+        st["last_s"][name] = round(time.time() - t, 1)
+    st.update(step=None, since=None)
+    if publish:
+        publish()
+
+
+def chore_child(lane: str, force_settle: bool = False) -> int:
+    """`launch.py --chore daily|settle|settle-forced` — one lane, in this
+    process, then exit. What the server's lanes start; never the server."""
+    import faulthandler
+    lane = lane if lane in _LANES else "settle"
+    state_path, stack_path = _chore_files(lane)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    st = {"step": None, "since": None, "last_s": {}}
+
+    def publish():
+        tmp = state_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({"pid": os.getpid(), **st}))
+        os.replace(tmp, state_path)
+
+    with open(stack_path, "w", encoding="utf-8") as fh:
+        # Every thread's stack, into the file, each time CHORES_STUCK_S
+        # passes — so "stuck where" is on the status page, not in an SSH
+        # session.
+        faulthandler.dump_traceback_later(CHORES_STUCK_S, repeat=True, file=fh)
+        try:
+            _lane_steps_run(lane, force_settle, st, publish)
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+    try:
+        stack_path.unlink()
+    except OSError:
+        pass
+    return 0
+
+
+def _chore_cmd(arg: str) -> list:
+    return [sys.executable, str(ROOT / "launch.py"), "--chore", arg]
+
+
+def _read_child_state(lane: str) -> dict:
+    try:
+        return json.loads(_chore_files(lane)[0].read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _lane_child(lane: str, force_settle: bool, st: dict) -> None:
+    """Start the lane's child, wait for it, and kill it past its ceiling."""
+    import signal
+    state_path, stack_path = _chore_files(lane)
+    for f in (state_path, stack_path):
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    arg = "settle-forced" if (lane == "settle" and force_settle) else lane
+    nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    proc = subprocess.Popen(_chore_cmd(arg), cwd=str(ROOT), preexec_fn=nicer, start_new_session=True)
+    st["proc"] = proc
+    st.update(step="starting", since=time.time())
+    ceiling = CHORE_TIMEOUT_S.get(lane, 20 * 60)
+    try:
+        proc.wait(timeout=ceiling)
+    except subprocess.TimeoutExpired:
+        kid = _read_child_state(lane)
+        print(f"  ⚠️  chores ({lane}): {kid.get('step') or 'a step'} still running after "
+              f"{max(1, ceiling // 60)} min — stopped, and rests {CHORE_REST_S // 3600} h "
+              f"before it runs again; its stack follows")
+        try:
+            print("    " + "\n    ".join(stack_path.read_text(encoding="utf-8").splitlines()[-40:]))
+        except OSError:
+            pass
+        st["rest_until"] = time.time() + CHORE_REST_S
+        try:
+            # Its whole process group: anything it started and waits on.
+            # The weekly fitters it spawns run in their own sessions and
+            # are left to their own ceiling (engine/maintenance).
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            proc.kill()
+        proc.wait()
+    st["last_s"].update(_read_child_state(lane).get("last_s") or {})
+
+
 def _lane_run(lane: str, force_settle: bool = False) -> None:
-    """One lane's steps, in order. Each step already swallows its own
-    failure; this times them and says which is running."""
+    """One lane, start to finish: in a child process on the box, on this
+    thread in the suite's sandbox."""
     st = _LANES[lane]
     try:
-        for name, fn in _lane_steps(lane, force_settle):
-            t = time.time()
-            st.update(step=name, since=t)
-            try:
-                fn()
-            except Exception as exc:                     # noqa: BLE001
-                print(f"  ⚠️  chore {name} failed: {exc}")
-            st["last_s"][name] = round(time.time() - t, 1)
+        if _chores_in_process():
+            _lane_steps_run(lane, force_settle, st)
+        else:
+            _lane_child(lane, force_settle, st)
+    except Exception as exc:                         # noqa: BLE001
+        print(f"  ⚠️  chores ({lane}) could not run: {exc}")
     finally:
-        st.update(step=None, since=None, done_at=time.time())
+        st.update(step=None, since=None, done_at=time.time(), proc=None)
 
 
 def _kick_chores(force_settle: bool = False) -> dict:
@@ -3766,6 +3895,9 @@ def _kick_chores(force_settle: bool = False) -> dict:
         th = st.get("thread")
         if th is not None and th.is_alive():
             out[lane] = "still running"
+            continue
+        if (st.get("rest_until") or 0) > time.time():
+            out[lane] = "resting after a timeout"
             continue
         th = threading.Thread(target=_lane_run, args=(lane, force_settle), daemon=True,
                               name=f"chores-{lane}")
@@ -3793,20 +3925,38 @@ def _chores_status(now: float | None = None) -> dict:
     out = {}
     for lane, st in _LANES.items():
         step, since = st.get("step"), st.get("since")
+        child = st.get("proc") is not None
+        if child:
+            kid = _read_child_state(lane)
+            if kid.get("step"):
+                step, since = kid["step"], kid.get("since") or since
         cur = {"step": step, "running_s": round(now - since) if step and since else None,
                "done_epoch": round(st["done_at"]) if st.get("done_at") else None,
                "last_s": dict(st.get("last_s") or {}), "stuck": False}
+        if (st.get("rest_until") or 0) > now:
+            cur["resting_until_epoch"] = round(st["rest_until"])
         if step and since and now - since > CHORES_STUCK_S:
             cur["stuck"] = True
-            th = st.get("thread")
-            frame = frames.get(th.ident) if th is not None and th.ident else None
-            if frame is not None:
-                cur["stack"] = [ln.strip().replace(str(ROOT) + "/", "")
-                                for ln in traceback.format_stack(frame)[-6:]]
+            stack = []
+            if child:
+                try:
+                    lines = _chore_files(lane)[1].read_text(encoding="utf-8").splitlines()
+                    stack = [ln.strip().replace(str(ROOT) + "/", "") for ln in lines
+                             if ln.strip().startswith("File")][:6]
+                except OSError:
+                    stack = []
+            else:
+                th = st.get("thread")
+                frame = frames.get(th.ident) if th is not None and th.ident else None
+                if frame is not None:
+                    stack = [ln.strip().replace(str(ROOT) + "/", "")
+                             for ln in traceback.format_stack(frame)[-6:]]
+            if stack:
+                cur["stack"] = stack
                 if now - st.get("stack_logged_at", 0.0) > 30 * 60:
                     st["stack_logged_at"] = now
                     print(f"  ⚠️  chore {step} ({lane} lane) has run {round((now - since) / 60)} min — "
-                          f"stuck at:\n    " + "\n    ".join(cur["stack"]))
+                          f"stuck at:\n    " + "\n    ".join(stack))
         out[lane] = cur
     return out
 
@@ -9672,7 +9822,7 @@ def _lan_ip() -> str | None:
 KNOWN_FLAGS = frozenset({
     "--alignment", "--apply", "--arsenal", "--auto-update", "--bands",
     "--bind", "--board-size", "--boards", "--booksharp", "--both-ways",
-    "--card-venue", "--check", "--clean-cache", "--confirm-qb",
+    "--card-venue", "--check", "--chore", "--clean-cache", "--confirm-qb",
     "--coverage", "--data-audit", "--data-use", "--desk", "--desk-probe",
     "--doctor", "--epoch", "--gates", "--haircut", "--injuries",
     "--inspect-pick", "--learning", "--likely", "--matchup", "--memes",
@@ -9763,6 +9913,12 @@ def main() -> None:
     if "--check" in argv:
         preflight()
         return
+    if "--chore" in argv:
+        # One chores lane, run by the server's lanes in a child process
+        # (see `_LANES`): daily | settle | settle-forced.
+        i = argv.index("--chore")
+        lane = argv[i + 1] if len(argv) > i + 1 else "settle"
+        sys.exit(chore_child(lane.replace("-forced", ""), force_settle=lane.endswith("-forced")))
     if "--nightly" in argv:
         _sp = None
         if "--sport" in argv:

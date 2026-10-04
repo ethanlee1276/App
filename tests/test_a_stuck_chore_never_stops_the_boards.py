@@ -10,6 +10,9 @@ a chore past the stuck mark publishes the line it is waiting on; the status
 page says so; a pulled update waits for the build in progress instead of
 abandoning it, and gives up waiting at its ceiling; the refresher starts no
 sweep while an update waits; the watchdog sees a loop with no step landing.
+On the box each lane is a niced child process, killed at its ceiling and
+rested before it runs again; a fitter it started stays guarded after it
+exits.
 
 Run directly: `python3 tests/test_a_stuck_chore_never_stops_the_boards.py`
 """
@@ -190,6 +193,103 @@ def test_the_status_page_says_the_chore_is_stuck_and_where():
     assert "Refresh loop" in html and "st-bad" in html, "a loop four hours quiet reads red"
     assert "Daily chores" in html and "stuck in maintenance" in html and "ingest_day" in html
     assert "Settling" in html and "idle · last finished" in html
+
+
+def test_on_the_box_a_lane_is_a_niced_child_that_is_killed_at_its_ceiling():
+    # Ethan, an hour after the thread fix: "site is still not working". A
+    # thread shares the server's CPU priority, memory and interpreter and can
+    # never be stopped; a child process can.
+    d = tempfile.mkdtemp()
+    script = ("import json, os, sys, time\n"
+              f"p = {os.path.join(d, 'chores_daily.json')!r}\n"
+              "open(p, 'w').write(json.dumps({'pid': os.getpid(), 'step': 'maintenance', "
+              "'since': time.time(), 'last_s': {}}))\n"
+              "print('nice', os.nice(0), flush=True)\n"
+              "time.sleep(60)\n")
+    saved = (launch._chores_in_process, launch._chore_cmd, launch.CHORE_STATE_DIR, dict(launch.CHORE_TIMEOUT_S))
+    launch._chores_in_process = lambda: False
+    launch._chore_cmd = lambda arg: [sys.executable, "-c", script, arg]
+    launch.CHORE_STATE_DIR = launch.Path(d)
+    launch.CHORE_TIMEOUT_S["daily"] = 3
+    try:
+        t0 = time.time()
+        st = {"last_s": {}}
+        launch._LANES["daily"]["proc"] = None
+        out = subprocess.run([sys.executable, "-c", "pass"])            # warm the interpreter cache
+        assert out.returncode == 0
+        launch._lane_child("daily", False, st)
+        took = time.time() - t0
+        assert 3 <= took < 30, f"killed at the ceiling, not left to run ({took:.1f}s)"
+        assert st["proc"].returncode is not None and st["proc"].returncode != 0
+        # While a child runs, the status reads the step the CHILD reports.
+        launch._LANES["daily"].update(proc=st["proc"], step="starting", since=time.time())
+        assert launch._chores_status()["daily"]["step"] == "maintenance"
+        # Killed, it rests: a daily pass that never marked the day done must
+        # not start straight back into whatever hung it.
+        assert st["rest_until"] > time.time() + launch.CHORE_REST_S - 60
+        launch._LANES["daily"].update(proc=None, step=None, since=None, rest_until=st["rest_until"])
+        settle_saved = launch._LANES["settle"].get("rest_until")
+        launch._LANES["settle"]["rest_until"] = time.time() + 600
+        try:
+            assert launch._kick_chores() == {"daily": "resting after a timeout",
+                                             "settle": "resting after a timeout"}
+            assert "resting_until_epoch" in launch._chores_status()["daily"]
+        finally:
+            launch._LANES["settle"]["rest_until"] = settle_saved
+    finally:
+        launch._LANES["daily"].update(proc=None, step=None, since=None, rest_until=None)
+        (launch._chores_in_process, launch._chore_cmd, launch.CHORE_STATE_DIR) = saved[:3]
+        launch.CHORE_TIMEOUT_S.clear()
+        launch.CHORE_TIMEOUT_S.update(saved[3])
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _lane_child("):src.index("def _lane_run(")]
+    assert "os.nice(10)" in body and "start_new_session=True" in body and "os.killpg" in body
+
+
+def test_the_child_runs_its_steps_says_what_it_did_and_cleans_up():
+    d = tempfile.mkdtemp()
+    ran = []
+    saved = (launch._run_autosettle, launch.CHORE_STATE_DIR)
+    launch._run_autosettle = lambda force=False: ran.append(force)
+    launch.CHORE_STATE_DIR = launch.Path(d)
+    try:
+        assert launch.chore_child("settle", force_settle=True) == 0
+    finally:
+        launch._run_autosettle, launch.CHORE_STATE_DIR = saved
+    assert ran == [True]
+    state = json.loads(open(os.path.join(d, "chores_settle.json")).read())
+    assert state["step"] is None and "autosettle" in state["last_s"]
+    assert not os.path.exists(os.path.join(d, "chores_settle.stack")), "no stack left behind when it finished"
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    main = src[src.index("def main() -> None:"):]
+    assert main.index('if "--chore" in argv:') < main.index("serve_forever"), "a chore child never starts a server"
+
+
+def test_a_fitter_started_by_an_exited_chore_is_still_guarded_and_cut_off():
+    from engine import maintenance as M
+    d = tempfile.mkdtemp()
+    saved = M._child_dir
+    M._child_dir = lambda: launch.Path(d)
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "engine.fakefit"],
+                            start_new_session=True)
+    try:
+        with open(os.path.join(d, "weekly_fakefit.pid"), "w") as fh:
+            json.dump({"pid": live.pid, "module": "engine.fakefit", "started": time.time()}, fh)
+        msg = M._spawn_module("engine.fakefit", print)
+        assert "still running" in msg[0] and "engine.fakefit" not in M._CHILDREN, msg
+        assert M.reap_children(log=lambda *_: None) == [], "a job inside its ceiling is left alone"
+        out = M.reap_children(log=lambda *_: None, now=time.time() + M.WEEKLY_JOB_TIMEOUT_S + 60)
+        assert any("cut off" in ln for ln in out), out
+        assert live.wait(timeout=10) != 0
+        with open(os.path.join(d, "weekly_gonefit.pid"), "w") as fh:
+            json.dump({"pid": live.pid, "module": "engine.gonefit", "started": time.time() - 120}, fh)
+        out = M.reap_children(log=lambda *_: None)
+        assert any("engine.gonefit: finished" in ln for ln in out), out
+        assert not os.listdir(d) or all(not f.endswith(".pid") for f in os.listdir(d))
+    finally:
+        M._child_dir = saved
+        if live.poll() is None:
+            live.kill()
 
 
 if __name__ == "__main__":
