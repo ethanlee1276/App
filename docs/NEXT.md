@@ -10,10 +10,10 @@ reads this file and picks up the top item.
 
 ## 1. Before charging anyone (not code — Ethan's calls)
 
-* A Paddle account, and a real test webhook sent through it. The signature
-  verifier in `engine/paddle.py` was written from memory with the API
-  unreachable from the dev container, and it is flagged UNVERIFIED in the
-  file. It is the one place where being wrong is silent AND dangerous.
+* A Stripe account with a real test webhook sent through it, to confirm the
+  signature check in `engine/billing.py` against a real payload. (Paddle was
+  the earlier plan; `engine/paddle.py` was retired 2026-10-01 — see
+  `docs/PROCESSOR.md`.)
 * The LLC and a business bank account.
 * Phase 0 in `docs/LAUNCH.md`: commercial-use terms for ~25 data feeds,
   and the Michigan/MGCB question. These gate charging money, not shipping

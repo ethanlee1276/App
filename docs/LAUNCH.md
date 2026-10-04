@@ -35,10 +35,8 @@ seller, they own the risk assessment, and they handle sales tax. The full
 reasoning, including why the high-risk brokers (PaymentCloud, PayKings)
 were rejected and why Nuvei is the fallback, is in `docs/BILLING.md`.
 
-`engine/paddle.py` is written and tested. Two things remain and both are
-flagged there: the signature scheme could not be verified against a real
-payload from this container, and Paddle's overlay checkout needs
-`cdn.paddle.com` allowed in the CSP.
+`engine/paddle.py` was retired on 2026-10-01; Stripe (`engine/billing.py`)
+is the one processor. See `docs/PROCESSOR.md` for why.
 
 The original question is kept below, because the reasoning is what makes
 the next processor question quick rather than new.
