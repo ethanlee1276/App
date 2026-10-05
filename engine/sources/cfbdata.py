@@ -411,6 +411,15 @@ def _score(raw) -> float | None:
         return None
 
 
+def _split_pair(raw) -> tuple[float, float] | None:
+    """ESPN's "22/35" → (22.0, 35.0), or None when it is not that shape."""
+    try:
+        a, b = str(raw or "").split("/", 1)
+        return float(a), float(b)
+    except (TypeError, ValueError):
+        return None
+
+
 def _team_key(team: dict) -> str:
     """A stable identifier for one side, or "" if there is genuinely none.
 
@@ -1014,6 +1023,11 @@ SUMMARY = BASE + "/summary"
 #: language across both footballs.
 BOX_MARKETS = {
     ("passing", "YDS"): "pass_yds",
+    # THE VOLUME MARKETS (2026-10-05), the same names the play feed
+    # (engine/sources/cfbstats) writes so the two feeds agree on a
+    # quarterback's day. "C/ATT" is one label holding two numbers and
+    # is split below rather than read through `_score`.
+    ("passing", "INT"): "pass_int",
     ("rushing", "CAR"): "carries",
     ("rushing", "YDS"): "rush_yds",
     ("receiving", "REC"): "receptions",
@@ -1055,12 +1069,19 @@ def parse_summary(payload: dict) -> list[dict]:
                 stats = ath.get("stats") or []
                 vals: dict = {}
                 for i, col in enumerate(labels):
+                    if gname == "passing" and col == "C/ATT" and i < len(stats):
+                        cmp_att = _split_pair(stats[i])
+                        if cmp_att:
+                            vals["pass_cmp"], vals["pass_att"] = cmp_att
+                        continue
                     mk = BOX_MARKETS.get((gname, col))
                     if mk is None or i >= len(stats):
                         continue
                     v = _score(stats[i])
                     if v is not None:
                         vals[mk] = v
+                if "carries" in vals:
+                    vals["rush_att"] = vals["carries"]
                 if not vals:
                     continue
                 pos = ((info.get("position") or {}).get("abbreviation")

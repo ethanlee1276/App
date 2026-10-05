@@ -33,6 +33,40 @@ Run it while the site feels slow. The load average (`uptime`) and the
 top processes tell whether it is the box; the `curl` times tell whether
 it is the server or your phone.
 
+### Run next: the new markets (2026-10-05, Ethan: "QB interceptions, QB Pass Attempts, QB Completions … any other market we are missing")
+
+**What shipped.** College now counts completions, interceptions and
+carries-as-a-market, builds attempts / completions / carries props, buys
+their prices (12 credits a game, was 9) and walks them in the rank store;
+each opens on the college Most Likely board only when the box's own walk
+clears 0.60. The NFL already had the three (2026-09-27). Interceptions
+are measured, not wired: college read 0.611 ± 0.014 with the opponent's
+takeaway rate (on the line, not over it); the NFL arms need the box's
+cache. Paste both outputs back:
+
+**1. NFL: interceptions round two + the other markets** (reads the nflverse
+cache; the FTN arm fetches the charting if it is not cached — a minute or
+two, low priority):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py
+```
+
+**2. College: land the new columns, then measure.** The four cached
+seasons re-parse with the new counts (the play files stream; ten minutes
+or so on the box), then the rank walk stores what the logs support:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cfbhist --seasons 2022-2026 2>&1 | tail -15
+sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT market, COUNT(*) FROM player_game_logs WHERE sport='cfb' AND market IN ('pass_att','pass_cmp','pass_int','rush_att') GROUP BY market\").fetchall())"
+sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'cfb')]"
+```
+
+A `cfb:pass_att` / `cfb:pass_cmp` / `cfb:rush_att` line at 0.60 or
+better means that market is on the college Most Likely board from the
+next build. Under it, the prop is still built and priced (Edge picks can
+use it); Most Likely waits.
+
 ### Run next: tier cap, then the same-book closes (2026-10-04, late night)
 
 **1. The near-even tier cap** — judges the written-down rule and saves the
@@ -60,6 +94,20 @@ journal up first):
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
 ```
+
+**2b. If the dry run looks stuck** (Ethan's first run, 2026-10-05: four
+minutes and counting — the old code read the snapshot file twice). In a
+second terminal, check it is alive and not out of memory:
+
+```
+ps -o pid,etime,rss,cmd -C python3 | grep repair-closes; free -m
+```
+
+"available" over ~150 MB: let it finish (nothing prints until the end,
+`head` holds it all). Over ~20 minutes, or "available" near zero: Ctrl+C
+the first terminal (a dry run writes nothing), make sure
+`git -C /srv/qellys log --oneline -1` shows `8e512932` or later, and
+rerun step 2 — it is a single cheap pass now.
 
 **3. Live tab "database is locked"** — nothing to run. The open-bet
 tracker now reads the journal read-only and retries a lock once; the box

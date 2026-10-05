@@ -29,7 +29,8 @@ from .betting import evaluate_prop
 
 #: Position by market, so the projection's role logic stays sensible.
 _POSITION = {"pass_yds": "QB", "rush_yds": "RB",
-             "rec_yds": "WR", "receptions": "WR"}
+             "rec_yds": "WR", "receptions": "WR",
+             "pass_att": "QB", "pass_cmp": "QB", "pass_int": "QB", "rush_att": "RB"}
 
 
 def _neutral() -> tuple[Game, Team]:

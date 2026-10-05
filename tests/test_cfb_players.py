@@ -85,14 +85,17 @@ def test_a_player_in_two_groups_is_one_row():
     rows = C.parse_summary(_summary())
     qbs = [r for r in rows if r["player"] == "Gunner Stockton"]
     assert len(qbs) == 1, "the scrambling QB landed in the logs twice"
-    assert qbs[0]["stats"] == {"pass_yds": 264.0, "carries": 6.0,
+    # The volume markets (2026-10-05): "C/ATT" split into completions and
+    # attempts, INT read, and carries a second time as `rush_att`.
+    assert qbs[0]["stats"] == {"pass_yds": 264.0, "pass_cmp": 18.0, "pass_att": 25.0,
+                               "pass_int": 0.0, "carries": 6.0, "rush_att": 6.0,
                                "rush_yds": 41.0, "rush_td": 1.0,
                                "anytime_td": 1.0}
 
 
 def test_yds_means_a_different_market_in_each_group():
     rows = {r["player"]: r for r in C.parse_summary(_summary())}
-    assert rows["Nate Frazier"]["stats"] == {"carries": 19.0,
+    assert rows["Nate Frazier"]["stats"] == {"carries": 19.0, "rush_att": 19.0,
                                              "rush_yds": 112.0,
                                              "rush_td": 1.0,
                                              "anytime_td": 1.0}
@@ -144,7 +147,9 @@ def test_the_ingest_walks_our_own_games_and_stores_the_logs():
     # long-shot board settles on them), so each player adds his TD
     # market(s) plus the derived anytime_td: Stockton 3+2, Frazier 2+2,
     # Branch 3+2, the opposing back 2+2.
-    assert res["player_logs"] == 18, res
+    # 18 until 2026-10-05; the volume markets add the QB's completions,
+    # attempts and interceptions and every rusher's `rush_att` (+6).
+    assert res["player_logs"] == 24, res
     row = conn.execute(
         "SELECT * FROM player_game_logs WHERE sport='cfb' AND "
         "player='Gunner Stockton' AND market='pass_yds'").fetchone()

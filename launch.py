@@ -180,13 +180,13 @@ CFB_OUT = "web/data/cfb.json"
 # ("an invisible 4-8x overspend that burned 19k of a 20k plan in a
 # day"). The pull itself asks `oddsbudget.affordable_events` and buys
 # fewer games when the month cannot carry twelve.
-CFB_ODDS_COST = 3 + 12 * 9
+CFB_ODDS_COST = 3 + 12 * 12          # twelve markets a game since 2026-10-05
 
 #: What ONE game's player-quote call costs college — `cfb_build.
 #: CREDITS_PER_EVENT`, pinned equal in tests/test_odds_decisions.py. A
 #: full pull that spent less than the board request plus one of these
 #: bought no player quotes, whatever the quota stamp says.
-CFB_PLAYER_EVENT_COST = 9
+CFB_PLAYER_EVENT_COST = 12      # twelve markets a game since 2026-10-05 (cfb_build.PLAYER_MARKETS)
 
 #: The cheap half of that sum, on its own. `cfb_build.attach_odds` buys
 #: full-game markets for the ENTIRE board in one request — three credits

@@ -219,11 +219,21 @@ ALWAYS = ("anytime_td",)
 ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions",
              "pass_yds": "pass_att",
              "pass_td": "pass_att", "rush_td": "carries",
-             "rec_td": "receptions"}
+             "rec_td": "receptions",
+             # THE VOLUME MARKETS (Ethan, 2026-10-05: "QB interceptions,
+             # QB Pass Attempts, QB Completions" for college too). A
+             # passer who threw and completed none, or was not picked
+             # off, is a zero on the record, not a missing row; carries
+             # are written a second time under the market's own name so
+             # `ledger.settle_from_history` — which looks a bet's actual
+             # up by its market — finds a college back's carries the
+             # way it finds an NFL back's (ingest.NFL_USAGE_MARKETS).
+             "pass_cmp": "pass_att", "pass_int": "pass_att",
+             "rush_att": "carries"}
 
 #: Emitted in this order so an ingest log reads the way a box score does.
-MARKETS = ("anytime_td", "carries", "rush_yds", "receptions", "rec_yds",
-           "pass_att", "pass_yds", "rush_td", "rec_td", "pass_td",
+MARKETS = ("anytime_td", "carries", "rush_att", "rush_yds", "receptions", "rec_yds",
+           "pass_att", "pass_cmp", "pass_int", "pass_yds", "rush_td", "rec_td", "pass_td",
            "rz_car", "rz_rec", "i5_car")
 
 #: A touchdown and the kick after it. The unit the coverage audit below
@@ -331,9 +341,9 @@ def split_pass(scores: dict, completion: str, reception: str) -> tuple:
 
 def _slot(bag: dict, key: tuple) -> dict:
     return bag.setdefault(key, {
-        "carries": 0.0, "rush_yds": 0.0, "rush_td": 0.0,
+        "carries": 0.0, "rush_att": 0.0, "rush_yds": 0.0, "rush_td": 0.0,
         "receptions": 0.0, "rec_yds": 0.0, "rec_td": 0.0,
-        "pass_att": 0.0, "pass_yds": 0.0, "pass_td": 0.0,
+        "pass_att": 0.0, "pass_cmp": 0.0, "pass_int": 0.0, "pass_yds": 0.0, "pass_td": 0.0,
         "rz_car": 0.0, "rz_rec": 0.0, "i5_car": 0.0,
     })
 
@@ -419,6 +429,11 @@ def parse_player_stats(rows, season: int, games: dict,
                        if _name(r.get(c))), "")
         if thrown:
             _slot(bag, base + (thrown,))["pass_att"] += 1
+        # THE INTERCEPTION, charged to the man who threw it. One per row,
+        # like the attempt it already counts as.
+        picked = _name(r.get("interception_thrown_player"))
+        if picked:
+            _slot(bag, base + (picked,))["pass_int"] += 1
 
         ytg = _ytg(r.get("yards_to_goal"))
         td = _name(r.get("touchdown_player"))
@@ -429,6 +444,7 @@ def parse_player_stats(rows, season: int, games: dict,
             s = _slot(bag, base + (rush,))
             gain = _num(r.get("rush_yds"))
             s["carries"] += 1
+            s["rush_att"] += 1                 # the same count under the market's name
             s["rush_yds"] += gain
             if ytg is not None and ytg <= RED_ZONE:
                 s["rz_car"] += 1
@@ -461,6 +477,7 @@ def parse_player_stats(rows, season: int, games: dict,
             s["rz_rec"] += 1
         q = _slot(bag, base + (passer,))
         q["pass_att"] += 1
+        q["pass_cmp"] += 1
         q["pass_yds"] += yds
         if passer != receiver and _credited(modes, week_of, base[0],
                                             by_name, by_field):

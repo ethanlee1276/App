@@ -35,7 +35,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-CFB_MARKETS = ["pass_yds", "rush_yds", "rec_yds", "receptions"]
+CFB_MARKETS = ["pass_yds", "rush_yds", "rec_yds", "receptions",
+               "pass_att", "pass_cmp", "rush_att"]      # the volume markets, 2026-10-05
 
 
 def _src(*parts):

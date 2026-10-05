@@ -81,7 +81,10 @@ MARKETS = {
     "mlb": ("hits", "total_bases", "home_runs", "strikeouts", "outs"),
     "nba": ("pts", "reb", "ast", "fg3m", "pra"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
-    "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions"),
+    # THE VOLUME MARKETS joined 2026-10-05 (engine/cfb/props.MARKETS says
+    # why); the walk measures them on this box's logs and the shelf opens
+    # only above the floor, as for the four before them.
+    "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att"),
     # HOCKEY (2026-10-03) walks its OWN model (engine/nhl/backtest) — a
     # per-60 rate times ice time is not the football chain logwalk hands
     # every other sport, so the branch in `measure` sends it there.

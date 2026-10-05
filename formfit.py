@@ -129,7 +129,8 @@ SPORT_MARKETS = {
     # neither figure is a raw count of those either. The gap is real and
     # unexplained; whichever number a later reader needs, MEASURE IT
     # rather than quoting one of these.
-    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions",
+            "pass_att", "pass_cmp", "rush_att"],      # the volume markets, 2026-10-05
     # UFC remains deliberately absent: it has no game logs at all, so a
     # fit here could never run. It learns from the journal only.
 }

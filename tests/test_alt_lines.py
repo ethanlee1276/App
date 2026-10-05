@@ -212,7 +212,7 @@ def test_college_buys_the_same_ladders_and_attaches_them_apart():
     import cfb_build as CB
     from engine.cfb import props as P
     assert [m for m in CB.PLAYER_MARKETS if m.endswith("_alternate")] == list(oa.ALT_ODDS_TO_MARKET)
-    assert CB.CREDITS_PER_EVENT == 9
+    assert CB.CREDITS_PER_EVENT == 12                   # nine until the volume markets, 2026-10-05
     src = inspect.getsource(CB.attach_player_quotes)
     assert "markets=PLAYER_MARKETS_BASE" in src, "no deploy-day fallback on the college pull"
     assert "parse_event_lines(payload, _alt_map)" in src
@@ -229,7 +229,7 @@ def test_college_buys_the_same_ladders_and_attaches_them_apart():
     assert [ln.line for ln in prop.alt_sharp_lines] == [50.5]
     # The launcher's Saturday estimate rose with the price.
     import launch
-    assert launch.CFB_ODDS_COST == 3 + CB.PLAYER_EVENT_CAP * CB.CREDITS_PER_EVENT == 111
+    assert launch.CFB_ODDS_COST == 3 + CB.PLAYER_EVENT_CAP * CB.CREDITS_PER_EVENT == 147
     assert key in alts
 
 

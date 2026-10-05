@@ -32,12 +32,17 @@ from engine.sources import oddsapi as O                      # noqa: E402
 
 
 # --- what the config now names ----------------------------------------
-def test_college_buys_the_same_four_markets_the_nfl_does():
-    """Same sport, same Odds API keys. Sharing the dict rather than
-    copying it is what stops the two drifting."""
-    assert O.SPORT_CONFIG["cfb"]["markets"] is O.ODDS_TO_MARKET
-    assert set(O.SPORT_CONFIG["cfb"]["markets"].values()) == \
-        {"pass_yds", "rush_yds", "rec_yds", "receptions"}
+def test_college_buys_the_same_markets_the_nfl_does():
+    """Same sport, same Odds API keys: the four stat markets by reference
+    and, since 2026-10-05, the three volume keys the NFL added on
+    2026-09-27 — on the same drop-and-retry guard."""
+    assert O.SPORT_CONFIG["cfb"]["markets"] is O.CFB_ODDS_TO_MARKET
+    assert set(O.CFB_ODDS_TO_MARKET.values()) == \
+        {"pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att"}
+    assert all(O.CFB_ODDS_TO_MARKET[k] == v for k, v in O.ODDS_TO_MARKET.items())
+    assert set(O.VOLUME_ODDS_KEYS) <= set(O.CFB_ODDS_TO_MARKET) <= set(O.NFL_ODDS_TO_MARKET)
+    assert O.PASS_TD_ODDS_KEY not in O.CFB_ODDS_TO_MARKET, "passing touchdowns stay off college (measured)"
+    assert set(O.VOLUME_ODDS_KEYS) <= O.UNPROVEN_MARKETS
 
 
 def test_the_scorer_market_rides_in_the_same_config():
@@ -114,15 +119,19 @@ def test_every_event_call_is_now_billed_to_a_league():
 
 
 # --- what a pull costs, and who decides how much ----------------------
-def test_one_call_buys_nine_markets_and_is_billed_for_nine():
+def test_one_call_buys_twelve_markets_and_is_billed_for_twelve():
     """Five since 2026-09-03; nine since 2026-09-07, when the four
-    alternate ladders joined (`oddsapi.ALT_ODDS_TO_MARKET`)."""
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 9
+    alternate ladders joined (`oddsapi.ALT_ODDS_TO_MARKET`); twelve since
+    2026-10-05, when the three volume markets joined."""
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 12
     assert B.PLAYER_MARKETS[0] == "player_anytime_td"
     for key in B.PLAYER_MARKETS[1:]:
-        assert key in O.ODDS_TO_MARKET or key in O.ALT_ODDS_TO_MARKET, key
+        assert key in O.CFB_ODDS_TO_MARKET or key in O.ALT_ODDS_TO_MARKET, key
     assert set(O.ALT_ODDS_TO_MARKET) <= set(B.PLAYER_MARKETS)
-    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:5]
+    assert set(O.VOLUME_ODDS_KEYS) <= set(B.PLAYER_MARKETS)
+    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:8]
+    # The pull this replaced, kept for the cache-only rebuild on deploy day.
+    assert B.PLAYER_MARKETS_PRIOR == B.PLAYER_MARKETS[:5] + list(O.ALT_ODDS_TO_MARKET)
 
 
 def test_the_authorization_estimate_matches_the_worst_saturday():

@@ -41,18 +41,21 @@ SEASON = 2025
 
 #: (name, filed team, position, markets)
 ROSTER = [
-    ("Carson Beck", "UGA", "QB", ("pass_yds",)),
-    ("Nate Frazier", "UGA", "RB", ("rush_yds", "carries")),
+    ("Carson Beck", "UGA", "QB", ("pass_yds", "pass_att", "pass_cmp")),
+    ("Nate Frazier", "UGA", "RB", ("rush_yds", "carries", "rush_att")),
     ("Arian Smith", "UGA", "WR", ("rec_yds", "receptions")),
-    ("Will Howard", "OSU", "QB", ("pass_yds",)),
-    ("Quinshon Judkins", "OSU", "RB", ("rush_yds", "carries")),
+    ("Will Howard", "OSU", "QB", ("pass_yds", "pass_att", "pass_cmp")),
+    ("Quinshon Judkins", "OSU", "RB", ("rush_yds", "carries", "rush_att")),
     ("Emeka Egbuka", "OSU", "WR", ("rec_yds", "receptions")),
     # Filed at Alabama, playing for Georgia — the transfer case.
-    ("Jam Miller", "BAMA", "RB", ("rush_yds", "carries")),
+    ("Jam Miller", "BAMA", "RB", ("rush_yds", "carries", "rush_att")),
 ]
 
 MEANS = {"pass_yds": 250.0, "rush_yds": 70.0, "rec_yds": 60.0,
-         "receptions": 4.0, "carries": 12.0}
+         "receptions": 4.0, "carries": 12.0,
+         # The volume markets (2026-10-05): the play feed writes carries
+         # a second time as `rush_att`.
+         "pass_att": 32.0, "pass_cmp": 21.0, "rush_att": 12.0}
 
 GAMES = [{"game_id": "401", "home": "UGA", "away": "OSU",
           "home_name": "Georgia", "away_name": "Ohio State",
@@ -101,13 +104,13 @@ def _of(slate, player, market):
 
 
 # --- the markets ------------------------------------------------------
-def test_the_four_markets_are_the_four_that_are_measured():
+def test_the_markets_built_are_the_markets_measured():
     from engine import rankfit
     assert set(P.MARKETS) == set(rankfit.MARKETS["cfb"]), \
         "a market on the board that the fitter never walks"
 
 
-def test_all_four_markets_reach_the_slate():
+def test_every_market_reaches_the_slate():
     got = {p.market for p in _slate().props}
     assert got == set(P.MARKETS), got
 

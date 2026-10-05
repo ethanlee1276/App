@@ -233,7 +233,8 @@ def test_empty_markets_are_not_written():
     passing or receiving appears at all."""
     out = _parse([_play(rush_player="RB", rush_yds="4")])
     markets = {r["market"] for r in out["rows"]}
-    assert markets == {"anytime_td", "carries", "rush_yds", "rush_td"}
+    # `rush_att` is the carry a second time under the market's name (2026-10-05).
+    assert markets == {"anytime_td", "carries", "rush_att", "rush_yds", "rush_td"}
     assert not markets & {"pass_td", "rec_td", "pass_yds", "receptions"}
 
 
@@ -408,7 +409,10 @@ def test_the_opportunity_columns_are_named_rather_than_inferred():
     assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions",
                            "pass_yds": "pass_att",
                            "pass_td": "pass_att", "rush_td": "carries",
-                           "rec_td": "receptions"}
+                           "rec_td": "receptions",
+                           # the volume markets, 2026-10-05
+                           "pass_cmp": "pass_att", "pass_int": "pass_att",
+                           "rush_att": "carries"}
     # EVERY COMPANION IS A MARKET THIS PARSER ACTUALLY WRITES. A name
     # that is merely plausible — "pass_attempts" for "pass_att" — makes
     # the rule inert and silently restores the survivorship it exists to

@@ -45,7 +45,8 @@ SPORT_MARKETS = {
     # board that prices these four through the shared engine. See
     # formfit.SPORT_MARKETS for the premise this corrects and what it
     # cost. UFC stays out: no game logs to walk.
-    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions",
+            "pass_att", "pass_cmp", "rush_att"],      # the volume markets, 2026-10-05
     # Hoops props go through their own pricing machinery but land in the
     # SAME history table, keyed (sport, market) — so the deep fit works
     # here the moment game logs are ingested. It was never wired up, which

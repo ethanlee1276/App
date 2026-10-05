@@ -79,26 +79,34 @@ from __future__ import annotations
 from ..data_loader import Slate
 from ..models import (
     DefenseProfile, Game, GameLog, LiveStatus, Prop, SportsbookLine, Team,
-    Weather, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS,
+    Weather, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT,
 )
 
-#: The four markets a book hangs on a college skill player, and the four
+#: The markets a book hangs on a college skill player, and the ones
 #: `engine.rankfit.MARKETS["cfb"]` measures. Kept in one order so a board
-#: and its measurement can be read side by side.
-MARKETS = (PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS)
+#: and its measurement can be read side by side. The four yardage and
+#: catch markets since 2026-09-04; THE VOLUME MARKETS since 2026-10-05
+#: (Ethan: "QB Pass Attempts, QB Completions" for college too) — a
+#: quarterback's attempts and completions and a back's carries, the
+#: three the NFL board added on 2026-09-27. Same rule as then: a market
+#: here is built and priced, and it reaches Most Likely only once this
+#: box's own walk (`engine.rankfit`) has measured it above the floor.
+MARKETS = (PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT)
 
 #: The market's own column in ``player_game_logs``. Identical strings
 #: today — `engine.sources.cfbstats` writes the engine's own market names
 #: — and written down anyway, because the day they diverge the failure is
 #: a silently empty board.
 _COLUMN = {PASS_YDS: "pass_yds", RUSH_YDS: "rush_yds",
-           REC_YDS: "rec_yds", RECEPTIONS: "receptions"}
+           REC_YDS: "rec_yds", RECEPTIONS: "receptions",
+           PASS_ATT: "pass_att", PASS_CMP: "pass_cmp", RUSH_ATT: "rush_att"}
 
 #: Position by market, matching `engine.sources.nflverse.build_slate`. A
 #: roster position beats this wherever the mirror's roster file supplied
 #: one (`tds.role_of`); this is the fallback that keeps the projection's
 #: role logic sensible for a player with no label.
-_POSITION = {PASS_YDS: "QB", RUSH_YDS: "RB", REC_YDS: "WR", RECEPTIONS: "TE"}
+_POSITION = {PASS_YDS: "QB", RUSH_YDS: "RB", REC_YDS: "WR", RECEPTIONS: "TE",
+             PASS_ATT: "QB", PASS_CMP: "QB", RUSH_ATT: "RB"}
 
 #: Games of his own before a player can be projected. The same floor the
 #: walk-forward measurement uses (`engine.logwalk.settled_props_from_logs`
@@ -112,7 +120,11 @@ LOG_LIMIT = 20
 #: A market a player barely touches is not a market. Below this per-game
 #: mean the proxy line lands at the 0.5 floor for everyone and the board
 #: fills with third-string receivers at "over 0.5 yards".
-_MIN_MEAN = {PASS_YDS: 40.0, RUSH_YDS: 12.0, REC_YDS: 12.0, RECEPTIONS: 1.5}
+_MIN_MEAN = {PASS_YDS: 40.0, RUSH_YDS: 12.0, REC_YDS: 12.0, RECEPTIONS: 1.5,
+             # The NFL harness's role floors (marketfit.ROLE_FLOOR): a
+             # book hangs attempts on a starter, carries on a back who
+             # gets them.
+             PASS_ATT: 15.0, PASS_CMP: 8.0, RUSH_ATT: 8.0}
 
 
 def _round_half(x: float) -> float:
@@ -452,7 +464,7 @@ def build_props(conn, games: list[dict], season: int,
                 # A passing prop is a quarterback's whatever the usage
                 # mix says — `role_of` never guesses QB, deliberately, so
                 # the market itself is the better evidence here.
-                position="QB" if market == PASS_YDS else (role or _POSITION[market]),
+                position="QB" if market in (PASS_YDS, PASS_ATT, PASS_CMP) else (role or _POSITION[market]),
                 market=market,
                 logs=[GameLog(week=len(rows) - i, opponent=o, value=v,
                               home=h, prior=pr)

@@ -125,6 +125,13 @@ VOLUME_ODDS_KEYS = {"player_pass_attempts": PASS_ATT, "player_pass_completions":
                     "player_rush_attempts": RUSH_ATT}
 NFL_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
 UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, *VOLUME_ODDS_KEYS})
+#: COLLEGE BUYS THE VOLUME MARKETS TOO (2026-10-05). The four stat
+#: markets are still the NFL's by reference (`ODDS_TO_MARKET`); the three
+#: volume keys ride on the same guard the NFL's do — unproven against
+#: the API from here, dropped and retried if it refuses them. Passing
+#: touchdowns stay off college for the measured reason above.
+CFB_ODDS_TO_MARKET = dict(ODDS_TO_MARKET)
+CFB_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
 #: Keys the API refused this process: dropped from every later request.
 REJECTED_MARKETS: set = set()
 
@@ -589,7 +596,7 @@ SPORT_CONFIG = {
     # reason (see the WNBA note below). cfb_build passes the map it
     # derived into the parsers.
     "cfb": {"sport_key": "americanfootball_ncaaf",
-            "markets": ODDS_TO_MARKET, "teams": {},
+            "markets": CFB_ODDS_TO_MARKET, "teams": {},
             "scorers": SCORER_ODDS_TO_MARKET,
             "alternates": ALT_ODDS_TO_MARKET},
     # Hockey (2026-10-03): the same three kinds — stat props, the Yes/No

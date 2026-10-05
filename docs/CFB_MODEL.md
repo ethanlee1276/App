@@ -355,6 +355,63 @@ for season, n, tot in c.execute(
 A season with `pass_yds` rows and no `pass_att` rows has not been
 re-ingested since this shipped.
 
+## The volume markets: attempts, completions, carries (2026-10-05)
+
+Ethan, 2026-10-05: "for nfl and CFB For the most likely bets, we need to
+implement picks for QB interceptions, QB Pass Attempts, QB Completions,
+and any other market we are missing that we can be winning in."
+
+The NFL board added attempts, completions and carries on 2026-09-27
+(docs/NFL_MODEL.md §6a). College carried none, and its play feed did not
+count completions or interceptions at all. Now:
+
+  * `engine/sources/cfbstats` counts `pass_cmp` (completed passes, charged
+    to the resolved passer) and `pass_int` (the interception_thrown
+    column, one per row), and writes carries a second time as `rush_att`
+    so the settler finds a college back's carries by the market's name.
+    A passer with attempts and no completion, or no interception, is a
+    ZERO on the record (ZERO_WHEN), not a missing row. The ESPN box
+    (`engine/sources/cfbdata`) splits "C/ATT" and reads INT the same way.
+  * `engine/cfb/props.MARKETS` builds PASS_ATT, PASS_CMP, RUSH_ATT (role
+    floors 15 / 8 / 8 a game, the NFL harness's), `cfb_build` buys
+    `player_pass_attempts`, `player_pass_completions`,
+    `player_rush_attempts` behind the drop-and-retry guard — twelve
+    credits a game instead of nine — and `engine/rankfit.MARKETS["cfb"]`
+    walks them. The shelf opens per market only when the box's own walk
+    clears `likely.MIN_RANK_AUC` (0.60), exactly as for the four before.
+
+**Measured first**, on the cached 2022-2025 play files (`cfbmarketfit.py`,
+marketfit.py's own walk-forward, held-out 2025):
+
+    pass_att      QB   0.569 ± 0.014   n=1739
+    pass_cmp      QB   0.571 ± 0.014   n=1727
+    rush_att      RB   0.559 ± 0.013   n=2095
+    rush_yds      QB   0.580 ± 0.014   n=1738      (a quarterback's rushing)
+    pass_yds      QB   0.577 ± 0.015   n=1749      } the four already on
+    rec_yds       WR   0.594 ± 0.010   n=3210      } the board, in the
+    receptions    WR   0.579 ± 0.010   n=2987      } same harness
+    rush_yds      RB   0.554 ± 0.014   n=2146      }
+
+That harness is the strict one (it scores the NFL's catches at 0.619
+where the production walk scores 0.770): the new three rank as well as
+the four the college board already carries, which is the bar the NFL's
+secondary markets were added on (2026-09-23). The production
+measurement — the one that opens the shelf — is `rankfit.measure(conn,
+"cfb")` on the box's ingested logs, after the seasons are re-ingested so
+the new columns land.
+
+**Interceptions, measured and NOT wired.** A college passer's own rate is
+a coin (0.494); the opponent's takeaway rate carries the signal:
+
+    pass_int               0.494 ± 0.014   (his count, as the NFL was measured)
+    pass_int+opp           0.603 ± 0.014   (× the opponent's rate)
+    pass_int/att×att       0.493 ± 0.014   (rate per attempt × projected attempts)
+    pass_int/att×att+opp   0.611 ± 0.014   (the same, × the opponent's rate)
+
+0.611 − 0.014 is 0.597: on the line, not clearing it. Nothing is bought
+or built for interceptions until a re-measure clears the floor with its
+± under it — re-run `cfbmarketfit.py` after this season's weeks land.
+
 ## The kickoff forecast is stored, not only drawn (2026-09-07)
 
 Ethan, 2026-09-07: "Weather for totals. College totals were the only
