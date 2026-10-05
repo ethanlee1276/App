@@ -456,6 +456,15 @@ after the fact.
     the store measures the board's number. It opens only above 0.60;
   * the request: `player_pass_interceptions`, thirteen credits a game.
 
+**What the college card can and cannot show.** The defence's interceptions
+forced (rank and per game) sits under every college interception row, and
+it is in the number. The NFL card also names the passer's top targets, the
+corners over them and his charted interception-worthy rate
+(engine/gamescan.interception_facts); college has no defender file and no
+charting, so those lines do not exist there — the matchup card is the
+whole path. The census of every market the API hangs against what college
+buys, builds, prices, ranks and settles is `docs/MARKET_CENSUS.md`.
+
 **The same run left the volume markets' opponent out of the number.** What
 a defence allows in attempts, completions and carries is now rated and
 SHOWN on the card (`defensevs.STATS` qb_pass_att, qb_pass_cmp,

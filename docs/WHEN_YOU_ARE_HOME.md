@@ -50,6 +50,12 @@ nothing until the box measures it**: no matchup strength, no Most Likely
 figure. Both come from the pastes below. College's request is 13 credits
 a game (was 12 this morning), the NFL's 17 (was 16).
 
+**What we supply and what we are missing** — `docs/MARKET_CENSUS.md`, one
+table per league: every player market the Odds API hangs for football
+against what we buy, build, price, rank and settle, plus the wiring of
+the one projection chain per market (which measured factor reaches which
+number). Generated from the code's own tables; nothing to run.
+
 **1. NFL: the opponent as the model applies it — interceptions and the
 volume markets** (reads the nflverse cache; two or three minutes, low
 priority). What I do with it: a `verdict: ADOPT ×b` line on `pass_int`

@@ -802,9 +802,62 @@ def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
     return sign, text
 
 
+#: A corner who has allowed a passer rating this low is where picks come
+#: from; SOFT_RATING (105) is the other end, the side an offence goes at.
+TIGHT_RATING = 75.0
+
+
+def interception_facts(team: str, opp: str, *, targets: list | None, room: dict | None,
+                       charting: dict | None, league_iw: float | None, lean: list) -> list[dict]:
+    """THE PATH TO A PICK, as facts under a quarterback's card (Ethan,
+    2026-10-05: "knowing who the QB is throwing too the most and also
+    knowing who is guarding that person and light the path of if an
+    interception bet is good or not"): who he throws to, how tight the
+    corners over them have been, and how often his throws deserved to be
+    picked (FTN's interception-worthy rate against the league's). Every
+    one is SHOWN, not in the number — the number carries the measured
+    path (engine/passint: his rate × his attempts × the defence's
+    takeaways); these are the facts a reader checks it against, each
+    signed from the OVER's side of his interceptions."""
+    facts: list[dict] = []
+    tops = [(n, sh, pg) for n, sh, pg in (targets or []) if sh]
+    if tops:
+        words = ", ".join(f"{n} ({sh:.0%}{' of the targets' if i == 0 else ''}{f', {pg:g} a game' if i == 0 and pg else ''})"
+                          for i, (n, sh, pg) in enumerate(tops[:3]))
+        facts.append({"text": f"Throws most to {words}", "sign": 0, "markets": list(lean) + ["pass_int"],
+                      "in_number": False, "kind": "targets"})
+    rated = [c for c in (room or {}).get("corners") or []
+             if c.get("rating") is not None and int(c.get("targets") or 0) >= MIN_TARGETS]
+    if rated:
+        tight = min(rated, key=lambda c: c["rating"])
+        soft = max(rated, key=lambda c: c["rating"])
+        if tight is soft:
+            text = (f"{opp}'s {tight['spot']} corner {tight['name']} has allowed a {tight['rating']:.0f} "
+                    f"passer rating on {tight['targets']} targets")
+        else:
+            text = (f"{opp}'s corners: {tight['name']} ({tight['spot']}) has allowed a {tight['rating']:.0f} "
+                    f"passer rating on {tight['targets']} targets, {soft['name']} ({soft['spot']}) "
+                    f"{soft['rating']:.0f} on {soft['targets']}")
+        sign = 1 if tight["rating"] <= TIGHT_RATING else -1 if soft["rating"] >= SOFT_RATING else 0
+        facts.append({"text": text + (" — picks come from coverage this tight" if sign > 0 else
+                                      " — a side that soft is where completions go, not picks" if sign < 0 else ""),
+                      "sign": sign, "markets": ["pass_int"], "in_number": False, "kind": "coverage"})
+    c = charting or {}
+    rate = c.get("iw_rate")
+    if (c.get("attempts") or 0) >= 30 and rate is not None and league_iw:
+        sign = 1 if rate >= league_iw + 0.01 else -1 if rate <= league_iw - 0.01 else 0
+        facts.append({"text": f"Interception-worthy throws: {rate:.1%} of his attempts this season "
+                              f"(league {league_iw:.1%}) — charted by FTN, shown beside the number until a "
+                              f"held-out run says it belongs inside it",
+                      "sign": sign, "markets": ["pass_int"], "in_number": False, "kind": "charting"})
+    return facts
+
+
 def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowed: dict | None,
                ratings_def: dict, points: float | None, line_words: str, n_teams: int,
-               room: dict | None, ratings_off: dict | None = None) -> list[dict]:
+               room: dict | None, ratings_off: dict | None = None,
+               targets: list | None = None, charting: dict | None = None,
+               league_iw: float | None = None) -> list[dict]:
     """Every matchup fact about this player as a pick page needs it:
     ``{"text", "sign", "markets", "in_number", "kind"}``. ``sign`` is from
     the OVER's side (+1 helps the over); the page flips it for an under.
@@ -916,6 +969,9 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
         where = f" ({line_words})" if line_words else ""
         facts.append({"text": f"The lines expect {team} to score about {points:.0f}{where}",
                       "sign": sign, "markets": lean, "in_number": True, "kind": "points"})
+    if group == "qb":
+        facts += interception_facts(team, opp, targets=targets, room=room, charting=charting,
+                                    league_iw=league_iw, lean=lean)
     return facts
 
 
@@ -925,7 +981,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 mates_out: list | None, n_teams: int = 32,
                 allowed: dict | None = None, points: float | None = None,
                 line_words: str = "", charting: dict | None = None,
-                charting_def: dict | None = None, tracking: dict | None = None) -> dict:
+                charting_def: dict | None = None, tracking: dict | None = None,
+                targets: list | None = None, league_iw: float | None = None) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), what else the
     scan noticed, and the markets the read points at.
@@ -1101,7 +1158,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     notes += charting_notes(group, opp, charting, charting_def, tracking)
     facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d,
                        points=points, line_words=line_words, n_teams=n_teams, room=room,
-                       ratings_off=o)
+                       ratings_off=o, targets=targets, charting=charting, league_iw=league_iw)
     # TEAMMATES OUT (engine/teammates, measured): the breakdowns' "Colbie
     # Young out and Iosivas on IR — the Bengals have no WR3" read as a fact
     # for this bet, in the number where the model counted it.
@@ -1171,6 +1228,27 @@ def _face(faces: dict | None, name: str) -> str:
 #: quarterback, the backs and the receivers who carry the work.
 KEY_BACKS, KEY_TARGETS = 2, 4
 KEY_CARRY_SHARE, KEY_TARGET_SHARE, KEY_QB_ATTEMPTS = 0.25, 0.12, 10.0
+
+
+def top_targets(usage: dict, team: str, n: int = 3) -> list[tuple]:
+    """``[(name, target share, targets a game)]`` — who this team throws
+    to most, from the usage table, for the quarterback's card."""
+    mine = [u for (t, _k), u in (usage or {}).items()
+            if t == team and u.get("games") and (u.get("tgt_share") or 0) > 0]
+    mine.sort(key=lambda u: -(u.get("tgt_share") or 0))
+    return [(u.get("name") or "", float(u.get("tgt_share") or 0), u.get("targets_pg")) for u in mine[:n]]
+
+
+def league_iw_rate(charting: dict | None) -> float | None:
+    """FTN's interception-worthy throws per attempt over every charted
+    passer with 30+ attempts — the league line the card reads his against."""
+    att = iw = 0.0
+    for c in ((charting or {}).get("qbs") or {}).values():
+        a = float(c.get("attempts") or 0)
+        if a >= 30:
+            att += a
+            iw += float(c.get("iw") or 0)
+    return (iw / att) if att > 0 else None
 
 
 def key_players(usage: dict, teams, injuries=None) -> list[dict]:
@@ -1358,7 +1436,9 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             allowed=(allowed or {}).get(opp[team]), points=(points or {}).get(team),
             line_words=(line_words or {}).get(team, ""),
             charting=own_chart, charting_def=(ch.get("defense") or {}).get(opp[team]),
-            tracking=own_track)
+            tracking=own_track,
+            targets=top_targets(usage, team) if group == "qb" else None,
+            league_iw=league_iw_rate(ch) if group == "qb" else None)
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):

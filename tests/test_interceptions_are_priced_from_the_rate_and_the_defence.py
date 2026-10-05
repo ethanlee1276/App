@@ -322,6 +322,57 @@ def test_the_scan_says_forces_and_never_leans_a_read_onto_a_pick():
     assert "forces" in pick[0]["text"]
 
 
+def test_the_quarterback_s_card_lights_the_path_to_a_pick():
+    """Ethan: "knowing who the QB is throwing too the most and also knowing
+    who is guarding that person". His top targets, the corners over them
+    and his charted interception-worthy rate, each shown and signed from
+    the over's side of his interceptions, none in the number."""
+    from engine import gamescan as G
+    usage = {("NYG", "nabers"): {"name": "M. Nabers", "games": 5, "tgt_share": 0.31, "targets_pg": 10.2},
+             ("NYG", "slayton"): {"name": "D. Slayton", "games": 5, "tgt_share": 0.17, "targets_pg": 5.6},
+             ("NYG", "robinson"): {"name": "W. Robinson", "games": 5, "tgt_share": 0.14, "targets_pg": 4.8},
+             ("NYG", "tracy"): {"name": "T. Tracy", "games": 5, "tgt_share": 0.09, "targets_pg": 3.0},
+             ("DAL", "lamb"): {"name": "C. Lamb", "games": 5, "tgt_share": 0.30, "targets_pg": 10.0}}
+    assert [n for n, _s, _p in G.top_targets(usage, "NYG")] == ["M. Nabers", "D. Slayton", "W. Robinson"]
+    room = {"corners": [{"name": "T. Diggs", "spot": "LCB", "rating": 68.0, "targets": 31},
+                        {"name": "D. Bland", "spot": "RCB", "rating": 101.0, "targets": 28},
+                        {"name": "J. Lewis", "spot": "NB", "rating": 55.0, "targets": 3}],    # too few targets
+            "missing": [], "weakest": None}
+    charting = {"qbs": {("NYG", "R.Wilson"): {"attempts": 160, "iw": 7, "iw_rate": 7 / 160},
+                        ("DAL", "D.Prescott"): {"attempts": 180, "iw": 3, "iw_rate": 3 / 180}}}
+    league = G.league_iw_rate(charting)
+    assert abs(league - 10 / 340) < 1e-9
+    facts = G.interception_facts("NYG", "DAL", targets=G.top_targets(usage, "NYG"), room=room,
+                                 charting=charting["qbs"][("NYG", "R.Wilson")], league_iw=league,
+                                 lean=["pass_yds", "pass_td", "pass_att", "pass_cmp"])
+    kinds = {f["kind"]: f for f in facts}
+    assert kinds["targets"]["text"].startswith("Throws most to M. Nabers (31% of the targets, 10.2 a game), D. Slayton (17%)")
+    assert "pass_int" in kinds["targets"]["markets"] and kinds["targets"]["sign"] == 0
+    cov = kinds["coverage"]
+    assert cov["sign"] == 1 and cov["markets"] == ["pass_int"] and cov["in_number"] is False
+    assert "T. Diggs (LCB) has allowed a 68 passer rating on 31 targets" in cov["text"]
+    assert "J. Lewis" not in cov["text"], "a corner with three targets is not rated"
+    ch = kinds["charting"]
+    assert ch["sign"] == 1 and "4.4% of his attempts" in ch["text"] and "league 2.9%" in ch["text"]
+    assert all(f["in_number"] is False for f in facts)
+    # Through read_facts, only a quarterback gets them.
+    got = G.read_facts("qb", "QB", "NYG", "DAL", usage={}, allowed=None, ratings_def={}, points=None,
+                       line_words="", n_teams=32, room=room, targets=G.top_targets(usage, "NYG"),
+                       charting=charting["qbs"][("NYG", "R.Wilson")], league_iw=league)
+    assert {f["kind"] for f in got} >= {"targets", "coverage", "charting"}
+    wr = G.read_facts("wr", "WR", "NYG", "DAL", usage={}, allowed=None, ratings_def={}, points=None,
+                      line_words="", n_teams=32, room=room, targets=G.top_targets(usage, "NYG"))
+    assert not [f for f in wr if f["kind"] in ("targets", "charting")]
+    # A soft room reads the other way; a middling one says nothing.
+    soft = {"corners": [{"name": "A", "spot": "LCB", "rating": 108.0, "targets": 30},
+                        {"name": "B", "spot": "RCB", "rating": 99.0, "targets": 30}]}
+    assert G.interception_facts("NYG", "DAL", targets=None, room=soft, charting=None, league_iw=None,
+                                lean=[])[0]["sign"] == -1
+    mid = {"corners": [{"name": "A", "spot": "LCB", "rating": 90.0, "targets": 30}]}
+    assert G.interception_facts("NYG", "DAL", targets=None, room=mid, charting=None, league_iw=None,
+                                lean=[])[0]["sign"] == 0
+
+
 def test_both_harnesses_print_a_verdict_under_the_written_rule():
     import cfbmarketfit as C
     import marketfit as M
