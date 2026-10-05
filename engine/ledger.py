@@ -5592,7 +5592,7 @@ def _harvested_closes(hist_conn) -> dict:
 
 
 @_audited("repair_closing_odds")
-def _same_book_close(cache: dict, hist_conn, bets, b, dates):
+def _same_book_close(cache: dict, hist_conn, bets, b, dates, stamped=None):
     """The close of the book ``b`` was posted at, else the best close across
     books, or None (engine/closebook). Built once per run over ``bets`` —
     one stream of the snapshot file — and kept in ``cache``. Never raises:
@@ -5606,11 +5606,11 @@ def _same_book_close(cache: dict, hist_conn, bets, b, dates):
             sb = SameBookCloses(hist_conn)
             sb.prepare([dict(r) for r in bets if r["market"] not in GAME_MARKETS])
             cache["_samebook"] = sb
-        def _stamped():
-            if "_snapshots" not in cache:
-                cache["_snapshots"] = _snapshot_closes()
-            return getattr(cache["_snapshots"], "stamped", ())
-        return sb.close_for(dict(b), list(dates or []), _stamped)
+        # The stamped keys settling already loaded, if it did — never a
+        # fresh stream of the snapshot file just for this.
+        if stamped is None:
+            stamped = getattr(cache.get("_snapshots"), "stamped", ()) or ()
+        return sb.close_for(dict(b), list(dates or []), stamped)
     except Exception as exc:                                  # noqa: BLE001
         # Named once a run: the bet keeps the older close it already had,
         # which a quiet night also produces, so the miss must say so.
@@ -5664,6 +5664,8 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
         "WHERE status IN ('won','lost','push')"
     ).fetchall()
     _sb_cache: dict = {}
+    # The snapshot index's stamped keys, as (player, market, date).
+    _snap_stamped = {k[:3] for k in getattr(snaps, "stamped", ())}
     fixed = cleared = agreed = filled = 0
     changes: list = []      # filled: had nothing, gains a close
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
@@ -5696,7 +5698,7 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
                 want = None        # not a legal American price; see linemoves
         # The same book's close, else the best one — the rule settling
         # banks by (engine/closebook). The fair close is untouched.
-        _px = _same_book_close(_sb_cache, hist_conn, rows, b, _dates)
+        _px = _same_book_close(_sb_cache, hist_conn, rows, b, _dates, _snap_stamped)
         if _px is not None:
             want = _px
         if apply and want is not None and want_fair is not None:

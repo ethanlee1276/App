@@ -63,6 +63,7 @@ class SameBookCloses:
         self._cache: dict = {}
         self._snap_rows = snapshots          # an iterable of snapshot rows, or None = the file
         self._snap: dict | None = None
+        self._stamped_keys: set = set()
 
     def close_for(self, b: dict, dates: list | None = None, stamped=None):
         """The price to bank: the same book's close, else the best one."""
@@ -70,28 +71,47 @@ class SameBookCloses:
         return same if same is not None else best
 
     def prepare(self, bets: list[dict]) -> None:
+        """One pass over the snapshot file, keeping only rows for these bets.
+
+        CHEAP ON PURPOSE (Ethan's first repair run, 2026-10-05, still going
+        at four minutes): the market is checked before the name, and each
+        raw name is normalised once, not once per row — the file holds
+        every sport's every pull. The keys whose game start was recorded
+        are kept as well, so the proven-close rule needs no second pass."""
         from . import linemoves
         from .sources.oddsapi import normalize_name
+        names: dict = {}
+
+        def norm(x):
+            v = names.get(x)
+            if v is None:
+                v = names[x] = normalize_name(x or "")
+            return v
         want = set()
         for b in bets:
             if b.get("player") and b.get("market") and b.get("line") is not None:
-                want.add((normalize_name(b["player"]), b["market"], round(float(b["line"]), 1)))
+                want.add((norm(b["player"]), b["market"], round(float(b["line"]), 1)))
+        markets = {k[1] for k in want}
         grouped: dict = {}
         rows = self._snap_rows if self._snap_rows is not None else linemoves.stream_history()
         for r in rows:
             try:
-                k = (normalize_name(r["player"]), r["market"], round(float(r["line"]), 1))
+                if r.get("market") not in markets:
+                    continue
+                k = (norm(r["player"]), r["market"], round(float(r["line"]), 1))
                 if k not in want:
                     continue
                 float(r["ts"])
                 grouped.setdefault((k[0], k[1], linemoves._slate_day(r), k[2]), []).append(r)
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, AttributeError):
                 continue
-        out = {}
+        out, stamped = {}, set()
         for key, items in grouped.items():
             legs = linemoves._pregame_legs(items)
             if not legs or not legs[0][1]:
                 continue
+            if legs[0][0] is not None:
+                stamped.add(key[:3])
             last: dict = {}
             for r in legs[0][1]:
                 bk = _bookkey(r.get("book"))
@@ -100,6 +120,7 @@ class SameBookCloses:
             out[key] = {bk: {"over": _price(r.get("over_odds")), "under": _price(r.get("under_odds"))}
                         for bk, r in last.items()}
         self._snap = out
+        self._stamped_keys = stamped
 
     def _harvested(self, b: dict, dates: list, stamped=None) -> list:
         from . import db, ledger
@@ -118,10 +139,10 @@ class SameBookCloses:
                 continue
             # Settling's rule (`ledger.settle_from_history`): a harvested
             # row nothing proves pre-game loses to a snapshot close cut at
-            # a recorded start. ``stamped`` is that set, asked for only
-            # when an unproven row is in hand (it costs a stream).
-            if not ledger._close_proven(q, b) and stamped is not None:
-                keys = stamped() if callable(stamped) else stamped
+            # a recorded start — the keys this object's own snapshot pass
+            # saw stamped, plus any set the caller already holds.
+            if not ledger._close_proven(q, b):
+                keys = self._stamped_keys | set(stamped or ())
                 if any((who, b["market"], d) in keys for d in dates):
                     continue
             price = ledger._close_odds_from(q, b["line"], b["side"])
