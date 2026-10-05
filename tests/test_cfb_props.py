@@ -41,10 +41,10 @@ SEASON = 2025
 
 #: (name, filed team, position, markets)
 ROSTER = [
-    ("Carson Beck", "UGA", "QB", ("pass_yds", "pass_att", "pass_cmp")),
+    ("Carson Beck", "UGA", "QB", ("pass_yds", "pass_att", "pass_cmp", "pass_int")),
     ("Nate Frazier", "UGA", "RB", ("rush_yds", "carries", "rush_att")),
     ("Arian Smith", "UGA", "WR", ("rec_yds", "receptions")),
-    ("Will Howard", "OSU", "QB", ("pass_yds", "pass_att", "pass_cmp")),
+    ("Will Howard", "OSU", "QB", ("pass_yds", "pass_att", "pass_cmp", "pass_int")),
     ("Quinshon Judkins", "OSU", "RB", ("rush_yds", "carries", "rush_att")),
     ("Emeka Egbuka", "OSU", "WR", ("rec_yds", "receptions")),
     # Filed at Alabama, playing for Georgia — the transfer case.
@@ -55,7 +55,10 @@ MEANS = {"pass_yds": 250.0, "rush_yds": 70.0, "rec_yds": 60.0,
          "receptions": 4.0, "carries": 12.0,
          # The volume markets (2026-10-05): the play feed writes carries
          # a second time as `rush_att`.
-         "pass_att": 32.0, "pass_cmp": 21.0, "rush_att": 12.0}
+         "pass_att": 32.0, "pass_cmp": 21.0, "rush_att": 12.0,
+         # Interceptions (2026-10-05): a count, paired with the attempts
+         # by date in the builder (engine/cfb/props.pair_by_period).
+         "pass_int": 0.8}
 
 GAMES = [{"game_id": "401", "home": "UGA", "away": "OSU",
           "home_name": "Georgia", "away_name": "Ohio State",

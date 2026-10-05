@@ -41,7 +41,10 @@ FBS_MIN_GAMES = 8
 #: `player_game_logs` market -> the nflverse column defensevs reads.
 COLUMN = {"rec_yds": "receiving_yards", "receptions": "receptions", "rush_yds": "rushing_yards",
           "pass_yds": "passing_yards", "pass_td": "passing_tds", "rec_td": "receiving_tds",
-          "rush_td": "rushing_tds", "carries": "carries", "pass_att": "attempts"}
+          "rush_td": "rushing_tds", "carries": "carries", "pass_att": "attempts",
+          # The volume markets and interceptions (2026-10-05): rated for the
+          # card; interceptions in the number (defensevs.TRANSFER_CFB).
+          "pass_cmp": "completions", "pass_int": "passing_interceptions"}
 
 
 def fbs_teams(conn, season: int) -> set:

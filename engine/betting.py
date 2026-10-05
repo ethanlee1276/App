@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Prop, PASS_TD, RECEPTIONS
+from .models import Prop, PASS_TD, PASS_INT, RECEPTIONS
 from .projection import Projection
 from .odds import (BestLine, best_over_line, best_under_line, consensus_fair,
                    devig_two_way, expected_value, is_quotable)
@@ -600,7 +600,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     from .losspatterns import veto as lp_veto
 
     def p_over_at(line: float) -> float:
-        if prop.market == PASS_TD:
+        if prop.market in (PASS_TD, PASS_INT):
             # POISSON, NOT A NORMAL TAIL. A quarterback throws between
             # zero and about five touchdowns; a normal fitted to a count
             # that small is visibly wrong at exactly the half-points the
@@ -609,6 +609,8 @@ def evaluate_prop(prop: Prop, proj: Projection,
             # different distribution. `engine/passtd.at_least` is the
             # closed form, and it is the same shape of decision
             # `longshots.prob_at_least_one` makes for scorers.
+            # Interceptions (engine/passint, 2026-10-05) are the same
+            # kind of count at the same kind of half-number.
             from .passtd import at_least
             raw = at_least(proj.mean, line)
         elif prop.market == RECEPTIONS:

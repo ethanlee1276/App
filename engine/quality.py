@@ -39,6 +39,10 @@ MARKET_TIER = {
     # The other long-shot market, Tier 3 with anytime_td for the same
     # reason §8 gives: high vig, rare event, most of a raw edge is error.
     "home_runs": 3, "pass_td": 3,
+    # Interceptions thrown (2026-10-05, engine/passint): a rare count at a
+    # half-number, quarantined with the other counts until its own record
+    # says otherwise.
+    "pass_int": 3,
 }
 
 # §3 step 5: how much of a raw model-vs-market disagreement we trust.

@@ -38,7 +38,8 @@ def test_college_buys_the_same_markets_the_nfl_does():
     2026-09-27 — on the same drop-and-retry guard."""
     assert O.SPORT_CONFIG["cfb"]["markets"] is O.CFB_ODDS_TO_MARKET
     assert set(O.CFB_ODDS_TO_MARKET.values()) == \
-        {"pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att"}
+        {"pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att",
+         "pass_int"}       # interceptions joined both leagues the same evening (engine/passint)
     assert all(O.CFB_ODDS_TO_MARKET[k] == v for k, v in O.ODDS_TO_MARKET.items())
     assert set(O.VOLUME_ODDS_KEYS) <= set(O.CFB_ODDS_TO_MARKET) <= set(O.NFL_ODDS_TO_MARKET)
     assert O.PASS_TD_ODDS_KEY not in O.CFB_ODDS_TO_MARKET, "passing touchdowns stay off college (measured)"
@@ -119,19 +120,23 @@ def test_every_event_call_is_now_billed_to_a_league():
 
 
 # --- what a pull costs, and who decides how much ----------------------
-def test_one_call_buys_twelve_markets_and_is_billed_for_twelve():
+def test_one_call_buys_thirteen_markets_and_is_billed_for_thirteen():
     """Five since 2026-09-03; nine since 2026-09-07, when the four
     alternate ladders joined (`oddsapi.ALT_ODDS_TO_MARKET`); twelve since
-    2026-10-05, when the three volume markets joined."""
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 12
+    2026-10-05, when the three volume markets joined; thirteen the same
+    evening, with interceptions."""
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 13
     assert B.PLAYER_MARKETS[0] == "player_anytime_td"
     for key in B.PLAYER_MARKETS[1:]:
         assert key in O.CFB_ODDS_TO_MARKET or key in O.ALT_ODDS_TO_MARKET, key
     assert set(O.ALT_ODDS_TO_MARKET) <= set(B.PLAYER_MARKETS)
     assert set(O.VOLUME_ODDS_KEYS) <= set(B.PLAYER_MARKETS)
-    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:8]
-    # The pull this replaced, kept for the cache-only rebuild on deploy day.
+    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:9]
+    # The pulls this replaced, kept for the cache-only rebuild on deploy day,
+    # newest first: this morning's twelve, the pre-ladder base, the pre-volume nine.
     assert B.PLAYER_MARKETS_PRIOR == B.PLAYER_MARKETS[:5] + list(O.ALT_ODDS_TO_MARKET)
+    assert B.PLAYER_MARKETS_PRIOR_VOLUME == [m for m in B.PLAYER_MARKETS if m != "player_pass_interceptions"]
+    assert B.PLAYER_MARKETS_FALLBACKS == [B.PLAYER_MARKETS_PRIOR_VOLUME, B.PLAYER_MARKETS_BASE, B.PLAYER_MARKETS_PRIOR]
 
 
 def test_the_authorization_estimate_matches_the_worst_saturday():

@@ -36,14 +36,18 @@ def test_the_book_is_asked_behind_the_guard_and_the_meter_counts_it():
     assert O.NFL_ODDS_TO_MARKET["player_pass_completions"] == PASS_CMP
     assert O.NFL_ODDS_TO_MARKET["player_rush_attempts"] == RUSH_ATT
     assert set(O.VOLUME_ODDS_KEYS) <= O.UNPROVEN_MARKETS, "unproven from here, like passing TDs were"
-    assert "player_pass_interceptions" not in O.NFL_ODDS_TO_MARKET, "measured a coin (0.540); not bought"
+    # The COUNT measured a coin (0.540) and was not bought; the RATE per
+    # attempt × projected attempts × the defence's takeaway rate is what
+    # went on the request on 2026-10-05 (engine/passint), one more credit.
+    assert O.NFL_ODDS_TO_MARKET["player_pass_interceptions"] == "pass_int"
+    assert "player_pass_interceptions" in O.UNPROVEN_MARKETS
     cfg = O.SPORT_CONFIG["nfl"]
-    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 16
+    assert B.EVENT_CREDITS["nfl"] == len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3 == 17
 
 
 def test_the_slate_builds_the_props_a_quarterback_and_a_back_now_hold():
     qb = [m for m, _r in N.POSITION_MARKETS["QB"]]
-    assert qb == [PASS_YDS, "pass_td", PASS_ATT, PASS_CMP, RUSH_YDS]
+    assert qb == [PASS_YDS, "pass_td", PASS_ATT, PASS_CMP, "pass_int", RUSH_YDS]
     assert RUSH_ATT in [m for m, _r in N.POSITION_MARKETS["RB"]]
     assert N.is_secondary("QB", RUSH_YDS) and N.SECONDARY_FLOOR[RUSH_YDS] == 8.0, \
         "a pocket passer with five yards a game gets no line nobody hangs"
@@ -69,7 +73,10 @@ def test_one_label_on_the_page_the_journal_and_the_chip():
     assert chips["carries"] == MARKET_LABELS[RUSH_ATT]
 
 
-def test_the_measured_figures_let_them_rank_and_keep_interceptions_off():
+def test_the_measured_figures_let_them_rank_and_keep_interceptions_off_most_likely():
+    """Interceptions are BUILT and PRICED since 2026-10-05 (engine/passint)
+    and still carry no NFL ranking figure: the box's own run of
+    `marketfit.py --opp` decides that, as it did for the three."""
     assert (RANK_AUC[PASS_ATT], RANK_AUC[PASS_CMP], RANK_AUC[RUSH_ATT]) == (0.707, 0.696, 0.632)
     for m in NEW:
         assert rankable(m, "nfl")

@@ -84,7 +84,11 @@ MARKETS = {
     # THE VOLUME MARKETS joined 2026-10-05 (engine/cfb/props.MARKETS says
     # why); the walk measures them on this box's logs and the shelf opens
     # only above the floor, as for the four before them.
-    "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att"),
+    "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att",
+            # Interceptions (2026-10-05): the walk carries the attempts and
+            # the opponent (logwalk.load_entries), so this is the board's
+            # own number being measured, not a form blend's.
+            "pass_int"),
     # HOCKEY (2026-10-03) walks its OWN model (engine/nhl/backtest) — a
     # per-60 rate times ice time is not the football chain logwalk hands
     # every other sport, so the branch in `measure` sends it there.
@@ -212,8 +216,7 @@ def measure(conn, sport: str, markets=None, log=print,
     outlive its evidence.
     """
     from . import calibrate as _cal
-    from . import db as _db
-    from .logwalk import walk
+    from .logwalk import walk, load_entries
 
     lines: list[str] = []
     store = load(path)
@@ -238,7 +241,7 @@ def measure(conn, sport: str, markets=None, log=print,
                 with _cal.disabled():
                     pairs = _nhl_bt.walk(conn, market, players=_nhl_players).pairs
             else:
-                entries = _db.entries_for_market(conn, sport, market)
+                entries = load_entries(conn, sport, market)
                 if not entries:
                     lines.append(f"rank fit {key}: no ingested logs")
                     continue

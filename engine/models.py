@@ -43,6 +43,14 @@ PASS_TD = "pass_td"
 PASS_ATT = "pass_att"
 PASS_CMP = "pass_cmp"
 RUSH_ATT = "rush_att"
+#: INTERCEPTIONS THROWN, 2026-10-05 (Ethan: "implement picks for QB
+#: interceptions"). The count was a coin twice over (0.540 NFL, 0.494
+#: college); what ranks is his RATE PER ATTEMPT times the attempts he is
+#: projected to throw, times the defence's own takeaway rate — college
+#: 0.611 ± 0.014 in the harness. Built from that shape (engine/passint),
+#: priced Poisson, Tier 3 on the edge board, and on Most Likely only
+#: where the league's own walk clears the floor.
+PASS_INT = "pass_int"
 
 # Human labels for the markets, used in the UI and explanations.
 MARKET_LABELS = {
@@ -57,6 +65,8 @@ MARKET_LABELS = {
     # "Carries" on purpose: the player page already draws a Carries chip
     # from the usage rows and dedupes chips BY LABEL (engine/statlogs).
     RUSH_ATT: "Carries",
+    # "Interceptions" on purpose, the stat chip's own word (engine/statlogs).
+    PASS_INT: "Interceptions",
 }
 
 
@@ -233,6 +243,13 @@ class Prop:
     form_prior: Optional[float] = None
     form_prior_n: int = 0
     form_prior_games: float = 0.0
+    #: COMPANION LOGS AND ANCHORS for a market whose number is built from
+    #: another stat of his (engine/passint, 2026-10-05): interceptions
+    #: ride on ``{"pass_att": [GameLog…] paired game for game with
+    #: ``logs``, "league_int_rate": the league's picks per attempt}``.
+    #: Empty for every other market, and then build_projection prices
+    #: exactly as before.
+    aux: dict = field(default_factory=dict)
 
 
 @dataclass

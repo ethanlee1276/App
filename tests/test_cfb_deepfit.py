@@ -62,7 +62,8 @@ import playerfit                                             # noqa: E402
 from engine import deepfit                                   # noqa: E402
 
 FOUR = ["pass_yds", "rush_yds", "rec_yds", "receptions",
-        "pass_att", "pass_cmp", "rush_att"]       # seven since 2026-10-05: the volume markets
+        "pass_att", "pass_cmp", "rush_att",       # seven since 2026-10-05: the volume markets
+        "pass_int"]                               # eight the same day: interceptions (engine/passint)
 
 
 def test_all_three_deep_fitters_accept_college():

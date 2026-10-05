@@ -33,7 +33,7 @@ from ..secrets import load_local_secrets
 # never closes while either module is still being defined.
 from .. import bookvig
 from ..models import (
-    SportsbookLine, PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS,
+    SportsbookLine, PASS_YDS, PASS_TD, PASS_ATT, PASS_INT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS,
 )
 
 ODDS_BASE = "https://api.the-odds-api.com/v4"
@@ -124,14 +124,26 @@ NFL_ODDS_TO_MARKET[PASS_TD_ODDS_KEY] = PASS_TD
 VOLUME_ODDS_KEYS = {"player_pass_attempts": PASS_ATT, "player_pass_completions": PASS_CMP,
                     "player_rush_attempts": RUSH_ATT}
 NFL_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
-UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, *VOLUME_ODDS_KEYS})
+#: INTERCEPTIONS THROWN, 2026-10-05 (Ethan: "implement picks for QB
+#: interceptions"). The API documents `player_pass_interceptions` for
+#: both football leagues. Bought on the strength of that documentation
+#: and the model in engine/passint (his rate per attempt × projected
+#: attempts × the defence's takeaway rate, the shape that measured
+#: 0.611 on college), one more credit an event, behind the same
+#: drop-and-retry guard as every key added since the incident below.
+PASS_INT_ODDS_KEY = "player_pass_interceptions"
+NFL_ODDS_TO_MARKET[PASS_INT_ODDS_KEY] = PASS_INT
+UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, PASS_INT_ODDS_KEY, *VOLUME_ODDS_KEYS})
 #: COLLEGE BUYS THE VOLUME MARKETS TOO (2026-10-05). The four stat
 #: markets are still the NFL's by reference (`ODDS_TO_MARKET`); the three
 #: volume keys ride on the same guard the NFL's do — unproven against
 #: the API from here, dropped and retried if it refuses them. Passing
-#: touchdowns stay off college for the measured reason above.
+#: touchdowns stay off college for the measured reason above;
+#: interceptions join college the same day as the NFL, since the shape
+#: the model prices was measured on college's own play files first.
 CFB_ODDS_TO_MARKET = dict(ODDS_TO_MARKET)
 CFB_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
+CFB_ODDS_TO_MARKET[PASS_INT_ODDS_KEY] = PASS_INT
 #: Keys the API refused this process: dropped from every later request.
 REJECTED_MARKETS: set = set()
 

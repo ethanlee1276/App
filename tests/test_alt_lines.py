@@ -89,7 +89,7 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     # joined the request, and back to four the same afternoon — see the
     # incident note in `sources.oddsapi`. The derived sum above is the
     # assertion that matters; this one just says which four.
-    assert len(cfg["markets"]) == 8, sorted(cfg["markets"])    # eight since 2026-09-27: the volume markets
+    assert len(cfg["markets"]) == 9, sorted(cfg["markets"])    # eight since 2026-09-27 (the volume markets); nine since 2026-10-05 (interceptions)
     # Baseball's price is derived the same way since its ladders joined
     # (2026-09-15): five markets, three ladders, three game markets.
     mlb = oa.SPORT_CONFIG["mlb"]
@@ -212,9 +212,9 @@ def test_college_buys_the_same_ladders_and_attaches_them_apart():
     import cfb_build as CB
     from engine.cfb import props as P
     assert [m for m in CB.PLAYER_MARKETS if m.endswith("_alternate")] == list(oa.ALT_ODDS_TO_MARKET)
-    assert CB.CREDITS_PER_EVENT == 12                   # nine until the volume markets, 2026-10-05
+    assert CB.CREDITS_PER_EVENT == 13                   # nine until the volume markets, 2026-10-05; thirteen with interceptions
     src = inspect.getsource(CB.attach_player_quotes)
-    assert "markets=PLAYER_MARKETS_BASE" in src, "no deploy-day fallback on the college pull"
+    assert "for _markets in PLAYER_MARKETS_FALLBACKS" in src, "no deploy-day fallback on the college pull"
     assert "parse_event_lines(payload, _alt_map)" in src
     slate = _slate()
     key = ("josh jacobs", RUSH_YDS)
@@ -229,7 +229,7 @@ def test_college_buys_the_same_ladders_and_attaches_them_apart():
     assert [ln.line for ln in prop.alt_sharp_lines] == [50.5]
     # The launcher's Saturday estimate rose with the price.
     import launch
-    assert launch.CFB_ODDS_COST == 3 + CB.PLAYER_EVENT_CAP * CB.CREDITS_PER_EVENT == 147
+    assert launch.CFB_ODDS_COST == 3 + CB.PLAYER_EVENT_CAP * CB.CREDITS_PER_EVENT == 159
     assert key in alts
 
 

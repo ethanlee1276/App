@@ -95,7 +95,8 @@ def _side(x) -> str:
 def _word(market: str) -> str:
     return {"receptions": "catches", "rec_yds": "receiving yards", "rush_yds": "rushing yards",
             "pass_yds": "passing yards", "pass_td": "passing TDs", "pass_att": "pass attempts",
-            "pass_cmp": "completions", "rush_att": "carries"}.get(market, market.replace("_", " "))
+            "pass_cmp": "completions", "rush_att": "carries",
+            "pass_int": "interceptions"}.get(market, market.replace("_", " "))
 
 
 def _snap_shift(row: dict):

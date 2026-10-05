@@ -23,7 +23,7 @@ from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
 from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
-    PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
+    PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
 )
 from ..data_loader import Slate
 
@@ -54,6 +54,9 @@ MARKET_COLUMNS = {
     PASS_ATT: ("attempts", "passing_attempts"),
     PASS_CMP: ("completions", "passing_completions"),
     RUSH_ATT: ("carries", "rushing_attempts"),
+    # nflverse spelled this `interceptions` and renamed it; the box's
+    # cache carries one or the other (engine/ingest reads both too).
+    PASS_INT: ("passing_interceptions", "interceptions"),
 }
 
 #: How many games a touchdown log is topped up to from the PRIOR season
@@ -494,7 +497,7 @@ QB_START_ATTEMPTS = 15.0
 
 
 #: The markets that are a quarterback's by nature.
-QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP)
+QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT)
 
 
 def quarterbacked(row: dict, market: str) -> bool:
@@ -527,6 +530,45 @@ def player_game_logs(rows: list[dict], player: str, market: str,
         ))
     out.sort(key=lambda g: g.week, reverse=True)
     return out
+
+
+def league_int_rate(rows: list[dict]) -> float | None:
+    """The league's interceptions per attempt over these weekly rows'
+    quarterback games (engine/passint.league_rate: a game counts where
+    he threw QB_START_ATTEMPTS or more). None with no quarterback rows."""
+    from ..passint import league_rate
+    att, picked = [], []
+    for r in _regular_season(rows):
+        if _s(r, "position", "position_group").upper() != "QB":
+            continue
+        att.append(_f(r, *MARKET_COLUMNS[PASS_ATT]))
+        picked.append(_f(r, *MARKET_COLUMNS[PASS_INT]))
+    return league_rate(att, picked)
+
+
+def pair_attempts(logs: list[GameLog], rows_now: list[dict], rows_before: list[dict],
+                  player: str, upto_week: int) -> tuple[list[GameLog], list[GameLog]]:
+    """His interception logs beside his attempts for THE SAME GAMES, in
+    the same order — ``(interception logs kept, attempts logs)``. A game
+    the attempts reader does not have (it cannot happen off one row set,
+    and the pairing refuses to guess if it does) drops from both, so the
+    rate in engine/passint is always picks over the throws they came
+    from. Current-season games pair by week; carried games (``prior``)
+    pair by last season's week."""
+    by_key: dict = {}
+    for g in player_game_logs(rows_now, player, PASS_ATT, upto_week):
+        by_key[(False, g.week)] = g
+    if rows_before:
+        for g in _carry.carried_logs(rows_before, player, PASS_ATT):
+            by_key[(True, g.week)] = g
+    kept, att = [], []
+    for g in logs:
+        partner = by_key.get((bool(getattr(g, "prior", False)), g.week))
+        if partner is None:
+            continue
+        kept.append(g)
+        att.append(partner)
+    return kept, att
 
 
 def td_game_logs(rows: list[dict], player: str, upto_week: int) -> list[GameLog]:
@@ -619,8 +661,14 @@ POSITION_MARKETS = {
     # back's rushing yards at the same 0.616. His rushing carries the
     # SECONDARY_FLOOR (8 yards — books hang a pocket passer 8.5-12.5 and
     # stop below that) so a statue gets no line nobody hangs.
+    # AND INTERCEPTIONS, 2026-10-05 (engine/passint): his rate per attempt
+    # times the attempts this slate projects, times the defence's takeaway
+    # rate — the shape that measured 0.638 on college's three held-out
+    # seasons. The NFL figure comes from the box's own run
+    # (`python3 marketfit.py --opp`); until it is pasted the row prices,
+    # sits at Tier 3 on the edge board and stays off Most Likely.
     "QB": [(PASS_YDS, "starter"), (PASS_TD, "starter"), (PASS_ATT, "starter"),
-           (PASS_CMP, "starter"), (RUSH_YDS, "starter")],
+           (PASS_CMP, "starter"), (PASS_INT, "starter"), (RUSH_YDS, "starter")],
     # EVERY MARKET THE BOOK IS ALREADY PAID FOR, 2026-09-23. Each position
     # had ONE market here since the first nflverse commit — a receiver got
     # receiving yards, a tight end catches, a back rushing yards — while
@@ -936,6 +984,9 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     # the same answer: every one of them keys a row by this same name.
     stats_of = _rows_by_player(stats)
     prior_of = _rows_by_player(prior_stats)
+    # The league's picks per attempt, for the interception rate's anchor
+    # (engine/passint): this season's quarterback games and last season's.
+    league_int = league_int_rate(list(stats) + list(prior_stats))
     # Snap shares, so a game a player left hurt is marked on his logs
     # (Ethan, 2026-09-23, Garrett Wilson's 0 vs CLE — 19 snaps, 39%).
     snaps = snap_table(season, season - 1 if carry else None)
@@ -1071,8 +1122,17 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             carried_report[spec.player] = carried
         else:
             baseline = _recent_mean(logs)
-        if baseline <= 0:
+        # A COUNT CAN BE ZERO AND STILL BE A MARKET: a passer with no pick
+        # in five games is the cleanest quarterback on the slate, not a
+        # man with no line (engine/passint prices him off his rate).
+        if baseline <= 0 and spec.market != PASS_INT:
             continue
+        aux: dict = {}
+        if spec.market == PASS_INT:
+            logs, att_logs = pair_attempts(logs, mine, mine_before, spec.player, upto_week)
+            if len(logs) < MIN_LOGS and thin is None:
+                continue
+            aux = {"pass_att": att_logs, "league_int_rate": league_int}
         stamp_snaps(logs, spec.player, season, snaps)
         pos = spec.position or position_of(spec.market)
         # A market that is not his position's own is built only when he
@@ -1081,6 +1141,8 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if is_secondary(pos, spec.market) and baseline < SECONDARY_FLOOR[spec.market]:
             continue
         line = _round_half(baseline) - 0.5  # a touch under baseline, like a book
+        if spec.market == PASS_INT:
+            line = 0.5          # the number every book hangs on a pick thrown
         # DERIVED FROM `POSITION_MARKETS`, NOT A SECOND COPY OF IT.
         #
         # THE OUTAGE OF 2026-09-10. This line was a hand-written literal
@@ -1122,6 +1184,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             form_prior=thin["anchor"] if thin and thin["weight"] < 1.0 else None,
             form_prior_n=_carry.THIN_ANCHOR_GAMES if thin else 0,
             form_prior_games=_carry.THIN_PRIOR_GAMES if thin else 0.0,
+            aux=aux,
         ))
 
     # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
@@ -1143,7 +1206,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     seen_td: set[tuple[str, str]] = set()
     td_props: list[Prop] = []
     for p in props:
-        if p.market in (PASS_YDS, PASS_ATT, PASS_CMP):
+        if p.market in (PASS_YDS, PASS_ATT, PASS_CMP, PASS_INT):
             continue                 # QB passing volume is not a scorer market
         key = (p.team, p.player)
         if key in seen_td:

@@ -82,7 +82,8 @@ def test_a_yes_only_board_counts_even_though_no_config_can_name_it():
         assert "anytime_td" in C._prop_markets("cfb")
         assert C._prop_markets("cfb") == {
             "anytime_td", "pass_yds", "rush_yds", "rec_yds", "receptions",
-            "pass_att", "pass_cmp", "rush_att"}          # the volume markets, 2026-10-05
+            "pass_att", "pass_cmp", "rush_att",          # the volume markets, 2026-10-05
+            "pass_int"}                                  # interceptions, the same evening
     finally:
         _led.DEFAULT_DB = saved
 

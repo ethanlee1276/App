@@ -79,7 +79,7 @@ from __future__ import annotations
 from ..data_loader import Slate
 from ..models import (
     DefenseProfile, Game, GameLog, LiveStatus, Prop, SportsbookLine, Team,
-    Weather, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT,
+    Weather, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT, PASS_INT,
 )
 
 #: The markets a book hangs on a college skill player, and the ones
@@ -91,7 +91,11 @@ from ..models import (
 #: three the NFL board added on 2026-09-27. Same rule as then: a market
 #: here is built and priced, and it reaches Most Likely only once this
 #: box's own walk (`engine.rankfit`) has measured it above the floor.
-MARKETS = (PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT)
+#: AND INTERCEPTIONS THROWN, the same day (engine/passint): a passer's
+#: rate per attempt × the attempts this slate projects × the defence's
+#: takeaway rate at the strength measured on college's own play files
+#: (defensevs.TRANSFER_CFB). Priced Poisson at the book's half-number.
+MARKETS = (PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT, PASS_INT)
 
 #: The market's own column in ``player_game_logs``. Identical strings
 #: today — `engine.sources.cfbstats` writes the engine's own market names
@@ -99,14 +103,15 @@ MARKETS = (PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, PASS_ATT, PASS_CMP, RUSH_ATT
 #: a silently empty board.
 _COLUMN = {PASS_YDS: "pass_yds", RUSH_YDS: "rush_yds",
            REC_YDS: "rec_yds", RECEPTIONS: "receptions",
-           PASS_ATT: "pass_att", PASS_CMP: "pass_cmp", RUSH_ATT: "rush_att"}
+           PASS_ATT: "pass_att", PASS_CMP: "pass_cmp", RUSH_ATT: "rush_att",
+           PASS_INT: "pass_int"}
 
 #: Position by market, matching `engine.sources.nflverse.build_slate`. A
 #: roster position beats this wherever the mirror's roster file supplied
 #: one (`tds.role_of`); this is the fallback that keeps the projection's
 #: role logic sensible for a player with no label.
 _POSITION = {PASS_YDS: "QB", RUSH_YDS: "RB", REC_YDS: "WR", RECEPTIONS: "TE",
-             PASS_ATT: "QB", PASS_CMP: "QB", RUSH_ATT: "RB"}
+             PASS_ATT: "QB", PASS_CMP: "QB", RUSH_ATT: "RB", PASS_INT: "QB"}
 
 #: Games of his own before a player can be projected. The same floor the
 #: walk-forward measurement uses (`engine.logwalk.settled_props_from_logs`
@@ -124,11 +129,45 @@ _MIN_MEAN = {PASS_YDS: 40.0, RUSH_YDS: 12.0, REC_YDS: 12.0, RECEPTIONS: 1.5,
              # The NFL harness's role floors (marketfit.ROLE_FLOOR): a
              # book hangs attempts on a starter, carries on a back who
              # gets them.
-             PASS_ATT: 15.0, PASS_CMP: 8.0, RUSH_ATT: 8.0}
+             PASS_ATT: 15.0, PASS_CMP: 8.0, RUSH_ATT: 8.0,
+             # A count: a clean passer's mean is 0 and he is still the
+             # market. The floor he must clear is the ATTEMPTS one, on
+             # the paired attempts log (see build_props).
+             PASS_INT: 0.0}
 
 
 def _round_half(x: float) -> float:
     return round(x * 2) / 2.0
+
+
+def pair_by_period(rows: list, att_rows: list) -> tuple[list, list]:
+    """His interception rows beside his attempts rows for the SAME games
+    (matched on the game's date), both newest first — ``(kept, attempts)``.
+    A game with one and not the other is dropped from both, so the rate
+    engine/passint builds is picks over the throws they came from."""
+    att = {p: r for r in att_rows for p in (r[0],)}
+    kept, paired = [], []
+    for r in rows:
+        a = att.get(r[0])
+        if a is None:
+            continue
+        kept.append(r)
+        paired.append(a)
+    return kept, paired
+
+
+def league_int_rate(filed: dict) -> float | None:
+    """The league's picks per attempt over every quarterback game in the
+    filed logs (engine/passint.league_rate: games of 15+ attempts)."""
+    from ..passint import league_rate
+    att, picked = [], []
+    for team_slots in (filed or {}).values():
+        for slot in team_slots.values():
+            ints, atts = pair_by_period(slot.get(_COLUMN[PASS_INT]) or [],
+                                        slot.get(_COLUMN[PASS_ATT]) or [])
+            att.extend(a[3] for a in atts)
+            picked.extend(i[3] for i in ints)
+    return league_rate(att, picked)
 
 
 def _proxy_line(values: list[float]) -> float:
@@ -432,6 +471,7 @@ def build_props(conn, games: list[dict], season: int,
 
     cands = _candidates(games, filed, current)
     census["candidates"] = len(cands)
+    league_int = league_int_rate(filed)
     census["transfers"] = sum(1 for side, _o, ft, _n in cands if ft != side)
     if not cands:
         return []
@@ -451,6 +491,24 @@ def build_props(conn, games: list[dict], season: int,
                         "position": slot.get("position") or u.get("position", "")})
         for market in MARKETS:
             rows = (slot.get(_COLUMN[market]) or [])[:LOG_LIMIT]
+            aux: dict = {}
+            if market == PASS_INT:
+                # The pick count rides on the attempts it came from: the
+                # same games, paired by date, and the ATTEMPTS floor is
+                # the one a passer must clear (a count's own mean is 0
+                # for the cleanest arm on the slate).
+                rows, att_rows = pair_by_period(rows, (slot.get(_COLUMN[PASS_ATT]) or [])[:LOG_LIMIT * 2])
+                if len(rows) < MIN_LOGS:
+                    if rows:
+                        census["thin_history"] += 1
+                    continue
+                att_vals = [v for _p, _o, _h, v, _pr in att_rows]
+                if sum(att_vals) / len(att_vals) < _MIN_MEAN[PASS_ATT]:
+                    census["below_volume"] += 1
+                    continue
+                aux = {"pass_att": [GameLog(week=len(att_rows) - i, opponent=o, value=v, home=h, prior=pr)
+                                    for i, (_p, o, h, v, pr) in enumerate(att_rows)],
+                       "league_int_rate": league_int}
             if len(rows) < MIN_LOGS:
                 if rows:
                     census["thin_history"] += 1
@@ -464,16 +522,19 @@ def build_props(conn, games: list[dict], season: int,
                 # A passing prop is a quarterback's whatever the usage
                 # mix says — `role_of` never guesses QB, deliberately, so
                 # the market itself is the better evidence here.
-                position="QB" if market in (PASS_YDS, PASS_ATT, PASS_CMP) else (role or _POSITION[market]),
+                position="QB" if market in (PASS_YDS, PASS_ATT, PASS_CMP, PASS_INT) else (role or _POSITION[market]),
                 market=market,
                 logs=[GameLog(week=len(rows) - i, opponent=o, value=v,
                               home=h, prior=pr)
                       for i, (_p, o, h, v, pr) in enumerate(rows)],
                 career_avg=sum(values) / len(values),
                 vs_opponent_avg=None,
-                lines=[SportsbookLine(book="proxy", line=_proxy_line(values),
+                # A pick thrown is hung at 0.5 by every book; the proxy says so.
+                lines=[SportsbookLine(book="proxy",
+                                      line=0.5 if market == PASS_INT else _proxy_line(values),
                                       over_odds=-110, under_odds=-110)],
                 usage_role="starter",
+                aux=aux,
                 # THE FACE, where ESPN publishes one. Keyed on the same
                 # normalised name the usage and roster lookups already
                 # join on, so a player found by one is found by all

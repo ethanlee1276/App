@@ -3,6 +3,7 @@
 
     python3 cfbmarketfit.py                  # the cached 2022-2025 play files
     python3 cfbmarketfit.py 2023 2024 2025   # other seasons (the last is held out)
+    python3 cfbmarketfit.py --opp            # the opponent, rated as production rates it
 
 Ethan, 2026-10-05: "for nfl and CFB For the most likely bets, we need to
 implement picks for QB interceptions, QB Pass Attempts, QB Completions,
@@ -186,6 +187,196 @@ def int_rate(att_hist: list, int_hist: list, league: dict, prior_att: float = 12
     return (career + recent) / 2
 
 
+# ═══ THE OPPONENT, AS THE MODEL WOULD APPLY IT ═══════════════════════════
+#
+# `score` measures the opponent arm the first cut of this file wrote: the
+# last twelve quarterback-games against the defence, across seasons, at
+# full strength. Production does not rate a defence that way —
+# engine/defensevs rates THIS season's games before the date, shrunk
+# n/(n+12) toward last season's factor (1.0 with no last season), and
+# applies the measured share of it (TRANSFER). Before a transfer is
+# written for a college market it is measured HERE in that exact form,
+# held out a season at a time, at each strength the table could carry.
+#
+# THE RULE, written before the run: a strength is adopted for a market
+# only where its mean held-out AUC beats the no-opponent arm by at least
+# ADOPT_MIN and beats it in every held-out season; the strength adopted
+# is the best mean. Interceptions are measured the same way and the
+# shelf still answers only to the box's own walk (engine/rankfit).
+ADOPT_MIN = 0.01
+OPP_STATS = {  # market -> (the role whose rows are summed per game, the stat column)
+    "pass_int": ("QB", "pass_int"), "pass_att": ("QB", "pass_att"), "pass_cmp": ("QB", "pass_cmp"),
+    "pass_yds": ("QB", "pass_yds"), "rush_att": ("RB", "carries"), "rush_yds": ("RB", "rush_yds"),
+    "rec_yds": ("WR", "rec_yds"), "receptions": ("WR", "receptions"),
+}
+OPP_SHRINK = 12.0
+STRENGTHS = {"count1": (0.5, 0.75, 1.0, 1.25, 1.5), "ou": (0.25, 0.5, 0.75, 1.0)}
+
+
+def _roles(rows) -> list:
+    """The role of every row, in order, as `score` would read it."""
+    recent: dict = defaultdict(lambda: defaultdict(list))
+    out = []
+    for _yr, _wk, name, pos, stats, _opp in rows:
+        out.append(role_of(pos, recent[name]))
+        for col in ROLE_COL.values():
+            recent[name][col].insert(0, stats.get(col, 0.0))
+    return out
+
+
+class _Defences:
+    """What each defence has allowed per game this season, the league's
+    mean, and last season's factor — engine/defensevs.ratings' shape,
+    kept in step with the walk so no row sees its own game."""
+
+    def __init__(self):
+        self.games: dict = defaultdict(lambda: defaultdict(list))      # (season, opp) -> stat -> [totals]
+        self.league: dict = defaultdict(lambda: defaultdict(lambda: [0.0, 0]))  # season -> stat -> [sum, n]
+        self.prior: dict = {}                                            # (season, opp) -> stat -> factor
+
+    def factor(self, season: int, opp: str, stat: str) -> float:
+        got = self.games.get((season, opp), {}).get(stat) or []
+        n = len(got)
+        if not n:
+            return 1.0
+        s, c = self.league[season][stat]
+        lg = s / c if c else 0.0
+        raw = (sum(got) / n) / lg if lg > 0 else 1.0
+        centre = self.prior.get((season - 1, opp), {}).get(stat, 1.0)
+        return centre + (raw - centre) * n / (n + OPP_SHRINK)
+
+    def add_week(self, season: int, totals: dict) -> None:
+        """``totals``: (opp, stat) -> total allowed that week."""
+        for (opp, stat), v in totals.items():
+            self.games[(season, opp)][stat].append(v)
+            acc = self.league[season][stat]
+            acc[0] += v
+            acc[1] += 1
+
+    def close_season(self, season: int) -> None:
+        for (yr, opp), stats in list(self.games.items()):
+            if yr != season:
+                continue
+            for stat, got in stats.items():
+                s, c = self.league[season][stat]
+                lg = s / c if c else 0.0
+                n = len(got)
+                raw = (sum(got) / n) / lg if (n and lg > 0) else 1.0
+                self.prior.setdefault((season, opp), {})[stat] = 1.0 + (raw - 1.0) * n / (n + OPP_SHRINK)
+
+
+def opponent_arms(rows, held_out: int) -> dict:
+    """{(market, role, arm): [(prob, outcome)]} for one held-out season,
+    where ``arm`` is "base", "opp raw" (interceptions only: `score`'s
+    arm) or "opp×<strength>" (the defence rated as production rates it)."""
+    league = league_anchors(rows, held_out)
+    roles = _roles(rows)
+    hist: dict = defaultdict(list)
+    recent: dict = defaultdict(lambda: defaultdict(list))
+    def_int: dict = defaultdict(list)
+    defs = _Defences()
+    scored: dict = defaultdict(list)
+    weeks: dict = defaultdict(list)
+    for i, row in enumerate(rows):
+        weeks[(row[0], row[1])].append(i)
+    last_season = None
+    for (yr, _wk), idx in sorted(weeks.items()):
+        if last_season is not None and yr != last_season:
+            defs.close_season(last_season)
+        last_season = yr
+        totals: dict = defaultdict(float)
+        for i in idx:
+            _yr, _wk, name, _pos, stats, opp = rows[i]
+            role = roles[i]
+            for mk, want, kind in CANDIDATES:
+                if role != want or mk not in league or mk not in OPP_STATS:
+                    continue
+                y = stats.get(mk, 0.0)
+                h = hist[(name, mk)]
+                rh = recent[name].get(ROLE_COL[role]) or []
+                eligible = (yr == held_out and len(h) >= MIN_GAMES and len(rh) >= 3
+                            and sum(rh[:3]) / 3 >= ROLE_FLOOR[role])
+                if eligible:
+                    f = defs.factor(yr, opp, OPP_STATS[mk][1])
+                    if kind == "count1":
+                        ratio = int_rate(hist[(name, "pass_att")], h, league)
+                        att = hist[(name, "pass_att")]
+                        if ratio is not None and len(att) >= MIN_GAMES and "pass_att" in league:
+                            lam = ratio * blend(att, league["pass_att"])
+                            scored[(mk, role, "base")].append((1 - math.exp(-lam), y >= 1))
+                            od = def_int.get(opp) or []
+                            if len(od) >= 4 and league[mk] > 0:
+                                opp_f = (sum(od[:12]) / len(od[:12])) / league[mk]
+                                scored[(mk, role, "opp raw")].append((1 - math.exp(-lam * opp_f), y >= 1))
+                            for b in STRENGTHS["count1"]:
+                                fb = 1.0 + b * (f - 1.0)
+                                scored[(mk, role, f"opp×{b:g}")].append((1 - math.exp(-lam * fb), y >= 1))
+                    else:
+                        proj = blend(h, league[mk])
+                        last = h[:LINE_GAMES]
+                        line = max(0.5, round(sum(last) / len(last) * 2) / 2 - 0.5)
+                        career = sum(h) / len(h)
+                        sd = (sum((v - career) ** 2 for v in h) / max(1, len(h) - 1)) ** 0.5 or 1.0
+                        if y != line:
+                            scored[(mk, role, "base")].append((1 - _norm_cdf((line + 0.5 - proj) / sd), y > line))
+                            for b in STRENGTHS["ou"]:
+                                fb = 1.0 + b * (f - 1.0)
+                                scored[(mk, role, f"opp×{b:g}")].append(
+                                    (1 - _norm_cdf((line + 0.5 - proj * fb) / sd), y > line))
+                h.insert(0, y)
+                if mk == "pass_int":
+                    def_int[opp].insert(0, y)
+            if role:
+                for mk, (want, col) in OPP_STATS.items():
+                    if role == want:
+                        totals[(opp, col)] += stats.get(col, 0.0)
+            for col in ROLE_COL.values():
+                recent[name][col].insert(0, stats.get(col, 0.0))
+        defs.add_week(yr, totals)
+    return scored
+
+
+def opponent_report(rows, held_outs=(2023, 2024, 2025)) -> list[str]:
+    """Mean held-out AUC per arm, each season beside it, and the verdict
+    the rule above gives — one block per market."""
+    per: dict = {}
+    for held in held_outs:
+        for key, pairs in opponent_arms(rows, held).items():
+            a, n = auc(pairs)
+            if a is not None:
+                per.setdefault(key, {})[held] = (a, n)
+    out = [f"College: the opponent as the model would apply it (engine/defensevs' rating, "
+           f"held out {', '.join(str(h) for h in held_outs)} in turn)", ""]
+    markets = sorted({(mk, role) for mk, role, _arm in per})
+    for mk, role in markets:
+        arms = {arm: v for (m, r, arm), v in per.items() if (m, r) == (mk, role)}
+        base = arms.get("base") or {}
+        if not base:
+            continue
+        out.append(f"  {mk} {role}")
+        best, best_mean = None, None
+        for arm in sorted(arms, key=lambda a: (a != "base", a != "opp raw", a)):
+            seasons = arms[arm]
+            if set(seasons) != set(base):
+                continue
+            mean = sum(a for a, _n in seasons.values()) / len(seasons)
+            cells = "  ".join(f"{h}: {a:.3f} (n={n})" for h, (a, n) in sorted(seasons.items()))
+            out.append(f"    {arm:<10} mean {mean:.3f}   {cells}")
+            if arm.startswith("opp×") and (best_mean is None or mean > best_mean):
+                best, best_mean = arm, mean
+        base_mean = sum(a for a, _n in base.values()) / len(base)
+        if best is None:
+            out.append("    verdict: no opponent arm scored")
+            continue
+        wins_all = all(arms[best][h][0] > base[h][0] for h in base)
+        if best_mean - base_mean >= ADOPT_MIN and wins_all:
+            out.append(f"    verdict: ADOPT {best} (+{best_mean - base_mean:.3f} over no opponent, every season)")
+        else:
+            out.append(f"    verdict: leave the opponent out of the number "
+                       f"({best} is {best_mean - base_mean:+.3f}; needs +{ADOPT_MIN} and every season)")
+    return out
+
+
 def report(results: dict, held: int) -> list[str]:
     out = [f"College ranking AUC, walk-forward, held-out {held} (marketfit.py's harness on the "
            f"cfbstats play feed)", ""]
@@ -199,6 +390,8 @@ def report(results: dict, held: int) -> list[str]:
 
 
 def main(argv) -> int:
+    opp = "--opp" in argv
+    argv = [a for a in argv if a != "--opp"]
     seasons = [int(a) for a in argv] or [2022, 2023, 2024, 2025]
     try:
         rows = load(seasons)
@@ -210,6 +403,10 @@ def main(argv) -> int:
         return 1
     held = seasons[-1]
     print()
+    if opp:
+        for line in opponent_report(rows, tuple(s for s in seasons if s > seasons[0])):
+            print(line)
+        return 0
     for line in report(score(rows, held), held):
         print(line)
     return 0

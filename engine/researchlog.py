@@ -46,6 +46,8 @@ MARKETS = {
     "pass td": "pass_td", "passing tds": "pass_td", "pass tds": "pass_td", "pass_td": "pass_td",
     "completions": "pass_cmp", "pass cmp": "pass_cmp", "pass_cmp": "pass_cmp",
     "pass att": "pass_att", "pass attempts": "pass_att", "pass_att": "pass_att",
+    "int": "pass_int", "ints": "pass_int", "interception": "pass_int", "interceptions": "pass_int",
+    "pass int": "pass_int", "pass_int": "pass_int",
 }
 
 

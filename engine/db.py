@@ -1103,6 +1103,56 @@ def entries_for_market(conn, sport: str, market: str,
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 
+def entries_with_companion(conn, sport: str, market: str, companion: str,
+                           min_games: int = 8, seasons: list[int] | None = None) -> list[dict]:
+    """`entries_for_market`'s shape with a second stat of THE SAME GAMES
+    beside each value — ``"companion"`` — and each game's ``"seasons"``.
+    A game with one stat and not the other is left out, so the two lists
+    pair game for game (engine/passint builds a rate from picks over the
+    throws they came from, and the walk needs the pair to re-build it)."""
+    q = ("SELECT player, season, period, game_id, team, opponent, home, market, value "
+         "FROM player_game_logs WHERE sport=? AND market IN (?, ?)")
+    args: list = [sport, market, companion]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " ORDER BY player, season, period, game_id"
+    games: dict = {}
+    for row in conn.execute(q, args):
+        g = games.setdefault(row["player"], {}).setdefault(
+            (int(row["season"] or 0), str(row["period"]), str(row["game_id"] or "")),
+            {"team": str(row["team"] or ""), "opp": str(row["opponent"] or ""), "home": int(row["home"] or 0)})
+        g[str(row["market"])] = float(row["value"] or 0.0)
+    out = []
+    for name, by_game in games.items():
+        keys = sorted(k for k, g in by_game.items() if market in g and companion in g)
+        if len(keys) < min_games:
+            continue
+        out.append({"name": name,
+                    "values": [by_game[k][market] for k in keys],
+                    "companion": [by_game[k][companion] for k in keys],
+                    "dates": [k[1] for k in keys],
+                    "seasons": [k[0] for k in keys],
+                    "teams": [by_game[k]["team"] for k in keys],
+                    "opps": [by_game[k]["opp"] for k in keys],
+                    "homes": [by_game[k]["home"] for k in keys]})
+    return out
+
+
+def allowed_timeline(conn, sport: str, market: str, seasons: list[int] | None = None) -> list[tuple]:
+    """``[(season, period, opponent, value)]`` for EVERY row of a market —
+    what each defence allowed, game by game, from every player who faced
+    it (not only the ones with enough games to be walked)."""
+    q = ("SELECT season, period, opponent, value FROM player_game_logs "
+         "WHERE sport=? AND market=? AND COALESCE(opponent, '') != ''")
+    args: list = [sport, market]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    return [(int(r["season"] or 0), str(r["period"]), str(r["opponent"]), float(r["value"] or 0.0))
+            for r in conn.execute(q, args)]
+
+
 def date_ranges(conn) -> dict:
     """First/last dates present in each store, so coverage gaps are visible.
 

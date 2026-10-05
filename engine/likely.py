@@ -119,6 +119,13 @@ RANK_AUC = {
 #: The game markets a card can carry (`gamebets._game_bet` bet_type).
 GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 
+#: The count markets priced on a Poisson arm (engine/passtd, engine/passint).
+#: Interceptions carry NO NFL figure here on purpose: the box's own run
+#: (`python3 marketfit.py --opp`) decides it, as it did for the three
+#: volume markets; college reads the rankfit store. Until then the row
+#: prices on the edge board at Tier 3 and never reaches this board.
+COUNT_MARKETS = ("pass_td", "pass_int")
+
 #: Game markets shown to rank, per sport — measured 2026-09-02 by
 #: `engine.gamerank` (see the header). ONLY the markets that cleared
 #: MIN_RANK_AUC are listed, because an entry here is what puts a market
@@ -430,6 +437,15 @@ def _prob_at(row: dict | None, market: str, side, line, fits=None):
     else:
         p_over = display_prob(market, row.get("projection"), line,
                               row.get("recent_values"), fits=fits)
+        if p_over is None and market in COUNT_MARKETS and row.get("projection") is not None:
+            # A COUNT'S RUNGS ARE POISSON (engine/passtd, engine/passint):
+            # a normal hung on 0.7 expected picks puts real mass below
+            # zero and prices 1.5 as if two were as likely as none.
+            try:
+                from .passtd import at_least
+                p_over = at_least(float(row.get("projection")), line)
+            except (TypeError, ValueError):
+                p_over = None
         if p_over is None:
             try:
                 mu, sd = float(row.get("projection")), float(row.get("proj_std") or 0)

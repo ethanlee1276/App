@@ -37,16 +37,35 @@ it is the server or your phone.
 
 **What shipped.** College now counts completions, interceptions and
 carries-as-a-market, builds attempts / completions / carries props, buys
-their prices (12 credits a game, was 9) and walks them in the rank store;
-each opens on the college Most Likely board only when the box's own walk
-clears 0.60. The NFL already had the three (2026-09-27). Interceptions
-are measured, not wired: college read 0.611 ± 0.014 with the opponent's
-takeaway rate (on the line, not over it); the NFL arms need the box's
-cache. Paste both outputs back:
+their prices and walks them in the rank store; each opens on the college
+Most Likely board only when the box's own walk clears 0.60. The NFL
+already had the three (2026-09-27).
 
-**1. NFL: interceptions round two + the other markets** (reads the nflverse
-cache; the FTN arm fetches the charting if it is not cached — a minute or
-two, low priority):
+**Interceptions are now BUILT on both leagues** (`engine/passint`): his
+picks per attempt × the attempts we project × the defence's takeaway
+rate, Poisson at 0.5, Tier 3 on the edge board. College measured the
+defence's part the way the model applies it — 0.529 → 0.638 held out
+2023-2025, every season — and carries it at ×1.5. **The NFL carries
+nothing until the box measures it**: no matchup strength, no Most Likely
+figure. Both come from the pastes below. College's request is 13 credits
+a game (was 12 this morning), the NFL's 17 (was 16).
+
+**1. NFL: the opponent as the model applies it — interceptions and the
+volume markets** (reads the nflverse cache; two or three minutes, low
+priority). What I do with it: a `verdict: ADOPT ×b` line on `pass_int`
+becomes `defensevs.TRANSFER[("pass_int","QB")] = b`; on any other market
+it becomes that market's transfer; "leave the opponent out" means the
+card shows it and the number ignores it, as college does for attempts:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py --opp
+```
+
+**1b. NFL: interceptions round two + the other markets** (the rate arm,
+the FTN interception-worthy arm, rush+rec yards, kicking, tackles; the
+FTN arm fetches the charting if it is not cached). The `pass_int/att×att+opp`
+line is the one that opens Most Likely: clearing 0.60 with its ± under it
+becomes `likely.RANK_AUC["pass_int"]`:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py
@@ -54,7 +73,9 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py
 
 **2. College: land the new columns, then measure.** The four cached
 seasons re-parse with the new counts (the play files stream; ten minutes
-or so on the box), then the rank walk stores what the logs support:
+or so on the box), then the rank walk stores what the logs support —
+`pass_int` is in the walk now, attempts and opponent included, so its
+line says whether the college interception shelf opens:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cfbhist --seasons 2022-2026 2>&1 | tail -15

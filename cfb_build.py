@@ -249,6 +249,9 @@ PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
                   # guard (oddsapi.UNPROVEN_MARKETS).
                   "player_pass_attempts", "player_pass_completions",
                   "player_rush_attempts",
+                  # INTERCEPTIONS THROWN (2026-10-05, engine/passint):
+                  # one more credit a game, the same guard.
+                  "player_pass_interceptions",
                   # THE ALTERNATE LADDERS (2026-09-07), the same four
                   # keys the NFL pull buys and for the same reason: at a
                   # main line the Most Likely board has nothing it can
@@ -266,7 +269,13 @@ PLAYER_MARKETS_BASE = [m for m in PLAYER_MARKETS if not m.endswith("_alternate")
 #: than finding "nothing on disk" twice.
 PLAYER_MARKETS_PRIOR = [m for m in PLAYER_MARKETS
                         if m not in ("player_pass_attempts", "player_pass_completions",
-                                     "player_rush_attempts")]
+                                     "player_rush_attempts", "player_pass_interceptions")]
+#: …and the request as it was for the hours between the volume markets
+#: and interceptions (both 2026-10-05), for the same deploy-day read.
+PLAYER_MARKETS_PRIOR_VOLUME = [m for m in PLAYER_MARKETS if m != "player_pass_interceptions"]
+#: Every earlier spelling of the request, newest first: what a
+#: cache-only rebuild tries after today's name finds nothing.
+PLAYER_MARKETS_FALLBACKS = [PLAYER_MARKETS_PRIOR_VOLUME, PLAYER_MARKETS_BASE, PLAYER_MARKETS_PRIOR]
 
 #: What one game costs, by the API's own rule — one credit per market per
 #: region, and every request this file makes is one region.
@@ -427,20 +436,22 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         except oddsapi.OddsAPIError:
             if not cache_only:
                 break                  # a live failure ends the spend, not the build
-            # THE DEPLOY-DAY MISS: no payload under the ladder's name
-            # yet, but the last paid pull's base-market payload is on
-            # disk. Same fallback as `oddsapi.apply_odds_to_slate`.
-            try:
-                payload, _quota = oddsapi.fetch_event_odds(
-                    event_id, api_key, markets=PLAYER_MARKETS_BASE,
-                    sport="cfb", ttl=1800, cache_only=True)
-            except oddsapi.OddsAPIError:
-                try:                   # the pull before the volume markets
+            # THE DEPLOY-DAY MISS: no payload under today's name yet,
+            # but the last paid pull's payload is on disk under the name
+            # the request had then. Every earlier spelling is tried,
+            # newest first (PLAYER_MARKETS_FALLBACKS). Same fallback as
+            # `oddsapi.apply_odds_to_slate`.
+            payload = None
+            for _markets in PLAYER_MARKETS_FALLBACKS:
+                try:
                     payload, _quota = oddsapi.fetch_event_odds(
-                        event_id, api_key, markets=PLAYER_MARKETS_PRIOR,
+                        event_id, api_key, markets=_markets,
                         sport="cfb", ttl=1800, cache_only=True)
+                    break
                 except oddsapi.OddsAPIError:
-                    continue           # never paid for — nothing on disk
+                    continue
+            if payload is None:
+                continue               # never paid for — nothing on disk
         # A LIVE PULL IS ZERO SECONDS OLD whatever was on disk before it.
         # `_request` only serves the cache under `cache_only` or inside
         # the 30-minute TTL, and both of those are what `age` measures.

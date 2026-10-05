@@ -130,7 +130,7 @@ SPORT_MARKETS = {
     # unexplained; whichever number a later reader needs, MEASURE IT
     # rather than quoting one of these.
     "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions",
-            "pass_att", "pass_cmp", "rush_att"],      # the volume markets, 2026-10-05
+            "pass_att", "pass_cmp", "rush_att", "pass_int"],      # the volume markets, 2026-10-05
     # UFC remains deliberately absent: it has no game logs at all, so a
     # fit here could never run. It learns from the journal only.
 }
@@ -171,8 +171,8 @@ def main() -> None:
           "this is the slow fit)\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
-        entries = _db.entries_for_market(conn, sport, market,
-                                         min_games=min_games)
+        from engine.logwalk import load_entries
+        entries = load_entries(conn, sport, market, min_games=min_games)
         if not entries:
             print(f"  {label:16} skipped — no player history in the DB")
             continue

@@ -408,6 +408,9 @@ FAMILY = {
     # Not a board market yet (2026-09-02); named so a slip that carries one
     # is priced against the measured QB-TD/WR-TD number, not the floor.
     "pass_td": "passtd",
+    # A pick thrown competes with nothing else on the slip; priced at the
+    # Tier 3 floor like the other counts.
+    "pass_int": "passint",
     "strikeouts": "pitch", "outs": "pitch",
     "total_bases": "bat", "hits": "bat", "home_runs": "bat",
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
@@ -426,7 +429,7 @@ FAMILY = {
 TIER = {
     "receptions": 1, "pass_att": 1, "pass_cmp": 1, "rush_att": 1,
     "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
-    "anytime_td": 3, "pass_td": 3,
+    "anytime_td": 3, "pass_td": 3, "pass_int": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
     "sog": 1, "saves": 1, "blocks": 2, "points": 2, "assists": 2, "goals": 3, "anytime_goal": 3,

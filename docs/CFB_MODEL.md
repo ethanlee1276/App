@@ -400,17 +400,69 @@ measurement — the one that opens the shelf — is `rankfit.measure(conn,
 "cfb")` on the box's ingested logs, after the seasons are re-ingested so
 the new columns land.
 
-**Interceptions, measured and NOT wired.** A college passer's own rate is
-a coin (0.494); the opponent's takeaway rate carries the signal:
+**Interceptions, measured first and then wired (the same evening).** A
+college passer's own rate is a coin (0.494); the opponent's takeaway rate
+carries the signal:
 
     pass_int               0.494 ± 0.014   (his count, as the NFL was measured)
     pass_int+opp           0.603 ± 0.014   (× the opponent's rate)
     pass_int/att×att       0.493 ± 0.014   (rate per attempt × projected attempts)
     pass_int/att×att+opp   0.611 ± 0.014   (the same, × the opponent's rate)
 
-0.611 − 0.014 is 0.597: on the line, not clearing it. Nothing is bought
-or built for interceptions until a re-measure clears the floor with its
-± under it — re-run `cfbmarketfit.py` after this season's weeks land.
+That first arm rated the defence crudely (its last twelve passer-games,
+across seasons, at full strength). Before anything was built, the
+opponent was re-measured **as the model would apply it** — this season's
+games before the date, shrunk n/(n+12) toward last season's factor, the
+exact rating `engine/defensevs` gives every matchup — held out 2023, 2024
+and 2025 in turn, at each strength the table could carry
+(`python3 cfbmarketfit.py --opp`):
+
+    pass_int QB      no opponent   0.529   (0.556 / 0.538 / 0.493)
+                     ×0.5          0.590
+                     ×0.75         0.608
+                     ×1.0          0.622
+                     ×1.25         0.631
+                     ×1.5          0.638   (0.659 / 0.645 / 0.611)   ← adopted
+
+The rule was written before the run (`cfbmarketfit.ADOPT_MIN`): adopt the
+best strength only where it beats no-opponent by 0.01 and in every held-out
+season. It beat it by 0.109, in every season. The curve is still rising
+at the top of the grid and the first harness's unshrunk arm scored 0.642,
+so the twelve-game shrink is heavy for a stat this rare — a re-measure
+with a lighter shrink is written down in `engine/defensevs`, not tuned
+after the fact.
+
+**What ships (engine/passint, 2026-10-05):**
+
+  * the prop: a quarterback's `pass_int` beside his attempts, paired game
+    for game by date (`engine/cfb/props.pair_by_period`), the attempts
+    floor (15 a game) deciding who is a passer, the book's 0.5 as the
+    proxy line, and the league's picks per attempt from the filed logs as
+    the rate's anchor;
+  * the number: his rate per attempt (career and last eight averaged, each
+    shrunk toward the league's by 120 notional attempts) × the attempts
+    THIS chain projects for him (the attempts market walked through its
+    own stores) is the base — the chain's base reads "Rate model" — and
+    the defence's interceptions forced reaches it through the matchup
+    step at ×1.5 (`defensevs.TRANSFER_CFB`), capped like every college
+    factor. Weather, injuries, the lineup step and player memory run as
+    for every other market (all ×1.0 for this one until measured);
+  * the price: Poisson at the half-number (`passtd.at_least`), Tier 3 on
+    the edge board with the 6% bar that quarantines the counts, and a
+    Poisson rung on the Most Likely ladder;
+  * the shelf: `rankfit.MARKETS["cfb"]` walks it, and the walk re-builds
+    the production model — attempts, league rate and the opponent's
+    rating from every passer who faced it (`logwalk.load_entries`) — so
+    the store measures the board's number. It opens only above 0.60;
+  * the request: `player_pass_interceptions`, thirteen credits a game.
+
+**The same run left the volume markets' opponent out of the number.** What
+a defence allows in attempts, completions and carries is now rated and
+SHOWN on the card (`defensevs.STATS` qb_pass_att, qb_pass_cmp,
+rb_rush_att) and moves nothing: +0.005, +0.002 and +0.008 at best, none
+in every season. The four yardage and catch markets read under +0.005 as
+well; a back's rushing yards read +0.020 at ×1.0 against the
+squared-error fit's 0.87 already shipped, which stays.
 
 ## The kickoff forecast is stored, not only drawn (2026-09-07)
 

@@ -276,7 +276,7 @@ FOOTBALL_SHELVES = (
     # figure is the MINIMUM across its markets (`_shelf_auc`), so adding
     # the weaker of the two cannot flatter the stronger — 0.687 against
     # passing yards' 0.691, near enough that the header barely moves.
-    ("passing", "Passing", ("pass_yds", "pass_td", "pass_att", "pass_cmp"),
+    ("passing", "Passing", ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int"),
      "Quarterback volume and the touchdowns that come with it. The "
      "weakest ranking on the board and labelled as such rather than "
      "mixed in silently — passing yards sort at 0.691 and passing "

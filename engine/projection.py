@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Prop, Game, Team
+from .models import Prop, Game, Team, PASS_INT, PASS_ATT, SportsbookLine
 from . import chain
 from .form import compute_form, FormResult, WINDOW_WEIGHTS
 from .weather import evaluate_weather, WeatherEffect
@@ -195,7 +195,34 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # exactly form.mean.
     mean_base = form.mean
     usage_why = ""
-    if usage and usage.get("opp_per_game") and usage.get("eff"):
+    # INTERCEPTIONS ARE A RATE, NOT A FORM BLEND (engine/passint,
+    # 2026-10-05). His picks per attempt, shrunk toward the league's,
+    # times the attempts THIS chain projects for him — the attempts
+    # market walked through the same steps with its own stores — is the
+    # base; the opponent's takeaway rate then reaches it through the
+    # matchup step like every other defence on this board. A prop
+    # without its attempts log prices as a plain count, as passing
+    # touchdowns do.
+    rate_base = None
+    att_logs = (prop.aux or {}).get("pass_att") if prop.market == PASS_INT else None
+    if att_logs:
+        from . import passint as _pi
+        from dataclasses import replace as _replace
+        _att_vals = [float(g.value) for g in att_logs]
+        _league = (prop.aux or {}).get("league_int_rate")
+        if _league is None:
+            _league = _pi.FALLBACK_LEAGUE_RATE.get(sport, _pi.FALLBACK_LEAGUE_RATE["nfl"])
+        att_prop = _replace(prop, market=PASS_ATT, logs=list(att_logs),
+                            career_avg=sum(_att_vals) / len(_att_vals),
+                            lines=[SportsbookLine(book="proxy", line=max(0.5, round(sum(_att_vals) / len(_att_vals)) - 0.5))],
+                            sharp_lines=[], alt_lines=[], alt_sharp_lines=[], aux={})
+        att_proj = build_projection(att_prop, game, opponent_team, model=model, context=context,
+                                    sport=sport, usage=(prop.aux or {}).get("att_usage"))
+        _rate = _pi.rate_per_attempt(_att_vals, [float(g.value) for g in prop.logs], float(_league))
+        rate_base = _pi.expected(_rate, att_proj.mean)
+        mean_base = rate_base
+        reasons.append(_pi.words(_rate, float(_league), att_proj.mean, rate_base))
+    if rate_base is None and usage and usage.get("opp_per_game") and usage.get("eff"):
         est = float(usage["opp_per_game"]) * float(usage["eff"])
         if est > 0:
             w = form.sample_games / (form.sample_games + USAGE_PRIOR_GAMES)
@@ -349,7 +376,11 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # see the form mean the player's own games earned before the measured
     # role pulled on it.
     steps = []
-    if form.mean > 0:
+    if rate_base is not None:
+        # The rate model IS the base: nothing multiplied a form mean into
+        # it, so the chain starts where the arithmetic started.
+        base_val, base_src = rate_base, "rate"
+    elif form.mean > 0:
         base_val, base_src = form.mean, "form"
         if abs(mean_base / form.mean - 1.0) > 1e-9:
             steps.append(chain.step("usage", mean_base / form.mean, usage_why))

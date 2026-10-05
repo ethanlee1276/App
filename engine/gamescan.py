@@ -638,19 +638,22 @@ def _allowed_line(allowed: dict | None, stat: str, opp: str, n_default: int = 32
     if not rank:
         return 0, ""
     words = D_STAT_WORDS.get(stat, stat)
+    verb = "forces" if stat in _FORCED else "gives up"
     q = max(1, round(n * 0.25))
     pg = r.get("pg")
     per = f" ({pg:.1f} a game)" if isinstance(pg, (int, float)) and pg < 10 else (
         f" ({pg:.0f} a game)" if isinstance(pg, (int, float)) else "")
     if rank <= q:
-        return 1, f"{opp} gives up the {_ord(rank)}-most {words}{per}"
+        return 1, f"{opp} {verb} the {_ord(rank)}-most {words}{per}"
     if rank > n - q:
-        return -1, f"{opp} gives up the {_ord(n - rank + 1)}-fewest {words}{per}"
+        return -1, f"{opp} {verb} the {_ord(n - rank + 1)}-fewest {words}{per}"
     return 0, ""
 
 
 #: The words for engine/defensevs.STATS, as a sentence says them.
 D_STAT_WORDS = {"qb_pass_yds": "passing yards", "qb_pass_td": "passing touchdowns",
+                "qb_pass_att": "pass attempts", "qb_pass_cmp": "completions",
+                "qb_pass_int": "interceptions", "rb_rush_att": "carries to running backs",
                 "wr_rec_yds": "receiving yards to wide receivers", "wr_rec": "catches to wide receivers",
                 "wr_td": "touchdowns to wide receivers", "te_rec_yds": "receiving yards to tight ends",
                 "te_rec": "catches to tight ends", "te_td": "touchdowns to tight ends",
@@ -765,11 +768,18 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
 _FACT_STATS = {
     "wr": (("rec_yds", "wr_rec_yds"), ("receptions", "wr_rec"), ("anytime_td", "wr_td")),
     "te": (("rec_yds", "te_rec_yds"), ("receptions", "te_rec"), ("anytime_td", "te_td")),
-    "rb": (("rush_yds", "rb_rush_yds"), ("rush_att", "rb_rush_yds"), ("anytime_td", "rb_td"),
+    "rb": (("rush_yds", "rb_rush_yds"), ("rush_att", "rb_rush_att"), ("anytime_td", "rb_td"),
            ("rec_yds", "rb_rec_yds"), ("receptions", "rb_rec")),
-    "qb": (("pass_yds", "qb_pass_yds"), ("pass_att", "qb_pass_yds"), ("pass_cmp", "qb_pass_yds"),
-           ("pass_td", "qb_pass_td")),
+    # Each volume market reads the defence's own count of it (2026-10-05):
+    # shown, not in the number — the college harness found the opponent
+    # worth under a point of AUC on attempts, completions and carries.
+    # Interceptions read what the defence forces; in the number where
+    # measured (defensevs.TRANSFER_CFB).
+    "qb": (("pass_yds", "qb_pass_yds"), ("pass_att", "qb_pass_att"), ("pass_cmp", "qb_pass_cmp"),
+           ("pass_td", "qb_pass_td"), ("pass_int", "qb_pass_int")),
 }
+#: Stats a defence FORCES rather than gives up: the sentence says so.
+_FORCED = {"qb_pass_int"}
 
 
 def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
@@ -781,12 +791,13 @@ def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
     if not rank:
         return 0, ""
     words = D_STAT_WORDS.get(stat, stat)
+    verb = "forces" if stat in _FORCED else "gives up"
     pg = r.get("pg")
     per = (f"{pg:.1f}" if pg < 10 else f"{pg:.0f}") if isinstance(pg, (int, float)) else ""
     where = (f"the {_ord(rank)}-most of {n}" if rank <= (n + 1) / 2
              else f"the {_ord(n - rank + 1)}-fewest of {n}")
-    text = (f"{opp} gives up {per} {words} a game — {where}" if per
-            else f"{opp} gives up {where} {words}")
+    text = (f"{opp} {verb} {per} {words} a game — {where}" if per
+            else f"{opp} {verb} {where} {words}")
     sign = 1 if rank <= n / 3 else -1 if rank > n * 2 / 3 else 0
     return sign, text
 
@@ -1487,7 +1498,10 @@ def implied_points(g) -> tuple[dict, dict]:
 #: a neutral read leans nowhere. Touchdown markets are left out: a scorer
 #: row is always "yes", and "no touchdown" is not a pick this board makes.
 LEAN_SIDE = {"breakout": "over", "good": "over", "tough": "under", "avoid": "under"}
-_NO_LEAN_MARKETS = ("anytime_td", "pass_td")
+#: A read's lean never reaches a count: a "could shine" quarterback is
+#: not an OVER on his own interceptions (the sign runs the other way),
+#: and the scorer and touchdown counts are their own boards.
+_NO_LEAN_MARKETS = ("anytime_td", "pass_td", "pass_int")
 
 
 def leans_from_reads(scan_reads: dict) -> dict:

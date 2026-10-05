@@ -46,7 +46,7 @@ SPORT_MARKETS = {
     # formfit.SPORT_MARKETS for the premise this corrects and what it
     # cost. UFC stays out: no game logs to walk.
     "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions",
-            "pass_att", "pass_cmp", "rush_att"],      # the volume markets, 2026-10-05
+            "pass_att", "pass_cmp", "rush_att", "pass_int"],      # the volume markets, 2026-10-05
     # Hoops props go through their own pricing machinery but land in the
     # SAME history table, keyed (sport, market) — so the deep fit works
     # here the moment game logs are ingested. It was never wired up, which
@@ -117,8 +117,8 @@ def main() -> None:
     print(f"Fitting {sport} player memory from {args.db}\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
-        entries = _db.entries_for_market(conn, sport, market,
-                                         min_games=min_games)
+        from engine.logwalk import load_entries
+        entries = load_entries(conn, sport, market, min_games=min_games)
         if not entries:
             print(f"  {label:16} skipped — no player history in the DB")
             continue

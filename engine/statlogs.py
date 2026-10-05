@@ -65,7 +65,10 @@ SPORT_MARKETS = {
             ("pass_td", "Passing TDs"),
             # The volume markets priced since 2026-09-27 (engine/models):
             # carries already has its chip above, under the same label.
-            ("pass_att", "Pass Attempts"), ("pass_cmp", "Completions")),
+            ("pass_att", "Pass Attempts"), ("pass_cmp", "Completions"),
+            # Interceptions thrown (2026-10-05): the label the priced
+            # market wears (models.MARKET_LABELS[PASS_INT]).
+            ("pass_int", "Interceptions")),
     "mlb": (("total_bases", "Total Bases"), ("hits", "Hits"),
             ("home_runs", "Home Runs"), ("strikeouts", "Strikeouts"),
             ("outs", "Outs Recorded")),
@@ -86,7 +89,8 @@ SPORT_MARKETS = {
     "cfb": (("pass_yds", "Passing Yards"), ("rush_yds", "Rushing Yards"),
             ("rec_yds", "Receiving Yards"), ("receptions", "Receptions"),
             ("carries", "Carries"), ("targets", "Targets"),
-            ("pass_td", "Passing TDs")),
+            ("pass_td", "Passing TDs"), ("pass_att", "Pass Attempts"),
+            ("pass_cmp", "Completions"), ("pass_int", "Interceptions")),
     # Hockey joined 2026-10-03, off the NHL's own box scores
     # (engine/sources/nhldata). Labels match engine/nhl/model.MARKET_LABELS.
     "nhl": (("sog", "Shots on Goal"), ("points", "Points"), ("goals", "Goals"),

@@ -87,15 +87,18 @@ def test_the_espn_box_splits_completions_over_attempts():
     assert rows["N. Frazier"]["rush_att"] == rows["N. Frazier"]["carries"] == 19.0
 
 
-def test_every_table_names_the_same_seven_markets():
+def test_every_table_names_the_same_eight_markets():
+    """Seven on 2026-10-05 morning; eight that evening, when interceptions
+    joined (engine/passint)."""
     import calibrate, formfit, playerfit
-    seven = {"pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att"}
-    assert set(P.MARKETS) == set(rankfit.MARKETS["cfb"]) == seven
-    assert set(P._COLUMN) == set(P._POSITION) == set(P._MIN_MEAN) == seven
+    eight = {"pass_yds", "rush_yds", "rec_yds", "receptions", "pass_att", "pass_cmp", "rush_att", "pass_int"}
+    assert set(P.MARKETS) == set(rankfit.MARKETS["cfb"]) == eight
+    assert set(P._COLUMN) == set(P._POSITION) == set(P._MIN_MEAN) == eight
     for mod in (calibrate, formfit, playerfit):
-        assert set(mod.SPORT_MARKETS["cfb"]) == seven, mod.__name__
-    assert set(O.CFB_ODDS_TO_MARKET.values()) == seven
-    assert P._POSITION["pass_att"] == P._POSITION["pass_cmp"] == "QB" and P._POSITION["rush_att"] == "RB"
+        assert set(mod.SPORT_MARKETS["cfb"]) == eight, mod.__name__
+    assert set(O.CFB_ODDS_TO_MARKET.values()) == eight
+    assert P._POSITION["pass_att"] == P._POSITION["pass_cmp"] == P._POSITION["pass_int"] == "QB"
+    assert P._POSITION["rush_att"] == "RB"
     for m in ("pass_att", "pass_cmp", "pass_int", "rush_att"):
         assert m in logwalk._POSITION
 
@@ -105,8 +108,11 @@ def test_the_college_request_buys_the_three_keys_behind_the_guard():
     keys = ("player_pass_attempts", "player_pass_completions", "player_rush_attempts")
     assert set(keys) <= set(B.PLAYER_MARKETS) and set(keys) <= O.UNPROVEN_MARKETS
     assert O.SPORT_CONFIG["cfb"]["markets"] is O.CFB_ODDS_TO_MARKET
-    assert B.CREDITS_PER_EVENT == 12 and B.PLAYER_MARKETS_PRIOR == [m for m in B.PLAYER_MARKETS if m not in keys]
-    assert "markets=PLAYER_MARKETS_PRIOR" in open(ROOT / "cfb_build.py", encoding="utf-8").read()
+    assert B.CREDITS_PER_EVENT == 13       # twelve that morning; thirteen with interceptions
+    assert B.PLAYER_MARKETS_PRIOR == [m for m in B.PLAYER_MARKETS
+                                      if m not in keys and m != "player_pass_interceptions"]
+    src = open(ROOT / "cfb_build.py", encoding="utf-8").read()
+    assert "for _markets in PLAYER_MARKETS_FALLBACKS" in src and "PLAYER_MARKETS_PRIOR]" in src
 
 
 def test_the_harness_reads_roles_and_rates_the_way_it_says():

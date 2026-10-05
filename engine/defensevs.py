@@ -43,10 +43,20 @@ from __future__ import annotations
 #: Position groups, from nflverse's `position` column.
 GROUP_OF = {"QB": "QB", "WR": "WR", "TE": "TE", "RB": "RB", "FB": "RB", "HB": "RB"}
 
-#: stat -> (group, the columns summed, words)
+#: stat -> (group, the columns summed, words). A column written "a|b"
+#: is read from the first spelling the row carries (nflverse renamed
+#: `interceptions` to `passing_interceptions`; the box's cache has either).
 STATS = {
     "qb_pass_yds": ("QB", ("passing_yards",), "passing yards"),
     "qb_pass_td": ("QB", ("passing_tds",), "passing TDs"),
+    # THE VOLUME MARKETS AND INTERCEPTIONS (2026-10-05, Ethan: "make sure
+    # it's using all the … data and stats we added before like defense").
+    # Rated and SHOWN for every one; in the number only where measured
+    # (TRANSFER / TRANSFER_CFB) — see the notes on those tables.
+    "qb_pass_att": ("QB", ("attempts|passing_attempts",), "pass attempts"),
+    "qb_pass_cmp": ("QB", ("completions|passing_completions",), "completions"),
+    "qb_pass_int": ("QB", ("passing_interceptions|interceptions",), "interceptions thrown"),
+    "rb_rush_att": ("RB", ("carries|rushing_attempts",), "carries by RBs"),
     "wr_rec_yds": ("WR", ("receiving_yards",), "receiving yards to WRs"),
     "wr_rec": ("WR", ("receptions",), "catches by WRs"),
     "wr_td": ("WR", ("receiving_tds", "rushing_tds"), "TDs to WRs"),
@@ -65,11 +75,15 @@ SHRINK_GAMES = 12.0
 
 
 def _f(row: dict, key: str) -> float:
-    try:
-        v = row.get(key)
-        return float(v) if v not in (None, "") else 0.0
-    except (TypeError, ValueError):
-        return 0.0
+    """One column, or the first present of several written "a|b"."""
+    for k in (key.split("|") if "|" in key else (key,)):
+        if k in row:
+            try:
+                v = row.get(k)
+                return float(v) if v not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+    return 0.0
 
 
 def _week(row: dict) -> int:
@@ -164,6 +178,14 @@ def stat_for(position: str, market: str) -> str | None:
         return "qb_pass_yds" if g == "QB" else None
     if market == "pass_td":
         return "qb_pass_td" if g == "QB" else None
+    if market == "pass_att":
+        return "qb_pass_att" if g == "QB" else None
+    if market == "pass_cmp":
+        return "qb_pass_cmp" if g == "QB" else None
+    if market == "pass_int":
+        return "qb_pass_int" if g == "QB" else None
+    if market == "rush_att":
+        return "rb_rush_att" if g == "RB" else None
     if market == "rush_yds":
         return "rb_rush_yds" if g == "RB" else None
     if market == "rec_yds":
@@ -214,6 +236,38 @@ MODEL_STAT_CFB = {
     ("rush_yds", "QB"): "rb_rush_yds",
 }
 
+#: INTERCEPTIONS THROWN, measured 2026-10-05 (`python3 cfbmarketfit.py
+#: --opp`, the cached 2022-2025 play files, held out 2023, 2024 and 2025
+#: in turn — the AUC of the Poisson arm's P(1+) at each strength, rated
+#: exactly as `ratings` rates a defence: this season's games before the
+#: date, shrunk n/(n+12) toward last season's factor):
+#:
+#:     no opponent      0.529   (0.556 / 0.538 / 0.493)
+#:     ×0.5             0.590
+#:     ×0.75            0.608
+#:     ×1.0             0.622
+#:     ×1.25            0.631
+#:     ×1.5             0.638   (0.659 / 0.645 / 0.611)   ← adopted
+#:
+#: The rule, written before the run (cfbmarketfit.ADOPT_MIN): adopt the
+#: best strength only where it beats no-opponent by 0.01 and in every
+#: season; it beat it by 0.109. The curve is still rising at the top of
+#: the grid, and the first harness's unshrunk cross-season rate scored
+#: 0.642: the twelve-game shrink is heavy for a stat this rare. That is
+#: a re-measure with a lighter shrink, written down here rather than
+#: tuned after the fact.
+#:
+#: THE SAME RUN LEFT THE VOLUME MARKETS OUT OF THE NUMBER. What a
+#: defence allows in attempts, completions and carries is shown on the
+#: card and moves nothing: +0.005, +0.002 and +0.008 at best, none in
+#: every season. A back's rushing yards read +0.020 at ×1.0 against the
+#: squared-error fit's 0.87 below; the fitted number stays, the
+#: harness's reading is noted.
+#:
+#: THE NFL IS NOT HERE. The same arms run on the box's nflverse cache
+#: (`python3 marketfit.py --opp`); an NFL strength is written from that
+#: paste, never borrowed from college.
+
 
 def model_stat(position: str, market: str, sport: str = "nfl") -> str | None:
     """The rating the projection multiplies by for this position and market, or None."""
@@ -261,6 +315,7 @@ TRANSFER_CFB = {
     ("anytime_td", "RB"): 0.44,   # n 9,233   beyond the total +0.37 +0.25 +0.18 +0.81
     ("anytime_td", "WR"): 0.48,   # n 10,782  beyond the total +0.08 +0.24 +0.36 +0.28
     ("anytime_td", "TE"): 0.21,   # n 2,475   beyond the total −0.08 +0.16 +0.09 +0.30
+    ("pass_int", "QB"): 1.5,      # ranking AUC 0.529 → 0.638 held out 2023-25 (the note above)
 }
 
 
@@ -329,8 +384,9 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
     show = stat_for(position, market) or model_stat(position, market, sport)
     g = GROUP_OF.get(str(position or "").upper())
     if g == "QB":
-        # A quarterback's two markets sit under each other.
-        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds"}.get(market)
+        # A quarterback's markets sit under each other: yards beside his
+        # touchdowns, and passing yards beside every other passing stat.
+        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds"}.get(market, "qb_pass_yds")
     else:
         also = (stat_for(position, "anytime_td") if market != "anytime_td"
                 else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))
