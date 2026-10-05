@@ -14,6 +14,73 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Tonight, in order (saved 2026-10-05, Ethan: "save all the code for me to run when I'm home")
+
+Run straight down. Each one is safe to run as-is; only step 6 changes
+anything, and it waits for us to look at step 5 together. Paste back
+each output with its number. The box picks up the new code by itself
+within about five minutes of the push; step 0 confirms it has.
+
+**0. The box has today's code** (should print `0250c2a9` or later):
+
+```
+git -C /srv/qellys log --oneline -1
+```
+
+**1. NFL: the defence's part of interceptions, measured the way the model
+uses it** (two or three minutes). An `ADOPT` line on `pass_int` becomes
+the NFL's interception matchup strength:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py --opp
+```
+
+**2. NFL: interceptions round two and the other markets** (a few minutes;
+fetches FTN charting if it is not cached). The `pass_int/att×att+opp`
+line decides whether NFL interceptions reach Most Likely:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py
+```
+
+**3. College: re-read the four seasons with the new counts, then measure**
+(about ten minutes for the first line). The last line says which college
+markets open on Most Likely, interceptions included:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cfbhist --seasons 2022-2026 2>&1 | tail -15
+sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT market, COUNT(*) FROM player_game_logs WHERE sport='cfb' AND market IN ('pass_att','pass_cmp','pass_int','rush_att') GROUP BY market\").fetchall())"
+sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'cfb')]"
+```
+
+**4. The near-even tier cap** — saves its verdict; the next build caps the
+labels only if it holds. Paste the TIER CAP block:
+
+```
+cd /srv/qellys && sudo -u qellys python3 bandcheck.py --save 2>&1 | sed -n '/TIER CAP/,/^$/p'
+```
+
+**5. Same-book closes for past bets, dry run** (writes nothing). Paste the
+counts and the OVERWRITTEN sample:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes 2>&1 | head -60
+```
+
+If it sits silent past twenty minutes, check it from a second terminal
+(`ps -o pid,etime,rss,cmd -C python3 | grep repair-closes; free -m`) and
+see "2b" further down.
+
+**6. Same-book closes, for real — only after we've looked at step 5.** It
+backs the journal up first; results, units and records do not change:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
+```
+
+The dated sections below say what each step is for and what I do with
+its output.
+
 ### Site speed — run this first (2026-10-04)
 
 The web server and the background work (settling, refits, board builds)
