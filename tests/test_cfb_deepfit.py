@@ -61,7 +61,8 @@ import formfit                                               # noqa: E402
 import playerfit                                             # noqa: E402
 from engine import deepfit                                   # noqa: E402
 
-FOUR = ["pass_yds", "rush_yds", "rec_yds", "receptions"]
+FOUR = ["pass_yds", "rush_yds", "rec_yds", "receptions",
+        "pass_att", "pass_cmp", "rush_att"]       # seven since 2026-10-05: the volume markets
 
 
 def test_all_three_deep_fitters_accept_college():
@@ -77,7 +78,7 @@ def test_the_markets_listed_are_the_markets_the_board_prices():
     minutes on a one-core box; a market priced with no fit is this bug."""
     src = open(os.path.join(ROOT, "engine", "cfb", "props.py"),
                encoding="utf-8").read()
-    i = src.index("MARKETS")
+    i = src.index("\nMARKETS = (")                    # the tuple itself, not the comment above it
     for market in FOUR:
         assert market in src[i:i + 400], \
             f"{market} is fitted but the college slate does not build it"

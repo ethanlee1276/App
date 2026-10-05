@@ -604,6 +604,11 @@ KEEP_CACHE_PREFIXES = {
     "cfb_rosters_": ("cfbfastR per-season roster, one file a season; the settler "
                      "reads it OFFLINE for a first-appearance player's school "
                      "(engine/cfbroster) — pruning it would blind that read"),
+    "cfb_player_stats_": ("cfbfastR per-season play file (~200k rows), one a season, "
+                          "bounded; the college measurement reads the cached seasons "
+                          "offline (cfbmarketfit.py)"),
+    "cfb_schedules_": ("cfbfastR per-season schedule, one small file a season, bounded; "
+                       "read offline beside the play file (cfbmarketfit.py)"),
     "injuries_": "nflverse per-season bulk, same",
     "ngs_": ("nflverse Next Gen Stats, ALL seasons in one file per kind — three "
              "files, bounded, six-hour TTL (engine/sources/ngs)"),

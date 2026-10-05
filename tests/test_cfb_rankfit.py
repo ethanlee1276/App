@@ -80,8 +80,9 @@ def _conn(rows):
 # --- the markets college is measured on -------------------------------
 def test_college_football_is_in_the_fitter_s_market_table():
     from engine import rankfit
+    # The four since 2026-09-04; the three volume markets since 2026-10-05.
     assert rankfit.MARKETS["cfb"] == ("pass_yds", "rush_yds", "rec_yds",
-                                      "receptions")
+                                      "receptions", "pass_att", "pass_cmp", "rush_att")
 
 
 def test_the_nfl_is_deliberately_not_in_it():
