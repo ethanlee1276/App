@@ -1439,6 +1439,25 @@ function rowStarted(r) {
   return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date });
 }
 
+/* THE PLAYER BOARDS CLEAR AT KICKOFF TOO. Ethan, 2026-10-05: "we need to
+   clear out all the players once the game starts and is over just like
+   how we do with the picks." The picks left at kickoff (rowStarted); the
+   boards of PLAYERS — who could shine or struggle, the touchdown
+   scenarios, the matchup picks, the long-shot scorers — kept every game
+   until the next rebuild, finished ones included. One game, by its two
+   teams, against the board's own scoreboard. The game page keeps its own
+   game's reads: that page is about the one game, before and after. */
+function gameKickedOff(g) {
+  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date });
+}
+function gameKeyStarted(key) {
+  const [away, home] = String(key || "").split("@");
+  if (!away || !home) return false;
+  const g = (((typeof state !== "undefined" && state.data) || {}).games || [])
+    .find((x) => x && x.away === away && x.home === home);
+  return gameKickedOff(g);
+}
+
 /* A ROW SHOWN BECAUSE NOTHING ON ITS SHELF CLEARED THE BAR.
 
    Ethan, 2026-09-08: "Also I don't want an empty boar either we need to
@@ -9258,6 +9277,7 @@ function foldRowsHTML(rows, opts = {}) {
 function scanTopRows(d) {
   const out = [];
   for (const g of (d.games || [])) {
+    if (gameKickedOff(g)) continue;            // off the board at kickoff, like the picks
     const reads = ((d.scan_reads || {})[`${g.away}@${g.home}`] || {}).players || [];
     reads.forEach((x) => out.push(x));
   }
@@ -9792,7 +9812,8 @@ function likelyScriptsHTML(rows) {
    row opens its game page. Tracked on paper under its own bucket. */
 function tdScenariosHTML() {
   if (oneBoardOn()) return "";                  // absorbed into the one board
-  const rows = ((state.data || {}).td_scenarios || []).filter((r) => r && r.player);
+  const rows = ((state.data || {}).td_scenarios || [])
+    .filter((r) => r && r.player && !gameKeyStarted(r.game) && !rowStarted(r));
   if (!rows.length) return "";
   const games = (state.data || {}).games || [];
   const gameFor = (key) => {
@@ -10473,7 +10494,8 @@ function matchupGameHTML(m, opts = {}) {
 }
 function matchupPicksHTML() {
   if (oneBoardOn()) return "";                  // absorbed into the one board
-  const games = ((state.data || {}).matchup_picks || []).filter((m) => m && ((m.td || []).length || (m.props || []).length));
+  const games = ((state.data || {}).matchup_picks || [])
+    .filter((m) => m && ((m.td || []).length || (m.props || []).length) && !gameKeyStarted(`${m.away}@${m.home}`));
   if (!games.length) return "";
   const n = games.reduce((a, m) => a + (m.td || []).length + (m.props || []).length, 0);
   return `<section class="likely-shelf matchup-picks" id="shelf-matchup-picks">
@@ -10503,7 +10525,7 @@ function matchupPickCount(g) {
 
 function renderLongShots() {
   const mlb = state.sport === "mlb";
-  const picks = state.data.long_shots || [];
+  const picks = (state.data.long_shots || []).filter((r) => !rowStarted(r));
   const host = document.getElementById("longshots");
   const note = document.getElementById("longshots-note");
   document.getElementById("longshots-sub").textContent = mlb
@@ -10513,7 +10535,7 @@ function renderLongShots() {
   // The board is three rows and there is no fourth. It used to list every
   // real-priced home run on the slate below the picks — two hundred names
   // most nights, which buried the three that were actually recommended.
-  const watch = state.data.longshot_watch || [];
+  const watch = (state.data.longshot_watch || []).filter((r) => !rowStarted(r));
   if (!picks.length) {
     host.innerHTML = watchlistHTML(watch, mlb);
     note.innerHTML = watch.length
