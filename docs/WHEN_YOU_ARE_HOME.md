@@ -54,7 +54,12 @@ a game (was 12 this morning), the NFL's 17 (was 16).
 table per league: every player market the Odds API hangs for football
 against what we buy, build, price, rank and settle, plus the wiring of
 the one projection chain per market (which measured factor reaches which
-number). Generated from the code's own tables; nothing to run.
+number). Generated from the code's own tables; nothing to run. Its one
+finding: `engine/teamcontext` spells three markets in words no market
+answers to, so the team's pass-rate tilt never reaches completions,
+passing touchdowns or rushing touchdowns — left as found and recorded,
+because moving the tilt onto them is a change in those numbers nothing
+has measured.
 
 **1. NFL: the opponent as the model applies it — interceptions and the
 volume markets** (reads the nflverse cache; two or three minutes, low

@@ -288,7 +288,9 @@ def wiring(t, sport: str) -> list[dict]:
                      "distribution": _distribution(t, market),
                      "defence": _defence(t, sport, market, positions),
                      "weather": _weather(t, market),
-                     "context": _context(t, market) if sport == "nfl" else "pace only (college skips the script rules)",
+                     # Only the NFL build prices the context layer (engine/teamcontext
+                     # needs the play-by-play profiles); college never passes it.
+                     "context": _context(t, market) if sport == "nfl" else "— (college does not price it)",
                      "usage": "yes" if sport == "nfl" and market in t["U"].OPP_BY_MARKET else "—",
                      "lineup": _lineup(t, market), "injuries": _injuries(t, market),
                      "fitters": _fitters(t, sport, market),
