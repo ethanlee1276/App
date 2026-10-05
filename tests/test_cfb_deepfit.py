@@ -76,12 +76,12 @@ def test_all_three_deep_fitters_accept_college():
 def test_the_markets_listed_are_the_markets_the_board_prices():
     """A fit offered for a market the board never prices is wasted
     minutes on a one-core box; a market priced with no fit is this bug."""
-    src = open(os.path.join(ROOT, "engine", "cfb", "props.py"),
-               encoding="utf-8").read()
-    i = src.index("\nMARKETS = (")                    # the tuple itself, not the comment above it
+    from engine.cfb import props
+    built = {props._COLUMN[m] for m in props.MARKETS}      # the slate's own market names
     for market in FOUR:
-        assert market in src[i:i + 400], \
+        assert market in built, \
             f"{market} is fitted but the college slate does not build it"
+    assert built == set(FOUR), "the slate builds a market no fitter walks"
 
 
 def test_ufc_stays_out_and_says_why():
