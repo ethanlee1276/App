@@ -14,28 +14,104 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
-### Tonight, in order (saved 2026-10-05, Ethan: "save all the code for me to run when I'm home")
+### Everything to run, in order (saved 2026-10-06, Ethan: "save all the code for me to run for when I'm home. I know it will be a big list")
 
-Run straight down. Each one is safe to run as-is; only step 6 changes
-anything, and it waits for us to look at step 5 together. Paste back
-each output with its number. The box picks up the new code by itself
-within about five minutes of the push; step 0 confirms it has.
+This is every outstanding command, start to finish. Run straight down
+and paste each output back with its number. **Parts A and B only read**
+(safe any time). **Part C measures and saves verdicts** (it changes
+nothing on the live board until the next build reads them). **Part D
+changes things**, and step 15 waits until we've looked at step 14
+together. Part E is setup you do in a browser plus two commands.
 
-**0. The box has today's code** (should print `a5cd4619` or later):
+If something errors or sits silent, paste what you have and skip to the
+next step; none of them depends on an earlier one except 15 (on 14).
+
+#### A. Is the box current and healthy? (seconds)
+
+**0. The box has today's code** (should print `70c6be95` or later; if it
+shows something older, wait five minutes and try again):
 
 ```
 git -C /srv/qellys log --oneline -1
 ```
 
-**1. NFL: the defence's part of interceptions, measured the way the model
-uses it** (two or three minutes). An `ADOPT` line on `pass_int` becomes
-the NFL's interception matchup strength:
+**1. Site speed and what is eating the box** (paste all of it):
+
+```
+uptime; free -m
+ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
+for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
+journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build" | tail -15
+```
+
+#### B. What the site is saying (seconds each, read-only)
+
+**2. NFL: does the board contradict itself?** Every board on the page
+read against the others: an over on one and an under on another, one bet
+with two chances, a play listed to avoid that another board posts, a
+reason under a pick that argues the other way, a pick on a player who is
+out. Paste the whole thing; each kind tells me which builder to fix:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.contradictions --sport nfl
+```
+
+**3. Hockey: why no picks?** Names the first thing stopping the NHL
+board. "NO PICKS EXPECTED — preseason only" is the honest answer until
+the regular season starts; anything starting with STOP is mine to fix:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nhlcheck
+journalctl -u qellys --since "6 hours ago" --no-pager | grep -iE "nhl" | tail -12
+```
+
+**4. The six research reports vs the weekend's results** (Monday night's
+game has settled): every report pick, our chance on the same bet, the
+price, and who was closer:
+
+```
+cd /srv/qellys && python3 -m engine.scancard
+```
+
+**5. Our touchdown record against the prices we took** (re-run of T3 with
+a bigger sample; banded by the chance we claimed):
+
+```
+cd /srv/qellys && python3 - <<'PY'
+import sqlite3
+c = sqlite3.connect('file:data/ledger.db?mode=ro', uri=True)
+rows = c.execute("""SELECT date, player, MAX(hit_prob), MAX(status='won'), MAX(odds) FROM bets
+  WHERE sport='nfl' AND market='anytime_td' AND UPPER(side)='OVER'
+  AND category IN ('board','likely','likely_live','matchup_td') AND status IN ('won','lost')
+  GROUP BY date, player""").fetchall()
+imp = lambda o: 100 / (o + 100) if o > 0 else -o / (100 - o)
+for lo, hi in ((0, .3), (.3, .4), (.4, .5), (.5, .6), (.6, 1.01)):
+    b = [r for r in rows if r[2] is not None and r[4] and lo <= r[2] < hi]
+    if b:
+        print(f"{lo:.0%}-{min(hi,1):.0%}  n {len(b):3}  we said {sum(r[2] for r in b)/len(b):.0%}  "
+              f"price said {sum(imp(r[4]) for r in b)/len(b):.0%}  scored {sum(r[3] for r in b)/len(b):.0%}")
+print("all:", len(rows), "picks,", sum(r[3] for r in rows), "scored")
+PY
+```
+
+**6. Which pages people use** (last 7 days; prints nothing useful if
+analytics is still switched off, which is fine):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.analytics report 7
+```
+
+#### C. Measure, then save the verdicts (minutes each, low priority)
+
+**7. NFL: the opponent's part of interceptions and the volume markets**
+(two or three minutes). An `ADOPT` line on `pass_int` becomes the NFL's
+interception matchup strength:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py --opp
 ```
 
-**2. NFL: interceptions round two and the other markets** (a few minutes;
+**8. NFL: interceptions round two and the other markets** (a few minutes;
 fetches FTN charting if it is not cached). The `pass_int/att×att+opp`
 line decides whether NFL interceptions reach Most Likely:
 
@@ -43,60 +119,102 @@ line decides whether NFL interceptions reach Most Likely:
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 marketfit.py
 ```
 
-**3. College: re-read the four seasons with the new counts, then measure**
-(about ten minutes for the first line). The last line says which college
-markets open on Most Likely, interceptions included:
+**9. College: re-read the four seasons with the new counts** (about ten
+minutes):
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cfbhist --seasons 2022-2026 2>&1 | tail -15
-sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT market, COUNT(*) FROM player_game_logs WHERE sport='cfb' AND market IN ('pass_att','pass_cmp','pass_int','rush_att') GROUP BY market\").fetchall())"
+```
+
+**10. College: check the new columns landed, then measure** (the last
+line says which college markets open on Most Likely, interceptions
+included):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT market, COUNT(*) FROM player_game_logs WHERE sport='cfb' AND market IN ('pass_att','pass_cmp','pass_int','rush_att') GROUP BY market\").fetchall())"
 sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'cfb')]"
 ```
 
-**4. The near-even tier cap** — saves its verdict; the next build caps the
-labels only if it holds. Paste the TIER CAP block:
+**11. The near-even tier cap.** Saves its verdict; the next build caps
+the labels only if it holds. Paste the TIER CAP block:
 
 ```
 cd /srv/qellys && sudo -u qellys python3 bandcheck.py --save 2>&1 | sed -n '/TIER CAP/,/^$/p'
 ```
 
-**5. Same-book closes for past bets, dry run** (writes nothing). Paste the
-counts and the OVERWRITTEN sample:
+**12. When to bet, re-checked against the same book's close** (a minute
+or two; streams the line snapshots):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 bettiming.py --sport nfl
+```
+
+**13. Do our parlay legs and tickets hit as claimed?** (seconds; the
+sample was too small last time):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import ledger, parlayledger as P; print(json.dumps(P.calibration(ledger.connect()), indent=1, default=str))"
+```
+
+#### D. The one that changes stored data
+
+**14. Same-book closes for past bets, dry run** (writes nothing). Paste
+the counts and the OVERWRITTEN sample:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes 2>&1 | head -60
 ```
 
 If it sits silent past twenty minutes, check it from a second terminal
-(`ps -o pid,etime,rss,cmd -C python3 | grep repair-closes; free -m`) and
-see "2b" further down.
+and paste this too:
 
-**6. Same-book closes, for real — only after we've looked at step 5.** It
-backs the journal up first; results, units and records do not change:
+```
+ps -o pid,etime,rss,cmd -C python3 | grep repair-closes; free -m
+```
+
+**15. Same-book closes, for real — only after we've looked at step 14
+together.** It backs the journal up first; results, units and records do
+not change, only the stored closing prices and the CLV built on them:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
 ```
 
-**7. NFL: does the board contradict itself?** (seconds; reads only).
-Every board on the page read against the others: an over on one and an
-under on another, one bet with two chances, a play listed to avoid that
-another board posts, a reason printed under a pick that argues the other
-way. Paste the whole thing; each kind tells me which builder to fix:
+#### E. Setup: hear about it when the site breaks (about 5 minutes)
+
+**16. healthchecks.io (P6-a, still not set up).** Website steps first:
+sign up free at https://healthchecks.io, rename "My First Check" to
+"Qellys Book", set **Period 15 minutes** and **Grace 15 minutes**, check
+your email is switched on under **Integrations**, then copy the ping URL
+(`https://hc-ping.com/...`). Then on the box (paste the URL when asked;
+the second line should print `1`):
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.contradictions --sport nfl
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEALTHCHECK_URL
+sudo grep -c '^QB_HEALTHCHECK_URL=https://hc-ping.com/' /etc/qellys/env
 ```
 
-**8. Hockey: why no picks?** (seconds; one free NHL schedule read). It
-names the first thing stopping the board. "NO PICKS EXPECTED — preseason
-only" is the honest answer until the regular season starts; anything
-that starts with STOP is mine to fix:
+Then the failure email (your email at the prompt; a test mail should
+arrive within a minute, check spam):
 
 ```
-cd /srv/qellys && sudo -u qellys python3 -m engine.nhlcheck
-journalctl -u qellys --since "6 hours ago" --no-pager | grep -iE "nhl" | tail -12
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_ALERT_EMAIL
+sudo cp deploy/qellys-alert@.service deploy/qellys-update.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart qellys
+sudo systemctl start qellys-alert@test.service
 ```
+
+No mail? `sudo journalctl -u qellys-alert@test -n 20 --no-pager`. The
+check turns green 10–15 minutes after the restart.
+
+#### Later (not tonight)
+
+- **NHL calibration (H14)**, once NHL picks have graded for two weeks:
+  `cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nhl`
+- **Live tab during a game (P9-a):** just open it while a game is on and
+  tell me if anything looks wrong.
+- **Steps 5 and 11** again every week or two, so the verdicts keep up
+  with the record.
 
 The dated sections below say what each step is for and what I do with
 its output.
@@ -360,15 +478,10 @@ Already done and moved to DROPLET_CHECKS: the record recount and dates
 (R1, R2), L1, the pre-game closes (P2-a), the backup check (P6-b), NHL
 H1–H13/H15, the round-7 fits, the corner rules, and the TD injury test.
 
-1. **B1–B3** — when to bet, heavy favourites, parlays (read-only, paste).
-2. **S1** — Tuesday: score the six reports against the results (paste).
-3. **P6-a** — healthchecks.io, so your phone hears when the site goes stale
-   (5 minutes; step by step below). Still not set up.
-4. Later: **T3** again in a week or two (the TD record against the prices; its
-   command is in DROPLET_CHECKS under "N1 + T3"), the
-   usage-count report (`sudo -u qellys python3 -m engine.analytics report 7`), **H14** (NHL calibration, once NHL picks have graded for two
-   weeks), **P9-a** (look at the Live tab during a game), **P45-a**
-   (Android), **P10-a** (nothing to do).
+Superseded 2026-10-06: everything still open is in **Everything to run,
+in order** at the top of this file (S1 is step 4, T3 step 5, the usage
+report step 6, B1/B3 steps 12–13, P6-a step 16, H14 and P9-a under
+"Later").
 
 ---
 
