@@ -80,7 +80,9 @@ def test_the_model_reads_what_was_measured_at_the_measured_strength():
     assert D.transfer("WR", "anytime_td") == 0.0 and D.transfer("K", "rec_yds") == 0.0
     assert set(D.TRANSFER) == {("pass_yds", "QB"), ("rush_yds", "RB"), ("rec_yds", "RB"), ("receptions", "RB"),
                                ("anytime_td", "RB"), ("rec_yds", "WR"), ("receptions", "WR"), ("rec_yds", "TE"),
-                               ("receptions", "TE")}
+                               ("receptions", "TE"),
+                               # The box's own run, 2026-10-06 (marketfit --opp), adopted by Ethan.
+                               ("pass_att", "QB"), ("pass_cmp", "QB"), ("pass_int", "QB")}
 
 
 def _rating(**factors):

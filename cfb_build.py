@@ -2407,6 +2407,10 @@ def main() -> None:
             # THE GAME PLAN, as the NFL's (engine/gameplan; nfl_build).
             from engine import gameplan as _gplan
             print(f"  {_gplan.attach(out, 'cfb')}")
+            try:
+                _lb.warn_avoids(out)
+            except Exception as _wexc:                    # noqa: BLE001
+                print(f"  ⚠️  plays-to-avoid warnings skipped: {_wexc}")
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every

@@ -96,7 +96,10 @@ def test_the_defence_tables_rate_the_new_stats_and_carry_the_measured_college_st
     assert D._f({"interceptions": "2"}, "passing_interceptions|interceptions") == 2.0
     assert D._f({"passing_interceptions": "1", "interceptions": "9"}, "passing_interceptions|interceptions") == 1.0
     assert D.TRANSFER_CFB[("pass_int", "QB")] == 1.5, "held out 2023-25: 0.529 → 0.638"
-    assert ("pass_int", "QB") not in D.TRANSFER, "the NFL's strength comes from the box's own run"
+    # The NFL's strengths came from the box's own run (2026-10-06, marketfit --opp),
+    # adopted by Ethan: interceptions, attempts and completions; nothing else new.
+    assert D.TRANSFER[("pass_int", "QB")] == 1.5 and D.TRANSFER[("pass_att", "QB")] == 0.75
+    assert D.TRANSFER[("pass_cmp", "QB")] == 0.5 and ("rush_att", "RB") not in D.TRANSFER
     for m in ("pass_att", "pass_cmp"):
         assert ("m", "QB") not in D.TRANSFER_CFB and (m, "QB") not in D.TRANSFER_CFB, "shown, under a point of AUC"
     assert ("rush_att", "RB") not in D.TRANSFER_CFB
@@ -159,7 +162,7 @@ def test_the_card_is_poisson_under_the_haircut_and_sits_at_tier_three():
     assert abs(raw_side - poisson_side) < 0.01, (raw_side, poisson_side, normal_side)
 
 
-def test_college_s_matchup_moves_the_number_at_the_measured_strength_and_the_nfl_s_is_shown():
+def test_both_leagues_matchups_move_the_number_at_their_measured_strength():
     rating = {"qb_pass_int": {"pg": 1.6, "league": 0.8, "raw": 2.0, "factor": 1.2, "games": 6, "rank": 1, "of": 60}}
     ints, atts = [0, 1, 0, 0, 1, 0, 1, 0], [31, 35, 28, 33, 40, 30, 38, 29]
     p_cfb, g_cfb, t_cfb = _qb(ints, atts, ratings=rating)
@@ -169,9 +172,12 @@ def test_college_s_matchup_moves_the_number_at_the_measured_strength_and_the_nfl
     step = {s["key"]: s["mult"] for s in cfb.chain["steps"]}
     assert abs(step["matchup"] - min(1.40, 1.0 + 1.5 * 0.2)) < 1e-6, step
     assert cfb.matchup.card and cfb.matchup.card["model"]["applied"] > 1.0
+    # The NFL's own run (2026-10-06) adopted the same strength, ×1.5, held
+    # inside the NFL's own bounds on a defence factor (defensevs.FACTOR_BOUNDS).
+    from engine.defensevs import FACTOR_BOUNDS
     nstep = {s["key"]: s["mult"] for s in nfl.chain["steps"]}
-    assert nstep["matchup"] == 1.0 and nfl.matchup.card["model"]["applied"] == 1.0
-    assert "has not predicted" in nfl.matchup.card["model"]["note"]
+    assert abs(nstep["matchup"] - min(FACTOR_BOUNDS["nfl"][1], 1.0 + 1.5 * 0.2)) < 1e-6, nstep
+    assert nfl.matchup.card and nfl.matchup.card["model"]["applied"] > 1.0
 
 
 # --- the builders -------------------------------------------------------------
@@ -266,10 +272,10 @@ def test_the_walk_rebuilds_the_production_model_opponent_included():
         nfl = settled_props_from_logs(entries, "pass_int", sport="nfl")
         blind = settled_props_from_logs(entries, "pass_int", sport="nfl", allowed=[])
     assert cfb and all(s.line == COUNT_LINE[PASS_INT] for s in cfb), "the book's 0.5, never a trailing average"
-    # The NFL walk has no interception transfer: the opponent changes nothing there…
-    assert [round(s.hit_prob, 6) for s in nfl] == [round(s.hit_prob, 6) for s in blind]
-    # …and college's measured strength does reach the walk's number.
-    assert [round(s.hit_prob, 6) for s in cfb] != [round(s.hit_prob, 6) for s in nfl]
+    # Both leagues' measured strengths reach the walk's number (the NFL's since
+    # its own run, 2026-10-06): the opponent changes it against a blind walk.
+    assert [round(s.hit_prob, 6) for s in nfl] != [round(s.hit_prob, 6) for s in blind]
+    assert [round(s.hit_prob, 6) for s in cfb] != [round(s.hit_prob, 6) for s in blind]
     # The pick-happy defence raises a passer's expected picks against it.
     by_opp = {}
     for s in cfb:
@@ -318,7 +324,8 @@ def test_the_scan_says_forces_and_never_leans_a_read_onto_a_pick():
     facts = G.read_facts("qb", "QB", "NYG", "DAL", usage={}, allowed=allowed, ratings_def={}, points=None,
                          line_words="", n_teams=32, room=None)
     pick = [f for f in facts if f["markets"] == ["pass_int"]]
-    assert pick and pick[0]["in_number"] is False and pick[0]["sign"] == 1, facts
+    # In the number since the NFL's own run adopted the strength (2026-10-06).
+    assert pick and pick[0]["in_number"] is True and pick[0]["sign"] == 1, facts
     assert "forces" in pick[0]["text"]
 
 

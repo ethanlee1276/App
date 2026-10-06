@@ -891,7 +891,9 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
     seen: dict = {}
     for market, own in _FACT_STATS.get(group, ()):
         used = _D.model_stat(pos, market) if _D.transfer(pos, market) > 0 else None
-        for stat, in_num in ((used, True), (own, used == own)):
+        # One visit when the stat in the number IS the stat shown, or the
+        # market was listed twice (["pass_yds", "pass_yds"]).
+        for stat, in_num in (((used, True),) if used == own else ((used, True), (own, False))):
             if not stat:
                 continue
             k = (stat, in_num)

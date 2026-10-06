@@ -10118,6 +10118,15 @@ function obWhyLine(r) {
     || (r.check_notes || {}).matchup || "");
   return t ? `<span class="ob-plain ob-why1">${escapeHtml(t.length > 96 ? `${t.slice(0, 93)}…` : t)}</span>` : "";
 }
+/* KEPT, AND SAID (Ethan, 2026-10-06: "keep 3 with the warning"). A pick
+   our own matchup read or the game plan argues against stays on the
+   board; its card says so in one line (engine/likelyboard harmonize,
+   warn_avoids). */
+function pickWarnHTML(r) {
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  return [r && r.matchup_warning, r && r.avoid_warning].filter(Boolean)
+    .map((t) => `<span class="ob-warn" role="note">⚠ ${escapeHtml(cap(String(t)))}</span>`).join("");
+}
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);
   const tags = likelyTagsHTML(r);
@@ -10134,7 +10143,7 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${td}${band}${obWhyLine(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${td}${band}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}${betItHTML(r, "mini")}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
@@ -12562,6 +12571,7 @@ function renderPropPage() {
             ${lk && lk.bet ? `<div class="pp-board">${escapeHtml(lk.book_name)} · placed ${escapeHtml(oddsTxt(lk.odds))}${
                 lk.placed_at ? ` · ${escapeHtml(placedStamp(lk.placed_at))}` : ""}</div>`
               : lk ? `<div class="pp-board">Most Likely${tier ? ` · ${escapeHtml(tier.word)}` : ""}</div>` : ""}
+            ${pickWarnHTML(lk || r)}
             ${lk && lk.locked && lk.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} Locked in — ${escapeHtml(lk.lock_note)}</div>` : ""}
             ${/* Priced from the sharp book's own pair at this line
                   (betting.sharp_anchor_for) — on every NFL row since it

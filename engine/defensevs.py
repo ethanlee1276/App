@@ -292,6 +292,16 @@ TRANSFER = {
     ("receptions", "WR"): 0.45,     # ±0.13   n 4,908   (pass defence) held-out +0.14%
     ("rec_yds", "TE"): 0.79,        # ±0.26   n 2,107   (pass defence) held-out +0.15%
     ("receptions", "TE"): 0.86,     # ±0.22   n 2,167   (pass defence) held-out +0.40%
+    # THE BOX'S OWN RUN, 2026-10-06 (`marketfit.py --opp`, runbook step 7),
+    # adopted by Ethan the same night ("yes 1"): the rating exactly as
+    # production applies it, held out 2023 / 2024 / 2025 in turn, ranking
+    # AUC per season. The rule, written before the run (marketfit.ADOPT_MIN):
+    # the best strength, only where it beats no opponent by 0.01 on average
+    # AND in every season. These three passed; receiving yards, catches,
+    # carries and QB rushing did not and stay out.
+    ("pass_att", "QB"): 0.75,       # 0.616 0.642 0.707 -> 0.623 0.655 0.724   mean +0.012
+    ("pass_cmp", "QB"): 0.5,        # 0.621 0.632 0.696 -> 0.629 0.643 0.708   mean +0.010
+    ("pass_int", "QB"): 1.5,        # 0.510 0.496 0.544 -> 0.525 0.525 0.587   mean +0.029
 }
 
 

@@ -155,6 +155,9 @@ SAME_GAME_BASELINE_RHO = 0.10
 # value instead gives 0.3524 — a joint 4.3 points too generous, which is 4.3
 # points of edge invented out of an estimate.
 RHO_SHRINK = 0.45
+#: Whether a positive correlation may raise a ticket's chance above the
+#: product of its legs. Off since 2026-10-06 — see `evaluate`'s note.
+POSITIVE_RHO_LIFTS = False
 
 # --- measured, and therefore preferred --------------------------------------
 # engine/corrfit.py fits these against our own history. Where a pairing has
@@ -1419,6 +1422,15 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     # The clamp is humility about an ESTIMATE. A counted number has nothing
     # to be humble about, so a measured rho is priced at face value.
     priced = [r.rho if r.measured else r.rho * RHO_SHRINK for r in rels]
+    # NO LIFT FROM A POSITIVE CORRELATION (Ethan, 2026-10-06, "yes 5"). The
+    # graded tickets (parlayledger.calibration on the box): the positively
+    # correlated ones went 0 for 11 against 3.44 expected with the lift and
+    # 2.99 with none (z -2.26). The lift was paying for a link the results
+    # do not show, so a positive rho prices as independent; a negative one
+    # still lowers the joint, which only ever costs us edge. Measured again
+    # as tickets settle (runbook step 13) before anything turns it back on.
+    if not POSITIVE_RHO_LIFTS:
+        priced = [min(0.0, x) for x in priced]
     if n == 2:
         modeled = joint_two(ps[0], ps[1], priced[0])
     else:

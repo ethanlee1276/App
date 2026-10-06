@@ -1337,6 +1337,33 @@ def test_the_launch_refresh_runs_the_slate_cap():
 
 # --- three grades, because there are three real answers ---------------------
 def test_a_ticket_is_graded_against_the_tax_band_not_a_point_estimate():
+    """The band logic is measured with the correlation lift on — the
+    constructions below clear because of it. The lift has been off since
+    2026-10-06 (P.POSITIVE_RHO_LIFTS); the test after this one checks what
+    that changes."""
+    _lift = P.POSITIVE_RHO_LIFTS
+    P.POSITIVE_RHO_LIFTS = True
+    try:
+        _tax_band_body()
+    finally:
+        P.POSITIVE_RHO_LIFTS = _lift
+
+
+def test_with_no_lift_a_positively_correlated_pair_prices_as_independent():
+    """Ethan, 2026-10-06: the positively correlated tickets went 0 for 11
+    against 3.44 expected. A positive correlation no longer raises the
+    ticket's chance, so the MLB pair that played on the lift does not."""
+    assert P.POSITIVE_RHO_LIFTS is False
+    g = [game("DET", "OAK", "2026-08-02", favorite="DET", spread=1.5)]
+    flat = run("mlb", [
+        leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
+            date="2026-08-02"),
+        leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
+            date="2026-08-02")], g)["tickets"]
+    assert not flat or flat[0]["grade"] != "play", flat[0]["grade"]
+
+
+def _tax_band_body():
     """Nobody publishes what a book charges to combine legs. Judging a ticket
     against a single assumed tax gives that assumption a precision it has not
     earned — a real construction missing by 2% landed in the same bin as one
@@ -1400,11 +1427,17 @@ def test_the_verdict_never_contradicts_the_cards_below_it():
     if thin["tickets"]:
         assert "No qualifying parlay" not in thin["verdict"], (
             "the page says nothing qualifies while showing a ticket")
-    live = run("mlb", [
-        leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
-            date="2026-08-02"),
-        leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
-            date="2026-08-02")], g)
+    # A ticket that clears needs the correlation lift (off since 2026-10-06).
+    _lift = P.POSITIVE_RHO_LIFTS
+    P.POSITIVE_RHO_LIFTS = True
+    try:
+        live = run("mlb", [
+            leg("Bolte", "OAK", "DET", "hits", side="UNDER", p=0.398, odds=165,
+                date="2026-08-02"),
+            leg("Montero", "DET", "OAK", "strikeouts", p=0.481, odds=111,
+                date="2026-08-02")], g)
+    finally:
+        P.POSITIVE_RHO_LIFTS = _lift
     assert "cleared" in live["verdict"]
 
 

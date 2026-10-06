@@ -594,6 +594,7 @@ def attach(result: dict, sport: str, conn=None) -> str:
             seen = {}
         board = build(result, record=rec, sport=sport, tiers_seen=seen)
         result["likely_board"] = board
+        harmonize(result)
         t = board["tiers"]
         return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
                 f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look")
@@ -638,3 +639,91 @@ def journal_held(lconn, result: dict, sport: str, date: str = "") -> int:
 def journal_rows(board: dict, tier: str) -> list:
     """The board's rows of one tier, for the paper book."""
     return [r for r in (board or {}).get("rows") or [] if r.get("tier") == tier]
+
+
+# ─── one bet, one chance; and the card says when our own read disagrees ────
+
+def _all_pick_rows(result: dict) -> list:
+    """Every Most Likely-family row the page or the journal can show, outside
+    the board itself: the Most Likely list, the matchup picks, the scenarios."""
+    out = [r for r in result.get("most_likely") or [] if isinstance(r, dict)]
+    for g in result.get("matchup_picks") or []:
+        out += [r for r in (g.get("td") or []) + (g.get("props") or []) if isinstance(r, dict)]
+    out += [r for r in result.get("td_scenarios") or [] if isinstance(r, dict)]
+    return out
+
+
+def matchup_warning(row: dict) -> str:
+    """The card's warning when the matchup check said no, else ''."""
+    if (row.get("checks") or {}).get("matchup") is not False:
+        return ""
+    return str((row.get("check_notes") or {}).get("matchup") or "our matchup read leans the other way")
+
+
+def harmonize(result: dict) -> int:
+    """ONE BET, ONE CHANCE (Ethan, 2026-10-06, "yes 2"). The contradiction
+    check found nine bets the page showed with two chances — Bucky Irving
+    over 1.5 catches at 77% on Most Likely and 68% on the one board. The
+    board's number is the one the graded record has corrected
+    (engine/likelycal, engine/likelyctx), so it is written back onto every
+    other row of the same bet, the list's own kept as ``listed_prob``. The
+    journal reads ``model_prob`` after this, so it records the number the
+    page shows. KEEP IT, SAY IT (Ethan, "keep 3 with the warning"): where
+    the matchup check said no, the row carries ``matchup_warning``.
+    Returns how many rows changed their chance."""
+    board = result.get("likely_board") or {}
+    rows = [r for r in (board.get("rows") or []) + (board.get("held") or []) if isinstance(r, dict)]
+    by = {key_of(r): r for r in rows}
+    n = 0
+    for r in rows:
+        w = matchup_warning(r)
+        if w:
+            r["matchup_warning"] = w
+    for src in _all_pick_rows(result):
+        b = by.get(key_of(src))
+        if b is None or b is src:
+            continue
+        p, q = b.get("model_prob"), src.get("model_prob")
+        # A POSTED PICK KEEPS THE NUMBER IT WENT UP AT (likely._locked; it
+        # is the number the journal holds). Here the board takes it instead.
+        if src.get("locked") and q is not None:
+            if p is not None and abs(float(p) - float(q)) > 1e-9:
+                b.setdefault("corrected_prob", p)
+                b["model_prob"] = q
+            w = matchup_warning(b)
+            if w:
+                src["matchup_warning"] = w
+            continue
+        if p is not None and q is not None and abs(float(p) - float(q)) > 1e-9:
+            src.setdefault("listed_prob", q)
+            src["model_prob"] = p
+            for f in ("cal_note", "ctx_note"):
+                if b.get(f):
+                    src[f] = b[f]
+            n += 1
+        w = matchup_warning(b)
+        if w:
+            src["matchup_warning"] = w
+    return n
+
+
+def warn_avoids(result: dict) -> int:
+    """A pick the game plan lists under "plays to avoid" keeps its seat and
+    says so (``avoid_warning``) on every row of it. Run after the game plan
+    is built. Returns how many rows were marked."""
+    from .contradictions import avoid_rows, _side as _cside
+    avoid = {}
+    for a in avoid_rows(result):
+        avoid.setdefault((a.get("player"), a.get("market"), _cside(a.get("side") or "over")),
+                         str(a.get("why") or "").strip())
+    if not avoid:
+        return 0
+    board = result.get("likely_board") or {}
+    n = 0
+    for r in _all_pick_rows(result) + [x for x in board.get("rows") or [] if isinstance(x, dict)]:
+        why = avoid.get((r.get("player"), r.get("market"), _cside(r.get("side"))))
+        if why is None:
+            continue
+        r["avoid_warning"] = "The game plan lists this as a play to avoid" + (f": {why}" if why else "")
+        n += 1
+    return n

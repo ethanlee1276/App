@@ -1088,6 +1088,7 @@ def main() -> None:
         except Exception:                                    # noqa: BLE001
             _rec = {}
         result["likely_board"] = _lb.build(result, record=_rec)
+        _lb.harmonize(result)
         _t = result["likely_board"]["tiers"]
         print(f"  Most Likely board: {len(result['likely_board']['rows'])} pick(s) — "
               f"{_t.get('top', 0)} top, {_t.get('strong', 0)} strong, {_t.get('look', 0)} worth a look")
@@ -1101,6 +1102,11 @@ def main() -> None:
     # goes through". Built AFTER the board so a fit can say its tier.
     from engine import gameplan as _gplan
     print(f"  {_gplan.attach(result, 'nfl')}")
+    try:
+        from engine import likelyboard as _lbw
+        _lbw.warn_avoids(result)
+    except Exception as _wexc:                                # noqa: BLE001
+        print(f"  ⚠️  plays-to-avoid warnings skipped: {_wexc}")
     # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
     # a table behind the last week played is data the page would present
     # as this week's. Never fatal.

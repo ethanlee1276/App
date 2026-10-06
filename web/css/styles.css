@@ -12849,3 +12849,5 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .dc-live li { display: flex; gap: 10px; align-items: baseline; }
 .dc-live .dc-hash { color: var(--brand-2); font-weight: 800; }
 .dc-live .dc-off { color: var(--text-mute); }
+/* A pick our own read argues against: kept, and the card says so. */
+.ob-warn { display: block; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); line-height: 1.35; }

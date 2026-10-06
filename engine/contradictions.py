@@ -245,6 +245,8 @@ def scan(d: dict, now: _dt.datetime | None = None) -> list[dict]:
     for a in avoid_rows(d):
         k = (a.get("player"), a.get("market"))
         for e in by_prop.get(k, []):
+            if e["row"].get("avoid_warning"):
+                continue                        # kept, and its card says so (Ethan, 2026-10-06)
             if e["side"] == _side(a.get("side") or "over"):
                 flag("AVOID vs PICK", a.get("player"),
                      f"Plays to avoid: {_side(a.get('side') or 'over')} {a.get('market')} — {a.get('why') or ''} "
@@ -262,6 +264,8 @@ def scan(d: dict, now: _dt.datetime | None = None) -> list[dict]:
         for e in es:
             if e["player"] != x.get("player") or e["market"] not in markets or e["market"] == "anytime_td":
                 continue
+            if e["row"].get("matchup_warning"):
+                continue                        # kept, and its card says so (Ethan, 2026-10-06)
             if e["side"] and e["side"] != want:
                 flag("READ vs PICK", e["player"],
                      f"read “{x.get('label')}” ({want}s) but {_desc(e)}")
