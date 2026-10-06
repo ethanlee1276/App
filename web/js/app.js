@@ -1278,20 +1278,47 @@ function safeHref(u) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-/* BET IT (engine/betlinks, Ethan 2026-10-06: "build the bet it button").
-   The book's own link for the pick, stamped onto the row by the build
-   from the odds feed: "slip" opens the book with this bet on the slip,
-   "page" opens the game at that book. No link, no button. A new tab, so
-   the board is still here when the reader comes back. */
+/* BET IT (engine/betlinks). Ethan, 2026-10-06: "a box that shows all the
+   different sports books and prediction markets we can link that bet to,
+   so it doesn't just send someone to one specific sportsbook since they
+   might not have a certain one." One button; it opens the list of every
+   book that has this exact bet — its slip, the pick's own book first, then
+   the best price — and under them the game's page at each other book.
+   The build stamps the links (bet_links on the row, the game's pages once
+   per board in bet_pages). New tabs, so the board is still here after. */
 function betItHTML(r, cls) {
-  const u = r && r.bet_link;
-  if (!u || safeHref(u) === "#") return "";
-  const slip = r.bet_link_kind !== "page";
-  const book = escapeHtml(r.book_name || r.book || "the book");
-  return `<a class="betit${slip ? "" : " betit-page"}${cls ? ` ${cls}` : ""}" href="${safeHref(u)}"
-    target="_blank" rel="noopener noreferrer nofollow"
-    title="${slip ? `Opens ${book} with this bet on the slip` : `Opens this game at ${book}`} · 21+ · 1-800-GAMBLER"
-    >${slip ? "Bet it" : "Open"} at ${book}</a>`;
+  if (!r) return "";
+  const slips = (r.bet_links || []).filter((x) => x && safeHref(x[1]) !== "#");
+  const have = new Set(slips.map((x) => x[0]));
+  const pages = ((((state || {}).data || {}).bet_pages || {})[r.bet_ev] || [])
+    .filter((x) => x && !have.has(x[0]) && safeHref(x[1]) !== "#");
+  if (!slips.length && !pages.length && r.bet_link && safeHref(r.bet_link) !== "#") {
+    pages.push([r.book_name || r.book || "the book", r.bet_link]);
+  }
+  if (!slips.length && !pages.length) return "";
+  const a = (title, url, right, sub) => `<a class="betit-row" href="${safeHref(url)}" target="_blank"
+      rel="noopener noreferrer nofollow"><b>${escapeHtml(title)}</b>${right}<i>${sub}</i></a>`;
+  return `<details class="betit-box${cls ? ` ${cls}` : ""}"><summary class="betit">Bet it</summary>
+    <div class="betit-list">
+      ${slips.length ? `<p class="betit-h">On the slip</p>` : ""}
+      ${slips.map(([t, u, px]) => a(t, u, px != null ? `<span class="betit-px">${escapeHtml(american(px))}</span>` : "", "bet slip")).join("")}
+      ${pages.length ? `<p class="betit-h">${slips.length ? "Or find the game at" : "Find the game at"}</p>` : ""}
+      ${pages.map(([t, u]) => a(t, u, "", "game page")).join("")}
+      <p class="betit-fine">21+ · Gambling problem? 1-800-GAMBLER</p>
+    </div></details>`;
+}
+
+/* The box sits on cards that are themselves doors to the pick: a tap
+   inside it must not also open the card, and opening one closes the rest.
+   Capture on window, so it runs before any card's own listener. */
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("click", (e) => {
+    const box = e.target && e.target.closest ? e.target.closest(".betit-box") : null;
+    if (typeof document !== "undefined" && document.querySelectorAll) {
+      document.querySelectorAll("details.betit-box[open]").forEach((d) => { if (d !== box) d.open = false; });
+    }
+    if (box) e.stopPropagation();
+  }, true);
 }
 
 function escapeHtml(s) {
@@ -6048,6 +6075,7 @@ function gameBetCard(r) {
         <div class="metric"><div class="k">Book implied</div><div class="v">${pct(r.fair_prob)}</div></div>
         <div class="metric primary"><div class="k">Edge</div><div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>
       </div>
+      ${betItHTML(r, "mini")}
       ${confMeter(r)}
       ${edgeHunterHTML(r)}
       ${gameBetChart(r)}
@@ -21369,6 +21397,7 @@ function edgePropRow(r) {
       // games red and its one loser green — see gamelogBars.
       line: r.line, team: r.team, side: r.side,
       book: r.book, bet_link: r.bet_link, bet_link_kind: r.bet_link_kind,
+      bet_links: r.bet_links, bet_ev: r.bet_ev,
     };
 }
 
@@ -21394,6 +21423,7 @@ function edgeBoardRows() {
         vals: s ? s.values : [], line: s ? s.line : undefined,
         team: b.team || b.home,
         book: b.book, bet_link: b.bet_link, bet_link_kind: b.bet_link_kind,
+        bet_links: b.bet_links, bet_ev: b.bet_ev,
       };
     });
   return [...props, ...games].sort(edgeOrder);
@@ -21517,6 +21547,7 @@ function ouCardHTML(r) {
       <span>${escapeHtml(teamName(r.team))}${r.opponent ? ` vs ${escapeHtml(teamName(r.opponent))}` : ""}</span></div></div>
     <div class="ou-mk">${ouMarketLine(r)}</div>
     <div class="ou-sides">${ouSideHTML("Over", s.over)}${ouSideHTML("Under", s.under)}</div>
+    ${betItHTML(r, "mini")}
   </article>`;
 }
 

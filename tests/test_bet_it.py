@@ -53,6 +53,12 @@ def _event():
                  {"key": "totals",
                   "outcomes": [_o("Over", -105, DK + "o47.5", 47.5), _o("Under", -115, DK + "u47.5", 47.5)]},
              ]},
+            {"key": "fanduel", "link": "https://sportsbook.fanduel.com/event/1",
+             "markets": [{"key": "player_pass_yds", "outcomes": [
+                 _o("Over", 100, "https://sportsbook.fanduel.com/addToBetslip?id=allen-o", 249.5, "Josh Allen")]}]},
+            {"key": "pinnacle", "link": "https://www.pinnacle.com/e/1",
+             "markets": [{"key": "player_pass_yds", "outcomes": [
+                 _o("Over", 105, "https://www.pinnacle.com/allen-o", 249.5, "Josh Allen")]}]},
             {"key": "betmgm", "link": "https://sports.{state}.betmgm.com/en/sports/events/1",
              "markets": [
                  {"key": "h2h", "outcomes": [_o("Buffalo Bills", -300, MGM + "buf-ml"),
@@ -70,7 +76,9 @@ def _banked(tmp, cache_name="odds_event_nfl_ev1_abcd1234.json", now=None):
 
 def _board():
     allen = {"player": "Josh Allen", "market": "pass_yds", "side": "OVER", "line": 249.5, "odds": -110,
-             "book": "DraftKings", "team": "BUF", "opponent": "LAC"}
+             "book": "DraftKings", "team": "BUF", "opponent": "LAC",
+             "all_lines": [{"book": "DraftKings", "line": 249.5, "over_odds": -110, "under_odds": -110},
+                           {"book": "FanDuel", "line": 249.5, "over_odds": 100, "under_odds": -120}]}
     return {
         "recommendations": [dict(allen),
                             {"player": "James Cook", "market": "rush_yds", "side": "OVER", "line": 60.5,
@@ -138,7 +146,26 @@ def test_every_kind_of_pick_gets_its_own_slip():
     assert gb[1]["bet_link"] == DK + "o47.5", "the total, matched to its game"
     assert gb[2]["bet_link"] == "https://sports.mi.betmgm.com/en/sports?options=buf-ml", "{state} → mi"
     assert board["pick_of_the_day"]["pick"]["bet_link"] == DK + "allen-o"
-    assert n == 8
+    assert n == 9, "every pick with a slip or its game's pages, the Fliff row included"
+
+
+def test_the_box_lists_every_book_with_the_bet_own_book_first_then_best_price():
+    """Ethan, 2026-10-06: "a box that shows all the different sports books …
+    so it doesn't just send someone to one specific sportsbook"."""
+    tmp = Path(tempfile.mkdtemp())
+    _banked(tmp)
+    board = _board()
+    B.stamp(board, "recommendations.json", env={}, cache_dir=tmp)
+    allen = board["recommendations"][0]
+    assert allen["bet_links"] == [["DraftKings", DK + "allen-o", -110],
+                                  ["FanDuel", "https://sportsbook.fanduel.com/addToBetslip?id=allen-o", 100]]
+    assert all(t != "Pinnacle" for t, _, _ in allen["bet_links"]), "no US action, never offered"
+    # The game's page at every book, once on the board; the row points at it.
+    nobody = board["recommendations"][3]
+    assert nobody["bet_ev"] == "ev1" and "bet_link" not in nobody
+    pages = dict(board["bet_pages"]["ev1"])
+    assert set(pages) == {"DraftKings", "FanDuel", "BetMGM"}
+    assert pages["BetMGM"] == "https://sports.mi.betmgm.com/en/sports/events/1"
 
 
 def test_no_outcome_link_falls_back_to_the_game_page_and_no_book_means_no_button():
@@ -215,8 +242,10 @@ def test_the_odds_request_asks_for_links_and_banks_them():
 def test_the_page_draws_the_button_safely_where_the_picks_are():
     js = (ROOT / "web" / "js" / "app.js").read_text()
     fn = js[js.index("function betItHTML("):js.index("function escapeHtml(")]
-    assert 'href="${safeHref(u)}"' in fn and 'rel="noopener noreferrer nofollow"' in fn and 'target="_blank"' in fn
-    assert "1-800-GAMBLER" in fn
+    assert 'href="${safeHref(url)}"' in fn and 'rel="noopener noreferrer nofollow"' in fn and 'target="_blank"' in fn
+    assert "1-800-GAMBLER" in fn and "bet_links" in fn and "bet_pages" in fn, "every book, not one"
+    assert 'window.addEventListener("click"' in fn and "stopPropagation" in fn, "a tap in the box never opens the card"
+    assert js.count('betItHTML(r, "mini")') >= 4, "props cards, game-line cards, Edge rows, Most Likely cards"
     for where in ('betItHTML(lk || r, "btn primary")',          # the pick page
                   '${obPriceHTML(r)}${betItHTML(r, "mini")}',     # Most Likely cards
                   'betItHTML(pick, "btn primary hd-betit")'):    # the Pick of the Day

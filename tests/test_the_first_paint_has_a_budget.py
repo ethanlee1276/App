@@ -51,7 +51,9 @@ APP_JS_BUDGET_KB = 480
 #: and renderVerify in app.js, +1.2 KB gz on the boot path together.
 #: 594 -> 595 on 2026-10-06 by Bet it and the Discord page: the same
 #: JavaScript as the app.js bump above plus their styles. Told to Ethan.
-BOOT_BUDGET_KB = 595
+#: 595 -> 596 on 2026-10-06 by the Bet it box (every book that has the bet,
+#: Ethan: "a box that shows all the different sports books"). Told to Ethan.
+BOOT_BUDGET_KB = 596
 
 
 def _gz_trimmed(rel: str) -> int:

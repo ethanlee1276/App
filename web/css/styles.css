@@ -12830,16 +12830,30 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .wk-recap .wk-line .pos { color: var(--good); } .wk-recap .wk-line .neg { color: var(--bad); }
 .wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
 
-/* BET IT (engine/betlinks): the book's own bet slip, one tap from the pick. */
-.betit { display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  text-decoration: none; white-space: nowrap; }
-.betit.mini { margin-top: 4px; padding: 2px 9px; border-radius: 999px;
-  font-size: var(--fs-2xs); font-weight: 700; color: var(--brand-2);
-  border: var(--hairline) solid var(--brand); background: transparent; }
-.betit.mini:hover, .betit.mini:focus-visible { background: var(--brand-solid); color: var(--brand-ink); }
-.betit.betit-page.mini { color: var(--text-mute); border-color: var(--border); }
+/* BET IT (engine/betlinks): one button, every book that has the bet. */
+.betit-box { position: relative; display: inline-block; margin-top: 4px; }
+.betit-box > summary { list-style: none; cursor: pointer; }
+.betit-box > summary::-webkit-details-marker { display: none; }
+.betit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-weight: 800;
+  padding: 3px 11px; border-radius: 999px; font-size: var(--fs-xs); color: var(--brand-ink);
+  background: var(--brand-solid); }
+.betit-box.mini .betit { font-size: var(--fs-2xs); padding: 2px 9px; color: var(--brand-2);
+  background: transparent; border: var(--hairline) solid var(--brand); }
+.betit-box[open] > .betit { background: var(--brand-solid); color: var(--brand-ink); }
+.betit-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 230px;
+  max-width: calc(100vw - 32px); max-height: 60vh; overflow-y: auto; padding: 8px;
+  background: var(--bg-2); border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  text-align: left; }
+.betit-h { margin: 4px 6px; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; }
+.betit-row { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; align-items: baseline;
+  padding: 7px 8px; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--fs-sm); }
+.betit-row:hover, .betit-row:focus-visible { background: var(--bg); }
+.betit-row i { grid-column: 1 / -1; font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs); }
+.betit-px { font-family: var(--font-mono); font-weight: 700; color: var(--brand-2); }
+.betit-fine { margin: 6px 6px 2px; color: var(--text-mute); font-size: var(--fs-2xs); }
 .hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
-.pp-actions .betit { flex: 1 1 auto; color: var(--brand-2); font-weight: 800; }
+.pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 .dc-feed { display: grid; gap: 10px; margin: 0 0 18px; }
 .dc-feed-post { display: block; padding: 14px 16px; white-space: pre-line; overflow-wrap: anywhere; font-size: var(--fs-sm); }
 .dc-feed-post b { display: inline; font-weight: 700; }

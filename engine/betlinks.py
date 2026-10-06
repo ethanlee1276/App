@@ -313,49 +313,108 @@ def _row_events(row: dict, sport: str, events: dict) -> tuple:
     return list(events.values()), False
 
 
-def link_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) -> tuple:
-    """(url, kind) for one pick row, or ("", "")."""
-    books = _books(row.get("book"))
-    if not books or not events:
-        return "", ""
-    evs, matched = _row_events(row, sport, events)
+def _rests(row: dict, sport: str, evs: list, mkeys: dict | None) -> list:
+    """[(event, outcome key without the book)] for this bet: every market key
+    that prices it (main line, ladder, Yes/No) at its line, on each event it
+    could be. Empty for a row this cannot read."""
     market = str(row.get("market") or "").lower()
     pt = point(row.get("line"))
     game_row = (str(row.get("kind") or "") == "game"
                 or str(row.get("bet_type") or "").lower() in GAME_MARKET or market in GAME_MARKET)
-    tries: list = []                                    # (event, slip key)
+    out: list = []
     if row.get("player") and market and not game_row:
         mkeys = mkeys if mkeys is not None else _market_keys(sport)
         who, side = norm(row.get("player")), norm(row.get("side"))
         for ev in evs:
-            for bk in books:
-                for mk in mkeys.get(market, []):
-                    for p in (pt, ""):
-                        tries.append((ev, key(bk, mk, who, side, p)))
-    else:
-        mk = GAME_MARKET.get(str(row.get("bet_type") or market).lower())
-        if not mk:
-            return "", ""
-        for ev in evs:
+            for mk in mkeys.get(market, []):
+                for p in (pt, ""):
+                    out.append((ev, "|".join((mk, who, side, p))))
+        return out
+    mk = GAME_MARKET.get(str(row.get("bet_type") or market).lower())
+    if not mk:
+        return out
+    names = _names_for(row.get("team"), sport)
+    for ev in evs:
+        if mk == "totals":
             game = f"{norm(ev.get('away'))}@{norm(ev.get('home'))}"
-            for bk in books:
-                if mk == "totals":
-                    tries.append((ev, key(bk, "totals", game, norm(row.get("side")), pt)))
-                    continue
-                names = _names_for(row.get("team"), sport)
-                for api_team in (ev.get("home"), ev.get("away")):
-                    if _same_team(api_team, names):
-                        tries.append((ev, key(bk, mk, norm(api_team), "", "" if mk == "h2h" else pt)))
-    for ev, k in tries:
-        url = (ev.get("slip") or {}).get(k)
-        if url:
-            return url, "slip"
-    # No outcome link: the book's page for the game, but only when the
-    # row's own teams picked out exactly one game. A page for the wrong
-    # game is worse than no button.
-    if matched and len(evs) == 1:
-        for bk in books:
-            url = (evs[0].get("page") or {}).get(bk)
+            out.append((ev, "|".join(("totals", game, norm(row.get("side")), pt))))
+            continue
+        for api_team in (ev.get("home"), ev.get("away")):
+            if _same_team(api_team, names):
+                out.append((ev, "|".join((mk, norm(api_team), "", "" if mk == "h2h" else pt))))
+    return out
+
+
+def _rest_index(ev: dict) -> dict:
+    """{outcome key without the book: {book: url}}, built once per event."""
+    idx = ev.get("_rest")
+    if idx is None:
+        idx = {}
+        for k, url in (ev.get("slip") or {}).items():
+            bk, _, rest = k.partition("|")
+            idx.setdefault(rest, {}).setdefault(bk, url)
+        ev["_rest"] = idx
+    return idx
+
+
+def _title(bk: str) -> str:
+    from .sources.oddsapi import BOOK_TITLES
+    return BOOK_TITLES.get(bk, bk)
+
+
+def _prices(row: dict) -> dict:
+    """{book title (lower): this bet's price there} off the row's own ladder."""
+    side_key = "under_odds" if str(row.get("side") or "").upper() in ("UNDER", "NO") else "over_odds"
+    ln = point(row.get("line"))
+    out = {}
+    for q in row.get("all_lines") or []:
+        if isinstance(q, dict) and point(q.get("line")) == ln and q.get(side_key) not in (None, ""):
+            out.setdefault(str(q.get("book") or "").lower(), q.get(side_key))
+    if row.get("book") and row.get("odds") not in (None, ""):
+        out[str(row["book"]).lower()] = row["odds"]
+    return out
+
+
+def links_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) -> tuple:
+    """([[book title, url, price or None], ...], event or None) for one pick.
+
+    EVERY BOOK THAT HAS THIS EXACT BET (Ethan, 2026-10-06: "a box that shows
+    all the different sports books and prediction markets we can link that
+    bet to, so it doesn't just send someone to one specific sportsbook").
+    The pick's own book first, then the best price; Pinnacle (no US
+    action) never. The event comes back only when the row's own teams
+    picked out exactly one game, for its game-page links."""
+    from .sources.oddsapi import SHARP_BOOKS
+    if not events:
+        return [], None
+    evs, matched = _row_events(row, sport, events)
+    found: dict = {}
+    for ev, rest in _rests(row, sport, evs, mkeys):
+        for bk, url in (_rest_index(ev).get(rest) or {}).items():
+            if bk not in SHARP_BOOKS and bk not in found:
+                found[bk] = url
+    prices = _prices(row)
+    own = set(_books(row.get("book")))
+
+    def _px(bk):
+        v = prices.get(_title(bk).lower())
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+    order = sorted(found, key=lambda bk: (bk not in own, -(_px(bk) if _px(bk) is not None else -10**6), _title(bk)))
+    slips = [[_title(bk), found[bk], _px(bk)] for bk in order]
+    return slips, (evs[0] if matched and len(evs) == 1 else None)
+
+
+def link_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) -> tuple:
+    """(url, kind) — the first link `stamp` would put on this row, or ("", "")."""
+    slips, ev = links_for(row, sport, events, mkeys)
+    if slips:
+        return slips[0][1], "slip"
+    if ev is not None:
+        for bk in _books(row.get("book")):
+            url = (ev.get("page") or {}).get(bk)
             if url:
                 return url, "page"
     return "", ""
@@ -394,15 +453,39 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
     events = load(sport, cache_dir, now)
     if not events:
         return 0
+    from .sources.oddsapi import SHARP_BOOKS
     st, mkeys = bet_state(env), _market_keys(sport)
+    eid_of = {id(ev): eid for eid, ev in events.items()}
     rows: list = []
     _walk(payload, rows)
+    pages: dict = {}
     n = 0
+    ok = lambda u: str(u).lower().startswith("https://")             # noqa: E731
     for row in rows:
-        url, kind = link_for(row, sport, events, mkeys)
-        if url and url.lower().startswith("https://"):
-            row["bet_link"], row["bet_link_kind"] = fill_state(url, st), kind
+        slips, ev = links_for(row, sport, events, mkeys)
+        slips = [[t, fill_state(u, st), px] for t, u, px in slips if ok(u)]
+        if slips:
+            row["bet_links"] = slips[:12]
+            row["bet_link"], row["bet_link_kind"] = slips[0][1], "slip"
+        if ev is not None:
+            eid = eid_of.get(id(ev))
+            if eid and eid not in pages:
+                pages[eid] = [[_title(bk), fill_state(u, st)] for bk, u in sorted((ev.get("page") or {}).items())
+                              if "|" not in bk and bk not in SHARP_BOOKS and ok(u)]
+            if eid and pages.get(eid):
+                row["bet_ev"] = eid
+                if not slips:
+                    for bk in _books(row.get("book")):
+                        u = (ev.get("page") or {}).get(bk)
+                        if u and ok(u):
+                            row["bet_link"], row["bet_link_kind"] = fill_state(u, st), "page"
+                            break
+        if row.get("bet_link") or row.get("bet_ev"):
             n += 1
+    if pages:
+        # Each game's page at every book, once per board; a row points at
+        # its game with `bet_ev` rather than carrying fifteen copies.
+        payload["bet_pages"] = {k: v for k, v in pages.items() if v}
     return n
 
 
@@ -425,9 +508,32 @@ def report(sport: str = "nfl") -> list[str]:
     slip = sum(1 for r in have if r.get("bet_link_kind") == "slip")
     lines.append(f"  board: {len(rows)} pick row(s) naming a book; {slip} with a bet-slip link, "
                  f"{len(have) - slip} with the game's page only, {len(rows) - len(have)} with none")
-    for r in [r for r in rows if not r.get("bet_link")][:8]:
-        lines.append(f"    none: {r.get('book')} · {r.get('player') or r.get('pick_label')} "
-                     f"{r.get('market')} {r.get('side')} {r.get('line')}")
+    # WHERE THE GAPS ARE (Ethan's first run, 2026-10-06: 87 of 1,607 rows
+    # had a slip). Which books the API gave slip links for, which books
+    # the unlinked rows name, and for a few unlinked rows at a book that
+    # does give links, the keys we hold for that player — so a key that
+    # does not line up shows itself.
+    from collections import Counter
+    by_book = Counter(k.split("|", 1)[0] for e in events.values() for k in (e.get("slip") or {}))
+    pages = Counter(k for e in events.values() for k in (e.get("page") or {}) if "|" not in k)
+    lines.append("  slip links banked, by book: " + (", ".join(f"{b} {n}" for b, n in by_book.most_common()) or "none"))
+    lines.append("  game-page links banked, by book: " + (", ".join(f"{b} {n}" for b, n in pages.most_common()) or "none"))
+    none = [r for r in rows if not r.get("bet_link")]
+    lines.append("  unlinked rows, by the book they name: "
+                 + ", ".join(f"{b} {n}" for b, n in Counter(str(r.get("book")) for r in none).most_common(10)))
+    shown = 0
+    for r in none:
+        books = [b for b in _books(r.get("book")) if b in by_book]
+        if not books or not r.get("player"):
+            continue
+        who = norm(r.get("player"))
+        held = sorted(k for e in events.values() for k in (e.get("slip") or {})
+                      if k.split("|")[0] in books and f"|{who}|" in k)[:4]
+        lines.append(f"    unlinked at a linking book: {r.get('book')} · {r.get('player')} {r.get('market')} "
+                     f"{r.get('side')} {r.get('line')} — keys held for him: {held or 'none'}")
+        shown += 1
+        if shown >= 6:
+            break
     return lines
 
 
