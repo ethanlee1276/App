@@ -546,6 +546,9 @@
         <button class="nav-btn sb-item" data-view="zeno" data-hint="Zeno’s own sportsbook bets — the record is public, tail what’s open">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4 6.7 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>
           Zeno’s Picks</button>
+        <button class="nav-btn sb-item" data-view="feed" data-hint="parlays people post — like, comment, tail">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 15.3C9.5 12.5 5.4 12.6 1.4 8.4c4.3-.3 8.1.2 10.6 3.3 2.5-3.1 6.3-3.6 10.6-3.3-4 4.2-8.1 4.1-10.6 6.9z"/><path d="M12 15.3c.3 2.8-.6 5.1-2.5 6.9"/></svg>
+          The Feed</button>
         <button class="sport-btn sb-item" data-sport="methodology" data-kind="tool"
                 title="How every number on the board is made">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
@@ -1010,6 +1013,10 @@
          entitled, so it cannot be sitting in this file, which is a
          static asset served to everybody. -->
     <section class="view" id="view-discord"></section>
+    <!-- The public feed (Ethan, 2026-10-06): parlays people post, likes,
+         comments, bios, and the whale-tail Tail button. Drawn by
+         renderFeed from /api/feed/ (engine/socialfeed.py). -->
+    <section class="view" id="view-feed"></section>
 
     <!-- Creating an account is its own page. It used to be a second
          button under the sign-in fields, which meant the same two boxes

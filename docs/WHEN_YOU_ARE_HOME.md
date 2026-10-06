@@ -459,6 +459,35 @@ If the first says `0 game(s) banked`, the pull has not run since the
 deploy; wait one more cycle. Off switch, any time:
 `sudo ./deploy/setenv.sh QB_BET_LINKS 0` then `sudo systemctl restart qellys`.
 
+**27. Why no player prop has a bet-slip link yet** (2026-10-06). Your
+step 26 run showed 174 slip links each at DraftKings, Caesars and
+FanDuel — exactly 29 games × 6 game-line outcomes — so every link banked
+so far is a spread, moneyline or total, and not one player prop. This
+says whether the prop pulls have run since the deploy, and whether they
+came back with links. Paste the output:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl --props
+```
+
+**28. The Feed** (2026-10-06): the public page where people post parlays,
+with likes, comments, bios and the whale-tail Tail button. Nothing to
+switch on. To check it is answering:
+
+```
+curl -s https://qellysbook.com/api/feed/list | head -c 300; echo
+```
+
+It should start with `{"posts": [`. Moderation from the box, any time:
+the first line lists what readers reported (three reports from different
+accounts hide a post or comment by themselves); the second hides post 12
+(put the real number in; `'comment'` for a comment; `False` restores it).
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.reported(A.connect()))"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.set_hidden(A.connect(), 'post', 12, True))"
+```
+
 #### Later (not tonight)
 
 - **NHL calibration (H14)**, once NHL picks have graded for two weeks:

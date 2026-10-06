@@ -1139,6 +1139,14 @@ const ICON_PATHS = {
           + '<path d="M1.7 13.4v-1a3.4 3.4 0 013.4-3.4h1.6a3.4 3.4 0 013.4 3.4v1"/>'
           + '<path d="M10.7 3.6a2.3 2.3 0 010 4.3"/>'
           + '<path d="M11.6 9.2h.4a2.9 2.9 0 012.9 2.9v1.3"/>',
+  // The feed (2026-10-06): a whale's tail for Tail (Ethan: "make it a
+  // whale's tail as the button"), a heart, a speech bubble, a flag, dots.
+  whale: '<path d="M8 10.2C6.3 8.3 3.6 8.4.9 5.6c2.9-.2 5.4.1 7.1 2.2 1.7-2.1 4.2-2.4 7.1-2.2-2.7 2.8-5.4 2.7-7.1 4.6z"/>'
+         + '<path d="M8 10.2c.2 1.9-.4 3.4-1.7 4.6"/>',
+  heart: '<path d="M8 13.5S2.2 10 2.2 6.2A2.9 2.9 0 018 4.6a2.9 2.9 0 015.8 1.6C13.8 10 8 13.5 8 13.5z"/>',
+  chat: '<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>',
+  flag: '<path d="M3.5 14V2.5M3.5 3h8l-1.6 2.7 1.6 2.8h-8"/>',
+  dots: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.6"/>',
   // Discord's mark, drawn rather than fetched — the CSP on this site
   // blocks every external host, and a logo that 404s is worse than none.
   // Used only as the label on links that genuinely go to Discord.
@@ -2217,6 +2225,7 @@ const FEATURES = [
    [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses.", "mybets"],
     ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
     ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
+    ["The Feed", "Post your parlays for everyone, with a bio and a handle. Likes, comments, and a whale-tail Tail button that opens the parlay at your book and counts everyone who tailed it.", "feed"],
     ["Messages & friends", "Send picks to friends as chart-linked cards, chat in real threads, nickname whoever you like.", "messages"],
     ["The Discord", "Where the site posts last night’s record, the Pick of the Day and the board by itself, and where members talk it over.", "discord"],
     ["The Streak", "Pick three, keep the streak alive. Free, and free by design — it publishes no model output at all.", "streak"],
@@ -40072,7 +40081,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -40125,6 +40134,9 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "pr
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    "signup", "streak", "messages",
+                   // The feed is open: a paid leg is locked by the server
+                   // for a reader who has not paid (engine/socialfeed).
+                   "feed",
                    // Zeno's PAGE stays open: his record there is the
                    // proof, like the Record's. His BETS inside it are for
                    // members (engine/zeno.PAID_BOARD, zenoTickets).
@@ -40431,6 +40443,7 @@ function _switchViewNow(name, push, dir) {
   // other pages it drew nothing at all.
   if (name === "futures") renderFutures();
   if (name === "discord") renderDiscord();
+  if (name === "feed") renderFeed();
   if (name === "signup") renderSignup();
   // The escape hatch, on the two pages that stay open behind the wall.
   // Driven from here rather than from each page's own render, because
@@ -42660,7 +42673,8 @@ function slipRender() {
         correlation is not priced here</span>
     </div>
     <div class="slip-send">
-      <button class="btn" id="slip-send" type="button">Send to a friend</button>
+      <button class="btn" id="slip-feed" type="button">Post to the feed</button>
+      <button class="btn ghost" id="slip-send" type="button">Send to a friend</button>
       <button class="btn ghost" id="slip-copy" type="button"
         title="Copy the legs as text, to key into your own book">Copy as text</button>
       <div id="slip-send-slot"></div>
@@ -42757,6 +42771,341 @@ document.addEventListener("click", async (e) => {
       tfToast("Could not reach the server.");
     }
   }
+});
+
+/* ============================================================
+   THE FEED — parlays people post, and the whale-tail Tail button.
+   ============================================================
+   Ethan, 2026-10-06: "a social page where users can make parlays and
+   share them on the site then we show a "tail" button that automatically
+   creates that parlay on any sportsbook … make it a whale's tail as the
+   button … show a counter for how many people click it and tail it … a
+   like feature … comments … a bio … write on the parlay post … censor
+   bad words."
+
+   The server is engine/socialfeed.py behind /api/feed/. The page sends
+   WHICH rows (a game's id, or player · market · side · line) and never a
+   price or a link: the server reads every leg off its own board, locks a
+   paid leg for a reader who has not paid, and hands out bet-slip links
+   only when somebody taps Tail — which is also what the counter counts,
+   one per person. Swearing comes back masked unless the reader turned
+   strong language on (kept on this device); slurs never got stored. */
+const FEED_STRONG_KEY = "qb_feed_strong";
+const _feed = { order: "new", posts: [], more: false, next: 0, me: null,
+                signedIn: false, handle: "", profile: null };
+
+function feedStrong() {
+  try { return localStorage.getItem(FEED_STRONG_KEY) === "1"; } catch (e) { return false; }
+}
+
+function feedAgo(ts) {
+  const s = Math.max(0, Date.now() / 1000 - Number(ts || 0));
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+async function feedApi(path, body) {
+  const q = !body && feedStrong() ? `${path.includes("?") ? "&" : "?"}strong=1` : "";
+  try {
+    const r = await fetch(`/api/feed/${path}${q}`, body
+      ? { method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      : { credentials: "same-origin", cache: "no-store" });
+    return { ok: r.ok, status: r.status, out: await r.json().catch(() => ({})) };
+  } catch (e) {
+    return { ok: false, status: 0, out: { error: "Could not reach the server." } };
+  }
+}
+
+function feedLegHTML(l) {
+  if (l.locked) {
+    return `<div class="fd-leg locked"><span class="fd-leg-who"><b>${escapeHtml(l.player || l.matchup || "")}</b>
+      <span>${escapeHtml(l.market_label || "")}</span></span>
+      <span class="fd-lock">${icon("lock", 12)} Members</span></div>`;
+  }
+  const who = l.kind === "game" ? (l.matchup || "") : (l.player || "");
+  return `<div class="fd-leg"><span class="slip-leg-mark">${betMark(l, 24)}</span>
+    <span class="fd-leg-who"><b>${escapeHtml(who)}</b><span>${escapeHtml(l.label || "")}</span></span>
+    <span class="fd-leg-odds">${l.odds != null ? escapeHtml(trueMinus(oddsTxt(l.odds))) : ""}${
+      l.book ? `<small>${escapeHtml(l.book)}</small>` : ""}</span></div>`;
+}
+
+function feedPostHTML(p) {
+  const n = (p.legs || []).length;
+  return `<article class="card fd-post" data-post="${p.id}">
+    <header class="fd-head">
+      <button class="fd-handle" data-feed-user="${escapeAttr(p.handle)}" type="button">@${escapeHtml(p.handle)}</button>
+      <span class="fd-meta">${escapeHtml(String(p.sport || "").toUpperCase())} · ${n > 1 ? `${n}-leg parlay` : "single"} · ${feedAgo(p.at)}</span>
+      <button class="fd-more" data-feed-menu="${p.id}" type="button" aria-label="More">${icon("dots", 16)}</button>
+    </header>
+    ${p.caption ? `<p class="fd-cap">${escapeHtml(p.caption)}</p>` : ""}
+    <div class="fd-legs">${(p.legs || []).map(feedLegHTML).join("")}</div>
+    ${p.combined != null && n > 1 ? `<div class="fd-total">Combined <b>${escapeHtml(trueMinus(oddsTxt(p.combined)))}</b>
+      <span>at the prices when posted</span></div>` : ""}
+    <div class="fd-acts">
+      <button class="fd-act${p.liked ? " on" : ""}" data-feed-like="${p.id}" type="button"
+        aria-pressed="${p.liked ? "true" : "false"}" aria-label="Like">${icon("heart", 16)}<span>${p.likes}</span></button>
+      <button class="fd-act" data-feed-comments="${p.id}" type="button" aria-label="Comments">${icon("chat", 16)}<span>${p.comments}</span></button>
+      <button class="fd-tail${p.tailed ? " on" : ""}${p.locked ? " locked" : ""}" data-feed-tail="${p.id}" type="button"
+        title="${p.locked ? "Members can tail this one" : "Open this parlay at your book"}">${icon("whale", 18)}<b>Tail</b>
+        <span class="fd-n">${p.tails}</span></button>
+    </div>
+    <div class="fd-slot" id="fd-slot-${p.id}"></div>
+  </article>`;
+}
+
+function feedTailHTML(res) {
+  const n = res.n_legs || 0;
+  const fine = `<p class="betit-fine">Each tap opens that book’s bet slip in a new tab. One link carries
+    every leg only where the book’s link format takes them (FanDuel’s does); at the others add the
+    legs one by one and they stack on the same slip. Prices move — check before you place.
+    21+ · Gambling problem? 1-800-GAMBLER</p>`;
+  const books = res.books || [];
+  if (!books.length) {
+    return `<div class="betit-list fd-tailbox"><p class="set-empty">No book has handed us a bet-slip
+      link for these legs yet — the legs above are everything you need to key it in.</p>${fine}</div>`;
+  }
+  const a = (url, inner, cls) => `<a class="${cls}" href="${safeHref(url)}" target="_blank"
+    rel="noopener noreferrer nofollow">${inner}</a>`;
+  const rows = books.map((b) => (b.combined
+    ? a(b.combined, `<b>${escapeHtml(b.book)}</b><span class="betit-px">all ${n} legs</span><i>one slip</i>`, "betit-row")
+    : `<div class="fd-book"><b>${escapeHtml(b.book)}</b><i>${b.have} of ${n} leg${n === 1 ? "" : "s"}</i>
+        <div class="fd-book-legs">${b.legs.map((c, i) => (c
+          ? a(c.url, `Leg ${i + 1}${c.price != null ? ` · ${escapeHtml(american(c.price))}` : ""}`, "chip")
+          : `<span class="chip off">Leg ${i + 1} not offered</span>`)).join("")}</div></div>`)).join("");
+  return `<div class="betit-list fd-tailbox"><p class="betit-h">Tail it at</p>${rows}${fine}</div>`;
+}
+
+function feedCommentsHTML(post) {
+  const list = (post.comment_list || []).map((c) => `<div class="fd-com">
+      <button class="fd-handle" data-feed-user="${escapeAttr(c.handle)}" type="button">@${escapeHtml(c.handle)}</button>
+      <span class="fd-meta">${feedAgo(c.at)}</span>
+      ${c.can_delete ? `<button class="fd-x" data-feed-del="comment:${c.id}:${post.id}" type="button" aria-label="Delete comment">${icon("cross", 11)}</button>`
+        : _feed.signedIn ? `<button class="fd-x" data-feed-report="comment:${c.id}" type="button" aria-label="Report comment">${icon("flag", 11)}</button>` : ""}
+      <p>${escapeHtml(c.body)}</p></div>`).join("");
+  const box = !_feed.signedIn
+    ? `<p class="set-note"><a href="#account">Sign in</a> to comment.</p>`
+    : !_feed.me ? `<p class="set-note">Pick a handle at the top of the feed to comment.</p>`
+    : `<div class="fd-compose"><input class="fd-input" id="fd-com-${post.id}" maxlength="280"
+         placeholder="Add a comment" aria-label="Add a comment">
+       <button class="btn" data-feed-comment="${post.id}" type="button">Post</button></div>`;
+  return `<div class="fd-coms">${list || `<p class="set-note">No comments yet.</p>`}${box}</div>`;
+}
+
+function feedMeHTML() {
+  if (!_feed.signedIn) {
+    return `<div class="card fd-me"><p><b>Post your own parlays.</b> <a href="#account">Sign in</a>
+      (free) to post, like, comment and tail.</p></div>`;
+  }
+  const m = _feed.me;
+  return `<div class="card fd-me">
+    ${m ? `<p class="fd-me-line"><b>@${escapeHtml(m.handle)}</b> <span>${escapeHtml(m.bio || "No bio yet")}</span>
+        <button class="btn ghost" id="fd-edit" type="button">Edit</button></p>` : `<p><b>Pick a handle</b> — it is the
+        name your posts and comments go out under. Your email is never shown.</p>`}
+    <div class="fd-form" id="fd-form"${m ? " hidden" : ""}>
+      <input class="fd-input" id="fd-handle" maxlength="20" placeholder="handle (3–20 letters, numbers, _)"
+        value="${escapeAttr(m ? m.handle : "")}" aria-label="Handle">
+      <input class="fd-input" id="fd-bio" maxlength="160" placeholder="Bio — who you are, what you bet"
+        value="${escapeAttr(m ? m.bio : "")}" aria-label="Bio">
+      <button class="btn" id="fd-save" type="button">Save</button>
+    </div>
+    <p class="set-note">To post: add legs with <b>+ Parlay</b> on any board, open the slip, and tap
+      <b>Post to the feed</b>.</p>
+  </div>`;
+}
+
+function feedPageHTML() {
+  const strong = feedStrong();
+  const prof = _feed.profile;
+  const head = prof
+    ? `<div class="card fd-prof"><button class="btn ghost" id="fd-back" type="button">All posts</button>
+        <h2>@${escapeHtml(prof.handle)}</h2><p>${escapeHtml(prof.bio || "")}</p>
+        <p class="fd-stats"><b>${prof.posts}</b> posts · <b>${prof.tails}</b> tails · <b>${prof.likes}</b> likes</p></div>`
+    : feedMeHTML();
+  const posts = _feed.posts.length
+    ? _feed.posts.map(feedPostHTML).join("")
+    : `<p class="set-empty">${prof ? "No posts yet." : "Nobody has posted yet — be first: build a parlay and post it from the slip."}</p>`;
+  return `<div class="section-title">The Feed
+      <span class="sub">— parlays people are riding. Tap the whale to tail one at your book.</span></div>
+    <div class="fd-bar">
+      ${prof ? "" : `<div class="rec-windows" role="group" aria-label="Order">
+        <button class="rec-win${_feed.order === "new" ? " active" : ""}" data-feed-order="new" type="button">New</button>
+        <button class="rec-win${_feed.order === "top" ? " active" : ""}" data-feed-order="top" type="button">Most tailed</button></div>`}
+      <label class="fd-toggle"><input type="checkbox" id="fd-strong"${strong ? " checked" : ""}> Show strong language</label>
+    </div>
+    ${head}
+    <div class="fd-list">${posts}</div>
+    ${_feed.more ? `<button class="btn ghost fd-load" id="fd-load" type="button">Older posts</button>` : ""}`;
+}
+
+async function feedLoad(append) {
+  const res = _feed.handle
+    ? await feedApi(`profile?handle=${encodeURIComponent(_feed.handle)}`)
+    : await feedApi(`list?order=${_feed.order}${append && _feed.next ? `&before=${_feed.next}` : ""}`);
+  if (!res.ok) { tfToast(res.out.error || "The feed did not load."); return; }
+  const o = res.out;
+  _feed.profile = o.profile || null;
+  _feed.posts = append ? _feed.posts.concat(o.posts || []) : (o.posts || []);
+  // A profile shows its newest twenty; paging is the main feed's.
+  _feed.more = !_feed.handle && !!o.more;
+  _feed.next = o.next || 0;
+  if (!_feed.handle) { _feed.me = o.me || null; _feed.signedIn = !!o.signed_in; }
+}
+
+async function renderFeed(append) {
+  const host = document.getElementById("view-feed");
+  if (!host) return;
+  if (!append && !_feed.posts.length) host.innerHTML = feedPageHTML();
+  await feedLoad(append);
+  host.innerHTML = feedPageHTML();
+}
+
+function feedPost(id) { return _feed.posts.find((p) => p.id === Number(id)); }
+
+function feedRedraw(id) {
+  const p = feedPost(id);
+  const el = document.querySelector(`.fd-post[data-post="${id}"]`);
+  if (!p || !el) return;
+  const slot = el.querySelector(".fd-slot").innerHTML;
+  el.outerHTML = feedPostHTML(p);
+  const fresh = document.getElementById(`fd-slot-${id}`);
+  if (fresh) fresh.innerHTML = slot;
+}
+
+async function feedOpenComments(id) {
+  const slot = document.getElementById(`fd-slot-${id}`);
+  if (!slot) return;
+  const res = await feedApi(`post?id=${id}`);
+  if (!res.ok) { tfToast(res.out.error || "Could not open the comments."); return; }
+  slot.innerHTML = feedCommentsHTML(res.out.post);
+  slot.dataset.open = "comments";
+}
+
+function feedNeedSignIn() {
+  if (_feed.signedIn) return false;
+  tfToast("Sign in (free) to do that.");
+  return true;
+}
+
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.id === "fd-strong") {
+    try { localStorage.setItem(FEED_STRONG_KEY, e.target.checked ? "1" : "0"); } catch (err) {}
+    renderFeed();
+  }
+});
+
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest && e.target.closest(
+    "[data-feed-like],[data-feed-tail],[data-feed-comments],[data-feed-comment],[data-feed-user],"
+    + "[data-feed-menu],[data-feed-del],[data-feed-report],[data-feed-order],#fd-back,#fd-load,#fd-edit,#fd-save");
+  if (!t || !t.closest("#view-feed")) return;
+  e.preventDefault();
+  const d = t.dataset;
+  if (d.feedOrder) { _feed.order = d.feedOrder; _feed.posts = []; return renderFeed(); }
+  if (d.feedUser) { _feed.handle = d.feedUser; _feed.posts = []; window.scrollTo(0, 0); return renderFeed(); }
+  if (t.id === "fd-back") { _feed.handle = ""; _feed.profile = null; _feed.posts = []; return renderFeed(); }
+  if (t.id === "fd-load") return renderFeed(true);
+  if (t.id === "fd-edit") { const f = document.getElementById("fd-form"); if (f) f.hidden = !f.hidden; return; }
+  if (t.id === "fd-save") {
+    const res = await feedApi("profile", { handle: (document.getElementById("fd-handle") || {}).value,
+                                           bio: (document.getElementById("fd-bio") || {}).value });
+    if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
+    _feed.me = res.out.profile;
+    tfToast("Saved.");
+    return renderFeed();
+  }
+  if (d.feedLike) {
+    if (feedNeedSignIn()) return;
+    const res = await feedApi("like", { id: Number(d.feedLike) });
+    const p = feedPost(d.feedLike);
+    if (res.ok && p) { p.likes = res.out.likes; p.liked = res.out.liked; buzz("tap"); feedRedraw(p.id); }
+    return;
+  }
+  if (d.feedTail) {
+    if (feedNeedSignIn()) return;
+    const slot = document.getElementById(`fd-slot-${d.feedTail}`);
+    if (slot && slot.dataset.open === "tail") { slot.innerHTML = ""; slot.dataset.open = ""; return; }
+    const res = await feedApi("tail", { id: Number(d.feedTail) });
+    if (!res.ok) { tfToast(res.out.error || "Could not tail that."); return; }
+    const p = feedPost(d.feedTail);
+    if (p) { p.tails = res.out.tails; p.tailed = true; buzz("tap"); feedRedraw(p.id); }
+    const s2 = document.getElementById(`fd-slot-${d.feedTail}`);
+    if (s2) { s2.innerHTML = feedTailHTML(res.out); s2.dataset.open = "tail"; }
+    return;
+  }
+  if (d.feedComments) {
+    const slot = document.getElementById(`fd-slot-${d.feedComments}`);
+    if (slot && slot.dataset.open === "comments") { slot.innerHTML = ""; slot.dataset.open = ""; return; }
+    return feedOpenComments(d.feedComments);
+  }
+  if (d.feedComment) {
+    const box = document.getElementById(`fd-com-${d.feedComment}`);
+    const res = await feedApi("comment", { id: Number(d.feedComment), body: box ? box.value : "" });
+    if (!res.ok) { tfToast(res.out.error || "That did not post."); return; }
+    const p = feedPost(d.feedComment);
+    if (p) { p.comments += 1; feedRedraw(p.id); }
+    return feedOpenComments(d.feedComment);
+  }
+  if (d.feedMenu) {
+    const p = feedPost(d.feedMenu);
+    const slot = document.getElementById(`fd-slot-${d.feedMenu}`);
+    if (!p || !slot) return;
+    slot.dataset.open = "menu";
+    slot.innerHTML = `<div class="fd-menu">${p.mine
+      ? `<button class="btn ghost" data-feed-del="post:${p.id}" type="button">Delete this post</button>`
+      : _feed.signedIn ? `<button class="btn ghost" data-feed-report="post:${p.id}" type="button">${icon("flag", 12)} Report</button>`
+      : `<span class="set-note">Sign in to report a post.</span>`}</div>`;
+    return;
+  }
+  if (d.feedDel) {
+    const [kind, id, post] = d.feedDel.split(":");
+    const res = await feedApi("delete", { kind, id: Number(id) });
+    if (!res.ok) { tfToast(res.out.error || "That did not delete."); return; }
+    if (kind === "post") { _feed.posts = _feed.posts.filter((p) => p.id !== Number(id)); renderFeed(); return; }
+    const p = feedPost(post);
+    if (p) { p.comments = Math.max(0, p.comments - 1); feedRedraw(p.id); }
+    return feedOpenComments(post);
+  }
+  if (d.feedReport) {
+    const [kind, id] = d.feedReport.split(":");
+    const res = await feedApi("report", { kind, id: Number(id) });
+    tfToast(res.ok ? "Reported — thanks. Three reports hide it until it is reviewed." : (res.out.error || "That did not go through."));
+  }
+});
+
+/* POST TO THE FEED, from the slip. Which rows, never what they say: a
+   game leg by its id, a prop by player · market · side · line. */
+async function slipPostToFeed(btn) {
+  const s = slipState();
+  const cap = (document.querySelector("#slip-send-slot .fd-caption") || {}).value || "";
+  btn.textContent = "Posting…";
+  const res = await feedApi("post", { sport: s.sport, date: s.date, caption: cap,
+    legs: s.legs.map((l) => (l.gid ? { gid: l.gid }
+      : { player: l.player, market: l.market, side: l.side, line: l.line })) });
+  btn.textContent = "Post";
+  if (res.out.need_handle) { tfToast(res.out.error); switchView("feed", true); return; }
+  if (!res.ok) { tfToast(res.out.error || "That did not post."); return; }
+  tfToast(res.out.already ? "Already on the feed." : "Posted to the feed.");
+  _feed.handle = ""; _feed.order = "new"; _feed.posts = [];
+  switchView("feed", true);
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.closest && e.target.closest("#slip-feed")) {
+    const u = await acctWho();
+    if (!(u && u.signed_in)) { tfToast("Sign in (free) to post to the feed."); return; }
+    const slot = document.getElementById("slip-send-slot");
+    if (slot) {
+      slot.innerHTML = `<input class="fr-note fd-caption" maxlength="280"
+          placeholder="Say something about it (optional)" aria-label="Caption">
+        <div class="fr-send-row"><button class="btn" id="slip-feed-go" type="button">Post</button></div>`;
+    }
+    return;
+  }
+  const go = e.target.closest && e.target.closest("#slip-feed-go");
+  if (go) { e.preventDefault(); slipPostToFeed(go); }
 });
 
 
@@ -47582,7 +47931,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    Picks · Odds · Research · My Book, then Proof. Every destination
    the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
-  ["Picks", ["view:likely", "view:longshots", "view:zeno"]],
+  ["Picks", ["view:likely", "view:longshots", "view:zeno", "view:feed"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",

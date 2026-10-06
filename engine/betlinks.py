@@ -537,12 +537,43 @@ def report(sport: str = "nfl") -> list[str]:
     return lines
 
 
+def props_report(sport: str = "nfl", cache_dir: Path | None = None, now: float | None = None) -> list[str]:
+    """Have the per-game (player prop) pulls run since links were switched
+    on, and did they come back with any? Ethan's 2026-10-06 run banked 174
+    slip links at each big book — 29 games × 6 game-line outcomes — and no
+    prop at all; this tells "not pulled yet" from "pulled, but no links"."""
+    root = Path(cache_dir) if cache_dir else _cache_dir()
+    now = now or time.time()
+
+    def _files(pat):
+        return sorted(root.glob(pat), key=lambda f: f.stat().st_mtime)
+    side = _files(f"{PREFIX}event_{sport}_*.json")
+    odds = _files(f"odds_event_{sport}_*.json")
+    age = lambda fs: f"{(now - fs[-1].stat().st_mtime) / 3600:.1f} h old" if fs else "none"   # noqa: E731
+    props, books = 0, set()
+    for f in side:
+        try:
+            evs = (json.loads(f.read_text()) or {}).get("events") or {}
+        except (OSError, ValueError):
+            continue
+        for e in evs.values():
+            for k in e.get("slip") or {}:
+                parts = k.split("|")
+                if len(parts) > 1 and parts[1].startswith("player_"):
+                    props += 1
+                    books.add(parts[0])
+    return [f"prop links: {sport}: {len(side)} per-game link file(s), newest {age(side)}; "
+            f"{len(odds)} per-game odds file(s), newest {age(odds)}",
+            f"  player-prop slip links banked: {props:,}" + (f" at {', '.join(sorted(books))}" if books else "")]
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="python3 -m engine.betlinks")
     ap.add_argument("sport", nargs="?", default="nfl")
+    ap.add_argument("--props", action="store_true", help="the per-game (player prop) pulls only")
     a = ap.parse_args(argv)
-    for line in report(a.sport):
+    for line in (props_report(a.sport) if a.props else report(a.sport)):
         print(line)
     return 0
 

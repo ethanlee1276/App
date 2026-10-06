@@ -768,8 +768,13 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # and the page carries none of the model's picks. Back link reaches
     # it through the same generic `name !== "paywall" && name !==
     # "checkout"` branch as Record.
+    # "feed" added 2026-10-06: the public feed of parlays people post.
+    # Open because the SERVER locks every paid leg for a reader who has
+    # not paid (engine/socialfeed.public_leg) and refuses them the tail;
+    # the page itself carries no model output. Back link confirmed by
+    # rendering it with the wall on: #wall-back shows, as on Record.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup", "streak", "messages", "zeno"}, (
+                      "signup", "streak", "messages", "zeno", "feed"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

@@ -301,6 +301,20 @@ def test_the_feed_writes_only_the_public_posts_for_the_page():
     assert (D.COMMUNITY.stat().st_mtime if D.COMMUNITY.exists() else None) == before, "the site's copy untouched"
 
 
+def test_the_props_report_tells_game_lines_from_player_props():
+    """Ethan's first run banked 29 games × 6 game-line links and no prop;
+    --props counts only the player-prop keys, and names the books."""
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "betlinks_event_nfl_e1_x.json").write_text(json.dumps({"sport": "nfl", "events": {"e1": {"slip": {
+        "fanduel|player_reception_yds|amon ra st brown|over|64.5": "https://a",
+        "draftkings|h2h|detroit lions||": "https://b"}, "page": {}}}}))
+    lines = B.props_report("nfl", cache_dir=tmp)
+    assert "1 per-game link file" in lines[0] and "0 per-game odds file" in lines[0]
+    assert lines[1].strip() == "player-prop slip links banked: 1 at fanduel"
+    empty = B.props_report("nfl", cache_dir=Path(tempfile.mkdtemp()))
+    assert "newest none" in empty[0] and empty[1].strip() == "player-prop slip links banked: 0"
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

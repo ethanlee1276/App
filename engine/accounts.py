@@ -665,6 +665,10 @@ def delete_user(conn, user_id: int) -> None:
         # deleted account is a dangling reference, not a keepsake.
         conn.execute("DELETE FROM friend_nicknames WHERE user_id=? OR friend_id=?",
                      (int(user_id), int(user_id)))
+    # The public feed's rows (engine/socialfeed): your posts with every
+    # like, tail and comment under them, and your marks on other posts.
+    from . import socialfeed as _feed
+    _feed.delete_user(conn, user_id)
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -767,4 +771,11 @@ def export_user(conn, user_id: int) -> dict:
         if d:
             out["email_digests"] = {"morning": bool(d["morning"]),
                                     "nightly": bool(d["nightly"])}
+    # The public feed (engine/socialfeed, 2026-10-06): the handle, the
+    # bio, every post and comment you wrote, and what you liked and tailed.
+    from . import socialfeed as _feed
+    mine = _feed.export_user(conn, user_id)
+    if mine and (mine.get("profile") or mine.get("posts") or mine.get("comments")
+                 or mine.get("likes") or mine.get("tails")):
+        out["public_feed"] = mine
     return out

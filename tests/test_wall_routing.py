@@ -123,7 +123,11 @@ def test_the_pages_that_stay_open_are_named_once():
     assert set(open_) == {"paywall", "checkout", "record", "account",
                           "discord", "signup", "streak", "messages",
                           # Zeno's own tickets: public like the Record.
-                          "zeno"}, open_
+                          "zeno",
+                          # The Feed (2026-10-06): the server locks every
+                          # paid leg for a reader who has not paid, and
+                          # #wall-back verified visible on it in a browser.
+                          "feed"}, open_
 
 
 def test_every_open_page_is_a_real_view():

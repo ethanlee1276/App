@@ -43,7 +43,11 @@ HTML = (WEB / "index.html").read_text()
 #: 479 -> 480 on 2026-10-06 by Bet it and the Discord page (betItHTML on
 #: the pick page, the Most Likely cards, the Edge rows and the Pick of the
 #: Day; the site-posted channels and the latest #record posts). Told to Ethan.
-APP_JS_BUDGET_KB = 480
+#: 480 -> 485 on 2026-10-06 by the Feed (Ethan: "a social page where users
+#: can make parlays and share them … a tail button … likes … comments … a
+#: bio"): renderFeed, the post cards, the Tail box, comments and the
+#: profile — +4.3 KB gz. Told to Ethan.
+APP_JS_BUDGET_KB = 485
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -53,7 +57,9 @@ APP_JS_BUDGET_KB = 480
 #: JavaScript as the app.js bump above plus their styles. Told to Ethan.
 #: 595 -> 596 on 2026-10-06 by the Bet it box (every book that has the bet,
 #: Ethan: "a box that shows all the different sports books"). Told to Ethan.
-BOOT_BUDGET_KB = 596
+#: 596 -> 601 on 2026-10-06 by the Feed: the JavaScript in the app.js bump
+#: above plus its styles and its section (+4.6 KB gz). Told to Ethan.
+BOOT_BUDGET_KB = 601
 
 
 def _gz_trimmed(rel: str) -> int:

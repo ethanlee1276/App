@@ -330,6 +330,14 @@ _PROFILE_PIN = re.compile(r"^\d{4,12}$")
 _PROFILE_LOCK = threading.Lock()
 
 
+def _int(v) -> int:
+    """A body's id field as an int, 0 when it is not one."""
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _acct():
     """`engine.accounts`, imported on first use.
 
@@ -1093,6 +1101,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/social/"):
             return self._social_get(
                 parsed.path[len("/api/social/"):].strip("/"))
+        if parsed.path.startswith("/api/feed/"):
+            return self._feed_get(parsed.path[len("/api/feed/"):].strip("/"),
+                                  parse_qs(parsed.query))
         if parsed.path.startswith("/api/alerts/"):
             return self._alerts_get(
                 parsed.path[len("/api/alerts/"):].strip("/"))
@@ -1231,6 +1242,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._tailfade_post(
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
         if (parsed.path.startswith("/api/social/")
+                or parsed.path.startswith("/api/feed/")
                 or parsed.path.startswith("/api/alerts/")
                 or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
                 or parsed.path in ("/api/draftplan", "/api/draftplan/")):
@@ -1254,6 +1266,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._parlay_check(body)
             if parsed.path.startswith("/api/draftplan"):
                 return self._draft_plan(body)
+            if parsed.path.startswith("/api/feed/"):
+                return self._feed_post(
+                    parsed.path[len("/api/feed/"):].strip("/"), body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
         if parsed.path in ("/api/ask", "/api/ask/"):
@@ -2412,6 +2427,101 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 AL.mark_seen(conn, who["id"], str(body.get("ts") or ""))
                 code, out = 200, {"ok": True}
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    # --- the public feed: parlays people post, and the Tail button -------
+    # engine/socialfeed.py holds the rules. READS ARE OPEN — a stranger can
+    # see the feed, which is the point of it — but every read is answered
+    # under the reader's own entitlement: a leg that is on the paid board
+    # only shows its identity to a reader who has not paid, and that
+    # reader cannot tail it. Every write needs a session. Hiding a post or
+    # comment is the owner's, behind QB_OWNER_TOKEN like Zeno's import.
+    def _feed_get(self, path: str, q: dict):
+        from engine import socialfeed as SF
+        if path == "reported":
+            if self._owner_refused():
+                return
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            uid = who["id"] if who else None
+            entitled = self._entitled(conn, who)
+            strong = (q.get("strong") or [""])[0] == "1"
+            if path == "list":
+                try:
+                    before = int((q.get("before") or ["0"])[0] or 0)
+                except ValueError:
+                    before = 0
+                out = SF.feed(conn, uid, entitled, strong, before=before,
+                              sport=(q.get("sport") or [""])[0][:8],
+                              order=(q.get("order") or ["new"])[0][:4])
+                out["me"] = SF.profile_of(conn, uid) if uid else None
+                out["signed_in"] = bool(who)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "post":
+                try:
+                    pid = int((q.get("id") or ["0"])[0] or 0)
+                except ValueError:
+                    pid = 0
+                code, out = SF.post_detail(conn, pid, uid, entitled, strong)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "profile":
+                code, out = SF.profile_page(conn, (q.get("handle") or [""])[0],
+                                            uid, entitled, strong)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "reported":
+                return self._send(200, json.dumps(
+                    {"items": SF.reported(conn)}).encode(), ".json")
+            return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
+        finally:
+            conn.close()
+
+    def _feed_post(self, path: str, body: dict):
+        from engine import socialfeed as SF
+        if path not in ("post", "like", "tail", "comment", "delete", "report",
+                        "profile", "hide"):
+            return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
+        if path == "hide" and self._owner_refused():
+            return
+        A = _acct()
+        conn = A.connect()
+        try:
+            if path == "hide":
+                code, out = SF.set_hidden(conn, str(body.get("kind") or ""),
+                                          _int(body.get("id")), bool(body.get("hidden", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            uid = who["id"]
+            if path == "post":
+                # Which rows, never what they say: the leg is rebuilt from
+                # the private board by engine/socialfeed.resolve_legs, so a
+                # price, a link or a URL in a crafted body lands nowhere.
+                legs = [{"gid": str(l.get("gid") or ""),
+                         "player": str(l.get("player") or ""),
+                         "market": str(l.get("market") or ""),
+                         "side": str(l.get("side") or ""),
+                         "line": l.get("line") if isinstance(l.get("line"), (int, float, str)) else None}
+                        for l in (body.get("legs") or []) if isinstance(l, dict)][:6]
+                code, out = SF.create_post(conn, uid, body.get("sport"), body.get("date"),
+                                           legs, body.get("caption"))
+            elif path == "like":
+                code, out = SF.toggle_like(conn, uid, _int(body.get("id")))
+            elif path == "tail":
+                code, out = SF.tail(conn, uid, _int(body.get("id")),
+                                    self._entitled(conn, who))
+            elif path == "comment":
+                code, out = SF.add_comment(conn, uid, _int(body.get("id")), body.get("body"))
+            elif path == "delete":
+                code, out = SF.delete(conn, uid, str(body.get("kind") or ""), _int(body.get("id")))
+            elif path == "report":
+                code, out = SF.report(conn, uid, str(body.get("kind") or ""), _int(body.get("id")))
+            else:
+                code, out = SF.profile_set(conn, uid, body.get("handle"), body.get("bio"))
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

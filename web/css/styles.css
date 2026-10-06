@@ -12865,3 +12865,69 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .dc-live .dc-off { color: var(--text-mute); }
 /* A pick our own read argues against: kept, and the card says so. */
 .ob-warn { display: block; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+
+/* THE FEED (Ethan, 2026-10-06): parlays people post, likes, comments,
+   bios, and the whale-tail Tail button with its counter. */
+.fd-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 12px; }
+.fd-bar .rec-windows { margin: 0; }
+.fd-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-size: var(--fs-xs); }
+.fd-me, .fd-prof { display: grid; gap: 8px; padding: 14px 16px; margin: 0 0 12px; }
+.fd-me p, .fd-prof p { margin: 0; line-height: var(--lh-snug); }
+.fd-me-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.fd-me-line span { color: var(--text-dim); flex: 1 1 160px; overflow-wrap: anywhere; }
+.fd-prof h2 { margin: 4px 0 0; font-size: var(--fs-lg); }
+.fd-prof .btn { justify-self: start; }
+.fd-stats { color: var(--text-mute); font-size: var(--fs-sm); }
+.fd-form, .fd-compose { display: flex; flex-wrap: wrap; gap: 8px; }
+.fd-form[hidden] { display: none; }
+.fd-input { flex: 1 1 180px; min-width: 0; padding: 8px 10px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.fd-list { display: grid; gap: 12px; }
+.fd-post { display: block; padding: 14px 16px; }
+.fd-head { display: flex; align-items: center; gap: 8px; }
+.fd-handle { background: none; border: 0; padding: 0; color: var(--text); font: inherit; font-weight: 800; cursor: pointer; }
+.fd-handle:hover { color: var(--brand-2); }
+.fd-meta { color: var(--text-mute); font-size: var(--fs-2xs); }
+.fd-more, .fd-x { margin-left: auto; background: none; border: 0; padding: 4px; color: var(--text-mute); cursor: pointer; }
+.fd-cap { margin: 8px 0 0; white-space: pre-line; overflow-wrap: anywhere; line-height: var(--lh-body); }
+.fd-legs { display: grid; gap: 6px; margin: 10px 0 0; }
+.fd-leg { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: var(--radius-sm); background: var(--bg); }
+.fd-leg.locked { grid-template-columns: 1fr auto; }
+.fd-leg-who { display: grid; min-width: 0; line-height: var(--lh-tight); }
+.fd-leg-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-leg-who span { color: var(--text-dim); font-size: var(--fs-xs); }
+.fd-leg-odds { display: grid; justify-items: end; font-family: var(--font-mono); font-weight: 700; color: var(--brand-2); }
+.fd-leg-odds small { font-family: inherit; font-weight: 600; color: var(--text-mute); font-size: var(--fs-2xs); }
+.fd-lock { display: inline-flex; align-items: center; gap: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
+.fd-total { margin: 8px 0 0; font-size: var(--fs-sm); }
+.fd-total b { font-family: var(--font-mono); color: var(--brand-2); }
+.fd-total span { color: var(--text-mute); font-size: var(--fs-2xs); }
+.fd-acts { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; }
+.fd-act { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px;
+  border: 0; background: none; color: var(--text-dim); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.fd-act:hover { color: var(--text); background: var(--bg); }
+.fd-act.on { color: var(--bad); }
+.fd-act.on .ic path { fill: currentColor; }
+.fd-tail { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px 6px 10px;
+  border-radius: 999px; border: var(--hairline) solid var(--brand); background: transparent; color: var(--brand-2);
+  font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.fd-tail b { font-weight: 800; }
+.fd-tail .fd-n { font-family: var(--font-mono); font-weight: 700; padding-left: 6px;
+  border-left: var(--hairline) solid var(--border); }
+.fd-tail:hover, .fd-tail.on { background: var(--brand-solid); color: var(--brand-ink); }
+.fd-tail.on .fd-n { border-color: currentColor; }
+.fd-tail.locked { opacity: .7; }
+.fd-slot:empty { display: none; }
+.fd-slot { margin: 10px 0 0; }
+.fd-tailbox { position: static; max-height: none; min-width: 0; max-width: none; }
+.fd-book { display: grid; gap: 4px; padding: 7px 8px; font-size: var(--fs-sm); }
+.fd-book i { font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs); }
+.fd-book-legs { display: flex; flex-wrap: wrap; gap: 6px; }
+.fd-book-legs a.chip { color: var(--brand-2); border-color: var(--brand); text-decoration: none; }
+.fd-book-legs .chip.off { opacity: .5; }
+.fd-coms { display: grid; gap: 8px; }
+.fd-com { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg); }
+.fd-com p { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; line-height: var(--lh-snug); font-size: var(--fs-sm); }
+.fd-menu { display: flex; gap: 8px; }
+.fd-load { display: block; margin: 14px auto 0; }
