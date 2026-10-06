@@ -34,7 +34,10 @@ HTML = (WEB / "index.html").read_text()
 #: 476 -> 477 on 2026-10-04 by Ethan's "do all of it" list: the research
 #: box, the price-move alert, the why line on Most Likely rows and the
 #: Record page's "This week" card (+0.6 KB gz together).
-APP_JS_BUDGET_KB = 477
+#: 477 -> 478 on 2026-10-06 by the Status page's Kalshi trader card
+#: (kalshiCardHTML: mode, today's orders, record, the Pikkit link —
+#: +0.37 KB gz; the file sat 0.14 KB under 477 before it).
+APP_JS_BUDGET_KB = 478
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).

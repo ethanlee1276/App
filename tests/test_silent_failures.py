@@ -197,6 +197,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # draws the older Most Likely shelves, which is the right fallback:
         # a board that fails must never take the picks down with it.
         "attach",
+        # THE KALSHI TRADER'S `check` (engine/kalshitrade._cmd_check,
+        # 2026-10-06): a quiet day prints "ok — connected; balance $…"
+        # and returns 0; a failure prints "FAILED — <exception>" and
+        # returns 2, so the two never read alike. It is the command that
+        # proves the key before any money moves, and it must say why not.
+        "_cmd_check",
     }
 
     def broad(h):

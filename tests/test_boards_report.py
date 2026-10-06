@@ -87,7 +87,10 @@ def _sweep_with_every_step_stubbed():
              if (n.startswith("refresh_") and n != "refresh_all")
              or n in ("_arbitrate_parlays", "_journal_parlays",
                       "_seal_forecasts", "_run_futures", "_publish_feed",
-                      "_note_board", "_warn_if_frozen")}
+                      "_note_board", "_warn_if_frozen",
+                      # The Kalshi trader (engine/kalshitrade) reads the
+                      # exchange and, live, places orders: stubbed.
+                      "_kalshi_trader")}
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     sweep = src.split("\ndef refresh_all", 1)[1].split("\ndef ", 1)[0]
     called = set(re.findall(r"(\w+)\(quiet=quiet\)", sweep))

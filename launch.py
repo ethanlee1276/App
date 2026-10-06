@@ -1782,6 +1782,35 @@ def _isolated(step: str, board: bool = True):
         print(f"  ⚠️  {step}: {note} — isolated; the rest of the cycle continues.")
 
 
+def _kalshi_trader(quiet: bool = False) -> None:
+    """engine/kalshitrade.run_cycle for each sport it is set to, right
+    after the football boards rebuild, so a pick is placed before its
+    price moves. Off unless QB_KALSHI_MODE says paper or live. Prints one
+    line per sport whenever it placed something or had something to say."""
+    from engine import kalshitrade as _kt
+    cfg = _kt.config()
+    if cfg.mode == "off":
+        return
+    for sport in cfg.sports:
+        if sport not in _kt.BOARD_FILE:
+            continue
+        out = _kt.run_cycle(sport, cfg)
+        if not quiet or out.get("placed") or out.get("note"):
+            print(f"  Kalshi {sport.upper()} [{out['mode']}]: {out['considered']} considered, "
+                  f"{out['matched']} matched, {out['placed']} placed"
+                  + (f" — {out['note']}" if out.get("note") else ""))
+
+
+def _kalshi_heartbeat():
+    """Counts only (engine/kalshitrade.heartbeat), for the public heartbeat."""
+    try:
+        from engine import kalshitrade as _kt
+        hb = _kt.heartbeat()
+        return hb if hb.get("mode") != "off" else {"mode": "off"}
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
 def refresh_all(quiet: bool = False) -> None:
     _lap = [time.time()]
     _STEP_FAIL.clear()
@@ -1797,6 +1826,11 @@ def refresh_all(quiet: bool = False) -> None:
     lap("nfl")
     with _isolated("cfb"): _note_board("cfb", refresh_cfb(quiet=quiet))
     lap("cfb")
+    # THE KALSHI TRADER (engine/kalshitrade): the football boards have
+    # just rebuilt, so their picks go on (or on paper) before the prices
+    # move. Not a board; off unless QB_KALSHI_MODE is set.
+    with _isolated("kalshi-trader", board=False): _kalshi_trader(quiet=quiet)
+    lap("kalshi-trader")
     with _isolated("mlb"): _note_board("mlb", refresh_mlb(quiet=quiet))
     lap("mlb")
     with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
@@ -4386,6 +4420,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # Per board, so "did CFB rebuild, and when" stops being a
             # question only a journal forensic can answer. See _BOARD_RUNS.
             "boards": dict(_BOARD_RUNS),
+            # The Kalshi trader, counts only: its mode, today's orders,
+            # what is open, its record (engine/kalshitrade.heartbeat).
+            "kalshi": _kalshi_heartbeat(),
             # Where the last cycle's seconds went, step by step — the
             # answer to "why are all the pages stale 45 minutes" as a
             # paste instead of a profiling session. See _STEP_S.
@@ -9557,6 +9594,19 @@ def settle_now(day: str | None = None) -> None:
                 _zc.close()
         except Exception as _exc:  # noqa: BLE001
             print(f"  ⚠️  Juice Reel sync skipped: {_exc}")
+        # AND THE KALSHI LEDGER (engine/kalshitrade): fills and results
+        # for the picks the trader placed, from Kalshi's own settlement —
+        # the same thing Pikkit grades on. Never fatal, never on when the
+        # trader is off.
+        try:
+            from engine import kalshitrade as _kt
+            if _kt.config().mode != "off":
+                _ks = _kt.sync()
+                print(f"  Kalshi sync: {_ks.get('open', 0)} open, {_ks.get('filled', 0)} filled, "
+                      f"{_ks.get('settled', 0)} settled, {_ks.get('expired', 0)} expired"
+                      + (f" — {_ks['note']}" if _ks.get("note") else ""))
+        except Exception as _exc:  # noqa: BLE001
+            print(f"  ⚠️  Kalshi sync skipped: {_exc}")
         # AND THE SHELF BREAKER, on the same grades and in the same
         # breath. A market whose whole settled record is clear of the
         # noise band on the losing side stops being staked on the next

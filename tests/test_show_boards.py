@@ -407,7 +407,11 @@ def test_every_cycle_step_is_clocked_and_the_bill_is_printed():
     # with it — so the laps moved onto their own lines and this went red
     # while every step was still being clocked. The guarantee is that
     # each step laps; the punctuation between them is not the guarantee.
-    assert body.count('lap("') == body.count("_note_board(") + 9, body
+    # Ten tail chores: rosters, injuries, news, standings, parlays, the
+    # parlay journal, the forecast seal, futures, the feed — and, since
+    # 2026-10-06, the Kalshi trader (engine/kalshitrade), which laps
+    # like every other step between the football boards and MLB.
+    assert body.count('lap("') == body.count("_note_board(") + 10, body
     # And each one is isolated, so a step that raises cannot cost the
     # rest of the cycle — the same count, from the other end.
     assert body.count("_isolated(") == body.count('lap("'), body

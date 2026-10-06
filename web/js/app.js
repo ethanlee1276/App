@@ -39017,6 +39017,24 @@ function loopRowsHTML(hb, now) {
   return out;
 }
 
+/* THE KALSHI TRADER (engine/kalshitrade), counts only, from the heartbeat:
+   its mode, today's orders, what is open, its record, and the Pikkit
+   profile the account syncs to. Ethan, 2026-10-06: "link the site to a
+   pikkit … account so we can legitimately track all the bets the site
+   puts in." Nothing when the trader is off. */
+function kalshiCardHTML(hb) {
+  const k = hb && hb.kalshi;
+  if (!k || !k.mode || k.mode === "off") return "";
+  const mode = k.stopped ? "stopped" : k.mode === "live" ? "live — real money" : "paper — recording, not placing";
+  const row = (l, v, c, n) => `<div class="st-row"><span class="st-k">${l}</span><span class="st-v st-${c}">${escapeHtml(v)}</span><span class="st-sub">${n}</span></div>`;
+  return `<div class="section-title">Kalshi trader<span class="sub">— the site’s picks, placed on Kalshi by the box so a Pikkit account can verify them</span></div>
+    <div class="card">${row("Mode", mode, k.stopped ? "bad" : k.mode === "live" ? "good" : "off",
+      k.pikkit ? `<a href="${safeHref(k.pikkit)}" target="_blank" rel="noopener">Verified on Pikkit →</a>` : "")}
+    ${row("Today", `${k.today == null ? "—" : k.today} orders · ${k.open == null ? "—" : k.open} open`, k.today ? "good" : "off",
+      k.last_run ? `last pass ${escapeHtml(String(k.last_run).replace("T", " ").slice(0, 16))}` : "")}
+    ${row("Record", k.record || "—", "off", "won-lost, settled by Kalshi")}</div>`;
+}
+
 function buildsCardHTML(hb) {
   if (!hb) return "";
   const runs = hb.boards || {};
@@ -39129,6 +39147,7 @@ async function renderStatus() {
     <details class="st-mech"><summary>How this is measured</summary>
       <div class="about-lede"><p>${beat} ${cycle}</p></div></details>
     ${buildsCardHTML(hb)}
+    ${kalshiCardHTML(hb)}
     <div class="section-title">Every published board</div>
     <div class="card st-card">${STATUS_BOARDS.map((b, i) => row(b, stamps[i])).join("")}</div>
     <div class="section-title">Tonight’s feeds

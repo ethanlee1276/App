@@ -925,6 +925,11 @@ NOT_A_BOARD_WRITER = {
                           "independently rather than taking this sentence "
                           "on trust",
     "server.py": "its only write is a user profile",
+    "engine/kalshitrade.py": "reads the NFL and CFB boards THROUGH "
+                             "gate.board_source (the private copy, so the "
+                             "trader sees the picks); its only writes are "
+                             "its own ledger (data/kalshi_trades.db) and "
+                             "the kill-switch file data/kalshi.STOP",
     "standings_build.py": "reads cfb.json for conferences; writes only the "
                           "free standings boards",
     "launch.py": "passes board paths to subprocesses; the builders publish",
