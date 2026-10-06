@@ -140,7 +140,12 @@ def test_plays_that_fit_are_the_reads_plays_volume_first_and_say_their_seat():
     shakir = fits[0]
     assert shakir["on_board"] and shakir["tier"] == "top" and shakir["tier_label"] == "Top pick"
     assert shakir["volume"] and "A volume market — a bet on his role, not on a big play." in shakir["why"]
-    assert "Script: leads late and runs the clock." in shakir["why"]
+    # A favourite that runs the clock pushes PASS volume down: against a
+    # receiver's catches over, and said so (2026-10-06 — it was listed as
+    # a reason FOR the over until Ethan's "make sure everything here is
+    # adding up").
+    assert "Against it — the script: leads late and runs the clock." in shakir["why"]
+    assert not any(w.startswith("Script:") for w in shakir["why"])
     assert not fits[2]["on_board"] and not fits[2]["volume"]
     assert "Yardage — a bet on his role AND a big play" in fits[2]["why"][-1]
     note = _step(_plan(), "fits")["note"]

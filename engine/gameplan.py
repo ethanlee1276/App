@@ -193,17 +193,58 @@ def _in_game(r: dict, g: dict) -> bool:
             and r.get("team") != r.get("opponent") and not r.get("live") and not r.get("started"))
 
 
+#: Which way the game script pushes a market: +1 toward the over, -1 toward
+#: the under, 0 says nothing. Keyed on `gamescript.for_team`'s own lean.
+_PASS_SIDE = ("pass_yds", "pass_att", "pass_cmp", "pass_td", "rec_yds", "receptions")
+_RUN_SIDE = ("rush_yds", "rush_att")
+
+
+def script_sign(lean: str, market: str) -> int:
+    """+1 when the script pushes this market's volume up, -1 down, 0 when it
+    says nothing about it (a close game, a pick'em)."""
+    lean = str(lean or "")
+    m = str(market or "")
+    if "everyone eats" in lean:
+        return 1
+    if "runs the clock" in lean:
+        return 1 if m in _RUN_SIDE else -1 if m in _PASS_SIDE else 0
+    if "trail and throw" in lean:
+        return 1 if m in _PASS_SIDE else -1 if m in _RUN_SIDE else 0
+    return 0
+
+
 def _fit_reason(r: dict) -> list:
     """Why this play fits: the read's own lines, the script, and whether
-    it is a bet on a role or on a big play."""
+    it is a bet on a role or on a big play.
+
+    EVERY LINE POINTS THE PLAY'S WAY OR SAYS IT DOES NOT (Ethan, 2026-10-06:
+    "make sure everything here is adding up"). Kendre Miller's UNDER 29.5
+    rushing yards listed "Script: favored in a shootout — everyone eats",
+    a reason for the over. The script now sits under the play only where
+    it backs the side; where it pushes the other way it is said as
+    "Against it"; a script that says nothing (a close game) is left off an
+    under, where it would read as a reason. The yardage line is worded for
+    the side: an under is beaten by one long play, not helped by it."""
+    side = str(r.get("side") or "").lower()
+    over = side in ("over", "yes")
     why = list(r.get("matchup_lines") or [])[:2]
     gs = r.get("game_script") or {}
     if isinstance(gs, dict) and gs.get("lean"):
-        why.append(f"Script: {gs['lean']}.")
+        sign = script_sign(gs["lean"], r.get("market"))
+        backs = sign if over else -sign
+        if backs > 0 or (sign == 0 and over):
+            why.append(f"Script: {gs['lean']}.")
+        elif backs < 0:
+            why.append(f"Against it — the script: {gs['lean']}.")
     if r.get("market") in VOLUME_MARKETS:
         why.append("A volume market — a bet on his role, not on a big play.")
     elif r.get("market") in YARDAGE_MARKETS:
-        why.append("Yardage — a bet on his role AND a big play; the catches or the score is the steadier way in.")
+        # The volume market under this yardage one, by name: a back's
+        # rushing yards ride on his carries, not on catches.
+        vol = {"rush_yds": "carries", "rec_yds": "catches", "pass_yds": "completions"}[r["market"]]
+        why.append(f"Yardage — a bet on his role AND a big play; the {vol} or the score is the steadier way in."
+                   if over else
+                   f"Yardage under — one long play can beat it; the {vol} under is the steadier way in.")
     return why[:4]
 
 

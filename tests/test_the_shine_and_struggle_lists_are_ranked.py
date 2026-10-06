@@ -26,7 +26,7 @@ def _fn(name):
 def _rank(rows, shine=True):
     if not shutil.which("node"):
         return None
-    prog = _fn("scanStrength") + _fn("scanRanked") + \
+    prog = _fn("scanAgree") + _fn("scanStrength") + _fn("scanRanked") + \
         f"\nconsole.log(JSON.stringify(scanRanked({json.dumps(rows)}, {str(shine).lower()}).map((x) => x.player)));"
     path = os.path.join(tempfile.mkdtemp(), "r.js")
     with open(path, "w", encoding="utf-8") as fh:
@@ -53,6 +53,25 @@ def test_tier_then_net_case_then_our_chance_then_name():
         return
     assert got == ["Breakout, strong, 71%", "Breakout, strong, TD 64%", "Breakout, strong", "Breakout, thin",
                    "Good, big case", "Aaron tie", "Zed tie"], got
+
+
+def test_a_read_our_own_number_goes_against_ranks_last():
+    """Ethan, 2026-10-06: Bijan Robinson #2 on Could shine while our Most
+    Likely pick on him was his under at 67%. Agreement comes first: a read
+    the model's own pick contradicts sits behind every other read, however
+    strong its matchup case."""
+    rows = [
+        {"player": "Bijan, breakout, model says under", "read": "breakout", "pro": ["a", "b", "c"], "con": [],
+         "pick_other_side": {"model_prob": 0.67}},
+        {"player": "Good, no pick", "read": "good", "pro": ["a"], "con": []},
+        {"player": "Good, with pick", "read": "good", "pro": ["a"], "con": [], "pick": {"model_prob": 0.6}},
+    ]
+    got = _rank(rows)
+    if got is None:
+        return
+    assert got == ["Good, with pick", "Good, no pick", "Bijan, breakout, model says under"], got
+    row = _fn("scanTopRowHTML")
+    assert "our number disagrees" in row
 
 
 def test_the_struggle_list_ranks_the_case_against():

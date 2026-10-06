@@ -9295,17 +9295,26 @@ function scanTopRows(d) {
      3. our chance on his side — his Most Likely pick's chance, else his
         touchdown chance on the shine list;
      4. his name, so a tie never shuffles between refreshes. */
+/* OUR NUMBER FIRST (Ethan, 2026-10-06, Bijan Robinson #2 "Could shine"
+   while our Most Likely pick on him was his UNDER at 67%: "make sure
+   everything here is adding up"). The read counts matchup reasons; the
+   number is the model. A read the model's own pick goes against ranks
+   behind every read it agrees with or says nothing about, and its tag
+   says so. */
+function scanAgree(x) {
+  return x.pick ? 2 : x.pick_other_side ? 0 : 1;
+}
 function scanStrength(x, shine) {
   const tier = shine ? ({ breakout: 2, good: 1 }[x.read] || 0) : ({ avoid: 2, tough: 1 }[x.read] || 0);
   const pro = (x.pro || []).length, con = (x.con || []).length;
   const net = shine ? pro - con : con - pro;
   const p = x.pick || (shine ? null : x.pick_other_side);
   const chance = Number((p && p.model_prob) ?? (shine && x.td ? x.td.model_prob : 0)) || 0;
-  return { tier, net, chance };
+  return { agree: scanAgree(x), tier, net, chance };
 }
 function scanRanked(xs, shine) {
   return xs.map((x) => ({ x, s: scanStrength(x, shine) }))
-    .sort((a, b) => b.s.tier - a.s.tier || b.s.net - a.s.net || b.s.chance - a.s.chance
+    .sort((a, b) => b.s.agree - a.s.agree || b.s.tier - a.s.tier || b.s.net - a.s.net || b.s.chance - a.s.chance
       || String(a.x.player || "").localeCompare(String(b.x.player || "")))
     .map((o) => o.x);
 }
@@ -9322,7 +9331,8 @@ function scanTopRowHTML(x, shine, rank) {
           bits.length ? ` · ${escapeHtml(bits[0])}` : ""}</span>
         ${why.length ? `<span class="sct-why">${escapeHtml(why.slice(0, 2).join(" · "))}</span>` : ""}
         ${scanPickHTML(x, "sct-pick")}${scanTdHTML(x, "sct-pick")}</span>
-      <span class="ms-read-tag ${SCAN_READ_TONE[x.read] || ""}">${escapeHtml(x.label)}</span>
+      <span class="ms-read-tag ${x.pick_other_side ? "" : (SCAN_READ_TONE[x.read] || "")}">${escapeHtml(x.label)}${
+        x.pick_other_side ? " · our number disagrees" : ""}</span>
     </button>`;
 }
 
@@ -13538,7 +13548,12 @@ function scanPickHTML(x, cls = "ms-pick") {
     const why = !x.no_pick.priced ? "the books have not priced his props yet."
       : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < 0.55
           ? " — under the 55% the board needs." : "."}${Number(b.model_prob) < 0.55 ? "" : refused}`
-      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.${refused}`;
+      /* ONE REASON, THE TRUE ONE (Gibbs, 2026-10-06: "none of his overs is
+         priced at −250 or better … The board turned it down: no book has a
+         main line on it" — two answers that cannot both be the reason).
+         When the board names its reason, that is the sentence. */
+      : x.no_pick.refused ? `${x.no_pick.refused.charAt(0).toUpperCase()}${x.no_pick.refused.slice(1)}.`
+      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.`;
     return `<span class="${cls} none"><b>No Most Likely pick</b> — ${why}</span>`;
   }
   return "";
