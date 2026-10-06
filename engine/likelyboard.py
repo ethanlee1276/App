@@ -148,7 +148,21 @@ def key_of(r: dict) -> tuple:
         line = None if line is None else round(float(line), 1)
     except (TypeError, ValueError):
         pass
-    return (who, r.get("market"), _side(r), line)
+    return tuple(_hashable(x) for x in (who, r.get("market"), _side(r), line))
+
+
+def _hashable(x):
+    """A key part the pool can hash. THE NHL BOARD, 2026-10-06: every build
+    skipped with "unhashable type: 'dict'" at `k not in pool` — a hockey row
+    carried a dict where the key expected a plain value. Any such part
+    becomes stable text, so one odd field never costs the whole board."""
+    if x is None or isinstance(x, (str, int, float, bool)):
+        return x
+    import json
+    try:
+        return json.dumps(x, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return repr(x)
 
 
 def _band(p: float):

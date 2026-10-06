@@ -98,6 +98,17 @@ def test_the_cards_draw_the_warning():
     assert "escapeHtml(" in fn and "matchup_warning" in fn and "avoid_warning" in fn
 
 
+def test_a_row_with_a_dict_where_a_value_belongs_does_not_cost_the_board():
+    """The NHL board, 2026-10-06: skipped every build with "unhashable type:
+    'dict'" at the pool's key. Any non-plain key part now hashes as text."""
+    odd = _row(player="Odd Skater", market="sog", line={"main": 2.5, "alt": 1.5}, p=0.7)
+    k = L.key_of(odd)
+    assert hash(k) is not None and k == L.key_of(dict(odd))
+    board = L.build({"most_likely": [odd, _row(p=0.7)]}, record={}, sport="nhl", tiers_seen={},
+                    band_verdict=None)
+    assert len(board["rows"]) + len(board["held"]) == 2
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

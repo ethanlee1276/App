@@ -10125,7 +10125,7 @@ function obWhyLine(r) {
 function pickWarnHTML(r) {
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
   return [r && r.matchup_warning, r && r.avoid_warning].filter(Boolean)
-    .map((t) => `<span class="ob-warn" role="note">⚠ ${escapeHtml(cap(String(t)))}</span>`).join("");
+    .map((t) => `<span class="ob-warn" role="note">${icon("warn", 12)} ${escapeHtml(cap(String(t)))}</span>`).join("");
 }
 function obCardHTML(r, rank, opts = {}) {
   const door = likelyOpen(r);

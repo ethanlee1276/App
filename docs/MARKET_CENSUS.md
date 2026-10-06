@@ -65,9 +65,9 @@ always because it was measured and found flat (the module's own notes say which)
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | pass_yds | QB | form blend + usage bridge | normal | QB ×0.73 on qb_pass_yds | measured wind/rain/cold (QB) | pace + PROE (pass) | yes | — | — | calibration, form weights, player memory | yes — 0.691 (constant, measured) |
 | pass_td | QB | form blend | Poisson (engine/passtd.at_least) | QB shown (qb_pass_td), not in the number | measured wind/rain/cold (QB) | pace only | — | — | — | — | yes — 0.687 (constant, measured) |
-| pass_att | QB | form blend | normal | QB shown (qb_pass_att), not in the number | — | pace only | — | — | — | — | yes — 0.707 (constant, measured) |
-| pass_cmp | QB | form blend | normal | QB shown (qb_pass_cmp), not in the number | — | pace only | — | — | — | — | yes — 0.696 (constant, measured) |
-| pass_int | QB | rate model (engine/passint: picks per attempt × projected attempts) | Poisson (engine/passtd.at_least) | QB shown (qb_pass_int), not in the number | — | pace only | — | — | — | — | no — no measured figure |
+| pass_att | QB | form blend | normal | QB ×0.75 on qb_pass_att | — | pace only | — | — | — | — | yes — 0.707 (constant, measured) |
+| pass_cmp | QB | form blend | normal | QB ×0.5 on qb_pass_cmp | — | pace only | — | — | — | — | yes — 0.696 (constant, measured) |
+| pass_int | QB | rate model (engine/passint: picks per attempt × projected attempts) | Poisson (engine/passtd.at_least) | QB ×1.5 on qb_pass_int | — | pace only | — | — | — | — | no — no measured figure |
 | rush_yds | QB, RB | form blend + usage bridge | normal | QB no rating; RB ×0.72 on rb_rush_yds | measured wind/rain/cold | pace + PROE (rush) | yes | teammate out | dl_out_rb | calibration, form weights, player memory | yes — 0.761 (constant, measured) |
 | rush_att | RB | form blend | normal | RB shown (rb_rush_att), not in the number | — | pace + PROE (rush) | — | — | — | — | yes — 0.632 (constant, measured) |
 | receptions | RB, WR, TE | form blend + usage bridge | discrete normal | RB ×0.47 on rb_rec; WR ×0.45 on qb_pass_yds; TE ×0.86 on qb_pass_yds | measured wind/rain/cold (WRTE) | pace + PROE (pass) | yes | QB change, teammate out | cb_out_wr_rec, cb_out_te, slot_out_wr2 | calibration, form weights, player memory | yes — 0.770 (constant, measured) |
