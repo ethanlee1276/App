@@ -12,6 +12,50 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine import maintenance
 
 
+def _no_feeds(monkeypatch):
+    """Nothing in this file is about a feed, and four chores reach one.
+
+    `_wnba_day` was nulled at every one of these call sites for exactly
+    that reason: "the WNBA day-ingest hits the network; these tests are
+    about the scheduling, not the feed". The NHL blocks, the NBA block and
+    the faces backfill landed in `_run_chores` later and nobody came back
+    here, so one run of this file made 139 live third-party requests — 32
+    NHL roster calls per `run_if_due` on any September-or-later date, plus
+    statsapi's active rosters once per sport. Each is swallowed by the
+    chore's own `except Exception` and logged as a warning nothing asserts
+    on, which is why the file stayed green and said nothing about it.
+
+    THAT GREEN MEANS DIFFERENT THINGS ON DIFFERENT MACHINES, which is the
+    defect rather than the latency. Where there is no egress the calls
+    fail instantly and the tests pass. On the laptop they are made for
+    real, and `nhl_catch_up` carries a twenty-minute wall-clock budget to
+    spend inside a test about scheduling.
+
+    Stubbed rather than nulled where the chore has no module-level hook to
+    null: the NHL, NBA and faces blocks import `nhldata`, `nbadata` and
+    `facesfill` INSIDE `_run_chores`, so the attribute is read at call
+    time and a patch on the module object is seen. `_nba_day` is nulled
+    beside `_wnba_day` all the same — it is the sibling hook the open-pick
+    loop reaches through, and the asymmetry would be the puzzle.
+    """
+    import facesfill
+    from engine.sources import nbadata, nhldata
+
+    monkeypatch.setattr(maintenance, "_nba_day", None)
+    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    monkeypatch.setattr(nhldata, "refresh_rosters",
+                        lambda conn, date, **kw: {"teams": 0, "players": 0,
+                                                  "faces_changed": 0,
+                                                  "failed": []})
+    monkeypatch.setattr(nhldata, "ingest_day",
+                        lambda conn, day, **kw: {"games": 0, "player_logs": 0,
+                                                 "skipped": []})
+    monkeypatch.setattr(nbadata, "ingest_nba_date",
+                        lambda conn, day, **kw: {"games": 0, "player_logs": 0,
+                                                 "skipped": []})
+    monkeypatch.setattr(facesfill, "fill", lambda conn, sport: (0, 0, 0))
+
+
 def _stub_chores(monkeypatch, calls):
     from engine import ingest, ledger, db
 
@@ -27,9 +71,7 @@ def _stub_chores(monkeypatch, calls):
     monkeypatch.setattr(ledger, "settle_from_history", fake_settle)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
-    # The WNBA day-ingest hits the network; these tests are about the
-    # scheduling, not the feed.
-    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    _no_feeds(monkeypatch)
 
 
 def test_runs_once_per_day_and_catches_up(monkeypatch):
@@ -87,7 +129,7 @@ def test_catch_up_resumes_from_the_databases_own_last_final(monkeypatch):
                             lambda c, h, sport=None: 0)
         monkeypatch.setattr(ledger, "connect", lambda path=None: None)
         monkeypatch.setattr(db, "connect", lambda path=None: hconn)
-        monkeypatch.setattr(maintenance, "_wnba_day", None)
+        _no_feeds(monkeypatch)
         today = dt.date(2026, 7, 25)          # nine days past the last final
         assert maintenance.run_if_due(harvest=False, log=logs.append,
                                       state_path=Path(td) / "m.json",
@@ -130,7 +172,7 @@ def test_failed_ingest_retries_next_cycle(monkeypatch):
     monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
-    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    _no_feeds(monkeypatch)
 
     with tempfile.TemporaryDirectory() as td:
         state = Path(td) / "m.json"
@@ -586,7 +628,7 @@ def test_the_wednesday_deep_refit_reads_the_today_it_was_given(monkeypatch):
     monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
-    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    _no_feeds(monkeypatch)
     with tempfile.TemporaryDirectory() as td:
         # Thursday 2026-07-23: no refit, whatever day it really is.
         maintenance.run_if_due(harvest=False, log=lambda *_: None,
@@ -608,7 +650,7 @@ def _quiet(monkeypatch):
     monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
     monkeypatch.setattr(ledger, "connect", lambda path=None: None)
     monkeypatch.setattr(db, "connect", lambda path=None: None)
-    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    _no_feeds(monkeypatch)
 
 
 def test_the_deep_refit_is_attempted_once_a_day_even_if_it_dies(monkeypatch):
@@ -739,6 +781,40 @@ def test_the_unit_lets_the_server_outlive_a_killed_child(monkeypatch):
     unit = (Path(__file__).resolve().parent.parent / "deploy" / "qellys.service").read_text()
     assert "\nOOMPolicy=continue" in unit
     assert "\nMemoryMax=1600M" in unit
+
+
+def test_the_chores_in_this_file_reach_no_feed(monkeypatch):
+    """The fourth recurrence, pinned.
+
+    Three times a test in this repo has had a verdict that depended on the
+    machine under it — test_prose.py fell through to a paid API call,
+    test_doctor_learning.py read the live learning stores, and the chores
+    here made 139 requests to api-web.nhle.com and statsapi.mlb.com that
+    only this box's missing egress turned into no-ops. Each time the fix
+    was a stub, and each time the next chore to land went unstubbed,
+    because nothing was watching the property itself.
+
+    So watch the property. `_no_feeds` is only as complete as the chore
+    list in `_run_chores`, and a new chore that reaches a feed fails here
+    rather than quietly costing the laptop a round trip per run. January
+    is deliberate: it is inside both NHL windows and a Wednesday, so the
+    deep-refit gate opens too — the widest set of chores one call can
+    reach."""
+    import http.client
+
+    reached = []
+    monkeypatch.setattr(
+        http.client.HTTPConnection, "connect",
+        lambda self: reached.append(getattr(self, "_tunnel_host", None)
+                                    or self.host))
+    _quiet(monkeypatch)
+    monkeypatch.setattr(maintenance, "_run_deep_refit", lambda log: [])
+    with tempfile.TemporaryDirectory() as td:
+        maintenance.run_if_due(harvest=False, log=lambda *_: None,
+                               state_path=Path(td) / "m.json",
+                               today=dt.date(2026, 1, 14))
+    assert reached == [], \
+        f"a chore reached {sorted(set(reached))} — stub it in _no_feeds"
 
 
 if __name__ == "__main__":
