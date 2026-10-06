@@ -12829,3 +12829,23 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .wk-recap .wk-line { font-variant-numeric: tabular-nums; }
 .wk-recap .wk-line .pos { color: var(--good); } .wk-recap .wk-line .neg { color: var(--bad); }
 .wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
+
+/* BET IT (engine/betlinks): the book's own bet slip, one tap from the pick. */
+.betit { display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  text-decoration: none; white-space: nowrap; }
+.betit.mini { margin-top: 4px; padding: 2px 9px; border-radius: 999px;
+  font-size: var(--fs-2xs); font-weight: 700; color: var(--brand-2);
+  border: var(--hairline) solid var(--brand); background: transparent; }
+.betit.mini:hover, .betit.mini:focus-visible { background: var(--brand-solid); color: var(--brand-ink); }
+.betit.betit-page.mini { color: var(--text-mute); border-color: var(--border); }
+.hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
+.pp-actions .betit { flex: 1 1 auto; color: var(--brand-2); font-weight: 800; }
+.dc-feed { display: grid; gap: 10px; margin: 0 0 18px; }
+.dc-feed-post { display: block; padding: 14px 16px; white-space: pre-line; overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.dc-feed-post b { display: inline; font-weight: 700; }
+.dc-feed-post time { display: block; color: var(--text-mute); font-size: var(--fs-2xs); margin-bottom: 6px; }
+.dc-feed-empty { color: var(--text-mute); }
+.dc-live { display: grid; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+.dc-live li { display: flex; gap: 10px; align-items: baseline; }
+.dc-live .dc-hash { color: var(--brand-2); font-weight: 800; }
+.dc-live .dc-off { color: var(--text-mute); }

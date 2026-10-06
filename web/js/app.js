@@ -1278,6 +1278,22 @@ function safeHref(u) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* BET IT (engine/betlinks, Ethan 2026-10-06: "build the bet it button").
+   The book's own link for the pick, stamped onto the row by the build
+   from the odds feed: "slip" opens the book with this bet on the slip,
+   "page" opens the game at that book. No link, no button. A new tab, so
+   the board is still here when the reader comes back. */
+function betItHTML(r, cls) {
+  const u = r && r.bet_link;
+  if (!u || safeHref(u) === "#") return "";
+  const slip = r.bet_link_kind !== "page";
+  const book = escapeHtml(r.book_name || r.book || "the book");
+  return `<a class="betit${slip ? "" : " betit-page"}${cls ? ` ${cls}` : ""}" href="${safeHref(u)}"
+    target="_blank" rel="noopener noreferrer nofollow"
+    title="${slip ? `Opens ${book} with this bet on the slip` : `Opens this game at ${book}`} · 21+ · 1-800-GAMBLER"
+    >${slip ? "Bet it" : "Open"} at ${book}</a>`;
+}
+
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2175,6 +2191,7 @@ const FEATURES = [
     ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
     ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
     ["Messages & friends", "Send picks to friends as chart-linked cards, chat in real threads, nickname whoever you like.", "messages"],
+    ["The Discord", "Where the site posts last night’s record, the Pick of the Day and the board by itself, and where members talk it over.", "discord"],
     ["The Streak", "Pick three, keep the streak alive. Free, and free by design — it publishes no model output at all.", "streak"],
     ["Share cards", "Any pick as an image, and a proper preview on every page you share.", null],
     ["Email digests", "A morning card and a nightly recap, if you want them.", null],
@@ -10119,7 +10136,7 @@ function obCardHTML(r, rank, opts = {}) {
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
         ${td}${band}${obWhyLine(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
-    <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}</span>
+    <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}${betItHTML(r, "mini")}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
       escapeHtml(OB_TIER_WORD[r.tier] || "Worth a look")}${r.tier_rate != null ? "<small>real hit rate</small>" : ""}</span>${obBothHTML(r)}</span>
     <button class="ob-door" type="button"${door} aria-label="Open this pick">${icon("chart", 18)}</button>
@@ -12556,6 +12573,7 @@ function renderPropPage() {
           escapeHtml(r.grade)}</span>` : ""}
       </div>
       <div class="pp-actions">
+        ${lk && lk.bet ? "" : betItHTML(lk || r, "btn primary")}
         ${r.player && r.odds != null && !(lk && lk.bet) ? `<button class="btn ghost"
           data-slip="${escapeAttr(propId(r))}">${slipHas(r)
             ? "On slip" : "+ Parlay"}</button>` : ""}
@@ -21340,6 +21358,7 @@ function edgePropRow(r) {
       // for the stat. Without it an UNDER row painted its nine winning
       // games red and its one loser green — see gamelogBars.
       line: r.line, team: r.team, side: r.side,
+      book: r.book, bet_link: r.bet_link, bet_link_kind: r.bet_link_kind,
     };
 }
 
@@ -21364,6 +21383,7 @@ function edgeBoardRows() {
                : teamMark(b.team || b.home, 30)),
         vals: s ? s.values : [], line: s ? s.line : undefined,
         team: b.team || b.home,
+        book: b.book, bet_link: b.bet_link, bet_link_kind: b.bet_link_kind,
       };
     });
   return [...props, ...games].sort(edgeOrder);
@@ -21392,7 +21412,7 @@ function edgeRowHTML(r, i) {
       <span>${escapeHtml(r.sub)}</span></span>
     ${spark}
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${oddsTxt(r.odds)}</span><span class="hd-p">+${evPct}% EV</span></span>
-      <span class="hd-vs">${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%${r.rec ? ` · ${icon('check')}` : " ·"} ${escapeHtml(r.grade || "")}</span></span>
+      <span class="hd-vs">${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%${r.rec ? ` · ${icon('check')}` : " ·"} ${escapeHtml(r.grade || "")}</span>${betItHTML(r, "mini")}</span>
   </div>`;
 }
 
@@ -28173,6 +28193,7 @@ const DISCORD_INSIDE = [
    exactly the reason that claims here have to be real ones. */
 const DISCORD_ROOMS = [
   ["Welcome", ["welcome", "announcements", "rules", "get-started"]],
+  ["Posted by the site", ["record", "picks", "anchors"]],
   ["Premium", ["premium-picks", "player-props", "live-alerts",
                "lineup-drops", "nba-dfs", "nfl-dfs", "mlb-dfs"]],
   ["Community", ["chat", "wins", "giveaways", "feedback"]],
@@ -28191,7 +28212,41 @@ function discordRoomsHTML() {
     </div>`;
 }
 
-function discordPageHTML(s, welcome) {
+/* WHAT THE SITE POSTS BY ITSELF (engine/discordfeed, engine/witness;
+   Ethan, 2026-10-06: "every single night when bets settle, it'll
+   automatically post that day's record to the Discord"). The three
+   channels, whether each is switched on (web/data/community.json says
+   so; it never carries a webhook), and the last posts that went to the
+   public one, word for word. Nothing here is written for the page: a
+   post shows only after Discord took it. */
+const DISCORD_FEED = [
+  ["record", "Public", "Last night’s record once every pick has graded: W-L, units, the hit rate against what we said, the best hit and the toughest miss. The week, every Tuesday."],
+  ["picks", "Members", "The Pick of the Day the moment it locks, the day’s board when it goes up, and any long shot that cashes."],
+  ["anchors", "Public", "The record’s fingerprint, stamped on Bitcoin — the proof on the Verify page."],
+];
+
+function dcPostHTML(p) {
+  const when = String(p.at || "").replace("T", " ").slice(0, 16);
+  const body = escapeHtml(String(p.text || "")).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  return `<article class="card dc-feed-post"><time>${escapeHtml(when)} UTC · #record</time>${body}</article>`;
+}
+
+function dcFeedHTML(feed) {
+  const ch = (feed && feed.channels) || {};
+  const posts = ((feed && feed.posts) || []).slice(0, 5);
+  return `
+    <h2 class="dc-h2 dc-h2-mid">Posted by the site, by itself</h2>
+    <ul class="dc-live">${DISCORD_FEED.map(([name, who, what]) => `
+      <li><span class="dc-hash">#${name}</span><span><b>${who}.</b> ${escapeHtml(what)}${
+        feed && !ch[name] ? ` <span class="dc-off">(not switched on yet)</span>` : ""}</span></li>`).join("")}
+    </ul>
+    <h2 class="dc-h2 dc-h2-mid">Latest in #record</h2>
+    <div class="dc-feed">${posts.length ? posts.map(dcPostHTML).join("")
+      : `<p class="dc-feed-empty">The first post goes up the morning after the next night that grades.
+           Until then, every result is on the <a href="#record">Record</a> page.</p>`}</div>`;
+}
+
+function discordPageHTML(s, welcome, feed) {
   const invite = s && s.discord;
   const gram = s && s.instagram;
   const year = new Date().getFullYear();
@@ -28262,6 +28317,8 @@ function discordPageHTML(s, welcome) {
       </div>
       ${discordRoomsHTML()}
     </section>
+
+    ${dcFeedHTML(feed)}
 
     <section class="card dc-cta">
       <div class="dc-cta-ic">${iconMark("discord", 30)}</div>
@@ -28347,6 +28404,8 @@ function dcTakeWelcome() {
   return had;
 }
 
+let _dcFeed = null;           // web/data/community.json, once read
+
 async function renderDiscord() {
   const host = document.getElementById("view-discord");
   if (!host) return;
@@ -28355,12 +28414,15 @@ async function renderDiscord() {
   // status call left behind, so the page is never blank while a request
   // is in flight, and again when the fresh answer lands. The invite is
   // the whole point of the page and it is the part that arrives late.
-  host.innerHTML = discordPageHTML(_pwStatus || {}, welcome);
+  host.innerHTML = discordPageHTML(_pwStatus || {}, welcome, _dcFeed);
+  const feedP = boardFetch("data/community.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
   try {
     const r = await fetch("/api/billing/status", { credentials: "same-origin" });
     _pwStatus = await r.json();
-    host.innerHTML = discordPageHTML(_pwStatus, welcome);
   } catch (e) { /* the first draw stands */ }
+  _dcFeed = (await feedP) || _dcFeed;
+  host.innerHTML = discordPageHTML(_pwStatus || {}, welcome, _dcFeed);
 }
 
 /* THE HERO'S TWO DOORS. Ethan's product audit, 2026-09-23, item 7: a
@@ -47891,7 +47953,8 @@ function potdHeroHTML(d) {
   return `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${
     deckPickRow({ player: pick.player, side: pick.side, line: pick.line,
                   market_label: pick.market_label || pick.market,
-                  team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}</div>`;
+                  team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}${
+    betItHTML(pick, "btn primary hd-betit")}</div>`;
 }
 
 /* The record tiles and Zeno's open tickets. A tile prints only when the

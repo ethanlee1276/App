@@ -957,6 +957,11 @@ def _request(url: str, cache_name: str, ttl: int = 300,
             return stale, Quota()
         raise OddsAPIError(f"Odds API request failed: {exc}") from exc
 
+    if "includeLinks=true" in url:
+        # BET IT (engine/betlinks): the bet-slip links go to their own small
+        # sidecar and the paid cache keeps the body without them.
+        from .. import betlinks
+        body = betlinks.bank(body, cache_name, cache_dir=CACHE_DIR)
     path.write_text(body)
     # Record what the API says is left so the budgeter schedules against the
     # real account rather than an assumption.
@@ -1020,6 +1025,15 @@ def list_events(api_key: str | None = None, ttl: int = 300,
     return data
 
 
+def _ask_for_links(params: dict) -> None:
+    """The books' own bet-slip links on the same call (engine/betlinks).
+    Billed per market per region like everything else, so asking is free;
+    QB_BET_LINKS=0 stops it."""
+    from .. import betlinks
+    if betlinks.enabled():
+        params["includeLinks"] = "true"
+
+
 def fetch_sport_odds(sport: str, api_key: str | None = None,
                      markets: list[str] | None = None,
                      books: list[str] | None = None,
@@ -1050,6 +1064,7 @@ def fetch_sport_odds(sport: str, api_key: str | None = None,
         "oddsFormat": "american",
         "bookmakers": ",".join(books or DEFAULT_BOOKS),
     }
+    _ask_for_links(params)
     url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/odds"
            f"?{urllib.parse.urlencode(params)}")
     name = f"odds_board_{sport}{('_' + cache_tag) if cache_tag else ''}.json"
@@ -1151,6 +1166,7 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
         "oddsFormat": "american",
         "bookmakers": ",".join(books),
     }
+    _ask_for_links(params)
     url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/events/{event_id}/odds"
            f"?{urllib.parse.urlencode(params)}")
     # THE CACHE NAME CARRIES WHAT THE REQUEST ASKED FOR, and it did not.

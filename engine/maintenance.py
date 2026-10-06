@@ -587,6 +587,10 @@ PRUNABLE_CACHE_PREFIXES = (
     # College kickoff forecasts (engine/cfb/wx.py): hours-long TTL,
     # keyless refetch, tiny — the same class as meteo_ and nws_*.
     "cfb_wx_",
+    # Bet-slip links (engine/betlinks): banked on each odds pull, read
+    # back for three days, and re-banked by the next pull. betlinks
+    # prunes its own after three days; this is the backstop.
+    "betlinks_",
 )
 
 #: DELIBERATELY KEPT, each for a reason that costs something to ignore.

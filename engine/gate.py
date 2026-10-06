@@ -328,7 +328,7 @@ FREE_FILES = (
     # per-day counts, and the picks of days whose games are over — the
     # same picks the Record page already shows settled. Free by nature:
     # a proof nobody can read proves nothing.
-    "witness.json",
+    "witness.json", "community.json",
     # League headlines — titles and links out to their publishers, no
     # model output in the file at all (engine/sources/news.py). Facts
     # and furniture, free like the injuries beside them.
@@ -398,7 +398,7 @@ FREE_FILES = (
 #: Listed by hand on purpose. Adding a board to a pipeline and not to this
 #: tuple should be a failing test, not a silent default.
 KNOWN_BOARDS = (
-    "witness.json",
+    "witness.json", "community.json",
     "recommendations.json", "mlb_recommendations.json", "nba.json",
     "wnba.json", "cfb.json", "ufc.json", "nhl.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
@@ -727,6 +727,11 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # in it. Dropped here, once, for every build that exists or will.
     if isinstance(payload, dict) and any(str(k).startswith("_") for k in payload):
         payload = {k: v for k, v in payload.items() if not str(k).startswith("_")}
+    # BET IT (engine/betlinks, 2026-10-06): each pick row's bet-slip link
+    # at the book it names, stamped here so every sports board gets it
+    # from one place. Inside the paid rows, so `redact` strips it with them.
+    from . import betlinks
+    betlinks.stamp(payload, label)
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label

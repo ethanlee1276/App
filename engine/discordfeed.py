@@ -43,6 +43,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "data" / "discord_feed.json"
+#: The site's copy of what went to the PUBLIC channel (#record), for the
+#: Discord page's "latest from #record" panel. Only the public channel's
+#: posts, never #picks, and never a webhook URL.
+COMMUNITY = ROOT / "web" / "data" / "community.json"
+PUBLIC_KEEP = 10
 SITE = "https://qellysbook.com"
 BOARD_FILE = {"nfl": "recommendations.json", "cfb": "cfb.json", "mlb": "mlb_recommendations.json",
               "nba": "nba.json", "wnba": "wnba.json", "nhl": "nhl.json"}
@@ -284,8 +289,14 @@ def _load_board(sport: str) -> dict | None:
 # ─── one pass ──────────────────────────────────────────────────────────────
 
 def run(conn, now: _dt.datetime | None = None, env: dict | None = None, boards: dict | None = None,
-        post_fn=post, state_path: Path = STATE) -> dict:
-    """Everything due this cycle, once each. Returns {"posted": [...], "failed": [...]}."""
+        post_fn=post, state_path: Path = STATE, community_path: Path | None = None) -> dict:
+    """Everything due this cycle, once each. Returns {"posted": [...], "failed": [...]}.
+
+    The site's copy (web/data/community.json) is written beside the real
+    state only; a run with its own state file (a test) writes none unless
+    it is handed a ``community_path``."""
+    if community_path is None and Path(state_path) == STATE:
+        community_path = COMMUNITY
     from .recap import recap
     cfg = config(env)
     out = {"posted": [], "failed": []}
@@ -309,6 +320,10 @@ def run(conn, now: _dt.datetime | None = None, env: dict | None = None, boards: 
         if ok:
             posted[key] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
             out["posted"].append(key)
+            if url == cfg["record"]:
+                public = state.setdefault("public", [])
+                public.insert(0, {"key": key, "at": posted[key], "text": text})
+                del public[PUBLIC_KEEP:]
 
     # Last night, and the night before if it was still grading yesterday.
     if cfg["record"]:
@@ -348,4 +363,29 @@ def run(conn, now: _dt.datetime | None = None, env: dict | None = None, boards: 
         posted.pop(k, None)
     if out["posted"]:
         save_state(state, state_path)
+    if community_path and (out["posted"] or not Path(community_path).exists()):
+        try:
+            export_community(state, cfg, env, now, community_path)
+        except OSError as exc:
+            out["failed"].append(f"community.json: {exc}")
     return out
+
+
+def community_payload(state: dict, cfg: dict, env: dict | None, now: _dt.datetime) -> dict:
+    """What the Discord page shows anyone: which channels the site posts to,
+    and the last few posts that went to the public one. Never a webhook URL."""
+    env = os.environ if env is None else env
+    return {"generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "channels": {"record": bool(cfg["record"]), "picks": bool(cfg["picks"]),
+                         "anchors": bool(str(env.get("QB_HEADS_WEBHOOK") or "").strip())},
+            "sports": list(cfg["sports"]),
+            "posts": [{"at": p.get("at"), "kind": str(p.get("key", "")).split(":", 1)[0], "text": p.get("text")}
+                      for p in (state.get("public") or [])[:PUBLIC_KEEP] if p.get("text")]}
+
+
+def export_community(state: dict, cfg: dict, env: dict | None, now: _dt.datetime, path: Path = COMMUNITY) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(community_payload(state, cfg, env, now), separators=(",", ":")))
+    os.replace(tmp, path)

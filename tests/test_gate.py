@@ -925,6 +925,11 @@ NOT_A_BOARD_WRITER = {
                           "independently rather than taking this sentence "
                           "on trust",
     "server.py": "its only write is a user profile",
+    "engine/betlinks.py": "is called BY gate.publish to stamp bet-slip "
+                          "links onto a board before the gate writes it; "
+                          "names the six sports boards only to know which "
+                          "sport a board is, and its only writes are its "
+                          "own link sidecars in data/cache",
     "engine/discordfeed.py": "reads the boards THROUGH gate.board_source "
                              "to post the Pick of the Day and the board "
                              "counts to the members' Discord; its only "
