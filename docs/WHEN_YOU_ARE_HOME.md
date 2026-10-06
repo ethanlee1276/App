@@ -28,8 +28,9 @@ next step; none of them depends on an earlier one except 15 (on 14).
 
 #### A. Is the box current and healthy? (seconds)
 
-**0. The box has today's code** (should print `70c6be95` or later; if it
-shows something older, wait five minutes and try again):
+**0. The box has today's code** (the top line should read `Runbook: Bet
+it and the Discord page` or something newer; if it shows something
+older, wait five minutes and try again):
 
 ```
 git -C /srv/qellys log --oneline -1
@@ -216,8 +217,8 @@ from Michigan. The trader is built and tested; when the court case
 resolves, this section runs as written. The Michigan-legal route for a
 verified record is the licensed sportsbooks (DraftKings, FanDuel,
 BetMGM, Caesars), which Pikkit and Juice Reel both sync — but they ban
-automated betting, so each bet is a tap by you; see the "Bet it"
-button note below if that gets built. **Coinbase is not a way around it**
+automated betting, so each bet is a tap by you — the **Bet it** button
+(Part I) opens each pick on that book's slip. **Coinbase is not a way around it**
 (checked 2026-10-06): its prediction markets are Kalshi's own contracts
 routed through Kalshi's exchange, its trading API does not cover them,
 and neither Pikkit nor Juice Reel syncs Coinbase.
@@ -404,6 +405,55 @@ day, the record the morning after). The log line to look for:
 ```
 journalctl -u qellys --since "1 hour ago" --no-pager | grep -E "discord|witness" | tail
 ```
+
+**25. The members' invite on the Discord page** (2 minutes, once). The
+page hands the invite only to paid accounts. First, is it set already?
+`1` means yes, skip the rest of this step:
+
+```
+sudo grep -c '^QB_DISCORD_INVITE=' /etc/qellys/env
+```
+
+`0`: in Discord, *Server name → Invite people → Edit invite link →
+Expire after: Never*, copy it, then (paste at the prompt):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_INVITE
+sudo systemctl restart qellys
+```
+
+The Discord page (More → The Discord) now also lists the three channels
+the site posts to, which ones are switched on, and the last few posts
+that went to #record, word for word (web/data/community.json; never a
+webhook URL, never a #picks post).
+
+#### I. Bet it — the book's own bet slip on every pick (nothing to set)
+
+Ethan, 2026-10-06: "build the bet it button". Built (`engine/betlinks`):
+the odds pulls we already pay for now ask the API for each book's links
+(free: billed per market and region, not per field). Every pick that
+names a book gets **"Bet it at DraftKings"** (or whichever book): it
+opens that book with the bet on the slip. Where the book gives no slip
+link for that exact line, the button says **"Open at …"** and opens the
+game at that book instead. It shows on the pick page, the Most Likely
+cards, the Edge rows and the Pick of the Day. Links are filled for
+Michigan (`QB_BET_STATE`, default `mi`). The links are kept in small
+files beside the odds cache that delete themselves after three days, so
+the cache does not grow.
+
+**26. After the next NFL rebuild** (the first one after the deploy;
+about 10 minutes), paste both. The first should show games banked and
+most picks "with a bet-slip link"; the second is the cache size to
+compare against tomorrow's:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl
+du -sh /srv/qellys/data/cache
+```
+
+If the first says `0 game(s) banked`, the pull has not run since the
+deploy; wait one more cycle. Off switch, any time:
+`sudo ./deploy/setenv.sh QB_BET_LINKS 0` then `sudo systemctl restart qellys`.
 
 #### Later (not tonight)
 
