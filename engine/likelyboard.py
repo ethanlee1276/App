@@ -598,7 +598,15 @@ def attach(result: dict, sport: str, conn=None) -> str:
         return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
                 f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look")
     except Exception as exc:                                 # noqa: BLE001
-        return f"⚠️  one Most Likely board skipped: {exc}"
+        # WHERE, not only what (the box, 2026-10-06: NHL's board was
+        # skipped every build with "unhashable type: 'dict'" and nothing
+        # to say which line). The innermost frame, so the log alone is
+        # enough to find it.
+        import os
+        import traceback
+        tb = traceback.extract_tb(exc.__traceback__)
+        where = f" (at {os.path.basename(tb[-1].filename)}:{tb[-1].lineno} in {tb[-1].name})" if tb else ""
+        return f"⚠️  one Most Likely board skipped: {type(exc).__name__}: {exc}{where}"
 
 
 def journal(lconn, result: dict, sport: str, date: str = "") -> int:

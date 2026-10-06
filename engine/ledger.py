@@ -6114,6 +6114,15 @@ def bench_existing(conn) -> dict:
     moved: dict = {}
     for sport in BENCHED_SPORTS:
         marks = ",".join("?" * len(BOOK))
+        # LOOK BEFORE TAKING THE LOCK (the box, 2026-10-06: "benched leagues
+        # not applied (OperationalError: database is locked)" every hour in
+        # live_build). Once a league is benched there is nothing left to
+        # move, but an UPDATE still asks for the write lock and loses it to
+        # the settler. A read never waits in WAL mode, so the sweep only
+        # writes when it has work.
+        if not conn.execute(f"SELECT 1 FROM bets WHERE sport=? AND category IN ({marks}) LIMIT 1",
+                            (sport, *BOOK)).fetchone():
+            continue
         cur = conn.execute(
             f"UPDATE bets SET category=?, stake_dollars=0.0 "
             f"WHERE sport=? AND category IN ({marks})",
