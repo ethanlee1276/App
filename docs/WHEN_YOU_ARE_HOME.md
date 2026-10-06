@@ -21,7 +21,7 @@ anything, and it waits for us to look at step 5 together. Paste back
 each output with its number. The box picks up the new code by itself
 within about five minutes of the push; step 0 confirms it has.
 
-**0. The box has today's code** (should print `0250c2a9` or later):
+**0. The box has today's code** (should print `a5cd4619` or later):
 
 ```
 git -C /srv/qellys log --oneline -1
@@ -76,6 +76,26 @@ backs the journal up first; results, units and records do not change:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
+```
+
+**7. NFL: does the board contradict itself?** (seconds; reads only).
+Every board on the page read against the others: an over on one and an
+under on another, one bet with two chances, a play listed to avoid that
+another board posts, a reason printed under a pick that argues the other
+way. Paste the whole thing; each kind tells me which builder to fix:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.contradictions --sport nfl
+```
+
+**8. Hockey: why no picks?** (seconds; one free NHL schedule read). It
+names the first thing stopping the board. "NO PICKS EXPECTED — preseason
+only" is the honest answer until the regular season starts; anything
+that starts with STOP is mine to fix:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nhlcheck
+journalctl -u qellys --since "6 hours ago" --no-pager | grep -iE "nhl" | tail -12
 ```
 
 The dated sections below say what each step is for and what I do with
