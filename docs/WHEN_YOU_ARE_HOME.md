@@ -217,7 +217,10 @@ resolves, this section runs as written. The Michigan-legal route for a
 verified record is the licensed sportsbooks (DraftKings, FanDuel,
 BetMGM, Caesars), which Pikkit and Juice Reel both sync — but they ban
 automated betting, so each bet is a tap by you; see the "Bet it"
-button note below if that gets built.
+button note below if that gets built. **Coinbase is not a way around it**
+(checked 2026-10-06): its prediction markets are Kalshi's own contracts
+routed through Kalshi's exchange, its trading API does not cover them,
+and neither Pikkit nor Juice Reel syncs Coinbase.
 
 Ethan, 2026-10-06: "link the site to a pikkit or juice reel account so we
 can legitimately track all the bets the site puts in … every single edge
@@ -365,6 +368,42 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.witness status
 
 Without the webhook the anchors still happen (the Bitcoin proof is the
 strong witness; the post is the one anyone can read without software).
+
+#### H. The Discord feed — the site posting to your server by itself (10 minutes, once)
+
+Ethan, 2026-10-06: "every single night when bets settle, it'll
+automatically post that day's record to the Discord … link other shit to
+where the site feels more alive." Built (`engine/discordfeed`), running
+from every cycle:
+
+- **#record** (public): last night's record once every pick has graded —
+  each book's W-L, units, hit rate against what we said, the best hit and
+  the toughest miss; and the week, every Tuesday.
+- **#picks** (members only): the Pick of the Day the cycle it locks;
+  "today's board is up" with the counts by tier and the top picks; a long
+  shot that cashed (+300 or longer).
+- **#anchors** (public): the chain heads and Bitcoin anchors (Part G).
+
+**24. Three webhooks.** In Discord, for each channel: *Edit channel →
+Integrations → Webhooks → New webhook → Copy URL*. Then (each prompts;
+paste at the prompt):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_DISCORD_RECORD_WEBHOOK
+sudo ./deploy/setenv.sh QB_DISCORD_PICKS_WEBHOOK
+sudo ./deploy/setenv.sh QB_HEADS_WEBHOOK
+sudo systemctl restart qellys
+```
+
+If #picks is NOT members-only, add `sudo ./deploy/setenv.sh
+QB_DISCORD_PICKS_DETAIL 0` before the restart: it then posts counts and
+"the Pick of the Day is locked", never the pick. The first posts arrive
+on the next cycle with something to say (the board post the next game
+day, the record the morning after). The log line to look for:
+
+```
+journalctl -u qellys --since "1 hour ago" --no-pager | grep -E "discord|witness" | tail
+```
 
 #### Later (not tonight)
 

@@ -1945,6 +1945,21 @@ def _seal_forecasts(quiet: bool = False) -> None:
         except Exception as _exc:  # noqa: BLE001
             if not quiet:
                 print(f"  ⚠️  witness skipped: {_exc}")
+        # THE COMMUNITY FEED (engine/discordfeed): last night's record once
+        # it has settled, the Pick of the Day and the board when they go
+        # up, a long shot that cashed, the week on Tuesday — to the Discord
+        # channels QB_DISCORD_RECORD_WEBHOOK and QB_DISCORD_PICKS_WEBHOOK
+        # name. Each once; a webhook that is down is retried next cycle.
+        try:
+            from engine import discordfeed as _dc
+            _d = _dc.run(conn)
+            if not quiet and _d.get("posted"):
+                print(f"  discord        : {', '.join(_d['posted'])}")
+            if _d.get("failed"):
+                print(f"  ⚠️  discord post failed: {'; '.join(_d['failed'])[:200]}")
+        except Exception as _exc:  # noqa: BLE001
+            if not quiet:
+                print(f"  ⚠️  discord feed skipped: {_exc}")
         conn.close()
         if not quiet and n:
             print(f"  forecast log   : +{n} sealed, {v['n']} total, "

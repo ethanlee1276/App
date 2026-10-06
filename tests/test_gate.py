@@ -925,6 +925,11 @@ NOT_A_BOARD_WRITER = {
                           "independently rather than taking this sentence "
                           "on trust",
     "server.py": "its only write is a user profile",
+    "engine/discordfeed.py": "reads the boards THROUGH gate.board_source "
+                             "to post the Pick of the Day and the board "
+                             "counts to the members' Discord; its only "
+                             "write is its own posted-once state "
+                             "(data/discord_feed.json)",
     "engine/kalshitrade.py": "reads the NFL and CFB boards THROUGH "
                              "gate.board_source (the private copy, so the "
                              "trader sees the picks); its only writes are "
