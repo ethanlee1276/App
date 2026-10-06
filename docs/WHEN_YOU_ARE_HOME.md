@@ -163,7 +163,7 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import led
 the counts and the OVERWRITTEN sample:
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes 2>&1 | head -60
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --sport nfl > /tmp/closes.txt 2>&1; echo "exit $?"; head -60 /tmp/closes.txt
 ```
 
 If it sits silent past twenty minutes, check it from a second terminal
@@ -173,12 +173,16 @@ and paste this too:
 ps -o pid,etime,rss,cmd -C python3 | grep repair-closes; free -m
 ```
 
+**DONE for the NFL, 2026-10-06** (backup data/backups/pre-repair-closes-20261006-225314:
+579 filled, 1,196 overwritten, 25 cleared). One sport at a time — the
+all-sport run was killed for memory. Other sports later, the same way.
+
 **15. Same-book closes, for real — only after we've looked at step 14
 together.** It backs the journal up first; results, units and records do
 not change, only the stored closing prices and the CLV built on them:
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --sport nfl --apply 2>&1 | tail -20
 ```
 
 #### E. Setup: hear about it when the site breaks (about 5 minutes)
@@ -570,14 +574,14 @@ and the CLV figures built on it. First the dry run, paste back the
 summary (the counts and the OVERWRITTEN sample):
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes 2>&1 | head -60
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --sport nfl > /tmp/closes.txt 2>&1; echo "exit $?"; head -60 /tmp/closes.txt
 ```
 
 Then, once we've looked at it together, the real one (it backs the
 journal up first):
 
 ```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --apply 2>&1 | tail -20
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --sport nfl --apply 2>&1 | tail -20
 ```
 
 **2b. If the dry run looks stuck** (Ethan's first run, 2026-10-05: four
