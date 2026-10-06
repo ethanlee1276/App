@@ -4,11 +4,17 @@ no-picks diagnostic (engine/nhlcheck), on fixtures — no box, no network.
 Ethan, 2026-10-06: "I feel like we have a lot of contradictions in our
 picks and the data and what we are saying… Also hockey (nhl) has not had
 any most likely pick or edge picks."
+
+Run directly: `python3 tests/test_the_board_does_not_contradict_itself.py`
 """
 import datetime as dt
+import os
+import sys
 
-from engine import contradictions as C
-from engine import nhlcheck
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine import contradictions as C                          # noqa: E402
+from engine import nhlcheck                                     # noqa: E402
 
 NOW = dt.datetime(2026, 10, 11, 12, 0, tzinfo=dt.timezone.utc)
 LATER = "2026-10-11T17:00:00Z"
@@ -155,3 +161,11 @@ def test_a_play_that_fits_shows_the_boards_chance_and_only_its_own_lines_tier():
     assert row["model_prob"] == 0.61 and not row["on_board"], "another line's tier is not this play's"
     # Pulled under the bar by the board, it is not shown as a fit at all.
     assert P.fits(g, {"td": [], "props": [play]}, [], [dict(same, model_prob=0.53)]) == []
+
+
+if __name__ == "__main__":
+    fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    for name, fn in fns:
+        fn()
+        print(f"  ok  {name}")
+    print(f"\n{len(fns)} tests passed.")
