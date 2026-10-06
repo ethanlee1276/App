@@ -137,3 +137,21 @@ def test_every_priced_prop_refused_shows_the_census():
 
 def test_an_unreadable_schedule_stops_there():
     assert nhlcheck.verdict(_nhl(), None, 0, [])[-1].startswith("STOP — the NHL schedule")
+
+
+# ─── one bet, one chance on the game plan ──────────────────────────────────
+
+def test_a_play_that_fits_shows_the_boards_chance_and_only_its_own_lines_tier():
+    from engine import gameplan as P
+    g = {"home": "BUF", "away": "LAC"}
+    play = {"kind": "prop", "player": "K. Shakir", "team": "BUF", "opponent": "LAC", "market": "receptions",
+            "side": "OVER", "line": 3.5, "odds": -150, "book": "DraftKings", "model_prob": 0.61}
+    same = {"player": "K. Shakir", "market": "receptions", "side": "OVER", "line": 3.5, "game": "LAC@BUF",
+            "tier": "strong", "tier_label": "Strong", "model_prob": 0.57}
+    row = P.fits(g, {"td": [], "props": [play]}, [], [same])[0]
+    assert row["model_prob"] == 0.57 and row["tier"] == "strong", "the board's number beside the board's tier"
+    other = dict(same, line=4.5, model_prob=0.52)
+    row = P.fits(g, {"td": [], "props": [play]}, [], [other])[0]
+    assert row["model_prob"] == 0.61 and not row["on_board"], "another line's tier is not this play's"
+    # Pulled under the bar by the board, it is not shown as a fit at all.
+    assert P.fits(g, {"td": [], "props": [play]}, [], [dict(same, model_prob=0.53)]) == []

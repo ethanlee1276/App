@@ -248,6 +248,13 @@ def _fit_reason(r: dict) -> list:
     return why[:4]
 
 
+def _ln(v):
+    try:
+        return round(float(v), 2)
+    except (TypeError, ValueError):
+        return None
+
+
 def sort_plays(rows: list) -> list:
     """Volume markets first, then yardage; within each by our chance."""
     return sorted(rows, key=lambda r: (r["market"] not in VOLUME_MARKETS, -(r.get("model_prob") or 0)))
@@ -259,19 +266,32 @@ def fits(g: dict, matchup: dict | None, props: list, board_rows: list) -> list:
     price), volume first, each saying whether the one Most Likely board
     carries it and at which tier."""
     key = _key(g)
-    on_board = {(r.get("player"), r.get("market"), str(r.get("side") or "").lower()): r
+    # Keyed on the LINE as well: over 3.5 catches on the board is not the
+    # over 4.5 a play here would show, and its tier is not this play's.
+    on_board = {(r.get("player"), r.get("market"), str(r.get("side") or "").lower(), _ln(r.get("line"))): r
                 for r in board_rows or [] if r.get("game") == key}
     by_rec = {(r.get("player"), r.get("market")): r for r in props or [] if _in_game(r, g)}
     out = []
     for r in ((matchup or {}).get("td") or []) + ((matchup or {}).get("props") or []):
-        if not isinstance(r, dict) or r.get("model_prob") is None or float(r["model_prob"]) < FIT_MIN_PROB:
+        if not isinstance(r, dict) or r.get("model_prob") is None:
             continue
         rec = by_rec.get((r.get("player"), r.get("market"))) or {}
-        b = on_board.get((r.get("player"), r.get("market"), str(r.get("side") or "").lower()))
+        b = on_board.get((r.get("player"), r.get("market"), str(r.get("side") or "").lower(), _ln(r.get("line"))))
+        # ONE BET, ONE CHANCE (Ethan, 2026-10-06: "a lot of contradictions
+        # in our picks and the data and what we are saying"). The one board
+        # pulls each chance toward its price by what the record has earned
+        # (likelycal); a play it carries at the same line shows the board's
+        # number here, so the card and its tier never sit beside a second
+        # percentage for the same bet. Not on the board: the read's own.
+        p = r["model_prob"]
+        if b and b.get("model_prob") is not None:
+            p = b["model_prob"]
+        if float(p) < FIT_MIN_PROB:
+            continue
         out.append({**{k: r.get(k) for k in ("kind", "player", "team", "opponent", "position", "headshot",
                                                "market", "market_label", "side", "line", "odds", "book",
-                                               "model_prob", "projection", "read", "label")},
-                    "game": key, "why": _fit_reason(dict(r, game_script=rec.get("game_script"))),
+                                               "projection", "read", "label")},
+                    "model_prob": p, "game": key, "why": _fit_reason(dict(r, game_script=rec.get("game_script"))),
                     "on_board": bool(b), "tier": (b or {}).get("tier"), "tier_label": (b or {}).get("tier_label"),
                     "volume": r.get("market") in VOLUME_MARKETS})
     return sort_plays(out)[:FIT_PER_GAME]
