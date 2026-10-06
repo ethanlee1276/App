@@ -9040,7 +9040,7 @@ def inspect_pick(name: str) -> None:
               f"gate.board_source — not the stripped public ones)")
 
 
-def repair_closes(apply: bool = False) -> None:
+def repair_closes(apply: bool = False, sport: str | None = None) -> None:
     """Rewrite every settled bet's banked closing price from the harvested
     closes and the raw snapshots, side- and line-aware. Dry run unless
     --apply.
@@ -9065,9 +9065,9 @@ def repair_closes(apply: bool = False) -> None:
     # carried none. `repair_closing_odds` takes the connection rather than
     # opening one, so a suite calling it cannot reach this box's history.
     r = ledger.repair_closing_odds(conn, apply=apply,
-                                   hist_conn=hist_db.connect())
+                                   hist_conn=hist_db.connect(), sport=sport)
     print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
-          f"HARVEST AND THE SNAPSHOTS\n{'='*70}")
+          f"HARVEST AND THE SNAPSHOTS{f' — {sport.upper()} ONLY' if sport else ''}\n{'='*70}")
     def _rows(label, sample):
         if not sample:
             return
@@ -10503,7 +10503,12 @@ def main() -> None:
         show_unplayed(apply="--apply" in argv)
         return
     if "--repair-closes" in argv:
-        repair_closes(apply="--apply" in argv)
+        # `--sport nfl` repairs one sport, reading only its closes — the
+        # all-sport run is more than this box's memory (2026-10-06).
+        _rs = None
+        if "--sport" in argv and argv.index("--sport") + 1 < len(argv):
+            _rs = argv[argv.index("--sport") + 1].lower()
+        repair_closes(apply="--apply" in argv, sport=_rs)
         return
     if "--inspect-pick" in argv:
         i = argv.index("--inspect-pick")

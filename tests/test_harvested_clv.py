@@ -129,6 +129,35 @@ def test_the_backfill_fills_a_settled_bet_from_a_purchased_close():
         ledger.DEFAULT_DB = saved
 
 
+def test_one_sport_at_a_time_touches_only_that_sport():
+    """The box, 2026-10-06: the all-sport repair was killed for memory, so
+    `--repair-closes --sport nfl` reads and writes one sport's bets only."""
+    saved = ledger.DEFAULT_DB
+    try:
+        hist, led = _fixture()
+        _price(hist, "Aaron Judge")
+        _journal(led, "Aaron Judge")
+        _price(hist, "Josh Allen", market="pass_yds", line=249.5, over=-115, under=-105,
+               sport="nfl", date="2025-09-07")
+        _journal(led, "Josh Allen", market="pass_yds", line=249.5, odds=-110, sport="nfl",
+                 date="2025-09-07", category="b")
+        r = ledger.repair_closing_odds(led, apply=True, hist_conn=hist, sport="mlb")
+        assert r["settled"] == 1 and r["filled"] == 1, r
+        got = dict(led.execute("SELECT sport, closing_odds FROM bets").fetchall())
+        assert int(got["mlb"]) == 155 and got["nfl"] is None, "the NFL bet is not read or written"
+    finally:
+        ledger.DEFAULT_DB = saved
+
+
+def test_opening_the_journal_writes_no_default_it_already_has():
+    """The box, 2026-10-06: opening the journal died at the defaults INSERT
+    with "database is locked" while the settler held the write lock."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "engine", "ledger.py")).read()
+    i = src.index('have = {r[0] for r in conn.execute("SELECT key FROM config")')
+    assert i < src.index('if k not in have:', i)
+
+
 def test_the_backfill_gives_each_side_its_own_close():
     saved = ledger.DEFAULT_DB
     try:

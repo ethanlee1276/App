@@ -862,8 +862,14 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  benched leagues not applied ({type(exc).__name__}: "
               f"{exc}) — WNBA rows may still be in the headline record")
+    # ONLY THE MISSING DEFAULTS ARE WRITTEN (the box, 2026-10-06: the close
+    # repair died at this INSERT with "database is locked" while the settler
+    # held the write lock). Every key is normally there already, and a read
+    # never waits in WAL mode; asking for the lock to change nothing lost it.
+    have = {r[0] for r in conn.execute("SELECT key FROM config").fetchall()}
     for k, v in DEFAULTS.items():
-        conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
+        if k not in have:
+            conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
     # AFTER every migration above, never before: the schema work is itself
     # a schema change, so a version recorded up front is the one we were
@@ -3653,7 +3659,7 @@ def _close_odds_from(close: dict | None, bet_line, side: str | None):
     return price
 
 
-def _snapshot_close_odds() -> dict:
+def _snapshot_close_odds(markets=None) -> dict:
     """``{(player, market, date): {"over": px, "under": px}}``.
 
     The price companion to :func:`_snapshot_closes`. Same free source, and
@@ -3670,6 +3676,11 @@ def _snapshot_close_odds() -> dict:
         # Streamed, with the same small honest saving `_snapshot_closes`
         # above measures — `closing_odds_by_date` groups the same way.
         from .linemoves import stream_history, closing_odds_by_date
+        if markets:
+            # Only the markets the caller will ask about (the close repair,
+            # one sport at a time): the box OOM-killed the all-sport run at
+            # 1.37 GB on 2026-10-06.
+            return closing_odds_by_date(r for r in stream_history() if r.get("market") in markets)
         return closing_odds_by_date(stream_history())
     except Exception:            # never let CLV bookkeeping block settling
         return {}
@@ -5552,7 +5563,7 @@ def _bet_clv(b) -> float | None:
     return move if (b["side"] or "OVER").upper() == "OVER" else -move
 
 
-def _harvested_closes(hist_conn) -> dict:
+def _harvested_closes(hist_conn, sport: str | None = None) -> dict:
     """``{(sport, market): {(norm_player, date): close}}`` from the harvest.
 
     One pass per (sport, market) `odds_history` actually holds; the caller
@@ -5577,7 +5588,8 @@ def _harvested_closes(hist_conn) -> dict:
         return out
     try:
         pairs = hist_conn.execute(
-            "SELECT DISTINCT sport, market FROM odds_history").fetchall()
+            "SELECT DISTINCT sport, market FROM odds_history"
+            + (" WHERE sport=?" if sport else ""), (sport,) if sport else ()).fetchall()
     except Exception:                                      # noqa: BLE001
         return out
     for row in pairs:
@@ -5620,7 +5632,7 @@ def _same_book_close(cache: dict, hist_conn, bets, b, dates, stamped=None):
         return None
 
 
-def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
+def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | None = None) -> dict:
     """Re-derive every settled bet's banked closing price, side- and
     line-aware, from the harvested closes and the raw snapshots.
 
@@ -5651,17 +5663,27 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     Returns a summary; writes only when `apply` is true.
     """
     from .sources.oddsapi import normalize_name
-    snaps = _snapshot_close_odds()
+    # ONE SPORT AT A TIME when asked (``sport``): the all-sport run held
+    # every sport's harvested and snapshot closes at once and the box
+    # killed it for memory (1.37 GB, 2026-10-06). Only that sport's bets,
+    # its harvested closes and the snapshot rows of its markets are read.
+    _markets = None
+    if sport:
+        _markets = {r[0] for r in conn.execute(
+            "SELECT DISTINCT market FROM bets WHERE sport=? AND status IN ('won','lost','push')",
+            (sport,)).fetchall()}
+    snaps = _snapshot_close_odds(_markets)
     # The harvested closes as well, on the same precedence the settle path
     # uses. Without this the repair can only ever reach what our own free
     # pulls happened to catch, while thousands of PURCHASED closing prices
     # sit unread in `odds_history` — which is the state this found on
     # 2026-08-27 and the reason a settled prop record carried no CLV.
-    harvested = _harvested_closes(hist_conn)
+    harvested = _harvested_closes(hist_conn, sport)
     rows = conn.execute(
         "SELECT id, sport, player, market, date, side, line, odds, "
         "closing_odds, ts, lead_min, leg, book, game_day FROM bets "
-        "WHERE status IN ('won','lost','push')"
+        "WHERE status IN ('won','lost','push')" + (" AND sport=?" if sport else ""),
+        (sport,) if sport else ()
     ).fetchall()
     _sb_cache: dict = {}
     # The snapshot index's stamped keys, as (player, market, date).
