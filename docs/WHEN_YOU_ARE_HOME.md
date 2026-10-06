@@ -207,6 +207,124 @@ sudo systemctl start qellys-alert@test.service
 No mail? `sudo journalctl -u qellys-alert@test -n 20 --no-pager`. The
 check turns green 10–15 minutes after the restart.
 
+#### F. Kalshi + Pikkit: the site's picks placed for real, verified on Pikkit (about 20 minutes, mostly in a browser)
+
+Ethan, 2026-10-06: "link the site to a pikkit or juice reel account so we
+can legitimately track all the bets the site puts in … every single edge
+bet and most likely bet … We will only do nfl to start." What is built
+(`engine/kalshitrade`): after every football board rebuild the box places
+each pick on **Kalshi** — an exchange with an official trading API, never
+a sportsbook — one contract a pick, only where Kalshi lists the same bet
+at the same line. Pikkit syncs the Kalshi account by itself, so the picks
+show up there as verified, nothing typed by hand. The Status page gets a
+"Kalshi trader" card with the mode, today's orders and a "Verified on
+Pikkit" link.
+
+**What one contract costs.** A Kalshi contract pays $1 if the pick wins
+and costs its chance in cents: a 60% pick costs about 60¢, a 35% long
+shot about 35¢. Every pick is under $1; a full NFL Sunday across both
+boards is roughly 60–80 picks, about $35–45. The site's units never touch
+this; they stay what the record is graded on.
+
+**What Pikkit can show.** Only what Kalshi lists: game lines match; player
+props exist for the markets Kalshi carries, mostly the main games and
+stats. The `run --dry` line in step 19 shows how much of a slate matches.
+Still to code (blocked by the sandbox's permission filter on 2026-10-06,
+retry with Ethan's go-ahead): Edge GAME bets (`game_bets`) into the edge
+lane with one key per bet, prop series found on Kalshi's list by itself,
+`QB_KALSHI_PRICE_RULE=any`, and defaults sized for a Sunday.
+
+**Paper first.** In `paper` mode the box records exactly what it would
+have placed, with Kalshi's price at that moment, and places nothing. Two
+days of that, we read the report together, then `live`.
+
+**17. The two accounts (browser).**
+   a. **Kalshi**: sign up at https://kalshi.com, verify your identity,
+      fund it (free ACH; $50 covers about one Sunday of every pick). Then
+      *Account → Settings → API Keys → Create key*. It shows a **Key ID**
+      and downloads a **private key file** (text starting
+      `-----BEGIN PRIVATE KEY-----`). Keep both; the file goes on the
+      box in step 18 and is never pasted anywhere else.
+   b. **Pikkit**: in the app, use (or make) the account that will hold
+      the site's record, *Connect a sportsbook → Kalshi*, log in. Copy
+      your Pikkit profile link (the `links.pikkit.com/user/...` one).
+
+**18. The key and the settings on the box.** The file first — this
+pastes it straight into place with no editor: run the first line, paste
+the WHOLE key file (every line from BEGIN to END), press Enter, then
+**Ctrl-D**:
+
+```
+sudo sh -c 'umask 077; cat > /etc/qellys/kalshi.pem'
+sudo chown qellys:qellys /etc/qellys/kalshi.pem && sudo chmod 600 /etc/qellys/kalshi.pem && sudo head -c 27 /etc/qellys/kalshi.pem; echo
+```
+
+(That prints `-----BEGIN PRIVATE KEY----` and nothing more.) Then the key
+id, the Pikkit link (each prompts; paste at the prompt), paper mode and
+the every-bet settings — every Most Likely tier and every staked Edge
+pick, NFL only, 150 orders and $50 a day at most, paying up to 3¢ over
+our own chance:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_KALSHI_KEY_ID
+sudo ./deploy/setenv.sh QB_PIKKIT_MODEL_URL
+sudo ./deploy/setenv.sh QB_KALSHI_MODE paper
+sudo ./deploy/setenv.sh QB_KALSHI_LANES potd,top,strong,look,edge,game
+sudo ./deploy/setenv.sh QB_KALSHI_MAX_ORDERS_DAY 150
+sudo ./deploy/setenv.sh QB_KALSHI_DAILY_CAP_CENTS 5000
+sudo ./deploy/setenv.sh QB_KALSHI_SLACK_CENTS 3
+sudo ./deploy/setenv.sh QB_KALSHI_RESERVE_CENTS 200
+sudo systemctl restart qellys
+```
+
+**19. Prove it, place nothing.** `check` signs one read-only request and
+prints `ok — connected; balance $…`; `run --dry` prints every pick it
+would place right now, the Kalshi market it matched and the price, and
+writes nothing. Paste both:
+
+```
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep -E '^QB_(KALSHI|PIKKIT)' | xargs) python3 -m engine.kalshitrade check
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep -E '^QB_(KALSHI|PIKKIT)' | xargs) python3 -m engine.kalshitrade run --dry
+```
+
+`FAILED — HTTP 401` means the key id and the file do not belong together
+(make the key again and redo step 18). `no Kalshi market for this bet`
+on a prop is expected until step 20.
+
+**20. Which Kalshi series carry player props** (paste it back; game
+lines match already, props need their series named in
+QB_KALSHI_PROP_SERIES and I set that from this list):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.kalshitrade series
+```
+
+**21. Two days on paper — nothing to run.** The box records a pass after
+every football rebuild. Then paste the report and we look at it together:
+
+```
+cd /srv/qellys && sudo -u qellys env $(sudo cat /etc/qellys/env | grep -E '^QB_(KALSHI|PIKKIT)' | xargs) python3 -m engine.kalshitrade report
+```
+
+**22. Live — only after step 21, and only when you say so:**
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_KALSHI_MODE live
+sudo systemctl restart qellys
+```
+
+**The off switch, any time** (takes effect on the next pass, no restart):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.kalshitrade stop      # …and `go` to resume
+```
+
+Every knob is a line in /etc/qellys/env (`sudo ./deploy/setenv.sh KEY
+VALUE`, then restart): QB_KALSHI_CONTRACTS (per pick, default 1),
+QB_KALSHI_MAX_ORDER_CENTS (100), QB_KALSHI_DAILY_CAP_CENTS,
+QB_KALSHI_MAX_ORDERS_DAY, QB_KALSHI_RESERVE_CENTS, QB_KALSHI_LANES,
+QB_KALSHI_SLACK_CENTS, QB_KALSHI_PROP_SERIES.
+
 #### Later (not tonight)
 
 - **NHL calibration (H14)**, once NHL picks have graded for two weeks:
