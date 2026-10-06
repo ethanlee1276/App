@@ -324,6 +324,11 @@ PAID_FILES = (
 #: and the model's output inside them is stripped. See PAID_KEYS_BY_FILE.
 FREE_FILES = (
     "record.json", "memerecord.json", "injuries.json",
+    # The forecast chain's outside witness (engine/witness): anchors,
+    # per-day counts, and the picks of days whose games are over — the
+    # same picks the Record page already shows settled. Free by nature:
+    # a proof nobody can read proves nothing.
+    "witness.json",
     # League headlines — titles and links out to their publishers, no
     # model output in the file at all (engine/sources/news.py). Facts
     # and furniture, free like the injuries beside them.
@@ -393,6 +398,7 @@ FREE_FILES = (
 #: Listed by hand on purpose. Adding a board to a pipeline and not to this
 #: tuple should be a failing test, not a silent default.
 KNOWN_BOARDS = (
+    "witness.json",
     "recommendations.json", "mlb_recommendations.json", "nba.json",
     "wnba.json", "cfb.json", "ufc.json", "nhl.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",

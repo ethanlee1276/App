@@ -1927,6 +1927,24 @@ def _seal_forecasts(quiet: bool = False) -> None:
         m = _led.seal_audit(conn)
         a = _led.verify_audit_log(conn)
         _led.record_heads(conn)
+        # THE OUTSIDE WITNESS (engine/witness): the chain head stamped on
+        # OpenTimestamps and posted when it moves, pending proofs upgraded
+        # to their Bitcoin block, web/data/witness.json rewritten for the
+        # Verify page. Never fatal: a calendar down costs an anchor, not
+        # the seal.
+        try:
+            from engine import witness as _wit
+            _w = _wit.run(conn)
+            if not quiet and (_w.get("anchored") or _w.get("upgraded")):
+                bits = []
+                if _w.get("anchored"):
+                    bits.append(f"anchored through #{_w.get('seq_to')}")
+                if _w.get("upgraded"):
+                    bits.append(f"{_w['upgraded']} proof(s) now on Bitcoin")
+                print(f"  witness        : {', '.join(bits)}")
+        except Exception as _exc:  # noqa: BLE001
+            if not quiet:
+                print(f"  ⚠️  witness skipped: {_exc}")
         conn.close()
         if not quiet and n:
             print(f"  forecast log   : +{n} sealed, {v['n']} total, "

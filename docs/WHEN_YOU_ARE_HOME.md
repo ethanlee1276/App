@@ -335,6 +335,37 @@ QB_KALSHI_MAX_ORDER_CENTS (100), QB_KALSHI_DAILY_CAP_CENTS,
 QB_KALSHI_MAX_ORDERS_DAY, QB_KALSHI_RESERVE_CENTS, QB_KALSHI_LANES,
 QB_KALSHI_SLACK_CENTS, QB_KALSHI_PROP_SERIES.
 
+#### G. The record's outside witness — nothing to run, one key to set (2026-10-06, Ethan: "Do 2")
+
+Built (`engine/witness`): whenever the forecast chain grows, its head is
+stamped on OpenTimestamps (a Bitcoin timestamp, free, no account) and
+posted to the public channel QB_HEADS_WEBHOOK names; the Bitcoin proof is
+fetched when mined; the **Verify** page (`qellysbook.com/#verify`, under
+More → Proof) lists every anchor with its downloadable proof and each
+day's picks under the anchor that covers them. It runs by itself from the
+seal step of every cycle. The only setup is the public post:
+
+**23. A public channel for the anchors** (5 minutes, once). In Discord,
+make a public read-only channel (e.g. `#record-anchors`), *Edit channel →
+Integrations → Webhooks → New webhook*, copy its URL, then (it prompts;
+paste at the prompt):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_HEADS_WEBHOOK
+sudo systemctl restart qellys
+```
+
+Then paste this after the next cycle (a few minutes) — it should show at
+least one anchor, `pending` until the calendar's next Bitcoin
+transaction (hours), `bitcoin block N` after:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.witness status
+```
+
+Without the webhook the anchors still happen (the Bitcoin proof is the
+strong witness; the post is the one anyone can read without software).
+
 #### Later (not tonight)
 
 - **NHL calibration (H14)**, once NHL picks have graded for two weeks:

@@ -2190,6 +2190,7 @@ const FEATURES = [
     ["The lab", "The measurements behind the boards — backtests, bake-offs, and the fits that were declined.", "lab"],
     ["Method", "How the numbers are made, in detail.", "methodology"],
     ["Status", "When each board last rebuilt, and what every feed is doing.", "status"],
+    ["Verify", "Proof that every pick was written down before its game: the chain head, stamped on Bitcoin.", "verify"],
     ["Why us", "Why this beats a picks service, with the open math toolbox.", "why"],
     ["What this is", "What the site does, what it deliberately does not do, and the responsible-gambling terms.", "about"]]],
 ];
@@ -39076,6 +39077,60 @@ function buildsCardHTML(hb) {
     </div>`;
 }
 
+/* THE OUTSIDE WITNESS (engine/witness). Ethan, 2026-10-06: "our record
+   could be verified from recommending those bets." Every pick is sealed
+   into a hash chain when it is journaled; the chain head is stamped on
+   OpenTimestamps (a Bitcoin timestamp) and posted whenever it moves. This
+   page lists the anchors with their proofs and each day's picks under
+   the anchor that covers them — the picks themselves once the games are
+   over. Reads web/data/witness.json, a free file. */
+async function renderVerify() {
+  const host = document.getElementById("verify-body");
+  if (!host) return;
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Verify · the record’s witness";
+  host.innerHTML = `<p class="es-sub">Reading the anchors…</p>`;
+  let w = null;
+  try {
+    const r = await boardFetch("data/witness.json", { cache: "no-store" });
+    w = r.ok ? await r.json() : null;
+  } catch (e) { w = null; }
+  if (!w) {
+    host.innerHTML = `<div class="card"><p>No witness file yet — the box writes it after its first anchor.</p></div>`;
+    return;
+  }
+  const when = (t) => `${escapeHtml(String(t || "").replace("T", " ").slice(0, 16))} UTC`;
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
+  const row = (k, v, cls, sub, indent) => `<div class="st-row${indent ? " st-indent" : ""}"><span class="st-k">${k}</span>
+      <span class="st-v ${cls}">${v}</span><span class="st-sub">${sub}</span></div>`;
+  const anchors = (w.anchors || []).slice(0, 60).map((a) => {
+    const proof = safeHref(`${location.origin}/data/ots/${String(a.head || "").replace(/[^0-9a-f]/g, "")}.ots`);
+    return row(when(a.ts),
+      a.status === "bitcoin" ? `Bitcoin block ${escapeHtml(String(a.height))}` : "stamped — Bitcoin proof pending",
+      a.status === "bitcoin" ? "st-good" : "st-off",
+      `through pick #${escapeHtml(String(a.seq_to))} · head <code>${escapeHtml(String(a.head || "").slice(0, 16))}…</code>
+       · <a href="${proof}" download>proof (.ots)</a>${a.posted ? " · posted publicly" : ""}`);
+  }).join("");
+  const days = (w.days || []).map((d) => {
+    const picks = (d.picks || []).map((p) => row(
+      escapeHtml(`${p.player || ""} ${String(p.side || "").toLowerCase()} ${p.line == null ? "" : p.line} ${p.market || ""}`.replace(/\s+/g, " ").trim()),
+      p.height ? `block ${escapeHtml(String(p.height))}` : p.anchor ? "stamped, pending" : "not yet anchored",
+      p.height ? "st-good" : "st-off",
+      `sealed ${when(p.sealed)}${p.lead_min != null ? ` · ${Math.round(p.lead_min)} min before the game` : ""}`, true)).join("");
+    return `<details class="st-mech"><summary>${escapeHtml(d.date)} — ${n(d.n, "pick", "picks")}, ${d.anchored} anchored, ${d.bitcoin} on Bitcoin${
+      picks ? "" : " · the picks show once the games are over"}</summary>${picks}</details>`;
+  }).join("");
+  host.innerHTML = `<div class="card"><p>Every pick is sealed into a hash chain the moment it is journaled: each link
+      covers the pick and the link before it, so nothing past can be edited or removed without changing every hash
+      after it. Whenever the chain grows, its head is stamped on <b>OpenTimestamps</b> — a Bitcoin timestamp nobody,
+      including us, can backdate — and posted publicly. A pick sealed before an anchor existed before that anchor’s block.</p>
+      <p>Current head <code>${escapeHtml(String(w.head || "—"))}</code>, through pick #${escapeHtml(String(w.seq || 0))}.
+      To check an anchor yourself, download its proof and run <code>ots verify</code> (opentimestamps.org) against the
+      head shown; it needs nothing from us but the bytes of the proof.</p></div>
+    <div class="section-title">Anchors</div><div class="card st-card">${anchors || "<p>None yet.</p>"}</div>
+    <div class="section-title">Days</div><div class="card st-card">${days || "<p>Nothing sealed in the last 45 days.</p>"}</div>`;
+}
+
 async function renderStatus() {
   const host = document.getElementById("status-body");
   if (!host) return;
@@ -39914,7 +39969,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -40119,7 +40174,7 @@ function switchView(name, push = false) {
    allow-list on purpose: a page left off it keeps the full notice, so a
    new betting page can never lose it by being forgotten here. */
 const QUIET_FOOTER_VIEWS = new Set(["team", "standings", "rosters", "injuries", "weather",
-  "fantasy", "account", "messages", "memes", "discord", "status", "features", "about",
+  "fantasy", "account", "messages", "memes", "discord", "status", "verify", "features", "about",
   "methodology", "why"]);
 
 function _switchViewNow(name, push, dir) {
@@ -40252,6 +40307,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "about") renderAbout();
   if (name === "methodology") renderMethodology();
   if (name === "status") renderStatus();
+  if (name === "verify") renderVerify();
   // THESE TWO WERE MISSING, and the symptom was a blank page. Both were
   // only ever reached by a button that rendered them first — the wall
   // going up, or "See the plans" — so nothing built them on a plain

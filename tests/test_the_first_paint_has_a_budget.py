@@ -37,11 +37,16 @@ HTML = (WEB / "index.html").read_text()
 #: 477 -> 478 on 2026-10-06 by the Status page's Kalshi trader card
 #: (kalshiCardHTML: mode, today's orders, record, the Pikkit link —
 #: +0.37 KB gz; the file sat 0.14 KB under 477 before it).
-APP_JS_BUDGET_KB = 478
+#: 478 -> 479 on 2026-10-06 by the Verify page (renderVerify: the chain's
+#: anchors with their OpenTimestamps proofs and each day's sealed picks —
+#: +1.07 KB gz), Ethan's "do 2" the same evening.
+APP_JS_BUDGET_KB = 479
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
-BOOT_BUDGET_KB = 592
+#: 592 -> 594 on 2026-10-06 by the Verify page: its section in index.html
+#: and renderVerify in app.js, +1.2 KB gz on the boot path together.
+BOOT_BUDGET_KB = 594
 
 
 def _gz_trimmed(rel: str) -> int:
