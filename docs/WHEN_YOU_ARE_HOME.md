@@ -209,6 +209,16 @@ check turns green 10–15 minutes after the restart.
 
 #### F. Kalshi + Pikkit: the site's picks placed for real, verified on Pikkit (about 20 minutes, mostly in a browser)
 
+**ON HOLD — 2026-10-06.** Michigan has blocked every sports prediction
+market (Kalshi, Polymarket, ProphetX; Novig never served Michigan), by
+a court order the state calls temporary. Do not fund a Kalshi account
+from Michigan. The trader is built and tested; when the court case
+resolves, this section runs as written. The Michigan-legal route for a
+verified record is the licensed sportsbooks (DraftKings, FanDuel,
+BetMGM, Caesars), which Pikkit and Juice Reel both sync — but they ban
+automated betting, so each bet is a tap by you; see the "Bet it"
+button note below if that gets built.
+
 Ethan, 2026-10-06: "link the site to a pikkit or juice reel account so we
 can legitimately track all the bets the site puts in … every single edge
 bet and most likely bet … We will only do nfl to start." What is built
