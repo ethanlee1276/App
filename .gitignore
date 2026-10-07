@@ -175,4 +175,8 @@ audit/
 
 # The sportsbooks' icons: fetched on the box by engine/booklogos, never committed.
 web/img/books/*.png
+web/img/books/*.jpg
+web/img/books/*.gif
+web/img/books/*.webp
+web/img/books/*.ico
 web/img/books/manifest.json

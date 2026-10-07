@@ -80,6 +80,12 @@ first). Paste back anything that prints an error or looks off.
    sudo chown -R qellys:qellys /srv/qellys/web/img/books
    cd /srv/qellys && sudo -u qellys python3 -m engine.booklogos
    ```
+   Done 2026-10-07: 14 of 17. Fanatics, theScore Bet and Kalshi missed
+   (two were real icons that were not PNGs; Fanatics' domain gave the
+   blank globe). The fetcher now keeps any image a browser draws and tries
+   more domains; once the box shows `Logos: any image a browser draws`
+   or newer in `git -C /srv/qellys log --oneline -1`, run the second line
+   again.
 6. **Bet-slip links for player props** (after the next props refresh;
    paste the output):
    ```

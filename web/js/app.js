@@ -1345,15 +1345,21 @@ const BOOK_ALIAS = { espnbet: "thescorebet", espn: "thescorebet", thescore: "the
    that got one. The sheet reads that list the first time it opens and
    lays an icon over each badge it has; a book without one keeps its
    colour and initials. Nothing here changes when a file lands. */
-let _bookLogos = null;              // Set of keys, once the manifest has answered
+let _bookLogos = null;              // key → file name, once the manifest has answered
 let _bookLogosWait = null;
 function bookLogosLoad() {
   if (_bookLogos) return Promise.resolve(_bookLogos);
   if (!_bookLogosWait) {
     _bookLogosWait = fetch("img/books/manifest.json", { cache: "no-cache" })
       .then((r) => (r.ok ? r.json() : {}))
-      .then((m) => { _bookLogos = new Set(Array.isArray(m.keys) ? m.keys : []); return _bookLogos; })
-      .catch(() => { _bookLogos = new Set(); return _bookLogos; });
+      .then((m) => {
+        // `files` names each icon's own file (a book may answer with a JPEG
+        // or an ICO); an older manifest has only `keys`, all PNGs.
+        const files = (m && m.files) || {};
+        _bookLogos = new Map((Array.isArray(m.keys) ? m.keys : []).map((k) => [k, files[k] || `${k}.png`]));
+        return _bookLogos;
+      })
+      .catch(() => { _bookLogos = new Map(); return _bookLogos; });
   }
   return _bookLogosWait;
 }
@@ -1362,7 +1368,7 @@ function bookLogosDecorate(host) {
   host.querySelectorAll(".bk-mark[data-book]").forEach((el) => {
     const k = el.dataset.book;
     if (_bookLogos.has(k) && !el.querySelector("img")) {
-      el.insertAdjacentHTML("beforeend", `<img src="img/books/${k}.png" alt="" data-onerr="remove"/>`);
+      el.insertAdjacentHTML("beforeend", `<img src="img/books/${escapeHtml(_bookLogos.get(k))}" alt="" data-onerr="remove"/>`);
     }
   });
 }

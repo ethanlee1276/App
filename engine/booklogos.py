@@ -51,7 +51,18 @@ BOOK_DOMAINS = {
     "kalshi": "kalshi.com",
     "polymarket": "polymarket.com",
 }
+#: More doors for a book whose own domain gave nothing usable (2026-10-07
+#: on the box: Fanatics' sportsbook domain gave Google's blank globe).
+MORE_DOMAINS = {
+    "fanatics": ("fanaticsbetting.com", "fanatics.com"),
+    "thescorebet": ("thescore.com",),
+}
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
+#: Every image a browser draws in an <img>, by its first bytes. On the box
+#: theScore and Kalshi answered with real icons that were not PNGs.
+SIGS = ((PNG_SIG, "png"), (b"\xff\xd8\xff", "jpg"), (b"GIF87a", "gif"),
+        (b"GIF89a", "gif"), (b"\x00\x00\x01\x00", "ico"))
+EXTS = ("png", "jpg", "gif", "webp", "ico")
 MIN_BYTES = 600          # Google's placeholder globe and a 16px favicon are smaller
 AGENT = "Mozilla/5.0 (compatible; QellysBook/1.0; +https://qellysbook.com)"
 
@@ -60,7 +71,9 @@ def candidates(domain: str) -> list[str]:
     """Where a book's square icon usually is, best first."""
     return [f"https://{domain}/apple-touch-icon.png",
             f"https://{domain}/apple-touch-icon-180x180.png",
-            f"https://www.google.com/s2/favicons?domain={domain}&sz=128"]
+            f"https://www.google.com/s2/favicons?domain={domain}&sz=128",
+            "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON"
+            f"&fallback_opts=TYPE,SIZE,URL&url=https://{domain}&size=128"]
 
 
 def _get(url: str, timeout: float = 12.0) -> bytes:
@@ -69,9 +82,21 @@ def _get(url: str, timeout: float = 12.0) -> bytes:
         return resp.read()
 
 
+def kind(raw: bytes) -> str:
+    """The image's file extension from its first bytes, or "" if it is not one."""
+    if not raw:
+        return ""
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp"
+    for sig, ext in SIGS:
+        if raw.startswith(sig):
+            return ext
+    return ""
+
+
 def usable(raw: bytes) -> bool:
-    """A real PNG, big enough to be a mark and not a placeholder."""
-    return bool(raw) and raw[:8] == PNG_SIG and len(raw) >= MIN_BYTES
+    """A real image, big enough to be a mark and not a placeholder."""
+    return bool(kind(raw)) and len(raw) >= MIN_BYTES
 
 
 def fetch_all(out_dir: Path = OUT_DIR, get=_get, domains: dict | None = None) -> dict:
@@ -81,21 +106,26 @@ def fetch_all(out_dir: Path = OUT_DIR, get=_get, domains: dict | None = None) ->
     misses: dict = {}
     for key, domain in (domains or BOOK_DOMAINS).items():
         last = ""
-        for url in candidates(domain):
+        urls = [u for d in (domain, *MORE_DOMAINS.get(key, ())) for u in candidates(d)]
+        for url in urls:
             try:
                 raw = get(url)
             except Exception as exc:                            # noqa: BLE001
                 last = f"{url} → {type(exc).__name__}"
                 continue
             if not usable(raw):
-                last = f"{url} → {len(raw)} bytes, not a usable PNG"
+                last = f"{url} → {len(raw)} bytes, not a usable image"
                 continue
-            (out_dir / f"{key}.png").write_bytes(raw)
-            got[key] = {"from": url, "bytes": len(raw)}
+            ext = kind(raw)
+            for old in EXTS:                     # one file per book, whatever it was before
+                (out_dir / f"{key}.{old}").unlink(missing_ok=True)
+            (out_dir / f"{key}.{ext}").write_bytes(raw)
+            got[key] = {"from": url, "bytes": len(raw), "file": f"{key}.{ext}"}
             break
         else:
             misses[key] = last
     manifest = {"keys": sorted(got), "icons": got, "missing": misses,
+                "files": {k: got[k]["file"] for k in sorted(got)},
                 "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest

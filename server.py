@@ -601,6 +601,9 @@ CONTENT_TYPES = {
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".ico": "image/x-icon",
+    ".jpg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
     ".webmanifest": "application/manifest+json",
     # The receipts download. `text/csv` rather than a generic stream so a
     # phone offers "open in Numbers" instead of asking what to do with it.
