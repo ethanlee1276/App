@@ -18,6 +18,7 @@ Run directly: `python3 tests/test_a_stuck_chore_never_stops_the_boards.py`
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -340,6 +341,25 @@ def test_a_chore_the_system_kills_rests_and_says_so():
     assert 'cmd = [sys.executable, "-u", "-m", module, *args]' in src
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "killed by the system in ${c.killed.step" in app
+
+
+def test_the_daily_pass_writes_its_memory_on_every_line():
+    """Which step of the daily pass needs 1.15 GB (the box, 2026-10-07):
+    in the lane's child every log line ends with the child's resident and
+    peak memory, so the step where the peak jumps is on the line."""
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        launch._mem_log("  nhl results: 3 game(s)")
+    out = buf.getvalue()
+    if os.path.exists("/proc/self/status"):
+        assert re.search(r"nhl results: 3 game\(s\)  \[\d+ MB, peak \d+ MB\]", out), out
+        now, peak = launch._mem_mb()
+        assert now and peak and peak >= now
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _run_maintenance("):src.index("FUTURES_EVERY_HOURS")]
+    assert "run_if_due(log=print if _chores_in_process() else _mem_log)" in body
 
 
 if __name__ == "__main__":

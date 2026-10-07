@@ -2029,12 +2029,39 @@ def _arbitrate_parlays(quiet: bool = False) -> None:
             print(f"  ⚠️  parlay slate cap skipped: {exc}")
 
 
+def _mem_mb() -> tuple:
+    """(resident MB now, peak MB) of this process, from /proc; (None, None)
+    where there is no /proc."""
+    now = peak = None
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for ln in fh:
+                if ln.startswith("VmRSS:"):
+                    now = int(ln.split()[1]) // 1024
+                elif ln.startswith("VmHWM:"):
+                    peak = int(ln.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return now, peak
+
+
+def _mem_log(msg: str) -> None:
+    """A chore's log line with its memory on the end. WHICH STEP, by
+    numbers (2026-10-07): the kernel killed the daily pass at ~1.15 GB ten
+    times in a day, and its lines said what it was doing but not what it
+    weighed — so the step where the peak jumps is now on the line itself."""
+    now, peak = _mem_mb()
+    print(f"{msg}  [{now} MB, peak {peak} MB]" if now is not None else msg, flush=True)
+
+
 def _run_maintenance() -> None:
     """Daily chores (results ingest, journal settle, closing-odds harvest).
     First call of each day does the work; the rest are no-ops."""
     try:
         from engine.maintenance import run_if_due
-        run_if_due()
+        # In the lane's own child, every line carries the child's memory;
+        # in the suite's sandbox the plain print the tests read.
+        run_if_due(log=print if _chores_in_process() else _mem_log)
     except Exception as exc:  # noqa: BLE001 — chores must never take the site down
         print(f"  ⚠️  daily maintenance failed: {exc}")
 

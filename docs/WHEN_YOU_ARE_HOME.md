@@ -130,6 +130,17 @@ first). Paste back anything that prints an error or looks off.
    journalctl -u qellys --since today --no-pager | grep -E "killed by signal|cut off|finished in|chores \(" | tail -15
    ```
 
+10. **Which daily step needs the memory.** Step 9's answer (2026-10-07):
+    the daily pass itself, "killed by signal 9 during maintenance" at
+    22:43, inside the unit's 1600M (MemoryPeak hit it). Its lines are
+    unbuffered since 22:25, and from the next pull on each one ends with
+    `[NOW MB, peak PEAK MB]`. Paste both; the step where the peak jumps
+    is the one to fix:
+    ```
+    journalctl -u qellys --since "22:24" --until "22:44" --no-pager | grep -v '"GET' | tail -40
+    journalctl -u qellys --since "1 hour ago" --no-pager | grep -E "MB, peak" | tail -40
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
