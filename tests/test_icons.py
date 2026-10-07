@@ -32,6 +32,7 @@ What deliberately stays, so a later audit does not "fix" it:
     deliberately austere.
 """
 
+import functools
 import os
 import re
 
@@ -92,14 +93,29 @@ def _lex(src):
     KW = ("return", "typeof", "case", "in", "of", "do", "else", "yield",
           "delete", "void", "instanceof", "new")
 
-    def starts_regex(upto):
-        s = upto.rstrip()
-        if not s:
+    def starts_regex(i):
+        # What comes before the `/` at i, read BACKWARD from i. It used to
+        # slice src[:i], rstrip the copy and run an end-anchored regex over
+        # all of it — the whole file prefix, at every `/` in code, about
+        # 55 s per pass over app.js and six minutes for this file. Same
+        # answer: the last non-space character, and if that ends a run of
+        # [\w$] characters, the identifier the old regex took (the run from
+        # its first [A-Za-z_$] character).
+        j = i - 1
+        while j >= 0 and src[j].isspace():
+            j -= 1
+        if j < 0:
             return True
-        if s[-1] in PRE:
+        if src[j] in PRE:
             return True
-        m = re.search(r"([A-Za-z_$][\w$]*)$", s)
-        return bool(m and m.group(1) in KW)
+        k = j
+        while k >= 0 and (src[k].isalnum() or src[k] in "_$"):
+            k -= 1
+        run = src[k + 1:j + 1]
+        for p, ch in enumerate(run):
+            if ch in "_$" or "a" <= ch <= "z" or "A" <= ch <= "Z":
+                return run[p:] in KW
+        return False
 
     out = []
     stack = [["code", 0]]          # [kind, brace depth for ${ } tracking]
@@ -142,7 +158,7 @@ def _lex(src):
             stack.append(["//", 0]); continue
         if c == "/" and nxt == "*":
             stack.append(["/*", 0]); continue
-        if c == "/" and starts_regex(src[:i]):
+        if c == "/" and starts_regex(i):
             j, in_class = i + 1, False
             while j < n:
                 d = src[j]
@@ -174,10 +190,12 @@ def _lex(src):
     return out
 
 
+@functools.lru_cache(maxsize=8)
 def _strip_js_comments(src):
     """Prose in a comment may legitimately NAME a glyph ("a check on Android
     is not the check on iOS") without rendering one, so the render-path
-    assertions have to look past them."""
+    assertions have to look past them. Cached: six tests strip the same
+    app.js, and the answer for a given source never changes."""
     return "".join(" " if k in ("//", "/*") else src[i]
                    for i, k in _lex(src))
 
