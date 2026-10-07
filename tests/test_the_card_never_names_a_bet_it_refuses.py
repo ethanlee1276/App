@@ -72,6 +72,7 @@ def render(payload, sport="mlb", top=None):
     const american = (o) => (o > 0 ? `+${{o}}` : `\\u2212${{Math.abs(o)}}`);
     const teamName = (t) => String(t || "");
     const betMark = () => "";
+    const betItHTML = () => "";   // the Bet it sheet is tests/test_bet_it.py's; this harness tests the words
     const ridingAttrs = () => "";
     const liveTrackerRows = (r) => r;
     // v3 (2026-09-22): the card is drawn on its venue render; the art
