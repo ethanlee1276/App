@@ -219,6 +219,30 @@ def test_tail_opens_the_bet_it_sheet_with_a_tile_per_book():
     assert "if (tpl) betSheetShow(tpl.innerHTML, \"Bet it\")" in app, "Bet it opens the same sheet"
 
 
+def test_posting_a_parlay_from_the_slip_neither_zooms_the_page_nor_leaves_the_tray_up():
+    """Ethan, 2026-10-07, three screenshots of posting a parlay from the
+    slip on his phone: "it zooms in the page and shit. Then when I post it,
+    it looks all buggy and keeps the parlay on my screen while also trying
+    to show me my post."
+
+    The zoom: iOS Safari zooms the page when a focused field is under
+    16px, and the slip's caption had its own 12.5px rule that outranked
+    the phone-wide 16px rule by specificity. So the phone rule is
+    !important — the one place the device's rule beats the design's.
+    The tray: a posted parlay now empties the slip (slipReset, the same
+    thing the Clear button does) before the page opens the post."""
+    css = _read("web", "css", "styles.css")
+    phone = css[css.index("iOS Safari zooms"):][:1500]
+    assert 'input:not([type="range"]), select, textarea { font-size: var(--fs-xl) !important; }' in phone
+    app = _read("web", "js", "app.js")
+    assert "function slipReset() {" in app
+    clear = app[app.index('e.target.closest("#slip-clear")'):]
+    assert "slipReset();" in clear[:120], "the Clear button is the same reset"
+    soc = _read("web", "js", "social.js")
+    post = soc[soc.index("async function slipPost(btn) {"):soc.index("window.QBSocial = {")]
+    assert post.index("slipReset();") < post.index("location.hash = `#feed/post/${res.out.id}`"), "the tray comes down before the post opens"
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):

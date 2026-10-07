@@ -1542,6 +1542,7 @@
     if (!res.ok) { tfToast(res.out.error || "That did not post."); return; }
     tfToast(res.out.already ? "Already on the feed." : "Posted to the feed.");
     F.posts = []; F.rail = null;
+    slipReset();                       // the tray comes down; the post is the record now
     location.hash = `#feed/post/${res.out.id}`;
   }
 

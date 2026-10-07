@@ -4403,8 +4403,13 @@ body.pk-open { overflow: hidden; }
   /* iOS Safari zooms the WHOLE PAGE in when a focused field is smaller
      than 16px — and it never zooms back out, which leaves every later
      tap looking enlarged. Range sliders don't trigger it and keep their
-     own sizing. */
-  input:not([type="range"]), select, textarea { font-size: var(--fs-xl); }
+     own sizing. !important, because a field's own rule (the slip's
+     caption, the comment box, the My Bets form, the games sort) outranks
+     this one by specificity and was zooming the page on every tap
+     (Ethan, 2026-10-07, posting a parlay from the slip: "it zooms in the
+     page"). A phone's field is never smaller than this; nothing else is
+     the device's rule rather than the design's. */
+  input:not([type="range"]), select, textarea { font-size: var(--fs-xl) !important; }
   /* Data rows (.drow) — Edge Board, Scanner pairs, stale lines, sharp
      anchors, fantasy sleepers. Each is a flex row whose fixed numeric
      columns sum well past a phone viewport (the Edge Board's alone need

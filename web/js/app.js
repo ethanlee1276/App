@@ -42859,6 +42859,14 @@ function slipExportText() {
           + `place anything. qellysbook.com does not take bets.`].join("\n");
 }
 
+/* Empty the slip and close the tray: the Clear button, and a parlay that
+   has just gone to the feed (Ethan, 2026-10-07: the tray stayed up over
+   the post it had just made). */
+function slipReset() {
+  _slip = { sport: "", date: "", legs: [] };
+  _slipOpen = false;
+  slipSave(); slipRender(); renderAll();
+}
 function slipRender() {
   const host = document.getElementById("qb-slip");
   if (!host) return;
@@ -42946,9 +42954,7 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (e.target.closest && e.target.closest("#slip-clear")) {
-    _slip = { sport: "", date: "", legs: [] };
-    _slipOpen = false;
-    slipSave(); slipRender(); renderAll();
+    slipReset();
     return;
   }
   const rm = e.target.closest && e.target.closest("[data-slip-rm]");
