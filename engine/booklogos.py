@@ -102,7 +102,15 @@ def fetch_all(out_dir: Path = OUT_DIR, get=_get, domains: dict | None = None) ->
 
 
 def main() -> int:
-    m = fetch_all()
+    try:
+        m = fetch_all()
+    except PermissionError as exc:
+        # The folder was made by root (a pull or an earlier run as root), so
+        # the qellys user cannot write into it. One command fixes it.
+        print(f"Cannot write {exc.filename}: the folder belongs to another user.\n"
+              f"Fix it once, then run this again:\n"
+              f"  sudo chown -R qellys:qellys {OUT_DIR}")
+        return 1
     for k in m["keys"]:
         print(f"  ok   {k:<12} {m['icons'][k]['bytes']:>6} B  {m['icons'][k]['from']}")
     for k, why in m["missing"].items():

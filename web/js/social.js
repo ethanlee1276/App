@@ -1472,7 +1472,7 @@
       <div class="fd-editp-grid">
         <label>Display name<input class="fd-input" id="fd-p-name" maxlength="30" value="${escapeAttr(m.name || "")}" placeholder="How your name shows"></label>
         <label>Handle<span class="fd-at-in"><span>@</span><input class="fd-input" id="fd-p-handle" maxlength="20" value="${escapeAttr(m.handle || suggest || "")}"
-          placeholder="3–20 letters, numbers or _"${m.verified ? " readonly" : ""}></span></label>
+          placeholder="3–20 letters, numbers or _"${m.verified && !m.founder ? " readonly" : ""}></span></label>
         <label class="wide"><span class="fd-lab">Bio <small id="fd-p-count">${(m.bio || "").length}/200</small></span><textarea class="fd-input" id="fd-p-bio" maxlength="200" rows="3"
           placeholder="Who you are, what you bet">${escapeHtml(m.bio || "")}</textarea></label>
         <fieldset class="fd-colors wide"><legend>Colour</legend>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) =>
@@ -1481,7 +1481,8 @@
           `<option value="${k}"${k === (lg || "") ? " selected" : ""}>${t}</option>`).join("")}</select></label>
         <label>Team code<input class="fd-input" id="fd-p-abbr" maxlength="12" value="${escapeAttr(abbr || "")}" placeholder="DET"></label>
       </div>
-      ${m.verified ? `<p class="fd-fine">${VERIFIED} Verified handles stay put — ask the site owner to change one.</p>` : ""}
+      ${m.founder ? `<p class="fd-fine">${VERIFIED} Your handle is yours to change — the tick and the Founder badge go with you.</p>`
+        : m.verified ? `<p class="fd-fine">${VERIFIED} Verified handles stay put — ask the site owner to change one.</p>` : ""}
       <p class="fd-fine">Slurs are refused in names and bios. Swearing in a bio is hidden unless a reader turns on strong language.</p>
       <div class="fd-row-end">${creating ? "" : `<button class="fd-btn ghost" data-fd="acct-edit" type="button">Cancel</button>`}
         <button class="fd-btn" data-fd="save-profile" type="button">${creating ? "Create profile" : "Save profile"}</button></div>

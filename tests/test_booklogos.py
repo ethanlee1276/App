@@ -66,6 +66,25 @@ def test_the_page_reads_the_manifest_when_the_sheet_opens_and_lays_icons_over_th
     assert 'data-book="' in APP[APP.index("function bookMarkHTML("):APP.index("function betWords(")]
 
 
+def test_a_folder_owned_by_root_prints_the_fix_not_a_traceback():
+    """Ethan's box, 2026-10-07: PermissionError on web/img/books/draftkings.png
+    (the file was root's). The run names the one command that fixes it."""
+    import contextlib
+    import io
+
+    def boom():
+        raise PermissionError(13, "Permission denied", str(BL.OUT_DIR / "draftkings.png"))
+    real, BL.fetch_all = BL.fetch_all, boom
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = BL.main()
+    finally:
+        BL.fetch_all = real
+    assert code == 1
+    assert f"sudo chown -R qellys:qellys {BL.OUT_DIR}" in buf.getvalue()
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):

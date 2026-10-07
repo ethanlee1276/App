@@ -56,16 +56,28 @@ first). Paste back anything that prints an error or looks off.
    command sets it. To take it back, the same command with
    `, on=False` after the email.
 4. **Give the site its own account** (once, a different email from
-   yours): sign up on the site with it, then run this with that email in
-   place of `you@example.com`. It becomes `Qellys_Book` with the gold
-   tick and the crown avatar:
+   yours). Done 2026-10-07: the crown worked, but the claim answered `409
+   Somebody already has that handle` because YOUR account held
+   `Qellys_Book`. First move your own handle: on the site, Account page →
+   Edit profile → Handle (the founder's handle is no longer locked) →
+   Save. Or from the box, with your email and the handle you want (no
+   "qellys" in it):
    ```
-   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'you@example.com', 'Qellys_Book', name='Qellys Book'))"
+   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'you@example.com', 'YourNewHandle'))"
+   ```
+   It prints `200` with the new handle and `'founder': True` still on.
+   Then the site's account (the other email, already signed up) takes the
+   name; it becomes `Qellys_Book` with the gold tick and the site's mark:
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'site@example.com', 'Qellys_Book', name='Qellys Book'))"
    ```
 5. **The real sportsbook logos** on the Bet it, Tail and Pick of the Day
-   sheets (paste the output; a line starting `--` is a book that keeps
-   its coloured initials):
+   sheets. On 2026-10-07 it stopped with `PermissionError` on
+   `web/img/books/draftkings.png`: that folder belonged to root. Fix the
+   owner once, then run it (paste the output; a line starting `--` is a
+   book that keeps its coloured initials):
    ```
+   sudo chown -R qellys:qellys /srv/qellys/web/img/books
    cd /srv/qellys && sudo -u qellys python3 -m engine.booklogos
    ```
 6. **Bet-slip links for player props** (after the next props refresh;

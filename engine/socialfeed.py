@@ -285,10 +285,13 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
     one main profile for the whole site"). This row is what the feed, the
     Account page, the streak leaderboard and the friends inbox all show.
     A verified account keeps its handle: renaming it would move the badge
-    onto a name the owner never checked."""
+    onto a name the owner never checked. The founder is the owner, so his
+    own handle moves (Ethan, 2026-10-07: "We need to give the option to be
+    able to change your handle" — his account held Qellys_Book, the name
+    the site's own account needs). Reserved names stay with :func:`claim`."""
     ensure_tables(conn)
     old = profile_of(conn, user_id) or {}
-    if old.get("verified") and handle is not None and not _owner \
+    if old.get("verified") and handle is not None and not _owner and not old.get("founder") \
             and str(handle).strip().lstrip("@").lower() != old["handle"].lower():
         return 403, {"error": "A verified handle can’t be changed here — ask the site owner."}
     handle = str(handle if handle is not None else old.get("handle", "")).strip().lstrip("@")

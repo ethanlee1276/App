@@ -150,6 +150,27 @@ def test_the_page_draws_the_founder_from_the_servers_flag():
         assert rule in css, rule
 
 
+def test_the_founder_renames_himself_and_frees_the_sites_name():
+    """Ethan, 2026-10-07: his own account held Qellys_Book, so the site's
+    account could not claim it (409). The founder's handle moves; nobody
+    else's verified handle does; reserved names stay with the box claim."""
+    conn, (ethan, sam) = _db()
+    assert SF.claim(conn, "ethan@example.com", "Qellys_Book", name="Ethan")[0] == 200
+    assert SF.crown(conn, "ethan@example.com")[0] == 200
+    assert SF.claim(conn, "sam@example.com", "Qellys_Book")[0] == 409   # what he hit
+    assert SF.profile_set(conn, ethan, "Qellys_Two", None)[0] == 400, "reserved names stay with claim"
+    code, out = SF.profile_set(conn, ethan, "EthanLee", None)
+    assert code == 200, out
+    p = SF.profile_of(conn, ethan)
+    assert p["handle"] == "EthanLee" and p["founder"] and p["verified"] and p["name"] == "Ethan"
+    code, out = SF.claim(conn, "sam@example.com", "Qellys_Book", name="Qellys Book")
+    assert code == 200 and out["profile"]["verified"] and not out["profile"].get("founder")
+    # The site's account is verified but not the founder: its handle stays put.
+    assert SF.profile_set(conn, sam, "SomethingElse", None)[0] == 403
+    js = _read("web", "js", "social.js")
+    assert 'm.verified && !m.founder ? " readonly"' in js
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):
