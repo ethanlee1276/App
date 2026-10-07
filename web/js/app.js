@@ -45199,7 +45199,8 @@ async function fetchAllLive() {
       });
     } catch (e) {}
   }));
-  _liveAll = { at: Date.now(), games: out, finals: done, all };
+  _liveAll = { at: Date.now(), games: out, finals: done };
+  _liveAll.all = all;             // every row, any state: the game page's Watch before kickoff
   return out;
 }
 /* The fast file's row for one game, any state — scheduled rows carry
