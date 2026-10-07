@@ -214,7 +214,7 @@ def test_tail_opens_the_bet_it_sheet_with_a_tile_per_book():
     # app.js hands Social the sheet, the tile and the front doors; the
     # prediction markets have no sports slip and stay off the door list.
     assert "function betSheetShow(html, label)" in app and "function bookTileHTML(title, url, px, sub, tag)" in app
-    doors = app[app.index("function bookHomeTilesHTML(skip)"):app.index("function betItHTML(")]
+    doors = app[app.index("function bookHomeTilesHTML(skip, first)"):app.index("function betItHTML(")]
     assert '["kalshi", "polymarket"].includes(k)' in doors and "https://${BOOKS[k][4]}/" in doors
     assert "if (tpl) betSheetShow(tpl.innerHTML, \"Bet it\")" in app, "Bet it opens the same sheet"
 

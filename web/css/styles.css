@@ -12866,6 +12866,7 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
   background: transparent; border: var(--hairline) solid var(--brand); }
 .betit-box.mini .betit:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
 .hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
+.potd-hero .potd-betit { margin-top: 10px; }
 .pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 /* The sheet: its own layer at the end of <body>, never inside a card. */
 .betit-sheet { position: fixed; inset: 0; z-index: 70; }

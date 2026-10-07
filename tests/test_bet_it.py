@@ -297,6 +297,30 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
     assert "@media (max-width: 760px)" in css[css.index(".betit-fine {"):css.index(".dc-feed {")], "a bottom sheet on a phone"
 
 
+def test_every_pick_of_the_day_has_the_button_and_the_sheet_always_opens():
+    """Ethan, 2026-10-07, circling the MLB Pick of the Day on Home: "all
+    pick of the days should also have a 'bet it' button with the same
+    boxes with the sports books."
+
+    The home card had no button at all; the deck's hero had one that
+    drew nothing when the pick carried no slip link (a total priced at
+    ProphetX, say). So the home card gets the button, and the sheet
+    always opens for a priced bet: slip links when the board has them,
+    and under "Key it in at" every book's front door, the book that
+    priced the pick first and tagged. Only an unpriced row has no button."""
+    js = (ROOT / "web" / "js" / "app.js").read_text()
+    fn = js[js.index("function betItHTML("):js.index("function betItOpen(")]
+    assert 'if (!slips.length && !pages.length && r.odds == null) return "";' in fn
+    assert "bookHomeTilesHTML([...slips, ...pages].map((x) => bookKey(x[0])), r.book_name || r.book)" in fn
+    assert "Key it in at" in fn and "Or key it in at" in fn
+    doors = js[js.index("function bookHomeTilesHTML(skip, first)"):js.index("function betItHTML(")]
+    assert '"Priced here"' in doors
+    at = js.index('<div class="card potd-hero"')
+    home = js[at:js.index('<div id="potd-top-pick"', at)]
+    assert 'betItHTML(pick, "btn primary potd-betit")' in home, "the Home card"
+    assert 'betItHTML(pick, "btn primary hd-betit")' in js, "the deck's hero"
+
+
 def test_the_discord_page_shows_what_the_site_posts_and_nothing_private():
     js = (ROOT / "web" / "js" / "app.js").read_text()
     page = js[js.index("const DISCORD_FEED"):js.index("function dcFirstStop(")]

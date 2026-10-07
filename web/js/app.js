@@ -1405,10 +1405,13 @@ function bookTileHTML(title, url, px, sub, tag) {
 }
 /* Every book's front door, as tiles — for a bet no book handed us a slip
    link for. The prediction markets stay off it: no sports slip to open. */
-function bookHomeTilesHTML(skip) {
+function bookHomeTilesHTML(skip, first) {
   const had = new Set(skip || []);
-  return Object.keys(BOOKS).filter((k) => BOOKS[k][4] && !["kalshi", "polymarket"].includes(k) && !had.has(k))
-    .map((k) => bookTileHTML(BOOKS[k][0], `https://${BOOKS[k][4]}/`, null, "open the book", "")).join("");
+  const lead = bookKey(first);
+  const keys = Object.keys(BOOKS).filter((k) => BOOKS[k][4] && !["kalshi", "polymarket"].includes(k) && !had.has(k));
+  if (lead && keys.includes(lead)) keys.splice(keys.indexOf(lead), 1), keys.unshift(lead);
+  return keys.map((k) => bookTileHTML(BOOKS[k][0], `https://${BOOKS[k][4]}/`, null, "open the book",
+                                      k === lead ? "Priced here" : "")).join("");
 }
 function betItHTML(r, cls) {
   if (!r) return "";
@@ -1419,7 +1422,11 @@ function betItHTML(r, cls) {
   if (!slips.length && !pages.length && r.bet_link && safeHref(r.bet_link) !== "#") {
     pages.push([r.book_name || r.book || "the book", r.bet_link]);
   }
-  if (!slips.length && !pages.length) return "";
+  // Nothing priced, nothing to bet. Otherwise the sheet always opens:
+  // with no slip link the books' front doors are the way in (Ethan,
+  // 2026-10-07: every Pick of the Day gets the button and the boxes).
+  if (!slips.length && !pages.length && r.odds == null) return "";
+  const doors = bookHomeTilesHTML([...slips, ...pages].map((x) => bookKey(x[0])), r.book_name || r.book);
   // The best price among the slips, when there is more than one to compare:
   // American odds, so the larger number pays more (+150 over -110).
   const priced = slips.filter((x) => x[2] != null);
@@ -1433,6 +1440,7 @@ function betItHTML(r, cls) {
         slips.map(([t, u, px]) => tile(t, u, px, "bet slip")).join("")}</div>` : ""}
       ${pages.length ? `<p class="betit-h">${slips.length ? "Or find the game at" : "Find the game at"}</p><div class="betit-grid pages">${
         pages.map(([t, u]) => tile(t, u, null, "game page")).join("")}</div>` : ""}
+      ${doors ? `<p class="betit-h">${slips.length || pages.length ? "Or key it in at" : "Key it in at"}</p><div class="betit-grid pages">${doors}</div>` : ""}
       <p class="betit-fine">Opens the book in a new tab; you place the bet there. 21+ · Gambling problem? 1-800-GAMBLER</p></template></span>`;
 }
 function betItOpen(box) {
@@ -3484,6 +3492,10 @@ async function renderPickOfTheDay() {
                pays ? `pays ${pays}u on 1u` : "", matchup].filter(Boolean).join(" · ")}</span>
         </span>
       </div>
+      ${/* Ethan, 2026-10-07: "all pick of the days should also have a
+            'bet it' button with the same boxes with the sports books" —
+            the deck's hero already had one; the home card did not. */
+        liveNow ? "" : betItHTML(pick, "btn primary potd-betit")}
       ${fair != null ? (pick.evidence === "model" ? `
       <div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
         <!-- A MODEL-ONLY ROW NEVER LEADS WITH ITS OWN NUMBER. Ethan,
