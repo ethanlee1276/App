@@ -39382,6 +39382,10 @@ function loopRowsHTML(hb, now) {
       const at = (c.stack || []).slice(-2).join(" ← ");
       out += rowOf(label, `stuck in ${c.step} for ${ageText(c.running_s || 0)}`, "st-bad",
         at ? `waiting at ${at} — the boards keep rebuilding meanwhile` : "the boards keep rebuilding meanwhile");
+    } else if (c.resting_until_epoch && c.resting_until_epoch > now && c.killed) {
+      // The system took it (out of memory), not our time limit.
+      out += rowOf(label, `killed by the system in ${c.killed.step || "a step"} — runs again in ${ageText(c.resting_until_epoch - now)}`,
+        "st-bad", "out of memory, most likely; the boards keep rebuilding meanwhile");
     } else if (c.resting_until_epoch && c.resting_until_epoch > now) {
       out += rowOf(label, `stopped at its time limit — runs again in ${ageText(c.resting_until_epoch - now)}`,
         "st-bad", "its stack is in the log; the boards keep rebuilding meanwhile");

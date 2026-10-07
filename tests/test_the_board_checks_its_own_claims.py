@@ -141,6 +141,28 @@ def test_a_phone_sees_which_checks_failed():
     assert ".st-why { display: block;" in phone[:phone.index("\n}")]
 
 
+def test_a_pick_the_record_corrected_is_judged_on_the_number_it_went_up_at():
+    """The box, 2026-10-07: "9 of 385 claims fail — FLOOR 9", every one a
+    pick the graded record's correction (likelycal / likelyctx) pulled
+    under 55% after it made the list at 55% or more. That is on purpose:
+    the pick stays, shows the honest number, drops to Worth a look and
+    says why. A pick that went on under 55% is still a FLOOR failure, and
+    so is a lowered number with no reason on the card."""
+    b = _clean()
+    b["most_likely"] += [
+        _row(player="Fixed", model_prob=0.49, listed_prob=0.61,
+             cal_note="Model picks on the under have hit 48% of 60 where we said 62%"),
+        _row(player="Ctx", model_prob=0.53, board_raw_prob=0.58, ctx_note="first game back"),
+        _row(player="Leak", model_prob=0.50, listed_prob=0.52, cal_note="pulled toward the price"),
+        _row(player="Silent", model_prob=0.50, listed_prob=0.61),
+    ]
+    rep = T.check(b)
+    assert rep["by_check"] == {"FLOOR": 2}, rep
+    assert any(p.startswith("FLOOR — Leak") and "before the record's correction (shows 50%)" in p
+               for p in rep["problems"]), rep["problems"]
+    assert any(p.startswith("FLOOR — Silent") for p in rep["problems"])
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

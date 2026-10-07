@@ -1383,7 +1383,9 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
     kept = _read_pid_file(module)
     if kept and _pid_runs(kept["pid"], module):
         return [f"{module}: still running from an earlier cycle (pid {kept['pid']}) — not started again"]
-    cmd = [sys.executable, "-m", module, *args]
+    # -u: a child the kernel kills keeps its last lines in its log (a
+    # buffered one left weekly_lab.log empty on the box, 2026-10-07).
+    cmd = [sys.executable, "-u", "-m", module, *args]
     nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
     path = _child_log_path(module)
     try:

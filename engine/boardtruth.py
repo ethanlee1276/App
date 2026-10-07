@@ -13,7 +13,14 @@ after every build (launch._note_board), counted into the heartbeat and
 shown on the Status page. Each check is a sentence a reader would take at
 its word:
 
-  FLOOR        an unlocked Most Likely row under the 55% the board needs
+  FLOOR        an unlocked Most Likely row under the 55% the board needs.
+               A pick the graded record corrected (engine/likelycal,
+               likelyctx) is judged on the number it went on the list at
+               (``listed_prob`` / ``board_raw_prob``): the correction lowers
+               its shown chance and its tier, and the card says why, on
+               purpose (Ethan, 2026-10-03: "I don't want to really get rid of
+               any most likely bets"). Nine of those read as FLOOR failures
+               on the box, 2026-10-07.
   CAP          an unlocked Most Likely row heavier than −250
   OLD PRICE    an unlocked row whose price was past the SHOW ceiling at the
                build (oddsapi.MAX_PROP_PRICE_SHOW_AGE, 48h) — a number too
@@ -87,8 +94,13 @@ def check(board: dict) -> dict:
             continue
         if r.get("reserve"):
             continue
-        if p is not None and p < MIN_PROB - 1e-9:
-            probs.append(("FLOOR", f"{_who(r)}: {p:.0%} on the board"))
+        listed = next((_f(r.get(k)) for k in ("listed_prob", "board_raw_prob", "ctx_raw_prob")
+                       if _f(r.get(k)) is not None), None)
+        corrected = listed is not None and bool(r.get("cal_note") or r.get("ctx_note"))
+        claim = listed if corrected else p
+        if claim is not None and claim < MIN_PROB - 1e-9:
+            probs.append(("FLOOR", f"{_who(r)}: {claim:.0%} on the board"
+                          + (f" before the record's correction (shows {p:.0%})" if corrected else "")))
         if odds is not None and odds < HEAVIEST_PRICE:
             probs.append(("CAP", f"{_who(r)}: {odds:+.0f}"))
     for r in ml + [x for x in (board or {}).get("recommendations") or [] if isinstance(x, dict)]:

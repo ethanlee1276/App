@@ -3818,6 +3818,13 @@ CHORE_TIMEOUT_S = {"daily": 60 * 60, "settle": 45 * 60}
 #: daily pass killed halfway never marked the day done, so without a rest
 #: it would start straight back into whatever hung it.
 CHORE_REST_S = 2 * 3600
+#: A lane whose child the SYSTEM killed (a signal, not our ceiling — on the
+#: box, the unit's MemoryMax) rests this long. Measured 2026-10-07: the
+#: kernel killed a ~1.15 GB python child ten times between 15:54 and 22:01,
+#: one every 23–60 minutes, because nothing here noticed — the daily pass
+#: never marked the day done, so every cycle started it straight back into
+#: the same wall. A settle rests less: on a game day that is ungraded bets.
+CHORE_KILLED_REST_S = {"daily": 2 * 3600, "settle": 30 * 60}
 #: Where a lane's child says what it is doing, and where its stack goes
 #: once it has run past CHORES_STUCK_S. data/, never web/data/: a stack is
 #: not for the public.
@@ -3893,7 +3900,10 @@ def chore_child(lane: str, force_settle: bool = False) -> int:
 
 
 def _chore_cmd(arg: str) -> list:
-    return [sys.executable, str(ROOT / "launch.py"), "--chore", arg]
+    # -u: unbuffered, so the journal holds the child's last line even when
+    # the kernel kills it — a buffered child loses the very line that says
+    # which step it was on.
+    return [sys.executable, "-u", str(ROOT / "launch.py"), "--chore", arg]
 
 
 def _read_child_state(lane: str) -> dict:
@@ -3916,6 +3926,7 @@ def _lane_child(lane: str, force_settle: bool, st: dict) -> None:
     nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
     proc = subprocess.Popen(_chore_cmd(arg), cwd=str(ROOT), preexec_fn=nicer, start_new_session=True)
     st["proc"] = proc
+    st.pop("killed", None)
     st.update(step="starting", since=time.time())
     ceiling = CHORE_TIMEOUT_S.get(lane, 20 * 60)
     try:
@@ -3938,6 +3949,18 @@ def _lane_child(lane: str, force_settle: bool, st: dict) -> None:
         except OSError:
             proc.kill()
         proc.wait()
+    else:
+        code = proc.returncode
+        if code is not None and code < 0:
+            # KILLED FROM OUTSIDE (see CHORE_KILLED_REST_S): say so, name the
+            # step, and rest, instead of starting it again next cycle.
+            kid = _read_child_state(lane)
+            rest = CHORE_KILLED_REST_S.get(lane, CHORE_REST_S)
+            why = " — out of memory (the unit's MemoryMax)" if code == -signal.SIGKILL else ""
+            print(f"  ⚠️  chores ({lane}): killed by signal {-code} during "
+                  f"{kid.get('step') or 'a step'}{why}; rests {rest // 60} min before it runs again")
+            st["rest_until"] = time.time() + rest
+            st["killed"] = {"at": round(time.time()), "step": kid.get("step") or "", "signal": -code}
     st["last_s"].update(_read_child_state(lane).get("last_s") or {})
 
 
@@ -4005,6 +4028,8 @@ def _chores_status(now: float | None = None) -> dict:
                "last_s": dict(st.get("last_s") or {}), "stuck": False}
         if (st.get("rest_until") or 0) > now:
             cur["resting_until_epoch"] = round(st["rest_until"])
+            if st.get("killed"):
+                cur["killed"] = dict(st["killed"])
         if step and since and now - since > CHORES_STUCK_S:
             cur["stuck"] = True
             stack = []

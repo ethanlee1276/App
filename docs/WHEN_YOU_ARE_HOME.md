@@ -114,6 +114,22 @@ first). Paste back anything that prints an error or looks off.
    journalctl -k --since "10 days ago" --no-pager | grep -iE "out of memory|killed process" | tail -10
    ```
 
+9. **What the box ran out of memory on** (2026-10-07: ten kernel kills
+   of a ~1.15 GB python child between 15:54 and 22:01, under the unit's
+   1600M cap). The self-check's nine FLOOR lines were picks the record's
+   correction lowered after they made the list, which is on purpose; the
+   check now reads their listed number. A chore the system kills now
+   rests (daily 2 h, settle 30 min) instead of restarting every cycle,
+   says so on the Status page, and every child writes unbuffered, so the
+   next kill leaves its step in the journal. Paste all of this:
+   ```
+   systemctl show qellys -p MemoryMax -p MemoryCurrent -p MemoryPeak
+   ps -eo pid,rss,etime,args --sort=-rss | head -6
+   cat /srv/qellys/data/cache/chores_daily.json; echo
+   journalctl -u qellys --since "21:57" --until "22:03" --no-pager | tail -40
+   journalctl -u qellys --since today --no-pager | grep -E "killed by signal|cut off|finished in|chores \(" | tail -15
+   ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

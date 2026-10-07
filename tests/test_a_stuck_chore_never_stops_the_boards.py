@@ -296,6 +296,52 @@ def test_a_fitter_started_by_an_exited_chore_is_still_guarded_and_cut_off():
             live.kill()
 
 
+def test_a_chore_the_system_kills_rests_and_says_so():
+    """The box, 2026-10-07: the kernel killed a ~1.15 GB python child ten
+    times between 15:54 and 22:01 (the unit's MemoryMax). Nothing noticed a
+    child that died of a signal inside its ceiling, so the daily pass —
+    never marked done — started straight back into the same wall every
+    cycle. Now it is logged with its step, it rests, and the Status page
+    says the system took it."""
+    d = tempfile.mkdtemp()
+    script = ("import json, os, signal, time\n"
+              f"p = {os.path.join(d, 'chores_daily.json')!r}\n"
+              "open(p, 'w').write(json.dumps({'pid': os.getpid(), 'step': 'maintenance', "
+              "'since': time.time(), 'last_s': {}}))\n"
+              "os.kill(os.getpid(), signal.SIGKILL)\n")
+    saved = (launch._chores_in_process, launch._chore_cmd, launch.CHORE_STATE_DIR)
+    launch._chores_in_process = lambda: False
+    launch._chore_cmd = lambda arg: [sys.executable, "-c", script, arg]
+    launch.CHORE_STATE_DIR = launch.Path(d)
+    try:
+        st = {"last_s": {}}
+        launch._lane_child("daily", False, st)
+        assert st["proc"].returncode == -9
+        assert st["rest_until"] > time.time() + launch.CHORE_KILLED_REST_S["daily"] - 60
+        assert st["killed"]["step"] == "maintenance" and st["killed"]["signal"] == 9
+        launch._LANES["daily"].update(proc=None, step=None, since=None,
+                                      rest_until=st["rest_until"], killed=st["killed"])
+        cur = launch._chores_status()["daily"]
+        assert cur["killed"]["step"] == "maintenance" and "resting_until_epoch" in cur
+        settle_saved = launch._LANES["settle"].get("rest_until")
+        launch._LANES["settle"]["rest_until"] = time.time() + 600     # start nothing real
+        try:
+            assert launch._kick_chores()["daily"] == "resting after a timeout"
+        finally:
+            launch._LANES["settle"]["rest_until"] = settle_saved
+    finally:
+        launch._LANES["daily"].update(proc=None, step=None, since=None, rest_until=None)
+        launch._LANES["daily"].pop("killed", None)
+        (launch._chores_in_process, launch._chore_cmd, launch.CHORE_STATE_DIR) = saved
+    assert launch.CHORE_KILLED_REST_S["settle"] < launch.CHORE_KILLED_REST_S["daily"]
+    # Unbuffered, so the journal keeps the killed child's last line.
+    assert launch._chore_cmd("daily")[1] == "-u"
+    src = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
+    assert 'cmd = [sys.executable, "-u", "-m", module, *args]' in src
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "killed by the system in ${c.killed.step" in app
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
