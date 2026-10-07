@@ -2443,35 +2443,58 @@ class Handler(BaseHTTPRequestHandler):
         if path == "reported":
             if self._owner_refused():
                 return
+        one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
         A = _acct()
         conn = A.connect()
         try:
             who = self._account(conn)
             uid = who["id"] if who else None
             entitled = self._entitled(conn, who)
-            strong = (q.get("strong") or [""])[0] == "1"
-            if path == "list":
+            strong = one("strong") == "1"
+            if path in ("list", "post", "profile"):
+                # The lazy fold: a parlay whose games are over is graded
+                # the first time anybody reads the feed after them.
                 try:
-                    before = int((q.get("before") or ["0"])[0] or 0)
-                except ValueError:
-                    before = 0
-                out = SF.feed(conn, uid, entitled, strong, before=before,
-                              sport=(q.get("sport") or [""])[0][:8],
-                              order=(q.get("order") or ["new"])[0][:4])
+                    from engine import ledger as _led
+                    SF.settle_pending(conn, _led.connect)
+                except Exception as exc:                 # noqa: BLE001
+                    _seclog("feed_grade", "failed", self._client_ip(), error=type(exc).__name__)
+            if path == "list":
+                out = SF.feed(conn, uid, entitled, strong, before=_int(one("before")),
+                              sport=one("sport")[:8], order=one("order", "hot")[:9],
+                              window=one("window", "week")[:5], kind=one("kind")[:6],
+                              offset=_int(one("offset")))
                 out["me"] = SF.profile_of(conn, uid) if uid else None
                 out["signed_in"] = bool(who)
+                out["unseen"] = SF.unseen(conn, uid)
+                return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "me":
+                return self._send(200, json.dumps({"me": SF.profile_of(conn, uid) if uid else None,
+                                                   "signed_in": bool(who),
+                                                   "unseen": SF.unseen(conn, uid)}).encode(), ".json")
+            if path == "rail":
+                out = {"leaders": SF.leaders(conn, uid)["top"][:5],
+                       "suggest": SF.suggestions(conn, uid)}
                 return self._send(200, json.dumps(out).encode(), ".json")
             if path == "post":
-                try:
-                    pid = int((q.get("id") or ["0"])[0] or 0)
-                except ValueError:
-                    pid = 0
-                code, out = SF.post_detail(conn, pid, uid, entitled, strong)
+                code, out = SF.post_detail(conn, _int(one("id")), uid, entitled, strong)
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "profile":
-                code, out = SF.profile_page(conn, (q.get("handle") or [""])[0],
-                                            uid, entitled, strong)
+                code, out = SF.profile_page(conn, one("handle"), uid, entitled, strong,
+                                            tab=one("tab", "posts")[:8], before=_int(one("before")))
                 return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "follows":
+                code, out = SF.follow_list(conn, one("handle"), one("which", "followers"), uid)
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "leaders":
+                return self._send(200, json.dumps(SF.leaders(conn, uid)).encode(), ".json")
+            if path == "search":
+                return self._send(200, json.dumps(
+                    SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
+            if path == "notifications":
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}', ".json")
+                return self._send(200, json.dumps(SF.notifications(conn, uid, strong)).encode(), ".json")
             if path == "reported":
                 return self._send(200, json.dumps(
                     {"items": SF.reported(conn)}).encode(), ".json")
@@ -2481,11 +2504,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _feed_post(self, path: str, body: dict):
         from engine import socialfeed as SF
-        if path not in ("post", "like", "tail", "comment", "delete", "report",
-                        "profile", "hide"):
+        if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
+                        "delete", "report", "profile", "follow", "block", "seen", "friend",
+                        "hide"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         if path == "hide" and self._owner_refused():
             return
+        txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
         conn = A.connect()
         try:
@@ -2509,19 +2534,38 @@ class Handler(BaseHTTPRequestHandler):
                         for l in (body.get("legs") or []) if isinstance(l, dict)][:6]
                 code, out = SF.create_post(conn, uid, body.get("sport"), body.get("date"),
                                            legs, body.get("caption"))
+            elif path == "talk":
+                code, out = SF.create_talk(conn, uid, txt("sport"), txt("title"), txt("body"))
+            elif path == "edit":
+                code, out = SF.edit_post(conn, uid, _int(body.get("id")), caption=txt("caption"),
+                                         title=txt("title"), body=txt("body"))
             elif path == "like":
                 code, out = SF.toggle_like(conn, uid, _int(body.get("id")))
+            elif path == "comment-like":
+                code, out = SF.toggle_comment_like(conn, uid, _int(body.get("id")))
             elif path == "tail":
                 code, out = SF.tail(conn, uid, _int(body.get("id")),
                                     self._entitled(conn, who))
             elif path == "comment":
-                code, out = SF.add_comment(conn, uid, _int(body.get("id")), body.get("body"))
+                code, out = SF.add_comment(conn, uid, _int(body.get("id")), body.get("body"),
+                                           parent_id=_int(body.get("parent")) or None)
             elif path == "delete":
                 code, out = SF.delete(conn, uid, str(body.get("kind") or ""), _int(body.get("id")))
             elif path == "report":
-                code, out = SF.report(conn, uid, str(body.get("kind") or ""), _int(body.get("id")))
+                code, out = SF.report(conn, uid, str(body.get("kind") or ""), _int(body.get("id")),
+                                      str(body.get("reason") or "other")[:12])
+            elif path == "follow":
+                code, out = SF.toggle_follow(conn, uid, str(body.get("handle") or ""))
+            elif path == "block":
+                code, out = SF.toggle_block(conn, uid, str(body.get("handle") or ""))
+            elif path == "friend":
+                code, out = SF.add_friend(conn, uid, str(body.get("handle") or ""))
+            elif path == "seen":
+                SF.mark_seen(conn, uid)
+                code, out = 200, {"ok": True}
             else:
-                code, out = SF.profile_set(conn, uid, body.get("handle"), body.get("bio"))
+                code, out = SF.profile_set(conn, uid, txt("handle"), txt("bio"), name=txt("name"),
+                                           color=body.get("color"), team=txt("team"))
             return self._send(code, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

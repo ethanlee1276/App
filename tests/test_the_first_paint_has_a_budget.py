@@ -47,7 +47,11 @@ HTML = (WEB / "index.html").read_text()
 #: can make parlays and share them … a tail button … likes … comments … a
 #: bio"): renderFeed, the post cards, the Tail box, comments and the
 #: profile — +4.3 KB gz. Told to Ethan.
-APP_JS_BUDGET_KB = 485
+#: 485 -> 481 on 2026-10-07: the Feed moved out to js/social.js, loaded on
+#: first use like the chart library (Ethan: "a full social feature …
+#: profiles for users" — 13 KB gz that no first visit should carry). What
+#: stays is the loader, the route and two icons. Told to Ethan.
+APP_JS_BUDGET_KB = 481
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -59,7 +63,9 @@ APP_JS_BUDGET_KB = 485
 #: Ethan: "a box that shows all the different sports books"). Told to Ethan.
 #: 596 -> 601 on 2026-10-06 by the Feed: the JavaScript in the app.js bump
 #: above plus its styles and its section (+4.6 KB gz). Told to Ethan.
-BOOT_BUDGET_KB = 601
+#: 601 -> 596 on 2026-10-07: its JavaScript and styles now load on first
+#: use (js/social.js, css/social.css). Told to Ethan.
+BOOT_BUDGET_KB = 596
 
 
 def _gz_trimmed(rel: str) -> int:

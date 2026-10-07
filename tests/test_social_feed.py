@@ -60,6 +60,9 @@ def _db():
     for who in ("ethan", "sam", "casey", "drew"):
         _, out = A.create_user(conn, f"{who}@example.com", GOOD, confirmed=True)
         ids.append(out["id"])
+    # Two days old: the day-one cap has its own test below.
+    conn.execute("UPDATE users SET created_at=created_at-?", (2 * 86400,))
+    conn.commit()
     return conn, ids
 
 

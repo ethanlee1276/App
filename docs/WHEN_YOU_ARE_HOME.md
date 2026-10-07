@@ -470,15 +470,20 @@ came back with links. Paste the output:
 cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl --props
 ```
 
-**28. The Feed** (2026-10-06): the public page where people post parlays,
-with likes, comments, bios and the whale-tail Tail button. Nothing to
-switch on. To check it is answering:
+**28. The Feed** (2026-10-06, made a full social feature 2026-10-07 —
+see `docs/SOCIAL_AUDIT.md`): parlays and discussion posts, profile pages
+with a graded record, follows, threaded comments, notifications, a
+leaderboard, search, blocks, and the whale-tail Tail button. Nothing to
+switch on. Parlays grade themselves from the journal the first time
+anyone reads the feed after their games. To check it is answering:
 
 ```
 curl -s https://qellysbook.com/api/feed/list | head -c 300; echo
+curl -s https://qellysbook.com/js/social.js | head -c 80; echo
 ```
 
-It should start with `{"posts": [`. Moderation from the box, any time:
+The first should start with `{"posts": [`, the second with
+`/* Qellys Book — the social feed`. Moderation from the box, any time:
 the first line lists what readers reported (three reports from different
 accounts hide a post or comment by themselves); the second hides post 12
 (put the real number in; `'comment'` for a comment; `False` restores it).
