@@ -112,7 +112,7 @@ def build(date: str, pbp_dir: Path | None = None) -> dict:
     now = utc_stamp()
     try:
         raw = _get_json(
-            f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore",
+            f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore,broadcasts(all)",
             f"mlb_live_{date}.json", ttl=30)
     except DataUnavailable as exc:
         return {"generated_at": now, "date": date, "games": [],

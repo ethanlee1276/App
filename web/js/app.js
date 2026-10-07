@@ -39283,6 +39283,7 @@ const STATUS_BOARDS = [
   ["live_cfb.json", "Live scoreboard (college football)"],
   ["live_nba.json", "Live scoreboard (NBA)"],
   ["live_wnba.json", "Live scoreboard (WNBA)"],
+  ["live_nhl.json", "Live scoreboard (NHL)"],
   /* The Lab's weekly backtest (audit O17): nine days overdue once with
      nothing flagging it, because it was not on this list at all. */
   ["backtest.json", "The Lab (weekly backtest)"],
@@ -45390,6 +45391,25 @@ const NETWORK_STREAM = [
 ];
 const ON_YOUTUBE_TV = new Set(["peacock", "paramount", "foxone", "espn", "hbomax", "cw", "ion", "nflplus", "mlbtv", "nbalp"]);
 const LEAGUE_OUT_OF_MARKET = { mlb: "mlbtv", nba: "nbalp", wnba: "wnbalp", nhl: "espnplus" };
+/* THE GAME ITSELF, NOT ONLY A FRONT DOOR (Ethan, 2026-10-07: "the watch
+   button needs to link to the games … youtube tv or peacock or mlb.com").
+   Two addresses really are per game and stable, so these are not guesses:
+   MLB.TV's player takes the schedule's gamePk (mlb.com/tv/g<pk>), with
+   the free Gameday tracker beside it (mlb.com/gameday/<pk>), and every
+   ESPN league has a Gamecast page per event id. A live game with an id
+   always gets one, so a game whose feed named no carrier still has a link
+   — the MLB game Ethan was watching had none. */
+const ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" };
+function gameLinksFor(g, league) {
+  if (!g) return {};
+  if (league === "mlb") {
+    const pk = String(g.game_pk || g.event_id || "").replace(/\D/g, "");
+    return pk ? { tv: `https://www.mlb.com/tv/g${pk}`, follow: ["Gameday", `https://www.mlb.com/gameday/${pk}`] } : {};
+  }
+  const ev = String(g.event_id || "").replace(/\D/g, "");
+  const path = ESPN_GAME_PATH[league];
+  return path && ev ? { follow: ["Gamecast", `https://www.espn.com/${path}/game/_/gameId/${ev}`] } : {};
+}
 function streamKey(network) {
   const n = String(network || "").trim();
   const hit = NETWORK_STREAM.find(([re]) => re.test(n));
@@ -45400,26 +45420,38 @@ function streamKey(network) {
 function streamsFor(g, league) {
   if (!g) return [];
   const out = [];
+  const game = gameLinksFor(g, league);
   const add = (key, via) => {
     const s = STREAM_HOME[key];
-    if (s && !out.some((x) => x.key === key)) out.push({ key, label: s[0], url: s[1], via: via || "" });
+    // MLB.TV opens THIS game when the schedule gave its number.
+    const url = key === "mlbtv" && game.tv ? game.tv : s && s[1];
+    if (s && !out.some((x) => x.key === key)) out.push({ key, label: s[0], url, via: via || "" });
   };
   (g.tv || []).forEach((n) => add(streamKey(n), n));
   if (!out.length && (g.tv_local || []).length) add(LEAGUE_OUT_OF_MARKET[league], (g.tv_local || []).join(" / "));
-  if (out.length && ON_YOUTUBE_TV.has(out[0].key)) add("ytv", out[0].via);
+  // No carrier named at all: a ballgame still streams on MLB.TV (every
+  // out-of-market game), at its own address.
+  const named = (g.tv || []).length || (g.tv_local || []).length;
+  if (!out.length && !named && game.tv) add("mlbtv", "MLB.TV");
+  if (out.length && named && ON_YOUTUBE_TV.has(out[0].key)) add("ytv", out[0].via);
   return out;
 }
 function watchHTML(g, league, cls) {
   const list = streamsFor(g, league);
+  const follow = gameLinksFor(g, league).follow;
+  const followA = (main) => follow ? `<a class="${main ? "watch-main" : "watch-alt"}" href="${safeHref(follow[1])}" target="_blank"
+      rel="noopener noreferrer" title="This game, live">${main ? `${icon("play", 12)}<span>Live</span><b>${escapeHtml(follow[0])}</b>` : escapeHtml(follow[0])}</a>` : "";
   if (!list.length) {
     const named = ((g && g.tv) || []).concat((g && g.tv_local) || []);
-    return named.length ? `<div class="watch${cls ? ` ${cls}` : ""}"><span class="watch-on">On ${escapeHtml(named.join(" · "))}</span></div>` : "";
+    if (!named.length && !follow) return "";
+    return `<div class="watch${cls ? ` ${cls}` : ""}">${followA(true)}${
+      named.length ? `<span class="watch-on">On ${escapeHtml(named.join(" · "))}</span>` : ""}</div>`;
   }
   const first = list[0];
   const rest = list.slice(1);
   return `<div class="watch${cls ? ` ${cls}` : ""}"><a class="watch-main" href="${safeHref(first.url)}" target="_blank"
       rel="noopener noreferrer" title="${escapeAttr(first.via ? `On ${first.via}` : first.label)}">${icon("play", 12)}<span>Watch</span><b>${escapeHtml(first.label)}</b></a>${
-    rest.map((s) => `<a class="watch-alt" href="${safeHref(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.label)}</a>`).join("")}</div>`;
+    rest.map((s) => `<a class="watch-alt" href="${safeHref(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.label)}</a>`).join("")}${followA(false)}</div>`;
 }
 
 function liveCardHTML({ sport, g, bets }) {

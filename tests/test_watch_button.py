@@ -73,6 +73,13 @@ def test_the_fast_file_and_the_deep_file_carry_it_only_when_named():
 def test_mlb_asks_its_schedule_for_the_broadcasts_and_keeps_the_television_ones():
     src = (ROOT / "engine" / "mlb" / "sources" / "live.py").read_text()
     assert "hydrate=linescore,broadcasts(all)" in src
+    # …and the live scoreboard file asks for them too. It asked for the
+    # linescore only, so no live MLB game ever carried a carrier and the
+    # Watch button never drew (Ethan, 2026-10-07: "there is a live mlb
+    # game with no WATCH button").
+    fast = (ROOT / "live_build.py").read_text()
+    assert "schedule?sportId=1&date={date}&hydrate=linescore,broadcasts(all)" in fast
+    assert "hydrate=linescore\"" not in fast and "hydrate=linescore'" not in fast
     nat, loc = mlive.mlb_carriers([
         {"name": "FOX", "type": "TV", "isNational": True, "homeAway": "home"},
         {"name": "Bally Sports Detroit", "type": "TV", "isNational": False, "homeAway": "home"},
@@ -116,12 +123,35 @@ def test_the_button_shows_only_while_the_game_is_live():
     assert '(row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : ""' in game
     fn = APP[APP.index("function watchHTML("):APP.index("function liveCardHTML(")]
     assert 'href="${safeHref(first.url)}"' in fn and 'target="_blank"' in fn and 'rel="noopener noreferrer"' in fn
-    # No stream door: the carrier is still NAMED ("On NBC"); no carrier at all, nothing.
+    # No stream door: the carrier is still NAMED ("On NBC"). Nothing at all
+    # only when there is neither a carrier nor a game id to link to.
     assert "if (!list.length) {" in fn and 'class="watch-on">On ${escapeHtml(named.join(" · "))}' in fn
-    assert 'return named.length ?' in fn and fn.index(': "";') > fn.index("return named.length ?"), "no carrier named, no button"
+    assert 'if (!named.length && !follow) return "";' in fn
     assert 'id="gp-watch-slot"' in APP and 'watchHTML(row, state.sport, "gp-watch")' in APP, "the game page, once live"
     css = (ROOT / "web" / "css" / "styles.css").read_text()
     assert ".watch-main {" in css and ".pbp-watch {" in css
+
+
+def test_every_live_game_links_to_the_game_itself():
+    """Ethan, 2026-10-07: "the watch button needs to link to the games, it
+    would prolly be youtube tv or peacock or mlb.com". Was: no carrier
+    named, no button. Now a live game with an id always links somewhere
+    real and per game — MLB.TV's player and Gameday by gamePk, ESPN's
+    Gamecast by event id for the other five leagues — beside the named
+    services, which still lead."""
+    fn = APP[APP.index("const ESPN_GAME_PATH"):APP.index("function streamKey(")]
+    assert 'https://www.mlb.com/tv/g${pk}' in fn and 'https://www.mlb.com/gameday/${pk}' in fn
+    assert 'https://www.espn.com/${path}/game/_/gameId/${ev}' in fn
+    assert 'ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" }' in fn
+    assert fn.count('.replace(/\\D/g, "")') == 2, "ids are digits only before they go in a URL"
+    sf = APP[APP.index("function streamsFor("):APP.index("function watchHTML(")]
+    assert 'key === "mlbtv" && game.tv ? game.tv' in sf, "MLB.TV opens this game"
+    assert 'if (!out.length && !named && game.tv) add("mlbtv", "MLB.TV");' in sf
+    assert "named && ON_YOUTUBE_TV.has(" in sf, "no YouTube TV beside a fallback nobody named"
+    wh = APP[APP.index("function watchHTML("):APP.index("function liveCardHTML(")]
+    assert "gameLinksFor(g, league).follow" in wh and "${followA(false)}</div>" in wh
+    # Every league the live page shows has its row on the Status page.
+    assert '["live_nhl.json", "Live scoreboard (NHL)"]' in APP
 
 
 if __name__ == "__main__":
