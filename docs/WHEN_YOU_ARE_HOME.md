@@ -81,7 +81,9 @@ from today, in order. Nothing here needs a command except step 1.
      the 12.5px field; every field on a phone is 17px now). Post: the
      tray goes away and you land on the post, nothing left behind.
    - *Pick of the Day.* Home, any league with a pick: a gold **Bet it**
-     under the pick. Tap: slip links if the board has them, otherwise
+     bar under the pick, word centred. Tap the far right end of the bar,
+     not the word — it must open (it used to take only the word). Then:
+     slip links if the board has them, otherwise
      "Key it in at" with the book that priced it first, tagged "Priced
      here". Same sheet on the Picks page hero and on every card.
    Until step 3 runs, every tile is the book's colour and initials; after
