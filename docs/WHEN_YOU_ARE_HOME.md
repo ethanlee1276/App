@@ -96,6 +96,24 @@ first). Paste back anything that prints an error or looks off.
    step 3 here: pin a post, hide and restore one, open Moderation. With a
    game on, step 7 below checks the Watch button.
 
+8. **Two red rows on the Status page** (Ethan's screenshots, 2026-10-07):
+   NFL "Self-check: 8 of 384 claims fail" and "The Lab (weekly backtest):
+   9 days ago". Paste all of this back. The first prints each failed
+   claim (the page now also names which checks failed, on a phone too):
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gate as G, boardtruth as T; T.KEEP=99; r=T.check(json.load(open(G.board_source('web/data/recommendations.json')))); print(T.line('NFL', r)); print(chr(10).join(r['problems']))"
+   ```
+   The Lab tries once a day once its page is a week old, so nine days
+   means at least two tries failed. Its last try's output, the day it
+   last tried, and whether the box ran out of memory:
+   ```
+   ls -la --time-style=+%F_%R /srv/qellys/web/data/backtest.json /srv/qellys/data/built/backtest.json /srv/qellys/data/cache/weekly_lab.* 2>&1
+   tail -25 /srv/qellys/data/cache/weekly_lab.log
+   grep -o '"lab_attempted": *"[^"]*"' /srv/qellys/data/cache/maintenance.json
+   journalctl -u qellys --since "10 days ago" --no-pager | grep -iE "engine\.lab|lab:|backtest lab" | tail -15
+   journalctl -k --since "10 days ago" --no-pager | grep -iE "out of memory|killed process" | tail -10
+   ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

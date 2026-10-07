@@ -39409,8 +39409,12 @@ function buildsCardHTML(hb) {
   // (launch._board_counts) — the Edge board as edgeBoardRows draws it, and
   // how many of those we actually stake.
   const n = (x, one, many) => x == null ? "—" : `${x} ${x === 1 ? one : many}`;
+  // A failing row's note gets its own line on a phone, where .st-sub is
+  // hidden (Ethan's 2026-10-07 screenshot: "8 of 384 claims fail" with no
+  // word of which checks).
   const sub = (label, v, cls, note) => `<div class="st-row st-indent"><span class="st-k">${label}</span>
-      <span class="st-v ${cls}">${escapeHtml(v)}</span><span class="st-sub">${escapeHtml(note || "")}</span></div>`;
+      <span class="st-v ${cls}">${escapeHtml(v)}</span><span class="st-sub">${escapeHtml(note || "")}</span>${
+        note && cls === "st-bad" ? `<span class="st-why">${escapeHtml(note)}</span>` : ""}</div>`;
   const rows = BUILD_LEAGUES.filter(([k]) => runs[k]).map(([k, label]) => {
     const r = runs[k];
     const when = r.at_epoch ? `${ageText(now - r.at_epoch)} ago` : "time unknown";

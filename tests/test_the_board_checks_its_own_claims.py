@@ -129,6 +129,18 @@ def test_the_full_copy_answers_after_a_restart_seals_the_public_one():
     assert launch.FULL_COPY_LAG_S >= 300
 
 
+def test_a_phone_sees_which_checks_failed():
+    """Ethan's 2026-10-07 screenshot: "8 of 384 claims fail" and nothing
+    else, because the breakdown sat in .st-sub, hidden under 640px. A
+    failing row now carries it as a .st-why line too, which phones show."""
+    fn = APP[APP.index("function buildsCardHTML("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'note && cls === "st-bad" ? `<span class="st-why">${escapeHtml(note)}</span>`' in fn
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+    phone = css[css.index("@media (max-width: 640px) {\n  .cl-row"):]
+    assert ".st-why { display: block;" in phone[:phone.index("\n}")]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
