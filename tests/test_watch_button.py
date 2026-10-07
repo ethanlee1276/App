@@ -103,17 +103,23 @@ def test_the_page_knows_where_every_carrier_the_feeds_name_streams():
     assert table.index('"espnplus"]') < table.index('"espn"]') and table.index('"ytv"]') < table.index('"youtube"]')
 
 
-def test_the_button_is_on_the_live_card_and_the_play_by_play_page_and_never_on_a_final():
+def test_the_button_shows_only_while_the_game_is_live():
+    """Ethan, 2026-10-07: "We should not show the 'watch' button until the
+    game is live." The live cards are live by definition; the game page and
+    the play-by-play page check the state themselves."""
     card = APP[APP.index("function liveCardHTML("):APP.index("function liveCardHTML(") + 4000]
     assert 'watchHTML(g, sport, "lb-watch")' in card
     pbp = APP[APP.index("async function renderPbpPage()"):]
-    assert 'lv.state === "final" ? "" : watchHTML(d, league, "pbp-watch")' in pbp
+    assert 'lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""' in pbp
+    game = APP[APP.index("function renderGamePage()"):APP.index("function renderGamePage()") + 40000]
+    assert 'isLive ? watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch") : ""' in game
+    assert '(row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : ""' in game
     fn = APP[APP.index("function watchHTML("):APP.index("function liveCardHTML(")]
     assert 'href="${safeHref(first.url)}"' in fn and 'target="_blank"' in fn and 'rel="noopener noreferrer"' in fn
     # No stream door: the carrier is still NAMED ("On NBC"); no carrier at all, nothing.
     assert "if (!list.length) {" in fn and 'class="watch-on">On ${escapeHtml(named.join(" · "))}' in fn
     assert 'return named.length ?' in fn and fn.index(': "";') > fn.index("return named.length ?"), "no carrier named, no button"
-    assert 'id="gp-watch-slot"' in APP and 'watchHTML(row, state.sport, "gp-watch")' in APP, "the game page, before kickoff"
+    assert 'id="gp-watch-slot"' in APP and 'watchHTML(row, state.sport, "gp-watch")' in APP, "the game page, once live"
     css = (ROOT / "web" / "css" / "styles.css").read_text()
     assert ".watch-main {" in css and ".pbp-watch {" in css
 

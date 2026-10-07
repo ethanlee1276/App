@@ -14442,11 +14442,16 @@ function renderGamePage() {
         margin, steadiness is low variance. Measured shape, not a projection.</p>
     </div>`;
   })() : "";
+  /* WATCH, ONLY WHILE THE GAME IS ON (Ethan, 2026-10-07: "We should not
+     show the 'watch' button until the game is live"). The fast file can
+     know a game is live before the board does, so its row decides. */
   if (!isFinal && typeof fetchAllLive === "function") {
     fetchAllLive().then(() => {
       const slot = document.getElementById("gp-watch-slot");
       const row = liveRowFor(state.sport, g);
-      if (slot && row && state.view === "game") slot.innerHTML = watchHTML(row, state.sport, "gp-watch");
+      if (slot && row && state.view === "game") {
+        slot.innerHTML = (row.live || {}).state === "live" ? watchHTML(row, state.sport, "gp-watch") : "";
+      }
     }).catch(() => {});
   }
   host.innerHTML = `
@@ -14480,7 +14485,7 @@ function renderGamePage() {
           <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
         <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}</div>
-        <div id="gp-watch-slot">${isFinal ? "" : watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch")}</div>
+        <div id="gp-watch-slot">${isLive ? watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch") : ""}</div>
         ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
               circling the spread · ML · total grid on the Home card: "we
               should be showing the info I have circled"). The same
@@ -45282,7 +45287,9 @@ function liveFeedWhyHTML(chip, feeds, now) {
    stable per-game address, and a guessed one lands on a 404 in the
    second quarter. A broadcast channel also rides on YouTube TV, so that
    is offered second for those; a local-only game goes to the league's
-   own out-of-market service. No carrier named, no button. */
+   own out-of-market service. No carrier named, no button — and no button
+   until the game is live (Ethan, 2026-10-07): the carrier names ride on
+   scheduled rows, but the door opens at kickoff. */
 const STREAM_HOME = {
   peacock: ["Peacock", "https://www.peacocktv.com/sports"],
   paramount: ["Paramount+", "https://www.paramountplus.com/live-tv/"],
@@ -47126,7 +47133,7 @@ async function renderPbpPage() {
           <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
           <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>
             <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
-            ${lv.state === "final" ? "" : watchHTML(d, league, "pbp-watch")}</div>
+            ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}</div>
           <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
           <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
             <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>
