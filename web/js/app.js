@@ -1484,12 +1484,15 @@ function betItClose() {
 /* The button sits on cards that are themselves doors to the pick: a tap
    on it must not also open the card. Capture on window, so it runs
    before any card's own listener. A tap on a tile lets the new tab open
-   and takes the sheet down behind it. */
+   and takes the sheet down behind it. A box drawn as a button (.btn on
+   the box — the Pick of the Day's gold bar) is the button edge to edge:
+   CSS stretches the word's hit area over it, and the second test here
+   catches a tap on the bar's own padding all the same. */
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("click", (e) => {
     const t = e.target;
     if (!t || !t.closest) return;
-    const btn = t.closest(".betit-box .betit");
+    const btn = t.closest(".betit-box .betit") || t.closest(".betit-box.btn");
     if (btn) { e.preventDefault(); e.stopPropagation(); betItOpen(btn.closest(".betit-box")); return; }
     if (t.closest("[data-betit-close]")) { e.stopPropagation(); betItClose(); return; }
     const tile = t.closest(".betit-sheet .bk-tile");

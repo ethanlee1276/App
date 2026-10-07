@@ -173,6 +173,9 @@
      pixels, which still renders thinner than the 3 it would otherwise
      take. Non-retina never enters the query and keeps a true 1px. */
   --hairline: 1px;
+  /* The keyboard focus ring: never a hairline, which halves on a retina
+     screen — a ring has to be seen. */
+  --focus-w: 2px;
 
   /* ROW MEASURE — how long a line runs, and how far apart the lines sit.
      The two halves of whether a row of text is comfortable, and both had
@@ -509,7 +512,7 @@
    containers, and an outline that overlaps its own control reads as a
    border rather than as focus. */
 :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--brand);
+  outline: var(--focus-w) solid var(--brand);
   outline-offset: 2px;
 }
 /* The nav sits tight against its own underline, so its ring needs room to
@@ -12866,8 +12869,25 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
   background: transparent; border: var(--hairline) solid var(--brand); }
 .betit-box.mini .betit:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
 .hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
-.potd-hero .potd-betit { margin-top: 10px; }
+.potd-hero .potd-betit { margin-top: 10px; display: flex; justify-content: center; }
 .pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+/* THE WHOLE BAR TAKES THE TAP. Where the box itself is drawn as the
+   button (.btn on the box: the Pick of the Day's gold bar, the Picks
+   hero's slab, the pick page's strip cell) the <button> inside was only
+   as big as its word — 2 of 27 points across the Home bar opened the
+   sheet and a tap anywhere else did nothing (Ethan, 2026-10-07: "We
+   should be able to click this full bar and it pulls up the menu"). The
+   word's hit area now covers its box: every point of the bar opens the
+   sheet, hover lights the whole bar, and the focus ring goes round the
+   bar rather than the word. The small chips (.mini) are outlined pills
+   that ARE their button; the card around one stays the card's door. */
+.betit-box.btn { position: relative; }
+.betit-box.btn .betit::after { content: ""; position: absolute; inset: 0; }
+/* On the painted bars the bar is the only surface: the word's own pill
+   would light as a patch in the middle of it on focus. */
+.potd-hero .potd-betit .betit, .hd-potd .hd-betit .betit { background: none; }
+.betit-box.btn .betit:focus-visible { outline: none; }
+.betit-box.btn:has(.betit:focus-visible) { outline: var(--focus-w) solid var(--brand); outline-offset: 2px; }
 /* The sheet: its own layer at the end of <body>, never inside a card. */
 .betit-sheet { position: fixed; inset: 0; z-index: 70; }
 .betit-sheet[hidden] { display: none; }

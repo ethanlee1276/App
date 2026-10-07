@@ -321,6 +321,32 @@ def test_every_pick_of_the_day_has_the_button_and_the_sheet_always_opens():
     assert 'betItHTML(pick, "btn primary hd-betit")' in js, "the deck's hero"
 
 
+def test_the_whole_bar_opens_the_sheet_not_just_the_word():
+    """Ethan, 2026-10-07, a screenshot of the MLB Pick of the Day's gold
+    bar: "Fix how you have to click here [where] it says bet it. We should
+    be able to click this full bar and it pulls up the menu."
+
+    The box is what's drawn as the button (`btn primary` on the box) but
+    the <button> inside was only as big as its word, and the handler only
+    listened to the button: measured, 2 of 27 points across the Home bar
+    opened the sheet (8 of 27 on the Picks hero, 6 of 27 on the pick
+    page's strip cell). Now the word's hit area covers its box, the
+    handler takes a tap on the box itself as well, the focus ring goes
+    round the bar, and the Home bar centres its word. The small chips
+    (.mini) are outlined pills that are their whole button, so the card
+    around a chip still opens the card: no stretched area there."""
+    css = (ROOT / "web" / "css" / "styles.css").read_text()
+    assert ".betit-box.btn { position: relative; }" in css
+    assert '.betit-box.btn .betit::after { content: ""; position: absolute; inset: 0; }' in css
+    assert ".betit-box.btn:has(.betit:focus-visible) { outline: var(--focus-w) solid var(--brand);" in css
+    assert ".potd-hero .potd-betit { margin-top: 10px; display: flex; justify-content: center; }" in css
+    assert ".betit-box.mini .betit::after" not in css and ".betit-box::after" not in css
+    js = (ROOT / "web" / "js" / "app.js").read_text()
+    at = js.index("function betItClose(")
+    handler = js[js.index('window.addEventListener("click", (e) => {', at):js.index("function escapeHtml(")]
+    assert 't.closest(".betit-box .betit") || t.closest(".betit-box.btn")' in handler
+
+
 def test_the_discord_page_shows_what_the_site_posts_and_nothing_private():
     js = (ROOT / "web" / "js" / "app.js").read_text()
     page = js[js.index("const DISCORD_FEED"):js.index("function dcFirstStop(")]
