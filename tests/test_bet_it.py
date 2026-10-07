@@ -287,7 +287,8 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
     # Logo files are opt-in by key, so a missing file is never a 404 per book per open.
     assert "const BOOK_LOGOS = new Set([" in fn and 'data-onerr="remove"' in fn
     css = (ROOT / "web" / "css" / "styles.css").read_text()
-    sheet = css[css.index("#betit-sheet {"):css.index("body.betit-open")]
+    sheet = css[css.index(".betit-sheet {"):css.index("body.betit-open")]
+    assert "#betit-sheet" not in css, "a class, not an id: the Most Likely block forbids a #"
     assert "color: var(--text)" in sheet[:sheet.index(".betit-x {")], "the panel sets its own text colour"
     assert ".bk-tile {" in sheet and "color: var(--text)" in sheet[sheet.index(".bk-tile {"):sheet.index(".bk-tile:hover")]
     assert "z-index: 70" in sheet and "position: fixed" in sheet

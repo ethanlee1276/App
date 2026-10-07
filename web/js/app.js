@@ -1385,6 +1385,7 @@ function betItOpen(box) {
   if (!host) {
     host = document.createElement("div");
     host.id = "betit-sheet";
+    host.className = "betit-sheet";
     host.hidden = true;
     host.innerHTML = `<div class="betit-scrim" data-betit-close></div>
       <div class="betit-panel" role="dialog" aria-modal="true" aria-label="Bet it">
@@ -1415,7 +1416,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
     const btn = t.closest(".betit-box .betit");
     if (btn) { e.preventDefault(); e.stopPropagation(); betItOpen(btn.closest(".betit-box")); return; }
     if (t.closest("[data-betit-close]")) { e.stopPropagation(); betItClose(); return; }
-    if (t.closest("#betit-sheet .bk-tile")) setTimeout(betItClose, 0);
+    if (t.closest(".betit-sheet .bk-tile")) setTimeout(betItClose, 0);
   }, true);
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") betItClose(); });
 }

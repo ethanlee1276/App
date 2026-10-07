@@ -12839,7 +12839,7 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
    ink, the black panel Ethan sent from his phone (2026-10-07). */
 .betit-box { display: inline-block; margin-top: 4px; }
 .betit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
-  font-family: inherit; font-size: var(--fs-xs); font-weight: 800; line-height: 1.4;
+  font-family: inherit; font-size: var(--fs-xs); font-weight: 800; line-height: var(--lh-snug);
   padding: 3px 11px; border: 0; border-radius: 999px; color: var(--brand-ink); background: var(--brand-solid); }
 .betit:hover, .betit:focus-visible { background: var(--brand-2); }
 .betit-box.mini .betit { font-size: var(--fs-2xs); padding: 2px 9px; color: var(--brand-2);
@@ -12848,8 +12848,8 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
 .pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 /* The sheet: its own layer at the end of <body>, never inside a card. */
-#betit-sheet { position: fixed; inset: 0; z-index: 70; }
-#betit-sheet[hidden] { display: none; }
+.betit-sheet { position: fixed; inset: 0; z-index: 70; }
+.betit-sheet[hidden] { display: none; }
 .betit-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .62); opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out); }
 .betit-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -46%);
@@ -12857,8 +12857,8 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
   padding: 18px 18px 14px; border-radius: var(--radius-lg); background: var(--panel); color: var(--text);
   border: var(--hairline) solid var(--border); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
-#betit-sheet.on .betit-scrim { opacity: 1; }
-#betit-sheet.on .betit-panel { opacity: 1; transform: translate(-50%, -50%); }
+.betit-sheet.on .betit-scrim { opacity: 1; }
+.betit-sheet.on .betit-panel { opacity: 1; transform: translate(-50%, -50%); }
 .betit-x { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; display: grid; place-items: center;
   border: 0; border-radius: 999px; background: var(--panel-2); color: var(--text-dim); cursor: pointer; }
 .betit-x:hover { color: var(--text); }
@@ -12873,23 +12873,23 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
   color: var(--text); text-decoration: none; text-align: center; }
 .bk-tile:hover, .bk-tile:focus-visible { border-color: var(--brand);
   background: color-mix(in srgb, var(--brand) 8%, var(--panel-2)); }
-.bk-mark { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+.bk-mark { position: relative; width: 44px; height: 44px; border-radius: var(--radius); display: grid; place-items: center;
   overflow: hidden; background: var(--panel); color: var(--text); }   /* the book's own colours ride on the tile */
-.bk-mark b { font-weight: 900; font-size: 15px; letter-spacing: -.02em; line-height: 1; }
+.bk-mark b { font-weight: 900; font-size: var(--fs-lg); letter-spacing: -.02em; line-height: 1; }
 .bk-mark img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .bk-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-xs); font-weight: 700; }
 .bk-px { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-sm); color: var(--brand-2); }
 .bk-px.dim { font-family: inherit; font-weight: 600; font-size: var(--fs-2xs); color: var(--text-mute); }
-.betit-grid.pages .bk-mark { width: 36px; height: 36px; border-radius: 10px; }
-.betit-grid.pages .bk-mark b { font-size: 12px; }
-.betit-fine { margin: 12px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); line-height: 1.4; }
+.betit-grid.pages .bk-mark { width: 36px; height: 36px; border-radius: var(--radius-sm); }
+.betit-grid.pages .bk-mark b { font-size: var(--fs-sm); }
+.betit-fine { margin: 12px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); line-height: var(--lh-snug); }
 body.betit-open { overflow: hidden; }
 @media (max-width: 760px) {
   /* A bottom sheet on a phone: full width, rises from the tab bar. */
   .betit-panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 86vh; transform: translateY(8%);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
-  #betit-sheet.on .betit-panel { transform: none; }
+  .betit-sheet.on .betit-panel { transform: none; }
 }
 .dc-feed { display: grid; gap: 10px; margin: 0 0 18px; }
 .dc-feed-post { display: block; padding: 14px 16px; white-space: pre-line; overflow-wrap: anywhere; font-size: var(--fs-sm); }
