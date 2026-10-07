@@ -64,6 +64,7 @@ function escapeAttr(s) { return String(s == null ? "" : s); }
 function icon(n) { return "[" + n + "]"; }
 function teamMark(t) { return "<i>" + t + "</i>"; }
 function nflMap() { return TEAMS; }
+let _cfbTeams = null;
 """
 
 #: The shape `web/js/teams.js` really has, including the historical keys
@@ -109,9 +110,29 @@ def _run(script, fns, consts=()):
 
 # ---------------------------------------------------- the search matches
 
-def _hits(q):
-    return _run(f"console.log(JSON.stringify(teamSearchHits({json.dumps(q)})));",
-                ["ffNorm", "teamSearchHits"])
+def _hits(q, pre=""):
+    return _run(pre + f"console.log(JSON.stringify(teamSearchHits({json.dumps(q)})));",
+                ["ffNorm", "teamsForSport", "teamSearchHits"], consts=("TEAM_SEARCH_SPORTS",))
+
+
+def test_every_league_is_searched_and_each_chip_carries_its_own():
+    """Ethan, 2026-10-07: "its only letting me search NFL teams but we need
+    that to work for all sports". The search read the NFL dictionary
+    whatever league was on, and the chip took the league on screen — so on
+    MLB "lions" offered the Lions as a baseball team. Each league's own
+    teams now, the league on screen first."""
+    mlb = json.dumps({"DET": {"name": "Detroit Tigers", "nick": "Tigers", "loc": "Detroit"}})
+    nhl = json.dumps({"DET": {"name": "Detroit Red Wings", "nick": "Red Wings", "loc": "Detroit"}})
+    pre = f"var MLB_TEAMS = {mlb}; var NHL_TEAMS = {nhl};\n"
+    got = _hits("tigers", pre)
+    assert [(h["name"], h["sport"]) for h in got] == [("Detroit Tigers", "mlb")], got
+    both = _hits("detroit", pre + "state.sport = 'nhl';\n")
+    assert [h["sport"] for h in both] == ["nhl", "mlb"], "the league on screen leads"
+    assert _hits("rams", pre)[0]["sport"] == "nfl"
+    body = _fn("renderTeamHits")
+    assert 'data-team-sport="${escapeAttr(t.sport)}"' in body
+    assert "teamMark(t.abbr, 16, teamsForSport(t.sport), t.sport)" in body
+    assert "nflMap()" not in _fn("teamSearchHits") + body
 
 
 def test_one_chip_per_franchise_not_one_per_key():
@@ -148,7 +169,9 @@ def test_the_chip_hands_the_server_a_name_not_a_key():
     finals — otherwise the page has to know which of LA/LAR/STL the
     database uses, and the two can disagree."""
     body = _fn("renderTeamHits")
-    assert 'data-team-open="${escapeAttr(t.name)}"' in body, body
+    # College's names are learned on the box, its keys are what the game
+    # page already opens a school by — so a school's chip sends its key.
+    assert 'data-team-open="${escapeAttr(t.sport === "cfb" ? t.abbr : t.name)}"' in body, body
 
 
 # --------------------------------------------------------- the opponents

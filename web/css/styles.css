@@ -2920,6 +2920,7 @@ select.calc-in { width: auto; font-weight: 600; }
    should know which he is opening before he taps it. */
 .tm-opp .tm-n { margin-left: 6px; opacity: .55; font-variant-numeric: tabular-nums; }
 .tm-hit { display: inline-flex; align-items: center; gap: 7px; }
+.tm-hit-lg { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .06em; }
 .tm-more { opacity: .7; }
 /* The result letter. Colour is never the whole message — W and L are
    already the words, and the tint only makes a long column scannable. */

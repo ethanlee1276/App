@@ -33509,35 +33509,47 @@ document.addEventListener("keydown", (e) => {
    resolves the name server-side when the page opens, so the two can
    never end up disagreeing about who "LA" is; this only decides what to
    OFFER. */
+/* EVERY LEAGUE'S TEAMS, NOT THE NFL'S (Ethan, 2026-10-07: "its only
+   letting me search NFL teams but we need that to work for all sports").
+   This read the NFL dictionary whatever league was on, and stamped the
+   chip with the league on screen — so on MLB "lions" offered the Lions
+   as a baseball team. Now each league's own dictionary, the league on
+   screen first, and each chip carries its own league. College's list
+   rides on its board, so it answers once that board has loaded. */
+const TEAM_SEARCH_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl"];
 function teamSearchHits(q) {
-  const map = nflMap() || {};
   const want = String(q || "").toLowerCase().trim();
   if (want.length < 2) return [];
+  const order = [state.sport, ...TEAM_SEARCH_SPORTS.filter((x) => x !== state.sport)]
+    .filter((x) => TEAM_SEARCH_SPORTS.includes(x));
   const out = [];
-  for (const abbr of Object.keys(map)) {
-    const t = map[abbr] || {};
-    const fields = [abbr, t.name, t.nick, t.loc]
-      .filter(Boolean).map((x) => String(x).toLowerCase());
-    // The abbreviation matches only EXACTLY. Two letters inside a
-    // colour key is not a search, it is a coincidence — "ne" would
-    // otherwise pull half the league through "Minnesota".
-    const hit = fields.some((f, i) => i === 0 ? f === want
-      : (f === want || f.startsWith(want)
-         || f.split(" ").some((w) => w === want)));
-    if (hit) out.push({ abbr, name: t.name || t.nick || abbr });
+  for (const sport of order) {
+    const map = teamsForSport(sport) || {};
+    const mine = [];
+    const seen = new Set();
+    for (const abbr of Object.keys(map)) {
+      const t = map[abbr] || {};
+      const fields = [abbr, t.name, t.nick, t.loc]
+        .filter(Boolean).map((x) => String(x).toLowerCase());
+      // The abbreviation matches only EXACTLY. Two letters inside a
+      // colour key is not a search, it is a coincidence — "ne" would
+      // otherwise pull half the league through "Minnesota".
+      const hit = fields.some((f, i) => i === 0 ? f === want
+        : (f === want || f.startsWith(want)
+           || f.split(" ").some((w) => w === want)));
+      /* ONE CHIP PER TEAM, NOT PER KEY. The colour dictionary carries the
+         franchise's old abbreviations too — the Rams answer to LA, LAR
+         and STL — so "rams" offered three identical chips, two of which
+         open a page with no games on it. */
+      const name = t.name || t.nick || abbr;
+      if (hit && !seen.has(ffNorm(name))) {
+        seen.add(ffNorm(name));
+        mine.push({ abbr, name, sport });
+      }
+    }
+    out.push(...mine.sort((x, y) => x.name.localeCompare(y.name)));
   }
-  /* ONE CHIP PER TEAM, NOT PER KEY. The colour dictionary carries the
-     franchise's old abbreviations too — the Rams answer to LA, LAR and
-     STL — so "rams" offered three identical chips, two of which open a
-     page with no games on it. Found by opening the page rather than by
-     reading it. */
-  const seen = new Set();
-  return out.filter((t) => {
-    const k = ffNorm(t.name);
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  }).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 6);
+  return out.slice(0, 8);
 }
 
 function renderTeamHits() {
@@ -33552,10 +33564,10 @@ function renderTeamHits() {
       and its history against any opponent.</span></div>
     <div class="std-chips">
       ${hits.map((t) => `<button type="button" class="al-cat tm-hit"
-        data-team-sport="${escapeAttr(state.sport)}"
-        data-team-open="${escapeAttr(t.name)}">
-        ${teamMark(t.abbr, 16, nflMap(), state.sport)}
-        ${escapeHtml(t.name)}</button>`).join("")}
+        data-team-sport="${escapeAttr(t.sport)}"
+        data-team-open="${escapeAttr(t.sport === "cfb" ? t.abbr : t.name)}">
+        ${teamMark(t.abbr, 16, teamsForSport(t.sport), t.sport)}
+        ${escapeHtml(t.name)}${t.sport === state.sport ? "" : ` <small class="tm-hit-lg">${t.sport.toUpperCase()}</small>`}</button>`).join("")}
     </div>`;
 }
 

@@ -63,7 +63,11 @@ HTML = (WEB / "index.html").read_text()
 #: Sportsbook logos … whatever else u think to add"): the icon manifest
 #: reader, the best-price and your-book tags, Watch before kickoff on the
 #: game page — +0.3 KB gz. Told to Ethan.
-APP_JS_BUDGET_KB = 485
+#: 485 -> 486 on 2026-10-07 by Watch linking to the game itself (MLB.TV
+#: and Gameday by gamePk, ESPN Gamecast by event id) and team search for
+#: every league (Ethan: "all sports should be able to search teams") —
+#: +0.3 KB gz. Told to Ethan.
+APP_JS_BUDGET_KB = 486
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -87,7 +91,9 @@ APP_JS_BUDGET_KB = 485
 #: 599 -> 600 on 2026-10-07 by the Watch button: the app.js bump above
 #: plus its styles. Told to Ethan.
 #: 600 -> 601 on 2026-10-07 by the same pass. Told to Ethan.
-BOOT_BUDGET_KB = 601
+#: 601 -> 602 on 2026-10-07 by the app.js bump above (Watch to the game,
+#: team search in every league). Told to Ethan.
+BOOT_BUDGET_KB = 602
 
 
 def _gz_trimmed(rel: str) -> int:
