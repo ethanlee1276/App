@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import sqlite3
 import math
 import re
 import threading
@@ -232,8 +233,12 @@ def ensure_tables(conn) -> None:
     for col, decl in (("display_name", "TEXT NOT NULL DEFAULT ''"),
                       ("color", "INTEGER NOT NULL DEFAULT 0"),
                       ("fav_team", "TEXT NOT NULL DEFAULT ''"),
-                      ("verified", "INTEGER NOT NULL DEFAULT 0")):
+                      ("verified", "INTEGER NOT NULL DEFAULT 0"),
+                      ("founder", "INTEGER NOT NULL DEFAULT 0")):
         _add(conn, "feed_profiles", col, decl)
+    # The one post the founder pins to the top of the feed (at most one row).
+    conn.execute("CREATE TABLE IF NOT EXISTS feed_pins (post_id INTEGER PRIMARY KEY, "
+                 "user_id INTEGER NOT NULL, pinned_at REAL NOT NULL)")
     for col, decl in (("kind", "TEXT NOT NULL DEFAULT 'parlay'"),
                       ("title", "TEXT NOT NULL DEFAULT ''"),
                       ("body", "TEXT NOT NULL DEFAULT ''"),
@@ -263,7 +268,7 @@ def profile_of(conn, user_id: int) -> dict | None:
         return None
     return {"handle": r["handle"], "bio": r["bio"], "since": r["created_at"],
             "name": r["display_name"], "color": int(r["color"] or 0), "team": r["fav_team"],
-            "verified": bool(r["verified"])}
+            "verified": bool(r["verified"]), "founder": bool(r["founder"])}
 
 
 def _reserved(name: str) -> bool:
@@ -333,6 +338,69 @@ def claim(conn, email: str, handle: str, name: str = "", verified: bool = True) 
         return code, out
     set_verified(conn, handle, verified)
     return 200, {"ok": True, "profile": profile_of(conn, int(u["id"]))}
+
+
+def crown(conn, email: str, on: bool = True) -> tuple[int, dict]:
+    """The founder's crown (a box command, never an endpoint a browser can
+    reach). Ethan, 2026-10-07: "make my profile like the god profile on the
+    website". The account with this email wears the Founder badge and the
+    gold tick everywhere its name shows, and gets the moderation tools in
+    the app: hide or restore any post or comment, the reports queue, the
+    verified tick for others, and one pinned post at the top of the feed.
+    It changes nothing about how its own posts are graded."""
+    ensure_tables(conn)
+    u = conn.execute("SELECT id FROM users WHERE email=? COLLATE NOCASE", (str(email or "").strip(),)).fetchone()
+    if not u:
+        return 404, {"error": "No account with that email."}
+    if not profile_of(conn, int(u["id"])):
+        return 409, {"error": "Make the profile first (Account page), then run this again."}
+    conn.execute("UPDATE feed_profiles SET founder=?, verified=CASE WHEN ? THEN 1 ELSE verified END "
+                 "WHERE user_id=?", (1 if on else 0, 1 if on else 0, int(u["id"])))
+    conn.commit()
+    return 200, {"ok": True, "profile": profile_of(conn, int(u["id"]))}
+
+
+def is_founder(conn, user_id) -> bool:
+    if not user_id:
+        return False
+    ensure_tables(conn)
+    r = conn.execute("SELECT founder FROM feed_profiles WHERE user_id=?", (int(user_id),)).fetchone()
+    return bool(r and r["founder"])
+
+
+def pinned_id(conn):
+    try:
+        r = conn.execute("SELECT f.post_id FROM feed_pins f JOIN feed_posts p ON p.id=f.post_id "
+                         "WHERE p.hidden=0 ORDER BY f.pinned_at DESC LIMIT 1").fetchone()
+    except sqlite3.OperationalError:          # a database ensure_tables has not touched yet
+        return None
+    return int(r["post_id"]) if r else None
+
+
+def pin(conn, user_id: int, post_id: int, on: bool = True) -> tuple[int, dict]:
+    """One post at the top of For You and Latest for everybody. The
+    founder's alone; pinning another replaces it."""
+    ensure_tables(conn)
+    if not is_founder(conn, user_id):
+        return 403, {"error": "Only the founder can pin."}
+    if on and not conn.execute("SELECT 1 FROM feed_posts WHERE id=? AND hidden=0", (int(post_id),)).fetchone():
+        return 404, {"error": "That post is gone."}
+    conn.execute("DELETE FROM feed_pins")
+    if on:
+        conn.execute("INSERT INTO feed_pins (post_id, user_id, pinned_at) VALUES (?,?,?)",
+                     (int(post_id), int(user_id), time.time()))
+    conn.commit()
+    return 200, {"ok": True, "pinned": int(post_id) if on else None}
+
+
+def _with_pin(conn, posts: list, viewer, entitled: bool, strong: bool) -> list:
+    pid = pinned_id(conn)
+    if not pid:
+        return posts
+    row = conn.execute(_POST_SQL + "WHERE p.id=? AND p.hidden=0", (pid,)).fetchone()
+    if not row or int(row["user_id"]) in blocked_ids(conn, viewer):
+        return posts
+    return _views(conn, [row], viewer, entitled, strong) + [x for x in posts if x["id"] != pid]
 
 
 def set_verified(conn, handle: str, on: bool) -> tuple[int, dict]:
@@ -459,7 +527,8 @@ def _person(r, following: set | None = None) -> dict:
     keys = r.keys()
     return {"handle": r["handle"], "name": r["display_name"], "color": int(r["color"] or 0),
             "team": r["fav_team"], "verified": bool(r["verified"]) if "verified" in keys else False,
-            "official": _official(r), "following": int(r["user_id"]) in (following or set())}
+            "official": _official(r), "founder": _founder(r),
+            "following": int(r["user_id"]) in (following or set())}
 
 
 # ─── notifications ──────────────────────────────────────────────────────────
@@ -1179,6 +1248,7 @@ def public_leg(leg: dict, entitled: bool) -> dict:
 
 
 def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
+    pinned = pinned_id(conn)
     ids = [int(r["id"]) for r in rows]
     likes, tails = _counts(conn, "feed_likes", ids), _counts(conn, "feed_tails", ids)
     comments = _counts(conn, "feed_comments", ids)
@@ -1203,7 +1273,7 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
             "handle": r["handle"] or "someone", "name": r["display_name"] or "",
             "color": int(r["color"] or 0), "team": r["fav_team"] or "",
             "verified": bool(r["verified"]) if "verified" in r.keys() else False,
-            "official": _official(r),
+            "official": _official(r), "founder": _founder(r), "pinned": pid == pinned,
             "link": r["link"] if "link" in r.keys() else "",
             "domain": _domain(r["link"]) if "link" in r.keys() and r["link"] else "",
             "poll": _poll_view(conn, pid, viewer) if pid in polled else None,
@@ -1225,6 +1295,12 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
                         and time.time() - float(r["created_at"]) <= EDIT_WINDOW_S,
         })
     return out
+
+
+def _founder(r) -> bool:
+    """The founder's crown: set only by the box command :func:`crown`."""
+    keys = r.keys() if hasattr(r, "keys") else ()
+    return bool("founder" in keys and r["founder"])
 
 
 def _official(r) -> bool:
@@ -1261,7 +1337,7 @@ def _kicked(legs: list, now: float | None = None) -> bool:
     return False
 
 
-_POST_SQL = ("SELECT p.*, f.handle, f.bio, f.display_name, f.color, f.fav_team, f.verified FROM feed_posts p "
+_POST_SQL = ("SELECT p.*, f.handle, f.bio, f.display_name, f.color, f.fav_team, f.verified, f.founder FROM feed_posts p "
              "LEFT JOIN feed_profiles f ON f.user_id=p.user_id ")
 
 
@@ -1319,7 +1395,10 @@ def feed(conn, viewer=None, entitled: bool = False, strong: bool = False,
             rows.sort(key=lambda r: (-score[int(r["id"])], -int(r["id"])))
         offset = max(0, int(offset or 0))
         page = rows[offset:offset + PAGE]
-        return {"posts": _views(conn, page, viewer, entitled, strong),
+        views = _views(conn, page, viewer, entitled, strong)
+        if order == "hot" and not offset and not (tag or sport or kind or handle):
+            views = _with_pin(conn, views, viewer, entitled, strong)
+        return {"posts": views,
                 "more": len(rows) > offset + PAGE, "next": offset + len(page), "paged": "offset"}
     if before:
         where.append("p.id<?")
@@ -1327,14 +1406,17 @@ def feed(conn, viewer=None, entitled: bool = False, strong: bool = False,
     rows = conn.execute(_POST_SQL + "WHERE " + " AND ".join(where) + " ORDER BY p.id DESC LIMIT ?",
                         [*args, PAGE]).fetchall()
     posts = _views(conn, rows, viewer, entitled, strong)
-    return {"posts": posts, "more": len(rows) == PAGE, "next": posts[-1]["id"] if posts else 0,
+    nxt = posts[-1]["id"] if posts else 0
+    if order == "new" and not before and not (tag or sport or kind or handle):
+        posts = _with_pin(conn, posts, viewer, entitled, strong)
+    return {"posts": posts, "more": len(rows) == PAGE, "next": nxt,
             "paged": "before"}
 
 
 def _comment_views(conn, post_id: int, owner: int, viewer, strong: bool) -> list:
     hide = blocked_ids(conn, viewer)
     rows = [c for c in conn.execute(
-        "SELECT c.*, f.handle, f.display_name, f.color FROM feed_comments c LEFT JOIN feed_profiles f "
+        "SELECT c.*, f.handle, f.display_name, f.color, f.verified, f.founder FROM feed_comments c LEFT JOIN feed_profiles f "
         "ON f.user_id=c.user_id WHERE c.post_id=? AND c.hidden=0 ORDER BY c.id LIMIT 500",
         (int(post_id),)) if int(c["user_id"]) not in hide]
     ids = [int(c["id"]) for c in rows]
@@ -1345,6 +1427,7 @@ def _comment_views(conn, post_id: int, owner: int, viewer, strong: bool) -> list
         cid = int(c["id"])
         v = {"id": cid, "handle": c["handle"] or "someone", "name": c["display_name"] or "",
              "color": int(c["color"] or 0), "at": c["created_at"],
+             "verified": bool(c["verified"]), "official": _official(c), "founder": _founder(c),
              "body": _text(c["body"], strong), "strong": profanity.has_strong(c["body"]),
              "likes": likes.get(cid, 0), "liked": cid in liked,
              "mine": bool(viewer) and int(c["user_id"]) == int(viewer),
@@ -1423,7 +1506,7 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
                                               (me, uid)).fetchone())
     prof = {"handle": r["handle"], "name": r["display_name"], "bio": _text(r["bio"], strong),
             "color": int(r["color"] or 0), "team": r["fav_team"], "since": r["created_at"],
-            "verified": bool(r["verified"]), "official": _official(r),
+            "verified": bool(r["verified"]), "official": _official(r), "founder": _founder(r),
             "posts": int(agg["posts"]), "tails": int(agg["tails"]), "likes": int(agg["likes"]),
             "followers": _n_followers(conn, uid), "following_count": following,
             "record": record_of(conn, uid), "record30": record_of(conn, uid, time.time() - 30 * 86400),
@@ -1703,6 +1786,15 @@ def reported(conn) -> list:
             out.append({"kind": r["kind"], "id": int(r["item_id"]), "reports": int(r["n"]),
                         "reasons": sorted(set(filter(None, (r["why"] or "").split(",")))),
                         "hidden": bool(it["hidden"]), "text": str(it["text"]).strip()})
+    # And whatever is hidden with no report on it (the founder hid it from
+    # the post's menu), so it can always be found again and restored.
+    seen = {(x["kind"], x["id"]) for x in out}
+    for kind, table, col in (("post", "feed_posts", "caption || ' ' || title || ' ' || body"),
+                             ("comment", "feed_comments", "body")):
+        for r in conn.execute(f"SELECT id, {col} AS text FROM {table} WHERE hidden=1 ORDER BY id DESC LIMIT 50"):
+            if (kind, int(r["id"])) not in seen:
+                out.append({"kind": kind, "id": int(r["id"]), "reports": 0, "reasons": [],
+                            "hidden": True, "text": str(r["text"]).strip()})
     return out
 
 
@@ -1733,7 +1825,7 @@ def leaders(conn, viewer=None, days: int | None = 30, metric: str = "units") -> 
                 top.append({**_person(r, mine), "followers": int(r["n"]), "value": int(r["n"])})
     else:
         rows = conn.execute(
-            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, "
+            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, f.founder, "
             "SUM(p.result='won') AS w, SUM(p.result='lost') AS l, SUM(p.result='push') AS pu, "
             "SUM(COALESCE(p.units,0)) AS u FROM feed_posts p JOIN feed_profiles f ON f.user_id=p.user_id "
             "WHERE p.kind='parlay' AND p.hidden=0 AND p.result IN ('won','lost','push') AND p.created_at>? "
@@ -1751,7 +1843,7 @@ def leaders(conn, viewer=None, days: int | None = 30, metric: str = "units") -> 
         top = top[:25]
     tailed = []
     for r in conn.execute(
-            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, COUNT(t.user_id) AS n "
+            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, f.founder, COUNT(t.user_id) AS n "
             "FROM feed_tails t JOIN feed_posts p ON p.id=t.post_id JOIN feed_profiles f ON f.user_id=p.user_id "
             "WHERE t.created_at>? AND p.hidden=0 GROUP BY p.user_id ORDER BY n DESC LIMIT 10",
             (now - 7 * 86400,)):

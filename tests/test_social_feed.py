@@ -295,9 +295,19 @@ def test_the_server_routes_exist_and_hide_is_owner_only():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     assert '"/api/feed/"' in src and "def _feed_get" in src and "def _feed_post" in src
     body = src[src.index("def _feed_post"):src.index("def _social_get")]
-    # Hiding a post and handing out the verified badge are the owner's alone.
-    assert 'if path in ("hide", "verify") and self._owner_refused()' in body
-    assert body.index("_owner_refused()") < body.index("SF.set_verified(")
+    # Hiding a post and handing out the verified badge are the owner's
+    # alone: the owner token, or (Ethan, 2026-10-07, "make my profile like
+    # the god profile") the founder's own signed-in session — the account
+    # only the box command engine/socialfeed.crown marks. Checked before
+    # either runs; anyone else is refused.
+    assert 'if path in ("hide", "verify") and not self._founder_or_owner(conn):' in body
+    assert body.index("_founder_or_owner(conn)") < body.index("SF.set_hidden(") < body.index("SF.set_verified(")
+    door = src[src.index("def _founder_or_owner"):src.index("def _owner_refused")]
+    assert "return not self._owner_refused()" in door and "SF.is_founder(conn, who[\"id\"])" in door
+    assert '"founder only"' in door
+    reads = src[src.index("def _feed_get"):src.index("def _feed_post")]
+    rep = reads[reads.index('if path == "reported":'):]
+    assert rep.index("_founder_or_owner(conn)") < rep.index("SF.reported(conn)")
     # The client's leg is reduced to its identity before the engine sees it.
     assert '"odds"' not in body.split('if path == "post":')[1].split("elif")[0]
 

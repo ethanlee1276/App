@@ -80,6 +80,8 @@
     chevr: '<path d="M6 3.5L10.5 8 6 12.5"/>',
     back: '<path d="M10 3.5L5.5 8l4.5 4.5"/>',
     pin: '<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 10-9 0c0 3.8 4.5 8 4.5 8z"/><circle cx="8" cy="6.5" r="1.6"/>',
+    // The founder's crown (2026-10-07): drawn, like every mark on this page.
+    crown: '<path d="M2.6 12.8h10.8"/><path d="M3.1 10.9L2.3 4.7l3.4 2.6L8 3.2l2.3 4.1 3.4-2.6-.8 6.2z"/>',
     cal: '<rect x="2.2" y="3.2" width="11.6" height="10.6" rx="1.6"/><path d="M2.2 6.6h11.6M5.4 1.8v2.6M10.6 1.8v2.6"/>',
     gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/>',
     // The feed's own marks (2026-10-06), moved out of app.js's set on
@@ -189,11 +191,18 @@
       return `<span class="fd-av fd-av-${sz} fd-av-site" aria-hidden="true"><img src="logo-qb.png" alt="" decoding="async"></span>`;
     }
     const c = Math.abs(Number((p && p.color) || 0)) % 8;
-    return `<span class="fd-av fd-av-${sz} fd-c${c}" aria-hidden="true">${escapeHtml(initials(p))}</span>`;
+    return `<span class="fd-av fd-av-${sz} fd-c${c}${p && p.founder ? " fd-av-founder" : ""}" aria-hidden="true">${escapeHtml(initials(p))}</span>`;
   }
 
   const displayName = (p) => escapeHtml((p && (p.name || p.handle)) || "someone");
-  const badge = (p) => (p && p.verified ? VERIFIED : "");
+  /* THE FOUNDER (Ethan, 2026-10-07: "make my profile like the god profile
+     on the website … a gold star or sum next to my name … and more"). The
+     gold tick and a Founder crown wherever the name shows — posts,
+     comments, profiles, leaderboards, people lists. Only the box command
+     engine/socialfeed.crown sets it; nobody can give it to themselves. */
+  const badge = (p) => (p ? (p.verified ? VERIFIED : "") + (p.founder
+    ? `<span class="fd-founder" title="Founder of Qellys Book">${ico("crown", 11)}Founder</span>` : "") : "");
+  const isBoss = () => !!(F.me && F.me.founder);
 
   function teamMap(sport) {
     const maps = { nfl: typeof TEAMS !== "undefined" ? TEAMS : null,
@@ -514,7 +523,8 @@
       : `<button class="fd-tail${p.tailed ? " on" : ""}${p.locked ? " locked" : ""}" data-fd="tail" data-id="${p.id}" type="button"
           title="${p.locked ? "Members can tail this one" : "Open this parlay at your book"}">${ico("whale", 17)}<b>Tail</b>${
           p.tails ? `<span class="fd-n">${big(p.tails)}</span>` : ""}</button>`;
-    return `<article class="fd-card fd-post" data-post="${p.id}">
+    return `<article class="fd-card fd-post${p.pinned ? " pinned" : ""}" data-post="${p.id}">
+      ${p.pinned ? `<div class="fd-pinned">${ico("pin", 13)} Pinned by the founder</div>` : ""}
       <header class="fd-ph"><a class="fd-ph-av" href="${profHref(p.handle)}" aria-label="${escapeAttr(p.name || p.handle)}">${avatar(p, "md")}</a>
         <div class="fd-ph-t"><a class="fd-name" href="${profHref(p.handle)}">${displayName(p)}</a>${badge(p)}
           <span class="fd-ago">${ago(p.at)}${p.edited ? " · edited" : ""}</span></div>
@@ -578,6 +588,12 @@
       items.push(`<button data-fd="report-open" data-id="${p.id}" type="button" role="menuitem">${ico("flag", 13)} Report</button>`,
         `<button class="danger" data-fd="block" data-handle="${escapeAttr(p.handle)}" type="button" role="menuitem">Block @${escapeHtml(p.handle)}</button>`);
     }
+    if (isBoss()) {
+      items.push(`<div class="fd-menu-h">${ico("crown", 12)} Founder</div>`,
+        `<button data-fd="pin" data-id="${p.id}" data-v="${p.pinned ? 0 : 1}" type="button" role="menuitem">${ico("pin", 13)} ${
+          p.pinned ? "Unpin from the top" : "Pin to the top of the feed"}</button>`);
+      if (!p.mine) items.push(`<button class="danger" data-fd="mod-hide" data-kind="post" data-id="${p.id}" type="button" role="menuitem">Hide for everyone</button>`);
+    }
     return `<div class="fd-menu" role="menu">${items.join("")}</div>`;
   }
 
@@ -600,10 +616,11 @@
     const acts = `<button class="fd-cact${c.liked ? " on" : ""}" data-fd="clike" data-id="${c.id}" type="button">${ico("heart", 13)}${c.likes ? ` ${c.likes}` : ""}</button>
       ${reply ? "" : `<button class="fd-cact" data-fd="reply" data-id="${c.id}" type="button">Reply</button>`}
       ${c.can_delete ? `<button class="fd-cact" data-fd="del-comment" data-id="${c.id}" type="button">Delete</button>`
-        : F.signedIn ? `<button class="fd-cact" data-fd="creport" data-id="${c.id}" type="button">Report</button>` : ""}`;
+        : F.signedIn ? `<button class="fd-cact" data-fd="creport" data-id="${c.id}" type="button">Report</button>` : ""}
+      ${isBoss() && !c.mine ? `<button class="fd-cact" data-fd="mod-hide" data-kind="comment" data-id="${c.id}" type="button">Hide</button>` : ""}`;
     return `<div class="fd-com${reply ? " reply" : ""}" id="fd-com-${c.id}">
       <a href="${profHref(c.handle)}">${avatar(c, "sm")}</a>
-      <div class="fd-com-b"><div class="fd-com-bubble"><div class="fd-com-h"><a href="${profHref(c.handle)}"><b>${displayName(c)}</b></a>
+      <div class="fd-com-b"><div class="fd-com-bubble"><div class="fd-com-h"><a href="${profHref(c.handle)}"><b>${displayName(c)}</b></a>${badge(c)}
         <span class="fd-ago">${ago(c.at)}</span></div><p>${rich(c.body)}</p></div>
         <div class="fd-cacts">${acts}</div>
         <div class="fd-rslot" id="fd-rslot-${c.id}"></div>
@@ -762,13 +779,15 @@
       return act ? `<button class="fd-pstat" data-fd="${act}" data-handle="${escapeAttr(p.handle)}" type="button">${inner}</button>`
         : `<div class="fd-pstat">${inner}</div>`;
     };
-    return `<section class="fd-card fd-prof">
+    return `<section class="fd-card fd-prof${p.founder ? " founder" : ""}">
       <div class="fd-prof-ban fd-c${(p.color || 0) % 8}"><img src="img/social/cover@900.webp" srcset="img/social/cover@900.webp 900w, img/social/cover.webp 1500w" sizes="(min-width: 1000px) 880px, 100vw" alt="" decoding="async"></div>
       <div class="fd-prof-body">
         <div class="fd-prof-top">${avatar(p, "xl")}<div class="fd-prof-btns">${btns}</div></div>
         <h2 class="fd-prof-name">${displayName(p)}${badge(p)}</h2>
         <p class="fd-prof-h">@${escapeHtml(p.handle)}${p.follows_you ? ` <span class="fd-tag">Follows you</span>` : ""}${
           p.streak ? ` <span class="fd-tag ${p.streak[0] === "W" ? "up" : "down"}">${escapeHtml(p.streak)} streak</span>` : ""}</p>
+        ${p.founder ? `<p class="fd-prof-crown">${ico("crown", 16)}<span><b>Founder</b> · built Qellys Book</span>${
+          o.mine && isBoss() ? `<button class="fd-crown-go" data-fd="acct-tab" data-v="mod" type="button">${ico("flag", 12)} Moderation</button>` : ""}</p>` : ""}
         ${p.bio ? `<p class="fd-prof-bio">${rich(p.bio)}</p>` : o.mine ? `<p class="fd-prof-bio dim">Add a bio — who you are, what you bet.</p>` : ""}
         <p class="fd-prof-meta">${abbr ? `<span>${teamLogo(abbr, lg, 18)}${escapeHtml(abbr)} · ${escapeHtml((lg || "").toUpperCase())}</span>` : ""}
           <span>${ico("cal", 14)} Joined ${escapeHtml(since(p.since))}</span></p>
@@ -1152,6 +1171,38 @@
       sameAll(id, (p) => { p.likes = res.out.likes; p.liked = res.out.liked; });
       buzz("tap"); redraw(id); return;
     }
+    if (act === "pin") {
+      closeMenus();
+      const res = await api("pin", { id: Number(id), on: d.v !== "0" });
+      if (!res.ok) { tfToast(res.out.error || "That did not pin."); return; }
+      tfToast(res.out.pinned ? "Pinned to the top of the feed." : "Unpinned.");
+      F.posts = []; ACCT.mod = null;
+      // The page on screen, not merely in the document: the Account page's
+      // copy stays in it, hidden, after a visit.
+      if (location.hash.startsWith("#account") && ACCT.el) mountAccount(ACCT.el, null, true); else render();
+      return;
+    }
+    if (act === "mod-hide" || act === "mod-restore") {
+      closeMenus();
+      const hidden = act === "mod-hide";
+      const res = await api("hide", { kind: d.kind, id: Number(id), hidden });
+      if (!res.ok) { tfToast(res.out.error || "That did not go through."); return; }
+      tfToast(hidden ? "Hidden for everyone. Restore it from Moderation on your Account page." : "Restored.");
+      if (hidden && d.kind === "post") document.querySelectorAll(`.fd-post[data-post="${id}"]`).forEach((el) => el.remove());
+      if (hidden && d.kind === "comment") { const el = document.getElementById(`fd-com-${id}`); if (el) el.remove(); }
+      ACCT.mod = null; F.posts = [];
+      if (ACCT.tab === "mod" && ACCT.el && location.hash.startsWith("#account")) mountAccount(ACCT.el, null, true);
+      return;
+    }
+    if (act === "verify") {
+      closeMenus();
+      const on = d.v !== "0";
+      const res = await api("verify", { handle: d.handle, on });
+      if (!res.ok) { tfToast(res.out.error || "That did not go through."); return; }
+      tfToast(on ? `@${d.handle} now wears the verified tick.` : `Took the tick off @${d.handle}.`);
+      F.profile = null; F.posts = []; render();
+      return;
+    }
     if (act === "vote") {
       if (needProfile("vote")) return;
       const res = await api("vote", { id: Number(id), option: Number(d.v) });
@@ -1200,6 +1251,8 @@
       const open = t.parentElement.querySelector(".fd-popover");
       if (open) { open.remove(); return; }
       popover(t, `<div class="fd-menu" role="menu"><button data-fd="share-profile" data-handle="${escapeAttr(p.handle)}" type="button" role="menuitem">Share profile</button>
+        ${isBoss() ? `<button data-fd="verify" data-handle="${escapeAttr(p.handle)}" data-v="${p.verified ? 0 : 1}" type="button" role="menuitem">${
+          p.verified ? "Remove the verified tick" : "Give the verified tick"}</button>` : ""}
         <button class="danger" data-fd="block" data-handle="${escapeAttr(p.handle)}" type="button" role="menuitem">${p.blocked ? "Unblock" : "Block"} @${escapeHtml(p.handle)}</button></div>`);
       return;
     }
@@ -1458,8 +1511,30 @@
 
   function acctTabsHTML() {
     const tabs = [["posts", "Posts"], ["picks", "Graded picks"], ["friends", "Friends"], ["settings", "Settings"]];
+    if (isBoss()) tabs.push(["mod", "Moderation"]);
     return `<nav class="fd-ptabs acct" aria-label="Your account">${tabs.map(([k, t]) =>
       `<button class="${ACCT.tab === k ? "on" : ""}" data-fd="acct-tab" data-v="${k}" type="button"${ACCT.tab === k ? ' aria-current="page"' : ""}>${t}</button>`).join("")}</nav>`;
+  }
+
+  /* The founder's desk: everything readers reported (three reports hide an
+     item on their own) and everything hidden, each with Hide or Restore,
+     plus the pinned post. Only the founder's account sees the tab, and the
+     server checks it again on every call. */
+  function modHTML() {
+    const m = ACCT.mod || { items: [] };
+    if (m.error) return `<section class="fd-card fd-mod"><p class="fd-fine">${escapeHtml(m.error)}</p></section>`;
+    const rows = (m.items || []).map((it) => `<div class="fd-mod-row${it.hidden ? " hid" : ""}">
+        <div class="fd-mod-t"><b>${it.kind === "post" ? "Post" : "Comment"} #${it.id}</b>
+          <span>${it.reports ? `${it.reports} report${it.reports === 1 ? "" : "s"}` : "no reports"}${
+            it.reasons.length ? ` · ${escapeHtml(it.reasons.join(", "))}` : ""}${it.hidden ? " · hidden" : ""}</span>
+          <p>${escapeHtml(String(it.text || "").slice(0, 240)) || "(no words)"}</p></div>
+        <div class="fd-mod-acts">${it.kind === "post" && !it.hidden ? `<a class="fd-btn ghost" href="#feed/post/${it.id}">Open</a>` : ""}
+          <button class="fd-btn${it.hidden ? "" : " ghost"}" data-fd="${it.hidden ? "mod-restore" : "mod-hide"}" data-kind="${it.kind}" data-id="${it.id}" type="button">${
+            it.hidden ? "Restore" : "Hide"}</button></div></div>`).join("");
+    return `<section class="fd-card fd-mod"><div class="fd-row-between"><b>${ico("flag", 15)} Reports and hidden posts</b>${
+        m.pinned ? `<button class="fd-btn ghost" data-fd="pin" data-id="${m.pinned}" data-v="0" type="button">${ico("pin", 13)} Unpin post #${m.pinned}</button>` : ""}</div>
+      ${rows || `<p class="fd-fine">Nothing reported and nothing hidden.</p>`}
+      <p class="fd-fine">Only you see this tab. Hide takes a post or comment off the site for everyone; Restore puts it back and clears its reports. From any post's dots menu you can pin it to the top of the feed or hide it; from any profile's, give or remove the verified tick.</p></section>`;
   }
 
   // The panels app.js drew (friends, plan, sign-in, settings) show by tab.
@@ -1510,7 +1585,12 @@
     }
     if (!document.body.contains(el)) return;
     const p = ACCT.prof || { ...F.me, record: {}, followers: 0, following_count: 0, tails: 0 };
-    const list = ACCT.tab === "posts" || ACCT.tab === "picks"
+    if (ACCT.tab === "mod" && isBoss() && !ACCT.mod) {
+      const r = await api("reported");
+      ACCT.mod = r.ok ? r.out : { items: [], error: r.out.error || "Could not load the reports." };
+      if (!document.body.contains(el)) return;
+    }
+    const list = ACCT.tab === "mod" && isBoss() ? modHTML() : ACCT.tab === "posts" || ACCT.tab === "picks"
       ? `<div class="fd-list">${ACCT.posts.length ? ACCT.posts.map((q) => postHTML(q)).join("")
           : `<div class="fd-card fd-empty">${ACCT.tab === "picks" ? "No graded picks yet — results land here once their games are final."
             : `Nothing posted yet. <a href="#feed">Head to Social</a> to share a take or build a parlay.`}</div>`}</div>
@@ -1519,6 +1599,9 @@
     el.innerHTML = `${ACCT.edit ? profileFormHTML(F.me, "", false) : profileHeaderHTML(p, { mine: true })}
       <div id="acct-follows">${followsHTML()}</div>${acctTabsHTML()}${list}`;
     showAcctPanels(ACCT.tab === "friends" || ACCT.tab === "settings" ? ACCT.tab : "none");
+    // On a phone the tab row scrolls sideways: keep the open tab in view.
+    const row = el.querySelector(".fd-ptabs.acct"), on = row && row.querySelector(".on");
+    if (row && on && on.offsetLeft + on.offsetWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - 16;
   }
 
   // ── posting from the parlay slip ──────────────────────────────────────────

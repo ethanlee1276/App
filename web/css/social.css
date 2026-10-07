@@ -543,3 +543,33 @@ button.fd-pstat:hover b { color: var(--brand-2); }
   .fd-like.on .ic, .fd-popover { animation: none; }
   .fd-pollbar, .fd-sporttile > span, .fd-postbtn { transition: none; }
 }
+
+/* THE FOUNDER (Ethan, 2026-10-07: "make my profile like the god profile on
+   the website"). A gold Founder pill beside the tick wherever the name
+   shows, a gold ring on the avatar, a gold-edged profile card with its
+   crown line, the pinned post's label, and the founder's Moderation tab.
+   Set only by the box command engine/socialfeed.crown. */
+.fd-founder { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px 1px 5px;
+  border-radius: 999px; background: var(--grad-brand); color: var(--ink-on-gold); vertical-align: middle;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; line-height: var(--lh-snug); }
+.fd-av-founder { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--brand-2); }
+.fd-prof.founder { border-color: color-mix(in srgb, var(--brand) 55%, transparent); box-shadow: var(--glow-soft); }
+.fd-prof-crown { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0 0; padding: 6px 14px;
+  border-radius: 999px; border: var(--hairline) solid color-mix(in srgb, var(--brand) 45%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand-2); font-size: var(--fs-sm); }
+.fd-prof-crown b { color: var(--brand-2); font-weight: 800; }
+.fd-post.pinned { border-color: color-mix(in srgb, var(--brand) 50%, transparent); }
+.fd-pinned { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--brand-2);
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.fd-mod-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 12px 0;
+  border-top: var(--hairline) solid var(--fd-line); }
+.fd-mod-row.hid { opacity: .72; }
+.fd-mod-t { min-width: 0; display: grid; gap: 3px; }
+.fd-mod-t span { color: var(--text-mute); font-size: var(--fs-sm); }
+.fd-mod-t p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.fd-mod-acts { display: flex; gap: 8px; flex: none; }
+.fd-prof-crown { flex-wrap: wrap; }
+.fd-crown-go { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+  border: var(--hairline) solid var(--brand); background: none; color: var(--brand-2);
+  font: inherit; font-size: var(--fs-xs); font-weight: 800; }
+.fd-crown-go:hover { background: color-mix(in srgb, var(--brand) 18%, transparent); }

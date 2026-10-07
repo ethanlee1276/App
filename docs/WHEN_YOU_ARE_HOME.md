@@ -14,6 +14,74 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Tonight — 2026-10-07 evening, in order (Ethan: "i am home so give me all the code needed to run")
+
+Seven steps, top to bottom. Every command runs on the box (`ssh` in
+first). Paste back anything that prints an error or looks off.
+
+1. **The box has tonight's code.** The top line should read `Social: the
+   founder's profile` or something newer; if it is older, wait five
+   minutes and run it again:
+   ```
+   git -C /srv/qellys log --oneline -1
+   ```
+2. **Health check** (paste all of it):
+   ```
+   uptime; free -m
+   ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
+   for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
+   journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build" | tail -15
+   ```
+3. **Make your profile the Founder's.** On the site, signed in as
+   yourself, open the Account page and make your profile if you have
+   not (handle, name). Then run this with the email you sign in with in
+   place of `you@example.com`:
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.crown(A.connect(), 'you@example.com'))"
+   ```
+   It prints `200` and your profile with `'founder': True`. Reload the
+   site: a gold **FOUNDER** pill and the gold tick beside your name on
+   every post, comment, profile and leaderboard; a gold ring on your
+   picture; a gold-edged profile card with "Founder · built Qellys Book"
+   and a **Moderation** button. What it adds for you alone:
+   - every post's dots menu: **Pin to the top of the feed** (one post
+     leads For You and Latest for everybody; pinning another replaces
+     it) and **Hide for everyone**; every comment: **Hide**;
+   - any other profile's dots menu: **Give / Remove the verified tick**;
+   - the **Moderation** tab on your Account page: everything readers
+     reported and everything hidden, each with Hide or Restore, and the
+     pinned post's Unpin.
+   Your own posts are graded exactly like everybody's; the badge changes
+   nothing about the record. Nobody can give it to themselves: only this
+   command sets it. To take it back, the same command with
+   `, on=False` after the email.
+4. **Give the site its own account** (once, a different email from
+   yours): sign up on the site with it, then run this with that email in
+   place of `you@example.com`. It becomes `Qellys_Book` with the gold
+   tick and the crown avatar:
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'you@example.com', 'Qellys_Book', name='Qellys Book'))"
+   ```
+5. **The real sportsbook logos** on the Bet it, Tail and Pick of the Day
+   sheets (paste the output; a line starting `--` is a book that keeps
+   its coloured initials):
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -m engine.booklogos
+   ```
+6. **Bet-slip links for player props** (after the next props refresh;
+   paste the output):
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl --props
+   ```
+7. **Walk it on your phone**: step 8 of the section below (Tail, posting
+   from the slip, the Pick of the Day bar), then the Founder tools from
+   step 3 here: pin a post, hide and restore one, open Moderation. With a
+   game on, step 7 below checks the Watch button.
+
+Everything older and lower priority (the measurements, the Discord feed,
+Kalshi + Pikkit) is in "Everything to run, in order" further down; none
+of it blocks tonight.
+
 ### Start here — 2026-10-07 (Social, the Account page, Bet it)
 
 Ethan, 2026-10-07: *"save all of this for when I'm home."* Everything

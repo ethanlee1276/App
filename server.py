@@ -2250,6 +2250,21 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, json.dumps(got).encode(), ".json")
 
     # --- Research picks, written down before kickoff (owner only) -------------
+    def _founder_or_owner(self, conn) -> bool:
+        """The feed's moderation door (hide, restore, the verified tick, the
+        reports queue): the owner token as before, or the founder's own
+        signed-in session — the account engine/socialfeed.crown marked from
+        the box. False after answering."""
+        from engine import socialfeed as SF
+        if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
+            return not self._owner_refused()
+        who = self._account(conn)
+        if who and SF.is_founder(conn, who["id"]):
+            return True
+        _seclog("founder", "refused", self._client_ip(), path=urlparse(self.path).path)
+        self._send(403, b'{"error":"founder only"}', ".json")
+        return False
+
     def _owner_refused(self) -> bool:
         """True after answering, when the caller is not the owner. The same
         door as Zeno's import: QB_OWNER_TOKEN, failing closed."""
@@ -2447,9 +2462,6 @@ class Handler(BaseHTTPRequestHandler):
     # comment is the owner's, behind QB_OWNER_TOKEN like Zeno's import.
     def _feed_get(self, path: str, q: dict):
         from engine import socialfeed as SF
-        if path == "reported":
-            if self._owner_refused():
-                return
         one = lambda k, d="": (q.get(k) or [d])[0]                # noqa: E731
         A = _acct()
         conn = A.connect()
@@ -2521,8 +2533,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(401, b'{"error":"sign in first"}', ".json")
                 return self._send(200, json.dumps(SF.notifications(conn, uid, strong)).encode(), ".json")
             if path == "reported":
+                if not self._founder_or_owner(conn):
+                    return
                 return self._send(200, json.dumps(
-                    {"items": SF.reported(conn)}).encode(), ".json")
+                    {"items": SF.reported(conn), "pinned": SF.pinned_id(conn)}).encode(), ".json")
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         finally:
             conn.close()
@@ -2531,14 +2545,14 @@ class Handler(BaseHTTPRequestHandler):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
                         "delete", "report", "profile", "follow", "block", "seen", "friend",
-                        "hide", "vote", "verify"):
+                        "hide", "vote", "verify", "pin"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
-        if path in ("hide", "verify") and self._owner_refused():
-            return
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
         conn = A.connect()
         try:
+            if path in ("hide", "verify") and not self._founder_or_owner(conn):
+                return
             if path == "hide":
                 code, out = SF.set_hidden(conn, str(body.get("kind") or ""),
                                           _int(body.get("id")), bool(body.get("hidden", True)))
@@ -2570,6 +2584,8 @@ class Handler(BaseHTTPRequestHandler):
                                            poll=poll, link=txt("link"))
             elif path == "vote":
                 code, out = SF.vote(conn, uid, _int(body.get("id")), body.get("option"))
+            elif path == "pin":
+                code, out = SF.pin(conn, uid, _int(body.get("id")), bool(body.get("on", True)))
             elif path == "edit":
                 code, out = SF.edit_post(conn, uid, _int(body.get("id")), caption=txt("caption"),
                                          title=txt("title"), body=txt("body"))
