@@ -232,6 +232,23 @@ def _pregame_only(items: list[dict]) -> list[dict]:
 SLATE_TZ = "America/New_York"
 
 
+#: What the two close readers read off a snapshot, and all they keep.
+_LINE_KEYS = ("ts", "line", "start_ts")
+_ODDS_KEYS = ("ts", "line", "start_ts", "over_odds", "under_odds")
+
+
+def _slim(r: dict, keys: tuple) -> dict:
+    """The fields a close is cut from, never the whole snapshot.
+
+    THE SETTLE LANE'S MEMORY (2026-10-07). Both close readers grouped every
+    snapshot row whole — ~530 MB on a 400,000-row file, by the note in
+    tests/test_history_stream.py — and the settle chore was killed by the
+    kernel on the box beside the daily pass. The grouping now keeps only
+    the keys `_pregame_legs`, the line median and `_price_close` read, so
+    every close comes out exactly as before."""
+    return {k: r[k] for k in keys if k in r}
+
+
 class _CloseIndex(dict):
     """A close index that also names the keys whose close was cut at a
     RECORDED start (`stamped`) — a close proven pre-game, which the settle
@@ -356,7 +373,7 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
             date = _slate_day(r)
             key = (normalize_name(r["player"]), r["market"], date)
             float(r["line"])                       # reject unusable rows early
-            grouped.setdefault(key, []).append(r)
+            grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
         except (KeyError, TypeError, ValueError):
             continue
     out = _CloseIndex()
@@ -442,7 +459,7 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
             ln = round(float(r["line"]), 1)
             grouped.setdefault(
                 (normalize_name(r["player"]), r["market"], date, ln),
-                []).append(r)
+                []).append(_slim(r, _ODDS_KEYS))
         except (KeyError, TypeError, ValueError):
             continue
     out = _CloseIndex()

@@ -148,7 +148,11 @@ first). Paste back anything that prints an error or looks off.
     measured here at 1,037 MB → 133 MB on a 146 MB history. After the
     pull showing `Book report streams` or newer, the next daily pass
     should end with a "book report" line and never "killed by signal 9";
-    the peak on its lines should stay well under 600 MB:
+    the peak on its lines should stay well under 600 MB. The settle chore
+    was killed beside it at 23:30; its two close readers now keep only
+    the fields a close is cut from (1,088 MB → 358 MB on 400,000
+    snapshots, every close the same) and its lines carry the same memory
+    stamp:
     ```
     journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "book report|faces:|killed by signal|MB, peak" | tail -20
     ```

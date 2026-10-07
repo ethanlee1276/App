@@ -228,6 +228,31 @@ def test_the_settle_path_streams_even_though_it_keeps_everything():
         "the measured saving is no longer written down beside the change"
 
 
+def test_the_close_readers_keep_only_what_a_close_is_cut_from():
+    """The settle chore was killed beside the daily pass on the box
+    (2026-10-07), and both close readers grouped every snapshot whole. They
+    keep only the keys a close reads now — and every close is the same,
+    a doubleheader's legs and the stamped set included."""
+    from engine import linemoves as lm
+    base = 1_790_000_000.0
+    rows = []
+    for i, (ts, line, over, under) in enumerate([(base, 4.5, -120, 100), (base + 60, 4.5, -125, 105),
+                                                 (base + 120, 5.5, -110, -110), (base + 7300, 4.5, -140, 120)]):
+        rows.append({"ts": ts, "player": "Gunnar Henderson", "market": "total_bases", "line": line,
+                     "over_odds": over, "under_odds": under, "start_ts": base + 3600 if i < 3 else base + 9000,
+                     "book": "draftkings", "sport": "mlb", "event_id": f"e{i}", "junk": "x" * 500})
+    wide = [dict(r) for r in rows]
+    narrow = [{k: r[k] for k in ("ts", "player", "market", "line", "over_odds", "under_odds", "start_ts")}
+              for r in rows]
+    a, b = lm.closing_lines_by_date(wide), lm.closing_lines_by_date(narrow)
+    assert dict(a) == dict(b) and a.stamped == b.stamped and a
+    c, d = lm.closing_odds_by_date(wide), lm.closing_odds_by_date(narrow)
+    assert dict(c) == dict(d) and c.stamped == d.stamped and c
+    assert lm._slim({"ts": 1, "line": 2, "junk": 3}, lm._LINE_KEYS) == {"ts": 1, "line": 2}
+    src = open(os.path.join(ROOT, "engine", "linemoves.py"), encoding="utf-8").read()
+    assert "append(_slim(r, _LINE_KEYS))" in src and "[]).append(_slim(r, _ODDS_KEYS))" in src
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

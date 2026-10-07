@@ -2121,7 +2121,9 @@ def _run_autosettle(force: bool = False) -> None:
     nothing recent is open, so it is cheap to call on every cycle."""
     try:
         from engine.maintenance import settle_open
-        settle_open(force=force)
+        # The same memory stamp as the daily pass (see _mem_log): on the box
+        # the settle child was killed beside it, 2026-10-07.
+        settle_open(force=force, log=print if _chores_in_process() else _mem_log)
     except Exception as exc:  # noqa: BLE001 — chores must never take the site down
         print(f"  ⚠️  auto-settle failed: {exc}")
 
