@@ -55,6 +55,16 @@ def _strip_comments(css):
     return re.sub(r"/\*.*?\*/", " ", css, flags=re.S)
 
 
+# Build output and third-party code. web/data/ is gitignored, so it exists
+# on the laptop and not in a fresh clone — walking it would make a
+# check's verdict depend on which machine ran it, which is the bug class
+# this suite has been bitten by three times. web/vendor/ is shipped as
+# downloaded; a comment in apexcharts.css is not a comment anyone here
+# wrote, and a version bump should not be able to fail a hygiene test
+# about Ethan's own editing.
+_CSS_WALK_SKIP = ("data", "vendor")
+
+
 # --- the font files themselves ----------------------------------------------
 def test_every_font_the_css_asks_for_is_actually_in_the_repo():
     """A missing woff2 is invisible on a laptop that has a similar system
@@ -75,9 +85,17 @@ def _font_refs_everywhere():
     Night Form prototype landed with its own @font-face block and five new
     faces. The rule it enforces — shipping a font is a claim that something
     uses it — is unchanged; the search just has to cover everywhere a claim
-    can be made, or it starts reporting live fonts as dead weight."""
+    can be made, or it starts reporting live fonts as dead weight.
+
+    It skips the same two directories the CSS walk does, for the same
+    reason: every build writes .js into web/data/, so a walk that reads it
+    reads a different set of files on the laptop than in a fresh clone.
+    Neither directory names a font today, which is why this costs nothing
+    — but "nothing references this font" is a claim that must not depend on
+    whether a build has run."""
     refs = set()
-    for base, _dirs, files in os.walk(os.path.join(ROOT, "web")):
+    for base, dirs, files in os.walk(os.path.join(ROOT, "web")):
+        dirs[:] = [d for d in dirs if d not in _CSS_WALK_SKIP]
         for name in files:
             if not name.endswith((".css", ".html", ".js")):
                 continue
@@ -154,17 +172,29 @@ def _css_everywhere():
     reopens there eats the rule under it exactly as it would in the
     stylesheet, and an inline block gets less proofreading, not more.
 
+    Then it happened a third time, in the other direction: widening to
+    inline blocks still left the list of STYLESHEETS hardcoded to
+    styles.css, so social.css shipped — 560 lines, 22 comments — with
+    nothing counting its delimiters. The lesson the second widening was
+    supposed to teach is that this function may not name files. It
+    enumerates: every stylesheet under web/, every inline block, found by
+    walking.
+
     Line numbers are offset back to the containing file so a failure names
     a line you can actually open."""
-    blocks = [("web/css/styles.css", CSS, 0)]
-    for base, _dirs, files in os.walk(os.path.join(ROOT, "web")):
+    blocks = []
+    for base, dirs, files in os.walk(os.path.join(ROOT, "web")):
+        dirs[:] = [d for d in dirs if d not in _CSS_WALK_SKIP]
         for name in sorted(files):
-            if not name.endswith(".html"):
+            if not name.endswith((".css", ".html")):
                 continue
             path = os.path.join(base, name)
             with open(path, encoding="utf-8") as fh:
                 txt = fh.read()
-            rel = os.path.relpath(path, ROOT)
+            rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+            if name.endswith(".css"):
+                blocks.append((rel, txt, 0))
+                continue
             for m in re.finditer(r"<style[^>]*>(.*?)</style>", txt, re.S):
                 blocks.append((rel, m.group(1), txt[:m.start(1)].count("\n")))
     return blocks
@@ -194,6 +224,31 @@ def test_the_balance_check_reads_the_inline_style_blocks_too():
     found = {label for label, _css, _line0 in _css_everywhere()}
     for page in ("web/og-card.html", "web/preview-nightform.html"):
         assert page in found, f"{page} carries a <style> block nothing checks"
+
+
+def test_the_balance_check_reads_every_stylesheet_we_wrote():
+    """The gap the walk above closed, pinned so it cannot reopen.
+
+    social.css landed as the second stylesheet in web/css/ and the balance
+    check did not read it, because the check's list of stylesheets was the
+    literal `styles.css` rather than a search. Nothing failed — that is the
+    whole problem with this bug: an uncounted comment has no symptom until a
+    rule quietly stops applying.
+
+    So assert the enumeration, not a list: every .css under web/ that we
+    wrote is in the set, and the only ones excluded are the two directories
+    excluded on purpose."""
+    found = {label for label, _css, _line0 in _css_everywhere()}
+    ours = set()
+    for base, dirs, files in os.walk(os.path.join(ROOT, "web")):
+        dirs[:] = [d for d in dirs if d not in _CSS_WALK_SKIP]
+        for name in files:
+            if name.endswith(".css"):
+                rel = os.path.relpath(os.path.join(base, name), ROOT)
+                ours.add(rel.replace(os.sep, "/"))
+    assert "web/css/styles.css" in ours and "web/css/social.css" in ours, \
+        "the walk stopped finding the stylesheets it is named for"
+    assert ours <= found, f"stylesheets nothing checks: {sorted(ours - found)}"
 
 
 def test_this_file_does_not_bow_out_whole_when_node_is_missing():
