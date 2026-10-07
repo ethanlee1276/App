@@ -255,6 +255,45 @@ def test_the_page_draws_the_button_safely_where_the_picks_are():
     assert js.count("bet_link: r.bet_link") + js.count("bet_link: b.bet_link") == 2
 
 
+def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
+    """Ethan, 2026-10-07, from his phone, at a black panel with one price in
+    it: "It should be showing a box with the Score Bets logo, FanDuel's
+    logo … all the sportsbooks logos that we offer. The click button to
+    take you to that sportsbook and bet the bet."
+
+    The black panel: the first box was a dropdown that INHERITED its text
+    colour, and the pick page's gold button handed it ink. So the sheet
+    lives on its own layer at the end of <body>, sets every colour, and
+    draws a tile per book — mark, name, price — from a <template> the card
+    rendered beside the button."""
+    js = (ROOT / "web" / "js" / "app.js").read_text()
+    fn = js[js.index("const BOOKS = {"):js.index("function escapeHtml(")]
+    assert '<template class="betit-tpl">' in fn and 'class="bk-tile"' in fn and "bookMarkHTML(title)" in fn
+    assert 'document.body.appendChild(host)' in fn and 'role="dialog"' in fn, "its own layer, not the card's"
+    assert "<details" not in fn and "<summary" not in fn, "the dropdown is gone"
+    # Every book the odds feed can name has a mark; the sharp reference never shows.
+    from engine.sources.oddsapi import BOOK_TITLES, SHARP_BOOKS
+    import re
+    keys = set(re.findall(r"^  ([a-z0-9]+): \[", fn, re.M))
+    alias = dict(re.findall(r"(\w+): \"(\w+)\"", fn[fn.index("const BOOK_ALIAS"):fn.index("const BOOK_LOGOS")]))
+    norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())
+    names = {norm(BOOKS_NAME) for BOOKS_NAME in re.findall(r"^  [a-z0-9]+: \[\"([^\"]+)\"", fn, re.M)}
+    for k, title in BOOK_TITLES.items():
+        if k in SHARP_BOOKS:
+            continue
+        n = norm(title)
+        assert n in names or alias.get(n) in keys or alias.get(norm(k)) in keys or norm(k) in keys, f"no mark for {title}"
+    assert "pinnacle" not in keys
+    # Logo files are opt-in by key, so a missing file is never a 404 per book per open.
+    assert "const BOOK_LOGOS = new Set([" in fn and 'data-onerr="remove"' in fn
+    css = (ROOT / "web" / "css" / "styles.css").read_text()
+    sheet = css[css.index("#betit-sheet {"):css.index("body.betit-open")]
+    assert "color: var(--text)" in sheet[:sheet.index(".betit-x {")], "the panel sets its own text colour"
+    assert ".bk-tile {" in sheet and "color: var(--text)" in sheet[sheet.index(".bk-tile {"):sheet.index(".bk-tile:hover")]
+    assert "z-index: 70" in sheet and "position: fixed" in sheet
+    assert "@media (max-width: 760px)" in css[css.index(".betit-fine {"):css.index(".dc-feed {")], "a bottom sheet on a phone"
+
+
 def test_the_discord_page_shows_what_the_site_posts_and_nothing_private():
     js = (ROOT / "web" / "js" / "app.js").read_text()
     page = js[js.index("const DISCORD_FEED"):js.index("function dcFirstStop(")]

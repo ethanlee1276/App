@@ -12833,30 +12833,64 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 .wk-recap .wk-line .pos { color: var(--good); } .wk-recap .wk-line .neg { color: var(--bad); }
 .wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
 
-/* BET IT (engine/betlinks): one button, every book that has the bet. */
-.betit-box { position: relative; display: inline-block; margin-top: 4px; }
-.betit-box > summary { list-style: none; cursor: pointer; }
-.betit-box > summary::-webkit-details-marker { display: none; }
-.betit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-weight: 800;
-  padding: 3px 11px; border-radius: 999px; font-size: var(--fs-xs); color: var(--brand-ink);
-  background: var(--brand-solid); }
+/* BET IT (engine/betlinks): one button; a sheet of every book that has
+   the bet, a tile each. Every colour here is SET — the first box let the
+   pick page's `btn primary` ink leak into the dropdown and drew ink on
+   ink, the black panel Ethan sent from his phone (2026-10-07). */
+.betit-box { display: inline-block; margin-top: 4px; }
+.betit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-xs); font-weight: 800; line-height: 1.4;
+  padding: 3px 11px; border: 0; border-radius: 999px; color: var(--brand-ink); background: var(--brand-solid); }
+.betit:hover, .betit:focus-visible { background: var(--brand-2); }
 .betit-box.mini .betit { font-size: var(--fs-2xs); padding: 2px 9px; color: var(--brand-2);
   background: transparent; border: var(--hairline) solid var(--brand); }
-.betit-box[open] > .betit { background: var(--brand-solid); color: var(--brand-ink); }
-.betit-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 230px;
-  max-width: calc(100vw - 32px); max-height: 60vh; overflow-y: auto; padding: 8px;
-  background: var(--bg-2); border: var(--hairline) solid var(--border); border-radius: var(--radius);
-  text-align: left; }
-.betit-h { margin: 4px 6px; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .08em; text-transform: uppercase; }
-.betit-row { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; align-items: baseline;
-  padding: 7px 8px; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--fs-sm); }
-.betit-row:hover, .betit-row:focus-visible { background: var(--bg); }
-.betit-row i { grid-column: 1 / -1; font-style: normal; color: var(--text-mute); font-size: var(--fs-2xs); }
-.betit-px { font-family: var(--font-mono); font-weight: 700; color: var(--brand-2); }
-.betit-fine { margin: 6px 6px 2px; color: var(--text-mute); font-size: var(--fs-2xs); }
+.betit-box.mini .betit:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
 .hd-potd .hd-betit { margin-top: 10px; align-self: flex-start; }
 .pp-actions .betit-box { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+/* The sheet: its own layer at the end of <body>, never inside a card. */
+#betit-sheet { position: fixed; inset: 0; z-index: 70; }
+#betit-sheet[hidden] { display: none; }
+.betit-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .62); opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out); }
+.betit-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -46%);
+  width: min(92vw, 460px); max-height: min(84vh, 680px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 18px 18px 14px; border-radius: var(--radius-lg); background: var(--panel); color: var(--text);
+  border: var(--hairline) solid var(--border); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+#betit-sheet.on .betit-scrim { opacity: 1; }
+#betit-sheet.on .betit-panel { opacity: 1; transform: translate(-50%, -50%); }
+.betit-x { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; display: grid; place-items: center;
+  border: 0; border-radius: 999px; background: var(--panel-2); color: var(--text-dim); cursor: pointer; }
+.betit-x:hover { color: var(--text); }
+.betit-head { display: grid; gap: 2px; margin: 0 36px 10px 0; }
+.betit-head b { font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+.betit-head span { color: var(--text-dim); font-size: var(--fs-sm); }
+.betit-h { margin: 10px 0 6px; color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; }
+.betit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bk-tile { display: grid; justify-items: center; gap: 5px; min-width: 0; padding: 10px 6px 9px;
+  border-radius: var(--radius); background: var(--panel-2); border: var(--hairline) solid var(--border);
+  color: var(--text); text-decoration: none; text-align: center; }
+.bk-tile:hover, .bk-tile:focus-visible { border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel-2)); }
+.bk-mark { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+  overflow: hidden; background: var(--panel); color: var(--text); }   /* the book's own colours ride on the tile */
+.bk-mark b { font-weight: 900; font-size: 15px; letter-spacing: -.02em; line-height: 1; }
+.bk-mark img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bk-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: 700; }
+.bk-px { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-sm); color: var(--brand-2); }
+.bk-px.dim { font-family: inherit; font-weight: 600; font-size: var(--fs-2xs); color: var(--text-mute); }
+.betit-grid.pages .bk-mark { width: 36px; height: 36px; border-radius: 10px; }
+.betit-grid.pages .bk-mark b { font-size: 12px; }
+.betit-fine { margin: 12px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); line-height: 1.4; }
+body.betit-open { overflow: hidden; }
+@media (max-width: 760px) {
+  /* A bottom sheet on a phone: full width, rises from the tab bar. */
+  .betit-panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 86vh; transform: translateY(8%);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  #betit-sheet.on .betit-panel { transform: none; }
+}
 .dc-feed { display: grid; gap: 10px; margin: 0 0 18px; }
 .dc-feed-post { display: block; padding: 14px 16px; white-space: pre-line; overflow-wrap: anywhere; font-size: var(--fs-sm); }
 .dc-feed-post b { display: inline; font-weight: 700; }

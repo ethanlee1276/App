@@ -14,6 +14,45 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Start here — 2026-10-07 (Social, the Account page, Bet it)
+
+Ethan, 2026-10-07: *"save all of this for when I'm home."* Everything
+from today, in order. Nothing here needs a command except step 1.
+
+1. **Give the site its own account, once.** Sign up on the site with the
+   email you want to post from as Qellys Book, then run the `SF.claim`
+   command in step 28 below with that email. It gives the account the
+   handle `Qellys_Book`, the gold tick and the crown avatar.
+2. **Bet it, after the next props refresh** — paste the output back:
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl --props
+   ```
+   Your last run showed no per-game link file yet (no props pull had run
+   since links were switched on), so player-prop slip links could not be
+   checked. This run should show them banked.
+3. **The book logos.** The Bet it box now draws a tile per book, and each
+   tile shows the book's colour and initials until its logo file exists.
+   This machine cannot download anything, so the files have to come from
+   you: drop each logo at `web/img/books/<key>.svg` (SVG preferred; a PNG
+   named `<key>.svg` will not work — tell me and I'll take `.png`). The
+   keys: `draftkings`, `fanduel`, `betmgm`, `caesars`, `fanatics`,
+   `thescorebet`, `hardrock`, `betrivers`, `ballybet`, `betparx`, `fliff`,
+   `windcreek`, `novig`, `prophetx`. Then tell me which you added and I
+   switch them on (the `BOOK_LOGOS` list in `web/js/app.js`) — a file
+   nobody listed is never requested, so a missing one costs no 404s.
+4. **Kalshi and Polymarket in the box.** We store Kalshi tickers and
+   Polymarket slugs for the games we price, but not a page address for
+   a bet, and I will not guess one. Open any market on kalshi.com and
+   paste me its full address (the URL bar); same for one on
+   polymarket.com. If the address can be built from the ticker/slug, both
+   get tiles in the box. Michigan blocks both, so they would be for
+   readers in other states.
+5. **One choice to check on Social:** profile covers use your banner's
+   arena with the logo cut out (so nobody's name sits under a second
+   Qellys Book). If you want the full logo on profiles too, say so.
+6. **The props "not graded" count and the leaderboard** fill by
+   themselves as people post; nothing to run.
+
 ### Everything to run, in order (saved 2026-10-06, Ethan: "save all the code for me to run for when I'm home. I know it will be a big list")
 
 This is every outstanding command, start to finish. Run straight down

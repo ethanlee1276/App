@@ -1281,11 +1281,81 @@ function safeHref(u) {
 /* BET IT (engine/betlinks). Ethan, 2026-10-06: "a box that shows all the
    different sports books and prediction markets we can link that bet to,
    so it doesn't just send someone to one specific sportsbook since they
-   might not have a certain one." One button; it opens the list of every
-   book that has this exact bet — its slip, the pick's own book first, then
-   the best price — and under them the game's page at each other book.
-   The build stamps the links (bet_links on the row, the game's pages once
-   per board in bet_pages). New tabs, so the board is still here after. */
+   might not have a certain one." And 2026-10-07, from his phone, at a
+   black panel with one price in it: "It should be showing a box with the
+   Score Bets logo, FanDuel's logo, Kalshi's logo, DraftKings logo, all
+   the sportsbooks logos that we offer. The click button to take you to
+   that sportsbook and bet the bet."
+
+   THE BLACK PANEL. The first box was a <details> dropdown inside the
+   pick page's action strip, which hands it `btn primary` — gold with ink
+   text — and the dropdown inherited the ink. Ink on the panel's near-
+   black: a box that showed nothing but the one price that had a colour
+   of its own. It also hung `position: absolute` off a card, clipped
+   wherever the card was narrower than it.
+
+   NOW: one button. A tap opens a sheet on its own layer at the end of
+   <body> — a bottom sheet on a phone, a dialog on a desktop — with a
+   tile per book: its mark, its name, this bet's price there. The pick's
+   own book first, then the best price, then the game's page at the other
+   books. Every colour on the sheet is set, none inherited. The tiles are
+   rendered into a <template> beside the button when the card is drawn,
+   so the sheet is the card's own links, moved — nothing fetched on tap.
+   New tabs, so the board is still here after.
+
+   THE MARKS. A book's own logo lives at img/books/<key>.svg and is drawn
+   over its badge when the key is in BOOK_LOGOS (listed, so a missing
+   file is not a 404 per book per open). Until Ethan drops the files in,
+   the badge is the book's colour and initials — not a copy of its
+   artwork, which this machine cannot fetch. Only the books the odds feed
+   links to appear; Kalshi and Polymarket carry no bet-slip address we
+   can build (see the runbook), and Michigan blocks both. */
+const BOOKS = {
+  draftkings: ["DraftKings", "#53D337", "#0A0907", "DK"],
+  fanduel: ["FanDuel", "#1493FF", "#FFFFFF", "FD"],
+  betmgm: ["BetMGM", "#C9A227", "#0A0907", "MGM"],
+  caesars: ["Caesars", "#0B3D2E", "#D9B44A", "C"],
+  fanatics: ["Fanatics", "#1E5BD8", "#FFFFFF", "F"],
+  thescorebet: ["theScore Bet", "#19C37D", "#0A0907", "tS"],
+  hardrock: ["Hard Rock", "#7B2CBF", "#FFFFFF", "HR"],
+  betrivers: ["BetRivers", "#1C3C8C", "#F5B700", "BR"],
+  ballybet: ["Bally Bet", "#D7282F", "#FFFFFF", "B"],
+  betparx: ["betPARX", "#B5176B", "#FFFFFF", "bP"],
+  fliff: ["Fliff", "#2563EB", "#FFFFFF", "Fl"],
+  windcreek: ["Wind Creek", "#8B1E2D", "#FFFFFF", "WC"],
+  novig: ["Novig", "#FF5A1F", "#0A0907", "N"],
+  prophetx: ["ProphetX", "#6D28D9", "#FFFFFF", "PX"],
+  bet365: ["bet365", "#027B5B", "#FFE600", "365"],
+  kalshi: ["Kalshi", "#00C56B", "#0A0907", "K"],
+  polymarket: ["Polymarket", "#2E5CFF", "#FFFFFF", "PM"],
+};
+const BOOK_ALIAS = { espnbet: "thescorebet", espn: "thescorebet", thescore: "thescorebet",
+                     hardrockbet: "hardrock", williamhillus: "caesars", williamhill: "caesars",
+                     caesarssportsbook: "caesars", fanaticssportsbook: "fanatics" };
+const BOOK_LOGOS = new Set([]);   // keys with a file at img/books/<key>.svg
+function bookKey(title) {
+  const n = String(title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!n) return "";
+  if (BOOK_ALIAS[n]) return BOOK_ALIAS[n];
+  if (BOOKS[n]) return n;
+  return Object.keys(BOOKS).find((k) => BOOKS[k][0].toLowerCase().replace(/[^a-z0-9]/g, "") === n) || "";
+}
+function bookMarkHTML(title) {
+  const k = bookKey(title);
+  const b = BOOKS[k] || [title, "var(--panel-2)", "var(--text)", String(title || "?").trim().slice(0, 1).toUpperCase()];  // a book we have no mark for
+  return `<span class="bk-mark" style="background:${b[1]};color:${b[2]}"><b>${escapeHtml(b[3])}</b>${
+    k && BOOK_LOGOS.has(k) ? `<img src="img/books/${k}.svg" alt="" data-onerr="remove"/>` : ""}</span>`;
+}
+/* The bet in words for the sheet's head: "Zay Flowers · Over 4.5 Receptions". */
+function betWords(r) {
+  if (r.pick_label) return String(r.pick_label);
+  const who = r.player || r.team || "";
+  if (/anytime/i.test(String(r.market || r.market_label || ""))) return who ? `${who} · Anytime TD` : "Anytime TD";
+  const side = String(r.side || "").toLowerCase();
+  const bet = [side ? side[0].toUpperCase() + side.slice(1) : "", r.line != null && r.line !== "" ? String(r.line) : "",
+               r.market_label || r.market || ""].filter(Boolean).join(" ");
+  return [who, bet].filter(Boolean).join(" · ");
+}
 function betItHTML(r, cls) {
   if (!r) return "";
   const slips = (r.bet_links || []).filter((x) => x && safeHref(x[1]) !== "#");
@@ -1296,29 +1366,58 @@ function betItHTML(r, cls) {
     pages.push([r.book_name || r.book || "the book", r.bet_link]);
   }
   if (!slips.length && !pages.length) return "";
-  const a = (title, url, right, sub) => `<a class="betit-row" href="${safeHref(url)}" target="_blank"
-      rel="noopener noreferrer nofollow"><b>${escapeHtml(title)}</b>${right}<i>${sub}</i></a>`;
-  return `<details class="betit-box${cls ? ` ${cls}` : ""}"><summary class="betit">Bet it</summary>
-    <div class="betit-list">
-      ${slips.length ? `<p class="betit-h">On the slip</p>` : ""}
-      ${slips.map(([t, u, px]) => a(t, u, px != null ? `<span class="betit-px">${escapeHtml(american(px))}</span>` : "", "bet slip")).join("")}
-      ${pages.length ? `<p class="betit-h">${slips.length ? "Or find the game at" : "Find the game at"}</p>` : ""}
-      ${pages.map(([t, u]) => a(t, u, "", "game page")).join("")}
-      <p class="betit-fine">21+ · Gambling problem? 1-800-GAMBLER</p>
-    </div></details>`;
+  const tile = (title, url, px, sub) => `<a class="bk-tile" href="${safeHref(url)}" target="_blank"
+      rel="noopener noreferrer nofollow">${bookMarkHTML(title)}<span class="bk-name">${escapeHtml(title)}</span><span class="bk-px${
+      px == null ? " dim" : ""}">${px != null ? escapeHtml(american(px)) : sub}</span></a>`;
+  const what = betWords(r);
+  return `<span class="betit-box${cls ? ` ${cls}` : ""}"><button type="button" class="betit" aria-haspopup="dialog">Bet it</button>
+    <template class="betit-tpl"><div class="betit-head"><b>Bet it</b>${what ? `<span>${escapeHtml(what)}</span>` : ""}</div>
+      ${slips.length ? `<p class="betit-h">On the bet slip</p><div class="betit-grid">${
+        slips.map(([t, u, px]) => tile(t, u, px, "bet slip")).join("")}</div>` : ""}
+      ${pages.length ? `<p class="betit-h">${slips.length ? "Or find the game at" : "Find the game at"}</p><div class="betit-grid pages">${
+        pages.map(([t, u]) => tile(t, u, null, "game page")).join("")}</div>` : ""}
+      <p class="betit-fine">Opens the book in a new tab; you place the bet there. 21+ · Gambling problem? 1-800-GAMBLER</p></template></span>`;
 }
-
-/* The box sits on cards that are themselves doors to the pick: a tap
-   inside it must not also open the card, and opening one closes the rest.
-   Capture on window, so it runs before any card's own listener. */
+function betItOpen(box) {
+  const tpl = box && box.querySelector("template.betit-tpl");
+  if (!tpl) return;
+  let host = document.getElementById("betit-sheet");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "betit-sheet";
+    host.hidden = true;
+    host.innerHTML = `<div class="betit-scrim" data-betit-close></div>
+      <div class="betit-panel" role="dialog" aria-modal="true" aria-label="Bet it">
+        <button type="button" class="betit-x" data-betit-close aria-label="Close">${icon("cross", 14)}</button>
+        <div class="betit-body"></div></div>`;
+    document.body.appendChild(host);
+  }
+  host.querySelector(".betit-body").innerHTML = tpl.innerHTML;
+  host.hidden = false;
+  document.body.classList.add("betit-open");
+  requestAnimationFrame(() => host.classList.add("on"));
+}
+function betItClose() {
+  const host = document.getElementById("betit-sheet");
+  if (!host || host.hidden) return;
+  host.classList.remove("on");
+  host.hidden = true;
+  document.body.classList.remove("betit-open");
+}
+/* The button sits on cards that are themselves doors to the pick: a tap
+   on it must not also open the card. Capture on window, so it runs
+   before any card's own listener. A tap on a tile lets the new tab open
+   and takes the sheet down behind it. */
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("click", (e) => {
-    const box = e.target && e.target.closest ? e.target.closest(".betit-box") : null;
-    if (typeof document !== "undefined" && document.querySelectorAll) {
-      document.querySelectorAll("details.betit-box[open]").forEach((d) => { if (d !== box) d.open = false; });
-    }
-    if (box) e.stopPropagation();
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const btn = t.closest(".betit-box .betit");
+    if (btn) { e.preventDefault(); e.stopPropagation(); betItOpen(btn.closest(".betit-box")); return; }
+    if (t.closest("[data-betit-close]")) { e.stopPropagation(); betItClose(); return; }
+    if (t.closest("#betit-sheet .bk-tile")) setTimeout(betItClose, 0);
   }, true);
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") betItClose(); });
 }
 
 function escapeHtml(s) {

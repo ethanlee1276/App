@@ -51,7 +51,11 @@ HTML = (WEB / "index.html").read_text()
 #: first use like the chart library (Ethan: "a full social feature …
 #: profiles for users" — 13 KB gz that no first visit should carry). What
 #: stays is the loader, the route and two icons. Told to Ethan.
-APP_JS_BUDGET_KB = 481
+#: 481 -> 483 on 2026-10-07 by the Bet it sheet (Ethan, from his phone, at
+#: a black panel: "a box with … all the sportsbooks logos that we offer"):
+#: the book table with each book's colours, the tile renderer and the
+#: sheet that opens on its own layer — +1.35 KB gz. Told to Ethan.
+APP_JS_BUDGET_KB = 483
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -70,7 +74,9 @@ APP_JS_BUDGET_KB = 481
 #: colour, the Account page as the profile, the streak board's name. +0.3
 #: KB gz after Social's own icons moved out of app.js to pay for most of
 #: it; the boot path sat 0.03 KB under 596 before. Told to Ethan.
-BOOT_BUDGET_KB = 597
+#: 597 -> 599 on 2026-10-07 by the Bet it sheet: the app.js bump above
+#: plus the sheet's and the tiles' styles (+1.1 KB gz all told). Told to Ethan.
+BOOT_BUDGET_KB = 599
 
 
 def _gz_trimmed(rel: str) -> int:
