@@ -2329,8 +2329,10 @@ const REFERENCE_VIEWS = ["why", "about", "methodology", "features"];
    slate's age chip and its stale bar leave these pages (offline and
    unreachable still show: those are about the connection, not the slate).
    Social joined 2026-10-07: it carries its own sport chips, and a league
-   row above them read as a filter the feed was not under. */
-const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed"];
+   row above them read as a filter the feed was not under. The Account
+   page joined the same day: it is the one profile now, and the profile
+   on Social carries no league row either. */
+const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account"];
 
 /* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
    pipeline is dead and every number below is a fossil". It exists

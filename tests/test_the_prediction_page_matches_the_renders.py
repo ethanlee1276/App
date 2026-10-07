@@ -86,8 +86,10 @@ def test_the_proof_room_wears_the_render():
 def test_the_prediction_page_shows_no_league_chrome():
     """Ethan, 2026-09-27: "We should not be showing this stuff on the
     prediction page" — the sports slate's stale bar and the league row."""
-    # Social (#feed) joined 2026-10-07: it has its own sport chips.
-    assert 'const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed"];' in APP
+    # Social (#feed) joined 2026-10-07: it has its own sport chips. The
+    # Account page the same day: it is the one profile, and the profile on
+    # Social shows no league row.
+    assert 'const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed", "account"];' in APP
     assert 'document.body.classList.toggle("off-league", OFF_LEAGUE_VIEWS.includes(name));' in APP
     assert "body.off-league .sportbar { display: none; }" in CSS
     i = APP.index("function renderStaleBar(")
