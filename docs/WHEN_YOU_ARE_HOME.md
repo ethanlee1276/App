@@ -141,6 +141,18 @@ first). Paste back anything that prints an error or looks off.
     journalctl -u qellys --since "1 hour ago" --no-pager | grep -E "MB, peak" | tail -40
     ```
 
+11. **The memory fix, checked** (2026-10-07). The daily pass died eight
+    minutes after "hold journal (mlb home_runs)": the next step, the book
+    report card (engine/booksharp), loaded every odds snapshot ever saved
+    into memory. It streams now and keeps only each snapshot's prices —
+    measured here at 1,037 MB → 133 MB on a 146 MB history. After the
+    pull showing `Book report streams` or newer, the next daily pass
+    should end with a "book report" line and never "killed by signal 9";
+    the peak on its lines should stay well under 600 MB:
+    ```
+    journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "book report|faces:|killed by signal|MB, peak" | tail -20
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

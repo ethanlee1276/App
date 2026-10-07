@@ -181,10 +181,26 @@ def test_the_callers_that_need_the_whole_list_still_have_it():
     """`load_history` was kept, not replaced. These read every row and are
     NOT on the per-cycle path — a one-off report or a CLI — so there is no
     case for changing them and every reason not to."""
-    for name in ("engine/booksharp.py", "stakecheck.py", "bookcheck.py",
-                 "movecheck.py"):
+    for name in ("stakecheck.py", "bookcheck.py", "movecheck.py"):
         src = open(os.path.join(ROOT, name), encoding="utf-8").read()
         assert "load_history()" in src, f"{name} lost its full-history read"
+
+
+def test_the_book_report_streams_because_the_daily_chores_run_it():
+    """engine/booksharp sat in the list above as "a one-off report", but
+    `payload()` runs in the DAILY CHORES (engine/maintenance, the book
+    report card) — and its `load_history()` was the ~1.15 GB the kernel
+    killed ten times on the box, 2026-10-07. It streams now, and its
+    series keep only each snapshot's time and prices."""
+    import inspect
+    from engine import booksharp
+    src = inspect.getsource(booksharp.payload)
+    assert "stream_history()" in src and "load_history()" not in src
+    rows = iter([{"ts": 1, "player": "P", "market": "m", "side": "over",
+                  "books": {"a": {"odds": -110}, "b": {"odds": -120}}, "big": "x" * 1000}])
+    got = booksharp._series(rows)
+    (key, items), = got.items()
+    assert key == ("P", "m", "over") and items == [(1.0, {"a": -110, "b": -120})], items
 
 
 def test_the_settle_path_streams_even_though_it_keeps_everything():

@@ -75,15 +75,27 @@ def _blank() -> dict:
 
 
 def _series(rows) -> dict:
-    """Snapshots grouped by (player, market, side), each sorted by time."""
+    """Snapshots grouped by (player, market, side), each sorted by time, as
+    ``(ts, {book: odds})`` — the prices this measure reads and nothing else.
+
+    NEVER THE WHOLE ROW (2026-10-07). It kept every snapshot dict, and
+    `payload` handed it `load_history()` — every snapshot the site has
+    written, about a gigabyte — inside the daily chores, where the kernel
+    killed the pass at ~1.15 GB ten times in a day under the unit's 1600M.
+    Rows now arrive one at a time (`stream_history`) and only the prices
+    stay, with each book's name interned once rather than per row."""
+    import sys as _sys
     out: dict = {}
     for r in rows:
         try:
             ts = float(r["ts"])
         except (KeyError, TypeError, ValueError):
             continue
-        key = (r.get("player"), r.get("market"), r.get("side") or "over")
-        out.setdefault(key, []).append((ts, r))
+        side = r.get("side") or "over"
+        prices = {_sys.intern(b): o for b, o in _book_prices(r, side).items() if o is not None}
+        if not prices:
+            continue
+        out.setdefault((r.get("player"), r.get("market"), side), []).append((ts, prices))
     for k in out:
         out[k].sort(key=lambda x: x[0])
     return out
@@ -108,7 +120,7 @@ def measure(rows) -> dict:
     closing consensus — lower is sharper.
     """
     acc: dict = {}
-    for (_p, _m, side), items in _series(rows).items():
+    for (_p, _m, _side), items in _series(rows).items():
         if len(items) < 2:
             continue
         t0, t1 = items[0][0], items[-1][0]
@@ -117,7 +129,7 @@ def measure(rows) -> dict:
         # The close: the median implied probability across books in the
         # LAST snapshot. A single book cannot define the truth it is then
         # graded against.
-        last = _book_prices(items[-1][1], side)
+        last = items[-1][1]
         closes = sorted(p for p in (_implied(o) for o in last.values())
                         if p is not None)
         if not closes:
@@ -128,8 +140,8 @@ def measure(rows) -> dict:
         first_move: dict = {}
         prev: dict = {}
         present: set = set()
-        for ts, snap in items:
-            for book, odds in _book_prices(snap, side).items():
+        for ts, prices in items:
+            for book, odds in prices.items():
                 p = _implied(odds)
                 if p is None:
                     continue
@@ -230,8 +242,9 @@ def payload(rows=None) -> dict:
     """
     import datetime as _dt
     if rows is None:
-        from .linemoves import load_history
-        rows = load_history()
+        # One snapshot at a time: this runs in the daily chores (see _series).
+        from .linemoves import stream_history
+        rows = stream_history()
     measured = measure(rows)
     ranked = sorted(
         ({"book": b, "n": v["n"], "mae_pts": v["mae_pts"],

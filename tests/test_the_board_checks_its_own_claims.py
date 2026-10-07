@@ -163,6 +163,27 @@ def test_a_pick_the_record_corrected_is_judged_on_the_number_it_went_up_at():
     assert any(p.startswith("FLOOR — Silent") for p in rep["problems"])
 
 
+def test_a_board_row_under_even_with_nothing_behind_it_is_a_problem():
+    """The board takes those off (likelyboard.held_reason); one still on it
+    is a leak. Backed by the matchup, posted, or a touchdown: not one."""
+    b = _clean()
+    b["likely_board"] = {"rows": [
+        {"player": "Leak", "kind": "prop", "market": "rush_yds", "side": "under", "line": 10.5,
+         "model_prob": 0.49, "checks": {"matchup": None}},
+        {"player": "Backed", "kind": "prop", "market": "receptions", "side": "over", "line": 4.5,
+         "model_prob": 0.48, "checks": {"matchup": True}},
+        {"player": "Posted", "kind": "prop", "market": "rec_yds", "side": "over", "line": 50.5,
+         "model_prob": 0.45, "locked": True, "checks": {}},
+        {"player": "TD", "kind": "td", "market": "anytime_td", "side": "YES", "line": 0.5,
+         "model_prob": 0.42, "lane": "td", "checks": {}},
+        {"player": "Fine", "kind": "prop", "market": "pass_att", "side": "over", "line": 30.5,
+         "model_prob": 0.53, "checks": {"matchup": None}}]}
+    rep = T.check(b)
+    assert rep["by_check"] == {"UNDER EVEN": 1}, rep
+    assert rep["problems"][0].startswith("UNDER EVEN — Leak under 10.5 rush_yds: 49%")
+    assert '"UNDER EVEN": "under 50%, nothing backing it"' in APP
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

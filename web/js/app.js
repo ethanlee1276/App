@@ -10552,10 +10552,11 @@ function obHeldHTML() {
   if (!held.length) return "";
   return `<details class="ls-note likely-pulled">
       <summary><b>Held back</b> <span class="mini">${held.length}</span></summary>
-      <p class="likely-pulled-lede">Our model liked these, but two of our other reads said no: our record
-        shows picks like them have been losing, and the offense-against-defense matchup leans the other
-        way. A losing record alone never takes a pick off. These are still graded, so the record says
-        whether holding them back was right.</p>
+      <p class="likely-pulled-lede">Our model liked these, but our other reads said no: either our record
+        shows picks like them have been losing and the offense-against-defense matchup leans the other
+        way, or our record’s correction left the chance under 50% with nothing else behind it. A losing
+        record alone never takes a pick off. These are still graded, so the record says whether holding
+        them back was right.</p>
       ${held.map((r) => `<div class="ml-pulled-row"><span class="ml-pulled-what">
         <b>${escapeHtml((r.kind === "game" ? (r.pick_label || r.player) : r.player) || "")}</b>
         <span class="ml-pulled-facts">${escapeHtml(obBetLine(r))}</span>
@@ -39348,7 +39349,8 @@ const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB
 const TRUTH_WORDS = { "FLOOR": "under 55%", "CAP": "heavier than −250", "OLD PRICE": "price too old to show",
   "NO NOW": "locked, no current price", "LOCK NOTE": "note and tile disagree",
   "PICK MISSING": "card names a missing pick", "LONGSHOT": "longshot called likeliest",
-  "BARE MATE": "teammate-out line with no number", "DATA BEHIND": "stats behind" };
+  "BARE MATE": "teammate-out line with no number", "DATA BEHIND": "stats behind",
+  "UNDER EVEN": "under 50%, nothing backing it" };
 function truthRowHTML(t, sub) {
   if (!t || t.checked == null) return "";
   if (!t.count) return sub("Self-check", `all ${t.checked} claims hold`, "st-good", "");

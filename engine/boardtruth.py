@@ -35,6 +35,10 @@ its word:
                and plus money — the McConkey sentence
   BARE MATE    a teammate-out line with no number in it
   DATA BEHIND  a week table behind the last week played (engine/freshness)
+  UNDER EVEN   a board row (not a touchdown, not posted) under 50% with no
+               matchup read backing it — engine/likelyboard.held_reason
+               takes those off (Ethan, 2026-10-07: "take picks off once
+               they drop under 50% unless we have data to back" it)
 
 A problem is a question for a human, not a verdict; nothing here edits a
 board. Standard library only.
@@ -123,6 +127,14 @@ def check(board: dict) -> dict:
             for t in (x.get("pro") or []) + (x.get("notes") or []):
                 if _BARE_MATE.search(str(t)):
                     probs.append(("BARE MATE", f"{x.get('player')}: {t}"))
+    from .likelyboard import DROP_FLOOR, lane_of
+    for r in ((board or {}).get("likely_board") or {}).get("rows") or []:
+        if not isinstance(r, dict) or r.get("locked") or (r.get("lane") or lane_of(r)) == "td":
+            continue
+        checked += 1
+        p = _f(r.get("model_prob"))
+        if p is not None and p < DROP_FLOOR - 1e-9 and (r.get("checks") or {}).get("matchup") is not True:
+            probs.append(("UNDER EVEN", f"{_who(r)}: {p:.0%} on the board with no matchup read behind it"))
     fresh = (board or {}).get("data_freshness") or {}
     if fresh.get("played") is not None:
         checked += 1

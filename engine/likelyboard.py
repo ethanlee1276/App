@@ -54,6 +54,9 @@ MODEL_BAR = {"td": 0.40, "prop": 0.58, "game": 0.58}
 #: the NHL's 65% went with its Most Likely floor (see likely.SPORT_MIN_PROB)
 #: and hockey's model check asks for the shared 58% like every league.
 SPORT_MODEL_BAR: dict = {}
+#: A corrected pick under this comes off the board unless the matchup read
+#: backs it (see `held_reason`). Ethan, 2026-10-07.
+DROP_FLOOR = 0.50
 #: The main Most Likely list's bar (likely.MIN_PROB) — a touchdown under it
 #: here is said as matchup-backed (see `build`).
 LIKELY_BAR = 0.55
@@ -118,12 +121,28 @@ def held_reason(r: dict, checks: dict) -> str | None:
       * the offence-against-defence read leans the OTHER way (the matchup
         check says no — not "cannot say", which keeps it).
 
+    UNDER EVEN, OFF — UNLESS THE MATCHUP BACKS IT (Ethan, 2026-10-07: "take
+    picks off once they drop under 50% unless we have data to back the
+    other side even tho its less confident. we cant stop a bet from posting
+    bc its bellow 55%"). A pick the record's correction pulled under
+    DROP_FLOOR is one our own honest number says is more likely to lose,
+    so it comes off — unless the offence-against-defence read says yes
+    (the matchup check True), the data backing it though the number is
+    thin. Between 50% and 55% it stays, Worth a look, as before.
+    Touchdown picks live under 50% by nature (their bar is 40%) and are
+    not judged on it.
+
     A pick already posted (``locked``) is never taken off; it keeps its
     seat until its game, as every posted pick does."""
-    if r.get("locked") or checks.get("matchup") is not False:
+    if r.get("locked"):
         return None
     proven = r.get("ctx_note") or r.get("cal_note")
-    if not proven:
+    prob = r.get("model_prob")
+    if (proven and lane_of(r) != "td" and prob is not None and float(prob) < DROP_FLOOR
+            and checks.get("matchup") is not True):
+        return (f"held back: our chance is {float(prob):.0%} after the record's correction "
+                f"({proven}) — under {DROP_FLOOR:.0%}, and no matchup read backs it")
+    if checks.get("matchup") is not False or not proven:
         return None
     return f"held back: {proven}, and our matchup read leans the other way"
 TIER_LABEL = dict(TIERS)

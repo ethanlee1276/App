@@ -353,6 +353,40 @@ def test_a_losing_pick_comes_off_only_when_our_reads_also_say_no():
     b = B.build(_result(most_likely=[dict(against, locked=True)]), calibration=losing)
     assert [r["player"] for r in b["rows"]] == ["Garrett Wilson"] and b["held"] == []
 
+def test_a_pick_corrected_under_even_comes_off_unless_the_matchup_backs_it():
+    """Ethan, 2026-10-07: "take picks off once they drop under 50% unless we
+    have data to back the other side even tho its less confident. we cant
+    stop a bet from posting bc its bellow 55%." On the box Justice Hill's
+    under read 49% after the record's correction and still sat on the
+    board. Under 50% after the correction: held back with the reason —
+    unless the matchup read backs it. 50-55% stays. Touchdowns (bar 40%)
+    and posted picks are never judged on it."""
+    plain = {"kind": "prop", "player": "Nobody", "team": "NYJ", "opponent": "DET", "sources": ["likely"],
+             "market": "rec_yds", "side": "OVER", "line": 40.5, "odds": 130, "model_prob": 0.60,
+             "implied_prob": 0.43}
+    backed = dict(plain, player="Amon-Ra St. Brown", team="DET", opponent="NYJ", market="receptions", line=6.5)
+    losing = {"nfl": {"groups": {"list|over": {"k": 0.3, "n": 80, "hit": 0.45, "claimed": 0.62}}}}
+    b = B.build(_result(most_likely=[dict(plain), dict(backed)]), calibration=losing)
+    held = {r["player"]: r for r in b["held"]}
+    assert set(held) == {"Nobody"}, [(r["player"], r["model_prob"]) for r in b["rows"] + b["held"]]
+    assert float(held["Nobody"]["model_prob"]) < B.DROP_FLOOR
+    assert "under 50%, and no matchup read backs it" in held["Nobody"]["held_note"]
+    assert [r["player"] for r in b["rows"]] == ["Amon-Ra St. Brown"], "the matchup backs him: he stays"
+    # Pulled only to the 50s: stays, Worth a look.
+    mild = {"nfl": {"groups": {"list|over": {"k": 0.6, "n": 80, "hit": 0.52, "claimed": 0.62}}}}
+    b = B.build(_result(most_likely=[dict(plain)]), calibration=mild)
+    assert [r["player"] for r in b["rows"]] == ["Nobody"] and b["held"] == []
+    assert B.DROP_FLOOR <= float(b["rows"][0]["model_prob"]) < 0.55 and b["rows"][0]["tier"] == "look"
+    # Posted: never taken off.
+    b = B.build(_result(most_likely=[dict(plain, locked=True)]), calibration=losing)
+    assert b["held"] == []
+    # A touchdown at 42% lives under 50% by nature.
+    b = B.build(_result(most_likely=[_td(prob=0.42, odds=150)]))
+    assert b["held"] == [] and len(b["rows"]) == 1
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    assert "under 50% with nothing else behind it" in js
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
