@@ -545,7 +545,7 @@
         <button class="fd-act" data-fd="share" data-id="${p.id}" type="button" aria-label="Share">${ico("share", 18)}</button>
         ${tail}
       </footer>
-      <div class="fd-slot" id="fd-slot-${p.id}"></div>
+      <div class="fd-slot"></div>
     </article>`;
   }
 
@@ -589,7 +589,7 @@
 
   function editHTML(p) {
     const v = p.kind === "text" ? p.body : p.caption;
-    return `<div class="fd-editbox"><textarea class="fd-input" id="fd-e-${p.id}" maxlength="${p.kind === "text" ? 2000 : 280}" rows="3"
+    return `<div class="fd-editbox"><textarea class="fd-input fd-e" maxlength="${p.kind === "text" ? 2000 : 280}" rows="3"
         aria-label="Edit">${escapeHtml(v)}</textarea>
       <div class="fd-row-end"><button class="fd-btn ghost" data-fd="edit-cancel" data-id="${p.id}" type="button">Cancel</button>
         <button class="fd-btn" data-fd="save-post" data-id="${p.id}" type="button">Save</button></div>
@@ -710,13 +710,12 @@
 
   function headHTML(title, sub, back) {
     return `<div class="fd-head">${back ? `<button class="fd-back" data-fd="back" type="button" aria-label="Back">${ico("back", 18)}</button>` : ""}
-      <div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ""}</div></div>`;
+      ${title || sub ? `<div>${title ? `<h2>${title}</h2>` : ""}${sub ? `<p>${sub}</p>` : ""}</div>` : ""}</div>`;
   }
 
   function feedPage(cur, title, empty) {
-    const results = F.search ? searchResultsHTML() : "";
     return `${title || ""}${composerHTML()}${chipsHTML(cur)}${cur === "foryou" ? phoneTrendHTML() : ""}
-      ${results || `<div class="fd-list">${listHTML(F.posts, empty)}</div>${moreHTML()}`}`;
+      <div class="fd-list">${listHTML(F.posts, empty)}</div>${moreHTML()}`;
   }
 
   function searchResultsHTML() {
@@ -968,7 +967,8 @@
         title = headHTML("My Posts", `Everything you’ve posted, newest first. <a href="#account">Your profile</a> holds your record.`);
         empty = "You haven’t posted yet. Share a take or build a parlay above.";
       }
-      if (!append) F.search = kind ? null : F.search;
+      // Search has its own page (#feed/search/…); a feed is never results.
+      F.search = null;
       const okP = loadList(params, append);
       await Promise.all([okP, railP]);
       paint(seq, active, feedPage(cur, title, empty), { hero: !kind || kind === "following" || kind === "s" });
@@ -1047,17 +1047,28 @@
   const allPosts = () => [...F.posts, ...ACCT.posts, ...(F.search ? F.search.posts || [] : []), ...(F.post ? [F.post] : [])];
   const findPost = (id) => allPosts().find((p) => p.id === Number(id));
 
+  /* A post can be on the page twice at once — in the Social view and on
+     the Account page, whichever is hidden — so a card is always found from
+     the button that was pressed, never by an id the two copies share. */
+  const cardsOf = (id) => [...document.querySelectorAll(`.fd-post[data-post="${id}"]`)];
+  const slotIn = (card) => (card ? card.querySelector(".fd-slot") : null);
+
+  // Redraws every copy of a post, keeping whatever was open under each;
+  // returns the new cards in the same order.
   function redraw(id) {
     const p = findPost(id);
-    if (!p) return;
-    document.querySelectorAll(`.fd-post[data-post="${id}"]`).forEach((el) => {
-      const slot = el.querySelector(".fd-slot");
+    if (!p) return [];
+    return cardsOf(id).map((el) => {
+      const slot = slotIn(el);
       const keep = slot ? slot.innerHTML : "";
       const open = slot ? slot.dataset.open || "" : "";
       const full = !!(F.post && F.post.id === Number(id) && route().startsWith("post/"));
-      el.outerHTML = postHTML(p, full);
-      const fresh = document.getElementById(`fd-slot-${id}`);
-      if (fresh) { fresh.innerHTML = keep; fresh.dataset.open = open; }
+      el.insertAdjacentHTML("afterend", postHTML(p, full));
+      const fresh = el.nextElementSibling;
+      el.remove();
+      const s2 = slotIn(fresh);
+      if (s2) { s2.innerHTML = keep; s2.dataset.open = open; }
+      return fresh;
     });
   }
 
@@ -1080,8 +1091,8 @@
     return pop;
   }
 
-  function slotToggle(id, what, html) {
-    const slot = document.getElementById(`fd-slot-${id}`);
+  function slotToggle(card, what, html) {
+    const slot = slotIn(card);
     if (!slot) return null;
     if (slot.dataset.open === what) { slot.innerHTML = ""; slot.dataset.open = ""; return null; }
     slot.innerHTML = html; slot.dataset.open = what;
@@ -1134,7 +1145,7 @@
     }
     if (act === "load") return inAccount() ? acctMore() : render(true);
     if (act === "back") { if (history.length > 1) history.back(); else go(""); return; }
-    if (act === "clear-search") { F.search = null; return route() ? go("") : render(); }
+    if (act === "clear-search") { F.search = null; return go(""); }
     if (act === "like") {
       if (needProfile("like posts")) return;
       const res = await api("like", { id: Number(id) });
@@ -1151,13 +1162,16 @@
     }
     if (act === "tail") {
       if (needProfile("tail parlays")) return;
-      const slot = document.getElementById(`fd-slot-${id}`);
+      const card = t.closest(".fd-post");
+      const slot = slotIn(card);
       if (slot && slot.dataset.open === "tail") { slot.innerHTML = ""; slot.dataset.open = ""; return; }
+      const at = cardsOf(id).indexOf(card);
       const res = await api("tail", { id: Number(id) });
       if (!res.ok) { tfToast(res.out.error || "Could not tail that."); return; }
       sameAll(id, (p) => { p.tails = res.out.tails; p.tailed = true; });
-      buzz("tap"); redraw(id);
-      const s2 = document.getElementById(`fd-slot-${id}`);
+      buzz("tap");
+      const fresh = redraw(id);
+      const s2 = slotIn(fresh[at] || fresh[0]);
       if (s2) { s2.innerHTML = tailHTML(res.out); s2.dataset.open = "tail"; }
       return;
     }
@@ -1197,20 +1211,22 @@
     if (act === "report-open") { const pop = t.closest(".fd-popover"); if (pop) pop.innerHTML = reportHTML("post", id); return; }
     if (act === "creport") { popover(t, reportHTML("comment", id)); return; }
     if (act === "edit-post") {
+      const card = t.closest(".fd-post");
       closeMenus();
       const p = findPost(id);
-      if (p) slotToggle(id, "edit", editHTML(p));
+      if (p) slotToggle(card, "edit", editHTML(p));
       return;
     }
-    if (act === "edit-cancel") { slotToggle(id, "edit", ""); return; }
+    if (act === "edit-cancel") { slotToggle(t.closest(".fd-post"), "edit", ""); return; }
     if (act === "save-post") {
       const p = findPost(id);
-      const v = (document.getElementById(`fd-e-${id}`) || {}).value || "";
+      const card = t.closest(".fd-post");
+      const v = ((card && card.querySelector(".fd-e")) || {}).value || "";
       const body = p && p.kind === "text" ? { id: Number(id), title: p.title || "", body: v } : { id: Number(id), caption: v };
       const res = await api("edit", body);
       if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
       sameAll(id, (q) => { if (q.kind === "text") q.body = v; else q.caption = v; q.edited = true; });
-      const slot = document.getElementById(`fd-slot-${id}`); if (slot) { slot.innerHTML = ""; slot.dataset.open = ""; }
+      const slot = slotIn(card); if (slot) { slot.innerHTML = ""; slot.dataset.open = ""; }
       redraw(id); return;
     }
     if (act === "del-post") {
@@ -1345,7 +1361,7 @@
     e.preventDefault();
     const q = ((f.querySelector("input") || {}).value || "").trim();
     if (q.startsWith("#") && q.length > 2) { go(`tag/${encodeURIComponent(q.slice(1))}`); return; }
-    if (q.length < 2) { F.search = null; render(); return; }
+    if (q.length < 2) { tfToast("Type at least two letters to search."); return; }
     go(`search/${encodeURIComponent(q)}`);
   });
 
@@ -1438,6 +1454,7 @@
     if (!res.ok) { tfToast(res.out.error || "That did not save."); return; }
     F.me = res.out.profile; F._meAt = Date.now(); F.rail = null;
     ACCT.edit = false;
+    ACCT.prof = null;          // the header redraws from the saved row
     if (typeof _acctUser !== "undefined" && _acctUser) _acctUser.profile = res.out.profile;
     if (typeof acctChipPaint === "function") acctChipPaint();
     tfToast("Profile saved.");

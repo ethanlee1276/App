@@ -39,10 +39,18 @@ def _no_feeds(monkeypatch):
     loop reaches through, and the asymmetry would be the puzzle.
     """
     import facesfill
+    from engine import ingest
     from engine.sources import nbadata, nhldata
 
     monkeypatch.setattr(maintenance, "_nba_day", None)
     monkeypatch.setattr(maintenance, "_wnba_day", None)
+    # The NFL weekly-results pull (nflverse on github.com) runs August to
+    # February, and January is the date the property test below uses. It
+    # read as green only when another test in the same run had just left
+    # a fresh player_stats CSV in data/cache — so the gate passed or failed
+    # by test order. Found 2026-10-07; stubbed like the NHL and NBA pulls.
+    monkeypatch.setattr(ingest, "ingest_nfl_results",
+                        lambda conn, season: {"player_logs": 0, "skipped": []})
     monkeypatch.setattr(nhldata, "refresh_rosters",
                         lambda conn, date, **kw: {"teams": 0, "players": 0,
                                                   "faces_changed": 0,
