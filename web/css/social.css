@@ -72,21 +72,17 @@
 .fd-tab .fd-badge { margin-left: 2px; }
 
 /* ── the banner ─────────────────────────────────────────────────────────── */
-/* A fixed height on a phone, the render's 5:1 band from 800px. Never
-   aspect-ratio WITH a min-height: the floor turns into a minimum WIDTH
-   (150px × 5), and the phone page scrolled sideways under it. */
+/* Ethan's backdrop, 3:1, with the crown and the wordmark in the art. A
+   fixed height on a phone shows all of it; from 800px the render's 5:1
+   band crops top and bottom, and 50% 45% keeps the whole mark with room
+   under it for the tagline. Never aspect-ratio WITH a min-height: the
+   floor turns into a minimum WIDTH (150px × 5), and the phone page
+   scrolled sideways under it. */
 .fd-hero { position: relative; overflow: hidden; border-radius: var(--radius-lg); height: 150px; min-width: 0;
   background: var(--bg); border: var(--hairline) solid var(--fd-line); isolation: isolate; }
-.fd-hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; }
-.fd-hero-in { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center;
-  padding: 8px 12px; }
-.fd-crown { width: clamp(38px, 6.4cqw, 66px); height: auto; margin-bottom: -2px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .55)); }
-.fd-word { display: flex; align-items: center; gap: 2px; font-family: var(--font-display); font-weight: 700; text-transform: uppercase;
-  line-height: .86; filter: drop-shadow(0 3px 12px rgba(0, 0, 0, .7)); }
-.fd-word-q { font-size: clamp(56px, 8.6cqw, 94px); background: var(--grad-brand); -webkit-background-clip: text; background-clip: text;
-  color: transparent; line-height: .8; }
-.fd-word-r { display: grid; text-align: left; font-size: clamp(27px, 4.1cqw, 45px); color: var(--fd-on-art); letter-spacing: .01em; }
-.fd-hero-tag { margin: 10px 0 0; color: var(--fd-on-art); font-size: clamp(9.5px, 1.18cqw, 13px); font-weight: 700;
+.fd-hero-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; z-index: -1; }
+.fd-hero-in { position: absolute; inset: auto 0 0; display: flex; justify-content: center; padding: 0 12px 11px; text-align: center; }
+.fd-hero-tag { margin: 0; color: var(--fd-on-art); font-size: clamp(9.5px, 1.18cqw, 13px); font-weight: 700;
   letter-spacing: .18em; text-transform: uppercase; text-shadow: 0 2px 8px rgba(0, 0, 0, .8); }
 @container fd (min-width: 600px) { .fd-hero-tag { letter-spacing: .32em; } }
 
@@ -437,7 +433,7 @@ a.fd-slip:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--borde
 /* ── a profile ──────────────────────────────────────────────────────────── */
 .fd-prof { padding: 0; overflow: visible; }
 .fd-prof-ban { position: relative; height: 150px; overflow: hidden; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--bg); }
-.fd-prof-ban img { width: 100%; height: 100%; object-fit: cover; }
+.fd-prof-ban img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 23%; }
 .fd-prof-ban::after { content: ""; position: absolute; inset: 0;
   background: linear-gradient(180deg, color-mix(in srgb, var(--fd-tint) 22%, transparent) 0%, color-mix(in srgb, var(--panel) 30%, transparent) 55%, var(--panel) 100%); }
 .fd-prof-body { padding: 0 20px 18px; }

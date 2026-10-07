@@ -76,7 +76,7 @@ everything matches"); the render's navy is the only thing not copied.
 | Render | Built |
 |---|---|
 | Left column: Post, Feed, Following, My Posts, Trending, Top Bettors, Tags; Sports | Same, plus Activity (notifications) with its unread count; on phones and tablets the same doors are a row of tabs |
-| Banner: an athlete per sport, logo, tagline | The site's own stadium scenes (NFL, MLB, NBA, NHL, WNBA), crown and wordmark in the middle. The render's athletes are real people's likenesses. Tagline "Post your plays. Talk sports. Sweat together." — the site never prints a promise of winning |
+| Banner: an athlete per sport, logo, tagline | Ethan's own backdrop render (2026-10-07): stadium lights over a blue arena, his crown and wordmark in the art. No athletes — the render's are real people's likenesses. Tagline "Post your plays. Talk sports. Sweat together." — the site never prints a promise of winning. Profile covers use the same arena with the logo cut out, tinted with the person's colour |
 | Composer: Parlay, Image, Poll, Link, Post | Parlay (search today's board, up to three legs), Poll (2–4 options, three days), Link (https only, not on an account's first day). No Image (section 5) |
 | Chips: For You, Following, sports | Same; For You is Hot with no time window, so a quiet week never empties it |
 | Post card: avatar, name, verified tick, time, sport pill, legs with team logos, odds, likes, comments, share, Tail | Same; the site's own account wears the crown mark |

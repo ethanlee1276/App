@@ -106,17 +106,6 @@
     <path fill="currentColor" d="M8 .9l1.9 1.4 2.3-.1.7 2.2 1.9 1.3-.8 2.2.8 2.2-1.9 1.3-.7 2.2-2.3-.1L8 15.1l-1.9-1.4-2.3.1-.7-2.2-1.9-1.3.8-2.2-.8-2.2 1.9-1.3.7-2.2 2.3.1z"/>
     <path d="M5.3 8.2l1.8 1.8 3.6-3.8" fill="none" stroke="var(--brand-ink)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  // The banner's crown, drawn so it stays sharp at any size.
-  const CROWN = `<svg class="fd-crown" viewBox="0 0 80 52" aria-hidden="true" focusable="false"><defs>
-    <linearGradient id="fdCrownG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--brand-2)"/>
-    <stop offset=".62" style="stop-color:var(--brand)"/><stop offset="1" style="stop-color:var(--warn)"/></linearGradient></defs>
-    <path d="M8 40L5 14l17 13L40 7l18 20 17-13-3 26z" fill="url(#fdCrownG)"/>
-    <rect x="8" y="42" width="64" height="7" rx="2" fill="url(#fdCrownG)"/>
-    <circle cx="5" cy="12.5" r="3.6" fill="url(#fdCrownG)"/><circle cx="40" cy="5.5" r="4.2" fill="url(#fdCrownG)"/>
-    <circle cx="75" cy="12.5" r="3.6" fill="url(#fdCrownG)"/>
-    <circle cx="24" cy="34" r="2.4" fill="var(--brand-ink)" opacity=".28"/><circle cx="40" cy="31" r="3" fill="var(--brand-ink)" opacity=".28"/>
-    <circle cx="56" cy="34" r="2.4" fill="var(--brand-ink)" opacity=".28"/></svg>`;
-
   // ── small helpers ─────────────────────────────────────────────────────────
   function strong() {
     try { return localStorage.getItem(STRONG_KEY) === "1"; } catch (e) { return false; }
@@ -279,16 +268,14 @@
   }
 
   function heroInner() {
-    // Not the render's athletes: their faces are real people's. These are
-    // the site's own stadium scenes, one per league, the mark in the calm
-    // middle. The tagline says sweat, not win — the one promise this site
-    // never prints is a profit.
-    return `<img class="fd-hero-art" src="img/social/hero.webp" srcset="img/social/hero@900.webp 900w, img/social/hero.webp 1800w"
-        sizes="(min-width: 1200px) 900px, 100vw" alt="" decoding="async">
-      <div class="fd-hero-in">${CROWN}
-        <div class="fd-word" aria-label="Qellys Book"><span class="fd-word-q" aria-hidden="true">Q</span>
-          <span class="fd-word-r" aria-hidden="true"><span>ELLYS</span><span>BOOK</span></span></div>
-        <p class="fd-hero-tag">Post your plays. Talk sports. Sweat together.</p></div>`;
+    // Ethan's own backdrop (2026-10-07: "the render for the backdrop photo
+    // I circled"): the crown and the wordmark are in the art, so nothing is
+    // drawn over them. Not the page render's athletes — real people's faces.
+    // The tagline says sweat, not win: the one promise this site never
+    // prints is a profit.
+    return `<img class="fd-hero-art" src="img/social/banner.webp" srcset="img/social/banner@900.webp 900w, img/social/banner.webp 1800w"
+        sizes="(min-width: 1200px) 980px, 100vw" alt="Qellys Book" decoding="async">
+      <div class="fd-hero-in"><p class="fd-hero-tag">Post your plays. Talk sports. Sweat together.</p></div>`;
   }
 
   function ensureFrame(el) {
@@ -764,7 +751,7 @@
         : `<div class="fd-pstat">${inner}</div>`;
     };
     return `<section class="fd-card fd-prof">
-      <div class="fd-prof-ban fd-c${(p.color || 0) % 8}"><img src="img/social/hero@900.webp" alt="" decoding="async"></div>
+      <div class="fd-prof-ban fd-c${(p.color || 0) % 8}"><img src="img/social/cover@900.webp" srcset="img/social/cover@900.webp 900w, img/social/cover.webp 1500w" sizes="(min-width: 1000px) 880px, 100vw" alt="" decoding="async"></div>
       <div class="fd-prof-body">
         <div class="fd-prof-top">${avatar(p, "xl")}<div class="fd-prof-btns">${btns}</div></div>
         <h2 class="fd-prof-name">${displayName(p)}${badge(p)}</h2>

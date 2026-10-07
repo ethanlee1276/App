@@ -14,8 +14,9 @@ code, so neither quietly drifts back:
     and soccer), the banner and the composer over the feed, and the rail
     (Trending Picks, Top Bettors with Win % / Units / Followers, Popular
     Sports, Community Stats, the Discord);
-  - the banner is the site's own art — no athlete's likeness — and the
-    tagline promises no wins;
+  - the banner is Ethan's own backdrop render (his crown and wordmark in
+    the art, no athlete's likeness), the profile cover is that arena
+    without the logo, and the tagline promises no wins;
   - the composer's tools are Parlay, Poll and Link; there is no Image
     tool, deliberately (uploads need moderation the site does not have);
   - ONE PROFILE: the Account page mounts the Social profile header, your
@@ -98,16 +99,26 @@ def test_the_banner_never_combines_aspect_ratio_with_a_minimum_height():
 
 # --- the banner and the composer ----------------------------------------------
 
-def test_the_banner_is_the_sites_own_art_and_promises_no_wins():
-    for name, cap in (("hero.webp", 220_000), ("hero@900.webp", 80_000)):
+def test_the_banner_is_ethans_backdrop_and_promises_no_wins():
+    """Ethan, 2026-10-07, with a render of the backdrop he circled on the
+    page render. The crown and the wordmark are IN his art, so the banner
+    draws nothing over them — a second, drawn logo on top was the old
+    banner's. Profile covers use the same arena with the logo cut out
+    (cover.webp: his art's two sides, blended), so a person's name is
+    never under a second Qellys Book."""
+    for name, cap in (("banner.webp", 220_000), ("banner@900.webp", 80_000),
+                      ("cover.webp", 140_000), ("cover@900.webp", 70_000)):
         path = os.path.join(ROOT, "web", "img", "social", name)
         assert os.path.exists(path), name
         assert os.path.getsize(path) < cap, f"{name} is {os.path.getsize(path)} bytes"
     hero = _fn(SOC, "heroInner")
-    assert "img/social/hero.webp" in hero
+    assert "img/social/banner.webp" in hero and 'alt="Qellys Book"' in hero
+    assert "fd-word" not in hero and "CROWN" not in hero
     tag = re.search(r'class="fd-hero-tag">([^<]+)<', hero).group(1)
     assert "win" not in tag.lower(), tag
     assert "Post your plays" in tag
+    head = _fn(SOC, "profileHeaderHTML")
+    assert "img/social/cover@900.webp" in head and "banner" not in head
 
 
 def test_the_composer_offers_parlay_poll_and_link_and_no_image():
