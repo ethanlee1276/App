@@ -66,6 +66,26 @@ from today, in order. Nothing here needs a command except step 1.
    ```
    A game with `tv` None means the feed named no carrier and the page
    shows no button, which is the designed answer, not a bug.
+8. **Walk today's three fixes on your phone** (2026-10-07 evening, after
+   the box pulls — about five minutes after each push; the Status page
+   shows the version). Each was walked here at 390px and 1440px with no
+   errors and no sideways scroll, so anything off is worth a screenshot:
+   - *Tail.* Social → any parlay → **Tail**. The Bet it sheet opens: a
+     tile for a book that carries every leg on one slip, a tile per leg
+     for a book holding only some (tagged "Leg 1 of 2"), then every other
+     book under "Or key it in at". The count still ticks. Tap a tile:
+     the book opens in a new tab and the sheet drops. Next sheet you
+     open, that book sits first tagged "Your book".
+   - *Posting from the slip.* Add two legs, open the tray, tap **Post to
+     the feed**, tap the caption box: the page must NOT zoom (that was
+     the 12.5px field; every field on a phone is 17px now). Post: the
+     tray goes away and you land on the post, nothing left behind.
+   - *Pick of the Day.* Home, any league with a pick: a gold **Bet it**
+     under the pick. Tap: slip links if the board has them, otherwise
+     "Key it in at" with the book that priced it first, tagged "Priced
+     here". Same sheet on the Picks page hero and on every card.
+   Until step 3 runs, every tile is the book's colour and initials; after
+   it, the real icons on all three sheets at once.
 
 ### Everything to run, in order (saved 2026-10-06, Ethan: "save all the code for me to run for when I'm home. I know it will be a big list")
 
