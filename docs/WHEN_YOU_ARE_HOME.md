@@ -470,12 +470,31 @@ came back with links. Paste the output:
 cd /srv/qellys && sudo -u qellys python3 -m engine.betlinks nfl --props
 ```
 
-**28. The Feed** (2026-10-06, made a full social feature 2026-10-07 —
-see `docs/SOCIAL_AUDIT.md`): parlays and discussion posts, profile pages
-with a graded record, follows, threaded comments, notifications, a
-leaderboard, search, blocks, and the whale-tail Tail button. Nothing to
-switch on. Parlays grade themselves from the journal the first time
-anyone reads the feed after their games. To check it is answering:
+**28. Social** (2026-10-06; a full social feature and then Ethan's render
+and one profile for the whole site, 2026-10-07 — see `docs/SOCIAL_AUDIT.md`):
+parlays, takes, polls and links, profile pages with a graded record,
+follows, threaded comments, notifications, Trending Picks, Top Bettors,
+tags, search, blocks, and the whale-tail Tail button. Your Account page IS
+your profile now. Nothing to switch on. Parlays grade themselves from the
+journal the first time anyone reads the feed after their games.
+
+**Give the site its own account (once).** Sign up on the site with the
+email you want to post from as Qellys Book, then run this on the box with
+that email in place of `you@example.com`. It gives that account the handle
+`Qellys_Book`, the gold verified tick and the crown avatar; nobody else can
+take a name with "qellys" in it:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.claim(A.connect(), 'you@example.com', 'Qellys_Book', name='Qellys Book'))"
+```
+
+To give (or take back) the tick on someone else's handle, `True` or `False`:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A, socialfeed as SF; print(SF.set_verified(A.connect(), 'SomeHandle', True))"
+```
+
+To check it is answering:
 
 ```
 curl -s https://qellysbook.com/api/feed/list | head -c 300; echo
@@ -483,7 +502,7 @@ curl -s https://qellysbook.com/js/social.js | head -c 80; echo
 ```
 
 The first should start with `{"posts": [`, the second with
-`/* Qellys Book — the social feed`. Moderation from the box, any time:
+`/* Qellys Book — Social: the feed`. Moderation from the box, any time:
 the first line lists what readers reported (three reports from different
 accounts hide a post or comment by themselves); the second hides post 12
 (put the real number in; `'comment'` for a comment; `False` restores it).

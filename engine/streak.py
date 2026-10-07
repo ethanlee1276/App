@@ -615,15 +615,25 @@ def playing_today(conn, date: str) -> int:
 
 
 def leaders(conn, limit: int = 20) -> list[dict]:
-    """Top streaks, named accounts only. An account with no display name
-    plays in private — that is the deal the name box states."""
+    """Top streaks, opted-in accounts only. An account that never chose to
+    show itself plays in private — that is the deal the page states.
+
+    The NAME shown is the site profile's (one profile for the whole site,
+    Ethan 2026-10-07), so a renamed profile renames its row here too; an
+    account with no profile keeps the streak name it chose. A non-empty
+    streak name is still the opt-in itself."""
     ensure_tables(conn)
-    return [{"name": r["name"], "current": int(r["current"]),
+    prof = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='feed_profiles'").fetchone() is not None
+    sql = ("SELECT COALESCE(NULLIF(f.display_name, ''), f.handle, s.name) AS name, "
+           "f.handle AS handle, s.current, s.best FROM streak_state s "
+           "LEFT JOIN feed_profiles f ON f.user_id = s.user_id ") if prof else (
+           "SELECT s.name AS name, '' AS handle, s.current, s.best FROM streak_state s ")
+    return [{"name": r["name"], "handle": r["handle"] or "", "current": int(r["current"]),
              "best": int(r["best"])}
             for r in conn.execute(
-                "SELECT name, current, best FROM streak_state "
-                "WHERE name != '' AND best > 0 "
-                "ORDER BY current DESC, best DESC, name ASC LIMIT ?",
+                sql + "WHERE s.name != '' AND s.best > 0 "
+                "ORDER BY s.current DESC, s.best DESC, name ASC LIMIT ?",
                 (int(limit),))]
 
 
@@ -637,6 +647,12 @@ def me(conn, user_id: int, slate: dict) -> dict:
                 "SELECT date, qid, side FROM streak_picks "
                 "WHERE user_id=? AND date >= ?", (int(user_id), dates[0])):
             picks.setdefault(r["date"], {})[r["qid"]] = r["side"]
+    prof = None
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                    "AND name='feed_profiles'").fetchone():
+        r = conn.execute("SELECT handle, display_name FROM feed_profiles WHERE user_id=?",
+                         (int(user_id),)).fetchone()
+        prof = {"handle": r["handle"], "name": r["display_name"] or r["handle"]} if r else None
     return {"name": st["name"], "current": st["current"], "best": st["best"],
             "last_day": st["last_day"], "last_result": st["last_result"],
-            "picks": picks}
+            "picks": picks, "profile": prof}

@@ -59,3 +59,51 @@ paid legs locked for readers who have not paid.
 - **Push notifications to the phone and email alerts.** The bell and its badge cover it on the site. Push needs the web-push setup and permission prompts; it can come next if wanted.
 - **Downvotes.** Reddit's downvote turns a betting feed into a pile-on over losing tickets; likes and tails measure what this feed is for.
 - **Paid picks shown to people who have not paid.** Unchanged from yesterday: a paid leg shows only the player and market to a reader who has not paid.
+
+## 6. Third cut: Ethan's render and one profile (2026-10-07, evening)
+
+Ethan: "The social page looks cluttered … Here is renders you must follow
+for the social page and profile page. Also the account page on the feed
+page and the main account page should be one page … it should all be one
+main profile for the whole site." One render arrived (the social page);
+the profile page was drawn in the same style because no second render
+came through.
+
+**The page, in the render's layout and the site's colours.** Gold on warm
+black stays (Ethan, 2026-08-23: "carried through the whole site so
+everything matches"); the render's navy is the only thing not copied.
+
+| Render | Built |
+|---|---|
+| Left column: Post, Feed, Following, My Posts, Trending, Top Bettors, Tags; Sports | Same, plus Activity (notifications) with its unread count; on phones and tablets the same doors are a row of tabs |
+| Banner: an athlete per sport, logo, tagline | The site's own stadium scenes (NFL, MLB, NBA, NHL, WNBA), crown and wordmark in the middle. The render's athletes are real people's likenesses. Tagline "Post your plays. Talk sports. Sweat together." — the site never prints a promise of winning |
+| Composer: Parlay, Image, Poll, Link, Post | Parlay (search today's board, up to three legs), Poll (2–4 options, three days), Link (https only, not on an account's first day). No Image (section 5) |
+| Chips: For You, Following, sports | Same; For You is Hot with no time window, so a quiet week never empties it |
+| Post card: avatar, name, verified tick, time, sport pill, legs with team logos, odds, likes, comments, share, Tail | Same; the site's own account wears the crown mark |
+| Rail: Trending Picks, Top Bettors (Win % / Units / Followers, 30D), Popular Sports, Community Stats, Discord | Same, with 7D / 30D / All |
+
+**What the numbers mean.** Trending Picks: every open parlay from the last
+two days, each leg counted once per person who posted or tailed it, over
+everyone active on those posts ("72% tailing"); fewer than ten active
+people shows "3 of 4 tailing" instead of a percentage. Top Bettors: Win %
+is won ÷ (won + lost), Units is one unit a post at the posted price, both
+need five graded posts in the window; Followers counts follows made in the
+window. Community Stats: profiles, posts showing, and the feed's graded
+win rate, shown once ten parlays are graded. All counted, none estimated.
+
+**One profile.** The Account page is now your profile page: the same
+header everyone else's profile wears, then Posts / Graded picks / Friends
+/ Settings. Your own handle and the old `#feed/edit` both open it. The
+top-bar avatar, the sync strip and your side of a chat show the profile's
+initials and colour; friends and friend search see the profile name; the
+streak leaderboard shows it too (appearing there is still your choice).
+
+**Verified and the site's names.** Any handle or display name containing
+"qellys", "zeno", "admin", "moderator" or "official" is refused, so nobody
+can pose as the site. The owner gives the site's account its handle and
+badge from the box (runbook step 28); a verified handle cannot be renamed
+from the page.
+
+**Data and tools.** Three new tables: tags, polls, votes. No outside
+service, no new key, no cost. Delete and export cover all three.
+

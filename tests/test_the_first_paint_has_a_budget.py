@@ -65,7 +65,12 @@ APP_JS_BUDGET_KB = 481
 #: above plus its styles and its section (+4.6 KB gz). Told to Ethan.
 #: 601 -> 596 on 2026-10-07: its JavaScript and styles now load on first
 #: use (js/social.js, css/social.css). Told to Ethan.
-BOOT_BUDGET_KB = 596
+#: 596 -> 597 on 2026-10-07 by one profile for the whole site (Ethan: "it
+#: should all be one main profile"): the top-bar chip in the profile's
+#: colour, the Account page as the profile, the streak board's name. +0.3
+#: KB gz after Social's own icons moved out of app.js to pay for most of
+#: it; the boot path sat 0.03 KB under 596 before. Told to Ethan.
+BOOT_BUDGET_KB = 597
 
 
 def _gz_trimmed(rel: str) -> int:

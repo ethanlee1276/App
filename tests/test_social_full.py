@@ -130,14 +130,18 @@ def test_a_block_hides_both_ways_and_stops_follows_and_comments():
 
 # --- talk posts and edits -----------------------------------------------------
 
-def test_a_talk_post_has_a_title_and_body_and_no_tail():
+def test_a_talk_post_needs_words_not_a_title_and_has_no_tail():
     conn, (a, b, *_) = _db()
     code, out = SF.create_talk(conn, a, "nfl", "Who starts at QB for the Jets?", "Thoughts?")
     assert code == 200
     p = SF.feed(conn, b, kind="text")["posts"][0]
     assert p["kind"] == "text" and p["title"].startswith("Who starts") and p["legs"] == []
     assert SF.tail(conn, b, out["id"], entitled=True)[0] == 404
-    assert SF.create_talk(conn, a, "nfl", "", "body")[0] == 400
+    # Ethan's render has one box ("What's your take?"): the title the
+    # first cut demanded is optional now; words are not.
+    assert SF.create_talk(conn, a, "nfl", "", "Jets cover tonight")[0] == 200
+    assert SF.create_talk(conn, a, "nfl", "", "")[0] == 400
+    assert SF.create_talk(conn, a, "nfl", "  ", " x ")[0] == 400
     assert SF.feed(conn, b, kind="parlay")["posts"] == []
 
 

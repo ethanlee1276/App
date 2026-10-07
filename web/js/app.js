@@ -1139,16 +1139,6 @@ const ICON_PATHS = {
           + '<path d="M1.7 13.4v-1a3.4 3.4 0 013.4-3.4h1.6a3.4 3.4 0 013.4 3.4v1"/>'
           + '<path d="M10.7 3.6a2.3 2.3 0 010 4.3"/>'
           + '<path d="M11.6 9.2h.4a2.9 2.9 0 012.9 2.9v1.3"/>',
-  // The feed (2026-10-06): a whale's tail for Tail (Ethan: "make it a
-  // whale's tail as the button"), a heart, a speech bubble, a flag, dots.
-  whale: '<path d="M8 10.2C6.3 8.3 3.6 8.4.9 5.6c2.9-.2 5.4.1 7.1 2.2 1.7-2.1 4.2-2.4 7.1-2.2-2.7 2.8-5.4 2.7-7.1 4.6z"/>'
-         + '<path d="M8 10.2c.2 1.9-.4 3.4-1.7 4.6"/>',
-  heart: '<path d="M8 13.5S2.2 10 2.2 6.2A2.9 2.9 0 018 4.6a2.9 2.9 0 015.8 1.6C13.8 10 8 13.5 8 13.5z"/>',
-  chat: '<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>',
-  flag: '<path d="M3.5 14V2.5M3.5 3h8l-1.6 2.7 1.6 2.8h-8"/>',
-  dots: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.6"/>',
-  share: '<path d="M8 10V2.5M5 5.2L8 2.3l3 2.9"/><path d="M3.5 8.5v4.5h9V8.5"/>',
-  bell: '<path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.3H2.8z"/><path d="M6.7 14a1.4 1.4 0 002.6 0"/>',
   // Discord's mark, drawn rather than fetched — the CSP on this site
   // blocks every external host, and a logo that 404s is worse than none.
   // Used only as the label on links that genuinely go to Discord.
@@ -2227,7 +2217,7 @@ const FEATURES = [
    [["My Bets", "Log your own tickets and track them to settlement, graded by the same rules the house journal uses.", "mybets"],
     ["Bankroll", "Size your units, set your limits, and see what is at risk.", "bankroll"],
     ["Alerts", "Line moves, injuries and the desk — conditions you set, fired when they happen.", "alerts"],
-    ["The Feed", "Post your parlays for everyone, with a bio and a handle. Likes, comments, and a whale-tail Tail button that opens the parlay at your book and counts everyone who tailed it.", "feed"],
+    ["Social", "Parlays, takes and polls under one profile for the whole site. Follow, like, comment, and tap the whale to tail a parlay at your book.", "feed"],
     ["Messages & friends", "Send picks to friends as chart-linked cards, chat in real threads, nickname whoever you like.", "messages"],
     ["The Discord", "Where the site posts last night’s record, the Pick of the Day and the board by itself, and where members talk it over.", "discord"],
     ["The Streak", "Pick three, keep the streak alive. Free, and free by design — it publishes no model output at all.", "streak"],
@@ -2337,8 +2327,10 @@ const REFERENCE_VIEWS = ["why", "about", "methodology", "features"];
    its picks, which league it is — and neither the prediction market nor
    the crypto radar is a league or runs on that slate. The league row, the
    slate's age chip and its stale bar leave these pages (offline and
-   unreachable still show: those are about the connection, not the slate). */
-const OFF_LEAGUE_VIEWS = ["intel", "memes"];
+   unreachable still show: those are about the connection, not the slate).
+   Social joined 2026-10-07: it carries its own sport chips, and a league
+   row above them read as a filter the feed was not under. */
+const OFF_LEAGUE_VIEWS = ["intel", "memes", "feed"];
 
 /* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
    pipeline is dead and every number below is a fossil". It exists
@@ -25017,13 +25009,13 @@ async function stkPick(qid, side) {
 }
 
 async function stkSaveName() {
-  const inp = document.getElementById("stk-name-in");
-  if (!inp) return;
+  const btn = document.getElementById("stk-name-save");
+  if (!btn) return;
   try {
     const r = await fetch("/api/streak/name", {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: inp.value || "" }),
+      body: JSON.stringify({ name: btn.dataset.name || "" }),
     });
     const body = await r.json().catch(() => ({}));
     const note = document.getElementById("stk-note");
@@ -25120,17 +25112,21 @@ async function renderStreak() {
   const board = (leadersRows.length
     ? `<table class="stk-board"><thead><tr><th>Player</th>
         <th class="num">Streak</th><th class="num">Best</th></tr></thead><tbody>
-        ${leadersRows.map((r) => `<tr><td>${escapeHtml(r.name)}</td>
+        ${leadersRows.map((r) => `<tr><td>${r.handle
+          ? `<a href="#feed/u/${encodeURIComponent(r.handle)}">${escapeHtml(r.name)}</a>` : escapeHtml(r.name)}</td>
           <td class="num">${r.current}</td><td class="num">${r.best}</td></tr>`).join("")}
         </tbody></table>`
     : `<p class="stk-empty">Nobody has survived a night yet — the board lists
         streaks, and the first one claims it.</p>`) + tonightLine;
-  const nameBox = signedIn ? `<div class="stk-namebox">
-      <input id="stk-name-in" maxlength="20" placeholder="Display name"
-        value="${escapeHtml((me && me.name) || "")}" autocomplete="off">
-      <button id="stk-name-save">Save</button>
-      <span>Pick a name to appear on the board — skip it and you play in private.</span>
-    </div>` : "";
+  // ONE PROFILE (Ethan, 2026-10-07): the board shows your site profile's
+  // name. Choosing to appear is still the opt-in — a streak name set to
+  // your handle — so nobody lands on a public board by making a profile.
+  const prof = me && me.profile;
+  const nameBox = !signedIn ? "" : `<div class="stk-namebox">${prof
+    ? `<span>${me.name ? "On the board" : "Playing in private"} as <b>${escapeHtml(prof.name)}</b></span>
+      <button id="stk-name-save" data-name="${me.name ? "" : escapeAttr(prof.handle)}">${me.name ? "Play in private" : "Show me"}</button>`
+    : `<span>Make your profile to appear on the board — or play in private.</span>`}
+      <a href="#account">${prof ? "Edit profile" : "Make your profile"}</a></div>`;
 
   host.innerHTML = `${head}${card}
     ${history ? `<div class="section-title stk-sub">Recent nights</div>${history}` : ""}
@@ -25154,10 +25150,6 @@ async function renderStreak() {
   if (cta) cta.addEventListener("click", () => switchView("account"));
   const save = document.getElementById("stk-name-save");
   if (save) save.addEventListener("click", stkSaveName);
-  const nameIn = document.getElementById("stk-name-in");
-  if (nameIn) nameIn.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") stkSaveName();
-  });
 }
 
 /* ============================================================
@@ -26682,6 +26674,33 @@ function acctPaintNote() {
 let _acctUser = null;                 // {signed_in, email} — server's answer
 const ACCT_SEARCH_KEY = "qb_search_v1";
 const SEARCH_KEEP = 100;
+
+/* ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07). Wherever the site
+   draws "you" outside Social — the top-bar chip, the sync strip, your side
+   of a chat — it draws the profile everybody sees on Social: its initials
+   on its colour. Before there is a profile, the email's first two letters,
+   as it always did. */
+const PF_TINT = ["brand-solid", "good", "bad", "cyan", "plum", "warn", "brand-2", "text-mute"];
+function acctMark(u) {
+  const p = u && u.profile;
+  if (p) {
+    const parts = String(p.name || p.handle || "?").trim().split(/[\s_]+/).filter(Boolean);
+    return { ini: ((parts[0] || "?")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase(),
+             st: ` style="background:var(--${PF_TINT[Math.abs(Number(p.color || 0)) % 8]});color:var(--brand-ink)"`,
+             name: p.name || p.handle };
+  }
+  return { ini: ((u && u.email) || "?").trim().slice(0, 2).toUpperCase(), st: "", name: "" };
+}
+
+function acctChipPaint() {
+  const btn = document.getElementById("nav-acct");
+  const u = _acctUser;
+  if (!btn || !(u && u.signed_in)) return;
+  const m = acctMark(u);
+  btn.classList.remove("nav-acct-out");
+  btn.innerHTML = `<span class="nav-acct-init"${m.st}>${escapeHtml(m.ini)}</span>`;
+  btn.title = m.name ? `${m.name} — your profile and account` : `Signed in as ${u.email}`;
+}
 
 async function acctWho(force) {
   if (_acctUser && !force) return _acctUser;
@@ -29113,13 +29132,15 @@ function acctScreenHTML() {
   const u = _acctUser;
   if (u && u.signed_in) {
     setTimeout(renderBilling, 0);
+    // The profile header above this panel is who you are on the site; this
+    // is the account behind it — sign-in, plan, devices, data. It carried
+    // its own initials disc until 2026-10-07, which made two identities on
+    // one page (Ethan: "it should all be one main profile").
     return `<div class="acct-screen acct-screen-in">
       <div class="acct-screen-head">
-        <span class="acct-avatar">${escapeHtml(
-          (u.email || "?").trim().slice(0, 2).toUpperCase())}</span>
         <div>
-          <h2>Your account</h2>
-          <p class="acct-screen-sub">${escapeHtml(u.email)}</p>
+          <h2>Sign-in &amp; plan</h2>
+          <p class="acct-screen-sub">${escapeHtml(u.email)} — only you see this.</p>
         </div>
       </div>
       ${acctSignedInHTML(u)}
@@ -29163,8 +29184,28 @@ function acctScreenHTML() {
 function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;
-  body.innerHTML = acctScreenHTML() + friendsCardHTML() + settingsHTML()
-    + menuDiagHTML();
+  const u = _acctUser;
+  if (u && u.signed_in) {
+    /* ONE PROFILE FOR THE WHOLE SITE. Ethan, 2026-10-07: "the account
+       page on the feed page and the main account page should be one page
+       … it should all be one main profile for the whole site." The top is
+       the profile everybody sees on Social (js/social.js mountAccount:
+       the header, Posts, Graded picks); Friends and Settings are this
+       page's own panels, shown by the tabs under the header. Social's old
+       #feed/edit lands here too. If Social cannot load, every panel
+       shows, so the account is never out of reach. */
+    body.innerHTML = `<div id="acct-prof" class="acct-prof"></div>
+      <div data-acct-tab="friends" hidden>${friendsCardHTML()}</div>
+      <div data-acct-tab="settings" hidden>${acctScreenHTML()}${settingsHTML()}${menuDiagHTML()}</div>`;
+    loadSocial().then((S) => {
+      const el = document.getElementById("acct-prof");
+      if (S && S.mountAccount && el) S.mountAccount(el, u);
+      else body.querySelectorAll("[data-acct-tab]").forEach((x) => { x.hidden = false; });
+    });
+  } else {
+    body.innerHTML = acctScreenHTML() + friendsCardHTML() + settingsHTML()
+      + menuDiagHTML();
+  }
   renderFantasyLinks();
   bindSettings();
   // Fetched after first paint, then redrawn once — the card renders
@@ -29588,9 +29629,9 @@ function menuDiagClear() {
 function acctStripHTML() {
   const u = _acctUser;
   if (u && u.signed_in) {
+    const m = acctMark(u);
     return `<div class="acct-strip">
-      <span class="acct-avatar sm">${escapeHtml(
-        (u.email || "?").trim().slice(0, 2).toUpperCase())}</span>
+      <span class="acct-avatar sm"${m.st}>${escapeHtml(m.ini)}</span>
       <span>Syncing to <b>${escapeHtml(u.email)}</b></span>
       <button class="btn ghost" data-act="toAccount">Account</button>
     </div>`;
@@ -43217,9 +43258,9 @@ function msgBubsHTML(items) {
    off the signed-in account, never a fake name. */
 function msgMyAvatar() {
   const u = typeof _acctUser === "object" && _acctUser ? _acctUser : null;
-  const init = ((u && u.email) || "?").trim().slice(0, 2).toUpperCase();
-  return `<span class="msg-ava msg-ava-me" aria-hidden="true">${
-    escapeHtml(init)}</span>`;
+  const m = acctMark(u);
+  return `<span class="msg-ava msg-ava-me"${m.st} aria-hidden="true">${
+    escapeHtml(m.ini)}</span>`;
 }
 
 // Through tzTime, like every clock on the site — one zone, no
@@ -48621,10 +48662,7 @@ function buzzOnSettle(rows) {
       try {
         const u = await acctWho();
         if (u && u.signed_in) {
-          const initials = (u.email || "?").trim().slice(0, 2).toUpperCase();
-          acctBtn.innerHTML =
-            `<span class="nav-acct-init">${escapeHtml(initials)}</span>`;
-          acctBtn.title = `Signed in as ${u.email}`;
+          acctChipPaint();
         } else {
           acctBtn.classList.add("nav-acct-out");
           acctBtn.innerHTML =

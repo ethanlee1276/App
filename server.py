@@ -1915,6 +1915,13 @@ class Handler(BaseHTTPRequestHandler):
                        "allowed": self._password_transport_ok()}
                 if who:
                     out["email"] = who["email"]
+                    # ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07):
+                    # the Account page, the top bar's avatar and the feed
+                    # all read this one row.
+                    from engine import socialfeed as SF
+                    out["profile"] = SF.profile_of(conn, who["id"])
+                    if not out["profile"]:
+                        out["suggest_handle"] = SF.suggest_handle(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
@@ -2459,11 +2466,13 @@ class Handler(BaseHTTPRequestHandler):
                     SF.settle_pending(conn, _led.connect)
                 except Exception as exc:                 # noqa: BLE001
                     _seclog("feed_grade", "failed", self._client_ip(), error=type(exc).__name__)
+            days = {"7": 7, "30": 30, "all": None}.get(one("days", "30"), 30)
             if path == "list":
                 out = SF.feed(conn, uid, entitled, strong, before=_int(one("before")),
                               sport=one("sport")[:8], order=one("order", "hot")[:9],
                               window=one("window", "week")[:5], kind=one("kind")[:6],
-                              offset=_int(one("offset")))
+                              offset=_int(one("offset")), tag=one("tag")[:30],
+                              handle=one("handle")[:20])
                 out["me"] = SF.profile_of(conn, uid) if uid else None
                 out["signed_in"] = bool(who)
                 out["unseen"] = SF.unseen(conn, uid)
@@ -2473,9 +2482,24 @@ class Handler(BaseHTTPRequestHandler):
                                                    "signed_in": bool(who),
                                                    "unseen": SF.unseen(conn, uid)}).encode(), ".json")
             if path == "rail":
-                out = {"leaders": SF.leaders(conn, uid)["top"][:5],
-                       "suggest": SF.suggestions(conn, uid)}
+                # The render's right column in one read: Trending Picks,
+                # Top Bettors, Community Stats, who to follow, #tags.
+                out = {"trending": SF.trending_picks(conn, uid, entitled, 5),
+                       "leaders": SF.leaders(conn, uid, days, one("metric", "win")[:9])["top"][:5],
+                       "stats": SF.community_stats(conn),
+                       "suggest": SF.suggestions(conn, uid),
+                       "tags": SF.trending_tags(conn, uid, 7, 8)}
                 return self._send(200, json.dumps(out).encode(), ".json")
+            if path == "trending":
+                return self._send(200, json.dumps(
+                    {**SF.trending_picks(conn, uid, entitled, 20),
+                     "tags": SF.trending_tags(conn, uid, 7, 20)}).encode(), ".json")
+            if path == "tags":
+                return self._send(200, json.dumps(
+                    {"tags": SF.trending_tags(conn, uid, 30, 60)}).encode(), ".json")
+            if path == "legs":
+                return self._send(200, json.dumps(
+                    SF.leg_search(one("sport", "nfl")[:8], one("q")[:60], entitled)).encode(), ".json")
             if path == "post":
                 code, out = SF.post_detail(conn, _int(one("id")), uid, entitled, strong)
                 return self._send(code, json.dumps(out).encode(), ".json")
@@ -2487,7 +2511,8 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = SF.follow_list(conn, one("handle"), one("which", "followers"), uid)
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "leaders":
-                return self._send(200, json.dumps(SF.leaders(conn, uid)).encode(), ".json")
+                return self._send(200, json.dumps(
+                    SF.leaders(conn, uid, days, one("metric", "units")[:9])).encode(), ".json")
             if path == "search":
                 return self._send(200, json.dumps(
                     SF.search(conn, one("q"), uid, entitled, strong)).encode(), ".json")
@@ -2506,9 +2531,9 @@ class Handler(BaseHTTPRequestHandler):
         from engine import socialfeed as SF
         if path not in ("post", "talk", "edit", "like", "comment-like", "tail", "comment",
                         "delete", "report", "profile", "follow", "block", "seen", "friend",
-                        "hide"):
+                        "hide", "vote", "verify"):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
-        if path == "hide" and self._owner_refused():
+        if path in ("hide", "verify") and self._owner_refused():
             return
         txt = lambda k: body.get(k) if isinstance(body.get(k), str) else None   # noqa: E731
         A = _acct()
@@ -2517,6 +2542,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "hide":
                 code, out = SF.set_hidden(conn, str(body.get("kind") or ""),
                                           _int(body.get("id")), bool(body.get("hidden", True)))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "verify":
+                code, out = SF.set_verified(conn, str(body.get("handle") or "")[:20],
+                                            bool(body.get("on", True)))
                 return self._send(code, json.dumps(out).encode(), ".json")
             who = self._account(conn)
             if not who:
@@ -2535,7 +2564,12 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = SF.create_post(conn, uid, body.get("sport"), body.get("date"),
                                            legs, body.get("caption"))
             elif path == "talk":
-                code, out = SF.create_talk(conn, uid, txt("sport"), txt("title"), txt("body"))
+                poll = [o for o in body.get("poll") or [] if isinstance(o, str)][:6] \
+                    if isinstance(body.get("poll"), list) else None
+                code, out = SF.create_talk(conn, uid, txt("sport"), txt("title"), txt("body"),
+                                           poll=poll, link=txt("link"))
+            elif path == "vote":
+                code, out = SF.vote(conn, uid, _int(body.get("id")), body.get("option"))
             elif path == "edit":
                 code, out = SF.edit_post(conn, uid, _int(body.get("id")), caption=txt("caption"),
                                          title=txt("title"), body=txt("body"))

@@ -9417,6 +9417,9 @@ button.rc-day b { font-size: var(--fs-sm); }
 .acct-hero-sub { margin-top: 6px; }
 .acct-screen-head { display: flex; align-items: center; gap: 14px;
   margin: 4px 0 18px; }
+/* The Account page's own panels (Friends, Settings) under the profile
+   header Social draws: the same 880px column, so the page reads as one. */
+#account-body > [data-acct-tab] { max-width: 880px; margin-inline: auto; }
 .acct-screen-head h2 { margin: 0; font-family: var(--font-display);
   font-size: var(--fs-xl); line-height: var(--lh-tight); letter-spacing: -.01em; }
 .acct-screen-sub { margin: 4px 0 0; color: var(--text-mute);

@@ -67,6 +67,17 @@ HANDLE_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
 MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_]{3,20})")
 RESERVED = {"qellys", "qellysbook", "admin", "owner", "zeno", "moderator", "mod",
             "support", "official", "staff", "system", "everyone", "here"}
+#: Names nobody may take for themselves, anywhere in a handle: they would
+#: read as the site speaking. The owner claims one with :func:`claim`.
+RESERVED_PARTS = ("qellys", "zeno", "admin", "moderator", "official")
+TAG_RE = re.compile(r"(?<![A-Za-z0-9_#&])#([A-Za-z][A-Za-z0-9_]{1,29})")
+MAX_TAGS = 5
+POLL_MIN, POLL_MAX, POLL_OPT = 2, 4, 60
+POLL_OPEN_S = 3 * 86400
+MAX_LINK = 300
+#: Sports a DISCUSSION post may wear. Parlays come only from the boards in
+#: SPORT_FILE; talk can be about anything the room watches.
+TALK_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "soccer")
 MIN_LEGS = 1
 MAX_LEGS = 3          # the slip's own cap (SLIP_MAX in app.js)
 POSTS_PER_DAY = 10
@@ -79,7 +90,9 @@ EDIT_WINDOW_S = 15 * 60
 MAX_MENTIONS = 5
 PAGE = 20
 KEEP_DAYS = 120                # a profile's record needs a season's history
-HOT_WINDOW_S = 7 * 86400
+TREND_WINDOW_S = 2 * 86400     # Trending Picks: parlays posted in the last two days
+LEADER_DAYS = {"7": 7, "30": 30, "all": None}
+LEADER_METRICS = ("win", "units", "followers")
 GRADE_AFTER_S = 2 * 3600       # nothing to grade before kickoff + a game
 GRADE_RETRY_S = 15 * 60
 GRADE_GIVE_UP_S = 10 * 86400
@@ -88,6 +101,7 @@ COLORS = 8                     # avatar colours, drawn from the theme by index
 REPORT_REASONS = ("spam", "abuse", "hate", "scam", "other")
 TOP_WINDOWS = {"day": 86400, "week": 7 * 86400, "month": 30 * 86400, "all": None}
 LEADER_MIN = 5
+STATS_MIN = 10                 # graded parlays before the community win rate shows
 
 #: The six sports boards a leg can come from — the same map Bet it uses.
 SPORT_FILE = {"nfl": "recommendations.json", "cfb": "cfb.json",
@@ -194,9 +208,31 @@ def ensure_tables(conn) -> None:
         ON feed_notifs(user_id, COALESCE(actor_id, 0), kind, COALESCE(post_id, 0), COALESCE(comment_id, 0));
       CREATE INDEX IF NOT EXISTS feed_notifs_inbox ON feed_notifs(user_id, created_at);
     """)
+    conn.executescript("""
+      CREATE TABLE IF NOT EXISTS feed_tags (
+        post_id    INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+        tag        TEXT NOT NULL COLLATE NOCASE,
+        created_at REAL NOT NULL,
+        PRIMARY KEY (post_id, tag)
+      );
+      CREATE INDEX IF NOT EXISTS feed_tags_tag ON feed_tags(tag, created_at);
+      CREATE TABLE IF NOT EXISTS feed_polls (
+        post_id    INTEGER PRIMARY KEY REFERENCES feed_posts(id) ON DELETE CASCADE,
+        options    TEXT NOT NULL,
+        closes_at  REAL NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS feed_votes (
+        post_id    INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        option     INTEGER NOT NULL,
+        created_at REAL NOT NULL,
+        PRIMARY KEY (post_id, user_id)
+      );
+    """)
     for col, decl in (("display_name", "TEXT NOT NULL DEFAULT ''"),
                       ("color", "INTEGER NOT NULL DEFAULT 0"),
-                      ("fav_team", "TEXT NOT NULL DEFAULT ''")):
+                      ("fav_team", "TEXT NOT NULL DEFAULT ''"),
+                      ("verified", "INTEGER NOT NULL DEFAULT 0")):
         _add(conn, "feed_profiles", col, decl)
     for col, decl in (("kind", "TEXT NOT NULL DEFAULT 'parlay'"),
                       ("title", "TEXT NOT NULL DEFAULT ''"),
@@ -205,7 +241,8 @@ def ensure_tables(conn) -> None:
                       ("units", "REAL"),
                       ("graded_at", "REAL"),
                       ("last_try", "REAL NOT NULL DEFAULT 0"),
-                      ("edited_at", "REAL")):
+                      ("edited_at", "REAL"),
+                      ("link", "TEXT NOT NULL DEFAULT ''")):
         _add(conn, "feed_posts", col, decl)
     _add(conn, "feed_comments", "parent_id", "INTEGER")
     conn.commit()
@@ -225,15 +262,30 @@ def profile_of(conn, user_id: int) -> dict | None:
     if not r:
         return None
     return {"handle": r["handle"], "bio": r["bio"], "since": r["created_at"],
-            "name": r["display_name"], "color": int(r["color"] or 0), "team": r["fav_team"]}
+            "name": r["display_name"], "color": int(r["color"] or 0), "team": r["fav_team"],
+            "verified": bool(r["verified"])}
+
+
+def _reserved(name: str) -> bool:
+    low = str(name or "").lower().replace(" ", "").replace("_", "")
+    return low in RESERVED or any(p in low for p in RESERVED_PARTS)
 
 
 def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
-                team=None) -> tuple[int, dict]:
+                team=None, _owner: bool = False) -> tuple[int, dict]:
     """Choose (or change) the handle; write the name, bio, colour and team.
-    Fields passed as None keep what is stored."""
+    Fields passed as None keep what is stored.
+
+    ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07: "it should all be
+    one main profile for the whole site"). This row is what the feed, the
+    Account page, the streak leaderboard and the friends inbox all show.
+    A verified account keeps its handle: renaming it would move the badge
+    onto a name the owner never checked."""
     ensure_tables(conn)
     old = profile_of(conn, user_id) or {}
+    if old.get("verified") and handle is not None and not _owner \
+            and str(handle).strip().lstrip("@").lower() != old["handle"].lower():
+        return 403, {"error": "A verified handle can’t be changed here — ask the site owner."}
     handle = str(handle if handle is not None else old.get("handle", "")).strip().lstrip("@")
     bio = re.sub(r"\s+", " ", str(bio if bio is not None else old.get("bio", ""))).strip()[:MAX_BIO]
     name = re.sub(r"\s+", " ", str(name if name is not None else old.get("name", ""))).strip()[:MAX_NAME]
@@ -246,9 +298,10 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
         return 400, {"error": "That favourite team is not one this site knows."}
     if not HANDLE_RE.match(handle):
         return 400, {"error": "A handle is 3–20 letters, numbers or underscores."}
-    if handle.lower() in RESERVED or not profanity.clean_name(handle):
+    keep = old.get("handle", "").lower() == handle.lower()   # an owner-claimed name stays
+    if not profanity.clean_name(handle) or (_reserved(handle) and not (_owner or keep)):
         return 400, {"error": "That handle is not available."}
-    if name and (name.lower().replace(" ", "") in RESERVED or not profanity.clean_name(name)):
+    if name and (not profanity.clean_name(name) or (_reserved(name) and not (_owner or old.get("verified")))):
         return 400, {"error": "That display name is not available."}
     why = profanity.check(bio, "Your bio")
     if why:
@@ -265,6 +318,54 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
         (int(user_id), handle, bio, now, now, name, color, team))
     conn.commit()
     return 200, {"ok": True, "profile": profile_of(conn, user_id)}
+
+
+def claim(conn, email: str, handle: str, name: str = "", verified: bool = True) -> tuple[int, dict]:
+    """The owner's door (a box command, never an endpoint a browser can
+    reach): give the account with this email a reserved handle — the
+    site's own "Qellys_Book" — and the verified badge."""
+    ensure_tables(conn)
+    u = conn.execute("SELECT id FROM users WHERE email=? COLLATE NOCASE", (str(email or "").strip(),)).fetchone()
+    if not u:
+        return 404, {"error": "No account with that email."}
+    code, out = profile_set(conn, int(u["id"]), handle, None, name=name or None, _owner=True)
+    if code != 200:
+        return code, out
+    set_verified(conn, handle, verified)
+    return 200, {"ok": True, "profile": profile_of(conn, int(u["id"]))}
+
+
+def set_verified(conn, handle: str, on: bool) -> tuple[int, dict]:
+    """The badge. Only the owner grants it (owner token or box command)."""
+    ensure_tables(conn)
+    cur = conn.execute("UPDATE feed_profiles SET verified=? WHERE handle=? COLLATE NOCASE",
+                       (1 if on else 0, str(handle or "").lstrip("@")))
+    conn.commit()
+    return (200, {"ok": True}) if cur.rowcount else (404, {"error": "Nobody has that handle."})
+
+
+def suggest_handle(conn, user_id: int) -> str:
+    """A starting handle for someone making their profile: the streak name
+    they already chose to show in public, when it makes a legal handle
+    nobody holds."""
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "streak_state" not in have:
+        return ""
+    r = conn.execute("SELECT name FROM streak_state WHERE user_id=?", (int(user_id),)).fetchone()
+    cand = re.sub(r"[^A-Za-z0-9_]", "_", str(r["name"] if r else "").strip())[:20].strip("_")
+    if not HANDLE_RE.match(cand or "") or _reserved(cand) or not profanity.clean_name(cand):
+        return ""
+    taken = _uid_of(conn, cand)
+    return cand if taken in (None, int(user_id)) else ""
+
+
+def public_name(conn, user_id: int) -> str:
+    """What the rest of the site calls this account when it has a profile:
+    the display name, else @handle. '' when there is no profile."""
+    p = profile_of(conn, user_id)
+    if not p:
+        return ""
+    return p["name"] or p["handle"]
 
 
 # ─── blocks and follows ─────────────────────────────────────────────────────
@@ -355,8 +456,10 @@ def _following_set(conn, viewer) -> set:
 
 
 def _person(r, following: set | None = None) -> dict:
+    keys = r.keys()
     return {"handle": r["handle"], "name": r["display_name"], "color": int(r["color"] or 0),
-            "team": r["fav_team"], "following": int(r["user_id"]) in (following or set())}
+            "team": r["fav_team"], "verified": bool(r["verified"]) if "verified" in keys else False,
+            "official": _official(r), "following": int(r["user_id"]) in (following or set())}
 
 
 # ─── notifications ──────────────────────────────────────────────────────────
@@ -594,6 +697,37 @@ def resolve_legs(sport: str, legs_in, data_dir: Path | None = None, now: float |
     return out, ""
 
 
+def leg_search(sport: str, q: str, entitled: bool, data_dir: Path | None = None,
+               now: float | None = None, n: int = 30) -> dict:
+    """The composer's Parlay picker: rows on today's board a post can
+    carry — priced at a real book, game not begun. A reader without a plan
+    searches the public board only, so the paid rows stay paid; whatever
+    comes back, create_post still rebuilds every leg from the board."""
+    sport = str(sport or "").lower()
+    full, public = boards(sport, data_dir)
+    rows = full if entitled else public
+    words = [w for w in re.split(r"\s+", str(q or "").lower().strip()) if w][:4]
+    out = []
+    for key, r in rows.items():
+        if str(r.get("book") or "").lower() == "proxy" or started(r, now):
+            continue
+        try:
+            int(r.get("odds"))
+        except (TypeError, ValueError):
+            continue
+        hay = " ".join(str(r.get(k) or "") for k in (
+            "player", "team", "opponent", "matchup", "home", "away", "market_label", "market")).lower()
+        if words and not all(w in hay for w in words):
+            continue
+        leg = _leg_from(r, paid=key not in public)
+        out.append({k: leg.get(k) for k in (
+            "kind", "gid", "player", "market", "market_label", "side", "line", "odds", "book",
+            "team", "label", "matchup", "opponent", "kickoff", "game_date") if leg.get(k) not in (None, "")})
+    out.sort(key=lambda x: (str(x.get("kickoff") or "9"), str(x.get("player") or x.get("matchup") or "")))
+    return {"legs": out[:max(1, min(int(n), 60))], "sport": sport,
+            "open": sport in SPORT_FILE and bool(full)}
+
+
 # ─── posts ──────────────────────────────────────────────────────────────────
 
 def _post_cap(conn, user_id: int, now: float) -> str:
@@ -622,7 +756,7 @@ def create_post(conn, user_id: int, sport, date, legs_in, caption,
     """A parlay (or single) of board legs, with an optional caption."""
     ensure_tables(conn)
     if not profile_of(conn, user_id):
-        return 409, {"error": "Pick a handle first — it is the name your posts go out under.",
+        return 409, {"error": "Set up your profile first — it is the name your posts go out under.",
                      "need_handle": True}
     sport = str(sport or "").strip().lower()[:8]
     if sport not in SPORT_FILE:
@@ -638,6 +772,8 @@ def create_post(conn, user_id: int, sport, date, legs_in, caption,
     legs, why = resolve_legs(sport, legs_in, data_dir, now=now)
     if why:
         return 400, {"error": why}
+    # The composer posts without a board date; the legs carry their own.
+    date = str(date or "")[:10] or legs[0].get("game_date") or _et_date(legs[0].get("kickoff") or "")
     blob = json.dumps(legs, sort_keys=True)
     same = conn.execute(
         "SELECT id FROM feed_posts WHERE user_id=? AND legs=? AND created_at>? AND hidden=0",
@@ -649,47 +785,155 @@ def create_post(conn, user_id: int, sport, date, legs_in, caption,
         "VALUES (?,?,?,?,?,?,?,'parlay')",
         (int(user_id), sport, str(date or "")[:10], blob, caption, combined_american(legs), now))
     pid = int(cur.lastrowid)
+    _set_tags(conn, pid, caption, now)
     _mentions(conn, caption, user_id, pid)
     _prune(conn, now)
     conn.commit()
     return 200, {"ok": True, "id": pid, "already": False}
 
 
-def create_talk(conn, user_id: int, sport, title, body, now: float | None = None) -> tuple[int, dict]:
-    """A discussion post — Reddit's text post: a title, a body, a sport tag."""
+def _tags(text: str) -> list:
+    """#hashtags in the order written, each once, at most five."""
+    out = []
+    for t in TAG_RE.findall(str(text or "")):
+        if t.lower() not in [x.lower() for x in out] and profanity.clean_name(t):
+            out.append(t)
+        if len(out) >= MAX_TAGS:
+            break
+    return out
+
+
+def _set_tags(conn, post_id: int, text: str, now: float) -> None:
+    conn.execute("DELETE FROM feed_tags WHERE post_id=?", (int(post_id),))
+    for t in _tags(text):
+        conn.execute("INSERT OR IGNORE INTO feed_tags (post_id, tag, created_at) VALUES (?,?,?)",
+                     (int(post_id), t, now))
+
+
+def _clean_link(link) -> tuple[str, str]:
+    """(url, '') or ('', why). https only, one link, shown with its domain."""
+    url = str(link or "").strip()
+    if not url:
+        return "", ""
+    if len(url) > MAX_LINK or not re.fullmatch(r"https://[^\s<>\"']+\.[^\s<>\"']+", url):
+        return "", "A link has to be a full https:// address."
+    if profanity.has_slur(url):
+        return "", "That link has a slur in it."
+    return url, ""
+
+
+def _clean_poll(options) -> tuple[list, str]:
+    if not options:
+        return [], ""
+    opts = [re.sub(r"\s+", " ", str(o or "")).strip()[:POLL_OPT] for o in options if isinstance(o, str)]
+    opts = [o for o in opts if o]
+    if not (POLL_MIN <= len(opts) <= POLL_MAX):
+        return [], f"A poll has {POLL_MIN}–{POLL_MAX} options."
+    if len({o.lower() for o in opts}) != len(opts):
+        return [], "Each poll option has to be different."
+    for o in opts:
+        why = profanity.check(o, "A poll option")
+        if why:
+            return [], why
+    return opts, ""
+
+
+def create_talk(conn, user_id: int, sport, title, body, now: float | None = None,
+                poll=None, link=None) -> tuple[int, dict]:
+    """A take — the render's one box: words, with a poll or a link if you
+    like, tagged with a sport. A title is optional (the August cut asked
+    for one; the composer Ethan drew has a single field)."""
     ensure_tables(conn)
     if not profile_of(conn, user_id):
-        return 409, {"error": "Pick a handle first — it is the name your posts go out under.",
+        return 409, {"error": "Set up your profile first — it is the name your posts go out under.",
                      "need_handle": True}
     sport = str(sport or "").strip().lower()[:8]
-    if sport and sport not in SPORT_FILE:
+    if sport not in TALK_SPORTS:
         sport = ""
     title = re.sub(r"\s+", " ", str(title or "")).strip()[:MAX_TITLE]
     body = str(body or "").strip()[:MAX_BODY]
-    if len(title) < 3:
-        return 400, {"error": "Give it a title."}
+    if len((title + body).strip()) < 2:
+        return 400, {"error": "Write something first."}
     why = profanity.check(f"{title}\n{body}", "Your post")
     if why:
         return 400, {"error": why}
+    opts, why = _clean_poll(poll)
+    if why:
+        return 400, {"error": why}
+    url, why = _clean_link(link)
+    if why:
+        return 400, {"error": why}
     now = now if now is not None else time.time()
+    if url:
+        u = conn.execute("SELECT created_at FROM users WHERE id=?", (int(user_id),)).fetchone()
+        if u and now - float(u["created_at"] or now) < NEW_ACCOUNT_S:
+            # The spam rule: a day-old account can talk, not advertise.
+            return 403, {"error": "New accounts can post links after their first day."}
     why = _post_cap(conn, user_id, now)
     if why:
         return 429, {"error": why}
     cur = conn.execute(
         "INSERT INTO feed_posts (user_id, sport, date, legs, caption, combined, created_at, kind, "
-        "title, body, result) VALUES (?,?,?,?,?,?,?,'text',?,?,'none')",
-        (int(user_id), sport or "all", "", "[]", "", None, now, title, body))
+        "title, body, result, link) VALUES (?,?,?,?,?,?,?,'text',?,?,'none',?)",
+        (int(user_id), sport or "all", "", "[]", "", None, now, title, body, url))
     pid = int(cur.lastrowid)
+    if opts:
+        conn.execute("INSERT INTO feed_polls (post_id, options, closes_at) VALUES (?,?,?)",
+                     (pid, json.dumps(opts), now + POLL_OPEN_S))
+    _set_tags(conn, pid, f"{title} {body}", now)
     _mentions(conn, f"{title} {body}", user_id, pid)
     _prune(conn, now)
     conn.commit()
     return 200, {"ok": True, "id": pid}
 
 
+def vote(conn, user_id: int, post_id: int, option) -> tuple[int, dict]:
+    """One vote per person, final once cast — the way polls on every
+    platform the render borrows from behave."""
+    ensure_tables(conn)
+    r = _reachable(conn, user_id, post_id)
+    pl = conn.execute("SELECT * FROM feed_polls WHERE post_id=?", (int(post_id),)).fetchone() if r else None
+    if not pl:
+        return 404, {"error": "That poll is gone."}
+    opts = json.loads(pl["options"])
+    try:
+        i = int(option)
+    except (TypeError, ValueError):
+        i = -1
+    if not 0 <= i < len(opts):
+        return 400, {"error": "Pick one of the options."}
+    if time.time() > float(pl["closes_at"]):
+        return 409, {"error": "That poll has closed."}
+    conn.execute("INSERT OR IGNORE INTO feed_votes (post_id, user_id, option, created_at) VALUES (?,?,?,?)",
+                 (int(post_id), int(user_id), i, time.time()))
+    conn.commit()
+    return 200, {"poll": _poll_view(conn, int(post_id), user_id)}
+
+
+def _poll_view(conn, post_id: int, viewer) -> dict | None:
+    pl = conn.execute("SELECT * FROM feed_polls WHERE post_id=?", (int(post_id),)).fetchone()
+    if not pl:
+        return None
+    opts = json.loads(pl["options"])
+    counts = [0] * len(opts)
+    for r in conn.execute("SELECT option, COUNT(*) AS n FROM feed_votes WHERE post_id=? GROUP BY option",
+                          (int(post_id),)):
+        if 0 <= int(r["option"]) < len(counts):
+            counts[int(r["option"])] = int(r["n"])
+    mine = None
+    if viewer:
+        v = conn.execute("SELECT option FROM feed_votes WHERE post_id=? AND user_id=?",
+                         (int(post_id), int(viewer))).fetchone()
+        mine = int(v["option"]) if v else None
+    return {"options": opts, "counts": counts, "total": sum(counts), "mine": mine,
+            "closes_at": float(pl["closes_at"]), "closed": time.time() > float(pl["closes_at"])}
+
+
 def edit_post(conn, user_id: int, post_id: int, caption=None, title=None, body=None,
               now: float | None = None) -> tuple[int, dict]:
     """Words only, and only for 15 minutes. Legs never change: a parlay's
-    legs ARE the record, and an editable record is no record."""
+    legs ARE the record, and an editable record is no record. A poll's
+    options and a link stay as posted, too — votes were cast on them."""
     ensure_tables(conn)
     r = conn.execute("SELECT * FROM feed_posts WHERE id=?", (int(post_id),)).fetchone()
     if not r or int(r["user_id"]) != int(user_id):
@@ -700,19 +944,21 @@ def edit_post(conn, user_id: int, post_id: int, caption=None, title=None, body=N
     if r["kind"] == "text":
         title = re.sub(r"\s+", " ", str(title if title is not None else r["title"])).strip()[:MAX_TITLE]
         body = str(body if body is not None else r["body"]).strip()[:MAX_BODY]
-        if len(title) < 3:
-            return 400, {"error": "Give it a title."}
+        if len((title + body).strip()) < 2:
+            return 400, {"error": "Write something first."}
         why = profanity.check(f"{title}\n{body}", "Your post")
         if why:
             return 400, {"error": why}
         conn.execute("UPDATE feed_posts SET title=?, body=?, edited_at=? WHERE id=?",
                      (title, body, now, int(post_id)))
+        _set_tags(conn, int(post_id), f"{title} {body}", float(r["created_at"]))
     else:
         caption = str(caption if caption is not None else r["caption"]).strip()[:MAX_CAPTION]
         why = profanity.check(caption, "Your caption")
         if why:
             return 400, {"error": why}
         conn.execute("UPDATE feed_posts SET caption=?, edited_at=? WHERE id=?", (caption, now, int(post_id)))
+        _set_tags(conn, int(post_id), caption, float(r["created_at"]))
     conn.commit()
     return 200, {"ok": True}
 
@@ -925,6 +1171,7 @@ def public_leg(leg: dict, entitled: bool) -> dict:
         return {"locked": True, "kind": leg.get("kind"),
                 "player": leg.get("player") or "",
                 "matchup": leg.get("matchup") or "",
+                "team": leg.get("team") or "",
                 "market_label": leg.get("market_label") or ""}
     keep = ("kind", "player", "market", "market_label", "side", "line", "team", "opponent",
             "home", "away", "matchup", "label", "odds", "book", "game_date", "gid", "result")
@@ -936,6 +1183,13 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
     likes, tails = _counts(conn, "feed_likes", ids), _counts(conn, "feed_tails", ids)
     comments = _counts(conn, "feed_comments", ids)
     liked, tailed = _mine(conn, "feed_likes", ids, viewer), _mine(conn, "feed_tails", ids, viewer)
+    q = ",".join("?" * len(ids))
+    polled = {int(x[0]) for x in conn.execute(
+        f"SELECT post_id FROM feed_polls WHERE post_id IN ({q})", ids)} if ids else set()
+    tags: dict = {}
+    if ids:
+        for x in conn.execute(f"SELECT post_id, tag FROM feed_tags WHERE post_id IN ({q}) ORDER BY rowid", ids):
+            tags.setdefault(int(x[0]), []).append(x[1])
     out = []
     for r in rows:
         legs = json.loads(r["legs"] or "[]")
@@ -948,6 +1202,12 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
             "at": r["created_at"], "edited": bool(r["edited_at"]),
             "handle": r["handle"] or "someone", "name": r["display_name"] or "",
             "color": int(r["color"] or 0), "team": r["fav_team"] or "",
+            "verified": bool(r["verified"]) if "verified" in r.keys() else False,
+            "official": _official(r),
+            "link": r["link"] if "link" in r.keys() else "",
+            "domain": _domain(r["link"]) if "link" in r.keys() and r["link"] else "",
+            "poll": _poll_view(conn, pid, viewer) if pid in polled else None,
+            "tags": tags.get(pid, []),
             "caption": _text(r["caption"], strong), "title": _text(r["title"], strong),
             "body": _text(r["body"], strong), "strong": profanity.has_strong(words),
             "legs": shown, "locked": locked,
@@ -965,6 +1225,22 @@ def _views(conn, rows, viewer, entitled: bool, strong: bool) -> list:
                         and time.time() - float(r["created_at"]) <= EDIT_WINDOW_S,
         })
     return out
+
+
+def _official(r) -> bool:
+    """The site's own account: verified AND holding a "qellys" name, which
+    only the owner's claim can hand out (RESERVED_PARTS). It wears the
+    site's mark instead of initials."""
+    keys = r.keys() if hasattr(r, "keys") else ()
+    return bool("verified" in keys and r["verified"] and "qellys" in str(r["handle"] or "").lower())
+
+
+def _domain(url: str) -> str:
+    try:
+        host = urlsplit(str(url)).netloc.lower()
+    except ValueError:
+        return ""
+    return host[4:] if host.startswith("www.") else host
 
 
 def _kicked(legs: list, now: float | None = None) -> bool:
@@ -985,7 +1261,7 @@ def _kicked(legs: list, now: float | None = None) -> bool:
     return False
 
 
-_POST_SQL = ("SELECT p.*, f.handle, f.bio, f.display_name, f.color, f.fav_team FROM feed_posts p "
+_POST_SQL = ("SELECT p.*, f.handle, f.bio, f.display_name, f.color, f.fav_team, f.verified FROM feed_posts p "
              "LEFT JOIN feed_profiles f ON f.user_id=p.user_id ")
 
 
@@ -997,15 +1273,19 @@ def _hot(score: int, created: float) -> float:
 
 def feed(conn, viewer=None, entitled: bool = False, strong: bool = False,
          before: int = 0, sport: str = "", handle: str = "", order: str = "new",
-         window: str = "week", kind: str = "", offset: int = 0) -> dict:
-    """One page of posts. order: hot | new | top | following."""
+         window: str = "week", kind: str = "", offset: int = 0, tag: str = "") -> dict:
+    """One page of posts. order: hot ("For You") | new ("Latest") | top | following."""
     ensure_tables(conn)
+    order = "new" if order == "latest" else order
     where, args = ["p.hidden=0"], []
+    if tag:
+        where.append("p.id IN (SELECT post_id FROM feed_tags WHERE tag=? COLLATE NOCASE)")
+        args.append(str(tag).lstrip("#")[:30])
     hide = blocked_ids(conn, viewer)
     if hide:
         where.append(f"p.user_id NOT IN ({','.join('?' * len(hide))})")
         args += sorted(hide)
-    if sport in SPORT_FILE:
+    if sport in TALK_SPORTS:
         where.append("p.sport=?")
         args.append(sport)
     if kind in ("parlay", "text"):
@@ -1021,7 +1301,9 @@ def feed(conn, viewer=None, entitled: bool = False, strong: bool = False,
         args += [int(viewer), int(viewer)]
     now = time.time()
     if order in ("hot", "top"):
-        span = HOT_WINDOW_S if order == "hot" else TOP_WINDOWS.get(window, TOP_WINDOWS["week"])
+        # Hot has no window: the age term already sinks old posts, and a
+        # quiet week must not leave For You empty.
+        span = None if order == "hot" else TOP_WINDOWS.get(window, TOP_WINDOWS["week"])
         if span:
             where.append("p.created_at>?")
             args.append(now - span)
@@ -1141,6 +1423,7 @@ def profile_page(conn, handle: str, viewer=None, entitled: bool = False,
                                               (me, uid)).fetchone())
     prof = {"handle": r["handle"], "name": r["display_name"], "bio": _text(r["bio"], strong),
             "color": int(r["color"] or 0), "team": r["fav_team"], "since": r["created_at"],
+            "verified": bool(r["verified"]), "official": _official(r),
             "posts": int(agg["posts"]), "tails": int(agg["tails"]), "likes": int(agg["likes"]),
             "followers": _n_followers(conn, uid), "following_count": following,
             "record": record_of(conn, uid), "record30": record_of(conn, uid, time.time() - 30 * 86400),
@@ -1353,7 +1636,7 @@ def delete(conn, user_id: int, kind: str, item_id: int) -> tuple[int, dict]:
             return 404, {"error": "Not yours to delete."}
         conn.execute("DELETE FROM feed_comment_likes WHERE comment_id IN "
                      "(SELECT id FROM feed_comments WHERE post_id=?)", (int(item_id),))
-        for t in ("feed_likes", "feed_tails", "feed_comments"):
+        for t in ("feed_likes", "feed_tails", "feed_comments", "feed_tags", "feed_votes", "feed_polls"):
             conn.execute(f"DELETE FROM {t} WHERE post_id=?", (int(item_id),))
         conn.execute("DELETE FROM feed_notifs WHERE post_id=?", (int(item_id),))
         conn.execute("DELETE FROM feed_posts WHERE id=?", (int(item_id),))
@@ -1425,35 +1708,147 @@ def reported(conn) -> list:
 
 # ─── leaderboard, who to follow, search ─────────────────────────────────────
 
-def leaders(conn, viewer=None, days: int = 30) -> dict:
-    """Top bettors by units over the window (5+ graded posts to qualify),
-    and the most-tailed accounts this week."""
+def leaders(conn, viewer=None, days: int | None = 30, metric: str = "units") -> dict:
+    """Top Bettors — the render's rail card and the Leaders page: Win %,
+    Units or Followers, over 7 days, 30 days or all time.
+
+    Win % and Units rank GRADED parlays only, five to qualify: a 1-0 week
+    is not a 100% bettor, and the record under every name was graded by
+    the site, never typed in. Win % leaves pushes out (won / won+lost).
+    Followers counts follows made inside the window (all time: everyone).
+    The most-tailed accounts of the week ride along for the Leaders page."""
     ensure_tables(conn)
-    since = time.time() - days * 86400
+    metric = metric if metric in LEADER_METRICS else "units"
+    now = time.time()
+    since = now - days * 86400 if days else 0
     hide = blocked_ids(conn, viewer)
     mine = _following_set(conn, viewer)
-    rows = conn.execute(
-        "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, "
-        "SUM(p.result='won') AS w, SUM(p.result='lost') AS l, SUM(p.result='push') AS pu, "
-        "SUM(COALESCE(p.units,0)) AS u FROM feed_posts p JOIN feed_profiles f ON f.user_id=p.user_id "
-        "WHERE p.kind='parlay' AND p.hidden=0 AND p.result IN ('won','lost','push') AND p.created_at>? "
-        "GROUP BY p.user_id HAVING COUNT(*)>=? ORDER BY u DESC LIMIT 25", (since, LEADER_MIN)).fetchall()
     top = []
-    for r in rows:
-        if int(r["user_id"]) in hide:
-            continue
-        n = int(r["w"]) + int(r["l"]) + int(r["pu"])
-        top.append({**_person(r, mine), "w": int(r["w"]), "l": int(r["l"]), "p": int(r["pu"]),
-                    "units": round(float(r["u"] or 0), 2), "roi": round(float(r["u"] or 0) / n * 100, 1)})
+    if metric == "followers":
+        for r in conn.execute(
+                "SELECT f.*, COUNT(x.follower_id) AS n FROM feed_follows x JOIN feed_profiles f "
+                "ON f.user_id=x.followee_id WHERE x.created_at>? GROUP BY x.followee_id "
+                "ORDER BY n DESC, f.created_at LIMIT 25", (since,)):
+            if int(r["user_id"]) not in hide:
+                top.append({**_person(r, mine), "followers": int(r["n"]), "value": int(r["n"])})
+    else:
+        rows = conn.execute(
+            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, "
+            "SUM(p.result='won') AS w, SUM(p.result='lost') AS l, SUM(p.result='push') AS pu, "
+            "SUM(COALESCE(p.units,0)) AS u FROM feed_posts p JOIN feed_profiles f ON f.user_id=p.user_id "
+            "WHERE p.kind='parlay' AND p.hidden=0 AND p.result IN ('won','lost','push') AND p.created_at>? "
+            "GROUP BY p.user_id HAVING COUNT(*)>=?", (since, LEADER_MIN)).fetchall()
+        for r in rows:
+            if int(r["user_id"]) in hide:
+                continue
+            w, lo, pu = int(r["w"]), int(r["l"]), int(r["pu"])
+            n, u = w + lo + pu, round(float(r["u"] or 0), 2)
+            win = round(w / (w + lo) * 100) if w + lo else 0
+            top.append({**_person(r, mine), "w": w, "l": lo, "p": pu, "units": u,
+                        "roi": round(u / n * 100, 1), "win": win,
+                        "value": win if metric == "win" else u})
+        top.sort(key=lambda x: (-x["value"], -x["units"], x["handle"].lower()))
+        top = top[:25]
     tailed = []
     for r in conn.execute(
-            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, COUNT(t.user_id) AS n "
+            "SELECT p.user_id, f.handle, f.display_name, f.color, f.fav_team, f.verified, COUNT(t.user_id) AS n "
             "FROM feed_tails t JOIN feed_posts p ON p.id=t.post_id JOIN feed_profiles f ON f.user_id=p.user_id "
             "WHERE t.created_at>? AND p.hidden=0 GROUP BY p.user_id ORDER BY n DESC LIMIT 10",
-            (time.time() - 7 * 86400,)):
+            (now - 7 * 86400,)):
         if int(r["user_id"]) not in hide:
             tailed.append({**_person(r, mine), "tails": int(r["n"])})
-    return {"top": top, "tailed": tailed, "days": days, "min": LEADER_MIN}
+    return {"top": top, "tailed": tailed, "days": days, "metric": metric, "min": LEADER_MIN}
+
+
+def _trend_key(sport: str, l: dict) -> tuple:
+    if l.get("kind") == "game":
+        return (sport, "g", str(l.get("gid") or l.get("matchup") or ""), str(l.get("market") or ""),
+                str(l.get("side") or l.get("team") or ""), str(l.get("line")))
+    return (sport, "p", str(l.get("player") or ""), str(l.get("market") or ""),
+            str(l.get("side") or "").upper(), str(l.get("line")))
+
+
+def trending_picks(conn, viewer=None, entitled: bool = False, n: int = 5,
+                   now: float | None = None) -> dict:
+    """The legs the feed is on right now — the render's Trending Picks.
+
+    Every parlay posted in the last two days that is still open, each leg
+    counted once per PERSON who posted it or tailed a post carrying it,
+    over everyone active on those posts ("72% tailing"). A leg whose game
+    began drops off: you can't tail it any more. Paid legs come back
+    locked for readers without a plan, exactly as they read in the feed."""
+    ensure_tables(conn)
+    now = now if now is not None else time.time()
+    hide = blocked_ids(conn, viewer)
+    rows = [r for r in conn.execute(
+        "SELECT id, user_id, sport, legs FROM feed_posts WHERE kind='parlay' AND hidden=0 "
+        "AND result='pending' AND created_at>? ORDER BY id DESC LIMIT 2000", (now - TREND_WINDOW_S,))
+        if int(r["user_id"]) not in hide]
+    if not rows:
+        return {"picks": [], "active": 0}
+    ids = [int(r["id"]) for r in rows]
+    tailers: dict = {}
+    for t in conn.execute(f"SELECT post_id, user_id FROM feed_tails WHERE post_id IN ({','.join('?' * len(ids))})", ids):
+        tailers.setdefault(int(t[0]), set()).add(int(t[1]))
+    people: dict = {}
+    first: dict = {}
+    active: set = set()
+    for r in rows:
+        who = ({int(r["user_id"])} | tailers.get(int(r["id"]), set())) - hide
+        live = [l for l in json.loads(r["legs"] or "[]") if not _kicked([l], now)]
+        if not live:
+            continue
+        active |= who
+        for l in live:
+            k = _trend_key(r["sport"], l)
+            people.setdefault(k, set()).update(who)
+            # The post that carries it with the most tails is where a tap goes.
+            best = first.get(k)
+            if best is None or len(tailers.get(int(r["id"]), ())) > best[1]:
+                first[k] = (int(r["id"]), len(tailers.get(int(r["id"]), ())), l, r["sport"])
+    ranked = sorted(people, key=lambda k: (-len(people[k]), -first[k][0]))[:max(1, int(n))]
+    total = len(active)
+    out = []
+    for k in ranked:
+        pid, _, leg, sport = first[k]
+        c = len(people[k])
+        out.append({"sport": sport, "post_id": pid, "leg": public_leg(leg, entitled),
+                    "people": c, "pct": round(c / total * 100) if total else 0})
+    return {"picks": out, "active": total}
+
+
+def trending_tags(conn, viewer=None, days: int = 7, n: int = 10) -> list:
+    """#tags by how many posts used them this week."""
+    ensure_tables(conn)
+    hide = blocked_ids(conn, viewer)
+    out = []
+    for r in conn.execute(
+            "SELECT t.tag, COUNT(*) AS n, MAX(t.created_at) AS last, GROUP_CONCAT(p.user_id) AS who "
+            "FROM feed_tags t JOIN feed_posts p ON p.id=t.post_id WHERE p.hidden=0 AND t.created_at>? "
+            "GROUP BY t.tag COLLATE NOCASE ORDER BY n DESC, last DESC LIMIT 60",
+            (time.time() - days * 86400,)):
+        users = [int(x) for x in str(r["who"] or "").split(",") if x]
+        k = sum(1 for u in users if u not in hide)
+        if k:
+            out.append({"tag": r["tag"], "posts": k})
+        if len(out) >= n:
+            break
+    return out
+
+
+def community_stats(conn) -> dict:
+    """The rail's Community Stats, every number counted, none estimated:
+    people with a profile, posts showing, and the win rate of the feed's
+    graded parlays (shown once ten are graded — a 2-0 start is not a
+    78% community)."""
+    ensure_tables(conn)
+    members = int(conn.execute("SELECT COUNT(*) FROM feed_profiles").fetchone()[0])
+    posts = int(conn.execute("SELECT COUNT(*) FROM feed_posts WHERE hidden=0").fetchone()[0])
+    g = conn.execute("SELECT SUM(result='won') AS w, SUM(result='lost') AS l FROM feed_posts "
+                     "WHERE kind='parlay' AND hidden=0 AND result IN ('won','lost')").fetchone()
+    w, lo = int(g["w"] or 0), int(g["l"] or 0)
+    return {"members": members, "posts": posts, "graded": w + lo,
+            "win_rate": round(w / (w + lo) * 100) if w + lo >= STATS_MIN else None}
 
 
 def suggestions(conn, viewer=None, n: int = 5) -> list:
@@ -1513,7 +1908,8 @@ def add_friend(conn, user_id: int, handle: str) -> tuple[int, dict]:
 # ─── the account's own rows (accounts.delete_user / export_user) ────────────
 
 FEED_TABLES = ("feed_profiles", "feed_posts", "feed_likes", "feed_tails", "feed_comments",
-               "feed_reports", "feed_follows", "feed_blocks", "feed_comment_likes", "feed_notifs")
+               "feed_reports", "feed_follows", "feed_blocks", "feed_comment_likes", "feed_notifs",
+               "feed_tags", "feed_polls", "feed_votes")
 
 
 def delete_user(conn, user_id: int) -> None:
@@ -1525,8 +1921,10 @@ def delete_user(conn, user_id: int) -> None:
     mine = "SELECT id FROM feed_posts WHERE user_id=?"
     conn.execute("DELETE FROM feed_comment_likes WHERE user_id=? OR comment_id IN "
                  f"(SELECT id FROM feed_comments WHERE user_id=? OR post_id IN ({mine}))", (uid, uid, uid))
-    for t in ("feed_likes", "feed_tails", "feed_comments"):
+    for t in ("feed_likes", "feed_tails", "feed_comments", "feed_votes"):
         conn.execute(f"DELETE FROM {t} WHERE user_id=? OR post_id IN ({mine})", (uid, uid))
+    for t in ("feed_tags", "feed_polls"):
+        conn.execute(f"DELETE FROM {t} WHERE post_id IN ({mine})", (uid,))
     conn.execute("DELETE FROM feed_comments WHERE parent_id IS NOT NULL AND parent_id NOT IN "
                  "(SELECT id FROM feed_comments)")
     conn.execute(f"DELETE FROM feed_notifs WHERE user_id=? OR actor_id=? OR post_id IN ({mine})", (uid, uid, uid))
@@ -1545,7 +1943,7 @@ def export_user(conn, user_id: int) -> dict:
     uid = int(user_id)
     prof = profile_of(conn, uid)
     posts = [{"kind": r["kind"], "sport": r["sport"], "date": r["date"], "caption": r["caption"],
-              "title": r["title"], "body": r["body"], "result": r["result"],
+              "title": r["title"], "body": r["body"], "result": r["result"], "link": r["link"],
               "legs": [public_leg(l, True) for l in json.loads(r["legs"] or "[]")],
               "created_at": r["created_at"]}
              for r in conn.execute("SELECT * FROM feed_posts WHERE user_id=? ORDER BY id", (uid,))]
@@ -1555,6 +1953,8 @@ def export_user(conn, user_id: int) -> dict:
     return {"profile": prof, "posts": posts, "comments": comments,
             "likes": [int(r[0]) for r in conn.execute("SELECT post_id FROM feed_likes WHERE user_id=?", (uid,))],
             "tails": [int(r[0]) for r in conn.execute("SELECT post_id FROM feed_tails WHERE user_id=?", (uid,))],
+            "votes": [{"post_id": int(r[0]), "option": int(r[1])} for r in conn.execute(
+                "SELECT post_id, option FROM feed_votes WHERE user_id=?", (uid,))],
             "following": handles("SELECT f.handle FROM feed_follows x JOIN feed_profiles f "
                                  "ON f.user_id=x.followee_id WHERE x.follower_id=?"),
             "blocked": handles("SELECT f.handle FROM feed_blocks b JOIN feed_profiles f "

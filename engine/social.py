@@ -171,11 +171,25 @@ def ensure_tables(conn) -> None:
 
 # --- identity, shown to friends only -----------------------------------------
 
+def _has(conn, table: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                        (table,)).fetchone() is not None
+
+
 def display_name(conn, user_id: int) -> str:
-    """What a friend sees. The streak name when one was chosen (it is the
-    one display name this site has), else the email's LOCAL PART — a
-    friend got here through your invite link, but the full address is
-    still not the app's to repeat."""
+    """What a friend sees.
+
+    ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07: "it should all be
+    one main profile for the whole site"): the site profile's display
+    name, else its handle. An account that has not made one yet keeps
+    what it had — the streak name when one was chosen, else the email's
+    LOCAL PART (a friend got here through your invite link, but the full
+    address is still not the app's to repeat)."""
+    if _has(conn, "feed_profiles"):
+        p = conn.execute("SELECT handle, display_name FROM feed_profiles WHERE user_id=?",
+                         (int(user_id),)).fetchone()
+        if p:
+            return (p["display_name"] or p["handle"]).strip()[:24]
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='streak_state'"
     ).fetchone()
@@ -331,22 +345,41 @@ def friend_remove(conn, user_id: int, friend_id: int) -> None:
 # --- name search and requests ------------------------------------------------
 
 def find_users(conn, me: int, q: str) -> list[dict]:
-    """Accounts whose DISPLAY NAME contains ``q`` — and nothing else.
+    """Accounts whose PUBLIC NAME contains ``q`` — and nothing else.
 
-    The display name is the streak name: chosen, public by intent, and
-    absent by default — so an account is findable exactly when its
-    owner named it. Emails never match here, which keeps the address
-    oracle closed however this endpoint is hammered. Each hit says how
-    it already stands with the asker (friend / asked / asked_me) so the
-    page can draw the right button instead of a second guess."""
+    The public name is the site profile's handle or display name (one
+    profile for the whole site), or, for an account with no profile yet,
+    the streak name it chose: public by intent and absent by default — so
+    an account is findable exactly when its owner named it. Emails never
+    match here, which keeps the address oracle closed however this
+    endpoint is hammered. Each hit says how it already stands with the
+    asker (friend / asked / asked_me) so the page can draw the right
+    button instead of a second guess."""
     ensure_tables(conn)
     q = " ".join(str(q or "").split()).lower()
     if len(q) < 2:
         return []
-    has = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='streak_state'").fetchone()
-    if has is None:
+    names: list[tuple[int, str, str]] = []
+    profiled: set = set()
+    if _has(conn, "feed_profiles"):
+        blocked = set()
+        if _has(conn, "feed_blocks"):
+            blocked = {int(r[0]) for r in conn.execute(
+                "SELECT blocked_id FROM feed_blocks WHERE user_id=? UNION "
+                "SELECT user_id FROM feed_blocks WHERE blocked_id=?", (int(me), int(me)))}
+        for r in conn.execute("SELECT user_id, handle, display_name FROM feed_profiles ORDER BY handle"):
+            profiled.add(int(r["user_id"]))
+            if int(r["user_id"]) in blocked:
+                continue
+            if q in f"{r['handle']} {r['display_name'] or ''}".lower():
+                names.append((int(r["user_id"]), (r["display_name"] or r["handle"]), r["handle"]))
+    if _has(conn, "streak_state"):
+        for r in conn.execute("SELECT user_id, name FROM streak_state WHERE name != '' ORDER BY name"):
+            # An account with a profile is found by its profile, never by
+            # an older streak name it may have left behind.
+            if int(r["user_id"]) not in profiled and q in r["name"].lower():
+                names.append((int(r["user_id"]), r["name"], ""))
+    if not names:
         return []
     me = int(me)
     friends = {int(r["friend_id"]) for r in conn.execute(
@@ -356,13 +389,10 @@ def find_users(conn, me: int, q: str) -> list[dict]:
     asked_me = {int(r["from_id"]) for r in conn.execute(
         "SELECT from_id FROM friend_requests WHERE to_id=?", (me,))}
     out = []
-    for r in conn.execute(
-            "SELECT user_id, name FROM streak_state WHERE name != '' "
-            "ORDER BY name"):
-        uid = int(r["user_id"])
-        if uid == me or q not in r["name"].lower():
+    for uid, name, handle in names:
+        if uid == me:
             continue
-        out.append({"id": uid, "name": r["name"],
+        out.append({"id": uid, "name": name, "handle": handle,
                     "standing": ("friend" if uid in friends
                                  else "asked" if uid in asked
                                  else "asked_me" if uid in asked_me

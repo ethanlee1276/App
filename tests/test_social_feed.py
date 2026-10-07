@@ -295,7 +295,9 @@ def test_the_server_routes_exist_and_hide_is_owner_only():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     assert '"/api/feed/"' in src and "def _feed_get" in src and "def _feed_post" in src
     body = src[src.index("def _feed_post"):src.index("def _social_get")]
-    assert 'if path == "hide" and self._owner_refused()' in body
+    # Hiding a post and handing out the verified badge are the owner's alone.
+    assert 'if path in ("hide", "verify") and self._owner_refused()' in body
+    assert body.index("_owner_refused()") < body.index("SF.set_verified(")
     # The client's leg is reduced to its identity before the engine sees it.
     assert '"odds"' not in body.split('if path == "post":')[1].split("elif")[0]
 
