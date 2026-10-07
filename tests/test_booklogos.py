@@ -25,6 +25,9 @@ def test_every_book_the_page_draws_has_a_domain_to_fetch_from():
     table = APP[APP.index("const BOOKS = {"):APP.index("const BOOK_ALIAS")]
     keys = set(re.findall(r"^  (\w+): \[", table, re.M))
     assert keys == set(BL.BOOK_DOMAINS), keys ^ set(BL.BOOK_DOMAINS)
+    # The page's front door for each book is the domain the icon came from.
+    doors = dict(re.findall(r'^  (\w+): \[(?:"[^"]*", ){4}"([^"]+)"\]', table, re.M))
+    assert doors == BL.BOOK_DOMAINS, {k: (doors.get(k), BL.BOOK_DOMAINS[k]) for k in BL.BOOK_DOMAINS if doors.get(k) != BL.BOOK_DOMAINS[k]}
     for d in BL.BOOK_DOMAINS.values():
         assert re.fullmatch(r"[a-z0-9.-]+\.[a-z]+", d), d
     assert BL.candidates("x.com")[0] == "https://x.com/apple-touch-icon.png"

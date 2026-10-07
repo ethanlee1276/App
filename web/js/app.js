@@ -1310,25 +1310,32 @@ function safeHref(u) {
    the badge is the book's colour and initials — not a copy of its
    artwork, which this machine cannot fetch. Only the books the odds feed
    links to appear; Kalshi and Polymarket carry no bet-slip address we
-   can build (see the runbook), and Michigan blocks both. */
+   can build (see the runbook), and Michigan blocks both.
+
+   Each row: name, badge colour, ink colour, initials, the book's front
+   door (the domain engine/booklogos fetches its icon from). The door is
+   the tile's link when no slip link exists for a bet — Tail on Social
+   (Ethan, 2026-10-07: "tail the parlay on any sportsbook of your
+   choosing") offers every book that way, and the reader keys the legs
+   in. The sheet itself is betSheetShow(): Bet it and Tail both open it. */
 const BOOKS = {
-  draftkings: ["DraftKings", "#53D337", "#0A0907", "DK"],
-  fanduel: ["FanDuel", "#1493FF", "#FFFFFF", "FD"],
-  betmgm: ["BetMGM", "#C9A227", "#0A0907", "MGM"],
-  caesars: ["Caesars", "#0B3D2E", "#D9B44A", "C"],
-  fanatics: ["Fanatics", "#1E5BD8", "#FFFFFF", "F"],
-  thescorebet: ["theScore Bet", "#19C37D", "#0A0907", "tS"],
-  hardrock: ["Hard Rock", "#7B2CBF", "#FFFFFF", "HR"],
-  betrivers: ["BetRivers", "#1C3C8C", "#F5B700", "BR"],
-  ballybet: ["Bally Bet", "#D7282F", "#FFFFFF", "B"],
-  betparx: ["betPARX", "#B5176B", "#FFFFFF", "bP"],
-  fliff: ["Fliff", "#2563EB", "#FFFFFF", "Fl"],
-  windcreek: ["Wind Creek", "#8B1E2D", "#FFFFFF", "WC"],
-  novig: ["Novig", "#FF5A1F", "#0A0907", "N"],
-  prophetx: ["ProphetX", "#6D28D9", "#FFFFFF", "PX"],
-  bet365: ["bet365", "#027B5B", "#FFE600", "365"],
-  kalshi: ["Kalshi", "#00C56B", "#0A0907", "K"],
-  polymarket: ["Polymarket", "#2E5CFF", "#FFFFFF", "PM"],
+  draftkings: ["DraftKings", "#53D337", "#0A0907", "DK", "sportsbook.draftkings.com"],
+  fanduel: ["FanDuel", "#1493FF", "#FFFFFF", "FD", "sportsbook.fanduel.com"],
+  betmgm: ["BetMGM", "#C9A227", "#0A0907", "MGM", "sports.betmgm.com"],
+  caesars: ["Caesars", "#0B3D2E", "#D9B44A", "C", "sportsbook.caesars.com"],
+  fanatics: ["Fanatics", "#1E5BD8", "#FFFFFF", "F", "sportsbook.fanatics.com"],
+  thescorebet: ["theScore Bet", "#19C37D", "#0A0907", "tS", "thescore.bet"],
+  hardrock: ["Hard Rock", "#7B2CBF", "#FFFFFF", "HR", "hardrock.bet"],
+  betrivers: ["BetRivers", "#1C3C8C", "#F5B700", "BR", "betrivers.com"],
+  ballybet: ["Bally Bet", "#D7282F", "#FFFFFF", "B", "ballybet.com"],
+  betparx: ["betPARX", "#B5176B", "#FFFFFF", "bP", "betparx.com"],
+  fliff: ["Fliff", "#2563EB", "#FFFFFF", "Fl", "getfliff.com"],
+  windcreek: ["Wind Creek", "#8B1E2D", "#FFFFFF", "WC", "windcreekcasino.com"],
+  novig: ["Novig", "#FF5A1F", "#0A0907", "N", "novig.us"],
+  prophetx: ["ProphetX", "#6D28D9", "#FFFFFF", "PX", "prophetx.co"],
+  bet365: ["bet365", "#027B5B", "#FFE600", "365", "bet365.com"],
+  kalshi: ["Kalshi", "#00C56B", "#0A0907", "K", "kalshi.com"],
+  polymarket: ["Polymarket", "#2E5CFF", "#FFFFFF", "PM", "polymarket.com"],
 };
 const BOOK_ALIAS = { espnbet: "thescorebet", espn: "thescorebet", thescore: "thescorebet",
                      hardrockbet: "hardrock", williamhillus: "caesars", williamhill: "caesars",
@@ -1388,6 +1395,21 @@ function betWords(r) {
                r.market_label || r.market || ""].filter(Boolean).join(" ");
   return [who, bet].filter(Boolean).join(" · ");
 }
+/* One tile: the book's mark, its name, this bet's price there (or a word
+   in its place), and a tag when there is something to say about it. */
+function bookTileHTML(title, url, px, sub, tag) {
+  return `<a class="bk-tile" href="${safeHref(url)}" target="_blank"
+      rel="noopener noreferrer nofollow" data-book="${escapeAttr(bookKey(title))}">${bookMarkHTML(title)}<span class="bk-name">${
+      escapeHtml(title)}</span><span class="bk-px${px == null ? " dim" : ""}">${px != null ? escapeHtml(american(px)) : escapeHtml(sub || "")}</span>${
+      tag ? `<i class="bk-tag">${escapeHtml(tag)}</i>` : ""}</a>`;
+}
+/* Every book's front door, as tiles — for a bet no book handed us a slip
+   link for. The prediction markets stay off it: no sports slip to open. */
+function bookHomeTilesHTML(skip) {
+  const had = new Set(skip || []);
+  return Object.keys(BOOKS).filter((k) => BOOKS[k][4] && !["kalshi", "polymarket"].includes(k) && !had.has(k))
+    .map((k) => bookTileHTML(BOOKS[k][0], `https://${BOOKS[k][4]}/`, null, "open the book", "")).join("");
+}
 function betItHTML(r, cls) {
   if (!r) return "";
   const slips = (r.bet_links || []).filter((x) => x && safeHref(x[1]) !== "#");
@@ -1402,10 +1424,8 @@ function betItHTML(r, cls) {
   // American odds, so the larger number pays more (+150 over -110).
   const priced = slips.filter((x) => x[2] != null);
   const best = priced.length > 1 ? Math.max(...priced.map((x) => Number(x[2]))) : null;
-  const tile = (title, url, px, sub) => `<a class="bk-tile" href="${safeHref(url)}" target="_blank"
-      rel="noopener noreferrer nofollow" data-book="${escapeAttr(bookKey(title))}">${bookMarkHTML(title)}<span class="bk-name">${
-      escapeHtml(title)}</span><span class="bk-px${px == null ? " dim" : ""}">${px != null ? escapeHtml(american(px)) : sub}</span>${
-      best != null && px != null && Number(px) === best ? `<i class="bk-tag">Best price</i>` : ""}</a>`;
+  const tile = (title, url, px, sub) => bookTileHTML(title, url, px, sub,
+    best != null && px != null && Number(px) === best ? "Best price" : "");
   const what = betWords(r);
   return `<span class="betit-box${cls ? ` ${cls}` : ""}"><button type="button" class="betit" aria-haspopup="dialog">Bet it</button>
     <template class="betit-tpl"><div class="betit-head"><b>Bet it</b>${what ? `<span>${escapeHtml(what)}</span>` : ""}</div>
@@ -1417,7 +1437,9 @@ function betItHTML(r, cls) {
 }
 function betItOpen(box) {
   const tpl = box && box.querySelector("template.betit-tpl");
-  if (!tpl) return;
+  if (tpl) betSheetShow(tpl.innerHTML, "Bet it");
+}
+function betSheetShow(html, label) {
   let host = document.getElementById("betit-sheet");
   if (!host) {
     host = document.createElement("div");
@@ -1431,7 +1453,8 @@ function betItOpen(box) {
     document.body.appendChild(host);
   }
   const body = host.querySelector(".betit-body");
-  body.innerHTML = tpl.innerHTML;
+  host.querySelector(".betit-panel").setAttribute("aria-label", label || "Bet it");
+  body.innerHTML = html;
   const mine = betBookRemembered();
   if (mine) {
     const tile = body.querySelector(`.betit-grid:not(.pages) .bk-tile[data-book="${mine}"]`);

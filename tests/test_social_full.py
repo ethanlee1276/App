@@ -394,8 +394,10 @@ def test_the_social_code_loads_on_first_use_not_on_the_first_visit():
     assert 's.src = "js/social.js"' in app and 'css.href = "css/social.css"' in app
     soc = open(os.path.join(ROOT, "web", "js", "social.js"), encoding="utf-8").read()
     assert "window.QBSocial = {" in soc
-    # A link to a book is only ever drawn through safeHref.
-    assert 'href="${safeHref(url)}"' in soc and "href=\"${url}" not in soc
+    # A link to a book is only ever drawn through safeHref: Tail's tiles
+    # come from app.js bookTileHTML (2026-10-07), which does that.
+    assert "href=\"${url}" not in soc and "href=\"${c.url}" not in soc and "href=\"${b.combined}" not in soc
+    assert soc.count("bookTileHTML(") >= 3 and 'href="${safeHref(url)}"' in app[app.index("function bookTileHTML("):]
 
 
 def test_the_server_has_every_route():

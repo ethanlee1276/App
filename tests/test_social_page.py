@@ -191,6 +191,34 @@ def test_the_nav_calls_it_social():
     assert btn.rstrip().endswith("Social")
 
 
+def test_tail_opens_the_bet_it_sheet_with_a_tile_per_book():
+    """Ethan, 2026-10-07, after tapping Tail on a parlay and seeing the
+    count tick with nothing else: "the tail button isn't working. It should
+    give you the option to tail the parlay on any sportsbook of your
+    choosing with the sportsbook logos … like we have for the bet it."
+
+    So Tail opens the same sheet Bet it does (app.js betSheetShow), not a
+    box inside the card: a tile for a book that carries every leg on one
+    slip, a tile per leg for a book that holds only some (tagged by leg),
+    and every other book's front door so the reader can key the legs in
+    wherever they bet. The links still come only from the tail call."""
+    js = _read("web", "js", "social.js")
+    app = _read("web", "js", "app.js")
+    assert "fd-tailbox" not in js and "fd-tailbox" not in _read("web", "css", "social.css"), "the in-card box is gone"
+    tail = js[js.index('if (act === "tail") {'):js.index('if (act === "share" || act === "copy")')]
+    assert 'await api("tail"' in tail and 'betSheetShow(tailSheetHTML(res.out, post), "Tail it")' in tail
+    sheet = js[js.index("function tailSheetHTML(res, p) {"):js.index("function menuHTML(p) {")]
+    assert "all ${n} legs · one slip" in sheet and "`Leg ${i + 1} of ${n}`" in sheet
+    assert "bookHomeTilesHTML(had)" in sheet and '"betit-grid pages"' in sheet
+    assert "1-800-GAMBLER" in sheet
+    # app.js hands Social the sheet, the tile and the front doors; the
+    # prediction markets have no sports slip and stay off the door list.
+    assert "function betSheetShow(html, label)" in app and "function bookTileHTML(title, url, px, sub, tag)" in app
+    doors = app[app.index("function bookHomeTilesHTML(skip)"):app.index("function betItHTML(")]
+    assert '["kalshi", "polymarket"].includes(k)' in doors and "https://${BOOKS[k][4]}/" in doors
+    assert "if (tpl) betSheetShow(tpl.innerHTML, \"Bet it\")" in app, "Bet it opens the same sheet"
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):

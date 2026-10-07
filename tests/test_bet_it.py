@@ -241,7 +241,7 @@ def test_the_odds_request_asks_for_links_and_banks_them():
 
 def test_the_page_draws_the_button_safely_where_the_picks_are():
     js = (ROOT / "web" / "js" / "app.js").read_text()
-    fn = js[js.index("function betItHTML("):js.index("function escapeHtml(")]
+    fn = js[js.index("function bookTileHTML("):js.index("function escapeHtml(")]   # the tile, then Bet it
     assert 'href="${safeHref(url)}"' in fn and 'rel="noopener noreferrer nofollow"' in fn and 'target="_blank"' in fn
     assert "1-800-GAMBLER" in fn and "bet_links" in fn and "bet_pages" in fn, "every book, not one"
     assert 'window.addEventListener("click"' in fn and "stopPropagation" in fn, "a tap in the box never opens the card"

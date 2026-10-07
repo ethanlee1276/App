@@ -309,17 +309,6 @@ a.fd-slip:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--borde
 .fd-tailed { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 700; }
 
 .fd-slot:empty { display: none; }
-.fd-tailbox { margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--radius);
-  border: var(--hairline) solid color-mix(in srgb, var(--brand) 38%, transparent); background: color-mix(in srgb, var(--brand) 5%, var(--panel)); }
-.fd-tailbox-h { display: flex; align-items: center; gap: 7px; color: var(--brand-2); font-weight: 800; margin: 0 0 4px; }
-.fd-book { display: grid; gap: 6px; padding: 10px 0; border-top: var(--hairline) solid var(--fd-line); }
-.fd-book b { font-size: var(--fs-md); }
-.fd-book > span { color: var(--text-mute); font-size: var(--fs-sm); }
-.fd-book.one { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
-.fd-book.one span { flex: 1; color: var(--text-mute); font-size: var(--fs-sm); }
-.fd-book.one:hover b { color: var(--brand-2); }
-.fd-book-legs { display: flex; flex-wrap: wrap; gap: 6px; }
-.fd-book-legs .fd-chip { padding: 6px 12px; font-size: var(--fs-sm); }
 .fd-editbox { margin: 12px 0 4px; display: grid; gap: 4px; }
 .fd-editbox .fd-row-end { margin-top: 6px; }
 

@@ -536,25 +536,37 @@
     </article>`;
   }
 
-  function tailHTML(res) {
+  /* THE TAIL SHEET. Ethan, 2026-10-07: "It should give you the option to
+     tail the parlay on any sportsbook of your choosing with the sportsbook
+     logos … like we have for the bet it." So a tail opens the Bet it sheet
+     (app.js betSheetShow) with a tile per book: a book holding every leg
+     gets one tile that carries the whole slip; a book holding some of
+     them gets a tile per leg it has, each tagged "Leg 1 of 3"; and every
+     other book we offer is a front door, so the reader can key the legs
+     in at the book they use. Nothing is fetched on the tap but the tail. */
+  function tailSheetHTML(res, p) {
     const n = res.n_legs || 0;
-    const fine = `<p class="fd-fine">Each tap opens that book’s bet slip in a new tab. One link carries every leg only
-      where the book’s link takes them all (FanDuel’s does); elsewhere add the legs one by one and they stack on the
-      same slip. Prices move — check before you place. 21+ · Gambling problem? 1-800-GAMBLER</p>`;
-    const books = res.books || [];
-    if (!books.length) {
-      return `<div class="fd-tailbox"><p class="fd-fine">No book has handed us a bet-slip link for these legs yet —
-        the legs above are everything you need to key it in.</p>${fine}</div>`;
-    }
-    const a = (url, inner, cls) => `<a class="${cls}" href="${safeHref(url)}" target="_blank"
-      rel="noopener noreferrer nofollow">${inner}</a>`;
-    const rows = books.map((b) => (b.combined
-      ? a(b.combined, `<b>${escapeHtml(b.book)}</b><span>all ${n} legs · one slip</span>${ico("chevr", 14)}`, "fd-book one")
-      : `<div class="fd-book"><b>${escapeHtml(b.book)}</b><span>${b.have} of ${n} leg${n === 1 ? "" : "s"}</span>
-          <div class="fd-book-legs">${b.legs.map((c, i) => (c
-            ? a(c.url, `Leg ${i + 1}${c.price != null ? ` · ${escapeHtml(american(c.price))}` : ""}`, "fd-chip")
-            : `<span class="fd-chip off">Leg ${i + 1} not offered</span>`)).join("")}</div></div>`)).join("");
-    return `<div class="fd-tailbox"><div class="fd-tailbox-h">${ico("whale", 16)} Tail it at</div>${rows}${fine}</div>`;
+    const legs = res.legs || (p && p.legs) || [];
+    const what = n === 1 && legs[0] ? shortLeg(legs[0])
+      : `${n} Leg Parlay${p && p.combined != null ? ` · ${px(p.combined)}` : ""}`;
+    const slips = [];
+    const had = [];
+    (res.books || []).forEach((b) => {
+      had.push(bookKey(b.book));
+      if (b.combined) {
+        slips.push(bookTileHTML(b.book, b.combined, null, n === 1 ? "bet slip" : `all ${n} legs · one slip`, ""));
+      } else if (b.have === n && n === 1 && b.legs[0]) {
+        slips.push(bookTileHTML(b.book, b.legs[0].url, b.legs[0].price, "bet slip", ""));
+      } else {
+        b.legs.forEach((c, i) => { if (c) slips.push(bookTileHTML(b.book, c.url, c.price, "bet slip", `Leg ${i + 1} of ${n}`)); });
+      }
+    });
+    const doors = bookHomeTilesHTML(had);
+    return `<div class="betit-head"><b>Tail it</b><span>${escapeHtml(what)}</span></div>
+      ${slips.length ? `<p class="betit-h">On the bet slip</p><div class="betit-grid">${slips.join("")}</div>` : ""}
+      ${doors ? `<p class="betit-h">${slips.length ? "Or key it in at" : "Key it in at"}</p><div class="betit-grid pages">${doors}</div>` : ""}
+      <p class="betit-fine">${slips.length ? "A tile tagged by leg carries that leg only; add the rest and they stack on the same slip. " : ""
+        }Opens the book in a new tab; you place the bet there. Prices move — check before you place. 21+ · Gambling problem? 1-800-GAMBLER</p>`;
   }
 
   function menuHTML(p) {
@@ -1149,17 +1161,13 @@
     }
     if (act === "tail") {
       if (needProfile("tail parlays")) return;
-      const card = t.closest(".fd-post");
-      const slot = slotIn(card);
-      if (slot && slot.dataset.open === "tail") { slot.innerHTML = ""; slot.dataset.open = ""; return; }
-      const at = cardsOf(id).indexOf(card);
       const res = await api("tail", { id: Number(id) });
       if (!res.ok) { tfToast(res.out.error || "Could not tail that."); return; }
-      sameAll(id, (p) => { p.tails = res.out.tails; p.tailed = true; });
+      let post = null;
+      sameAll(id, (p) => { p.tails = res.out.tails; p.tailed = true; post = p; });
       buzz("tap");
-      const fresh = redraw(id);
-      const s2 = slotIn(fresh[at] || fresh[0]);
-      if (s2) { s2.innerHTML = tailHTML(res.out); s2.dataset.open = "tail"; }
+      redraw(id);
+      betSheetShow(tailSheetHTML(res.out, post), "Tail it");
       return;
     }
     if (act === "share" || act === "copy") {
