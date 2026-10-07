@@ -1333,7 +1333,38 @@ const BOOKS = {
 const BOOK_ALIAS = { espnbet: "thescorebet", espn: "thescorebet", thescore: "thescorebet",
                      hardrockbet: "hardrock", williamhillus: "caesars", williamhill: "caesars",
                      caesarssportsbook: "caesars", fanaticssportsbook: "fanatics" };
-const BOOK_LOGOS = new Set([]);   // keys with a file at img/books/<key>.svg
+/* THE BOOKS' OWN ICONS. `engine/booklogos` runs on the box, fetches each
+   book's square icon and writes img/books/manifest.json naming the keys
+   that got one. The sheet reads that list the first time it opens and
+   lays an icon over each badge it has; a book without one keeps its
+   colour and initials. Nothing here changes when a file lands. */
+let _bookLogos = null;              // Set of keys, once the manifest has answered
+let _bookLogosWait = null;
+function bookLogosLoad() {
+  if (_bookLogos) return Promise.resolve(_bookLogos);
+  if (!_bookLogosWait) {
+    _bookLogosWait = fetch("img/books/manifest.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((m) => { _bookLogos = new Set(Array.isArray(m.keys) ? m.keys : []); return _bookLogos; })
+      .catch(() => { _bookLogos = new Set(); return _bookLogos; });
+  }
+  return _bookLogosWait;
+}
+function bookLogosDecorate(host) {
+  if (!host || !_bookLogos || !_bookLogos.size) return;
+  host.querySelectorAll(".bk-mark[data-book]").forEach((el) => {
+    const k = el.dataset.book;
+    if (_bookLogos.has(k) && !el.querySelector("img")) {
+      el.insertAdjacentHTML("beforeend", `<img src="img/books/${k}.png" alt="" data-onerr="remove"/>`);
+    }
+  });
+}
+/* The book you took last time goes first, named. Stored on this phone
+   only (localStorage), never sent anywhere. */
+const BET_BOOK_KEY = "qb_bet_book";
+function betBookRemembered() {
+  try { return localStorage.getItem(BET_BOOK_KEY) || ""; } catch (e) { return ""; }
+}
 function bookKey(title) {
   const n = String(title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!n) return "";
@@ -1344,8 +1375,8 @@ function bookKey(title) {
 function bookMarkHTML(title) {
   const k = bookKey(title);
   const b = BOOKS[k] || [title, "var(--panel-2)", "var(--text)", String(title || "?").trim().slice(0, 1).toUpperCase()];  // a book we have no mark for
-  return `<span class="bk-mark" style="background:${b[1]};color:${b[2]}"><b>${escapeHtml(b[3])}</b>${
-    k && BOOK_LOGOS.has(k) ? `<img src="img/books/${k}.svg" alt="" data-onerr="remove"/>` : ""}</span>`;
+  return `<span class="bk-mark" style="background:${b[1]};color:${b[2]}"${k ? ` data-book="${k}"` : ""}><b>${
+    escapeHtml(b[3])}</b></span>`;
 }
 /* The bet in words for the sheet's head: "Zay Flowers · Over 4.5 Receptions". */
 function betWords(r) {
@@ -1367,9 +1398,14 @@ function betItHTML(r, cls) {
     pages.push([r.book_name || r.book || "the book", r.bet_link]);
   }
   if (!slips.length && !pages.length) return "";
+  // The best price among the slips, when there is more than one to compare:
+  // American odds, so the larger number pays more (+150 over -110).
+  const priced = slips.filter((x) => x[2] != null);
+  const best = priced.length > 1 ? Math.max(...priced.map((x) => Number(x[2]))) : null;
   const tile = (title, url, px, sub) => `<a class="bk-tile" href="${safeHref(url)}" target="_blank"
-      rel="noopener noreferrer nofollow">${bookMarkHTML(title)}<span class="bk-name">${escapeHtml(title)}</span><span class="bk-px${
-      px == null ? " dim" : ""}">${px != null ? escapeHtml(american(px)) : sub}</span></a>`;
+      rel="noopener noreferrer nofollow" data-book="${escapeAttr(bookKey(title))}">${bookMarkHTML(title)}<span class="bk-name">${
+      escapeHtml(title)}</span><span class="bk-px${px == null ? " dim" : ""}">${px != null ? escapeHtml(american(px)) : sub}</span>${
+      best != null && px != null && Number(px) === best ? `<i class="bk-tag">Best price</i>` : ""}</a>`;
   const what = betWords(r);
   return `<span class="betit-box${cls ? ` ${cls}` : ""}"><button type="button" class="betit" aria-haspopup="dialog">Bet it</button>
     <template class="betit-tpl"><div class="betit-head"><b>Bet it</b>${what ? `<span>${escapeHtml(what)}</span>` : ""}</div>
@@ -1394,7 +1430,15 @@ function betItOpen(box) {
         <div class="betit-body"></div></div>`;
     document.body.appendChild(host);
   }
-  host.querySelector(".betit-body").innerHTML = tpl.innerHTML;
+  const body = host.querySelector(".betit-body");
+  body.innerHTML = tpl.innerHTML;
+  const mine = betBookRemembered();
+  if (mine) {
+    const tile = body.querySelector(`.betit-grid:not(.pages) .bk-tile[data-book="${mine}"]`);
+    if (tile && tile.parentNode.firstElementChild !== tile) tile.parentNode.prepend(tile);
+    if (tile && !tile.querySelector(".bk-tag")) tile.insertAdjacentHTML("beforeend", `<i class="bk-tag mine">Your book</i>`);
+  }
+  bookLogosLoad().then(() => bookLogosDecorate(body));
   host.hidden = false;
   document.body.classList.add("betit-open");
   requestAnimationFrame(() => host.classList.add("on"));
@@ -1417,7 +1461,11 @@ if (typeof window !== "undefined" && window.addEventListener) {
     const btn = t.closest(".betit-box .betit");
     if (btn) { e.preventDefault(); e.stopPropagation(); betItOpen(btn.closest(".betit-box")); return; }
     if (t.closest("[data-betit-close]")) { e.stopPropagation(); betItClose(); return; }
-    if (t.closest(".betit-sheet .bk-tile")) setTimeout(betItClose, 0);
+    const tile = t.closest(".betit-sheet .bk-tile");
+    if (tile) {
+      try { if (tile.dataset.book) localStorage.setItem(BET_BOOK_KEY, tile.dataset.book); } catch (e) {}
+      setTimeout(betItClose, 0);
+    }
   }, true);
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") betItClose(); });
 }
@@ -14394,6 +14442,13 @@ function renderGamePage() {
         margin, steadiness is low variance. Measured shape, not a projection.</p>
     </div>`;
   })() : "";
+  if (!isFinal && typeof fetchAllLive === "function") {
+    fetchAllLive().then(() => {
+      const slot = document.getElementById("gp-watch-slot");
+      const row = liveRowFor(state.sport, g);
+      if (slot && row && state.view === "game") slot.innerHTML = watchHTML(row, state.sport, "gp-watch");
+    }).catch(() => {});
+  }
   host.innerHTML = `
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="gp-back">${escapeHtml(detailBackLabel())}</button>
@@ -14425,6 +14480,7 @@ function renderGamePage() {
           <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
         <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}</div>
+        <div id="gp-watch-slot">${isFinal ? "" : watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch")}</div>
         ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
               circling the spread · ML · total grid on the Home card: "we
               should be showing the info I have circled"). The same
@@ -45011,7 +45067,7 @@ const LIVE_FEEDS = {
 const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
                     cfb: "data/live_cfb.json", nba: "data/live_nba.json",
                     wnba: "data/live_wnba.json", nhl: "data/live_nhl.json" };
-let _liveAll = { at: 0, games: [], finals: [] };
+let _liveAll = { at: 0, games: [], finals: [], all: [] };
 let _liveChip = "all";
 //: The sport the chip was chosen under. Ethan, 2026-09-05: "the live page
 //: is showing live mlb bets and games on the CFB button, it should be
@@ -45053,6 +45109,7 @@ async function fetchAllLive() {
      back to whatever the build said — UPCOMING, on a board built
      before kickoff. */
   const done = [];
+  const all = [];
   await Promise.all(Object.entries(LIVE_FEEDS).map(async ([sport, url]) => {
     /* THE SCORES DO NOT WAIT ON THE MODEL BOARD. Not for latency — that
        is the 2026-08-16 fix the note under LIVE_FAST describes — and,
@@ -45135,14 +45192,23 @@ async function fetchAllLive() {
       }
       games.forEach((g) => {
         const st = (g.live || {}).state;
+        all.push({ sport, g });
         if (st === "live") out.push({ sport, g,
           bets: (d.game_bets || []).filter((b) => b.home === g.home && b.away === g.away) });
         else if (st === "final") done.push({ sport, g });
       });
     } catch (e) {}
   }));
-  _liveAll = { at: Date.now(), games: out, finals: done };
+  _liveAll = { at: Date.now(), games: out, finals: done, all };
   return out;
+}
+/* The fast file's row for one game, any state — scheduled rows carry
+   the carriers before kickoff (the Watch button on the game page). */
+function liveRowFor(sport, g) {
+  if (!g) return null;
+  const hit = ((_liveAll && _liveAll.all) || []).find((x) => x.sport === sport
+    && x.g && x.g.home === g.home && x.g.away === g.away);
+  return hit ? hit.g : null;
 }
 
 /*: A fast scoreboard file older than this is not a quiet afternoon, it
@@ -45283,7 +45349,10 @@ function streamsFor(g, league) {
 }
 function watchHTML(g, league, cls) {
   const list = streamsFor(g, league);
-  if (!list.length) return "";
+  if (!list.length) {
+    const named = ((g && g.tv) || []).concat((g && g.tv_local) || []);
+    return named.length ? `<div class="watch${cls ? ` ${cls}` : ""}"><span class="watch-on">On ${escapeHtml(named.join(" · "))}</span></div>` : "";
+  }
   const first = list[0];
   const rest = list.slice(1);
   return `<div class="watch${cls ? ` ${cls}` : ""}"><a class="watch-main" href="${safeHref(first.url)}" target="_blank"

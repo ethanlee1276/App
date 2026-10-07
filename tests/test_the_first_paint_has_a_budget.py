@@ -59,7 +59,11 @@ HTML = (WEB / "index.html").read_text()
 #: whatever streaming service is hosting that game"): the table of where
 #: each carrier streams and the button on the live card and the
 #: play-by-play page — +1.2 KB gz. Told to Ethan.
-APP_JS_BUDGET_KB = 484
+#: 484 -> 485 on 2026-10-07 by the second Bet it/Watch pass (Ethan: "real
+#: Sportsbook logos … whatever else u think to add"): the icon manifest
+#: reader, the best-price and your-book tags, Watch before kickoff on the
+#: game page — +0.3 KB gz. Told to Ethan.
+APP_JS_BUDGET_KB = 485
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -82,7 +86,8 @@ APP_JS_BUDGET_KB = 484
 #: plus the sheet's and the tiles' styles (+1.1 KB gz all told). Told to Ethan.
 #: 599 -> 600 on 2026-10-07 by the Watch button: the app.js bump above
 #: plus its styles. Told to Ethan.
-BOOT_BUDGET_KB = 600
+#: 600 -> 601 on 2026-10-07 by the same pass. Told to Ethan.
+BOOT_BUDGET_KB = 601
 
 
 def _gz_trimmed(rel: str) -> int:

@@ -7413,6 +7413,8 @@ body.has-deck #rail-live { display: none; }
   color: var(--text-dim); text-decoration: none; font-size: var(--fs-2xs); font-weight: 700; }
 .watch-alt:hover, .watch-alt:focus-visible { color: var(--text); border-color: var(--brand); }
 .pbp-watch { justify-content: center; margin-top: 6px; }
+.gp-watch { margin-top: 8px; }
+.watch-on { color: var(--text-dim); font-size: var(--fs-xs); font-weight: 700; }
 .lb-score { display: grid; grid-template-columns: 1fr auto auto auto 1fr;
   align-items: center; gap: 12px; margin: 12px 0 10px; }
 .lb-team { display: flex; flex-direction: column; align-items: center; gap: 5px; }
@@ -12894,6 +12896,11 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
   font-size: var(--fs-xs); font-weight: 700; }
 .bk-px { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-sm); color: var(--brand-2); }
 .bk-px.dim { font-family: inherit; font-weight: 600; font-size: var(--fs-2xs); color: var(--text-mute); }
+.bk-tile { position: relative; }
+.bk-tag { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-style: normal;
+  padding: 2px 7px; border-radius: 999px; background: var(--brand-solid); color: var(--brand-ink);
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .02em; }
+.bk-tag.mine { background: var(--panel); color: var(--brand-2); border: var(--hairline) solid var(--brand); }
 .betit-grid.pages .bk-mark { width: 36px; height: 36px; border-radius: var(--radius-sm); }
 .betit-grid.pages .bk-mark b { font-size: var(--fs-sm); }
 .betit-fine { margin: 12px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); line-height: var(--lh-snug); }

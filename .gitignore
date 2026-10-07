@@ -172,3 +172,7 @@ logs/
 # The comment-stripped shell engine/shrink.py builds on the box (served by Caddy's @trimmed).
 web/min/
 audit/
+
+# The sportsbooks' icons: fetched on the box by engine/booklogos, never committed.
+web/img/books/*.png
+web/img/books/manifest.json

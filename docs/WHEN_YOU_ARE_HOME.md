@@ -30,16 +30,17 @@ from today, in order. Nothing here needs a command except step 1.
    Your last run showed no per-game link file yet (no props pull had run
    since links were switched on), so player-prop slip links could not be
    checked. This run should show them banked.
-3. **The book logos.** The Bet it box now draws a tile per book, and each
-   tile shows the book's colour and initials until its logo file exists.
-   This machine cannot download anything, so the files have to come from
-   you: drop each logo at `web/img/books/<key>.svg` (SVG preferred; a PNG
-   named `<key>.svg` will not work — tell me and I'll take `.png`). The
-   keys: `draftkings`, `fanduel`, `betmgm`, `caesars`, `fanatics`,
-   `thescorebet`, `hardrock`, `betrivers`, `ballybet`, `betparx`, `fliff`,
-   `windcreek`, `novig`, `prophetx`. Then tell me which you added and I
-   switch them on (the `BOOK_LOGOS` list in `web/js/app.js`) — a file
-   nobody listed is never requested, so a missing one costs no 404s.
+3. **The book logos** — one command on the box, then look at the sheet:
+   ```
+   cd /srv/qellys && sudo -u qellys python3 -m engine.booklogos
+   ```
+   It fetches each sportsbook's own square icon (the one it ships for
+   phone home screens, or Google's copy of it) into `web/img/books/` and
+   writes the list the page reads; the Bet it sheet shows the icons the
+   next time it opens, no deploy needed. Paste the output back: a line
+   starting `--` is a book that returned nothing usable and keeps its
+   coloured initials — for those, drop a PNG at `web/img/books/<key>.png`
+   yourself and add the key to `manifest.json`'s `keys` list, or tell me.
 4. **Kalshi and Polymarket in the box.** We store Kalshi tickers and
    Polymarket slugs for the games we price, but not a page address for
    a bet, and I will not guess one. Open any market on kalshi.com and

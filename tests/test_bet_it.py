@@ -275,7 +275,7 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
     from engine.sources.oddsapi import BOOK_TITLES, SHARP_BOOKS
     import re
     keys = set(re.findall(r"^  ([a-z0-9]+): \[", fn, re.M))
-    alias = dict(re.findall(r"(\w+): \"(\w+)\"", fn[fn.index("const BOOK_ALIAS"):fn.index("const BOOK_LOGOS")]))
+    alias = dict(re.findall(r"(\w+): \"(\w+)\"", fn[fn.index("const BOOK_ALIAS"):fn.index("let _bookLogos")]))
     norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())
     names = {norm(BOOKS_NAME) for BOOKS_NAME in re.findall(r"^  [a-z0-9]+: \[\"([^\"]+)\"", fn, re.M)}
     for k, title in BOOK_TITLES.items():
@@ -284,8 +284,10 @@ def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
         n = norm(title)
         assert n in names or alias.get(n) in keys or alias.get(norm(k)) in keys or norm(k) in keys, f"no mark for {title}"
     assert "pinnacle" not in keys
-    # Logo files are opt-in by key, so a missing file is never a 404 per book per open.
-    assert "const BOOK_LOGOS = new Set([" in fn and 'data-onerr="remove"' in fn
+    # Icons come off the manifest the box writes, so a missing file is never a 404 per book per open.
+    assert 'fetch("img/books/manifest.json"' in fn and 'data-onerr="remove"' in fn
+    # The best price is tagged, and the book you took last time goes first.
+    assert "Best price" in fn and "Your book" in fn and 'localStorage.setItem(BET_BOOK_KEY' in fn
     css = (ROOT / "web" / "css" / "styles.css").read_text()
     sheet = css[css.index(".betit-sheet {"):css.index("body.betit-open")]
     assert "#betit-sheet" not in css, "a class, not an id: the Most Likely block forbids a #"

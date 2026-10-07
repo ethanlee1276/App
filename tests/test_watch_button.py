@@ -110,7 +110,10 @@ def test_the_button_is_on_the_live_card_and_the_play_by_play_page_and_never_on_a
     assert 'lv.state === "final" ? "" : watchHTML(d, league, "pbp-watch")' in pbp
     fn = APP[APP.index("function watchHTML("):APP.index("function liveCardHTML(")]
     assert 'href="${safeHref(first.url)}"' in fn and 'target="_blank"' in fn and 'rel="noopener noreferrer"' in fn
-    assert "if (!list.length) return \"\"" in fn, "no carrier named, no button"
+    # No stream door: the carrier is still NAMED ("On NBC"); no carrier at all, nothing.
+    assert "if (!list.length) {" in fn and 'class="watch-on">On ${escapeHtml(named.join(" · "))}' in fn
+    assert 'return named.length ?' in fn and fn.index(': "";') > fn.index("return named.length ?"), "no carrier named, no button"
+    assert 'id="gp-watch-slot"' in APP and 'watchHTML(row, state.sport, "gp-watch")' in APP, "the game page, before kickoff"
     css = (ROOT / "web" / "css" / "styles.css").read_text()
     assert ".watch-main {" in css and ".pbp-watch {" in css
 
