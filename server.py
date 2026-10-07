@@ -2250,21 +2250,6 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, json.dumps(got).encode(), ".json")
 
     # --- Research picks, written down before kickoff (owner only) -------------
-    def _founder_or_owner(self, conn) -> bool:
-        """The feed's moderation door (hide, restore, the verified tick, the
-        reports queue): the owner token as before, or the founder's own
-        signed-in session — the account engine/socialfeed.crown marked from
-        the box. False after answering."""
-        from engine import socialfeed as SF
-        if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
-            return not self._owner_refused()
-        who = self._account(conn)
-        if who and SF.is_founder(conn, who["id"]):
-            return True
-        _seclog("founder", "refused", self._client_ip(), path=urlparse(self.path).path)
-        self._send(403, b'{"error":"founder only"}', ".json")
-        return False
-
     def _owner_refused(self) -> bool:
         """True after answering, when the caller is not the owner. The same
         door as Zeno's import: QB_OWNER_TOKEN, failing closed."""
@@ -2540,6 +2525,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b'{"error":"unknown feed endpoint"}', ".json")
         finally:
             conn.close()
+
+    def _founder_or_owner(self, conn) -> bool:
+        """The feed's moderation door (hide, restore, the verified tick, the
+        reports queue): the owner token as before, or the founder's own
+        signed-in session — the account engine/socialfeed.crown marked from
+        the box. False after answering."""
+        from engine import socialfeed as SF
+        if self.headers.get("X-Owner-Token") or self.headers.get("Authorization"):
+            return not self._owner_refused()
+        who = self._account(conn)
+        if who and SF.is_founder(conn, who["id"]):
+            return True
+        _seclog("founder", "refused", self._client_ip(), path=urlparse(self.path).path)
+        self._send(403, b'{"error":"founder only"}', ".json")
+        return False
 
     def _feed_post(self, path: str, body: dict):
         from engine import socialfeed as SF

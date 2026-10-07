@@ -162,10 +162,15 @@ def test_the_official_account_wears_the_site_mark_and_others_never_do():
     assert posts["user0"]["verified"] and not posts["user0"]["official"]
 
 
-def test_only_the_owner_hands_out_the_badge():
+def test_only_the_owner_or_the_founder_hands_out_the_badge():
+    """Was owner token only; the founder's own signed-in session now opens
+    the same door (2026-10-07, Ethan's founder profile). Nobody else."""
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     body = src[src.index("def _feed_post"):src.index("def _social_get")]
-    assert 'if path in ("hide", "verify") and self._owner_refused()' in body
+    assert 'if path in ("hide", "verify") and not self._founder_or_owner(conn)' in body
+    door = src[src.index("def _founder_or_owner"):src.index("def _feed_post")]
+    assert "self._owner_refused()" in door and "SF.is_founder(" in door
+    assert '403' in door
 
 
 # --- the composer: words, tags, polls, links -----------------------------------

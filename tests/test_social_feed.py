@@ -302,7 +302,7 @@ def test_the_server_routes_exist_and_hide_is_owner_only():
     # either runs; anyone else is refused.
     assert 'if path in ("hide", "verify") and not self._founder_or_owner(conn):' in body
     assert body.index("_founder_or_owner(conn)") < body.index("SF.set_hidden(") < body.index("SF.set_verified(")
-    door = src[src.index("def _founder_or_owner"):src.index("def _owner_refused")]
+    door = src[src.index("def _founder_or_owner"):src.index("def _feed_post")]
     assert "return not self._owner_refused()" in door and "SF.is_founder(conn, who[\"id\"])" in door
     assert '"founder only"' in door
     reads = src[src.index("def _feed_get"):src.index("def _feed_post")]

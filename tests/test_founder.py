@@ -128,7 +128,7 @@ def test_the_queue_lists_hidden_items_so_a_hide_can_be_undone():
 
 def test_the_server_door_is_the_token_or_the_founders_session():
     src = _read("server.py")
-    door = src[src.index("def _founder_or_owner"):src.index("def _owner_refused")]
+    door = src[src.index("def _founder_or_owner"):src.index("def _feed_post")]
     assert "return not self._owner_refused()" in door and 'SF.is_founder(conn, who["id"])' in door
     post = src[src.index("def _feed_post"):src.index("def _social_get")]
     assert '"pin"' in post and "SF.pin(conn, uid," in post
