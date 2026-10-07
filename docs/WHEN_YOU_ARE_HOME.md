@@ -41,6 +41,10 @@ from today, in order. Nothing here needs a command except step 1.
    starting `--` is a book that returned nothing usable and keeps its
    coloured initials — for those, drop a PNG at `web/img/books/<key>.png`
    yourself and add the key to `manifest.json`'s `keys` list, or tell me.
+   The same icons show on Social's Tail sheet (Tail opens the Bet it
+   sheet now: one tile per book with every leg, a tile per leg where a
+   book holds only some, and every other book's front door under "Key
+   it in at").
 4. **Kalshi and Polymarket in the box.** We store Kalshi tickers and
    Polymarket slugs for the games we price, but not a page address for
    a bet, and I will not guess one. Open any market on kalshi.com and
