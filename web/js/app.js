@@ -1047,6 +1047,7 @@ const ICON_PATHS = {
   lock: '<rect x="3.2" y="7" width="9.6" height="7" rx="1.4"/>'
       + '<path d="M5.6 7V4.9a2.4 2.4 0 014.8 0V7"/>',
   cross: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  play: '<path d="M5 3l8 5-8 5z"/>',
   dash: '<path d="M3.4 8h9.2"/>',
   // The one filled mark. A live indicator is not a glyph you read, it is a
   // thing you notice in peripheral vision, and an outline dot does not.
@@ -45204,6 +45205,92 @@ function liveFeedWhyHTML(chip, feeds, now) {
     `<p class="rail-quiet lb-why">${escapeHtml(w)}</p>`).join("")}</div>`;
 }
 
+/* WATCH (Ethan, 2026-10-07: "on the live page … put a 'watch' button and
+   then it will link you to whatever streaming service is hosting that
+   game whether it's YouTube tv, or prime video, or peacock or whatever").
+   The feed names the carrier — ESPN's scoreboard for football, basketball
+   and hockey, MLB's schedule for baseball (`tv`, national; `tv_local`, the
+   home and away markets) — and this table says where that carrier's
+   stream lives. FRONT DOORS, NOT DEEP LINKS: no service publishes a
+   stable per-game address, and a guessed one lands on a 404 in the
+   second quarter. A broadcast channel also rides on YouTube TV, so that
+   is offered second for those; a local-only game goes to the league's
+   own out-of-market service. No carrier named, no button. */
+const STREAM_HOME = {
+  peacock: ["Peacock", "https://www.peacocktv.com/sports"],
+  paramount: ["Paramount+", "https://www.paramountplus.com/live-tv/"],
+  foxone: ["Fox One", "https://www.foxone.com/"],
+  espn: ["ESPN", "https://www.espn.com/watch/"],
+  espnplus: ["ESPN+", "https://plus.espn.com/"],
+  prime: ["Prime Video", "https://www.amazon.com/gp/video/storefront"],
+  netflix: ["Netflix", "https://www.netflix.com/"],
+  nflplus: ["NFL+", "https://www.nfl.com/plus/"],
+  ytv: ["YouTube TV", "https://tv.youtube.com/"],
+  youtube: ["YouTube", "https://www.youtube.com/"],
+  hbomax: ["HBO Max", "https://www.hbomax.com/"],
+  apple: ["Apple TV", "https://tv.apple.com/"],
+  mlbtv: ["MLB.TV", "https://www.mlb.com/tv"],
+  nbalp: ["NBA League Pass", "https://www.nba.com/watch/league-pass-stream"],
+  wnbalp: ["WNBA League Pass", "https://www.wnba.com/watch"],
+  cw: ["The CW", "https://www.cwtv.com/"],
+  hulu: ["Hulu", "https://www.hulu.com/"],
+  ion: ["ION", "https://iontelevision.com/"],
+  roku: ["The Roku Channel", "https://therokuchannel.roku.com/"],
+};
+/* A carrier's name, as the feed spells it, to the service above. Order
+   matters: "ESPN+" before "ESPN", "YouTube TV" before "YouTube",
+   "NBC Sports" is NBC, "FS1" is Fox. */
+const NETWORK_STREAM = [
+  [/^(nbc|peacock|usa network|cnbc|golf)/i, "peacock"],
+  [/^(cbs|paramount)/i, "paramount"],
+  [/^(fox|fs1|fs2|btn|big ten network|fox deportes)/i, "foxone"],
+  [/^espn ?\+|espnplus/i, "espnplus"],
+  [/^(espn|abc|sec network|secn|acc network|accn|espnu|espn2|espnews|longhorn)/i, "espn"],
+  [/prime video|amazon/i, "prime"],
+  [/netflix/i, "netflix"],
+  [/^(nfl network|nfln|nfl\+)/i, "nflplus"],
+  [/youtube tv/i, "ytv"],
+  [/youtube/i, "youtube"],
+  [/^(tnt|tbs|trutv|max\b|hbo)/i, "hbomax"],
+  [/apple/i, "apple"],
+  [/^(mlb network|mlb\.tv|mlbn)/i, "mlbtv"],
+  [/^nba tv/i, "nbalp"],
+  [/^(the cw|cw)\b/i, "cw"],
+  [/hulu/i, "hulu"],
+  [/^ion\b/i, "ion"],
+  [/roku/i, "roku"],
+];
+const ON_YOUTUBE_TV = new Set(["peacock", "paramount", "foxone", "espn", "hbomax", "cw", "ion", "nflplus", "mlbtv", "nbalp"]);
+const LEAGUE_OUT_OF_MARKET = { mlb: "mlbtv", nba: "nbalp", wnba: "wnbalp", nhl: "espnplus" };
+function streamKey(network) {
+  const n = String(network || "").trim();
+  const hit = NETWORK_STREAM.find(([re]) => re.test(n));
+  return hit ? hit[1] : "";
+}
+/* [{key, label, url, via}] — the places this game streams, best first,
+   each service once. `via` is the carrier the feed named. */
+function streamsFor(g, league) {
+  if (!g) return [];
+  const out = [];
+  const add = (key, via) => {
+    const s = STREAM_HOME[key];
+    if (s && !out.some((x) => x.key === key)) out.push({ key, label: s[0], url: s[1], via: via || "" });
+  };
+  (g.tv || []).forEach((n) => add(streamKey(n), n));
+  if (!out.length && (g.tv_local || []).length) add(LEAGUE_OUT_OF_MARKET[league], (g.tv_local || []).join(" / "));
+  if (out.length && ON_YOUTUBE_TV.has(out[0].key)) add("ytv", out[0].via);
+  return out;
+}
+function watchHTML(g, league, cls) {
+  const list = streamsFor(g, league);
+  if (!list.length) return "";
+  const first = list[0];
+  const rest = list.slice(1);
+  return `<div class="watch${cls ? ` ${cls}` : ""}"><a class="watch-main" href="${safeHref(first.url)}" target="_blank"
+      rel="noopener noreferrer" title="${escapeAttr(first.via ? `On ${first.via}` : first.label)}">${icon("play", 12)}<span>Watch</span><b>${escapeHtml(first.label)}</b></a>${
+    rest.map((s) => `<a class="watch-alt" href="${safeHref(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.label)}</a>`).join("")}</div>`;
+}
+
 function liveCardHTML({ sport, g, bets }) {
   const lv = g.live || {};
   const teams = teamsForSport(sport);
@@ -45243,6 +45330,7 @@ function liveCardHTML({ sport, g, bets }) {
     <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
       <span class="lb-sit">${situation}</span>
       <span class="lb-league">${sport.toUpperCase()}</span></div>
+    ${watchHTML(g, sport, "lb-watch")}
     <div class="lb-score">
       <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away)}</em></span>
       <b${lv.away_score == null ? "" : ` data-tick="ls:${escapeAttr(gameId(g))}:a" data-tick-mode="neutral"
@@ -46967,7 +47055,8 @@ async function renderPbpPage() {
             <b>${name(d.away, d.away_name)}</b></div></div>
           <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
           <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>
-            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span></div>
+            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
+            ${lv.state === "final" ? "" : watchHTML(d, league, "pbp-watch")}</div>
           <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
           <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
             <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>

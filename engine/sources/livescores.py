@@ -267,6 +267,38 @@ def parse_espn_scoreboard(data: dict) -> dict[frozenset, LiveStatus]:
             for r in parse_espn_rows(data)}
 
 
+def espn_carriers(comp: dict) -> tuple[list, list]:
+    """(national, local) carriers named on an ESPN competition.
+
+    `broadcasts[].names` is the national list as ESPN prints it under
+    the score; `geoBroadcasts` is every market with its `market.type`
+    ("National", "Home", "Away") and the carrier's `media.shortName`.
+    Television and streaming only — a radio call is not a place to
+    watch — and each name once, in the feed's own order. Both lists
+    come back empty, not None, when the block is absent; the caller
+    decides what absence means.
+    """
+    nat: list = []
+    loc: list = []
+    def _add(into: list, name) -> None:
+        n = str(name or "").strip()
+        if n and n not in nat and n not in loc:
+            into.append(n)
+    for b in comp.get("broadcasts") or []:
+        if str((b or {}).get("market") or "national").lower() == "national":
+            for n in (b or {}).get("names") or []:
+                _add(nat, n)
+    for g in comp.get("geoBroadcasts") or []:
+        g = g or {}
+        kind = str(((g.get("type") or {}).get("shortName")) or "").lower()
+        if kind and kind not in ("tv", "streaming", "web"):
+            continue
+        name = (g.get("media") or {}).get("shortName")
+        market = str(((g.get("market") or {}).get("type")) or "").lower()
+        _add(nat if market == "national" else loc, name)
+    return nat, loc
+
+
 def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
     """An ESPN scoreboard payload → one row per game, sides named.
 
@@ -339,6 +371,11 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
             possession=(by_id.get(str(sit.get("possession", "")), "")
                         if state == "live" else ""),
         )
+        # Where to watch it: only when the feed named a carrier, so a
+        # scoreboard without the block leaves None, not [].
+        nat, loc = espn_carriers(comp)
+        if nat or loc:
+            live.tv, live.tv_local = nat, loc
         out.append({"event_id": str(ev.get("id", "") or ""),
                     "home": home, "away": away,
                     "home_name": home_name, "away_name": away_name,

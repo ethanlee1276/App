@@ -67,7 +67,7 @@ def _row(pk: int, st) -> dict:
     because LiveStatus carries the STATE of a game and not its identity —
     and inventing a field on it here would put the same fact in two places.
     """
-    return {
+    out = {
         "game_pk": pk,
         "live": {
             "state": st.state,
@@ -81,6 +81,12 @@ def _row(pk: int, st) -> dict:
             "start_time": st.start_time,
         },
     }
+    # Where to watch it, when the schedule named a carrier (the Watch
+    # button, Ethan 2026-10-07); absent when it did not.
+    if getattr(st, "tv", None) or getattr(st, "tv_local", None):
+        out["tv"] = list(st.tv or [])
+        out["tv_local"] = list(st.tv_local or [])
+    return out
 
 
 def build(date: str, pbp_dir: Path | None = None) -> dict:
@@ -263,6 +269,8 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
         "event_id": str(g["game_pk"]),
         "generated_at": _utc(),
         "home": g.get("home"), "away": g.get("away"),
+        **({"tv": list(g.get("tv") or []), "tv_local": list(g.get("tv_local") or [])}
+           if g.get("tv") or g.get("tv_local") else {}),
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},
         "plays": plays,

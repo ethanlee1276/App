@@ -294,6 +294,15 @@ class LiveStatus:
     # end zone on the left, so x is a straight function of this number.
     yard_line: Optional[float] = None     # NFL/CFB: 0-100 from home's goal
     possession: str = ""                  # NFL/CFB: team abbr with the ball
+    # WHERE IT IS ON (Ethan, 2026-10-07: "a 'watch' button … whatever
+    # streaming service is hosting that game"). `tv` is the national
+    # television and streaming carriers the feed names, in its order;
+    # `tv_local` the home- and away-market ones. Names as the feed spells
+    # them ("CBS", "Prime Video", "Peacock"); the page maps a name to the
+    # service that streams it. None when the feed said nothing, which is
+    # a different fact from an empty list.
+    tv: Optional[list] = None
+    tv_local: Optional[list] = None
 
 
 def live_to_dict(live) -> Optional[dict]:
@@ -313,6 +322,8 @@ def live_to_dict(live) -> Optional[dict]:
         "balls": live.balls,
         "strikes": live.strikes,
         "yard_line": live.yard_line,
+        "tv": live.tv,
+        "tv_local": live.tv_local,
         "possession": live.possession,
     }
 

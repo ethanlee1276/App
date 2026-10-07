@@ -1,6 +1,6 @@
 """Live MLB game state from the MLB Stats API schedule + linescore.
 
-    https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=linescore
+    https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=linescore,broadcasts(all)
 
 Keyless and free. The parser is pure and unit-tested; the fetch wrapper reuses
 the cached JSON getter (blocked in some sandboxes). ``attach_live`` overlays
@@ -74,6 +74,9 @@ def parse_live(schedule_json: dict) -> dict:
                 balls=balls, strikes=strikes,
                 start_time=g.get("gameDate", ""),
             )
+            nat, loc = mlb_carriers(g.get("broadcasts"))
+            if nat or loc:
+                st.tv, st.tv_local = nat, loc
             pair = frozenset((home_ab, away_ab))
             out[(pair, int(g.get("gameNumber") or 1))] = st
             pk = g.get("gamePk")
@@ -88,9 +91,27 @@ def parse_live(schedule_json: dict) -> dict:
     return out
 
 
+def mlb_carriers(broadcasts) -> tuple[list, list]:
+    """(national, local) television carriers off a schedule game's
+    `broadcasts` (hydrate=broadcasts(all)): `{name, type, isNational,
+    homeAway}` each. Radio (`AM`/`FM`) is not a place to watch and is
+    left out; a name appears once, national first."""
+    nat: list = []
+    loc: list = []
+    for b in broadcasts or []:
+        b = b or {}
+        if str(b.get("type") or "").upper() not in ("TV", "STREAMING", ""):
+            continue
+        n = str(b.get("name") or b.get("callSign") or "").strip()
+        if not n or n in nat or n in loc:
+            continue
+        (nat if b.get("isNational") else loc).append(n)
+    return nat, loc
+
+
 def fetch_live(date: str) -> dict:
     data = _get_json(
-        f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore",
+        f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore,broadcasts(all)",
         f"mlb_live_{date}.json", ttl=30)
     return parse_live(data)
 

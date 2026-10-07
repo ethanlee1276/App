@@ -206,6 +206,11 @@ def _row(r: dict, league: str = "") -> dict:
         out["home_id"] = r["home_id"]
     if r.get("away_id"):
         out["away_id"] = r["away_id"]
+    # Where to watch it, when the scoreboard named a carrier (the Watch
+    # button, Ethan 2026-10-07). Absent otherwise, for the same reason.
+    if getattr(st, "tv", None) or getattr(st, "tv_local", None):
+        out["tv"] = list(st.tv or [])
+        out["tv_local"] = list(st.tv_local or [])
     return out
 
 
@@ -514,6 +519,8 @@ def pbp_doc(league: str, g: dict, payload: dict,
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},
     }
+    if g.get("tv") or g.get("tv_local"):
+        doc["tv"], doc["tv_local"] = list(g.get("tv") or []), list(g.get("tv_local") or [])
     if league in espnplays.FOOTBALL:
         drives = espnplays.football_drives(
             payload, league, home=doc["home"] or "", away=doc["away"] or "")

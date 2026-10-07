@@ -52,6 +52,15 @@ from today, in order. Nothing here needs a command except step 1.
    Qellys Book). If you want the full logo on profiles too, say so.
 6. **The props "not graded" count and the leaderboard** fill by
    themselves as people post; nothing to run.
+7. **Watch button check** (next game night). The live cards and the
+   play-by-play page carry a Watch button once the live loop names a
+   carrier. With a game on, this prints each game and where the feed
+   says it is on; paste it back:
+   ```
+   for f in /srv/qellys/web/data/live_*.json; do python3 -c "import json,sys; d=json.load(open('$f')); print('$f'.split('/')[-1], [(g['away']+'@'+g['home'], g.get('tv'), g.get('tv_local')) for g in d.get('games',[]) if g['live']['state']=='live'])"; done
+   ```
+   A game with `tv` None means the feed named no carrier and the page
+   shows no button, which is the designed answer, not a bug.
 
 ### Everything to run, in order (saved 2026-10-06, Ethan: "save all the code for me to run for when I'm home. I know it will be a big list")
 

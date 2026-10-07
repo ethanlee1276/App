@@ -7400,6 +7400,19 @@ body.has-deck #rail-live { display: none; }
 .lb-sit { color: var(--text-mute); font-size: var(--fs-xs); }
 .lb-league { margin-left: auto; color: var(--text-faint); font-size: var(--fs-2xs);
   font-weight: 800; letter-spacing: .1em; }
+/* WATCH: where the game streams (Ethan, 2026-10-07). One door, the
+   service's name on it; a second service as a quiet chip. */
+.watch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lb-watch { margin: 8px 0 2px; }
+.watch-main { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px 4px 9px; border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 14%, var(--panel-2)); border: var(--hairline) solid color-mix(in srgb, var(--brand) 45%, transparent);
+  color: var(--text); text-decoration: none; font-size: var(--fs-xs); font-weight: 700; }
+.watch-main b { color: var(--brand-2); font-weight: 800; }
+.watch-main:hover, .watch-main:focus-visible { background: color-mix(in srgb, var(--brand) 24%, var(--panel-2)); }
+.watch-alt { padding: 4px 9px; border-radius: 999px; background: var(--panel-2); border: var(--hairline) solid var(--border);
+  color: var(--text-dim); text-decoration: none; font-size: var(--fs-2xs); font-weight: 700; }
+.watch-alt:hover, .watch-alt:focus-visible { color: var(--text); border-color: var(--brand); }
+.pbp-watch { justify-content: center; margin-top: 6px; }
 .lb-score { display: grid; grid-template-columns: 1fr auto auto auto 1fr;
   align-items: center; gap: 12px; margin: 12px 0 10px; }
 .lb-team { display: flex; flex-direction: column; align-items: center; gap: 5px; }
