@@ -159,6 +159,34 @@ def test_the_new_quarterbacks_offence_is_described_by_its_shape():
     d = Q.detail(ch)
     assert d.startswith("Jalon Daniels has thrown for 5.5 yards an attempt (27 attempts) against Baker Mayfield’s 7.2 — ")
     assert "47% of its plays" in d
+    # WHERE THE BALL GOES UNDER HIM (the research's "4.2 air yards per
+    # target"): the team's short and deep shares of its targets in his
+    # starts, off the units table's offence rows.
+    conn = DB.connect(":memory:")
+    DB.upsert_team_units(conn, [
+        {"sport": "nfl", "season": 2026, "period": f"{wk:03d}", "team": "TB", "side": "off", "opp": "X",
+         "plays": 60, "short_tgt": st, "short_yds": 100.0, "mid_tgt": mi, "mid_yds": 80.0, "deep_tgt": dp, "deep_yds": 60.0}
+        for wk, st, mi, dp in ((1, 14, 10, 6), (2, 15, 10, 5), (3, 16, 9, 5), (4, 22, 6, 2))]
+        + [{"sport": "nfl", "season": 2026, "period": "005", "team": "TB", "side": "off", "opp": "X", "plays": 60}])
+    td = Q.team_depth(conn, 2026)
+    assert td[("TB", 4)] == {"short": 22.0, "mid": 6.0, "deep": 2.0} and ("TB", 5) not in td, \
+        "a week from before the columns is no mix, not a zero one"
+    qb3 = Q.quarterbacks([], stats, [], 5, lambda p: "TB", team_depth=td)
+    pr3 = qb3["profile"]
+    assert pr3["Jalon Daniels"]["short_share"] == round(22 / 30, 3) and pr3["Jalon Daniels"]["deep_share"] == round(2 / 30, 3)
+    assert pr3["Baker Mayfield"]["short_share"] == 0.5 and pr3["Baker Mayfield"]["deep_share"] == round(16 / 90, 3)
+    assert pr["Jalon Daniels"]["short_share"] is None, "without the table, nothing is said"
+    ch3 = {**ch, "replacement_profile": pr3["Jalon Daniels"], "starter_profile": pr3["Baker Mayfield"]}
+    w3 = Q.shape_words(ch3)
+    assert ("in his starts 73% of the team’s targets were short throws (under 10 air yards) and 7% deep (20+) — "
+            "Baker Mayfield’s starts: 50% short, 18% deep") in w3, w3
+    assert "short throws" not in words, "no table: the old sentence"
+    # The build puts the rows in the report; the slate builder hands them on.
+    build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
+    assert 'carry_report["team_depth"] = _team_depth(_tdb.connect(), args.season)' in build
+    assert build.index('carry_report["team_depth"]') < build.index("report=carry_report, qb_backups=True")
+    nv = open(os.path.join(ROOT, "engine", "sources", "nflverse.py"), encoding="utf-8").read()
+    assert 'team_depth=report.get("team_depth") or None' in nv
     # No weekly rows under him yet: the sentence stays as it was.
     assert Q.detail({"team": "TB", "starter": "A", "replacement": "B", "replacement_attempts": 0}) \
         == "B has 0 pass attempts in our data — too few to rate"
@@ -256,6 +284,15 @@ def test_the_card_says_where_his_targets_come_from_and_how_the_defence_does_ther
     assert G.depth_facts({"short": 0.9, "mid": 0.1, "deep": 0.0, "targets": 40}, "TB", {"def": {}}, 32, lean) == [], \
         "a table from before the columns: no rank, no fact"
     assert G.depth_facts(None, "TB", ratings_def, 32, lean) == []
+    # The tale of the tape carries the three zones, each row only where a
+    # rank exists (a table from before the backfill shows nothing new).
+    tape = APP[APP.index("const SCAN_UNITS = "):APP.index("const SCAN_READ_TONE")]
+    for z, label in (("short", "Short throws"), ("mid", "Intermediate throws"), ("deep", "Deep throws")):
+        assert f'["{z}", "{label}", ' in tape, z
+    labels = APP[APP.index("const TAPE_LABELS = {"):APP.index("function tapeTier(")]
+    assert 'short: ["Short throws (yds a target)", "Short throws allowed"]' in labels
+    assert "deep: [" in labels and "mid: [" in labels
+    assert "if (ra == null && rh == null) return \"\";" in APP[APP.index("function scanTapeHTML("):]
     # read_facts carries it for a receiver, after his role; never for a passer.
     facts = G.read_facts("wr", "WR", "DAL", "TB", usage={"games": 4, "tgt_share": 0.33, "targets_pg": 11.0,
                                                          "depth": {"short": 0.58, "mid": 0.3, "deep": 0.12,

@@ -97,8 +97,37 @@ def _norm(name: str) -> str:
     return normalize_name(str(name or ""))
 
 
-def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: int, team_of) -> dict:
-    """{"teams": {team: {"starter", "backup"}}, "passing": {name: (attempts, yards)}} for the slate."""
+#: Targets in a quarterback's starts before the team's throw-depth mix
+#: under him is said (engine/gamescan.DEPTH_MIN_TGTS, the same floor).
+DEPTH_MIN_TGTS = 10
+
+
+def team_depth(conn, season: int) -> dict:
+    """``{(team, week): {"short", "mid", "deep"}}`` — the offence's targets
+    by air-yard zone each week this season, off the units table
+    (engine/sources/nflunits; empty before the columns are filled)."""
+    out: dict = {}
+    try:
+        rows = conn.execute("SELECT team, period, short_tgt, mid_tgt, deep_tgt FROM team_units "
+                            "WHERE sport='nfl' AND season=? AND side='off'", (int(season),))
+        for r in rows:
+            if r[2] is None and r[3] is None and r[4] is None:
+                continue
+            out[(r[0], int(str(r[1])))] = {"short": float(r[2] or 0), "mid": float(r[3] or 0),
+                                           "deep": float(r[4] or 0)}
+    except Exception:                                        # noqa: BLE001
+        return {}
+    return out
+
+
+def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: int, team_of,
+                 team_depth: dict | None = None) -> dict:
+    """{"teams": {team: {"starter", "backup"}}, "passing": {name: (attempts, yards)}} for the slate.
+
+    ``team_depth`` (`team_depth(conn, season)`) adds, to each passer's
+    profile, the share of the team's targets in HIS starts that were
+    short / deep throws — the research's "4.2 air yards per target"
+    read as where the ball goes under him."""
     from .sources.nflverse import _f, _s
     teams: dict = {}
     for sp in specs or []:
@@ -196,6 +225,10 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
         pr["air_per_att"] = round(pr["air_yards"] / pr["attempts"], 1) if pr["air_yards"] > 0 else None
         pr["carries_pg"] = round(pr["carries"] / pr["games"], 1)
         pr["rush_yds_pg"] = round(pr["rush_yds"] / pr["games"], 1)
+        zones = [(team_depth or {})[k] for k in starts if k in (team_depth or {})]
+        tot = sum(z["short"] + z["mid"] + z["deep"] for z in zones)
+        pr["short_share"] = round(sum(z["short"] for z in zones) / tot, 3) if tot >= DEPTH_MIN_TGTS else None
+        pr["deep_share"] = round(sum(z["deep"] for z in zones) / tot, 3) if tot >= DEPTH_MIN_TGTS else None
     return {"teams": teams, "passing": {k: tuple(v) for k, v in passing.items()},
             "usual": {t: n for t, n in usual.items() if t in teams}, "profile": profile}
 
@@ -295,6 +328,14 @@ def shape_words(ch: dict) -> str:
         s = f"{rp['air_per_att']:.1f} air yards an attempt"
         if sp.get("air_per_att"):
             s += f" against {ch['starter']}’s {sp['air_per_att']:.1f}"
+        bits.append(s)
+    # Where the ball goes under him (engine/sources/nflunits, 2026-10-08):
+    # the team's short and deep shares of its targets in his starts.
+    if rp.get("short_share") is not None:
+        s = (f"in his starts {rp['short_share']:.0%} of the team’s targets were short throws (under 10 air "
+             f"yards) and {rp.get('deep_share') or 0:.0%} deep (20+)")
+        if sp.get("short_share") is not None:
+            s += f" — {ch['starter']}’s starts: {sp['short_share']:.0%} short, {sp.get('deep_share') or 0:.0%} deep"
         bits.append(s)
     return "; ".join(bits)
 

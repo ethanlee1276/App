@@ -13533,6 +13533,12 @@ const SCAN_UNITS = [["overall", "Overall", "offense", "defense"],
   // 2026-10-04: conversions per third down; touchdowns per red-zone trip.
   ["third_down", "Third downs", "third-down offense", "third-down defense"],
   ["redzone", "Red-zone touchdowns", "red-zone offense", "red-zone defense"],
+  // 2026-10-08: yards a target on short (under 10 air yards), intermediate
+  // (10–19) and deep (20+) throws — the defence rated by zone, for the
+  // receiver whose targets live in one of them (engine/sources/nflunits).
+  ["short", "Short throws", "short passing game", "short-throw defense"],
+  ["mid", "Intermediate throws", "intermediate passing game", "intermediate-throw defense"],
+  ["deep", "Deep throws", "deep passing game", "deep-throw defense"],
   // College only (CFBD's advanced table): havoc is sacks, tackles for
   // loss and takeaways; line yards credit the blocking, stuffs the front.
   ["havoc", "Havoc", "ball security", "havoc"],
@@ -13560,6 +13566,9 @@ const TAPE_LABELS = {
   stuff: ["Avoiding stuffed runs", "Stuffing runs"],
   third_down: ["Third-down conversions", "Third-down stops"],
   redzone: ["Red-zone TD rate", "Red-zone TDs allowed"],
+  short: ["Short throws (yds a target)", "Short throws allowed"],
+  mid: ["Intermediate throws", "Intermediate throws allowed"],
+  deep: ["Deep throws", "Deep throws allowed"],
 };
 
 //: What a rank means, in a word, by quarter of the league.

@@ -49,7 +49,12 @@ used, against what the site computes, and what was built from it.
 | Yards after contact ALLOWED by a defence (1.73, best) | Not in nflverse/PFR free tables |
 | "Completing over 80% when kept clean" | Pressure-split completion rate is PFF/NGS-only per QB |
 
-**Next if wanted:** the offence's own depth mix under its quarterback
-("TB throws short on 61% of targets under Daniels" — the offence side of
-the same `team_units` columns, per QB start), and the defence's zone
-ranks on the tale of the tape.
+Also built the same night: the three zones on the game page's tale of
+the tape ("Short throws allowed … 24th"), and the QB-change card's
+offence shape gained where the ball goes under him — "in his starts 73%
+of the team's targets were short throws (under 10 air yards) and 7% deep
+(20+) — Mayfield's starts: 50% short, 18% deep" (the offence side of the
+same `team_units` columns, over his start weeks).
+
+**Next if wanted:** the depth signal's box run (`engine/scanfit`) — if
+it passes the bar, the zone matchup joins the number for receivers.

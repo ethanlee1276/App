@@ -1255,8 +1255,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         report["thin"] = thin_report
         # WHO EACH TEAM'S QUARTERBACKS ARE, and what they have thrown —
         # engine/qbchange reads it once the injuries are in.
+        # ``report["team_depth"]`` (engine/qbchange.team_depth, put there
+        # by the build) adds where the ball goes under each passer.
         from ..qbchange import quarterbacks as _quarterbacks
-        report["qb"] = _quarterbacks(specs, stats, prior_stats, upto_week, team_of)
+        report["qb"] = _quarterbacks(specs, stats, prior_stats, upto_week, team_of,
+                                     team_depth=report.get("team_depth") or None)
         # THE DEPTH ORDER AT EACH POSITION, the one engine/matefit measured
         # on — engine/teammates reads it once the injuries are in.
         # Ranked on SNAP SHARE when the feed has this season's counts

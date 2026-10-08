@@ -477,6 +477,15 @@ def main() -> None:
         return
 
     carry_report: dict = {}
+    # THE OFFENCE'S THROW DEPTH BY WEEK (engine/qbchange.team_depth, off the
+    # units table): the QB-change card says where the ball goes under the
+    # replacement against the usual starter. Empty before the columns fill.
+    try:
+        from engine import db as _tdb
+        from engine.qbchange import team_depth as _team_depth
+        carry_report["team_depth"] = _team_depth(_tdb.connect(), args.season)
+    except Exception:                                         # noqa: BLE001
+        carry_report["team_depth"] = {}
     try:
         slate = build_slate(args.season, args.week, carry=args.carry,
                             report=carry_report, qb_backups=True, games=games)
