@@ -3578,7 +3578,35 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
     return plan
 
 
-def _snapshot_closes() -> dict:
+def _wanted_rows(rows, want):
+    """Only the snapshots of the bets being settled.
+
+    THE BOX'S HISTORY IS 2.7 MILLION ROWS (2026-10-08, 444 MB), and the two
+    snapshot readers below grouped all of it to answer a handful of open
+    bets — over 2 GB even with linemoves keeping only a close's fields, and
+    the settle chores were killed for it. ``want`` is the open bets'
+    ``{(normalized player, market)}``; every row of those keys is kept, so
+    each of their closes, legs and stamps is exactly what the whole file
+    gives. ``None`` keeps everything (a caller that wants the full map)."""
+    if want is None:
+        yield from rows
+        return
+    from .sources.oddsapi import normalize_name
+    markets = {m for _p, m in want}
+    names: dict = {}
+    for r in rows:
+        m = r.get("market")
+        if m not in markets:
+            continue
+        p = r.get("player") or ""
+        n = names.get(p)
+        if n is None:
+            n = names[p] = normalize_name(p)
+        if (n, m) in want:
+            yield r
+
+
+def _snapshot_closes(want=None) -> dict:
     """``{(normalized player, market, date): closing line}`` from the free
     line-move snapshots. The fallback CLV source: harvested odds_history
     closes cost credits and only exist for backtested dates, while these
@@ -3601,7 +3629,7 @@ def _snapshot_closes() -> dict:
         # `grouped` and keep only the fields the reduce needs. That is a
         # change to the settling path and wants its own measurement.
         from .linemoves import stream_history, closing_lines_by_date
-        return closing_lines_by_date(stream_history())
+        return closing_lines_by_date(_wanted_rows(stream_history(), want))
     except Exception as exc:     # noqa: BLE001
         # NEVER LET CLV BOOKKEEPING BLOCK SETTLING — and never let it fail
         # in silence either. `{}` here is indistinguishable from "no
@@ -3659,7 +3687,7 @@ def _close_odds_from(close: dict | None, bet_line, side: str | None):
     return price
 
 
-def _snapshot_close_odds(markets=None) -> dict:
+def _snapshot_close_odds(markets=None, want=None) -> dict:
     """``{(player, market, date): {"over": px, "under": px}}``.
 
     The price companion to :func:`_snapshot_closes`. Same free source, and
@@ -3680,8 +3708,9 @@ def _snapshot_close_odds(markets=None) -> dict:
             # Only the markets the caller will ask about (the close repair,
             # one sport at a time): the box OOM-killed the all-sport run at
             # 1.37 GB on 2026-10-06.
-            return closing_odds_by_date(r for r in stream_history() if r.get("market") in markets)
-        return closing_odds_by_date(stream_history())
+            return closing_odds_by_date(r for r in _wanted_rows(stream_history(), want)
+                                        if r.get("market") in markets)
+        return closing_odds_by_date(_wanted_rows(stream_history(), want))
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 
@@ -5076,6 +5105,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     closes_cache: dict = {}
     settled = 0
     _open_rows = conn.execute(q, args).fetchall()
+    # The snapshot closes are read for these bets only (see _wanted_rows).
+    _want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}
     for b in _open_rows:
         where, wargs = _hist_where(b)
         if b["market"] in GAME_MARKETS:
@@ -5194,7 +5225,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # Nothing proves this harvested row is pre-game. A free snapshot
             # close cut at a RECORDED start is proven, so it wins.
             if "_snapshots" not in closes_cache:
-                closes_cache["_snapshots"] = _snapshot_closes()
+                closes_cache["_snapshots"] = _snapshot_closes(_want)
             _stamped = getattr(closes_cache["_snapshots"], "stamped", ())
             if any((_who, b["market"], _d) in _stamped for _d in _dates):
                 close = None
@@ -5203,7 +5234,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # No harvested close for this date — fall back to our own
             # recorded snapshots, so CLV accrues without spending credits.
             if "_snapshots" not in closes_cache:
-                closes_cache["_snapshots"] = _snapshot_closes()
+                closes_cache["_snapshots"] = _snapshot_closes(_want)
             _snap = closes_cache["_snapshots"]
             close_line = next(
                 (v for v in (_snap.get(_leg_key(_snap, (_who, b["market"], _d), b))
@@ -5240,7 +5271,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # our own recorded snapshots, which cost nothing and accrue on
             # every pull that was already paid for.
             if "_snapshot_odds" not in closes_cache:
-                closes_cache["_snapshot_odds"] = _snapshot_close_odds()
+                closes_cache["_snapshot_odds"] = _snapshot_close_odds(want=_want)
             _sides = closes_cache["_snapshot_odds"].get(_leg_key(
                 closes_cache["_snapshot_odds"],
                 (_who, b["market"], b["date"],
@@ -5480,17 +5511,6 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
     ``closing`` supplies closing lines for CLV; when omitted they're derived
     automatically from the recorded line-move snapshots, so closing-line value
     accrues without any manual bookkeeping."""
-    dated: dict = {}
-    if closing is None:
-        try:
-            # DATED snapshots, keyed (player, market, date). The undated map
-            # keys on (player, market) alone, which in a sport that plays
-            # every night resolves to the last price ever seen for that
-            # prop — a July bet could take August's line as its "close".
-            dated = _snapshot_closes()
-        except Exception:      # never let CLV bookkeeping block settling
-            dated = {}
-        closing = {}
     q = "SELECT * FROM bets WHERE status='open'"
     args: list = []
     if sport:
@@ -5499,8 +5519,22 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
         q += " AND date=?"; args.append(date)
 
     from .sources.oddsapi import normalize_name
+    open_rows = conn.execute(q, args).fetchall()
+    dated: dict = {}
+    if closing is None:
+        try:
+            # DATED snapshots, keyed (player, market, date). The undated map
+            # keys on (player, market) alone, which in a sport that plays
+            # every night resolves to the last price ever seen for that
+            # prop — a July bet could take August's line as its "close".
+            # Read for these bets only (_wanted_rows).
+            dated = _snapshot_closes({(normalize_name(b["player"]), b["market"]) for b in open_rows
+                                      if (b["player"], b["market"]) in actuals})
+        except Exception:      # never let CLV bookkeeping block settling
+            dated = {}
+        closing = {}
     settled = 0
-    for b in conn.execute(q, args).fetchall():
+    for b in open_rows:
         key = (b["player"], b["market"])
         if key not in actuals:
             continue

@@ -218,14 +218,46 @@ def test_the_settle_path_streams_even_though_it_keeps_everything():
     small and this test exists partly to stop anyone reading the change as
     a big one."""
     src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
-    assert src.count("closing_lines_by_date(stream_history())") == 1
-    assert src.count("closing_odds_by_date(stream_history())") == 1
+    # Streamed AND, since 2026-10-08, filtered to the open bets' keys
+    # (_wanted_rows): the box's history reached 2.7 million rows.
+    assert src.count("closing_lines_by_date(_wanted_rows(stream_history(), want))") == 1
+    assert src.count("closing_odds_by_date(_wanted_rows(stream_history(), want))") == 1
     assert "closing_lines_by_date(load_history())" not in src
-    # And the reason the saving is small is recorded where the change is,
-    # so nobody re-measures it from scratch to find out.
-    i = src.index("closing_lines_by_date(stream_history())")
+    # And the reason the streaming saving alone was small is recorded where
+    # the change is, so nobody re-measures it from scratch to find out.
+    i = src.index("closing_lines_by_date(_wanted_rows(stream_history(), want))")
     assert "3 MB" in src[max(0, i - 1400):i], \
         "the measured saving is no longer written down beside the change"
+
+
+def test_settling_reads_the_snapshots_of_its_own_bets_only():
+    """The box's line history was 2,708,562 rows (444 MB) on 2026-10-08, and
+    settling grouped all of it to answer a handful of open bets — killed
+    twice beside the daily pass. It reads only the open bets' (player,
+    market) now, and their closes are exactly what the whole file gives."""
+    from engine import ledger, linemoves as lm
+    from engine.sources.oddsapi import normalize_name
+    base = 1_790_000_000.0
+    rows = []
+    for p in ("Gunnar Henderson", "Aaron Judge", "Juan Soto"):
+        for i in range(4):
+            rows.append({"ts": base + i * 60, "player": p, "market": "total_bases", "line": 1.5,
+                         "over_odds": -120 - i, "under_odds": 100, "start_ts": base + 3600})
+    rows.append({"ts": base, "player": "Gunnar Henderson", "market": "hits", "line": 0.5,
+                 "over_odds": -200, "under_odds": 160, "start_ts": base + 3600})
+    want = {(normalize_name("Gunnar Henderson"), "total_bases")}
+    kept = list(ledger._wanted_rows(iter(rows), want))
+    assert {r["player"] for r in kept} == {"Gunnar Henderson"} and {r["market"] for r in kept} == {"total_bases"}
+    assert len(kept) == 4 and list(ledger._wanted_rows(iter(rows), None)) == rows
+    full, part = lm.closing_odds_by_date(rows), lm.closing_odds_by_date(kept)
+    for k, v in part.items():
+        assert full[k] == v
+    assert set(part) == {k for k in full if (k[0], k[1]) in want} and part
+    src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
+    i = src.index("def settle_from_history(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert '_want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}' in body
+    assert body.count("_snapshot_closes(_want)") == 2 and "_snapshot_close_odds(want=_want)" in body
 
 
 def test_the_close_readers_keep_only_what_a_close_is_cut_from():

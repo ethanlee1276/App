@@ -204,8 +204,8 @@ def _settle(lead_min, monkey_snaps=None):
          "over_odds": -250, "under_odds": 190}])
     saved = (ledger._snapshot_closes, ledger._snapshot_close_odds)
     snaps = monkey_snaps or ({}, {})
-    ledger._snapshot_closes = lambda: snaps[0]
-    ledger._snapshot_close_odds = lambda: snaps[1]
+    ledger._snapshot_closes = lambda *a, **k: snaps[0]
+    ledger._snapshot_close_odds = lambda *a, **k: snaps[1]
     try:
         assert ledger.settle_from_history(conn, hist, sport="mlb") == 1
     finally:

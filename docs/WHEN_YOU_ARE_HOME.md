@@ -157,6 +157,18 @@ first). Paste back anything that prints an error or looks off.
     journalctl -u qellys --since "3 hours ago" --no-pager | grep -E "book report|faces:|killed by signal|MB, peak" | tail -20
     ```
 
+12. **Settling reads only its own bets' snapshots** (2026-10-08). The box's
+    line history is 444 MB, 2,708,562 rows; settling grouped all of it to
+    answer a handful of open bets (the 23:41 kill on the 7th). It now
+    keeps only the open bets' players and markets: 28 MB against 360 MB on
+    a 400,000-row test, every close the same. After the pull showing
+    `Settle reads only its own bets` or newer, a day with no
+    "killed by signal 9" is the check:
+    ```
+    journalctl -u qellys --since today --no-pager | grep -E "journal:|book report|faces:|killed by signal" | tail -20
+    grep -o '"last_done": *"[^"]*"' /srv/qellys/data/cache/maintenance.json
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
