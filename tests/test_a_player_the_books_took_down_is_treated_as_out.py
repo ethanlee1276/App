@@ -77,7 +77,8 @@ def test_the_pull_loop_the_game_and_the_page_are_wired():
     from engine.models import Game
     assert "pulled_players" in Game.__dataclass_fields__
     scan = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
-    assert 'pulled=getattr(g, "pulled_players", None) or [])' in scan
+    # (2026-10-08: the call gained `contact=contact` after it.)
+    assert 'pulled=getattr(g, "pulled_players", None) or [],' in scan
     assert "<b>Taken down by the books:</b>" in APP and "(scan.pulled || []).length" in APP
 
 

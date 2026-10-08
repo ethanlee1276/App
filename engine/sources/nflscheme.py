@@ -4,7 +4,9 @@ Two free nflverse releases the site had not read:
 
 * **PFR advanced defense** (`pfr_advstats/advstats_week_def_<season>`;
   the pass and rec files too since 2026-09-28 — read by chartfit.py, no
-  lift found, so nothing here prices with them),
+  lift found, so nothing here prices with them; the rush file since
+  2026-10-08 — yards before and after contact and broken tackles, summed
+  by the defence they came against: `run_contact`),
   per defender per game: targets, completions, yards and touchdowns
   allowed, passer rating allowed, missed tackles, pressures, sacks. It is
   the free cousin of the coverage grades the Falcons @ Packers breakdown
@@ -122,6 +124,62 @@ def defenders(rows: list[dict]) -> dict:
         c["yds_per_tgt"] = round(c["yds"] / t, 1) if t else None
         c["rating"] = passer_rating(t, c["cmp"], c["yds"], c["td"], c["ints"])
     return out
+
+
+#: Carries a defence must have faced (or a back carried) before its
+#: contact numbers are said: about three games of a lead back.
+CONTACT_MIN_CARRIES = 60
+RUSHER_MIN_CARRIES = 25
+
+
+def run_contact(rows: list[dict], min_carries: int = CONTACT_MIN_CARRIES) -> dict:
+    """{defence: {"carries", "ybc_pc", "yac_pc", "broken_pc", "yac_rank",
+    "ybc_rank", "of"}} — what a defence allows a carry BEFORE contact (the
+    front), AFTER contact (the tackling), and broken tackles a carry,
+    summed over the opposing rushers' PFR weekly rows (2026-10-08, Ethan:
+    "seems like it should be free data" — the research's "1.73 yards
+    after contact allowed, best in the league" is this). Rank 1 allows
+    the fewest. Nothing under ``min_carries`` faced."""
+    acc: dict = {}
+    for r in rows:
+        if (r.get("game_type") or "REG") != "REG":
+            continue
+        dfn = r.get("opponent") or ""
+        if not dfn:
+            continue
+        a = acc.setdefault(dfn, {"carries": 0.0, "ybc": 0.0, "yac": 0.0, "broken": 0.0})
+        a["carries"] += _f(r.get("carries"))
+        a["ybc"] += _f(r.get("rushing_yards_before_contact"))
+        a["yac"] += _f(r.get("rushing_yards_after_contact"))
+        a["broken"] += _f(r.get("rushing_broken_tackles"))
+    out = {t: {"carries": int(a["carries"]), "ybc_pc": round(a["ybc"] / a["carries"], 2),
+               "yac_pc": round(a["yac"] / a["carries"], 2), "broken_pc": round(a["broken"] / a["carries"], 3)}
+           for t, a in acc.items() if a["carries"] >= min_carries}
+    for key, rank in (("yac_pc", "yac_rank"), ("ybc_pc", "ybc_rank")):
+        order = sorted(out, key=lambda t: (out[t][key], t))
+        for i, t in enumerate(order):
+            out[t][rank] = i + 1
+            out[t]["of"] = len(order)
+    return out
+
+
+def rushers_contact(rows: list[dict], min_carries: int = RUSHER_MIN_CARRIES) -> dict:
+    """{(team, name_key): {"carries", "ybc_pc", "yac_pc", "broken_pc"}} —
+    each back's own yards before and after contact a carry, from the same
+    PFR rows."""
+    acc: dict = {}
+    for r in rows:
+        if (r.get("game_type") or "REG") != "REG":
+            continue
+        key = (r.get("team") or "", name_key(r.get("pfr_player_name") or ""))
+        a = acc.setdefault(key, {"carries": 0.0, "ybc": 0.0, "yac": 0.0, "broken": 0.0})
+        a["carries"] += _f(r.get("carries"))
+        a["ybc"] += _f(r.get("rushing_yards_before_contact"))
+        a["yac"] += _f(r.get("rushing_yards_after_contact"))
+        a["broken"] += _f(r.get("rushing_broken_tackles"))
+    return {k: {"carries": int(a["carries"]), "ybc_pc": round(a["ybc"] / a["carries"], 2),
+                "yac_pc": round(a["yac"] / a["carries"], 2), "broken_pc": round(a["broken"] / a["carries"], 3)}
+            for k, a in acc.items() if a["carries"] >= min_carries}
 
 
 def team_tackling(rows: list[dict]) -> dict:

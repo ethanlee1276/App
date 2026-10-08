@@ -15,6 +15,14 @@ audit; these pin the four gaps it closed:
      his starts, his carries and rushing yards a game, air yards an attempt
      (engine/qbchange);
   4. the game page says when inactives post (web/js/app.js);
+  6. (Ethan: "u really think we have to pay for this data … seems like it
+     should be free data") — three of the five "paid" angles were not:
+     yards before and after contact allowed, off PFR's free rushing rows
+     summed by opponent (nflscheme.run_contact); the passer's completion
+     rate not hit against hit, off the play-by-play (nflpbp
+     POCKET_MARKETS, nflusage.pocket_split); and the coverage shells the
+     scan already had (single-high now said on the page). Shown, not in
+     the number; both registered in scanfit.PENDING.
   5. (Ethan, later that night: "add the target-depth buckets on the cards
      too") where a receiver's targets come from by air yards — short /
      intermediate / deep — and how the defence does in that zone: counted
@@ -42,6 +50,7 @@ from engine import scout as SC                                          # noqa: 
 from engine import scanfit as SF                                        # noqa: E402
 from engine import nflusage as NU                                       # noqa: E402
 from engine.sources import nflpbp as P                                  # noqa: E402
+from engine.sources import nflscheme as N                               # noqa: E402
 from engine.sources import nflunits as U                                # noqa: E402
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
@@ -325,6 +334,132 @@ def test_the_card_says_where_his_targets_come_from_and_how_the_defence_does_ther
     W = {"units": sig}
     assert SF.signal("depth", W, "DAL", "TB", {"player_name": "C.Lamb"}, {}, {}, 4, zones) == sig["TB"]["def_short"]
     assert SF.signal("depth", W, "DAL", "TB", {"player_name": "C.Lamb"}, {}, {}, 3, zones) is None
+
+
+def _pfr_rush(wk, team, opp, name, car, ybc, yac, broken=0):
+    return {"week": wk, "game_type": "REG", "team": team, "opponent": opp, "pfr_player_name": name,
+            "carries": car, "rushing_yards_before_contact": ybc, "rushing_yards_after_contact": yac,
+            "rushing_broken_tackles": broken}
+
+
+def test_yards_after_contact_allowed_come_free_from_the_pfr_rushing_rows():
+    rows = []
+    for wk in (1, 2, 3, 4):
+        rows += [_pfr_rush(wk, "TB", "DAL", "Bucky Irving", 16, 40, 56, 2),      # DAL allows 3.5 after contact
+                 _pfr_rush(wk, "DAL", "TB", "Javonte Williams", 18, 54, 36, 1),  # TB allows 2.0
+                 _pfr_rush(wk, "PHI", "NYG", "Saquon Barkley", 20, 60, 50, 3),   # NYG allows 2.5
+                 _pfr_rush(wk, "NYG", "PHI", "Tyrone Tracy", 10, 20, 30, 0)]      # PHI: 40 carries — thin
+    rows.append(_pfr_rush(1, "TB", "DAL", "Bucky Irving", 9, 9, 9, 0) | {"game_type": "POST"})
+    c = N.run_contact(rows)
+    assert c["DAL"] == {"carries": 64, "ybc_pc": 2.5, "yac_pc": 3.5, "broken_pc": 0.125,
+                        "yac_rank": 3, "ybc_rank": 1, "of": 3}
+    assert c["TB"]["yac_rank"] == 1 and c["NYG"]["yac_rank"] == 2 and "PHI" not in c, \
+        "rank 1 allows the fewest; 40 carries faced is no rating"
+    own = N.rushers_contact(rows)
+    irving = ("TB", N.name_key("Bucky Irving"))
+    assert own[irving] == {"carries": 64, "ybc_pc": 2.5, "yac_pc": 3.5, "broken_pc": 0.125}
+    assert ("NYG", N.name_key("Tyrone Tracy")) in own and ("x", "nobody") not in own
+    # The card: the defence's two numbers, ranked, his own beside them.
+    f = G.contact_facts({**c["DAL"]}, own[irving], "DAL")
+    assert f[0]["text"] == ("DAL allows 3.50 yards after contact a carry (3rd-fewest of 3) and 2.50 before "
+                            "contact (1st-fewest); he averages 3.50 after contact")
+    assert f[0]["in_number"] is False and f[0]["kind"] == "contact" and f[0]["markets"] == ["rush_yds", "rush_att"]
+    big = {"yac_pc": 1.73, "ybc_pc": 2.1, "yac_rank": 1, "ybc_rank": 4, "of": 32}
+    assert G.contact_facts(big, None, "DAL")[0]["sign"] == -1, "the stingiest tackling: against the over"
+    soft = {**big, "yac_rank": 28, "last_season": True}
+    g = G.contact_facts(soft, None, "DAL")[0]
+    assert g["sign"] == 1 and g["text"].endswith("— last season’s numbers until it has faced 60 carries")
+    assert G.contact_facts({}, None, "DAL") == [] and G.contact_facts(None, None, "DAL") == []
+    # The scan passes the defence's table through to a back's read and
+    # hangs his own on his usage row.
+    src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
+    assert "contact, own_contact = contact_tables(season)" in src
+    assert 'own_contact.get((team, N.name_key(u.get("name") or "")))' in src
+    assert "contact=(contact or {}).get(opp[team]))" in src
+    facts = G.read_facts("rb", "RB", "TB", "DAL", usage={"games": 4, "carry_share": 0.6, "carries_pg": 16.0,
+                                                         "contact": own[irving]},
+                         allowed=None, ratings_def={}, points=None, line_words="", n_teams=32, room=None,
+                         contact=c["DAL"])
+    assert [x["kind"] for x in facts][:2] == ["role", "contact"]
+    # Measured before it moves a number: the arm is registered and reads
+    # the rows strictly before the week.
+    assert "yac_allowed" in SF.PENDING and SF.PENDING["yac_allowed"]["markets"] == [("rush_yds", "RB")]
+    sig = SF.contact_signal(rows + [_pfr_rush(5, "PHI", "NYG", "Saquon Barkley", 30, 60, 90, 0)], 5)
+    assert set(sig) == {"DAL", "TB", "NYG"} and abs(sum(sig.values())) < 1e-9 and sig["DAL"] > 0 > sig["TB"]
+    assert SF.signal("yac_allowed", {"units": {}, "contact": sig}, "TB", "DAL", {}, {}, {}, 5) == sig["DAL"]
+
+
+def test_the_passers_clean_pocket_split_comes_free_from_the_play_by_play():
+    assert P.POCKET_MARKETS == ("att_clean", "cmp_clean", "att_hit", "cmp_hit")
+    assert all(c in P.NEEDED for c in ("passer_player_name", "qb_hit", "sack"))
+    plays = []
+    for i in range(8):        # eight clean throws, six complete; two hit throws, none complete; a sack
+        plays.append(_play(1, "TB", "DAL", "C.Godwin", 6, 9 if i < 6 else 0, passer_player_name="B.Mayfield",
+                           qb_hit=0, complete_pass=1 if i < 6 else 0))
+    plays += [_play(1, "TB", "DAL", "C.Godwin", 12, 0, passer_player_name="B.Mayfield", qb_hit=1, complete_pass=0),
+              _play(1, "TB", "DAL", "M.Evans", 20, 0, passer_player_name="B.Mayfield", qb_hit=1, complete_pass=0),
+              _play(1, "TB", "DAL", "", "NA", -7, passer_player_name="B.Mayfield", qb_hit=1, sack=1, complete_pass=0,
+                    receiver_player_name="")]
+    agg = P.aggregate_pbp(plays)
+    q = agg["players"][("B.Mayfield", "TB", 1)]
+    assert (q["_att_clean"], q["_cmp_clean"], q["_att_hit"], q.get("_cmp_hit", 0)) == (8, 6, 2, 0), q
+    logs = {(r["player"], r["market"]): r["value"] for r in P.xfp_player_rows(agg, 2026)}
+    assert logs[("B.Mayfield", "att_clean")] == 8.0 and logs[("B.Mayfield", "cmp_hit")] == 0.0
+    assert ("C.Godwin", "att_clean") not in logs, "a receiver has no pocket"
+    conn = DB.connect(":memory:")
+    rows = []
+    for wk in (1, 2, 3, 4, 5):
+        for mk, v in (("att_clean", 14), ("cmp_clean", 10), ("att_hit", 3), ("cmp_hit", 1)):
+            rows.append({"sport": "nfl", "season": 2026, "period": f"{wk:03d}", "game_id": f"TB-{wk:03d}",
+                         "player": "B.Mayfield", "team": "TB", "opponent": "", "position": "", "home": 1,
+                         "market": mk, "value": float(v)})
+        for mk, v in (("att_clean", 20), ("cmp_clean", 12), ("att_hit", 4), ("cmp_hit", 2)):
+            rows.append({"sport": "nfl", "season": 2026, "period": f"{wk:03d}", "game_id": f"DAL-{wk:03d}",
+                         "player": "D.Prescott", "team": "DAL", "opponent": "", "position": "", "home": 1,
+                         "market": mk, "value": float(v)})
+    rows.append({"sport": "nfl", "season": 2026, "period": "001", "game_id": "TB-001", "player": "J.Daniels",
+                 "team": "TB", "opponent": "", "position": "", "home": 1, "market": "att_clean", "value": 27.0})
+    DB.upsert_player_logs(conn, rows)
+    pk = NU.pocket_split(conn, 2026)
+    m = pk[("b", "mayfield", "TB")]
+    assert (m["clean_pct"], m["hit_pct"], m["clean_att"], m["hit_att"]) == (round(50 / 70, 3), round(5 / 15, 3), 70, 15)
+    # The league's rates count every throw, the thin passer's included.
+    assert m["league_clean_pct"] == round(110 / 197, 3) and m["league_hit_pct"] == round(15 / 35, 3)
+    assert ("j", "daniels", "TB") not in pk, "27 clean throws: under the floor"
+    assert ("b", "mayfield", "TB") not in NU.pocket_split(conn, 2026, upto_week=4), "42 before week 4: thin"
+    assert NU.pocket_split(conn, 2026, upto_week=5)[("b", "mayfield", "TB")]["clean_att"] == 56
+    assert "pocket" in NU.build_usage_maps(conn, 2026)
+    usage = {("TB", "baker mayfield"): {"name": "Baker Mayfield"}}
+    assert G.attach_player_map(usage, pk, "pocket") == 1 and usage[("TB", "baker mayfield")]["pocket"] is m
+    # The card: his two rates, the league's, and how often this defence
+    # hits or sacks the passer — the pressure unit the scan already ranks.
+    rd = {"def": {"pressure": {"rank": 5, "value": 0.091, "of": 32}}}
+    f = G.pocket_facts(m, "DAL", rd, 32)
+    assert f[0]["text"] == ("Completes 71% of his throws when not hit and 33% when hit (league 56% / 43%); "
+                            "DAL hits or sacks the passer on 9.1% of dropbacks, 5th of 32")
+    assert f[0]["sign"] == -1 and f[0]["kind"] == "pocket" and f[0]["in_number"] is False
+    assert G.pocket_facts({**m, "hit_pct": None}, "DAL", {"def": {}}, 32)[0]["text"] \
+        == "Completes 71% of his throws when not hit (league 56% / 43%)"
+    assert G.pocket_facts(None, "DAL", rd, 32) == []
+    facts = G.read_facts("qb", "QB", "TB", "DAL", usage={"games": 5, "pocket": m}, allowed=None, ratings_def=rd,
+                         points=None, line_words="", n_teams=32, room=None)
+    assert "pocket" in [x["kind"] for x in facts]
+    src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
+    assert 'attach_player_map(usage, pocket_split(conn, season, upto_week=week), "pocket")' in src
+    # Measured before it moves a number: his gap × their pressure.
+    assert "pocket_fit" in SF.PENDING and SF.PENDING["pocket_fit"]["markets"] == [("pass_yds", "QB")]
+    passes = ([{"passer_player_name": "B.Mayfield", "week": 1, "qb_hit": 0, "complete_pass": 1}] * 40
+              + [{"passer_player_name": "B.Mayfield", "week": 2, "qb_hit": 0, "complete_pass": 0}] * 20
+              + [{"passer_player_name": "B.Mayfield", "week": 2, "qb_hit": 1, "complete_pass": 1}] * 4
+              + [{"passer_player_name": "B.Mayfield", "week": 3, "qb_hit": 1, "complete_pass": 0}] * 6)
+    assert SF.pocket_gap(passes, "B.Mayfield", 3) is None, "six hit throws before week 3: too few"
+    assert abs(SF.pocket_gap(passes, "B.Mayfield", 4) - (40 / 60 - 4 / 10)) < 1e-9
+    W = {"units": {"DAL": {"def_pressure": 0.2}}}
+    x = SF.signal("pocket_fit", W, "TB", "DAL", {"player_name": "B.Mayfield"}, {}, {}, 4, {}, passes)
+    assert abs(x - (40 / 60 - 4 / 10) * 0.2) < 1e-9
+    assert SF.signal("pocket_fit", W, "TB", "DAL", {"player_name": "B.Mayfield"}, {}, {}, 3, {}, passes) is None
+    # The game page says the single-high rate the scan always had.
+    assert "single-high (Cover 1/3) ${Math.round(sch.mofc * 100)}%" in APP
 
 
 def test_the_game_page_says_when_inactives_post():

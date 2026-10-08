@@ -35,7 +35,17 @@ from .fetch import fetch_text, DataUnavailable
 NEEDED = ("week", "posteam", "play_type", "yardline_100", "air_yards",
           "complete_pass", "yards_gained", "rush_touchdown", "pass_touchdown",
           "rusher_player_name", "receiver_player_name", "pass_oe",
-          "game_id", "defteam", "epa", "wp", "qtr", "game_seconds_remaining")
+          "game_id", "defteam", "epa", "wp", "qtr", "game_seconds_remaining",
+          # The passer's pocket (2026-10-08): his throws with and without
+          # a hit, for the clean-pocket completion split on his card.
+          "passer_player_name", "qb_hit", "sack")
+
+#: The pocket split's player_game_logs markets: attempts and completions
+#: on throws when the passer was NOT hit, and when he was (sacks aside —
+#: a sack is no throw). PFF's "completion % when kept clean" counts every
+#: pressure; the play-by-play records hits and sacks, so this is the
+#: free half of it, and the card calls it what it is.
+POCKET_MARKETS = ("att_clean", "cmp_clean", "att_hit", "cmp_hit")
 
 # Neutral-pace guards: only snaps with the game in the balance (win prob
 # 20–80%, quarters 1–3), and only believable snap-to-snap gaps — under 4s
@@ -183,6 +193,13 @@ def aggregate_pbp(rows, also=None) -> dict:
                         t["pace"][1] += 1
                 last_snap[(gid, team)] = secs
 
+        if ptype == "pass" and r.get("passer_player_name") and _f(r.get("sack")) != 1:
+            # A throw (not a sack), hit or not hit: the pocket split.
+            q = players.setdefault((r["passer_player_name"], team, wk), {})
+            hit = _f(r.get("qb_hit")) == 1
+            q["_att_hit" if hit else "_att_clean"] = q.get("_att_hit" if hit else "_att_clean", 0) + 1
+            if _f(r.get("complete_pass")) == 1:
+                q["_cmp_hit" if hit else "_cmp_clean"] = q.get("_cmp_hit" if hit else "_cmp_clean", 0) + 1
         if ptype == "run" and r.get("rusher_player_name"):
             b = _carry_bucket(yl)
             pts = 0.1 * _f(r.get("yards_gained")) + 6.0 * _f(r.get("rush_touchdown"))
@@ -258,6 +275,10 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
         # receiver's mix on his card (engine/nflusage.depth_mix).
         for z, mk in DEPTH_MARKETS.items():
             out.append({**base, "market": mk, "value": float(buckets.get("_dep_" + z, 0))})
+        # The pocket split, for passers only (a row with a throw in it).
+        if any(("_" + mk) in buckets for mk in POCKET_MARKETS):
+            for mk in POCKET_MARKETS:
+                out.append({**base, "market": mk, "value": float(buckets.get("_" + mk, 0))})
     return out
 
 

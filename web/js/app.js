@@ -13744,7 +13744,7 @@ function scanCoverageHTML(scan, team) {
       <span class="ms-cb-num">${escapeHtml(now)}${last ? `<br><span class="mini">${escapeHtml(last)}</span>` : ""}</span></div>`;
   }).join("");
   const out = (room.missing || []).map((m) => `${escapeHtml(m.name)} (${escapeHtml(m.spot)}, ${escapeHtml(m.status.toLowerCase())})`);
-  const schLine = sch ? `Zone ${Math.round(sch.zone * 100)}% · man ${Math.round(sch.man * 100)}% · middle of the field open ${Math.round(sch.mofo * 100)}% · blitz ${Math.round(sch.blitz * 100)}% · pressure ${Math.round(sch.pressure * 100)}%` : "";
+  const schLine = sch ? `Zone ${Math.round(sch.zone * 100)}% · man ${Math.round(sch.man * 100)}% · single-high (Cover 1/3) ${Math.round(sch.mofc * 100)}% · two-high or open middle ${Math.round(sch.mofo * 100)}% · blitz ${Math.round(sch.blitz * 100)}% · pressure ${Math.round(sch.pressure * 100)}%` : "";
   const rushLine = rush.length ? rush.map((r) => `${escapeHtml(r.name)} ${r.pressures} pressures${r.status ? ` (${escapeHtml(r.status.toLowerCase())})` : ""}`).join(" · ") : "";
   return `<div class="ms-cov card">
       <div class="ms-cov-head">${teamMark(team, 22)} <b>${escapeHtml(teamName(team))} defense</b></div>

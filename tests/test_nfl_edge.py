@@ -97,7 +97,7 @@ def test_build_usage_maps_now_carries_the_volume_map():
     conn = db.connect(":memory:")
     maps = build_usage_maps(conn)
     assert set(maps) == {"red_zone", "snap", "volume", "xfp",
-                         "team_of", "depth"}
+                         "team_of", "depth", "pocket"}
 
 
 # --- item 1: the blend inside the projection ---------------------------------

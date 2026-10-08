@@ -39,15 +39,18 @@ used, against what the site computes, and what was built from it.
 | Indoor venue — weather a non-factor | `weather.dome` |
 | Catch rate, RB targets | usage; the pick page |
 
-**Cannot be done with free data** (said so, not faked):
+**The five I first called "paid"** — Ethan: "u really think we have to
+pay for this data or is there other ways to get it and maybe use past
+game data … seems like it should be free data." He was right about
+three of them:
 
-| Angle | Why |
-|---|---|
-| Which corner covers which receiver; shadow assignments (Porter on Egbuka; Lamb vs rookie slot Keionte Scott) | Alignment data is PFF/charting-only. The scan has coverage room and the weakest starter left, not man-on-man pairs |
-| Coverage shell rates ("single-high 2nd-highest", "two-high shell", "Cover 3 ~70% zone") | No free coverage-shell source |
-| PFF matchup grades and projections | Paid |
-| Yards after contact ALLOWED by a defence (1.73, best) | Not in nflverse/PFR free tables |
-| "Completing over 80% when kept clean" | Pressure-split completion rate is PFF/NGS-only per QB |
+| Angle | Verdict | Where it is now |
+|---|---|---|
+| Coverage shell rates ("single-high 2nd-highest", "two-high", "Cover 3 ~70% zone") | **Free, and the scan already had it.** nflverse's participation file charts every dropback's coverage (man/zone, Cover 0/1/2/3/4/6/2-man) and pressure; `nflscheme.scheme` turns it into man %, zone %, single-high % (Cover 1 + 3), two-high/open-middle %, blitz %, pressure %. The one catch: nflverse publishes the file a season behind, so in-season these are **last season's tendencies**, and the page says which season. Same coordinator, mostly the same shells | Game page scheme line (now says "single-high (Cover 1/3) NN%" explicitly) |
+| Yards after contact ALLOWED by a defence ("1.73, best in the league") | **Free, derivable from past game data** — exactly as asked. PFR's weekly advanced rushing table (nflverse, within the week) gives every rusher's yards before contact, after contact and broken tackles, with the opponent; summed by the defence they came against it is the research's number | `nflscheme.run_contact` / `rushers_contact`; the RB card: "DAL allows 2.90 yards after contact a carry (20th-fewest of 32) and 2.40 before contact (12th-fewest); he averages 3.10 after contact" (last season's until a defence has faced 60 carries). Measurement arm `yac_allowed` in `scanfit.PENDING` |
+| "Completing over 80% when kept clean" | **Half free.** PFF counts every pressure; the play-by-play records hits and sacks. So the split the site can build is completion % when NOT HIT against when hit — the free half, and the card calls it that. (Last season's participation file has `was_pressure` per play for the full split, a season behind) | `nflpbp.POCKET_MARKETS` (nightly fold) → `nflusage.pocket_split` → the QB card: "Completes 71% of his throws when not hit and 33% when hit (league 65% / 43%); DAL hits or sacks the passer on 9.1% of dropbacks, 5th of 32". Measurement arm `pocket_fit` (his gap × their pressure) in `scanfit.PENDING` |
+| Which corner covers which receiver; shadow assignments (Porter on Egbuka; Lamb vs the rookie slot) | **Not free.** Who lines up across whom comes from the league's tracking data, which is not public (the participation file lists the eleven on the field, not where they stood). What IS free and already on the scan: each corner's own targets, completions, yards and passer rating allowed (PFR), his depth-chart spot (outside / slot), and the defence's man rate — in a man-heavy defence the top corner travels more often, but that is inference, so the card does not say it | coverage room on the game page |
+| PFF matchup grades and projections | **Not free** — PFF's grades are its product. The things a grade summarises are the free stats above (rating allowed, separation, cushion, EPA per target), which the scan reads | — |
 
 Also built the same night: the three zones on the game page's tale of
 the tape ("Short throws allowed … 24th"), and the QB-change card's

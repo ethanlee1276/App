@@ -83,6 +83,15 @@ PENDING = {
     "depth": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE"), ("receptions", "WR"), ("receptions", "TE")],
               "says": "their yards a target allowed in his biggest air-yard zone (short / intermediate / deep), "
                       "over the league's"},
+    # 2026-10-08, Ethan: "seems like it should be free data". Two more off
+    # the free tables: what the defence allows after contact (PFR's rows,
+    # summed by opponent), and the passer's own clean-vs-hit gap against
+    # how often this defence hits him (the play-by-play).
+    "yac_allowed": {"markets": [("rush_yds", "RB")],
+                    "says": "their yards after contact allowed a carry (PFR, by opponent), over the league's"},
+    "pocket_fit": {"markets": [("pass_yds", "QB")],
+                   "says": "his completion rate not hit minus hit (play-by-play) × their hits-and-sacks rate "
+                           "over the league's"},
 }
 
 #: The run behind the page's sentence, 2026-09-24: (b, SE, held-out gain
@@ -281,6 +290,42 @@ def main_zone(zones: dict, name: str, wk: int):
     return max(("short", "mid", "deep"), key=lambda z: (counts[z], z == "short"))
 
 
+#: Carries a defence must have faced before its contact number is a
+#: signal, and the passer's throws (not hit / hit) before his gap is.
+CONTACT_MIN_CARRIES = 60
+POCKET_MIN = (50, 10)
+
+
+def contact_signal(pfr_rush: list[dict], wk: int) -> dict:
+    """{defence: yards after contact allowed a carry − the league's} from
+    PFR rushing rows strictly before ``wk``."""
+    from engine.sources.nflscheme import run_contact
+    rows = [r for r in pfr_rush if _f(r.get("week")) < wk]
+    got = run_contact(rows, CONTACT_MIN_CARRIES)
+    if not got:
+        return {}
+    league = sum(v["yac_pc"] for v in got.values()) / len(got)
+    return {t: v["yac_pc"] - league for t, v in got.items()}
+
+
+def pocket_gap(passes: list[dict], name: str, wk: int):
+    """His completion rate not hit minus hit over the throws before
+    ``wk``, or None under POCKET_MIN of either."""
+    ac = cc = ah = ch = 0
+    for p in passes:
+        if p.get("passer_player_name") != name or _f(p.get("week")) >= wk:
+            continue
+        if _f(p.get("qb_hit")) == 1:
+            ah += 1
+            ch += _f(p.get("complete_pass")) == 1
+        else:
+            ac += 1
+            cc += _f(p.get("complete_pass")) == 1
+    if ac < POCKET_MIN[0] or ah < POCKET_MIN[1]:
+        return None
+    return cc / ac - ch / ah
+
+
 def zone_splits(part_prev: list[dict], plays_prev: list[dict]) -> dict:
     """{receiver: relative split} from last season: (yards per target vs
     zone − vs man) over his yards per target, where both samples clear."""
@@ -318,6 +363,8 @@ def samples(season: dict, prior: dict | None) -> dict:
     cbs = corner_snaps(season["snaps"])
     splits = zone_splits(prior["part"], prior["plays"]) if prior else {}
     depth = depth_zones(season["plays"])
+    passes = season.get("passes") or []
+    pfr_rush = season.get("pfr_rush") or []
     by_player: dict = {}
     for r in reg:
         g = D.GROUP_OF.get(str(r.get("position") or "").upper())
@@ -333,6 +380,7 @@ def samples(season: dict, prior: dict | None) -> dict:
                 "units": unit_signals(season["units"], prior["units"] if prior else None, wk),
                 "missed": missed_signal(tackles, tackles_prior, wk),
                 "zone": zr, "zone_league": (sum(zr.values()) / len(zr)) if zr else None,
+                "contact": contact_signal(pfr_rush, wk),
             }
         return cache[wk]
 
@@ -356,18 +404,24 @@ def samples(season: dict, prior: dict | None) -> dict:
                     if e0 < floor:
                         continue
                     mult, _why, _card = D.effect(opp, (W["dvp"] or {}).get(opp) or {}, g, market)
-                    x = signal(name, W, team, opp, r, cbs, splits, wk, depth)
+                    x = signal(name, W, team, opp, r, cbs, splits, wk, depth, passes)
                     if x is None:
                         continue
                     out.setdefault((name, market, g), []).append((e0 * mult, x, _f(r.get(col)), yr))
     return out
 
 
-def signal(name, W, team, opp, r, cbs, splits, wk, depth=None):
+def signal(name, W, team, opp, r, cbs, splits, wk, depth=None, passes=None):
     u = W["units"]
     if name == "depth":
         zone = main_zone(depth or {}, str(r.get("player_name") or ""), wk)
         return None if zone is None else (u.get(opp) or {}).get(f"def_{zone}")
+    if name == "yac_allowed":
+        return (W.get("contact") or {}).get(opp)
+    if name == "pocket_fit":
+        gap = pocket_gap(passes or [], str(r.get("player_name") or ""), wk)
+        pr = (u.get(opp) or {}).get("def_pressure")
+        return None if gap is None or pr is None else gap * pr
     if name == "pressure":
         a, b = (u.get(opp) or {}).get("def_pressure"), (u.get(team) or {}).get("off_pressure")
         return None if a is None or b is None else a + b
@@ -493,6 +547,7 @@ def report(res: dict) -> str:
 
 RECV_COLS = ("game_id", "play_id", "receiver_player_name", "yards_gained", "complete_pass",
              "air_yards", "week")
+PASS_COLS = ("passer_player_name", "week", "qb_hit", "complete_pass")
 
 
 def load_season(yr: int) -> dict:
@@ -500,21 +555,30 @@ def load_season(yr: int) -> dict:
     from engine.sources import nflpbp, nflscheme as N, nflverse as NV
     from engine.sources.nflunits import UNIT_COLS, Units
     units = Units()
-    plays = []
-    for r in nflpbp.load_pbp_rows(yr, columns=tuple(UNIT_COLS) + RECV_COLS):
+    plays, passes = [], []
+    for r in nflpbp.load_pbp_rows(yr, columns=tuple(UNIT_COLS) + RECV_COLS + PASS_COLS):
         units.add(r)
-        if r.get("receiver_player_name") and r.get("season_type", "REG") == "REG":
+        if r.get("season_type", "REG") != "REG":
+            continue
+        if r.get("receiver_player_name"):
             plays.append({k: r.get(k) for k in RECV_COLS + ("posteam",)})
+        if r.get("passer_player_name") and r.get("play_type") == "pass" and _f(r.get("sack")) != 1:
+            passes.append({k: r.get(k) for k in PASS_COLS})
     keep_part = ("nflverse_game_id", "play_id", "possession_team", "defense_man_zone_type",
                  "defense_coverage_type", "number_of_pass_rushers", "was_pressure")
     part = [{k: r.get(k) for k in keep_part} for r in N.load_participation(yr, ttl=10 ** 9)
             if r.get("defense_man_zone_type")]
     pfr = [{k: r.get(k) for k in ("team", "week", "game_type", "def_missed_tackles", "def_tackles_combined")}
            for r in N.load_pfr_def(yr, ttl=10 ** 9)]
+    pfr_rush = [{k: r.get(k) for k in ("team", "opponent", "week", "game_type", "carries",
+                                       "rushing_yards_before_contact", "rushing_yards_after_contact",
+                                       "rushing_broken_tackles")}
+                for r in N.load_pfr_rush(yr, ttl=10 ** 9)]
     snaps = [{k: r.get(k) for k in ("team", "week", "game_type", "player", "position", "defense_pct")}
              for r in NV.load_snap_counts(yr)]
     return {"season": yr, "weekly": NV.load_weekly_stats(yr), "units": units.rows(yr),
-            "plays": plays, "part": part, "pfr": pfr, "snaps": snaps}
+            "plays": plays, "passes": passes, "part": part, "pfr": pfr, "pfr_rush": pfr_rush,
+            "snaps": snaps}
 
 
 def run(seasons=(2022, 2023, 2024, 2025), first_prior: int | None = 2021) -> dict:

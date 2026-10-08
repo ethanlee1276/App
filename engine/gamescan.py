@@ -901,11 +901,60 @@ def depth_facts(depth: dict | None, opp: str, ratings_def: dict | None, n_teams:
              "zone": zone, "share": round(share, 3)}]
 
 
+def contact_facts(contact: dict | None, own: dict | None, opp: str) -> list[dict]:
+    """What the defence allows a carry before contact (its front) and
+    after it (its tackling), ranked, with the back's own yards after
+    contact beside it (engine/sources/nflscheme.run_contact, off PFR's
+    free rushing rows — the research's "1.73 yards after contact
+    allowed, best in the league"). Shown, not in the number."""
+    c = contact or {}
+    if not c.get("yac_rank") or not c.get("of"):
+        return []
+    n = int(c["of"])
+    rank = int(c["yac_rank"])
+    weak, strong = _weak(rank, n), _strong(rank, n)
+    sign = 1 if weak else -1 if strong else 0
+    text = (f"{opp} allows {c['yac_pc']:.2f} yards after contact a carry ({_ord(rank)}-fewest of {n}) and "
+            f"{c['ybc_pc']:.2f} before contact ({_ord(int(c['ybc_rank']))}-fewest)")
+    if own and own.get("yac_pc") is not None:
+        text += f"; he averages {own['yac_pc']:.2f} after contact"
+    if c.get("last_season"):
+        text += " — last season’s numbers until it has faced 60 carries"
+    return [{"text": text, "sign": sign, "markets": ["rush_yds", "rush_att"], "in_number": False,
+             "kind": "contact"}]
+
+
+def pocket_facts(pocket: dict | None, opp: str, ratings_def: dict | None, n_teams: int) -> list[dict]:
+    """His completion rate on throws when he was not hit against when he
+    was (engine/nflusage.pocket_split, off the play-by-play — the free
+    half of "completion % when kept clean"), and how often this defence
+    hits or sacks the passer. Shown, not in the number."""
+    pk = pocket or {}
+    if pk.get("clean_pct") is None:
+        return []
+    text = f"Completes {pk['clean_pct']:.0%} of his throws when not hit"
+    if pk.get("hit_pct") is not None:
+        text += f" and {pk['hit_pct']:.0%} when hit"
+    if pk.get("league_clean_pct") is not None and pk.get("league_hit_pct") is not None:
+        text += f" (league {pk['league_clean_pct']:.0%} / {pk['league_hit_pct']:.0%})"
+    cell = ((ratings_def or {}).get("def") or {}).get("pressure") or {}
+    rank, val = cell.get("rank"), cell.get("value")
+    sign = 0
+    if rank:
+        weak, strong = _weak(rank, n_teams), _strong(rank, n_teams)
+        sign = 1 if weak else -1 if strong else 0
+        text += (f"; {opp} hits or sacks the passer on "
+                 + (f"{val:.1%} of dropbacks, " if isinstance(val, (int, float)) else "")
+                 + f"{_ord(rank)} of {n_teams}")
+    return [{"text": text, "sign": sign, "markets": ["pass_yds", "pass_cmp", "pass_att", "pass_td"],
+             "in_number": False, "kind": "pocket"}]
+
+
 def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowed: dict | None,
                ratings_def: dict, points: float | None, line_words: str, n_teams: int,
                room: dict | None, ratings_off: dict | None = None,
                targets: list | None = None, charting: dict | None = None,
-               league_iw: float | None = None) -> list[dict]:
+               league_iw: float | None = None, contact: dict | None = None) -> list[dict]:
     """Every matchup fact about this player as a pick page needs it:
     ``{"text", "sign", "markets", "in_number", "kind"}``. ``sign`` is from
     the OVER's side (+1 helps the over); the page flips it for an under.
@@ -941,6 +990,10 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
     # that zone (engine/sources/nflunits). Shown, not in the number.
     if group in ("wr", "te", "rb"):
         facts += depth_facts(u.get("depth"), opp, ratings_def, n_teams, lean)
+    if group == "rb":
+        facts += contact_facts(contact, u.get("contact"), opp)
+    if group == "qb":
+        facts += pocket_facts(u.get("pocket"), opp, ratings_def, n_teams)
     # What the defence gives up — the stat our number reads, and the one
     # the bet is literally about where that differs.
     seen: dict = {}
@@ -1039,7 +1092,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 allowed: dict | None = None, points: float | None = None,
                 line_words: str = "", charting: dict | None = None,
                 charting_def: dict | None = None, tracking: dict | None = None,
-                targets: list | None = None, league_iw: float | None = None) -> dict:
+                targets: list | None = None, league_iw: float | None = None,
+                contact: dict | None = None) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), what else the
     scan noticed, and the markets the read points at.
@@ -1213,7 +1267,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # WHAT THE CHARTING AND THE TRACKING SAY (engine/sources/ftn, ngs):
     # shown, never counted — chartfit and ngsfit found no lift in any of it.
     notes += charting_notes(group, opp, charting, charting_def, tracking)
-    facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d,
+    facts = read_facts(group, pos, team, opp, usage=u, allowed=allowed, ratings_def=d, contact=contact,
                        points=points, line_words=line_words, n_teams=n_teams, room=room,
                        ratings_off=o, targets=targets, charting=charting, league_iw=league_iw)
     # TEAMMATES OUT (engine/teammates, measured): the breakdowns' "Colbie
@@ -1345,7 +1399,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               allowed: dict | None = None, points: dict | None = None,
               line_words: dict | None = None, faces: dict | None = None,
               evidence: list | None = None, pulled: list | None = None,
-              charting: dict | None = None, tracking: dict | None = None) -> dict:
+              charting: dict | None = None, tracking: dict | None = None,
+              contact: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
 
     ``evidence`` is every priced row of this game whose teammate-out notes
@@ -1495,7 +1550,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             charting=own_chart, charting_def=(ch.get("defense") or {}).get(opp[team]),
             tracking=own_track,
             targets=top_targets(usage, team) if group == "qb" else None,
-            league_iw=league_iw_rate(ch) if group == "qb" else None)
+            league_iw=league_iw_rate(ch) if group == "qb" else None,
+            contact=(contact or {}).get(opp[team]))
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
@@ -1753,18 +1809,45 @@ def scan_props(result: dict) -> list[dict]:
     return out
 
 
-def attach_depth(usage: dict, depth: dict) -> int:
-    """Hang each player's target-depth mix (engine/nflusage.depth_mix,
-    keyed (initial, surname, team)) on his usage row as ``depth``.
+def attach_player_map(usage: dict, table: dict, field: str) -> int:
+    """Hang a per-player map keyed (initial, surname, team) — the usage
+    maps' key (engine/nflusage) — on each usage row as ``field``.
     Returns how many rows got one."""
     from .fantasy import _short_key
     n = 0
     for (team, _k), u in (usage or {}).items():
-        d = depth.get(_short_key(u.get("name") or "", team))
+        d = (table or {}).get(_short_key(u.get("name") or "", team))
         if d:
-            u["depth"] = d
+            u[field] = d
             n += 1
     return n
+
+
+def attach_depth(usage: dict, depth: dict) -> int:
+    """Each player's target-depth mix (engine/nflusage.depth_mix) on his
+    usage row as ``depth``."""
+    return attach_player_map(usage, depth, "depth")
+
+
+def contact_tables(season: int) -> tuple[dict, dict]:
+    """(what each defence allows before and after contact, each back's
+    own) from PFR's weekly rushing rows: this season where a defence has
+    faced CONTACT_MIN_CARRIES, last season's — flagged ``last_season`` —
+    where it has not yet. Empty on a failed fetch."""
+    from .sources import nflscheme as N
+    try:
+        now = N.load_pfr_rush(season)
+    except Exception:                                        # noqa: BLE001
+        now = []
+    try:
+        last = N.load_pfr_rush(season - 1)
+    except Exception:                                        # noqa: BLE001
+        last = []
+    contact = N.run_contact(now)
+    for t, v in N.run_contact(last).items():
+        if t not in contact:
+            contact[t] = {**v, "last_season": True}
+    return contact, N.rushers_contact(now)
 
 
 def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
@@ -1814,10 +1897,18 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                     before_week=week),
         usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
     try:
-        from .nflusage import depth_mix
+        from .nflusage import depth_mix, pocket_split
         attach_depth(usage, depth_mix(conn, season, upto_week=week))
+        attach_player_map(usage, pocket_split(conn, season, upto_week=week), "pocket")
     except Exception:                                        # noqa: BLE001
         pass
+    # YARDS BEFORE AND AFTER CONTACT (2026-10-08): what each defence
+    # allows, and each back's own, off PFR's free weekly rushing rows.
+    contact, own_contact = contact_tables(season)
+    for (team, _k), u in usage.items():
+        c = own_contact.get((team, N.name_key(u.get("name") or "")))
+        if c:
+            u["contact"] = c
     from .sources.nflverse import headshot_map
     faces = _safe(headshot_map, season) or {}
     props = scan_props(result)
@@ -1849,7 +1940,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          evidence=gprops + [r for r in result.get("most_likely") or []
                                             if r.get("team") in (home, away)],
                          charting=charting, tracking=tracking,
-                         pulled=getattr(g, "pulled_players", None) or [])
+                         pulled=getattr(g, "pulled_players", None) or [],
+                         contact=contact)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}

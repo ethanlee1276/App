@@ -193,9 +193,15 @@ first). Paste back anything that prints an error or looks off.
     blend leans on early — needs one backfill:
     ```
     cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan backfill 2025 2026
-    sudo -u qellys python3 -m engine.ingest --nfl 2>&1 | tail -5     # the per-receiver tgt_short/mid/deep rows
+    sudo -u qellys nice -n 19 python3 ingest.py nfl --seasons 2026 2>&1 | tail -8   # the per-player tgt_short/mid/deep and att_clean/cmp_clean/att_hit/cmp_hit rows
     sudo -u qellys sqlite3 data/qellys.db "SELECT team, side, short_tgt, mid_tgt, deep_tgt FROM team_units WHERE season=2026 AND period='005' AND team IN ('DAL','TB')"
     ```
+    (The first paste of this step, 2026-10-08 evening, ran the backfill
+    and the fitter on the OLD code — the fitter printed no `rush_yds QB`
+    line, which it does from `Research parity` on — and the ingest line
+    as first written (`python3 -m engine.ingest --nfl`) is not a command
+    and printed nothing. Pull first, then the three lines above, then
+    the fitter again.)
     After the next NFL build, a receiver's pick page carries the line
     "NN% of his targets are short throws …; DAL ranks Nth of 32 against
     them". Then, on a quiet hour (it reads four seasons of play-by-play —
@@ -203,10 +209,13 @@ first). Paste back anything that prints an error or looks off.
     ```
     sudo -u qellys python3 -m engine.scanfit --points /tmp/pts.pkl 2>&1 | tail -40
     ```
-    Paste the `depth` lines. They go into `scanfit.MEASURED`; the
-    signal moves a number only where the held-out gain is positive on
-    average and in all but one season, and b clears MIN_T — the same
-    bar every other scan signal failed.
+    Paste the `depth`, `yac_allowed` and `pocket_fit` lines (the last
+    two from the free-data round the same night: yards after contact
+    allowed off PFR's rushing rows, and the passer's not-hit / hit gap
+    against the defence's pressure off the play-by-play). They go into
+    `scanfit.MEASURED`; a signal moves a number only where the held-out
+    gain is positive on average and in all but one season, and b clears
+    MIN_T — the same bar every other scan signal failed.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

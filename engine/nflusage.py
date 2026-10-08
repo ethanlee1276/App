@@ -172,6 +172,50 @@ def depth_mix(conn, season: int | None = None, upto_week: int | None = None) -> 
     return out
 
 
+#: Throws without a hit a passer needs before his split is said.
+POCKET_MIN_ATT = 50
+
+
+def pocket_split(conn, season: int | None = None, upto_week: int | None = None) -> dict:
+    """``{(initial, lastname, team): {"clean_pct", "hit_pct", "clean_att",
+    "hit_att", "league_clean_pct", "league_hit_pct"}}`` — each passer's
+    completion rate on throws when he was not hit and when he was, this
+    season, from the play-by-play rows `att_clean` / `cmp_clean` /
+    `att_hit` / `cmp_hit` (engine/sources/nflpbp.POCKET_MARKETS). The
+    league's two rates ride on every entry for the card's comparison.
+    Under POCKET_MIN_ATT clean throws, nothing."""
+    from .fantasy import _short_key
+    season = season or latest_season(conn, "att_clean")
+    if season is None:
+        return {}
+    acc: dict = {}
+    q = ("SELECT player, team, period, market, value FROM player_game_logs "
+         "WHERE sport='nfl' AND season=? AND market IN ('att_clean', 'cmp_clean', 'att_hit', 'cmp_hit')")
+    for r in conn.execute(q, (season,)):
+        try:
+            wk = int(str(r["period"]))
+        except ValueError:
+            continue
+        if upto_week is not None and wk >= upto_week:
+            continue
+        c = acc.setdefault((r["player"], r["team"]), {"att_clean": 0.0, "cmp_clean": 0.0,
+                                                      "att_hit": 0.0, "cmp_hit": 0.0})
+        c[r["market"]] += float(r["value"] or 0)
+    tot = {k: sum(c[k] for c in acc.values()) for k in ("att_clean", "cmp_clean", "att_hit", "cmp_hit")}
+    league_clean = round(tot["cmp_clean"] / tot["att_clean"], 3) if tot["att_clean"] else None
+    league_hit = round(tot["cmp_hit"] / tot["att_hit"], 3) if tot["att_hit"] else None
+    out: dict = {}
+    for (player, team), c in acc.items():
+        if c["att_clean"] < POCKET_MIN_ATT:
+            continue
+        out[_short_key(player, team)] = {
+            "clean_pct": round(c["cmp_clean"] / c["att_clean"], 3),
+            "hit_pct": round(c["cmp_hit"] / c["att_hit"], 3) if c["att_hit"] >= 10 else None,
+            "clean_att": int(c["att_clean"]), "hit_att": int(c["att_hit"]),
+            "league_clean_pct": league_clean, "league_hit_pct": league_hit}
+    return out
+
+
 def snap_shares(conn, season: int | None = None) -> dict:
     """``{(initial, lastname, team): avg offensive snap share (0-1)}`` over
     each player's most recent ``SNAP_WEEKS`` weeks."""
@@ -440,6 +484,7 @@ def build_usage_maps(conn, season: int | None = None,
             "volume": volume_roles(conn, season, upto_week),
             "xfp": xfp_roles(conn, season, upto_week),
             "depth": depth_mix(conn, season, upto_week),
+            "pocket": pocket_split(conn, season, upto_week),
             # Not a map of roles — the index that lets a player who
             # changed teams in the offseason still find his own.
             "team_of": season_teams(conn, season, upto_week)}
