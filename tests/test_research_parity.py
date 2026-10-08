@@ -14,7 +14,15 @@ audit; these pin the four gaps it closed:
   3. how the offence changes shape under a new quarterback: pass rate in
      his starts, his carries and rushing yards a game, air yards an attempt
      (engine/qbchange);
-  4. the game page says when inactives post (web/js/app.js).
+  4. the game page says when inactives post (web/js/app.js);
+  5. (Ethan, later that night: "add the target-depth buckets on the cards
+     too") where a receiver's targets come from by air yards — short /
+     intermediate / deep — and how the defence does in that zone: counted
+     per player-week and per defence-week off the play-by-play
+     (engine/sources/nflpbp, nflunits), rated like every unit
+     (engine/gamescan.UNITS), joined onto his usage (engine/nflusage), said
+     on his card (gamescan.depth_facts) and registered for measurement
+     (engine/scanfit) — shown, not in the number, until that run.
 
 Run directly: `python3 tests/test_research_parity.py`
 """
@@ -24,12 +32,17 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from engine import db as DB                                             # noqa: E402
 from engine import defensevs as D                                       # noqa: E402
 from engine import defensefit as DF                                     # noqa: E402
 from engine import gamescan as G                                        # noqa: E402
 from engine import likelyctx as C                                       # noqa: E402
 from engine import qbchange as Q                                        # noqa: E402
 from engine import scout as SC                                          # noqa: E402
+from engine import scanfit as SF                                        # noqa: E402
+from engine import nflusage as NU                                       # noqa: E402
+from engine.sources import nflpbp as P                                  # noqa: E402
+from engine.sources import nflunits as U                                # noqa: E402
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
@@ -153,6 +166,128 @@ def test_the_new_quarterbacks_offence_is_described_by_its_shape():
     qb2 = Q.quarterbacks([], [_weekly("X", "TB", 1, attempts=30, passing_yards=200, carries=3, rushing_yards=12)],
                          [], 2, lambda p: "TB")
     assert qb2["profile"]["X"]["air_per_att"] is None
+
+
+def _play(wk, off, dfn, receiver, air, yds, **kw):
+    r = {"week": wk, "season_type": "REG", "posteam": off, "defteam": dfn, "play_type": "pass",
+         "qb_dropback": 1, "rush": 0, "epa": 0.1, "success": 1, "yards_gained": yds,
+         "sack": 0, "qb_hit": 0, "two_point_attempt": 0, "game_id": f"g{wk}", "drive": 1,
+         "yardline_100": 60, "fixed_drive_result": "Punt", "receiver_player_name": receiver,
+         "air_yards": air, "complete_pass": 1 if yds else 0, "pass_touchdown": 0}
+    r.update(kw)
+    return r
+
+
+def test_targets_are_counted_by_depth_for_the_receiver_and_the_defence():
+    assert (P.MID_AIR, P.DEEP_AIR) == (10.0, 20.0)
+    assert [P.depth_zone(a) for a in (-3, 0, 9.9, 10, 19.9, 20, 45)] == \
+        ["short", "short", "short", "mid", "mid", "deep", "deep"]
+    plays = [_play(1, "DAL", "TB", "C.Lamb", 4, 7), _play(1, "DAL", "TB", "C.Lamb", 6, 0),
+             _play(1, "DAL", "TB", "C.Lamb", 14, 18), _play(1, "DAL", "TB", "G.Pickens", 28, 0),
+             _play(1, "DAL", "TB", "G.Pickens", 31, 44),
+             # No air yards charted: not called short, not counted.
+             _play(1, "DAL", "TB", "C.Lamb", "NA", 0)]
+    # Per defence-week (the units): targets and yards in each zone.
+    u = U.Units()
+    for r in plays:
+        u.add(r)
+    rows = {(r["team"], r["side"]): r for r in u.rows(2026)}
+    tb = rows[("TB", "def")]
+    assert (tb["short_tgt"], tb["short_yds"]) == (2, 7.0)
+    assert (tb["mid_tgt"], tb["mid_yds"]) == (1, 18.0)
+    assert (tb["deep_tgt"], tb["deep_yds"]) == (2, 44.0)
+    assert rows[("DAL", "off")]["deep_tgt"] == 2, "the offence's own mix sits on its side of the row"
+    assert all(c in U.UNIT_COLS for c in ("air_yards", "receiver_player_name"))
+    assert U.DEPTH_COLS == ("short_tgt", "short_yds", "mid_tgt", "mid_yds", "deep_tgt", "deep_yds")
+    assert all(c in DB.TEAM_UNIT_COLS for c in U.DEPTH_COLS), "the table carries them"
+    for z in ("short", "mid", "deep"):
+        assert G.UNITS[z] == ((f"{z}_yds",), f"{z}_tgt", True) and z in G.UNIT_LABELS
+    # Per player-week (the play-by-play fold): counts, never an xFP bucket.
+    agg = P.aggregate_pbp(plays)
+    assert agg["players"][("C.Lamb", "DAL", 1)]["_dep_short"] == 2
+    assert agg["players"][("C.Lamb", "DAL", 1)]["_dep_mid"] == 1
+    assert agg["players"][("G.Pickens", "DAL", 1)]["_dep_deep"] == 2
+    assert "_dep_short" not in agg["values"], "the xFP value table prices only the situation buckets"
+    logs = {(r["player"], r["market"]): r["value"] for r in P.xfp_player_rows(agg, 2026)}
+    assert logs[("C.Lamb", "tgt_short")] == 2.0 and logs[("C.Lamb", "tgt_mid")] == 1.0 \
+        and logs[("C.Lamb", "tgt_deep")] == 0.0
+    assert logs[("G.Pickens", "tgt_deep")] == 2.0
+    # A fresh database takes the rows, and the mix comes back per player.
+    conn = DB.connect(":memory:")
+    DB.upsert_team_units(conn, u.rows(2026))
+    got = conn.execute("SELECT short_tgt, deep_yds FROM team_units WHERE team='TB' AND side='def'").fetchone()
+    assert tuple(got) == (2, 44.0)
+    rows_in = []
+    for wk in (1, 2, 3, 4):
+        for z, n in (("short", 3), ("mid", 1), ("deep", 1)):
+            rows_in.append({"sport": "nfl", "season": 2026, "period": f"{wk:03d}", "game_id": f"DAL-{wk:03d}",
+                            "player": "C.Lamb", "team": "DAL", "opponent": "", "position": "", "home": 1,
+                            "market": f"tgt_{z}", "value": float(n)})
+    rows_in.append({"sport": "nfl", "season": 2026, "period": "001", "game_id": "DAL-001", "player": "J.Ferguson",
+                    "team": "DAL", "opponent": "", "position": "", "home": 1, "market": "tgt_short", "value": 4.0})
+    DB.upsert_player_logs(conn, rows_in)
+    mix = NU.depth_mix(conn, 2026)
+    assert mix[("c", "lamb", "DAL")] == {"short": 0.6, "mid": 0.2, "deep": 0.2, "targets": 20}
+    assert ("j", "ferguson", "DAL") not in mix, "four targets is no mix"
+    assert ("c", "lamb", "DAL") not in NU.depth_mix(conn, 2026, upto_week=2), "five before week 2: thin"
+    assert NU.depth_mix(conn, 2026, upto_week=3)[("c", "lamb", "DAL")]["targets"] == 10, "ten is the floor"
+    assert "depth" in NU.build_usage_maps(conn, 2026)
+    # The scan hangs it on his usage row by (initial, surname, team).
+    usage = {("DAL", "ceedee lamb"): {"name": "CeeDee Lamb", "targets_pg": 11.0},
+             ("DAL", "jake ferguson"): {"name": "Jake Ferguson", "targets_pg": 4.0}}
+    assert G.attach_depth(usage, mix) == 1
+    assert usage[("DAL", "ceedee lamb")]["depth"]["short"] == 0.6 and "depth" not in usage[("DAL", "jake ferguson")]
+
+
+def test_the_card_says_where_his_targets_come_from_and_how_the_defence_does_there():
+    ratings_def = {"def": {"short": {"rank": 24, "value": 6.9, "of": 32},
+                           "mid": {"rank": 3, "value": 9.1, "of": 32},
+                           "deep": {"rank": 15, "value": 14.0, "of": 32}}}
+    lean = ["rec_yds", "receptions", "anytime_td"]
+    f = G.depth_facts({"short": 0.58, "mid": 0.3, "deep": 0.12, "targets": 40}, "TB", ratings_def, 32, lean)
+    assert len(f) == 1 and f[0]["text"] == \
+        "58% of his targets are short throws (under 10 air yards); TB ranks 24th of 32 against them, " \
+        "allowing 6.9 yards a target"
+    assert f[0]["sign"] == 1 and f[0]["in_number"] is False and f[0]["kind"] == "depth"
+    assert f[0]["markets"] == lean and f[0]["zone"] == "short"
+    g = G.depth_facts({"short": 0.3, "mid": 0.5, "deep": 0.2, "targets": 40}, "TB", ratings_def, 32, lean)
+    assert g[0]["sign"] == -1 and "intermediate throws (10–19 air yards); TB ranks 3rd of 32" in g[0]["text"]
+    assert G.depth_facts({"short": 0.9, "mid": 0.1, "deep": 0.0, "targets": 9}, "TB", ratings_def, 32, lean) == []
+    assert G.depth_facts({"short": 0.9, "mid": 0.1, "deep": 0.0, "targets": 40}, "TB", {"def": {}}, 32, lean) == [], \
+        "a table from before the columns: no rank, no fact"
+    assert G.depth_facts(None, "TB", ratings_def, 32, lean) == []
+    # read_facts carries it for a receiver, after his role; never for a passer.
+    facts = G.read_facts("wr", "WR", "DAL", "TB", usage={"games": 4, "tgt_share": 0.33, "targets_pg": 11.0,
+                                                         "depth": {"short": 0.58, "mid": 0.3, "deep": 0.12,
+                                                                   "targets": 40}},
+                         allowed=None, ratings_def=ratings_def, points=None, line_words="", n_teams=32, room=None)
+    kinds = [x["kind"] for x in facts]
+    assert kinds[:2] == ["role", "depth"], kinds
+    qb = G.read_facts("qb", "QB", "DAL", "TB", usage={"games": 4, "depth": {"short": 0.6, "mid": 0.3, "deep": 0.1,
+                                                                            "targets": 40}},
+                      allowed=None, ratings_def=ratings_def, points=None, line_words="", n_teams=32, room=None)
+    assert "depth" not in [x["kind"] for x in qb]
+    # Registered for measurement — PENDING, not SIGNALS: every signal in
+    # SIGNALS has its MEASURED line and the page's sentence rests on that;
+    # the run collects both, and the box's paste moves it over.
+    assert "depth" in SF.PENDING and "depth" not in SF.SIGNALS
+    assert not any(k[0] == "depth" for k in SF.MEASURED)
+    assert ("rec_yds", "TE") in SF.PENDING["depth"]["markets"]
+    assert all(m in SF.MARKETS for m in SF.PENDING["depth"]["markets"])
+    assert "air_yards" in SF.RECV_COLS and "week" in SF.RECV_COLS
+    zones = SF.depth_zones([{"receiver_player_name": "C.Lamb", "air_yards": a, "week": w}
+                            for w, a in [(1, 3), (1, 5), (1, 12), (2, 2), (2, 4), (2, 6), (2, 7), (2, 25),
+                                         (3, 1), (3, 2), (3, 3), (4, 30)]])
+    assert SF.main_zone(zones, "C.Lamb", 3) is None, "eight targets before week 3: too few"
+    assert SF.main_zone(zones, "C.Lamb", 4) == "short" and SF.main_zone(zones, "Nobody", 9) is None
+    units = [{"period": "001", "team": t, "side": "def", "opp": "X", "dropbacks": 30, "pass_epa": 0.0,
+              "plays": 60, "epa": 0.0, "rushes": 30, "rush_epa": 0.0, "short_tgt": 20, "short_yds": y}
+             for t, y in (("TB", 160.0), ("DAL", 120.0), ("PHI", 140.0))]
+    sig = SF.unit_signals(units, None, 2)
+    assert round(sig["TB"]["def_short"], 3) == round(8.0 - 7.0, 3) and round(sig["DAL"]["def_short"], 3) == -1.0
+    W = {"units": sig}
+    assert SF.signal("depth", W, "DAL", "TB", {"player_name": "C.Lamb"}, {}, {}, 4, zones) == sig["TB"]["def_short"]
+    assert SF.signal("depth", W, "DAL", "TB", {"player_name": "C.Lamb"}, {}, {}, 3, zones) is None
 
 
 def test_the_game_page_says_when_inactives_post():

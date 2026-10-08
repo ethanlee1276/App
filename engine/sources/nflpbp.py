@@ -46,6 +46,26 @@ PACE_GAP_S = (4.0, 45.0)
 CARRY_BUCKETS = ("car_i5", "car_rz", "car_open")
 TARGET_BUCKETS = ("tgt_rz", "tgt_deep", "tgt_short")
 
+#: TARGET DEPTH (2026-10-08, from the Bucs-Cowboys research: "4.2 air
+#: yards per target", "Lamb works the short and intermediate zones",
+#: "Egbuka's deep targets against Porter"). Where a receiver's targets
+#: come from, by air yards alone — the conventional cuts: short under 10,
+#: intermediate 10-19, deep 20 and more. Counted per player-week beside
+#: the xFP buckets (which stay as they are: they are priced), and per
+#: defence-week in engine/sources/nflunits (targets and yards allowed in
+#: each zone), so a card can say "58% of his targets are short throws;
+#: DAL ranks 24th of 32 against them". Shown, not in the number, until
+#: engine/scanfit measures it.
+MID_AIR = 10.0
+DEEP_AIR = 20.0
+DEPTH_ZONES = ("short", "mid", "deep")
+DEPTH_MARKETS = {"short": "tgt_short", "mid": "tgt_mid", "deep": "tgt_deep"}
+
+
+def depth_zone(air: float) -> str:
+    """short / mid / deep from the air yards of one target."""
+    return "deep" if air >= DEEP_AIR else "mid" if air >= MID_AIR else "short"
+
 
 def _pbp_urls(season: int) -> list[str]:
     base = "https://github.com/nflverse/nflverse-data/releases/download/pbp"
@@ -186,6 +206,13 @@ def aggregate_pbp(rows, also=None) -> dict:
             # situation buckets.
             if yl <= 10:
                 p["_i10_tgt"] = p.get("_i10_tgt", 0) + 1
+            # His target depth — a count, never an xFP bucket. A target
+            # with no air yards recorded (a throwaway charted to him, a
+            # batted ball) is left out rather than called short.
+            araw = r.get("air_yards")
+            if araw not in (None, "", "NA"):
+                dz = "_dep_" + depth_zone(_f(araw))
+                p[dz] = p.get(dz, 0) + 1
 
     values = {b: round(s / n, 4) if n >= 30 else None
               for b, (s, n) in bucket_pts.items()}
@@ -227,6 +254,10 @@ def xfp_player_rows(agg: dict, season: int) -> list[dict]:
                     "value": float(buckets.get("car_i5", 0)
                                    + buckets.get("car_rz", 0))})
         out.append({**base, "market": "i10_tgt", "value": float(buckets.get("_i10_tgt", 0))})
+        # Targets by depth (tgt_short / tgt_mid / tgt_deep), for the
+        # receiver's mix on his card (engine/nflusage.depth_mix).
+        for z, mk in DEPTH_MARKETS.items():
+            out.append({**base, "market": mk, "value": float(buckets.get("_dep_" + z, 0))})
     return out
 
 

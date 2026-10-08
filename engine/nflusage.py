@@ -133,6 +133,45 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
     return out
 
 
+#: Targets with air yards a receiver needs before his depth mix is kept.
+DEPTH_MIN_TGTS = 10
+
+
+def depth_mix(conn, season: int | None = None, upto_week: int | None = None) -> dict:
+    """``{(initial, lastname, team): {"short", "mid", "deep", "targets"}}``
+    — the share of his targets in each air-yard zone this season, from
+    the play-by-play rows `tgt_short` / `tgt_mid` / `tgt_deep`
+    (engine/sources/nflpbp, 2026-10-08). ``upto_week`` keeps only weeks
+    strictly before it, for the replay. Players under DEPTH_MIN_TGTS
+    targets get no mix — an absent fact, not a noisy one."""
+    from .fantasy import _short_key
+    from .sources.nflpbp import DEPTH_MARKETS
+    season = season or latest_season(conn, "tgt_short")
+    if season is None:
+        return {}
+    by_market = {mk: z for z, mk in DEPTH_MARKETS.items()}
+    counts: dict = {}
+    q = ("SELECT player, team, period, market, value FROM player_game_logs "
+         "WHERE sport='nfl' AND season=? AND market IN ('tgt_short', 'tgt_mid', 'tgt_deep')")
+    for r in conn.execute(q, (season,)):
+        try:
+            wk = int(str(r["period"]))
+        except ValueError:
+            continue
+        if upto_week is not None and wk >= upto_week:
+            continue
+        c = counts.setdefault((r["player"], r["team"]), {"short": 0.0, "mid": 0.0, "deep": 0.0})
+        c[by_market[r["market"]]] += float(r["value"] or 0)
+    out: dict = {}
+    for (player, team), c in counts.items():
+        n = c["short"] + c["mid"] + c["deep"]
+        if n < DEPTH_MIN_TGTS:
+            continue
+        out[_short_key(player, team)] = {z: round(c[z] / n, 3) for z in ("short", "mid", "deep")}
+        out[_short_key(player, team)]["targets"] = int(n)
+    return out
+
+
 def snap_shares(conn, season: int | None = None) -> dict:
     """``{(initial, lastname, team): avg offensive snap share (0-1)}`` over
     each player's most recent ``SNAP_WEEKS`` weeks."""
@@ -400,6 +439,7 @@ def build_usage_maps(conn, season: int | None = None,
     return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn),
             "volume": volume_roles(conn, season, upto_week),
             "xfp": xfp_roles(conn, season, upto_week),
+            "depth": depth_mix(conn, season, upto_week),
             # Not a map of roles — the index that lets a player who
             # changed teams in the offseason still find his own.
             "team_of": season_teams(conn, season, upto_week)}

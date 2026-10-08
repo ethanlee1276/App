@@ -277,6 +277,8 @@ CREATE TABLE IF NOT EXISTS team_units (
     rushes INTEGER, rush_epa REAL, rush_success REAL, rush_yds REAL, rush_expl INTEGER,
     sacks INTEGER, hits INTEGER,
     third_att INTEGER, third_conv INTEGER, rz_drives INTEGER, rz_tds INTEGER,
+    short_tgt INTEGER, short_yds REAL, mid_tgt INTEGER, mid_yds REAL,
+    deep_tgt INTEGER, deep_yds REAL,
     PRIMARY KEY (sport, season, period, team, side)
 );
 -- HOCKEY SHOTS (2026-10-03, Ethan: "the opposing goalie, the shot quality,
@@ -581,10 +583,16 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
         conn.commit()
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)
-    # Third downs and red-zone trips (2026-10-04, engine/sources/nflunits).
-    for col in ("third_att", "third_conv", "rz_drives", "rz_tds"):
+    # Third downs and red-zone trips (2026-10-04, engine/sources/nflunits),
+    # and targets and yards by depth zone (2026-10-08). Nullable: a row
+    # written before them reads as no targets, never as zero yards.
+    for col, kind in (("third_att", "INTEGER"), ("third_conv", "INTEGER"),
+                      ("rz_drives", "INTEGER"), ("rz_tds", "INTEGER"),
+                      ("short_tgt", "INTEGER"), ("short_yds", "REAL"),
+                      ("mid_tgt", "INTEGER"), ("mid_yds", "REAL"),
+                      ("deep_tgt", "INTEGER"), ("deep_yds", "REAL")):
         try:
-            conn.execute(f"ALTER TABLE team_units ADD COLUMN {col} INTEGER")
+            conn.execute(f"ALTER TABLE team_units ADD COLUMN {col} {kind}")
             conn.commit()
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
@@ -839,7 +847,8 @@ TEAM_UNIT_COLS = ["sport", "season", "period", "team", "side", "opp",
                   "plays", "epa", "success",
                   "dropbacks", "pass_epa", "pass_success", "pass_expl",
                   "rushes", "rush_epa", "rush_success", "rush_yds", "rush_expl",
-                  "sacks", "hits", "third_att", "third_conv", "rz_drives", "rz_tds"]
+                  "sacks", "hits", "third_att", "third_conv", "rz_drives", "rz_tds",
+                  "short_tgt", "short_yds", "mid_tgt", "mid_yds", "deep_tgt", "deep_yds"]
 
 
 NHL_SHOT_COLS = ["game_id", "event_id", "date", "season", "team", "opponent", "shooter_id",

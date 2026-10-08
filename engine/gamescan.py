@@ -113,13 +113,28 @@ UNITS = {
     # touchdowns per drive that reached the 20. Shown, not priced with.
     "third_down": (("third_conv",), "third_att", True),
     "redzone": (("rz_tds",), "rz_drives", True),
+    # 2026-10-08 (engine/sources/nflpbp.depth_zone): yards a target on
+    # short (under 10 air yards), intermediate (10-19) and deep (20+)
+    # throws — a defence rated against each zone apart, for the receiver
+    # whose targets live in one of them. Shown, not priced with.
+    "short": (("short_yds",), "short_tgt", True),
+    "mid": (("mid_yds",), "mid_tgt", True),
+    "deep": (("deep_yds",), "deep_tgt", True),
 }
 
 #: How the page names them.
 UNIT_LABELS = {"overall": "Overall", "passing": "Passing", "rushing": "Rushing",
                "success": "Success rate", "explosive": "Explosive plays",
                "pressure": "Pressure", "ypc": "Yards per carry",
-               "third_down": "Third downs", "redzone": "Red-zone TDs"}
+               "third_down": "Third downs", "redzone": "Red-zone TDs",
+               "short": "Short throws", "mid": "Intermediate throws", "deep": "Deep throws"}
+
+#: The depth zones as a card says them, and the targets a receiver needs
+#: before his mix is a fact (two games of a starter's work).
+DEPTH_WORDS = {"short": "short throws (under 10 air yards)",
+               "mid": "intermediate throws (10–19 air yards)",
+               "deep": "deep throws (20+ air yards)"}
+DEPTH_MIN_TGTS = 10
 
 
 def _num(row: dict, fields) -> float:
@@ -857,6 +872,35 @@ def interception_facts(team: str, opp: str, *, targets: list | None, room: dict 
     return facts
 
 
+def depth_facts(depth: dict | None, opp: str, ratings_def: dict | None, n_teams: int,
+                lean: list) -> list[dict]:
+    """The one fact a receiver's target depth makes against this defence:
+    his biggest zone's share, and the defence's rank there (yards a
+    target allowed; rank 1 the stingiest). Nothing until he has
+    DEPTH_MIN_TGTS targets with air yards, and nothing without the
+    defence's zone rating (a table from before the columns)."""
+    d = depth or {}
+    if (d.get("targets") or 0) < DEPTH_MIN_TGTS:
+        return []
+    zones = [z for z in DEPTH_WORDS if d.get(z) is not None]
+    if not zones:
+        return []
+    zone = max(zones, key=lambda z: (float(d.get(z) or 0.0), z == "short"))
+    share = float(d.get(zone) or 0.0)
+    cell = ((ratings_def or {}).get("def") or {}).get(zone) or {}
+    rank, val = cell.get("rank"), cell.get("value")
+    if not rank:
+        return []
+    weak, strong = _weak(rank, n_teams), _strong(rank, n_teams)
+    sign = 1 if weak else -1 if strong else 0
+    text = (f"{share:.0%} of his targets are {DEPTH_WORDS[zone]}; {opp} ranks {_ord(rank)} of "
+            f"{n_teams} against them"
+            + (f", allowing {val:.1f} yards a target" if isinstance(val, (int, float)) else ""))
+    markets = [m for m in lean if m in ("rec_yds", "receptions", "anytime_td")] or ["rec_yds", "receptions"]
+    return [{"text": text, "sign": sign, "markets": markets, "in_number": False, "kind": "depth",
+             "zone": zone, "share": round(share, 3)}]
+
+
 def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowed: dict | None,
                ratings_def: dict, points: float | None, line_words: str, n_teams: int,
                room: dict | None, ratings_off: dict | None = None,
@@ -890,6 +934,13 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
             sign = 1 if cs >= 0.55 else -1 if cs < 0.30 else 0
             facts.append({"text": f"Takes {cs:.0%} of {team}'s carries ({u.get('carries_pg', 0):g} a game)",
                           "sign": sign, "markets": lean, "in_number": True, "kind": "role"})
+    # WHERE HIS TARGETS COME FROM, and how the defence does there (the
+    # Bucs @ Cowboys research, 2026-10-08: "Lamb works the short and
+    # intermediate zones", "Egbuka's deep targets against Porter"): his
+    # biggest zone by air yards, against the defence's yards a target in
+    # that zone (engine/sources/nflunits). Shown, not in the number.
+    if group in ("wr", "te", "rb"):
+        facts += depth_facts(u.get("depth"), opp, ratings_def, n_teams, lean)
     # What the defence gives up — the stat our number reads, and the one
     # the bet is literally about where that differs.
     seen: dict = {}
@@ -1702,6 +1753,20 @@ def scan_props(result: dict) -> list[dict]:
     return out
 
 
+def attach_depth(usage: dict, depth: dict) -> int:
+    """Hang each player's target-depth mix (engine/nflusage.depth_mix,
+    keyed (initial, surname, team)) on his usage row as ``depth``.
+    Returns how many rows got one."""
+    from .fantasy import _short_key
+    n = 0
+    for (team, _k), u in (usage or {}).items():
+        d = depth.get(_short_key(u.get("name") or "", team))
+        if d:
+            u["depth"] = d
+            n += 1
+    return n
+
+
 def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                conn=None) -> int:
     """Hang a ``scan`` on every game of an NFL board. Reads only what is
@@ -1748,6 +1813,11 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         usage_table(_safe(load_weekly_stats, season), _safe(load_snap_counts, season),
                     before_week=week),
         usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
+    try:
+        from .nflusage import depth_mix
+        attach_depth(usage, depth_mix(conn, season, upto_week=week))
+    except Exception:                                        # noqa: BLE001
+        pass
     from .sources.nflverse import headshot_map
     faces = _safe(headshot_map, season) or {}
     props = scan_props(result)

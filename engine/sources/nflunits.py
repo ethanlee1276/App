@@ -22,6 +22,11 @@ nflverse play-by-play the site already reads:
   Jaguars breakdowns Ethan brought each led with "Jacksonville allows a
   touchdown on 20% of red-zone trips" and third-down rank, and the site
   had neither.
+* **target depth** — targets and yards in each air-yard zone (short under
+  10, intermediate 10-19, deep 20+; engine/sources/nflpbp.depth_zone), so
+  a defence is rated against short, intermediate and deep throws apart.
+  Added 2026-10-08 from the Bucs @ Cowboys research ("Lamb works the
+  short and intermediate zones"; "Egbuka's deep targets").
 
 One row per team-week per side, as SUMS, so the reader can blend weeks
 and seasons exactly (engine/gamescan divides). Standard library only.
@@ -29,12 +34,18 @@ and seasons exactly (engine/gamescan divides). Standard library only.
 
 from __future__ import annotations
 
+from .nflpbp import depth_zone, DEPTH_ZONES
+
 #: The play-by-play columns this reads, beside `nflpbp.NEEDED`.
 UNIT_COLS = ("week", "season_type", "posteam", "defteam", "play_type",
              "qb_dropback", "rush", "qb_scramble", "epa", "success",
              "yards_gained", "sack", "qb_hit", "two_point_attempt",
              "game_id", "drive", "yardline_100", "fixed_drive_result",
-             "third_down_converted", "third_down_failed")
+             "third_down_converted", "third_down_failed",
+             "air_yards", "receiver_player_name")
+
+#: The depth columns, in the order the table carries them.
+DEPTH_COLS = tuple(f"{z}_{k}" for z in DEPTH_ZONES for k in ("tgt", "yds"))
 
 #: What counts as explosive: the conventional cut, dropbacks and runs apart.
 PASS_EXPLOSIVE_YDS = 20
@@ -55,7 +66,9 @@ def _blank() -> dict:
             "dropbacks": 0, "pass_epa": 0.0, "pass_success": 0.0, "pass_expl": 0,
             "rushes": 0, "rush_epa": 0.0, "rush_success": 0.0, "rush_yds": 0.0,
             "rush_expl": 0, "sacks": 0, "hits": 0,
-            "third_att": 0, "third_conv": 0, "rz_drives": 0, "rz_tds": 0}
+            "third_att": 0, "third_conv": 0, "rz_drives": 0, "rz_tds": 0,
+            "short_tgt": 0, "short_yds": 0.0, "mid_tgt": 0, "mid_yds": 0.0,
+            "deep_tgt": 0, "deep_yds": 0.0}
 
 
 class Units:
@@ -112,6 +125,13 @@ class Units:
                 c["pass_expl"] += int(yds >= PASS_EXPLOSIVE_YDS)
                 c["sacks"] += int(_f(r.get("sack")) == 1)
                 c["hits"] += int(_f(r.get("qb_hit")) == 1 and _f(r.get("sack")) != 1)
+                # A target with air yards recorded, in its depth zone: the
+                # yards it gained (0 when incomplete) against the throw.
+                araw = r.get("air_yards")
+                if r.get("receiver_player_name") and araw not in (None, "", "NA"):
+                    z = depth_zone(_f(araw))
+                    c[f"{z}_tgt"] += 1
+                    c[f"{z}_yds"] += yds
             else:
                 c["rushes"] += 1
                 c["rush_epa"] += epa

@@ -162,7 +162,7 @@ def test_empty_db_returns_empty_maps():
     conn = db.connect(":memory:")
     maps = build_usage_maps(conn)
     assert maps == {"red_zone": {}, "snap": {}, "volume": {},
-                    "xfp": {}, "team_of": {}}
+                    "xfp": {}, "team_of": {}, "depth": {}}
 
 
 if __name__ == "__main__":

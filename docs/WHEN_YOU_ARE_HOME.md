@@ -186,6 +186,28 @@ first). Paste back anything that prints an error or looks off.
     `docs/RESEARCH_PARITY_2026-10-08.md` is the whole audit of the four
     write-ups against the site.
 
+    **Target depth** (same night): the units table gained six columns
+    (targets and yards on short / intermediate / deep throws, per
+    defence-week). The pull adds the columns empty; the nightly refresh
+    fills this season on its next run, and last season — which the
+    blend leans on early — needs one backfill:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan backfill 2025 2026
+    sudo -u qellys python3 -m engine.ingest --nfl 2>&1 | tail -5     # the per-receiver tgt_short/mid/deep rows
+    sudo -u qellys sqlite3 data/qellys.db "SELECT team, side, short_tgt, mid_tgt, deep_tgt FROM team_units WHERE season=2026 AND period='005' AND team IN ('DAL','TB')"
+    ```
+    After the next NFL build, a receiver's pick page carries the line
+    "NN% of his targets are short throws …; DAL ranks Nth of 32 against
+    them". Then, on a quiet hour (it reads four seasons of play-by-play —
+    the better part of an hour, memory-heavy; run it alone):
+    ```
+    sudo -u qellys python3 -m engine.scanfit --points /tmp/pts.pkl 2>&1 | tail -40
+    ```
+    Paste the `depth` lines. They go into `scanfit.MEASURED`; the
+    signal moves a number only where the held-out gain is positive on
+    average and in all but one season, and b clears MIN_T — the same
+    bar every other scan signal failed.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

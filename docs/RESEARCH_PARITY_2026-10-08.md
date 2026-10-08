@@ -13,6 +13,7 @@ used, against what the site computes, and what was built from it.
 | 2 | Post-mortem rule: "reception overs outside a team's top-2 targets need 15%+ target share" | No flag; target share shown in usage only | `scout.FLAGS["thin_target_over"]` on the card, read from the scan's usage; a **note until the record proves it** (likelyctx fits every flag on the journal, held out) |
 | 3 | "Tampa altered its entire offense around Daniels — 31 runs vs 36 dropbacks, 4.2 air yards per target, 8 carries for 55" | QB-change card: who starts, his yards an attempt vs the starter's | `qbchange.shape_words`: the team's pass rate in his starts (against the usual starter's), his carries and rushing yards a game, his air yards an attempt |
 | 4 | "Inactives come out about 6:45 PM ET — confirm Otton and Godwin are active" | Kickoff only | The NFL game page says "inactives 6:45 PM ET" (90 min before kickoff) while the game is ahead |
+| 5 | "Lamb works the short and intermediate zones"; "Egbuka's deep targets against Porter"; "4.2 air yards per target" | Target depth was computed for the xFP model only (red zone / deep / short value buckets) and never said | Every target counted by air yards — short (under 10), intermediate (10–19), deep (20+) — per receiver (`tgt_short/mid/deep` rows) and per defence-week (`team_units` short/mid/deep targets and yards). The defence is ranked in each zone like every unit; the card says "58% of his targets are short throws (under 10 air yards); TB ranks 24th of 32 against them, allowing 6.9 yards a target". Registered in `engine/scanfit` as the `depth` signal — **shown, not in the number**, until the box's run measures it (runbook step 13) |
 
 **Already on the site** (the research's angle → where it lives):
 
@@ -25,7 +26,7 @@ used, against what the site computes, and what was built from it.
 | Pass rate over expectation | `sources/nflpbp` (`pass_oe` per play) in the units |
 | Defence vs position: WR/TE/RB yards, catches, TDs; QB yards, TDs, attempts, completions, INTs | `defensevs.STATS`, every pick card and scan read; in the number where measured (`TRANSFER`) |
 | Target share, targets/carries a game, carry share, red-zone usage | scan usage (`USAGE_RATES`), red-zone chances, goal-line usage |
-| Target depth (short / intermediate / deep) | `nflpbp._target_bucket` — in the xFP model; **not yet said on the card** (next) |
+| Target depth (short / intermediate / deep) | built tonight — row 5 above |
 | Game script from spread/total: trailing teams stop running, favourites sit on leads, shootouts, low totals, blowouts | `scout.FLAGS` (dog_run_over, dog_pass_under, fav_pass_over, fav_run_under, shootout_under, low_total_over, blowout_over) |
 | First game back, thin sample, boom-or-bust, short week, wind | `scout.FLAGS` |
 | NGS tracking: completion over expected, YAC over expected, separation, cushion | scan tracking lines (free data #2, #6) |
@@ -48,6 +49,7 @@ used, against what the site computes, and what was built from it.
 | Yards after contact ALLOWED by a defence (1.73, best) | Not in nflverse/PFR free tables |
 | "Completing over 80% when kept clean" | Pressure-split completion rate is PFF/NGS-only per QB |
 
-**Next if wanted:** say the target-depth buckets on the card (the data is
-there for xFP): "53% of his targets are short; TB ranks 22nd against
-intermediate throws".
+**Next if wanted:** the offence's own depth mix under its quarterback
+("TB throws short on 61% of targets under Daniels" — the offence side of
+the same `team_units` columns, per QB start), and the defence's zone
+ranks on the tale of the tape.

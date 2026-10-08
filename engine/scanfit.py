@@ -71,6 +71,20 @@ SIGNALS = {
                  "says": "his yards per target vs zone over vs man (last season) × their zone rate over the league's"},
 }
 
+#: Signals written but NOT YET MEASURED: collected and reported by the
+#: same run, kept out of SIGNALS (every signal there has its MEASURED
+#: line, and the page's sentence rests on that) until the box's run puts
+#: theirs in MEASURED. Until then the card shows the fact as "shown, not
+#: in the number", which is exactly what it is.
+PENDING = {
+    # 2026-10-08 (the Bucs @ Cowboys research): the defence's yards a
+    # target in HIS biggest air-yard zone (short / intermediate / deep),
+    # against the league's.
+    "depth": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE"), ("receptions", "WR"), ("receptions", "TE")],
+              "says": "their yards a target allowed in his biggest air-yard zone (short / intermediate / deep), "
+                      "over the league's"},
+}
+
 #: The run behind the page's sentence, 2026-09-24: (b, SE, held-out gain
 #: per season 2022 / 2023 / 2024 / 2025, mean). Re-run before changing
 #: what the page says; a signal moves a number only when it passes.
@@ -135,12 +149,16 @@ def unit_signals(units_now: list[dict], units_prior: list[dict] | None, wk: int)
         xs = [val(t, side, u) for t in r if val(t, side, u) is not None]
         return sum(xs) / len(xs) if xs else None
     m = {k: mean(*k) for k in (("def", "passing"), ("def", "rushing"),
-                               ("def", "pressure"), ("off", "pressure"))}
+                               ("def", "pressure"), ("off", "pressure"),
+                               ("def", "short"), ("def", "mid"), ("def", "deep"))}
     out = {}
     for t in r:
         row = {}
         for (side, u), name in ((("def", "passing"), "pass_defense"),
-                                (("def", "rushing"), "run_defense")):
+                                (("def", "rushing"), "run_defense"),
+                                (("def", "short"), "def_short"),
+                                (("def", "mid"), "def_mid"),
+                                (("def", "deep"), "def_deep")):
             v = val(t, side, u)
             if v is not None and m[(side, u)] is not None:
                 row[name] = v - m[(side, u)]
@@ -230,6 +248,39 @@ def zone_rates(part_rows: list[dict], wk: int) -> dict:
     return {t: v["zone"] for t, v in got.items()}
 
 
+#: Targets with air yards before his zone counts (engine/gamescan.DEPTH_MIN_TGTS).
+DEPTH_MIN_TGTS = 10
+
+
+def depth_zones(plays: list[dict]) -> dict:
+    """{receiver (pbp name): [(week, zone)]} from a season's targeted plays,
+    for `main_zone` to read strictly before a week."""
+    from engine.sources.nflpbp import depth_zone
+    out: dict = {}
+    for p in plays:
+        name, araw = p.get("receiver_player_name"), p.get("air_yards")
+        if not name or araw in (None, "", "NA"):
+            continue
+        try:
+            wk = int(_f(p.get("week")))
+        except ValueError:
+            continue
+        out.setdefault(str(name), []).append((wk, depth_zone(_f(araw))))
+    return out
+
+
+def main_zone(zones: dict, name: str, wk: int):
+    """His biggest air-yard zone over the targets before ``wk``, or None
+    under DEPTH_MIN_TGTS of them."""
+    counts = {"short": 0, "mid": 0, "deep": 0}
+    for w, z in zones.get(name) or ():
+        if w < wk:
+            counts[z] += 1
+    if sum(counts.values()) < DEPTH_MIN_TGTS:
+        return None
+    return max(("short", "mid", "deep"), key=lambda z: (counts[z], z == "short"))
+
+
 def zone_splits(part_prev: list[dict], plays_prev: list[dict]) -> dict:
     """{receiver: relative split} from last season: (yards per target vs
     zone − vs man) over his yards per target, where both samples clear."""
@@ -266,6 +317,7 @@ def samples(season: dict, prior: dict | None) -> dict:
     tackles_prior = tackle_rates(prior["pfr"]) if prior else None
     cbs = corner_snaps(season["snaps"])
     splits = zone_splits(prior["part"], prior["plays"]) if prior else {}
+    depth = depth_zones(season["plays"])
     by_player: dict = {}
     for r in reg:
         g = D.GROUP_OF.get(str(r.get("position") or "").upper())
@@ -295,7 +347,7 @@ def samples(season: dict, prior: dict | None) -> dict:
             if g == "QB" and sum(_f(p.get("attempts")) for p in prev) / len(prev) < QB_MIN_ATTEMPTS:
                 continue
             W = week(wk)
-            for name, sig in SIGNALS.items():
+            for name, sig in {**SIGNALS, **PENDING}.items():
                 for market, grp in sig["markets"]:
                     if grp != g:
                         continue
@@ -304,15 +356,18 @@ def samples(season: dict, prior: dict | None) -> dict:
                     if e0 < floor:
                         continue
                     mult, _why, _card = D.effect(opp, (W["dvp"] or {}).get(opp) or {}, g, market)
-                    x = signal(name, W, team, opp, r, cbs, splits, wk)
+                    x = signal(name, W, team, opp, r, cbs, splits, wk, depth)
                     if x is None:
                         continue
                     out.setdefault((name, market, g), []).append((e0 * mult, x, _f(r.get(col)), yr))
     return out
 
 
-def signal(name, W, team, opp, r, cbs, splits, wk):
+def signal(name, W, team, opp, r, cbs, splits, wk, depth=None):
     u = W["units"]
+    if name == "depth":
+        zone = main_zone(depth or {}, str(r.get("player_name") or ""), wk)
+        return None if zone is None else (u.get(opp) or {}).get(f"def_{zone}")
     if name == "pressure":
         a, b = (u.get(opp) or {}).get("def_pressure"), (u.get(team) or {}).get("off_pressure")
         return None if a is None or b is None else a + b
@@ -436,7 +491,8 @@ def report(res: dict) -> str:
 # ── loading ────────────────────────────────────────────────────────────────
 
 
-RECV_COLS = ("game_id", "play_id", "receiver_player_name", "yards_gained", "complete_pass")
+RECV_COLS = ("game_id", "play_id", "receiver_player_name", "yards_gained", "complete_pass",
+             "air_yards", "week")
 
 
 def load_season(yr: int) -> dict:
