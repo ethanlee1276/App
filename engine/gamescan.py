@@ -658,7 +658,8 @@ D_STAT_WORDS = {"qb_pass_yds": "passing yards", "qb_pass_td": "passing touchdown
                 "wr_td": "touchdowns to wide receivers", "te_rec_yds": "receiving yards to tight ends",
                 "te_rec": "catches to tight ends", "te_td": "touchdowns to tight ends",
                 "rb_rush_yds": "rushing yards to running backs", "rb_rec_yds": "receiving yards to running backs",
-                "rb_rec": "catches to running backs", "rb_td": "touchdowns to running backs"}
+                "rb_rec": "catches to running backs", "rb_td": "touchdowns to running backs",
+                "qb_rush_yds": "rushing yards to quarterbacks"}
 
 
 #: The model's measured teammate-out markets, in words (engine/teammates).
@@ -776,7 +777,10 @@ _FACT_STATS = {
     # Interceptions read what the defence forces; in the number where
     # measured (defensevs.TRANSFER_CFB).
     "qb": (("pass_yds", "qb_pass_yds"), ("pass_att", "qb_pass_att"), ("pass_cmp", "qb_pass_cmp"),
-           ("pass_td", "qb_pass_td"), ("pass_int", "qb_pass_int")),
+           ("pass_td", "qb_pass_td"), ("pass_int", "qb_pass_int"),
+           # His legs against what the defence gives up to quarterbacks
+           # (2026-10-08): shown, in the number once the box measures it.
+           ("rush_yds", "qb_rush_yds")),
 }
 #: Stats a defence FORCES rather than gives up: the sentence says so.
 _FORCED = {"qb_pass_int"}

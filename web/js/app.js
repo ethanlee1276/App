@@ -1558,6 +1558,22 @@ function formatKickoff(kick) {
   if (m) { let h = +m[1]; const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${m[2]} ${ap} ET`; }
   return kick;
 }
+/* INACTIVES, 90 MINUTES BEFORE KICKOFF (every research write-up, 2026-10-07:
+   "inactives come out about 6:45 PM ET — confirm Otton and Godwin are
+   active"). The NFL posts them 90 minutes out; the game page says when,
+   while the game is still ahead. The bare "HH:MM" kickoff is Eastern. */
+function inactivesNote(g) {
+  if (state.sport !== "nfl" || !g || !g.kickoff) return "";
+  const st = String((g.live || {}).state || "scheduled");
+  if (!["scheduled", "pre", "upcoming"].includes(st)) return "";
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(g.kickoff));
+  if (!m) return "";
+  let mins = (+m[1]) * 60 + (+m[2]) - 90;
+  if (mins < 0) mins += 24 * 60;
+  const h = Math.floor(mins / 60), mm = String(mins % 60).padStart(2, "0");
+  const ap = h >= 12 ? "PM" : "AM";
+  return ` · <span class="gp-inactives">inactives ${(h % 12) || 12}:${mm} ${ap} ET</span>`;
+}
 function whenLabel(dateStr, kick) {
   return [formatGameDate(dateStr), formatKickoff(kick)].filter(Boolean).join(" · ");
 }
@@ -14529,7 +14545,7 @@ function renderGamePage() {
           <span class="gp-at">@</span>
           <span>${gpTeamDoor(g.home, g.away)} ${score("home")}</span>
         </div>
-        <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}</div>
+        <div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}${inactivesNote(g)}</div>
         <div id="gp-watch-slot">${isLive ? watchHTML(liveRowFor(state.sport, g) || g, state.sport, "gp-watch") : ""}</div>
         ${/* THE CARD'S LINES, ON THE PAGE THE CARD OPENS (Ethan, 2026-09-24,
               circling the spread · ML · total grid on the Home card: "we

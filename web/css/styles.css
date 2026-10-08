@@ -4358,6 +4358,7 @@ body.pk-open { overflow: hidden; }
 .gp-team:hover .gp-team-name, .gp-team:focus-visible .gp-team-name { text-decoration-color: var(--brand); }
 .gp-at { color: var(--text-mute); font-weight: 600; font-size: var(--fs-lg); }
 .gp-sub { color: var(--text-dim); font-size: var(--fs-md); margin-top: 6px; }
+.gp-inactives { color: var(--text-mute); font-size: var(--fs-sm); }
 .gp-chips { margin-top: 12px; }
 .gp-stats { margin-bottom: 22px; }
 

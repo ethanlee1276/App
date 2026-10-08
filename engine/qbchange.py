@@ -147,20 +147,57 @@ def quarterbacks(specs, stats: list[dict], prior_stats: list[dict], upto_week: i
                 if lead not in names:
                     names.append(lead)
         usual[team] = names
+    # HOW THE OFFENCE CHANGES SHAPE UNDER HIM (2026-10-08). Four Bucs-Cowboys
+    # write-ups led with it: "Tampa altered its entire offense around
+    # Daniels — 31 runs vs 36 dropbacks, 4.2 air yards per target, 8
+    # carries for 55". The card said who starts and his yards an attempt;
+    # now also, this season: the team's pass rate in his starts (against
+    # the usual starter's), his carries and rushing yards a game, and his
+    # air yards an attempt. Weekly rows carry all of it.
+    profile: dict = {}
+    team_plays: dict = {}             # (team, week) -> [pass attempts, carries]
     for rows, current in ((prior_stats or [], False), (stats or [], True)):
         for r in rows:
-            if _s(r, "position", "position_group").upper() != "QB":
-                continue
-            if current and int(_f(r, "week", default=0)) >= upto_week:
-                continue
             if _s(r, "season_type", "game_type", default="REG").upper() not in ("REG", ""):
+                continue
+            wk = int(_f(r, "week", default=0))
+            if current and wk >= upto_week:
+                continue
+            team = _s(r, "recent_team", "team")
+            is_qb = _s(r, "position", "position_group").upper() == "QB"
+            if current and team:
+                tp = team_plays.setdefault((team, wk), [0.0, 0.0])
+                tp[1] += _f(r, "carries")
+                if is_qb:
+                    tp[0] += _f(r, "attempts")
+            if not is_qb:
                 continue
             name = _s(r, "player_display_name", "player_name", "full_name")
             a = passing.setdefault(name, [0.0, 0.0])
             a[0] += _f(r, "attempts")
             a[1] += _f(r, "passing_yards")
+            if current and _f(r, "attempts") > 0:
+                pr = profile.setdefault(name, {"games": 0, "attempts": 0.0, "air_yards": 0.0,
+                                               "carries": 0.0, "rush_yds": 0.0, "_starts": []})
+                pr["games"] += 1
+                pr["attempts"] += _f(r, "attempts")
+                pr["air_yards"] += _f(r, "passing_air_yards")
+                pr["carries"] += _f(r, "carries")
+                pr["rush_yds"] += _f(r, "rushing_yards")
+                cell = team_att.get((team, wk)) or {}
+                if cell and max(sorted(cell), key=lambda n: cell[n]) == name:
+                    pr["_starts"].append((team, wk))
+    for name, pr in profile.items():
+        starts = pr.pop("_starts")
+        plays = [team_plays[k] for k in starts if k in team_plays]
+        att, car = sum(p[0] for p in plays), sum(p[1] for p in plays)
+        pr["starts"] = len(starts)
+        pr["pass_rate"] = round(att / (att + car), 3) if att + car > 0 else None
+        pr["air_per_att"] = round(pr["air_yards"] / pr["attempts"], 1) if pr["air_yards"] > 0 else None
+        pr["carries_pg"] = round(pr["carries"] / pr["games"], 1)
+        pr["rush_yds_pg"] = round(pr["rush_yds"] / pr["games"], 1)
     return {"teams": teams, "passing": {k: tuple(v) for k, v in passing.items()},
-            "usual": {t: n for t, n in usual.items() if t in teams}}
+            "usual": {t: n for t, n in usual.items() if t in teams}, "profile": profile}
 
 
 def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
@@ -214,7 +251,10 @@ def changes(qb: dict, injuries: list, depth_qb1: dict | None = None,
                                   if reported else None),
                      "starter_ypa": round(s_ypa, 1) if s_ypa else None,
                      "replacement_ypa": round(r_ypa, 1) if r_ypa else None,
-                     "replacement_attempts": int((qb.get("passing") or {}).get(replacement or "", (0, 0))[0])}
+                     "replacement_attempts": int((qb.get("passing") or {}).get(replacement or "", (0, 0))[0]),
+                     # This season's shape under each of them (see `quarterbacks`).
+                     "replacement_profile": (qb.get("profile") or {}).get(replacement or ""),
+                     "starter_profile": (qb.get("profile") or {}).get(starter)}
     return out
 
 
@@ -234,14 +274,43 @@ def headline(ch: dict) -> str:
     return f"{ch['starter']} ({ch['status']}) — {who}"
 
 
+def shape_words(ch: dict) -> str:
+    """How the offence has looked under the replacement this season, from
+    `quarterbacks`' profile: the team's pass rate in his starts against the
+    usual starter's, his carries and rushing yards a game, his air yards an
+    attempt. "" when nothing is known."""
+    rp, sp = ch.get("replacement_profile") or {}, ch.get("starter_profile") or {}
+    if not rp or not ch.get("replacement"):
+        return ""
+    bits = []
+    if rp.get("pass_rate") is not None and rp.get("starts"):
+        s = (f"in his {rp['starts']} start{'s' if rp['starts'] != 1 else ''} this season the team threw on "
+             f"{rp['pass_rate']:.0%} of its plays")
+        if sp.get("pass_rate") is not None and sp.get("starts"):
+            s += f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})"
+        bits.append(s)
+    if rp.get("games"):
+        bits.append(f"he has run {rp['carries_pg']:.1f} times a game for {rp['rush_yds_pg']:.0f} yards")
+    if rp.get("air_per_att"):
+        s = f"{rp['air_per_att']:.1f} air yards an attempt"
+        if sp.get("air_per_att"):
+            s += f" against {ch['starter']}’s {sp['air_per_att']:.1f}"
+        bits.append(s)
+    return "; ".join(bits)
+
+
 def detail(ch: dict) -> str:
-    """The replacement's sample against the starter's, in words."""
+    """The replacement's sample against the starter's, in words — and how
+    the offence has looked under him (`shape_words`)."""
+    shape = shape_words(ch)
     if ch.get("replacement") and ch.get("replacement_ypa") and ch.get("starter_ypa"):
-        return (f"{ch['replacement']} has thrown for {ch['replacement_ypa']} yards an attempt "
-                f"({ch['replacement_attempts']} attempts) against {ch['starter']}’s {ch['starter_ypa']}")
+        out = (f"{ch['replacement']} has thrown for {ch['replacement_ypa']} yards an attempt "
+               f"({ch['replacement_attempts']} attempts) against {ch['starter']}’s {ch['starter_ypa']}")
+        return f"{out} — {shape}" if shape else out
     if ch.get("replacement"):
         n = ch.get("replacement_attempts") or 0
-        return f"{ch['replacement']} has {n} pass attempt{'s' if n != 1 else ''} in our data — too few to rate"
+        out = f"{ch['replacement']} has {n} pass attempt{'s' if n != 1 else ''} in our data — too few to rate"
+        return f"{out} — {shape}" if shape else out
     return ""
 
 

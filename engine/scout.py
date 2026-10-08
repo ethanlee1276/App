@@ -89,7 +89,16 @@ FLAGS = {
     "thin_sample": "fewer than three games of evidence this season",
     "boom_bust": "a boom-or-bust player — his games swing widely",
     "short_week_over": "an over on a short week (Thursday)",
+    # Ethan's research post-mortem, 2026-10-07 ("stat legs went 8 for 11,
+    # but both 2-legs died on one leg. The new rule: reception overs
+    # outside a team's top-2 targets need 15%+ target share"). A note
+    # until the record proves it, like every flag here.
+    "thin_target_over": "a receiving over outside his team's top-two targets, with under 15% of its "
+                        "targets — thin volume to hit a line on",
 }
+#: A receiver outside the top two with less than this share of his team's
+#: targets is a thin-volume over (the post-mortem's rule).
+THIN_TARGET_SHARE = 0.15
 
 
 def team_spread(game_spread, home: bool | None):
@@ -126,9 +135,13 @@ def _cv(xs):
 
 def situation(market: str, side: str, line=None, position: str = "", values=None,
               game_spread=None, home: bool | None = None, total=None, wind=None, outdoor=None,
-              weekday=None, games_season=None, missed_last=None) -> dict:
+              weekday=None, games_season=None, missed_last=None,
+              tgt_share=None, tgt_rank=None) -> dict:
     """The situation from the pick and its game. ``values`` = his results in
-    this market, NEWEST FIRST (the shape every row and the history carry)."""
+    this market, NEWEST FIRST (the shape every row and the history carry).
+    ``tgt_share`` is his share of his team's targets this season and
+    ``tgt_rank`` his place among its targets (1 = most), when the usage
+    read has them."""
     vals = [v for v in (values or []) if v is not None]
     sp = team_spread(game_spread, home)
     return {"market": market, "side": str(side or "").upper(), "line": line,
@@ -138,7 +151,7 @@ def situation(market: str, side: str, line=None, position: str = "", values=None
             "recent3": _avg(vals[:3]) if len(vals) >= 3 else None,
             "prior5": _avg(vals[3:8]) if len(vals) >= 6 else None,
             "games_season": games_season if games_season is not None else len(vals),
-            "missed_last": missed_last}
+            "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank}
 
 
 def flags(s: dict) -> list[str]:
@@ -192,6 +205,10 @@ def flags(s: dict) -> list[str]:
         out.add("boom_bust")
     if over and s.get("weekday") == 3:
         out.add("short_week_over")
+    rank, share = s.get("tgt_rank"), s.get("tgt_share")
+    if over and m in RECEIVING and rank is not None and share is not None \
+            and int(rank) > 2 and float(share) < THIN_TARGET_SHARE:
+        out.add("thin_target_over")
     return [f for f in FLAGS if f in out]
 
 

@@ -169,6 +169,23 @@ first). Paste back anything that prints an error or looks off.
     grep -o '"last_done": *"[^"]*"' /srv/qellys/data/cache/maintenance.json
     ```
 
+13. **QB rushing yards against the defence — measure it** (2026-10-08,
+    from the Bucs–Cowboys research: "Dallas has allowed a league-high 188
+    rushing yards to quarterbacks"). The site now rates what every defence
+    gives up in rushing yards TO QUARTERBACKS and shows it on a QB rushing
+    pick and in the scan read, but it moves no number until it is measured
+    on the box (the repo's rule). After the pull showing `Research parity`
+    or newer, on the next quiet hour:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 defensefit.py 2>&1 | tail -40
+    ```
+    Paste the `rush_yds` lines (RB and QB). If the QB arm's held-out gain is
+    positive in every season, the next commit writes its strength into
+    `defensevs.TRANSFER[("rush_yds", "QB")]` and `MODEL_STAT`; if not, the
+    card keeps saying "shown for you; it has not predicted this bet".
+    `docs/RESEARCH_PARITY_2026-10-08.md` is the whole audit of the four
+    write-ups against the site.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

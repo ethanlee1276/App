@@ -36,7 +36,10 @@ from engine import passtd as _passtd
 MARKETS = {
     "rec_yds": (("WR", "TE", "RB"), ("receiving_yards",), 15.0),
     "receptions": (("WR", "TE", "RB"), ("receptions",), 1.5),
-    "rush_yds": (("RB",), ("rushing_yards",), 15.0),
+    # …and a quarterback's rushing against what the defence gives up to
+    # quarterbacks (2026-10-08; the same 15-yard floor keeps it to the ones
+    # who run).
+    "rush_yds": (("RB", "QB"), ("rushing_yards",), 15.0),
     "pass_yds": (("QB",), ("passing_yards",), 150.0),
     "anytime_td": (("WR", "TE", "RB"), ("receiving_tds", "rushing_tds"), 0.0),
     # Added 2026-09-23: the passing-touchdown prop had no matchup at all

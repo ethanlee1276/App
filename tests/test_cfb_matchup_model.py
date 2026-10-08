@@ -105,8 +105,14 @@ def test_the_card_names_the_school_and_a_qb_run_reads_the_run_defence():
     assert abs(f - (1 + 0.82 * 0.2)) < 1e-9 and why.startswith("Soft matchup — Alabama allow the 3rd-most")
     assert card["opponent"] == "Alabama" and card["of"] == 130
     f, why, card = D.effect("espn:333", r, "QB", "rush_yds", sport="cfb", label="Alabama")
-    assert abs(f - (1 + 0.16 * -0.2)) < 1e-9 and card["stat"] == "rushing yards to RBs"
-    assert D.effect("espn:333", r, "QB", "rush_yds")[2] is None, "the NFL shows no QB rushing card"
+    # Since 2026-10-08 the card shows what the defence gives up to
+    # QUARTERBACKS' legs (the Bucs-Cowboys research's number), the run
+    # defence beside it; the number still reads the measured run defence.
+    assert abs(f - (1 + 0.16 * -0.2)) < 1e-9 and card["stat"] == "rushing yards to QBs"
+    assert card["also"]["stat"] == "rushing yards to RBs" and card["model"]["reads"] == "rushing yards to RBs"
+    f, why, card = D.effect("espn:333", r, "QB", "rush_yds")
+    assert f == 1.0 and card["stat"] == "rushing yards to QBs" and card["model"]["applied"] == 1.0, \
+        "the NFL shows the QB rushing card too, and leaves it out of the number until measured"
 
 
 def _prop(market, pos="WR", team="espn:2"):

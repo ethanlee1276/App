@@ -64,6 +64,13 @@ STATS = {
     "te_rec": ("TE", ("receptions",), "catches by TEs"),
     "te_td": ("TE", ("receiving_tds", "rushing_tds"), "TDs to TEs"),
     "rb_rush_yds": ("RB", ("rushing_yards",), "rushing yards to RBs"),
+    # A QUARTERBACK'S LEGS (2026-10-08). Four Bucs-Cowboys write-ups led
+    # with "Dallas has allowed a league-high 188 rushing yards to
+    # quarterbacks — Dart 54, Jayden Daniels 69, Lamar 50", and the site had
+    # no such number: a QB rushing prop read NO defence at all (stat_for
+    # returned None). Rated and shown here; in the number only once
+    # `python3 defensefit.py` on the box measures it (MODEL_STAT below).
+    "qb_rush_yds": ("QB", ("rushing_yards",), "rushing yards to QBs"),
     "rb_rec_yds": ("RB", ("receiving_yards",), "receiving yards to RBs"),
     "rb_rec": ("RB", ("receptions",), "catches by RBs"),
     "rb_td": ("RB", ("rushing_tds", "receiving_tds"), "TDs to RBs"),
@@ -187,7 +194,7 @@ def stat_for(position: str, market: str) -> str | None:
     if market == "rush_att":
         return "rb_rush_att" if g == "RB" else None
     if market == "rush_yds":
-        return "rb_rush_yds" if g == "RB" else None
+        return {"RB": "rb_rush_yds", "QB": "qb_rush_yds"}.get(g)
     if market == "rec_yds":
         return {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rec_yds"}.get(g)
     if market == "receptions":
@@ -219,6 +226,10 @@ MODEL_STAT = {
     ("rec_yds", "WR"): "qb_pass_yds", ("receptions", "WR"): "qb_pass_yds",
     ("rec_yds", "TE"): "qb_pass_yds", ("receptions", "TE"): "qb_pass_yds",
     ("anytime_td", "WR"): None, ("anytime_td", "TE"): None, ("anytime_td", "QB"): None,
+    # A quarterback's rushing: SHOWN against what the defence gives up to
+    # quarterbacks (qb_rush_yds, 2026-10-08); not in the number until the
+    # box's `python3 defensefit.py` measures it (runbook step 13).
+    ("rush_yds", "QB"): None,
 }
 
 
@@ -396,7 +407,8 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
     if g == "QB":
         # A quarterback's markets sit under each other: yards beside his
         # touchdowns, and passing yards beside every other passing stat.
-        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds"}.get(market, "qb_pass_yds")
+        also = {"pass_yds": "qb_pass_td", "pass_td": "qb_pass_yds",
+                "rush_yds": "rb_rush_yds"}.get(market, "qb_pass_yds")
     else:
         also = (stat_for(position, "anytime_td") if market != "anytime_td"
                 else {"WR": "wr_rec_yds", "TE": "te_rec_yds", "RB": "rb_rush_yds"}.get(g))

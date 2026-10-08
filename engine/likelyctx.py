@@ -255,11 +255,24 @@ def annotate(rows: list[dict], result: dict) -> int:
             continue
         last_week[r.get("player")] = max(last_week.get(r.get("player"), 0), max(weeks))
         team_week[r.get("team")] = max(team_week.get(r.get("team"), 0), max(weeks))
+    # His share of his team's targets and his place among them, from the
+    # scan's usage read (the thin_target_over flag).
+    usage: dict = {}
+    for game in (result.get("scan_reads") or {}).values():
+        for x in (game or {}).get("players") or []:
+            if x.get("player") and isinstance(x.get("usage"), dict):
+                usage[x["player"]] = (x.get("team"), x["usage"])
+    by_team: dict = {}
+    for name, (team, u) in usage.items():
+        by_team.setdefault(team, []).append((float(u.get("targets_pg") or 0.0), name))
+    tgt_rank = {name: i + 1 for team, lst in by_team.items()
+                for i, (_t, name) in enumerate(sorted(lst, key=lambda x: (-x[0], x[1])))}
     n = 0
     for r in rows:
         if r.get("kind") == "game" or not r.get("player") or not r.get("market"):
             continue
         g = _game_for(r, games)
+        u = (usage.get(r["player"]) or (None, {}))[1]
         w = (g or {}).get("weather") or {}
         team = r.get("team")
         lw, tw = last_week.get(r.get("player")), team_week.get(team)
@@ -269,7 +282,9 @@ def annotate(rows: list[dict], result: dict) -> int:
             game_spread=(g or {}).get("spread"), home=(team == (g or {}).get("home")) if g else None,
             total=(g or {}).get("total"), wind=w.get("wind_mph") if w.get("measured") else None,
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
-            missed_last=(lw is not None and tw is not None and lw < tw))
+            missed_last=(lw is not None and tw is not None and lw < tw),
+            tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
+            tgt_rank=tgt_rank.get(r["player"]))
         codes = SC.flags(s)
         r["scout_flags"] = codes
         r["scout_notes"] = SC.notes(codes)

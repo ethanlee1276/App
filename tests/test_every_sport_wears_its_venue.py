@@ -37,7 +37,9 @@ def test_one_game_page_for_every_team_sport():
 
 def test_the_ballpark_is_named_once():
     page = _fn("renderGamePage")
-    assert '<div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}</div>' in page
+    # The sub line is the time, and on the NFL the inactives time
+    # (2026-10-08) — never the venue, which the eyebrow names.
+    assert '<div class="gp-sub">${escapeHtml(whenLabel(g.date, g.kickoff))}${inactivesNote(g)}</div>' in page
     assert "(g.stadium || {}).name || g.park_name" in page, "the eyebrow names it"
 
 
