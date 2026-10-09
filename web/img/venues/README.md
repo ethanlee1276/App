@@ -1,12 +1,19 @@
 # Venue photos — the drop-in slot
 
-Put an image here and the stadium card uses it as its backdrop
-automatically; delete it and the card falls back through the chain
-below. No build step, no code change.
+Put an image here, name it in `VENUE_TEAM_PHOTOS` in app.js, and the
+stadium card uses it as its backdrop; delete it (and its name) and the
+card falls back through the chain below. No build step.
+
+Why the name has to be listed (2026-10-09): the card used to ask for a
+team photo on every game and fall back when it was missing — and none
+has ever shipped, so every card waited on a failed request before its
+render loaded. tests/test_the_site_feels_quick.py fails until a photo
+dropped in here is named in the list, so it can never be silently unused.
 
 ## What a card shows, in order
 
-1. `{sport}/{HOME_TEAM_ABBR}.jpg` — a team-specific photo, if present.
+1. `{sport}/{HOME_TEAM_ABBR}.jpg` — a team-specific photo, if present
+   and named in `VENUE_TEAM_PHOTOS` (e.g. `"nfl/KC"`).
 2. `variants/{family}-{colour}.jpg` — Ethan's sliced night renders
    (2026-08-11). The card picks the render whose lighting matches the
    home team's colours: first team colour with real chroma maps to the
@@ -16,8 +23,12 @@ below. No build step, no code change.
    the blue one also fills the violet slot).
 3. The drawn night scene, if both files are missing.
 
-LIVE games always use the drawn scene — it carries the ball spot, the
-bases and the live wind, which a photo cannot.
+Live games show the photo too (since 2026-08-13); the live bases ride
+over it as an overlay.
+
+Every render ships twice: the full WebP and an 800px phone copy
+(`{name}@800.webp`), which narrow screens are served. The ingest tool
+writes both; a render added by hand needs both.
 
 The UFC page ignores team colours (no home team) and shows ONE
 picture for every card: `ufc-hero.jpg`, Ethan's branded arena render

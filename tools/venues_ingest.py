@@ -258,12 +258,31 @@ def target_name(family: str, cls: str) -> str:
     return f"{family}-{cls}.jpg"
 
 
+#: The phone copy's width (the lag, 2026-10-09: "all our renders will take
+#: a while to load"). A card is ~272px wide and a phone's hero ~390px, so
+#: 800 pixels covers both at a 2x screen. Measured on the shipped renders:
+#: 38-134 KB against 83-446 KB for the full 1600px file — a third.
+SMALL_W = 800
+
+
+def _small(img, jpg_path: Path) -> None:
+    """The phone copy, `{name}@800.webp`, beside the full one. `venueSrc`
+    asks for it on a narrow screen, so a variant written without one would
+    be a broken image on every phone — this is called wherever `_webp` is."""
+    rgb = img.convert("RGB")
+    if rgb.width > SMALL_W:
+        rgb = rgb.resize((SMALL_W, round(rgb.height * SMALL_W / rgb.width)), Image.LANCZOS)
+    rgb.save(jpg_path.with_name(f"{jpg_path.stem}@{SMALL_W}.webp"), "WEBP", quality=80, method=6)
+
+
 def _webp(img, jpg_path: Path) -> None:
     """The WebP the page actually serves, beside the JPEG (audit 2026-09-30,
     F-3): about half the bytes. `venueSrc` in app.js asks for the .webp of
     every variant, so a variant written without one would be a broken
-    image — this is called at every variant write."""
+    image — this is called at every variant write. The phone copy is
+    written with it (`_small`)."""
     img.convert("RGB").save(jpg_path.with_suffix(".webp"), "WEBP", quality=80, method=6)
+    _small(img, jpg_path)
 
 
 def ingest(incoming: Path = INCOMING, variants: Path = VARIANTS,

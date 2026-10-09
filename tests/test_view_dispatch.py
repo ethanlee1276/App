@@ -105,18 +105,31 @@ def test_the_two_that_taught_this_lesson_are_still_dispatched():
         assert line in sw, f"regressed: {line}"
 
 
-def test_the_unconditional_renderers_are_not_required_to_be_dispatched():
-    """Guards the OTHER half of the rule. renderScanner and friends run
-    on every load whatever view is showing, so their hosts are already
-    filled — demanding a dispatch for them would be noise, and a test
-    that demands noise gets relaxed until it means nothing."""
+def test_the_off_screen_pages_are_drawn_when_opened():
+    """The OTHER half of the rule, changed 2026-10-09 (the lag: "switching
+    pages will also take a couple seconds"). renderScanner and the other
+    board pages used to run on every load whatever view was showing, so
+    their hosts were always filled and needed no dispatch. They now draw
+    only when on screen (OFFSCREEN_PAGES / drawOrDefer); a page off screen
+    is marked stale, and opening it must draw it — `drawStale(name)` in
+    _switchViewNow, right after the page is made active — or it would open
+    on the previous load's rows. That is this file's rule again: a page
+    may not depend on a load happening to pass while it is showing."""
     body = _body("renderAll")
-    conditional = set(_conditional_renderers().values())
-    for fn in ("renderScanner", "renderTrending", "renderPlayers",
-               "renderRecommended"):
-        assert f"{fn}()" in body, f"{fn} left renderAll"
-        assert fn not in conditional, \
-            f"{fn} became conditional — it now needs a dispatch too"
+    assert "OFFSCREEN_PAGES.forEach(([host, draw, onVisit]) => drawOrDefer(host, draw, onVisit));" in body
+    assert "renderRecommended()" in body, "Home's own board is drawn on every load"
+    i = APP.index("const OFFSCREEN_PAGES = [")
+    pages = APP[i:APP.index("];", i)]
+    for fn in ("renderScanner", "renderTrending", "renderPlayers", "renderEdgeBoard",
+               "renderProps", "renderLongShots", "renderTonight", "renderLikely"):
+        assert f"{fn}()" in pages, f"{fn} left the off-screen pages"
+    sw = _body("_switchViewNow")
+    assert 'target.classList.add("active");' in sw and "drawStale(name);" in sw
+    assert sw.index('target.classList.add("active");') < sw.index("drawStale(name);"), \
+        "drawn after the page is active, before anything reads it"
+    # The two marked onVisit are the ones _switchViewNow redraws itself.
+    for line in ('if (name === "likely") renderLikely();', 'if (name === "tonight") renderTonight();'):
+        assert line in sw, line
 
 
 if __name__ == "__main__":

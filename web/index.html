@@ -127,6 +127,17 @@
        required for a font preload even on our own origin. -->
   <link rel="preload" href="fonts/archivo-narrow.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="fonts/archivo-narrow-700.woff2" as="font" type="font/woff2" crossorigin />
+  <!-- The picture hosts, warmed before the first card asks (the lag,
+       2026-10-09: "all the logos and headshots take a while to load").
+       Every team mark comes from ESPN's resize service, so its connection
+       is opened now rather than by the first logo; the face hosts only
+       have their names looked up, since which one a page needs depends on
+       the league. No cookies or data go to any of them from this. -->
+  <link rel="preconnect" href="https://a.espncdn.com" />
+  <link rel="dns-prefetch" href="https://static.www.nfl.com" />
+  <link rel="dns-prefetch" href="https://img.mlbstatic.com" />
+  <link rel="dns-prefetch" href="https://cdn.nba.com" />
+  <link rel="dns-prefetch" href="https://assets.nhle.com" />
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Decided BEFORE first paint, or the full masthead renders and then
        collapses — a 790px jump on every load, which is worse than the

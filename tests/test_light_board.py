@@ -159,8 +159,17 @@ def test_a_light_board_is_never_revalidated_and_the_flag_clears_by_either_route(
     body = _load_body()
     assert "const holding = state.data && _boardFor === meta.api && !state.lightBoard;" in body, \
         "a tag from an earlier full load would 304 and pin the light board on screen"
-    assert body.count("state.lightBoard = false;") == 2, "cleared when the full board lands, by either route"
-    assert body.index("state.lightBoard = true;") < body.index("state.lightBoard = false;")
+    # Three routes since 2026-10-09: the full board off the wire, the
+    # redacted fallback, and the league's own full board drawn from memory
+    # on the way back to it (BOARD_MEM_MAX). Each lands a FULL board.
+    assert body.count("state.lightBoard = false;") == 3, "cleared when a full board lands, by any route"
+    # The memory route sits above the light block and skips it (a league
+    # held whole needs no light copy), so the order that matters is the
+    # light paint before the wire's full board replacing it.
+    assert body.index("state.lightBoard = true;") < \
+        body.index("state.lightBoard = false;          // the full board is on screen now")
+    assert body.index("state.lightBoard = false;") < body.index("const lightName = lightNameFor(meta);"), \
+        "the memory route runs before the light copy is even considered"
     assert "lightBoard: false," in APP[:APP.index("async function load(")], "declared on state, not conjured"
 
 
@@ -170,7 +179,7 @@ def _run_light(setup, plan, light):
     import test_open_bets_vanish as H
     src = (H._STUBS
            + H._fn("normalizeSlate") + "\n" + H._fn("refreshLikelyPrices") + "\n" + H._fn("locksAwayWhatWeHold") + "\n"
-           + H._fn("lightNameFor") + "\n"
+           + H._fn("lightNameFor") + "\n" + H._board_mem() + "\n"
            + H._fn("_loadNow", kind="async function") + "\n"
            # `load` is the coalescer now; this harness wants the load itself.
            + "const load = _loadNow;\n"

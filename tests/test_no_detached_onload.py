@@ -100,7 +100,9 @@ def test_every_onload_that_adds_a_class_goes_through_the_helper():
         src = open(path, encoding="utf-8").read()
         seen += len(re.findall(r'data-onload="[\w-]+"', src))
         assert not re.search(r"""(?<![-\w])onload\s*=\s*["']""", src), os.path.relpath(path, ROOT)
-    assert seen >= 5, f"the onload sites went missing entirely ({seen} found)"
+    # Four since 2026-10-09: the board card and the game page share one
+    # stadium tag (venuePhotoTag), so two sites became one.
+    assert seen >= 4, f"the onload sites went missing entirely ({seen} found)"
     vis = open(os.path.join(WEB, "js", "visuals.js"), encoding="utf-8").read()
     i = vis.index('document.addEventListener("load"')
     assert "artOn(el, el.dataset.onload)" in vis[i:i + 300] and "}, true);" in vis[i:i + 300]

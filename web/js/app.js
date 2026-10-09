@@ -280,8 +280,32 @@ function lineupPendingWords(g, short) {
 }
 
 function tzTime(d, o) {
-  return new Date(d).toLocaleTimeString(undefined,
-    tzOpts(o || { hour: "numeric", minute: "2-digit" }));
+  // Remembered per instant and options (the zone setting is inside the
+  // options, so a changed zone is a different key): the same kickoffs
+  // are formatted on every poll, and a locale call builds its formatter
+  // each time it is asked.
+  const t = +new Date(d);
+  const opts = tzOpts(o || { hour: "numeric", minute: "2-digit" });
+  const key = `${t}|${JSON.stringify(opts)}`;
+  const memo = tzTime._memo || (tzTime._memo = new Map());
+  let out = memo.get(key);
+  if (out == null) {
+    // A formatter per options set, built once (the locale call builds a
+    // fresh one every time it is asked). Options that name no clock part
+    // fall through to the locale call, which fills the clock in itself.
+    if (opts.hour || opts.minute || opts.second || opts.timeStyle || opts.dayPeriod) {
+      const fmts = tzTime._fmts || (tzTime._fmts = new Map());
+      const fk = key.slice(key.indexOf("|") + 1);
+      let fmt = fmts.get(fk);
+      if (!fmt) { fmt = new Intl.DateTimeFormat(undefined, opts); fmts.set(fk, fmt); }
+      out = fmt.format(new Date(t));
+    } else {
+      out = new Date(t).toLocaleTimeString(undefined, opts);
+    }
+    if (memo.size > 2000) memo.clear();
+    memo.set(key, out);
+  }
+  return out;
 }
 
 /* ONE STAMP (audit V-24, roadmap #50). A build time printed five ways —
@@ -1540,9 +1564,23 @@ function plural(n, one, many) {
 function formatGameDate(dateStr) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || "");
   if (!m) return "";
-  // Build a local date (avoids the UTC-parse off-by-one on YYYY-MM-DD).
-  const d = new Date(+m[1], +m[2] - 1, +m[3]);
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  // Remembered per date: a board of two hundred rows asks this a few
+  // hundred times a render, and the locale call builds a formatter each
+  // time. The memo lives on the function so a test can lift it alone.
+  const memo = formatGameDate._memo || (formatGameDate._memo = new Map());
+  let out = memo.get(m[0]);
+  if (out == null) {
+    // Build a local date (avoids the UTC-parse off-by-one on YYYY-MM-DD).
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    // One formatter for the life of the page: toLocaleDateString builds a
+    // fresh one per call, which is most of what a call costs.
+    const fmt = formatGameDate._fmt || (formatGameDate._fmt
+      = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }));
+    out = fmt.format(d);
+    if (memo.size > 400) memo.clear();
+    memo.set(m[0], out);
+  }
+  return out;
 }
 function formatKickoff(kick) {
   if (!kick) return "";
@@ -1656,12 +1694,20 @@ function likelyStarted(r) {
     const d = String(r.game_date || r.date || "");
     if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
     let off = /-(0[4-9]|10)-/.test(d) ? "-04:00" : "-05:00";   // EDT Apr–Oct, else EST
-    try {
-      const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" })
-        .formatToParts(new Date(`${d}T16:00:00Z`)).find((p) => p.type === "timeZoneName").value;
-      const o = /GMT([+-])(\d{1,2})/.exec(tz);
-      if (o) off = `${o[1]}${o[2].padStart(2, "0")}:00`;
-    } catch (e) { /* the month rule above stands */ }
+    // The East's offset on a date is remembered: every row of every board
+    // asks, and the formatter that answers is the expensive part.
+    const offs = likelyStarted._off || (likelyStarted._off = new Map());
+    if (offs.has(d)) {
+      off = offs.get(d);
+    } else {
+      try {
+        const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "shortOffset" })
+          .formatToParts(new Date(`${d}T16:00:00Z`)).find((p) => p.type === "timeZoneName").value;
+        const o = /GMT([+-])(\d{1,2})/.exec(tz);
+        if (o) off = `${o[1]}${o[2].padStart(2, "0")}:00`;
+      } catch (e) { /* the month rule above stands */ }
+      offs.set(d, off);
+    }
     t = Date.parse(`${d}T${m[1].padStart(2, "0")}:${m[2]}:00${off}`);
   }
   return Number.isFinite(t) && t <= Date.now();
@@ -1975,9 +2021,45 @@ async function load(quiet = false) {
   return p;
 }
 
+/* THE LAST BOARD OF EACH LEAGUE YOU OPENED, KEPT IN MEMORY (the lag,
+   2026-10-09: "going sport to sport" took "a couple seconds"). Leaving a
+   league threw its board away, so going back meant the skeleton, the
+   light copy, the whole board again and two full draws — on a phone, the
+   seconds Ethan was describing. Now the board you left is kept, drawn the
+   instant you return, and then revalidated exactly as the 30-second poll
+   does (If-None-Match against the tag kept in `_boardTags`): unchanged
+   is a 304 with nothing drawn twice, changed is the new board.
+
+   IN MEMORY ONLY, never storage: the paid board must not sit on disk in a
+   browser (see the revalidation note in _loadNow). Three leagues at most,
+   the oldest dropped first, and keyed by who is signed in, so signing
+   out or in never shows one account the other's board. */
+const BOARD_MEM_MAX = 3;
+const _boardMem = new Map();      // `${api}|${who}` -> { data, builtAt }
+
+function boardMemWho() {
+  try { return (_acctUser && _acctUser.signed_in && _acctUser.email) || ""; } catch (e) { return ""; }
+}
+function boardMemKey(meta) { return meta && meta.api ? `${meta.api}|${boardMemWho()}` : ""; }
+function boardMemGet(meta) {
+  const k = boardMemKey(meta);
+  return (k && _boardMem.get(k)) || null;
+}
+function boardMemPut(meta, data, builtAt) {
+  const k = boardMemKey(meta);
+  if (!k || !data || data.light === true || data.status === "not built") return;
+  _boardMem.delete(k);                       // re-inserted last: the newest
+  _boardMem.set(k, { data, builtAt });
+  while (_boardMem.size > BOARD_MEM_MAX) _boardMem.delete(_boardMem.keys().next().value);
+}
+
 async function _loadNow(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
-  if (!quiet) showSkeleton();
+  // A league held in memory is drawn whole in a moment (below), so it
+  // gets no skeleton to flash on the way.
+  const held = (state.data && _boardFor === (SPORT_META[state.sport] || {}).api)
+    ? null : boardMemGet(SPORT_META[state.sport]);
+  if (!quiet && !held) showSkeleton();
   // What this machine's rebuild actually costs, so "stale" can mean
   // "later than this box's own normal" instead of a typed constant.
   // Not awaited: the freshness chip re-reads it on the next tick, and a
@@ -2012,6 +2094,18 @@ async function _loadNow(quiet = false) {
     const t = lm ? Date.parse(lm) : NaN;
     state.builtAt = Number.isFinite(t) ? t : null;
   };
+  // THE LEAGUE YOU CAME BACK TO, AT ONCE (BOARD_MEM_MAX): drawn from
+  // memory now, then revalidated below like any poll.
+  let fromMemory = false, unchanged = false;
+  if (held) {
+    if (overtaken()) return;
+    state.data = held.data;
+    _boardFor = meta.api;
+    state.lightBoard = false;
+    state.builtAt = held.builtAt;
+    renderAll();
+    fromMemory = true;
+  }
   try {
     /* FIRST PAINT FROM THE LIGHT COPY. Ethan, 2026-09-05: "faster first
        paint on mlb board". A phone parses the whole board before it draws
@@ -2076,6 +2170,7 @@ async function _loadNow(quiet = false) {
     if (overtaken()) return;             // a league switch got here first
     if (res.status === 304 && holding) {
       stampFrom(res);                    // the build time has not moved
+      unchanged = true;
     } else if (res.status === 304) {
       // We did not ask to revalidate, so a 304 here means something
       // between us and the server answered for it. Keeping it would
@@ -2167,6 +2262,17 @@ async function _loadNow(quiet = false) {
     }
   }
   if (overtaken()) return;
+  if (!state.lightBoard) boardMemPut(meta, state.data, state.builtAt);
+  // Drawn from memory at the top of this load and confirmed unchanged:
+  // it is on screen already, and drawing it twice is the cost this saves.
+  if (fromMemory && unchanged) {
+    state.lastLoad = Date.now();
+    state.quiet = false;
+    if (refreshBtn && !quiet) refreshBtn.classList.remove("loading");
+    manageAutoRefresh();
+    updateAgo();
+    return;
+  }
   renderAll();
   applyFreshPulses();
   state.lastLoad = Date.now();
@@ -2823,7 +2929,15 @@ function slateNotice(d) {
     .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)).sort();
   if (!dates.length) return null;
   const newest = dates[dates.length - 1];
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  // Today's date in the East, asked once every half-minute: this runs
+  // every second behind the freshness chip, and building a formatter is
+  // the expensive half of the call.
+  const now = Date.now();
+  if (!slateNotice._today || now - slateNotice._today.at > 30000) {
+    slateNotice._today = { at: now,
+      s: new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(now)) };
+  }
+  const today = slateNotice._today.s;
   const days = Math.round((Date.parse(today) - Date.parse(newest)) / 86400000);
   // A week, not a day or two: a football board holds Sunday's games
   // until the next week's schedule lands, and that is not stale.
@@ -2889,6 +3003,15 @@ function dataBehindHTML(f) {
     ${tail} in those numbers. This clears on its own when the data lands.</span>`;
 }
 
+/* The bar's one writer: the same sentence is not written twice. The
+   renderer runs every second behind the freshness chip, and rewriting
+   an unchanged bar re-ran every observer on the page each tick. */
+function staleWrite(host, html) {
+  if (host._staleHTML === html) return;
+  host._staleHTML = html;
+  host.innerHTML = html;
+}
+
 function renderStaleBar(ageMs, ago) {
   _staleArgs = [ageMs, ago];
   const host = document.getElementById("stalebar");
@@ -2916,12 +3039,12 @@ function renderStaleBar(ageMs, ago) {
     host.hidden = false;
     const when = state.builtAt ? tzTime(state.builtAt)
                : state.lastLoad ? tzTime(state.lastLoad) : null;
-    host.innerHTML = `${icon("warn", 15)}
+    staleWrite(host, `${icon("warn", 15)}
       <span><b>You’re offline.</b> ${when
         ? `This is the ${escapeHtml(when)} board — the last one that reached
            this device. Prices have moved since; nothing below is live.`
         : `Nothing below has loaded yet, and it cannot until you are back
-           on a network.`}</span>`;
+           on a network.`}</span>`);
     return;
   }
   // UNREACHABLE OUTRANKS STALE. Old numbers are a fact about the build;
@@ -2932,61 +3055,61 @@ function renderStaleBar(ageMs, ago) {
   const down = wireDown();
   if (down.length) {
     host.hidden = false;
-    host.innerHTML = `${icon("warn", 15)}
+    staleWrite(host, `${icon("warn", 15)}
       <span><b>We could not reach the data for this page.</b>
       ${down.length === 1 ? "One board" : `${down.length} boards`} failed to
       load, so anything below that says “nothing qualifies” or “no data yet”
       is describing the connection, not the model. Check your network and
-      reload.</span>`;
+      reload.</span>`);
     return;
   }
   // Everything below is about the sports slate, and a page that is not
   // about a league (OFF_LEAGUE_VIEWS) shows none of it.
-  if (OFF_LEAGUE_VIEWS.includes(state.view)) { host.hidden = true; host.innerHTML = ""; return; }
+  if (OFF_LEAGUE_VIEWS.includes(state.view)) { host.hidden = true; staleWrite(host, ""); return; }
   // A demo board outranks the age: its numbers were never live at all.
   const notice = slateNotice(state.data);
   if (notice && notice.kind === "demo") {
     host.hidden = false;
-    host.innerHTML = slateNoticeHTML(notice, demoAcked());
+    staleWrite(host, slateNoticeHTML(notice, demoAcked()));
     host.classList.toggle("slate-chip", demoAcked());
     return;
   }
   const bad = ageMs != null && ageMs > STALE_LOUD_MS;
   if (!bad && notice) {
     host.hidden = false;
-    host.innerHTML = slateNoticeHTML(notice);
+    staleWrite(host, slateNoticeHTML(notice));
     return;
   }
   // Late, then too late to stand behind (withholdAfterMs, above).
   if (!bad && ageMs != null && ageMs > withholdAfterMs()) {
     host.hidden = false;
-    host.innerHTML = `${icon("warn", 15)}
+    staleWrite(host, `${icon("warn", 15)}
       <span><b>Picks are hidden — this board last updated ${escapeHtml(ago)} ago.</b>
       A pick is a price and our chance at it, and both are ${escapeHtml(ago)} old, so we
-      are not showing them. They come back on their own the moment the next update lands.</span>`;
+      are not showing them. They come back on their own the moment the next update lands.</span>`);
     return;
   }
   if (!bad && ageMs != null && ageMs > staleAfterMs()) {
     host.hidden = false;
-    host.innerHTML = `${icon("warn", 15)}
+    staleWrite(host, `${icon("warn", 15)}
       <span><b>Last updated ${escapeHtml(ago)} ago — later than usual.</b>
       Prices and our chances may have moved since. Every number below is
-      ${escapeHtml(ago)} old until the next update lands.</span>`;
+      ${escapeHtml(ago)} old until the next update lands.</span>`);
     return;
   }
   const behind = !bad && slateNotice(state.data) === null && boardViewNow() ? dataBehind(state.data) : null;
   if (behind) {
     host.hidden = false;
-    host.innerHTML = dataBehindHTML(behind);
+    staleWrite(host, dataBehindHTML(behind));
     return;
   }
   host.hidden = !bad;
-  if (!bad) { host.innerHTML = ""; return; }
-  host.innerHTML = `${icon("warn", 15)}
+  if (!bad) { staleWrite(host, ""); return; }
+  staleWrite(host, `${icon("warn", 15)}
     <span><b>These numbers are ${escapeHtml(ago)} old.</b>
     The build that feeds this page has not run since then, so every board
     below is showing a finished slate as if it were tonight’s. Nothing
-    here is live, and the picks are hidden until it runs again.</span>`;
+    here is live, and the picks are hidden until it runs again.</span>`);
 }
 
 function updateAgo() {
@@ -3021,7 +3144,7 @@ function updateAgo() {
   // for phones (Ethan, 2026-08-11: the bar was "way too crowded and
   // cutting itself off"). CSS picks; the title carries the sentence
   // everywhere, and the chip's colour already says updated-vs-stale.
-  el.innerHTML = (state.livePolling && !stale ? `<span class="live-dot"></span>` : "")
+  const chip = (state.livePolling && !stale ? `<span class="live-dot"></span>` : "")
     + `<span class="lr-full">${stale ? `Stale — built ${ago} ago` : `Updated ${ago} ago`}</span>`
     // The phone form carries the WORD once it is properly stale. A bare
     // "216h" is a number; "Stale 9d" is a sentence, and the phone is
@@ -3030,6 +3153,12 @@ function updateAgo() {
     // number nobody could read, and the source word was hidden at 390.
     + `<span class="lr-short">${stale ? `Stale ${ago}` : `Updated ${ago}`} · ${
         boardIsReal((state.data || {}).generated_from) ? "LIVE" : "DEMO"}</span>`;
+  // WRITTEN ONLY WHEN IT CHANGED (the lag, 2026-10-09). This runs every
+  // second, and the age reads the same for most of every minute; the
+  // rewrite still replaced the chip's nodes each tick, and every observer
+  // on the page answered the change — a 40 ms stall a second at phone
+  // speed, on a chip that said the same thing.
+  if (chip !== el._chipHTML) { el._chipHTML = chip; el.innerHTML = chip; }
   renderStaleBar(known ? Date.now() - state.builtAt : null, ago);
   // The picks come off the page past withholdAfterMs (styles.css,
   // body.picks-withheld) and return with the next build.
@@ -3047,10 +3176,11 @@ function updateAgo() {
       + `every board, so anything under ${Math.round(staleAfterMs() / 60000)} min `
       + `is normal.`
     : "";
-  el.title = (stale
+  const title = (stale
     ? "This board hasn’t rebuilt in a while. It catches up on its own — "
       + "until it does, treat these numbers as old."
     : "How long ago the server last rebuilt this board.") + cadence;
+  if (title !== el._chipTitle) { el._chipTitle = title; el.title = title; }
 }
 
 /* A RECOMMENDED PROP THIS BOARD DELIBERATELY DOES NOT DRAW.
@@ -3885,6 +4015,73 @@ function talentCardHTML(t) {
       that grade this model leave the prior out.</div></div>`;
 }
 
+/* OFF-SCREEN PAGES DRAW WHEN THEY ARE WANTED (the lag, 2026-10-09:
+   "Switching pages will also take a couple seconds and feel laggy, like
+   going sport to sport"). renderAll rebuilt every board page on every
+   load — Tonight, Edge, Props, Scanner, Long Shots, Most Likely,
+   Trending, Players — whichever one was showing. Measured at phone speed
+   that was about half of a league switch and of every 30-second refresh,
+   spent on pages nobody was looking at, in one block the page could not
+   answer a tap through.
+
+   Now a page whose host is not on screen is marked stale instead, and is
+   drawn the moment it is opened (_switchViewNow → drawStale) or, failing
+   that, one page per idle moment after the load, so a later tap usually
+   finds it drawn already. Same renderers, same output; only the moment
+   moved. The third field marks the two pages _switchViewNow redraws on
+   every visit anyway (Tonight, Most Likely): off screen they are simply
+   skipped, since drawing them in the background would be thrown away. */
+const OFFSCREEN_PAGES = [
+  ["tonight-body", () => renderTonight(), true],
+  ["edge-board", () => renderEdgeBoard()],
+  ["props-body", () => renderProps()],
+  ["scanner-body", () => renderScanner()],
+  ["longshots", () => renderLongShots()],
+  ["likely", () => renderLikely(), true],
+  ["trending", () => renderTrending()],
+  ["players", () => renderPlayers()],
+];
+const _stalePages = new Map();     // host id -> its renderer
+let _staleIdle = null;
+
+function pageOfHost(id) {
+  const host = typeof document !== "undefined" && document.getElementById(id);
+  return host && host.closest ? host.closest(".view") : null;
+}
+
+function drawOrDefer(id, draw, onVisit) {
+  const view = pageOfHost(id);
+  if (!view || view.classList.contains("active")) { _stalePages.delete(id); draw(); return; }
+  if (onVisit) { _stalePages.delete(id); return; }
+  _stalePages.set(id, draw);
+}
+
+/* The page being opened draws whatever of it is stale, before it shows. */
+function drawStale(name) {
+  for (const [id, draw] of [..._stalePages]) {
+    const view = pageOfHost(id);
+    if (view && view.id === `view-${name}`) { _stalePages.delete(id); draw(); }
+  }
+}
+
+/* One stale page per idle moment (a timer where the browser has no idle
+   callback — Safari), so the work never comes back as one long block. */
+function idleStale() {
+  if (_staleIdle || !_stalePages.size) return;
+  const later = typeof requestIdleCallback === "function"
+    ? (f) => requestIdleCallback(f, { timeout: 3000 })
+    : (f) => setTimeout(f, 250);
+  _staleIdle = later(() => {
+    _staleIdle = null;
+    const next = _stalePages.keys().next();
+    if (next.done) return;
+    const draw = _stalePages.get(next.value);
+    _stalePages.delete(next.value);
+    try { draw(); } catch (e) { /* it draws again when its page is opened */ }
+    idleStale();
+  });
+}
+
 function renderAll() {
   const d = state.data;
   if (!d) return;
@@ -3942,13 +4139,10 @@ function renderAll() {
   // Tonight owns its own host and is not one of the board's rooms, so it
   // draws after the grouping rather than between the board and it — a
   // call inserted in that gap reads as part of the sequence the grouping
-  // depends on, which is exactly what a test caught it as.
-  renderTonight();
-  renderEdgeBoard();
-  renderProps();
-  renderScanner();
-  renderLongShots();
-  renderLikely();
+  // depends on, which is exactly what a test caught it as. It and the
+  // other board pages draw now only if they are on screen; the rest are
+  // drawn when opened or in the next idle moment (OFFSCREEN_PAGES).
+  OFFSCREEN_PAGES.forEach(([host, draw, onVisit]) => drawOrDefer(host, draw, onVisit));
   renderParlays();
   /* THE SECOND POOL. Paper measuring paper — the legs are ranked leans
      rather than bets — so it is drawn under its own heading and never
@@ -3956,8 +4150,7 @@ function renderAll() {
      records apart on the page has the same problem the journal would
      have had without its `source` column. */
   renderParlays("likely_parlays", "likely-parlays-body");
-  renderTrending();
-  renderPlayers();
+  idleStale();
   // A deep link into a game lands before the slate has loaded, and the
   // 60s refresh replaces the data under an open game page — both need the
   // view redrawn once the new data is actually here.
@@ -6760,7 +6953,50 @@ const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
    `tools/venues_ingest.py` writing new bytes under an old name is the
    whole failure mode, and nothing else in the chain can detect it. */
 const VENUE_ART_V = "20260907";
-const venueSrc = (path) => `${String(path).replace(/(\/variants\/[^/?]+)\.jpg$/, "$1.webp")}?v=${VENUE_ART_V}`;
+/* THE PHONE COPY ON A NARROW SCREEN (the lag, 2026-10-09: "all our
+   renders will take a while to load"). Every render ships twice: the
+   full 1600px WebP and an 800px one beside it (`{name}@800.webp`,
+   tools/venues_ingest.py writes both). A card is ~272px wide and a
+   phone's hero ~390px, so 800 covers a 2x screen; measured on the shipped
+   renders the phone copy is 38-134 KB against 83-446 KB. A phone used to
+   pull the full file for every card on the strip. */
+const VENUE_SMALL_MQ = "(max-width: 900px)";
+const venueSrc = (path) => {
+  let p = String(path).replace(/(\/variants\/[^/?]+)\.jpg$/, "$1.webp");
+  if (typeof matchMedia === "function" && matchMedia(VENUE_SMALL_MQ).matches) {
+    p = p.replace(/(\/variants\/[^/?@]+|\/ufc-hero)\.(?:webp|jpg)$/, "$1@800.webp");
+  }
+  return `${p}?v=${VENUE_ART_V}`;
+};
+
+/* WHICH TEAMS HAVE A PHOTO OF THEIR OWN (the lag, 2026-10-09). Every
+   stadium card asked for `img/venues/{sport}/{TEAM}.jpg` first and fell
+   back to the family render when that failed — and no team photo has
+   ever shipped, so every card on every board waited on a failed request
+   before its render was even asked for. On the box the miss is worse
+   than a 404: Caddy's page fallback answers it with the whole index.html,
+   cached for a week as if it were the picture. A card now asks for a
+   team photo only when it is named here ("nfl/KC"); tests/test_venue_cache.py
+   holds this list and the folders on disk in step, so a photo dropped in
+   fails the suite until it is named. */
+const VENUE_TEAM_PHOTOS = new Set([]);
+
+/* The stadium <img> for a game card and the game page: the team's own
+   photo when it has one, else the family render matched to the home kit
+   (the data-alt hop between them), else nothing and the drawn scene
+   stays. `vp-on` drops the drawing under a painted photo (.vp-on in the
+   stylesheet): its blur filters rasterising under a photo that covers
+   them was GPU load helping crash iPhones (2026-08-26). */
+function venuePhotoTag(sport, home, homeTeam) {
+  const fam = VENUE_FAMILY[sport];
+  const render = fam ? venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`) : "";
+  const own = VENUE_TEAM_PHOTOS.has(`${sport}/${home}`)
+    ? venueSrc(`img/venues/${escapeHtml(sport)}/${escapeHtml(home)}.jpg`) : "";
+  if (!own && !render) return "";
+  return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
+    data-onload="vp-on" src="${own || render}"${own && render ? ` data-alt="${render}"` : ""}
+    data-onerr="vpFall"/>`;
+}
 /* WHICH COLOUR SLOTS HOLD ART THAT MATCHES THE REST.
 //
 // Ethan, 2026-08-13, after the cache-bust shipped: "the stadium issue is
@@ -7144,21 +7380,7 @@ function gameCard(g) {
         // one neither the cache token nor the one-generation gate could
         // reach. He chose photo-everywhere with the runners kept on top;
         // `runnerOverlay` is that, and it is why nothing is lost here.
-        (() => {
-          const fam = VENUE_FAMILY[state.sport];
-          // `onload` marks the wrap so the CSS can DROP THE DRAWING
-          // underneath (see .vp-on): the SVG scene carries Gaussian-blur
-          // filters, and sixteen of them rasterizing under photos that
-          // fully cover them is GPU load spent on invisible pixels — the
-          // load that was helping crash iPhones (2026-08-26). The
-          // drawing stays as the fallback when every photo 404s, because
-          // then onload never fires and nothing is hidden.
-          return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-          data-onload="vp-on"
-          src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
-          ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
-          data-onerr="vpFall"` : `data-onerr="remove"`}/>`;
-        })()}${
+        venuePhotoTag(state.sport, g.home, homeTeam)}${
         // The one thing the drawing carried that a photo cannot.
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
@@ -8205,13 +8427,10 @@ document.addEventListener("keydown", (e) => {
   const th = e.target.closest && e.target.closest("th[aria-sort]");
   if (th && th.closest(SORTABLE_TABLES)) { e.preventDefault(); sortTableBy(th); }
 });
-if (typeof MutationObserver === "function" && typeof document !== "undefined" && document.body) {
-  let _sortT = null;
-  new MutationObserver(() => {
-    clearTimeout(_sortT);
-    _sortT = setTimeout(() => armSortable(document), 120);
-  }).observe(document.body, { childList: true, subtree: true });
-}
+/* Armed by the settle pass (watchSectionSubs) over the subtrees that
+   changed, not by an observer of its own over the whole document: a
+   table drawn by any render still gets its sortable headers on the next
+   frame, and nothing is re-read that did not change. */
 
 function booksStripHTML(r) {
   const q = quotesForSide(r);
@@ -9977,9 +10196,29 @@ function likelyPulled(d = state.data) {
 function likelyWhen(iso) {
   const t = Date.parse(iso || "");
   if (!Number.isFinite(t)) return "";
-  const day = (x) => new Date(x).toLocaleDateString(undefined, tzOpts({}));
-  return day(t) === day(Date.now()) ? tzTime(t)
-    : `${new Date(t).toLocaleDateString(undefined, tzOpts({ weekday: "short" }))} ${tzTime(t)}`;
+  // Remembered per instant (and zone): every row on the board asks for
+  // its day and today's, and each answer built a formatter.
+  const memo = likelyWhen._memo || (likelyWhen._memo = new Map());
+  const fmt = (x, o) => {
+    const opts = tzOpts(o);
+    const key = `${x}|${JSON.stringify(opts)}`;
+    let out = memo.get(key);
+    if (out == null) {
+      const fmts = likelyWhen._fmts || (likelyWhen._fmts = new Map());
+      const fk = key.slice(key.indexOf("|") + 1);
+      let f = fmts.get(fk);
+      if (!f) { f = new Intl.DateTimeFormat(undefined, opts); fmts.set(fk, f); }
+      out = f.format(new Date(x));
+      if (memo.size > 2000) memo.clear();
+      memo.set(key, out);
+    }
+    return out;
+  };
+  const day = (x) => fmt(x, {});
+  const now = Date.now();
+  if (!likelyWhen._today || now - likelyWhen._today.at > 60000) likelyWhen._today = { at: now, s: day(now) };
+  return day(t) === likelyWhen._today.s ? tzTime(t)
+    : `${fmt(t, { weekday: "short" })} ${tzTime(t)}`;
 }
 
 function likelyPulledRow(e) {
@@ -14363,14 +14602,9 @@ function renderGamePage() {
   // The drawing carried the live bases, which is why the guard existed.
   // The runner overlay carries them now, over the photo, so nothing is
   // lost by showing it.
-  const gpFam = VENUE_FAMILY[state.sport];
-  // Same onload mark as the board cards: a painted photo drops the
-  // blurred SVG scene under it (see .vp-on in the stylesheet).
-  const gpPhoto = `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-      data-onload="vp-on"
-      src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
-      ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
-      data-onerr="vpFall"` : `data-onerr="remove"`}/>`;
+  // The board card's own tag, so the strip and the page behind it can
+  // never disagree about the venue.
+  const gpPhoto = venuePhotoTag(state.sport, g.home, (window.ACTIVE_TEAMS || {})[g.home] || {});
   // The render's GAME LINES table and KEY INSIGHTS panel. Lines come
   // straight off the slate; a cell without a real price shows a dash.
   // Insights are the game's own data fields, not narratives.
@@ -40156,7 +40390,9 @@ const SUB_COLLAPSE_CHARS = 90;   // one line is fine; a paragraph is not
    does. Runs with the sub enhancer, so a page that redraws its title
    keeps its name. */
 function markPageTitles(root) {
-  (root || document).querySelectorAll(".view").forEach((view) => {
+  const views = [...(root || document).querySelectorAll(".view")];
+  if (root && root.matches && root.matches(".view")) views.push(root);
+  views.forEach((view) => {
     const first = view.querySelector(".section-title:not(.minor):not(.subhead)");
     view.querySelectorAll(".section-title.page-title").forEach((t) => {
       if (t !== first) t.classList.remove("page-title");
@@ -40354,12 +40590,108 @@ function enhanceNotes(root) {
   });
 }
 
+/* ONE PASS PER FRAME, OVER WHAT CHANGED (the lag, 2026-10-09: "the
+   site feel super laggy and not feeling snappy or quick"). Profiled at
+   phone speed, the page's own housekeeping was the biggest cost on it:
+   four observers each answered every mutation anywhere on the page, and
+   three of them swept the WHOLE document every time — the fourteen
+   attribute selectors of the keyboard doors, every table for sorting,
+   every subtitle, every note — while the fourth read the width of every
+   wide table, which makes the browser lay the whole page out again in
+   the middle of a render. A dozen tab taps spent 1.4 s of 7 s in these
+   sweeps; the freshness chip's one-second rewrite cost 40 ms of every
+   second a game was on, for a chip that had not changed.
+
+   Now the records are collected, their parents deduplicated (a parent
+   whose ancestor is also in the set is dropped — the ancestor's sweep
+   covers it), and the enhancers run ONCE on the next frame over those
+   subtrees only. The enhancers are unchanged and still idempotent; only
+   the scope and the moment moved. Records the pass writes itself (a
+   wrapped table, a "more" button) are discarded with takeRecords(), so
+   it cannot chase its own tail. */
+const _settle = { roots: new Set(), queued: false, obs: null };
+
+/* THE WIDE-TABLE FADE, measured after layout. `.rank-more` carries the
+   "more to the right" mask only while there is more to the right; the
+   width question is asked where it is free — in a ResizeObserver, whose
+   notifications arrive once the browser has laid the frame out — rather
+   than forced on every change to the page. The wrapper AND its table are
+   observed: a redraw that keeps the wrapper and changes the table's
+   columns moves only the inner width. */
+const _wide = { ro: null, seen: typeof WeakSet === "function" ? new WeakSet() : null };
+
+function wideTableSync(el) {
+  el.classList.toggle("rank-more", el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+}
+
+function watchWideTables(root) {
+  if (!root || !root.querySelectorAll) return;
+  const els = [...root.querySelectorAll(".rank-scroll")];
+  if (root.matches && root.matches(".rank-scroll")) els.push(root);
+  if (!els.length) return;
+  if (!_wide.ro && typeof ResizeObserver === "function") {
+    _wide.ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const el = e.target.closest(".rank-scroll");
+        if (el) wideTableSync(el);
+      }
+    });
+  }
+  for (const el of els) {
+    if (_wide.seen) {
+      if (_wide.seen.has(el)) continue;
+      _wide.seen.add(el);
+    }
+    if (!_wide.ro) { wideTableSync(el); continue; }
+    _wide.ro.observe(el);
+    if (el.firstElementChild) _wide.ro.observe(el.firstElementChild);
+  }
+}
+
+function domSettled(records) {
+  for (const r of records) {
+    // From the PARENT of what changed: a render that rewrites an
+    // element's own text (`#longshots-sub.textContent = …`) reports that
+    // element as the target, and a sweep of its descendants would never
+    // see the element itself — its subtitle kept the dash the sweep trims.
+    const t = r.target;
+    if (t && t.nodeType === 1) _settle.roots.add(t.parentElement || t);
+  }
+  if (_settle.queued || !_settle.roots.size) return;
+  _settle.queued = true;
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(settleNow);
+  else setTimeout(settleNow, 0);
+}
+
+function settleNow() {
+  _settle.queued = false;
+  const all = [..._settle.roots];
+  _settle.roots.clear();
+  const roots = all.filter((el) => el.isConnected
+    && !all.some((o) => o !== el && o.contains(el)));
+  const views = new Set();
+  for (const root of roots) {
+    enhanceSectionSubs(root);
+    armSortable(root);
+    watchWideTables(root);
+    const v = root.closest(".view");
+    if (v) views.add(v);
+  }
+  // The page's name is decided per VIEW — the first real title in it —
+  // so the view that changed is re-read whole, however small the change.
+  views.forEach((v) => markPageTitles(v));
+  if (_settle.obs) _settle.obs.takeRecords();
+}
+
 function watchSectionSubs() {
   enhanceSectionSubs();
   const main = document.querySelector("main");
   if (!main || typeof MutationObserver === "undefined") return;
-  const obs = new MutationObserver(() => enhanceSectionSubs());
-  obs.observe(main, { childList: true, subtree: true });
+  const obs = new MutationObserver(domSettled);
+  // The body, not main: the sortable tables and the wide-table fades the
+  // pass also serves live in the rails too.
+  obs.observe(document.body || main, { childList: true, subtree: true });
+  _settle.obs = obs;
 }
 
 /* Left-to-right nav order, used ONLY to pick which way a view slides in.
@@ -40635,6 +40967,9 @@ function _switchViewNow(name, push, dir) {
   if (dir > 0) target.classList.add("from-right");
   else if (dir < 0) target.classList.add("from-left");
   target.classList.add("active");
+  // A board page renderAll skipped while it was off screen draws now,
+  // before anything below reads it (OFFSCREEN_PAGES).
+  drawStale(name);
   // The game view has no tab of its own — it belongs to the board it came
   // from, so Recommended stays lit while you're inside a game.
   // Neither the game page nor the prop page has a tab. Both belong to the
@@ -43835,6 +44170,13 @@ function moveIndicator() {
   const active = document.querySelector(".nav-btn.active");
   const ind = document.getElementById("nav-indicator");
   if (!active || !ind) return;
+  // THE UNDERLINE IS RETIRED (display: none since the New Look), and the
+  // offsets below are a layout question: measuring for it laid the whole
+  // page out again on every tab switch — 70 ms at phone speed, for a bar
+  // nobody can see. Asked once whether it is drawn at all; a stylesheet
+  // that shows it again gets its measurement back.
+  if (moveIndicator._drawn == null) moveIndicator._drawn = getComputedStyle(ind).display !== "none";
+  if (!moveIndicator._drawn) return;
   // scaleX against a 1px base, so the measured width passes through
   // unchanged while the animation stays on the compositor. See the
   // .nav-indicator rule for why left/width were the wrong properties.
@@ -45102,6 +45444,19 @@ function initGamesControls() {
 
 /* Arrows only exist while there is somewhere to scroll to. */
 function syncStripArrows() {
+  /* ON THE NEXT FRAME, ONCE. Called straight after the strip is drawn,
+     and from its scroll listener, this read scrollWidth against a layout
+     the browser had not done yet — so it did it there and then, the
+     whole page, 150 ms at phone speed, and again for the next caller.
+     Deferred to the frame, every write of the render has landed, the
+     measurement happens once, and the frame reuses it. */
+  if (typeof requestAnimationFrame !== "function") { syncStripArrowsNow(); return; }
+  if (syncStripArrows._queued) return;
+  syncStripArrows._queued = true;
+  requestAnimationFrame(() => { syncStripArrows._queued = false; syncStripArrowsNow(); });
+}
+
+function syncStripArrowsNow() {
   const el = document.getElementById("games");
   const prev = document.getElementById("games-prev");
   const next = document.getElementById("games-next");
@@ -48869,10 +49224,17 @@ async function renderHomeDeck(opts) {
      must not re-land the whole deck. A visit to the page is the full
      render, and everything rises once. */
   const still = !!(opts && opts.still);
+  // A silent poll (state.quiet: the 30-second refresh under a page that
+  // is already up) refills every zone but lands nothing again — no
+  // entrance, no ring sweep, no count-up. Decided here, before the
+  // awaits below, because the loader clears state.quiet the moment the
+  // synchronous render returns.
+  const quiet = still || !!state.quiet;
   const host = document.getElementById("home-deck");
   if (!host) return;
   clearTimeout(_deckTimer);
   host.classList.toggle("hd-still", still);
+  if (quiet) host.classList.add("hd-still");
   if (!still) { deckSkeleton(host); deckAdopt(host); placeSlip(); }
   host.hidden = false;
   document.body.classList.add("has-deck");        // the rail's Live now card is the strip, twice
@@ -48900,10 +49262,12 @@ async function renderHomeDeck(opts) {
     setTimeout(() => { b.textContent = "Copy"; }, 1500);
   }));
   _deckStamp = fastLiveStamp(_deckFast.games.map((x) => x.g));
+  sweepRings._quiet = quiet;        // the slip column carries no hd-still of its own
   if (!still) {
     sweepRings(host);
     sweepRings(document.getElementById("rail-slip"));
   }
+  sweepRings._quiet = false;
   armDeckLive();
 }
 
@@ -48915,6 +49279,21 @@ async function renderHomeDeck(opts) {
    duration and the ring is simply full. */
 function sweepRings(host) {
   if (typeof requestAnimationFrame !== "function") return;   // a test harness, not a browser
+  // A SILENT REFRESH SETS THE ARC WHERE IT IS: no sweep from zero and no
+  // count-up on every poll of a page that is already up. The deck says
+  // so with hd-still (decided before its awaits, when state.quiet still
+  // held); the other ribbons are drawn inside the render itself.
+  const quiet = sweepRings._quiet
+    || !!(host && host.classList && host.classList.contains("hd-still"))
+    || !!(typeof state !== "undefined" && state && state.quiet);
+  if (quiet) {
+    (host || document).querySelectorAll(".hd-ring[data-pc]").forEach((el) => {
+      el.style.setProperty("--pc", el.dataset.pc);
+    });
+    countNumbers._quiet = true;
+    countNumbers(host);
+    return;
+  }
   requestAnimationFrame(() => requestAnimationFrame(() => {
     (host || document).querySelectorAll(".hd-ring[data-pc]").forEach((el) => {
       el.style.setProperty("--pc", el.dataset.pc);
@@ -48957,9 +49336,26 @@ function countNumbers(host) {
   const COUNT_STEPS_OF_SLOW = 3;   // inside, for the same reason as countAt's pattern
   if (typeof requestAnimationFrame !== "function") return;
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const slow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-slow")) || 280;
-  const dur = slow * COUNT_STEPS_OF_SLOW;
-  (host || document).querySelectorAll("[data-count]:not([data-counted])").forEach((el) => {
+  const els = (host || document).querySelectorAll("[data-count]:not([data-counted])");
+  if (!els.length) return;
+  // A silent refresh redraws in place: the number is simply there, as
+  // under reduced motion. Only a visit counts up. (sweepRings hands the
+  // verdict over, because the deck decides it before its awaits.)
+  const quiet = countNumbers._quiet || !!(typeof state !== "undefined" && state && state.quiet);
+  countNumbers._quiet = false;
+  if (quiet) {
+    els.forEach((el) => { el.dataset.counted = "1"; });
+    return;
+  }
+  // The ladder's value is read ONCE: getComputedStyle after a redraw is a
+  // full style pass over the page (70 ms at phone speed), and the token
+  // does not change. Kept on the function, not a top-level const — a boot
+  // landing on My Bets runs this before the file's tail exists.
+  if (countNumbers._slow == null) {
+    countNumbers._slow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-slow")) || 280;
+  }
+  const dur = countNumbers._slow * COUNT_STEPS_OF_SLOW;
+  els.forEach((el) => {
     el.dataset.counted = "1";
     const final = el.textContent;
     const t0 = performance.now();
@@ -49134,8 +49530,20 @@ function buzzOnSettle(rows) {
   (() => {
     const sb = document.querySelector(".sidebar");
     if (!sb) return;
-    const sync = () => sb.classList.toggle("sb-more",
-      sb.scrollTop + sb.clientHeight < sb.scrollHeight - 4);
+    // ONE READ PER FRAME. scrollHeight is a layout question; asked
+    // straight from the mutation observer below it forced a layout on
+    // every change inside the rail (226 ms of a phone's cold load). The
+    // observers still fire on every change; the measurement waits for
+    // the frame and happens once.
+    let queued = false;
+    const sync = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sb.classList.toggle("sb-more", sb.scrollTop + sb.clientHeight < sb.scrollHeight - 4);
+      });
+    };
     sb.addEventListener("scroll", sync, { passive: true });
     // The rail's CONTENT changes (league chips, fold state, ROI note)
     // without the box ever resizing, so watch both.
@@ -49157,21 +49565,22 @@ function buzzOnSettle(rows) {
      note warns about. Delegated to the document because these tables
      are rendered and re-rendered by half a dozen views. */
   (() => {
-    const sync = (el) => el.classList.toggle("rank-more",
-      el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const sync = wideTableSync;
     const all = () => document.querySelectorAll(".rank-scroll").forEach(sync);
     document.addEventListener("scroll", (e) => {
       const el = e.target;
       if (el && el.classList && el.classList.contains("rank-scroll")) sync(el);
     }, true);
     window.addEventListener("resize", all, { passive: true });
-    // Same guard as the rail above: every real browser has this, the
-    // suite's eval harness does not, and a boot-time throw here is a
-    // blank page in the failure mode it exists to catch.
-    if (window.MutationObserver)
-      new MutationObserver(all).observe(document.body,
-                                        { childList: true, subtree: true });
-    all();
+    /* NOT A MUTATION OBSERVER ANY MORE (the lag, 2026-10-09). One
+       watched the whole body and re-measured every wide table on every
+       change anywhere — and scrollWidth is a layout question, so each
+       answer made the browser lay the page out again, mid-render, as
+       many times as there were batches of changes: the single largest
+       cost on the profile. The tables are now handed to a ResizeObserver
+       as they appear (watchWideTables, from the settle pass), whose
+       callback runs AFTER layout and reads what is already computed. */
+    watchWideTables(document.body);
   })();
   // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
   document.querySelectorAll(".sb-anchor").forEach((b) =>

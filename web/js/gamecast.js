@@ -56,8 +56,16 @@
      handler, which the page's CSP forbids. */
   function faceHTML(league, row, faces) {
     const src = faceURL(league, row, faces);
-    return `<span class="gc-face">${icon("user", 16)}${
-      src ? `<img src="${escapeAttr(src)}" alt="" loading="lazy" decoding="async">` : ""}</span>`;
+    if (!src) return `<span class="gc-face">${icon("user", 16)}</span>`;
+    /* AT THE SIZE IT IS DRAWN (the lag, 2026-10-09: "all the logos and
+       headshots take a while to load"). ESPN's full headshot is about
+       200 KB and the box score drew forty of them at 28px — megabytes of
+       face on one tab. visuals.js `facePreview` asks ESPN's own resize for
+       twice the drawn size; the full file is the first fallback
+       (swapFull), and only a second miss leaves the mark showing. */
+    const small = typeof facePreview === "function" ? facePreview(src, 40) : src;
+    const fall = small !== src ? ` data-full="${escapeAttr(src)}" data-onerr="swapFull"` : "";
+    return `<span class="gc-face">${icon("user", 16)}<img src="${escapeAttr(small)}" alt="" loading="lazy" decoding="async"${fall}></span>`;
   }
 
   /* ---------------- the box score, read ----------------

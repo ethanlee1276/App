@@ -78,6 +78,15 @@ def _fn(name, kind="function"):
     raise AssertionError(f"{name} has unbalanced braces")
 
 
+def _board_mem():
+    """The league memory `_loadNow` consults first (2026-10-09: the board
+    you left is kept and drawn at once when you come back). Lifted from the
+    app whole — the cap, the map and its helpers — so the harness runs the
+    real thing rather than a restatement of it."""
+    i = APP.index("const BOARD_MEM_MAX = ")
+    return APP[i:APP.index("async function _loadNow(", i)]
+
+
 #: Everything `load()` reaches for that is not the thing under test. Each
 #: one is inert on purpose: this file is about WHICH payload survives the
 #: call, not about what gets drawn from it.
@@ -143,7 +152,7 @@ def _run(setup, plan):
     src = (_STUBS
            + _fn("normalizeSlate") + "\n" + _fn("refreshLikelyPrices") + "\n"
            + _fn("locksAwayWhatWeHold") + "\n"
-           + _fn("lightNameFor") + "\n"
+           + _fn("lightNameFor") + "\n" + _board_mem() + "\n"
            + _fn("_loadNow", kind="async function") + "\n"
            + "// `load` is the coalescer; the body under test is `_loadNow`. Aliased\n"
              "// so this harness exercises the load itself rather than the guard in\n"

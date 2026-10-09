@@ -225,7 +225,11 @@ def test_the_game_page_shows_the_photo_when_the_game_is_live():
     i = APP.index("const gpPhoto")
     decl = APP[i:i + 400]
     assert "!isLive ?" not in decl, "the game page still hides the photo when live"
-    assert "venueSrc(" in decl
+    # One tag for the strip card and the page since 2026-10-09, so the two
+    # can never disagree about the venue; the tag carries the versioned URL.
+    assert "venuePhotoTag(state.sport, g.home," in decl
+    tag = APP[APP.index("function venuePhotoTag("):]
+    assert "venueSrc(" in tag[:tag.index("\n}\n")] and "isLive" not in tag[:tag.index("\n}\n")]
     # The bases the drawing used to carry ride over the photo instead.
     assert "mlb && isLive ? runnerOverlay(g)" in APP[APP.index('<div class="gp-art">'):
                                                      APP.index('<div class="gp-art">') + 300]

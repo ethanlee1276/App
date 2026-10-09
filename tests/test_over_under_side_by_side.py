@@ -136,7 +136,10 @@ def test_cards_or_a_list_remembered_and_the_page_is_a_real_destination():
     assert 'localStorage.setItem("qb.propsView", _propsView)' in render
     assert 'mode === "list"' in render and "shown.map(ouRowHTML)" in render and "shown.map(ouCardHTML)" in render
     assert 'localStorage.getItem("qb.propsView")' in _fn("propsViewMode")
-    assert "renderEdgeBoard();\n  renderProps();" in APP, "drawn with the other boards"
+    pages = APP[APP.index("const OFFSCREEN_PAGES = ["):]
+    pages = pages[:pages.index("];")]
+    assert '["edge-board", () => renderEdgeBoard()],\n  ["props-body", () => renderProps()],' in pages, \
+        "drawn with the other boards (the off-screen pages, since 2026-10-09)"
     assert '"live", "props", "edge"' in APP[APP.index("const VIEW_ORDER"):][:300]
     assert '["Odds", ["view:props", "view:edge",' in APP
     assert 'data-view="props"' in HTML and 'id="view-props"' in HTML and 'id="props-body"' in HTML

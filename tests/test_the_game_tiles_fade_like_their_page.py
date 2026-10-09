@@ -48,7 +48,10 @@ def test_the_tile_is_still_the_same_card():
     i = APP.index("function gameCard(")
     body = APP[i:APP.index("\n}\n", i)]
     assert '<div class="stadium-wrap">${art}' in body
-    assert 'data-onload="vp-on"' in body, "the drawing still hides under a loaded photo"
+    # The stadium <img> is the shared tag since 2026-10-09 (venuePhotoTag).
+    assert "venuePhotoTag(state.sport, g.home, homeTeam)" in body
+    tag = APP[APP.index("function venuePhotoTag("):]
+    assert 'data-onload="vp-on"' in tag[:tag.index("\n}\n")], "the drawing still hides under a loaded photo"
     assert "runnerOverlay(g)" in body, "the live bases still ride the photo"
 
 

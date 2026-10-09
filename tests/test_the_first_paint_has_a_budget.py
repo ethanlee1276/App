@@ -72,7 +72,14 @@ HTML = (WEB / "index.html").read_text()
 #: tab set, the loader and the hero's record and carrier — the rooms
 #: themselves load on first use (js/gamecast.js, css/gamecast.css), so a
 #: first visit carries none of them. +0.4 KB gz. Told to Ethan.
-APP_JS_BUDGET_KB = 487
+#: 487 -> 489 on 2026-10-09 by the lag fixes (Ethan: "the site feel super
+#: laggy and not feeling snappy or quick", then "switching pages will also
+#: take a couple seconds"): one settle pass per frame instead of four
+#: whole-page observers, the league memory that redraws a sport at once,
+#: the off-screen pages drawn when opened, the remembered date formatters
+#: and the phone-sized renders' chooser — +2.0 KB gz of code that makes
+#: every page cheaper to run. Told to Ethan.
+APP_JS_BUDGET_KB = 489
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -101,7 +108,10 @@ APP_JS_BUDGET_KB = 487
 #: 602 -> 603 on 2026-10-08 by the Gamecast's door: the app.js bump above
 #: and the hero's two rules (the record, the carrier). The rooms' own
 #: styles load with the module (css/gamecast.css). Told to Ethan.
-BOOT_BUDGET_KB = 603
+#: 603 -> 605 on 2026-10-09 by the lag fixes: the app.js bump above
+#: (+2.0 KB gz) and the head's connection hints for the picture hosts.
+#: Told to Ethan.
+BOOT_BUDGET_KB = 605
 
 
 def _gz_trimmed(rel: str) -> int:
@@ -163,9 +173,13 @@ def test_every_venue_variant_has_its_webp_and_the_page_asks_for_it():
         assert w.exists(), f"{w.name} missing — venueSrc serves it, so the card would break"
         assert w.stat().st_size < j.stat().st_size
     app = (WEB / "js" / "app.js").read_text()
+    # The whole arrow since 2026-10-09: it also picks the 800px phone copy
+    # on a narrow screen (tests/test_the_site_feels_quick.py), so it is no
+    # longer one line.
     line = app[app.index("const venueSrc = "):]
-    line = line[:line.index("\n")]
+    line = line[:line.index("\n};\n")]
     assert '.jpg$/, "$1.webp")' in line
+    assert '"$1@800.webp")' in line
     assert "_webp(done, out)" in (ROOT / "tools" / "venues_ingest.py").read_text(), \
         "the ingest must write the webp it serves"
 

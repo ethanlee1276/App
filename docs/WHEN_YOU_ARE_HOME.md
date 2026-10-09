@@ -255,6 +255,23 @@ first). Paste back anything that prints an error or looks off.
     (The trimmed copy is rebuilt by the updater after every pull; a 404
     on the first line means the pull has not landed.)
 
+15. **The speed pass** (2026-10-09, your words: "the site feel super
+    laggy", "all the logos and headshots take a while to load", "switching
+    pages will also take a couple seconds"). Nothing to run for it to
+    work — the box picks it up on its next pull. Three read-only checks
+    tell me what the box itself adds, so paste all three:
+    ```
+    ls /srv/qellys/web/img/venues/variants/*@800.webp | wc -l
+    ls -laS /srv/qellys/web/data/*.json | head -8
+    cd /srv/qellys && sudo -u qellys python3 assets.py --probe --sport nfl 2>&1 | tail -25
+    ```
+    The first should say 30 (the phone-sized stadium renders). The second
+    lists the biggest boards, which is what a sport switch downloads the
+    first time. The third answers the one thing this sandbox cannot see:
+    whether NFL's photo host serves the small headshot the page asks for.
+    If its RESIZED lines all say FAIL, every NFL face falls back to the
+    full-size photo, which is megabytes each, and that is the next fix.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
