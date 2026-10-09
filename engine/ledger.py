@@ -9711,6 +9711,19 @@ def settle_and_export(conn, hist_conn, sport: str | None = None,
     return settled
 
 
+#: The sections of record.json that only the Record page reads (renderRecord
+#: and its rooms in web/js/app.js, which fetch the whole file themselves).
+#: record_head.json is the record without them, for every other surface.
+#: tests/test_the_site_feels_quick.py holds this list to the page: a key
+#: here that any other function starts reading fails the suite.
+RECORD_PAGE_ONLY = (
+    "predmarket", "shadow_books", "loss_patterns", "hypothesis_lab",
+    "edge_now", "edge_trend", "self_tuning", "board_learning", "regrades",
+    "prereg", "audit_log", "forecast_heads", "likely_by_sport",
+    "clv_leadtime", "market_words",
+)
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -10040,6 +10053,17 @@ def export_json(conn, path) -> None:
     # first screen, and the indentation was ~40% of the bytes.
     tmp.write_text(_json.dumps(out, separators=(",", ":")))
     _os.replace(tmp, p)
+    # THE FIRST SCREEN'S COPY (the speed pass, 2026-10-09). Measured on the
+    # box: the record is the heaviest thing Home downloads (170 KB on the
+    # wire), and over half of it — the prediction desk, the loss patterns,
+    # the hypothesis lab, the edge series, the audit trail — is read only
+    # by the Record page, which loads this whole file for itself. The same
+    # record without those sections, written beside it on every export.
+    head = {k: v for k, v in out.items() if k not in RECORD_PAGE_ONLY}
+    hp = p.with_name("record_head.json")
+    htmp = hp.with_suffix(hp.suffix + f".{_os.getpid()}.tmp")
+    htmp.write_text(_json.dumps(head, separators=(",", ":")))
+    _os.replace(htmp, hp)
     # The paid half, beside it: web/data/zeno.json (a locked stub for the
     # public) and its full copy for members. Never fails the export.
     try:

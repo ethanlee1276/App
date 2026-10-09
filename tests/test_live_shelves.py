@@ -85,11 +85,14 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # The record.json readers ride the same trade — four since 2026-10-09,
     # when two `?t=<now>` reads (the Record page's and one more) joined the
     # two that already revalidated (the speed pass: an unchanged record is
-    # a 304, not 1.5 MB again).
+    # a 304, not 1.5 MB again). Five later that day: loadRecordOnce reads
+    # the slim record_head.json first and falls back to the full file
+    # with the same revalidating read (an old export has no slim copy).
     assert src.count('boardFetch("/data/record.json", { cache: "no-cache" })'
                      ) + src.count(
                      'boardFetch("data/record.json", { cache: "no-cache" })'
-                     ) == 4
+                     ) == 5
+    assert 'boardFetch("data/record_head.json", { cache: "no-cache" })' in src
     assert 'boardFetch("data/record.json?t=" + Date.now())' not in src
 
 

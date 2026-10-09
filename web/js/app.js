@@ -4593,8 +4593,14 @@ function renderEmptySlate() {
 let _recordCache = null;
 async function loadRecordOnce() {
   if (_recordCache !== null) return _recordCache;
+  /* THE SLIM COPY FIRST (the speed pass, 2026-10-09). record_head.json is
+     the record without the sections only the Record page reads — that
+     page fetches the whole file itself — and it was over half the bytes
+     Home downloaded for its first screen. A box that has not exported
+     since this shipped has no slim copy yet; the whole record answers. */
   try {
-    const res = await boardFetch("data/record.json?t=" + (Date.now() / 60000 | 0));
+    let res = await boardFetch("data/record_head.json", { cache: "no-cache" });
+    if (!res.ok) res = await boardFetch("data/record.json", { cache: "no-cache" });
     _recordCache = res.ok ? adoptPooledRecord(await res.json()) : {};
   } catch (e) { _recordCache = {}; }
   return _recordCache;

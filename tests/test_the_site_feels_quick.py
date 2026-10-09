@@ -558,6 +558,83 @@ def test_the_big_public_files_are_written_compact():
         src = (ROOT / path).read_text(encoding="utf-8")
         assert needle in src, f"{path} writes its public file pretty-printed again"
 
+
+def test_the_first_screen_reads_a_slim_record_beside_the_full_one():
+    """The record was the heaviest thing Home downloads (170 KB on the wire
+    on the box, 2026-10-09), and over half of it was sections only the
+    Record page draws. export_json writes record_head.json beside it
+    without them; the first-screen readers ask for that, and fall back to
+    the full file if the slim one is missing (an old export)."""
+    sys.path.insert(0, str(ROOT))
+    from engine import ledger
+    d = tempfile.mkdtemp()
+    try:
+        conn = ledger.connect(os.path.join(d, "l.db"))
+        conn.execute(
+            "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
+            "stake_units,status,category,pnl_units,hit_prob) VALUES "
+            "('nfl','2026-10-04','A','receptions','OVER',4.5,-110,'B',0.5,"
+            "'won','main',0.45,0.6)")
+        conn.commit()
+        out = os.path.join(d, "record.json")
+        ledger.export_json(conn, out)
+        full = json.loads(open(out, encoding="utf-8").read())
+        head = json.loads(open(os.path.join(d, "record_head.json"),
+                               encoding="utf-8").read())
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    assert not set(head) & set(ledger.RECORD_PAGE_ONLY), \
+        "the slim record carries a Record-page-only section"
+    # Everything else is the same, value for value: the slim copy is a
+    # subset, never a second version of the numbers.
+    for k, v in head.items():
+        assert full.get(k) == v, f"record_head.json disagrees with record.json on {k}"
+    assert set(full) - set(head) <= set(ledger.RECORD_PAGE_ONLY)
+    fn = _fn("loadRecordOnce", kind="async function")
+    assert fn.index('"data/record_head.json"') < fn.index('"data/record.json"'), \
+        "the first screen no longer asks for the slim copy first"
+    assert "!res.ok" in fn, "no fallback to the full record when the slim one is missing"
+
+
+def test_the_sections_left_out_are_read_only_on_the_record_page():
+    """THE HALF THAT KEEPS THIS HONEST. A section left out of the slim copy
+    and then read by a first-screen reader would draw as empty — a page
+    saying "no data" about data that exists. So every left-out key may be
+    read only inside the Record page's own functions, which fetch the
+    whole record.json themselves."""
+    sys.path.insert(0, str(ROOT))
+    from engine.ledger import RECORD_PAGE_ONLY
+    record_page = {"renderRecord", "_recordRooms", "recBookSections"}
+    for js in sorted((ROOT / "web" / "js").glob("*.js")):
+        src = js.read_text(encoding="utf-8")
+        code = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), src, flags=re.S)
+        code = re.sub(r"(?m)^\s*//.*$", "", code)
+        starts = [(m.start(), m.group(1)) for m in re.finditer(
+            r"^(?:async )?function\s*\*?\s*([A-Za-z0-9_$]+)\s*\(", code, re.M)]
+        for k in RECORD_PAGE_ONLY:
+            for m in re.finditer(r"\b" + re.escape(k) + r"\b", code):
+                owner = None
+                for s, n in starts:
+                    if s > m.start():
+                        break
+                    owner = n
+                assert owner in record_page, \
+                    (f"{js.name}: {k} is read in {owner}(), which may be handed the "
+                     "slim record — keep it in the slim copy or read the full file there")
+    rec = _fn("renderRecord", kind="async function")
+    assert 'boardFetch("data/record.json"' in rec, \
+        "the Record page stopped reading the full record"
+
+
+def test_the_slim_record_is_a_free_file():
+    """It is a strict subset of record.json, which is free; gated, it would
+    resolve to a private copy nothing ever rewrites (the 2026-09-14 frozen
+    record)."""
+    sys.path.insert(0, str(ROOT))
+    from engine import gate
+    assert gate.is_free("record_head.json")
+    assert "record_head.json" in gate.KNOWN_BOARDS
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

@@ -324,6 +324,10 @@ PAID_FILES = (
 #: and the model's output inside them is stripped. See PAID_KEYS_BY_FILE.
 FREE_FILES = (
     "record.json", "memerecord.json", "injuries.json",
+    # record.json without the sections only the Record page reads
+    # (ledger.RECORD_PAGE_ONLY): a strict subset of a free file, written
+    # beside it for the first screen (the speed pass, 2026-10-09).
+    "record_head.json",
     # The forecast chain's outside witness (engine/witness): anchors,
     # per-day counts, and the picks of days whose games are over — the
     # same picks the Record page already shows settled. Free by nature:
@@ -403,7 +407,7 @@ KNOWN_BOARDS = (
     "wnba.json", "cfb.json", "ufc.json", "nhl.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
-    "record.json", "injuries.json", "news.json", "fantasy.json",
+    "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
     # Zeno's bets, written beside record.json by ledger.export_json and on
     # every owner post (engine/zeno.publish_tickets). Paid whole.
