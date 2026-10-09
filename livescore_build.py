@@ -537,6 +537,26 @@ def pbp_doc(league: str, g: dict, payload: dict,
                           else pbp_players(league, payload, g))
     except Exception:                                        # noqa: BLE001
         pass
+    # THE GAMECAST'S ROOMS (2026-10-09, Ethan's ESPN screenshots): the
+    # whole box score, each side's game totals, the two records, and the
+    # drive in progress — all off the summary in hand, each guarded on
+    # its own so a shape this box has not seen costs that key alone.
+    for key, read in (("box", lambda: espnplays.summary_box(payload, league)),
+                      ("team_stats", lambda: espnplays.summary_team_stats(payload, league)),
+                      ("records", lambda: espnplays.team_records(payload, league))):
+        try:
+            got = read()
+        except Exception:                                    # noqa: BLE001
+            continue
+        if got:
+            doc[key] = got
+    if league in espnplays.FOOTBALL:
+        try:
+            drive = espnplays.current_drive(payload, league)
+        except Exception:                                    # noqa: BLE001
+            drive = None
+        if drive:
+            doc["drive"] = drive
     return doc
 
 

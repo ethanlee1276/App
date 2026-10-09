@@ -340,10 +340,30 @@ def football_drives(payload: dict, league: str = "cfb",
                            .get("number")),
             "scoring": any(r["scoring"] for r in rows),
         }
+        # HOW THE DRIVE ENDED (2026-10-09, Ethan's ESPN screenshots: the
+        # app heads every drive "Touchdown", "Punt", "Field Goal"). ESPN's
+        # `displayResult` / `result` is that one label — a category, like
+        # a play's type text, not its `description`, which stays unread.
+        result = _drive_result(drive)
+        if result:
+            entry["result"] = result
         if did not in by_id:
             order.append(did)
         by_id[did] = entry
     return [by_id[d] for d in order]
+
+
+#: A drive result longer than this is a sentence, not a label, and is
+#: not stored (the prose rule, `_football_players`).
+_RESULT_MAX = 24
+
+
+def _drive_result(drive: dict) -> str:
+    for key in ("displayResult", "result"):
+        v = str((drive or {}).get(key) or "").strip()
+        if v and len(v) <= _RESULT_MAX:
+            return v
+    return ""
 
 
 def current_drive(payload: dict, league: str = "cfb") -> dict | None:
@@ -358,7 +378,7 @@ def current_drive(payload: dict, league: str = "cfb") -> dict | None:
     cur = block.get("current") if isinstance(block, dict) else None
     if not isinstance(cur, dict):
         return None
-    return {
+    out = {
         "team": _side_key(cur.get("team") or {}, league),
         "plays": _int(cur.get("offensivePlays")) or 0,
         "yards": _int(cur.get("yards")) or 0,
@@ -368,6 +388,146 @@ def current_drive(payload: dict, league: str = "cfb") -> dict | None:
         "period": _int(((cur.get("start") or {}).get("period") or {})
                        .get("number")),
     }
+    result = _drive_result(cur)
+    if result:
+        out["result"] = result
+    return out
+
+
+# ═══ THE GAMECAST'S OTHER ROOMS (2026-10-09) ═════════════════════════════
+#
+# Ethan, with three screenshots of ESPN's app on a live Bucs-Cowboys
+# game: "I want the page to look like ESPN's app … see the live game
+# leaders and shit and see the actual play by play and all of that. We
+# should have the box score and all of that." The summary the deep file
+# is already built from carries all of it — the whole box score (every
+# group, every column), each team's game totals, and the two records in
+# the header — and the page had been reading four markets of it.
+#
+# EVERY NUMBER, NONE OF THE WRITING. A box score is a table of numbers
+# under labels ("C/ATT", "YDS"); a team stat is a label and a value
+# ("3rd down efficiency", "5-12"); a record is "2-2". Those are facts
+# anybody can read off a scoreboard. ESPN's sentences — a play's `text`,
+# a drive's `description`, an athlete's `summary` blurb — are theirs,
+# and nothing below reads them (tests/test_pbp_files
+# .test_prose_never_reaches_a_deep_file holds the file to it).
+#
+# THE SHAPE READ IS THE ONE ALREADY VERIFIED: `boxscore.players[]
+# .statistics[]` with `labels` (`names` on hoops), `athletes[].athlete
+# {id, displayName, position}` and `athletes[].stats[]` — the read
+# `espnhoops.parse_summary` and `nflpreseason.parse_boxscore` have
+# built boards from for weeks. `boxscore.teams[].statistics[]` and
+# `header.competitions[].competitors[].record[]` are read defensively:
+# a payload without them yields nothing, never a wrong table.
+
+#: A stat string longer than this is not a stat.
+_STAT_MAX = 16
+
+
+def _clean_stat(v) -> str:
+    """A stat as a short string; ESPN's "--" (not applicable) reads as
+    nothing, so a row of dashes is a row with no stats."""
+    s = str(v if v is not None else "").strip()
+    if s == "--" or len(s) > _STAT_MAX:
+        return ""
+    return s
+
+
+def summary_box(payload: dict, league: str = "nfl") -> list[dict]:
+    """``[{team, groups: [{name, labels, rows: [{name, stats, pos?, id?}]}]}]``
+    — the whole box score, every group ESPN lists, in its order.
+
+    `team` is the board's own key (`_side_key`); a block whose team does
+    not resolve is kept under ESPN's abbreviation so nothing is lost. A
+    row with no stats at all is dropped; "0" is a stat.
+    """
+    out: list[dict] = []
+    box = (payload or {}).get("boxscore") or {}
+    for block in box.get("players") or []:
+        if not isinstance(block, dict):
+            continue
+        tinfo = block.get("team") or {}
+        team = _side_key(tinfo, league) or str(tinfo.get("abbreviation") or "")
+        groups: list[dict] = []
+        for grp in block.get("statistics") or []:
+            if not isinstance(grp, dict):
+                continue
+            labels = [_clean_stat(x) for x in (grp.get("labels") or grp.get("names") or [])]
+            rows: list[dict] = []
+            for ath in grp.get("athletes") or []:
+                if not isinstance(ath, dict):
+                    continue
+                info = ath.get("athlete") or {}
+                name = str(info.get("displayName") or "").strip()
+                stats = [_clean_stat(x) for x in (ath.get("stats") or [])]
+                if not name or not any(stats):
+                    continue
+                row: dict = {"name": name, "stats": stats}
+                pos = str(((info.get("position") or {}).get("abbreviation")) or "").strip()
+                if pos:
+                    row["pos"] = pos
+                aid = str(info.get("id") or "").strip()
+                if aid:
+                    row["id"] = aid
+                rows.append(row)
+            if labels and rows:
+                groups.append({"name": str(grp.get("name") or grp.get("text") or ""),
+                               "labels": labels, "rows": rows})
+        if team and groups:
+            out.append({"team": team, "groups": groups})
+    return out
+
+
+def summary_team_stats(payload: dict, league: str = "nfl") -> dict:
+    """``{team: [{name, label, value}]}`` — each side's game totals as ESPN
+    lists them (first downs, total yards, possession, third downs…), in
+    its order. Empty when the summary carries none."""
+    out: dict = {}
+    box = (payload or {}).get("boxscore") or {}
+    for block in box.get("teams") or []:
+        if not isinstance(block, dict):
+            continue
+        tinfo = block.get("team") or {}
+        team = _side_key(tinfo, league) or str(tinfo.get("abbreviation") or "")
+        rows = []
+        for st in block.get("statistics") or []:
+            if not isinstance(st, dict):
+                continue
+            value = _clean_stat(st.get("displayValue"))
+            label = str(st.get("label") or st.get("name") or "").strip()
+            if not value or not label or len(label) > 40:
+                continue
+            rows.append({"name": str(st.get("name") or ""), "label": label, "value": value})
+        if team and rows:
+            out[team] = rows
+    return out
+
+
+def team_records(payload: dict, league: str = "nfl") -> dict:
+    """``{team: "2-2"}`` from the summary's header, where ESPN carries each
+    side's season record. Empty when it does not."""
+    out: dict = {}
+    hdr = (payload or {}).get("header") or {}
+    for comp in (hdr.get("competitions") or [])[:1]:
+        for side in (comp or {}).get("competitors") or []:
+            if not isinstance(side, dict):
+                continue
+            tinfo = side.get("team") or {}
+            team = _side_key(tinfo, league) or str(tinfo.get("abbreviation") or "")
+            recs = side.get("record") or side.get("records") or []
+            if isinstance(recs, dict):
+                recs = [recs]
+            summary = ""
+            for r in recs:
+                if not isinstance(r, dict):
+                    continue
+                v = _clean_stat(r.get("summary") or r.get("displayValue"))
+                if v and re.fullmatch(r"\d{1,2}-\d{1,2}(-\d{1,2})?", v):
+                    summary = v
+                    break
+            if team and summary:
+                out[team] = summary
+    return out
 
 
 def _athletes(payload: dict) -> dict[str, str]:

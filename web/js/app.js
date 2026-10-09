@@ -45650,7 +45650,7 @@ function armDashLive(seen) {
 }
 /* `_pbpShowAll` used to live here, beside its readers. It is declared
    near the top of the file now — see the comment there. */
-let _pbpTab = "info";           // info | props | injuries | players
+let _pbpTab = "gamecast";       // gamecast | box | plays | team | odds | injuries — baseball: info | props | injuries | players
 
 /* ---------------- The page's other rooms ----------------
    Ethan, 2026-09-05: "the play by plays other rooms". The render's
@@ -45659,14 +45659,42 @@ let _pbpTab = "info";           // info | props | injuries | players
    open tickets as one list, until 2026-09-26), Injuries (both clubs'
    designations from the injury board), Player stats (the box score the
    fast loop now writes into the deep file, from the parsers the tracker
-   trusts). Team stats and Splits are not built: the summary's team
-   block has not been probed, and a room drawn from an unread shape
-   would be the fabricated number this site exists not to print. */
+   trusts). Team stats and Splits are not built FOR BASEBALL: the MLB
+   deep file is the MLB builder's own shape, and a room drawn from an
+   unread shape would be the fabricated number this site exists not to
+   print. Football, hoops and hockey have them since 2026-10-08 — the
+   summary's box and team blocks, read by livescore_build.pbp_doc and
+   drawn by js/gamecast.js (GC_TABS below). */
 // The two codes that share a play feed, a field and every renderer
 // below. Named once so a change cannot reach one league and miss the
 // other — which is the shape of most of this file's football bugs.
 const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
 const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];
+/* THE GAMECAST'S TABS (Ethan, 2026-10-08, with ESPN's app on a live game:
+   "Gamecast · Box Score · Play-by-Play · Team Stats · Odds"). Football,
+   the hoops leagues and hockey get them; their panels live in
+   js/gamecast.js, loaded on first use (loadGamecast). Baseball keeps the
+   four rooms above — its deep file is the MLB builder's own shape. */
+const GC_TABS = [["gamecast", "Gamecast"], ["box", "Box score"], ["plays", "Play-by-play"],
+                 ["team", "Team stats"], ["odds", "Odds & picks"], ["injuries", "Injuries"]];
+const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : GC_TABS;
+let _gamecastLoading = null;
+function loadGamecast() {
+  if (window.QBGamecast) return Promise.resolve(window.QBGamecast);
+  if (_gamecastLoading) return _gamecastLoading;
+  _gamecastLoading = new Promise((resolve) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "css/gamecast.css";
+    document.head.appendChild(css);
+    const el = document.createElement("script");
+    el.src = "js/gamecast.js";
+    el.onload = () => resolve(window.QBGamecast || null);
+    el.onerror = () => { _gamecastLoading = null; resolve(null); };
+    document.head.appendChild(el);
+  });
+  return _gamecastLoading;
+}
 
 /* The open bets on THIS game, from the board's tracker — which is the
    viewed league's, so another league's page has none to show. */
@@ -45987,8 +46015,8 @@ function pbpInjuriesHTML(d, league) {
   return `<div class="inj-list">${rows.map((r) => injRow(r, true)).join("")}</div>`;
 }
 
-function pbpTabsHTML(active, boardGame) {
-  return `<div class="pbp-tabs">${PBP_TABS.map(([k, label]) =>
+function pbpTabsHTML(active, boardGame, tabs) {
+  return `<div class="pbp-tabs">${(tabs || PBP_TABS).map(([k, label]) =>
     `<button type="button" class="pbp-tab${k === active ? " active" : ""}" data-pbp-tab="${k}">${label}</button>`).join("")}${
     boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>`;
 }
@@ -47142,6 +47170,12 @@ async function renderPbpPage() {
     if (g) g.addEventListener("click", () => openGame(g.dataset.gid));
     host.querySelectorAll("[data-pbp-tab]").forEach((b) =>
       b.addEventListener("click", () => { _pbpTab = b.dataset.pbpTab; renderPbpPage(); }));
+    // The box score's team toggle (js/gamecast.js keeps the choice).
+    host.querySelectorAll("[data-gc-team]").forEach((b) =>
+      b.addEventListener("click", () => {
+        if (window.QBGamecast) window.QBGamecast.setTeam(b.dataset.gcTeam);
+        renderPbpPage();
+      }));
   };
   if (!league || !event) {
     host.innerHTML = `${emptySlate("stadium", "No game selected",
@@ -47245,27 +47279,48 @@ async function renderPbpPage() {
     : `<p class="rail-quiet">Team totals fill in from the drives as they are played. Park and
        weather facts come off the league’s board — open the ${
        escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab for them.</p>`;
-  const tab = PBP_TABS.some(([k]) => k === _pbpTab) ? _pbpTab : "info";
+  /* THE GAMECAST (2026-10-08): football, hoops and hockey draw ESPN's
+     tab set from js/gamecast.js — the drive in progress, the last play
+     with the players in it, the leaders, the whole box score, the drives,
+     the team stats. Loaded on the first live game opened; until it lands
+     the panel says so and the page redraws itself when it does. Baseball
+     keeps its own four rooms. */
+  const tabs = pbpTabsFor(league);
+  const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : tabs[0][0];
+  const GC = league === "mlb" ? null : (window.QBGamecast || null);
+  if (league !== "mlb" && !GC) {
+    loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
+  }
   const panel = tab === "props" ? pbpPropsHTML(d, league)
     : tab === "injuries" ? pbpInjuriesHTML(d, league)
     : tab === "players" ? pbpPlayersHTML(d, league)
-    : infoPanel;
-  const infoHTML = `${pbpTabsHTML(tab, boardGame)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
+    : league === "mlb" ? infoPanel
+    : GC ? GC.panel(tab, { d, league, faces, boardGame })
+    : `<p class="rail-quiet">Loading the gamecast…</p>`;
+  const infoHTML = `${pbpTabsHTML(tab, boardGame, tabs)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
   const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
+  // The two records and the carrier (ESPN's header: "TB 0-4", "Prime
+  // Video"), from the summary's header and the scoreboard — absent, nothing.
+  const rec = (abbr) => (d.records || {})[abbr]
+    ? `<div class="mini pbp-hero-rec">${escapeHtml((d.records || {})[abbr])}</div>` : "";
+  // Live, the Watch button already names the carrier; the pill is for
+  // before and after, when there is no button.
+  const carrier = (d.tv || [])[0] && lv.state !== "live"
+    ? `<span class="pbp-hero-tv">${escapeHtml((d.tv || [])[0])}</span>` : "";
   host.innerHTML = `
     ${stripHTML}
     <div class="pbp-layout">
       <div class="pbp-main">
         <div class="card pbp-hero">
           <div class="pbp-hero-side">${mark(d.away)}<div><div class="mini">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</div>
-            <b>${name(d.away, d.away_name)}</b></div></div>
+            <b>${name(d.away, d.away_name)}</b>${rec(d.away)}</div></div>
           <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
-          <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>
+          <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>${carrier}
             <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
             ${lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""}</div>
           <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
           <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
-            <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>
+            <b>${name(d.home, d.home_name)}</b>${rec(d.home)}</div>${mark(d.home)}</div>
         </div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}

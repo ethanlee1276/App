@@ -1,0 +1,101 @@
+/* Qellys Book — Gamecast (js/gamecast.js): the live game page's rooms in
+   ESPN's layout. Loaded with the module, on the first live game opened,
+   so a first visit carries none of it. Tokens only — every colour is the
+   site's, and it re-tints in light mode with the rest. */
+.gc-k { display: block; font-size: var(--fs-xs); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-mute); }
+.gc-head { font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; font-weight: 700;
+  color: var(--text-mute); margin-bottom: 8px; }
+.gc-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.gc-tag.turnover { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+
+/* the face: the mark under the photograph, so a photo that does not load
+   leaves a mark rather than a hole */
+.gc-face { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  background: var(--bg-2); color: var(--text-mute); }
+.gc-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+
+/* the drive in progress */
+.gc-drive-head { display: flex; align-items: center; gap: 12px; }
+.gc-drive-head b { font-size: var(--fs-md); }
+.gc-q { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); }
+.gc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.gc-tile { padding: 8px 10px; border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+  background: rgba(255,255,255,.03); text-align: center; }
+.gc-tile b { display: block; font-size: var(--fs-lg); margin-top: 2px; }
+
+/* the last play */
+.gc-last-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.gc-last-title { font-size: var(--fs-lg); }
+.gc-win { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.gc-win b { font-family: var(--font-mono); font-size: var(--fs-md); }
+.gc-last-team { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-dim);
+  font-size: var(--fs-sm); }
+.gc-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-top: 12px; }
+.gc-chip { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-width: 0;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); background: rgba(255,255,255,.03); }
+.gc-chip-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-chip-t b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-chip-line { font-size: var(--fs-sm); color: var(--text-dim); }
+.gc-last-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 10px; font-size: var(--fs-sm); color: var(--text-mute); }
+.gc-score { font-family: var(--font-mono); }
+
+/* the leaders and the team stats: the card's head sits tight over its rows */
+.gc-leaders, .gc-tstats { padding-bottom: 6px; }
+.gc-lead-teams { display: flex; justify-content: space-between; align-items: center; font-weight: 700;
+  padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
+.gc-lead-teams span { display: inline-flex; align-items: center; gap: 6px; }
+.gc-lead-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.gc-lead-row:last-child { border-bottom: 0; }
+.gc-lead-k { font-weight: 700; font-size: var(--fs-sm); text-align: center; color: var(--text-dim); }
+.gc-lead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gc-lead.right { flex-direction: row-reverse; text-align: right; }
+.gc-lead.none { opacity: .55; }
+.gc-lead-t { display: flex; flex-direction: column; min-width: 0; }
+.gc-lead-v { font-family: var(--font-mono); font-size: var(--fs-xl); line-height: 1.05; }
+.gc-lead-n { font-weight: 600; overflow-wrap: anywhere; line-height: 1.2; }
+
+/* the box score */
+.gc-toggle { display: flex; gap: 8px; margin: 4px 0 12px; }
+.gc-tog { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font: inherit;
+  color: var(--text-mute); background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: 999px; cursor: pointer; }
+.gc-tog.active { color: var(--text); border-color: var(--gold); font-weight: 700; }
+.gc-bx .pbp-bx-who { display: flex; align-items: center; gap: 8px; }
+.gc-bx .gc-face { width: 28px; height: 28px; }
+
+/* team stats */
+.gc-ts-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  padding-bottom: 8px; border-bottom: var(--hairline) solid var(--border); }
+.gc-ts-head > span:first-child, .gc-ts-head > span:last-child { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.gc-ts-head > span:last-child { justify-content: flex-end; }
+.gc-ts-head .gc-head { margin: 0; }
+.gc-ts { padding: 8px 0 6px; border-bottom: var(--hairline) solid var(--border-soft); }
+.gc-ts:last-child { border-bottom: 0; }
+.gc-ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: baseline; }
+.gc-ts-row b:last-child { text-align: right; }
+.gc-ts-row b { font-family: var(--font-mono); }
+.gc-ts-k { font-size: var(--fs-sm); color: var(--text-dim); text-align: center; }
+.gc-bar { display: flex; gap: 3px; height: 5px; margin-top: 6px; }
+.gc-bar span { display: block; height: 100%; border-radius: 999px; background: var(--text-mute); opacity: .35; }
+.gc-bar span:first-child { background: var(--gold); opacity: 1; }
+
+/* play by play, drive by drive */
+.gc-dr { margin-bottom: 10px; }
+.gc-dr.scoring { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
+.gc-dr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.gc-dr-score { margin-left: auto; font-family: var(--font-mono); color: var(--text-mute); font-size: var(--fs-sm); }
+
+@media (max-width: 700px) {
+  .gc-lead-row { grid-template-columns: 1fr auto 1fr; gap: 6px; }
+  .gc-lead { gap: 6px; }
+  .gc-lead-v { font-size: var(--fs-lg); }
+  .gc-lead-n, .gc-lead-t .mini { font-size: var(--fs-xs); }
+  .gc-lead-k { font-size: var(--fs-xs); }
+  .gc-chips { grid-template-columns: 1fr; }
+}

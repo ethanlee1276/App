@@ -163,7 +163,11 @@ def test_the_page_has_four_real_tabs_and_says_what_is_not_built():
     assert 'const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];' in APP[i:i + 200]
     assert "Team stats and Splits are not built" in APP[i - 900:i]
     page = _fn("renderPbpPage")
-    assert 'const tab = PBP_TABS.some(([k]) => k === _pbpTab) ? _pbpTab : "info";' in page
+    # 2026-10-08: the tab set is the league's — baseball keeps these four,
+    # football, hoops and hockey draw ESPN's six from js/gamecast.js.
+    assert "const tabs = pbpTabsFor(league);" in page
+    assert "const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : tabs[0][0];" in page
+    assert 'const pbpTabsFor = (league) => league === "mlb" ? PBP_TABS : GC_TABS;' in APP
     assert 'tab === "props" ? pbpPropsHTML(d, league)' in page and 'tab === "players" ? pbpPlayersHTML(d, league)' in page
     assert '_pbpTab = b.dataset.pbpTab; renderPbpPage();' in page
     props = _fn("pbpPropsHTML")

@@ -10862,6 +10862,11 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-hero-home { justify-content: flex-end; text-align: right; }
 .pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
 .pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
+/* ESPN's header has the record under each side and the carrier under the
+   clock (2026-10-08); both come off the deep file, both absent when unknown. */
+.pbp-hero-rec { color: var(--text-mute); }
+.pbp-hero-tv { font-size: var(--fs-xs); padding: 2px 8px; border: var(--hairline) solid var(--border);
+  border-radius: 999px; color: var(--text-dim); }
 /* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the
    play by play screen is bugged out").
    ---------------------------------------------------------------------
@@ -11041,7 +11046,12 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--bg-2);
   display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .pbp-face-blank { color: var(--text-mute); }
-.pbp-tabs { display: flex; gap: 14px; align-items: center; margin: 12px 0 8px; border-bottom: var(--hairline) solid var(--border); }
+/* ESPN's tab row scrolls sideways on a phone with every label on one line
+   (2026-10-08: six tabs, "Play-by-play" was wrapping to three). */
+.pbp-tabs { display: flex; gap: 14px; align-items: center; margin: 12px 0 8px; border-bottom: var(--hairline) solid var(--border);
+  overflow-x: auto; scrollbar-width: none; }
+.pbp-tabs::-webkit-scrollbar { display: none; }
+.pbp-tabs .pbp-tab { white-space: nowrap; flex: 0 0 auto; }
 .pbp-tabs .active { padding: 6px 0; border-bottom: 2px solid var(--gold); font-weight: 700; }
 .pbp-tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-mute); font: inherit;
   font-weight: 600; padding: 6px 2px; margin-right: 12px; cursor: pointer; min-height: 44px; }

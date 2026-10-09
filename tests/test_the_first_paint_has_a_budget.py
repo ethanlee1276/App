@@ -67,7 +67,12 @@ HTML = (WEB / "index.html").read_text()
 #: and Gameday by gamePk, ESPN Gamecast by event id) and team search for
 #: every league (Ethan: "all sports should be able to search teams") —
 #: +0.3 KB gz. Told to Ethan.
-APP_JS_BUDGET_KB = 486
+#: 486 -> 487 on 2026-10-08 by the Gamecast's door (Ethan, with ESPN's
+#: app on a live game: "I want the page to look like ESPN's app"): the
+#: tab set, the loader and the hero's record and carrier — the rooms
+#: themselves load on first use (js/gamecast.js, css/gamecast.css), so a
+#: first visit carries none of them. +0.4 KB gz. Told to Ethan.
+APP_JS_BUDGET_KB = 487
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -93,7 +98,10 @@ APP_JS_BUDGET_KB = 486
 #: 600 -> 601 on 2026-10-07 by the same pass. Told to Ethan.
 #: 601 -> 602 on 2026-10-07 by the app.js bump above (Watch to the game,
 #: team search in every league). Told to Ethan.
-BOOT_BUDGET_KB = 602
+#: 602 -> 603 on 2026-10-08 by the Gamecast's door: the app.js bump above
+#: and the hero's two rules (the record, the carrier). The rooms' own
+#: styles load with the module (css/gamecast.css). Told to Ethan.
+BOOT_BUDGET_KB = 603
 
 
 def _gz_trimmed(rel: str) -> int:

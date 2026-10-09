@@ -238,6 +238,23 @@ first). Paste back anything that prints an error or looks off.
     gain is positive on average and in all but one season, and b clears
     MIN_T — the same bar every other scan signal failed.
 
+14. **The Gamecast** (2026-10-08, your three ESPN screenshots: "I want
+    the page to look like ESPN's app"). Nothing to run — the fast loop
+    already writes a game's deep file every twelve seconds while it is
+    on, and from `The Gamecast` on that file carries the whole box score,
+    each side's totals, the two records and the drive in progress; the
+    page's rooms (js/gamecast.js) load the first time you open a live
+    game. To see it: Live tab → tap a game in progress → the tabs read
+    Gamecast · Box score · Play-by-play · Team stats · Odds & picks ·
+    Injuries. If the Gamecast tab says only "Loading the gamecast…" for
+    more than a few seconds, paste:
+    ```
+    curl -s -o /dev/null -w "%{http_code} %{size_download}B\n" https://qellysbook.com/js/gamecast.js
+    ls -la /srv/qellys/web/min/js/ /srv/qellys/web/data/pbp/ | head -20
+    ```
+    (The trimmed copy is rebuilt by the updater after every pull; a 404
+    on the first line means the pull has not landed.)
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

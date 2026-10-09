@@ -43,7 +43,9 @@ from pathlib import Path
 #: (already minified) and not the small team tables. The document itself
 #: since 2026-10-03: index.html carried ~47 KB of comments (18 KB of its
 #: 29 KB gzipped) that every first visit downloaded.
-FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html")
+FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
+         # The lazy rooms, served trimmed the same way (2026-10-08).
+         "js/gamecast.js", "css/gamecast.css")
 
 #: HTML comments that are not commentary: `engine/routes.document` splices
 #: an entity's preview tags between these two markers, so they stay.
