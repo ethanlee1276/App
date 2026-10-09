@@ -2483,7 +2483,7 @@ function staleAfterMs() {
    than inventing a looser one. */
 async function loadHeartbeat() {
   try {
-    const res = await boardFetch("data/heartbeat.json?t=" + (Date.now() / 60000 | 0));
+    const res = await boardFetch("data/heartbeat.json", { cache: "no-cache" });
     if (!res.ok) return;
     const hb = await res.json();
     const p50 = Number(hb.cycle_p50_s);
@@ -22628,7 +22628,7 @@ async function renderBookReport() {
   if (!host || document.getElementById("bookreport-card")) return;
   if (!_brCache || Date.now() - _brAt > 300000) {
     try {
-      const res = await boardFetch(`data/bookreport.json?t=` + (Date.now() / 60000 | 0));
+      const res = await boardFetch("data/bookreport.json", { cache: "no-cache" });
       _brCache = res.ok ? await res.json() : null;
       _brAt = Date.now();
     } catch (e) { _brCache = null; }
@@ -25516,7 +25516,7 @@ let _stkLeaders = null, _stkLeadersAt = 0, _stkTonight = 0;
 async function stkSlate() {
   if (_stkSlate && Date.now() - _stkSlateAt < 60000) return _stkSlate;
   try {
-    const res = await boardFetch(`data/streak.json?t=` + Date.now());
+    const res = await boardFetch("data/streak.json", { cache: "no-cache" });
     if (res.ok) { _stkSlate = await res.json(); _stkSlateAt = Date.now(); }
   } catch (e) { /* keep whatever we had */ }
   return _stkSlate || {};
@@ -26214,7 +26214,7 @@ async function renderMemes() {
   // record still draws, and a record with no board is still readable.
   let rec = null;
   try {
-    const res = await boardFetch("data/memerecord.json?t=" + Date.now());
+    const res = await boardFetch("data/memerecord.json", { cache: "no-cache" });
     if (res.ok) rec = await res.json();
   } catch (e) {}
 
@@ -30564,7 +30564,14 @@ async function loadRosters(sport) {
   const key = sport || state.sport || "nfl";
   if (_rosterCache[key] !== undefined) return _rosterCache[key];
   try {
-    const res = await boardFetch(`data/rosters_${key}.json?t=` + (Date.now() / 60000 | 0));
+    /* REVALIDATED, NOT RE-DOWNLOADED (the speed pass, 2026-10-09). The
+       URL carried `?t=<minute>`, so every visit a minute apart was a new
+       address and the browser could not answer it with a 304: the college
+       file is 988 KB on the wire, every time. `no-cache` asks the box
+       whether the copy in hand is current, which an unchanged roster
+       answers in a few hundred bytes — the trade the record readers and
+       the live scoreboards already make. */
+    const res = await boardFetch(`data/rosters_${key}.json`, { cache: "no-cache" });
     _rosterCache[key] = res.ok ? await res.json() : {};
   } catch (e) { _rosterCache[key] = {}; }
   return _rosterCache[key];
@@ -30741,7 +30748,7 @@ async function loadStandings(sport) {
   const key = sport || state.sport || "nfl";
   if (_standingsCache[key] !== undefined) return _standingsCache[key];
   try {
-    const res = await boardFetch(`data/standings_${key}.json?t=` + (Date.now() / 60000 | 0));
+    const res = await boardFetch(`data/standings_${key}.json`, { cache: "no-cache" });
     _standingsCache[key] = res.ok ? await res.json() : {};
   } catch (e) { _standingsCache[key] = {}; }
   return _standingsCache[key];
@@ -31017,7 +31024,7 @@ let _newsCache = null;
 async function loadNews() {
   if (_newsCache) return _newsCache;
   try {
-    const res = await boardFetch("data/news.json?t=" + (Date.now() / 600000 | 0));
+    const res = await boardFetch("data/news.json", { cache: "no-cache" });
     if (res.ok) _newsCache = await res.json();
   } catch (e) { /* headlines are furniture — the page stands without them */ }
   return _newsCache;

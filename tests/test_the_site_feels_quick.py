@@ -635,6 +635,22 @@ def test_the_slim_record_is_a_free_file():
     assert gate.is_free("record_head.json")
     assert "record_head.json" in gate.KNOWN_BOARDS
 
+
+def test_board_reads_revalidate_instead_of_changing_their_address():
+    """A `?t=<now>` on a data read makes every visit a new URL, so the
+    browser can never answer it with a 304 — the college rosters were
+    988 KB on the wire each time (the box, 2026-10-09). The two left are
+    deliberate: the error-path fallback board (no-store, one read after
+    a failure) and the UFC fight poller (a live file the Caddy fast rule
+    does not cover)."""
+    busted = re.findall(r'(?:board)?[fF]etch\(\s*[`"]([^`"]*\?(?:t|_)=)', APP)
+    assert sorted(busted) == ["${meta.fallback}?_=", "data/ufc_live.json?t="], busted
+    for name in ("rosters_${key}", "standings_${key}", "news", "bookreport",
+                 "streak", "memerecord", "heartbeat"):
+        assert re.search(r'boardFetch\([`"]data/' + re.escape(name)
+                         + r'\.json[`"], \{ cache: "no-cache" \}\)', APP), \
+            f"data/{name}.json is no longer a revalidating read"
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
