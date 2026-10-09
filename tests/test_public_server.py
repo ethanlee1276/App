@@ -596,7 +596,10 @@ def test_the_client_handles_304_before_it_checks_ok():
     falls through to the fallback file, which is the stale board this
     whole mechanism exists to avoid serving."""
     from _windows import until
-    block = until(APP, "const tag = _boardTags[", "} catch (e) {")
+    # Anchored at the awaited answer since 2026-10-09: the request now
+    # leaves before the light copy is read (the speed pass), so the light
+    # block — with its own catch — sits between the tag and the answer.
+    block = until(APP, "const res = await fullAsk;", "} catch (e) {")
     assert "res.status === 304" in block, "the 304 is not handled at all"
     assert block.index("res.status === 304") < block.index("!res.ok"), \
         "!res.ok is tested first, so every 304 throws"

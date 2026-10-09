@@ -82,11 +82,15 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # stay byte-identical between polls. (The Date.now() at the top of
     # the function is the 30-second memory cache, not a buster.)
     assert "?_=" not in body and "`${url}?" not in body
-    # The two record.json readers ride the same trade.
+    # The record.json readers ride the same trade — four since 2026-10-09,
+    # when two `?t=<now>` reads (the Record page's and one more) joined the
+    # two that already revalidated (the speed pass: an unchanged record is
+    # a 304, not 1.5 MB again).
     assert src.count('boardFetch("/data/record.json", { cache: "no-cache" })'
                      ) + src.count(
                      'boardFetch("data/record.json", { cache: "no-cache" })'
-                     ) == 2
+                     ) == 4
+    assert 'boardFetch("data/record.json?t=" + Date.now())' not in src
 
 
 def test_the_shelf_has_its_own_css():
