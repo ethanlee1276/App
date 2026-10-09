@@ -340,7 +340,18 @@ def test_an_off_screen_page_draws_when_opened_or_when_idle():
 
 # --- the renders --------------------------------------------------------------
 def test_every_render_has_a_phone_copy():
-    from PIL import Image
+    # Pillow is the one non-stdlib package in this repo and it is not
+    # installed anywhere but a laptop that has run the venue intake
+    # tool. Imported unconditionally it does not fail this assertion —
+    # it fails the FILE, taking the other eighteen speed tests with it,
+    # which is the exact shape of the outage test_venue_ingest.py's
+    # docstring was written about. The skip is indented, so run_tests.py
+    # reads it as one test bowing out rather than the file bowing out
+    # (its ^SKIP is anchored at line start).
+    try:
+        from PIL import Image
+    except ImportError:
+        print("  SKIP Pillow not installed"); return
     jpgs = sorted(VARIANTS.glob("*.jpg")) + [ROOT / "web" / "img" / "venues" / "ufc-hero.jpg"]
     assert len(jpgs) >= 31
     for jpg in jpgs:
@@ -388,8 +399,15 @@ def test_a_card_asks_for_a_team_photo_only_when_one_ships():
 
 
 def test_the_ingest_tool_writes_the_phone_copy():
-    import venues_ingest as V
-    from PIL import Image
+    # Same reason as above, and the guard has to wrap the venues_ingest
+    # import too: that module does `from PIL import Image` at the top,
+    # so it is the import that raises on a stdlib-only machine, before
+    # any PIL line in this function is reached.
+    try:
+        import venues_ingest as V
+        from PIL import Image
+    except ImportError:
+        print("  SKIP Pillow not installed"); return
     with tempfile.TemporaryDirectory() as d:
         out = Path(d) / "football-gold.jpg"
         img = Image.new("RGB", (1600, 900), (40, 60, 90))

@@ -482,6 +482,64 @@ def test_no_test_file_imports_a_third_party_module_unguarded():
                      f"them with try/except + a SKIP line: {bad}")
 
 
+def test_no_test_imports_pillow_without_a_guard_at_any_depth():
+    """The half of the door the sibling above leaves open, found the hard
+    way for the third time (nightly, 2026-10-09).
+
+    That test reads `tree.body` — module scope only — and says so: an
+    import nested in a function "passes freely", which is the escape
+    hatch that lets a hand-run tool's dependency stay out of the suite's.
+    The hatch is right, but it is not free. The speed pass landed two
+    tests in test_the_site_feels_quick.py that called `from PIL import
+    Image` in the function body with no try around it. Module scope was
+    clean, so the sibling stayed green — and the file went red on every
+    machine without Pillow, which is every machine but the laptop that
+    has run the venue intake tool.
+
+    Nesting an import only moves the blast radius from the file to the
+    one test. It does not make the dependency optional. So for the ONE
+    package this repo has a written policy about, check every import of
+    it at every depth, not just the top.
+
+    Deliberately narrow. The general rule — every third-party import
+    anywhere in tests/ must be guarded — cannot be asserted this cheaply:
+    the two Playwright sweeps are gated on QB_BROWSER_TESTS rather than
+    on a try, and reading an env gate out of an AST is a guess. PIL has
+    no such gate anywhere, so for PIL the rule is exact."""
+    import ast
+    bad = []
+    tests = os.path.join(ROOT, "tests")
+    for f in sorted(os.listdir(tests)):
+        if not (f.startswith("test_") and f.endswith(".py")):
+            continue
+        tree = ast.parse(open(os.path.join(tests, f), encoding="utf-8").read())
+        stack = []
+
+        def visit(node):
+            stack.append(node)
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, ast.Import):
+                    roots = [a.name.split(".")[0] for a in child.names]
+                elif isinstance(child, ast.ImportFrom):
+                    roots = [child.module.split(".")[0]] \
+                        if child.level == 0 and child.module else []
+                else:
+                    roots = []
+                # An enclosing try is the guard, wherever it sits: the
+                # import may be in the try of a function three levels
+                # down and it is still guarded.
+                if "PIL" in roots and not any(
+                        isinstance(a, ast.Try) for a in stack):
+                    bad.append(f"{f}:{child.lineno}")
+                visit(child)
+            stack.pop()
+
+        visit(tree)
+    assert not bad, (
+        "PIL imported with no try/except around it — a machine without "
+        f"Pillow fails these rather than skipping them: {bad}")
+
+
 def test_a_skipped_test_file_is_not_reported_as_a_pass():
     """The skip has to be louder than a green zero. run_tests.py prints
     "✅ name  0 tests" for any file that exits clean without running
