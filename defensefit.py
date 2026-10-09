@@ -47,27 +47,47 @@ def main() -> None:
     if len(seasons) < 2:
         raise SystemExit("need at least two complete seasons of data/cache/player_stats_<season>.csv")
     F.SHRINK_GRID = (D.SHRINK_GAMES,)
-    for label, kw in (("ratings before 2026-09-23", {"legacy": True}),
-                      ("the model now (defensevs.MODEL_STAT, shrunk toward last season)",
-                       {"with_prior": True, "model": True})):
+    # THE CANDIDATES (2026-10-09): a stat the card shows but the number
+    # ignores (defensevs.stat_for set, MODEL_STAT None — a quarterback's
+    # rushing against what a defence gives up to quarterbacks, since
+    # 2026-10-08) is in neither section above: the legacy ratings never
+    # had it, and the model section reads MODEL_STAT. The first run after
+    # it shipped printed no `rush_yds QB` line at all. This section
+    # measures every such arm the same way, so a paste can move it in.
+    shown_only = lambda m, g: D.stat_for(g, m) and D.model_stat(g, m) is None      # noqa: E731
+    for label, kw, keep in (("ratings before 2026-09-23", {"legacy": True}, None),
+                            ("the model now (defensevs.MODEL_STAT, shrunk toward last season)",
+                             {"with_prior": True, "model": True}, None),
+                            ("candidates — shown on the card, not in the number (defensevs.stat_for)",
+                             {"with_prior": True, "model": False}, shown_only)):
         print(f"\n== {label}")
         table: dict = {}
         for test in years:
             r = F.study(seasons, test, **kw)
             for m, x in r["markets"].items():
                 for g, xg in (x.get("by_group") or {"all": x}).items():
+                    if keep and not keep(m, g):
+                        continue
                     table.setdefault((m, g), []).append((test, xg["b"], xg["held_out_gain"]))
+        if not table:
+            print("  (none)")
         for (m, g), rows in sorted(table.items()):
             mean = sum(h for _t, _b, h in rows) / len(rows)
             print(f"  {m:<11} {g:<4} held out " + "  ".join(f"{t}:{100 * h:+.2f}%" for t, _b, h in rows)
                   + f"   mean {100 * mean:+.2f}%   b " + " ".join(f"{b:+.2f}" for _t, b, _h in rows))
     whole = F.study(seasons, None, with_prior=True, model=True)
+    cands = F.study(seasons, None, with_prior=True, model=False)
     print(f"\n== fitted on every season (shrink {D.SHRINK_GAMES:g} games) against what the model uses")
     for m, x in whole["markets"].items():
         for g, xg in (x.get("by_group") or {}).items():
             now = D.TRANSFER.get((m, g))
             print(f"  {m:<11} {g:<4} b = {xg['b']:+.3f} ± {xg.get('se') or 0:.3f} (n {xg['n']})   "
                   f"in use: {'—' if now is None else f'{now:.2f}'}")
+    for m, x in cands["markets"].items():
+        for g, xg in (x.get("by_group") or {}).items():
+            if shown_only(m, g):
+                print(f"  {m:<11} {g:<4} b = {xg['b']:+.3f} ± {xg.get('se') or 0:.3f} (n {xg['n']})   "
+                      f"in use: — (shown only; stat {D.stat_for(g, m)})")
 
 
 if __name__ == "__main__":

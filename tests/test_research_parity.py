@@ -90,6 +90,30 @@ def test_a_defences_rushing_yards_to_quarterbacks_is_rated_shown_and_not_yet_in_
     sign, line = G.rank_fact({"qb_rush_yds": {"rank": 1, "of": 32, "pg": 47.0}}, "qb_rush_yds", "DAL")
     assert sign == 1 and line == "DAL gives up 47 rushing yards to quarterbacks a game — the 1st-most of 32", line
     assert "QB" in DF.MARKETS["rush_yds"][0] and "RB" in DF.MARKETS["rush_yds"][0]
+    # …and the fitter script prints it: the box's first run (2026-10-08)
+    # had no `rush_yds QB` line, because the legacy section never had the
+    # stat and the model section reads MODEL_STAT (None). The candidates
+    # section measures every shown-only arm with `stat_for`.
+    fitter = open(os.path.join(ROOT, "defensefit.py"), encoding="utf-8").read()
+    assert "candidates — shown on the card, not in the number (defensevs.stat_for)" in fitter
+    assert 'shown_only = lambda m, g: D.stat_for(g, m) and D.model_stat(g, m) is None' in fitter
+    assert '{"with_prior": True, "model": False}, shown_only)' in fitter
+    assert 'in use: — (shown only; stat {D.stat_for(g, m)})' in fitter
+    # The candidates study itself: a QB who runs gets his sample against
+    # the defence's QB-rushing factor, and only there.
+    weekly = []
+    for wk in range(1, 9):
+        for opp in ("DAL", "TB"):
+            weekly += [{"week": wk, "season_type": "REG", "position": "QB", "opponent_team": opp,
+                        "player_id": f"run{opp}", "player_display_name": f"Runner {opp}", "rushing_yards": 50 + wk,
+                        "passing_yards": 230, "attempts": 30, "team": "X"},
+                       {"week": wk, "season_type": "REG", "position": "RB", "opponent_team": opp,
+                        "player_id": f"back{opp}", "player_display_name": f"Back {opp}", "rushing_yards": 70,
+                        "carries": 15, "team": "X"}]
+    got = DF.samples(weekly, 12.0, None, legacy=False, model=False)
+    assert {p[3] for p in got["rush_yds"]} == {"QB", "RB"}, "stat_for measures the quarterback's legs"
+    assert {p[3] for p in DF.samples(weekly, 12.0, None, legacy=False, model=True)["rush_yds"]} == {"RB"}, \
+        "MODEL_STAT leaves him out until a paste moves him in"
 
 
 def test_a_receiving_over_outside_the_top_two_targets_on_thin_volume_is_flagged():

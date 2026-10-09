@@ -196,12 +196,23 @@ first). Paste back anything that prints an error or looks off.
     sudo -u qellys nice -n 19 python3 ingest.py nfl --seasons 2026 2>&1 | tail -8   # the per-player tgt_short/mid/deep and att_clean/cmp_clean/att_hit/cmp_hit rows
     sudo -u qellys sqlite3 data/qellys.db "SELECT team, side, short_tgt, mid_tgt, deep_tgt FROM team_units WHERE season=2026 AND period='005' AND team IN ('DAL','TB')"
     ```
-    (The first paste of this step, 2026-10-08 evening, ran the backfill
-    and the fitter on the OLD code — the fitter printed no `rush_yds QB`
-    line, which it does from `Research parity` on — and the ingest line
-    as first written (`python3 -m engine.ingest --nfl`) is not a command
-    and printed nothing. Pull first, then the three lines above, then
-    the fitter again.)
+    (2026-10-09: the first two runs of the fitter printed no `rush_yds QB`
+    line — on the old code AND on `Free data for three…`. Not the pull:
+    the script's two sections could not see a shown-only stat (the
+    legacy ratings never had it; the model section reads MODEL_STAT,
+    which is None for it). From `The fitter measures the candidates` on
+    it has a third section, "candidates — shown on the card, not in the
+    number", with the per-season held-out line and the fitted b. Paste
+    that. The backfill above was also first run on the old code, before
+    the columns existed — run it again; and the ingest line as first
+    written (`python3 -m engine.ingest --nfl`) is not a command, so the
+    pocket and depth rows come from the corrected line. To see they
+    landed:
+    ```
+    sudo -u qellys sqlite3 data/qellys.db "SELECT market, COUNT(*) FROM player_game_logs WHERE sport='nfl' AND season=2026 AND market IN ('tgt_short','att_clean') GROUP BY market"
+    sudo -u qellys sqlite3 data/qellys.db "SELECT COUNT(*) FROM team_units WHERE season=2026 AND short_tgt IS NOT NULL"
+    ```
+    Both should be hundreds, not 0.)
     After the next NFL build, a receiver's pick page carries the line
     "NN% of his targets are short throws …; DAL ranks Nth of 32 against
     them". Then, on a quiet hour (it reads four seasons of play-by-play —
