@@ -100,6 +100,38 @@ FLAGS = {
 #: targets is a thin-volume over (the post-mortem's rule).
 THIN_TARGET_SHARE = 0.15
 
+#: COLLEGE'S NUMBERS (Ethan, 2026-10-09: "look at every single tool ... we
+#: added for NFL and add it for college football"). Written before any
+#: college measurement. College totals run about ten points above the
+#: NFL's and its spreads about twice as wide, so the NFL's numbers would
+#: call most college games a shootout or a blowout — and a flag raised on
+#: more than half the record is skipped by the correction as "the record
+#: itself" (likelyctx.MAX_SHARE), so it would never be judged at all. Each
+#: is set where typical FBS lines put the same share of games the NFL
+#: number catches in the NFL (a 49 total is a high NFL game; a 63 is a
+#: high college one). `python3 -m engine.scouthist --sport cfb --dry-run`
+#: prints the share each catches in both leagues, so the box can confirm
+#: it. Everything not listed here reads the NFL's number.
+LEAGUE = {
+    "cfb": {"SHOOTOUT_TOTAL": 63.0, "LOW_TOTAL": 48.0, "BIG_DOG": 17.0, "BIG_FAV_PASS": 24.0,
+            "BIG_FAV_RUN": 17.0, "BLOWOUT": 28.0, "LOW_IMPLIED": 20.0},
+}
+#: A flag sentence that names an NFL number says the league's own.
+TEXT = {
+    "cfb": {"low_implied_td": "a touchdown on a team expected to score under 20"},
+}
+
+
+def threshold(name: str, league: str | None = None) -> float:
+    """A threshold for this league: its own where LEAGUE has one, else the
+    NFL's (read live, so a module constant is still the one source)."""
+    return (LEAGUE.get(league or "") or {}).get(name, globals()[name])
+
+
+def note(code: str, league: str | None = None) -> str:
+    """One flag's sentence, in this league's numbers."""
+    return (TEXT.get(league or "") or {}).get(code) or FLAGS.get(code, code)
+
 
 def team_spread(game_spread, home: bool | None):
     """The team's own spread from the stored HOME spread (negative = home
@@ -136,12 +168,12 @@ def _cv(xs):
 def situation(market: str, side: str, line=None, position: str = "", values=None,
               game_spread=None, home: bool | None = None, total=None, wind=None, outdoor=None,
               weekday=None, games_season=None, missed_last=None,
-              tgt_share=None, tgt_rank=None) -> dict:
+              tgt_share=None, tgt_rank=None, league: str = "nfl") -> dict:
     """The situation from the pick and its game. ``values`` = his results in
     this market, NEWEST FIRST (the shape every row and the history carry).
     ``tgt_share`` is his share of his team's targets this season and
     ``tgt_rank`` his place among its targets (1 = most), when the usage
-    read has them."""
+    read has them. ``league`` picks the thresholds (LEAGUE)."""
     vals = [v for v in (values or []) if v is not None]
     sp = team_spread(game_spread, home)
     return {"market": market, "side": str(side or "").upper(), "line": line,
@@ -151,7 +183,8 @@ def situation(market: str, side: str, line=None, position: str = "", values=None
             "recent3": _avg(vals[:3]) if len(vals) >= 3 else None,
             "prior5": _avg(vals[3:8]) if len(vals) >= 6 else None,
             "games_season": games_season if games_season is not None else len(vals),
-            "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank}
+            "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank,
+            "league": league or "nfl"}
 
 
 def flags(s: dict) -> list[str]:
@@ -161,57 +194,61 @@ def flags(s: dict) -> list[str]:
     under = side == "UNDER"
     sp, tot, imp = s.get("spread"), s.get("total"), s.get("implied")
     line, l5 = s.get("line"), s.get("last5")
+    lg = s.get("league")
+
+    def t(name):
+        return threshold(name, lg)
     out = set()
     if tot is not None:
-        if under and m in VOLUME and tot >= SHOOTOUT_TOTAL:
+        if under and m in VOLUME and tot >= t("SHOOTOUT_TOTAL"):
             out.add("shootout_under")
-        if over and tot <= LOW_TOTAL:
+        if over and tot <= t("LOW_TOTAL"):
             out.add("low_total_over")
     if sp is not None:
-        if over and m in RUSHING and sp >= BIG_DOG:
+        if over and m in RUSHING and sp >= t("BIG_DOG"):
             out.add("dog_run_over")
-        if under and m in (PASSING | RECEIVING) and sp >= BIG_DOG:
+        if under and m in (PASSING | RECEIVING) and sp >= t("BIG_DOG"):
             out.add("dog_pass_under")
-        if over and m in PASSING and sp <= -BIG_FAV_PASS:
+        if over and m in PASSING and sp <= -t("BIG_FAV_PASS"):
             out.add("fav_pass_over")
-        if under and m in RUSHING and sp <= -BIG_FAV_RUN:
+        if under and m in RUSHING and sp <= -t("BIG_FAV_RUN"):
             out.add("fav_run_under")
-        if over and m in VOLUME and abs(sp) >= BLOWOUT:
+        if over and m in VOLUME and abs(sp) >= t("BLOWOUT"):
             out.add("blowout_over")
     wind = s.get("wind")
     if over and m in (PASSING | RECEIVING) and wind is not None and s.get("outdoor") is not False \
-            and float(wind) >= WIND:
+            and float(wind) >= t("WIND"):
         out.add("wind_pass_over")
-    if over and m in SCORING and imp is not None and imp <= LOW_IMPLIED:
+    if over and m in SCORING and imp is not None and imp <= t("LOW_IMPLIED"):
         out.add("low_implied_td")
     if s.get("missed_last"):
         out.add("back_from_absence")
     if line is not None and l5 and m in VOLUME:
-        if over and float(line) >= LINE_STRETCH * l5:
+        if over and float(line) >= t("LINE_STRETCH") * l5:
             out.add("line_above_form")
-        if under and float(line) <= LINE_SHRINK * l5:
+        if under and float(line) <= t("LINE_SHRINK") * l5:
             out.add("line_below_form")
     r3, p5 = s.get("recent3"), s.get("prior5")
     if r3 is not None and p5 and m in VOLUME:
-        if over and r3 <= ROLE_DOWN * p5:
+        if over and r3 <= t("ROLE_DOWN") * p5:
             out.add("role_down_over")
-        if under and r3 >= ROLE_UP * p5:
+        if under and r3 >= t("ROLE_UP") * p5:
             out.add("role_up_under")
     gs = s.get("games_season")
-    if gs is not None and gs < THIN_GAMES:
+    if gs is not None and gs < t("THIN_GAMES"):
         out.add("thin_sample")
     cv = s.get("cv10")
-    if cv is not None and m in YARDAGE and cv >= BOOM_BUST_CV:
+    if cv is not None and m in YARDAGE and cv >= t("BOOM_BUST_CV"):
         out.add("boom_bust")
     if over and s.get("weekday") == 3:
         out.add("short_week_over")
     rank, share = s.get("tgt_rank"), s.get("tgt_share")
     if over and m in RECEIVING and rank is not None and share is not None \
-            and int(rank) > 2 and float(share) < THIN_TARGET_SHARE:
+            and int(rank) > 2 and float(share) < t("THIN_TARGET_SHARE"):
         out.add("thin_target_over")
     return [f for f in FLAGS if f in out]
 
 
-def notes(codes: list[str]) -> list[str]:
-    """The sentences for a list of flag codes."""
-    return [FLAGS[c] for c in codes if c in FLAGS]
+def notes(codes: list[str], league: str | None = None) -> list[str]:
+    """The sentences for a list of flag codes, in this league's numbers."""
+    return [note(c, league) for c in codes if c in FLAGS]

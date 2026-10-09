@@ -206,7 +206,7 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
                 by_flag[f].append(r)
         from . import scout
         entry["scout"] = {**_verdict(ctx), "matched": len(found), "too_common": ctx.get("too_common") or [],
-                          "flags": sorted(({"key": f, "note": scout.FLAGS.get(f, f), **grade(v)}
+                          "flags": sorted(({"key": f, "note": scout.note(f, sport), **grade(v)}
                                            for f, v in by_flag.items() if len(v) >= MIN_SLICE),
                                           key=lambda s: s["z"]),
                           "fitted": ctx.get("flags") or {}}

@@ -164,7 +164,7 @@ def test_the_store_round_trips_and_the_board_runs_the_read():
             "held_out": {"n": 10}, "fitted_at": "now"}, p)
     assert C.load(p)["nfl"]["flags"]["thin_sample"]["k"] == 0.6
     src = open(os.path.join(ROOT, "engine", "likelyboard.py"), encoding="utf-8").read()
-    i, j = src.index("_calibrate([pool[k] for k in order]"), src.index("_ctx.annotate(_rows, result)")
+    i, j = src.index("_calibrate([pool[k] for k in order]"), src.index("_ctx.annotate(_rows, result, sport)")
     assert i < j, "the scout reads after the record's calibration"
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "<b>Scout:</b>" in js and "r.ctx_note" in js

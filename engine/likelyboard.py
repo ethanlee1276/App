@@ -520,7 +520,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         from . import likelyctx as _ctx
         if sport in _ctx.SPORTS:
             _rows = [pool[k] for k in order]
-            _ctx.annotate(_rows, result)
+            _ctx.annotate(_rows, result, sport)
             _ctx.apply(_rows, sport)
     except Exception:                                        # noqa: BLE001
         pass

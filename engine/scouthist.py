@@ -1,7 +1,15 @@
 """What football history proves about the scout's flags, and the board's use of it.
 
-    sudo -u qellys python3 -m engine.scouthist            # replay 2021+, save what is proven
+    sudo -u qellys python3 -m engine.scouthist            # replay 2021+, every league, save what is proven
     sudo -u qellys python3 -m engine.scouthist --dry-run
+    sudo -u qellys python3 -m engine.scouthist --sport cfb --dry-run   # one league
+
+COLLEGE (2026-10-09): the same replay over college's stored games, with
+college's own thresholds (scout.LEAGUE) and its own store
+(scout_history_cfb.json). The bar is the NFL's, unchanged. The dry run
+also prints the share of each league's stored games every game-script
+threshold catches, so the college numbers can be checked against the
+NFL's on the box's own lines.
 
 Ethan, 2026-10-04, after the five-season replay: Most Likely is "what we
 think is going to happen based off all data we collect ... offense and
@@ -70,18 +78,18 @@ def _week_no(period) -> int:
         return 0
 
 
-def replay(hist, seasons=None) -> dict:
+def replay(hist, seasons=None, sport: str = "nfl") -> dict:
     """Every stored player-game in HISTORY_MARKETS with five earlier games
     (across seasons)
     that season: the line is his last-five average (0.5 for touchdowns),
     and each flag's side is scored against the same side in unflagged
     games of the same market. A negative gap that holds in both halves of
     the seasons is a football effect form alone does not carry."""
-    games, by_team, _ = history_index(hist, set())
+    games, by_team, _ = history_index(hist, set(), sport)
     by_key = game_keys(games)
     q = ("SELECT player, season, period, game_id, team, position, market, value FROM player_game_logs "
-         f"WHERE sport='nfl' AND market IN ({','.join('?' * len(HISTORY_MARKETS))})")
-    args = list(HISTORY_MARKETS)
+         f"WHERE sport=? AND market IN ({','.join('?' * len(HISTORY_MARKETS))})")
+    args = [sport, *HISTORY_MARKETS]
     if seasons:
         q += f" AND season IN ({','.join('?' * len(seasons))})"
         args += list(seasons)
@@ -129,7 +137,7 @@ def replay(hist, seasons=None) -> dict:
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
                                  weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
-                                 missed_last=missed)
+                                 missed_last=missed, league=sport)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)
@@ -172,19 +180,21 @@ def proven(h: dict) -> dict:
     return out
 
 
-def _store() -> Path:
-    return Path(modelstate.path("scout_history.json"))
+def _store(sport: str = "nfl") -> Path:
+    """The NFL's store keeps its original name, so the box's file is read
+    as it is; every other league has its own."""
+    return Path(modelstate.path("scout_history.json" if sport == "nfl" else f"scout_history_{sport}.json"))
 
 
-def load(path=None) -> dict:
+def load(path=None, sport: str = "nfl") -> dict:
     try:
-        return json.loads(Path(path or _store()).read_text(encoding="utf-8"))
+        return json.loads(Path(path or _store(sport)).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
-def save(found: dict, seasons, path=None) -> None:
-    p = Path(path or _store())
+def save(found: dict, seasons, path=None, sport: str = "nfl") -> None:
+    p = Path(path or _store(sport))
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_text(json.dumps({"flags": found, "seasons": list(seasons),
@@ -207,24 +217,55 @@ def shift_for(codes, market: str, side: str, store: dict | None = None):
     return best, who
 
 
+#: The game-script thresholds whose catch the dry run prints, per league.
+SHARE_CHECKS = (("total >= SHOOTOUT_TOTAL", "total", "SHOOTOUT_TOTAL", 1),
+                ("total <= LOW_TOTAL", "total", "LOW_TOTAL", -1),
+                ("|spread| >= BIG_DOG", "abs_spread", "BIG_DOG", 1),
+                ("|spread| >= BIG_FAV_PASS", "abs_spread", "BIG_FAV_PASS", 1),
+                ("|spread| >= BLOWOUT", "abs_spread", "BLOWOUT", 1))
+
+
+def threshold_shares(hist, sport: str) -> dict:
+    """{check: (share of the league's stored games with a line it catches,
+    games with a line)} — the check that college's thresholds catch about
+    the share of college games the NFL's catch of NFL games."""
+    rows = hist.execute("SELECT spread, total FROM games WHERE sport=? AND total IS NOT NULL "
+                        "AND spread IS NOT NULL", (sport,)).fetchall()
+    out = {}
+    for label, field, name, sign in SHARE_CHECKS:
+        cut = SC.threshold(name, sport)
+        vals = [float(r["total"]) if field == "total" else abs(float(r["spread"])) for r in rows]
+        hit = sum(1 for v in vals if (v >= cut if sign > 0 else v <= cut))
+        out[f"{label.split()[0]} {label.split()[1]} {cut:g}"] = (hit / len(vals) if vals else None, len(vals))
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m engine.scouthist")
     ap.add_argument("--dry-run", action="store_true", help="replay and report, save nothing")
     ap.add_argument("--history-db", default="", help="history path (default data/history.db)")
+    ap.add_argument("--sport", default="", help="one league (default: every league the scout reads)")
     a = ap.parse_args(argv)
     from . import db
-    from .likelyctx import ro
-    h = replay(ro(a.history_db or db.DEFAULT_DB))
-    found = proven(h)
-    print(f"seasons {h['seasons']} (halves split at {h['split']})")
-    for flag, cells in found.items():
-        for ms, c in cells.items():
-            print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")
-    if not found:
-        print("  nothing proven — the board's flags stay notes")
-    if not a.dry_run:
-        save(found, h["seasons"])
-        print("saved; the board reads it on its next build")
+    from .likelyctx import SPORTS, ro
+    hist = ro(a.history_db or db.DEFAULT_DB)
+    for sport in ([a.sport.lower()] if a.sport else list(SPORTS)):
+        print(f"=== {sport.upper()}")
+        if a.dry_run:
+            for label, (share, n) in threshold_shares(hist, sport).items():
+                print(f"  catches  {label:28} " + (f"{share:6.1%} of {n} games" if share is not None
+                                                   else "no stored lines"))
+        h = replay(hist, sport=sport)
+        found = proven(h)
+        print(f"seasons {h['seasons']} (halves split at {h['split']})")
+        for flag, cells in found.items():
+            for ms, c in cells.items():
+                print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")
+        if not found:
+            print("  nothing proven — the board's flags stay notes")
+        if not a.dry_run:
+            save(found, h["seasons"], sport=sport)
+            print("saved; the board reads it on its next build")
     return 0
 
 

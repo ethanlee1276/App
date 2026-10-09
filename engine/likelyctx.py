@@ -59,8 +59,10 @@ def _store() -> Path:
 BOOKS = ("likely_live", "likely", "board", "td_scenario", "matchup_td", "matchup_prop", "bold")
 SOURCE = {"likely_live": "list", "likely": "list", "board": "board", "td_scenario": "scenario",
           "matchup_td": "matchup", "matchup_prop": "matchup", "bold": "bold"}
-#: Leagues the scout reads (football's flags are football's).
-SPORTS = ("nfl",)
+#: Leagues the scout reads (football's flags are football's). College
+#: joined 2026-10-09 with its own thresholds (scout.LEAGUE): the same reads
+#: and the same held-out bar, fitted on college's own record only.
+SPORTS = ("nfl", "cfb")
 
 
 # --- the record, in its football context ----------------------------------------
@@ -101,7 +103,7 @@ def _date(s):
         return None
 
 
-def history_index(hist, players: set) -> tuple[dict, dict, dict]:
+def history_index(hist, players: set, sport: str = "nfl") -> tuple[dict, dict, dict]:
     """(games by id, games by team in date order, {player: [log rows]}).
 
     THE TWO TABLES DO NOT SHARE A GAME ID: games writes "LV@KC", the
@@ -112,7 +114,7 @@ def history_index(hist, players: set) -> tuple[dict, dict, dict]:
     Each log row's ``game_id`` is rewritten to its game's, so everything
     downstream compares like with like."""
     games, by_team = {}, defaultdict(list)
-    for g in hist.execute("SELECT * FROM games WHERE sport='nfl'"):
+    for g in hist.execute("SELECT * FROM games WHERE sport=?", (sport,)):
         g = dict(g)
         d = _date(g.get("date") or "")
         if d is None:
@@ -122,7 +124,9 @@ def history_index(hist, players: set) -> tuple[dict, dict, dict]:
             wk = _week(g.get("period"))
             if not isinstance(wk, int) or not g.get("season"):
                 continue
-            d = _dt.date(int(g["season"]), 9, 7) + _dt.timedelta(weeks=wk - 1)
+            # College opens a week before the NFL; a week off is all the
+            # ordering needs, and the weekday says "unknown" either way.
+            d = _dt.date(int(g["season"]), 9, 7 if sport == "nfl" else 1) + _dt.timedelta(weeks=wk - 1)
             g["_approx"] = True
         g["_d"] = d
         # "BUF@KC" IS NOT A GAME, it is a fixture that recurs every season.
@@ -142,8 +146,8 @@ def history_index(hist, players: set) -> tuple[dict, dict, dict]:
     for i in range(0, len(names), 400):
         chunk = names[i:i + 400]
         q = ("SELECT player, season, period, game_id, team, position, market, value FROM player_game_logs "
-             f"WHERE sport='nfl' AND player IN ({','.join('?' * len(chunk))})")
-        for r in hist.execute(q, chunk):
+             f"WHERE sport=? AND player IN ({','.join('?' * len(chunk))})")
+        for r in hist.execute(q, [sport, *chunk]):
             g = log_game(r, games, by_key)
             if g is not None:
                 logs[r["player"]].append({**dict(r), "game_id": g["game_id"], "_d": g["_d"]})
@@ -178,7 +182,7 @@ def _outdoor(roof):
     return None if not roof else roof in ("outdoors", "open", "outdoor")
 
 
-def context(pick: dict, games: dict, by_team: dict, logs: dict) -> dict | None:
+def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nfl") -> dict | None:
     """The scout's situation for one settled pick, from what was known
     before its game — or None when its game cannot be found."""
     day = _date(pick.get("day") or "")
@@ -204,7 +208,7 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict) -> dict | None:
                      values=vals, game_spread=game.get("spread"), home=(team == game["home"]),
                      total=game.get("total"), wind=game.get("wind"), outdoor=_outdoor(game.get("roof")),
                      weekday=None if game.get("_approx") else gd.weekday(), games_season=games_season,
-                     missed_last=missed)
+                     missed_last=missed, league=sport)
     s["team"], s["game_id"] = team, game["game_id"]
     if game.get("home_score") is not None and game.get("away_score") is not None:
         mine_pts = game["home_score"] if team == game["home"] else game["away_score"]
@@ -216,9 +220,9 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict) -> dict | None:
 def flagged_journal(ledger, hist, sport: str = "nfl") -> list[dict]:
     """The journal with each pick's situation and flags attached."""
     rows = journal(ledger, sport)
-    games, by_team, logs = history_index(hist, {r["player"] for r in rows})
+    games, by_team, logs = history_index(hist, {r["player"] for r in rows}, sport)
     for r in rows:
-        r["ctx"] = context(r, games, by_team, logs)
+        r["ctx"] = context(r, games, by_team, logs, sport)
         r["flags"] = SC.flags(r["ctx"]) if r["ctx"] else []
     return rows
 
@@ -242,9 +246,10 @@ def _weekday(g: dict):
     return None
 
 
-def annotate(rows: list[dict], result: dict) -> int:
+def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
     """Put ``scout_flags`` and ``scout_notes`` on every player row of the
-    board; returns how many rows carry at least one. Moves no number."""
+    board; returns how many rows carry at least one. Moves no number.
+    ``sport`` picks the league's thresholds (scout.LEAGUE)."""
     games = result.get("games") or []
     recs = result.get("recommendations") or []
     last_week: dict = {}
@@ -284,10 +289,10 @@ def annotate(rows: list[dict], result: dict) -> int:
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
             missed_last=(lw is not None and tw is not None and lw < tw),
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
-            tgt_rank=tgt_rank.get(r["player"]))
+            tgt_rank=tgt_rank.get(r["player"]), league=sport)
         codes = SC.flags(s)
         r["scout_flags"] = codes
-        r["scout_notes"] = SC.notes(codes)
+        r["scout_notes"] = SC.notes(codes, sport)
         n += bool(codes)
     return n
 
@@ -438,7 +443,7 @@ def apply(rows: list[dict], sport: str, store: dict | None = None, history: dict
     ``ctx_raw_prob`` and the reason as ``ctx_note``."""
     from . import scouthist
     ks = ((store if store is not None else load()).get(sport) or {}).get("flags") or {}
-    hist = history if history is not None else (scouthist.load() if sport == "nfl" else {})
+    hist = history if history is not None else scouthist.load(sport=sport)
     moved = 0
     for r in rows:
         codes = r.get("scout_flags") or []
@@ -459,12 +464,12 @@ def apply(rows: list[dict], sport: str, store: dict | None = None, history: dict
         # the next fit judges what we said, never its own correction.
         r.setdefault("board_raw_prob", raw)
         if by_history <= by_record:
-            r["ctx_note"] = (f"{SC.FLAGS[hflag]}: in 2021+ games picks like this hit {abs(shift):.0%} less "
+            r["ctx_note"] = (f"{SC.note(hflag, sport)}: in 2021+ games picks like this hit {abs(shift):.0%} less "
                              f"often than usual, so this shows {adj:.0%} (it was {raw:.0%})")
         else:
             worst = min(codes, key=lambda f: (ks.get(f) or {}).get("k", 1.0))
             g = ks[worst]
-            r["ctx_note"] = (f"picks like this one ({SC.FLAGS[worst]}) have hit {g['hit']:.0%} of {g['n']} where "
+            r["ctx_note"] = (f"picks like this one ({SC.note(worst, sport)}) have hit {g['hit']:.0%} of {g['n']} where "
                              f"we said {g['claimed']:.0%}, so this shows {adj:.0%} (it was {raw:.0%})")
         moved += 1
     return moved
