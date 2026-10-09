@@ -285,6 +285,30 @@ first). Paste back anything that prints an error or looks off.
     "wait" over half a second on a board means the box is the slow part,
     not the phone. The record and roster files shrink by about 40% after
     their next rebuild (they are written compact now).
+    (Done 2026-10-09: every "wait" was 0.16–0.22 s, and the split showed
+    why — DNS 3 ms, connect 4 ms, the secure handshake 158 ms, then the
+    first byte 4 ms after it. The server answers in 4 ms; the handshake
+    is the slow part. A phone pays it once per visit, not per file, since
+    every file after the first rides the same connection.)
+
+17. **The slim record and the slow handshake** (2026-10-09). Nothing to
+    run for the slim record to work: after the box pulls, the next settle
+    pass writes `record_head.json` beside `record.json` — the same record
+    without the sections only the Record page draws (about half the
+    bytes) — and Home reads that instead. Two read-only checks; paste
+    what they print:
+    ```
+    for f in record record_head; do curl -s -o /dev/null -H "Accept-Encoding: gzip" -w "$f %{http_code} %{size_download} bytes\n" "https://qellysbook.com/data/$f.json"; done
+    uptime; free -m; swapon --show; vmstat 1 5; cat /proc/pressure/cpu /proc/pressure/memory; ps -eo pid,ni,rss,pcpu,comm --sort=-rss | head -8; for i in 1 2 3 4 5; do curl -s -o /dev/null -w "tls %{time_appconnect}s first byte %{time_starttransfer}s\n" https://qellysbook.com/data/record_head.json; done
+    ```
+    The first line should show `record_head` well under `record`; a 404
+    on it only means no settle pass has run since the pull. In the second
+    check, `vmstat`'s `si`/`so` columns above zero mean the box is
+    swapping (the handshake waits on memory read back from disk); `st`
+    above 5 means DigitalOcean is lending our one CPU to a neighbour,
+    which no code change fixes; the `some avg10` lines above 10 mean the
+    box is short of memory or CPU. Five handshakes all near 0.15 s is a
+    steady cost; one slow and four fast was a cold start.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
