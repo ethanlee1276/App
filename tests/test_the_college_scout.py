@@ -150,6 +150,42 @@ def test_the_replay_and_its_share_check_run_on_college():
     assert nfl_check == (1.0, 1), "the NFL's 51 is a shootout at 49"
 
 
+
+def _box_shaped_hist(path):
+    """College as the box stores it (2026-10-09): the kickoff date in
+    ``period``, ``date`` empty, games keyed "AWAY@HOME", the player logs
+    keyed by the play-by-play's numeric id. The first runs on the box
+    joined none of it: the replay found no seasons and 0 of 689 picks met
+    their game."""
+    from engine import db
+    c = db.connect(path)
+    games, logs = [], []
+    days = ["2025-09-06", "2025-09-13", "2025-09-20", "2025-09-27", "2025-10-04", "2025-10-11", "2025-10-18"]
+    for i, day in enumerate(days):
+        games.append(("cfb", 2025, day, f"OPP{i}@UGA", "UGA", f"OPP{i}", 35, 14, -14.5, 55.5, None))
+        logs.append(("cfb", 2025, day, f"40100{i}", "Dawg Back", "UGA", f"OPP{i}", "RB", 1, "rush_yds",
+                     80.0 + i))
+    c.executemany("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, "
+                  "spread, total, date) VALUES (?,?,?,?,?,?,?,?,?,?,?)", games)
+    c.executemany("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                  "position, home, market, value) VALUES (?,?,?,?,?,?,?,?,?,?,?)", logs)
+    c.commit()
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def test_college_games_are_found_by_the_date_in_their_period():
+    c = _box_shaped_hist(os.path.join(tempfile.mkdtemp(), "h.db"))
+    games, by_team, logs = C.history_index(c, {"Dawg Back"}, "cfb")
+    assert len(games) == 7, "a college game with its date in period was dropped"
+    assert len(logs["Dawg Back"]) == 7, "the logs' numeric ids must meet the games on season, day and team"
+    pick = {"player": "Dawg Back", "team": "UGA", "market": "rush_yds", "side": "OVER", "line": 85.5,
+            "day": "2025-10-18"}
+    s = C.context(pick, games, by_team, logs, "cfb")
+    assert s is not None and s["spread"] == -14.5 and s["games_season"] == 6, s
+    h = H.replay(c, sport="cfb")
+    assert h["seasons"] == [2025], "the replay must score college's stored season"
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

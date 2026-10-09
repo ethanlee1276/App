@@ -116,7 +116,12 @@ def history_index(hist, players: set, sport: str = "nfl") -> tuple[dict, dict, d
     games, by_team = {}, defaultdict(list)
     for g in hist.execute("SELECT * FROM games WHERE sport=?", (sport,)):
         g = dict(g)
-        d = _date(g.get("date") or "")
+        # COLLEGE'S PERIOD IS ITS DATE. The college ingest writes the kickoff
+        # date into ``period`` ("2025-10-04", engine/sources/cfbfastr) and
+        # leaves ``date`` empty; read as a week it is no week at all, so the
+        # first college runs (2026-10-09) dropped every college game — the
+        # replay found no seasons and 0 of 689 picks met their game.
+        d = _date(g.get("date") or "") or _date(g.get("period") or "")
         if d is None:
             # Older schedule rows were written before the kickoff date was
             # kept (engine/ingest.nfl_game_rows). The week still orders
