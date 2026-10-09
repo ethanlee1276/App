@@ -6,7 +6,7 @@
 
 COLLEGE (2026-10-09): the same replay over college's stored games, with
 college's own thresholds (scout.LEAGUE) and its own store
-(scout_history_cfb.json). The bar is the NFL's, unchanged. The dry run
+(cfb_scout_history.json). The bar is the NFL's, unchanged. The dry run
 also prints the share of each league's stored games every game-script
 threshold catches, so the college numbers can be checked against the
 NFL's on the box's own lines.
@@ -183,7 +183,7 @@ def proven(h: dict) -> dict:
 def _store(sport: str = "nfl") -> Path:
     """The NFL's store keeps its original name, so the box's file is read
     as it is; every other league has its own."""
-    return Path(modelstate.path("scout_history.json" if sport == "nfl" else f"scout_history_{sport}.json"))
+    return Path(modelstate.path("scout_history.json" if sport == "nfl" else f"{sport}_scout_history.json"))
 
 
 def load(path=None, sport: str = "nfl") -> dict:

@@ -61,8 +61,27 @@ def test_the_projection_widens_that_position_only_and_says_so():
     assert P.width_mult("TE", "receptions") == 1.0, "a store from the far-tail version is ignored"
     src = open(os.path.join(ROOT, "engine", "projection.py"), encoding="utf-8").read()
     i = src.index("from .posspread import width_mult")
-    assert 'if sport == "nfl":' in src[i - 200:i], "measured on NFL games, used on NFL props"
+    # Each league reads only widths measured on its own games (college
+    # joined 2026-10-09 with its own store; was NFL-only).
+    assert 'if sport in ("nfl", "cfb"):' in src[i - 200:i]
+    assert "width_mult(prop.position, prop.market, sport)" in src[i:i + 120], \
+        "a league must read its own store, never another league's"
     assert "adj_std *= _w" in src[i:i + 300] and "Spread:" in src[i:i + 500]
+
+
+def test_college_reads_its_own_widths_and_never_the_nfls():
+    nfl = Path(os.environ["QB_MODELS_DIR"]) / "position_spread.json"
+    cfb = Path(os.environ["QB_MODELS_DIR"]) / "cfb_position_spread.json"
+    assert P._store("cfb").name == cfb.name and P._store("nfl").name == nfl.name
+    P.save({"TE|receptions": {"m": 1.3, "n": 9000, "gain": 0.01, "passed": True}}, nfl)
+    P.save({"RB|rush_yds": {"m": 1.2, "n": 9000, "gain": 0.01, "passed": True}}, cfb)
+    assert P.width_mult("TE", "receptions", "cfb") == 1.0, "an NFL width never reaches a college prop"
+    assert P.width_mult("RB", "rush_yds", "cfb") == 1.2
+    assert P.width_mult("RB", "rush_yds", "nfl") == 1.0, "a college width never reaches an NFL prop"
+    assert P.width_mult("TE", "receptions", "nba") == 1.0, "a league with no fit reads 1.0"
+    rep = {"cfb": {"slices": {"position": [{"key": "RB · over", "n": 40, "hit": 0.70, "said": 0.64}]}}}
+    assert P.record_veto("RB", rep, "cfb") and not P.record_veto("RB", rep, "nfl"), \
+        "college's own record vetoes college's widths"
 
 
 def test_the_record_vetoes_widening_a_position_it_shows_is_not_over_sure():

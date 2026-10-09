@@ -1,7 +1,14 @@
 """How wide a player's outcomes really are, by position.
 
-    sudo -u qellys python3 -m engine.posspread            # measure 2021+, save what holds
+    sudo -u qellys python3 -m engine.posspread            # measure 2021+, every league, save what holds
     sudo -u qellys python3 -m engine.posspread --dry-run
+    sudo -u qellys python3 -m engine.posspread --sport cfb --dry-run
+
+COLLEGE (2026-10-09, Ethan: "add it for college football"): the same
+measurement on college's stored player-weeks, its own store
+(cfb_position_spread.json), its own record veto (college's position-by-
+side slices), and the same bar — unchanged, written for the NFL before any
+run. A college width is used only on college props.
 
 THE FINDING THAT ASKED FOR IT. The NFL Most Likely record, 2026-10-04:
 tight ends over-claimed on BOTH sides — overs hit 47% where we said 64%
@@ -69,8 +76,16 @@ NEAR_LO, NEAR_HI = 0.75, 1.33
 STORE_VERSION = 3
 
 
-def _store() -> Path:
-    return Path(modelstate.path("position_spread.json"))
+#: Leagues measured. Each reads only widths measured on its own games.
+SPORTS = ("nfl", "cfb")
+#: Games of form behind a row, by league: about one season.
+CARRY_BY = {"nfl": 17, "cfb": 12}
+
+
+def _store(sport: str = "nfl") -> Path:
+    """The NFL's store keeps its original name, so the box's file is read
+    as it is; every other league has its own."""
+    return Path(modelstate.path("position_spread.json" if sport == "nfl" else f"{sport}_position_spread.json"))
 
 
 def load(path=None) -> dict:
@@ -83,20 +98,23 @@ def load(path=None) -> dict:
 _CACHE: dict = {}
 
 
-def width_mult(position: str, market: str) -> float:
-    """The adopted spread multiplier for this position and market, 1.0
-    where nothing was adopted. Re-read when the store changes — the
-    launcher is long-lived and the weekly refit writes from a child."""
-    p = _store()
+def width_mult(position: str, market: str, sport: str = "nfl") -> float:
+    """The adopted spread multiplier for this position and market in this
+    league, 1.0 where nothing was adopted. Re-read when the store changes —
+    the launcher is long-lived and the weekly refit writes from a child."""
+    if sport not in SPORTS:
+        return 1.0
+    p = _store(sport)
     try:
         stamp = (str(p), p.stat().st_mtime)
     except OSError:
         stamp = (str(p), None)
-    if _CACHE.get("stamp") != stamp:
+    cell = _CACHE.setdefault(sport, {})
+    if cell.get("stamp") != stamp:
         store = load(p)
-        _CACHE["stamp"] = stamp
-        _CACHE["w"] = (store.get("widths") or {}) if store.get("version") == STORE_VERSION else {}
-    return float((_CACHE["w"].get(f"{str(position or '').upper()}|{market}") or {}).get("m", 1.0))
+        cell["stamp"] = stamp
+        cell["w"] = (store.get("widths") or {}) if store.get("version") == STORE_VERSION else {}
+    return float((cell["w"].get(f"{str(position or '').upper()}|{market}") or {}).get("m", 1.0))
 
 
 def _phi(z: float) -> float:
@@ -108,12 +126,12 @@ def _ll(p: float, hit: bool) -> float:
     return -math.log(p if hit else 1.0 - p)
 
 
-def positions_of(conn) -> dict:
+def positions_of(conn, sport: str = "nfl") -> dict:
     """{(season, player, team): position} off the box-score rows."""
     out = {}
     for season, player, team, pos in conn.execute(
-            "SELECT season, player, team, MAX(position) FROM player_game_logs WHERE sport='nfl' "
-            "AND position IN ('QB','RB','WR','TE') GROUP BY season, player, team"):
+            "SELECT season, player, team, MAX(position) FROM player_game_logs WHERE sport=? "
+            "AND position IN ('QB','RB','WR','TE') GROUP BY season, player, team", (sport,)):
         out[(season, player, team)] = pos
     return out
 
@@ -169,7 +187,7 @@ def judge(data: list) -> dict:
 VETO_N = 30
 
 
-def record_veto(position: str, report: dict | None = None) -> str | None:
+def record_veto(position: str, report: dict | None = None, sport: str = "nfl") -> str | None:
     """Why the board's own record forbids widening this position, or None.
 
     Written 2026-10-04, after the near-line re-run adopted x1.25-x1.50 for
@@ -182,7 +200,7 @@ def record_veto(position: str, report: dict | None = None) -> str | None:
     if report is None:
         from . import boardlearn
         report = boardlearn.report()
-    for s in ((report.get("nfl") or {}).get("slices") or {}).get("position") or []:
+    for s in ((report.get(sport) or {}).get("slices") or {}).get("position") or []:
         pos, _, side = str(s.get("key", "")).partition(" · ")
         if pos == position and s.get("n", 0) >= VETO_N and s.get("hit", 0) >= s.get("said", 1):
             return (f"the record's {position} {side}s hit {s['hit']:.0%} of {s['n']} where we said "
@@ -190,10 +208,10 @@ def record_veto(position: str, report: dict | None = None) -> str | None:
     return None
 
 
-def apply_vetoes(res: dict, report: dict | None = None) -> dict:
+def apply_vetoes(res: dict, report: dict | None = None, sport: str = "nfl") -> dict:
     """Mark every passing width the record vetoes as not passed, with why."""
     for k, v in res.items():
-        why = record_veto(k.split("|")[0], report) if v.get("passed") else None
+        why = record_veto(k.split("|")[0], report, sport) if v.get("passed") else None
         if why:
             v["passed"], v["veto"] = False, why
     return res
@@ -203,7 +221,7 @@ def apply_vetoes(res: dict, report: dict | None = None) -> dict:
 CARRY_GAMES = 17
 
 
-def carried_rows(conn, market: str) -> list:
+def carried_rows(conn, market: str, sport: str = "nfl") -> list:
     """yardagefit.rows, but his form reaches back into last season.
 
     Ethan, 2026-10-04: "make sure ur using 2026 data too." Keyed by season,
@@ -212,16 +230,19 @@ def carried_rows(conn, market: str) -> list:
     his last CARRY_GAMES games, as the live model carries a season over in
     its first weeks — the current season counts from week 2."""
     from .yardagefit import MIN_PRIOR, MIN_PROJECTION, blended
+    carry = CARRY_BY.get(sport, CARRY_GAMES)
     by: dict = defaultdict(list)
     for season, period, player, team, value in conn.execute(
             "SELECT season, period, player, team, value FROM player_game_logs "
-            "WHERE sport='nfl' AND market=?", (market,)):
+            "WHERE sport=? AND market=?", (sport, market)):
         by[(player, team)].append((season, str(period), float(value or 0.0)))
     out = []
     for (player, team), games in by.items():
-        games.sort()
+        # By week, not by text: college's periods are "1".."15", and "10"
+        # sorts before "2" as a string.
+        games.sort(key=lambda g: (g[0], _week(g[1])))
         for i in range(MIN_PRIOR, len(games)):
-            vals = [v for _s, _p, v in games[max(0, i - CARRY_GAMES):i]]
+            vals = [v for _s, _p, v in games[max(0, i - carry):i]]
             mean = sum(vals) / len(vals)
             sd = math.sqrt(sum((v - mean) ** 2 for v in vals) / (len(vals) - 1)) if len(vals) > 1 else 0.0
             mu = blended(vals)
@@ -232,10 +253,17 @@ def carried_rows(conn, market: str) -> list:
     return out
 
 
-def measure(conn) -> dict:
+def _week(period) -> tuple:
+    try:
+        return (0, int(str(period).strip()))
+    except (TypeError, ValueError):
+        return (1, str(period))
+
+
+def measure(conn, sport: str = "nfl") -> dict:
     """{"POS|market": judge(...)} for every position and market."""
-    yrows = lambda c, m: carried_rows(c, m)                          # noqa: E731
-    pos = positions_of(conn)
+    yrows = lambda c, m: carried_rows(c, m, sport)                   # noqa: E731
+    pos = positions_of(conn, sport)
     out = {}
     for market in MARKETS:
         by = defaultdict(list)
@@ -245,12 +273,12 @@ def measure(conn) -> dict:
                 by[p].append(r)
         for p, rs in by.items():
             out[f"{p}|{market}"] = judge(samples(rs, market))
-    return apply_vetoes(out)
+    return apply_vetoes(out, sport=sport)
 
 
-def save(res: dict, path=None) -> None:
+def save(res: dict, path=None, sport: str = "nfl") -> None:
     import datetime as _dt
-    p = Path(path or _store())
+    p = Path(path or _store(sport))
     p.parent.mkdir(parents=True, exist_ok=True)
     widths = {k: {"m": v["m"], "n": v["n"], "gain": v["gain"]} for k, v in res.items() if v["passed"]}
     tmp = p.with_suffix(p.suffix + ".tmp")
@@ -263,17 +291,23 @@ def save(res: dict, path=None) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m engine.posspread")
     ap.add_argument("--dry-run", action="store_true", help="measure and report, save nothing")
+    ap.add_argument("--sport", default="", help="one league (default: every league measured)")
     a = ap.parse_args(argv)
     from . import db
-    res = measure(db.connect())
-    for k, v in sorted(res.items()):
-        verdict = (f"ADOPT ×{v['m']:.2f}" if v["passed"] else
-                   f"keep ×1.00 ({v['veto']})" if v.get("veto") else "keep ×1.00")
-        print(f"  {k:16} n {v['n']:6}  fitted ×{v['m']:.2f}  held-out gain {v['gain']:+.5f}  "
-              f"better in {v['better']}/{len(v['seasons'])} seasons  → {verdict}")
-    if not a.dry_run:
-        save(res)
-        print("saved; the next build reads it")
+    conn = db.connect()
+    for sport in ([a.sport.lower()] if a.sport else list(SPORTS)):
+        print(f"=== {sport.upper()}")
+        res = measure(conn, sport)
+        for k, v in sorted(res.items()):
+            verdict = (f"ADOPT ×{v['m']:.2f}" if v["passed"] else
+                       f"keep ×1.00 ({v['veto']})" if v.get("veto") else "keep ×1.00")
+            print(f"  {k:16} n {v['n']:6}  fitted ×{v['m']:.2f}  held-out gain {v['gain']:+.5f}  "
+                  f"better in {v['better']}/{len(v['seasons'])} seasons  → {verdict}")
+        if not res:
+            print("  no rows to measure")
+        if not a.dry_run:
+            save(res, sport=sport)
+            print("saved; the next build reads it")
     return 0
 
 

@@ -128,7 +128,7 @@ def test_a_settled_college_pick_finds_its_game_with_college_numbers():
 
 def test_the_history_store_is_per_league_and_the_nfls_keeps_its_name():
     assert H._store("nfl").name == "scout_history.json", "the box's NFL file is read as it is"
-    assert H._store("cfb").name == "scout_history_cfb.json"
+    assert H._store("cfb").name == "cfb_scout_history.json"
     d = Path(tempfile.mkdtemp())
     H.save({"back_from_absence": {"rush_yds OVER": {"shift": -0.05, "n": 300, "gaps": [-0.05, -0.06]}}},
            [2024, 2025], path=d / "x.json", sport="cfb")
