@@ -228,6 +228,11 @@ def test_the_icons_are_defined_in_this_repo_and_not_imported():
     shell = _strip_html_comments(HTML)
     shell = re.sub(r"<meta\b[^>]*>", " ", shell, flags=re.I)
     shell = re.sub(r'<link\b[^>]*rel=["\']?canonical["\']?[^>]*>', " ", shell, flags=re.I)
+    # CONNECTION HINTS are the third kind (2026-10-09, the speed pass): a
+    # `preconnect` or `dns-prefetch` names a picture host so its handshake
+    # starts early. Nothing is downloaded and nothing renders from it, so
+    # a page with the network unplugged draws exactly the same. Told to Ethan.
+    shell = re.sub(r'<link\b[^>]*rel=["\']?(?:preconnect|dns-prefetch)["\']?[^>]*>', " ", shell, flags=re.I)
     shell = shell.lower().replace("http://www.w3.org", "")
     for host in ("http://", "https://", "//cdn.", "//unpkg", "//fonts.g"):
         assert host not in shell, f"{host} is being fetched by the page shell"
