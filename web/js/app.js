@@ -2048,18 +2048,94 @@ function boardMemGet(meta) {
 function boardMemPut(meta, data, builtAt) {
   const k = boardMemKey(meta);
   if (!k || !data || data.light === true || data.status === "not built") return;
+  _lightMem.delete(k);                       // the whole board supersedes its light copy
   _boardMem.delete(k);                       // re-inserted last: the newest
   _boardMem.set(k, { data, builtAt });
   while (_boardMem.size > BOARD_MEM_MAX) _boardMem.delete(_boardMem.keys().next().value);
 }
 
+/* THE FIRST VISIT TO A LEAGUE, DRAWN AT ONCE TOO (the speed pass,
+   2026-10-09: "now make the first visit to a sport faster too"). Every
+   build publishes a light copy of each board — the picks, the games and
+   the open bets without the heavy tables (engine/lightboard). While the
+   page is idle after its own board has drawn, the light copies of the
+   other leagues on the sport bar are fetched one at a time and kept in
+   memory, so the first tap on a league draws its picks immediately and
+   the whole board replaces them when it lands. A finger on a league
+   chip (or a mouse over it) asks for that league's copy first.
+
+   Never on a data-saver or 2G connection, never more than one request at
+   a time, and never for a league already held. Memory only, keyed by
+   who is signed in, like the boards themselves (BOARD_MEM_MAX). */
+const _lightMem = new Map();      // `${api}|${who}` -> { data, builtAt }
+const _lightAsk = new Map();      // the same key -> the request in flight
+let _prefetchArmed = false;
+
+function lightMemGet(meta) {
+  const k = boardMemKey(meta);
+  return (k && _lightMem.get(k)) || null;
+}
+
+async function prefetchLight(sport) {
+  const meta = SPORT_META[sport];
+  const name = lightNameFor(meta);
+  const k = boardMemKey(meta);
+  if (!name || !k || _lightMem.has(k) || _boardMem.has(k)) return;
+  if (_lightAsk.has(k)) return _lightAsk.get(k);
+  const ask = (async () => {
+    try {
+      const r = await paidFetch(name);
+      if (!r.ok) return;
+      const lite = normalizeSlate(await r.json());
+      if (lite.light !== true || _boardMem.has(k)) return;
+      const lm = r.headers.get("Last-Modified");
+      const t = lm ? Date.parse(lm) : NaN;
+      _lightMem.set(k, { data: lite, builtAt: Number.isFinite(t) ? t : null });
+    } catch (e) { /* the visit asks for it the way it always has */ }
+  })();
+  _lightAsk.set(k, ask);
+  try { await ask; } finally { _lightAsk.delete(k); }
+}
+
+function prefetchLeaguesSoon() {
+  if (_prefetchArmed || typeof document === "undefined" || !document.querySelectorAll) return;
+  _prefetchArmed = true;
+  const c = (typeof navigator !== "undefined" && navigator.connection) || {};
+  if (c.saveData || /(^|-)2g$/.test(String(c.effectiveType || ""))) return;
+  const later = typeof requestIdleCallback === "function"
+    ? (f) => requestIdleCallback(f, { timeout: 5000 })
+    : (f) => setTimeout(f, 2000);
+  later(async () => {
+    const seen = new Set();
+    for (const b of document.querySelectorAll(".sport-btn[data-sport]")) {
+      const s = b.dataset.sport;
+      if (b.hidden || seen.has(s) || s === state.sport || !SPORT_META[s]) continue;
+      seen.add(s);
+      await prefetchLight(s);
+    }
+  });
+}
+
+// A finger on a league chip, or a mouse over it, asks for its light copy
+// now: the tap that follows finds it in memory.
+if (typeof document !== "undefined" && document.addEventListener) {
+  const intent = (e) => {
+    const b = e.target && e.target.closest && e.target.closest(".sport-btn[data-sport]");
+    if (b && b.dataset.sport !== state.sport && SPORT_META[b.dataset.sport]) prefetchLight(b.dataset.sport);
+  };
+  document.addEventListener("pointerdown", intent, { passive: true });
+  document.addEventListener("pointerover", (e) => { if (e.pointerType === "mouse") intent(e); }, { passive: true });
+}
+
 async function _loadNow(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   // A league held in memory is drawn whole in a moment (below), so it
-  // gets no skeleton to flash on the way.
-  const held = (state.data && _boardFor === (SPORT_META[state.sport] || {}).api)
-    ? null : boardMemGet(SPORT_META[state.sport]);
-  if (!quiet && !held) showSkeleton();
+  // gets no skeleton to flash on the way — and neither does one whose
+  // light copy was fetched while the page sat idle.
+  const own = state.data && _boardFor === (SPORT_META[state.sport] || {}).api;
+  const held = own ? null : boardMemGet(SPORT_META[state.sport]);
+  const lightHeld = own || held ? null : lightMemGet(SPORT_META[state.sport]);
+  if (!quiet && !held && !lightHeld) showSkeleton();
   // What this machine's rebuild actually costs, so "stale" can mean
   // "later than this box's own normal" instead of a typed constant.
   // Not awaited: the freshness chip re-reads it on the next tick, and a
@@ -2105,8 +2181,48 @@ async function _loadNow(quiet = false) {
     state.builtAt = held.builtAt;
     renderAll();
     fromMemory = true;
+  } else if (lightHeld) {
+    // The light copy fetched while the page was idle: the picks at once,
+    // the whole board below replaces it the moment it lands.
+    if (overtaken()) return;
+    state.data = lightHeld.data;
+    _boardFor = meta.api;
+    state.lightBoard = true;
+    state.builtAt = lightHeld.builtAt;
+    renderAll();
   }
   try {
+    /* REVALIDATE INSTEAD OF RE-DOWNLOADING. This fires every 30 seconds
+       and the launcher rebuilds every 60, so roughly half of these polls
+       ask for a board this tab already has — and used to be handed the
+       whole thing again. Per subscriber, all day, that is the largest
+       recurring cost the site has.
+
+       The tag is kept in memory rather than letting the HTTP cache do
+       this, because the cache would also mean a paid board sitting on
+       disk in the subscriber's browser. `no-store` stays; the server
+       reads the header we send by hand.
+
+       Only sent when there is actually something to keep: a 304 with an
+       empty `state.data` would render a blank board. */
+    const tag = _boardTags[meta.api];
+    // A LIGHT BOARD IS NOT SOMETHING TO KEEP. With the light copy on
+    // screen and a tag from an earlier full load of this league, a
+    // revalidation would 304 and the light board would stay up — and
+    // stay up on every poll after it. Held means the FULL board.
+    const holding = state.data && _boardFor === meta.api && !state.lightBoard;
+    // ASKED FOR NOW, NOT AFTER THE LIGHT COPY (the speed pass,
+    // 2026-10-09). The whole board waited for the light copy to arrive
+    // and draw before its own request even left, so a first visit paid
+    // two downloads back to back. Both are on the wire together now; the
+    // light copy still draws first when it wins, and the whole board is
+    // read below exactly as before. Its failure is read where it is
+    // awaited, so the early catch only stops it being called unhandled.
+    const fullAsk = fetch(`${meta.api}?${params}&_=${Date.now()}`, {
+      cache: "no-store",
+      headers: (tag && holding) ? { "If-None-Match": tag } : {},
+    });
+    fullAsk.catch(() => {});
     /* FIRST PAINT FROM THE LIGHT COPY. Ethan, 2026-09-05: "faster first
        paint on mlb board". A phone parses the whole board before it draws
        anything on the MLB tab. Each build now publishes a light copy
@@ -2143,30 +2259,8 @@ async function _loadNow(quiet = false) {
     // twenty minutes ago while the timer fired happily every 30 seconds.
     // Closing the tab and reopening it was the only thing that missed the
     // cache, which is exactly the symptom.
-    /* REVALIDATE INSTEAD OF RE-DOWNLOADING. This fires every 30 seconds
-       and the launcher rebuilds every 60, so roughly half of these polls
-       ask for a board this tab already has — and used to be handed the
-       whole thing again. Per subscriber, all day, that is the largest
-       recurring cost the site has.
-
-       The tag is kept in memory rather than letting the HTTP cache do
-       this, because the cache would also mean a paid board sitting on
-       disk in the subscriber's browser. `no-store` stays; the server
-       reads the header we send by hand.
-
-       Only sent when there is actually something to keep: a 304 with an
-       empty `state.data` would render a blank board. */
     captureFreshBaseline(meta.api);
-    const tag = _boardTags[meta.api];
-    // A LIGHT BOARD IS NOT SOMETHING TO KEEP. With the light copy on
-    // screen and a tag from an earlier full load of this league, a
-    // revalidation would 304 and the light board would stay up — and
-    // stay up on every poll after it. Held means the FULL board.
-    const holding = state.data && _boardFor === meta.api && !state.lightBoard;
-    const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
-      cache: "no-store",
-      headers: (tag && holding) ? { "If-None-Match": tag } : {},
-    });
+    const res = await fullAsk;
     if (overtaken()) return;             // a league switch got here first
     if (res.status === 304 && holding) {
       stampFrom(res);                    // the build time has not moved
@@ -2280,6 +2374,7 @@ async function _loadNow(quiet = false) {
   if (refreshBtn && !quiet) refreshBtn.classList.remove("loading");
   manageAutoRefresh();
   updateAgo();
+  prefetchLeaguesSoon();
 }
 
 /* Refresh the moment the page comes back, because a timer alone cannot.
@@ -2761,12 +2856,44 @@ async function boardFetch(url, opts) {
 
    ONE HELPER, because there are four of these and a fifth will be added
    by someone who did not read this. */
+/* PAID FILES, ASKED FOR ONCE AND ONLY WHERE THEY CAN BE HAD (the speed
+   pass, 2026-10-09: "now make the first visit to a sport faster too").
+   Three wastes on every first visit, seen in the browser's request log:
+   * A reader without a subscription asked the entitled endpoint for
+     every paid file, was refused (401/402), and only then fetched the
+     public copy — a whole extra round trip per file, every load. The
+     refusal is remembered for whoever is signed in (boardMemWho), so the
+     next file goes straight to the public copy; signing in asks again.
+   * Two parts of the page asking for one file at the same moment
+     (kalshi.json, feed.json on a sport switch) downloaded it twice. They
+     share one request now, and each gets its own copy of the answer.
+   * The public copy carried `?t=<now>`, so no answer was ever reused.
+     It revalidates instead (`cache: "no-cache"`): every request still
+     asks the server, and an unchanged file comes back as a 304 with no
+     body (Caddy gives /data files an ETag and max-age=60). */
+let _paidDenied = null;
+const _paidInflight = new Map();
+
 async function paidFetch(name) {
-  try {
-    const res = await boardFetch("/api/board/" + name);
-    if (res.ok) return res;
-  } catch (e) { /* no API here — the static copy is the honest fallback */ }
-  return boardFetch(`data/${name}?t=` + Date.now());
+  let ask = _paidInflight.get(name);
+  if (!ask) {
+    ask = (async () => {
+      if (_paidDenied !== boardMemWho()) {
+        try {
+          const res = await boardFetch("/api/board/" + name);
+          if (res.ok) return res;
+          if (res.status === 401 || res.status === 402) _paidDenied = boardMemWho();
+        } catch (e) { /* no API here — the static copy is the honest fallback */ }
+      }
+      return boardFetch(`data/${name}`, { cache: "no-cache" });
+    })();
+    _paidInflight.set(name, ask);
+    const done = () => { if (_paidInflight.get(name) === ask) _paidInflight.delete(name); };
+    ask.then(done, done);
+  }
+  // Every caller reads its own copy; the original is never consumed, so a
+  // second caller can still copy it after the first has read the body.
+  return (await ask).clone();
 }
 
 /* The URLs whose most recent attempt never reached the server. */
@@ -20986,7 +21113,7 @@ async function renderRecord() {
   // anything else that is not a 2xx is an outage with its own card.
   const got = { failed: false };
   try {
-    const res = await boardFetch("data/record.json?t=" + Date.now());
+    const res = await boardFetch("data/record.json", { cache: "no-cache" });
     if (res.ok) d = adoptPooledRecord(await res.json());
     if (res.ok) _lastGood.set("record", Date.now());
     else got.failed = res.status !== 404;
@@ -30754,13 +30881,21 @@ function injWhen(ts) {
    nothing outside the injuries tab would have said so. */
 let _injBoard = null;
 let _injBoardAt = 0;
+let _injBoardAsk = null;
 async function loadInjuryBoard() {
   if (_injBoard && Date.now() - _injBoardAt < 5 * 60e3) return _injBoard;
-  try {
-    const res = await boardFetch("data/injuries.json?t=" + Date.now());
-    if (res.ok) { _injBoard = await res.json(); _injBoardAt = Date.now(); }
-  } catch (e) {}
-  return _injBoard;
+  // ONE REQUEST FOR EVERY CALLER (the speed pass, 2026-10-09): a sport
+  // switch asked from two places at once and downloaded the 560 KB file
+  // twice. Revalidated rather than stamped, so an unchanged file is a 304.
+  if (_injBoardAsk) return _injBoardAsk;
+  _injBoardAsk = (async () => {
+    try {
+      const res = await boardFetch("data/injuries.json", { cache: "no-cache" });
+      if (res.ok) { _injBoard = await res.json(); _injBoardAt = Date.now(); }
+    } catch (e) {}
+    return _injBoard;
+  })();
+  try { return await _injBoardAsk; } finally { _injBoardAsk = null; }
 }
 
 /* The tag is agate type, so the status has to fit in a breath. Longest
@@ -40212,7 +40347,7 @@ async function renderWhy() {
   let rec = null;
   const gotW = { failed: false };
   try {
-    const res = await boardFetch("data/record.json?t=" + Date.now());
+    const res = await boardFetch("data/record.json", { cache: "no-cache" });
     if (res.ok) rec = adoptPooledRecord(await res.json());   // the same record as every other page
     else gotW.failed = res.status !== 404;
   } catch (e) { gotW.failed = true; }

@@ -275,7 +275,10 @@ def write(sport: str, out_dir: Path = OUT_DIR, today: str | None = None) -> dict
     # Atomic (audit F-12): a poll mid-write must never read half a file.
     dest = out_dir / f"rosters_{sport}.json"
     tmp = dest.with_suffix(dest.suffix + ".tmp")
-    tmp.write_text(json.dumps(blob, indent=2))
+    # COMPACT (the speed pass, 2026-10-09): the college file was 22.6 MB,
+    # two spaces of indentation on every line of it. Readers parse it the
+    # same; the phone downloads and parses roughly 40% less.
+    tmp.write_text(json.dumps(blob, separators=(",", ":")))
     os.replace(tmp, dest)
     return blob
 

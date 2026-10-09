@@ -10036,7 +10036,9 @@ def export_json(conn, path) -> None:
     # export here, and a shared "record.json.tmp" let one process swap in
     # another's half-written copy.
     tmp = p.with_suffix(p.suffix + f".{_os.getpid()}.tmp")
-    tmp.write_text(_json.dumps(out, indent=2))
+    # Compact (the speed pass, 2026-10-09): the page fetches this on its
+    # first screen, and the indentation was ~40% of the bytes.
+    tmp.write_text(_json.dumps(out, separators=(",", ":")))
     _os.replace(tmp, p)
     # The paid half, beside it: web/data/zeno.json (a locked stub for the
     # public) and its full copy for members. Never fails the export.

@@ -271,6 +271,20 @@ first). Paste back anything that prints an error or looks off.
     whether NFL's photo host serves the small headshot the page asks for.
     If its RESIZED lines all say FAIL, every NFL face falls back to the
     full-size photo, which is megabytes each, and that is the next fix.
+    (Done 2026-10-09: the width-only resize answered 200 at 2.9 KB, so NFL
+    faces now ask for exactly that shape.)
+
+16. **The first visit to a sport** (2026-10-09, "now make the first visit
+    to a sport faster too … everything needs to be faster"). Nothing to
+    run for it to work. One read-only check, from the box, tells me how
+    long the server itself takes to answer and how many bytes a phone
+    really downloads for each board; paste what it prints:
+    ```
+    for u in /api/recommendations /api/mlb/recommendations /api/cfb/recommendations /api/nhl/recommendations /data/recommendations_picks.json /data/record.json /data/rosters_cfb.json; do curl -s -o /dev/null -H "Accept-Encoding: gzip" -w "$u %{http_code} wait %{time_starttransfer}s total %{time_total}s %{size_download} bytes\n" "https://qellysbook.com$u"; done
+    ```
+    "wait" over half a second on a board means the box is the slow part,
+    not the phone. The record and roster files shrink by about 40% after
+    their next rebuild (they are written compact now).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

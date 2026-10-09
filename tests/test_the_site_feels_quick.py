@@ -444,6 +444,120 @@ def test_the_picture_hosts_are_warmed_in_the_head():
     assert head.index('rel="preconnect"') < head.index('href="css/styles.css"'), "before the stylesheet blocks"
 
 
+
+# --- the first visit to a league (2026-10-09, "now make the first visit to a
+# sport faster too … everything needs to be faster") -------------------------
+def test_a_refused_paid_file_is_not_asked_for_again_and_twins_share_one_request():
+    got = _node(r"""
+      let _acctUser = null;
+      const CALLS = [];
+      const boardFetch = async (url, opts) => {
+        CALLS.push(url + (opts && opts.cache ? " [" + opts.cache + "]" : ""));
+        await new Promise((r) => setTimeout(r, 5));
+        const denied = url.startsWith("/api/board/");
+        return new Response(denied ? "{}" : JSON.stringify({ url }), { status: denied ? 401 : 200 });
+      };
+      """ + _fn("boardMemWho") + APP[APP.index("let _paidDenied = null;"):APP.index("async function paidFetch(")] + _fn("paidFetch", kind="async function") + r"""
+      (async () => {
+        const [a, b] = await Promise.all([paidFetch("kalshi.json"), paidFetch("kalshi.json")]);
+        const both = [(await a.json()).url, (await b.json()).url];
+        const first = CALLS.slice();
+        await paidFetch("feed.json");
+        const after = CALLS.slice(first.length);
+        _acctUser = { signed_in: true, email: "x@example.com" };
+        await paidFetch("feed.json");
+        const signedIn = CALLS.slice(first.length + after.length);
+        console.log(JSON.stringify({ first, both, after, signedIn }));
+      })();
+    """)
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["first"] == ["/api/board/kalshi.json", "data/kalshi.json [no-cache]"], \
+        f"two callers at once must share one trip, revalidated: {got['first']}"
+    assert got["both"] == ["data/kalshi.json", "data/kalshi.json"], "each caller reads its own copy"
+    assert got["after"] == ["data/feed.json [no-cache]"], "a refusal is remembered: no second detour"
+    assert got["signedIn"][0] == "/api/board/feed.json", "signing in asks the entitled endpoint again"
+
+
+def test_the_injury_board_is_one_request_for_every_caller():
+    body = _fn("loadInjuryBoard", kind="async function")
+    assert "if (_injBoardAsk) return _injBoardAsk;" in body
+    assert 'boardFetch("data/injuries.json", { cache: "no-cache" })' in body
+    assert 'boardFetch("data/record.json?t=" + Date.now())' not in APP, "the record revalidates instead"
+
+
+def test_the_whole_board_is_asked_for_before_the_light_copy_is_read():
+    body = _fn("_loadNow", kind="async function")
+    ask = body.index("const fullAsk = fetch(")
+    lite = body.index("const lr = await paidFetch(lightName);")
+    wait = body.index("const res = await fullAsk;")
+    assert ask < lite < wait, "the full board waits on the light copy again"
+    assert "fullAsk.catch(() => {});" in body
+
+
+def test_an_idle_light_copy_draws_the_first_visit_at_once():
+    got = _league_run("""
+(async () => {
+  PLAN = [{ body: { date: "NFL-1", games: [] }, headers: { ETag: "e1" } }];
+  await _loadNow(false);
+  const skel = SKELETONS;
+  paidFetch = async (name) => ({ ok: true, status: 200, headers: { get: () => null },
+    json: async () => ({ date: "MLB-LIGHT", light: true, games: [] }), clone() { return this; } });
+  await prefetchLight("mlb");
+  state.sport = "mlb";
+  PLAN = [{ body: { date: "MLB-FULL", games: [] } }];
+  const before = PAINTS.length;
+  const p = _loadNow(false);
+  const atOnce = PAINTS.slice(before);
+  await p;
+  console.log(JSON.stringify({ atOnce, after: PAINTS.slice(before), skeletons: SKELETONS - skel,
+    light: state.lightBoard, held: state.data.date, lightLeft: _lightMem.size }));
+})();
+""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["atOnce"] == ["MLB-LIGHT"], f"the light copy fetched while idle was not drawn at once: {got}"
+    assert got["after"] == ["MLB-LIGHT", "MLB-FULL"] and got["held"] == "MLB-FULL"
+    assert got["skeletons"] == 0, "no skeleton over a league whose light copy is in hand"
+    assert got["light"] is False and got["lightLeft"] == 0, "the whole board replaces and releases the light copy"
+
+
+def test_the_idle_fetch_is_polite():
+    soon = _fn("prefetchLeaguesSoon")
+    assert "c.saveData" in soon and "2g" in soon, "never on a data saver or 2G"
+    assert "await prefetchLight(s);" in soon, "one league at a time"
+    assert "s === state.sport" in soon and "b.hidden" in soon, "only the leagues on the bar, not this one"
+    assert "prefetchLeaguesSoon();" in _fn("_loadNow", kind="async function")
+
+
+def test_nfl_faces_ask_for_the_size_nfls_host_was_seen_to_serve():
+    vis = (ROOT / "web" / "js" / "visuals.js").read_text(encoding="utf-8")
+    i = vis.index("function facePreview(")
+    src = vis[vis.index("const FACE_TRANSFORM = "):vis.index("const FACE_TRANSFORM = ") + 1200]
+    src = src[:src.index(";", src.index("const FACE_TRANSFORM_NFL")) + 1]
+    body = vis[i:vis.index("\n}\n", i) + 2]
+    esp = vis[vis.index("function espnFacePreview("):vis.index("function facePreview(")]
+    got = _node(src + esp + body + r"""
+      console.log(JSON.stringify({
+        nfl: facePreview("https://static.www.nfl.com/image/upload/f_auto,q_auto/league/abc123", 40),
+        mlb: facePreview("https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_auto/v1/people/1/headshot/67/current", 56) }));
+    """)
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["nfl"] == "https://static.www.nfl.com/image/upload/f_auto,q_auto,w_80/league/abc123", got
+    assert ",c_fill,g_face/" in got["mlb"], "MLB keeps the crop its own account verified"
+
+
+def test_the_big_public_files_are_written_compact():
+    """rosters_cfb.json was 22.6 MB on the box, two spaces of indentation on
+    every line; record.json (1.5 MB) is read on the first screen. Compact
+    JSON is the same data, ~40% fewer bytes to download and parse."""
+    for path, needle in (("rosters_build.py", 'json.dumps(blob, separators=(",", ":"))'),
+                         ("engine/ledger.py", '_json.dumps(out, separators=(",", ":"))'),
+                         ("ufc_live_build.py", 'json.dumps(blob, separators=(",", ":"))')):
+        src = (ROOT / path).read_text(encoding="utf-8")
+        assert needle in src, f"{path} writes its public file pretty-printed again"
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

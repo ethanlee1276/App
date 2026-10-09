@@ -32,9 +32,15 @@ CSS = _read("web", "css", "styles.css")
 def test_the_baseline_is_captured_before_the_fetch_replaces_the_board():
     """The diff needs the OLD board; captured after the fetch there is
     nothing left to diff against."""
+    # Since 2026-10-09 the whole board's request leaves before the light
+    # copy is read (the speed pass), so "before the fetch began" is no
+    # longer the line that matters. What matters is unchanged: the
+    # baseline is taken before the answer is awaited, so before it can
+    # replace the board.
     i = APP.index("captureFreshBaseline(meta.api)")
-    j = APP.index('const tag = _boardTags[meta.api]')
-    assert i < j, "the baseline is captured after the fetch began"
+    j = APP.index("const res = await fullAsk;")
+    k = APP.index("state.data = slate;", j)
+    assert i < j < k, "the baseline is captured after the new board could replace the old"
 
 
 def test_pulses_apply_after_the_render_that_draws_the_cards():

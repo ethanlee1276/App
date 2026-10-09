@@ -119,6 +119,14 @@ function idealText(hex) {
    image — the behaviour that shipped before. Dead host costs the initials,
    also the behaviour that shipped before. */
 const FACE_TRANSFORM = "w_${W},h_${W},c_fill,g_face";
+/* NFL's own account, MEASURED (Ethan's box, 2026-10-09, `assets.py --probe
+   --sport nfl`): the width-only resize answers 200 with a 2.9 KB face at
+   96px. The crop above is the shape MLB's account verified; NFL's answer
+   to it was never seen, and a miss there falls back to the full photo,
+   which is megabytes. So NFL asks for the shape it was seen to serve. The
+   face sits in a round frame drawn with object-fit: cover, so a width-only
+   image fills it the same way. */
+const FACE_TRANSFORM_NFL = "w_${W}";
 
 /* ESPN's own faces, which the NBA and WNBA boards draw.
    ------------------------------------------------------------------------
@@ -152,8 +160,8 @@ function facePreview(url, px) {
   const [head, tail] = url.split(marker);
   const id = tail.indexOf("/") >= 0 ? tail.slice(tail.indexOf("/") + 1) : tail;
   const w = Math.max(48, Math.round(px * 2));        // 2x for retina
-  return `${head}${marker}f_auto,q_auto,${
-    FACE_TRANSFORM.replace(/\$\{W\}/g, w)}/${id}`;
+  const tf = url.indexOf("static.www.nfl.com") >= 0 ? FACE_TRANSFORM_NFL : FACE_TRANSFORM;
+  return `${head}${marker}f_auto,q_auto,${tf.replace(/\$\{W\}/g, w)}/${id}`;
 }
 
 function playerAvatar(name, abbr, opts = {}) {

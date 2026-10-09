@@ -42,7 +42,11 @@ def test_the_board_is_fetched_once_and_cached():
     assert "_injBoard && Date.now() - _injBoardAt" in body
     # boardFetch since 2026-08-20 — the wrapper that tells a refused
     # wire apart from an empty payload. Same URL, same caching.
-    assert 'boardFetch("data/injuries.json?t="' in body
+    # Revalidated rather than stamped since 2026-10-09 (the speed pass):
+    # an unchanged file is a 304, and callers at the same moment share
+    # one request instead of downloading it twice.
+    assert 'boardFetch("data/injuries.json", { cache: "no-cache" })' in body
+    assert "if (_injBoardAsk) return _injBoardAsk;" in body
 
 
 def test_a_return_notice_never_tags():

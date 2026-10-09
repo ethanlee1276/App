@@ -79,7 +79,13 @@ HTML = (WEB / "index.html").read_text()
 #: the off-screen pages drawn when opened, the remembered date formatters
 #: and the phone-sized renders' chooser — +2.0 KB gz of code that makes
 #: every page cheaper to run. Told to Ethan.
-APP_JS_BUDGET_KB = 489
+#: 489 -> 490 on 2026-10-09 by the first-visit pass (Ethan: "now make the
+#: first visit to a sport faster too … everything needs to be faster"):
+#: the other leagues' light copies fetched while idle, the whole board
+#: asked for alongside the light one, paid files shared and never asked
+#: for twice — +1.0 KB gz. The dead-code sweep that would have paid for
+#: it found 0.6 KB in three functions, two of them pinned. Told to Ethan.
+APP_JS_BUDGET_KB = 490
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -111,7 +117,9 @@ APP_JS_BUDGET_KB = 489
 #: 603 -> 605 on 2026-10-09 by the lag fixes: the app.js bump above
 #: (+2.0 KB gz) and the head's connection hints for the picture hosts.
 #: Told to Ethan.
-BOOT_BUDGET_KB = 605
+#: 605 -> 606 on 2026-10-09 by the first-visit pass: the app.js bump
+#: above. Told to Ethan.
+BOOT_BUDGET_KB = 606
 
 
 def _gz_trimmed(rel: str) -> int:
