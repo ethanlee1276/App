@@ -227,8 +227,14 @@ MODEL_STAT = {
     ("rec_yds", "TE"): "qb_pass_yds", ("receptions", "TE"): "qb_pass_yds",
     ("anytime_td", "WR"): None, ("anytime_td", "TE"): None, ("anytime_td", "QB"): None,
     # A quarterback's rushing: SHOWN against what the defence gives up to
-    # quarterbacks (qb_rush_yds, 2026-10-08); not in the number until the
-    # box's `python3 defensefit.py` measures it (runbook step 13).
+    # quarterbacks (qb_rush_yds, 2026-10-08). MEASURED 2026-10-09 on the
+    # box (`python3 defensefit.py`, the candidates section, 2021-2025
+    # each held out, shrink 12 games): b = +0.30 ± 0.12 (n 955), held
+    # out 2021 −0.10%  2022 +1.26%  2023 +0.12%  2024 +0.09%  2025 −1.92%,
+    # mean −0.11%. The rule (positive on average and in all but one
+    # season) is not met — two seasons negative, the mean negative — so
+    # the card shows it and the number leaves it out. Re-measure after
+    # a season of the running quarterbacks the research named.
     ("rush_yds", "QB"): None,
 }
 

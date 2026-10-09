@@ -73,7 +73,13 @@ def test_a_defences_rushing_yards_to_quarterbacks_is_rated_shown_and_not_yet_in_
     assert D.STATS["qb_rush_yds"] == ("QB", ("rushing_yards",), "rushing yards to QBs")
     assert D.stat_for("QB", "rush_yds") == "qb_rush_yds" and D.stat_for("RB", "rush_yds") == "rb_rush_yds"
     assert D.model_stat("QB", "rush_yds") is None and D.transfer("QB", "rush_yds") == 0.0, \
-        "shown, not in the number, until the box measures it"
+        "shown, not in the number: measured 2026-10-09 and it failed the bar"
+    # The measurement sits beside the entry it decided (never a number
+    # moved because a backtest liked it; never one left out silently).
+    src = open(os.path.join(ROOT, "engine", "defensevs.py"), encoding="utf-8").read()
+    note = src[src.index("MEASURED 2026-10-09"):src.index('("rush_yds", "QB"): None,')]
+    assert "b = +0.30 ± 0.12 (n 955)" in note and "2025 −1.92%" in note and "mean −0.11%" in note
+    assert "is not met" in note
     r = D.ratings(_qb_rows(), 4)
     assert r["DAL"]["qb_rush_yds"]["pg"] == 60.0 and r["DAL"]["qb_rush_yds"]["rank"] == 1
     assert r["TB"]["qb_rush_yds"]["pg"] == 5.0 and r["TB"]["qb_rush_yds"]["rank"] == 2

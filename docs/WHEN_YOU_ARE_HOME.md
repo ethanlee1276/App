@@ -194,7 +194,7 @@ first). Paste back anything that prints an error or looks off.
     ```
     cd /srv/qellys && sudo -u qellys python3 -m engine.gamescan backfill 2025 2026
     sudo -u qellys nice -n 19 python3 ingest.py nfl --seasons 2026 2>&1 | tail -8   # the per-player tgt_short/mid/deep and att_clean/cmp_clean/att_hit/cmp_hit rows
-    sudo -u qellys sqlite3 data/qellys.db "SELECT team, side, short_tgt, mid_tgt, deep_tgt FROM team_units WHERE season=2026 AND period='005' AND team IN ('DAL','TB')"
+    sudo -u qellys sqlite3 data/history.db "SELECT team, side, short_tgt, mid_tgt, deep_tgt FROM team_units WHERE season=2026 AND period='005' AND team IN ('DAL','TB')"
     ```
     (2026-10-09: the first two runs of the fitter printed no `rush_yds QB`
     line — on the old code AND on `Free data for three…`. Not the pull:
@@ -209,10 +209,20 @@ first). Paste back anything that prints an error or looks off.
     pocket and depth rows come from the corrected line. To see they
     landed:
     ```
-    sudo -u qellys sqlite3 data/qellys.db "SELECT market, COUNT(*) FROM player_game_logs WHERE sport='nfl' AND season=2026 AND market IN ('tgt_short','att_clean') GROUP BY market"
-    sudo -u qellys sqlite3 data/qellys.db "SELECT COUNT(*) FROM team_units WHERE season=2026 AND short_tgt IS NOT NULL"
+    sudo -u qellys sqlite3 data/history.db "SELECT market, COUNT(*) FROM player_game_logs WHERE sport='nfl' AND season=2026 AND market IN ('tgt_short','att_clean') GROUP BY market"
+    sudo -u qellys sqlite3 data/history.db "SELECT COUNT(*) FROM team_units WHERE season=2026 AND short_tgt IS NOT NULL"
     ```
-    Both should be hundreds, not 0.)
+    Both should be hundreds, not 0. The database is `data/history.db`
+    (engine/db.DEFAULT_DB) — the first paste said `data/qellys.db`,
+    which does not exist, hence "no such table".)
+
+    **Result, 2026-10-09** — the candidates section printed
+    `rush_yds QB  b = +0.302 ± 0.120 (n 955)`, held out 2021 −0.10%,
+    2022 +1.26%, 2023 +0.12%, 2024 +0.09%, 2025 −1.92%, mean −0.11%.
+    Fails the bar (two seasons negative, mean negative): the QB rushing
+    card keeps saying "shown for you; it has not predicted this bet", and
+    `defensevs.MODEL_STAT[("rush_yds", "QB")]` stays None with the numbers
+    beside it. Nothing more to run for it this season.
     After the next NFL build, a receiver's pick page carries the line
     "NN% of his targets are short throws …; DAL ranks Nth of 32 against
     them". Then, on a quiet hour (it reads four seasons of play-by-play —
