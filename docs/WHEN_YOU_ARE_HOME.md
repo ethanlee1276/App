@@ -287,9 +287,9 @@ first). Paste back anything that prints an error or looks off.
     their next rebuild (they are written compact now).
     (Done 2026-10-09: every "wait" was 0.16–0.22 s, and the split showed
     why — DNS 3 ms, connect 4 ms, the secure handshake 158 ms, then the
-    first byte 4 ms after it. The server answers in 4 ms; the handshake
-    is the slow part. A phone pays it once per visit, not per file, since
-    every file after the first rides the same connection.)
+    first byte 4 ms after it. The server answers in 4 ms. The handshake
+    number turned out to be curl's own, not the server's — see the end of
+    step 17.)
 
 17. **The slim record and the slow handshake** (2026-10-09). Nothing to
     run for the slim record to work: after the box pulls, the next settle
@@ -309,6 +309,18 @@ first). Paste back anything that prints an error or looks off.
     which no code change fixes; the `some avg10` lines above 10 mean the
     box is short of memory or CPU. Five handshakes all near 0.15 s is a
     steady cost; one slow and four fast was a cold start.
+    (Done 2026-10-09. The slim record is 31.8 KB on the wire against
+    136.7 KB for the full one. No swapping (`si`/`so` 0), no steal (`st`
+    0–1); the CPU is full of the builds and chores, all at nice 10, so
+    Caddy and the server still go first. The handshake is NOT the server:
+    curl itself spends 0.08 s of CPU per run on this box, and from here
+    Cloudflare's own site and Google's take as long as ours —
+    0.119 s, 0.128 s, ours 0.102 s. A browser keeps its certificates
+    loaded, so a visitor pays one round trip to New York instead. Also
+    learned: Cloudflare is NOT in front of the site any more — no `cf-ray`
+    or `server: cloudflare` header — whatever "Behind Cloudflare" in
+    DEPLOY.md says. Don't chase the handshake again from the box; time it
+    from a computer that is not the box if it ever matters.)
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
