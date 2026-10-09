@@ -72,3 +72,61 @@ Most Likely board: N pick(s) — T top, S strong, L worth a look
 
 The full board is at `data/built/cfb.json`. The public `web/data/cfb.json`
 is the free copy, with the paid picks removed.
+
+## Round 2 — everything the NFL got from 2026-09-27 to 2026-10-09
+
+Ethan, 2026-10-09: *"Our edge picks for college football is 34 for 23, and
+we're up eight units ... But our most likely picks for college football is
+down 3% ROI ... look at every single tool and every single data point and
+every single everything we've added for NFL and add it for college
+football."*
+
+**Done today** means built, tested and running for college from the next
+build. **Measuring** means the college version is built and runs on the box
+under the NFL's own bar; it changes a college number only when college's
+own games or record pass it. **Already** means college had it.
+
+### What sets a Most Likely pick's chance
+
+| NFL work | College | How |
+|---|---|---|
+| The record corrects each maker's chance (likelycal) | Already | Every league, fitted on its own record |
+| The board learns by itself on every settle (boardlearn) | Already | Every league |
+| A losing pick comes off only when our reads also say no | Already | Every league |
+| One bet, one chance (harmonize) | Already | Every league |
+| The scout's football flags on every card | **Done today** | College thresholds (`scout.LEAGUE`): shootout 63, grind 48, big dog 17, big favourite 24 / 17, blowout 28, low implied 20. Written before any college measurement |
+| The scout's correction from the record (likelyctx) | **Measuring** | College's own record, the NFL's held-out bar, refit on every settle |
+| History proves a flag (scouthist: first game back, shootout unders) | **Measuring** | College's stored games, both halves, 100+ each; own store |
+| Per-position spread (posspread: tight ends too sure) | **Measuring** | College's player-weeks, the NFL's bar, college's own record veto; own store |
+| Touchdowns follow the team total (tdscale) | Different | College's touchdown board is built from the book's team total already (C5); not refitted per position yet |
+| Defence strengths for attempts, completions, interceptions | Partly | College has its own measured strengths, interceptions included (`TRANSFER_CFB`). Attempts and completions: `python3 cfbmarketfit.py --opp` is the college run of the NFL's measurement, not yet run on the box |
+| Teammate out, what it opens (lineup step) | Not measured | The NFL's step is measured on NFL targets and snaps; college logs catches, no targets or snaps. Needs a college measurement first |
+| New starting QB moves his receivers | Not measured | Same — shown on the card, not priced |
+
+### Data the NFL added
+
+| NFL source | College | Why |
+|---|---|---|
+| Next Gen Stats (separation, RYOE, CPOE) | Not possible | NFL tracking data; no college equivalent is published |
+| FTN charting (blitz, box, play-action, drops) | Not possible | NFL charting only |
+| PFR advanced passing and receiving | Not possible | NFL pages only |
+| Target depth and depth zones | Not possible | Needs air yards per target; college play-by-play does not carry them reliably |
+| Thin-target receiving over (scout flag) | Not possible | College logs catches, not targets, and this checklist never passes catches off as targets |
+| Expected QB starters from the news feed | Different | College reads the passer the books priced (C4) |
+| Opening lines kept per game | Already | College keeps its line snapshots (lineledger) |
+| Interceptions, attempts, completions, carries markets | Already | Q1 and Q4 |
+
+### Box checks for round 2 (read-only)
+
+```
+cd /srv/qellys
+sudo -u qellys python3 -m engine.scouthist --sport cfb --dry-run 2>&1 | tail -40
+sudo -u qellys python3 -m engine.posspread --sport cfb --dry-run 2>&1 | tail -20
+sudo -u qellys python3 -m engine.likelyctx fit --sport cfb --dry-run 2>&1 | tail -30
+```
+
+The first prints, for both leagues' stored games, the share each game-script
+threshold catches (college's numbers should catch about the share the NFL's
+catch of NFL games), then what history proves for college. The second says
+which college position widths would be adopted. The third says whether
+college's record can prove a flag yet. None of them saves anything.
