@@ -399,6 +399,19 @@ first). Paste back anything that prints an error or looks off.
     /srv/qellys/deploy/cfips.sh --check
     ```
 
+23. **First game back counts regulars only** (2026-10-10, "yes make that
+    fix"). College's first saved history had quarterback overs in a
+    player's first game back at -35%: backups who simply did not get in,
+    not starters back from injuries. A return now counts only for a
+    regular (top passer, top-two back by carries, top-three by catches in
+    3 of the 5 games before). Re-save college's, and look at the NFL's:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport cfb
+    cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run
+    ```
+    The NFL's is saved by the weekly job on Wednesday either way; paste
+    the dry run so we see what changes first.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

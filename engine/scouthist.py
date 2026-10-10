@@ -38,6 +38,21 @@ back after missing his team's last game — receiving yards, catches and
 rushing yards overs 4-8 points under the usual rate, a touchdown 14%
 against 21%; and pass-attempt unders in projected shootouts.
 
+WHO COUNTS FOR "FIRST GAME BACK" (2026-10-10). The flag means his team
+played its last game without him. In the stored logs that is also every
+backup who simply did not get in, and a backup's return is not a game the
+board bets: his line is the average of a couple of spot starts and some
+mop-up work, and mop-up work is what comes next. College's first save
+proved the flag on quarterback pass-attempt overs at -35% — a backup
+effect, not a starter coming back from an injury. Ethan: "yes make that
+fix." So a return is scored only for a REGULAR: in at least REGULAR_OF of
+the five games his line is built from, he was among his team's top
+REGULAR_TOP in that role's volume (the passer with the most attempts; the
+two backs with the most carries; the three players with the most catches).
+Decided from those earlier games only, never from the return game. A
+part-timer's return is left out of the replay altogether — neither
+flagged nor in the baseline — and the dry run prints how many of each.
+
 WHAT THE BOARD DOES WITH IT (engine/likelyctx.apply): a pick carrying a
 proven flag on that market and side is lowered by the shift — only ever
 lowered, never below its price — and the card says why. Nothing is
@@ -69,6 +84,51 @@ PROVEN_N = 100
 #: model scales by the book's implied total; low_total_over reads the same
 #: number). History shows them large; applying them again would double them.
 MODEL_PRICES = frozenset({"wind_pass_over", "low_implied_td", "low_total_over"})
+#: A regular, for the first-game-back flag (2026-10-10): among his team's
+#: top N in the role's volume in at least REGULAR_OF of his last five games.
+REGULAR_TOP = {"pass": 1, "rush": 2, "catch": 3}
+REGULAR_OF = 3
+_VOLUME = {"pass_att": "pass", "rush_att": "rush", "receptions": "catch"}
+
+
+def role_group(market: str, position) -> str | None:
+    """Which volume makes him a regular for this market: a quarterback's
+    rushing is his starting job; a back's catches are his backfield job.
+    None (an anytime touchdown with no position) means any of the three."""
+    pos = str(position or "").upper()
+    if market in ("pass_att", "pass_yds"):
+        return "pass"
+    if market in ("rush_att", "rush_yds"):
+        return "pass" if pos == "QB" else "rush"
+    if market in ("receptions", "rec_yds"):
+        return "rush" if pos in ("RB", "FB") else "catch"
+    return {"QB": "pass", "RB": "rush", "FB": "rush", "WR": "catch", "TE": "catch"}.get(pos)
+
+
+def team_leaders(series) -> dict:
+    """{(team, game_id, group): the players among that team's top N in that
+    game} — ties at the cut all count."""
+    vol = defaultdict(dict)
+    for (player, market), rows in series.items():
+        grp = _VOLUME.get(market)
+        if not grp:
+            continue
+        for _d, value, team, _pos, g, _season in rows:
+            if value and value > 0:
+                vol[(team, g["game_id"], grp)][player] = float(value)
+    top = {}
+    for key, by in vol.items():
+        cut = sorted(by.values(), reverse=True)[:REGULAR_TOP[key[2]]][-1]
+        top[key] = {p for p, v in by.items() if v >= cut}
+    return top
+
+
+def is_regular(player: str, window, group, leaders: dict) -> bool:
+    """Was he a regular in these games (the five his line is built from)?"""
+    groups = (group,) if group else tuple(REGULAR_TOP)
+    hits = sum(1 for _d, _v, team, _pos, g, _season in window
+               if any(player in leaders.get((team, g["game_id"], gr), ()) for gr in groups))
+    return hits >= REGULAR_OF
 
 
 def _week_no(period) -> int:
@@ -117,6 +177,8 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
     for rows in series.values():
         rows.sort(key=lambda x: x[0])
     all_seasons = sorted({row[5] for rows in series.values() for row in rows[5:]})
+    leaders = team_leaders(series)
+    back = {"kept": 0, "skipped": 0}
     by_season = len(all_seasons) >= 2
     mid = all_seasons[len(all_seasons) // 2] if by_season else "week 10"
     for (player, market), rows in series.items():
@@ -129,6 +191,11 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                 continue
             prev = [x for x in by_team.get(team, []) if x["_d"] < d and x.get("season") == season]
             missed = bool(prev) and prev[-1]["game_id"] not in played[(player, season)]
+            if missed:
+                if not is_regular(player, rows[i - 5:i], role_group(market, pos), leaders):
+                    back["skipped"] += 1           # a part-timer's return: not a game the board bets
+                    continue
+                back["kept"] += 1
             roof = str(g.get("roof") or "").lower()
             half = (("early" if season < mid else "late") if by_season
                     else ("early" if _week_no(g.get("period")) < 10 else "late"))
@@ -159,7 +226,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                 res[half] = {"n": fn, "rate": fh / fn, "base": bh / bn, "gap": fh / fn - bh / bn}
         if res:
             out.setdefault(f, {})[f"{market} {side}"] = res
-    return {"seasons": all_seasons, "split": mid, "flags": out}
+    return {"seasons": all_seasons, "split": mid, "flags": out, "first_game_back": back}
 
 
 def proven(h: dict) -> dict:
@@ -258,6 +325,9 @@ def main(argv=None) -> int:
         h = replay(hist, sport=sport)
         found = proven(h)
         print(f"seasons {h['seasons']} (halves split at {h['split']})")
+        fb = h.get("first_game_back") or {}
+        print(f"  first game back: {fb.get('kept', 0)} returns by regulars scored, "
+              f"{fb.get('skipped', 0)} by part-timers left out")
         for flag, cells in found.items():
             for ms, c in cells.items():
                 print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")
