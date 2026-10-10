@@ -362,6 +362,23 @@ first). Paste back anything that prints an error or looks off.
     trail, and the rest) — a pick carrying one is lowered by what history
     proved, never below its price.
 
+20. **NFL games abroad** (2026-10-10, "make sure that our models and our
+    bets ... is being adjusted for them being played out of the country").
+    Nothing to run for it to work:
+    - weather already comes from the real venue (since 2026-09-23 — every
+      2026 site: Melbourne, Rio, London twice, Paris, Madrid, Munich,
+      Mexico City);
+    - the game model gives no home field at a neutral site (it was adding
+      1.6 points to the listed home team in London);
+    - the game page names the real stadium, with Mexico City's altitude;
+    - "an over in a game played abroad" is a scout caution on every card,
+      and the weekly history replay tests it on every international game
+      since 2021 (both halves, 100+ each); it moves a number only if it
+      passes. To see it now:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run 2>&1 | grep -i "abroad\|seasons"
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

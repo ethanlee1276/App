@@ -137,7 +137,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
                                  weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
-                                 missed_last=missed, league=sport)
+                                 missed_last=missed, league=sport, abroad=g.get("abroad"))
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)

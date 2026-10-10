@@ -79,9 +79,15 @@ def _sd(table: dict, sport: str, what: str) -> float:
         ) from None
 
 
-def nfl_win_prob(home_rating: float, away_rating: float) -> float:
-    """P(home win) from net-point ratings (points/game vs league average)."""
-    margin = (home_rating - away_rating) + NFL_HOME_FIELD
+def nfl_win_prob(home_rating: float, away_rating: float, neutral: bool = False) -> float:
+    """P(home win) from net-point ratings (points/game vs league average).
+
+    ``neutral``: a neutral-site game — in the NFL an international one
+    (London, Munich, Madrid, São Paulo ...) — has no home crowd and no home
+    stadium, so it carries no home field (Ethan, 2026-10-10: "make sure ...
+    our models and our bets ... is being adjusted for them being played out
+    of the country"). The listed home team is a schedule label there."""
+    margin = (home_rating - away_rating) + (0.0 if neutral else NFL_HOME_FIELD)
     return clamp(normal_cdf(margin / NFL_MARGIN_SD), 0.01, 0.99)
 
 
@@ -601,9 +607,10 @@ def project_total(sport: str, home_off: float, home_def: float,
     return 2 * base + home_off + away_off + home_def + away_def
 
 
-def game_margin(sport: str, home_rating: float, away_rating: float) -> float:
-    """Projected home scoring margin (points/runs), including home field."""
-    return (home_rating - away_rating) + _sd(HOME_FIELD, sport, "home field")
+def game_margin(sport: str, home_rating: float, away_rating: float, neutral: bool = False) -> float:
+    """Projected home scoring margin (points/runs), including home field —
+    none at a neutral site (see `nfl_win_prob`)."""
+    return (home_rating - away_rating) + (0.0 if neutral else _sd(HOME_FIELD, sport, "home field"))
 
 
 def temper(raw_win: float, fair: float, sport: str = "",

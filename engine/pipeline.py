@@ -841,9 +841,11 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
         has_rating = any((g.home_rating, g.away_rating,
                           g.home_off, g.home_def, g.away_off, g.away_def))
         if g.home_ml and g.away_ml:
-            wp_home = nfl_win_prob(g.home_rating, g.away_rating)
+            _neutral = bool(getattr(g, "neutral_site", False))
+            wp_home = nfl_win_prob(g.home_rating, g.away_rating, neutral=_neutral)
             ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
-                   f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
+                   f"{g.away_rating:+.1f} net pts/game "
+                   + ("(neutral site abroad — no home field)" if _neutral else "(incl. home field)")]
             sharp_rec = None
             if g.sharp_home_ml and g.sharp_away_ml:
                 sharp_rec = price_moneyline_sharp(
@@ -921,8 +923,10 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             # is an ordinary NFL line and was being skipped here along
             # with the games that have no spread at all.
             if g.spread_is_posted and g.spread_home_odds and g.spread_away_odds:
-                margin = game_margin("nfl", g.home_rating, g.away_rating)
-                sctx = [f"Projected margin {margin:+.1f} pts (home)"]
+                margin = game_margin("nfl", g.home_rating, g.away_rating,
+                                     neutral=bool(getattr(g, "neutral_site", False)))
+                sctx = [f"Projected margin {margin:+.1f} pts (home)"
+                        + (" — neutral site abroad, no home field" if getattr(g, "neutral_site", False) else "")]
                 sharp_sp = None
                 if (g.sharp_spread and g.sharp_spread == g.spread
                         and g.sharp_spread_home_odds and g.sharp_spread_away_odds):
@@ -1494,6 +1498,24 @@ def _conditions(g, results: list[dict] | None) -> dict:
     }
 
 
+def venue_to_dict(g) -> dict:
+    """The building the game is played in: the home team's, or — at a
+    neutral site abroad (engine/nflwx.venue_coords knows the international
+    venues) — the real one, named from the schedule, with what the trip
+    means. Mexico City's altitude is a fact about the ball, so it is said."""
+    from .nflwx import venue_coords
+    venue = str(getattr(g, "venue", "") or "")
+    if not (getattr(g, "neutral_site", False) and venue and venue_coords(venue)):
+        return stadium_to_dict(g.home)
+    high = any(w in venue.lower() for w in ("azteca", "banorte"))
+    return {"team": g.home, "name": venue, "roof": str(getattr(g, "roof", "") or "outdoors"),
+            "surface": str(getattr(g, "surface", "") or "grass"),
+            "altitude_ft": 7349 if high else 0, "capacity": None, "opened": None,
+            "abroad": True,
+            "plays": ("Played abroad: a neutral site neither team calls home, after an overseas "
+                      "flight and a time change — the weather here is this city's, not the home team's.")}
+
+
 def _game_to_dict(g, results: list[dict] | None = None) -> dict:
     """Per-game context for the dashboard's stadium + weather visuals."""
     w = g.weather
@@ -1513,8 +1535,14 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
         # Kalshi divergence read joins on them venue-vs-venue.
         "home_ml": g.home_ml, "away_ml": g.away_ml,
         # Venue reference for the game page. Unlike MLB parks this is
-        # context, not an input — see engine/stadiums.py for why.
-        "stadium": stadium_to_dict(g.home),
+        # context, not an input — see engine/stadiums.py for why. A game
+        # ABROAD is not at the home team's building (Ethan, 2026-10-10:
+        # "for like the stadium ... we need to be making sure ... whatever
+        # location they're playing is that is out of the country"): the
+        # card names the real venue, and the flag rides for the scout.
+        "stadium": venue_to_dict(g),
+        "neutral_site": bool(getattr(g, "neutral_site", False)),
+        "venue": str(getattr(g, "venue", "") or ""),
         "live": live_to_dict(g.live),
         "weather": {
             "dome": w.dome,
