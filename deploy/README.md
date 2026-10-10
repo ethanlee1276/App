@@ -89,7 +89,8 @@ apologise for it.
 | A | `@` | the droplet's IPv4 | DNS only (grey) at first; Proxied (orange) since 2026-08-21 |
 | A | `www` | the droplet's IPv4 | same as `@` |
 
-**Live since 2026-08-21: orange cloud.** The proxy is on in production. Two things
+**Orange from 2026-08-21; found grey (off) on 2026-10-09.** To turn it back on,
+follow docs/DEPLOY.md, "Turning it back on, step by step". When it is on, two things
 came with it and are already handled: the app trusts `CF-Connecting-IP` only from
 Cloudflare's published ranges (`engine/cfips.py`, installed by `deploy/cfips.sh`;
 check its age with `deploy/cfips.sh --check`), and Bot Fight Mode had to allow the

@@ -354,6 +354,122 @@ Cloudflare's ranges change rarely but they do change. Weekly refresh:
 0 5 * * 1 /srv/qellys/deploy/cfips.sh >/dev/null 2>&1
 ```
 
+### Turning it back on, step by step (2026-10-10)
+
+The proxy was found OFF on 2026-10-09 (no `cf-ray` header, `server` was
+Caddy). Ethan wants the site faster above all; with the proxy on, the TLS
+handshake happens at a Cloudflare server near the reader instead of on the
+droplet, and the board art and fonts are served from that nearby server.
+The app already handles the extra hop (`engine/cfips.py`, the weekly
+`qellys-cfips.timer`, installed 2026-10-01).
+
+Dashboard labels move around; the search box at the top of the Cloudflare
+dashboard finds any setting below by its name.
+
+**0. Baseline, from your laptop (not the box), before changing anything:**
+
+```
+curl -o /dev/null -s -w "connect %{time_connect}s  tls %{time_appconnect}s  first byte %{time_starttransfer}s  total %{time_total}s\n" https://qellysbook.com/
+```
+
+Run it three times and keep the numbers.
+
+**1. SSL/TLS → Overview → encryption mode: Full (strict).** Do this FIRST.
+On "Flexible" Cloudflare talks plain HTTP to Caddy, Caddy redirects to
+HTTPS, and every page loops ("too many redirects"). Strict means
+Cloudflare checks Caddy's real certificate.
+
+**2. SSL/TLS → Edge Certificates:**
+- Always Use HTTPS: **Off.** Caddy already redirects to HTTPS, and Caddy
+  renews its own certificate over plain HTTP; Cloudflare redirecting
+  first can get in the way of that renewal.
+- Minimum TLS Version: 1.2. TLS 1.3: On.
+- HTTP Strict Transport Security: leave Cloudflare's **off**; Caddy sends it.
+
+**3. Caching → Configuration:**
+- Browser Cache TTL: **Respect Existing Headers.** This one matters most.
+  Any other value overrides the Caddyfile's `no-cache` on the app's code,
+  and phones keep an old app.js after a deploy (the iOS bug of 2026-08-17).
+- Caching Level: Standard.
+- Always Online: **Off.** It shows an old copy when the box is down, and
+  an old copy of an odds site shows old prices.
+
+**4. Caching → Tiered Cache → Smart Tiered Caching: On.**
+
+**5. Caching → Cache Rules → Create rule.** Name it `Never cache the API`.
+"Custom filter expression": Field **URI Path**, Operator **starts with**,
+Value **/api/**. Then: Cache eligibility **Bypass cache**. Deploy.
+Cloudflare does not cache the API by default; this makes sure a signed-in
+reader's answer can never be stored and handed to someone else.
+
+**6. Speed → Settings (it may say Optimization):**
+- HTTP/2: On. HTTP/3 (with QUIC): On. 0-RTT: Off.
+- Early Hints: On.
+- Rocket Loader: **Off.** It rewrites the page's scripts and the site's
+  security policy blocks the rewritten ones: a blank page.
+- If it offers Web Analytics / Real User Measurements "automatic setup",
+  decline: it injects a script the security policy blocks.
+
+**7. Security:**
+- Bots → Bot Fight Mode: **Off** (it blocks the Stripe webhook; below).
+- Email Address Obfuscation (Scrape Shield): **Off** (it rewrites pages).
+- Leave the Security Level and the free managed rules as they are.
+
+**8. DNS → Records:** edit `qellysbook.com` (type A) and switch Proxy
+status to **Proxied** (the orange cloud), Save; the same for `www`, and
+for an AAAA record if there is one. Do not touch MX or TXT records (email).
+Proxied records take about five minutes.
+
+**9. On the box:**
+
+```
+sudo /srv/qellys/deploy/cfips.sh && sudo systemctl restart qellys
+/srv/qellys/deploy/cfips.sh --check
+systemctl list-timers qellys-cfips.timer
+```
+
+`--check` should say about 22 ranges and 0.0 days old; the timer should show
+a next run.
+
+**10. Checks, from your laptop:**
+
+```
+curl -sI https://qellysbook.com/ | grep -iE "^server|cf-ray"
+curl -sI https://qellysbook.com/fonts/archivo-narrow.woff2 | grep -i cf-cache-status
+curl -sI https://qellysbook.com/fonts/archivo-narrow.woff2 | grep -i cf-cache-status
+curl -s -o /dev/null -D - https://qellysbook.com/api/cfb/recommendations | grep -i cf-cache-status
+```
+
+- `server: cloudflare` and a `cf-ray` line: the proxy is on.
+- The font: `MISS` the first time, `HIT` the second: art and fonts come
+  from Cloudflare now.
+- The API: `DYNAMIC` or `BYPASS`, never `HIT`.
+- Then step 0's timing line again, three times, and compare.
+- Stripe → Developers → Webhooks → the endpoint → Send test webhook: `200`.
+- On your phone: sign in, open Live during a game, ask Ask Qellys one
+  question.
+
+**11. A month later, the certificate renewed:** on the box,
+
+```
+echo | openssl s_client -connect 127.0.0.1:443 -servername qellysbook.com 2>/dev/null | openssl x509 -noout -enddate
+sudo journalctl -u caddy --since "-45 days" --no-pager | grep -iE "certificate obtained|could not get certificate" | tail -5
+```
+
+The date should keep moving forward (Caddy renews about 30 days before it
+runs out). If the journal says "could not get certificate", tell me.
+
+**If anything goes wrong:** DNS → set both records back to **DNS only**
+(grey). The site is back to direct within about five minutes; nothing on
+the box needs undoing. What the symptoms mean:
+- "Too many redirects": step 1 is not Full (strict).
+- Error 525 or 526: Cloudflare cannot verify Caddy's certificate. Go grey
+  and send me the step 11 output.
+- A blank page or dead buttons: Rocket Loader or Email Obfuscation is on.
+- The Stripe test webhook fails: Bot Fight Mode is on.
+- Long Ask Qellys answers cut off with error 524: Cloudflare's free plan
+  stops waiting after 100 seconds. Tell me if you see it.
+
 ### Bot Fight Mode and the Stripe webhook
 
 Bot Fight Mode challenges traffic that does not look like a browser. A

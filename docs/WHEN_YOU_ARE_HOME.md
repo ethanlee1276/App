@@ -389,6 +389,16 @@ first). Paste back anything that prints an error or looks off.
     "ADOPT" on a line means the weekly job will start using it for that
     position; "keep g +0.0" means no change. Takes a few minutes.
 
+22. **Cloudflare back on, for speed** (2026-10-10). The full walkthrough,
+    with what each setting is for and how to undo it, is in
+    docs/DEPLOY.md under "Turning it back on, step by step". The order
+    matters: SSL mode Full (strict) and Browser Cache TTL "Respect Existing
+    Headers" BEFORE the orange cloud. Then on the box:
+    ```
+    sudo /srv/qellys/deploy/cfips.sh && sudo systemctl restart qellys
+    /srv/qellys/deploy/cfips.sh --check
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

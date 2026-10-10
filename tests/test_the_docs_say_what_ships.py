@@ -47,7 +47,11 @@ def test_account_health_says_whose_action_it_scores():
 
 def test_the_deploy_readme_says_production_runs_behind_the_proxy():
     dep = _r("deploy/README.md")
-    assert "**Live since 2026-08-21: orange cloud.**" in dep
+    # The proxy was found off on 2026-10-09; the README says so and points
+    # at the walkthrough that turns it back on (updated 2026-10-10).
+    assert "**Orange from 2026-08-21; found grey (off) on 2026-10-09.**" in dep
+    assert '"Turning it back on, step by step"' in dep
+    assert "### Turning it back on, step by step" in _r("docs/DEPLOY.md")
     assert "engine/cfips.py" in dep and (ROOT / "engine" / "cfips.py").exists()
     assert (ROOT / "deploy" / "cfips.sh").exists()
 
