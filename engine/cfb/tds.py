@@ -955,9 +955,49 @@ def points_per_game(conn, season: int) -> dict:
     return {t: round(v / n, 1) for t, (v, n) in got.items() if n >= 2}
 
 
+def lineup_step(player: str, team: str, pos: str, qb_changes: dict | None,
+                lineups: dict | None) -> tuple[float, list[str], dict]:
+    """College's measured lineup steps on one scorer — the same two the
+    projection applies to every college prop (engine/cfb/lineup's store,
+    the NFL's rule): his starting quarterback out, and a ranked teammate at
+    his position out. ``(multiplier on his scoring rate, reasons, cards)``;
+    1.0 wherever college's fit did not adopt that case.
+
+    The NFL's touchdown rows show these and never price them — the NFL
+    measured them as noise. College's own fit decides for college
+    (2026-10-10: RB touchdowns behind a downgrade at quarterback, x0.87,
+    passed in four of five seasons)."""
+    from types import SimpleNamespace as _NS
+    mult, reasons, cards = 1.0, [], {}
+    ch = (qb_changes or {}).get(team)
+    if ch and pos != "QB":
+        from .lineup import qb_mult
+        from .qbchange import card as _qcard
+        m = qb_mult("anytime_td", pos, ch.get("tier"))
+        if m != 1.0:
+            mult *= m
+            reasons.append(f"QB change: behind a {ch.get('tier')} at quarterback, college {pos}s scored "
+                           f"{abs(round((m - 1) * 100))}% {'more' if m > 1 else 'less'} than their own "
+                           f"form (measured) (×{m:.2f})")
+            cards["qb_card"] = _qcard(ch, mult=m)
+    lu = (lineups or {}).get(team)
+    if lu:
+        from ..teammates import effect as _mate
+        m, why, mcard = _mate(_NS(player=player, team=team, position=pos, market="anytime_td"),
+                              _NS(lineup={team: lu}))
+        if m != 1.0:
+            mult *= m
+            if why:
+                reasons.append(why)
+        if mcard:
+            cards["mate_card"] = mcard
+    return mult, reasons, cards
+
+
 def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                            season: int, limit: int = 6,
-                           per_game: int = 2
+                           per_game: int = 2, qb_changes: dict | None = None,
+                           lineups: dict | None = None
                            ) -> tuple[list[dict], dict, list[dict]]:
     """``(picks, census, watch)`` — the board rows, what was skipped and
     why, and the most-likely-scorers list.
@@ -1137,7 +1177,10 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 d_reasons = [d_why] + d_reasons
             s_mult, s_reasons = script_multiplier(spread_home, is_home, pos)
             w_mult, w_reasons = weather_multiplier(g.get("weather"), pos)
-            rate = clamp(team_tds * base * d_mult * s_mult * w_mult,
+            # WHO PLAYS AROUND HIM (engine/cfb/lineup): college's measured
+            # QB-change and teammate-out steps, on the rate, before price.
+            lu_mult, lu_reasons, lu_cards = lineup_step(u["player"], side, pos, qb_changes, lineups)
+            rate = clamp(team_tds * base * d_mult * s_mult * w_mult * lu_mult,
                          0.005, 1.05)
             prob = prob_at_least_one(rate)
             # HOW HARD HIS CHANCE FOLLOWS HIS TEAM'S EXPECTED POINTS — the
@@ -1159,7 +1202,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 f"expected offensive TDs",
                 f"{share:.0%} of {side}’s rushing + receiving yards "
                 f"({u['games']} game sample) — read as a {pos} role",
-            ] + td_reason + d_reasons + s_reasons + w_reasons + gamma_reason
+            ] + td_reason + d_reasons + s_reasons + w_reasons + lu_reasons + gamma_reason
             # WHICH SEASON THIS ROLE CAME FROM, per player rather than
             # per board. `merged_usage` shrinks a man's own games toward
             # his prior season by how many he has played, so two players
@@ -1263,6 +1306,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         **_rz_now(float(u.get("rz_car") or 0) + float(u.get("rz_rec") or 0),
                                   implied, scored.get(usage_team)),
                         "position": pos,
+                        **lu_cards,
                     })
 
             if not in_odds_window(odds, CFB_TD_ODDS):
@@ -1287,6 +1331,8 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 hold_override=fairs.get(norm))
             if pick:
                 pick.matchup_card = mu_card
+                for _ck, _cv in lu_cards.items():
+                    setattr(pick, _ck, _cv)
                 pick.game_date = g.get("date", "")
                 pick.game_kickoff = g.get("kickoff", "")
                 # …and on the picks, for the same reason the NFL's got

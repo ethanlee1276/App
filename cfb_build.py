@@ -2077,11 +2077,13 @@ def main() -> None:
         # projection's lineup step applies college's own measured
         # multipliers (x1.00 until a fit saves them).
         _cfb_qb_ch = None
+        _cfb_lineups = None
         try:
             from engine.cfb import lineup as _clu
             _lu = _clu.attach(conn, _prop_slate, games, _cfb_inj,
                               _prop_season_of("cfb", args.date), args.date)
             _cfb_qb_ch = _lu["qb_changes"]
+            _cfb_lineups = _lu.get("lineups")
             print(f"  Lineup: {_lu['orders']} depth order(s), {_lu['outs']} ranked teammate(s) out, "
                   f"{len(_cfb_qb_ch)} QB change(s)"
                   + ("" if _clu.measured() else " — college not measured yet, nothing applied"))
@@ -2224,7 +2226,8 @@ def main() -> None:
             from engine.cfb import tds as _tds
             quotes, td_note = td_quotes, quotes_note
             rows, census, watch = _tds.build_cfb_td_longshots(
-                conn, out["games"], quotes, day.year)
+                conn, out["games"], quotes, day.year,
+                qb_changes=_cfb_qb_ch, lineups=_cfb_lineups)
             # Each scorer carries his listing, as the NFL's do — the board
             # holds a listed player and the scenarios leave him out.
             from engine.sources.oddsapi import normalize_name as _nn
@@ -2236,8 +2239,11 @@ def main() -> None:
             # A STARTING QUARTERBACK OUT, BENCHED OR BACK (engine/cfb/
             # qbchange): read off the college passing logs, ESPN's injury
             # board and the passer the books priced this week, and put on
-            # every row of that team — shown, not priced (unmeasured for
-            # college, and the card says so).
+            # every row of that team. Priced where college's own fit
+            # adopted the case (the projection for props, the touchdown
+            # board's lineup_step for scorers — those rows already carry
+            # the card with what was applied, and stamp leaves them be);
+            # shown, with the reason, everywhere else.
             try:
                 from engine.cfb import qbchange as _cqb
                 _teams = {t for g in out.get("games") or [] for t in (g.get("home"), g.get("away"))}

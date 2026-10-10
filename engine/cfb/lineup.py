@@ -407,7 +407,9 @@ def attach(conn, slate, games: list, injuries: list, season: int, date: str) -> 
     """Stamp each slate game with ``lineup`` (engine/teammates.effect reads
     it) and ``qb_changes`` (engine/qbchange.effect reads it), both marked as
     college's so the projection applies college's own multipliers.
-    Returns {"qb_changes": {team: change}, "outs": n, "orders": n}."""
+    Returns {"qb_changes": {team: change}, "lineups": {team: lineup},
+    "outs": n, "orders": n} — the touchdown board reads the last two maps,
+    since its scorers are not slate props."""
     from ..injuries import RULED_OUT
     from ..teammates import MAYBE
     from . import qbchange as cq
@@ -441,6 +443,7 @@ def attach(conn, slate, games: list, injuries: list, season: int, date: str) -> 
         else:
             ch["tier"] = None
     n_out = 0
+    lineups: dict = {}
     for g in getattr(slate, "games", None) or []:
         g.lineup = {}
         for t in (g.home, g.away):
@@ -451,8 +454,9 @@ def attach(conn, slate, games: list, injuries: list, season: int, date: str) -> 
             g.lineup[t] = {"order": order, "out": outs,
                            "maybe": sorted(n for n in maybe_by.get(t, ()) if n in names),
                            "last": d["last"].get(t, 0), "basis": BASIS}
+            lineups[t] = g.lineup[t]
         g.qb_changes = {t: chs[t] for t in (g.home, g.away) if t in chs}
-    return {"qb_changes": chs, "outs": n_out, "orders": len(d["order"])}
+    return {"qb_changes": chs, "lineups": lineups, "outs": n_out, "orders": len(d["order"])}
 
 
 def main(argv=None) -> int:

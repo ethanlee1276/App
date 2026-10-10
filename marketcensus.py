@@ -137,6 +137,10 @@ def _built(t, sport: str) -> dict:
     # roster's role, with `_POSITION` as the fallback for a player with no
     # label. Catch and receiving markets reach every pass-catcher.
     got = {m: (["RB", "WR", "TE"] if m in ("rec_yds", "receptions") else [P._POSITION[m]]) for m in P.MARKETS}
+    # A quarterback who logs rushing yards gets the prop too, with his
+    # roster label (engine/cfb/props builds a market for whoever logs it;
+    # Ethan, 2026-10-10, asking after "those rushing props").
+    got["rush_yds"] = ["QB", "RB"]
     got[t["ANYTIME_TD"]] = ["RB", "WR", "TE"]                # engine/cfb/tds
     return got
 
@@ -252,7 +256,15 @@ def _context(t, market: str) -> str:
     return "pace only"
 
 
-def _lineup(t, market: str) -> str:
+def _lineup(t, market: str, sport: str = "nfl") -> str:
+    if sport == "cfb":
+        # College's own fit (engine/cfb/lineup) on college games, the NFL's
+        # rule; which cases apply is the box's store. Touchdowns too: the
+        # college scorer board applies them itself (cfb/tds.lineup_step).
+        from engine.cfb import lineup as _clu
+        if any(market == m for rows in _clu.MARKETS.values() for m, _f in rows):
+            return "QB change, teammate out (college's own fit; the box's store decides)"
+        return "—"
     got = []
     if any(k[0] == market for k in t["QC"].EFFECT):
         got.append("QB change")
@@ -292,7 +304,7 @@ def wiring(t, sport: str) -> list[dict]:
                      # needs the play-by-play profiles); college never passes it.
                      "context": _context(t, market) if sport == "nfl" else "— (college does not price it)",
                      "usage": "yes" if sport == "nfl" and market in t["U"].OPP_BY_MARKET else "—",
-                     "lineup": _lineup(t, market), "injuries": _injuries(t, market),
+                     "lineup": _lineup(t, market, sport), "injuries": _injuries(t, market),
                      "fitters": _fitters(t, sport, market),
                      "most_likely": _most_likely(t, sport, market)})
     return rows

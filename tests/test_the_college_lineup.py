@@ -181,6 +181,33 @@ def test_the_nfls_paths_are_unchanged():
     assert T.table_for({}) is T.EFFECT
 
 
+def test_the_touchdown_board_prices_what_college_adopted():
+    """College's scorers are not slate props, so the projection never sees
+    them; the touchdown board applies the same two steps itself, on the
+    rate before the price — and only what college's fit adopted."""
+    from engine.cfb import tds
+    c = _db(_team_rows(2025, "UGA", DAYS) + _team_rows(2024, "UGA", DAYS))
+    slate, game = _slate()
+    got = L.attach(c, slate, [{"home": "UGA", "away": "VAN"}],
+                   [NS(team="UGA", player="UGA WR1", status="OUT"), NS(team="UGA", player="UGA QB1", status="OUT")],
+                   2025, "2025-10-18")
+    assert got["lineups"]["UGA"] is game.lineup["UGA"], "the board reads the same lineup the props do"
+    L.save({"seasons": [2024, 2025], "adopt_mates": {("anytime_td", "WR", "above_new"): 1.2},
+            "adopt_qb": {("anytime_td", "RB", "downgrade"): 0.866}})
+    m, why, cards = tds.lineup_step("UGA RB1", "UGA", "RB", got["qb_changes"], got["lineups"])
+    assert abs(m - 0.866) < 1e-9 and "QB change" in why[0], (m, why)
+    assert cards["qb_card"]["applied"] == 0.866, "the card says what the number got"
+    m2, _w, cards2 = tds.lineup_step("UGA WR2", "UGA", "WR", got["qb_changes"], got["lineups"])
+    assert abs(m2 - 1.2) < 1e-9 and cards2["mate_card"], "WR1 out, ranked above him: college's x1.2"
+    m3, _w, _c = tds.lineup_step("UGA QB2", "UGA", "QB", got["qb_changes"], got["lineups"])
+    assert m3 == 1.0, "the quarterback himself is not moved by his own change"
+    src = open(os.path.join(ROOT, "engine", "cfb", "tds.py"), encoding="utf-8").read()
+    i = src.index("lu_mult, lu_reasons, lu_cards = lineup_step(")
+    assert i < src.index("prob = prob_at_least_one(rate)", i) and "* lu_mult" in src[i:i + 400]
+    build = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
+    assert "qb_changes=_cfb_qb_ch, lineups=_cfb_lineups)" in build
+
+
 def test_the_build_runs_it_before_pricing_and_the_weekly_job_refits_it():
     src = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
     assert src.index("_clu.attach(") < src.index('out["recommendations"] = _price_props(_prop_slate, sport="cfb")')

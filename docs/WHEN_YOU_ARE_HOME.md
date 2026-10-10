@@ -411,6 +411,17 @@ first). Paste back anything that prints an error or looks off.
     same day, only games in the return's season and for its team make a
     regular (last November's starter who is a backup now is not one).
 
+24. **Every college market, both boards** (2026-10-10: "QB interceptions
+    ... rushing props ... pass completion props, pass attempt props, rush
+    attempts, spreads, money lines ... into the most likely bets and the
+    edge bets"). All of them are built, priced on Edge and settled. A
+    college market opens on Most Likely when the box's own ranking walk
+    measures it at 0.60 or better (the NFL's bar). To re-measure and see
+    which open (saves as it goes; a few minutes):
+    ```
+    cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'cfb')]"
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
