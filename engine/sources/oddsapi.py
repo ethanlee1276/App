@@ -34,6 +34,7 @@ from ..secrets import load_local_secrets
 from .. import bookvig
 from ..models import (
     SportsbookLine, PASS_YDS, PASS_TD, PASS_ATT, PASS_INT, PASS_CMP, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS,
+    PASS_RUSH_YDS, RUSH_REC_YDS, KICK_PTS, FG_MADE, TACKLES_AST,
 )
 
 ODDS_BASE = "https://api.the-odds-api.com/v4"
@@ -133,7 +134,21 @@ NFL_ODDS_TO_MARKET.update(VOLUME_ODDS_KEYS)
 #: drop-and-retry guard as every key added since the incident below.
 PASS_INT_ODDS_KEY = "player_pass_interceptions"
 NFL_ODDS_TO_MARKET[PASS_INT_ODDS_KEY] = PASS_INT
-UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, PASS_INT_ODDS_KEY, *VOLUME_ODDS_KEYS})
+#: FIVE MORE, 2026-10-10 (Ethan: "Yes add all of them"), measured before
+#: bought (engine/models PASS_RUSH_YDS…, marketfit.py held-out 2025): a
+#: quarterback's passing + rushing (+ receiving) yards, a back's rushing +
+#: receiving yards, a kicker's points and field goals, a defender's tackles
+#: + assists. Five more credits an event (oddsbudget.EVENT_CREDITS), the
+#: NFL's alone — college's map is copied from the base one, not this —
+#: and behind the same drop-and-retry guard: the spellings are the API's
+#: documented keys, unproven against it from here.
+NEW_PROP_ODDS_KEYS = {"player_pass_rush_reception_yds": PASS_RUSH_YDS,
+                      "player_rush_reception_yds": RUSH_REC_YDS,
+                      "player_kicking_points": KICK_PTS,
+                      "player_field_goals": FG_MADE,
+                      "player_tackles_assists": TACKLES_AST}
+NFL_ODDS_TO_MARKET.update(NEW_PROP_ODDS_KEYS)
+UNPROVEN_MARKETS = frozenset({PASS_TD_ODDS_KEY, PASS_INT_ODDS_KEY, *VOLUME_ODDS_KEYS, *NEW_PROP_ODDS_KEYS})
 #: COLLEGE BUYS THE VOLUME MARKETS TOO (2026-10-05). The four stat
 #: markets are still the NFL's by reference (`ODDS_TO_MARKET`); the three
 #: volume keys ride on the same guard the NFL's do — unproven against
@@ -1207,7 +1222,13 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
         bad = [m for m in markets if m in text]
         if not bad and ("422" in text or "INVALID_MARKET" in text.upper()
                         or "market" in text.lower()):
-            bad = [m for m in markets if m in UNPROVEN_MARKETS]
+            # NEWEST FIRST (2026-10-10). Passing touchdowns, the volume
+            # markets and interceptions have been served since September;
+            # an unnamed refusal the day five new keys went on is about the
+            # new keys, so they go first, and the older ones only if the
+            # request still fails without them.
+            bad = ([m for m in markets if m in NEW_PROP_ODDS_KEYS]
+                   or [m for m in markets if m in UNPROVEN_MARKETS])
         if not bad or len(bad) >= len(markets):
             raise
         REJECTED_MARKETS.update(bad)

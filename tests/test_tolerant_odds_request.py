@@ -75,8 +75,15 @@ def test_an_error_naming_no_key_drops_only_the_unproven_one():
     restore = _patched(fake)
     try:
         oa.fetch_event_odds("ev1", "key", sport="nfl")
-        assert len(calls) == 2 and BAD not in calls[1]
-        assert "player_rush_yds" in calls[1]
+        # THE NEWEST KEYS GO FIRST (2026-10-10): an unnamed refusal drops
+        # the five keys added that day before the older unproven ones, so a
+        # refusal that was really about this older key costs one more call
+        # (three, not two) — the price of never losing the working markets
+        # to a refusal of the new ones (tests/test_the_five_new_nfl_markets).
+        assert len(calls) == 3, calls
+        assert not any(k in calls[1] for k in oa.NEW_PROP_ODDS_KEYS) and BAD in calls[1]
+        assert BAD not in calls[2]
+        assert "player_rush_yds" in calls[2]
     finally:
         restore()
 

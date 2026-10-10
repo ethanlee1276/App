@@ -233,16 +233,15 @@ def positional_means(rows: list[dict], market: str) -> dict[str, float]:
     silent kind of wrong — the shrink would still look fitted and would
     be pulling somewhere else.
     """
-    from .sources.nflverse import MARKET_COLUMNS, _f, _s, _regular_season
+    from .sources.nflverse import _s, _regular_season, board_position, stat_value
 
-    cols = MARKET_COLUMNS[market]
     per_player: dict[tuple, list[float]] = {}
     for r in _regular_season(rows):
-        pos = _s(r, "position", "position_group").upper()
+        pos = board_position(r)
         name = _s(r, "player_display_name", "player_name", "full_name")
         if not pos or not name:
             continue
-        per_player.setdefault((pos, name), []).append(_f(r, *cols))
+        per_player.setdefault((pos, name), []).append(stat_value(r, market))
 
     buckets: dict[str, list[float]] = {}
     for (pos, _name), vals in per_player.items():
@@ -261,9 +260,8 @@ def carried_logs(rows: list[dict], player: str, market: str) -> list[GameLog]:
     checking ``prior`` is reading last September as though it were this
     one.
     """
-    from .sources.nflverse import MARKET_COLUMNS, _f, _s, _regular_season, quarterbacked
+    from .sources.nflverse import _f, _s, _regular_season, quarterbacked, stat_value
 
-    cols = MARKET_COLUMNS[market]
     out = []
     for r in _regular_season(rows):
         name = _s(r, "player_display_name", "player_name", "full_name")
@@ -275,7 +273,7 @@ def carried_logs(rows: list[dict], player: str, market: str) -> list[GameLog]:
         if not quarterbacked(r, market):
             continue            # a relief appearance is not a start (nflverse.QB_START_ATTEMPTS)
         out.append(GameLog(week=wk, opponent=_s(r, "opponent_team", "opponent"),
-                           value=_f(r, *cols), home=True, prior=True))
+                           value=stat_value(r, market), home=True, prior=True))
     out.sort(key=lambda g: g.week, reverse=True)
     return out
 

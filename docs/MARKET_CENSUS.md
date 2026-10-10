@@ -38,20 +38,20 @@ always because it was measured and found flat (the module's own notes say which)
 | player_reception_yds | Receiving yards | rec_yds | yes | RB, WR, TE | normal | Tier 2, 3.0% bar | yes — 0.733 (constant, measured) | yes | marketfit.py |
 | player_reception_longest | Longest reception | — | no | — | — | — | — | — | — |
 | player_reception_tds | Receiving touchdowns | — | no | — | — | — | — | — | — |
-| player_rush_reception_yds | Rushing + receiving yards | — | no | — | — | — | — | — | marketfit.py |
+| player_rush_reception_yds | Rushing + receiving yards | rush_rec_yds | yes (guarded) | RB | normal | Tier 2, 3.0% bar | yes — 0.629 (constant, measured) | yes | marketfit.py |
 | player_rush_reception_tds | Rushing + receiving touchdowns | — | no | — | — | — | — | — | — |
-| player_pass_rush_reception_yds | Pass + rush + receiving yards | — | no | — | — | — | — | — | marketfit.py |
+| player_pass_rush_reception_yds | Pass + rush + receiving yards | pass_rush_yds | yes (guarded) | QB | normal | Tier 2, 3.0% bar | yes — 0.683 (constant, measured) | yes | marketfit.py |
 | player_pass_rush_reception_tds | Pass + rush + receiving touchdowns | — | no | — | — | — | — | — | — |
 | player_anytime_td | Anytime touchdown | anytime_td | yes | RB, WR, TE | scorer model (engine/touchdowns, Poisson) | Long Shots board (its own measured tier) | yes — 0.721 (constant, measured) | yes | walk-forward constant |
 | player_1st_td | First touchdown | — | no | — | — | — | — | — | — |
 | player_last_td | Last touchdown | — | no | — | — | — | — | — | — |
 | player_tds_over | Touchdowns over | — | no | — | — | — | — | — | — |
-| player_kicking_points | Kicking points | — | no | — | — | — | — | — | marketfit.py |
-| player_field_goals | Field goals | — | no | — | — | — | — | — | marketfit.py |
+| player_kicking_points | Kicking points | kick_pts | yes (guarded) | K | discrete normal | Tier 1, 2.5% bar | yes — 0.673 (constant, measured) | yes | marketfit.py |
+| player_field_goals | Field goals | fg_made | yes (guarded) | K | Poisson (engine/passtd.at_least) | Tier 3, 6.0% bar | yes — 0.700 (constant, measured) | yes | marketfit.py |
 | player_pats | Extra points | — | no | — | — | — | — | — | — |
 | player_sacks | Sacks | — | no | — | — | — | — | — | — |
 | player_solo_tackles | Solo tackles | — | no | — | — | — | — | — | — |
-| player_tackles_assists | Tackles + assists | — | no | — | — | — | — | — | marketfit.py |
+| player_tackles_assists | Tackles + assists | tackles_ast | yes (guarded) | DEF | discrete normal | Tier 1, 2.5% bar | yes — 0.621 (constant, measured) | yes | marketfit.py |
 | player_assists | Assists | — | no | — | — | — | — | — | — |
 | player_defensive_interceptions | Defensive interceptions | — | no | — | — | — | — | — | — |
 | player_pass_yds_alternate | Passing Yards ladder | pass_yds | yes | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
@@ -69,9 +69,14 @@ always because it was measured and found flat (the module's own notes say which)
 | pass_cmp | QB | form blend | normal | QB ×0.5 on qb_pass_cmp | — | pace only | — | — | — | — | yes — 0.696 (constant, measured) |
 | pass_int | QB | rate model (engine/passint: picks per attempt × projected attempts) | Poisson (engine/passtd.at_least) | QB ×1.5 on qb_pass_int | — | pace only | — | — | — | — | no — no measured figure |
 | rush_yds | QB, RB | form blend + usage bridge | normal | QB shown (qb_rush_yds), not in the number; RB ×0.72 on rb_rush_yds | measured wind/rain/cold | pace + PROE (rush) | yes | teammate out | dl_out_rb | calibration, form weights, player memory | yes — 0.761 (constant, measured) |
+| pass_rush_yds | QB | form blend | normal | QB no rating | — | pace only | — | — | — | — | yes — 0.683 (constant, measured) |
 | rush_att | RB | form blend | normal | RB shown (rb_rush_att), not in the number | — | pace + PROE (rush) | — | — | — | — | yes — 0.632 (constant, measured) |
 | receptions | RB, WR, TE | form blend + usage bridge | discrete normal | RB ×0.47 on rb_rec; WR ×0.45 on qb_pass_yds; TE ×0.86 on qb_pass_yds | measured wind/rain/cold (WRTE) | pace + PROE (pass) | yes | QB change, teammate out | cb_out_wr_rec, cb_out_te, slot_out_wr2 | calibration, form weights, player memory | yes — 0.770 (constant, measured) |
 | rec_yds | RB, WR, TE | form blend + usage bridge | normal | RB ×0.39 on rb_rec_yds; WR ×0.57 on qb_pass_yds; TE ×0.79 on qb_pass_yds | measured wind/rain/cold (WRTE) | pace + PROE (pass) | yes | QB change, teammate out | cb_out_wr_yds, cb_out_te, slot_out_wr2, ol_out_wr | calibration, form weights, player memory | yes — 0.733 (constant, measured) |
+| rush_rec_yds | RB | form blend | normal | RB no rating | — | pace only | — | — | — | — | yes — 0.629 (constant, measured) |
+| kick_pts | K | form blend | discrete normal | K no rating | — | pace only | — | — | — | — | yes — 0.673 (constant, measured) |
+| fg_made | K | form blend | Poisson (engine/passtd.at_least) | K no rating | — | pace only | — | — | — | — | yes — 0.700 (constant, measured) |
+| tackles_ast | DEF | form blend | discrete normal | DEF no rating | — | pace only | — | — | — | — | yes — 0.621 (constant, measured) |
 | anytime_td | RB, WR, TE | touchdown model (engine/touchdowns: rate × red-zone chances, script) | scorer model (engine/touchdowns, Poisson) | RB ×0.45 on rb_td; WR shown (wr_td), not in the number; TE shown (te_td), not in the number | measured (TD_WIND_FORECAST and the rest) | pace only | — | — | — | — | yes — 0.721 (constant, measured) |
 
 ## College football
@@ -138,6 +143,6 @@ always because it was measured and found flat (the module's own notes say which)
 ## What is not bought, and why
 
 - **Longest completion / rush / reception, first and last touchdown, touchdowns over:** no model, no measurement; a book's vig on a longest-play market is the widest on the menu.
-- **Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals, tackles + assists:** measured on the box's nflverse cache by `marketfit.py` (round two, 2026-10-05) before any is bought; the paste decides. Sacks, solo tackles, assists and defensive interceptions have no harness arm yet.
+- **Sacks, solo tackles, assists and defensive interceptions:** no harness arm yet. (Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals and tackles + assists were measured by `marketfit.py` and bought on 2026-10-10, NFL only.)
 - **Rushing / receiving / pass-rush-receiving touchdowns:** the anytime-touchdown model already prices the scorer; the split markets are the same event at worse prices.
 

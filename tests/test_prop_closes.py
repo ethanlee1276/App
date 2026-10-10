@@ -206,7 +206,11 @@ def test_nothing_harvested_is_reported_as_missing_and_names_the_markets():
     # market (`pass_td`) sorted above it and pushed it behind the "+2
     # more". Nothing about the report had changed.
     boarded = C._prop_markets("nfl")
-    named = [m for m in boarded if m in layer.detail]
+    # WHOLE NAMES: "rush_yds" sits inside "pass_rush_yds" and "rec_yds"
+    # inside "rush_rec_yds" (both 2026-10-10), so a plain substring test
+    # counted a market as named when only its longer cousin was.
+    import re
+    named = [m for m in boarded if re.search(rf"(?<![a-z_]){re.escape(m)}(?![a-z_])", layer.detail)]
     assert named, f"the report names no market at all: {layer.detail}"
     missing = len(boarded) - len(named)
     assert not missing or f"(+{missing} more)" in layer.detail, \
@@ -230,7 +234,11 @@ def test_a_partly_harvested_sport_says_which_half_is_missing():
     layer = _layer(conn, "nfl")
     assert layer.state == C.PARTIAL
     assert "receptions" in layer.detail
-    assert "pass_yds" in layer.detail
+    # Named in the detail, or counted in its "(+N more)" once the list
+    # passes the cap (the board's NFL markets grew past it on 2026-10-10);
+    # the fix line names every one either way.
+    assert "pass_yds" in layer.detail or "more)" in layer.detail
+    assert "anytime_td" in layer.detail and "pass_yds" in layer.fix
     assert layer.fix and "receptions" not in layer.fix, \
         "the fix must buy what is missing, not what is already stored"
 

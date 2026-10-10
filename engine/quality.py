@@ -30,6 +30,11 @@ MARKET_TIER = {
     # carefully as catches are.
     "pass_att": 1, "pass_cmp": 1, "rush_att": 1,
     "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
+    # The five of 2026-10-10: the yardage sums with the yardage; a kicker's
+    # points and a defender's tackles are whole-number counts of a role,
+    # priced like the volume markets; field goals are a small count at a
+    # half-number, quarantined with the other counts.
+    "pass_rush_yds": 2, "rush_rec_yds": 2, "kick_pts": 1, "tackles_ast": 1, "fg_made": 3,
     "anytime_td": 3,
     # Game lines, since the 0–100 grade became the ONE gate (Ethan,
     # 2026-09-02: "1. 0-100"). Tier 1 is `engine/parlays.TIER`'s standing
@@ -141,6 +146,8 @@ VOLATILITY = {
     "pass_att": "LOW", "pass_cmp": "LOW", "rush_att": "MEDIUM",
     "pass_yds": "MEDIUM",          # lowest CV of the yardage family
     "rush_yds": "HIGH", "rec_yds": "HIGH",
+    "pass_rush_yds": "MEDIUM", "rush_rec_yds": "HIGH",
+    "kick_pts": "MEDIUM", "tackles_ast": "MEDIUM", "fg_made": "HIGH",
     "anytime_td": "EXTREME",
 }
 

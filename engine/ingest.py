@@ -105,12 +105,14 @@ def _is_regular(row: dict) -> bool:
 
 
 def nfl_player_log_rows(stats_rows: list[dict], season: int) -> list[dict]:
-    from .sources.nflverse import _s, _f, POSITION_MARKETS, MARKET_COLUMNS
+    from .sources.nflverse import _s, _f, POSITION_MARKETS, board_position, stat_value
     out = []
     for r in stats_rows:
         if not _is_regular(r):
             continue
-        pos = _s(r, "position", "position_group").upper()
+        # A kicker and a defender are stored under K and DEF (2026-10-10),
+        # so their markets settle like every other.
+        pos = board_position(r)
         if pos not in POSITION_MARKETS:
             continue
         wk = int(_f(r, "week", default=0))
@@ -126,7 +128,7 @@ def nfl_player_log_rows(stats_rows: list[dict], season: int) -> list[dict]:
                 "sport": "nfl", "season": season, "period": f"{wk:03d}",
                 "game_id": f"{team}-{wk:03d}", "player": name, "team": team,
                 "opponent": opp, "position": pos, "home": 1,
-                "market": market, "value": _f(r, *MARKET_COLUMNS[market]),
+                "market": market, "value": stat_value(r, market),
             })
     return out
 
@@ -182,13 +184,13 @@ NFL_QB_ONLY = {"pass_att", "pass_cmp", "pass_td", "pass_int"}
 
 
 def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
-    from .sources.nflverse import _s, _f, POSITION_MARKETS
+    from .sources.nflverse import _s, _f, OFFENSE_POSITIONS
     out = []
     for r in stats_rows:
         if not _is_regular(r):
             continue
         pos = _s(r, "position", "position_group").upper()
-        if pos not in POSITION_MARKETS:
+        if pos not in OFFENSE_POSITIONS:
             continue
         wk = int(_f(r, "week", default=0))
         if wk <= 0:
@@ -216,13 +218,13 @@ def nfl_td_rows(stats_rows: list[dict], season: int) -> list[dict]:
     This is what settles the NFL long-shot board. Passing TDs are
     deliberately excluded — an anytime-scorer prop pays the player who
     SCORES the touchdown, not the one who throws it."""
-    from .sources.nflverse import _s, _f, POSITION_MARKETS
+    from .sources.nflverse import _s, _f, OFFENSE_POSITIONS
     out = []
     for r in stats_rows:
         if not _is_regular(r):
             continue
         pos = _s(r, "position", "position_group").upper()
-        if pos not in POSITION_MARKETS:
+        if pos not in OFFENSE_POSITIONS:
             continue
         wk = int(_f(r, "week", default=0))
         if wk <= 0:

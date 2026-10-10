@@ -85,9 +85,12 @@ def test_every_built_market_prices_through_the_one_chain():
             if market == t["ANYTIME_TD"]:
                 continue                      # its own model (engine/touchdowns), its own walk
             mean = {"pass_yds": 240, "pass_att": 33, "pass_cmp": 21, "pass_td": 1.5, "pass_int": 0.8,
-                    "rush_yds": 60, "rush_att": 14, "rec_yds": 55, "receptions": 4.5}[market]
+                    "rush_yds": 60, "rush_att": 14, "rec_yds": 55, "receptions": 4.5,
+                    # the five of 2026-10-10
+                    "pass_rush_yds": 265, "rush_rec_yds": 80, "kick_pts": 8, "fg_made": 1.6,
+                    "tackles_ast": 6}[market]
             vals = [max(0.0, rnd.gauss(mean, mean * 0.4)) for _ in range(12)]
-            if market in ("pass_td", "pass_int"):
+            if market in ("pass_td", "pass_int", "fg_made", "kick_pts", "tackles_ast"):
                 vals = [float(round(v)) for v in vals]
             e = {"name": "P", "values": vals, "dates": [f"2025-09-{i + 1:02d}" for i in range(12)],
                  "opps": ["X"] * 12, "seasons": [2025] * 12}

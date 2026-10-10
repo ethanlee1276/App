@@ -51,6 +51,21 @@ RUSH_ATT = "rush_att"
 #: priced Poisson, Tier 3 on the edge board, and on Most Likely only
 #: where the league's own walk clears the floor.
 PASS_INT = "pass_int"
+#: FIVE MARKETS THE BOOKS HANG AND THE NFL BOARD NEVER ASKED FOR, added
+#: 2026-10-10 (Ethan: "Yes add all of them"). Measured first, in
+#: marketfit.py's walk-forward on the cached 2021-2025 box scores, held-out
+#: 2025, each game projected from earlier games only and scored against a
+#: trailing-average line: field goals 0.700 ± 0.027, a quarterback's
+#: passing + rushing yards 0.683 ± 0.023, kicking points 0.673 ± 0.023, a
+#: back's rushing + receiving yards 0.629 ± 0.023, a defender's tackles +
+#: assists 0.621 ± 0.008. Every one clears likely.MIN_RANK_AUC in the
+#: harness that scores catches at 0.618. NFL only: college has no kicking
+#: or tackle columns in its play feed.
+PASS_RUSH_YDS = "pass_rush_yds"        # passing + rushing + receiving yards (the book's own sum)
+RUSH_REC_YDS = "rush_rec_yds"          # rushing + receiving yards
+KICK_PTS = "kick_pts"                  # 3 a field goal, 1 an extra point
+FG_MADE = "fg_made"                    # field goals made
+TACKLES_AST = "tackles_ast"            # solo tackles + assists
 
 # Human labels for the markets, used in the UI and explanations.
 MARKET_LABELS = {
@@ -67,6 +82,11 @@ MARKET_LABELS = {
     RUSH_ATT: "Carries",
     # "Interceptions" on purpose, the stat chip's own word (engine/statlogs).
     PASS_INT: "Interceptions",
+    PASS_RUSH_YDS: "Pass + Rush Yards",
+    RUSH_REC_YDS: "Rush + Rec Yards",
+    KICK_PTS: "Kicking Points",
+    FG_MADE: "Field Goals Made",
+    TACKLES_AST: "Tackles + Assists",
 }
 
 

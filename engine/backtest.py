@@ -715,7 +715,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     """
     from .models import ANYTIME_TD
     from .sources.nflverse import (
-        build_slate, load_weekly_stats, MARKET_COLUMNS, _s, _f,
+        build_slate, load_weekly_stats, STAT_MARKETS, stat_value, _s, _f,
     )
     from .pipeline import run_slate
     from .rules import RuleConfig
@@ -790,8 +790,8 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
             if int(_f(row, "week", default=0)) != w:
                 continue
             name = _s(row, "player_display_name", "player_name", "full_name")
-            for market, cols in MARKET_COLUMNS.items():
-                actuals[(_norm(name), market)] = _f(row, *cols)
+            for market in STAT_MARKETS:
+                actuals[(_norm(name), market)] = stat_value(row, market)
             # ANYTIME TOUCHDOWN, which MARKET_COLUMNS deliberately cannot
             # express: the value is the SUM of two columns and `_f` reads
             # the first present key, so an entry there would silently

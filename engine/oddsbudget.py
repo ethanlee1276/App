@@ -80,7 +80,10 @@ CREDITS_PER_EVENT = 8
 #: the request (`oddsapi.VOLUME_ODDS_KEYS`), measured before bought.
 #: Seventeen since 2026-10-05: interceptions thrown
 #: (`oddsapi.PASS_INT_ODDS_KEY`, engine/passint).
-EVENT_CREDITS = {"nfl": 17, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
+#: Twenty-two since 2026-10-10: pass + rush yards, rush + rec yards,
+#: kicking points, field goals and tackles + assists
+#: (`oddsapi.NEW_PROP_ODDS_KEYS`), measured before bought.
+EVENT_CREDITS = {"nfl": 22, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
 
 
 def credits_per_event(sport: str | None = None) -> int:

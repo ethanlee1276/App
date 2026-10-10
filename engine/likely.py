@@ -110,6 +110,17 @@ RANK_AUC = {
     "pass_att": 0.707,
     "pass_cmp": 0.696,
     "rush_att": 0.632,
+    #: THE FIVE OF 2026-10-10 (Ethan: "Yes add all of them"), the same
+    #: harness, held-out 2025, each clearing the floor by more than its ±:
+    #: field goals 0.700 ± 0.027, a quarterback's passing + rushing yards
+    #: 0.683 ± 0.023, kicking points 0.673 ± 0.023, a back's rushing +
+    #: receiving yards 0.629 ± 0.023, a defender's tackles + assists
+    #: 0.621 ± 0.008.
+    "fg_made": 0.700,
+    "pass_rush_yds": 0.683,
+    "kick_pts": 0.673,
+    "rush_rec_yds": 0.629,
+    "tackles_ast": 0.621,
     "receptions": 0.770,
     "rush_yds": 0.761,
     "rec_yds": 0.733,
@@ -124,7 +135,7 @@ GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 #: (`python3 marketfit.py --opp`) decides it, as it did for the three
 #: volume markets; college reads the rankfit store. Until then the row
 #: prices on the edge board at Tier 3 and never reaches this board.
-COUNT_MARKETS = ("pass_td", "pass_int")
+COUNT_MARKETS = ("pass_td", "pass_int", "fg_made")
 
 #: Game markets shown to rank, per sport — measured 2026-09-02 by
 #: `engine.gamerank` (see the header). ONLY the markets that cleared

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Prop, PASS_TD, PASS_INT, RECEPTIONS
+from .models import Prop, PASS_TD, PASS_INT, RECEPTIONS, FG_MADE, KICK_PTS, TACKLES_AST
 from .projection import Projection
 from .odds import (BestLine, best_over_line, best_under_line, consensus_fair,
                    devig_two_way, expected_value, is_quotable)
@@ -600,7 +600,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     from .losspatterns import veto as lp_veto
 
     def p_over_at(line: float) -> float:
-        if prop.market in (PASS_TD, PASS_INT):
+        if prop.market in (PASS_TD, PASS_INT, FG_MADE):
             # POISSON, NOT A NORMAL TAIL. A quarterback throws between
             # zero and about five touchdowns; a normal fitted to a count
             # that small is visibly wrong at exactly the half-points the
@@ -610,10 +610,13 @@ def evaluate_prop(prop: Prop, proj: Projection,
             # closed form, and it is the same shape of decision
             # `longshots.prob_at_least_one` makes for scorers.
             # Interceptions (engine/passint, 2026-10-05) are the same
-            # kind of count at the same kind of half-number.
+            # kind of count at the same kind of half-number, and so are a
+            # kicker's field goals (2026-10-10: 0 to 4 a game, hung at 1.5).
             from .passtd import at_least
             raw = at_least(proj.mean, line)
-        elif prop.market == RECEPTIONS:
+        elif prop.market in (RECEPTIONS, KICK_PTS, TACKLES_AST):
+            # Whole numbers a game, hung at the half — catches, a kicker's
+            # points, a defender's tackles + assists.
             raw = prob_over_discrete(line, proj.mean, proj.std)
         else:
             raw = prob_over(line, proj.mean, proj.std)

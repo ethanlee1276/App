@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from ..form import compute_form
 from ..models import Prop, DefenseProfile, GameLog
 from ..sources.nflverse import (
-    build_defense_profiles, POSITION_MARKETS, MARKET_COLUMNS, _s, _f,
+    build_defense_profiles, POSITION_MARKETS, MARKET_COLUMNS, OFFENSE_POSITIONS, _s, _f,
 )
 from .features import extract_features, vectorize, FEATURE_ORDER
 from .model import MultiplierModel, ridge_fit
@@ -51,8 +51,8 @@ def build_examples(stats: list[dict], week_games: dict[int, list],
             if int(_f(r, "week", default=0)) != w:
                 continue
             pos = _s(r, "position", "position_group").upper()
-            if pos not in POSITION_MARKETS:
-                continue
+            if pos not in POSITION_MARKETS or pos not in OFFENSE_POSITIONS:
+                continue          # offence only: the kicker and defender markets are not this model's
             name = _s(r, "player_display_name", "player_name", "full_name")
             team = _s(r, "recent_team", "team")
             opp = _s(r, "opponent_team", "opponent")
@@ -68,6 +68,8 @@ def build_examples(stats: list[dict], week_games: dict[int, list],
 
             defense = defenses.get(opp) or DefenseProfile(team=opp)
             for market, role in POSITION_MARKETS[pos]:
+                if market not in MARKET_COLUMNS:
+                    continue      # the summed markets (2026-10-10) are not part of this model
                 cols = MARKET_COLUMNS[market]
                 actual = _f(r, *cols)
                 vals = [_f(pr, *cols) for pr in prior_rows]

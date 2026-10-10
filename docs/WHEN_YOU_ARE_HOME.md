@@ -422,6 +422,28 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db, rankfit; [print(l) for l in rankfit.measure(db.connect(), 'cfb')]"
     ```
 
+25. **Five new NFL markets** (2026-10-10, "Yes add all of them"): a QB's
+    pass + rush yards, a back's rush + rec yards, a kicker's points and
+    field goals, a defender's tackles + assists. Each was measured before
+    it went on (marketfit.py, held-out 2025: 0.683, 0.629, 0.673, 0.700,
+    0.621). They are on the NFL odds request (22 credits an event, was 17)
+    behind the drop-and-retry guard. After the next NFL build, see which
+    the books priced and which reached Most Likely:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -c "
+    import json, collections, os
+    p = 'data/built/recommendations.json' if os.path.exists('data/built/recommendations.json') else 'web/data/recommendations.json'
+    d = json.load(open(p)); new = ('pass_rush_yds','rush_rec_yds','kick_pts','fg_made','tackles_ast')
+    recs = [r for r in d.get('recommendations', []) if r.get('market') in new]
+    print('built:', collections.Counter(r['market'] for r in recs))
+    print('book-priced:', collections.Counter(r['market'] for r in recs if r.get('has_market')))
+    print('most likely:', collections.Counter(r['market'] for r in d.get('most_likely', []) if r.get('market') in new))"
+    ```
+    A market at zero under "book-priced" with the others filled means the
+    API refused that key (the guard drops it and the rest keep working).
+    Settling needs this season's box scores re-ingested once, so the
+    kickers' and defenders' rows exist; the nightly ingest does it.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

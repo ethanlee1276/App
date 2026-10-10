@@ -271,6 +271,13 @@ def test_every_market_a_position_gets_can_be_placed_at_a_position():
             rows.append({"season_type": "REG", "week": str(wk), "recent_team": "BUF", "position": pos,
                          "player_display_name": name, "attempts": "30" if pos == "QB" else "0",
                          "carries": "15" if pos == "RB" else "0", "targets": "8" if pos in ("WR", "TE") else "0"})
+    # A kicker and a defender, board positions since 2026-10-10 (K, DEF).
+    for wk in (1, 2, 3):
+        rows.append({"season_type": "REG", "week": str(wk), "recent_team": "BUF", "position": "K",
+                     "position_group": "SPEC", "player_display_name": "Kay", "fg_att": "3", "pat_att": "3"})
+        rows.append({"season_type": "REG", "week": str(wk), "recent_team": "BUF", "position": "LB",
+                     "position_group": "LB", "player_display_name": "Dee", "def_tackles_solo": "6",
+                     "def_tackle_assists": "3"})
     specs = top_players_for_week(rows, {"BUF"}, 4)
     got = {(s.position, s.market) for s in specs}
     for position, markets in POSITION_MARKETS.items():

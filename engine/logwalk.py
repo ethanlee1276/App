@@ -30,7 +30,10 @@ from .betting import evaluate_prop
 #: Position by market, so the projection's role logic stays sensible.
 _POSITION = {"pass_yds": "QB", "rush_yds": "RB",
              "rec_yds": "WR", "receptions": "WR",
-             "pass_att": "QB", "pass_cmp": "QB", "pass_int": "QB", "rush_att": "RB"}
+             "pass_att": "QB", "pass_cmp": "QB", "pass_int": "QB", "rush_att": "RB",
+             # the five NFL markets of 2026-10-10
+             "pass_rush_yds": "QB", "rush_rec_yds": "RB", "kick_pts": "K", "fg_made": "K",
+             "tackles_ast": "DEF"}
 
 #: A count market is hung at the book's one number, not a trailing
 #: average: every book posts a pick thrown at 0.5, and the walk should

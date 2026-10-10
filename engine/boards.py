@@ -265,7 +265,7 @@ FOOTBALL_SHELVES = (
     ("receiving", "Catches & receiving yards", ("receptions", "rec_yds"),
      "Volume receivers and the yardage that follows it — the markets "
      "that rank strongest of anything we measure."),
-    ("rushing", "Rushing yards & carries", ("rush_yds", "rush_att"),
+    ("rushing", "Rushing yards & carries", ("rush_yds", "rush_att", "rush_rec_yds"),
      "Backfield workload. Ranks well; the price fit is shut, so these "
      "are a read rather than a card."),
     # PASSING TOUCHDOWNS JOINED THE YARDS on 2026-09-10 (Ethan: "we also
@@ -276,11 +276,21 @@ FOOTBALL_SHELVES = (
     # figure is the MINIMUM across its markets (`_shelf_auc`), so adding
     # the weaker of the two cannot flatter the stronger — 0.687 against
     # passing yards' 0.691, near enough that the header barely moves.
-    ("passing", "Passing", ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int"),
+    ("passing", "Passing", ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "pass_rush_yds"),
      "Quarterback volume and the touchdowns that come with it. The "
      "weakest ranking on the board and labelled as such rather than "
      "mixed in silently — passing yards sort at 0.691 and passing "
      "touchdowns at 0.687, both measured, both barely above the bar."),
+    # KICKERS AND DEFENDERS, 2026-10-10 (Ethan: "Yes add all of them"):
+    # the board's first markets for either, each measured before it went
+    # on (likely.RANK_AUC). Their own shelves, because nobody shopping a
+    # receiver is shopping a kicker.
+    ("kicking", "Kickers", ("kick_pts", "fg_made"),
+     "A kicker's points and his field goals — whole numbers a game, and "
+     "among the best-ranked markets measured (field goals 0.700)."),
+    ("tackles", "Tackles", ("tackles_ast",),
+     "A defender's tackles plus assists — a linebacker's or a safety's "
+     "workload, ranked at 0.621."),
     # GAME LINES, LAST. Ethan, 2026-09-02: "we have no money lines or
     # spreads or totals or anything like that." Measured the same day
     # (engine.gamerank): the model ranks who WINS (0.64) and sorts

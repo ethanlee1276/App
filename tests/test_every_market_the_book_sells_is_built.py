@@ -55,7 +55,8 @@ def test_a_position_s_own_market_comes_first_and_the_rest_have_a_floor():
     assert [m for m, _r in N.POSITION_MARKETS["RB"]][0] == RUSH_YDS
     assert N.is_secondary("WR", RECEPTIONS) and N.is_secondary("RB", REC_YDS)
     assert not N.is_secondary("WR", REC_YDS) and not N.is_secondary("TE", RECEPTIONS)
-    assert N.SECONDARY_FLOOR == {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0}, "the college board's floors; a quarterback's rushing floor is where the books stop hanging one"
+    assert N.SECONDARY_FLOOR == {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0, "rush_rec_yds": 20.0}, \
+        "the college board's floors; a quarterback's rushing floor is where the books stop hanging one; a back's rush + rec (2026-10-10)"
 
 
 def test_receivers_and_backs_are_ranked_on_their_team():

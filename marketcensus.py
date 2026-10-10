@@ -151,8 +151,10 @@ def _settles(t, sport: str, market: str) -> bool:
     and the usage stats (ingest.NFL_USAGE_MARKETS); college writes every
     market its play feed counts (cfbstats.MARKETS)."""
     if sport == "nfl":
-        return (market in t["N"].MARKET_COLUMNS or market in t["I"].NFL_USAGE_MARKETS
-                or market == t["ANYTIME_TD"])
+        # The summed markets (nflverse.STAT_SUMS, 2026-10-10) are written
+        # by the same ingest under their own names.
+        return (market in t["N"].MARKET_COLUMNS or market in t["N"].STAT_SUMS
+                or market in t["I"].NFL_USAGE_MARKETS or market == t["ANYTIME_TD"])
     return market in t["CS"].MARKETS or market == t["ANYTIME_TD"]
 
 
@@ -161,7 +163,7 @@ def _distribution(t, market: str) -> str:
         return "scorer model (engine/touchdowns, Poisson)"
     if market in t["L"].COUNT_MARKETS:
         return "Poisson (engine/passtd.at_least)"
-    if market == "receptions":
+    if market in ("receptions", "kick_pts", "tackles_ast"):
         return "discrete normal"
     return "normal"
 
@@ -378,10 +380,9 @@ def render() -> str:
     out += ["", "## What is not bought, and why", "",
             "- **Longest completion / rush / reception, first and last touchdown, touchdowns over:** "
             "no model, no measurement; a book's vig on a longest-play market is the widest on the menu.",
-            "- **Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals, "
-            "tackles + assists:** measured on the box's nflverse cache by `marketfit.py` (round two, "
-            "2026-10-05) before any is bought; the paste decides. Sacks, solo tackles, assists and "
-            "defensive interceptions have no harness arm yet.",
+            "- **Sacks, solo tackles, assists and defensive interceptions:** no harness arm yet. "
+            "(Rushing + receiving yards, pass + rush + receiving yards, kicking points, field goals "
+            "and tackles + assists were measured by `marketfit.py` and bought on 2026-10-10, NFL only.)",
             "- **Rushing / receiving / pass-rush-receiving touchdowns:** the anytime-touchdown model "
             "already prices the scorer; the split markets are the same event at worse prices.", ""]
     return "\n".join(out) + "\n"

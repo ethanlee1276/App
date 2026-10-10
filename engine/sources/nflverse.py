@@ -24,6 +24,7 @@ from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
     PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, RUSH_ATT, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
+    PASS_RUSH_YDS, RUSH_REC_YDS, KICK_PTS, FG_MADE, TACKLES_AST,
 )
 from ..data_loader import Slate
 
@@ -57,7 +58,61 @@ MARKET_COLUMNS = {
     # nflverse spelled this `interceptions` and renamed it; the box's
     # cache carries one or the other (engine/ingest reads both too).
     PASS_INT: ("passing_interceptions", "interceptions"),
+    FG_MADE: ("fg_made",),
 }
+
+#: THE MARKETS THAT ARE A SUM (2026-10-10). `_f` reads the FIRST column
+#: present, so a sum written into MARKET_COLUMNS would silently return
+#: one part of it — the anytime-touchdown trap (td_game_logs). These are
+#: (weight, column fallbacks) pairs, added up by `stat_value`, which is
+#: what every reader of a market's number goes through. Quarterback
+#: passing + rushing is priced as the book settles it: passing + rushing
+#: + receiving yards (player_pass_rush_reception_yds).
+STAT_SUMS = {
+    PASS_RUSH_YDS: ((1.0, ("passing_yards",)), (1.0, ("rushing_yards",)), (1.0, ("receiving_yards",))),
+    RUSH_REC_YDS: ((1.0, ("rushing_yards",)), (1.0, ("receiving_yards",))),
+    KICK_PTS: ((3.0, ("fg_made",)), (1.0, ("pat_made",))),
+    TACKLES_AST: ((1.0, ("def_tackles_solo",)), (1.0, ("def_tackle_assists", "def_tackles_with_assist"))),
+}
+#: Every market the box score can settle: the single columns and the sums.
+STAT_MARKETS = tuple(MARKET_COLUMNS) + tuple(STAT_SUMS)
+
+
+def stat_value(row: dict, market: str) -> float:
+    """His number in this market from one weekly stats row."""
+    if market in STAT_SUMS:
+        return sum(w * _f(row, *cols, default=0.0) for w, cols in STAT_SUMS[market])
+    return _f(row, *MARKET_COLUMNS[market])
+
+
+#: The positions whose board markets are offence's (everything the usage,
+#: touchdown and ML tables were built for).
+OFFENSE_POSITIONS = ("QB", "RB", "WR", "TE")
+#: nflverse's defensive position groups, read as one board position: a book
+#: hangs tackles on a linebacker and a safety alike.
+DEF_GROUPS = ("LB", "DB", "DL")
+
+
+def board_position(row: dict) -> str:
+    """The position a row is built and stored under: K for a kicker, DEF
+    for any defender, else the row's own position."""
+    pos = _s(row, "position", "position_group").upper()
+    if pos == "K":
+        return "K"
+    if _s(row, "position_group").upper() in DEF_GROUPS:
+        return "DEF"
+    return pos
+
+
+def volume(row: dict, position: str) -> float:
+    """The opportunity a player is ranked on for his team: attempts,
+    carries and targets for the offence; kicks for a kicker; tackles for a
+    defender."""
+    if position == "K":
+        return _f(row, "fg_att", default=0.0) + _f(row, "pat_att", default=0.0)
+    if position == "DEF":
+        return stat_value(row, TACKLES_AST)
+    return _f(row, "attempts") + _f(row, "carries") + _f(row, "targets")
 
 #: How many games a touchdown log is topped up to from the PRIOR season
 #: when the carry is on. Ten, because that is where the TD model's blend
@@ -497,7 +552,7 @@ QB_START_ATTEMPTS = 15.0
 
 
 #: The markets that are a quarterback's by nature.
-QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT)
+QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, PASS_RUSH_YDS)
 
 
 def quarterbacked(row: dict, market: str) -> bool:
@@ -511,7 +566,6 @@ def quarterbacked(row: dict, market: str) -> bool:
 def player_game_logs(rows: list[dict], player: str, market: str,
                      upto_week: int) -> list[GameLog]:
     """Most-recent-first game logs for one player and market."""
-    cols = MARKET_COLUMNS[market]
     out = []
     for r in rows:
         name = _s(r, "player_display_name", "player_name", "full_name")
@@ -525,7 +579,7 @@ def player_game_logs(rows: list[dict], player: str, market: str,
         out.append(GameLog(
             week=wk,
             opponent=_s(r, "opponent_team", "opponent"),
-            value=_f(r, *cols),
+            value=stat_value(r, market),
             home=True,
         ))
     out.sort(key=lambda g: g.week, reverse=True)
@@ -601,9 +655,8 @@ def td_game_logs(rows: list[dict], player: str, upto_week: int) -> list[GameLog]
 
 
 def career_average(rows: list[dict], player: str, market: str) -> float:
-    cols = MARKET_COLUMNS[market]
     vals = [
-        _f(r, *cols) for r in rows
+        stat_value(r, market) for r in rows
         if _s(r, "player_display_name", "player_name", "full_name") == player
     ]
     return sum(vals) / len(vals) if vals else 0.0
@@ -699,13 +752,26 @@ POSITION_MARKETS = {
     "RB": [(RUSH_YDS, "rb1"), (RUSH_ATT, "rb1"), (RECEPTIONS, "rb1"), (REC_YDS, "rb1")],
     "WR": [(REC_YDS, "wr1"), (RECEPTIONS, "wr1")],
     "TE": [(RECEPTIONS, "te"), (REC_YDS, "te")],
+    # THE FIVE OF 2026-10-10 (engine/models PASS_RUSH_YDS…; Ethan: "Yes add
+    # all of them"), measured in marketfit.py before they were added. A
+    # kicker and a defender are board positions for the first time: the
+    # kicker his team's one (ranked on kicks), the defenders its top three
+    # by tackles (`board_position`, `volume`).
+    "K": [(KICK_PTS, "k"), (FG_MADE, "k")],
+    "DEF": [(TACKLES_AST, "def")],
 }
+POSITION_MARKETS["QB"].append((PASS_RUSH_YDS, "starter"))
+POSITION_MARKETS["RB"].append((RUSH_REC_YDS, "rb1"))
+#: How many players a team gets at a position (QB: one, two with backups).
+TAKE = {"K": 1}
 
 #: The least a player's recent average may be, for a market that is not
 #: his position's own, before a prop is built on it — the college board's
 #: floors (engine/cfb/props._MIN_MEAN), the same question in the same
 #: sport.
-SECONDARY_FLOOR = {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0}
+SECONDARY_FLOOR = {REC_YDS: 12.0, RECEPTIONS: 1.5, RUSH_YDS: 8.0,
+                   # a third back with a handful of touches gets no combo line
+                   RUSH_REC_YDS: 20.0}
 
 #: Positions whose role says WHERE he ranks on his team — "wr2", "rb1".
 #: The table's role is only the default; the depth order comes from the
@@ -781,7 +847,7 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
         team = _s(r, "recent_team", "team")
         if team not in teams:
             continue
-        pos = _s(r, "position", "position_group").upper()
+        pos = board_position(r)
         if pos not in POSITION_MARKETS:
             continue
         name = _s(r, "player_display_name", "player_name", "full_name")
@@ -789,7 +855,7 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
             continue
         key = (team, pos, name)
         a = agg.setdefault(key, {"vol": 0.0, "games": 0})
-        a["vol"] += _f(r, "attempts") + _f(r, "carries") + _f(r, "targets")
+        a["vol"] += volume(r, pos)
         a["games"] += 1
 
     specs: list[PlayerSpec] = []
@@ -799,7 +865,7 @@ def top_players_for_week(rows: list[dict], teams: set[str], upto_week: int,
         for pos, markets in POSITION_MARKETS.items():
             cands = [(k, v) for k, v in agg.items() if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
-            take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
+            take = (2 if qb_backups else 1) if pos in ("QB",) else TAKE.get(pos, per_team)
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
                     specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos, team))
@@ -833,11 +899,16 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
         team = entry.get("team") or ""
         if team not in teams:
             continue
+        # The roster's label decides a kicker; a defender is whoever last
+        # season's rows put in a defensive group (the roster spells its
+        # positions LB, CB, S… and carries no group).
         pos = (entry.get("position") or "").upper()
+        if pos != "K" and board_position(r) == "DEF":
+            pos = "DEF"
         if pos not in POSITION_MARKETS:
             continue
         a = agg.setdefault((team, pos, name), {"vol": 0.0})
-        a["vol"] += _f(r, "attempts") + _f(r, "carries") + _f(r, "targets")
+        a["vol"] += volume(r, pos)
 
     specs: list[PlayerSpec] = []
     for team in sorted(teams):
@@ -845,7 +916,7 @@ def _carry_specs(prior_rows: list[dict], roster: dict[str, dict],
             cands = [(k, v) for k, v in agg.items()
                      if k[0] == team and k[1] == pos]
             cands.sort(key=lambda kv: kv[1]["vol"], reverse=True)
-            take = (2 if qb_backups else 1) if pos in ("QB",) else per_team
+            take = (2 if qb_backups else 1) if pos in ("QB",) else TAKE.get(pos, per_team)
             for rank, ((_t, _p, name), _v) in enumerate(cands[:take], 1):
                 for market, role in markets:
                     specs.append(PlayerSpec(name, market, role_for(pos, rank, role), pos, team))
@@ -971,7 +1042,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if prior_stats and roster:
             index = _carry.build_index(prior_stats, roster,
                                        load_schedules(), season)
-            for market in MARKET_COLUMNS:
+            for market in STAT_MARKETS:
                 pos_means[market] = _carry.positional_means(prior_stats, market)
 
     # EACH PLAYER'S ROWS, ONCE. Every per-player read below filtered the
@@ -1206,8 +1277,10 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     seen_td: set[tuple[str, str]] = set()
     td_props: list[Prop] = []
     for p in props:
-        if p.market in (PASS_YDS, PASS_ATT, PASS_CMP, PASS_INT):
+        if p.market in (PASS_YDS, PASS_ATT, PASS_CMP, PASS_INT, PASS_RUSH_YDS):
             continue                 # QB passing volume is not a scorer market
+        if p.position not in OFFENSE_POSITIONS:
+            continue                 # a kicker or a defender is no anytime scorer
         key = (p.team, p.player)
         if key in seen_td:
             continue
