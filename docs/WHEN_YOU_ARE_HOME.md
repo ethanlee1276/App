@@ -343,6 +343,25 @@ first). Paste back anything that prints an error or looks off.
     whose chance is below its price's break-even is graded on paper, not
     staked, and its card says "Price too high to stake".
 
+19. **College teammate-out and new QB** (2026-10-10, "do the teammate-out
+    and new QB stuff for college now"). Built and wired; nothing moves
+    until college's own games pass the NFL's rule. Measure, read, then
+    save (the weekly job would save the same on its own):
+    ```
+    cd /srv/qellys
+    sudo -u qellys python3 -m engine.cfb.lineup --dry-run 2>&1 | tail -60
+    sudo -u qellys python3 -m engine.cfb.lineup
+    sudo -u qellys python3 -m engine.scouthist --sport cfb
+    ```
+    The first prints every case (a teammate ranked above or below him
+    out, just now or already; a starting QB out behind a similar or a
+    downgraded replacement) with its multiplier, its error and each
+    season's; "ADOPT" marks the ones the next college build applies. The
+    third saves the 14 scout cautions college's history proved on
+    2026-10-10 (first game back, rushing overs on a team expected to
+    trail, and the rest) — a pick carrying one is lowered by what history
+    proved, never below its price.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

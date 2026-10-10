@@ -2069,6 +2069,24 @@ def main() -> None:
         prop_census["priced"] = _matched
         for _pg in getattr(_prop_slate, "games", None) or []:
             _pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]
+        # WHO PLAYS AROUND HIM, FOR COLLEGE (engine/cfb/lineup; Ethan,
+        # 2026-10-10: "do the teammate-out and new QB stuff for college").
+        # The depth order off college's logs, who is out (ESPN's board and
+        # every book's pulled players), and the QB change from the passers
+        # the books priced — on each game BEFORE pricing, so the
+        # projection's lineup step applies college's own measured
+        # multipliers (x1.00 until a fit saves them).
+        _cfb_qb_ch = None
+        try:
+            from engine.cfb import lineup as _clu
+            _lu = _clu.attach(conn, _prop_slate, games, _cfb_inj,
+                              _prop_season_of("cfb", args.date), args.date)
+            _cfb_qb_ch = _lu["qb_changes"]
+            print(f"  Lineup: {_lu['orders']} depth order(s), {_lu['outs']} ranked teammate(s) out, "
+                  f"{len(_cfb_qb_ch)} QB change(s)"
+                  + ("" if _clu.measured() else " — college not measured yet, nothing applied"))
+        except Exception as _lux:                            # noqa: BLE001
+            print(f"  ⚠️  college lineup step skipped: {_lux}")
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
@@ -2228,7 +2246,10 @@ def main() -> None:
                     if _p.get("market") == "pass_yds" and _p.get("has_market") and _p.get("player") \
                             and _p.get("player") not in _priced_qbs.setdefault(_p.get("team"), []):
                         _priced_qbs[_p.get("team")].append(_p["player"])
-                _qb_ch = _cqb.changes(_cqb.passers(conn, day.year, _teams), _cfb_inj, _priced_qbs)
+                # The change read before pricing (engine/cfb/lineup.attach),
+                # tiered and priced; the old read only when that step failed.
+                _qb_ch = (_cfb_qb_ch if _cfb_qb_ch is not None
+                          else _cqb.changes(_cqb.passers(conn, day.year, _teams), _cfb_inj, _priced_qbs))
                 _cqb.stamp(list(out.get("recommendations") or []) + list(rows or []) + list(watch or []), _qb_ch)
                 # …and on the game cards, as the NFL's (pipeline: qb_cards).
                 for _gd in out.get("games") or []:

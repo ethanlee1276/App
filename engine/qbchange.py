@@ -403,6 +403,8 @@ def effect(prop, game) -> tuple:
     ch = (getattr(game, "qb_changes", None) or {}).get(getattr(prop, "team", ""))
     if not ch:
         return 1.0, "", None
+    if ch.get("league") == "cfb":
+        return _college_effect(prop, ch)
     if getattr(prop, "position", "") == "QB":
         own = ch.get("replacement") and _norm(prop.player) == _norm(ch["replacement"])
         return 1.0, "", card(ch, 1.0, own=bool(own))
@@ -412,6 +414,23 @@ def effect(prop, game) -> tuple:
         reason = (f"QB change: {headline(ch)} — behind a downgrade at quarterback receivers lost "
                   f"{round((1 - mult) * 100)}% (measured) (×{mult:.2f})")
     return mult, reason, card(ch, mult)
+
+
+def _college_effect(prop, ch: dict) -> tuple:
+    """A college change, priced by college's own measurement (engine/cfb/
+    lineup) and carded by college's card (engine/cfb/qbchange.card)."""
+    from .cfb import qbchange as _cq
+    from .cfb.lineup import qb_mult
+    if getattr(prop, "position", "") == "QB":
+        own = _norm(prop.player) in {_norm(ch.get("starter") or ""), _norm(ch.get("replacement") or "")}
+        return 1.0, "", _cq.card(ch, own=own)
+    mult = qb_mult(prop.market, getattr(prop, "position", ""), ch.get("tier"))
+    reason = ""
+    if mult != 1.0:
+        reason = (f"QB change: {headline(ch)} — behind a {ch.get('tier')} at quarterback, college "
+                  f"{getattr(prop, 'position', '')}s produced {abs(round((mult - 1) * 100))}% "
+                  f"{'more' if mult > 1 else 'less'} (measured on college games) (×{mult:.2f})")
+    return mult, reason, _cq.card(ch, mult=mult)
 
 
 def game_note(ch: dict) -> str:

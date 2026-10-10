@@ -1510,7 +1510,7 @@ def _run_deep_refit(log) -> list[str]:
     the history behind a "first game back" correction re-measures itself
     as seasons are added, with nobody pasting it."""
     return (_spawn_module("engine.deepfit", log) + _spawn_module("engine.scouthist", log)
-            + _spawn_module("engine.posspread", log))
+            + _spawn_module("engine.posspread", log) + _spawn_module("engine.cfb.lineup", log))
 
 
 def _run_lab(log) -> list[str]:

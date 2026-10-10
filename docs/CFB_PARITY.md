@@ -100,8 +100,8 @@ own games or record pass it. **Already** means college had it.
 | Per-position spread (posspread: tight ends too sure) | **Measuring** | College's player-weeks, the NFL's bar, college's own record veto; own store |
 | Touchdowns follow the team total (tdscale) | Different | College's touchdown board is built from the book's team total already (C5); not refitted per position yet |
 | Defence strengths for attempts, completions, interceptions | Partly | College has its own measured strengths, interceptions included (`TRANSFER_CFB`). Attempts and completions: `python3 cfbmarketfit.py --opp` is the college run of the NFL's measurement, not yet run on the box |
-| Teammate out, what it opens (lineup step) | Not measured | The NFL's step is measured on NFL targets and snaps; college logs catches, no targets or snaps. Needs a college measurement first |
-| New starting QB moves his receivers | Not measured | Same — shown on the card, not priced |
+| Teammate out, what it opens (lineup step) | **Measuring** | `engine/cfb/lineup`: a catch-ranked depth order off college's logs (carries plus catches for a back), out from ESPN's board and every book's pulled players, the NFL's cases and the NFL's rule (2 SE, 3+ seasons). Applied from the store the fit saves; x1.00 until then |
+| New starting QB moves his receivers | **Measuring** | Same module: qbfit's starter and tier on college passing, the change read from the passers the books priced BEFORE pricing, college's own multipliers |
 
 ### The price (Ethan's call, 2026-10-09)
 

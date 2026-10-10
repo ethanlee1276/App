@@ -97,14 +97,22 @@ def changes(qb: dict, injuries: list, priced_qbs: dict) -> dict:
     return out
 
 
-def card(ch: dict, own: bool = False) -> dict:
-    """What goes under a pick of that team — shown, never applied."""
+def card(ch: dict, own: bool = False, mult: float = 1.0) -> dict:
+    """What goes under a pick of that team. ``mult`` is what college's own
+    measurement (engine/cfb/lineup) applied to this pick — 1.0 where it
+    did not pass, or where college has not been measured."""
     if own and ch.get("status") == "RETURNS":
         note = f"Back as the starter; {ch['starter']} started the last game"
     elif own:
         note = f"Starting in place of {ch['starter']}"
     elif ch.get("status") == "RETURNS":
         note = "His usual quarterback is back — nothing to adjust"
+    elif mult != 1.0:
+        note = (f"Measured on college games: behind a {ch.get('tier')} at quarterback, players in his "
+                f"spot produced {abs(round((mult - 1) * 100))}% {'more' if mult > 1 else 'less'} than their "
+                f"own form — applied (×{mult:.2f})")
+    elif _measured() and ch.get("tier"):
+        note = ("Shown for you: on college games this change did not move this bet enough to price it")
     else:
         note = ("Shown for you, not priced: the NFL measured what a quarterback change does to "
                 "his receivers; college has not been measured yet")
@@ -113,7 +121,12 @@ def card(ch: dict, own: bool = False) -> dict:
         words = f"{ch['replacement']} is the quarterback the books priced this week, not {ch['starter']}"
     return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
             "replacement": ch.get("replacement"), "tier": ch.get("tier") or "unmeasured",
-            "headline": words, "detail": detail(ch), "applied": 1.0, "note": note}
+            "headline": words, "detail": detail(ch), "applied": round(float(mult), 3), "note": note}
+
+
+def _measured() -> bool:
+    from .lineup import measured
+    return measured()
 
 
 def read_game(game: dict, qb: dict, injuries: list) -> dict:
