@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Replay the Pick of the Day over stored closes. Did it pay?
+
+    python3 potd_backtest.py mlb
+    python3 potd_backtest.py nfl
+    python3 potd_backtest.py --all
+    python3 potd_backtest.py mlb --sweep-ev      # where should the EV floor sit?
+    python3 potd_backtest.py mlb --sweep-conf    # how confident can the pick be?
+
+Ethan, 2026-09-16: "you should not stop until you confirm that the Pick
+of the Day we show every day is elite and worth betting on." This is the
+confirmation, and it is the only thing in this repository that grades
+the PRODUCT rather than the method underneath it — one pick a day,
+chosen by `potd.choose` under its own bars, settled by the final score.
+
+Reads only what is already on disk: completed games (free ingest) joined
+to moneylines harvested by `harvest_odds.py`. No network, no API credits.
+Every caveat the number carries is printed under it and written out in
+`engine/potdbacktest`'s header — read them before the ROI.
+"""
+
+from __future__ import annotations
+
+import argparse
+
+from engine import db, potd
+from engine.potdbacktest import (replay_potd, summarize, sweep_ev,
+                                 sweep_conf)
+
+SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description="Replay the Pick of the Day against harvested closes.")
+    ap.add_argument("sport", nargs="?", default="mlb", choices=SPORTS)
+    ap.add_argument("--all", action="store_true",
+                    help="every league in TOP_PICK_LEAGUES, one after another")
+    ap.add_argument("--db", default=str(db.DEFAULT_DB))
+    ap.add_argument("--sharp", default="Pinnacle",
+                    help="the book whose two-way close is de-vigged for the "
+                         "fair (default Pinnacle)")
+    ap.add_argument("--sweep-ev", action="store_true",
+                    help="where should the EV floor sit? Replays at every "
+                         "floor in potdbacktest.SWEEP_FLOORS and prints days "
+                         "with a pick, the record, the ROI and which bar was "
+                         "binding on the days that still got nothing. Read "
+                         "the shape, not the best cell.")
+    ap.add_argument("--sweep-conf", action="store_true",
+                    help="how confident can the day's pick actually be? "
+                         "Replays at every confidence floor and prints the "
+                         "HIT RATE with the units beside it, because those "
+                         "two move in opposite directions and the decision "
+                         "lives in that trade.")
+    ap.add_argument("--min-fair", type=float, default=None,
+                    help=f"replay at ONE confidence floor instead of the "
+                         f"shipped {potd.MIN_FAIR * 100:.0f}%%.")
+    ap.add_argument("--min-ev", type=float, default=None,
+                    # `%%`, not `%`: argparse runs help through %-expansion
+                    # and a bare percent sign raises ValueError from
+                    # `--help` itself — which takes the WHOLE parser's help
+                    # down, not just this line's.
+                    help=f"replay at ONE EV floor instead of the shipped "
+                         f"{potd.MIN_EV * 100:.1f}%%. The report marks a "
+                         f"supplied floor so a what-if cannot be read as "
+                         f"the shipped setting.")
+    ap.add_argument("--rank-auc", type=float, default=None,
+                    help="ask a what-if: replay as if this sport's moneyline "
+                         "had measured this AUC, instead of what it did. The "
+                         "report marks a supplied figure so a hypothetical "
+                         "cannot be read as a measurement.")
+    args = ap.parse_args()
+
+    conn = db.read_only(args.db)
+    for sport in (SPORTS if args.all else [args.sport]):
+        if args.sweep_conf:
+            print(sweep_conf(conn, sport, sharp=args.sharp,
+                             rank_auc=args.rank_auc))
+        elif args.sweep_ev:
+            print(sweep_ev(conn, sport, sharp=args.sharp,
+                           rank_auc=args.rank_auc))
+        else:
+            print(summarize(replay_potd(conn, sport, sharp=args.sharp,
+                                        rank_auc=args.rank_auc,
+                                        min_ev=args.min_ev,
+                                        min_fair=args.min_fair)))
+        print()
+
+
+if __name__ == "__main__":
+    main()

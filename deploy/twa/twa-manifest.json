@@ -1,0 +1,27 @@
+{
+  "packageId": "com.qellysbook.app",
+  "host": "qellysbook.com",
+  "name": "Qellys Book",
+  "launcherName": "Qellys",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#090705",
+  "navigationColor": "#090705",
+  "backgroundColor": "#090705",
+  "enableNotifications": false,
+  "startUrl": "/?sport=mlb#recommended",
+  "iconUrl": "https://qellysbook.com/icon-512.png",
+  "maskableIconUrl": "https://qellysbook.com/icon-maskable-512.png",
+  "webManifestUrl": "https://qellysbook.com/manifest.webmanifest",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "minSdkVersion": 21,
+  "fallbackType": "customtabs",
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "signingKey": {
+    "path": "./qellys-upload.keystore",
+    "alias": "qellys"
+  },
+  "generatorApp": "bubblewrap-cli"
+}

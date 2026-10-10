@@ -1,0 +1,22 @@
+# Qellys Book — mail the owner when a unit fails (audit 2026-09-30, P1-13).
+#
+#   sudo cp deploy/qellys-alert@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+# Started by `OnFailure=qellys-alert@%n.service` in qellys.service and
+# qellys-update.service, with the failed unit's name as the instance.
+# Needs QB_ALERT_EMAIL and the site's SMTP settings in /etc/qellys/env
+# (deploy/setenv.sh). Test it: sudo systemctl start qellys-alert@test.service
+
+[Unit]
+Description=Qellys Book failure mail for %i
+
+[Service]
+Type=oneshot
+User=qellys
+Group=qellys
+# systemd-journal lets the mail carry the failed unit's last lines.
+SupplementaryGroups=systemd-journal
+WorkingDirectory=/srv/qellys
+EnvironmentFile=-/etc/qellys/env
+ExecStart=/usr/bin/python3 -m engine.alert %i

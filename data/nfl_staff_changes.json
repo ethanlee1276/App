@@ -1,0 +1,30 @@
+{
+  "_note": "New staff by season, for engine/teamchange — named on the matchup card. Measured on 2022-2025 (scanblendfit.py, 2026-09-27): a new head coach did not make a season's own games predict more, so staff changes do NOT change the season split; only a new starting QB (from the nflverse schedule, not listed here) does. Head coaches are listed here as a backstop because nflverse can keep last season's coach on a season's rows (Arizona 2026 still read Jonathan Gannon in September). Only staff new THIS season, every name from a published report of the hire, never a guess. Left out on purpose: New England's Zak Kuhr (DC title in 2026, but he already ran the defense through 2025); coordinators retained under a new head coach (Arizona's Nick Rallis, Atlanta's Jeff Ulbrich). hc_calls: the side whose plays the head coach calls over a new coordinator (Jets defense: Aaron Glenn; Chiefs: Andy Reid; Bears: Ben Johnson; Rams: Sean McVay) — said on the card.",
+  "_sources": "Compiled 2026-09-27 from published reports: Adam Schefter's list of the 21 new offensive coordinators (x.com/AdamSchefter/status/2024829911358173205); team announcements and NFL.com/ESPN/AP reports for each defensive coordinator and head coach hire (newyorkjets.com, baltimoreravens.com, miamidolphins.com, giants.com, buffalobills.com, clevelandbrowns.com, packers.com, dallascowboys.com, chargers.com, tennesseetitans.com, steelers.com, azcardinals.com, atlantafalcons.com; Washington Post on the 49ers and Titans; ESPN on the Raiders; Wikipedia's 2026 Washington Commanders season). Play callers: newyorkjets.com (Glenn will call the defense, 2026-02-24), ESPN's 32-team play-caller guide and Yahoo/Acme Packing Company (Reid, Johnson; Webb given Denver's calls), Turf Show Times (McVay calls, Scheelhaase once), Seahawks and Buccaneers reports of Fleury's and Robinson's play-calling debuts.",
+  "2026": {
+    "ARI": {"hc": "Mike LaFleur", "oc": "Nathaniel Hackett"},
+    "ATL": {"hc": "Kevin Stefanski", "oc": "Tommy Rees"},
+    "BAL": {"hc": "Jesse Minter", "oc": "Declan Doyle", "dc": "Anthony Weaver"},
+    "BUF": {"hc": "Joe Brady", "oc": "Pete Carmichael", "dc": "Jim Leonhard"},
+    "CHI": {"oc": "Press Taylor", "hc_calls": ["off"]},
+    "CLE": {"hc": "Todd Monken", "oc": "Travis Switzer", "dc": "Mike Rutenberg"},
+    "DAL": {"dc": "Christian Parker"},
+    "DEN": {"oc": "Davis Webb"},
+    "DET": {"oc": "Drew Petzing"},
+    "GB": {"dc": "Jonathan Gannon"},
+    "KC": {"oc": "Eric Bieniemy", "hc_calls": ["off"]},
+    "LA": {"oc": "Nate Scheelhaase / Dave Ragone", "hc_calls": ["off"]},
+    "LAC": {"oc": "Mike McDaniel", "dc": "Chris O'Leary"},
+    "LV": {"hc": "Klint Kubiak", "oc": "Andrew Janocko", "dc": "Rob Leonard"},
+    "MIA": {"hc": "Jeff Hafley", "oc": "Bobby Slowik", "dc": "Sean Duggan"},
+    "NYG": {"hc": "John Harbaugh", "oc": "Matt Nagy", "dc": "Dennard Wilson"},
+    "NYJ": {"oc": "Frank Reich", "dc": "Brian Duker", "hc_calls": ["def"]},
+    "PHI": {"oc": "Sean Mannion"},
+    "PIT": {"hc": "Mike McCarthy", "oc": "Brian Angelichio", "dc": "Patrick Graham"},
+    "SEA": {"oc": "Brian Fleury"},
+    "SF": {"dc": "Raheem Morris"},
+    "TB": {"oc": "Zac Robinson"},
+    "TEN": {"hc": "Robert Saleh", "oc": "Brian Daboll", "dc": "Gus Bradley"},
+    "WAS": {"oc": "David Blough", "dc": "Daronte Jones"}
+  }
+}
