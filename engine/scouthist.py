@@ -49,6 +49,11 @@ fix." So a return is scored only for a REGULAR: in at least REGULAR_OF of
 the five games his line is built from, he was among his team's top
 REGULAR_TOP in that role's volume (the passer with the most attempts; the
 two backs with the most carries; the three players with the most catches).
+Only games IN THE RETURN'S SEASON AND FOR ITS TEAM count: the first version
+also counted last season's, and college's QB number grew to -40% — a
+quarterback who started last November and is a backup now (the transfer
+portal, a lost job) "returned" in his first mop-up appearance against a
+line built on last year's starts.
 Decided from those earlier games only, never from the return game. A
 part-timer's return is left out of the replay altogether — neither
 flagged nor in the baseline — and the dry run prints how many of each.
@@ -123,11 +128,14 @@ def team_leaders(series) -> dict:
     return top
 
 
-def is_regular(player: str, window, group, leaders: dict) -> bool:
-    """Was he a regular in these games (the five his line is built from)?"""
+def is_regular(player: str, window, group, leaders: dict, season=None, team=None) -> bool:
+    """Was he a regular in these games (the five his line is built from)?
+    Only games in ``season`` for ``team`` count when they are given: last
+    season's starter on another depth chart is not this team's regular."""
     groups = (group,) if group else tuple(REGULAR_TOP)
-    hits = sum(1 for _d, _v, team, _pos, g, _season in window
-               if any(player in leaders.get((team, g["game_id"], gr), ()) for gr in groups))
+    hits = sum(1 for _d, _v, t, _pos, g, s in window
+               if (season is None or s == season) and (team is None or t == team)
+               and any(player in leaders.get((t, g["game_id"], gr), ()) for gr in groups))
     return hits >= REGULAR_OF
 
 
@@ -192,7 +200,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
             prev = [x for x in by_team.get(team, []) if x["_d"] < d and x.get("season") == season]
             missed = bool(prev) and prev[-1]["game_id"] not in played[(player, season)]
             if missed:
-                if not is_regular(player, rows[i - 5:i], role_group(market, pos), leaders):
+                if not is_regular(player, rows[i - 5:i], role_group(market, pos), leaders, season, team):
                     back["skipped"] += 1           # a part-timer's return: not a game the board bets
                     continue
                 back["kept"] += 1
@@ -204,7 +212,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
                                  weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
-                                 missed_last=missed, league=sport, abroad=g.get("abroad"))
+                                 missed_last=missed, league=sport)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)

@@ -371,13 +371,10 @@ first). Paste back anything that prints an error or looks off.
     - the game model gives no home field at a neutral site (it was adding
       1.6 points to the listed home team in London);
     - the game page names the real stadium, with Mexico City's altitude;
-    - "an over in a game played abroad" is a scout caution on every card,
-      and the weekly history replay tests it on every international game
-      since 2021 (both halves, 100+ each); it moves a number only if it
-      passes. To see it now:
-    ```
-    cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run 2>&1 | grep -i "abroad\|seasons"
-    ```
+    - the scout's "an over in a game played abroad" caution was tested on
+      every international game since 2021 and did not hold (overs abroad
+      hit no less), so it came off the cards the same day ("yes take it
+      off").
 
 21. **College touchdowns follow the team total** (2026-10-10, "we want the
     same methods and tools and models as we use for nfl"). The NFL's
@@ -410,7 +407,9 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run
     ```
     The NFL's is saved by the weekly job on Wednesday either way; paste
-    the dry run so we see what changes first.
+    the dry run so we see what changes first. Since the second fix the
+    same day, only games in the return's season and for its team make a
+    regular (last November's starter who is a backup now is not one).
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

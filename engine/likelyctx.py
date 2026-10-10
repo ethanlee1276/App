@@ -103,40 +103,6 @@ def _date(s):
         return None
 
 
-#: WHICH STORED NFL GAMES WERE PLAYED ABROAD. The games table keeps no
-#: location, so the schedule file on disk (nflverse games.csv, the one the
-#: build already caches) says: every regular-season game at a neutral site
-#: — in the NFL an international one. Read from disk only, never fetched.
-_ABROAD: dict = {}
-
-
-def abroad_keys(path=None) -> set:
-    """{(season, week, home team)} for every regular-season neutral-site NFL
-    game in the cached schedule; an empty set without one."""
-    import csv as _csv
-    from .sources.fetch import CACHE_DIR
-    p = Path(path) if path else Path(CACHE_DIR) / "games.csv"
-    try:
-        stamp = (str(p), p.stat().st_mtime)
-    except OSError:
-        return set()
-    if _ABROAD.get("stamp") != stamp:
-        keys = set()
-        try:
-            with open(p, newline="", encoding="utf-8") as fh:
-                for r in _csv.DictReader(fh):
-                    try:
-                        season, week = int(r.get("season") or 0), int(float(r.get("week") or 0))
-                    except ValueError:
-                        continue
-                    if str(r.get("location") or "").lower() == "neutral" and 1 <= week <= 18:
-                        keys.add((season, week, str(r.get("home_team") or "")))
-        except (OSError, ValueError):
-            keys = set()
-        _ABROAD["stamp"], _ABROAD["keys"] = stamp, keys
-    return _ABROAD["keys"]
-
-
 def history_index(hist, players: set, sport: str = "nfl") -> tuple[dict, dict, dict]:
     """(games by id, games by team in date order, {player: [log rows]}).
 
@@ -148,10 +114,8 @@ def history_index(hist, players: set, sport: str = "nfl") -> tuple[dict, dict, d
     Each log row's ``game_id`` is rewritten to its game's, so everything
     downstream compares like with like."""
     games, by_team = {}, defaultdict(list)
-    abroad = abroad_keys() if sport == "nfl" else set()
     for g in hist.execute("SELECT * FROM games WHERE sport=?", (sport,)):
         g = dict(g)
-        g["abroad"] = (g.get("season"), _week(g.get("period")), g.get("home")) in abroad
         # COLLEGE'S PERIOD IS ITS DATE. The college ingest writes the kickoff
         # date into ``period`` ("2025-10-04", engine/sources/cfbfastr) and
         # leaves ``date`` empty; read as a week it is no week at all, so the
@@ -249,7 +213,7 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nf
                      values=vals, game_spread=game.get("spread"), home=(team == game["home"]),
                      total=game.get("total"), wind=game.get("wind"), outdoor=_outdoor(game.get("roof")),
                      weekday=None if game.get("_approx") else gd.weekday(), games_season=games_season,
-                     missed_last=missed, league=sport, abroad=game.get("abroad"))
+                     missed_last=missed, league=sport)
     s["team"], s["game_id"] = team, game["game_id"]
     if game.get("home_score") is not None and game.get("away_score") is not None:
         mine_pts = game["home_score"] if team == game["home"] else game["away_score"]
@@ -285,14 +249,6 @@ def _weekday(g: dict):
         except ValueError:
             continue
     return None
-
-
-def _abroad_game(g: dict) -> bool:
-    """A board game at a neutral site whose venue is an international one
-    (engine/nflwx.venue_coords) — never a domestic relocation or a Super
-    Bowl."""
-    from .nflwx import venue_coords
-    return bool(g.get("neutral_site")) and venue_coords(g.get("venue") or "") is not None
 
 
 def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
@@ -338,8 +294,7 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
             missed_last=(lw is not None and tw is not None and lw < tw),
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
-            tgt_rank=tgt_rank.get(r["player"]), league=sport,
-            abroad=_abroad_game(g) if g else None)
+            tgt_rank=tgt_rank.get(r["player"]), league=sport)
         codes = SC.flags(s)
         r["scout_flags"] = codes
         r["scout_notes"] = SC.notes(codes, sport)

@@ -1,4 +1,4 @@
-"""NFL games played abroad: the real venue, no home field, and a measured caution.
+"""NFL games played abroad: the real venue's weather and stadium, and no home field.
 
 Ethan, 2026-10-10: "we need to be making sure that we're pulling weather
 for whatever location they're playing is that is out of the country ...
@@ -9,17 +9,20 @@ These check, one rule each: every 2026 international venue the schedule
 names has its own forecast location; a neutral site carries no home field
 in the game model (moneyline and spread), and a home game still does; the
 game record names the real venue (with Mexico City's altitude) instead of
-the home team's building; the scout raises "abroad" on overs, never on
-unders, and the history replay knows which stored games were abroad from
-the cached schedule — regular-season neutral sites only, never a Super
-Bowl.
+the home team's building; and the scout raises no "abroad" caution.
+
+THE CAUTION CAME OFF (2026-10-10, Ethan: "yes take it off"). The scout
+carried "an over in a game played abroad" for one day. The five-season
+replay on the box tested it on every stored international game (2021+,
+200-300 player-games a half for catches and touchdowns): catches overs
++1% then -4%, rushing yards -4% then +4%, touchdowns -0.3% then -1.9%.
+Nothing held in both halves, so overs abroad do not hit less, and a card
+should not warn about something history says does not happen.
 
 Run directly: `python3 tests/test_games_abroad.py`
 """
 import os
-import sqlite3
 import sys
-import tempfile
 from types import SimpleNamespace as NS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,53 +66,17 @@ def test_the_game_record_names_the_real_venue():
     assert home.get("team") == "GB" and not home.get("abroad")
 
 
-def test_the_scout_flags_overs_abroad_and_never_unders():
-    over = SC.flags(SC.situation("rec_yds", "OVER", line=60.5, values=[60] * 6, abroad=True))
-    under = SC.flags(SC.situation("rec_yds", "UNDER", line=60.5, values=[60] * 6, abroad=True))
-    home = SC.flags(SC.situation("rec_yds", "OVER", line=60.5, values=[60] * 6, abroad=False))
-    assert "abroad_over" in over and "abroad_over" not in under and "abroad_over" not in home
-    assert "abroad" in SC.note("abroad_over")
+def test_the_scout_raises_no_abroad_caution():
+    assert "abroad_over" not in SC.FLAGS, "history showed overs abroad hit no less"
+    s = SC.situation("rec_yds", "OVER", line=60.5, values=[60] * 6)
+    assert "abroad" not in s
     games = [{"home": "JAX", "away": "HOU", "spread": -2.5, "total": 44.5, "neutral_site": True,
               "venue": "Wembley Stadium", "weather": {}}]
     rows = [{"player": "Wide Out", "team": "HOU", "opponent": "JAX", "market": "receptions", "side": "OVER",
              "line": 5.5, "odds": -120, "model_prob": 0.62, "recent_values": [6, 5, 6, 7, 5]}]
     C.annotate(rows, {"games": games, "recommendations": []})
-    assert "abroad_over" in rows[0]["scout_flags"]
-
-
-def test_the_history_knows_which_stored_games_were_abroad():
-    d = tempfile.mkdtemp()
-    sched = os.path.join(d, "games.csv")
-    with open(sched, "w", encoding="utf-8") as fh:
-        fh.write("season,week,home_team,away_team,location,stadium\n"
-                 "2024,6,CHI,JAX,Neutral,Tottenham Stadium\n"
-                 "2024,7,JAX,NE,Neutral,Wembley Stadium\n"
-                 "2024,22,PHI,KC,Neutral,Mercedes-Benz Superdome\n"
-                 "2024,6,GB,ARI,Home,Lambeau Field\n")
-    keys = C.abroad_keys(sched)
-    assert keys == {(2024, 6, "CHI"), (2024, 7, "JAX")}, "regular-season neutral sites only — no Super Bowl"
-    from engine import db
-    c = db.connect(os.path.join(d, "h.db"))
-    c.executemany("INSERT INTO games (sport, season, period, game_id, home, away, spread, total, date) "
-                  "VALUES (?,?,?,?,?,?,?,?,?)", [
-                      ("nfl", 2024, "006", "JAX@CHI", "CHI", "JAX", -1.5, 44.5, "2024-10-13"),
-                      ("nfl", 2024, "006", "ARI@GB", "GB", "ARI", -4.5, 47.5, "2024-10-13")])
-    c.commit()
-    c.row_factory = sqlite3.Row
-    real = C.abroad_keys
-    C.abroad_keys = lambda path=None: keys
-    try:
-        games, _by_team, _logs = C.history_index(c, set(), "nfl")
-    finally:
-        C.abroad_keys = real
-    by = {g["raw_id"]: g["abroad"] for g in games.values()}
-    assert by == {"JAX@CHI": True, "ARI@GB": False}
-    src = open(os.path.join(ROOT, "engine", "scouthist.py"), encoding="utf-8").read()
-    assert 'abroad=g.get("abroad")' in src, "the five-season replay must read it"
-
-
-def test_a_missing_schedule_file_reads_as_nothing_abroad():
-    assert C.abroad_keys(os.path.join(tempfile.mkdtemp(), "none.csv")) == set()
+    assert not any("abroad" in f for f in rows[0]["scout_flags"])
+    assert not hasattr(C, "abroad_keys"), "the history no longer marks games abroad"
 
 
 if __name__ == "__main__":
