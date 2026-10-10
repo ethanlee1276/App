@@ -150,7 +150,8 @@ def refit_nfl_props(db: str = "data/history.db") -> list[str]:
 
 def refit_td_scale(db: str = "data/history.db") -> list[str]:
     """engine/tdscale: how hard a scorer's chance follows his team's
-    expected points, per position, adopted only on held-out seasons."""
+    expected points, per position, adopted only on held-out seasons —
+    the NFL on its replay, college on its own."""
     try:
         import sqlite3
         from .tdscale import refit
@@ -159,8 +160,14 @@ def refit_td_scale(db: str = "data/history.db") -> list[str]:
             return []
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
+        out = []
         try:
-            return [f"deep refit:{line}" for line in refit(conn)]
+            for sport in ("nfl", "cfb"):
+                try:
+                    out += [f"deep refit:{line}" for line in refit(conn, sport=sport)]
+                except Exception as exc:                  # noqa: BLE001
+                    out.append(f"⚠️  {sport} touchdown team-total fit skipped: {exc}")
+            return out
         finally:
             conn.close()
     except Exception as exc:                              # noqa: BLE001

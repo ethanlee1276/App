@@ -5995,7 +5995,9 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.boardlearn
 To undo any one: remove its file under /srv/qellys/data/models/ —
 `td_implied.json` (touchdown team-total step), `position_spread.json`
 (widths), `likely_calibration.json` (record), `scout_history.json`
-(history). Each comes back by itself if it is still proven.
+(history). College's own (2026-10-10): `cfb_td_implied.json`,
+`cfb_position_spread.json`, `cfb_scout_history.json`, `cfb_lineup.json`
+(teammate-out and new QB). Each comes back by itself if it is still proven.
 
 
 #### NHL — load three seasons, then it runs itself (2026-10-03)

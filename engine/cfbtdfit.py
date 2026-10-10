@@ -151,7 +151,7 @@ class Sample:
 
     __slots__ = ("season", "period", "position", "share", "rz_share",
                  "td_mean", "games", "team", "opponent", "is_home",
-                 "spread", "total", "team_tds", "script", "scored",
+                 "spread", "total", "team_tds", "script", "scored", "implied",
                  # WHO THIS ROW IS. The slots stopped at the team, which
                  # meant a replayed college row could not be joined back
                  # to the player it graded — and every within-team
@@ -210,8 +210,11 @@ class Sample:
         #: cost of a joint fit.
         self.team_tds = CFB_AVG_TEAM_OFF_TDS
         self.script = 1.0
+        #: The team's implied points, kept for engine/tdscale's exponent.
+        self.implied = None
         if spread is not None and total is not None:
             implied = implied_total_for(spread, total, is_home)
+            self.implied = implied
             if implied is not None:
                 self.team_tds = max(0.0, implied) * (CFB_AVG_TEAM_OFF_TDS
                                                      / CFB_AVG_TEAM_POINTS)
@@ -617,9 +620,16 @@ def run(conn, seasons=None, games_scale: float | None = None,
     rows = sorted(samples(conn, seasons=seasons),
                   key=lambda s: (s.season, s.period))
     defense = defense_to_date(conn, seasons)
+    # The team-total exponent the board applies (engine/tdscale), read
+    # once: on here, so the college temperature is fitted on top of it;
+    # off inside tdscale's own replay, so it never learns from itself.
+    from .tdscale import adjust as _td_adjust, gamma_for as _td_gamma
+    gammas = {pos: _td_gamma(pos, "cfb") for pos in POSITION_TD_SHARE}
     for s in rows:
         prob = probability(blended(s, games_scale, max_weight), s,
                            _defense_for(defense, s))
+        if gammas.get(s.position):
+            prob = _td_adjust(prob, s.implied, gammas[s.position], "cfb")
         report.add(prob, s.scored)
         if collect is not None:
             collect({"season": s.season, "week": s.period,
@@ -627,7 +637,7 @@ def run(conn, seasons=None, games_scale: float | None = None,
                      "prob": float(prob), "scored": s.scored,
                      "position": s.position, "opponent": s.opponent,
                      "spread": s.spread, "total": s.total,
-                     "is_home": s.is_home,
+                     "is_home": s.is_home, "implied": s.implied,
                      "opp_share": s.share, "rz_share": s.rz_share,
                      "td_mean": s.td_mean, "games": s.games,
                      "prior_weeks": list(s.prior_periods)})

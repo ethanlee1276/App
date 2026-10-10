@@ -53,9 +53,9 @@ exist for college, and the reason is written down.
 | Injury report read by the build | Done | ESPN college injury board (`injuries.load_cfb_injuries`), which fed only the Injuries page before |
 | Listed player's props held | Done | The slate's games carry the injuries; the rules engine's health check holds them |
 | Player every book took down treated as out | Done | `pricedplayers.Tracker` in the college quote pull |
-| Starting QB out, benched or back | Different | Usual starter from college passing logs, this week's from the passer the books priced. **Shown, not priced**: the NFL's receiver effect was measured on NFL games; college has not been measured |
+| Starting QB out, benched or back | Done | Usual starter from college passing logs, this week's from the passer the books priced. Priced by college's own measured multipliers (`engine/cfb/lineup`, 2026-10-10 — see round 2); x1.00 until college's fit is saved |
 | Teammate out, what it opens | Done | The scan names who is out and what his share opens ("30% of the catches to go around") |
-| Teammate-out lineup step moving the number | Not measured | The NFL's step is measured on NFL data (`engine/teammates`). College stays unpriced until it is measured the same way |
+| Teammate-out lineup step moving the number | Done | Measured on college's own games (`engine/cfb/lineup`, 2026-10-10 — see round 2); x1.00 until college's fit is saved |
 
 ## How to check it on the droplet
 
@@ -98,8 +98,8 @@ own games or record pass it. **Already** means college had it.
 | The scout's correction from the record (likelyctx) | **Measuring** | College's own record, the NFL's held-out bar, refit on every settle |
 | History proves a flag (scouthist: first game back, shootout unders) | **Measuring** | College's stored games, both halves, 100+ each; own store |
 | Per-position spread (posspread: tight ends too sure) | **Measuring** | College's player-weeks, the NFL's bar, college's own record veto; own store |
-| Touchdowns follow the team total (tdscale) | Different | College's touchdown board is built from the book's team total already (C5); not refitted per position yet |
-| Defence strengths for attempts, completions, interceptions | Partly | College has its own measured strengths, interceptions included (`TRANSFER_CFB`). Attempts and completions: `python3 cfbmarketfit.py --opp` is the college run of the NFL's measurement, not yet run on the box |
+| Touchdowns follow the team total (tdscale) | **Measuring** | The NFL's exponent per position, on college's own replay (`cfbtdfit.run`) against college's average team (26.7), the NFL's bar, college's own store (`cfb_td_implied.json`). Refitted weekly before college's touchdown temperature, which is fitted on top of it. 0 (no change) until a position passes |
+| Defence strengths for attempts, completions, interceptions | Done | Measured 2026-10-10 (`python3 cfbmarketfit.py --opp`, held out 2023, 2024, 2025 in turn; needs +0.01 ranking AUC in every season): interceptions ADOPT x1.5 (+0.109) and back rushing yards ADOPT (+0.020), both already in `TRANSFER_CFB`; attempts +0.005, completions +0.002, carries +0.008 — under the bar, so the defence stays out of those numbers, as measured |
 | Teammate out, what it opens (lineup step) | **Measuring** | `engine/cfb/lineup`: a catch-ranked depth order off college's logs (carries plus catches for a back), out from ESPN's board and every book's pulled players, the NFL's cases and the NFL's rule (2 SE, 3+ seasons). Applied from the store the fit saves; x1.00 until then |
 | New starting QB moves his receivers | **Measuring** | Same module: qbfit's starter and tier on college passing, the change read from the passers the books priced BEFORE pricing, college's own multipliers |
 

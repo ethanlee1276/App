@@ -1140,12 +1140,26 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             rate = clamp(team_tds * base * d_mult * s_mult * w_mult,
                          0.005, 1.05)
             prob = prob_at_least_one(rate)
+            # HOW HARD HIS CHANCE FOLLOWS HIS TEAM'S EXPECTED POINTS — the
+            # NFL's step (engine/tdscale), measured on college's own
+            # replayed seasons against college's average team. 0 (no
+            # change) for any position that did not pass.
+            from ..tdscale import adjust as _td_adjust, gamma_for as _td_gamma
+            td_gamma = _td_gamma(pos, "cfb")
+            gamma_reason = []
+            if td_gamma:
+                prob = _td_adjust(prob, implied, td_gamma, "cfb")
+                gamma_reason = [
+                    f"Team total: college {pos} touchdown chances follow the team's expected points "
+                    f"{'more' if td_gamma > 0 else 'less'} steeply than the base model ({implied:.1f} "
+                    f"against a {CFB_AVG_TEAM_POINTS:.1f} average) — measured on college seasons it "
+                    f"was not fitted on"]
             reasons = [
                 f"Team implied total {implied:.1f} → {team_tds:.2f} "
                 f"expected offensive TDs",
                 f"{share:.0%} of {side}’s rushing + receiving yards "
                 f"({u['games']} game sample) — read as a {pos} role",
-            ] + td_reason + d_reasons + s_reasons + w_reasons
+            ] + td_reason + d_reasons + s_reasons + w_reasons + gamma_reason
             # WHICH SEASON THIS ROLE CAME FROM, per player rather than
             # per board. `merged_usage` shrinks a man's own games toward
             # his prior season by how many he has played, so two players

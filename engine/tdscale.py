@@ -40,6 +40,16 @@ is refitted, so the temperature is always fitted on top of this. The
 replay this fitter reads runs with the correction switched off (`raw`),
 so a refit never learns from its own adjustment.
 
+COLLEGE (2026-10-10, Ethan: "we want the same methods and tools and models
+as we use for nfl"). The same exponent, the same bar, measured on college's
+own replay (engine/cfbtdfit.run — the college board's chain over every
+stored season) against college's average team (26.7 points), and saved in
+college's own store. The college board applies it after its rate and
+BEFORE its temperature, and the college temperature's replay runs with it
+on, exactly as the NFL's does.
+
+    sudo -u qellys python3 -m engine.tdscale --sport cfb --dry-run
+
 Standard library only.
 """
 from __future__ import annotations
@@ -55,6 +65,7 @@ from pathlib import Path
 
 from . import modelstate
 
+SPORTS = ("nfl", "cfb")
 POSITIONS = ("RB", "WR", "TE", "QB")
 GAMMA_GRID = tuple(round(-0.5 + 0.1 * i, 1) for i in range(26))       # -0.5 .. 2.0
 MIN_ROWS = 1500
@@ -65,31 +76,43 @@ _STATE = {"enabled": True}
 _CACHE: dict = {}
 
 
-def _store() -> Path:
-    return Path(modelstate.path("td_implied.json"))
+def _store(sport: str = "nfl") -> Path:
+    """The NFL's file keeps its name (the box reads it as it is); college
+    has its own."""
+    return Path(modelstate.path("td_implied.json" if sport == "nfl" else f"{sport}_td_implied.json"))
 
 
-def load(path=None) -> dict:
+def average_points(sport: str = "nfl") -> float:
+    """The league's average team score — what "a high total" is measured from."""
+    if sport == "cfb":
+        from .cfb.tds import CFB_AVG_TEAM_POINTS
+        return CFB_AVG_TEAM_POINTS
+    from .longshots import NFL_AVG_TEAM_POINTS
+    return NFL_AVG_TEAM_POINTS
+
+
+def load(path=None, sport: str = "nfl") -> dict:
     try:
-        store = json.loads(Path(path or _store()).read_text(encoding="utf-8"))
+        store = json.loads(Path(path or _store(sport)).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return store if store.get("version") == STORE_VERSION else {}
 
 
-def gamma_for(position: str) -> float:
+def gamma_for(position: str, sport: str = "nfl") -> float:
     """The adopted exponent for this position, 0.0 where none passed or
     while `raw()` is in force. Re-read when the store changes."""
     if not _STATE["enabled"]:
         return 0.0
-    p = _store()
+    p = _store(sport)
     try:
         stamp = (str(p), p.stat().st_mtime)
     except OSError:
         stamp = (str(p), None)
-    if _CACHE.get("stamp") != stamp:
-        _CACHE["stamp"], _CACHE["g"] = stamp, (load(p).get("gamma") or {})
-    return float((_CACHE["g"].get(str(position or "").upper()) or {}).get("g", 0.0))
+    got = _CACHE.get(sport)
+    if not got or got[0] != stamp:
+        got = _CACHE[sport] = (stamp, load(p).get("gamma") or {})
+    return float((got[1].get(str(position or "").upper()) or {}).get("g", 0.0))
 
 
 @contextlib.contextmanager
@@ -103,13 +126,12 @@ def raw():
         _STATE["enabled"] = was
 
 
-def adjust(p: float, implied, gamma: float) -> float:
+def adjust(p: float, implied, gamma: float, sport: str = "nfl") -> float:
     """1 − (1 − p) ^ ((implied ÷ league average) ^ gamma)."""
-    from .longshots import NFL_AVG_TEAM_POINTS
     if not gamma or not implied or implied <= 0:
         return p
     p = min(0.999, max(0.001, float(p)))
-    return 1.0 - (1.0 - p) ** ((float(implied) / NFL_AVG_TEAM_POINTS) ** gamma)
+    return 1.0 - (1.0 - p) ** ((float(implied) / average_points(sport)) ** gamma)
 
 
 # --- the fit -----------------------------------------------------------------
@@ -148,22 +170,22 @@ def fit_logistic(xs, ys) -> tuple[float, float]:
     return a, b
 
 
-def _scored(train, test, gamma):
+def _scored(train, test, gamma, sport="nfl"):
     """(fitted calibration on train) → (train loss, test loss) at this gamma."""
-    xtr = [_logit(adjust(p, imp, gamma)) for _s, p, imp, _y in train]
+    xtr = [_logit(adjust(p, imp, gamma, sport)) for _s, p, imp, _y in train]
     ytr = [y for *_r, y in train]
     a, b = fit_logistic(xtr, ytr)
     cal = lambda x: 1.0 / (1.0 + math.exp(-(a + b * x)))
     tr = sum(_ll(cal(x), y) for x, y in zip(xtr, ytr))
-    te = sum(_ll(cal(_logit(adjust(p, imp, gamma))), y) for _s, p, imp, y in test)
+    te = sum(_ll(cal(_logit(adjust(p, imp, gamma, sport))), y) for _s, p, imp, y in test)
     return tr, te
 
 
-def best_gamma(data) -> float:
-    return min(GAMMA_GRID, key=lambda g: _scored(data, [], g)[0])
+def best_gamma(data, sport="nfl") -> float:
+    return min(GAMMA_GRID, key=lambda g: _scored(data, [], g, sport)[0])
 
 
-def judge(data: list) -> dict:
+def judge(data: list, sport: str = "nfl") -> dict:
     """data = [(season, p, implied, scored)] for one position."""
     seasons = sorted({d[0] for d in data})
     per, better, raw_sum, fit_sum = {}, 0, 0.0, 0.0
@@ -172,24 +194,27 @@ def judge(data: list) -> dict:
         test = [d for d in data if d[0] == s]
         if not train or not test:
             continue
-        g = best_gamma(train)
-        base = _scored(train, test, 0.0)[1]
-        fit = _scored(train, test, g)[1]
+        g = best_gamma(train, sport)
+        base = _scored(train, test, 0.0, sport)[1]
+        fit = _scored(train, test, g, sport)[1]
         per[s] = {"g": g, "n": len(test), "gain": round((base - fit) / len(test), 5)}
         better += fit < base
         raw_sum += base
         fit_sum += fit
     n = len(data)
-    g_all = best_gamma(data) if data else 0.0
+    g_all = best_gamma(data, sport) if data else 0.0
     passed = bool(n >= MIN_ROWS and fit_sum < raw_sum and better >= MIN_SEASONS_BETTER and g_all != 0.0)
     return {"g": g_all, "n": n, "seasons": per, "better": better,
             "gain": round((raw_sum - fit_sum) / n, 5) if n else 0.0, "passed": passed}
 
 
-def replay_rows(conn) -> dict:
+def replay_rows(conn, sport: str = "nfl") -> dict:
     """{position: [(season, p, implied, scored)]} from the production model,
     replayed with this correction switched off."""
-    from .tdbacktest import run
+    if sport == "cfb":
+        from .cfbtdfit import run
+    else:
+        from .tdbacktest import run
     rows: list = []
     with raw():
         run(conn, collect=rows.append)
@@ -201,12 +226,12 @@ def replay_rows(conn) -> dict:
     return by
 
 
-def measure(conn) -> dict:
-    return {pos: judge(data) for pos, data in replay_rows(conn).items()}
+def measure(conn, sport: str = "nfl") -> dict:
+    return {pos: judge(data, sport) for pos, data in replay_rows(conn, sport).items()}
 
 
-def save(res: dict, path=None) -> None:
-    p = Path(path or _store())
+def save(res: dict, path=None, sport: str = "nfl") -> None:
+    p = Path(path or _store(sport))
     p.parent.mkdir(parents=True, exist_ok=True)
     gamma = {k: {"g": v["g"], "n": v["n"], "gain": v["gain"]} for k, v in res.items() if v["passed"]}
     tmp = p.with_suffix(p.suffix + ".tmp")
@@ -217,32 +242,38 @@ def save(res: dict, path=None) -> None:
     _CACHE.clear()
 
 
-def report_lines(res: dict) -> list[str]:
+def report_lines(res: dict, sport: str = "nfl") -> list[str]:
     out = []
+    label = "touchdowns" if sport == "nfl" else f"{sport} touchdowns"
     for k in POSITIONS:
         v = res.get(k)
         if not v:
             continue
         verdict = f"ADOPT g {v['g']:+.1f}" if v["passed"] else "keep g +0.0"
-        out.append(f"  touchdowns {k:3} n {v['n']:6}  fitted g {v['g']:+.1f}  held-out gain {v['gain']:+.5f}  "
+        out.append(f"  {label} {k:3} n {v['n']:6}  fitted g {v['g']:+.1f}  held-out gain {v['gain']:+.5f}  "
                    f"better in {v['better']}/{len(v['seasons'])} seasons  → {verdict}")
     return out
 
 
-def refit(conn, dry_run: bool = False) -> list[str]:
-    res = measure(conn)
+def refit(conn, dry_run: bool = False, sport: str = "nfl") -> list[str]:
+    res = measure(conn, sport)
     if not dry_run:
-        save(res)
-    return report_lines(res) or ["  touchdowns: no replayable seasons yet"]
+        save(res, sport=sport)
+    label = "touchdowns" if sport == "nfl" else f"{sport} touchdowns"
+    return report_lines(res, sport) or [f"  {label}: no replayable seasons yet"]
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python3 -m engine.tdscale")
     ap.add_argument("--dry-run", action="store_true", help="measure and report, save nothing")
+    ap.add_argument("--sport", choices=SPORTS, action="append",
+                    help="one league (repeatable); default every league")
     a = ap.parse_args(argv)
     from . import db
-    for line in refit(db.connect(), a.dry_run):
-        print(line)
+    conn = db.connect()
+    for sport in a.sport or SPORTS:
+        for line in refit(conn, a.dry_run, sport):
+            print(line)
     print("dry run: nothing saved" if a.dry_run else "saved; the next build reads it")
     return 0
 

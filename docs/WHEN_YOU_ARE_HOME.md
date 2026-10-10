@@ -379,6 +379,16 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run 2>&1 | grep -i "abroad\|seasons"
     ```
 
+21. **College touchdowns follow the team total** (2026-10-10, "we want the
+    same methods and tools and models as we use for nfl"). The NFL's
+    per-position exponent, measured on college's own seasons. It refits
+    itself every week; nothing changes until a position passes. To see it:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.tdscale --sport cfb --dry-run
+    ```
+    "ADOPT" on a line means the weekly job will start using it for that
+    position; "keep g +0.0" means no change. Takes a few minutes.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
