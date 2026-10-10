@@ -1596,6 +1596,30 @@ def repair_inverted_likely_sides(conn) -> dict:
     return {"flipped": len(ids), "reopened_for_regrade": len(ids)}
 
 
+#: LEAGUES WHOSE STAKED MOST LIKELY PICK MUST COVER ITS PRICE (Ethan,
+#: 2026-10-09, choosing "stake only when we cover the price"). The college
+#: loss audit that morning: the staked college picks claimed 63% and hit
+#: 63% — an honest number — at prices that needed 65%, so the book lost by
+#: construction (127-76, -4.1%). The board ranks on how likely a pick is,
+#: never on its price, and in college the likely picks were dear. A college
+#: pick is staked only when the chance the board shows is at least what its
+#: price needs to break even; below that it is journaled on paper — still
+#: published, still graded — and its card says "price too high to stake".
+#: The NFL is not in it: its staked book is winning and was not asked.
+PRICE_COVER_SPORTS = ("cfb",)
+
+
+def covers_price(prob, odds) -> bool | None:
+    """Does this chance reach what the price needs to break even? None
+    when either is missing."""
+    be = implied_breakeven(odds)
+    try:
+        p = float(prob)
+    except (TypeError, ValueError):
+        return None
+    return None if be is None else p >= be
+
+
 def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
                     depth=LIKELY_JOURNAL_DEPTH, category: str = "likely",
                     grade_label: str = "Likely") -> int:
@@ -1794,6 +1818,13 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
                  LIKELY_LIVE_CATEGORY if category == "likely" else category)).fetchone():
             continue
         stake_units = _stake_for(r.get("model_prob"))
+        # PRICE FIRST, IN COLLEGE (PRICE_COVER_SPORTS): a pick our own chance
+        # says loses money at this price rides on paper, not money.
+        if staked and sport in PRICE_COVER_SPORTS:
+            short = covers_price(r.get("model_prob"), odds) is False
+            r["price_short"] = short
+            if short:
+                stake_units = 0.0
         row_category = (LIKELY_LIVE_CATEGORY if stake_units and staked
                         else category)
         grade = LIKELY_LIVE_GRADE if row_category == LIKELY_LIVE_CATEGORY \

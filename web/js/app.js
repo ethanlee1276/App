@@ -10262,6 +10262,14 @@ function likelyTagsHTML(r) {
                ((r.bold_why || []).join(" ") || "More confident than the market, and checked for a data error")
                + " Graded on paper, not staked."]);
   }
+  /* PRICE TOO HIGH TO STAKE (engine/ledger.PRICE_COVER_SPORTS, college,
+     2026-10-09): our chance is below what this price needs to break even,
+     so the pick is graded on paper and no money rides on it. */
+  if (r.price_short) {
+    tags.push(["Price too high to stake", "down",
+               "Our chance is below what this price needs to break even, so this pick is graded on paper, "
+               + "not staked. A better price at another book could change that."]);
+  }
   const thin = ((state.data || {}).thin || {})[r.player];
   if (thin && thin.games) {
     tags.push([`${thin.games} game${thin.games === 1 ? "" : "s"} in`, "",

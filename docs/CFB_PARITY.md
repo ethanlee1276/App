@@ -103,6 +103,16 @@ own games or record pass it. **Already** means college had it.
 | Teammate out, what it opens (lineup step) | Not measured | The NFL's step is measured on NFL targets and snaps; college logs catches, no targets or snaps. Needs a college measurement first |
 | New starting QB moves his receivers | Not measured | Same — shown on the card, not priced |
 
+### The price (Ethan's call, 2026-10-09)
+
+The box's loss audit: staked college Most Likely picks claimed 63% and hit
+63% at prices that needed 65% — honest numbers, bought too dear (127-76,
+-4.1%). Ethan chose **stake only when we cover the price**: a college pick
+is staked only when the chance its card shows is at least what its price
+needs to break even (`ledger.PRICE_COVER_SPORTS`). Below that it is still
+published and graded, on paper, and the card says "Price too high to
+stake". The NFL is not in it.
+
 ### Data the NFL added
 
 | NFL source | College | Why |

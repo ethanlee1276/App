@@ -322,6 +322,27 @@ first). Paste back anything that prints an error or looks off.
     DEPLOY.md says. Don't chase the handshake again from the box; time it
     from a computer that is not the box if it ever matters.)
 
+18. **College Most Likely** (2026-10-09, your words: "we need to fix that,
+    and we need to make changes now"). The box's loss audit said the
+    staked college picks were honest (claimed 63%, hit 63%) but bought at
+    prices needing 65%, and the whole college board was too sure on
+    unders, rushing yards and its bolder-than-the-books picks. Three
+    things, in order:
+    ```
+    cd /srv/qellys
+    sudo -u qellys python3 -m engine.posspread --sport cfb
+    sudo -u qellys python3 -m engine.scouthist --sport cfb --dry-run 2>&1 | tail -40
+    sudo -u qellys python3 -m engine.likelyctx fit --sport cfb --dry-run 2>&1 | tail -30
+    ```
+    The first SAVES college's measured spreads — WR catches ×1.20, WR
+    yards ×1.35, RB rushing yards ×1.50, each better in 4-5 of 5 held-out
+    seasons (the weekly job would save the same on its own). The other two
+    are read-only: the scout's history and record checks, which matched
+    nothing on the first run because of a join bug fixed in `e50ad436`.
+    Nothing to run for the price rule: from the next college build a pick
+    whose chance is below its price's break-even is graded on paper, not
+    staked, and its card says "Price too high to stake".
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
