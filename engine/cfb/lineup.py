@@ -274,7 +274,7 @@ def qb_samples(conn, seasons) -> list[dict]:
                     rep = max(now, key=now.get)
                     tier = tier_of(passing_before(this_passing, last_passing, day), starter, rep)[0]
                 for pos in GROUPS:
-                    for name, _v, n, _l in ranked(roster, pos, prior):
+                    for name, _v, _n, _l in ranked(roster, pos, prior):
                         games = roster[name]["games"]
                         if day not in games:
                             continue
