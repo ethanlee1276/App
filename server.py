@@ -711,6 +711,46 @@ def _seclog(kind, outcome, ip=None, **kw):
         pass
 
 
+#: Where a locked-out reader is sent when the site cannot email them.
+SUPPORT_EMAIL = "support@qellysbook.com"
+
+
+def _mail_on() -> bool:
+    """Whether the mail relay is configured (engine.mailer), reading
+    secrets.local first — that is where the SMTP settings are written."""
+    try:
+        from engine import mailer, secrets as _local
+        _local.load_local_secrets()
+        return mailer.configured()
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
+def _send_reset(email: str) -> None:
+    """Mint a reset link for ``email`` and mail it, off the request thread.
+
+    Nothing happens for an address with no account, or one past its hourly
+    limit — engine.accounts.start_reset returns None for both. A failed
+    send is logged by kind only: the token and the link never reach a log.
+    """
+    A = _acct()
+    try:
+        conn = A.connect()
+        try:
+            token = A.start_reset(conn, email)
+        finally:
+            conn.close()
+        if not token:
+            return
+        from engine import mailer
+        subject, text, html = A.reset_message(A.reset_link(token))
+        mailer.send(email, subject, text, html)
+        _seclog("password_reset_mail", "sent", email=email)
+    except Exception as exc:                                  # noqa: BLE001
+        _seclog("password_reset_mail", "failed", email=email,
+                error=type(exc).__name__)
+
+
 def board_bytes(name: str):
     """``(body, mtime, etag)`` for a board, or ``(None, None, None)``.
 
@@ -1915,7 +1955,11 @@ class Handler(BaseHTTPRequestHandler):
                 # password, rather than only refusing after they have.
                 out = {"signed_in": bool(who),
                        "insecure": self._transport_is_cleartext(),
-                       "allowed": self._password_transport_ok()}
+                       "allowed": self._password_transport_ok(),
+                       # Whether "Forgot password?" can email a link, so
+                       # the page can say how to get back in BEFORE anybody
+                       # types an address into a form that cannot send.
+                       "reset_by_email": _mail_on()}
                 if who:
                     out["email"] = who["email"]
                     # ONE PROFILE FOR THE WHOLE SITE (Ethan, 2026-10-07):
@@ -1960,7 +2004,7 @@ class Handler(BaseHTTPRequestHandler):
     #: Endpoints that carry a PASSWORD in the body. These are the ones
     #: refused over a cleartext connection to another machine — see
     #: `_password_transport_ok`.
-    PASSWORD_PATHS = ("signup", "login", "password", "delete")
+    PASSWORD_PATHS = ("signup", "login", "password", "delete", "reset")
 
     def _via_tailnet(self) -> bool:
         """Whether this request arrived through the Tailscale tunnel.
@@ -2042,14 +2086,33 @@ class Handler(BaseHTTPRequestHandler):
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
-                        "delete", "signout-all", "digest"):
+                        "delete", "signout-all", "digest", "forgot", "reset"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
             return self._send(400, json.dumps({"error": _INSECURE_LOGIN}
                                               ).encode(), ".json")
+        if path == "forgot":
+            return self._forgot_password(A, body)
         conn = A.connect()
         try:
+            if path == "reset":
+                # A reset link (engine.accounts.finish_reset). Success signs
+                # this browser in: they just proved they hold the address,
+                # and making them type the new password again straight away
+                # is a second chance to fumble it for nothing.
+                code, out = A.finish_reset(conn, body.get("token"),
+                                           body.get("password"))
+                _seclog("password_reset", "ok" if code == 200 else "fail",
+                        self._client_ip(),
+                        email=out.get("email") if code == 200 else None,
+                        status=code)
+                if code != 200:
+                    return self._send(code, json.dumps(out).encode(), ".json")
+                token = A.start_session(conn, out["id"])
+                return self._send(200, json.dumps(
+                    {"signed_in": True, "email": out["email"]}).encode(),
+                    ".json", headers=self._session_cookie(token))
             if path in ("signup", "login"):
                 if path == "signup":
                     code, out = A.create_user(
@@ -2149,6 +2212,37 @@ class Handler(BaseHTTPRequestHandler):
                                   headers=self._session_cookie("", clear=True))
         finally:
             conn.close()
+
+    def _forgot_password(self, A, body: dict):
+        """"Forgot password?" — email a reset link (engine.accounts).
+
+        THE SAME ANSWER WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT, and in
+        the same time: the lookup, the token and the send all happen on a
+        background thread after the reply has gone. A form that answered
+        "no such account", or answered it faster, would be a way to test
+        which addresses are registered here.
+
+        With no mail relay configured nothing can be sent, and the reply
+        says so with the way back in (write to support), which is the same
+        for every address and so tells a prober nothing either.
+        """
+        email = body.get("email")
+        if not A.email_ok(email):
+            return self._send(400, json.dumps(
+                {"error": "That does not look like an email address."}
+            ).encode(), ".json")
+        if not _mail_on():
+            _seclog("password_reset_request", "no_mail", self._client_ip(),
+                    email=email)
+            return self._send(200, json.dumps(
+                {"sent": False, "by_email": False,
+                 "contact": SUPPORT_EMAIL}).encode(), ".json")
+        _seclog("password_reset_request", "asked", self._client_ip(),
+                email=email)
+        threading.Thread(target=_send_reset, args=(A.normalize_email(email),),
+                         daemon=True, name="password-reset").start()
+        return self._send(200, json.dumps({"sent": True, "by_email": True}
+                                          ).encode(), ".json")
 
     # --- tail or fade ----------------------------------------------------
     # Calls are validated against the SERVED board (the full copy, via

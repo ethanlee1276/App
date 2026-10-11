@@ -127,7 +127,12 @@ def test_the_pages_that_stay_open_are_named_once():
                           # The Feed (2026-10-06): the server locks every
                           # paid leg for a reader who has not paid, and
                           # #wall-back verified visible on it in a browser.
-                          "feed"}, open_
+                          "feed",
+                          # Forgot password (2026-10-11): a locked-out
+                          # reader is signed out, so behind the wall like
+                          # sign-up; it shows no pick. #wall-back verified
+                          # visible on it in a browser with the wall on.
+                          "reset"}, open_
 
 
 def test_every_open_page_is_a_real_view():

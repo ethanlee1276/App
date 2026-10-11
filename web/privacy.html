@@ -64,6 +64,10 @@
         in your browser is the only copy of the raw token; a stolen
         database does not yield a working session.
         (<code>sessions.token_hash</code>)</li>
+      <li><b>Password reset links, stored hashed</b>, if you use “Forgot
+        password?”. The link in your email is the only working copy; we
+        keep its one-way scramble for an hour, or until it is used, and
+        delete it then. (<code>password_resets.token_hash</code>)</li>
     </ul>
 
     <h3>2.2 What you put in</h3>
@@ -242,6 +246,8 @@
         retention rules.</li>
       <li><b>Sessions</b> — expire on their own, and are deleted when you
         sign out or change your password.</li>
+      <li><b>Password reset links</b> — one hour, or until used, whichever
+        comes first; deleted when you change your password.</li>
       <li><b>Failed code attempts</b> — rolled off after one hour.</li>
       <li><b>Processed webhook ids</b> — 60 days.</li>
       <li><b>Server logs</b> — a short rolling window for security and

@@ -9568,6 +9568,33 @@ button.rc-day b { font-size: var(--fs-sm); }
   font-size: var(--fs-sm); }
 .acct-screen .acct-alt .btn { width: auto; }
 
+/* "Forgot password?" — a text link, not a third button: it is the way
+   out for somebody stuck, and it must not compete with Log in for the
+   eye of everybody who is not. */
+.acct-forgot { border: 0; background: none; padding: 2px 0; cursor: pointer;
+  color: var(--brand); font: inherit; font-size: var(--fs-sm);
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.acct-forgot:hover { text-decoration-color: currentColor; }
+.acct-forgot-row { display: flex; justify-content: flex-end; margin-top: -2px; }
+.rank-help .acct-forgot { font-size: inherit; }
+
+/* The sign-up and reset cards stack their fields like the sign-in
+   screen: one box a line, the action last and full width. In a wrapping
+   row the two password boxes and the button fell into a ragged pile. */
+.acct-card .acct-row { flex-direction: column; align-items: stretch; gap: 10px; }
+.acct-card .acct-row input { flex: 1 1 auto; width: 100%; }
+.acct-card .acct-row .btn { width: 100%; justify-content: center; }
+.acct-reset { max-width: 30rem; margin-inline: auto; }
+.acct-reset-help { margin: 12px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.acct-reset-help a { color: var(--brand); }
+/* The reset page's own message line — `.acct-note` is repainted by the
+   account sync, and a reset message has to stay put until it is read. */
+.acct-note-reset { margin-top: 8px; color: var(--text); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+.acct-note-reset:empty { display: none; }
+
 /* ---- The fantasy start calendar ---------------------------------- */
 .ffcal-head {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;

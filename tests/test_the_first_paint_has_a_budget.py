@@ -85,7 +85,12 @@ HTML = (WEB / "index.html").read_text()
 #: asked for alongside the light one, paid files shared and never asked
 #: for twice — +1.0 KB gz. The dead-code sweep that would have paid for
 #: it found 0.6 KB in three functions, two of them pinned. Told to Ethan.
-APP_JS_BUDGET_KB = 490
+#: 490 -> 492 on 2026-10-11 by the password work (Ethan: "put in your
+#: password twice ... add an option for forget a password"): the second
+#: password box and its match check, Enter-to-submit, the Forgot password
+#: links, and the reset page's three states — +1.86 KB gz (489.61 ->
+#: 491.47). Told to Ethan.
+APP_JS_BUDGET_KB = 492
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
@@ -119,7 +124,10 @@ APP_JS_BUDGET_KB = 490
 #: Told to Ethan.
 #: 605 -> 606 on 2026-10-09 by the first-visit pass: the app.js bump
 #: above. Told to Ethan.
-BOOT_BUDGET_KB = 606
+#: 606 -> 608 on 2026-10-11 by the password work: the app.js bump above
+#: plus the reset page's section and styles (605.87 -> 607.89 KB gz).
+#: Told to Ethan.
+BOOT_BUDGET_KB = 608
 
 
 def _gz_trimmed(rel: str) -> int:

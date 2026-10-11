@@ -153,8 +153,38 @@ published policy false.
 | GET | `/api/account/data` | stored sections |
 | POST | `/api/account/data` | `{sections}` → merged sections |
 | POST | `/api/account/password` | `{old, new}` |
+| POST | `/api/account/forgot` | `{email}` → the same answer for every address |
+| POST | `/api/account/reset` | `{token, password}` → session cookie |
 | POST | `/api/account/delete` | `{password}` |
 | GET | `/api/account/export` | everything, as JSON |
+
+### A forgotten password (2026-10-11)
+
+The verifier is one-way, so nothing can be sent back; "Forgot password?"
+replaces the password. `forgot` mints a one-hour, one-use token
+(`engine/accounts.start_reset`), stores **only its sha256** in
+`password_resets`, and emails `QB_SITE_URL/#reset/<token>`. The link is
+built from the site's own address, never from the request's `Host`
+header (a forged one would mail the token to the attacker's domain), and
+the token rides in the fragment, which no browser sends to any server.
+The page takes it out of the address bar as soon as it reads it.
+
+`forgot` answers every address the same way, at the same speed: the
+lookup and the send run on a background thread after the reply. At most
+three links an hour go to one address. `reset` checks the token, applies
+the usual password rules (a weak password does not spend the link), then
+in one transaction writes the new verifier, ends every session, deletes
+every other link for the account, and signs this browser in. Changing the
+password or deleting the account also deletes outstanding links.
+
+With no mail relay configured (docs/EMAIL.md), `forgot` sends nothing and
+says so, and the page tells the reader to write to support from the
+address on the account. The owner then runs
+`python3 -m engine.accounts reset-link <email>` and emails that link to
+the account's own address.
+
+Sign-up asks for the password twice, and the page checks the two boxes
+match before anything is sent.
 
 The session cookie is `HttpOnly` (page scripts cannot read it, so an
 injected script cannot steal it either), `SameSite=Lax` (another site

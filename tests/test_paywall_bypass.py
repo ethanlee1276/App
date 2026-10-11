@@ -773,8 +773,13 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # not paid (engine/socialfeed.public_leg) and refuses them the tail;
     # the page itself carries no model output. Back link confirmed by
     # rendering it with the wall on: #wall-back shows, as on Record.
+    # "reset" added 2026-10-11: the Forgot password page. Someone locked
+    # out is signed out, so it must open behind the wall exactly as sign-up
+    # does, and it carries no model output — a form and two messages. Back
+    # link confirmed by rendering #reset and #reset/<token> with the wall
+    # on: #wall-back shows, and the token route lands on #reset.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup", "streak", "messages", "zeno", "feed"}, (
+                      "signup", "streak", "messages", "zeno", "feed", "reset"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

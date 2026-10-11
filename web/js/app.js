@@ -27405,6 +27405,8 @@ function acctSignedInHTML(u) {
           autocomplete="new-password">
         <button class="btn ghost" data-act="acctChangePassword">Change password</button>
       </div>
+      <p class="rank-help">Forgot your current one?
+        <button type="button" class="acct-forgot" data-act="acctGoForgot">Email me a reset link</button></p>
       <p class="rank-help">Changing it signs out every other device — a
         password change is usually an answer to “somebody else may have
         this”, and leaving those sessions alive would answer it with
@@ -27540,19 +27542,16 @@ function acctSignInHTML() {
    of them — that hint is what decides whether a password manager offers
    to fill or offers to save. */
 
-function acctFieldsHTML(mode) {
-  const isNew = mode === "signup";
-  return `
-    <div class="acct-row">
-      <input type="email" class="acct-email" placeholder="you@example.com"
-        autocomplete="email" maxlength="254" spellcheck="false"
-        aria-label="Email address">
-      <div class="acct-pw-wrap">
-        <input type="password" class="acct-pw"
-          placeholder="${isNew ? "choose a password" : "password"}"
-          autocomplete="${isNew ? "new-password" : "current-password"}"
-          maxlength="200"
-          aria-label="${isNew ? "Choose a password" : "Password"}">
+/* One password box with its eye. `pair` marks the two boxes of a NEW
+   password (sign-up, reset): leaving either one checks they agree, so a
+   typo is caught at the box rather than after the button. Enter in any
+   box presses the card's button, the way every sign-in form behaves. */
+function acctPwHTML(cls, placeholder, label, autocomplete, pair = false) {
+  return `<div class="acct-pw-wrap">
+        <input type="password" class="${cls}" placeholder="${placeholder}"
+          autocomplete="${autocomplete}" maxlength="200"
+          aria-label="${label}" data-key="acctEnter"${
+          pair ? ' data-change="acctPwMatch"' : ""}>
         <button type="button" class="acct-eye" aria-label="Show password"
           aria-pressed="false" data-act="acctTogglePw">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -27560,11 +27559,51 @@ function acctFieldsHTML(mode) {
             10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
           </svg>
         </button>
-      </div>
+      </div>`;
+}
+
+/* THE PASSWORD TWICE, on sign-up (Ethan, 2026-10-11: "you should have to
+   be able to put in your password twice, so you confirm that you're
+   putting in the right password"). The verifier is one-way, so a typo
+   made here is a password nobody knows — the second box is the only
+   check there is before it is locked in. */
+/* The one email box — sign-in, sign-up and the Forgot page all draw it
+   from here, so its hints cannot drift between them. */
+function acctEmailHTML(value = "") {
+  return `<input type="email" class="acct-email" placeholder="you@example.com"
+        autocomplete="email" maxlength="254" spellcheck="false"
+        aria-label="Email address" data-key="acctEnter"${
+        value ? ` value="${escapeHtml(value)}"` : ""}>`;
+}
+
+function acctFieldsHTML(mode) {
+  const isNew = mode === "signup";
+  return `
+    <div class="acct-row">
+      ${acctEmailHTML()}
+      ${isNew
+        ? acctPwHTML("acct-pw", "choose a password", "Choose a password", "new-password", true)
+          + acctPwHTML("acct-pw2", "type it again", "Type the password again", "new-password", true)
+        : acctPwHTML("acct-pw", "password", "Password", "current-password")
+          // Under the password box, above the button: where every sign-in
+          // form puts it, so it is where a stuck person looks.
+          + `<div class="acct-forgot-row">
+        <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
+      </div>`}
       <button class="btn${isNew ? " primary" : ""}"
         data-act="acctAuth" data-arg="${isNew ? "signup" : "login"}">${
         isNew ? "Create account" : "Log in"}</button>
     </div>`;
+}
+
+/* The two boxes of a new password, compared. "" when they agree or the
+   second is still empty — nobody is told off for a box they have not
+   reached yet. */
+function acctPwMismatch(card) {
+  const a = card && card.querySelector(".acct-pw");
+  const b = card && card.querySelector(".acct-pw2");
+  if (!a || !b || !b.value) return "";
+  return a.value === b.value ? "" : "The two passwords don’t match — type them again.";
 }
 
 window.acctGoSignup = function () {
@@ -27609,12 +27648,14 @@ function signupHTML() {
     <div class="acct-alt">
       <span>Already have an account?</span>
       <button class="btn ghost" data-act="acctGoLogin">Log in</button>
+      <button type="button" class="acct-forgot" data-act="acctGoForgot">Forgot password?</button>
     </div>
 
     <p class="rank-help">Ten characters or more — length is what makes a
-      password hard to guess. We store a one-way scramble of it, never the
-      password itself, which is why nobody here can ever tell you what
-      yours is; a lost one gets replaced, not recovered.</p>
+      password hard to guess. Type it twice so a slip of the thumb is caught
+      here. We store a one-way scramble of it, never the password itself,
+      which is why nobody here can ever tell you what yours is; a lost one
+      gets replaced from “Forgot password?”, not recovered.</p>
     <p class="rank-help">We never ask for your sportsbook or ESPN password.
       Those belong to someone else’s service and could not be revoked by
       us. This one is ours, and you can delete it whenever you like.</p>
@@ -27637,6 +27678,222 @@ async function renderSignup() {
   host.innerHTML = signupHTML();
 }
 
+/* ===================== FORGOT PASSWORD =====================
+   Ethan, 2026-10-11: "add an option for forget a password. Like, after
+   you create your account, or you're trying to log in, there's no option
+   for if you forget your password, you can't get it back."
+
+   One page, two states. Without a token it asks for the address and the
+   server emails a one-hour, one-use link (engine/accounts.start_reset).
+   With one — the link is `#reset/<token>` — it asks for the new password
+   twice, and saving it signs this browser in.
+
+   THE TOKEN LEAVES THE ADDRESS BAR AT ONCE. The router hands it to
+   `openReset`, which keeps it in memory and switches to the plain
+   `#reset` view, replacing the history entry — so it is not in the back
+   stack, a screenshot or a copied URL. It travelled in the fragment for
+   the same reason: a browser never sends a fragment to any server.
+
+   THE ANSWER NEVER SAYS WHETHER AN ACCOUNT EXISTS. "If there is an
+   account for that address, a link is on its way" — the server answers
+   every address the same way, in the same time, and the page repeats it.
+
+   WITH NO MAIL RELAY (docs/EMAIL.md) nothing can be sent, and the page
+   says so before anybody types: write to support from the address on the
+   account, and the owner sends a link made on the server (the reset-link
+   command in engine/accounts.py). */
+let _resetToken = "";
+let _resetEmail = "";
+let _resetSent = false;
+// Its own line, not `_resetNote`: the account sync writes "synced 4:35 PM"
+// into that one, and it landed on top of "that link has expired".
+let _resetNote = "";
+
+function openReset(token) {
+  _resetToken = String(token || "");
+  _resetSent = false;
+  _resetNote = "";
+  switchView("reset");
+}
+
+window.acctGoForgot = function (btn) {
+  // The address already typed comes along: retyping it on the next page
+  // is the kind of friction that makes a locked-out person give up.
+  const card = btn && btn.closest && btn.closest(".card");
+  const typed = card && card.querySelector(".acct-email");
+  _resetEmail = (typed && typed.value.trim())
+    || (_acctUser && _acctUser.signed_in && _acctUser.email) || _resetEmail;
+  _resetToken = "";
+  _resetSent = false;
+  _resetNote = "";
+  switchView("reset", true);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+function resetHTML() {
+  const insecure = _acctUser && _acctUser.insecure;
+  const warn = insecure ? `<div class="warning">${icon("warn")} <b>${
+      _acctUser.allowed ? "This connection is not private."
+                        : "Not over this connection."}</b>
+      This page came over plain HTTP, so a password typed here crosses the
+      network readable by anyone on it.</div>` : "";
+  const back = `<div class="acct-alt">
+      <span>Remembered it?</span>
+      <button class="btn ghost" data-act="acctGoLogin">Log in</button>
+    </div>`;
+  if (_resetToken) {
+    return `<div class="card acct-card acct-reset">
+      <div class="card-head"><div>
+        <div class="player">Choose a new password</div>
+        <div class="subtitle">Ten characters or more, typed twice. Saving it
+          signs you in here and signs every other device out.</div></div></div>
+      ${warn}
+      <div class="acct-row">
+        ${acctPwHTML("acct-pw", "new password", "New password", "new-password", true)}
+        ${acctPwHTML("acct-pw2", "type it again", "Type the new password again", "new-password", true)}
+        <button class="btn primary" data-act="acctResetSave">Save new password</button>
+      </div>
+      <div class="acct-note-reset" role="status">${escapeHtml(_resetNote)}</div>
+      ${back}
+    </div>`;
+  }
+  const byEmail = !(_acctUser && _acctUser.reset_by_email === false);
+  if (!byEmail) {
+    return `<div class="card acct-card acct-reset">
+      <div class="card-head"><div>
+        <div class="player">Forgot your password?</div>
+        <div class="subtitle">Nobody here can see your password — it is
+          stored as a one-way scramble — so it gets replaced, not sent back.</div></div></div>
+      <p class="acct-reset-help">Email
+        <a href="mailto:support@qellysbook.com?subject=Password%20reset">support@qellysbook.com</a>
+        <b>from the address on your account</b> and we will send you a link
+        to choose a new one. It works for an hour.</p>
+      ${back}
+    </div>`;
+  }
+  if (_resetSent) {
+    return `<div class="card acct-card acct-reset">
+      <div class="card-head"><div>
+        <div class="player">Check your email</div>
+        <div class="subtitle">If there is an account for
+          <b>${escapeHtml(_resetEmail)}</b>, a link to choose a new password
+          is on its way. It works once, for an hour.</div></div></div>
+      <p class="acct-reset-help">Nothing after a few minutes? Look in spam
+        or promotions, check the address, or
+        <button type="button" class="acct-forgot" data-act="acctForgotAgain">send another</button>.</p>
+      ${back}
+    </div>`;
+  }
+  return `<div class="card acct-card acct-reset">
+    <div class="card-head"><div>
+      <div class="player">Forgot your password?</div>
+      <div class="subtitle">Type the email you signed up with and we will
+        send you a link to choose a new one.</div></div></div>
+    ${warn}
+    <div class="acct-row">
+      ${acctEmailHTML(_resetEmail)}
+      <button class="btn primary" data-act="acctForgotSend">Email me a link</button>
+    </div>
+    <div class="acct-note-reset" role="status">${escapeHtml(_resetNote)}</div>
+    ${back}
+  </div>`;
+}
+
+async function renderReset() {
+  const host = document.getElementById("view-reset");
+  if (!host) return;
+  // Asked fresh: whether mail can go out decides which card this is.
+  await acctWho();
+  host.innerHTML = resetHTML();
+  const first = host.querySelector(".acct-pw, .acct-email");
+  if (first && !first.value) first.focus({ preventScroll: true });
+}
+
+window.acctForgotAgain = function () {
+  _resetSent = false;
+  _resetNote = "";
+  renderReset();
+};
+
+window.acctForgotSend = async function (btn) {
+  const card = btn.closest(".card");
+  const note = card.querySelector(".acct-note-reset");
+  const say = (t) => { if (note) note.textContent = t; };
+  const email = (card.querySelector(".acct-email").value || "").trim();
+  if (!email) return say("Type the email address on your account.");
+  btn.disabled = true;
+  say("Sending…");
+  try {
+    const r = await fetch("/api/account/forgot", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const body = await r.json().catch(() => null);
+    btn.disabled = false;
+    if (!r.ok) return say((body && body.error) || `Failed (${r.status}).`);
+    _resetEmail = email;
+    if (body && body.by_email === false) {
+      // The server's own answer wins over the one cached at page load.
+      if (_acctUser) _acctUser.reset_by_email = false;
+    } else {
+      _resetSent = true;
+    }
+    _resetNote = "";
+    renderReset();
+  } catch (e) {
+    btn.disabled = false;
+    say("The server is not reachable right now — try again in a moment.");
+  }
+};
+
+window.acctResetSave = async function (btn) {
+  const card = btn.closest(".card");
+  const note = card.querySelector(".acct-note-reset");
+  const say = (t) => { if (note) note.textContent = t; };
+  const password = card.querySelector(".acct-pw").value || "";
+  const again = card.querySelector(".acct-pw2").value || "";
+  if (!password) return say("Type the new password.");
+  if (!again) return say("Type it a second time, in the box under it.");
+  const off = acctPwMismatch(card);
+  if (off) return say(off);
+  btn.disabled = true;
+  say("Saving…");
+  try {
+    const r = await fetch("/api/account/reset", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: _resetToken, password }),
+    });
+    const body = await r.json().catch(() => null);
+    btn.disabled = false;
+    if (!r.ok) {
+      const why = (body && body.error) || `Failed (${r.status}).`;
+      // A dead link cannot be fixed by typing again: drop it and show the
+      // form that sends a new one, with the reason on top.
+      if (r.status === 400 && /expired|already used/i.test(why)) {
+        _resetToken = "";
+        _resetNote = why;
+        return renderReset();
+      }
+      return say(why);
+    }
+    card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
+    _resetToken = "";
+    _acctUser = { signed_in: true, email: body.email };
+    _resetNote = "";
+    _acctNote = "Password changed — you are signed in.";
+    say(_acctNote);
+    a2hsArm();
+    await acctSync();
+    if (typeof renderGreeting === "function") renderGreeting();
+    await acctLandAfterAuth(say);
+  } catch (e) {
+    btn.disabled = false;
+    say("The server is not reachable right now — try again in a moment.");
+  }
+};
+
 window.acctAuth = async function (btn, mode) {
   const card = btn.closest(".card");
   const note = card.querySelector(".acct-note");
@@ -27649,6 +27906,12 @@ window.acctAuth = async function (btn, mode) {
   // the opposite of what an acknowledgment is for.
   const ageBox = card.querySelector(".acct-age");
   const confirmed = !!(ageBox && ageBox.checked);
+  if (mode === "signup") {
+    const pw2 = card.querySelector(".acct-pw2");
+    if (pw2 && !pw2.value) return say("Type the password a second time, in the box under it.");
+    const off = acctPwMismatch(card);
+    if (off) return say(off);
+  }
   if (mode === "signup" && !confirmed)
     return say("Please confirm you are 21 or older and accept the Terms.");
   say(mode === "signup" ? "Creating your account…" : "Signing in…");
@@ -27663,7 +27926,7 @@ window.acctAuth = async function (btn, mode) {
     _acctUser = { signed_in: true, email: body.email };
     // The typed password is not kept anywhere. What we hold now is a
     // session cookie this script cannot even read.
-    card.querySelector(".acct-pw").value = "";
+    card.querySelectorAll(".acct-pw, .acct-pw2").forEach((i) => { i.value = ""; });
     _acctNote = mode === "signup" ? "Account created — this device is synced."
                                   : "Signed in — pulling your data…";
     // "once someone makes an account … the first thing we should do is
@@ -40868,7 +41131,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -40920,7 +41183,7 @@ const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "pr
 // entitlement), so the wall was hiding a page that leaks nothing and
 // exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
-                   "signup", "streak", "messages",
+                   "signup", "reset", "streak", "messages",
                    // The feed is open: a paid leg is locked by the server
                    // for a reader who has not paid (engine/socialfeed).
                    "feed",
@@ -41235,6 +41498,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "discord") renderDiscord();
   if (name === "feed") renderFeed();
   if (name === "signup") renderSignup();
+  if (name === "reset") renderReset();
   // The escape hatch, on the two pages that stay open behind the wall.
   // Driven from here rather than from each page's own render, because
   // this is the one place that knows which view is showing — and a
@@ -43115,6 +43379,7 @@ function initialView() {
     return;
   }
   if (teamRoute(h)) return;
+  if (h.startsWith("reset/")) { openReset(decodeURIComponent(h.slice(6))); return; }
   if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
@@ -44767,6 +45032,7 @@ function bind() {
       return;
     }
     if (teamRoute(h)) return;
+    if (h.startsWith("reset/")) { openReset(decodeURIComponent(h.slice(6))); return; }
     if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
@@ -48411,7 +48677,7 @@ var _tourTimer = null;
    2026-09-06 ("Cannot access 'NO_TOUR_VIEWS' before initialization"
    on every load). A function declaration is hoisted and has no dead
    zone. tests/test_tour_never.py pins the shape. */
-function noTourViews() { return ["paywall", "signup", "checkout"]; }
+function noTourViews() { return ["paywall", "signup", "reset", "checkout"]; }
 
 function tourSteps() {
   return [
@@ -49951,6 +50217,10 @@ const ACTS = {
   acctDelete: (el) => acctDelete(el),
   acctTogglePw: (el) => acctTogglePw(el),
   acctAuth: (el, a) => acctAuth(el, a),
+  acctGoForgot: (el) => acctGoForgot(el),
+  acctForgotSend: (el) => acctForgotSend(el),
+  acctForgotAgain: () => acctForgotAgain(),
+  acctResetSave: (el) => acctResetSave(el),
   acctGo: (el, a) => acctGo(el, a === "create"),
   toAccount: () => switchView("account", true),
   billSeePlans: () => billSeePlans(),
@@ -49973,8 +50243,24 @@ const CHANGES = {
   pmFlowSort: (el) => window._pmFlowSort(el.value),
   mbImport: (el) => mbImport(el),
   mbBulkFile: (el) => mbBulkFile(el),
+  // Leaving either box of a new password says at once if the two differ.
+  acctPwMatch: (el) => {
+    const card = el.closest(".card");
+    const note = card && card.querySelector(".acct-note-reset, .acct-note");
+    if (note) note.textContent = acctPwMismatch(card);
+  },
 };
 const KEYS = {
+  // Enter in an account box presses that card's button.
+  acctEnter: (el, a, b, e) => {
+    if (e.key !== "Enter") return;
+    const card = el.closest(".card");
+    const go = card && card.querySelector(
+      '[data-act="acctAuth"], [data-act="acctForgotSend"], [data-act="acctResetSave"]');
+    if (!go || go.disabled) return;
+    e.preventDefault();
+    go.click();
+  },
   pmRow: (el, a, b, e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();

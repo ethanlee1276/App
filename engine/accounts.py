@@ -108,6 +108,23 @@ MAX_EMAIL = 254             # the real limit on an address
 MAX_FAILS = 8
 LOCKOUT_S = 900
 
+#: A forgotten password (Ethan, 2026-10-11: "there's no option for if you
+#: forget your password, you can't get it back"). The verifier is one-way,
+#: so nothing can be sent back — a reset link lets the owner of the address
+#: choose a new one. It works for an hour and once: long enough to find the
+#: email in a spam folder, short enough that a link left in an inbox is not
+#: a standing key to the account.
+RESET_TTL = 3600
+#: At most this many links an hour to one address. The per-network auth
+#: bucket caps how fast one network can ask; this caps how hard any number
+#: of networks can fill a stranger's inbox with our mail.
+RESET_PER_HOUR = 3
+#: Where a reset link points when QB_SITE_URL is not set. NEVER the Host
+#: header: that is whatever the requester typed, and a link built from it
+#: sends the victim's token to the attacker's domain (Host-header
+#: injection, the classic way a reset flow is broken).
+SITE_URL = "https://qellysbook.com"
+
 #: Sections an account can hold. `search` is new with this feature —
 #: Ethan asked for search history alongside bets and fantasy.
 #:
@@ -340,6 +357,13 @@ def _init(conn: sqlite3.Connection) -> None:
         expires_at REAL NOT NULL
       );
       CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+      CREATE TABLE IF NOT EXISTS password_resets (
+        token_hash TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at REAL NOT NULL,
+        expires_at REAL NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets(user_id);
       CREATE TABLE IF NOT EXISTS user_data (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         section TEXT NOT NULL,
@@ -488,8 +512,136 @@ def change_password(conn, user_id: int, old: str, new: str) -> tuple[int, dict]:
     # response to "somebody else may have this", and leaving their session
     # alive answers that with nothing.
     conn.execute("DELETE FROM sessions WHERE user_id=?", (int(user_id),))
+    # …and any reset link still sitting in an inbox dies with the old
+    # password, for the same reason.
+    conn.execute("DELETE FROM password_resets WHERE user_id=?", (int(user_id),))
     conn.commit()
     return 200, {"ok": True}
+
+
+# --- a forgotten password ------------------------------------------------------
+#: Said for a link that is unknown, expired or already used — one message
+#: for all three, because telling them apart helps nobody but a guesser.
+RESET_EXPIRED = ("That reset link has expired or was already used — "
+                 "send yourself a new one.")
+
+
+def start_reset(conn, email) -> str | None:
+    """A reset token for this address, or None. The RAW token is returned —
+    the only moment it exists here; what is stored is its sha256, like a
+    session's, so the file never holds a working link.
+
+    THE CALLER SAYS THE SAME THING EITHER WAY. None means no such account
+    OR this address already has RESET_PER_HOUR links this hour, and the
+    browser is told "if there is an account, a link is on its way" in
+    every case — anything else turns the form into a way to ask which
+    addresses are registered here.
+
+    Earlier unexpired links stay good until one is used: somebody who asks
+    twice and opens the first email must not find it dead.
+    """
+    e = normalize_email(email)
+    if not email_ok(e):
+        return None
+    row = conn.execute("SELECT id FROM users WHERE email=?", (e,)).fetchone()
+    if row is None:
+        return None
+    now = time.time()
+    conn.execute("DELETE FROM password_resets WHERE expires_at < ?", (now,))
+    recent = conn.execute(
+        "SELECT COUNT(*) FROM password_resets WHERE user_id=? AND created_at > ?",
+        (int(row["id"]), now - 3600)).fetchone()[0]
+    if recent >= RESET_PER_HOUR:
+        conn.commit()
+        return None
+    token = secrets.token_urlsafe(32)
+    conn.execute("INSERT INTO password_resets (token_hash, user_id, created_at, "
+                 "expires_at) VALUES (?,?,?,?)",
+                 (_token_hash(token), int(row["id"]), now, now + RESET_TTL))
+    conn.commit()
+    return token
+
+
+def finish_reset(conn, token, new_password) -> tuple[int, dict]:
+    """``(status, body)``: set a new password from a reset link.
+
+    A password that fails the rules does NOT spend the link — the person
+    can try a better one. A good one spends it in the same transaction that
+    writes the new verifier, so two tabs racing the same link cannot both
+    win. Every session is ended (the old password may be the reason they
+    are here) and every other link for the account dies with it.
+    """
+    t = str(token or "")
+    row = conn.execute(
+        "SELECT r.user_id, r.expires_at, u.email FROM password_resets r "
+        "JOIN users u ON u.id = r.user_id WHERE r.token_hash=?",
+        (_token_hash(t),)).fetchone() if t else None
+    if row is None or float(row["expires_at"]) < time.time():
+        return 400, {"error": RESET_EXPIRED}
+    why = password_problem(new_password)
+    if why:
+        return 400, {"error": why}
+    uid = int(row["user_id"])
+    verifier = hash_password(new_password)          # the slow part, before the claim
+    claimed = conn.execute(
+        "DELETE FROM password_resets WHERE token_hash=? AND expires_at >= ?",
+        (_token_hash(t), time.time())).rowcount
+    if not claimed:
+        conn.rollback()
+        return 400, {"error": RESET_EXPIRED}
+    conn.execute("UPDATE users SET verifier=? WHERE id=?", (verifier, uid))
+    conn.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+    conn.execute("DELETE FROM password_resets WHERE user_id=?", (uid,))
+    conn.commit()
+    # Whatever wrong guesses they made before giving up are forgiven: the
+    # owner of the address just proved it, and a lockout left standing
+    # would refuse their new password on their next sign-in.
+    e = str(row["email"])
+    for k in [k for k in _fails if k == e or k.startswith(e + "|")]:
+        _fails.pop(k, None)
+    return 200, {"id": uid, "email": e}
+
+
+def site_url() -> str:
+    """The site's own address for links that leave it: QB_SITE_URL (read
+    from secrets.local too), else SITE_URL. Never a request header."""
+    from . import secrets as _local
+    _local.load_local_secrets()
+    return os.environ.get("QB_SITE_URL", "").strip().rstrip("/") or SITE_URL
+
+
+def reset_link(token: str, base: str | None = None) -> str:
+    """The token rides in the FRAGMENT (``#reset/…``): a browser never sends
+    a fragment to any server, so it stays out of access logs, proxies and
+    Referer headers. The page reads it, then takes it out of the address
+    bar."""
+    return f"{(base or site_url()).rstrip('/')}/#reset/{token}"
+
+
+def reset_message(link: str) -> tuple[str, str, str]:
+    """``(subject, text, html)`` for the reset email. Both parts — see
+    engine.mailer.message."""
+    import html as _html
+    subject = "Reset your Qellys Book password"
+    text = ("Someone asked to reset the password for the Qellys Book account "
+            "at this address.\n\n"
+            "If it was you, open this link within the hour to choose a new "
+            "password. It works once:\n\n"
+            f"{link}\n\n"
+            "If it was not you, ignore this email. Your password has not "
+            "changed, and nobody can change it without this link.\n\n"
+            "Qellys Book\n")
+    safe = _html.escape(link, quote=True)
+    html = ("<p>Someone asked to reset the password for the Qellys Book "
+            "account at this address.</p>"
+            "<p>If it was you, open this link within the hour to choose a new "
+            "password. It works once:</p>"
+            f'<p><a href="{safe}">Choose a new password</a></p>'
+            f"<p style=\"color:#666;font-size:13px\">{safe}</p>"
+            "<p>If it was not you, ignore this email. Your password has not "
+            "changed, and nobody can change it without this link.</p>"
+            "<p>Qellys Book</p>")
+    return subject, text, html
 
 
 def end_all_sessions(conn, user_id: int) -> int:
@@ -613,6 +765,9 @@ def delete_user(conn, user_id: int) -> None:
     conn.execute("DELETE FROM sessions WHERE user_id=?", (int(user_id),))
     have = {r[0] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "password_resets" in have:
+        # A live reset link is a credential, and it dies with the account.
+        conn.execute("DELETE FROM password_resets WHERE user_id=?", (int(user_id),))
     if "subscriptions" in have:
         conn.execute("DELETE FROM subscriptions WHERE user_id=?", (int(user_id),))
     # The streak game's tables (engine/streak.py) and tail-or-fade's
@@ -779,3 +934,39 @@ def export_user(conn, user_id: int) -> dict:
                  or mine.get("likes") or mine.get("tails")):
         out["public_feed"] = mine
     return out
+
+
+# --- the owner's hand-made reset link ----------------------------------------
+def _cli(argv=None) -> int:
+    """``python3 -m engine.accounts reset-link someone@example.com``
+
+    For the days email is not switched on (docs/EMAIL.md): somebody writes
+    to support saying they are locked out, and this prints a one-hour,
+    one-use link for that account. SEND IT ONLY TO THE ACCOUNT'S OWN
+    ADDRESS, never to whichever address the request came from: a "From"
+    line is easy to fake, and the link is the account.
+    """
+    import argparse
+    p = argparse.ArgumentParser(prog="python3 -m engine.accounts")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("reset-link", help="print a one-hour reset link for an account")
+    r.add_argument("email")
+    a = p.parse_args(argv)
+    conn = connect()
+    try:
+        e = normalize_email(a.email)
+        token = start_reset(conn, e)
+    finally:
+        conn.close()
+    if not token:
+        print(f"No link: there is no account for {e}, or it already has "
+              f"{RESET_PER_HOUR} unused links from the last hour.")
+        return 1
+    print(f"Reset link for {e} (works once, for {RESET_TTL // 60} minutes):\n")
+    print(f"  {reset_link(token)}\n")
+    print(f"Email it to {e} and nowhere else.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())

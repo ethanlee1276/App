@@ -444,6 +444,27 @@ first). Paste back anything that prints an error or looks off.
     Settling needs this season's box scores re-ingested once, so the
     kickers' and defenders' rows exist; the nightly ingest does it.
 
+26. **Confirm password and Forgot password** (2026-10-11, "add an option
+    for forget a password"). Sign-up asks for the password twice; sign-in,
+    sign-up and Account settings each have "Forgot password?". Nothing to
+    run for those. Two things to know:
+
+    * **Email is not switched on yet** (docs/EMAIL.md), so for now the
+      Forgot page tells people to write to support@qellysbook.com from
+      the address on their account. When one does, make them a link
+      (one hour, works once) and **email it to the account's own address
+      only**, never to a different address the request names:
+      ```
+      cd /srv/qellys && sudo -u qellys python3 -m engine.accounts reset-link someone@example.com
+      ```
+    * **Once the mail relay is set** (the `QB_SMTP_*` and `QB_MAIL_FROM`
+      settings, via `sudo ./deploy/setenv.sh`), the page emails the link
+      itself, with no step from you. To check which mode the live site is
+      in (`false` means support-email mode, `true` means it emails):
+      ```
+      curl -s http://127.0.0.1:8000/api/account/me; echo
+      ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -85,7 +85,9 @@ def test_every_card_carries_never_show_again_and_only_it_or_done_remembers():
     mb = _fn("tourMaybe")
     assert 'if (stored !== "done" && sessionStorage.getItem(TOUR_KEY) === "later") stored = "later";' in mb
     assert "wall: noTourViews()" in mb
-    assert 'function noTourViews() { return ["paywall", "signup", "checkout"]; }' in APP
+    # "reset" joined 2026-10-11: the Forgot password page, a form like
+    # sign-up, where a tour card over the box would be in the way.
+    assert 'function noTourViews() { return ["paywall", "signup", "reset", "checkout"]; }' in APP
     assert "const NO_TOUR_VIEWS" not in APP and "NO_TOUR_VIEWS.includes" not in APP, \
         "a const here is read by the view switch during boot, before it exists"
 

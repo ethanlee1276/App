@@ -16,6 +16,7 @@ below the line is done:
 | Opt-in, per account, per digest | `digest_optin` in accounts.db | done |
 | One-click unsubscribe, no sign-in | `/unsubscribe?t=…` | done |
 | The preview CLI | `python3 digest.py morning` | done |
+| Password reset email (2026-10-11) | `engine/accounts.reset_message`, `server._send_reset` | done; until a provider is set, the Forgot page sends people to support and the owner makes the link by hand (`python3 -m engine.accounts reset-link`) |
 | Actually sending | `engine/mailer.send` | **needs a provider** |
 
 Read the copy before anything else:
