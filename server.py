@@ -717,11 +717,12 @@ def _seclog(kind, outcome, ip=None, **kw):
 SUPPORT_EMAIL = "qellysbook@gmail.com"
 
 #: At most this many reset emails a day, all addresses together. The site
-#: sends through its own Gmail, which allows a few hundred messages a day;
-#: a script asking for links to every address it knows must not spend that
-#: and get the inbox suspended. Past the cap the page answers exactly as
-#: before and nothing is sent; the security log says why.
-RESET_MAIL_PER_DAY = 150
+#: sends through Resend's free plan (100 a day) or its own Gmail (a few
+#: hundred); a script asking for links to every address it knows must not
+#: spend that — the owner's crash alerts share it — or get the account
+#: suspended. Past the cap the page answers exactly as before and nothing
+#: is sent; the security log says why.
+RESET_MAIL_PER_DAY = 90
 _RESET_SENT: list = []
 _RESET_LOCK = threading.Lock()
 

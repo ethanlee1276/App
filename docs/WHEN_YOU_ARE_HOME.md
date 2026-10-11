@@ -444,82 +444,77 @@ first). Paste back anything that prints an error or looks off.
     Settling needs this season's box scores re-ingested once, so the
     kickers' and defenders' rows exist; the nightly ingest does it.
 
-26. **Make "Forgot password?" email people — the site's Gmail**
-    (2026-10-11, Ethan: "i have an email for the site. its
-    qellysbook@gmail.com. also we have to have a forgot a password
-    feture"). The Forgot page is built; it needs the site to be able to
-    send mail. Gmail does that with an **app password**: a 16-letter code
-    Google makes for one program, which is NOT your Gmail password and can
-    be deleted any time without touching the account. About 10 minutes.
+26. **Make "Forgot password?" email people** (2026-10-11, Ethan: "we
+    have to have a forgot a password feture"). The Forgot page is built
+    and the Gmail settings are on the box, but the test said **"Could not
+    reach smtp.gmail.com on port 587"**: DigitalOcean blocks the mail
+    ports (25, 465, 587) on newer accounts and often will not lift it. So
+    the site now also sends through **Resend**, an email service the site
+    talks to over normal HTTPS (port 443), which DigitalOcean does not
+    block. Free for up to 100 emails a day. About 10 minutes:
 
-    **A. Turn on 2-Step Verification** (Google only makes app passwords
-    for accounts that have it):
-    1. On your phone or computer, sign in to **qellysbook@gmail.com**.
-    2. Open **https://myaccount.google.com/security**.
-    3. Under "How you sign in to Google", tap **2-Step Verification** and
-       follow the steps (it texts a code to your phone). Finish until it
-       says it is **On**.
+    **A. The box has the new code.** The top line should read `Mail: send
+    through Resend` or something newer; if older, wait five minutes:
+    ```
+    git -C /srv/qellys log --oneline -1
+    ```
 
-    **B. Make the app password:**
-    1. Open **https://myaccount.google.com/apppasswords** (still signed in
-       as qellysbook@gmail.com). If it says the setting is not available,
-       2-Step Verification is not on yet — go back to A.
-    2. App name: type `Qellys site`, then **Create**.
-    3. Google shows 16 letters in a yellow box, like `abcd efgh ijkl mnop`.
-       Copy them. Do not paste them anywhere except step C5 below, and do
-       not send them to me. (Lost it? Delete it on that page and make a
-       new one.)
+    **B. Make the Resend account and connect the domain:**
+    1. Go to **https://resend.com**, sign up with qellysbook@gmail.com.
+    2. **Domains → Add Domain**, type `qellysbook.com`, then click
+       **Sign in to Cloudflare** and allow it. Resend adds its DNS records
+       to Cloudflare for you. Wait until the domain says **Verified**
+       (usually a few minutes; refresh the page).
+       No Cloudflare button? Choose manual setup: Resend lists 3–4
+       records. For each one, in Cloudflare → qellysbook.com → **DNS** →
+       **Add record**, copy the Type, Name and Value exactly, and leave
+       Proxy status as **DNS only** (grey cloud).
+    3. **API Keys → Create API Key**, name `qellys site`, permission
+       **Sending access**, then **Add**. Copy the key (it starts with
+       `re_`); Resend shows it once. Don't send it to me.
 
-    **C. Put it on the box** (`ssh` in first). One line at a time:
+    **C. Put it on the box** (`ssh` in), one line at a time:
     ```
     cd /srv/qellys
-    sudo ./deploy/setenv.sh QB_SMTP_HOST smtp.gmail.com
-    sudo ./deploy/setenv.sh QB_SMTP_PORT 587
-    sudo ./deploy/setenv.sh QB_SMTP_USER qellysbook@gmail.com
-    sudo ./deploy/setenv.sh QB_MAIL_FROM qellysbook@gmail.com
-    sudo ./deploy/setenv.sh QB_SMTP_PASS
-    ```
-    The last one asks `Value for QB_SMTP_PASS` and shows nothing while you
-    type: paste the 16 letters (spaces are fine) and press Enter.
-    Optional, and worth it: get an email when the site's service crashes:
-    ```
-    sudo ./deploy/setenv.sh QB_ALERT_EMAIL qellysbook@gmail.com
-    ```
-    Then restart so the site reads them:
-    ```
+    sudo ./deploy/setenv.sh QB_RESEND_KEY
+    sudo ./deploy/setenv.sh QB_MAIL_FROM noreply@qellysbook.com
+    sudo ./deploy/setenv.sh QB_MAIL_REPLY_TO qellysbook@gmail.com
     sudo systemctl restart qellys
     ```
+    The first one asks for the value and shows nothing while you type:
+    paste the `re_...` key and press Enter. Emails come from "Qellys Book
+    <noreply@qellysbook.com>", and anyone who hits Reply reaches
+    qellysbook@gmail.com. (The Gmail settings you already set can stay;
+    while QB_RESEND_KEY is set they are not used.)
 
-    **D. Test it** — send yourself one email (any inbox you can check):
+    **D. Test it** (your own inbox):
     ```
     cd /srv/qellys && sudo python3 -m engine.mailer test you@example.com
     ```
-    It should say `Sent to ... from Qellys Book <qellysbook@gmail.com>`.
-    If it says the login was refused, the app password was mistyped, or
-    the normal Gmail password was used — redo B and C5. If it says it
-    **could not reach smtp.gmail.com**, DigitalOcean is blocking outgoing
-    mail from the droplet (they do this on many accounts). Open a ticket:
-    DigitalOcean → Help → Support → "Please unblock outbound SMTP (port
-    587) on my droplet. It sends password-reset emails for my own site
-    through my Gmail account." When they say done, run the test again.
-    Check the inbox (and spam); the first one from a new sender sometimes
-    lands there.
-
-    **E. Try the real thing.** On the site: Log in → **Forgot password?**
-    → type your own account's email → **Email me a link**. The email comes
-    from "Qellys Book"; the link opens the site and asks for the new
-    password twice. To see the site knows mail is on (`true` = it emails):
+    It should say `Sent to ...`. If it says the domain is not verified,
+    wait for B2 to show Verified and run it again. Then on the site: Log in
+    → **Forgot password?** → your account's email → **Email me a link**.
+    To see the site knows mail is on (`"reset_by_email": true`):
     ```
     curl -s http://127.0.0.1:8000/api/account/me; echo
     ```
+    Optional: an email when the site's service crashes:
+    `sudo ./deploy/setenv.sh QB_ALERT_EMAIL qellysbook@gmail.com` then
+    restart.
 
-    Notes: the site sends at most 150 reset emails a day (well under
-    Gmail's limit, so a flood of requests cannot get the account
-    suspended) and at most 3 an hour to one address. The morning/nightly
-    digests stay OFF on Gmail on purpose — a mailing list through a
-    personal Gmail is how it gets suspended; they need a real provider
-    (docs/EMAIL.md). Until C is done, the Forgot page tells people to
-    email qellysbook@gmail.com, and you can make a link by hand:
+    **Rather send from the Gmail itself?** Ask DigitalOcean (Help →
+    Support): "Please unblock outbound SMTP (port 587) on my droplet. It
+    sends password-reset emails for my own site through my Gmail
+    account." If they do, switch back with
+    `sudo ./deploy/setenv.sh --unset QB_RESEND_KEY`,
+    `sudo ./deploy/setenv.sh QB_MAIL_FROM qellysbook@gmail.com`, restart,
+    and run the test in D.
+
+    Notes: at most 90 reset emails go out a day (under Resend's free 100)
+    and 3 an hour to one address. The morning/nightly digests stay off on
+    Resend's free plan and on Gmail; a mailing list would use up the
+    day's password resets. Until C is done, the Forgot page tells people
+    to email qellysbook@gmail.com, and you can make a link by hand:
     ```
     cd /srv/qellys && sudo -u qellys python3 -m engine.accounts reset-link someone@example.com
     ```

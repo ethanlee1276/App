@@ -16,7 +16,7 @@ below the line is done:
 | Opt-in, per account, per digest | `digest_optin` in accounts.db | done |
 | One-click unsubscribe, no sign-in | `/unsubscribe?t=…` | done |
 | The preview CLI | `python3 digest.py morning` | done |
-| Password reset email (2026-10-11) | `engine/accounts.reset_message`, `server._send_reset` | done; sends through the site's Gmail once its app password is on the box (runbook step 26) |
+| Password reset email (2026-10-11) | `engine/accounts.reset_message`, `server._send_reset` | done; sends through Resend (HTTPS) once its key is on the box, or the site's Gmail if DigitalOcean unblocks SMTP (runbook step 26) |
 | Actually sending | `engine/mailer.send` | **needs a provider** |
 
 Read the copy before anything else:
@@ -26,6 +26,24 @@ Read the copy before anything else:
     python3 digest.py morning --locked     # what a signed-out reader gets
 
 ---
+
+## Resend, over HTTPS — what the box actually sends through (2026-10-11)
+
+The first test of the Gmail relay on the droplet: "Could not reach
+smtp.gmail.com on port 587". DigitalOcean blocks outbound SMTP (25, 465,
+587) on newer accounts. Resend's API is HTTPS on port 443, which the box
+already uses for every feed, so `engine/mailer` sends through it whenever
+`QB_RESEND_KEY` is set (it wins over the SMTP settings):
+
+    QB_RESEND_KEY=re_…            # resend.com → API Keys, Sending access
+    QB_MAIL_FROM=noreply@qellysbook.com   # on the domain Resend verified
+    QB_MAIL_REPLY_TO=qellysbook@gmail.com # replies reach the site's inbox
+
+The domain is verified in Resend with its "Sign in to Cloudflare" button,
+which writes the SPF/DKIM records into the qellysbook.com zone; Resend
+sends only from a verified domain, never from @gmail.com. The free plan
+is 100 messages a day, so `bulk_ok()` is False here too and reset emails
+are capped at 90 a day. Step-by-step: runbook step 26.
 
 ## The site's Gmail — one-to-one mail only (2026-10-11)
 

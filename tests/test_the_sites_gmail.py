@@ -45,7 +45,8 @@ class _env:
         self.values = values
 
     def __enter__(self):
-        self.saved = {k: os.environ.get(k) for k in M.REQUIRED + (M.ENV_PORT,)}
+        self.saved = {k: os.environ.get(k)
+                      for k in M.REQUIRED + (M.ENV_PORT, M.ENV_RESEND, M.ENV_REPLY_TO)}
         for k in self.saved:
             os.environ.pop(k, None)
         os.environ.update(self.values)
@@ -98,7 +99,7 @@ def test_the_digests_never_go_out_through_gmail():
 def test_reset_emails_stop_at_a_daily_cap():
     import server
     from engine import accounts as A
-    assert server.RESET_MAIL_PER_DAY <= 200, "well under a personal Gmail's few hundred a day"
+    assert server.RESET_MAIL_PER_DAY < 100, "under Resend's free 100 a day, and Gmail's few hundred"
     sent = []
     real_send, real_cap = M.send, server.RESET_MAIL_PER_DAY
     M.send = lambda to, subject, text, html="": sent.append(to)
@@ -169,10 +170,94 @@ def test_the_settings_script_refuses_a_mistyped_mail_setting():
     assert run("QB_SMTP_PORT", "five-eight-seven").returncode != 0
     assert run("QB_SMTP_USER", "qellysbook").returncode != 0
     assert run("QB_MAIL_FROM", "qellysbook").returncode != 0
+    assert run("QB_RESEND_KEY", "sk_live_nope").returncode != 0, "a Resend key starts with re_"
+    assert run("QB_MAIL_REPLY_TO", "gmail").returncode != 0
     for k, v in (("QB_SMTP_HOST", "smtp.gmail.com"), ("QB_SMTP_PORT", "587"),
                  ("QB_SMTP_USER", SITE), ("QB_MAIL_FROM", SITE)):
         assert run(k, v).returncode == 0, k
     assert open(env_file).read().count("=") == 4
+
+
+RESEND = {"QB_RESEND_KEY": "re_test_key_123", "QB_MAIL_FROM": "noreply@qellysbook.com",
+          "QB_MAIL_REPLY_TO": "qellysbook@gmail.com"}
+
+
+class _Resp:
+    def __init__(self):
+        self.read = lambda: b'{"id":"abc"}'
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+
+def test_resend_takes_over_when_its_key_is_set():
+    """The box could not reach smtp.gmail.com: DigitalOcean blocks the mail
+    ports. Resend's API is HTTPS on port 443, which nothing blocks."""
+    with _env({**GMAIL, **RESEND}):
+        assert M.transport() == "resend" and M.configured()
+        assert not M.is_gmail(), "the Gmail settings are ignored while Resend sends"
+        assert not M.bulk_ok(), "Resend's free plan is 100 a day: never a mailing list"
+    with _env({"QB_RESEND_KEY": "re_x"}):
+        assert M.missing() == ["QB_MAIL_FROM"], "only the from address is still needed"
+    with _env(GMAIL):
+        assert M.transport() == "smtp"
+
+
+def test_the_resend_request_carries_the_whole_message_and_never_logs_the_key():
+    import json
+    seen = []
+
+    def opener(req, timeout=30):
+        seen.append((req.full_url, req.get_method(), dict(req.header_items()),
+                     json.loads(req.data), timeout))
+        return _Resp()
+
+    with _env(RESEND):
+        M._send_resend("fan@example.com", "Reset", "the text", "<p>the html</p>", opener=opener)
+    url, method, headers, body, timeout = seen[0]
+    assert url == "https://api.resend.com/emails" and method == "POST" and timeout == 30
+    assert headers["Authorization"] == "Bearer re_test_key_123"
+    assert headers["User-agent"].startswith("qellysbook"), "not the bare Python agent"
+    assert body == {"from": "Qellys Book <noreply@qellysbook.com>", "to": ["fan@example.com"],
+                    "subject": "Reset", "text": "the text", "html": "<p>the html</p>",
+                    "reply_to": "qellysbook@gmail.com"}, body
+
+
+def test_a_resend_refusal_says_what_and_never_the_key():
+    import urllib.error
+
+    def refuse(req, timeout=30):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {},
+                                     io.BytesIO(b'{"name":"validation_error",'
+                                                b'"message":"The qellysbook.com domain is not verified."}'))
+    with _env(RESEND):
+        try:
+            M._send_resend("fan@example.com", "s", "t", opener=refuse)
+            raise AssertionError("no error raised")
+        except M.ResendError as exc:
+            assert exc.status == 403 and exc.name == "validation_error"
+            assert "re_test_key_123" not in str(exc)
+        real = M._send_resend
+        try:
+            def unverified(*_a, **_k):
+                return real(*_a, opener=refuse, **_k)
+            M._send_resend = unverified
+            out = io.StringIO()
+            with redirect_stdout(out):
+                assert M._cli(["test", "ethan@example.com"]) == 1
+            assert "Verified" in out.getvalue() and "noreply@qellysbook.com" in out.getvalue()
+        finally:
+            M._send_resend = real
+
+
+def test_replies_go_to_the_sites_inbox():
+    with _env({**GMAIL, "QB_MAIL_REPLY_TO": "qellysbook@gmail.com"}):
+        assert M.message("fan@example.com", "s", "t")["Reply-To"] == "qellysbook@gmail.com"
+    with _env(GMAIL):
+        assert M.message("fan@example.com", "s", "t")["Reply-To"] is None
 
 
 def test_every_page_publishes_the_one_inbox():
@@ -184,10 +269,12 @@ def test_every_page_publishes_the_one_inbox():
         assert "support@qellysbook.com" not in text and "privacy@qellysbook.com" not in text, rel
 
 
-def test_the_privacy_page_names_google_for_the_reset_email():
+def test_the_privacy_page_names_who_carries_the_reset_email():
     privacy = _read("web", "privacy.html")
-    i = privacy.index("<b>Google LLC</b>")
-    assert "Forgot password" in privacy[i:i + 400] and "Gmail" in privacy[i:i + 400]
+    i = privacy.index("<b>Resend</b>")
+    assert "Forgot password" in privacy[i:i + 400]
+    j = privacy.index("<b>Google LLC</b>")
+    assert "Forgot password" in privacy[j:j + 400] and "Gmail" in privacy[j:j + 400]
 
 
 if __name__ == "__main__":

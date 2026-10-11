@@ -177,8 +177,10 @@ in one transaction writes the new verifier, ends every session, deletes
 every other link for the account, and signs this browser in. Changing the
 password or deleting the account also deletes outstanding links.
 
-The relay is the site's Gmail, qellysbook@gmail.com, with an app password
-(docs/EMAIL.md, runbook step 26); at most 150 reset emails go out a day.
+The relay is Resend over HTTPS (DigitalOcean blocks the SMTP ports), from
+noreply@qellysbook.com with replies to qellysbook@gmail.com, or the site's
+Gmail if SMTP is ever unblocked (docs/EMAIL.md, runbook step 26); at most
+90 reset emails go out a day.
 With no mail relay configured, `forgot` sends nothing and says so, and the
 page tells the reader to write to qellysbook@gmail.com from the address on
 the account. The owner then runs

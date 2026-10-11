@@ -46,6 +46,28 @@ ENV_FROM = "QB_MAIL_FROM"
 
 REQUIRED = (ENV_HOST, ENV_USER, ENV_PASS, ENV_FROM)
 
+#: RESEND, OVER HTTPS (2026-10-11). The first real test of the Gmail relay
+#: on the box ended in "Could not reach smtp.gmail.com on port 587":
+#: DigitalOcean blocks the mail ports (25, 465, 587) on newer accounts and
+#: often will not lift it. An HTTPS API on port 443 — the port every odds
+#: feed already uses — cannot be blocked that way. With QB_RESEND_KEY set,
+#: every message goes through https://api.resend.com/emails instead of
+#: SMTP, from an address on qellysbook.com (Resend sends only for a domain
+#: it has verified), with replies going to QB_MAIL_REPLY_TO.
+ENV_RESEND = "QB_RESEND_KEY"
+ENV_REPLY_TO = "QB_MAIL_REPLY_TO"
+RESEND_URL = "https://api.resend.com/emails"
+RESEND_REQUIRED = (ENV_RESEND, ENV_FROM)
+
+
+class ResendError(RuntimeError):
+    """Resend refused the message. Carries the HTTP status and Resend's own
+    error name — never the key."""
+
+    def __init__(self, status: int, name: str, detail: str = ""):
+        super().__init__(f"Resend refused the message ({status} {name}) {detail}".strip())
+        self.status, self.name, self.detail = status, name, detail
+
 #: THE SITE'S OWN GMAIL (Ethan, 2026-10-11: "i have an email for the site.
 #: its qellysbook@gmail.com"). Gmail's SMTP server takes an APP PASSWORD —
 #: sixteen letters Google makes once 2-Step Verification is on — never the
@@ -59,9 +81,15 @@ GMAIL_HOSTS = ("smtp.gmail.com", "smtp.googlemail.com")
 SENDER_NAME = "Qellys Book"
 
 
+def transport() -> str:
+    """``"resend"`` when its key is set (it wins over SMTP), else ``"smtp"``."""
+    return "resend" if os.environ.get(ENV_RESEND, "").strip() else "smtp"
+
+
 def missing() -> list:
     """Which settings are absent. Names only — never values."""
-    return [name for name in REQUIRED if not os.environ.get(name, "").strip()]
+    need = RESEND_REQUIRED if transport() == "resend" else REQUIRED
+    return [name for name in need if not os.environ.get(name, "").strip()]
 
 
 def configured() -> bool:
@@ -69,12 +97,20 @@ def configured() -> bool:
 
 
 def is_gmail() -> bool:
-    return os.environ.get(ENV_HOST, "").strip().lower() in GMAIL_HOSTS
+    return (transport() == "smtp"
+            and os.environ.get(ENV_HOST, "").strip().lower() in GMAIL_HOSTS)
 
 
 def bulk_ok() -> bool:
-    """Whether a mailing to many people may go out — never through Gmail."""
-    return configured() and not is_gmail()
+    """Whether a mailing to many people may go out: only through an SMTP
+    provider. Never Gmail (a few hundred a day, and a suspension takes the
+    site's inbox with it) and never Resend's free plan (100 a day — a
+    mailing would spend the day's password resets)."""
+    return configured() and transport() == "smtp" and not is_gmail()
+
+
+def reply_to() -> str:
+    return os.environ.get(ENV_REPLY_TO, "").strip()
 
 
 def sender() -> str:
@@ -110,6 +146,8 @@ def message(to: str, subject: str, text: str, html: str = "") -> EmailMessage:
     msg["Subject"] = subject
     msg["From"] = sender() or "qellysbook@invalid"
     msg["To"] = to
+    if reply_to():
+        msg["Reply-To"] = reply_to()
     # A List-Unsubscribe header is what puts the one-click control in
     # Gmail's own chrome, which is where people actually look for it —
     # and a reader who finds it there does not press Report spam.
@@ -144,6 +182,8 @@ def send(to: str, subject: str, text: str, html: str = "") -> None:
         raise RuntimeError(
             "email is not configured — set " + ", ".join(gaps)
             + " (see docs/EMAIL.md). Nothing was sent.")
+    if transport() == "resend":
+        return _send_resend(to, subject, text, html)
     host = os.environ[ENV_HOST].strip()
     port = int(os.environ.get(ENV_PORT, "587").strip() or 587)
     user = os.environ[ENV_USER].strip()
@@ -162,6 +202,48 @@ def send(to: str, subject: str, text: str, html: str = "") -> None:
         s.starttls(context=ctx)
         s.login(user, password)
         s.send_message(msg)
+
+
+def resend_payload(to: str, subject: str, text: str, html: str = "") -> dict:
+    """The JSON Resend takes: the same message `message()` builds for SMTP —
+    both parts, the reply address, the one-click unsubscribe header."""
+    body = {"from": sender(), "to": [to], "subject": subject, "text": text}
+    if html:
+        body["html"] = html
+    if reply_to():
+        body["reply_to"] = reply_to()
+    m = _unsub_from(text)
+    if m:
+        body["headers"] = {"List-Unsubscribe": f"<{m}>",
+                           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+    return body
+
+
+def _send_resend(to: str, subject: str, text: str, html: str = "", opener=None) -> None:
+    """POST one message to Resend. Raises ResendError on a refusal (status
+    and Resend's error name, never the key) and lets a network failure
+    through as the OSError it is."""
+    import json
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(
+        RESEND_URL, method="POST",
+        data=json.dumps(resend_payload(to, subject, text, html)).encode("utf-8"),
+        headers={"Authorization": "Bearer " + os.environ[ENV_RESEND].strip(),
+                 "Content-Type": "application/json",
+                 # Resend's API sits behind Cloudflare, which turns away a
+                 # bare "Python-urllib" agent on some days.
+                 "User-Agent": "qellysbook-mailer/1.0"})
+    try:
+        with (opener or urllib.request.urlopen)(req, timeout=30) as r:
+            r.read()
+    except urllib.error.HTTPError as e:
+        try:
+            said = json.loads(e.read() or b"{}")
+        except ValueError:
+            said = {}
+        raise ResendError(e.code, str(said.get("name") or "error"),
+                          str(said.get("message") or "")[:200]) from None
 
 
 # --- the owner's test send -----------------------------------------------------
@@ -189,6 +271,16 @@ def _cli(argv=None) -> int:
         send(args[1], "Qellys Book: test email",
              "This is a test from the Qellys Book server. If you can read "
              "it, password reset emails will reach people too.\n")
+    except ResendError as exc:
+        if exc.status in (401, 403) and "domain" not in exc.detail.lower():
+            print("Resend refused the API key. Make a new one at resend.com → "
+                  "API Keys (Sending access) and set it again with "
+                  "sudo ./deploy/setenv.sh QB_RESEND_KEY.")
+        else:
+            print(f"Resend refused the message ({exc.status} {exc.name}): {exc.detail} "
+                  f"— QB_MAIL_FROM must be an address on a domain Resend shows as "
+                  f"Verified (e.g. noreply@qellysbook.com).")
+        return 1
     except smtplib.SMTPAuthenticationError:
         print("The mail server refused the login. For Gmail, QB_SMTP_PASS must "
               "be an APP PASSWORD (16 letters from myaccount.google.com/apppasswords), "
@@ -199,6 +291,10 @@ def _cli(argv=None) -> int:
               f"({type(exc).__name__}). Check QB_MAIL_FROM is the Gmail address itself.")
         return 1
     except OSError as exc:
+        if transport() == "resend":
+            print(f"Could not reach api.resend.com ({type(exc).__name__}). Check the "
+                  f"box can reach the internet: curl -sI https://api.resend.com")
+            return 1
         # No answer at all. DigitalOcean blocks the mail ports (25, 465,
         # 587) on many accounts, and from the box that looks exactly like
         # this: a timeout or a refused connection, never a refused login.
@@ -206,7 +302,8 @@ def _cli(argv=None) -> int:
               f"{os.environ.get(ENV_PORT, '587').strip() or '587'} ({type(exc).__name__}). "
               f"If the host and port are right (Gmail: smtp.gmail.com, 587), the "
               f"hosting company is blocking outgoing mail: ask DigitalOcean support "
-              f"to unblock SMTP for this droplet (runbook step 26).")
+              f"to unblock SMTP for this droplet, or send through Resend instead "
+              f"(runbook step 26).")
         return 1
     except Exception as exc:                                  # noqa: BLE001
         print(f"Not sent: {type(exc).__name__}.")
