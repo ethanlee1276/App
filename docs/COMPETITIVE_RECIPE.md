@@ -159,9 +159,9 @@ than bankroll management.
 | Correlation between legs, clash detection | HAVE | `engine/correlation.py`, `engine/parlays.py` |
 | Correlation priors backtested against our own history | HAVE | task #52 |
 | Risk of ruin | HAVE | `engine/ledger.py` |
-| Drawdown-aware staking | PARTIAL | drawdown is tracked and wired into the parlay module; it does not constrain the singles stake vector |
+| Drawdown-aware staking | PARTIAL | drawdown is tracked and wired into the parlay module and, via `staking.apply_drawdown`, the MLB, NBA and NFL builds' singles; not the CFB build |
 | Covariance matrix across *simultaneous* positions | MISSING | the study's sharpest quant-finance gap: no consumer tool does this |
-| Per-game / per-player / per-day exposure caps, auto-enforced | PARTIAL | one-per-slate cap exists for parlays (task #49); no per-player or per-day cap |
+| Per-game / per-player / per-day exposure caps, auto-enforced | PARTIAL | `correlation.apply_exposure_caps` holds singles to 5u per game and 15u per slate in the NFL, MLB, NBA and CFB pipelines; one-per-slate cap for parlays (task #49); no per-player cap |
 | Shrinkage of edge estimates | PARTIAL | the humility clamp tempers edge; it is not a formal shrinkage estimator |
 | Tax lots / reporting | MISSING | |
 
@@ -269,7 +269,7 @@ piece below.
 
 ### BUILT 2026-08-03 — per-game Monte Carlo (`engine/mlb/gamesim.py`)
 
-The engine and its gate. NOT yet wired into pricing — see below.
+The engine and its gate. Not wired into pricing when it landed; wired 2026-08-05 — see below.
 
 Props are still priced from closed-form distributions, and this does not
 change that or try to. What it adds is the **joint**: the chance two props in
@@ -545,9 +545,11 @@ dials against real harvested book closes instead and gets AUC 0.468 and
 (lines ~206-225) already says as much and declines to add a guard, on the
 grounds that a guard here would only hide the upstream question being
 wrong. `formbook.py` is the fix path (`engine.propcal` made the same
-repair for calibrations) but is not yet wired into `fit()` — it exists
-only as a standalone measurement script, imported nowhere outside its own
-test. Until it is, treat "recency dial: BUILT" as true for `receptions`
+repair for calibrations) but is not wired into `formfit.fit()`. Other fitters
+do import it (`engine/nflfit.py`, `engine/yardagefit.py`, `engine/tdbook.py`,
+`engine/devigfit.py`, `engine/ripplefit.py` — for its feature logs and
+`game_dates`), so it is no longer a standalone script, but nothing applies
+its AUC result to the recency dial. Until something does, treat "recency dial: BUILT" as true for `receptions`
 and `pass_yds` and unproven for `rush_yds`/`rec_yds`.
 
 ### BUILT 2026-08-03 — player memory (`engine/playerfit.py`)
