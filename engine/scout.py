@@ -40,6 +40,7 @@ missing and a flag needing a missing field simply does not fire):
     missed_last           he did not play his team's previous game
     hometown              a road game within 50 miles of where he was born
                           (engine/hometown)
+    spots                 the SPOTS that hold for this pick (engine/spots)
 
 Standard library only. Pure: no I/O.
 """
@@ -109,6 +110,41 @@ FLAGS = {
 #: targets is a thin-volume over (the post-mortem's rule).
 THIN_TARGET_SHARE = 0.15
 
+#: SPOTS (Ethan, 2026-10-11: "what other things are there like this we can
+#: track for players" — then, of the list, "all of it"). The situations
+#: around a game, each defined in engine/spots.py before anything was
+#: measured, and each flagged on BOTH sides, as the hometown flags are: the
+#: occasion can cut either way, and the five-season replay decides which
+#: (if either) is real. The card shows an unproven spot as a plain line
+#: ("Spot: primetime"), not a caution — it is a fact about the game, and
+#: only history can make it a reason to hesitate.
+SPOTS = {
+    "primetime": "a primetime game",
+    "extra_rest": "a game off extra rest (a bye, or the long week after a Thursday game)",
+    "long_trip": "a road game two or more time zones from home",
+    "body_clock": "a game that kicks off at 10am or earlier by his team's home clock",
+    "div_rematch": "a second meeting this season with a division rival",
+    "new_coach": "one of his team's first four games under a new head coach",
+    "altitude": "a road game at altitude",
+    "surface_switch": "a road game on a different surface from his home field",
+    "late_season": "a late-season game for a team that has clinched or is eliminated",
+    "revenge": "his first game against a team he used to play for",
+    "contract_year": "the last season of his contract",
+    "milestone": "a late-season chase of a round number",
+}
+#: What a reader sees for each spot when it is not (yet) a caution.
+SPOT_TITLES = {
+    "primetime": "Primetime", "extra_rest": "Extra rest", "long_trip": "Long trip",
+    "body_clock": "Body clock", "div_rematch": "Division rematch", "new_coach": "New head coach",
+    "altitude": "Altitude", "surface_switch": "Different surface", "late_season": "Late season",
+    "revenge": "Revenge game", "contract_year": "Contract year", "milestone": "Milestone chase",
+}
+for _code, _what in SPOTS.items():
+    FLAGS[f"{_code}_over"] = f"an over in {_what}"
+    FLAGS[f"{_code}_under"] = f"an under in {_what}"
+#: Every flag a spot raises, and the spot each belongs to.
+SPOT_FLAGS = {f"{c}_{side}": c for c in SPOTS for side in ("over", "under")}
+
 #: COLLEGE'S NUMBERS (Ethan, 2026-10-09: "look at every single tool ... we
 #: added for NFL and add it for college football"). Written before any
 #: college measurement. College totals run about ten points above the
@@ -177,12 +213,13 @@ def _cv(xs):
 def situation(market: str, side: str, line=None, position: str = "", values=None,
               game_spread=None, home: bool | None = None, total=None, wind=None, outdoor=None,
               weekday=None, games_season=None, missed_last=None,
-              tgt_share=None, tgt_rank=None, league: str = "nfl", hometown=None) -> dict:
+              tgt_share=None, tgt_rank=None, league: str = "nfl", hometown=None, spots=None) -> dict:
     """The situation from the pick and its game. ``values`` = his results in
     this market, NEWEST FIRST (the shape every row and the history carry).
     ``tgt_share`` is his share of his team's targets this season and
     ``tgt_rank`` his place among its targets (1 = most), when the usage
-    read has them. ``league`` picks the thresholds (LEAGUE)."""
+    read has them. ``league`` picks the thresholds (LEAGUE). ``spots`` are
+    the SPOTS that hold for this pick (engine/spots)."""
     vals = [v for v in (values or []) if v is not None]
     sp = team_spread(game_spread, home)
     return {"market": market, "side": str(side or "").upper(), "line": line,
@@ -193,7 +230,8 @@ def situation(market: str, side: str, line=None, position: str = "", values=None
             "prior5": _avg(vals[3:8]) if len(vals) >= 6 else None,
             "games_season": games_season if games_season is not None else len(vals),
             "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank,
-            "league": league or "nfl", "hometown": bool(hometown)}
+            "league": league or "nfl", "hometown": bool(hometown),
+            "spots": sorted(c for c in (spots or ()) if c in SPOTS)}
 
 
 def flags(s: dict) -> list[str]:
@@ -256,6 +294,12 @@ def flags(s: dict) -> list[str]:
             out.add("hometown_over")
         if under:
             out.add("hometown_under")
+    if m in (VOLUME | SCORING):
+        for code in s.get("spots") or ():
+            if over:
+                out.add(f"{code}_over")
+            if under:
+                out.add(f"{code}_under")
     rank, share = s.get("tgt_rank"), s.get("tgt_share")
     if over and m in RECEIVING and rank is not None and share is not None \
             and int(rank) > 2 and float(share) < t("THIN_TARGET_SHARE"):

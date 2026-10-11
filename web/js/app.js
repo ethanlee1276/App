@@ -6157,9 +6157,15 @@ function renderIncentives() {
         ${r.need > 0 ? `needs ${r.need.toLocaleString()} in ${plural(r.games_left, "game")}` : "done"}</span>
       <span style="font-weight:700">${money(r.bonus_usd ?? 0)}</span>
       <span class="chip" style="color:${tone(r.status)}">${escapeHtml(r.status || "")}</span>
+      ${/^https?:\/\//.test(r.source || "") ? `<a href="${safeHref(r.source)}" target="_blank" rel="noopener noreferrer">source</a>` : ""}
     </div>`).join("") : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
       ${escapeHtml(inc.note || "No incentive chases on file.")}</p>`;
+  /* MILESTONE WATCH: the automatic half — every player chasing a round
+     number down the stretch (1,000 yards, 100 catches…), from our logs. */
+  const miles = (inc.milestones || []).map((r) => `
+    <div class="rec-row"><span class="chip">${escapeHtml(r.team || "")}</span>
+      <b>${escapeHtml(r.player || "")}</b> ${escapeHtml(r.note || "")}</div>`).join("");
   host.innerHTML = `
     <div class="section-title">Incentive watch
       <span class="sub">— contract money on the line down the stretch. Each
@@ -6167,7 +6173,10 @@ function renderIncentives() {
       distance, and his real per-game pace — because a team feeds a player
       who is close, and the books are slow to price that. Picks touching a
       live chase say so on their card.</span></div>
-    <div class="card" style="padding:0">${body}</div>`;
+    <div class="card" style="padding:0">${body}</div>${miles ? `
+    <div class="section-title">Milestone watch
+      <span class="sub">— a few games from a round number, at about their pace</span></div>
+    <div class="card" style="padding:0">${miles}</div>` : ""}`;
 }
 
 /* ============================================================
@@ -10613,7 +10622,14 @@ function obWhyHTML(r) {
      would hesitate in, said plainly, and — once the record has proven a
      flag over-claims — what that did to the number. */
   const scout = (r.scout_notes || []).map((t) => `<li><b>Scout:</b> ${escapeHtml(t)}</li>`).join("")
-    + (r.ctx_note ? `<li><b>Our record:</b> ${escapeHtml(r.ctx_note)}</li>` : "");
+    + (r.ctx_note ? `<li><b>Our record:</b> ${escapeHtml(r.ctx_note)}</li>` : "")
+    /* SPOTS (engine/spots; Ethan, 2026-10-11: "all of it"): primetime, a
+       revenge game, a contract year… facts about the game, not cautions,
+       until history proves one — then it moves to the Scout lines above. */
+    + (r.scout_spots || []).map((t) => `<li><b>Spot:</b> ${escapeHtml(t)}</li>`).join("")
+    + (r.milestone_note ? `<li><b>Milestone:</b> ${escapeHtml(r.milestone_note)}</li>` : "")
+    + (r.incentive_note ? `<li><b>Incentive:</b> ${escapeHtml(r.incentive_note)}${r.incentive_source
+      ? ` · <a href="${safeHref(r.incentive_source)}" target="_blank" rel="noopener noreferrer">the report</a>` : ""}</li>` : "");
   return checks || lines || scout ? `<details class="td-why"><summary>Why?${
     (r.scout_notes || []).length ? ` · ${r.scout_notes.length} caution${r.scout_notes.length === 1 ? "" : "s"}` : ""}</summary><ul>${checks}${lines}${scout}</ul></details>` : "";
 }

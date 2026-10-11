@@ -1305,12 +1305,15 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         _hc = _hist_connect()
         try:
             inc = incentives.report(_hc)
+            # …and the automatic half: every player chasing a round number
+            # down the stretch (engine/spots' milestones), from our own logs.
+            inc["milestones"] = incentives.milestones(_hc)
         finally:
             _hc.close()
         incentives.decorate(results, inc.get("entries") or [])
         out["incentives"] = inc
     except Exception:                              # noqa: BLE001
-        out["incentives"] = {"entries": [], "note": ""}
+        out["incentives"] = {"entries": [], "milestones": [], "note": ""}
     # The playoff picture — the incentive tracker's mirror. Clinched
     # teams rest, eliminated teams shut down, and an ANNOUNCED rest flips
     # matching props to Pass before the journal or the parlay screen can

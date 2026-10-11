@@ -14,7 +14,10 @@ TWO JOBS, kept apart on purpose.
    team expected to trail, his first game back, a line set above his recent
    form…) and their sentences, drawn on the card under "Why?". That is
    information a reader weighs, the note a football person would write, and
-   it moves no number.
+   it moves no number. The SPOTS (engine/spots: primetime, a revenge game,
+   a contract year…) ride on the card as plain "Spot:" lines, not
+   cautions, until history or the record proves one; a milestone chase and
+   a contract incentive on file (engine/incentives) get a line each.
 
 2. THE CORRECTION (``fit`` / ``apply``) — a flag moves a number only once
    the graded record has shown, OUT OF SAMPLE, that picks carrying it hit
@@ -209,16 +212,33 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nf
     prev = [g for g in by_team.get(team, []) if g["_d"] < gd and g.get("season") == season]
     missed = bool(prev) and games_season > 0 and prev[-1]["game_id"] not in played
     position = next((r.get("position") for r in before if r.get("position")), "")
-    mi = None
+    mi, here = None, {}
     if sport == "nfl":
+        from . import contracts as CT
         from . import hometown as HT
+        from . import spots as SP
         mi = HT.hometown_game(HT.lookup(HT.load(), pick["player"], position), team, game["home"],
                               neutral=(season, _week(game.get("period")), game["home"]) in HT.neutral_keys())
+        sched = SP.load_schedule()
+        sg = sched.game(season, _week(game.get("period")), game["home"], game.get("away")) if sched.rows else None
+        if sg:
+            # His games before this one, oldest first, as (team, opponent).
+            seen, seq = set(), []
+            for r in reversed(before):
+                g0 = games.get(r["game_id"])
+                if g0 and r["game_id"] not in seen:
+                    seen.add(r["game_id"])
+                    seq.append((r["team"], g0["away"] if r["team"] == g0["home"] else g0["home"]))
+            seq.append((team, game["away"] if team == game["home"] else game["home"]))
+            here, _chase = SP.player_spots(
+                sched, sg, team, player=pick["player"], position=position, market=pick["market"],
+                games=seq, i=len(seq) - 1, contracts=CT.load(), staff=SP.staff_for(season),
+                values=[r["value"] for r in before if r["market"] == pick["market"] and r.get("season") == season])
     s = SC.situation(pick["market"], pick.get("side") or "", line=pick.get("line"), position=position,
                      values=vals, game_spread=game.get("spread"), home=(team == game["home"]),
                      total=game.get("total"), wind=game.get("wind"), outdoor=_outdoor(game.get("roof")),
                      weekday=None if game.get("_approx") else gd.weekday(), games_season=games_season,
-                     missed_last=missed, league=sport, hometown=mi is not None)
+                     missed_last=missed, league=sport, hometown=mi is not None, spots=here)
     s["team"], s["game_id"] = team, game["game_id"]
     if game.get("home_score") is not None and game.get("away_score") is not None:
         mine_pts = game["home_score"] if team == game["home"] else game["away_score"]
@@ -244,6 +264,18 @@ def _game_for(row: dict, games: list) -> dict | None:
         if team in (g.get("home"), g.get("away")) and (not opp or opp in (g.get("home"), g.get("away"))):
             return g
     return None
+
+
+def _history():
+    """The history database, read-only, for the board's spots (an empty
+    in-memory one when it is not there, so a fresh clone builds)."""
+    try:
+        from . import db
+        if Path(db.DEFAULT_DB).exists():
+            return ro(db.DEFAULT_DB)
+    except Exception:                                         # noqa: BLE001
+        pass
+    return sqlite3.connect(":memory:")
 
 
 def _weekday(g: dict):
@@ -285,6 +317,38 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
     # Hometown games (engine/hometown): NFL only, read from the saved table.
     from . import hometown as HT
     towns = HT.load() if sport == "nfl" else {}
+    # Spots (engine/spots; Ethan, 2026-10-11: "all of it"): NFL only — the
+    # schedule's game spots, revenge games and milestone chases from his
+    # stored logs, contract years from the saved table. An unproven spot is
+    # a line on the card ("Spot: primetime — kicks off 8:20pm Eastern"),
+    # never a caution: only history (or the record) can make it one.
+    from . import scouthist
+    from . import spots as SP
+    sched = SP.load_schedule() if sport == "nfl" else SP.Schedule([])
+    deals, plays, staff, money = {}, {}, {}, []
+    if sport == "nfl":
+        from . import contracts as CT
+        from . import incentives
+        deals = CT.load()
+        h = _history()
+        try:
+            if sched.rows:
+                this = max(x["season"] for x in sched.rows)
+                staff = SP.staff_for(this - 1, this)
+                plays = SP.player_history(h, {r.get("player") for r in rows}, since=this - 6)
+            # Contract incentives on file (engine/incentives), on the card
+            # with the report's link — a reason, never a number.
+            try:
+                money = incentives.report(h).get("entries") or []
+            except Exception:                                 # noqa: BLE001
+                money = []
+        finally:
+            h.close()
+    proven_h = scouthist.load(sport=sport)
+    ks = (load().get(sport) or {}).get("flags") or {}
+
+    def proven(code, market, side):
+        return scouthist.shift_for([code], market, side, proven_h)[0] < 0 or (ks.get(code) or {}).get("k", 1.0) < 1.0
     n = 0
     for r in rows:
         if r.get("kind") == "game" or not r.get("player") or not r.get("market"):
@@ -296,6 +360,13 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
         lw, tw = last_week.get(r.get("player")), team_week.get(team)
         town = HT.lookup(towns, r["player"], r.get("position")) if towns and g else None
         mi = HT.hometown_game(town, team, g.get("home"), neutral=bool(g.get("neutral_site"))) if town else None
+        here, chase = {}, None
+        sg = sched.game(home=g.get("home"), away=g.get("away"), day=g.get("date")) if g and sched.rows else None
+        if sg:
+            seq, i, vals = SP.live_inputs(plays.get(r["player"]), sg, team, r["market"])
+            here, chase = SP.player_spots(sched, sg, team, player=r["player"], position=r.get("position") or "",
+                                          market=r["market"], games=seq, i=i, values=vals, contracts=deals,
+                                          staff=staff)
         s = SC.situation(
             r["market"], r.get("side") or ("YES" if r["market"] == "anytime_td" else ""), line=r.get("line"),
             position=r.get("position") or "", values=r.get("recent_values") or [],
@@ -304,16 +375,35 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
             missed_last=(lw is not None and tw is not None and lw < tw),
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
-            tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None)
+            tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None, spots=here)
         codes = SC.flags(s)
+        side = s["side"] or ("YES" if r["market"] == "anytime_td" else "")
+        firm = {c for c in codes if c in SC.SPOT_FLAGS and proven(c, r["market"], side)}
+        notes = []
+        for c in codes:
+            if c in SC.SPOT_FLAGS and c not in firm:
+                continue
+            t = SC.note(c, sport)
+            if mi is not None and c in ("hometown_over", "hometown_under"):
+                # The card names the town: "…in his hometown (Detroit, MI)…".
+                t = t.replace("in his hometown", f"in his hometown ({town['city']}, {town['state']})", 1)
+            notes.append(t)
         r["scout_flags"] = codes
-        r["scout_notes"] = SC.notes(codes, sport)
-        if mi is not None:
-            # The card names the town: "…in his hometown (Detroit, MI)…".
-            r["scout_notes"] = [x.replace("in his hometown", f"in his hometown ({town['city']}, {town['state']})", 1)
-                                if c in ("hometown_over", "hometown_under") else x
-                                for c, x in zip([c for c in codes if c in SC.FLAGS], r["scout_notes"])]
+        r["scout_notes"] = notes
+        lines = [f"{SC.SPOT_TITLES[c]} — {d}" for c, d in here.items()
+                 if not ({f"{c}_over", f"{c}_under"} & firm)]
+        if lines:
+            r["scout_spots"] = lines
+        else:
+            r.pop("scout_spots", None)
+        if chase:
+            r["milestone_note"] = chase["note"]
+        else:
+            r.pop("milestone_note", None)
         n += bool(codes)
+    if sport == "nfl":
+        from . import incentives
+        incentives.card_notes([r for r in rows if r.get("kind") != "game" and r.get("player")], money)
     return n
 
 

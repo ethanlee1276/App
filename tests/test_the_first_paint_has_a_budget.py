@@ -127,7 +127,11 @@ APP_JS_BUDGET_KB = 492
 #: 606 -> 608 on 2026-10-11 by the password work: the app.js bump above
 #: plus the reset page's section and styles (605.87 -> 607.89 KB gz).
 #: Told to Ethan.
-BOOT_BUDGET_KB = 608
+#: 608 -> 609 on 2026-10-11 by the spots and the incentive tracker (Ethan:
+#: "all of it"): the card's Spot, Milestone and Incentive lines with the
+#: report's link, and the Milestone watch list (607.88 -> 608.20 KB gz).
+#: Told to Ethan.
+BOOT_BUDGET_KB = 609
 
 
 def _gz_trimmed(rel: str) -> int:

@@ -3,6 +3,7 @@
     sudo -u qellys python3 -m engine.scouthist            # replay 2021+, every league, save what is proven
     sudo -u qellys python3 -m engine.scouthist --dry-run
     sudo -u qellys python3 -m engine.scouthist --sport cfb --dry-run   # one league
+    sudo -u qellys python3 -m engine.scouthist --sport nfl --dry-run --spot primetime   # one spot, every market
 
 COLLEGE (2026-10-09): the same replay over college's stored games, with
 college's own thresholds (scout.LEAGUE) and its own store
@@ -58,6 +59,16 @@ Decided from those earlier games only, never from the return game. A
 part-timer's return is left out of the replay altogether — neither
 flagged nor in the baseline — and the dry run prints how many of each.
 
+SPOTS (2026-10-11, Ethan: "all of it"): primetime, extra rest, a long
+trip, the body clock, a division rematch, a new head coach, altitude, a
+different surface, late season, a revenge game, a contract year and a
+milestone chase (engine/spots, each defined there before any run) are
+replayed here too, both sides of each, against the same bar. The dry run
+prints each spot's overs and unders with every market pooled, and
+``--spot NAME`` prints one spot's every market; only ``proven`` moves a
+pick. The weekly run keeps the contract table (engine/contracts) fresh as
+it does the birthplace table.
+
 WHAT THE BOARD DOES WITH IT (engine/likelyctx.apply): a pick carrying a
 proven flag on that market and side is lowered by the shift — only ever
 lowered, never below its price — and the card says why. Nothing is
@@ -77,9 +88,11 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from . import contracts as CT
 from . import hometown as HT
 from . import modelstate
 from . import scout as SC
+from . import spots as SP
 from .likelyctx import _week, game_keys, history_index, log_game
 
 HISTORY_MARKETS = ("rush_yds", "rec_yds", "receptions", "pass_yds", "rush_att", "pass_att", "anytime_td")
@@ -148,7 +161,7 @@ def _week_no(period) -> int:
         return 0
 
 
-def replay(hist, seasons=None, sport: str = "nfl") -> dict:
+def replay(hist, seasons=None, sport: str = "nfl", sched=None) -> dict:
     """Every stored player-game in HISTORY_MARKETS with five earlier games
     (across seasons)
     that season: the line is his last-five average (0.5 for touchdowns),
@@ -194,6 +207,22 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
     towns = HT.load() if sport == "nfl" else {}
     neutral = HT.neutral_keys() if towns else set()
     home_games: set = set()
+    # Spots (2026-10-11, engine/spots): NFL only — the schedule's game
+    # spots, revenge from his own logs, contract years from the saved table.
+    if sched is None:
+        sched = SP.load_schedule() if sport == "nfl" else SP.Schedule([])
+    deals = CT.load() if sport == "nfl" else {}
+    from .teamchange import load_staff
+    staff = {s: load_staff(s) for s in all_seasons} if sport == "nfl" else {}
+    games_of: dict = {}
+    for (player, _m), rows in series.items():
+        for d, _v, team, _pos, g, _s in rows:
+            opp = g["away"] if team == g["home"] else g["home"]
+            games_of.setdefault(player, {})[g["game_id"]] = (d, team, opp)
+    order = {p: sorted(gs.items(), key=lambda kv: kv[1][0]) for p, gs in games_of.items()}
+    seq = {p: [(t, o) for _gid, (_d, t, o) in lst] for p, lst in order.items()}
+    at = {p: {gid: i for i, (gid, _x) in enumerate(lst)} for p, lst in order.items()}
+    spot_games: dict = defaultdict(set)
     by_season = len(all_seasons) >= 2
     mid = all_seasons[len(all_seasons) // 2] if by_season else "week 10"
     for (player, market), rows in series.items():
@@ -217,6 +246,14 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                 if towns else None
             if mi is not None:
                 home_games.add((player, g["game_id"]))
+            sg = sched.game(g.get("season"), _week(g.get("period")), g.get("home"), g.get("away")) \
+                if sched.rows else None
+            here, _chase = SP.player_spots(
+                sched, sg, team, player=player, position=pos, market=market, games=seq.get(player),
+                i=at.get(player, {}).get(g["game_id"]), contracts=deals, staff=staff,
+                values=[row[1] for row in rows[:i] if row[5] == season]) if sg else ({}, None)
+            for code in here:
+                spot_games[code].add((player, g["game_id"]))
             half = (("early" if season < mid else "late") if by_season
                     else ("early" if _week_no(g.get("period")) < 10 else "late"))
             for side in (("YES",) if market == "anytime_td" else ("OVER", "UNDER")):
@@ -224,7 +261,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
                                  weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
-                                 missed_last=missed, league=sport, hometown=mi is not None)
+                                 missed_last=missed, league=sport, hometown=mi is not None, spots=here)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)
@@ -248,17 +285,19 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
             out.setdefault(f, {})[f"{market} {side}"] = res
     return {"seasons": all_seasons, "split": mid, "flags": out, "first_game_back": back,
             "hometown": {"players": len((towns or {}).get("players") or {}), "games": len(home_games),
-                         "cells": hometown_cells(cells, base)}}
+                         "cells": hometown_cells(cells, base)},
+            "spots": {code: {"games": len(spot_games.get(code) or ()),
+                             "cells": hometown_cells(cells, base, prefix=f"{code}_")} for code in SC.SPOTS}}
 
 
-def hometown_cells(cells, base) -> dict:
-    """{"MARKET SIDE": {"n", "rate", "base"}} for the hometown flags, both
-    halves together — what history shows whether or not it clears the bar
-    (Ethan, 2026-10-11: "push further"). Printed, never applied: only
-    `proven` moves a pick."""
+def hometown_cells(cells, base, prefix: str = "hometown_") -> dict:
+    """{"MARKET SIDE": {"n", "rate", "base"}} for the hometown flags (or
+    another family's, by ``prefix``), both halves together — what history
+    shows whether or not it clears the bar (Ethan, 2026-10-11: "push
+    further"). Printed, never applied: only `proven` moves a pick."""
     out = {}
     for (f, market, side), halves in cells.items():
-        if not f.startswith("hometown_"):
+        if not f.startswith(prefix) or f[len(prefix):] not in ("over", "under"):
             continue
         fh, fn = (sum(h[i] for h in halves.values()) for i in (0, 1))
         b = base.get((market, side)) or {}
@@ -266,6 +305,33 @@ def hometown_cells(cells, base) -> dict:
         if fn and bn:
             out[f"{market} {side}"] = {"n": fn, "rate": round(fh / fn, 4), "base": round(bh / bn, 4)}
     return out
+
+
+def together(cells: dict, sides) -> tuple[int, float, float] | None:
+    """(games, hit rate, the usual rate on the same markets) for every
+    market on these sides pooled — one line per spot in the dry run."""
+    pick = [c for ms, c in cells.items() if ms.split()[-1] in sides]
+    n = sum(c["n"] for c in pick)
+    if not n:
+        return None
+    return (n, sum(c["rate"] * c["n"] for c in pick) / n, sum(c["base"] * c["n"] for c in pick) / n)
+
+
+def _print_spots(spots: dict) -> None:
+    """The dry run's spot block: each spot's overs and unders, every market
+    pooled — shown, never applied (only `proven` moves a pick)."""
+    if not spots:
+        return
+    print(f"  spots, every market pooled (shown, not applied — a side moves a pick only once one market "
+          f"clears the bar: {PROVEN_N}+ games in each half, {PROVEN_GAP:.0%} worse in both):")
+    for code, sp in spots.items():
+        cells = sp.get("cells") or {}
+        over, under = together(cells, ("OVER", "YES")), together(cells, ("UNDER",))
+        line = f"    {SC.SPOT_TITLES.get(code, code):18} {sp.get('games', 0):6} player-games"
+        for label, t in (("overs", over), ("unders", under)):
+            line += (f"  |  {label} n {t[0]:5} hit {t[1]:6.1%} vs {t[2]:6.1%} ({t[1] - t[2]:+.1%})" if t
+                     else f"  |  {label} —")
+        print(line)
 
 
 def proven(h: dict) -> dict:
@@ -351,6 +417,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="replay and report, save nothing")
     ap.add_argument("--history-db", default="", help="history path (default data/history.db)")
     ap.add_argument("--sport", default="", help="one league (default: every league the scout reads)")
+    ap.add_argument("--spot", default="", help="print one spot's every market (e.g. primetime, revenge)")
     a = ap.parse_args(argv)
     from . import db
     from .likelyctx import SPORTS, ro
@@ -361,6 +428,9 @@ def main(argv=None) -> int:
         # never inside the test sandbox, which must not touch the network.
         if sport == "nfl" and not a.dry_run and HT.stale() and not os.environ.get(modelstate.ENV_VAR):
             HT.refresh(log=print)
+        # …and the contract years (engine/contracts), on the same terms.
+        if sport == "nfl" and not a.dry_run and CT.stale() and not os.environ.get(modelstate.ENV_VAR):
+            CT.refresh(log=print)
         if a.dry_run:
             for label, (share, n) in threshold_shares(hist, sport).items():
                 print(f"  catches  {label:28} " + (f"{share:6.1%} of {n} games" if share is not None
@@ -384,13 +454,20 @@ def main(argv=None) -> int:
                     print(f"    {ms:18} n {c['n']:4}  hit {c['rate']:6.1%}  vs  {c['base']:6.1%} usual  "
                           f"({c['rate'] - c['base']:+.1%})")
                 for label, sides in (("every over", ("OVER", "YES")), ("every under", ("UNDER",))):
-                    pick = [c for ms, c in cells.items() if ms.split()[-1] in sides]
-                    n = sum(c["n"] for c in pick)
-                    if n:
-                        hit = sum(c["rate"] * c["n"] for c in pick) / n
-                        exp = sum(c["base"] * c["n"] for c in pick) / n
+                    t = together(cells, sides)
+                    if t:
+                        n, hit, exp = t
                         print(f"    {label + ' together':18} n {n:4}  hit {hit:6.1%}  vs  {exp:6.1%} expected  "
                               f"({hit - exp:+.1%})")
+            _print_spots(h.get("spots") or {})
+            if not (CT.load().get("players")):
+                print("  contract years: no table yet — run python3 -m engine.contracts first")
+            one = (h.get("spots") or {}).get(a.spot.strip().lower())
+            if a.spot and one is None:
+                print(f"  no spot called {a.spot!r} — the spots are: {', '.join(SC.SPOTS)}")
+            for ms, c in sorted(((one or {}).get("cells") or {}).items()):
+                print(f"    {a.spot.strip().lower()} {ms:18} n {c['n']:5}  hit {c['rate']:6.1%}  vs  "
+                      f"{c['base']:6.1%} usual  ({c['rate'] - c['base']:+.1%})")
         for flag, cells in found.items():
             for ms, c in cells.items():
                 print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")

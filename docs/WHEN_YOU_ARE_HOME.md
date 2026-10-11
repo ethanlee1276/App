@@ -562,6 +562,15 @@ first). Paste back anything that prints an error or looks off.
     together) — shown, not applied, so you can see which way it leans
     even when it is too thin to prove.
 
+    **Run 2 result (2026-10-11):** 2,792 players placed (555 past players
+    from their ESPN pages) and 195 hometown games scored. Every over
+    together hit 1.3 points above the usual rate and every under 2.3
+    points below it, which is a lean toward players rising to the
+    occasion. Catches overs ran +5.2% on 172 games. Nothing cleared the
+    bar, which needs 100+ games in *each* half on one market, so nothing
+    moves. The weekly run re-tests it as 2026 adds games. Nothing more to
+    run.
+
 28. **The extras** (2026-10-11, "add the three optional extras"):
     * **Crash alerts** are on: when the site's service fails, an email
       goes to qellysbook@gmail.com with the last lines of its log.
@@ -574,6 +583,63 @@ first). Paste back anything that prints an error or looks off.
       Content `v=DMARC1; p=none;`, then **Save**.
     * **Resend's limit**: nothing to do. 100 emails a day free; the site
       caps password resets at 90.
+
+29. **More spots, contract years, milestones and the incentive tracker**
+    (2026-10-11, Ethan: "all of it"). New on every NFL Most Likely card,
+    under "Why?":
+    * **Spot:** lines for primetime, extra rest (a bye, or the long week
+      after a Thursday), a long trip (two or more time zones, or abroad),
+      body clock (10am or earlier by his team's clock), division rematch,
+      a new head coach (his first four games), altitude (Denver, Mexico
+      City), a different surface from his home field, late season (team
+      clinched or eliminated, week 15 on), revenge game (first time facing
+      a team he played 8+ games for), contract year (the last season of
+      his deal) and milestone chase. Like hometown, each moves no number
+      until the five-season replay proves one side by the same fixed bar.
+      A proven one then moves up to the Scout cautions and says why.
+      Short weeks were already a flag (Thursday overs), so nothing new
+      there.
+    * **Milestone:** "913 receiving yards — needs 87 more in his last 4
+      games for 1,000", from our own logs, in the last six games of the
+      season. The site also lists every chase under **Milestone watch**,
+      below Incentive watch.
+    * **Incentive:** contract money, added by you from a news report
+      (below). The card shows how far he has to go and links the report.
+
+    **A. Build the contract table** (about a minute; nflverse's contract
+    file, downloaded, never scraped). It prints how many skill players are
+    in a contract year this season, with a sample:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.contracts
+    cd /srv/qellys && sudo -u qellys python3 -m engine.contracts --player "Tee Higgins"
+    ```
+    The second shows one player's deals and which seasons were contract
+    years (Higgins: 2023 and 2024 yes, 2025 no). The weekly run rebuilds
+    the table from now on.
+
+    **B. See what five seasons say about every spot** (read-only, a few
+    minutes):
+    ```
+    cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.scouthist --sport nfl --dry-run
+    ```
+    Paste back the `spots, every market pooled` block and any `PROVEN`
+    line. For one spot's every market, add `--spot primetime` (or
+    `revenge`, `contract_year`, `extra_rest`, …).
+
+    **C. Add an incentive when a report gives one.** Example: a report
+    says a receiver gets $500,000 at 100 catches:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.incentives add --player "Player Name" --stat receptions --target 100 --bonus 500K --source https://link-to-the-report
+    cd /srv/qellys && sudo -u qellys python3 -m engine.incentives list
+    ```
+    Stats it can track: `receptions`, `rec_yds`, `rush_yds`, `pass_yds`,
+    `pass_td`, `anytime_td` (rushing plus receiving touchdowns). The link
+    is required, and the card shows it. To take one out:
+    `... engine.incentives remove --player "Player Name" --stat receptions`.
+    `... engine.incentives milestones` lists every round-number chase from
+    the logs. Everything here is a note on the card: an incentive can't be
+    tested on past seasons (there is no list of past ones), so it never
+    moves a number.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
