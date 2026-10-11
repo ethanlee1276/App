@@ -380,7 +380,155 @@ def espn_entries(fetch=None) -> tuple[list, list]:
     return out, missed
 
 
-def refresh(log=print, espn=None, sleeper=None, gaz=None) -> dict:
+# --- players no roster lists today ------------------------------------------------
+#: ESPN's page for one player, by id. Ethan, 2026-10-11, after the first
+#: run placed only today's players (Sleeper's file carries no birthplaces)
+#: and history held 142 hometown games: "ok push further". The ids come
+#: from nflverse's season rosters (2021 on), each looked up once and kept.
+ATHLETE_URLS = ("https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/athletes/{id}",
+                "https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/{id}")
+PAST_STORE = "nfl_past_birthplaces.json"
+PAST_FROM = 2021
+#: A pause between lookups, and a cap per run: the first run walks a few
+#: thousand pages slowly; every later one only the newcomers.
+PAST_PAUSE_S = 0.25
+PAST_PER_RUN = 3000
+
+
+def from_espn_athlete(payload: dict) -> dict | None:
+    """One birthplace off an ESPN player page (either shape in use)."""
+    a = payload.get("athlete") if isinstance((payload or {}).get("athlete"), dict) else (payload or {})
+    born = a.get("birthPlace") if isinstance(a.get("birthPlace"), dict) else {}
+    name = str(a.get("fullName") or a.get("displayName") or "").strip()
+    if not name or not born.get("city"):
+        return None
+    pos = a.get("position")
+    pos = (pos.get("abbreviation") or "") if isinstance(pos, dict) else (pos or "")
+    return {"player": name, "pos": str(pos).upper(), "team": "", "city": str(born["city"]),
+            "state": str(born.get("state") or ""), "country": str(born.get("country") or ""),
+            "src": "espn-past"}
+
+
+def history_players(hist, since: int = PAST_FROM) -> dict:
+    """{name key: (display name, position)} for everyone in the stored NFL
+    logs since ``since`` in the markets the replay scores."""
+    from .scouthist import HISTORY_MARKETS
+    marks = ",".join("?" * len(HISTORY_MARKETS))
+    out = {}
+    for r in hist.execute(f"SELECT DISTINCT player, position FROM player_game_logs WHERE sport='nfl' "
+                          f"AND season >= ? AND market IN ({marks})", (since, *HISTORY_MARKETS)):
+        out.setdefault(norm_name(r[0]), (r[0], str(r[1] or "").upper()))
+    return out
+
+
+def roster_ids(seasons, load=None) -> dict:
+    """{(name key, position): ESPN id} and {name key: {ids}} off nflverse's
+    season rosters — the crosswalk from our logs' names to ESPN's pages."""
+    from .sources.nflverse import load_rosters
+    reader = load or load_rosters
+    by_pos, by_name = {}, {}
+    for season in seasons:
+        try:
+            rows = reader(season)
+        except Exception:                                     # noqa: BLE001
+            continue
+        for r in rows:
+            pid = str(r.get("espn_id") or "").strip()
+            pid = pid[:-2] if pid.endswith(".0") else pid
+            name = norm_name(r.get("full_name") or r.get("player_name") or "")
+            if not pid.isdigit() or not name:
+                continue
+            by_pos.setdefault((name, str(r.get("position") or "").upper()), pid)
+            by_name.setdefault(name, set()).add(pid)
+    return {"by_pos": by_pos, "by_name": by_name}
+
+
+def _get_json(url: str):
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "qellysbook/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def _past_path() -> Path:
+    from . import modelstate
+    return Path(modelstate.path(PAST_STORE))
+
+
+def past_entries(current: set, hist=None, seasons=None, fetch=None, load=None, pause: float = PAST_PAUSE_S,
+                 limit: int = PAST_PER_RUN, log=print) -> tuple[list, dict]:
+    """(birthplace entries for players in our history whom no roster lists
+    today, counts). Each ESPN page is read once and kept in PAST_STORE —
+    including "no birthplace", so a page is never asked twice."""
+    import time as _time
+    if hist is None:
+        from . import db
+        from .likelyctx import ro
+        hist = ro(db.DEFAULT_DB)
+    want = {k: v for k, v in history_players(hist).items() if k not in current}
+    if seasons is None:
+        top = hist.execute("SELECT MAX(season) FROM player_game_logs WHERE sport='nfl'").fetchone()[0]
+        seasons = range(PAST_FROM, int(top or PAST_FROM) + 1)
+    ids = roster_ids(seasons, load)
+    path = _past_path()
+    try:
+        store = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        store = {}
+    fetch = fetch or _get_json
+    out, asked, failed, no_id = [], 0, 0, 0
+    for key, (name, pos) in sorted(want.items()):
+        pid = ids["by_pos"].get((key, pos))
+        if not pid and len(ids["by_name"].get(key) or ()) == 1:
+            pid = next(iter(ids["by_name"][key]))
+        if not pid:
+            no_id += 1
+            continue
+        if pid not in store:
+            if asked >= limit:
+                continue
+            asked += 1
+            got = None
+            try:
+                for url in ATHLETE_URLS:
+                    payload = fetch(url.format(id=pid))
+                    got = from_espn_athlete(payload) if payload else None
+                    if got:
+                        break
+            except Exception:                                 # noqa: BLE001
+                failed += 1
+                continue
+            store[pid] = got or {"none": True}
+            if asked % 50 == 0:
+                _save_json(path, store)
+            if pause:
+                _time.sleep(pause)
+        e = store.get(pid) or {}
+        if e.get("city"):
+            out.append(dict(e, player=name, pos=e.get("pos") or pos))
+    if asked:
+        _save_json(path, store)
+    counts = {"wanted": len(want), "looked_up": asked, "failed": failed, "no_espn_id": no_id,
+              "with_birthplace": len(out)}
+    if failed:
+        log(f"hometown: {failed} ESPN player pages would not load; they are asked again next run")
+    return out, counts
+
+
+def _save_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(path)
+
+
+def refresh(log=print, espn=None, sleeper=None, gaz=None, past=None) -> dict:
     """Build the table from today's rosters, Sleeper's file and the map, and
     save it. Never raises: a source that will not load is a logged line."""
     try:
@@ -391,12 +539,15 @@ def refresh(log=print, espn=None, sleeper=None, gaz=None) -> dict:
         if sleeper is None:
             from .offseason import load_sleeper_players
             sleeper = from_sleeper(load_sleeper_players() or {})
+        if past is None:
+            past, _counts = past_entries({norm_name(e["player"]) for e in espn}, log=log)
         if gaz is None:
             gaz = load_gazetteer()
         if not gaz:
             log("hometown: the Census place map could not be loaded — nothing can be placed")
-        table = build_table(list(espn) + list(sleeper), gaz)
-        table["sources"] = {"espn": len(espn), "sleeper": len(sleeper), "map_places": len(gaz)}
+        table = build_table(list(espn) + list(past) + list(sleeper), gaz)
+        table["sources"] = {"espn": len(espn), "espn_past": len(past), "sleeper": len(sleeper),
+                            "map_places": len(gaz)}
         save(table)
         return table
     except Exception as exc:                                  # noqa: BLE001
@@ -411,12 +562,18 @@ def main(argv=None) -> int:
     espn, missed = espn_entries()
     from .offseason import load_sleeper_players
     sleeper = from_sleeper(load_sleeper_players() or {})
+    print("looking up players no roster lists today (the first run takes a while)…", flush=True)
+    past, pc = past_entries({norm_name(e["player"]) for e in espn})
     gaz = load_gazetteer()
-    table = build_table(espn + sleeper, gaz)
+    table = build_table(espn + past + sleeper, gaz)
     c = table["counts"]
     print(f"birthplaces: {len(espn)} from ESPN rosters"
           + (f" ({len(missed)} teams would not load)" if missed else "")
-          + f", {len(sleeper)} from Sleeper; Census map: {len(gaz)} places")
+          + f", {len(past)} past players from ESPN's player pages, {len(sleeper)} from Sleeper; "
+          f"Census map: {len(gaz)} places")
+    print(f"past players: {pc['wanted']} in our 2021+ logs and on no roster today; "
+          f"{pc['looked_up']} looked up this run, {pc['no_espn_id']} with no ESPN id"
+          + (f", {pc['failed']} pages would not load" if pc["failed"] else ""))
     print(f"placed {c['placed']} players; born abroad {c['abroad']}; "
           f"not found on the map {c['unplaced']}")
     from .stadiums import STADIUM_COORDS
@@ -433,7 +590,8 @@ def main(argv=None) -> int:
     for name, r, team, d in sorted(near, key=lambda x: x[0])[:15]:
         print(f"  {name:24} {r['pos']:3} {r['team'] or '—':4} born {r['city']}, {r['state']} — {d:.0f} mi from {team}")
     if not a.dry_run:
-        table["sources"] = {"espn": len(espn), "sleeper": len(sleeper), "map_places": len(gaz)}
+        table["sources"] = {"espn": len(espn), "espn_past": len(past), "sleeper": len(sleeper),
+                            "map_places": len(gaz)}
         save(table)
         print("saved; the board and the weekly replay read it")
     return 0

@@ -550,6 +550,18 @@ first). Paste back anything that prints an error or looks off.
     none means the flag stays a note on the card. The weekly run rebuilds
     the birthplace table by itself from now on.
 
+    **Run 1 result (2026-10-11):** 2,281 of today's players placed;
+    Sleeper's file carries no birthplaces; history held only 142 hometown
+    games — too few for the bar. Ethan: "ok push further." So A now also
+    looks up every player in our 2021+ logs whom no roster lists today,
+    by his ESPN id (from nflverse's season rosters), once each. **Run A
+    again** — the first time takes 10–20 minutes (it walks ESPN's player
+    pages slowly), later runs seconds. It prints `past players: …`. Then
+    run B again: it now also prints **every hometown market's raw numbers**
+    (hit rate against the usual rate, and every over / every under
+    together) — shown, not applied, so you can see which way it leans
+    even when it is too thin to prove.
+
 28. **The extras** (2026-10-11, "add the three optional extras"):
     * **Crash alerts** are on: when the site's service fails, an email
       goes to qellysbook@gmail.com with the last lines of its log.

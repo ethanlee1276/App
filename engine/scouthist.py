@@ -247,7 +247,25 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
         if res:
             out.setdefault(f, {})[f"{market} {side}"] = res
     return {"seasons": all_seasons, "split": mid, "flags": out, "first_game_back": back,
-            "hometown": {"players": len((towns or {}).get("players") or {}), "games": len(home_games)}}
+            "hometown": {"players": len((towns or {}).get("players") or {}), "games": len(home_games),
+                         "cells": hometown_cells(cells, base)}}
+
+
+def hometown_cells(cells, base) -> dict:
+    """{"MARKET SIDE": {"n", "rate", "base"}} for the hometown flags, both
+    halves together — what history shows whether or not it clears the bar
+    (Ethan, 2026-10-11: "push further"). Printed, never applied: only
+    `proven` moves a pick."""
+    out = {}
+    for (f, market, side), halves in cells.items():
+        if not f.startswith("hometown_"):
+            continue
+        fh, fn = (sum(h[i] for h in halves.values()) for i in (0, 1))
+        b = base.get((market, side)) or {}
+        bh, bn = (sum(h[i] for h in b.values()) for i in (0, 1))
+        if fn and bn:
+            out[f"{market} {side}"] = {"n": fn, "rate": round(fh / fn, 4), "base": round(bh / bn, 4)}
+    return out
 
 
 def proven(h: dict) -> dict:
@@ -358,6 +376,21 @@ def main(argv=None) -> int:
             print(f"  hometown: {hg.get('games', 0)} road games in a player's hometown scored "
                   f"({hg.get('players', 0)} players with a known birthplace"
                   + ("; run python3 -m engine.hometown first" if not hg.get("players") else "") + ")")
+            cells = hg.get("cells") or {}
+            if cells:
+                print(f"  hometown, every market (shown, not applied — the bar is {PROVEN_N}+ games "
+                      f"in each half and {PROVEN_GAP:.0%} worse in both):")
+                for ms, c in sorted(cells.items()):
+                    print(f"    {ms:18} n {c['n']:4}  hit {c['rate']:6.1%}  vs  {c['base']:6.1%} usual  "
+                          f"({c['rate'] - c['base']:+.1%})")
+                for label, sides in (("every over", ("OVER", "YES")), ("every under", ("UNDER",))):
+                    pick = [c for ms, c in cells.items() if ms.split()[-1] in sides]
+                    n = sum(c["n"] for c in pick)
+                    if n:
+                        hit = sum(c["rate"] * c["n"] for c in pick) / n
+                        exp = sum(c["base"] * c["n"] for c in pick) / n
+                        print(f"    {label + ' together':18} n {n:4}  hit {hit:6.1%}  vs  {exp:6.1%} expected  "
+                              f"({hit - exp:+.1%})")
         for flag, cells in found.items():
             for ms, c in cells.items():
                 print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")

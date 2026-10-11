@@ -179,9 +179,76 @@ def test_the_replay_scores_hometown_games_and_says_how_many():
         h = H.replay(_hist(), sport="nfl")
     finally:
         HT.neutral_keys = real
-    assert h["hometown"] == {"players": 3, "games": 1}, h["hometown"]
+    hg = h["hometown"]
+    assert (hg["players"], hg["games"]) == (3, 1), hg
+    assert set(hg["cells"]) == {"receptions OVER", "receptions UNDER"}, "both sides, shown whether or not proven"
+    assert hg["cells"]["receptions OVER"]["n"] == 1
     src = open(os.path.join(ROOT, "engine", "scouthist.py"), encoding="utf-8").read()
     assert "road games in a player's hometown scored" in src
+    assert "shown, not applied" in src and "every over" in src
+
+
+def _logs_db(rows):
+    from engine import db
+    c = db.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
+    c.executemany("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                  "position, home, market, value) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+    c.commit()
+    return c
+
+
+def test_players_no_roster_lists_today_are_looked_up_once_by_their_espn_id():
+    hist = _logs_db([("nfl", 2022, "3", "g1", "Retired Receiver", "CHI", "DET", "WR", 1, "receptions", 5),
+                     ("nfl", 2023, "3", "g2", "Current Star", "CHI", "DET", "WR", 1, "receptions", 7),
+                     ("nfl", 2022, "4", "g3", "No Id Back", "CHI", "DET", "RB", 1, "rush_yds", 40),
+                     ("nfl", 2022, "5", "g4", "Blank Page", "CHI", "DET", "TE", 1, "receptions", 3)])
+    rosters = {2022: [{"full_name": "Retired Receiver", "position": "WR", "espn_id": "123.0"},
+                      {"full_name": "Blank Page", "position": "TE", "espn_id": "456"},
+                      {"full_name": "No Id Back", "position": "RB", "espn_id": "NA"}]}
+    asked = []
+
+    def fetch(url):
+        asked.append(url)
+        if "/123" in url:
+            return {"fullName": "Retired Receiver", "position": {"abbreviation": "WR"},
+                    "birthPlace": {"city": "Detroit", "state": "MI", "country": "USA"}}
+        return {"athlete": {"fullName": "Blank Page"}}            # a page with no birthplace
+
+    out, c = HT.past_entries({"current star"}, hist=hist, seasons=[2022], fetch=fetch,
+                             load=lambda season: rosters.get(season, []), pause=0)
+    assert [(e["player"], e["city"]) for e in out] == [("Retired Receiver", "Detroit")]
+    assert c["wanted"] == 3 and c["no_espn_id"] == 1, "today's players are not looked up; no id, no page"
+    assert any("sports.core.api.espn.com" in u and u.endswith("/123") for u in asked)
+    n = len(asked)
+
+    def refuse(url):
+        raise AssertionError("asked twice: " + url)
+    out2, c2 = HT.past_entries({"current star"}, hist=hist, seasons=[2022], fetch=refuse,
+                               load=lambda season: rosters.get(season, []), pause=0)
+    assert [e["player"] for e in out2] == ["Retired Receiver"] and c2["looked_up"] == 0, \
+        "every page — even one with no birthplace — is read once and kept"
+    assert n == 3, asked
+
+
+def test_a_page_that_will_not_load_is_asked_again_next_run():
+    hist = _logs_db([("nfl", 2024, "1", "g1", "Flaky Page", "CHI", "DET", "WR", 1, "receptions", 5)])
+    load = lambda season: [{"full_name": "Flaky Page", "position": "WR", "espn_id": "789"}]  # noqa: E731
+
+    def down(url):
+        raise OSError("timed out")
+    out, c = HT.past_entries(set(), hist=hist, seasons=[2024], fetch=down, load=load, pause=0, log=lambda m: None)
+    assert out == [] and c["failed"] == 1
+    out, c = HT.past_entries(set(), hist=hist, seasons=[2024], load=load, pause=0,
+                             fetch=lambda url: {"fullName": "Flaky Page", "birthPlace": {"city": "Compton",
+                                                                                         "state": "CA"}})
+    assert [e["city"] for e in out] == ["Compton"]
+
+
+def test_both_espn_page_shapes_are_read():
+    core = {"fullName": "A B", "position": {"abbreviation": "RB"}, "birthPlace": {"city": "Dallas", "state": "TX"}}
+    web = {"athlete": core}
+    assert HT.from_espn_athlete(core)["city"] == HT.from_espn_athlete(web)["city"] == "Dallas"
+    assert HT.from_espn_athlete({"fullName": "No Town"}) is None
 
 
 def test_the_card_names_the_town():
@@ -206,7 +273,7 @@ def test_the_weekly_replay_rebuilds_the_table_but_never_in_the_sandbox():
     assert "not a.dry_run" in guard and "HT.stale()" in guard and "modelstate.ENV_VAR" in guard
     out = io.StringIO()
     with redirect_stdout(out):
-        HT.refresh(log=print, espn=[], sleeper=[], gaz={})
+        HT.refresh(log=print, espn=[], sleeper=[], gaz={}, past=[])
     assert "could not be loaded" in out.getvalue(), "a missing map is said, not silent"
 
 
