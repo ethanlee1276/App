@@ -77,7 +77,12 @@ def test_a_failed_unit_emails_through_the_mailer():
                     env={"QB_ALERT_EMAIL": "owner@example.invalid"}, journal=lambda u: "line 1\nline 2")
     assert got == "sent" and sent and "qellys.service" in sent[0][1]
     assert "line 2" in sent[0][2]
-    assert alert.run("qellys.service", send=lambda *a: None, env={},
+    # Unset, an alert now goes to the site's inbox (2026-10-11, Ethan: "add
+    # the three optional extras"); QB_ALERT_EMAIL=off is the way to stop it.
+    sent.clear()
+    assert alert.run("qellys.service", send=lambda to, subj, text: sent.append(to), env={},
+                     journal=lambda u: "") == "sent" and sent == [alert.DEFAULT_TO]
+    assert alert.run("qellys.service", send=lambda *a: None, env={"QB_ALERT_EMAIL": "off"},
                      journal=lambda u: "") == "no-address"
 
 

@@ -203,6 +203,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # returns 2, so the two never read alike. It is the command that
         # proves the key before any money moves, and it must say why not.
         "_cmd_check",
+        # THE HOMETOWN TABLE (engine/hometown.refresh, 2026-10-11), caught
+        # by this sweep the hour it was written. Its failure returns {} and
+        # logs "hometown: not rebuilt (<exception>)"; a quiet week returns
+        # the built table with its counts, so the two never read alike. The
+        # weekly replay calls it and must still replay when it fails — the
+        # last saved table stays in place.
+        "refresh",
     }
 
     def broad(h):

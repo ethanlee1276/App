@@ -72,13 +72,15 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
 
+from . import hometown as HT
 from . import modelstate
 from . import scout as SC
-from .likelyctx import game_keys, history_index, log_game
+from .likelyctx import _week, game_keys, history_index, log_game
 
 HISTORY_MARKETS = ("rush_yds", "rec_yds", "receptions", "pass_yds", "rush_att", "pass_att", "anytime_td")
 #: The bar, fixed before any box run of this module.
@@ -187,6 +189,11 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
     all_seasons = sorted({row[5] for rows in series.values() for row in rows[5:]})
     leaders = team_leaders(series)
     back = {"kept": 0, "skipped": 0}
+    # Hometown games (2026-10-11): NFL only, from the saved birthplace table
+    # (engine/hometown) and the schedule's neutral sites.
+    towns = HT.load() if sport == "nfl" else {}
+    neutral = HT.neutral_keys() if towns else set()
+    home_games: set = set()
     by_season = len(all_seasons) >= 2
     mid = all_seasons[len(all_seasons) // 2] if by_season else "week 10"
     for (player, market), rows in series.items():
@@ -205,6 +212,11 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                     continue
                 back["kept"] += 1
             roof = str(g.get("roof") or "").lower()
+            mi = HT.hometown_game(HT.lookup(towns, player, pos), team, g.get("home"),
+                                  neutral=(g.get("season"), _week(g.get("period")), g.get("home")) in neutral) \
+                if towns else None
+            if mi is not None:
+                home_games.add((player, g["game_id"]))
             half = (("early" if season < mid else "late") if by_season
                     else ("early" if _week_no(g.get("period")) < 10 else "late"))
             for side in (("YES",) if market == "anytime_td" else ("OVER", "UNDER")):
@@ -212,7 +224,7 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                                  game_spread=g.get("spread"), home=(team == g["home"]), total=g.get("total"),
                                  wind=g.get("wind"), outdoor=(None if not roof else roof in ("outdoors", "open")),
                                  weekday=None if g.get("_approx") else d.weekday(), games_season=in_season,
-                                 missed_last=missed, league=sport)
+                                 missed_last=missed, league=sport, hometown=mi is not None)
                 # The line IS his form here, so the two line flags cannot fire.
                 fl = [f for f in SC.flags(s) if f not in ("line_above_form", "line_below_form")]
                 hit = (value > line) if side in ("OVER", "YES") else (value < line)
@@ -234,7 +246,8 @@ def replay(hist, seasons=None, sport: str = "nfl") -> dict:
                 res[half] = {"n": fn, "rate": fh / fn, "base": bh / bn, "gap": fh / fn - bh / bn}
         if res:
             out.setdefault(f, {})[f"{market} {side}"] = res
-    return {"seasons": all_seasons, "split": mid, "flags": out, "first_game_back": back}
+    return {"seasons": all_seasons, "split": mid, "flags": out, "first_game_back": back,
+            "hometown": {"players": len((towns or {}).get("players") or {}), "games": len(home_games)}}
 
 
 def proven(h: dict) -> dict:
@@ -326,6 +339,10 @@ def main(argv=None) -> int:
     hist = ro(a.history_db or db.DEFAULT_DB)
     for sport in ([a.sport.lower()] if a.sport else list(SPORTS)):
         print(f"=== {sport.upper()}")
+        # The weekly run keeps the birthplace table fresh before it replays;
+        # never inside the test sandbox, which must not touch the network.
+        if sport == "nfl" and not a.dry_run and HT.stale() and not os.environ.get(modelstate.ENV_VAR):
+            HT.refresh(log=print)
         if a.dry_run:
             for label, (share, n) in threshold_shares(hist, sport).items():
                 print(f"  catches  {label:28} " + (f"{share:6.1%} of {n} games" if share is not None
@@ -336,6 +353,11 @@ def main(argv=None) -> int:
         fb = h.get("first_game_back") or {}
         print(f"  first game back: {fb.get('kept', 0)} returns by regulars scored, "
               f"{fb.get('skipped', 0)} by part-timers left out")
+        if sport == "nfl":
+            hg = h.get("hometown") or {}
+            print(f"  hometown: {hg.get('games', 0)} road games in a player's hometown scored "
+                  f"({hg.get('players', 0)} players with a known birthplace"
+                  + ("; run python3 -m engine.hometown first" if not hg.get("players") else "") + ")")
         for flag, cells in found.items():
             for ms, c in cells.items():
                 print(f"  PROVEN  {flag:20} {ms:18} shift {c['shift']:+.1%}  (halves {c['gaps']}, n {c['n']})")

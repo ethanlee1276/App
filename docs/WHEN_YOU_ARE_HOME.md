@@ -520,6 +520,49 @@ first). Paste back anything that prints an error or looks off.
     ```
     Email that link only to the account's own address.
 
+27. **Hometown games for NFL picks** (2026-10-11, Ethan: "one signal that
+    I want to add for our NFL bets is hometown returns"). A player's ROAD
+    game within 50 miles of where he was born now raises a scout flag on
+    his card ("an under in a road game in his hometown (Detroit, MI) …").
+    His own team's home games never count, nor neutral sites. Like every
+    flag it moves no number until the five-season replay proves it, by the
+    same fixed bar as the rest (3+ points worse on that side, in both
+    halves, 100+ games each). Both sides are flagged, so the replay finds
+    whichever is real: if hometown players rise to it, unders on them get
+    lowered; if the occasion gets to them, overs do.
+    Birthplaces come from ESPN's rosters and Sleeper's player file; the
+    map is the US Census place list (downloaded once).
+
+    **A. Build the birthplace table** (a minute; prints who it placed and
+    a sample of skill players born near another team's stadium — glance
+    at the sample to check it looks right):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.hometown
+    ```
+    If it says the Census map could not be loaded, paste me that line.
+
+    **B. See what five seasons say** (read-only; a few minutes):
+    ```
+    cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.scouthist --sport nfl --dry-run
+    ```
+    Paste back the `hometown:` line and any `PROVEN  hometown_…` line. A
+    proven line starts lowering those picks after the weekly run saves it;
+    none means the flag stays a note on the card. The weekly run rebuilds
+    the birthplace table by itself from now on.
+
+28. **The extras** (2026-10-11, "add the three optional extras"):
+    * **Crash alerts** are on: when the site's service fails, an email
+      goes to qellysbook@gmail.com with the last lines of its log.
+      Nothing to set. (To stop them: `sudo ./deploy/setenv.sh
+      QB_ALERT_EMAIL off`.)
+    * **DMARC**, so the reset emails keep landing in inboxes — in
+      Cloudflare: qellysbook.com → **DNS** → **Records**. If a **TXT**
+      record named `_dmarc` is already listed (Resend may have added one),
+      you are done. If not, **Add record**: Type `TXT`, Name `_dmarc`,
+      Content `v=DMARC1; p=none;`, then **Save**.
+    * **Resend's limit**: nothing to do. 100 emails a day free; the site
+      caps password resets at 90.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
@@ -530,8 +573,8 @@ Ethan, 2026-10-07: *"save all of this for when I'm home."* Everything
 from today, in order. Nothing here needs a command except step 1.
 
 1. **Give the site its own account, once.** Sign up on the site with the
-   email you want to post from as Qellys Book, then run the `SF.claim`
-   command in step 28 below with that email. It gives the account the
+   email you want to post from as Qellys Book, then run the second
+   `SF.claim` command in step 4 at the top of this file with that email. It gives the account the
    handle `Qellys_Book`, the gold tick and the crown avatar.
 2. **Bet it, after the next props refresh** — paste the output back:
    ```

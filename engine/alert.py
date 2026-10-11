@@ -6,9 +6,11 @@ unit's name. Before this a failed unit was visible only to someone already
 running `systemctl status` — the site kept serving yesterday's files and
 nobody was told.
 
-The address is `QB_ALERT_EMAIL` (set on the box with `deploy/setenv.sh`);
-the mail goes through `engine.mailer`, the same SMTP settings the site's
-own mail uses. Never raises: an alert that crashes is an alert not sent,
+The address is `QB_ALERT_EMAIL` (set on the box with `deploy/setenv.sh`),
+and the site's own inbox when it is not set (Ethan, 2026-10-11: "add the
+three optional extras" — crash alerts on, with no step on the box);
+`QB_ALERT_EMAIL=off` turns them off. The mail goes through
+`engine.mailer`, the same relay the site's own mail uses. Never raises: an alert that crashes is an alert not sent,
 and the unit that started it has already failed.
 
     python3 -m engine.alert qellys.service
@@ -19,6 +21,9 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+
+#: Where an alert goes when QB_ALERT_EMAIL is not set: the site's inbox.
+DEFAULT_TO = "qellysbook@gmail.com"
 
 
 def _journal(unit: str) -> str:
@@ -33,9 +38,9 @@ def _journal(unit: str) -> str:
 def run(unit: str, send=None, env=None, journal=None) -> str:
     """``"sent"``, ``"no-address"``, ``"no-mailer"`` or ``"failed"``."""
     env = os.environ if env is None else env
-    to = str(env.get("QB_ALERT_EMAIL") or "").strip()
-    if not to:
-        print(f"alert: {unit} failed, but QB_ALERT_EMAIL is not set")
+    to = str(env.get("QB_ALERT_EMAIL") or "").strip() or DEFAULT_TO
+    if to.lower() in ("off", "none", "no", "0"):
+        print(f"alert: {unit} failed, but alerts are switched off (QB_ALERT_EMAIL={to})")
         return "no-address"
     if send is None:
         from . import mailer

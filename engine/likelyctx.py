@@ -209,11 +209,16 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nf
     prev = [g for g in by_team.get(team, []) if g["_d"] < gd and g.get("season") == season]
     missed = bool(prev) and games_season > 0 and prev[-1]["game_id"] not in played
     position = next((r.get("position") for r in before if r.get("position")), "")
+    mi = None
+    if sport == "nfl":
+        from . import hometown as HT
+        mi = HT.hometown_game(HT.lookup(HT.load(), pick["player"], position), team, game["home"],
+                              neutral=(season, _week(game.get("period")), game["home"]) in HT.neutral_keys())
     s = SC.situation(pick["market"], pick.get("side") or "", line=pick.get("line"), position=position,
                      values=vals, game_spread=game.get("spread"), home=(team == game["home"]),
                      total=game.get("total"), wind=game.get("wind"), outdoor=_outdoor(game.get("roof")),
                      weekday=None if game.get("_approx") else gd.weekday(), games_season=games_season,
-                     missed_last=missed, league=sport)
+                     missed_last=missed, league=sport, hometown=mi is not None)
     s["team"], s["game_id"] = team, game["game_id"]
     if game.get("home_score") is not None and game.get("away_score") is not None:
         mine_pts = game["home_score"] if team == game["home"] else game["away_score"]
@@ -277,6 +282,9 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
         by_team.setdefault(team, []).append((float(u.get("targets_pg") or 0.0), name))
     tgt_rank = {name: i + 1 for team, lst in by_team.items()
                 for i, (_t, name) in enumerate(sorted(lst, key=lambda x: (-x[0], x[1])))}
+    # Hometown games (engine/hometown): NFL only, read from the saved table.
+    from . import hometown as HT
+    towns = HT.load() if sport == "nfl" else {}
     n = 0
     for r in rows:
         if r.get("kind") == "game" or not r.get("player") or not r.get("market"):
@@ -286,6 +294,8 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
         w = (g or {}).get("weather") or {}
         team = r.get("team")
         lw, tw = last_week.get(r.get("player")), team_week.get(team)
+        town = HT.lookup(towns, r["player"], r.get("position")) if towns and g else None
+        mi = HT.hometown_game(town, team, g.get("home"), neutral=bool(g.get("neutral_site"))) if town else None
         s = SC.situation(
             r["market"], r.get("side") or ("YES" if r["market"] == "anytime_td" else ""), line=r.get("line"),
             position=r.get("position") or "", values=r.get("recent_values") or [],
@@ -294,10 +304,15 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
             missed_last=(lw is not None and tw is not None and lw < tw),
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
-            tgt_rank=tgt_rank.get(r["player"]), league=sport)
+            tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None)
         codes = SC.flags(s)
         r["scout_flags"] = codes
         r["scout_notes"] = SC.notes(codes, sport)
+        if mi is not None:
+            # The card names the town: "…in his hometown (Detroit, MI)…".
+            r["scout_notes"] = [x.replace("in his hometown", f"in his hometown ({town['city']}, {town['state']})", 1)
+                                if c in ("hometown_over", "hometown_under") else x
+                                for c, x in zip([c for c in codes if c in SC.FLAGS], r["scout_notes"])]
         n += bool(codes)
     return n
 

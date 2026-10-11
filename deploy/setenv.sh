@@ -107,7 +107,10 @@ case "$KEY" in
     [[ "$VALUE" =~ ^[0-9]+$ ]] || die "the port is a number — 587 for Gmail" ;;
   QB_RESEND_KEY)
     [[ "$VALUE" == re_* ]] || die "a Resend API key starts with re_ (resend.com → API Keys)" ;;
-  QB_SMTP_USER|QB_MAIL_FROM|QB_ALERT_EMAIL|QB_MAIL_REPLY_TO)
+  QB_ALERT_EMAIL)
+    [[ "$VALUE" == *"@"* || "$VALUE" == "off" ]] \
+      || die "QB_ALERT_EMAIL is an email address, or off to stop crash alerts" ;;
+  QB_SMTP_USER|QB_MAIL_FROM|QB_MAIL_REPLY_TO)
     [[ "$VALUE" == *"@"* ]] || die "$KEY is an email address, e.g. qellysbook@gmail.com" ;;
   QB_INSTAGRAM)
     # Unlike the invite, this one is PUBLIC — the Discord page cites it to

@@ -38,6 +38,8 @@ missing and a flag needing a missing field simply does not fire):
                           five before them — the direction of his role
     games_season          games he has played this season
     missed_last           he did not play his team's previous game
+    hometown              a road game within 50 miles of where he was born
+                          (engine/hometown)
 
 Standard library only. Pure: no I/O.
 """
@@ -89,6 +91,13 @@ FLAGS = {
     "thin_sample": "fewer than three games of evidence this season",
     "boom_bust": "a boom-or-bust player — his games swing widely",
     "short_week_over": "an over on a short week (Thursday)",
+    # Ethan, 2026-10-11: "hometown returns ... when they come back to their
+    # hometown and play a game in their hometown, I feel like that matters."
+    # Both sides are flagged, because the occasion can cut either way, and
+    # the five-season replay decides which (if either) is real.
+    "hometown_over": "an over in a road game in his hometown — family in the stands, and nerves that "
+                     "cut both ways",
+    "hometown_under": "an under in a road game in his hometown — the game a player circles on the calendar",
     # Ethan's research post-mortem, 2026-10-07 ("stat legs went 8 for 11,
     # but both 2-legs died on one leg. The new rule: reception overs
     # outside a team's top-2 targets need 15%+ target share"). A note
@@ -168,7 +177,7 @@ def _cv(xs):
 def situation(market: str, side: str, line=None, position: str = "", values=None,
               game_spread=None, home: bool | None = None, total=None, wind=None, outdoor=None,
               weekday=None, games_season=None, missed_last=None,
-              tgt_share=None, tgt_rank=None, league: str = "nfl") -> dict:
+              tgt_share=None, tgt_rank=None, league: str = "nfl", hometown=None) -> dict:
     """The situation from the pick and its game. ``values`` = his results in
     this market, NEWEST FIRST (the shape every row and the history carry).
     ``tgt_share`` is his share of his team's targets this season and
@@ -184,7 +193,7 @@ def situation(market: str, side: str, line=None, position: str = "", values=None
             "prior5": _avg(vals[3:8]) if len(vals) >= 6 else None,
             "games_season": games_season if games_season is not None else len(vals),
             "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank,
-            "league": league or "nfl"}
+            "league": league or "nfl", "hometown": bool(hometown)}
 
 
 def flags(s: dict) -> list[str]:
@@ -242,6 +251,11 @@ def flags(s: dict) -> list[str]:
         out.add("boom_bust")
     if over and s.get("weekday") == 3:
         out.add("short_week_over")
+    if s.get("hometown") and m in (VOLUME | SCORING):
+        if over:
+            out.add("hometown_over")
+        if under:
+            out.add("hometown_under")
     rank, share = s.get("tgt_rank"), s.get("tgt_share")
     if over and m in RECEIVING and rank is not None and share is not None \
             and int(rank) > 2 and float(share) < t("THIN_TARGET_SHARE"):
