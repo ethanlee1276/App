@@ -344,6 +344,7 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
                 money = []
         finally:
             h.close()
+    logged = {(se, wk, t) for p in plays.values() for se, wk, t, _o in p.get("games") or []}
     proven_h = scouthist.load(sport=sport)
     ks = (load().get(sport) or {}).get("flags") or {}
 
@@ -361,7 +362,12 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
         town = HT.lookup(towns, r["player"], r.get("position")) if towns and g else None
         mi = HT.hometown_game(town, team, g.get("home"), neutral=bool(g.get("neutral_site"))) if town else None
         here, chase = {}, None
+        missed = lw is not None and tw is not None and lw < tw
         sg = sched.game(home=g.get("home"), away=g.get("away"), day=g.get("date")) if g and sched.rows else None
+        if sg and plays:
+            # NFL: from the schedule and his stored logs, never the row's
+            # recent games, which carry last season's (SP.missed_last).
+            missed = bool(SP.missed_last(sched, sg, team, plays.get(r["player"]), logged))
         if sg:
             seq, i, vals = SP.live_inputs(plays.get(r["player"]), sg, team, r["market"])
             here, chase = SP.player_spots(sched, sg, team, player=r["player"], position=r.get("position") or "",
@@ -373,7 +379,7 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
             game_spread=(g or {}).get("spread"), home=(team == (g or {}).get("home")) if g else None,
             total=(g or {}).get("total"), wind=w.get("wind_mph") if w.get("measured") else None,
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
-            missed_last=(lw is not None and tw is not None and lw < tw),
+            missed_last=missed,
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
             tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None, spots=here)
         codes = SC.flags(s)

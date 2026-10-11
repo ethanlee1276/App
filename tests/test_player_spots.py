@@ -350,6 +350,38 @@ def test_the_card_shows_an_unproven_spot_as_a_line_and_a_proven_one_as_a_caution
     assert not [t for t in r.get("scout_spots") or [] if t.startswith("Primetime")], "said once, not twice"
 
 
+def test_first_game_back_is_read_from_the_schedule_not_a_carried_season():
+    """2026-10-11, the box after the replay saved: 59 picks lowered, and
+    the first eight all "his first game back" — St. Brown and Gibbs in one
+    build. A teammate's carried week 17 from last season sat beside this
+    season's week 5 in the rows' recent games, so every man on the team
+    looked to have missed its last game. Now: the schedule and his logs."""
+    from engine import likelyctx as L
+    real = (SP.load_schedule, SP.player_history)
+    SP.load_schedule = lambda path=None: _sched()
+    SP.player_history = lambda hist, players, since: {
+        "Played Receiver": {"games": [(2025, w, "PHI", f"O{w}") for w in range(1, 6)], "values": {}},
+        "Sat Receiver": {"games": [(2025, w, "PHI", f"O{w}") for w in range(1, 5)], "values": {}}}
+    try:
+        rows = [{"player": p, "team": "PHI", "opponent": "DEN", "position": "WR", "market": "receptions",
+                 "side": "OVER", "line": 5.5, "recent_values": [6, 6, 6, 6, 6]}
+                for p in ("Played Receiver", "Sat Receiver")]
+        carried = [{"week": w, "value": 5.0} for w in range(17, 0, -1)]      # last season, carried
+        result = {"games": [{"home": "DEN", "away": "PHI", "date": "2025-10-06"}],
+                  "recommendations": [{"player": "Returning Back", "team": "PHI", "logs": carried},
+                                      {"player": "Played Receiver", "team": "PHI",
+                                       "logs": [{"week": w, "value": 6} for w in range(5, 0, -1)]}]}
+        L.annotate(rows, result, "nfl")
+    finally:
+        SP.load_schedule, SP.player_history = real
+    assert "back_from_absence" not in rows[0]["scout_flags"], "he played week 5"
+    assert "back_from_absence" in rows[1]["scout_flags"], "he did not"
+    m = SP.missed_last(_sched(), _sched().game(2025, 6, "DEN"), "PHI", {"games": []}, {(2025, 5, "PHI")})
+    assert m is None, "no game of his this season: unknown, not missed"
+    assert SP.missed_last(_sched(), _sched().game(2025, 6, "DEN"), "PHI",
+                          {"games": [(2025, 1, "PHI", "O1")]}, set()) is None, "last game not in our logs yet"
+
+
 def test_the_engine_row_fields_are_drawn_on_the_card():
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     i = app.index("function obWhyHTML(")

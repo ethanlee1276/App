@@ -449,3 +449,30 @@ def live_inputs(hist_row: dict | None, g: dict, team, market: str) -> tuple[list
     games = past + [(str(team or "").upper(), opp)]
     vals = [v for w, v in (h.get("values") or {}).get((g["season"], market), []) if w < g["week"]]
     return games, len(games) - 1, vals
+
+
+def missed_last(sched: Schedule, g: dict, team, hist_row: dict | None, logged: set) -> bool | None:
+    """Did he sit out his team's last game? From the schedule and his own
+    stored logs — the replay's definition (engine/scouthist), read the same
+    way on the live board. True / False, or None when it cannot be told:
+    no earlier game this season, no game of his this season to judge from,
+    or that game not in our logs yet (``logged`` = every (season, week,
+    team) any board player has a log for).
+
+    2026-10-11: the board used to read this off each row's recent games,
+    where the prior-season carry (engine/carry) puts last season's week 17
+    beside this season's week 5 with nothing to tell them apart. One
+    teammate carrying last season made his whole team "miss" its last
+    game, and the proven first-game-back cut landed on every one of them —
+    St. Brown and Gibbs in the same build."""
+    team = str(team or "").upper()
+    prev = sched.before(team, g)
+    if not prev:
+        return None
+    last = prev[-1]
+    if (last["season"], last["week"], team) not in logged:
+        return None
+    mine = {(s, w) for s, w, _t, _o in (hist_row or {}).get("games") or []}
+    if not any(s == g["season"] and w < g["week"] for s, w in mine):
+        return None
+    return (last["season"], last["week"]) not in mine
