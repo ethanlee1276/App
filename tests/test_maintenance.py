@@ -51,6 +51,12 @@ def _no_feeds(monkeypatch):
     # by test order. Found 2026-10-07; stubbed like the NHL and NBA pulls.
     monkeypatch.setattr(ingest, "ingest_nfl_results",
                         lambda conn, season: {"player_logs": 0, "skipped": []})
+    # The daily NFL schedule refresh (nflverse's games.csv, on GitHub) — the
+    # same trap one more time: green only when an earlier test had left the
+    # CSV in data/cache. Found 2026-10-11 by running the suite with the
+    # network refused; read at call time, so the module patch is seen.
+    from engine.sources import nflverse
+    monkeypatch.setattr(nflverse, "load_schedules", lambda force=False: [])
     monkeypatch.setattr(nhldata, "refresh_rosters",
                         lambda conn, date, **kw: {"teams": 0, "players": 0,
                                                   "faces_changed": 0,

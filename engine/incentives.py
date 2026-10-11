@@ -271,21 +271,67 @@ def _money(text) -> float:
         raise ValueError(f"{text!r} is not an amount of money") from None
 
 
+def _real_link(source: str) -> bool:
+    """An http(s) address with a real host name ("example.com", never a
+    bare word like "link-to-the-report")."""
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(str(source or "").strip())
+    except ValueError:
+        return False
+    host = (u.hostname or "")
+    return u.scheme in ("http", "https") and "." in host and not host.startswith(".") \
+        and not host.endswith(".")
+
+
+def logged_team(hconn, player: str, season: int) -> str | None:
+    """His team in our NFL logs this season or last (the latest game), or
+    None when the logs have never heard of him — the check that keeps a
+    misspelled or made-up name off the site."""
+    from .sources.oddsapi import normalize_name
+    want = normalize_name(player)
+    best = None
+    for r in hconn.execute("SELECT player, team, season, period FROM player_game_logs "
+                           "WHERE sport='nfl' AND season >= ?", (season - 1,)):
+        if normalize_name(r["player"]) == want:
+            key = (int(r["season"]), str(r["period"]))
+            if best is None or key > best[0]:
+                best = (key, str(r["team"] or ""))
+    return best[1] if best else None
+
+
 def add(player: str, stat: str, target, bonus, source: str, team: str = "",
-        season: int | None = None, path: Path | str | None = None) -> dict:
+        season: int | None = None, path: Path | str | None = None, hconn=None) -> dict:
     """Save one incentive in the box's table (replacing the same player's
-    same stat). Refuses a stat we cannot measure and an entry with no link
-    to the report it came from."""
+    same stat). Refuses a stat we cannot measure, an entry with no real
+    link to the report it came from, and a player our NFL logs have never
+    heard of this season or last — 2026-10-11, the runbook's example
+    ("Player Name", "https://link-to-the-report") was pasted as it stood,
+    and nothing stopped it reaching the site."""
     from .seasons import season_of
     if stat not in TRACKABLE:
         raise ValueError(f"{stat!r} is not a stat our logs carry — one of: {', '.join(TRACKABLE)}")
-    if not str(source or "").startswith(("http://", "https://")):
-        raise ValueError("every incentive needs the link to the report it came from (--source https://…)")
+    if not _real_link(source):
+        raise ValueError("every incentive needs the real link to the report it came from "
+                         "(--source https://www.site.com/the-article)")
     if not str(player or "").strip():
         raise ValueError("--player is required")
+    season = int(season or season_of("nfl", _dt.date.today().isoformat()))
+    own = hconn is None
+    if own:
+        from .db import connect
+        hconn = connect()
+    try:
+        found = logged_team(hconn, player, season)
+    finally:
+        if own:
+            hconn.close()
+    if found is None:
+        raise ValueError(f"{player.strip()!r} is not in our NFL game logs for {season - 1} or {season} — "
+                         "check the spelling against the box scores")
+    team = team or found
     p = Path(path) if path is not None else _box_path()
     raw = _read(p)
-    season = int(season or season_of("nfl", _dt.date.today().isoformat()))
     entry = {"player": player.strip(), "team": team.strip().upper(), "stat": stat,
              "threshold": float(target), "bonus_usd": _money(bonus), "source": source.strip(),
              "season": season, "added": _dt.date.today().isoformat()}

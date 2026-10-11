@@ -546,15 +546,16 @@ def real_lines(conn, market: str, sport: str = "nfl") -> dict:
     return out
 
 
-def dated(rows, seasons=None) -> int:
+def dated(rows, seasons=None, dates: dict | None = None) -> int:
     """Stamp each row with its game's date, in place. Returns how many.
 
     The logs key a game by (season, period); the harvest keys a price by
     (player, date). `formbook.game_dates` is the bridge both sides of
     this codebase already use.
     """
-    from .formbook import game_dates
-    dates = game_dates(seasons)
+    if dates is None:
+        from .formbook import game_dates
+        dates = game_dates(seasons)
     hit = 0
     for r in rows:
         try:
@@ -697,8 +698,10 @@ def ranked_record(rows, prob, by: str = "edge", take: float = 0.25,
             "hit_rate": wins / n, "pool": len(pool)}
 
 
-def report_real(market: str, conn=None, db_path=None) -> list:
-    """The same candidates, judged at the prices books really hung."""
+def report_real(market: str, conn=None, db_path=None, dates: dict | None = None) -> list:
+    """The same candidates, judged at the prices books really hung.
+    ``dates`` = {(season, week, team): date}, by default nflverse's
+    schedule (formbook.game_dates); a caller with its own passes it."""
     import sqlite3 as _sq
     close_it = conn is None
     conn = conn or _sq.connect(str(db_path or DEFAULT_DB))
@@ -710,7 +713,7 @@ def report_real(market: str, conn=None, db_path=None) -> list:
         if not closes:
             return out + ["  no harvested closing lines for this market — "
                           "this needs the box that bought them"]
-        stamped = dated(data, sorted({d["season"] for d in data}))
+        stamped = dated(data, sorted({d["season"] for d in data}), dates=dates)
         joined, why = matched(data, closes)
         out.append(f"  {len(data):,} walked-forward rows, {stamped:,} dated, "
                    f"{len(closes):,} harvested closes, "

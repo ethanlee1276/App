@@ -102,7 +102,7 @@ def test_team_totals_are_summed_per_team_week_from_the_rows_own_team():
 def test_a_share_the_book_ignores_is_found_where_the_count_is_not():
     c = _conn()
     dates = _league(c)
-    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates)
+    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates, hosts={})
     sig = out["signals"]
     for name in ("target_share", "air_share", "wopr"):
         assert sig[name]["z"] > 5, (name, sig.get(name))
@@ -118,7 +118,7 @@ def test_a_share_the_book_ignores_is_found_where_the_count_is_not():
 def test_no_air_yards_on_file_leaves_wopr_thin_rather_than_half_built():
     c = _conn()
     dates = _league(c, with_air=False)
-    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates)
+    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates, hosts={})
     assert out["signals"]["target_share"]["z"] > 5
     assert "air_share" in out["thin"] and "wopr" in out["thin"], out["thin"]
     assert "air_share" not in out["signals"] and "wopr" not in out["signals"]
@@ -127,7 +127,7 @@ def test_no_air_yards_on_file_leaves_wopr_thin_rather_than_half_built():
 def test_a_market_without_usage_rows_names_the_shares_as_thin():
     c = _conn()
     dates = _league(c, tag=False)
-    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates)
+    out = F.signal_scan(c, "rec_yds", min_pairs=100, dates=dates, hosts={})
     for name in ("target_share", "air_share", "wopr"):
         assert out["thin"].get(name) == 0, (name, out["thin"])
 

@@ -380,25 +380,44 @@ def _logs(player="Chase Guy", team="KC", per_game=6.0, games=13, stat="reception
 def test_an_incentive_needs_a_stat_we_measure_and_the_reports_link():
     from engine import incentives as INC
     p = os.path.join(tempfile.mkdtemp(), "box.json")
+    h = _logs()
     for bad in ({"stat": "sacks", "source": "https://x.test/a"}, {"stat": "receptions", "source": ""},
-                {"stat": "receptions", "source": "a beat writer said so"}):
+                {"stat": "receptions", "source": "a beat writer said so"},
+                {"stat": "receptions", "source": "https://link-to-the-report"}):
         try:
-            INC.add("Chase Guy", bad["stat"], 100, "500K", bad["source"], path=p)
+            INC.add("Chase Guy", bad["stat"], 100, "500K", bad["source"], path=p, hconn=h)
             raise AssertionError(f"taken: {bad}")
         except ValueError:
             pass
-    e = INC.add("Chase Guy", "receptions", 100, "$500K", "https://x.test/report", season=2026, path=p)
+    e = INC.add("Chase Guy", "receptions", 100, "$500K", "https://x.test/report", season=2026, path=p, hconn=h)
     assert e["bonus_usd"] == 500000 and e["threshold"] == 100.0
-    INC.add("Chase Guy", "receptions", 90, "1.5M", "https://x.test/newer", season=2026, path=p)
+    assert e["team"] == "KC", "his team comes from our logs when not given"
+    INC.add("Chase Guy", "receptions", 90, "1.5M", "https://x.test/newer", season=2026, path=p, hconn=h)
     tbl = INC.load(p)
     assert len(tbl["entries"]) == 1 and tbl["entries"][0]["bonus_usd"] == 1.5e6, "the same chase is replaced"
     assert INC.remove("Chase Guy", "receptions", path=p) == 1 and INC.load(p)["entries"] == []
 
 
+def test_a_name_our_logs_have_never_seen_is_refused():
+    """2026-10-11: the runbook's example — "Player Name", with
+    "https://link-to-the-report" — was pasted as it stood and saved."""
+    from engine import incentives as INC
+    p = os.path.join(tempfile.mkdtemp(), "box.json")
+    for name in ("Player Name", "Chase Gyu"):
+        try:
+            INC.add(name, "receptions", 100, "500K", "https://x.test/r", season=2026, path=p, hconn=_logs())
+            raise AssertionError(f"taken: {name}")
+        except ValueError as exc:
+            assert "not in our NFL game logs" in str(exc)
+    assert INC.load(p)["entries"] == [], "nothing saved"
+    assert INC.logged_team(_logs(), "chase guy", 2027) == "KC", "last season counts, spelled any case"
+
+
 def test_the_box_entries_sit_beside_the_checked_in_table_and_last_season_stays_out():
     from engine import incentives as INC
-    INC.add("Chase Guy", "receptions", 100, 500000, "https://x.test/r", season=2026)
-    INC.add("Old Guy", "receptions", 100, 500000, "https://x.test/old", season=2025)
+    INC.add("Chase Guy", "receptions", 100, 500000, "https://x.test/r", season=2026, hconn=_logs())
+    INC.add("Old Guy", "receptions", 100, 500000, "https://x.test/old", season=2025,
+            hconn=_logs(player="Old Guy"))
     tbl = INC.load()
     assert {e["player"] for e in tbl["entries"]} >= {"Chase Guy", "Old Guy"}
     rep = INC.report(_logs(), 2026)
@@ -411,7 +430,7 @@ def test_the_box_entries_sit_beside_the_checked_in_table_and_last_season_stays_o
 def test_a_live_incentive_shows_on_its_card_with_the_link():
     from engine import incentives as INC
     p = os.path.join(tempfile.mkdtemp(), "box.json")
-    INC.add("Chase Guy", "receptions", 100, 500000, "https://x.test/r", season=2026, path=p)
+    INC.add("Chase Guy", "receptions", 100, 500000, "https://x.test/r", season=2026, path=p, hconn=_logs())
     entries = INC.report(_logs(), 2026, p)["entries"]
     rows = [{"player": "Chase Guy", "market": "receptions", "model_prob": 0.6},
             {"player": "Chase Guy", "market": "rec_yds"}]

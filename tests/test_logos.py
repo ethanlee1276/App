@@ -299,7 +299,11 @@ def test_the_roster_carries_a_face_for_the_current_season():
     season's file by construction. It is insurance for rookies and
     practice-squad promotions, who have a photo and no stat line."""
     from engine.sources import nflverse as nv
-    idx = nv.roster_index(2026)
+    from engine.sources.fetch import DataUnavailable
+    try:
+        idx = nv.roster_index(2026)
+    except DataUnavailable:
+        idx = {}                     # not cached, and the suite has no network
     if not idx:
         return                       # no cached roster in this checkout
     have = sum(1 for v in idx.values() if v.get("headshot"))

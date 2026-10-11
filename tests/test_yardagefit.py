@@ -313,7 +313,7 @@ def test_without_a_harvest_it_says_so_rather_than_reporting_zeroes():
                  "under_odds INT)")
     conn.commit()
     try:
-        lines = Y.report_real("rush_yds", conn=conn)
+        lines = Y.report_real("rush_yds", conn=conn, dates={})
     finally:
         conn.close()
     assert any("box that bought them" in x for x in lines), lines
@@ -374,7 +374,7 @@ def test_a_thin_harvest_says_it_is_a_harvest_problem_not_a_verdict():
                  "'e','KC','DEN','P1','rush_yds','DK',25.5,-110,-110)")
     conn.commit()
     try:
-        lines = Y.report_real("rush_yds", conn=conn)
+        lines = Y.report_real("rush_yds", conn=conn, dates={})
     finally:
         conn.close()
     text = "\n".join(lines)

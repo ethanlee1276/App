@@ -627,7 +627,12 @@ first). Paste back anything that prints an error or looks off.
     `revenge`, `contract_year`, `extra_rest`, …).
 
     **C. Add an incentive when a report gives one.** Example: a report
-    says a receiver gets $500,000 at 100 catches:
+    says a receiver gets $500,000 at 100 catches. **Put in his real name
+    and the article's real link in place of the two examples.** Pasted
+    as written, the example went in on 2026-10-11. Now the command
+    refuses a name our game logs don't know and a link that isn't a real
+    web address. If you added the example, take it out with
+    `... engine.incentives remove --player "Player Name"`.
     ```
     cd /srv/qellys && sudo -u qellys python3 -m engine.incentives add --player "Player Name" --stat receptions --target 100 --bonus 500K --source https://link-to-the-report
     cd /srv/qellys && sudo -u qellys python3 -m engine.incentives list

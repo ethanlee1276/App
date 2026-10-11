@@ -268,7 +268,7 @@ def test_a_feature_the_book_ignores_is_found():
         carries[f"P{i}"] = [22 if high else 5] * 14
     c = _conn()
     dates = _featured(c, "rush_yds", outcome, "carries", carries, line=50.0)
-    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates)
+    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates, hosts={})
     assert out["signals"]["carries"]["z"] > 5, out["signals"]["carries"]
     assert "** orders it **" in "\n".join(formbook.signal_lines(out))
 
@@ -283,7 +283,7 @@ def test_a_feature_unrelated_to_the_outcome_is_not():
         carries[f"P{i}"] = [rng.uniform(0, 25) for _ in range(14)]
     c = _conn()
     dates = _featured(c, "rush_yds", outcome, "carries", carries, line=50.0)
-    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates)
+    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates, hosts={})
     assert abs(out["signals"]["carries"]["z"]) < 2.5
 
 

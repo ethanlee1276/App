@@ -271,10 +271,44 @@ def main() -> int:
     # the box is richer than a clone keeps passing right up until it is
     # deployed somewhere that never fitted anything.
     env["QB_MODELS_DIR"] = os.path.join(sandbox, "models")
+    # …AND IT MUST NOT REACH THE INTERNET (2026-10-11). Run once with every
+    # outbound connection refused and logged, about seventy files reached
+    # GitHub, ESPN, MLB, Kalshi, Polymarket, the NHL, the Odds API and
+    # Stripe; the cloud sandbox's proxy hid most of it, the droplet sent
+    # it all, and five files only passed because a download happened to be
+    # there to read. tests/netguard/sitecustomize.py is imported by every
+    # test process and every script a test launches, and refuses anything
+    # but this machine — the failure the code already survives on a box
+    # with no egress. Its tally prints at the end of the run.
+    guard = os.path.join(ROOT, "tests", "netguard")
+    env["PYTHONPATH"] = guard + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    env["QB_NETGUARD_LOG"] = os.path.join(sandbox, "netguard.log")
     try:
         return _run(env, sys.argv[1:])
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
+
+
+def netguard_tally(path: str, top: int = 8) -> str:
+    """One line on what the network guard refused this run, busiest first
+    ("" when nothing tried). Not a failure: the refusal already kept the
+    suite off the internet; the line is so a new caller gets noticed."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            rows = [ln.rstrip("\n").split("\t") for ln in fh if "\t" in ln]
+    except OSError:
+        return ""
+    if not rows:
+        return ""
+    by: dict = {}
+    for script, host in rows:
+        by.setdefault(script, {}).setdefault(host, 0)
+        by[script][host] += 1
+    busiest = sorted(by.items(), key=lambda kv: -sum(kv[1].values()))
+    shown = "; ".join(f"{s} ({', '.join(sorted(h))})" for s, h in busiest[:top])
+    more = f"; and {len(busiest) - top} more" if len(busiest) > top else ""
+    return (f"  network refused {len(rows)} time(s) in {len(by)} file(s) — kept off the "
+            f"internet by tests/netguard: {shown}{more}")
 
 
 def _run(env, argv) -> int:
@@ -361,6 +395,10 @@ def _run(env, argv) -> int:
             failed.append(name)
             print(f"  ❌ {name:28} FAILED")
             print((out + err)[-800:])
+
+    refused = netguard_tally(env.get("QB_NETGUARD_LOG", ""))
+    if refused:
+        print("\n" + refused)
 
     took = time.monotonic() - started
     if "--slowest" in argv:

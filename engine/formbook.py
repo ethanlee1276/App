@@ -432,7 +432,7 @@ def schedule_context(dates: dict) -> dict:
 
 
 def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
-                dates: dict | None = None) -> dict:
+                dates: dict | None = None, hosts: dict | None = None) -> dict:
     """Does ANYTHING we record order this market against a book?
 
     THE QUESTION LEFT WHEN THE DIAL ANSWERS NO. `scan` sweeps the recency
@@ -468,7 +468,9 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
 
     base = base_for("nfl")
     ctx = schedule_context(dates if dates is not None else game_dates(seasons))
-    hosts = home_teams(seasons)
+    # ``hosts`` beside ``dates``, for the same reason: both default to the
+    # nflverse schedule, and a caller that has its own (a test) passes it.
+    hosts = hosts if hosts is not None else home_teams(seasons)
     cand: dict = {}
     for key, hist, career, vs_opp, line, over, _oo, _uo in rows:
         season, week, player, team, _opponent = key
@@ -559,7 +561,8 @@ def _payout(odds: int) -> float:
 
 
 def roi_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
-             dates: dict | None = None, split_week: int = SPLIT_WEEK) -> dict:
+             dates: dict | None = None, split_week: int = SPLIT_WEEK,
+             hosts: dict | None = None) -> dict:
     """Does any signal MAKE MONEY at the price the book actually hung?
 
     WHY AUC IS NOT ENOUGH, and why this exists beside `signal_scan`.
@@ -596,7 +599,9 @@ def roi_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
 
     base = base_for("nfl")
     ctx = schedule_context(dates if dates is not None else game_dates(seasons))
-    hosts = home_teams(seasons)
+    # ``hosts`` beside ``dates``, for the same reason: both default to the
+    # nflverse schedule, and a caller that has its own (a test) passes it.
+    hosts = hosts if hosts is not None else home_teams(seasons)
     recs: list = []
     for key, hist, career, vs_opp, line, over, oo, uo in rows:
         season, week, player, team, _opponent = key
