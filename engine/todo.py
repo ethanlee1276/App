@@ -437,7 +437,7 @@ def _legal_blanks() -> Item:
 
 
 def _legal_mailboxes() -> Item:
-    """The two addresses the legal pages publish have to receive mail.
+    """The address the legal pages publish has to receive mail.
 
     NOT CHECKABLE FROM HERE and deliberately reported as unknown rather
     than assumed: this box cannot send mail to itself and find out. It is
@@ -445,10 +445,10 @@ def _legal_mailboxes() -> Item:
     contact — §8 of the Privacy Policy and §16's "try us first" step both
     route through it, and Stripe asks for one that works.
     """
-    return Item("config", "support@ and privacy@ receive mail", UNKNOWN,
-                "published in Terms §18 and Privacy §14; this machine "
-                "cannot test a mailbox",
-                "send a message to support@qellysbook.com from your phone "
+    return Item("config", "the site's inbox receives mail", UNKNOWN,
+                "qellysbook@gmail.com, published in Terms §18 and Privacy "
+                "§14 (Ethan, 2026-10-11); this machine cannot test a mailbox",
+                "send a message to qellysbook@gmail.com from your phone "
                 "and check it arrives")
 
 

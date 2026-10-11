@@ -99,6 +99,14 @@ case "$KEY" in
     [[ "$VALUE" == https://discord.gg/* ]] || die "that is not a discord.gg invite" ;;
   QB_MAX_INFLIGHT)
     [[ "$VALUE" =~ ^[0-9]+$ ]] || die "QB_MAX_INFLIGHT is a number of requests" ;;
+  # The mail relay (docs/EMAIL.md; the site's Gmail since 2026-10-11).
+  QB_SMTP_HOST)
+    [[ "$VALUE" != *"://"* && "$VALUE" != *" "* ]] \
+      || die "just the server name, e.g. smtp.gmail.com — no https:// and no spaces" ;;
+  QB_SMTP_PORT)
+    [[ "$VALUE" =~ ^[0-9]+$ ]] || die "the port is a number — 587 for Gmail" ;;
+  QB_SMTP_USER|QB_MAIL_FROM|QB_ALERT_EMAIL)
+    [[ "$VALUE" == *"@"* ]] || die "$KEY is an email address, e.g. qellysbook@gmail.com" ;;
   QB_INSTAGRAM)
     # Unlike the invite, this one is PUBLIC — the Discord page cites it to
     # people who have not subscribed, which is the point of citing it.

@@ -205,9 +205,9 @@ def test_the_contact_address_is_on_the_about_page():
     unread."""
     i = APP.index("function renderAbout()")
     body = APP[i:APP.index("async function renderWhy", i)]
-    assert "mailto:support@qellysbook.com" in body
+    assert "mailto:qellysbook@gmail.com" in body   # the site's inbox, 2026-10-11
     terms = _read("web", "terms.html")
-    assert "support@qellysbook.com" in terms, \
+    assert "qellysbook@gmail.com" in terms, \
         "the About page and the terms name different addresses"
 
 

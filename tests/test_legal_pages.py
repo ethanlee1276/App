@@ -99,7 +99,9 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             # names the operator, the address and what the address is
             # for, so the check moved to the thing that has to be there:
             # a reachable mailbox, spelled out.
-            ("contact", ["support@qellysbook.com"]),
+            # The site's inbox since 2026-10-11 (Ethan: "i have an email
+            # for the site. its qellysbook@gmail.com").
+            ("contact", ["qellysbook@gmail.com"]),
             ("who the counterparty is", ["Ethan Lee"]),
             # Added 2026-08-22 when the documents were completed.
             ("arbitration", ["binding individual arbitration"]),
@@ -291,8 +293,11 @@ def test_both_documents_publish_a_reachable_address():
     """§8 of the Privacy Policy and §16's "try us first" both route
     through a mailbox. A policy that grants rights with no way to
     exercise them grants nothing."""
-    assert "support@qellysbook.com" in TERMS
-    assert "privacy@qellysbook.com" in PRIVACY
+    # One real inbox since 2026-10-11, qellysbook@gmail.com (Ethan: "i
+    # have an email for the site"); support@ and privacy@qellysbook.com
+    # were never confirmed to receive anything.
+    assert "qellysbook@gmail.com" in TERMS
+    assert "qellysbook@gmail.com" in PRIVACY
     for doc in (TERMS, PRIVACY):
         assert "mailto:" in doc, "the address is not clickable"
 

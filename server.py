@@ -711,8 +711,30 @@ def _seclog(kind, outcome, ip=None, **kw):
         pass
 
 
-#: Where a locked-out reader is sent when the site cannot email them.
-SUPPORT_EMAIL = "support@qellysbook.com"
+#: The site's inbox (Ethan, 2026-10-11: "i have an email for the site. its
+#: qellysbook@gmail.com"). Where a locked-out reader is sent when the site
+#: cannot email them, and the address every page publishes.
+SUPPORT_EMAIL = "qellysbook@gmail.com"
+
+#: At most this many reset emails a day, all addresses together. The site
+#: sends through its own Gmail, which allows a few hundred messages a day;
+#: a script asking for links to every address it knows must not spend that
+#: and get the inbox suspended. Past the cap the page answers exactly as
+#: before and nothing is sent; the security log says why.
+RESET_MAIL_PER_DAY = 150
+_RESET_SENT: list = []
+_RESET_LOCK = threading.Lock()
+
+
+def _reset_budget_ok() -> bool:
+    """Take one send from today's allowance, or say there is none left."""
+    now = time.time()
+    with _RESET_LOCK:
+        _RESET_SENT[:] = [t for t in _RESET_SENT if now - t < 86400]
+        if len(_RESET_SENT) >= RESET_MAIL_PER_DAY:
+            return False
+        _RESET_SENT.append(now)
+        return True
 
 
 def _mail_on() -> bool:
@@ -741,6 +763,9 @@ def _send_reset(email: str) -> None:
         finally:
             conn.close()
         if not token:
+            return
+        if not _reset_budget_ok():
+            _seclog("password_reset_mail", "daily_cap", email=email)
             return
         from engine import mailer
         subject, text, html = A.reset_message(A.reset_link(token))
@@ -1994,7 +2019,9 @@ class Handler(BaseHTTPRequestHandler):
                 # …and the page is told whether mail can go out at all,
                 # so it can say "not switched on yet" instead of
                 # offering a subscription to nothing.
-                out["available"] = mailer.configured()
+                # bulk_ok, not configured: the site's Gmail carries
+                # resets and alerts, never a mailing list (engine/mailer).
+                out["available"] = mailer.bulk_ok()
                 return self._send(200, json.dumps(out).encode(), ".json")
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")

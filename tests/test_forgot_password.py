@@ -196,7 +196,7 @@ def test_the_server_answers_every_address_alike_and_signs_the_reset_browser_in()
         known = _post(base, "/api/account/forgot", {"email": "fan@example.com"})
         unknown = _post(base, "/api/account/forgot", {"email": "nobody@example.com"})
         assert known[:2] == unknown[:2] == (200, {"sent": False, "by_email": False,
-                                                  "contact": "support@qellysbook.com"})
+                                                  "contact": "qellysbook@gmail.com"})
         assert _post(base, "/api/account/forgot", {"email": "nope"})[0] == 400
         c = A.connect(db)
         token = A.start_reset(c, "fan@example.com")

@@ -16,7 +16,7 @@ below the line is done:
 | Opt-in, per account, per digest | `digest_optin` in accounts.db | done |
 | One-click unsubscribe, no sign-in | `/unsubscribe?t=…` | done |
 | The preview CLI | `python3 digest.py morning` | done |
-| Password reset email (2026-10-11) | `engine/accounts.reset_message`, `server._send_reset` | done; until a provider is set, the Forgot page sends people to support and the owner makes the link by hand (`python3 -m engine.accounts reset-link`) |
+| Password reset email (2026-10-11) | `engine/accounts.reset_message`, `server._send_reset` | done; sends through the site's Gmail once its app password is on the box (runbook step 26) |
 | Actually sending | `engine/mailer.send` | **needs a provider** |
 
 Read the copy before anything else:
@@ -24,6 +24,29 @@ Read the copy before anything else:
     python3 digest.py morning
     python3 digest.py nightly
     python3 digest.py morning --locked     # what a signed-out reader gets
+
+---
+
+## The site's Gmail — one-to-one mail only (2026-10-11)
+
+Ethan: *"i have an email for the site. its qellysbook@gmail.com."* Its
+SMTP server is the relay for **password resets** (and, if
+`QB_ALERT_EMAIL` is set, the owner's crash alerts): `smtp.gmail.com`,
+port 587, the full address as the user, and an **app password** made at
+myaccount.google.com/apppasswords — never the account's own password.
+Mail sent through Gmail is signed by Google for gmail.com, so it lands
+in inboxes without any DNS work. Step-by-step: runbook step 26.
+
+What Gmail is NOT used for: the digests. A personal Gmail account sends
+a few hundred messages a day, and a mailing list through it is how an
+account gets suspended — taking the resets with it. `mailer.bulk_ok()` is
+False on Gmail, the Account page does not offer the digests there, and
+`digest.py --send` refuses. Reset emails are capped at 150 a day
+(`server.RESET_MAIL_PER_DAY`) for the same reason. The digests still
+need the provider below.
+
+`sudo python3 -m engine.mailer test you@example.com` sends one message
+and says what went wrong, by kind, if it did not.
 
 ---
 

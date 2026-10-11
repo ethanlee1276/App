@@ -46,6 +46,18 @@ ENV_FROM = "QB_MAIL_FROM"
 
 REQUIRED = (ENV_HOST, ENV_USER, ENV_PASS, ENV_FROM)
 
+#: THE SITE'S OWN GMAIL (Ethan, 2026-10-11: "i have an email for the site.
+#: its qellysbook@gmail.com"). Gmail's SMTP server takes an APP PASSWORD —
+#: sixteen letters Google makes once 2-Step Verification is on — never the
+#: account's real password. It suits ONE-TO-ONE mail: a password reset to
+#: the person who asked, an alert to the owner. It does not suit a mailing
+#: list: a personal Gmail account sends a few hundred messages a day, and
+#: a suspension for bulk sending takes the site's only inbox with it. So
+#: `bulk_ok()` is False on Gmail and the digests stay off (docs/EMAIL.md).
+GMAIL_HOSTS = ("smtp.gmail.com", "smtp.googlemail.com")
+#: Shown as the sender when QB_MAIL_FROM is a bare address.
+SENDER_NAME = "Qellys Book"
+
 
 def missing() -> list:
     """Which settings are absent. Names only — never values."""
@@ -56,8 +68,31 @@ def configured() -> bool:
     return not missing()
 
 
+def is_gmail() -> bool:
+    return os.environ.get(ENV_HOST, "").strip().lower() in GMAIL_HOSTS
+
+
+def bulk_ok() -> bool:
+    """Whether a mailing to many people may go out — never through Gmail."""
+    return configured() and not is_gmail()
+
+
 def sender() -> str:
-    return os.environ.get(ENV_FROM, "").strip()
+    """QB_MAIL_FROM, with the site's name in front of a bare address, so the
+    inbox reads "Qellys Book" rather than an address on its own."""
+    from email.utils import formataddr, parseaddr
+    raw = os.environ.get(ENV_FROM, "").strip()
+    name, addr = parseaddr(raw)
+    if addr and not name and "@" in addr:
+        return formataddr((SENDER_NAME, addr))
+    return raw
+
+
+def _clean_password(pw: str) -> str:
+    """Google shows an app password in four groups of four ("abcd efgh ijkl
+    mnop") and the letters are the password, so the spaces come out. Only
+    for Gmail: another provider's password may hold a real space."""
+    return "".join(pw.split()) if is_gmail() else pw.strip()
 
 
 def message(to: str, subject: str, text: str, html: str = "") -> EmailMessage:
@@ -111,6 +146,8 @@ def send(to: str, subject: str, text: str, html: str = "") -> None:
             + " (see docs/EMAIL.md). Nothing was sent.")
     host = os.environ[ENV_HOST].strip()
     port = int(os.environ.get(ENV_PORT, "587").strip() or 587)
+    user = os.environ[ENV_USER].strip()
+    password = _clean_password(os.environ[ENV_PASS])
     msg = message(to, subject, text, html)
     # STARTTLS on 587, implicit TLS on 465 — the two ports every
     # transactional provider offers, and the credential must never cross
@@ -118,10 +155,65 @@ def send(to: str, subject: str, text: str, html: str = "") -> None:
     ctx = ssl.create_default_context()
     if port == 465:
         with smtplib.SMTP_SSL(host, port, context=ctx, timeout=30) as s:
-            s.login(os.environ[ENV_USER], os.environ[ENV_PASS])
+            s.login(user, password)
             s.send_message(msg)
         return
     with smtplib.SMTP(host, port, timeout=30) as s:
         s.starttls(context=ctx)
-        s.login(os.environ[ENV_USER], os.environ[ENV_PASS])
+        s.login(user, password)
         s.send_message(msg)
+
+
+# --- the owner's test send -----------------------------------------------------
+def _cli(argv=None) -> int:
+    """``python3 -m engine.mailer test you@example.com``
+
+    One short message, so the owner can see the settings work before a
+    customer finds out they do not. Prints what went wrong by KIND — a
+    refused login, an unreachable server — and never the password.
+    """
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    if len(args) != 2 or args[0] != "test" or "@" not in args[1]:
+        print("usage: sudo python3 -m engine.mailer test you@example.com")
+        return 2
+    # The box's settings live in /etc/qellys/env, which only root can read
+    # (hence sudo); the service gets them from systemd, a shell does not.
+    from . import secrets as _local
+    _local.load_local_secrets()
+    gaps = missing()
+    if gaps:
+        print("Not set yet: " + ", ".join(gaps) + ". Nothing was sent.")
+        return 1
+    try:
+        send(args[1], "Qellys Book: test email",
+             "This is a test from the Qellys Book server. If you can read "
+             "it, password reset emails will reach people too.\n")
+    except smtplib.SMTPAuthenticationError:
+        print("The mail server refused the login. For Gmail, QB_SMTP_PASS must "
+              "be an APP PASSWORD (16 letters from myaccount.google.com/apppasswords), "
+              "not the account's normal password, and QB_SMTP_USER the full address.")
+        return 1
+    except smtplib.SMTPException as exc:
+        print(f"The mail server answered but did not take the message "
+              f"({type(exc).__name__}). Check QB_MAIL_FROM is the Gmail address itself.")
+        return 1
+    except OSError as exc:
+        # No answer at all. DigitalOcean blocks the mail ports (25, 465,
+        # 587) on many accounts, and from the box that looks exactly like
+        # this: a timeout or a refused connection, never a refused login.
+        print(f"Could not reach {os.environ.get(ENV_HOST, '').strip()} on port "
+              f"{os.environ.get(ENV_PORT, '587').strip() or '587'} ({type(exc).__name__}). "
+              f"If the host and port are right (Gmail: smtp.gmail.com, 587), the "
+              f"hosting company is blocking outgoing mail: ask DigitalOcean support "
+              f"to unblock SMTP for this droplet (runbook step 26).")
+        return 1
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"Not sent: {type(exc).__name__}.")
+        return 1
+    print(f"Sent to {args[1]} from {sender()}. Check that inbox (and its spam folder).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())

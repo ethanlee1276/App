@@ -55,6 +55,14 @@ def _send(kind: str) -> int:
         print("Refusing to send: " + ", ".join(mailer.missing()) + " unset.")
         print("See docs/EMAIL.md. Nothing was sent.")
         return 2
+    if not mailer.bulk_ok():
+        # The site's Gmail carries password resets and alerts — one person
+        # at a time. A mailing to the opt-in list through it risks the
+        # suspension that would take those with it (engine/mailer.GMAIL_HOSTS).
+        print("Refusing to send: the mail relay is a Gmail account, which is "
+              "for one-to-one mail. The digests need a transactional provider "
+              "(docs/EMAIL.md). Nothing was sent.")
+        return 2
     from engine import accounts
     conn = accounts.connect()
     try:

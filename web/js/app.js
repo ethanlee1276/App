@@ -27765,7 +27765,7 @@ function resetHTML() {
         <div class="subtitle">Nobody here can see your password — it is
           stored as a one-way scramble — so it gets replaced, not sent back.</div></div></div>
       <p class="acct-reset-help">Email
-        <a href="mailto:support@qellysbook.com?subject=Password%20reset">support@qellysbook.com</a>
+        <a href="mailto:qellysbook@gmail.com?subject=Password%20reset">qellysbook@gmail.com</a>
         <b>from the address on your account</b> and we will send you a link
         to choose a new one. It works for an hour.</p>
       ${back}
@@ -40599,7 +40599,7 @@ function renderAbout() {
       <div class="about-body">
         <p>Something broken, something wrong on a page, a question about your
         account or your subscription:
-        <a href="mailto:support@qellysbook.com">support@qellysbook.com</a>.
+        <a href="mailto:qellysbook@gmail.com">qellysbook@gmail.com</a>.
         The Discord is where the picks get argued about —
         <a href="#discord">the invite lives here</a> — and the
         <a href="#methodology">methodology page</a> answers most questions

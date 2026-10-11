@@ -444,26 +444,86 @@ first). Paste back anything that prints an error or looks off.
     Settling needs this season's box scores re-ingested once, so the
     kickers' and defenders' rows exist; the nightly ingest does it.
 
-26. **Confirm password and Forgot password** (2026-10-11, "add an option
-    for forget a password"). Sign-up asks for the password twice; sign-in,
-    sign-up and Account settings each have "Forgot password?". Nothing to
-    run for those. Two things to know:
+26. **Make "Forgot password?" email people — the site's Gmail**
+    (2026-10-11, Ethan: "i have an email for the site. its
+    qellysbook@gmail.com. also we have to have a forgot a password
+    feture"). The Forgot page is built; it needs the site to be able to
+    send mail. Gmail does that with an **app password**: a 16-letter code
+    Google makes for one program, which is NOT your Gmail password and can
+    be deleted any time without touching the account. About 10 minutes.
 
-    * **Email is not switched on yet** (docs/EMAIL.md), so for now the
-      Forgot page tells people to write to support@qellysbook.com from
-      the address on their account. When one does, make them a link
-      (one hour, works once) and **email it to the account's own address
-      only**, never to a different address the request names:
-      ```
-      cd /srv/qellys && sudo -u qellys python3 -m engine.accounts reset-link someone@example.com
-      ```
-    * **Once the mail relay is set** (the `QB_SMTP_*` and `QB_MAIL_FROM`
-      settings, via `sudo ./deploy/setenv.sh`), the page emails the link
-      itself, with no step from you. To check which mode the live site is
-      in (`false` means support-email mode, `true` means it emails):
-      ```
-      curl -s http://127.0.0.1:8000/api/account/me; echo
-      ```
+    **A. Turn on 2-Step Verification** (Google only makes app passwords
+    for accounts that have it):
+    1. On your phone or computer, sign in to **qellysbook@gmail.com**.
+    2. Open **https://myaccount.google.com/security**.
+    3. Under "How you sign in to Google", tap **2-Step Verification** and
+       follow the steps (it texts a code to your phone). Finish until it
+       says it is **On**.
+
+    **B. Make the app password:**
+    1. Open **https://myaccount.google.com/apppasswords** (still signed in
+       as qellysbook@gmail.com). If it says the setting is not available,
+       2-Step Verification is not on yet — go back to A.
+    2. App name: type `Qellys site`, then **Create**.
+    3. Google shows 16 letters in a yellow box, like `abcd efgh ijkl mnop`.
+       Copy them. Do not paste them anywhere except step C5 below, and do
+       not send them to me. (Lost it? Delete it on that page and make a
+       new one.)
+
+    **C. Put it on the box** (`ssh` in first). One line at a time:
+    ```
+    cd /srv/qellys
+    sudo ./deploy/setenv.sh QB_SMTP_HOST smtp.gmail.com
+    sudo ./deploy/setenv.sh QB_SMTP_PORT 587
+    sudo ./deploy/setenv.sh QB_SMTP_USER qellysbook@gmail.com
+    sudo ./deploy/setenv.sh QB_MAIL_FROM qellysbook@gmail.com
+    sudo ./deploy/setenv.sh QB_SMTP_PASS
+    ```
+    The last one asks `Value for QB_SMTP_PASS` and shows nothing while you
+    type: paste the 16 letters (spaces are fine) and press Enter.
+    Optional, and worth it: get an email when the site's service crashes:
+    ```
+    sudo ./deploy/setenv.sh QB_ALERT_EMAIL qellysbook@gmail.com
+    ```
+    Then restart so the site reads them:
+    ```
+    sudo systemctl restart qellys
+    ```
+
+    **D. Test it** — send yourself one email (any inbox you can check):
+    ```
+    cd /srv/qellys && sudo python3 -m engine.mailer test you@example.com
+    ```
+    It should say `Sent to ... from Qellys Book <qellysbook@gmail.com>`.
+    If it says the login was refused, the app password was mistyped, or
+    the normal Gmail password was used — redo B and C5. If it says it
+    **could not reach smtp.gmail.com**, DigitalOcean is blocking outgoing
+    mail from the droplet (they do this on many accounts). Open a ticket:
+    DigitalOcean → Help → Support → "Please unblock outbound SMTP (port
+    587) on my droplet. It sends password-reset emails for my own site
+    through my Gmail account." When they say done, run the test again.
+    Check the inbox (and spam); the first one from a new sender sometimes
+    lands there.
+
+    **E. Try the real thing.** On the site: Log in → **Forgot password?**
+    → type your own account's email → **Email me a link**. The email comes
+    from "Qellys Book"; the link opens the site and asks for the new
+    password twice. To see the site knows mail is on (`true` = it emails):
+    ```
+    curl -s http://127.0.0.1:8000/api/account/me; echo
+    ```
+
+    Notes: the site sends at most 150 reset emails a day (well under
+    Gmail's limit, so a flood of requests cannot get the account
+    suspended) and at most 3 an hour to one address. The morning/nightly
+    digests stay OFF on Gmail on purpose — a mailing list through a
+    personal Gmail is how it gets suspended; they need a real provider
+    (docs/EMAIL.md). Until C is done, the Forgot page tells people to
+    email qellysbook@gmail.com, and you can make a link by hand:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.accounts reset-link someone@example.com
+    ```
+    Email that link only to the account's own address.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
