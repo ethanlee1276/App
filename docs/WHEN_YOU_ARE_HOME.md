@@ -776,6 +776,31 @@ first). Paste back anything that prints an error or looks off.
       cd /srv/qellys && sudo -u qellys python3 defoutfit.py --seasons 2022-2026
       ```
 
+36. **Ask grades a parlay from its screenshot** (2026-10-12, Ethan:
+    "users can upload a screenshot of there parlay and it will rank it").
+    In Ask, tap the paperclip, then **Grade a parlay screenshot**. The
+    phone shrinks the picture and sends it once. Ask's model reads the
+    legs off it: same key, counted as one question against the daily
+    limits, with its tokens in the usage log. Every leg is then priced
+    from tonight's boards by our own numbers, in code, the same way the
+    board prices them:
+    * a Most Likely pick at the chance it shows;
+    * any other prop at the slip's exact number;
+    * a scorer off the touchdown model;
+    * a side or total from the board's game card.
+
+    The card shows the grade, our chance it all hits against what the
+    payout needs, every leg ranked, any pair the parlay engine would
+    never build, and the weakest leg with our likeliest pick in that
+    game. A leg that isn't on our boards is called out and counted at its
+    own price's break-even (the grade gets a *). The picture is stored
+    nowhere. Nothing to run; it arrives with the next pull. To try it,
+    upload any slip screenshot from your phone. To see the reads in the
+    day's spend afterwards (read-only):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.askbot usage
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

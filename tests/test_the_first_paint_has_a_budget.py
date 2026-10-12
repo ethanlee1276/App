@@ -90,7 +90,12 @@ HTML = (WEB / "index.html").read_text()
 #: password box and its match check, Enter-to-submit, the Forgot password
 #: links, and the reset page's three states — +1.86 KB gz (489.61 ->
 #: 491.47). Told to Ethan.
-APP_JS_BUDGET_KB = 492
+#: 492 -> 493 on 2026-10-12 by Ask's parlay grader (Ethan: "users can upload
+#: a screenshot of there parlay and it will rank it"): the attach sheet's
+#: upload row, the loader and the graded turn — +0.41 KB gz (491.996 ->
+#: 492.407). The upload and the card load on first use (js/slip.js,
+#: css/slip.css). Told to Ethan.
+APP_JS_BUDGET_KB = 493
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).

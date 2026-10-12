@@ -217,6 +217,10 @@ RATE_ASK_PER_MIN = 8
 RATE_EVENT_PER_MIN = 60
 #: A question, a pick id and a few trimmed turns; anything larger is junk.
 MAX_ASK_BYTES = 32_000
+#: A parlay screenshot for Ask to grade (engine/slipgrade): the picture,
+#: base64, in a small JSON body. Caddy refuses anything over 1MB before it
+#: reaches here; this is the same ceiling for `python3 server.py`.
+MAX_SLIP_BYTES = 1_000_000
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -1340,6 +1344,20 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/feed/"):].strip("/"), body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
+        if parsed.path in ("/api/ask/slip", "/api/ask/slip/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_SLIP_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"that picture is too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask_slip(body)
         if parsed.path in ("/api/ask", "/api/ask/"):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -4258,6 +4276,81 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             except Exception:                                # noqa: BLE001
                 pass                     # a counting failure never costs the answer
         return self._send(200, json.dumps(keep).encode(), ".json")
+
+    def _ask_slip(self, body):
+        """Ask Qellys grades a parlay from its screenshot (engine/slipgrade).
+
+        Ethan, 2026-10-12: "users can upload a screenshot of there parlay and
+        it will rank it based on all our data and tools and models".
+
+        GATED AND COUNTED EXACTLY AS A QUESTION IS (`_ask`): a stranger gets
+        401, a lapsed account 402, the day's ceilings 429 — all before the
+        picture is read or a token spent. The picture is checked
+        (slipgrade.decode_image: a type the API takes, real base64, under
+        the size, the bytes its type starts with), sent to the API once to
+        be read, and dropped — nothing here writes it anywhere. The legs are
+        graded against every league's board in code, and the card comes
+        back with a signed one-paragraph summary the page can carry as the
+        conversation, like any answer.
+        """
+        if self._rate_limited(RATE_ASK_PER_MIN, "ask"):
+            return
+        from engine import askbot as AB
+        from engine import explainer as EX
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Ask needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        try:
+            image = SG.decode_image(body.get("image"), body.get("media_type"))
+        except ValueError as exc:
+            return self._send(400, json.dumps({"error": str(exc)}).encode(), ".json")
+        if not AB.configured():
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        me = ((who.get("id") or who.get("email")) if isinstance(who, dict) else who) \
+            or f"ip:{self._client_ip()}"
+        limit = AB.over_limit(me)
+        if limit:
+            return self._send(429, json.dumps({"error": "ask daily limit",
+                                               "limit": limit}).encode(), ".json")
+        boards = {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = AB.board_at(path) if path else None
+            if got:
+                boards[league] = got
+        try:
+            slip = SG.read_slip(image, str(body.get("media_type") or "").lower().strip())
+        except SG.SlipUnreadable as exc:
+            try:
+                AB.count_question(me)                   # the read was paid for
+            except Exception:                                # noqa: BLE001
+                pass
+            return self._send(422, json.dumps({"error": str(exc)}).encode(), ".json")
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"ask not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            sys.stderr.write(f"  ask slip: {type(exc).__name__}: {exc}\n")
+            return self._send(503, b'{"error":"ask unavailable"}', ".json")
+        card = SG.grade(slip, boards)
+        text = SG.summary(card)
+        try:
+            AB.count_question(me)
+        except Exception:                                    # noqa: BLE001
+            pass                     # a counting failure never costs the answer
+        out = {"slip": card, "text": text, "sig": AB.sign_turn(text)}
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.

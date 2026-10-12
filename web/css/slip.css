@@ -1,0 +1,52 @@
+/* Ask Qellys's graded parlay (js/slip.js), loaded with it. */
+.ask-turn.has-slip { width: min(560px, 100%); max-width: 100%; }
+.pgr-card { display: grid; gap: 10px; }
+.pgr-top { display: flex; align-items: center; gap: 12px; }
+.pgr-grade { flex-shrink: 0; width: 56px; height: 56px; border-radius: var(--radius); display: flex;
+  align-items: center; justify-content: center; font-family: var(--font-headline); font-size: var(--fs-3xl);
+  font-weight: 700; line-height: 1; color: var(--brand-ink); background: var(--text-faint); }
+.pgr-grade sup { align-self: flex-start; margin: 10px 0 0 1px; font-family: var(--font-sans); font-size: var(--fs-md); }
+.pgr-grade.g-a, .pgr-grade.g-b { background: var(--good); }
+.pgr-grade.g-c { background: var(--warn); }
+.pgr-grade.g-d, .pgr-grade.g-f { background: var(--bad); }
+.pgr-sum { display: grid; gap: 2px; min-width: 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.pgr-sum > b { color: var(--text); font-size: var(--fs-md); }
+.pgr-sum b.pos { color: var(--good); }
+.pgr-sum b.neg { color: var(--bad); }
+.pgr-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pgr-leg { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel);
+  border-left: 3px solid var(--text-faint); }
+.pgr-leg.v-strong { border-left-color: var(--good); }
+.pgr-leg.v-fair { border-left-color: var(--gold); }
+.pgr-leg.v-weak { border-left-color: var(--warn); }
+.pgr-leg.v-against { border-left-color: var(--bad); }
+/* The name keeps a readable width; on a narrow screen the pill drops under it. */
+.pgr-leg-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.pgr-leg-h b { flex: 1 1 14ch; min-width: 0; font-weight: 600; overflow-wrap: break-word; }
+.pgr-n { flex-shrink: 0; color: var(--text-mute); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.pgr-pill { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--text-mute); border: var(--hairline) solid var(--border); }
+.pgr-pill.v-strong { color: var(--good); border-color: currentColor; }
+.pgr-pill.v-fair { color: var(--gold); border-color: currentColor; }
+.pgr-pill.v-weak { color: var(--warn); border-color: currentColor; }
+.pgr-pill.v-against { color: var(--bad); border-color: currentColor; }
+.pgr-leg-m { margin-top: 3px; color: var(--text-dim); font-size: var(--fs-sm); }
+.pgr-leg-m b { color: var(--text); font-family: var(--font-mono); }
+.pgr-leg-w { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* Our chance as the fill, what the price needs as the tick: a fill past
+   the tick is a leg that clears its price. */
+.pgr-bar { position: relative; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); }
+.pgr-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--text-faint); }
+.pgr-leg.v-strong .pgr-bar i { background: var(--good); }
+.pgr-leg.v-fair .pgr-bar i { background: var(--gold); }
+.pgr-leg.v-weak .pgr-bar i { background: var(--warn); }
+.pgr-leg.v-against .pgr-bar i { background: var(--bad); }
+.pgr-bar u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); }
+.pgr-note, .pgr-swap { padding: 8px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
+  color: var(--text-dim); background: var(--panel); }
+.pgr-note { border: var(--hairline) solid var(--warn); }
+.pgr-note.kill { border-color: var(--bad); }
+.pgr-note b, .pgr-swap b { color: var(--text); }
+.pgr-foot { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
+.pgr-fine { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
+.pgr-fine span { white-space: nowrap; }

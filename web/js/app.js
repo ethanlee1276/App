@@ -42654,8 +42654,41 @@ function askTurnHTML(t, live = false) {
   if (t === _askTyping) {
     return `<div class="ask-row bot">${askAva(true)}<div class="ask-turn bot typing" id="ask-typing"></div></div>`;
   }
-  return `<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}<div class="ask-turn ${who}">${
-    askBodyHTML(t.text)}${askSourcesHTML(t)}</div></div>`;
+  return `<div class="ask-row ${who}">${who === "me" ? "" : askAva(live)}<div class="ask-turn ${who}${t.slip ? " has-slip" : ""}">${
+    t.slip ? askSlipCard(t) : askBodyHTML(t.text)}${askSourcesHTML(t)}</div></div>`;
+}
+
+/* A GRADED PARLAY (Ethan, 2026-10-12: "users can upload a screenshot of
+   there parlay and it will rank it"). The upload and the card live in
+   js/slip.js and css/slip.css, loaded the first time a ticket is graded or
+   a graded one is drawn; until then its summary stands in. The summary is
+   also what rides along as the conversation, signed like any answer. */
+let _slipLoading = null;
+function loadSlip() {
+  if (window.QBSlip) return Promise.resolve(window.QBSlip);
+  if (_slipLoading) return _slipLoading;
+  _slipLoading = new Promise((resolve) => {
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "css/slip.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script"); s.src = "js/slip.js";
+    s.onload = () => resolve(window.QBSlip || null);
+    s.onerror = () => { _slipLoading = null; resolve(null); };
+    document.head.appendChild(s);
+  });
+  return _slipLoading;
+}
+
+function askSlipCard(t) {
+  if (window.QBSlip) return window.QBSlip.card(t.slip);
+  loadSlip().then((S) => { if (S && state.view === "ask") renderAsk(); });
+  return askBodyHTML(t.text);
+}
+
+function askSlipSend(file) {
+  loadSlip().then((S) => S && S.send({
+    state: askState, save: askSave, errorText: askErrorText, thinkMs: ASK_THINK_MS,
+    render: () => { if (state.view === "ask") renderAsk(); },
+  }, file));
 }
 
 /* TYPED, NOT DROPPED IN. Ethan, 2026-09-23: "We should add the 3 dots that
@@ -42850,7 +42883,9 @@ function askAttachable() {
    can be drawn before tonight's board has arrived. */
 function askAttachHTML() {
   const picks = askAttachable();
-  return `<div class="ask-attach-h">Ask about one of tonight’s picks</div>${picks.length
+  return `<label class="ask-attach-row"><span>Grade a parlay screenshot</span><b>Upload</b>
+    <input type="file" accept="image/*" class="ask-sr" data-ask-slip></label>
+    <div class="ask-attach-h">Ask about one of tonight’s picks</div>${picks.length
     ? picks.map((p) => `<button type="button" class="ask-attach-row" data-ask-attach="${escapeAttr(p.id)}"
         data-ask-label="${escapeAttr(p.label)}"><span>${escapeHtml(p.label)}</span>${
         p.pct ? `<b>${escapeHtml(p.pct)}</b>` : ""}</button>`).join("")
@@ -42916,7 +42951,7 @@ function renderAsk() {
         <button type="button" class="ask-x" data-ask-clear-pick aria-label="Stop asking about this pick">&#215;</button></div>` : ""}
       <div class="ask-attach" id="ask-attach" role="dialog" aria-label="Attach a pick" hidden></div>
       ${askLocked() ? askLockedHTML() : `<form class="ask-form" id="ask-form">
-        <button type="button" class="ask-clip" data-ask-clip aria-label="Attach one of tonight’s picks"
+        <button type="button" class="ask-clip" data-ask-clip aria-label="Attach a pick or a parlay screenshot"
           aria-controls="ask-attach" aria-expanded="false">${askIcon("clip", 22)}</button>
         <textarea id="ask-input" rows="1" maxlength="400" placeholder="Ask about a player, a game or a bet…"
           aria-label="Your question"${a.busy ? " disabled" : ""}></textarea>
@@ -42954,6 +42989,10 @@ function renderAsk() {
     if (!sheet || !clip) return;
     if (open) {
       sheet.innerHTML = askAttachHTML();
+      sheet.querySelectorAll("[data-ask-slip]").forEach((f) => f.addEventListener("change", () => {
+        attachOpen(false);
+        if (f.files && f.files[0]) askSlipSend(f.files[0]);
+      }));
       sheet.querySelectorAll("[data-ask-attach]").forEach((b) => b.addEventListener("click", () => {
         a.pick = b.dataset.askAttach || "";
         a.pickLabel = b.dataset.askLabel || "";
