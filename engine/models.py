@@ -263,6 +263,10 @@ class Prop:
     form_prior: Optional[float] = None
     form_prior_n: int = 0
     form_prior_games: float = 0.0
+    #: Which anchor that is: "thin" (the position's typical number, weeks
+    #: 2-3) or "season" (his own last season, week 4 on —
+    #: engine/carry.SEASON_PRIOR_GAMES). The pick page says which.
+    form_prior_kind: str = ""
     #: COMPANION LOGS AND ANCHORS for a market whose number is built from
     #: another stat of his (engine/passint, 2026-10-05): interceptions
     #: ride on ``{"pass_att": [GameLog…] paired game for game with

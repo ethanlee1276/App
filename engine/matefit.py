@@ -45,6 +45,8 @@ MARKETS = {
 FIRST_WEEK = 4
 MIN_GAMES = 3
 TOP = 3
+#: Snap-file position spellings that mean one of GROUPS.
+POS_ALIASES = {"HB": "RB"}
 
 
 def _f(r: dict, k: str) -> float:
@@ -92,6 +94,11 @@ def games_from_snaps(stat_rows: list[dict], snap_rows: list[dict]) -> tuple[dict
             continue
         team_weeks[team].add(wk)
         pos = str(r.get("position") or "").upper()
+        # "HB" IS A BACK. The snap file spells Cincinnati's running backs
+        # HB (2025 on: Chase Brown, Samaje Perine), so until 2026-10-12 the
+        # Bengals had no running backs in the snap-ranked order at all and
+        # the teammate step could never see one ruled out.
+        pos = POS_ALIASES.get(pos, pos)
         if pos not in GROUPS or _f(r, "offense_snaps") <= 0:
             continue
         name = str(r.get("player") or "")
@@ -356,3 +363,200 @@ def cross_samples(seasons: dict) -> list[dict]:
                             out.append({"season": season, "m": m, "g": pos, "e": e,
                                         "y": sum(_f(g[wk], c) for c in cols), "tier": case})
     return out
+
+
+# ═══ A TEAMMATE BACK ═════════════════════════════════════════════════════
+#
+# Ethan, 2026-10-12, four outside reports on Bills @ Rams: "with Nacua
+# active [Adams] has only 58 yards in two games, versus 332 in the two
+# games Nacua missed." Everything above asks what a player does when a
+# teammate at his position is OUT tonight. Nothing asked the mirror: the
+# teammate is BACK tonight, and the player's own games this season — the
+# form the projection starts from — were partly played without him. The
+# model read Davante Adams off 26, 195, 137 and 32 yards and projected
+# 90.5 against a 64.5 line.
+#
+# THE CORRECTION ADDS NO NEW NUMBER. A game played without a teammate ran
+# high by the multiplier `samples` already measured for that absence
+# (EFFECT_SNAPS: a receiver ×1.22 the first game the man ahead of him
+# missed, ×1.11 after), so each such game is divided by it before the form
+# is taken (`deflated`). Then one residual, measured on the deflated forms
+# by the same rule as everything here (`back_samples`): where the
+# deflation still leaves the player high, the shipping rule decides.
+#
+# MEASURED 2026-10-12 (`python3 matefit.py --back`, 2022-2025 snap
+# counts, week 4 on, the absence multipliers fitted on three seasons and
+# the fourth held out, each season in turn; a teammate counts as back
+# once he has played the team's last game, `back_mates`, as on the
+# board). Squared error on the games a teammate came back to, cut by:
+#
+#     RB rushing yards   +2.6%  +6.0%  +1.4%  +1.5%   (every season)
+#     WR catches         +1.0%  +0.3%  +0.4%  +0.7%   (every season)
+#     WR yards           +0.4%   0.0%   0.0%  +0.4%
+#     RB catches         -0.0%  +0.3%  +0.3%  +0.3%
+#     RB yards            0.0%   0.0%   0.0%  +0.9%
+#     TE yards           +0.5%  +0.4%   0.0%  -0.2%
+#     TE catches         +1.1%  -0.1%   0.0%  -0.5%   (two seasons worse: NOT applied)
+#
+# The bar (`back_verdicts`): the error cut overall and no more than one
+# season the wrong way — engine/teammates.BACK_CELLS is what passed. The
+# residual on every season's deflated forms that clears `shipped`'s rule:
+# a back's catches with the back behind him returned, ×0.903
+# (BACK_RESIDUAL). Without the "played last week" rule the cuts ran two
+# to four times bigger (RB rushing +4.1/+6.6/+5.0/+3.9) — those were the
+# men back for the first time, whom the board cannot know are playing
+# until they have. A flat "teammate back" multiplier without the
+# deflation measured ×0.891 (WR yards), ×0.901 (WR catches) and ×0.812 (RB
+# rushing) and predicted worse for backs and tight ends, because it
+# charges a player whose teammate missed one game of twelve the same as
+# one who missed half of them.
+
+#: Which teammates count: the top TOP at his position by volume a game
+#: over the games each one played, from one game up — a starter back from
+#: two weeks out has two games, and `ranked`'s three-game floor would not
+#: see him at all (Nacua, week 5 of 2026).
+BACK_MIN_GAMES = 1
+
+
+def back_mates(mates, team_weeks) -> list:
+    """The teammates who count as BACK: those who played the team's last
+    game. Who plays tonight is not known before kickoff, and "not on the
+    injury report" is not "playing" — a back who has not been active since
+    week 1 (Ronnie Rivers, 2026) is on no report at all. A man who played
+    last week is back; one returning tonight from a missed game is not
+    counted until he has played one. The measurement holds to the same
+    rule (`back_samples`)."""
+    last = max(team_weeks, default=0)
+    return [m for m in mates if last in m[1]]
+
+
+def absences(my_weeks, mates, team_weeks) -> dict:
+    """{week: [case, ...]} — for each of his weeks, every teammate who did
+    not play it, as the absence case `samples` measured: "above_new" the
+    first game a man ranked ahead of him missed (he played the team's game
+    before it), "above_cont" a later one; "below_*" the same for a man
+    behind him. ``mates`` is [(side, weeks that teammate played)];
+    ``team_weeks`` every week the team played."""
+    tw = sorted(team_weeks)
+    out: dict = {}
+    for w in my_weeks:
+        for side, played, *_rest in mates:
+            if w in played:
+                continue
+            prev = max((x for x in tw if x < w), default=0)
+            out.setdefault(w, []).append(f"{side}_{'new' if prev in played else 'cont'}")
+    return out
+
+
+def deflated(values, weeks, cases: dict, table: dict, market: str, pos: str) -> list[float]:
+    """Each game's value divided by the measured lift of every absence in
+    it (``table`` is {(market, pos, case): multiplier}); a game nobody
+    missed, or an absence with no shipped multiplier, is left alone."""
+    out = []
+    for v, w in zip(values, weeks):
+        m = 1.0
+        for case in cases.get(w) or ():
+            m *= table.get((market, pos, case), 1.0)
+        out.append(v / m)
+    return out
+
+
+def back_samples(seasons: dict, snaps: dict, table: dict) -> list[dict]:
+    """Points for `measure`, one per player-game from week FIRST_WEEK with
+    every top-TOP teammate at his position playing (an absence tonight is
+    `samples`' question): ``e`` his form as the projection reads it, ``ea``
+    the same form with each game a teammate missed deflated by ``table``,
+    tier "above_back" when a man ahead of him missed any of his games this
+    season, "below_back" when only one behind him did, else None."""
+    from .form import compute_form
+    from .models import GameLog
+
+    def form(vals):
+        logs = [GameLog(week=len(vals) - j, opponent="", value=v) for j, v in enumerate(reversed(vals))]
+        return compute_form(logs, sum(vals) / len(vals), None).mean
+
+    out = []
+    for season, rows in sorted(seasons.items()):
+        if snaps and snaps.get(season):
+            games, team_weeks = games_from_snaps(rows, snaps[season])
+        else:
+            games, team_weeks = _games_from_stats(rows)
+        for team, weeks in team_weeks.items():
+            tw = sorted(weeks)
+            for wk in tw:
+                if wk < FIRST_WEEK:
+                    continue
+                for pos in GROUPS:
+                    order = ranked(games, team, pos, wk)
+                    seen = ranked(games, team, pos, wk, BACK_MIN_GAMES)
+                    if any(wk not in games[(team, pos, o[0])] for o in seen):
+                        continue
+                    names = [o[0] for o in seen]
+                    for name, _v, _n, _l in order:
+                        g = games[(team, pos, name)]
+                        if wk not in g or name not in names:
+                            continue
+                        i = names.index(name)
+                        mine = sorted(w for w in g if w < wk)
+                        before = [w for w in tw if w < wk]
+                        mates = back_mates([("above" if j < i else "below",
+                                             {w for w in games[(team, pos, n)] if w < wk})
+                                            for j, n in enumerate(names) if j != i], before)
+                        cases = absences(mine, mates, before)
+                        sides = {c.split("_")[0] for cs in cases.values() for c in cs}
+                        tier = "above_back" if "above" in sides else "below_back" if sides else None
+                        for m, cols, floor in MARKETS[pos]:
+                            if m == "anytime_td":
+                                continue          # touchdowns behind a lineup change are shown, never priced
+                            vals = [sum(_f(g[w], c) for c in cols) for w in mine]
+                            e = form(vals)
+                            if e < floor or e <= 0:
+                                continue
+                            ea = form(deflated(vals, mine, cases, table, m, pos))
+                            out.append({"season": season, "m": m, "g": pos, "e": e, "ea": ea,
+                                        "y": sum(_f(g[wk], c) for c in cols), "tier": tier})
+    return out
+
+
+def back_verdicts(held: dict) -> dict:
+    """{(market, pos): True/False} — THE BAR for the deflation, per market
+    and position, on `back_check`'s held-out seasons: squared error cut
+    overall, and no more than one season the wrong way (the bar the
+    context steps clear; a season it did not touch counts as neither)."""
+    cells: dict = {}
+    for (m, g, _s), h in held.items():
+        c = cells.setdefault((m, g), {"raw": 0.0, "adj": 0.0, "worse": 0})
+        c["raw"] += h["raw"]
+        c["adj"] += h["deflated"]
+        if h["deflated"] > h["raw"] + 1e-9:
+            c["worse"] += 1
+    return {k: c["adj"] < c["raw"] and c["worse"] <= 1 for k, c in cells.items()}
+
+
+def back_check(seasons: dict, snaps: dict) -> dict:
+    """The held-out test: for each season, the absence multipliers fitted
+    on the others (`samples` → `measure` → `shipped`), the residual too,
+    and the squared error on that season's back games — raw, deflated, and
+    deflated with the residual. {"held": {(market, pos, season): {n, raw,
+    deflated, residual}}, "residual": the residual table on every season}."""
+    held: dict = {}
+    for s in sorted(seasons):
+        train = {k: v for k, v in seasons.items() if k != s}
+        tsn = {k: v for k, v in (snaps or {}).items() if k != s}
+        table = shipped(measure(samples(train, tsn)))
+        trp = back_samples(train, tsn, table)
+        resid = shipped(measure([{**p, "e": p["ea"]} for p in trp]))
+        for p in back_samples({s: seasons[s]}, {s: (snaps or {}).get(s)} if snaps else {}, table):
+            if p["tier"] is None:
+                continue
+            k = (p["m"], p["g"], s)
+            h = held.setdefault(k, {"n": 0, "raw": 0.0, "deflated": 0.0, "residual": 0.0})
+            r = resid.get((p["m"], p["g"], p["tier"]), 1.0)
+            h["n"] += 1
+            h["raw"] += (p["y"] - p["e"]) ** 2
+            h["deflated"] += (p["y"] - p["ea"]) ** 2
+            h["residual"] += (p["y"] - p["ea"] * r) ** 2
+    table = shipped(measure(samples(seasons, snaps)))
+    allp = back_samples(seasons, snaps, table)
+    return {"held": held, "cells": back_verdicts(held),
+            "residual": shipped(measure([{**p, "e": p["ea"]} for p in allp]))}

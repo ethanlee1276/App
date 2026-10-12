@@ -55,8 +55,15 @@ def test_each_leg_gets_our_number_our_price_and_the_seat():
     assert got[3]["prob"] == 0.41 and "ours 41% at 110 FanDuel" in text
 
 
-def test_the_default_legs_are_tonights_six_and_the_script_writes_nothing():
-    assert len(legcheck.TONIGHT) == 6
+def test_the_default_legs_are_tonights_and_the_script_writes_nothing():
+    # 2026-10-12: Bills @ Rams, four reports — every leg they built or cut,
+    # each carrying the chance its report claimed (was Eagles-Bears' six).
+    assert len(legcheck.TONIGHT) == 18
+    assert all(len(leg) == 5 and leg[4] for leg in legcheck.TONIGHT)
+    lines = []
+    got = legcheck.check(BOARD, [("Jalen Hurts", "pass_yds", "over", 199.5, "R3 high, DK -349")], out=lines.append)
+    assert lines[0] == "  Jalen Hurts over 199.5 pass_yds — theirs: R3 high, DK -349"
+    assert got[0]["theirs"] == "R3 high, DK -349" and got[0]["prob"] is not None
     src = (ROOT / "legcheck.py").read_text(encoding="utf-8")
     assert "open(board_source(" in src, "the board is read through the gate's own source, not a path"
     assert '"w"' not in src and "write(" not in src

@@ -197,6 +197,53 @@ THIN_ANCHOR_GAMES = 17
 #: Shown, not staked — the same answer, for the same reason, as a mover.
 STAKE_ON_THIN = False
 
+#: LAST SEASON, FROM WEEK 4 ON (2026-10-12). Ethan's four reports on
+#: Bills @ Rams all leaned on last season ("2025: 6+ catches in 13 of 16
+#: games", "1,533 yards, about 90 a game"); the model stopped reading it
+#: the moment a player had three games this season, and its widest
+#: misses against the market that night were exactly where the two
+#: seasons disagree — Kyren Williams 5.8 catches projected off a 6- and a
+#: 10-catch game (2.1 a game in 2025, the market's line 3.5), Keon
+#: Coleman 62 receiving yards (34 a game in 2025, line 36.5).
+#:
+#: So from week 4 a player's form is pulled toward his own last-season
+#: per-game number — compute_form's existing shrink, w = n/(n+k), with
+#: last season's games behind the anchor (MIN_PRIOR_GAMES or more, the
+#: carry's floor; a quarterback's real games only, as player_game_logs
+#: reads his season). MEASURED (`python3 seasonpriorfit.py`, 2022-2025,
+#: every player-game from week 4 with three games this season, through
+#: compute_form's own prior path): k fitted on three seasons, squared
+#: error on the fourth, each season in turn. THE BAR, set before the run:
+#: a market ships only if the held-out error falls in every season.
+#:
+#:     rec_yds     k 6     +7.8%  +6.5%  +5.1%  +5.6%
+#:     receptions  k 4     +4.9%  +5.3%  +4.6%  +4.2%
+#:     rush_yds    k 2     +3.4%  +2.2%  +2.7%  +2.9%
+#:     rush_att    k 1.5   +2.2%  +2.1%  +2.1%  +1.2%
+#:     pass_yds    k 10    +9.4%  +7.0% +11.0%  +1.2%
+#:     pass_att    k 10   +12.2%  +6.3%  +9.6%  +4.5%
+#:     pass_cmp    k 8     +9.5%  +5.6%  +9.5%  +4.0%
+#:     rush_rec_yds k 2    +2.5%  +1.3%  +2.4%  +3.1%
+#:     pass_rush_yds —     +8.9%  +7.8%  +9.9%  -1.6%   fails (2025)
+#:
+#: Every market but a quarterback's passing + rushing yards passes; k is
+#: the one fitted on all four seasons. (A first
+#: run that let a backup's relief appearances into his "last season"
+#: failed the passing markets in 2024 — a starter pulled toward a mop-up
+#: man's numbers. Read as the board reads a quarterback, they pass.) At
+#: week 5 a receiver's yards are 40% this season and 60% last; by week 12
+#: it is 65/35. Markets not in the table — passing + rushing yards,
+#: kicking, tackles, interceptions — keep the season-only form.
+SEASON_PRIOR_GAMES = {"rec_yds": 6.0, "receptions": 4.0, "rush_yds": 2.0, "rush_att": 1.5,
+                      "pass_yds": 10.0, "pass_att": 10.0, "pass_cmp": 8.0, "rush_rec_yds": 2.0}
+#: ...and only for a player at least this involved THIS season (his form
+#: without the anchor), the population the measurement scored. A man whose
+#: role has shrunk — 3 receiving yards a game after a 50-yard season — was
+#: never in it, and pulling him back to last season's job is a guess the
+#: bar never saw (Jauan Jennings, 3.1 -> 27.2 on the first local build).
+SEASON_PRIOR_FLOOR = {"rec_yds": 15.0, "receptions": 1.5, "rush_yds": 15.0, "rush_att": 5.0,
+                      "pass_yds": 120.0, "pass_att": 18.0, "pass_cmp": 12.0, "rush_rec_yds": 30.0}
+
 #: Kinds of offseason reset, reusing reset.py's vocabulary so a reader sees
 #: one set of labels across both rules.
 TRADE = "team change"

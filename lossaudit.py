@@ -44,6 +44,19 @@ settled bet that journaled a projection, as a share of the projection:
 a market whose projections run high loses its overs and wins its unders
 for the same reason, and this is the number that says so.
 
+THE PRICE AGAINST OUR CHANCE. Ethan, 2026-10-11, looking at an all-red
+NFL board by tier: "we have won so many most likely bets ... I feel like
+we should be up more money." A 54% hit rate loses money at prices that
+need 60%. Every book is also cut by whether the chance we showed covered
+what its price needed to break even (the college staking rule,
+ledger.PRICE_COVER_SPORTS) — the slice that says whether that rule would
+help a league before anyone turns it on.
+
+BIGGER UNITS. On the one board, the same picks staked 3u Top pick / 2u
+Strong / 1u Worth a look against 1u flat, as units won per 100 picks.
+Sizing multiplies a result; it cannot change its sign. This shows by how
+much, on the record itself.
+
 THE LEAKS. At the end, every slice with at least MIN_N settled bets that
 lost units and is two standard errors from its price or its claim, the
 biggest loss first. That list is the work.
@@ -81,6 +94,9 @@ PRICE_BANDS = ((0.75, 1.01, "-300 or shorter"), (0.667, 0.75, "-299 to -200"),
                (0.455, 0.524, "-110 to +120"), (0.0, 0.455, "+121 or longer"))
 CLAIM_BANDS = ((0.80, 1.01, "80%+"), (0.70, 0.80, "70-80%"), (0.60, 0.70, "60-70%"),
                (0.50, 0.60, "50-60%"), (0.0, 0.50, "under 50%"))
+#: The tiered sizing Ethan asked about (2026-10-11), units per pick by
+#: the board's tier, set against 1u flat on the same picks.
+TIER_UNITS = {"Top pick": 3.0, "Strong": 2.0, "Worth a look": 1.0}
 COLUMNS = ("id", "sport", "date", "player", "market", "side", "line", "book", "odds", "projection",
            "hit_prob", "edge", "grade", "stake_units", "status", "actual", "pnl_units",
            "closing_line", "closing_odds", "category", "loss_cause")
@@ -190,6 +206,36 @@ def _week(b) -> str:
     return f"week of {(d - _dt.timedelta(days=d.weekday())).isoformat()}"
 
 
+def covered(b) -> str:
+    """Did the chance we showed reach what the price needs to break even?"""
+    need = _implied(b["odds"])
+    try:
+        claim = float(b["hit_prob"])
+    except (TypeError, ValueError):
+        claim = None
+    if need is None or claim is None:
+        return "no price or no claim"
+    return "our chance covered the price" if claim >= need else "the price needed more than our chance"
+
+
+def sizing(bets: list) -> dict | None:
+    """Units won per 100 picks at 1u flat, and at TIER_UNITS by tier, on
+    the same settled picks — None for a book with no tiers."""
+    rows = []
+    for b in bets:
+        try:
+            stake, pnl = float(b["stake_units"] or 0.0), float(b["pnl_units"] or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if stake > 0 and b.get("grade") in TIER_UNITS:
+            rows.append((pnl / stake, TIER_UNITS[b["grade"]]))
+    if not rows:
+        return None
+    n = len(rows)
+    return {"n": n, "flat": round(sum(m for m, _ in rows) / n * 100, 1),
+            "tiered": round(sum(m * u for m, u in rows) / n * 100, 1)}
+
+
 def slices(bets: list) -> dict:
     """{slice name: {value: score}} for one book."""
     keys = {
@@ -199,6 +245,7 @@ def slices(bets: list) -> dict:
         "market and side": lambda b: f"{(b['sport'] or '').upper()} {b['market']} {(b['side'] or '').upper()}",
         "price": lambda b: _band(_implied(b["odds"]), PRICE_BANDS),
         "claimed": lambda b: _band(float(b["hit_prob"]) if b["hit_prob"] is not None else None, CLAIM_BANDS),
+        "our chance against the price": covered,
         "the close": close_verdict,
         "sportsbook": lambda b: (b["book"] or "").lower() or "(none)",
         "week": _week,
@@ -297,7 +344,7 @@ def audit(conn, since=None, sport=None) -> dict:
         if not mine:
             continue
         books[label] = {"total": score(mine), "slices": slices(mine), "causes": causes(mine),
-                        "projection": projection_bias(mine),
+                        "projection": projection_bias(mine), "sizing": sizing(mine),
                         "first": mine[0]["date"], "last": mine[-1]["date"]}
     report = {"since": since, "sport": sport, "books": books}
     report["leaks"] = leaks(report)
@@ -332,10 +379,15 @@ def render(report: dict, top: int = 12) -> str:
         out.append(_line("ALL", rep["total"]))
         for name, groups in rep["slices"].items():
             shown = [(k, s) for k, s in groups.items() if s["n"] >= 5][:top]
-            if len(shown) < 2 and name not in ("tier", "the close"):
+            if len(shown) < 2 and name not in ("tier", "the close", "our chance against the price"):
                 continue
             out.append(f"  -- by {name}")
             out += [_line(str(k), s) for k, s in shown]
+        sz = rep.get("sizing")
+        if sz:
+            out.append(f"  -- bigger units on the same {sz['n']} picks, units won per 100 picks: "
+                       f"1u flat {sz['flat']:+.1f}  |  3u Top pick / 2u Strong / 1u Worth a look "
+                       f"{sz['tiered']:+.1f}")
         if rep["causes"]:
             out.append("  -- how the losses are tagged: " + ", ".join(f"{k} {v}" for k, v in rep["causes"].items()))
         if rep["projection"]:

@@ -140,7 +140,13 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     from .qbchange import effect as _qb_effect
     from .teammates import effect as _mate_effect
     _qb_mult, _qb_why, injury.qb_card = _qb_effect(prop, game)
-    _mate_mult, _mate_why, injury.mate_card = _mate_effect(prop, game)
+
+    def _form_mean(logs, career):
+        """The form above, on other logs — the teammate-back step's ratio."""
+        return compute_form(logs, career, prop.vs_opponent_avg, weights=form_weights,
+                            prior=prop.form_prior, prior_n=prop.form_prior_n,
+                            prior_games=prop.form_prior_games).mean
+    _mate_mult, _mate_why, injury.mate_card = _mate_effect(prop, game, form_mean=_form_mean)
     lineup_mult = _qb_mult * _mate_mult
     lineup_why = [w for w in (_qb_why, _mate_why) if w]
 
@@ -428,5 +434,9 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                           # How hard: the k in n/(n+k), so the pick page
                           # can say "pulled 33% toward the typical WR" for
                           # a thin sample (engine/carry.thin_for).
-                          shrink_k=(prop.form_prior_games or None) if form.shrunk_to is not None else None),
+                          shrink_k=(prop.form_prior_games or None) if form.shrunk_to is not None else None,
+                          # "thin" (toward the position) or "season" (toward
+                          # his own last season, week 4 on — engine/carry).
+                          shrink_kind=(getattr(prop, "form_prior_kind", "") or "thin")
+                          if form.shrunk_to is not None else None),
     )

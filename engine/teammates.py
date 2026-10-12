@@ -24,10 +24,21 @@ case is whether he ranks ABOVE or BELOW the player and whether he played
 last week ("new" — the player's recent games do not know yet) or was
 already out ("cont" — they partly do; and not at all for a player the
 reset rule already re-projected from his games since the change).
+
+AND WHEN HE IS BACK (2026-10-12, Ethan's four reports on Bills @ Rams:
+Adams had 26 and 32 yards with Nacua, 195 and 137 without him, and the
+model projected 90.5 against a 64.5 line). With nobody at his position
+out tonight, every game of his this season that a teammate ranked with
+him did not play is divided by the lift engine/matefit measured for that
+absence, the form is taken again, and the projection moves by the ratio
+(`back`); the card says who is back and how many of his games came
+without him. No new number: the multipliers are the ones above, and one
+measured residual (BACK_RESIDUAL). Held out by season, see matefit.
 """
 from __future__ import annotations
 
-from .matefit import GROUPS, MIN_GAMES, TOP, case_for, volume
+from .matefit import (BACK_MIN_GAMES, GROUPS, MIN_GAMES, TOP, absences, back_mates, case_for,
+                      deflated, volume)
 
 #: {(market, group, case): multiplier} — engine/matefit.shipped() on
 #: 2022-2025, 2026-09-23. Per-season values in docs/NFL_MODEL.md.
@@ -64,11 +75,39 @@ EFFECT_SNAPS = {
 #: The words for each case, on the card.
 CASE_WORDS = {"above_new": "just ruled out ahead of him", "above_cont": "out ahead of him",
               "below_new": "just ruled out behind him", "below_cont": "out behind him"}
+#: A TEAMMATE BACK — engine/matefit.back_check on 2022-2025 snap counts
+#: (`python3 matefit.py --back`). The markets and positions whose held-out
+#: error the deflation cut (matefit.back_verdicts' bar); a tight end's
+#: catches went the wrong way in two seasons and are left alone.
+BACK_CELLS = frozenset({
+    ("rec_yds", "RB"), ("rec_yds", "TE"), ("rec_yds", "WR"),
+    ("receptions", "RB"), ("receptions", "WR"), ("rush_yds", "RB"),
+})
+#: What is left after the deflation, by matefit's shipping rule on every
+#: season: a back's catches with the back behind him returned. Snap-ranked
+#: NFL lineups only; college is not measured.
+BACK_RESIDUAL = {
+    ("receptions", "RB", "below_back"): 0.903,
+}
 
 
 def _norm(name: str) -> str:
+    """normalize_name, with a run of initials closed up: the snap file
+    writes "D.J. Moore" and "D.K. Metcalf" (normalize_name: "d j moore"),
+    the box scores, the injury report and the books "DJ Moore" ("dj
+    moore"). Until 2026-10-12 the two never met here, so Moore ruled out
+    would have lifted nobody behind him, and his own props never found
+    themselves in the order."""
     from .sources.oddsapi import normalize_name
-    return normalize_name(str(name or ""))
+    out: list = []
+    run = False                    # the last token is a run of initials
+    for tok in normalize_name(str(name or "")).split():
+        if len(tok) == 1 and run:
+            out[-1] += tok
+        else:
+            out.append(tok)
+            run = len(tok) == 1
+    return " ".join(out)
 
 
 def depth_table(stats: list[dict], teams, upto_week: int, snaps: list[dict] | None = None) -> dict:
@@ -108,6 +147,7 @@ def depth_table(stats: list[dict], teams, upto_week: int, snaps: list[dict] | No
             if pos in GROUPS:
                 games.setdefault((team, pos, _s(r, "player_display_name", "player_name", "full_name")), {})[wk] = r
     order = {}
+    seen = {}
     for team in {t for t, _p, _n in games}:
         for pos in GROUPS:
             # From week 2, on the games played so far (early_min_games):
@@ -116,7 +156,30 @@ def depth_table(stats: list[dict], teams, upto_week: int, snaps: list[dict] | No
             got = ranked(games, team, pos, upto_week, early_min_games(upto_week))
             if got:
                 order[f"{team}|{pos}"] = [[n, round(v, 2), g, lw] for n, v, g, lw in got]
-    return {"order": order, "last": last, "basis": basis}
+            # Everyone with a game, and which weeks he played — what `back`
+            # reads (a starter two games into a return is not in `order`).
+            got = ranked(games, team, pos, upto_week, BACK_MIN_GAMES)
+            if got:
+                seen[f"{team}|{pos}"] = [[n, round(v, 2), g, lw,
+                                          sorted(w for w in games[(team, pos, n)] if w < upto_week)]
+                                         for n, v, g, lw in got]
+    weeks = _team_weeks(stats, snaps, teams, upto_week)
+    return {"order": order, "last": last, "basis": basis, "seen": seen, "weeks": weeks}
+
+
+def _team_weeks(stats, snaps, teams, upto_week: int) -> dict:
+    """{team: every week before ``upto_week`` the team played}, off the
+    snap counts when there are any, the box scores when not."""
+    from .sources.nflverse import _f, _s
+    out: dict = {}
+    for r in (snaps or []) or (stats or []):
+        if str(r.get("game_type") or r.get("season_type") or "REG") not in ("REG", ""):
+            continue
+        wk = int(_f(r, "week", default=0))
+        team = _s(r, "team", "recent_team")
+        if 0 < wk < upto_week and team and (not teams or team in teams):
+            out.setdefault(team, set()).add(wk)
+    return {t: sorted(w) for t, w in out.items()}
 
 
 def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
@@ -137,10 +200,14 @@ def stamp(slate, depth: dict, injuries, reset_players=()) -> dict:
     order = (depth or {}).get("order") or {}
     last = (depth or {}).get("last") or {}
     basis = (depth or {}).get("basis") or "targets"
+    seen = (depth or {}).get("seen") or {}
+    weeks = (depth or {}).get("weeks") or {}
     for g in slate.games:
         g.lineup = {t: {"order": {pos: order.get(f"{t}|{pos}") or [] for pos in GROUPS},
                         "out": sorted(out.get(t, ())), "maybe": sorted(maybe.get(t, ())),
-                        "last": last.get(t, 0), "basis": basis}
+                        "last": last.get(t, 0), "basis": basis,
+                        "seen": {pos: seen.get(f"{t}|{pos}") or [] for pos in GROUPS},
+                        "weeks": weeks.get(t) or []}
                     for t in (g.home, g.away)}
     return {t: sorted(v) for t, v in out.items()}
 
@@ -184,8 +251,12 @@ def if_sits(prop, lu: dict, order: list, me: str, playing: set, mult: float):
     return {"who": sorted(maybe), "mult": round(m, 3), "case": case}
 
 
-def effect(prop, game) -> tuple:
-    """(multiplier, reason, card) for one prop from its game's lineup."""
+def effect(prop, game, form_mean=None) -> tuple:
+    """(multiplier, reason, card) for one prop from its game's lineup.
+
+    ``form_mean(logs, career_avg)`` is the projection's own form (its
+    curve and prior); with it, a teammate BACK tonight is read too
+    (`back`). Without it — the touchdown rows — only absences are."""
     pos = str(getattr(prop, "position", "") or "").upper()
     lu = ((getattr(game, "lineup", None) or {}).get(getattr(prop, "team", "")) or {})
     order = (lu.get("order") or {}).get(pos) or []
@@ -199,7 +270,13 @@ def effect(prop, game) -> tuple:
     playing = {n for n in names if _norm(n) not in out}
     case = case_for([tuple(o) for o in order], me, playing, int(lu.get("last") or 0))
     if not case:
-        maybe = if_sits(prop, lu, order, me, playing, 1.0)
+        bmult, bwhy, bcard = back(prop, lu, form_mean) if form_mean else (1.0, "", None)
+        maybe = if_sits(prop, lu, order, me, playing, bmult)
+        if bcard:
+            if maybe:
+                bcard["if_sits"] = maybe
+                bcard["note"] = f"{bcard['note']}. {_if_sits_note(maybe, bmult, prop.market, lu)}"
+            return bmult, bwhy, bcard
         if not maybe:
             return 1.0, "", None
         return 1.0, "", {"team": prop.team, "out": [], "case": None, "applied": 1.0,
@@ -230,6 +307,76 @@ def effect(prop, game) -> tuple:
     if maybe:
         card["if_sits"] = maybe
         card["note"] = f"{note}. {_if_sits_note(maybe, mult, prop.market, lu)}"
+    return mult, reason, card
+
+
+def back(prop, lu: dict, form_mean) -> tuple:
+    """(multiplier, reason, card) for a teammate BACK tonight: each of his
+    games this season that a teammate ranked with him at his position did
+    not play is divided by the measured lift of that absence (matefit
+    .absences / .deflated, the table his lineup was measured with), the
+    form is taken again, and the projection moves by the ratio — times
+    BACK_RESIDUAL where it applies. (1.0, "", None) when nobody at his
+    position missed one of his games, when somebody there is out tonight
+    (the absence step's question, not this one), or on a college lineup
+    (not measured)."""
+    pos = str(getattr(prop, "position", "") or "").upper()
+    if (lu or {}).get("basis") == "cfb" or pos not in GROUPS:
+        return 1.0, "", None
+    seen = ((lu or {}).get("seen") or {}).get(pos) or []
+    out = set(lu.get("out") or [])
+    if len(seen) < 2 or any(_norm(s[0]) in out for s in seen):
+        return 1.0, "", None
+    keys = [_norm(s[0]) for s in seen]
+    if _norm(prop.player) not in keys:
+        return 1.0, "", None
+    i = keys.index(_norm(prop.player))
+    logs = list(getattr(prop, "logs", None) or [])
+    now = [g for g in logs if not getattr(g, "prior", False)]
+    if not now:
+        return 1.0, "", None
+    mates = back_mates([("above" if j < i else "below", set(s[4] if len(s) > 4 else ()), s[0])
+                        for j, s in enumerate(seen) if j != i], lu.get("weeks") or [])
+    cases = absences([g.week for g in now], mates, lu.get("weeks") or [])
+    if not cases:
+        return 1.0, "", None
+    market = prop.market
+    if (market, pos) not in BACK_CELLS:
+        return 1.0, "", None
+    table = table_for(lu)
+    adj_now = deflated([float(g.value) for g in now], [g.week for g in now], cases, table, market, pos)
+    from dataclasses import replace as _replace
+    it = iter(adj_now)
+    adj_logs = [(_replace(g, value=next(it)) if not getattr(g, "prior", False) else g) for g in logs]
+    raw = [float(g.value) for g in logs]
+    adj = [float(g.value) for g in adj_logs]
+    career = float(getattr(prop, "career_avg", 0.0) or 0.0)
+    if sum(raw) > 0:
+        career *= sum(adj) / sum(raw)
+    base = form_mean(logs, getattr(prop, "career_avg", 0.0))
+    if not base or base <= 0:
+        return 1.0, "", None
+    mult = form_mean(adj_logs, career) / base
+    weeks_now = [g.week for g in now]
+    above = [n for side, w, n in mates if side == "above" and any(x not in w for x in weeks_now)]
+    if lu.get("basis") == "snaps":
+        mult *= BACK_RESIDUAL.get((market, pos, "above_back" if above else "below_back"), 1.0)
+    if abs(mult - 1.0) < 0.005:
+        return 1.0, "", None
+    who = [n for side, w, n in mates if any(x not in w for x in weeks_now)]
+    missed = sorted({w for w in cases})
+    head = (f"{' and '.join(who)} back at {pos} — {len(missed)} of his {len(now)} game"
+            f"{'' if len(now) == 1 else 's'} this season came without "
+            f"{'them' if len(who) > 1 else 'him'}")
+    lifts = sorted({table.get((market, pos, c), 1.0) for cs in cases.values() for c in cs} - {1.0})
+    how = (" and ".join(f"×{x:.2f}" for x in lifts) if lifts else "")
+    note = (f"Measured over four seasons: a {pos}'s games without "
+            f"{'a teammate ahead of him' if above else 'a teammate behind him'} run high"
+            + (f" ({how})" if how else "")
+            + f", so those games are counted at that much less — applied (×{mult:.2f})")
+    reason = f"Teammate back: {head} — measured (×{mult:.2f})"
+    card = {"team": prop.team, "out": [], "back": who, "case": "back", "headline": head,
+            "missed": missed, "applied": round(mult, 3), "note": note}
     return mult, reason, card
 
 

@@ -8922,10 +8922,17 @@ function qbCardHTML(c) {
    data" — the Next man up note used to say the projection had not moved;
    now the measured change is in the number and this card says by how
    much, or says it was not measured enough to price. */
-function mateCardHTML(c) {
+/* The teammate card. Its title — out, back (engine/teammates.back: his
+   games without a teammate who has returned count for less) or
+   questionable — is also what the pick page's section heading reads
+   (`titleOnly`). */
+function mateCardHTML(c, titleOnly) {
   if (!c || !c.headline) return "";
+  const title = (c.out || []).length ? "Teammate out" : (c.back || []).length ? "Teammate back"
+    : c.if_sits ? "Teammate questionable" : "Teammate out";
+  if (titleOnly) return title;
   return `<div class="mu-card qb-card">
-    <div class="mu-head">${(c.out || []).length || !c.if_sits ? "Teammate out" : "Teammate questionable"}<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
+    <div class="mu-head">${title}<span class="mu-sub">${escapeHtml(c.team || "")}</span></div>
     <div class="mu-line"><b>${escapeHtml(c.headline)}</b></div>
     ${c.note ? `<div class="mu-model">${escapeHtml(c.note)}</div>` : ""}
   </div>`;
@@ -10258,8 +10265,11 @@ function likelyTagsHTML(r) {
                qb.headline]);
   }
   if (mate && Number(mate.applied) && Number(mate.applied) !== 1) {
-    const who = (mate.out || [])[0] || "Teammate";
-    tags.push([`${surname(who)} out ${pct(Number(mate.applied))}`,
+    /* Out tonight, or back (engine/teammates.back: his games without him
+       count for less) — the tag names which. */
+    const back = !(mate.out || []).length && (mate.back || []).length;
+    const who = back ? mate.back[0] : (mate.out || [])[0] || "Teammate";
+    tags.push([`${surname(who)} ${back ? "back" : "out"} ${pct(Number(mate.applied))}`,
                Number(mate.applied) > 1 ? "up" : "down", mate.headline || ""]);
   }
   /* BOLDER THAN THE BOOKS (engine/boldcheck, 2026-09-27): our number is
@@ -12558,10 +12568,14 @@ function chainShrinkHTML(base, position, decimals) {
   if (!base || base.shrunk_to == null) return "";
   const n = Number(base.sample_games), k = Number(base.shrink_k);
   const pull = n > 0 && k > 0 ? Math.round(k / (n + k) * 100) : null;
-  const who = position ? `the typical ${escapeHtml(String(position).toUpperCase())}` : "a longer record’s rate";
-  return `<span class="ch-why">Only ${n} game${n === 1 ? "" : "s"} of his own${
+  /* HIS OWN LAST SEASON, week 4 on (engine/carry.SEASON_PRIOR_GAMES,
+     2026-10-12): the same sentence, saying whose number it leans on. */
+  const season = base.shrink_kind === "season";
+  const who = season ? "his own per-game number last season"
+    : position ? `the typical ${escapeHtml(String(position).toUpperCase())}` : "a longer record’s rate";
+  return `<span class="ch-why">${season ? "" : "Only "}${n} game${n === 1 ? "" : "s"} ${season ? "this season" : "of his own"}${
     pull != null ? `, so the blend is pulled ${pull}%` : ", so the blend is pulled"} toward ${
-    Number(base.shrunk_to).toFixed(decimals)} — ${who} — as measured for samples this thin.</span>`;
+    Number(base.shrunk_to).toFixed(decimals)} — ${who} — as measured ${season ? "on 2022–2025" : "for samples this thin"}.</span>`;
 }
 
 const CHAIN_WINDOWS = {
@@ -13280,11 +13294,10 @@ function renderPropPage() {
         and any other club he has faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
 
-    ${r.mate_card ? `<div class="section-title minor">${(r.mate_card.out || []).length || !r.mate_card.if_sits
-          ? "Teammate out" : "Teammate questionable"}
-        <span class="sub">— ${(r.mate_card.out || []).length || !r.mate_card.if_sits
-          ? "someone at his position is ruled out, and what the model did with it"
-          : "someone at his position may not play, and what the model does if he sits"}.</span></div>
+    ${r.mate_card ? `<div class="section-title minor">${mateCardHTML(r.mate_card, 1)}
+        <span class="sub">— ${({ "Teammate out": "someone at his position is ruled out, and what the model did with it",
+          "Teammate back": "someone at his position is back; his games without him count for less",
+          "Teammate questionable": "someone at his position may not play, and what the model does if he sits" })[mateCardHTML(r.mate_card, 1)]}.</span></div>
       ${mateCardHTML(r.mate_card)}` : ""}
 
     ${r.qb_card ? `<div class="section-title minor">Quarterback

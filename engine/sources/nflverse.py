@@ -555,6 +555,29 @@ QB_START_ATTEMPTS = 15.0
 QB_MARKETS = (PASS_YDS, PASS_TD, PASS_ATT, PASS_CMP, PASS_INT, PASS_RUSH_YDS)
 
 
+def season_anchor(prior_rows: list[dict], market: str, logs=None) -> dict | None:
+    """{"anchor", "n", "k"} — his own last season as the form's anchor from
+    week 4 (engine/carry.SEASON_PRIOR_GAMES, measured by seasonpriorfit.py):
+    his per-game number over last season's regular-season games, read as
+    player_game_logs reads a season (a quarterback's real games only). None
+    for an unmeasured market, under MIN_PRIOR_GAMES games, or — given his
+    ``logs`` this season — a form under SEASON_PRIOR_FLOOR, which the
+    measurement never scored."""
+    from ..carry import MIN_PRIOR_GAMES, SEASON_PRIOR_FLOOR, SEASON_PRIOR_GAMES
+    k = SEASON_PRIOR_GAMES.get(market)
+    if not k:
+        return None
+    if logs is not None:
+        from ..form import compute_form
+        vals = [float(g.value) for g in logs]
+        if not vals or compute_form(list(logs), sum(vals) / len(vals), None).mean < SEASON_PRIOR_FLOOR.get(market, 0.0):
+            return None
+    vals = [stat_value(r, market) for r in _regular_season(prior_rows or []) if quarterbacked(r, market)]
+    if len(vals) < MIN_PRIOR_GAMES:
+        return None
+    return {"anchor": sum(vals) / len(vals), "n": len(vals), "k": float(k)}
+
+
 def quarterbacked(row: dict, market: str) -> bool:
     """False for a passing row — or a quarterback's rushing row — from a
     game he did not really play in."""
@@ -1181,6 +1204,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
                                    pos_means.get(spec.market, {}), upto_week)
         if carried is None and thin is None and len(logs) < MIN_LOGS:
             continue  # not enough history to project
+        # HIS OWN LAST SEASON, FROM WEEK 4 ON (engine/carry
+        # .SEASON_PRIOR_GAMES): the form is pulled toward last season's
+        # per-game number by n/(n+k), measured market by market.
+        season_prior = (season_anchor(mine_before, spec.market, logs)
+                        if carried is None and thin is None else None)
         if thin is not None:
             baseline = thin["baseline"]
             thin_report[spec.player] = thin
@@ -1252,9 +1280,13 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             lines=[SportsbookLine(book="proxy", line=line, over_odds=-110, under_odds=-110)],
             usage_role=spec.usage_role,
             headshot=face_for(headshots, spec.player),
-            form_prior=thin["anchor"] if thin and thin["weight"] < 1.0 else None,
-            form_prior_n=_carry.THIN_ANCHOR_GAMES if thin else 0,
-            form_prior_games=_carry.THIN_PRIOR_GAMES if thin else 0.0,
+            form_prior=(thin["anchor"] if thin and thin["weight"] < 1.0
+                        else season_prior["anchor"] if season_prior else None),
+            form_prior_n=(_carry.THIN_ANCHOR_GAMES if thin
+                          else season_prior["n"] if season_prior else 0),
+            form_prior_games=(_carry.THIN_PRIOR_GAMES if thin
+                              else season_prior["k"] if season_prior else 0.0),
+            form_prior_kind="thin" if thin else "season" if season_prior else "",
             aux=aux,
         ))
 

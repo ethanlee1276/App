@@ -691,7 +691,8 @@ def compact(row: dict) -> dict:
         out["qb_change"] = qb_line(qb)
     mate = row.get("mate_card")
     if isinstance(mate, dict) and mate.get("headline"):
-        out["teammate_out"] = ". ".join(x for x in (mate.get("headline"), mate.get("note")) if x)
+        out["teammate_back" if mate.get("back") and not mate.get("out") else "teammate_out"] = \
+            ". ".join(x for x in (mate.get("headline"), mate.get("note")) if x)
     return out
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Price somebody else's legs with our engine, off the built board. Read-only.
 
-    cd /srv/qellys && python3 legcheck.py                      # tonight's six (Eagles-Bears)
+    cd /srv/qellys && python3 legcheck.py                      # tonight's legs (Bills-Rams)
     python3 legcheck.py "Jalen Hurts" pass_yds over 199.5 "DeVonta Smith" receptions over 5.5
 
 Ethan, 2026-09-28, with two research reports on Eagles-Bears: "see how it
@@ -12,6 +12,9 @@ likely._prob_at), the best price our books hang there and whether that
 rung cleared the board's bars, what the board actually seated for the
 player, and the matchup read's label — then every Most Likely row on the
 game, so the two boards sit side by side. Writes nothing.
+
+2026-10-12, Bills @ Rams: four reports, every leg they built or cut, each
+with the chance its report claimed ("R1 76%"), printed beside ours.
 """
 
 import json
@@ -21,12 +24,24 @@ from engine import likely
 from engine.gate import board_source
 from engine.sources.oddsapi import normalize_name
 
-TONIGHT = [("Jalen Hurts", "pass_yds", "over", 199.5),        # report 2: 71%, DK -167
-           ("Dontayvion Wicks", "rec_yds", "over", 39.5),      # report 2: 69%, DK -124
-           ("DeVonta Smith", "receptions", "over", 5.5),       # both: 55% / 65%
-           ("Kalif Raymond", "receptions", "over", 2.5),       # report 1: 58%
-           ("Kyle Monangai", "rush_att", "over", 9.5),         # report 1: 57%
-           ("D'Andre Swift", "anytime_td", "yes", 0.5)]        # report 1 passed at +110
+TONIGHT = [("Puka Nacua", "receptions", "over", 5.5, "R1 76%"),
+           ("Kyren Williams", "rush_rec_yds", "over", 74.5, "R1 72%"),
+           ("Matthew Stafford", "pass_cmp", "over", 20.5, "R1 71%"),
+           ("Josh Allen", "pass_att", "over", 29.5, "R1 68%"),
+           ("Matthew Stafford", "pass_yds", "over", 249.5, "R2 68%"),
+           ("Puka Nacua", "receptions", "over", 6.5, "R2 63%, FD -160"),
+           ("Josh Allen", "anytime_td", "yes", 0.5, "R2 57%; R1 ~48%"),
+           ("Josh Allen", "pass_yds", "over", 199.5, "R3 high, DK -349"),
+           ("Kyren Williams", "rush_yds", "over", 49.5, "R3 high, DK -311"),
+           ("Puka Nacua", "rec_yds", "over", 69.5, "R3 high, DK -276"),
+           ("Keon Coleman", "rec_yds", "over", 39.5, "R3 moderate; R4 65% if Moore out"),
+           ("Kyren Williams", "rec_yds", "over", 14.5, "R4 76%, DK -203"),
+           ("Davante Adams", "rec_yds", "over", 59.5, "R4 67%, -126"),
+           ("Dalton Kincaid", "rec_yds", "over", 49.5, "R4 65%, DK -133"),
+           ("Davante Adams", "rec_yds", "over", 64.5, "R1 cut (explosive-dependent)"),
+           ("James Cook", "rush_yds", "over", 75.5, "R1 cut (script)"),
+           ("Dalton Kincaid", "rec_yds", "under", 57.5, "R1 cut (fragile under)"),
+           ("Kyren Williams", "receptions", "over", 2.5, "R1 cut (same player)")]
 
 
 def _legs(argv):
@@ -95,9 +110,13 @@ def _read(board, player):
 def check(board, legs, out=print):
     """One block per leg; returns the rows for a test to read."""
     got = []
-    for player, market, side, line in legs:
+    for leg in legs:
+        player, market, side, line = leg[:4]
+        theirs = leg[4] if len(leg) > 4 else ""
+        if theirs:
+            out(f"  {player} {side} {line:g} {market} — theirs: {theirs}")
         r = _row(board, player, market)
-        rec = {"player": player, "market": market, "side": side, "line": line}
+        rec = {"player": player, "market": market, "side": side, "line": line, "theirs": theirs}
         if not r:
             out(f"  {player:20} {side} {line:g} {market:11} — not on our board (no prop priced)")
             got.append(rec)

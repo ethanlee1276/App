@@ -646,6 +646,69 @@ first). Paste back anything that prints an error or looks off.
     tested on past seasons (there is no list of past ones), so it never
     moves a number.
 
+30. **Why the NFL board is red, and whether bigger units would help**
+    (2026-10-11, Ethan: "we have won so many most likely bets … I feel
+    like we should be up more money"; "save the code for when I'm
+    home"). Read-only, seconds:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 lossaudit.py --sport nfl
+    ```
+    Paste back, for **The one board** and **Most Likely, staked**:
+    * `-- by price` — which price range loses.
+    * `-- by our chance against the price` — the picks whose shown chance
+      covered what the price needed to break even, against the ones it
+      didn't. If the covered row clearly beats the other, the college
+      rule (stake only what covers its price) is worth turning on for
+      the NFL. That's your call; nothing changes until you say so.
+    * `-- bigger units on the same … picks` — the same picks at 1u flat
+      against 3u Top pick / 2u Strong / 1u Worth a look. Sizing multiplies
+      a result. It cannot turn a loss into a win.
+
+31. **Bills @ Rams: the four reports against our model** (2026-10-12,
+    Ethan: "compare to what we have … then fix shit"). The write-up is
+    `docs/RESEARCH_PARITY_2026-10-12.md`. Two model changes went in. They
+    reach the board on the next NFL build by themselves, because the box
+    pulls pushed code every five minutes:
+    * **His own last season, week 4 on.** Every player's form is pulled
+      toward his 2025 per-game number by a measured share (receiving
+      yards 60% at four games, fading as the season fills). Held out on
+      four seasons, every season improved. The pick page says how much.
+    * **A teammate back.** A player's games without a teammate who has
+      since returned count for less (Adams' games without Nacua). The card
+      says **Teammate back**.
+
+    **A. Our number at every leg the reports built or cut** (read-only,
+    seconds; best before kickoff, 8:15 PM ET):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 legcheck.py
+    ```
+    Each leg prints `theirs:` (the report's claim) and then ours, our best
+    price and whether the board seated it.
+
+    **B. Check the build took the changes** (read-only). It prints Adams',
+    Kyren's and Stafford's projections, and any "back" card:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -c "
+    import json; from engine.gate import board_source
+    b = json.load(open(board_source('web/data/recommendations.json')))
+    for r in b.get('recommendations') or []:
+        if r.get('player') in ('Davante Adams', 'Kyren Williams', 'Matthew Stafford') and r.get('market') in ('rec_yds', 'receptions', 'pass_att'):
+            print(r['player'], r['market'], r.get('projection'), (r.get('mate_card') or {}).get('headline', ''))"
+    ```
+    Adams' receiving yards should read near 64, not 90.
+
+    **C. Re-measure on the box** (optional, a minute each; they read the
+    box's own cached box scores and print the same tables):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 seasonpriorfit.py --seasons 2022-2025
+    cd /srv/qellys && sudo -u qellys python3 matefit.py --back
+    ```
+
+    **D. Your call:** report 1's whole card was alternate lines on
+    completions, attempts and rush+rec yards. We buy alternates for yards
+    and catches only. Adding the other three costs three or four more Odds
+    API credits a game. Say yes and I'll add them.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -5,6 +5,7 @@
     python3 matefit.py --seasons 2021-2025
     python3 matefit.py --early             # weeks 2-3, form carried from last season
     python3 matefit.py --snaps             # depth ranked on snap share (what the board uses)
+    python3 matefit.py --back              # a teammate BACK: the deflation, held out by season
 
 Reads data/cache/player_stats_<season>.csv (the NFL build's box scores) and
 prints, per market, position and case, the multiplier the games show, its
@@ -31,7 +32,12 @@ def main() -> None:
                     help="a target leader out at ANOTHER position (engine/matefit.cross_samples)")
     ap.add_argument("--snaps", action="store_true",
                     help="rank the depth order on snap share (data/cache/snap_counts_<season>.csv)")
+    ap.add_argument("--back", action="store_true",
+                    help="a teammate BACK tonight: the games he missed deflated by the measured "
+                         "absence, each season held out (engine/matefit.back_check)")
     args = ap.parse_args()
+    if args.back:
+        args.snaps = True
     a, _, b = args.seasons.partition("-")
     seasons = {}
     for s in range(int(a) - (1 if args.early else 0), int(b or a) + 1):
@@ -45,6 +51,9 @@ def main() -> None:
             if path.exists():
                 with open(path, newline="") as fh:
                     snaps[s] = list(csv.DictReader(fh))
+    if args.back:
+        _back(seasons, snaps)
+        return
     res = F.measure(F.cross_samples(seasons) if args.cross
                     else F.early_samples(seasons) if args.early else F.samples(seasons, snaps))
     rule = F.shipped(res)
@@ -64,6 +73,34 @@ def main() -> None:
         for k, v in sorted(rule.items()):
             print(f"      {k!r}: {v:.3f},")
         print("  }")
+
+
+def _back(seasons: dict, snaps: dict) -> None:
+    """Print the held-out squared-error cut on the games a teammate came
+    back to, per market, position and season, and the residual table the
+    shipping rule passes on every season against teammates.BACK_RESIDUAL."""
+    rep = F.back_check(seasons, snaps)
+    print("Squared error cut on the games a teammate came back to, each season held out:")
+    print("  market     pos season    n   deflated  +residual")
+    for (m, g, s), h in sorted(rep["held"].items()):
+        if not h["raw"]:
+            continue
+        print(f"  {m:<11}{g:<4}{s}  {h['n']:5}   {(1 - h['deflated'] / h['raw']) * 100:+6.1f}%  "
+              f"{(1 - h['residual'] / h['raw']) * 100:+6.1f}%")
+    print("\n  The bar per market and position (cut overall, at most one season worse):")
+    for (m, g), ok in sorted(rep["cells"].items()):
+        print(f"    {m:<11}{g:<4}{'passes' if ok else 'fails'}")
+    print("\n  BACK_CELLS = {")
+    for k, ok in sorted(rep["cells"].items()):
+        if ok:
+            print(f"      {k!r},")
+    print("  }")
+    print(f"  shipped: {sorted(T.BACK_CELLS)}")
+    print("\n  BACK_RESIDUAL = {")
+    for k, v in sorted(rep["residual"].items()):
+        print(f"      {k!r}: {v:.3f},")
+    print("  }")
+    print(f"  shipped: {T.BACK_RESIDUAL}")
 
 
 if __name__ == "__main__":

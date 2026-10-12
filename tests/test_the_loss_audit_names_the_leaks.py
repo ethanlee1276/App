@@ -145,6 +145,42 @@ def test_the_report_reads_as_a_page_and_scopes_by_sport_and_date():
     assert "No settled bets" in LA.render(LA.audit(LA.open_ledger(path), sport="mlb"))
 
 
+def _bet(**kw):
+    d = {c: None for c in LA.COLUMNS}
+    d.update({"sport": "nfl", "market": "receptions", "side": "OVER", "date": "2026-10-04",
+              "book": "fanduel", "category": "board", "status": "won"})
+    d.update(kw)
+    return d
+
+
+def test_each_book_is_cut_by_whether_our_chance_covered_the_price():
+    # Ethan, 2026-10-11: 54% won still lost money. The cut that says whether
+    # staking only what covers its price (the college rule) would help.
+    assert LA.covered(_bet(odds=-150, hit_prob=0.62)) == "our chance covered the price"     # needs 60%
+    assert LA.covered(_bet(odds=-200, hit_prob=0.62)) == "the price needed more than our chance"  # 66.7%
+    assert LA.covered(_bet(odds=-150, hit_prob=0.60)) == "our chance covered the price", "exactly break-even covers"
+    assert LA.covered(_bet(odds=None, hit_prob=0.6)) == "no price or no claim"
+    assert LA.covered(_bet(odds=-150, hit_prob=None)) == "no price or no claim"
+    rep, _ = _report()
+    cut = rep["books"]["Most Likely, paper"]["slices"]["our chance against the price"]
+    assert sum(s["n"] for s in cut.values()) == rep["books"]["Most Likely, paper"]["total"]["n"]
+
+
+def test_bigger_units_multiply_the_same_picks_and_cannot_change_a_loss_into_a_win():
+    bets = [_bet(grade="Top pick", odds=-150, stake_units=1.0, pnl_units=-1.0, status="lost"),
+            _bet(grade="Strong", odds=-200, stake_units=1.0, pnl_units=0.5),
+            _bet(grade="Worth a look", odds=100, stake_units=1.0, pnl_units=1.0),
+            _bet(grade="Likely (staked)", odds=-110, stake_units=0.25, pnl_units=-0.25, status="lost")]
+    sz = LA.sizing(bets)
+    assert sz == {"n": 3, "flat": 16.7, "tiered": -33.3}, sz      # a book without tiers is not counted
+    assert LA.sizing([_bet(grade="Likely (staked)", stake_units=0.25, pnl_units=0.2)]) is None
+    rep, _ = _report()
+    assert rep["books"]["The one board"]["sizing"]["n"] == 9
+    assert rep["books"]["Most Likely, paper"]["sizing"] is None
+    text = LA.render(rep)
+    assert "bigger units on the same 9 picks" in text and "-- by our chance against the price" in text
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:
