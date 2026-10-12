@@ -37,6 +37,23 @@ has no coverage assignments; those come from paid charting (PFF, FTN's
 full product). So "a bad corner" is measured here as what the defence
 gives up to the position — which is what Olave's day against Detroit
 shows up as.
+
+A DEFENCE MISSING ITS STARTERS, measured 2026-10-12 and NOT applied
+(`python3 defoutfit.py`; Ethan's Bills @ Rams reports leaned on Ed Oliver,
+Dee Alford and Quentin Lake being out). Starters are defenders at 60%+ of
+the snaps over three or more earlier games (nflverse snap counts); out is
+Out or Doubtful on that week's injury report, which is what the board can
+know before kickoff. On the board's base (form, last season from week 4,
+this step): pass-catchers' catches and yards and the quarterback's yards ×
+(1 + a × defensive backs out), rushing yards × (1 + b × front seven out),
+a and b fitted on three seasons and scored on the fourth. Every market
+got worse in at least one held-out season (catches 2024 −0.75%, receiving
+yards 2024 −0.48%, passing yards 2024 −1.82%, rushing 2023 and 2024), so
+the rating stands as it is and the injury board shows who is out.
+Catches did drift up with each defensive back out (actual against base
+0.968, 0.981, 0.995, 1.007 for none to three), yards did not; injury
+data starts in 2022, so a re-cut of that idea has no unseen season to be
+scored on until 2026 is complete — re-run then.
 """
 from __future__ import annotations
 

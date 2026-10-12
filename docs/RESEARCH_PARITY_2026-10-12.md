@@ -193,20 +193,20 @@ questionable-teammate note ("if Moore sits…").
 |---|---|
 | Alt rungs on completions, attempts and rush+rec yards (all of report 1's card) | We buy alternates for yards and catches only, so the board can price 21+ completions but has no book price to seat it. The Odds API documents alternate keys for these too (unproven from here); they would cost three or four more credits a game (22 now). **Your call**: say yes and I'll add them behind the same drop-and-retry guard. |
 | A teammate who left a game early (Moore, weeks 2 and 4) | Our "left early" rule compares him with his own median. With two short games in four, his median is low and nothing is flagged. Last season's anchor now covers most of it (Coleman 61.6 → 44.3). |
-| A defender out (Ed Oliver, Dee Alford, Quentin Lake) | Shown on the injury board and in the coverage room, not in the number. Measurable from nflverse snaps and injuries (a defence missing its top-snap players against what it allows). A candidate, not done today. |
+| A defender out (Ed Oliver, Dee Alford, Quentin Lake) | **Measured the same day** (`defoutfit.py`): starters (60%+ of snaps) listed Out or Doubtful, against what the defence gives up beyond its rating. Every market got worse in at least one held-out season, so it is not in the number; the injury board shows who is out. Re-run once 2026 is complete. |
 | Quarterback against man or zone (Allen +0.36 EPA vs man, +0.17 vs zone) | Coverage comes from nflverse's participation file, which publishes a season behind. Last season's split could be measured; not done today. |
-| Kalshi player-prop contracts (R2: "Kalshi 68.5¢" on Stafford 250+) | We read Kalshi's game, spread and total series only. Kalshi is blocked from this sandbox; a box probe for its NFL player series is the next step. |
+| Kalshi player-prop contracts (R2: "Kalshi 68.5¢" on Stafford 250+) | We read Kalshi's game, spread and total series only. Kalshi is blocked from this sandbox; `kalshiprops.py` is the box probe (runbook step 33). |
 | Ticket and money splits (Circa via VSiN) | No free feed. We don't scrape. |
 | Referee crew (Scott Novak, most penalties) | Report 4 found no reliable trend either. Not built. |
 | Coach trends ("Under 29-14 as a home favourite under McVay") | Not measured, and not worth a number on its own. |
 
 ## Known limits of today's fixes
 
-- The nightly calibration replay (`engine/backtest`) still builds its slates
-  without last season. Its temperature errs on the cautious side until it
-  is brought in line.
-- The usage bridge (recent volume × efficiency) still reads only this
-  season, so on the board the pull toward last season comes out smaller
-  than measured.
+- ~~The calibration replay builds its slates without last season.~~ Fixed
+  the same day: `propcal` replays with `carry=True`, as the live board
+  builds.
+- ~~The usage bridge reads only this season.~~ Measured and fixed the same
+  day for catches, receiving yards and rushing yards (`bridgefit.py`);
+  passing yards failed 2025 and keeps its bridge as it was.
 - Measured with the form's default curve; a market whose curve the
   formfit adopted runs a slightly different blend underneath.

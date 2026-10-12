@@ -229,8 +229,18 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         mean_base = rate_base
         reasons.append(_pi.words(_rate, float(_league), att_proj.mean, rate_base))
     if rate_base is None and usage and usage.get("opp_per_game") and usage.get("eff"):
-        est = float(usage["opp_per_game"]) * float(usage["eff"])
+        est = role = float(usage["opp_per_game"]) * float(usage["eff"])
         if est > 0:
+            # HIS OWN LAST SEASON IN THE BRIDGE TOO (engine/carry
+            # .BRIDGE_SEASON_MARKETS, measured 2026-10-12): the role is
+            # pulled toward the same number by the same n/(n+k) the form
+            # was, and only where the form itself was pulled.
+            from .carry import BRIDGE_SEASON_MARKETS
+            pulled = bool(form.shrunk_to is not None and prop.market in BRIDGE_SEASON_MARKETS
+                          and getattr(prop, "form_prior_kind", "") == "season" and prop.form_prior_games)
+            if pulled:
+                s = form.sample_games / (form.sample_games + float(prop.form_prior_games))
+                est = s * est + (1.0 - s) * float(form.shrunk_to)
             w = form.sample_games / (form.sample_games + USAGE_PRIOR_GAMES)
             mean_base = w * form.mean + (1.0 - w) * est
             if form.mean > 0 and abs(mean_base / form.mean - 1.0) >= 0.02:
@@ -241,8 +251,10 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                 }.get(usage.get("opp_market"), ("touches/gm", "per touch"))
                 usage_why = (
                     f"{float(usage['opp_per_game']):.1f} {per} "
-                    f"× {float(usage['eff']):.2f} {unit} — measured role says "
-                    f"{est:.1f}, weighted {1.0 - w:.0%} against form")
+                    f"× {float(usage['eff']):.2f} {unit} — measured role says {role:.1f}"
+                    + (f", pulled {1.0 - s:.0%} toward his {float(form.shrunk_to):.1f} last season "
+                       f"to {est:.1f}" if pulled else "")
+                    + f", weighted {1.0 - w:.0%} against form")
                 reasons.append(f"Usage bridge: {usage_why}")
 
     if model is not None and model.has(prop.market):

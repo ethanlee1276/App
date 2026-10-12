@@ -93,6 +93,21 @@ def test_the_runbook_says_how_to_measure_it_again():
     assert "python3 qbscriptfit.py" in run
 
 
+def test_a_defence_missing_starters_was_measured_and_is_not_in_the_number():
+    """Item 4 of the Bills @ Rams follow-ups (2026-10-12): defenders Out or
+    Doubtful, measured on the board's base (defoutfit.py), failed a
+    held-out season in every market — so the defence step reads its rating
+    only, and the note says what to re-run once 2026 is complete."""
+    import inspect
+    from engine import defensevs as DV
+    note = " ".join(line.strip() for line in (DV.__doc__ or "").splitlines())
+    assert "A DEFENCE MISSING ITS STARTERS, measured 2026-10-12 and NOT applied" in note
+    assert "python3 defoutfit.py" in note and "re-run then" in note
+    assert "injur" not in inspect.getsource(DV.effect).lower(), "the step reads the rating, not the report"
+    src = open(os.path.join(ROOT, "defoutfit.py"), encoding="utf-8").read()
+    assert "every held-out season improves" in src and 'in ("out", "doubtful")' in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

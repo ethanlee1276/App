@@ -755,6 +755,27 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys python3 -m engine.deepfit
     ```
 
+35. **Last season in the usage step; defenders out** (2026-10-12, the
+    rest of the Bills @ Rams follow-ups). Nothing to run for either.
+    * **The usage step leans on last season too.** It's the part of the
+      base built from recent targets and carries, and it read this
+      season only, so the pull toward last season reached the board
+      about half as hard as measured. The same pull now goes into it
+      for catches, receiving yards and rushing yards. Every season
+      2022-2025 improved, and 2017-2021 agreed. Passing yards got worse
+      in 2025 and stays as it was. To re-measure on the box (a minute):
+      ```
+      cd /srv/qellys && sudo -u qellys python3 bridgefit.py
+      ```
+    * **A defence missing starters** (Out or Doubtful on the injury
+      report) was measured and **isn't** in the number. Every market got
+      worse in at least one held-out season. Injury reports only go back
+      to 2022, so there's no older season to check a second idea on.
+      Re-run it once 2026 is over:
+      ```
+      cd /srv/qellys && sudo -u qellys python3 defoutfit.py --seasons 2022-2026
+      ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

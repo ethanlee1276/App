@@ -125,6 +125,42 @@ def test_the_calibration_replay_reads_last_season_as_the_board_does():
     assert seen == [{}, {"carry": True}], seen
 
 
+def test_the_usage_bridge_leans_on_last_season_where_it_measured():
+    """engine/carry.BRIDGE_SEASON_MARKETS (bridgefit.py): the bridge's role
+    — recent opportunities × this season's efficiency — is pulled toward
+    last season by the form's own n/(n+k), only where the form itself was
+    pulled. Passing yards failed 2025 and keeps its bridge as it was."""
+    from engine.models import DefenseProfile, Game, Team, Weather
+    from engine.projection import USAGE_PRIOR_GAMES, build_projection
+    assert C.BRIDGE_SEASON_MARKETS == frozenset({"receptions", "rec_yds", "rush_yds"})
+    src = open(os.path.join(ROOT, "bridgefit.py"), encoding="utf-8").read()
+    assert "at most one of --unseen is worse" in src and "C.BRIDGE_SEASON_MARKETS" in src
+    game = Game(home="KC", away="BUF", weather=Weather(dome=True))
+    opp = Team(abbr="BUF", name="BUF", defense=DefenseProfile(team="BUF"))
+    usage = {"opp_per_game": 8.0, "eff": 9.0, "opp_market": "targets"}      # role 72.0
+
+    def proj(market, kind="season", prior=40.0, position="WR"):
+        p = Prop(player="P", team="KC", opponent="BUF", position=position, market=market,
+                 logs=[GameLog(week=w, opponent="BUF", value=60.0) for w in (4, 3, 2, 1)],
+                 career_avg=60.0, vs_opponent_avg=None, lines=[], form_prior=prior, form_prior_n=17,
+                 form_prior_games=6.0, form_prior_kind=kind)
+        return build_projection(p, game, opp, usage=usage)
+
+    got = proj("rec_yds")
+    n, k = 4, 6.0
+    form = n / (n + k) * 60.0 + k / (n + k) * 40.0                      # the form, pulled: 48.0
+    role = n / (n + k) * 72.0 + k / (n + k) * 40.0                      # the role, pulled the same: 52.8
+    w = n / (n + USAGE_PRIOR_GAMES)
+    assert abs(got.form.mean - form) < 1e-9
+    base = got.chain["steps"][0]["mult"] * got.form.mean if got.chain["steps"][0]["key"] == "usage" else None
+    assert base is not None and abs(base - (w * form + (1 - w) * role)) < 1e-6, base
+    assert "pulled 60% toward his 40.0 last season to 52.8" in " ".join(got.reasons)
+    untouched = proj("pass_yds", position="QB")
+    assert "last season to" not in " ".join(untouched.reasons), "passing yards keeps its bridge as it was"
+    thin = proj("rec_yds", kind="thin")
+    assert "last season to" not in " ".join(thin.reasons), "a thin anchor is the position, not his season"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -244,6 +244,26 @@ SEASON_PRIOR_GAMES = {"rec_yds": 6.0, "receptions": 4.0, "rush_yds": 2.0, "rush_
 SEASON_PRIOR_FLOOR = {"rec_yds": 15.0, "receptions": 1.5, "rush_yds": 15.0, "rush_att": 5.0,
                       "pass_yds": 120.0, "pass_att": 18.0, "pass_cmp": 12.0, "rush_rec_yds": 30.0}
 
+#: …AND IN THE USAGE BRIDGE, for these markets (measured 2026-10-12,
+#: `python3 bridgefit.py`). The bridge — recent opportunities × this
+#: season's efficiency, engine/projection.USAGE_PRIOR_GAMES — reads this
+#: season only, so at four games it supplied half the base with no last
+#: season in it, and the measured pull above reached the board about
+#: half as hard as measured. The candidate added no number: the bridge's
+#: estimate pulled toward last season by the same n/(n+k), under the
+#: same condition (the form was shrunk). Squared error cut, each season:
+#:
+#:                 2022   2023   2024   2025 |  2017   2018   2019   2020   2021
+#:   receptions   +1.32  +1.16  +0.71  +0.82 | +0.33  +0.30  +1.15  +0.66  +1.00
+#:   rec_yds      +1.84  +1.40  +0.42  +0.79 | +0.77  +0.59  +1.06  +1.60  +0.50
+#:   rush_yds     +1.29  +0.27  +0.57  +0.35 | +0.92  +1.28  +1.02  +0.19  +0.53
+#:   pass_yds     +2.53  +0.68  +2.35  −0.62 | +0.26  −0.87  +3.31  +0.34  +2.61
+#:
+#: The bar, set before the run: every season 2022-2025 improves and at
+#: most one of 2017-2021 is worse. Passing yards fails 2025 and keeps its
+#: bridge as it was.
+BRIDGE_SEASON_MARKETS = frozenset({"receptions", "rec_yds", "rush_yds"})
+
 #: Kinds of offseason reset, reusing reset.py's vocabulary so a reader sees
 #: one set of labels across both rules.
 TRADE = "team change"
