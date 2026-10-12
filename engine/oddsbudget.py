@@ -156,8 +156,8 @@ class BudgetState:
         return float(self.sport_last_refresh.get(sport, 0.0))
 
 
-def load(path: Path | str = STATE_PATH) -> BudgetState:
-    path = Path(path)
+def load(path: Path | str | None = None) -> BudgetState:
+    path = Path(path or STATE_PATH)
     if not path.is_file():
         return BudgetState()
     try:
@@ -204,8 +204,8 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
         return BudgetState()
 
 
-def save(state: BudgetState, path: Path | str = STATE_PATH) -> None:
-    path = Path(path)
+def save(state: BudgetState, path: Path | str | None = None) -> None:
+    path = Path(path or STATE_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state.to_dict(), indent=2))
 
@@ -446,13 +446,25 @@ def fingerprint(key: str) -> str:
     return hashlib.sha256((key or "").encode("utf-8")).hexdigest()[:8]
 
 
-# These three resolve STATE_PATH at CALL time, not in the signature. A
-# default argument binds once, when the function is defined, so
+# EVERY function here resolves STATE_PATH at CALL time, not in the
+# signature. A default argument binds once, when the function is defined, so
 # `path=STATE_PATH` cannot be redirected by reassigning the module attribute
 # — which is exactly how a test (and a caller wanting a different state file)
 # would try to redirect it, and it would silently keep writing to the real
 # one. The same trap cost a whole test file its meaning earlier in this
 # project; it is not a hypothetical.
+#
+# It was still live in nine signatures until the nightly sweep of
+# 2026-10-12 measured where the suite writes: `load`, `save`,
+# `record_quota`, `mark_refreshed`, `paid_pull_result`, `should_refresh`,
+# `reset`, `key_report` and `summary` all bound it at definition, so
+# test_odds_keyring.py — which sets `B.STATE_PATH` to a tempfile and then
+# drives a full `_request` — wrote its fake quota into the REAL
+# data/cache/odds_budget.json on whatever box ran the suite. The test
+# still passed, because the half it ASSERTS (`key_is_spent(key, p)`) takes
+# the path explicitly; only the half it WRITES escaped. That is the shape
+# this trap always takes, and why the rule is the whole module now and not
+# three functions. test_oddsbudget_paths.py pins it.
 def key_state(key: str, path: Path | str | None = None) -> dict:
     return load(path or STATE_PATH).keys.get(fingerprint(key), {})
 
@@ -523,7 +535,7 @@ def pool_remaining(path: Path | str | None = None) -> int:
     return _pool_remaining(load(path or STATE_PATH))
 
 
-def record_quota(remaining, used=None, path: Path | str = STATE_PATH,
+def record_quota(remaining, used=None, path: Path | str | None = None,
                  key: str | None = None) -> BudgetState:
     """Store the quota the API just reported. Non-numeric values are ignored."""
     state = load(path)
@@ -581,7 +593,7 @@ def _claim_touchpoint(state: "BudgetState", sport: str | None,
             state.sport_touchpoint.pop(k, None)
 
 
-def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
+def mark_refreshed(ts: float | None = None, path: Path | str | None = None,
                    sport: str | None = None) -> None:
     state = load(path)
     t = ts if ts is not None else time.time()
@@ -647,7 +659,7 @@ def decisions(path: Path | str | None = None, since: float | None = None,
     return out
 
 
-def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
+def paid_pull_result(before_seen_iso: str, path: Path | str | None = None,
                      now: float | None = None,
                      sport: str | None = None,
                      bought_enough: bool = True) -> bool:
@@ -1159,7 +1171,7 @@ STALE_MAX_CREDITS = 8
 
 
 def should_refresh(requests_per_refresh: int, now: float | None = None,
-                   path: Path | str = STATE_PATH,
+                   path: Path | str | None = None,
                    kickoffs=None, sport: str | None = None,
                    share: float = 1.0, credits: int | None = None,
                    prices_stale: bool = False,
@@ -1422,7 +1434,7 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     return True, f"refreshing odds ({state.remaining} credits left this month)"
 
 
-def reset(path: Path | str = STATE_PATH) -> BudgetState:
+def reset(path: Path | str | None = None) -> BudgetState:
     """Forget the recorded quota — use after swapping in a new key.
 
     The stored balance belongs to whichever key produced it, so a replacement
@@ -1445,7 +1457,7 @@ def is_measured(state: BudgetState | None = None) -> bool:
     return bool(state.last_seen_iso)
 
 
-def key_report(path: Path | str = STATE_PATH) -> list[str]:
+def key_report(path: Path | str | None = None) -> list[str]:
     """One line per key on the ring: what it has, and whether it counts.
 
     The pool is a SUM, so "19,999 left" is the same sentence whether that
@@ -1489,7 +1501,7 @@ def key_report(path: Path | str = STATE_PATH) -> list[str]:
     return out
 
 
-def summary(path: Path | str = STATE_PATH) -> str:
+def summary(path: Path | str | None = None) -> str:
     state = load(path)
     if not is_measured(state):
         return (f"Odds quota: not yet measured — assuming a free plan "

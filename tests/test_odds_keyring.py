@@ -219,6 +219,15 @@ def test_an_exhausted_key_switches_mid_request_and_the_call_succeeds():
                 io.BytesIO(b'{"message":"OUT_OF_USAGE_CREDITS"}'))
         return _Resp()
 
+    # The spend ledger is a SEPARATE module path, derived from STATE_PATH at
+    # import — so redirecting STATE_PATH does not move it, and this test
+    # appended its fake paid call to the real data/cache/odds_spend.jsonl,
+    # the file that answers "what burned twenty thousand credits?". Measured
+    # by the nightly sweep of 2026-10-12; the sibling budget test files all
+    # redirect it and this one did not.
+    old_spend, old_decisions = B.SPEND_LOG, B.DECISIONS_LOG
+    B.SPEND_LOG = __import__("pathlib").Path(p).parent / "spend.jsonl"
+    B.DECISIONS_LOG = __import__("pathlib").Path(p).parent / "decisions.jsonl"
     B.STATE_PATH = p
     urllib.request.urlopen = fake_urlopen
     cache = tempfile.mkdtemp()
@@ -235,6 +244,7 @@ def test_an_exhausted_key_switches_mid_request_and_the_call_succeeds():
     finally:
         urllib.request.urlopen = old_open
         B.STATE_PATH = old_state
+        B.SPEND_LOG, B.DECISIONS_LOG = old_spend, old_decisions
         O.CACHE_DIR = old_cache
         _env()
 
