@@ -803,6 +803,47 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys python3 -m engine.askbot usage
     ```
 
+    **Later the same day, round two** (Ethan: "use all the data we have
+    with defense and offense … run the parlays and legs through our 2000
+    time simulations"):
+    * **Why we say X%** folds under every leg. It lists the board's own
+      facts, and nothing is invented for the slip.
+      * Props show: our projection and its range; his recent games
+        against that number; his games against this defence; the defence
+        card and what it did to our number; the other steps that moved
+        it most; the game script; the matchup scan's read; his
+        quarterback, teammates and measured teammate-out effects; his
+        injury status and warnings; and what the books say with the
+        margin out (the sharp book's number, and the field's across books
+        at that number).
+      * A seated Most Likely pick also shows the case it was picked on,
+        our record on picks like it, the four checks and the scout's
+        notes.
+      * Scorers show the team's expected points, red-zone chances and
+        goal-line work.
+      * Sides and totals show our model's reasons, the books, Kalshi and
+        Polymarket on the same bet at the same number, the move since
+        the line opened, where the exchange money sits, and the game
+        plan.
+    * **The ticket, replayed 2,000 times**, the Sim Lab's count. Legs in
+      one game win and lose together exactly as the parlay engine prices
+      them. The card shows how many nights it cashed, how many legs
+      landed on the rest, and the leg that most often broke a ticket
+      that missed by one.
+    * Two legs that can't both win (both sides of one line) now grade
+      0% and F instead of a small number.
+    * A seated pick shows its tier word ("Top pick"), not the board's
+      internal key ("top"). A "Worth a look" pick is graded at the
+      tier's real hit rate, the number its Most Likely card shows, not
+      our model's higher one. The swap suggestion uses the same number.
+    * Fixed while building this: in a low-total, close game (e.g. WAS by
+      3.5 at 41.5) the favorite's game-script line read "favored in a
+      shootout — everyone eats", and the game-plan page counted that as
+      backing every over. It now reads "favored in a low-scoring, close
+      game" and backs no side. Wording only; no number changes.
+
+    Nothing to run for any of it.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -104,9 +104,14 @@ def for_team(spread: float, total: float, home: str, away: str, team: str) -> di
             else "favorite" if team_spread < 0 else "underdog")
     # What the archetype means for THIS side, in one clause.
     if role == "favorite":
+        # A LOW TOTAL IS NOT A SHOOTOUT. "Nobody's good" fell through to
+        # "favored in a shootout — everyone eats" — at 41.5 — and
+        # gameplan.script_sign reads "everyone eats" as every over backed.
+        # Said plainly now, and it backs no side (script_sign: 0).
         lean = ("leads late and runs the clock — run volume up, pass volume "
                 "a little down" if d["archetype"] in ("Favorite runs, dog throws",
                                                       "Floor, no ceiling")
+                else "favored in a low-scoring, close game" if d["archetype"] == "Nobody's good"
                 else "favored in a shootout — everyone eats")
     elif role == "underdog":
         lean = ("expected to trail and throw — pass volume up, the run "

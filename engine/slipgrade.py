@@ -54,8 +54,10 @@ kept. The card says our number and what the price needs, and no more.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import math
+import random
 
 #: Every market the boards price, by the key the boards use. The reader
 #: must pick one of these (or "other"), so a leg can only ever be looked up
@@ -427,6 +429,15 @@ def _game_pick(board: dict, leg: dict, league: str):
     return None
 
 
+def _shown(r: dict) -> float:
+    """The chance the Most Likely page prints for a seated pick: the tier's
+    real hit rate where the board carries one (likelyboard.REAL_RATE_TIERS,
+    "Worth a look", once it has the settled picks to say), else our model's
+    chance — app.js reads `tier_rate != null ? tier_rate : model_prob`."""
+    rate = _num(r.get("tier_rate"), None)
+    return rate if rate is not None else _num(r.get("model_prob"), float("nan"))
+
+
 def _likely_row(board: dict, leg: dict) -> dict | None:
     """The Most Likely board's own row for exactly this leg — same player,
     market, side and number — whose chance is the one the site shows, with
@@ -493,7 +504,7 @@ def price_leg(boards: dict, leg: dict) -> dict:
         elif leg["market"] != "other":
             r = _likely_row(board, leg)
             if r is not None:
-                got = (_num(r.get("model_prob"), float("nan")), r.get("odds"), "likely", r)
+                got = (_shown(r), r.get("odds"), "likely", r)
             elif leg["market"] in SCORER_MARKETS:
                 s = _scorer(board, leg)
                 if s is not None:
@@ -518,7 +529,8 @@ def price_leg(boards: dict, leg: dict) -> dict:
     if r.get("player") and out["market"] not in GAME_MARKETS:
         out["player"] = r["player"]      # the board's spelling: "J. Allen" was Josh Allen
     out["projection"] = r.get("projection")
-    out["tier"] = str(r.get("tier") or "") if out["found"] == "likely" else ""
+    # The board's word for the seat ("Top pick"), not its key ("top").
+    out["tier"] = str(r.get("tier_label") or r.get("tier") or "") if out["found"] == "likely" else ""
     out["game"] = _game_label(r, boards.get(out["league"])) or out["game"]
     out["team"] = out["team"] if out["market"] in GAME_MARKETS else (str(r.get("team") or "") or out["team"])
     out["opponent"] = str(r.get("opponent") or "")
@@ -589,7 +601,7 @@ def joint(legs: list[dict]) -> tuple[float | None, list[dict]]:
     for l in priced:
         k = _game_of(l)
         groups.setdefault(k if any(k[0]) else ("solo", id(l)), []).append(l)
-    total, notes = 1.0, []
+    total, notes, impossible = 1.0, [], False
     for group in groups.values():
         ps = [max(1e-6, min(1 - 1e-6, float(l["prob"]))) for l in group]
         rhos = []
@@ -604,6 +616,7 @@ def joint(legs: list[dict]) -> tuple[float | None, list[dict]]:
                 if rel is not None and getattr(rel, "verdict", "ok") in ("kill", "duplicate"):
                     notes.append({"legs": [_name(group[i]), _name(group[j])], "kind": rel.verdict,
                                   "why": getattr(rel, "mechanism", "")})
+                impossible = impossible or _exclusive(rel)
         if len(group) == 1:
             total *= ps[0]
         elif len(group) == 2:
@@ -612,7 +625,17 @@ def joint(legs: list[dict]) -> tuple[float | None, list[dict]]:
             total *= P.joint_three(tuple(ps), (rhos[0], rhos[1], rhos[2]))
         else:
             total *= joint_k(ps, sum(rhos) / len(rhos))
-    return max(0.0, min(1.0, total)), notes
+    # BOTH SIDES OF ONE LINE CANNOT BOTH WIN. The engine scores the pair at
+    # -0.90 (a side) or -1.0 (a total) and names it a kill; a copula at
+    # -0.90 still leaves a few points of "both", which no game can.
+    return (0.0 if impossible else max(0.0, min(1.0, total))), notes
+
+
+def _exclusive(rel) -> bool:
+    """A pair the parlay engine says cannot both win — both sides of one
+    side or one total (parlays.relate, §3 Type 1 "cannot both win"); a
+    team-total-against-its-own-player clash is a logic problem, not this."""
+    return bool(rel is not None and "cannot both win" in str(getattr(rel, "mechanism", "")))
 
 
 def joint_k(ps: list[float], rho: float) -> float:
@@ -632,6 +655,432 @@ def joint_k(ps: list[float], rho: float) -> float:
             term *= 1.0 - P._phi((zi - lam * z) / res)
         acc += w * term
     return max(0.0, min(1.0, 8.0 * acc))
+
+
+# ---- the facts behind each leg ---------------------------------------------
+#: At most this many facts a leg, in the order a case is made. They sit
+#: folded under the leg, so a full case costs a tap, not the card's length.
+MAX_WHY = 16
+#: A projection step worth naming moves the number at least this much.
+STEP_SHOWN = 0.03
+#: The warnings worth a reader's time on a parlay leg — not the Edge
+#: board's grade notes ("Below confidence threshold", "Edge too small").
+FLAG_WORDS = ("carried from", "questionable", "doubtful", "out", "quarterback", " qb", "teammate",
+              "injur", "pulled", "returns", "back from", "limited")
+
+
+def _fmt(x) -> str:
+    try:
+        f = float(x)
+    except (TypeError, ValueError):
+        return ""
+    return f"{f:.1f}".rstrip("0").rstrip(".")
+
+
+def _context_row(board: dict, leg: dict) -> dict:
+    """The board's full row for the leg's player and market — the one the
+    projection, the defence card and the chain live on — whichever shelf
+    priced the leg (a Most Likely row carries the chance, not the why)."""
+    found = _named(board.get("recommendations"), leg, lambda r: r.get("market") == leg["market"])
+    return found or (leg.get("row") or {})
+
+
+def _scan_read(board: dict, player: str) -> dict | None:
+    """The game scan's read on him: a label ("Good matchup") and the facts
+    for and against, in the scan's own words."""
+    want = _key(player)
+    for game in (board.get("scan_reads") or {}).values():
+        for r in (game or {}).get("players") or []:
+            if isinstance(r, dict) and _key(r.get("player")) == want:
+                return r
+    return None
+
+
+def _game_plan(board: dict, home, away) -> dict | None:
+    for g in board.get("game_plans") or []:
+        if isinstance(g, dict) and g.get("home") == home and g.get("away") == away:
+            return g
+    return None
+
+
+def _steps(row: dict) -> list:
+    return [s for s in ((row.get("chain") or {}).get("steps") or []) if isinstance(s, dict)]
+
+
+def _step_mult(row: dict, key: str):
+    for s in _steps(row):
+        if s.get("key") == key:
+            return _num(s.get("mult"), None)
+    return None
+
+
+def _board_game(board: dict, home, away) -> dict:
+    """The board's own game — where the crowd's prices, the opening line
+    and the exchange money hang."""
+    for g in board.get("games") or []:
+        if isinstance(g, dict) and home and g.get("home") == home and g.get("away") == away:
+            return g
+    return {}
+
+
+def _venues(c: dict, keys) -> tuple[list[str], float | None]:
+    """(the venues quoting it, their average) off a game's crowd block."""
+    got = [(name, _num(c.get(k), None)) for name, k in keys]
+    got = [(name, v) for name, v in got if v is not None]
+    return [n for n, _ in got], (sum(v for _, v in got) / len(got) if got else None)
+
+
+def _game_facts(board: dict, leg: dict, row: dict) -> list[tuple[str, str]]:
+    """What the site knows about a side or a total beyond our model's own
+    reasons, all of it already on the board: the books' number with the
+    margin out, Kalshi and Polymarket on the same bet at the same number,
+    the move since the line opened and where the exchange money sits."""
+    out: list[tuple[str, str]] = []
+    market, home, away = leg["market"], row.get("home"), row.get("away")
+    team = leg.get("team") or ""
+    is_home = team == home
+    if market == "total":
+        same = str(row.get("side") or "").lower() == leg["side"]
+        what = f"the {leg['side']} {_fmt(leg['line'])}"
+    else:
+        same = (row.get("team") or row.get("pick") or "") == team
+        what = team + (f" {leg['line']:+g}" if market == "spread" else "")
+    fair = _num(row.get("fair_prob"), None)
+    if fair is not None and row.get("has_market", True):
+        out.append(("The books", f"Their own price, the margin taken out, says {(fair if same else 1 - fair):.0%}"))
+    g = _board_game(board, home, away)
+    c = g.get("crowd") or {}
+    if market == "moneyline":
+        names, p = _venues(c, (("Kalshi", "kalshi"), ("Polymarket", "polymarket")))
+        mine = None if p is None else (p if is_home else 1 - p)
+    elif market == "spread":
+        names, p = _venues(c, (("Kalshi", "kalshi_home_cover"), ("Polymarket", "poly_home_cover")))
+        at = leg["line"] if is_home else -leg["line"]
+        mine = (None if p is None or abs(_num(c.get("spread_home_line"), 1e9) - at) > 0.01
+                else (p if is_home else 1 - p))
+    else:
+        names, p = _venues(c, (("Kalshi", "kalshi_over"), ("Polymarket", "poly_over")))
+        mine = (None if p is None or abs(_num(c.get("total_line"), 1e9) - leg["line"]) > 0.01
+                else (p if leg["side"] == "over" else 1 - p))
+    if mine is not None:
+        out.append(("Prediction markets", f"{' and '.join(names)} traders put {what} at {mine:.0%}"
+                    + (" to win" if market == "moneyline" else "")))
+    lo = g.get("line_open") or {}
+    if market == "spread" and lo.get("spread_home") is not None and lo.get("spread_move") is not None:
+        o = float(lo["spread_home"])
+        now = o + float(lo["spread_move"])
+        o, now = (o, now) if is_home else (-o, -now)
+        out.append(("Line move", f"{team} opened {o:+g}, now {now:+g}" if abs(now - o) >= 0.01
+                    else f"{team} {now:+g}, where it opened"))
+    elif market == "total" and lo.get("total") is not None and lo.get("total_move") is not None:
+        o = float(lo["total"])
+        now = o + float(lo["total_move"])
+        out.append(("Line move", f"Opened {_fmt(o)}, now {_fmt(now)}" if abs(now - o) >= 0.01
+                    else f"{_fmt(now)}, where it opened"))
+    elif market == "moneyline":
+        o, now = _odds(lo.get("home_ml" if is_home else "away_ml")), _odds(g.get("home_ml" if is_home else "away_ml"))
+        if o and now:
+            out.append(("Line move", f"{team} opened {o:+d}, now {now:+d}" if o != now
+                        else f"{team} {now:+d}, where it opened"))
+    am = lo.get("against_money") or {}
+    if out and out[-1][0] == "Line move" and am.get("toward") in ("home", "away") and market == "spread":
+        club = lambda w: home if w == "home" else away                   # noqa: E731
+        k, t = out.pop()
+        out.append((k, f"{t} — toward {club(am['toward'])} with {_num(am.get('money_share')):.0%} "
+                       f"of the money on {club(am.get('money_on'))}"))
+    m = g.get("money") or {}
+    split = m.get({"moneyline": "ml", "spread": "spread", "total": "total"}[market]) or {}
+    if split:
+        if market == "total":
+            ok, share = abs(_num(split.get("line"), 1e9) - leg["line"]) < 0.01, split.get(leg["side"])
+        else:
+            ok = market == "moneyline" or abs(_num(split.get("line"), 1e9)
+                                              - (leg["line"] if is_home else -leg["line"])) < 0.01
+            share = split.get("home" if is_home else "away")
+        if ok and share is not None:
+            where = " and ".join(m.get("venues") or []) or "the exchanges"
+            usd = f"${_num(split.get('usd')):,.0f} " if split.get("usd") else ""
+            out.append(("Money", f"{_num(share):.0%} of the {usd}traded on {where} is on {what}"))
+    return out
+
+
+def _books_fact(ctx: dict, leg: dict) -> str:
+    """The market's own number for this exact bet, margin out: the sharp
+    book's when it quoted the number, the field's median across books at
+    the number, else the one book's. Only at the row's own line."""
+    if abs(_num(ctx.get("line"), 1e9) - leg["line"]) >= 0.01 or not ctx.get("has_market"):
+        return ""
+    same = str(ctx.get("side") or "").lower() == leg["side"]
+    parts = []
+    sharp = _num(ctx.get("sharp_fair"), None) if ctx.get("sharp_anchored") else None
+    if sharp is not None:
+        parts.append(f"the sharp book's price, the margin taken out, says {(sharp if same else 1 - sharp):.0%}")
+    field = _num(ctx.get("fair_consensus"), None)
+    if field is not None and int(_num(ctx.get("consensus_books"), 0)) >= 2:
+        over = field if leg["side"] == "over" else 1 - field             # the field's number is the over's
+        parts.append(f"{int(ctx['consensus_books'])} books at this number together say {over:.0%}")
+    fair = _num(ctx.get("fair_prob"), None)
+    if not parts and fair is not None:
+        return f"Their own price, the margin taken out, says {(fair if same else 1 - fair):.0%}"
+    return "; ".join(parts)[:1].upper() + "; ".join(parts)[1:] if parts else ""
+
+
+def _seat_facts(board: dict, leg: dict) -> list[tuple[str, str]]:
+    """What the one Most Likely board wrote on this pick: the case it was
+    picked on, our record on picks like it, the scout's notes. The record
+    and the checks are this exact pick's (same number, same side); the
+    scout's notes are about the side, so any of his lines carries them."""
+    out: list[tuple[str, str]] = []
+    seat = leg.get("row") if leg.get("found") == "likely" else None
+    side_row = seat or _named((board.get("likely_board") or {}).get("rows"), leg,
+                              lambda r: r.get("market") == leg["market"]
+                              and str(r.get("side") or "").lower() in (leg["side"], ""))
+    if seat:
+        for t in (seat.get("case_lines") or [])[:2]:
+            out.append(("The case", t))
+        notes = seat.get("check_notes") or {}
+        checks = seat.get("checks") or {}
+        if seat.get("tier_rate") is not None and seat.get("tier_n"):
+            out.append(("Our record", f"Our {seat.get('tier_label') or 'board'} tier has hit "
+                                      f"{_num(seat['tier_rate']):.0%} of {int(seat['tier_n'])} settled"))
+        elif notes.get("record"):
+            t = str(notes["record"])
+            out.append(("Our record", t[:1].upper() + t[1:]))
+        passed = [k for k in ("model", "matchup", "market", "record") if checks.get(k) is True]
+        if checks:
+            out.append(("Checks", f"Passes {len(passed)} of our 4 checks"
+                        + (f" ({', '.join(passed)})" if passed else "")
+                        + (f"; market: {notes['market']}" if checks.get("market") is not True and notes.get("market") else "")))
+    if side_row:
+        for t in (side_row.get("scout_notes") or [])[:2]:
+            out.append(("Scout", t))
+        for k, label in (("milestone_note", "Milestone"), ("incentive_note", "Incentive")):
+            if side_row.get(k):
+                out.append((label, side_row[k]))
+    return out
+
+
+def why(boards: dict, leg: dict) -> list[dict]:
+    """The facts behind one leg's number, in the board's own words: what we
+    project and the likely range, how often he has cleared this number and
+    what he did against this defence, the defence card, the steps that
+    moved his projection most, the game around him, the scan's matchup
+    read, who is out around him, anything the card warns about, the case
+    the Most Likely board made, our record on picks like it, the scout's
+    notes and what the books' own prices say. For a side or a total: our
+    model's reasons, the books, Kalshi and Polymarket, the line's move,
+    the exchange money and the game plan. Nothing here is computed for the
+    slip; every fact is already on the row or the board."""
+    out: list[dict] = []
+    seen: set = set()
+
+    def add(k, t):
+        t = " ".join(str(t or "").split())
+        if t and t not in seen:
+            seen.add(t)
+            out.append({"k": k, "t": t[:260]})
+
+    if leg.get("prob") is None:
+        return out
+    board = boards.get(leg.get("league") or "") or {}
+    row = leg.get("row") or {}
+    market = leg["market"]
+    if market in GAME_MARKETS:
+        for line in (row.get("reasons") or [])[:2]:
+            add("Our model", line)
+        for k, t in _game_facts(board, leg, row):
+            add(k, t)
+        script = ((_game_plan(board, row.get("home"), row.get("away")) or {}).get("script") or {})
+        if script.get("read"):
+            add("Game script", (f"{script['archetype']}. " if script.get("archetype") else "") + script["read"])
+        return _keep(out)
+    ctx = _context_row(board, leg)
+    line = leg["line"]
+    over = leg["side"] in ("over", "yes")
+    if market in SCORER_MARKETS:
+        if ctx.get("implied_total") is not None:
+            add("Game", f"{ctx.get('team') or 'His team'} expected to score {_fmt(ctx['implied_total'])}")
+        if ctx.get("rz_chances") is not None:
+            add("Red zone", f"{_fmt(ctx['rz_chances'])} red-zone chances expected this week")
+        if ctx.get("goal_line_text"):
+            add("Goal line", ctx["goal_line_text"])
+    else:
+        if ctx.get("projection") is not None:
+            lo, hi = ctx.get("proj_low"), ctx.get("proj_high")
+            span = (f" (likely range {_fmt(max(0.0, _num(lo)))}–{_fmt(hi)})"
+                    if lo is not None and hi is not None else "")
+            add("Projection", f"We project {_fmt(ctx['projection'])}{span} against {_fmt(line)}")
+        vals = [float(v) for v in (ctx.get("recent_values") or []) if isinstance(v, (int, float))][:10]
+        if vals:
+            hit = sum(1 for v in vals if (v > line if over else v < line))
+            shown = ", ".join(_fmt(v) for v in vals[:6]) + ("…" if len(vals) > 6 else "")
+            add("Recent games", f"{'Cleared' if over else 'Stayed under'} {_fmt(line)} in {hit} of his "
+                                f"last {len(vals)} ({shown}, latest first)")
+        opp = str(ctx.get("opponent") or leg.get("opponent") or "")
+        met = [float(g["value"]) for g in (ctx.get("logs") or [])
+               if isinstance(g, dict) and opp and g.get("opponent") == opp
+               and isinstance(g.get("value"), (int, float))][:5]
+        if met:
+            hit = sum(1 for v in met if (v > line if over else v < line))
+            add(f"Against {opp}", f"{', '.join(_fmt(v) for v in met)} in his log against them "
+                                  f"({'cleared' if over else 'stayed under'} {_fmt(line)} in {hit} of {len(met)})")
+    card = ctx.get("matchup_card") or {}
+    if card.get("text"):
+        mult = _step_mult(ctx, "matchup")
+        tail = f" — our number ×{mult:.2f} for it" if mult and abs(mult - 1.0) >= 0.01 else ""
+        add("Defense", card["text"] + tail)
+    seat = _seat_facts(board, leg)
+    for k, t in seat:
+        if k == "The case":
+            add(k, t)
+    big = sorted((s for s in _steps(ctx) if s.get("key") != "matchup"
+                  and abs((_num(s.get("mult"), 1.0)) - 1.0) >= STEP_SHOWN),
+                 key=lambda s: -abs(_num(s.get("mult"), 1.0) - 1.0))
+    for s in big[:2]:
+        add(str(s.get("label") or s.get("key") or "Model"),
+            f"×{_num(s.get('mult'), 1.0):.2f}" + (f" — {s['why']}" if s.get("why") else ""))
+    gs = ctx.get("game_script") or {}
+    if gs.get("line") or gs.get("lean"):
+        add("Game script", " — ".join(x for x in (gs.get("line"), gs.get("lean")) if x))
+    read = _scan_read(board, leg["player"])
+    if read:
+        pro = [str(x) for x in (read.get("pro") or [])][:2]
+        con = [str(x) for x in (read.get("con") or [])][:1]
+        bits = [b for b in (read.get("label") or "", "; ".join(pro), f"against: {con[0]}" if con else "") if b]
+        if len(bits) > 1 or pro or con:
+            add("Matchup read", " · ".join(bits))
+    for c in (ctx.get("qb_card"), ctx.get("mate_card")):
+        if isinstance(c, dict) and c.get("headline"):
+            add("Around him", c["headline"])
+    ripples = sorted((r for r in ctx.get("ripples") or [] if isinstance(r, dict) and r.get("measured") and r.get("text")),
+                     key=lambda r: -abs(_num(r.get("delta"), 0.0)))
+    for r in ripples[:1]:
+        add("Lineup", r["text"])
+    if ctx.get("injury_status"):
+        add("Status", f"Listed {ctx['injury_status']}")
+    for w in ctx.get("warnings") or []:
+        if any(word in str(w).lower() for word in FLAG_WORDS):
+            add("Watch", w)
+    for k, t in seat:
+        if k != "The case":
+            add(k, t)
+    if market not in SCORER_MARKETS:
+        add("The books", _books_fact(ctx, leg))
+    return _keep(out)
+
+
+#: Which facts give way first when a leg has more than MAX_WHY: the number
+#: and the market's own price stay longest, colour goes first.
+WHY_RANK = {"Projection": 0, "Game": 0, "Red zone": 0, "Our model": 0, "The books": 1, "Defense": 1,
+            "Recent games": 1, "Our record": 1, "Goal line": 1, "Prediction markets": 1, "Status": 2,
+            "Game script": 2, "Matchup read": 2, "Around him": 2, "Line move": 2, "Money": 2,
+            "The case": 3, "Checks": 3, "Lineup": 3, "Watch": 3, "Scout": 4, "Milestone": 4,
+            "Incentive": 4}
+
+
+def _keep(facts: list[dict]) -> list[dict]:
+    """At most MAX_WHY facts, in the order the case reads; past that the
+    lowest-ranked go first, the latest of them before the earliest."""
+    if len(facts) <= MAX_WHY:
+        return facts
+    rank = lambda f: WHY_RANK.get(f["k"], 2 if f["k"].startswith("Against ") else 3)   # noqa: E731
+    order = sorted(range(len(facts)), key=lambda i: (rank(facts[i]), i))[:MAX_WHY]
+    return [facts[i] for i in sorted(order)]
+
+
+# ---- the ticket, replayed --------------------------------------------------
+#: Nights the ticket is replayed: the Sim lab's 2,000 (web/js/app.js
+#: runSim), each leg drawn from the chance its own curve gives it.
+SIM_NIGHTS = 2000
+
+
+def _loadings(group: list[dict]) -> list[float]:
+    """Each leg's loading on its game's one shared factor — the parlay
+    engine's own dependence structure, so the replay counts what
+    `joint` integrates: a pair at its exact correlation (either sign), a
+    trio by `parlays._factor_loadings` (scaled down so no pair is
+    overstated), four or more at their average, as `joint_k`."""
+    from . import parlays as P
+    n = len(group)
+    if n < 2:
+        return [0.0] * n
+    rhos, apart = [], False
+    for i in range(n):
+        for j in range(i + 1, n):
+            try:
+                rel = P.relate(group[i].get("league") or "nfl", _relation_leg(group[i]), _relation_leg(group[j]))
+                rhos.append(float(getattr(rel, "rho", 0.0) or 0.0))
+                apart = apart or _exclusive(rel)
+            except Exception:                                      # noqa: BLE001
+                rhos.append(0.0)
+    if n == 2:
+        r = -1.0 if apart else max(-0.999, min(0.999, rhos[0]))   # exactly opposite: never both
+        s = math.sqrt(abs(r))
+        return [s, s if r >= 0 else -s]
+    if n == 3:
+        return list(P._factor_loadings((rhos[0], rhos[1], rhos[2])))
+    lam = math.sqrt(max(0.0, min(0.9, sum(rhos) / len(rhos))))
+    return [lam] * n
+
+
+def simulate(legs: list[dict], nights: int = SIM_NIGHTS, seed: int | None = None) -> dict | None:
+    """The whole ticket played ``nights`` times. Each leg wins on a night
+    with its own chance (ours, or its price's break-even where we have no
+    number), and legs in one game win and lose together through the parlay
+    engine's own structure — one shared factor per game, the engine's
+    loadings (`_loadings`) — so the count lands on the ticket's chance give
+    or take the noise of 2,000 draws. Returns how many nights the ticket
+    cashed, how many legs landed each night, how often it missed by one
+    and which leg was that one most often. None when a leg has neither our
+    number nor a price, since there is nothing to draw it from."""
+    from . import parlays as P
+    entries = []
+    for l in legs:
+        p = l.get("prob") if l.get("prob") is not None else l.get("needs")
+        if p is None:
+            return None
+        entries.append((l, max(1e-4, min(1 - 1e-4, float(p)))))
+    n = len(entries)
+    if not n:
+        return None
+    # Games, as `joint` groups them; a stand-in carries no opinion of ours
+    # and plays alone, as it does there.
+    groups: dict = {}
+    for i, (l, _) in enumerate(entries):
+        k = _game_of(l) if l.get("prob") is not None else None
+        groups.setdefault(k if k and any(k[0]) else ("solo", i), []).append(i)
+    lam = [0.0] * n
+    game_of = [0] * n
+    for gi, idx in enumerate(groups.values()):
+        for i, v in zip(idx, _loadings([entries[i][0] for i in idx])):
+            lam[i] = v
+        for i in idx:
+            game_of[i] = gi
+    rest = [math.sqrt(max(0.0, 1.0 - v * v)) for v in lam]
+    if seed is None:
+        key = "|".join(sorted(f"{_name(l)}@{l.get('odds')}" for l, _ in entries))
+        seed = int(hashlib.sha256(key.encode()).hexdigest()[:12], 16)
+    rng = random.Random(seed)
+    cut = [P._phi_inv(1.0 - p) for _, p in entries]          # a leg wins above its cut
+    dist = [0] * (n + 1)
+    alone = [0] * n
+    hits = [0] * n
+    for _ in range(nights):
+        shared = [rng.gauss(0.0, 1.0) for _ in groups]
+        won = [lam[i] * shared[game_of[i]] + rest[i] * rng.gauss(0.0, 1.0) > cut[i] for i in range(n)]
+        k = sum(won)
+        dist[k] += 1
+        for i in range(n):
+            hits[i] += won[i]
+        if k == n - 1:
+            alone[won.index(False)] += 1
+    short = dist[n - 1] if n > 1 else 0
+    worst = max(range(n), key=lambda i: alone[i]) if short else None
+    return {"nights": nights, "cashed": dist[n], "rate": round(dist[n] / nights, 4),
+            "legs_hit": dist, "one_short": round(short / nights, 4),
+            "breaker": None if worst is None else {"leg": _name(entries[worst][0]),
+                                                  "share": round(alone[worst] / short, 3)},
+            "hits": hits}
 
 
 def _name(leg: dict) -> str:
@@ -666,21 +1115,25 @@ def _swap(boards: dict, weak: dict, legs: list | None = None) -> dict | None:
             continue
         if (_key(r.get("player")), r.get("market")) in taken:
             continue
-        p = _num(r.get("model_prob"), None)
-        if p is not None and (best is None or p > best[0]):
+        p = _shown(r) if r.get("model_prob") is not None or r.get("tier_rate") is not None else None
+        if p is not None and math.isfinite(p) and (best is None or p > best[0]):
             best = (p, r)
     if not best:
         return None
     r = best[1]
     return {"player": r.get("player") or "", "market": r.get("market") or "", "side": r.get("side") or "",
-            "line": r.get("line"), "odds": r.get("odds"), "prob": round(best[0], 4), "tier": r.get("tier") or ""}
+            "line": r.get("line"), "odds": r.get("odds"), "prob": round(best[0], 4),
+            "tier": r.get("tier_label") or r.get("tier") or ""}
 
 
 def grade(slip: dict, boards: dict) -> dict:
-    """The card: every leg priced and ranked, the ticket's chance by our
-    numbers, what its payout needs, a letter, the pairs worth naming and
+    """The card: every leg priced and ranked with the facts behind its
+    number, the ticket's chance by our numbers, the ticket replayed 2,000
+    nights, what its payout needs, a letter, the pairs worth naming and
     the swap for the weakest leg."""
     legs = [price_leg(boards, l) for l in slip.get("legs") or []]
+    for l in legs:
+        l["why"] = why(boards, l)
     ours, notes = joint(legs)
     # The unpriced legs stand in at their own price's break-even — we add no
     # opinion of ours, so they neither help nor hurt the grade.
@@ -696,6 +1149,10 @@ def grade(slip: dict, boards: dict) -> dict:
                                          -(l["edge"] if l["edge"] is not None else (l["prob"] or 0) - 0.5)))
     priced = [l for l in ranked if l["prob"] is not None]
     weakest = priced[-1] if priced else None
+    sim = simulate(legs) if chance else None          # nothing to replay on a ticket that cannot cash
+    if sim:
+        for l, h in zip(legs, sim.pop("hits")):
+            l["sim_hits"] = h
     out_legs = [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in l.items()
                  if k not in ("row", "game_key")} for l in ranked]
     return {
@@ -710,22 +1167,34 @@ def grade(slip: dict, boards: dict) -> dict:
         "notes": notes,
         "weakest": _name(weakest) if weakest and len(priced) > 1 else "",
         "swap": _swap(boards, weakest, legs) if weakest and len(priced) > 1 else None,
+        "sim": sim,
     }
 
 
 def summary(card: dict) -> str:
-    """One paragraph of the card, for the conversation Ask carries on."""
+    """One paragraph of the card, for the conversation Ask carries on. The
+    verdict comes first: Ask keeps the first askbot.MAX_TURN_CHARS of a
+    turn as the context of the next question."""
     parts = [f"Graded parlay, {card['n_legs']} legs ({card['n_priced']} on our boards)."]
     if card.get("ours") is not None:
         parts.append(f"Our chance it all hits: {card['ours']:.0%}"
                      + (f"; the payout needs {card['needs']:.0%}." if card.get("needs") else "."))
     if card.get("ev") is not None:
         parts.append(f"Expected return {card['ev']:+.0%} a dollar by our numbers, grade {card['grade']}.")
+    sim = card.get("sim") or {}
+    if sim.get("nights"):
+        parts.append(f"In {sim['nights']:,} simulated nights it cashed {sim['cashed']:,} times"
+                     + (f" and missed by one leg on {sim['one_short']:.0%}" if sim.get("one_short") else "")
+                     + (f", most often {sim['breaker']['leg']}" if sim.get("breaker") else "") + ".")
+    if card.get("weakest"):
+        parts.append(f"Weakest leg: {card['weakest']}.")
     for l in card["legs"]:
         p = (("no number of ours at that line" if l.get("found") else "not on our board")
              if l["prob"] is None else f"ours {l['prob']:.0%}")
         n = "" if l.get("needs") is None else f", needs {l['needs']:.0%}"
-        parts.append(f"{_name(l)}: {p}{n} ({l['verdict']}).")
-    if card.get("weakest"):
-        parts.append(f"Weakest leg: {card['weakest']}.")
+        lead = next((w["t"] for w in l.get("why") or []
+                     if w.get("k") in ("Defense", "Matchup read", "Prediction markets")), "")
+        if len(lead) > 140:
+            lead = lead[:139].rsplit(" ", 1)[0].rstrip(",;—- ") + "…"   # a whole word, never "our nu"
+        parts.append(f"{_name(l)}: {p}{n} ({l['verdict']})" + (f"; {lead}" if lead else "") + ".")
     return " ".join(parts)[:1600]

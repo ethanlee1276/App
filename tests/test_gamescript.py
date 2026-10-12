@@ -146,6 +146,23 @@ def test_the_page_renders_it_in_three_places():
     assert "r.game_script.lean" in js               # the Most Likely card
 
 
+def test_a_low_total_is_never_called_a_shootout():
+    """Found 2026-10-12 grading a parlay: WAS by 3.5 at 41.5 read "favored in
+    a shootout — everyone eats", and gameplan.script_sign scores "everyone
+    eats" as every over backed. A low, close game says so and backs no side."""
+    from engine.gameplan import script_sign
+    low = G.for_team(-3.5, 41.5, "WAS", "NYG", "WAS")
+    assert low["archetype"] == "Nobody's good"
+    assert "shootout" not in low["lean"] and "eats" not in low["lean"], low["lean"]
+    assert low["lean"] == "favored in a low-scoring, close game"
+    assert all(script_sign(low["lean"], m) == 0 for m in ("rush_yds", "pass_yds", "receptions"))
+    high = G.for_team(-3.5, 52.5, "WAS", "NYG", "WAS")
+    assert high["lean"] == "favored in a shootout — everyone eats", "a high total still is one"
+    assert script_sign(high["lean"], "rush_yds") == 1
+    dog = G.for_team(-3.5, 41.5, "WAS", "NYG", "NYG")
+    assert dog["lean"] != low["lean"], "each sideline keeps its own lean"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

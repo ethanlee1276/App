@@ -50,3 +50,36 @@
 .pgr-foot { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
 .pgr-fine { margin: 0; color: var(--text-mute); font-size: var(--fs-xs); }
 .pgr-fine span { white-space: nowrap; }
+/* Why we say it: the board's own facts, folded under the leg. */
+.pgr-why { margin-top: 6px; font-size: var(--fs-sm); }
+.pgr-why summary { cursor: pointer; color: var(--gold); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: .02em; list-style: none; }
+.pgr-why summary::-webkit-details-marker { display: none; }
+.pgr-why summary::after { content: " ▸"; }
+.pgr-why[open] summary::after { content: " ▾"; }
+.pgr-why dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; }
+.pgr-why dt { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; padding-top: 1px; }
+.pgr-why dd { margin: 0; color: var(--text-dim); overflow-wrap: break-word; min-width: 0; }
+@media (max-width: 480px) {
+  .pgr-why dl { grid-template-columns: 1fr; gap: 1px; }
+  .pgr-why dd { margin-bottom: 6px; }
+}
+/* The ticket replayed: legs landed per night, every-leg nights in gold. */
+.pgr-sim { padding: 10px; border-radius: var(--radius-sm); background: var(--panel); }
+.pgr-sim-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px;
+  font-size: var(--fs-sm); color: var(--text-dim); }
+.pgr-sim-h > b { color: var(--text); }
+.pgr-sim-h span b { color: var(--gold); font-family: var(--font-mono); }
+.pgr-sim-bars { display: flex; align-items: flex-end; gap: 6px; height: 72px; margin: 10px 0 4px; }
+.pgr-sim-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  gap: 3px; min-width: 0; }
+.pgr-sim-col i { width: 100%; border-radius: 3px 3px 0 0; background: var(--panel-3); transform-origin: bottom; }
+.pgr-sim-col.all i { background: var(--gold); }
+.pgr-sim-col span { font-size: var(--fs-2xs); color: var(--text-mute); white-space: nowrap; }
+.pgr-sim-col.all span { color: var(--gold); font-weight: 700; }
+.pgr-sim-note { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+.pgr-sim-note b { color: var(--text); }
+@media (prefers-reduced-motion: no-preference) {
+  .pgr-sim-col i { animation: pgrGrow .7s var(--ease-out, ease-out) both; }
+  @keyframes pgrGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+}

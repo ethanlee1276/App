@@ -160,7 +160,8 @@
     if (l.prob != null) meta.push(`ours <b>${pct(l.prob)}</b>`);
     if (l.needs != null) meta.push(`needs ${pct(l.needs)}${l.odds ? ` at ${esc(price(l.odds))}` : ""}`);
     if (l.game && l.market !== "total") meta.push(esc(l.game));
-    const where = l.found && l.prob != null ? `${FOUND[l.found] || ""}${l.tier ? ` · ${esc(l.tier)}` : ""}` : "";
+    const where = l.found && l.prob != null ? `${FOUND[l.found] || ""}${l.tier ? ` · ${esc(l.tier)}` : ""}${
+      l.sim_hits != null && simN ? ` · hit in ${Number(l.sim_hits).toLocaleString()} of ${simN.toLocaleString()} simulated nights` : ""}` : "";
     const label = v === "unpriced" && l.found ? "No number of ours" : (VERDICT[v] || v);
     const bar = l.prob != null
       ? `<div class="pgr-bar" aria-hidden="true"><i style="width:${Math.round(l.prob * 100)}%"></i>${
@@ -169,12 +170,45 @@
       <div class="pgr-leg-h"><span class="pgr-n">${i + 1}</span><b>${esc(legName(l))}</b>
         <span class="pgr-pill v-${esc(v)}">${esc(label)}</span></div>
       ${meta.length ? `<div class="pgr-leg-m">${meta.join(" · ")}</div>` : ""}${bar}
-      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}
+      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${whyHTML(l)}
     </li>`;
   }
 
+  /* The facts behind the leg's number, from the board itself
+     (engine/slipgrade.why): the projection and its range, how often he has
+     cleared this number, the defence, the steps that moved the number, the
+     game script, the scan's read, anything to watch and the books' price.
+     Folded, so a twelve-leg ticket is still a list. */
+  function whyHTML(l) {
+    const facts = Array.isArray(l.why) ? l.why : [];
+    if (!facts.length) return "";
+    return `<details class="pgr-why"><summary>Why we say ${esc(pct(l.prob))}</summary><dl>${
+      facts.map((f) => `<dt>${esc(f.k)}</dt><dd>${esc(f.t)}</dd>`).join("")}</dl></details>`;
+  }
+
+  /* The ticket replayed (engine/slipgrade.simulate): a bar for each count
+     of legs that landed, the last one — every leg — in gold. */
+  function simHTML(sim, n) {
+    if (!sim || !sim.nights || !Array.isArray(sim.legs_hit)) return "";
+    const peak = Math.max(1, ...sim.legs_hit);
+    const bars = sim.legs_hit.map((c, k) => `<div class="pgr-sim-col${k === n ? " all" : ""}">
+        <i style="height:${Math.max(2, Math.round(100 * c / peak))}%"></i>
+        <span>${k === n ? `all ${n}` : k}</span></div>`).join("");
+    const br = sim.breaker;
+    return `<div class="pgr-sim">
+      <div class="pgr-sim-h"><b>${sim.nights.toLocaleString()} simulated nights</b>
+        <span>cashed <b>${Number(sim.cashed).toLocaleString()}</b> times · ${(100 * sim.rate).toFixed(1)}%</span></div>
+      <div class="pgr-sim-bars" aria-hidden="true">${bars}</div>
+      <p class="pgr-sim-note">Legs that landed each night. Every leg is drawn from its own chance, and legs in one
+        game rise and fall together the way our parlay engine measures them.${sim.one_short && br
+          ? ` Missed by one leg on ${pct(sim.one_short)} of nights — most often <b>${esc(br.leg)}</b> (${pct(br.share)} of those).` : ""}</p>
+    </div>`;
+  }
+
+  let simN = 0;
   function card(s) {
     if (!s || !Array.isArray(s.legs)) return "";
+    simN = (s.sim && s.sim.nights) || 0;
     const g = String(s.grade || "?");
     const letterCls = g.charAt(0) === "?" ? "na" : g.charAt(0).toLowerCase();
     const head = [`${s.n_legs}-leg parlay`, s.book].filter(Boolean).map(esc).join(" · ");
@@ -212,6 +246,7 @@
       <div class="pgr-top"><div class="pgr-grade g-${letterCls}" aria-label="Grade ${esc(g)}">${esc(g.replace("*", ""))}${
         g.indexOf("*") >= 0 ? "<sup>*</sup>" : ""}</div>
         <div class="pgr-sum"><b>${head}</b>${lines.map((x) => `<span>${x}</span>`).join("")}</div></div>
+      ${simHTML(s.sim, s.n_legs)}
       <ol class="pgr-legs">${s.legs.map(legHTML).join("")}</ol>
       ${notes}${swap}
       ${foot.map((f) => `<p class="pgr-foot">${esc(f)}</p>`).join("")}

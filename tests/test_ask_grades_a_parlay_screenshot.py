@@ -221,33 +221,94 @@ def _rec(player, team, opp, market, side, line, odds, proj, sd, vals):
             "odds": odds, "projection": proj, "proj_std": sd, "recent_values": vals}
 
 
+KYREN_CONTEXT = {
+    "proj_low": 41.0, "proj_high": 123.0, "has_market": True, "fair_prob": 0.53,
+    "matchup_card": {"text": "BUF allow 128 rushing yards to RBs a game, the 4th-most (league 104), over 4 games"},
+    "chain": {"steps": [{"key": "matchup", "label": "Matchup", "mult": 1.06, "why": ""},
+                        {"key": "usage", "label": "Usage", "mult": 1.08, "why": "Takes 71% of the carries"},
+                        {"key": "weather", "label": "Weather", "mult": 1.0, "why": "Dome"}]},
+    "game_script": {"line": "LA by 3.5 at 54.5", "lean": "favored in a shootout"},
+    "warnings": ["Edge too small (+0.0%)", "Carried from 2025: 16 games last season"],
+    "injury_status": "Questionable",
+    "mate_card": {"headline": "Puka Nacua out — 29% of the targets to go around"},
+    "logs": [{"week": 5, "opponent": "SF", "value": 80}, {"week": 14, "opponent": "BUF", "value": 88},
+             {"week": 3, "opponent": "BUF", "value": 61}],
+    "ripples": [{"out": "Tutu Atwell", "measured": False, "delta": None, "text": "Tutu Atwell out — not measured"},
+                {"out": "Puka Nacua", "measured": True, "delta": 0.031,
+                 "text": "Puka Nacua out — over his 6 missed games, Williams's share of the carries rose 3.1%"}],
+}
+# The market's own numbers, the way betting.Recommendation writes them: the
+# sharp book's de-vigged chance for the row's side, and the field's median
+# de-vigged chance for the OVER across the books quoting the same number.
+COOK_MARKET = {"has_market": True, "sharp_anchored": True, "sharp_fair": 0.56, "fair_prob": 0.51,
+               "fair_consensus": 0.47, "consensus_books": 5}
+# What the one Most Likely board writes on a seated pick (likelyboard.build).
+PUKA_SEAT = {
+    "checks": {"model": True, "matchup": True, "market": None, "record": True},
+    "check_notes": {"model": "our chance 77% (the bar here is 60%)", "matchup": "BUF soft against WRs",
+                    "market": "no book price to compare", "record": "picks like this hit 74% of 212 when we said 76%"},
+    "case_lines": ["BUF allow 7.1 catches a game to WRs, the 3rd-most", "Takes 29% of the targets"],
+    "scout_notes": ["A catches over with his team favoured in a shootout"],
+    "milestone_note": "4 catches from 400 in his career",
+}
+
 BOARD = {
-    "games": [{"home": "LA", "away": "BUF"}, {"home": "KC", "away": "DEN"}],
+    "games": [{"home": "LA", "away": "BUF", "home_ml": -140, "away_ml": 120,
+               # Kalshi + Polymarket on the board's own bets (engine/crowd), the opener
+               # (engine/lineopen) and the exchange money (engine/moneysplit).
+               "crowd": {"kalshi": 0.60, "polymarket": 0.62, "crowd": 0.61, "books": 0.57,
+                         "spread_home_line": -2.5, "kalshi_home_cover": 0.52, "poly_home_cover": 0.50,
+                         "total_line": 47.5, "poly_over": 0.58},
+               "line_open": {"spread_home": -1.5, "total": 46.5, "home_ml": -120, "away_ml": 100,
+                             "spread_move": -1.0, "total_move": 1.0,
+                             "against_money": {"toward": "home", "money_on": "away", "money_share": 0.64,
+                                               "delta": -1.0}},
+               "money": {"ml": {"home": 0.41, "away": 0.59, "usd": 48210, "n": 300},
+                         "spread": {"home": 0.36, "away": 0.64, "line": -2.5, "usd": 12000, "n": 80},
+                         "total": {"over": 0.70, "under": 0.30, "line": 47.5, "usd": 9000, "n": 50},
+                         "venues": ["Kalshi", "Polymarket"]}},
+              {"home": "KC", "away": "DEN"}],
+    "scan_reads": {"BUF@LA": {"players": [
+        {"player": "Kyren Williams", "label": "Good matchup",
+         "pro": ["Takes 71% of the carries", "BUF gives up the 4th-most rushing yards to RBs"],
+         "con": ["<b>LA</b> trail late"]}]}},
+    "game_plans": [{"home": "LA", "away": "BUF", "script": {
+        "archetype": "Everyone eats", "read": "High total, close spread."}}],
     "recommendations": [
-        _rec("Kyren Williams", "LA", "BUF", "rush_yds", "Over", 69.5, -115, 82.0, 18.0, [80, 75, 90, 85, 70]),
+        dict(_rec("Kyren Williams", "LA", "BUF", "rush_yds", "Over", 69.5, -115, 82.0, 18.0, [80, 75, 90, 85, 70]),
+             **KYREN_CONTEXT),
         _rec("Josh Allen", "BUF", "LA", "pass_att", "Over", 32.5, -110, 33.0, 5.0, [31, 35, 30, 34]),
-        _rec("James Cook", "BUF", "LA", "rush_yds", "Under", 70.5, -110, 62.0, 16.0, [60, 55, 71, 64]),
+        dict(_rec("James Cook", "BUF", "LA", "rush_yds", "Under", 70.5, -110, 62.0, 16.0, [60, 55, 71, 64]),
+             **COOK_MARKET),
         _rec("Patrick Mahomes", "KC", "DEN", "pass_yds", "Over", 255.5, -115, 271.0, 45.0, [280, 240, 300]),
         _rec("Keenan Allen", "CHI", "GB", "receptions", "Over", 4.5, -120, 5.1, 1.8, [5, 6, 4]),
         _rec("Josh Allen", "BUF", "LA", "rush_yds", "Over", 30.5, -110, 33.0, 14.0, [30, 41, 22]),
         _rec("Davante Adams", "LA", "BUF", "receptions", "Over", 4.5, -125, 5.2, 1.7, [5, 4, 6]),
+        _rec("Puka Nacua", "LA", "BUF", "receptions", "Over", 5.5, -140, 6.4, 1.9, [7, 6, 8, 5]),
     ],
     "likely_board": {"rows": [
         {"kind": "prop", "player": "Puka Nacua", "team": "LA", "opponent": "BUF", "market": "receptions",
-         "side": "Over", "line": 5.5, "odds": -140, "model_prob": 0.7712, "tier": "Top pick"},
+         "side": "Over", "line": 5.5, "odds": -140, "model_prob": 0.7712, "tier": "top", "tier_label": "Top pick",
+         **PUKA_SEAT},
         {"kind": "prop", "player": "Davante Adams", "team": "LA", "opponent": "BUF", "market": "rec_yds",
-         "side": "Over", "line": 49.5, "odds": -120, "model_prob": 0.66, "tier": "Strong"},
+         "side": "Over", "line": 49.5, "odds": -120, "model_prob": 0.66, "tier": "look", "tier_label": "Worth a look",
+         # likelyboard.REAL_RATE_TIERS: the page prints this in place of our 66%.
+         "tier_rate": 0.58, "tier_n": 140},
     ]},
     "td_field": [{"player": "Kyren Williams", "team": "LA", "opponent": "BUF", "market": "anytime_td",
-                  "model_prob": 0.48, "odds": 110}],
+                  "model_prob": 0.48, "odds": 110, "implied_total": 29.0, "rz_chances": 2.4,
+                  "goal_line_text": "Takes 80% of the goal-line carries"}],
     "game_bets": [
         {"bet_type": "moneyline", "market": "moneyline", "home": "LA", "away": "BUF", "team": "LA", "pick": "LA",
          "pick_is_home": True, "pick_label": "LA ML", "side": "", "line": 0.0, "win_prob": 0.58, "odds": -140,
-         "home_odds": -140, "away_odds": 120},
+         "home_odds": -140, "away_odds": 120, "reasons": ["Power rating: LA +4.1 vs BUF +2.0"],
+         "fair_prob": 0.57, "has_market": True},
         {"bet_type": "total", "market": "total", "home": "LA", "away": "BUF", "team": "", "side": "Over",
-         "line": 47.5, "pick_label": "Over 47.5", "win_prob": 0.55, "odds": -110, "other_odds": -105},
+         "line": 47.5, "pick_label": "Over 47.5", "win_prob": 0.55, "odds": -110, "other_odds": -105,
+         "fair_prob": 0.52, "has_market": True},
         {"bet_type": "spread", "market": "spread", "home": "LA", "away": "BUF", "team": "LA", "side": "",
-         "line": -2.5, "pick_label": "LA -2.5", "win_prob": 0.53, "odds": -110, "other_odds": -110},
+         "line": -2.5, "pick_label": "LA -2.5", "win_prob": 0.53, "odds": -110, "other_odds": -110,
+         "fair_prob": 0.50, "has_market": True},
     ],
 }
 BOARDS = {"nfl": BOARD}
@@ -271,6 +332,22 @@ def test_a_leg_the_most_likely_board_seats_reads_its_shown_chance():
     assert got["verdict"] == "strong" and got["game"] == "BUF @ LA" and got["team"] == "LA"
     other = SG.price_leg(BOARDS, _leg(player="Puka Nacua", market="receptions", side="over", line=6.5))
     assert other["found"] != "likely", "another number is not the seated pick"
+
+
+def test_a_worth_a_look_pick_reads_the_tiers_real_rate_as_the_page_does():
+    """likelyboard.REAL_RATE_TIERS: on the tier that claims more than it
+    hits, the Most Likely card prints the tier's real hit rate in place of
+    our chance (app.js: `tier_rate != null ? tier_rate : model_prob`). The
+    grade reads the number the page shows, and so does the swap."""
+    got = SG.price_leg(BOARDS, _leg(player="Davante Adams", market="rec_yds", side="over", line=49.5, odds=-120))
+    assert got["found"] == "likely" and got["prob"] == 0.58 and got["tier"] == "Worth a look"
+    assert "tier_rate != null ? Number(r.tier_rate) : Number(r.model_prob || 0)" in APP, \
+        "the page's own rule, which the grade copies"
+    weak = _leg(player="Josh Allen", market="pass_att", side="over", line=32.5, odds=-120)
+    strong = _leg(player="Kyren Williams", market="rush_yds", side="over", line=59.5, odds=-200)
+    seated = _leg(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-140)
+    swap = SG.grade({"legs": [strong, weak, seated]}, BOARDS)["swap"]
+    assert swap["player"] == "Davante Adams" and swap["prob"] == 0.58 and swap["tier"] == "Worth a look"
 
 
 def test_a_prop_is_priced_at_the_slips_exact_number():
@@ -406,6 +483,226 @@ def test_the_weakest_leg_comes_with_the_boards_likeliest_pick_in_its_game():
     assert all("row" not in l for l in card["legs"]), "the board's rows stay home"
 
 
+# ---- the facts behind each leg ------------------------------------------------
+def _facts(leg):
+    got = SG.price_leg(BOARDS, leg)
+    return {f["k"]: f["t"] for f in SG.why(BOARDS, got)}
+
+
+def test_every_leg_carries_the_boards_own_facts_defence_and_offence():
+    f = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115))
+    assert f["Projection"] == "We project 82 (likely range 41–123) against 69.5"
+    assert f["Recent games"] == "Cleared 69.5 in 5 of his last 5 (80, 75, 90, 85, 70, latest first)"
+    assert f["Defense"].startswith("BUF allow 128 rushing yards to RBs") and f["Defense"].endswith("our number ×1.06 for it")
+    assert f["Usage"] == "×1.08 — Takes 71% of the carries", "the projection step that moved him most"
+    assert "Weather" not in f, "a step that moved nothing is not a reason"
+    assert f["Game script"] == "LA by 3.5 at 54.5 — favored in a shootout"
+    assert f["Matchup read"] == ("Good matchup · Takes 71% of the carries; BUF gives up the 4th-most rushing "
+                                 "yards to RBs · against: <b>LA</b> trail late")
+    assert f["Around him"].startswith("Puka Nacua out") and f["Status"] == "Listed Questionable"
+    assert f["Watch"].startswith("Carried from 2025"), "the Edge board's grade notes stay off a parlay"
+    assert f["The books"] == "Their own price, the margin taken out, says 53%"
+    under = _facts(_leg(player="Kyren Williams", market="rush_yds", side="under", line=69.5, odds=-105))
+    assert under["Recent games"].startswith("Stayed under 69.5 in 0 of his last 5")
+    assert under["The books"].endswith("says 47%"), "the other side of the book's own number"
+    alt = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=59.5))
+    assert "The books" not in alt, "the book's price is for its own number, not an alternate"
+
+
+def test_scorers_and_game_lines_carry_their_own_facts():
+    td = _facts(_leg(player="Kyren Williams", market="anytime_td", side="yes", line=0.5, odds=120))
+    assert td["Game"] == "LA expected to score 29" and td["Red zone"] == "2.4 red-zone chances expected this week"
+    assert td["Goal line"] == "Takes 80% of the goal-line carries"
+    ml = _facts(_leg(team="Rams", market="moneyline", side="team", odds=-140))
+    assert ml["Our model"] == "Power rating: LA +4.1 vs BUF +2.0"
+    assert ml["Game script"] == "Everyone eats. High total, close spread."
+    assert SG.why(BOARDS, SG.price_leg(BOARDS, _leg(player="Somebody Else", market="rec_yds", side="over",
+                                                     line=40.5))) == [], "no number of ours, no facts of ours"
+
+
+def test_a_prop_carries_his_log_against_this_defence_and_the_teammates_out():
+    f = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115))
+    assert f["Against BUF"] == "88, 61 in his log against them (cleared 69.5 in 1 of 2)"
+    assert f["Lineup"].startswith("Puka Nacua out — over his 6 missed games"), "measured ripples only"
+    assert "not measured" not in " ".join(f.values())
+
+
+def test_the_books_line_reads_the_sharp_book_and_the_field_the_right_way_round():
+    under = _facts(_leg(player="James Cook", market="rush_yds", side="under", line=70.5, odds=-110))
+    assert under["The books"] == ("The sharp book's price, the margin taken out, says 56%; "
+                                  "5 books at this number together say 53%"), \
+        "the sharp number is the row's side; the field's is the over's"
+    over = _facts(_leg(player="James Cook", market="rush_yds", side="over", line=70.5, odds=-110))
+    assert over["The books"] == ("The sharp book's price, the margin taken out, says 44%; "
+                                 "5 books at this number together say 47%")
+    assert "The books" not in _facts(_leg(player="James Cook", market="rush_yds", side="under", line=65.5)), \
+        "the market's number is for its own line"
+
+
+def test_a_seated_pick_carries_the_case_the_record_the_checks_and_the_scout():
+    seated = SG.price_leg(BOARDS, _leg(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-150))
+    assert [x["t"] for x in SG.why(BOARDS, seated) if x["k"] == "The case"] == [
+        "BUF allow 7.1 catches a game to WRs, the 3rd-most", "Takes 29% of the targets"]
+    f = _facts(_leg(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-150))
+    assert f["Our record"] == "Picks like this hit 74% of 212 when we said 76%", "the record check's own words"
+    assert f["Checks"] == "Passes 3 of our 4 checks (model, matchup, record); market: no book price to compare"
+    assert f["Scout"] == "A catches over with his team favoured in a shootout"
+    assert f["Milestone"] == "4 catches from 400 in his career"
+    look = _facts(_leg(player="Davante Adams", market="rec_yds", side="over", line=49.5, odds=-120))
+    assert look["Our record"] == "Our Worth a look tier has hit 58% of 140 settled", "the tier's real rate, where shown"
+    other = _facts(_leg(player="Puka Nacua", market="receptions", side="over", line=6.5, odds=120))
+    assert other["Projection"] == "We project 6.4 against 6.5", "priced off his prop row at the slip's number"
+    assert "Our record" not in other and "Checks" not in other and "The case" not in other, \
+        "the record and the checks are the seated number's, not another's"
+    assert other.get("Scout") == f["Scout"], "the scout's note is about the side, so it rides any of his lines"
+
+
+def test_a_side_or_total_carries_the_books_the_crowd_the_move_and_the_money():
+    rams = _facts(_leg(team="Rams", market="moneyline", side="team", odds=-140))
+    assert rams["The books"] == "Their own price, the margin taken out, says 57%"
+    assert rams["Prediction markets"] == "Kalshi and Polymarket traders put LA at 61% to win"
+    assert rams["Line move"] == "LA opened -120, now -140"
+    assert rams["Money"] == "41% of the $48,210 traded on Kalshi and Polymarket is on LA"
+    bills = _facts(_leg(team="Buffalo Bills", market="moneyline", side="team", odds=120))
+    assert bills["The books"].endswith("says 43%") and bills["Prediction markets"].endswith("BUF at 39% to win")
+    assert bills["Line move"] == "BUF opened +100, now +120" and bills["Money"].startswith("59% of")
+    fav = _facts(_leg(team="Rams", market="spread", side="team", line=-2.5, odds=-110))
+    assert fav["Prediction markets"] == "Kalshi and Polymarket traders put LA -2.5 at 51%"
+    assert fav["Line move"] == "LA opened -1.5, now -2.5 — toward LA with 64% of the money on BUF"
+    assert fav["Money"] == "36% of the $12,000 traded on Kalshi and Polymarket is on LA -2.5"
+    dog = _facts(_leg(team="Bills", market="spread", side="team", line=2.5, odds=-110))
+    assert dog["Prediction markets"].endswith("BUF +2.5 at 49%") and dog["Line move"].startswith("BUF opened +1.5, now +2.5")
+    over = _facts(_leg(game="BUF @ LA", market="total", side="over", line=47.5, odds=-110))
+    assert over["The books"].endswith("says 52%")
+    assert over["Prediction markets"] == "Polymarket traders put the over 47.5 at 58%", "only the venues quoting it"
+    assert over["Line move"] == "Opened 46.5, now 47.5"
+    assert over["Money"] == "70% of the $9,000 traded on Kalshi and Polymarket is on the over 47.5"
+    under = _facts(_leg(game="BUF @ LA", market="total", side="under", line=47.5, odds=-110))
+    assert under["Prediction markets"].endswith("under 47.5 at 42%") and under["Money"].startswith("30% of")
+    text = SG.summary(SG.grade({"legs": [_leg(team="Rams", market="moneyline", side="team", odds=-140),
+                                         _leg(player="Patrick Mahomes", market="pass_yds", side="over",
+                                              line=255.5, odds=-115)]}, BOARDS))
+    assert "LA moneyline: ours 58%, needs 58% (fair); Kalshi and Polymarket traders put LA at 61% to win." in text, text
+
+
+def test_a_venue_at_another_number_is_another_bet_and_stays_off():
+    game = BOARD["games"][0]
+    saved = json.loads(json.dumps(game))
+    try:
+        game["crowd"]["spread_home_line"] = -3.5
+        game["money"]["spread"]["line"] = -3.5
+        f = _facts(_leg(team="Rams", market="spread", side="team", line=-2.5, odds=-110))
+        assert "Prediction markets" not in f and "Money" not in f
+        game.pop("crowd")
+        game.pop("money")
+        game.pop("line_open")
+        bare = _facts(_leg(team="Rams", market="moneyline", side="team", odds=-140))
+        assert set(bare) == {"Our model", "The books", "Game script"}, "nothing on the board, nothing said"
+    finally:
+        game.clear()
+        game.update(saved)
+
+
+def test_a_long_case_drops_its_colour_first():
+    many = [{"k": "Scout", "t": f"note {i}"} for i in range(6)] + [{"k": "Projection", "t": "p"}] + \
+           [{"k": "Watch", "t": f"w {i}"} for i in range(8)] + [{"k": "Our record", "t": "r"},
+                                                              {"k": "The books", "t": "b"}, {"k": "Defense", "t": "d"}]
+    kept = SG._keep(many)
+    assert len(kept) == SG.MAX_WHY == 16
+    assert [f["k"] for f in kept if f["k"] not in ("Scout", "Watch")] == ["Projection", "Our record", "The books",
+                                                                         "Defense"], "the number and the price stay"
+    assert sum(f["k"] == "Watch" for f in kept) == 8
+    assert [f["t"] for f in kept if f["k"] == "Scout"] == ["note 0", "note 1", "note 2", "note 3"], \
+        "colour gives way first, its latest before its earliest"
+    assert kept == sorted(kept, key=many.index), "the case still reads in its own order"
+    assert SG._keep(many[:10]) == many[:10], "under the cap nothing goes"
+
+
+def test_the_facts_ride_on_the_card_and_lead_the_summary():
+    a = _leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    b = _leg(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    card = SG.grade({"legs": [a, b], "total_odds": 260}, BOARDS)
+    ky = next(l for l in card["legs"] if l["player"] == "Kyren Williams")
+    assert any(f["k"] == "Defense" for f in ky["why"]) and len(ky["why"]) <= SG.MAX_WHY
+    text = SG.summary(card)
+    assert text.index("simulated nights") < text.index("Kyren Williams over 69.5"), \
+        "the verdict leads: Ask keeps the first 800 characters of a turn"
+    assert "BUF allow 128 rushing yards" in text
+    words = "BUF allow " + "plenty of rushing yards to backs, " * 8
+    long = dict(BOARD, recommendations=[dict(r, matchup_card={"text": words})
+                                        if r["player"] == "Kyren Williams" else r for r in BOARD["recommendations"]])
+    cut = SG.summary(SG.grade({"legs": [a, b], "total_odds": 260}, {"nfl": long}))
+    kept = cut[cut.index("; BUF allow ") + 2:].split("…", 1)[0]
+    full = " ".join(words.split()) + " — our number ×1.06 for it"
+    assert full.startswith(kept) and full[len(kept)] in " ,", (kept[-20:], "a long fact is cut at a word")
+    assert len(kept) <= 140 and not kept.endswith((",", " "))
+
+
+# ---- the ticket, replayed ------------------------------------------------------
+def _priced(**kw):
+    return SG.price_leg(BOARDS, _leg(**kw))
+
+
+def test_the_replay_is_the_sim_labs_two_thousand_nights_and_repeats_itself():
+    a = _priced(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    b = _priced(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    one, two = SG.simulate([a, b]), SG.simulate([a, b])
+    assert SG.SIM_NIGHTS == 2000 and one["nights"] == 2000 and one == two, "the same slip, the same nights"
+    assert sum(one["legs_hit"]) == 2000 and one["cashed"] == one["legs_hit"][-1]
+    want = a["prob"] * b["prob"]
+    assert abs(one["rate"] - want) < 0.03, (one["rate"], want)
+    for h, l in zip(one["hits"], (a, b)):
+        assert abs(h / 2000 - l["prob"]) < 0.035, "each leg lands as often as its own chance says"
+    other = SG.simulate([a, b], seed=7)
+    assert other != one and abs(other["rate"] - want) < 0.03
+
+
+def test_one_game_replays_the_engines_own_correlation():
+    a = _priced(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    c = _priced(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-140)
+    d = _priced(player="Davante Adams", market="receptions", side="over", line=4.5, odds=-125)
+    ours, _ = SG.joint([a, c, d])
+    big = SG.simulate([a, c, d], nights=40000, seed=11)
+    assert abs(big["rate"] - ours) < 0.012, (big["rate"], ours)
+    pair, _ = SG.joint([a, c])
+    assert abs(SG.simulate([a, c], nights=40000, seed=3)["rate"] - pair) < 0.012
+    bills = _priced(team="Buffalo Bills", market="moneyline", side="team", odds=120)
+    rams = _priced(team="Rams", market="moneyline", side="team", odds=-140)
+    both = SG.simulate([bills, rams])
+    assert both["cashed"] <= 10, "two sides of one game almost never both win"
+    card = SG.grade({"legs": [_leg(team="Buffalo Bills", market="moneyline", side="team", odds=120),
+                              _leg(team="Rams", market="moneyline", side="team", odds=-140)]}, BOARDS)
+    assert card["ours"] == 0.0 and card["grade"] == "F" and card["sim"] is None, \
+        "a ticket that cannot cash is graded as one, not at a copula's few points"
+    over = _priced(game="BUF @ LA", market="total", side="over", line=47.5, odds=-110)
+    under = _priced(game="BUF @ LA", market="total", side="under", line=47.5, odds=-105)
+    assert SG.joint([over, under])[0] == 0.0
+
+
+def test_the_replay_names_the_leg_that_breaks_the_ticket():
+    sure = _priced(player="Kyren Williams", market="rush_yds", side="over", line=49.5, odds=-300)
+    shaky = _priced(player="Josh Allen", market="pass_att", side="over", line=36.5, odds=150)
+    sim = SG.simulate([sure, shaky])
+    assert sim["breaker"]["leg"] == SG._name(shaky) and sim["breaker"]["share"] > 0.8
+    assert sim["one_short"] == round(sim["legs_hit"][1] / 2000, 4)
+    blind = dict(_priced(player="Somebody Else", market="rec_yds", side="over", line=40.5), odds=0, needs=None)
+    assert SG.simulate([sure, blind]) is None, "nothing to draw a leg from, no replay"
+    stand = _priced(player="Somebody Else", market="rec_yds", side="over", line=40.5, odds=150)
+    got = SG.simulate([sure, stand], nights=20000, seed=5)
+    assert abs(got["hits"][1] / 20000 - 0.4) < 0.015, "a leg off our boards plays at its price's break-even"
+
+
+def test_the_card_carries_the_replay_and_each_legs_count():
+    a = _leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    b = _leg(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    card = SG.grade({"legs": [a, b], "total_odds": 260}, BOARDS)
+    sim = card["sim"]
+    assert sim["nights"] == 2000 and "hits" not in sim and abs(sim["rate"] - card["ours"]) < 0.03
+    assert all(isinstance(l["sim_hits"], int) for l in card["legs"])
+    blind = SG.grade({"legs": [a, _leg(player="Somebody Else", market="rec_yds", side="over", line=40.5)]}, BOARDS)
+    assert blind["sim"] is None
+
+
 # ---- the server --------------------------------------------------------------
 def _method(name):
     i = SRV.index(f"    def {name}(self")
@@ -485,7 +782,11 @@ CARD = {
     "weakest": "Josh Allen over 32.5 pass attempts",
     "swap": {"player": "Kyren Williams", "market": "rush_yds", "side": "Over", "line": 59.5, "odds": -200,
              "prob": 0.81, "tier": ""},
+    "sim": {"nights": 2000, "cashed": 318, "rate": 0.159, "legs_hit": [96, 520, 1066, 318],
+            "one_short": 0.533, "breaker": {"leg": "Josh Allen over 32.5 pass attempts", "share": 0.62}},
 }
+CARD["legs"][0].update(sim_hits=1544, why=[{"k": "Defense", "t": "BUF allow 13.2 catches by WRs a game, the 7th-most"},
+                                          {"k": "Matchup read", "t": "Breakout candidate · <script>x</script>"}])
 
 
 FOUND_NO_NUMBER = dict(CARD, legs=[dict(CARD["legs"][2], player="Josh Allen", found="prop")], n_legs=1,
@@ -522,6 +823,13 @@ def test_the_card_renders_and_escapes_what_the_picture_said():
     assert "One bet sold twice" in html and "Weakest leg:" in html and "Kyren Williams over 59.5 Rush Yds" in html
     assert 'style="width:77%"' in html and 'style="left:58%"' in html
     assert "21+ · 1-800-GAMBLER" in html
+    assert "2,000 simulated nights" in html and "cashed <b>318</b> times · 15.9%" in html
+    assert html.count('<div class="pgr-sim-col') == 4 and '<div class="pgr-sim-col all">' in html and "all 3" in html
+    assert "Missed by one leg on 53% of nights — most often <b>Josh Allen over 32.5 pass attempts</b> (62% of those)" in html
+    assert "hit in 1,544 of 2,000 simulated nights" in html
+    assert '<details class="pgr-why"><summary>Why we say 77%</summary>' in html
+    assert "<dt>Defense</dt><dd>BUF allow 13.2 catches by WRs a game, the 7th-most</dd>" in html
+    assert "&lt;script&gt;x&lt;/script&gt;" in html and "<script>x" not in html
 
 
 # ---- the browser half ------------------------------------------------------------
@@ -554,7 +862,10 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
   const card = () => p.evaluate(() => {
     const c = document.querySelector('.pgr-card');
     const r = c.getBoundingClientRect();
+    const why = c.querySelector('.pgr-why');
+    if (why) why.open = true;
     return { grade: c.querySelector('.pgr-grade').textContent.trim(), legs: c.querySelectorAll('.pgr-leg').length,
+             sim: c.querySelectorAll('.pgr-sim-col').length, why: why ? why.querySelectorAll('dt').length : 0,
              left: Math.round(r.left), right: Math.round(r.right), screen: window.innerWidth,
              overflow: document.scrollingElement.scrollWidth > window.innerWidth + 1,
              sheet: document.getElementById('ask-attach').hidden };
@@ -607,7 +918,7 @@ def test_a_screenshot_goes_up_and_the_card_comes_back_at_both_widths():
         assert got["media"] == "image/jpeg" and got["jpeg"], f"{w}: the page sends a JPEG it drew itself"
         for k in ("first", "again"):
             c = got[k]
-            assert c["grade"] == "A*" and c["legs"] == 3, (w, k, c)
+            assert c["grade"] == "A*" and c["legs"] == 3 and c["sim"] == 4 and c["why"] == 2, (w, k, c)
             assert c["left"] >= 0 and c["right"] <= c["screen"] and not c["overflow"], (w, k, c)
         assert got["first"]["sheet"], "the attach sheet closes once a picture is chosen"
         assert not got["errors"], got["errors"]
