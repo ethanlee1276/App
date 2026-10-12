@@ -83,3 +83,41 @@
   .pgr-sim-col i { animation: pgrGrow .7s var(--ease-out, ease-out) both; }
   @keyframes pgrGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 }
+/* The live line (engine/sliplive): each leg's price now, its game, the ticket. */
+.pgr-price { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-dim); overflow-wrap: break-word; }
+.pgr-price b { color: var(--text); font-family: var(--font-mono); font-weight: 600; }
+.pgr-price .up { color: var(--good); font-weight: 600; }
+.pgr-price.none { color: var(--text-mute); }
+.pgr-when { color: var(--text-mute); }
+.pgr-live { margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); overflow-wrap: break-word; }
+.pgr-live b { color: var(--text); font-family: var(--font-mono); }
+.pgr-live-tag { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--brand-ink); background: var(--bad); }
+.pgr-live-tag.fin { background: var(--text-faint); }
+.pgr-prog { position: relative; height: 4px; margin-top: 5px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.pgr-prog i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--gold); }
+.pgr-leg.r-won .pgr-prog i { background: var(--good); }
+.pgr-leg.r-lost .pgr-prog i { background: var(--bad); }
+.pgr-res { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--brand-ink); background: var(--text-faint); }
+.pgr-res.r-won { background: var(--good); }
+.pgr-res.r-lost { background: var(--bad); }
+.pgr-leg.r-won { border-left-color: var(--good); }
+.pgr-leg.r-lost { border-left-color: var(--bad); opacity: .85; }
+.pgr-now, .pgr-alerts, .pgr-shop, .pgr-better, .pgr-pairs { padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); color: var(--text-dim); background: var(--panel); overflow-wrap: break-word; }
+.pgr-now b, .pgr-shop b, .pgr-better b, .pgr-pairs > b, .pgr-alerts > b { color: var(--text); }
+.pgr-now.s-open { border: var(--hairline) solid var(--gold); }
+.pgr-now.s-lost { border: var(--hairline) solid var(--bad); }
+.pgr-now.s-won { border: var(--hairline) solid var(--good); }
+.pgr-alerts { border: var(--hairline) solid var(--warn); }
+.pgr-alerts ul, .pgr-pairs ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.pgr-shop small { display: block; margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
+.pgr-better b.pos { color: var(--good); }
+.pgr-better b.neg { color: var(--bad); }
+.pgr-pairs .up { color: var(--good); font-weight: 600; font-family: var(--font-mono); }
+.pgr-pairs .down { color: var(--warn); font-weight: 600; font-family: var(--font-mono); }
+@media (prefers-reduced-motion: no-preference) {
+  .pgr-live-tag:not(.fin) { animation: pgrPulse 1.6s ease-in-out infinite; }
+  @keyframes pgrPulse { 50% { opacity: .55; } }
+}

@@ -844,6 +844,40 @@ first). Paste back anything that prints an error or looks off.
 
     Nothing to run for any of it.
 
+    **Round three, the live line** (Ethan: "make sure we are also pulling
+    live line for the picks that the user puts in the parlay checker", and
+    "figure out what more we can add"):
+    * **Every leg's price right now, at the slip's own number.** Each
+      book's price, best first, including alternate numbers. Also the
+      market's chance with the margin taken out, whether it beats the
+      price on the slip, where the main line sits, and when that price
+      was pulled. It comes from our latest paid pull, so no extra
+      credits. The NFL re-prices through game day: at the touchpoints,
+      three hours out, at inactives and in the last half hour.
+    * **Once a leg's game is on**, it shows the score, the clock and his
+      number so far (e.g. "Has 74 of 69.5"). That comes from the
+      12-second scoreboard and box score the live loop already writes.
+      An over past its number shows Won and an under past it shows Lost;
+      finals settle. The card says where the ticket stands (won, in play,
+      yet to start). A moneyline in play reads its live win chance. A
+      prop in play gets no number, because our projection assumes a whole
+      game.
+    * **Before kickoff the card also shows:**
+      * where to place it: the parlay priced at each book that quotes
+        every leg, against the slip;
+      * the leg it's better without, when cutting one lifts the expected
+        return;
+      * legs that move together or pull apart, from the parlay engine;
+      * alerts first: a Questionable player, or a prop no book is pricing.
+    * **Your call, not built:** a fresh Odds API pull of just the slip's
+      markets, for when our price is old. It costs one credit per market
+      per game per upload; a 4-leg ticket over two games is about 3–4
+      credits. It draws on the same daily budget that prices the board,
+      so it could delay a board refresh. Say yes and give a daily cap if
+      you want it.
+
+    Nothing to run.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

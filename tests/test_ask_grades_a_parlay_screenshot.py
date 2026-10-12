@@ -21,6 +21,13 @@ What is pinned, offline, on fixtures (engine/slipgrade.py):
     expected return, a leg off our boards stands in at its own break-even,
     the pairs the engine would never build are named, and the weakest leg
     comes with the board's likeliest pick in its game;
+  * the live line (engine/sliplive; Ethan: "make sure we are also pulling
+    live line for the picks"): every book's price at the slip's number from
+    the latest pull, best first, the sharp book a reference only, the
+    margin taken out, and when it was pulled; a game under way read off the
+    live loop's own scoreboard and box score — an over past its number has
+    won, an under past it has lost — and the ticket's standing, where to
+    place it, the leg it is better without, the pairs, the alerts;
   * the server gates and counts it as it does a question, before the
     picture is read, and writes the picture nowhere;
   * the page: the attach sheet's upload row, the lazy module, the card.
@@ -233,6 +240,13 @@ KYREN_CONTEXT = {
     "mate_card": {"headline": "Puka Nacua out — 29% of the targets to go around"},
     "logs": [{"week": 5, "opponent": "SF", "value": 80}, {"week": 14, "opponent": "BUF", "value": 88},
              {"week": 3, "opponent": "BUF", "value": 61}],
+    # Every book's number, as apply_odds_to_slate leaves it on the private board:
+    # the main line from each book, and the ladder Ask's copy drops.
+    "all_lines": [{"book": "DraftKings", "line": 69.5, "over_odds": -115, "under_odds": -105},
+                  {"book": "FanDuel", "line": 69.5, "over_odds": -108, "under_odds": -112},
+                  {"book": "Pinnacle", "line": 69.5, "over_odds": -104, "under_odds": -116},
+                  {"book": "proxy", "line": 69.5, "over_odds": -110, "under_odds": -110}],
+    "alt_lines": [{"book": "DraftKings", "line": 59.5, "over_odds": -170, "under_odds": 135}],
     "ripples": [{"out": "Tutu Atwell", "measured": False, "delta": None, "text": "Tutu Atwell out — not measured"},
                 {"out": "Puka Nacua", "measured": True, "delta": 0.031,
                  "text": "Puka Nacua out — over his 6 missed games, Williams's share of the carries rose 3.1%"}],
@@ -253,7 +267,7 @@ PUKA_SEAT = {
 }
 
 BOARD = {
-    "games": [{"home": "LA", "away": "BUF", "home_ml": -140, "away_ml": 120,
+    "games": [{"home": "LA", "away": "BUF", "home_ml": -140, "away_ml": 120, "date": "2026-10-12", "kickoff": "16:25",
                # Kalshi + Polymarket on the board's own bets (engine/crowd), the opener
                # (engine/lineopen) and the exchange money (engine/moneysplit).
                "crowd": {"kalshi": 0.60, "polymarket": 0.62, "crowd": 0.61, "books": 0.57,
@@ -284,8 +298,12 @@ BOARD = {
         _rec("Keenan Allen", "CHI", "GB", "receptions", "Over", 4.5, -120, 5.1, 1.8, [5, 6, 4]),
         _rec("Josh Allen", "BUF", "LA", "rush_yds", "Over", 30.5, -110, 33.0, 14.0, [30, 41, 22]),
         _rec("Davante Adams", "LA", "BUF", "receptions", "Over", 4.5, -125, 5.2, 1.7, [5, 4, 6]),
-        _rec("Puka Nacua", "LA", "BUF", "receptions", "Over", 5.5, -140, 6.4, 1.9, [7, 6, 8, 5]),
+        dict(_rec("Puka Nacua", "LA", "BUF", "receptions", "Over", 5.5, -140, 6.4, 1.9, [7, 6, 8, 5]),
+             all_lines=[{"book": "FanDuel", "line": 5.5, "over_odds": -135, "under_odds": 105},
+                        {"book": "DraftKings", "line": 5.5, "over_odds": -150, "under_odds": 120}]),
     ],
+    # When the last paid pulls were made (nfl_build: odds_status, epoch seconds).
+    "odds_status": {"priced_at": 1760283000, "lines_priced_at": 1760284800},
     "likely_board": {"rows": [
         {"kind": "prop", "player": "Puka Nacua", "team": "LA", "opponent": "BUF", "market": "receptions",
          "side": "Over", "line": 5.5, "odds": -140, "model_prob": 0.7712, "tier": "top", "tier_label": "Top pick",
@@ -302,13 +320,13 @@ BOARD = {
         {"bet_type": "moneyline", "market": "moneyline", "home": "LA", "away": "BUF", "team": "LA", "pick": "LA",
          "pick_is_home": True, "pick_label": "LA ML", "side": "", "line": 0.0, "win_prob": 0.58, "odds": -140,
          "home_odds": -140, "away_odds": 120, "reasons": ["Power rating: LA +4.1 vs BUF +2.0"],
-         "fair_prob": 0.57, "has_market": True},
+         "fair_prob": 0.57, "has_market": True, "home_book": "FanDuel", "away_book": "DraftKings", "book": "FanDuel"},
         {"bet_type": "total", "market": "total", "home": "LA", "away": "BUF", "team": "", "side": "Over",
          "line": 47.5, "pick_label": "Over 47.5", "win_prob": 0.55, "odds": -110, "other_odds": -105,
-         "fair_prob": 0.52, "has_market": True},
+         "fair_prob": 0.52, "has_market": True, "over_book": "BetMGM", "under_book": "Caesars"},
         {"bet_type": "spread", "market": "spread", "home": "LA", "away": "BUF", "team": "LA", "side": "",
-         "line": -2.5, "pick_label": "LA -2.5", "win_prob": 0.53, "odds": -110, "other_odds": -110,
-         "fair_prob": 0.50, "has_market": True},
+         "line": -2.5, "pick_label": "LA -2.5", "win_prob": 0.53, "odds": -110, "other_odds": -108,
+         "fair_prob": 0.50, "has_market": True, "home_book": "FanDuel", "away_book": "BetMGM"},
     ],
 }
 BOARDS = {"nfl": BOARD}
@@ -709,6 +727,219 @@ def _method(name):
     return SRV[i:SRV.index("\n    def ", i + 10)]
 
 
+# ---- the live line ---------------------------------------------------------------
+# Ethan, 2026-10-12: "Obv make sure we are also pulling live line for the picks
+# that the user puts in the parlay checker". engine/sliplive.
+from engine import sliplive as SL                                # noqa: E402
+
+
+def _fast_dir(games=None, deep=None, age_s=0):
+    """The live loop's files, as livescore_build writes them, in a temp dir."""
+    d = Path(tempfile.mkdtemp())
+    (d / "pbp").mkdir()
+    doc = {"league": "nfl", "games": games if games is not None else [
+        {"event_id": "401", "home": "LA", "away": "BUF",
+         "live": {"state": "live", "home_score": 17, "away_score": 10, "period": 3, "clock": "8:12",
+                  "detail": "8:12 - 3rd", "win_prob": {"home_win_prob": 0.74, "away_win_prob": 0.26}}},
+        {"event_id": "402", "home": "KC", "away": "DEN", "live": {"state": "final", "home_score": 27, "away_score": 20}}]}
+    (d / "live_nfl.json").write_text(json.dumps(doc))
+    for eid, players in (deep if deep is not None else {
+            "401": [{"player": "Kyren Williams", "team": "LA", "stats": {"rush_yds": 74, "carries": 15, "rush_td": 1}},
+                    {"player": "Puka Nacua", "team": "LA", "stats": {"receptions": 4, "rec_yds": 51}},
+                    {"player": "James Cook", "team": "BUF", "stats": {"rush_yds": 75}}],
+            "402": [{"player": "Patrick Mahomes", "team": "KC", "stats": {"pass_yds": 241, "pass_att": 35}}]}).items():
+        (d / "pbp" / f"nfl_{eid}.json").write_text(json.dumps({"players": players}))
+    if age_s:
+        old = __import__("time").time() - age_s
+        os.utime(d / "live_nfl.json", (old, old))
+    return d
+
+
+def _live(fast=None):
+    return SL.Live({"nfl": SL.quote_index(BOARD)}, fast_dir=fast or _fast_dir(games=[]))
+
+
+def _priced_live(fast=None, **kw):
+    leg = SG.price_leg(BOARDS, _leg(**kw))
+    lv = _live(fast)
+    return leg, lv.prices(leg, BOARD), lv.state(leg)
+
+
+def test_every_book_at_the_slips_number_best_first_with_the_margin_out():
+    _, p, _ = _priced_live(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    assert p["books"] == [{"book": "FanDuel", "odds": -108}, {"book": "DraftKings", "odds": -115}], \
+        "best first; the sharp book is a reference, never the price to take; a proxy is no book"
+    assert p["best"] == -108 and p["book"] == "FanDuel" and p["n"] == 2 and p["beats_yours"] is True
+    from engine.odds import devig_two_way
+    fairs = sorted(devig_two_way(o, u)[0] for o, u in ((-115, -105), (-108, -112), (-104, -116)))
+    assert abs(p["fair"] - fairs[1]) < 1e-4, "the median of every book's own pair, the sharp one included"
+    assert p["as_of"] == "2025-10-12T15:30:00Z" or p["as_of"].endswith("Z"), p["as_of"]
+    import datetime as dt
+    assert dt.datetime.fromisoformat(p["as_of"].replace("Z", "+00:00")).timestamp() == 1760283000, \
+        "when the pull was made, not when the page loaded"
+    _, under, _ = _priced_live(player="Kyren Williams", market="rush_yds", side="under", line=69.5, odds=-105)
+    assert under["best"] == -105 and under["book"] == "DraftKings" and "beats_yours" in under
+    assert abs(under["fair"] - (1 - p["fair"])) < 0.02
+    _, alt, _ = _priced_live(player="Kyren Williams", market="rush_yds", side="over", line=59.5, odds=-160)
+    assert alt["books"] == [{"book": "DraftKings", "odds": -170}] and alt["main_line"] == 69.5, \
+        "a rung on the ladder, priced at its own number, with the main line beside it"
+    assert alt["beats_yours"] is False
+    _, none, _ = _priced_live(player="Kyren Williams", market="rush_yds", side="over", line=64.5, odds=-140)
+    assert none["books"] == [] and none["any"] is True and "best" not in none
+    assert _priced_live(player="Somebody Else", market="rec_yds", side="over", line=40.5)[1] is None
+
+
+def test_a_side_or_total_reads_its_own_card_for_the_live_price():
+    _, rams, _ = _priced_live(team="Rams", market="moneyline", side="team", odds=-150)
+    assert rams["books"] == [{"book": "FanDuel", "odds": -140}] and rams["fair"] == 0.57 and rams["beats_yours"]
+    _, bills, _ = _priced_live(team="Bills", market="moneyline", side="team", odds=120)
+    assert bills["books"] == [{"book": "DraftKings", "odds": 120}] and bills["fair"] == 0.43
+    assert not bills["beats_yours"], "the same price is not a better one"
+    import datetime as dt
+    assert dt.datetime.fromisoformat(rams["as_of"].replace("Z", "+00:00")).timestamp() == 1760284800, \
+        "the game lines' own clock"
+    _, under, _ = _priced_live(game="BUF @ LA", market="total", side="under", line=47.5, odds=-110)
+    assert under["books"] == [{"book": "Caesars", "odds": -105}] and under["fair"] == 0.48
+    _, dog, _ = _priced_live(team="Bills", market="spread", side="team", line=2.5, odds=-110)
+    assert dog["books"] == [{"book": "BetMGM", "odds": -108}] and dog["fair"] == 0.5
+
+
+def test_the_ask_loader_keeps_every_books_number_from_the_same_parse():
+    from engine import askbot as AB
+    d = Path(tempfile.mkdtemp())
+    path = d / "recommendations.json"
+    path.write_text(json.dumps(BOARD))
+    idx = AB.prices_at(path)
+    q = idx[(SG._key("Kyren Williams"), "rush_yds")]["quotes"]
+    assert (59.5, "DraftKings", -170, 135) in q, "the ladder survives into the index"
+    slim = AB.board_at(path)
+    ky = next(r for r in slim["recommendations"] if r["player"] == "Kyren Williams")
+    assert "alt_lines" not in ky and "all_lines" in ky, "Ask's own copy still drops the ladders"
+    assert AB.prices_at(d / "missing.json") == {}
+
+
+def test_a_game_under_way_reads_the_live_loops_own_files():
+    fast = _fast_dir()
+    _, _, ky = _priced_live(fast, player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    assert ky["state"] == "live" and ky["current"] == 74 and ky["result"] == "won", "past his number: won, live"
+    assert ky["clock"] == "8:12 - 3rd" and (ky["home_score"], ky["away_score"]) == (17, 10)
+    _, _, pk = _priced_live(fast, player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-150)
+    assert pk["current"] == 4 and pk["result"] is None, "short of his number with time left: still live"
+    _, _, cook = _priced_live(fast, player="James Cook", market="rush_yds", side="under", line=70.5, odds=-110)
+    assert cook["result"] == "lost", "an under past its number has lost, whatever the clock says"
+    _, _, mah = _priced_live(fast, player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    assert mah["state"] == "final" and mah["current"] == 241 and mah["result"] == "lost" and mah["clock"] == "Final"
+    _, _, td = _priced_live(fast, player="Kyren Williams", market="anytime_td", side="yes", line=0.5, odds=120)
+    assert td["current"] == 1 and td["result"] == "won"
+    _, _, adams = _priced_live(fast, player="Davante Adams", market="receptions", side="over", line=4.5, odds=-125)
+    assert "current" not in adams and adams["note"] == "not in the box score yet"
+    _, _, rams = _priced_live(fast, team="Rams", market="moneyline", side="team", odds=-140)
+    assert rams["win_prob"] == 0.74 and rams["margin"] == 7 and "result" not in rams
+    _, _, bills = _priced_live(fast, team="Bills", market="moneyline", side="team", odds=120)
+    assert bills["win_prob"] == 0.26
+    _, _, sp = _priced_live(fast, team="Rams", market="spread", side="team", line=-2.5, odds=-110)
+    assert sp["cover_by"] == 4.5 and "result" not in sp
+    _, _, over = _priced_live(fast, game="BUF @ LA", market="total", side="over", line=47.5, odds=-110)
+    assert over["current"] == 27 and over["result"] is None
+    kc = _fast_dir(games=[{"event_id": "402", "home": "KC", "away": "DEN",
+                           "live": {"state": "final", "home_score": 20, "away_score": 20}}])
+    leg = SG.price_leg(BOARDS, _leg(team="Chiefs", market="moneyline", side="team", odds=-150))
+    assert SL.live_state(dict(leg, league="nfl", row={"home": "KC", "away": "DEN"}, team="KC"), kc)["result"] == "push"
+    stale = _fast_dir(age_s=SL.FAST_FRESH_S + 60)
+    assert _priced_live(stale, player="Kyren Williams", market="rush_yds", side="over", line=69.5)[2] is None, \
+        "a stopped loop pins nothing on a leg"
+    pre = _fast_dir(games=[{"event_id": "401", "home": "LA", "away": "BUF", "live": {"state": "scheduled"}}])
+    st = _priced_live(pre, player="Kyren Williams", market="rush_yds", side="over", line=69.5)[2]
+    assert st["state"] == "scheduled" and "current" not in st and "result" not in st
+    assert SL.live_state({"league": "mlb", "market": "hits"}, fast) is None, "no fast loop, no live line"
+
+
+def test_the_ticket_says_where_it_stands():
+    fast = _fast_dir()
+    ky = _leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    pk = _leg(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-150)
+    rams = _leg(team="Rams", market="moneyline", side="team", odds=-140)
+    mah = _leg(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    live = _live(fast)
+    open_ = SG.grade({"legs": [ky, pk]}, BOARDS, live=live)
+    assert open_["now"] == {"won": 1, "lost": 0, "push": 0, "live": 1, "status": "open", "left": 1, "start": 0,
+                            "chance": None}, "a prop in play gets no number"
+    assert open_["shop"] is None and open_["better"] is None, "where to place it is a pre-game question"
+    assert all(l["price"] is None for l in open_["legs"]), "a started game's pre-game price is gone"
+    ml = SG.grade({"legs": [ky, rams]}, BOARDS, live=live)
+    assert ml["now"]["status"] == "open" and ml["now"]["chance"] == 0.74, "a moneyline in play at its live chance"
+    lost = SG.grade({"legs": [ky, mah]}, BOARDS, live=live)
+    assert lost["now"]["status"] == "lost" and lost["now"]["chance"] == 0.0
+    assert lost["now"]["lost_leg"] == "Patrick Mahomes over 255.5 passing yards"
+    text = SG.summary(lost)
+    assert text.index("Live: this ticket has already lost — Patrick Mahomes over 255.5 passing yards missed.") < \
+        text.index("Before kickoff our chance was")
+    won = SG.grade({"legs": [ky, _leg(player="Kyren Williams", market="anytime_td", side="yes", line=0.5, odds=120)]},
+                   BOARDS, live=live)
+    assert won["now"]["status"] == "won" and "Live: every leg has won." in SG.summary(won)
+    t2 = SG.summary(open_)
+    assert "Live: 1 won, 1 in play." in t2, t2
+    calm = SG.grade({"legs": [ky, pk]}, BOARDS, live=_live())
+    assert calm["now"] is None and all(l["price"] for l in calm["legs"]), "before kickoff: prices, no standing"
+
+
+def test_where_to_place_it_and_the_leg_it_is_better_without():
+    ky = _leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    pk = _leg(player="Puka Nacua", market="receptions", side="over", line=5.5, odds=-150)
+    card = SG.grade({"legs": [ky, pk], "total_odds": 210}, BOARDS, live=_live())
+    sh = card["shop"]
+    from engine.slipgrade import to_decimal
+    want = SG.from_decimal(to_decimal(-108) * to_decimal(-135))
+    assert sh["books"][0] == {"book": "FanDuel", "odds": want} and want == 235
+    assert sh["books"][1]["book"] == "DraftKings" and sh["yours"] == 210 and sh["beats_yours"]
+    assert sh["same_game"] is True, "a same-game ticket says books price it their own way"
+    assert "Best place for it now: FanDuel at +235 (your slip +210)." in SG.summary(card)
+    assert SG.shop([SG.price_leg(BOARDS, ky)], 0) is None
+    cook = _leg(player="James Cook", market="rush_yds", side="under", line=70.5, odds=-110)
+    assert SG.grade({"legs": [ky, cook]}, BOARDS, live=_live())["shop"] is None, "a leg no book quotes: no shop"
+    mah = _leg(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
+    fair = _leg(player="Josh Allen", market="pass_att", side="over", line=32.5, odds=-120)
+    ok = SG.grade({"legs": [ky, mah, fair], "total_odds": 600}, BOARDS, live=_live())
+    assert ok["better"] is None, "a leg that pays for itself: cutting it halves the payout for less than double the chance"
+    # At -300 the same leg needs 75% and we say 54%: the ticket is better without it.
+    weak = dict(fair, odds=-300)
+    total = SG.from_decimal(to_decimal(-115) * to_decimal(-115) * to_decimal(-300))
+    three = SG.grade({"legs": [ky, mah, weak], "total_odds": total}, BOARDS, live=_live())
+    bt = three["better"]
+    assert bt and bt["leg"] == "Josh Allen over 32.5 pass attempts", bt
+    assert bt["ev"] >= three["ev"] + SG.DROP_GAIN and bt["odds"] == SG.from_decimal(to_decimal(total) / to_decimal(-300))
+    rest, _ = SG.joint([SG.price_leg(BOARDS, ky), SG.price_leg(BOARDS, mah)])
+    assert abs(bt["chance"] - rest) < 1e-4
+    assert bt["approx"] is True, "Kyren and Josh Allen share BUF @ LA: the book's payout is its own, so it is close, not exact"
+    assert "Better without Josh Allen over 32.5 pass attempts: return" in SG.summary(three)
+    assert SG.without([SG.price_leg(BOARDS, ky), SG.price_leg(BOARDS, mah)], 3.0, 0.1) is None, "two legs: nothing to cut"
+
+
+def test_alerts_pairs_and_kickoff():
+    ky = _leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115)
+    cook = _leg(player="James Cook", market="rush_yds", side="under", line=70.5, odds=-110)
+    card = SG.grade({"legs": [ky, cook]}, BOARDS, live=_live())
+    assert "Kyren Williams: listed Questionable" in card["alerts"]
+    assert "No book is pricing James Cook under 70.5 rushing yards right now — it may have been taken down" in card["alerts"]
+    assert next(l for l in card["legs"] if l["player"] == "Kyren Williams")["kickoff"] == "2026-10-12 16:25"
+    assert card["first_kickoff"] == "2026-10-12 16:25"
+    legs = [SG.price_leg(BOARDS, ky), SG.price_leg(BOARDS, _leg(team="Rams", market="moneyline", side="team", odds=-140))]
+    got = SG.pairs(legs)
+    for x in got:
+        assert abs(x["rho"]) >= SG.PAIR_RHO and len(x["legs"]) == 2 and x["why"]
+    rel = P.relate("nfl", SG._relation_leg(legs[0]), SG._relation_leg(legs[1]))
+    assert bool(got) == (abs(rel.rho) >= SG.PAIR_RHO and rel.verdict not in ("kill", "duplicate"))
+    assert SG.pairs([SG.price_leg(BOARDS, ky), SG.price_leg(BOARDS, _leg(player="Patrick Mahomes", market="pass_yds",
+                                                                        side="over", line=255.5))]) == [], \
+        "different games are not a pair"
+    assert SG.grade({"legs": [ky]}, BOARDS)["alerts"] == ["Kyren Williams: listed Questionable"], \
+        "without the live line there are no prices to alert on"
+    bare = {k: dict(v, quotes=[]) for k, v in SL.quote_index(BOARD).items()}
+    dry = SG.grade({"legs": [ky, cook]}, BOARDS, live=SL.Live({"nfl": bare}, fast_dir=_fast_dir(games=[])))
+    assert dry["alerts"] == ["Kyren Williams: listed Questionable"] and all(l["price"] is None for l in dry["legs"]), \
+        "a board with no book's price anywhere (a pull that did not land) is no sign one prop was taken down"
+
+
 def test_the_server_gates_and_counts_it_as_a_question_before_the_picture_is_read():
     route = SRV.index('if parsed.path in ("/api/ask/slip", "/api/ask/slip/"):')
     assert route < SRV.index('if parsed.path in ("/api/ask", "/api/ask/"):')
@@ -720,12 +951,13 @@ def test_the_server_gates_and_counts_it_as_a_question_before_the_picture_is_read
     assert "max_size 1MB" in caddy, "Caddy refuses a larger body before the server sees it"
     body = _method("_ask_slip")
     order = ["self._rate_limited(RATE_ASK_PER_MIN", "self._entitled(conn, who)", "SG.decode_image(",
-             "AB.configured()", "AB.over_limit(me)", "SG.read_slip(", "SG.grade(slip, boards)",
+             "AB.configured()", "AB.over_limit(me)", "SG.read_slip(", "SG.grade(slip, boards, live=SL.Live(prices))",
              "AB.count_question(me)", "AB.sign_turn(text)"]
     # The last count is the graded one; an unreadable slip is counted on its own path below.
     at = [body.rindex(x) if x == "AB.count_question(me)" else body.index(x) for x in order]
     assert at == sorted(at), dict(zip(order, at))
     assert "401 if not who else 402" in body and "429" in body
+    assert "prices[league] = AB.prices_at(path)" in body, "every book's prices from the same parse as the board"
     unread = body[body.index("except SG.SlipUnreadable"):body.index("except EX.NotConfigured")]
     assert "AB.count_question(me)" in unread and "422" in unread, "a read that was paid for is counted"
     assert "open(" not in body and ".write_" not in body and "body.get(\"image\")" in body
@@ -787,6 +1019,36 @@ CARD = {
 }
 CARD["legs"][0].update(sim_hits=1544, why=[{"k": "Defense", "t": "BUF allow 13.2 catches by WRs a game, the 7th-most"},
                                           {"k": "Matchup read", "t": "Breakout candidate · <script>x</script>"}])
+# The live line, before kickoff (engine/sliplive): every book's price, the ticket's shop.
+CARD["legs"][0].update(kickoff="2026-10-12 16:25", price={
+    "books": [{"book": "FanDuel", "odds": -135}, {"book": "DraftKings", "odds": -150}, {"book": "<b>Evil</b>", "odds": -155},
+              {"book": "BetMGM", "odds": -160}],
+    "n": 4, "fair": 0.5549, "as_of": "2026-10-12T15:00:00Z", "any": True, "best": -135, "book": "FanDuel",
+    "beats_yours": True})
+CARD["legs"][1].update(price={"books": [{"book": "DraftKings", "odds": -125}], "n": 1, "fair": None, "any": True,
+                              "best": -125, "book": "DraftKings", "beats_yours": False, "main_line": 34.5})
+CARD["legs"][2].update(price={"books": [], "n": 0, "fair": None, "any": False})
+CARD.update(alerts=["Kyren Williams: listed Questionable", "<i>breaking</i>"],
+            shop={"books": [{"book": "FanDuel", "odds": 640}, {"book": "DraftKings", "odds": 600}],
+                  "same_game": True, "yours": 600, "beats_yours": True},
+            better={"leg": "Josh Allen over 32.5 pass attempts", "chance": 0.31, "odds": 310, "ev": 0.27, "approx": True},
+            pairs=[{"legs": ["Puka Nacua over 5.5 receptions", "Josh Allen over 32.5 pass attempts"], "rho": -0.21,
+                    "why": "they <u>share</u> the targets"},
+                   {"legs": ["Puka Nacua over 5.5 receptions", "LA moneyline"], "rho": 0.32, "why": "a win needs his catches"}],
+            now=None, first_kickoff="2026-10-12 16:25")
+
+# The same ticket on game day: a leg settled, one in play, one to start.
+LIVE_CARD = dict(CARD, shop=None, better=None, alerts=[], pairs=[],
+                 now={"won": 1, "lost": 0, "push": 0, "live": 1, "status": "open", "left": 2, "start": 1, "chance": None},
+                 legs=[dict(CARD["legs"][0], price=None, live={
+                           "state": "final", "home": "LA", "away": "BUF", "home_score": 24, "away_score": 20,
+                           "clock": "Final", "current": 7, "result": "won"}),
+                       dict(CARD["legs"][1], price=None, live={
+                           "state": "live", "home": "LA", "away": "<b>BUF</b>", "home_score": 17, "away_score": 10,
+                           "clock": "8:12 - 3rd", "current": 24}),
+                       dict(CARD["legs"][2], live={"state": "scheduled"})])
+LOST_CARD = dict(LIVE_CARD, now={"won": 0, "lost": 1, "push": 0, "live": 0, "status": "lost", "left": 0, "start": 0,
+                                 "chance": 0.0, "lost_leg": "Puka Nacua over 5.5 receptions"})
 
 
 FOUND_NO_NUMBER = dict(CARD, legs=[dict(CARD["legs"][2], player="Josh Allen", found="prop")], n_legs=1,
@@ -805,10 +1067,14 @@ def test_the_card_renders_and_escapes_what_the_picture_said():
         f"process.stdout.write(ctx.window.QBSlip.card({json.dumps(CARD)}));"
         "process.stdout.write('\\n=====\\n');"
         f"process.stdout.write(ctx.window.QBSlip.card({json.dumps(FOUND_NO_NUMBER)}));"
+        "process.stdout.write('\\n=====\\n');"
+        f"process.stdout.write(ctx.window.QBSlip.card({json.dumps(LIVE_CARD)}));"
+        "process.stdout.write('\\n=====\\n');"
+        f"process.stdout.write(ctx.window.QBSlip.card({json.dumps(LOST_CARD)}));"
     )
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-800:]
-    html, other = out.stdout.split("\n=====\n")
+    html, other, live, lost = out.stdout.split("\n=====\n")
     assert "No number of ours" in other and "Our projection" not in other, \
         "a player we carry at a number we can't price is not 'not on our board'"
     assert 'class="pgr-grade g-a"' in html and ">A<sup>*</sup>" in html
@@ -830,6 +1096,29 @@ def test_the_card_renders_and_escapes_what_the_picture_said():
     assert '<details class="pgr-why"><summary>Why we say 77%</summary>' in html
     assert "<dt>Defense</dt><dd>BUF allow 13.2 catches by WRs a game, the 7th-most</dd>" in html
     assert "&lt;script&gt;x&lt;/script&gt;" in html and "<script>x" not in html
+    # The live line, before kickoff.
+    assert "Now <b>FanDuel -135</b> · DraftKings -150 · &lt;b&gt;Evil&lt;/b&gt; -155 · 4 books" in html
+    assert "55% with the margin out" in html and '<span class="up">beats your -140</span>' in html
+    assert "BetMGM -160" not in html, "three books shown, the count says how many more"
+    assert "main line 34.5" in html and "No book is pricing this right now." in html
+    assert '<span class="pgr-when">· priced ' in html and "Mon 4:25 PM ET" in html
+    assert '<div class="pgr-alerts"><b>Read this first</b>' in html and "&lt;i&gt;breaking&lt;/i&gt;" in html
+    assert "<b>Place it at</b> <b>FanDuel +640</b> · DraftKings +600 · your slip +600" in html
+    assert "Books price same-game parlays their own way" in html
+    assert "<b>Better without</b> Josh Allen over 32.5 pass attempts: chance 31%, pays +310 (about), return" in html
+    assert '<span class="down">Apart -0.21</span>' in html and '<span class="up">Together +0.32</span>' in html
+    assert "they &lt;u&gt;share&lt;/u&gt; the targets" in html and "<u>share" not in html
+    assert "pgr-now" not in html, "no standing before kickoff"
+    # Game day.
+    assert '<div class="pgr-now s-open"><b>Live</b> · 1 won · 1 in play · 1 yet to start' in live
+    assert "we don’t put a number on a prop mid-game" in live
+    assert "Before kickoff our chance was <b>16%</b>" in live and "Our chance it all hits" not in live
+    assert '<span class="pgr-res r-won">Won</span>' in live and 'class="pgr-leg v-strong r-won"' in live
+    assert '<span class="pgr-live-tag fin">Final</span> BUF 20 – 24 LA' in live and "Has <b>7</b> of 5.5" in live
+    assert '<span class="pgr-live-tag">Live</span> &lt;b&gt;BUF&lt;/b&gt; 10 – 17 LA · 8:12 - 3rd · Has <b>24</b> of 32.5' in live
+    assert 'style="width:74%"' in live, "24 of 32.5 drawn as progress"
+    assert "pgr-price" not in live.split("Somebody Else")[0], "a started game's pre-game price is gone"
+    assert '<div class="pgr-now s-lost"><b>Lost</b> — Puka Nacua over 5.5 receptions missed.</div>' in lost
 
 
 # ---- the browser half ------------------------------------------------------------
@@ -866,6 +1155,8 @@ for (const [w, h] of [[390, 844], [1280, 900]]) {
     if (why) why.open = true;
     return { grade: c.querySelector('.pgr-grade').textContent.trim(), legs: c.querySelectorAll('.pgr-leg').length,
              sim: c.querySelectorAll('.pgr-sim-col').length, why: why ? why.querySelectorAll('dt').length : 0,
+             price: c.querySelectorAll('.pgr-price').length, live: c.querySelectorAll('.pgr-live').length,
+             extras: ['.pgr-now', '.pgr-alerts', '.pgr-shop', '.pgr-better', '.pgr-pairs'].filter((q) => c.querySelector(q)).length,
              left: Math.round(r.left), right: Math.round(r.right), screen: window.innerWidth,
              overflow: document.scrollingElement.scrollWidth > window.innerWidth + 1,
              sheet: document.getElementById('ask-attach').hidden };
@@ -899,7 +1190,10 @@ def test_a_screenshot_goes_up_and_the_card_comes_back_at_both_widths():
         print("      (skipped: no Node/Playwright — install to enable)")
         return
     import rendercheck
-    resp = {"slip": CARD, "text": "Graded parlay, 3 legs (2 on our boards).", "sig": "x"}
+    # Every piece at once — a pre-game shop beside a game-day standing never
+    # happens, but the layout has to hold all of them at both widths.
+    walk = dict(CARD, now=LIVE_CARD["now"], legs=[CARD["legs"][0], LIVE_CARD["legs"][1], CARD["legs"][2]])
+    resp = {"slip": walk, "text": "Graded parlay, 3 legs (2 on our boards).", "sig": "x"}
     srv, port = rendercheck._serve()
     script = None
     try:
@@ -919,6 +1213,7 @@ def test_a_screenshot_goes_up_and_the_card_comes_back_at_both_widths():
         for k in ("first", "again"):
             c = got[k]
             assert c["grade"] == "A*" and c["legs"] == 3 and c["sim"] == 4 and c["why"] == 2, (w, k, c)
+            assert c["price"] == 2 and c["live"] == 1 and c["extras"] == 5, (w, k, c)
             assert c["left"] >= 0 and c["right"] <= c["screen"] and not c["overflow"], (w, k, c)
         assert got["first"]["sheet"], "the attach sheet closes once a picture is chosen"
         assert not got["errors"], got["errors"]

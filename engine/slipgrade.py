@@ -1126,23 +1126,200 @@ def _swap(boards: dict, weak: dict, legs: list | None = None) -> dict | None:
             "tier": r.get("tier_label") or r.get("tier") or ""}
 
 
-def grade(slip: dict, boards: dict) -> dict:
+# ---- the ticket, now -------------------------------------------------------
+def from_decimal(dec: float) -> int:
+    """A decimal price as American."""
+    if not dec or dec <= 1.0:
+        return 0
+    return int(round((dec - 1.0) * 100.0)) if dec >= 2.0 else int(round(-100.0 / (dec - 1.0)))
+
+
+def _same_game(legs: list[dict]) -> bool:
+    keys = [_game_of(l) for l in legs if l.get("prob") is not None]
+    keys = [k for k in keys if any(k[0])]
+    return len(keys) != len(set(keys))
+
+
+def standing(legs: list[dict]) -> dict | None:
+    """Where the ticket stands once its games are on (engine/sliplive):
+    legs won, lost and pushed off the box score, legs in play, and our
+    chance for what is left — the legs still to play at our pre-game
+    numbers, a moneyline in play at the live win probability. A prop in
+    play gets no number (our projection assumes a whole game), so a ticket
+    with one says where each stands instead of guessing. None before any
+    game starts."""
+    res = [((l.get("live") or {}).get("result"), l) for l in legs]
+    won = [l for r, l in res if r == "won"]
+    lost = [l for r, l in res if r == "lost"]
+    push = [l for r, l in res if r == "push"]
+    in_play = [l for r, l in res if r is None and (l.get("live") or {}).get("state") == "live"]
+    if not (won or lost or push or in_play):
+        return None
+    out = {"won": len(won), "lost": len(lost), "push": len(push), "live": len(in_play)}
+    if lost:
+        return dict(out, status="lost", left=0, start=0, chance=0.0, lost_leg=_name(lost[0]))
+    rest = [l for r, l in res if r not in ("won", "push")]
+    if not rest:
+        return dict(out, status="won", left=0, start=0, chance=1.0)
+    chance = None
+    if all(l["market"] == "moneyline" and (l.get("live") or {}).get("win_prob") is not None for l in in_play):
+        before = [l for l in rest if l not in in_play]
+        pre = _ticket_chance(before) if before else 1.0
+        if pre is not None:
+            chance = pre * math.prod(float(l["live"]["win_prob"]) for l in in_play)
+    return dict(out, status="open", left=len(rest), start=len(rest) - len(in_play),
+                chance=None if chance is None else round(chance, 4))
+
+
+def shop(legs: list[dict], total_odds=None) -> dict | None:
+    """The ticket priced at each book quoting every leg at its number: the
+    product of that book's prices, best first, against the slip's own.
+    Books price a same-game parlay their own way, so for one the product
+    is the straight parlay and says so."""
+    if len(legs) < 2:
+        return None
+    per = []
+    for l in legs:
+        bk = {b["book"]: b["odds"] for b in ((l.get("price") or {}).get("books") or [])
+              if isinstance(b, dict) and b.get("book") and _odds(b.get("odds"))}
+        if not bk:
+            return None
+        per.append(bk)
+    common = set.intersection(*(set(b) for b in per))
+    if not common:
+        return None
+    rows = sorted(({"book": book, "odds": from_decimal(math.prod(to_decimal(b[book]) for b in per))}
+                   for book in common), key=lambda r: (-(to_decimal(r["odds"]) or 0), r["book"]))
+    yours = _odds(total_odds)
+    best = rows[0]["odds"]
+    return {"books": rows[:4], "same_game": _same_game(legs), "yours": yours,
+            "beats_yours": bool(yours and (to_decimal(best) or 0) > (to_decimal(yours) or 0) + 1e-9)}
+
+
+#: Dropping a leg is named only when it lifts the expected return this much.
+DROP_GAIN = 0.03
+
+
+def without(legs: list[dict], payout, ev) -> dict | None:
+    """The leg this ticket is better off without, by our numbers: each of
+    our priced legs taken out in turn, the payout cut by that leg's own
+    price and the chance re-run with the engine's correlation. Named only
+    when it lifts the expected return by DROP_GAIN. A same-game slip's
+    payout is the book's own, not the product of its legs, so the cut
+    payout is close rather than exact and says so."""
+    if len(legs) < 3 or not payout or ev is None:
+        return None
+    best = None
+    for i, l in enumerate(legs):
+        d = to_decimal(l.get("odds"))
+        if not d or l.get("prob") is None:
+            continue
+        rest = legs[:i] + legs[i + 1:]
+        p = _ticket_chance(rest)
+        if p is None:
+            continue
+        pay = payout / d
+        ev_i = p * pay - 1.0
+        if ev_i >= ev + DROP_GAIN and (best is None or ev_i > best["ev"]):
+            best = {"leg": _name(l), "chance": round(p, 4), "odds": from_decimal(pay), "ev": round(ev_i, 4)}
+    if best:
+        best["approx"] = _same_game(legs)
+    return best
+
+
+#: A same-game pair is named when the engine's correlation is at least this.
+PAIR_RHO = 0.15
+
+
+def pairs(legs: list[dict]) -> list[dict]:
+    """Same-game legs that move together or pull apart, by the parlay
+    engine's own correlation and its reason in words (parlays.relate) —
+    what makes the ticket's chance more or less than its legs multiplied.
+    The pairs it would never build are named in `notes`."""
+    from . import parlays as P
+    priced = [l for l in legs if l.get("prob") is not None]
+    out = []
+    for i in range(len(priced)):
+        for j in range(i + 1, len(priced)):
+            a, b = priced[i], priced[j]
+            ka, kb = _game_of(a), _game_of(b)
+            if not any(ka[0]) or ka != kb:
+                continue
+            try:
+                rel = P.relate(a.get("league") or "nfl", _relation_leg(a), _relation_leg(b))
+            except Exception:                                      # noqa: BLE001
+                continue
+            rho = float(getattr(rel, "rho", 0.0) or 0.0)
+            if getattr(rel, "verdict", "ok") in ("kill", "duplicate") or abs(rho) < PAIR_RHO:
+                continue
+            out.append({"legs": [_name(a), _name(b)], "rho": round(rho, 2),
+                        "why": str(getattr(rel, "mechanism", "") or "")[:200]})
+    return sorted(out, key=lambda x: -abs(x["rho"]))[:4]
+
+
+def alerts(legs: list[dict]) -> list[str]:
+    """What to read before anything else: a leg on a player listed on the
+    injury report, and a prop no book is pricing right now (taken down, as
+    books do when news breaks)."""
+    out = []
+    for l in legs:
+        status = next((f["t"] for f in l.get("why") or [] if f.get("k") == "Status"), "")
+        if status:
+            out.append(f"{l.get('player') or _name(l)}: {status[0].lower() + status[1:]}")
+        pr = l.get("price")
+        if isinstance(pr, dict) and not pr.get("any") and l["market"] not in GAME_MARKETS:
+            out.append(f"No book is pricing {_name(l)} right now — it may have been taken down")
+    return out[:6]
+
+
+def _kickoff(boards: dict, leg: dict) -> str:
+    """"YYYY-MM-DD HH:MM" for the leg's game, off its board's schedule."""
+    board = boards.get(leg.get("league") or "") or {}
+    r = leg.get("row") or {}
+    teams = ({r.get("home"), r.get("away")} - {None, ""}) or \
+        ({leg.get("team") or r.get("team"), leg.get("opponent") or r.get("opponent")} - {None, ""})
+    if not teams:
+        return ""
+    for g in board.get("games") or []:
+        if isinstance(g, dict) and teams <= {g.get("home"), g.get("away")}:
+            return " ".join(str(x) for x in (g.get("date"), g.get("kickoff")) if x)
+    return ""
+
+
+def _ticket_chance(legs: list[dict]) -> float | None:
+    """Our chance every leg on ``legs`` wins: the priced legs through the
+    parlay engine's correlation (`joint`), a leg off our boards at its own
+    price's break-even — we add no opinion of ours, so it neither helps nor
+    hurts — and None when a leg has neither, or none is ours."""
+    ours, _ = joint(legs)
+    if ours is None or any(l["prob"] is None and l["needs"] is None for l in legs):
+        return None
+    return ours * math.prod(l["needs"] for l in legs if l["prob"] is None and l["needs"] is not None)
+
+
+def grade(slip: dict, boards: dict, live=None) -> dict:
     """The card: every leg priced and ranked with the facts behind its
     number, the ticket's chance by our numbers, the ticket replayed 2,000
     nights, what its payout needs, a letter, the pairs worth naming and
-    the swap for the weakest leg."""
+    the swap for the weakest leg. With ``live`` (engine/sliplive.Live):
+    each leg's price at every book right now and where its game stands,
+    and for the ticket where it stands, the best book to place it at, the
+    leg it is better without, and the alerts worth reading first."""
     legs = [price_leg(boards, l) for l in slip.get("legs") or []]
     for l in legs:
         l["why"] = why(boards, l)
-    ours, notes = joint(legs)
-    # The unpriced legs stand in at their own price's break-even — we add no
-    # opinion of ours, so they neither help nor hurt the grade.
-    stand_in = math.prod(l["needs"] for l in legs if l["prob"] is None and l["needs"] is not None)
-    unpriced_no_price = [l for l in legs if l["prob"] is None and l["needs"] is None]
+        l["kickoff"] = _kickoff(boards, l)
+        if live is not None:
+            l["live"] = live.state(l)
+            # A started game's pre-game prices are gone from the books; the
+            # leg says where it stands instead (sliplive.live_state).
+            started = (l["live"] or {}).get("state") in ("live", "final")
+            l["price"] = None if started else live.prices(l, boards.get(l.get("league") or ""))
+    _, notes = joint(legs)
     payout = to_decimal(slip.get("total_odds"))
     if payout is None and legs and all(_odds(l["odds"]) for l in legs):
         payout = math.prod(to_decimal(l["odds"]) for l in legs)
-    chance = (ours * stand_in) if (ours is not None and not unpriced_no_price) else None
+    chance = _ticket_chance(legs)
     ev = (chance * payout - 1.0) if (chance is not None and payout) else None
     needs = (1.0 / payout) if payout else None
     ranked = sorted(legs, key=lambda l: (l["prob"] is None,
@@ -1155,7 +1332,16 @@ def grade(slip: dict, boards: dict) -> dict:
             l["sim_hits"] = h
     out_legs = [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in l.items()
                  if k not in ("row", "game_key")} for l in ranked]
+    kicks = sorted(k for k in (l.get("kickoff") for l in legs) if k)
+    now = standing(legs)
     return {
+        "now": now,
+        # Where to place it and what to cut are pre-game questions.
+        "shop": None if now else shop(legs, slip.get("total_odds")),
+        "better": None if now else without(legs, payout, ev),
+        "pairs": pairs(legs),
+        "alerts": alerts(legs),
+        "first_kickoff": kicks[0] if kicks else "",
         "legs": out_legs,
         "n_legs": len(legs), "n_priced": len(priced), "dropped": int(slip.get("dropped") or 0),
         "book": slip.get("book") or "", "stake": slip.get("stake") or 0,
@@ -1176,8 +1362,20 @@ def summary(card: dict) -> str:
     verdict comes first: Ask keeps the first askbot.MAX_TURN_CHARS of a
     turn as the context of the next question."""
     parts = [f"Graded parlay, {card['n_legs']} legs ({card['n_priced']} on our boards)."]
+    now = card.get("now") or {}
+    if now.get("status") == "lost":
+        parts.append(f"Live: this ticket has already lost — {now.get('lost_leg')} missed.")
+    elif now.get("status") == "won":
+        parts.append("Live: every leg has won.")
+    elif now.get("status") == "open":
+        bits = [f"{now[k]} {w}" for k, w in (("won", "won"), ("push", "pushed"), ("live", "in play"),
+                                              ("start", "yet to start")) if now.get(k)]
+        parts.append("Live: " + ", ".join(bits)
+                     + (f"; our chance for the rest {now['chance']:.0%}" if now.get("chance") is not None else "")
+                     + ".")
     if card.get("ours") is not None:
-        parts.append(f"Our chance it all hits: {card['ours']:.0%}"
+        parts.append((f"Before kickoff our chance was {card['ours']:.0%}" if now
+                      else f"Our chance it all hits: {card['ours']:.0%}")
                      + (f"; the payout needs {card['needs']:.0%}." if card.get("needs") else "."))
     if card.get("ev") is not None:
         parts.append(f"Expected return {card['ev']:+.0%} a dollar by our numbers, grade {card['grade']}.")
@@ -1186,6 +1384,14 @@ def summary(card: dict) -> str:
         parts.append(f"In {sim['nights']:,} simulated nights it cashed {sim['cashed']:,} times"
                      + (f" and missed by one leg on {sim['one_short']:.0%}" if sim.get("one_short") else "")
                      + (f", most often {sim['breaker']['leg']}" if sim.get("breaker") else "") + ".")
+    sh = card.get("shop") or {}
+    if sh.get("beats_yours") and sh.get("books"):
+        parts.append(f"Best place for it now: {sh['books'][0]['book']} at {sh['books'][0]['odds']:+d}"
+                     f" (your slip {sh['yours']:+d}).")
+    bt = card.get("better") or {}
+    if bt.get("leg"):
+        parts.append(f"Better without {bt['leg']}: return {bt['ev']:+.0%} a dollar, chance {bt['chance']:.0%}, "
+                     f"pays {bt['odds']:+d}" + (" (about)" if bt.get("approx") else "") + ".")
     if card.get("weakest"):
         parts.append(f"Weakest leg: {card['weakest']}.")
     for l in card["legs"]:

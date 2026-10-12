@@ -4323,12 +4323,13 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if limit:
             return self._send(429, json.dumps({"error": "ask daily limit",
                                                "limit": limit}).encode(), ".json")
-        boards = {}
+        boards, prices = {}, {}
         for league, name in AB.BOARD_FILES.items():
             path = GATE_.full_board_file(name)
             got = AB.board_at(path) if path else None
             if got:
                 boards[league] = got
+                prices[league] = AB.prices_at(path)
         try:
             slip = SG.read_slip(image, str(body.get("media_type") or "").lower().strip())
         except SG.SlipUnreadable as exc:
@@ -4343,7 +4344,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         except EX.Unavailable as exc:
             sys.stderr.write(f"  ask slip: {type(exc).__name__}: {exc}\n")
             return self._send(503, b'{"error":"ask unavailable"}', ".json")
-        card = SG.grade(slip, boards)
+        # The live line (engine/sliplive): every book's price at each leg's
+        # number from the latest pull, and the live loop's own score and box
+        # score for a game under way. Nothing new is bought.
+        from engine import sliplive as SL
+        card = SG.grade(slip, boards, live=SL.Live(prices))
         text = SG.summary(card)
         try:
             AB.count_question(me)

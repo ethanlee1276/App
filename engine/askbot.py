@@ -1207,6 +1207,8 @@ def board_summary(board: dict, boards: dict | None = None) -> dict:
 
 
 _BOARDS: dict = {}
+#: {path: (stamp, sliplive.quote_index)} — filled by the same parse.
+_PRICES: dict = {}
 
 
 _BOARDS_PARSE = threading.Lock()
@@ -1236,10 +1238,31 @@ def board_at(path) -> dict | None:
             return hit[1]
         data = _load_json(Path(path)) or None
         if data is not None:
+            # The parlay checker's live line (engine/sliplive): every book's
+            # number on every prop, ladders included, kept as numbers alone
+            # before the slim copy drops the ladders — one parse, not two.
+            try:
+                from .sliplive import quote_index
+                _PRICES[str(path)] = (stamp, quote_index(data))
+            except Exception:                                # noqa: BLE001
+                _PRICES.pop(str(path), None)
             data = for_ask(data)
             _BOARDS[str(path)] = (stamp, data)
         release_memory()
     return data
+
+
+def prices_at(path) -> dict:
+    """Every book's prices on a board's props (sliplive.quote_index), from
+    the same parse as `board_at` — read for the same write of the file, or
+    an empty index."""
+    board_at(path)
+    try:
+        st = os.stat(path)
+    except (OSError, TypeError):
+        return {}
+    hit = _PRICES.get(str(path))
+    return hit[1] if hit and hit[0] == (st.st_mtime_ns, st.st_size) else {}
 
 
 def _all_boards(board: dict, boards: dict | None) -> dict:
