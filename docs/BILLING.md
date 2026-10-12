@@ -588,10 +588,42 @@ somebody who has paid cannot sign in to prove it.
 |---|---|---|
 | `active` | yes | |
 | `trialing` | yes | a trial is a deliberate grant |
-| `past_due` | yes, until the paid period ends | a failed renewal is usually an expiry date, not a decision — locking someone out on the first failed charge turns a payment blip into a refund request |
+| `active`, cancelled to the period's end | yes, until that date | the days already paid for; the wall goes up on the second the date passes, without waiting for Stripe's closing webhook |
+| `past_due` | **no — walled at once** | Ethan, 2026-10-12: a failed payment "should lock them too the paywall screen". The paywall says the payment failed and its button opens Stripe's billing page, where the card is changed and the open invoice paid; the payment that clears lets them straight back in |
 | `canceled` | no | |
-| `unpaid` | no | |
+| `unpaid` | no | Stripe has stopped retrying; paying the open invoice on the billing page starts it again |
 | `incomplete` | no | a Checkout that was never finished is not a subscription |
+
+`past_due` used to keep access "until the paid period ends". The date it
+read was the end of the NEW period — Stripe moves the period forward when
+it opens the renewal invoice, paid or not — so a failed card kept the site
+for the whole unpaid month. Gone with Ethan's word on 2026-10-12.
+
+**A failed card is fixed, not replaced.** A walled `past_due` account sees
+the plans again, and buying one would start a second subscription while
+Stripe keeps retrying the first. `/api/billing/checkout` answers 409 with
+`portal: true` for `past_due` and `unpaid`, and the page shows the
+sentence.
+
+**Hearing about a lapse when the webhook does not say.** The webhook is a
+request from Stripe's servers to ours, and Bot Fight Mode is the known way
+to lose one. A lost grant was already rescued by the return trip from
+Checkout (`reconcile_session`); a lost LAPSE had nothing. Now
+`billing.refresh` reads the subscription from Stripe — on the page's own
+status call when the row is due one (hourly while entitled, each minute
+while walled, at once after a visit to the billing page), and from the
+launcher's `_billing_sweeper` every six hours for every row that is not
+final. A failed read changes nothing.
+
+**Late events are dropped.** Stripe does not deliver in order and retries
+a refused delivery for days, so a payment failure refused at the door can
+land after the payment that fixed it. Each row keeps the creation time of
+the newest event it reflects (`event_at`; a read of Stripe counts as now),
+and an older event is acknowledged and not applied.
+
+**The page walls an open tab too.** The wall used to go up at boot only.
+`wallRecheck` asks again when the tab comes back and every five minutes,
+and a wall that comes up reloads onto the paywall.
 
 Cancelling happens on **Stripe's portal**, reached from Manage billing. A
 company that builds its own cancel flow is deciding how hard it is to
@@ -606,12 +638,14 @@ cancel anything at Stripe. Stripe is the system of record for the money,
 and a row disappearing here would otherwise leave a live subscription
 billing a card every month with nothing on our side to match it to.
 
-So **`/api/account/delete` answers 409 while `status_for` reports an
-entitled state**, with a message naming the fix: cancel under Manage
-billing first, which is a button on the same card. `past_due` and
-`trialing` are refused too — both still have something live at Stripe.
-Nobody is trapped: cancelling flips the status through the webhook and
-delete then works normally. A billing lookup that *throws* lets the
+So **`/api/account/delete` answers 409 while the subscription is open at
+Stripe** (`billing.OPEN`: active, trialing, past_due, unpaid), with a
+message naming the fix: cancel under Manage billing first, which is a
+button on the same card. `past_due` is walled but Stripe is still retrying
+its card, so it is refused too. Nobody is trapped: a plan cancelled to run
+out at its period's end is let through at once (Stripe will not charge it
+again), and an immediate cancellation flips the status through the
+webhook. A billing lookup that *throws* lets the
 delete through, deliberately — a bug in code that is switched off must
 not hold somebody's data hostage.
 
@@ -664,7 +698,9 @@ rather than implied to work.
 
 **Verified here, by test:** signature verification against forged, wrong-
 secret, replayed and tampered payloads; idempotency on retry; the status
-state machine; entitlement including the `past_due` grace; the request
+state machine; the lapse lock — `past_due` walled, cancel-at-period-end,
+late events dropped, the Stripe re-read and the sweep, all against a stub
+(tests/test_a_lapse_locks_the_paywall.py); the request
 shapes; the full checkout → renewal → cancellation sequence driven through
 the real endpoint with a fake signing secret. `tests/test_billing_e2e.py`
 does that last one over actual HTTP against a real `server.py` process, so
@@ -673,7 +709,9 @@ failure every unit test above would have passed through.
 
 **Not verified, and cannot be from here:** that Stripe accepts our
 Checkout Session parameters, that the live event JSON matches the shapes
-read in `read_event`, and the portal call. Those need step 6 above. The
+read in `read_event` (including `created`, `cancel_at_period_end` and
+`cancel_at`), the Subscription read `refresh` makes, and the portal call.
+Those need step 6 above. The
 field names come from Stripe's documented API, but this repo has shipped a
 bug from exactly that kind of confidence before — `pass_att` was read from
 a market that did not exist and everything downstream read zero without an
@@ -695,6 +733,7 @@ error — so treat the first live run as the real test.
 | `tests/test_stripe_plans.py` | the page's prices vs the ones Stripe is told |
 | `tests/test_stripe_wiring.py` | the request shape and what can grant access |
 | `tests/test_billing_e2e.py` | a real server, a real HTTP purchase, over the wire |
+| `tests/test_a_lapse_locks_the_paywall.py` | a failed payment or a cancellation walls the account |
 | `tests/test_paywall_bypass.py` | every way somebody could read a paid board free |
 
 `engine/paddle.py` was retired on 2026-10-01 (roadmap #53); see

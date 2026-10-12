@@ -121,8 +121,9 @@ def test_a_paid_session_entitles_the_person_who_paid():
 
 def test_the_period_end_survives_being_on_the_subscription_item():
     """Stripe moved this field onto the items. Read from the top level
-    only, it comes back NULL — and a NULL period_end silently disables the
-    past_due grace period, locking out somebody whose card blipped."""
+    only, it comes back NULL — and a NULL period_end means a plan
+    cancelled to its period's end is not walled when the period ends
+    (tests/test_stripe_wiring.py says why)."""
     out, conn, _ = _run(_session(), _sub())
     assert conn.execute(
         "SELECT period_end FROM subscriptions").fetchone()[0] == 4102444800

@@ -240,14 +240,15 @@ def test_the_whole_purchase_lands_in_the_database_with_its_plan():
     assert st["entitled"] and st["plan"] == "sixmonth"
     assert st["plan_name"] == "6 months"
 
-    # A renewal failure keeps them in until the paid period ends — a card
-    # that failed to renew is usually an expiry date, not a decision.
+    # A renewal failure walls them at once (Ethan, 2026-10-12) — and
+    # keeps the plan on the row, which the account page still names.
     fail = billing.read_event({
         "type": "invoice.payment_failed",
         "data": {"object": {"customer": "cus_9", "subscription": "sub_9"}}})
     assert billing.apply_event(conn, fail)
     st = billing.status_for(conn, 9)
     assert st["status"] == "past_due"
+    assert not st["entitled"], "a failed payment left the site open"
     assert st["plan"] == "sixmonth", \
         "an event carrying no plan blanked the term off the account page"
 
@@ -324,28 +325,35 @@ def test_the_paid_through_date_is_read_from_where_stripe_now_puts_it():
         "the earliest item won, so access ends before it should"
 
 
-def test_a_null_paid_through_date_silently_kills_the_grace_period():
+def test_a_null_paid_through_date_lets_a_cancelled_plan_run_on():
     """WHY THE ONE ABOVE MATTERS, stated as the consequence rather than
     the mechanism.
 
-    `entitled()` grants `past_due` only while the paid-through date is
-    still in the future — a failed renewal is usually an expiry date
-    rather than a decision, and locking somebody out on the first failed
-    charge turns a payment blip into a refund request. With the date
-    null, `bool(period_end)` is False and that whole grace period is off:
-    the customer is cut the instant a renewal fails.
+    Until 2026-10-12 this was "a null paid-through date silently kills
+    the grace period": `past_due` kept access while the date was in the
+    future, and a null cut the customer the instant a renewal failed.
+    Ethan has since asked for a failed payment to wall the account at
+    once, so that grace is gone (reported to him as a changed pin) and
+    the date now carries a different job: a plan cancelled from Stripe's
+    portal runs to the end of the period paid for, and walls on the
+    second that date passes — without waiting for Stripe's closing
+    webhook. With the date null there is nothing to wall it at, and a
+    cancelled plan runs on until a webhook or a re-read says otherwise.
 
     Nothing errors. The subscription reads `active` and correct right up
-    until the day it does not.
+    until the day it should have stopped.
     """
     now = time.time()
-    assert billing.entitled("past_due", now + 86400, now=now), \
-        "a past-due subscription inside its paid period was refused"
-    assert not billing.entitled("past_due", None, now=now), \
+    assert billing.entitled("active", now + 86400, now=now,
+                            cancel_at_end=True), \
+        "a cancelled plan lost the days already paid for"
+    assert not billing.entitled("active", now - 1, now=now,
+                                cancel_at_end=True), \
+        "a plan cancelled to its period's end outlived the period"
+    assert billing.entitled("active", None, now=now, cancel_at_end=True), \
         "this test no longer describes the code it is protecting"
-    assert not billing.entitled("past_due", now - 1, now=now)
-    # active does not depend on the date, which is why the null was
-    # invisible on the first purchase.
+    # active does not depend on the date otherwise, which is why the null
+    # was invisible on the first purchase.
     assert billing.entitled("active", None, now=now)
 
 

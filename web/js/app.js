@@ -2394,6 +2394,7 @@ const RETURN_REFRESH_AFTER_MS = 10000;
 
 function refreshOnReturn() {
   if (state.static) return;
+  wallRecheck();
   // A tab-switch storm should not become a request storm: if we loaded
   // seconds ago, the data on screen is already the data on disk.
   if (Date.now() - (state.lastLoad || 0) < RETURN_REFRESH_AFTER_MS) return;
@@ -2408,6 +2409,26 @@ window.addEventListener("pageshow", (e) => {
   if (e.persisted) refreshOnReturn();
 });
 window.addEventListener("focus", refreshOnReturn);
+
+/* A LAPSE LOCKS AN OPEN TAB TOO. Ethan, 2026-10-12: a failed payment or a
+   cancellation "should lock them too the paywall screen". The server stops
+   sending full boards the moment it knows (_entitled runs per request),
+   but the wall itself went up only at boot, so a tab left open across a
+   lapse kept the site's chrome over redacted boards. Asked again on return
+   and every five minutes; a wall that comes up reloads onto the paywall,
+   as acctLandAfterAuth does, so the boot path draws it and installs its
+   hash guard. A request that fails locks nobody — paywallCheck answers
+   with the wall as it stands. */
+let _wallAsked = Date.now();
+async function wallRecheck() {
+  if (state.static || document.body.classList.contains("walled")
+      || Date.now() - _wallAsked < 3e5) return;
+  _wallAsked = Date.now();
+  if (!(await paywallCheck())) return;
+  if (!WALL_OPEN.includes(state.view)) location.hash = "#paywall";
+  location.reload();
+}
+setInterval(wallRecheck, 3e5);
 
 /* Poll for live updates every 30s while any game is in progress. */
 function manageAutoRefresh() {
@@ -28617,6 +28638,21 @@ function freeVsPlanHTML(cls = "") {
   return `<p class="free-vs-plan${cls ? ` ${cls}` : ""}">${escapeHtml(FREE_VS_PLAN)}</p>`;
 }
 
+/* WHY THE WALL IS UP, when it is a lapse (Ethan, 2026-10-12): the
+   server's own sentence for the status (billing.describe, the line the
+   account page shows too), and for a failed card the button to Stripe's
+   billing page, which changes the card and pays the open invoice. Not a
+   second plan: that would bill them twice once Stripe's retry clears,
+   and checkout refuses one. */
+function pwLapseHTML(s) {
+  const st = s && s.signed_in && !s.entitled && s.note ? s.status : "";
+  const fix = st === "past_due" || st === "unpaid";
+  return fix || st === "canceled" || (st && s.cancel_at_end) ? `
+    <div class="card pw-lapse" role="status"><p>${escapeHtml(s.note)}</p>${fix
+      ? `<button class="btn primary" data-act="billPortal">Update card</button>
+         <p class="pw-lapse-note"></p>` : ""}</div>` : "";
+}
+
 function paywallHTML(rec, status) {
   /* Same reasoning as the sport chips above: these ten cards are what a
      visitor scans to decide whether the site does the thing they came
@@ -28728,6 +28764,7 @@ function paywallHTML(rec, status) {
            <button class="btn ghost pw-login" data-act="pwSignIn">Account</button>`
         : `<button class="btn ghost pw-login" data-act="pwSignIn">Log in</button>`}
     </header>
+    ${pwLapseHTML(status)}
 
     <section class="pw-hero">
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
@@ -29709,7 +29746,8 @@ function planPanelHTML(s) {
         { year: "numeric", month: "long", day: "numeric" })
     : "";
   const trial = String(s.status || "") === "trialing";
-  const ending = String(s.status || "") === "canceled";
+  // Cancelled to run out at the period's end (billing.read_event).
+  const ending = s.cancel_at_end || String(s.status || "") === "canceled";
 
   const row = (k, v) => v
     ? `<div class="plan-kv"><span>${k}</span><b>${v}</b></div>` : "";
@@ -29861,7 +29899,9 @@ async function _billGo(btn, path, payload) {
   } catch (e) {
     btn.disabled = false;
     btn.textContent = was;
-    const note = btn.closest(".card").querySelector(".acct-note");
+    // The paywall's lapse banner has its own line: every .acct-note
+    // carries the account's "synced" status (acctSync).
+    const note = btn.closest(".card").querySelector(".acct-note, .pw-lapse-note");
     if (note) note.textContent = String((e && e.message) || e);
   }
 }

@@ -289,6 +289,53 @@ def main():
         assert code == 200 and json.loads(body).get("duplicate") is True, body
         step("a replayed event is a no-op, not a second grant")
 
+        # --- a failed card walls the account (Ethan, 2026-10-12) ----------
+        t0 = int(time.time())
+        failed = json.dumps({
+            "id": "evt_e2e_fail", "type": "invoice.payment_failed",
+            "created": t0,
+            "data": {"object": {"customer": "cus_e2e",
+                                "subscription": "sub_e2e"}}}).encode()
+        code, body, _ = srv.post("/api/billing/webhook", failed,
+                                 headers=_signed(failed))
+        assert code == 200 and json.loads(body).get("applied") is True, body
+        st = json.loads(srv.get("/api/billing/status", ck)[1])
+        assert st["status"] == "past_due" and st["entitled"] is False, st
+        step("a failed payment walls the account at once")
+
+        # The wall shows the plans again; buying one would start a second
+        # subscription while Stripe retries the first. Refused before any
+        # call to Stripe, so this is a 409 here and not the 502 above.
+        code, body, _ = srv.post("/api/billing/checkout", {"plan": "monthly"}, ck)
+        assert code == 409 and json.loads(body).get("portal") is True, \
+            f"{code}: {body}"
+        step("a past-due account is sent to fix its card, not sold a second plan")
+
+        back = json.dumps({
+            "id": "evt_e2e_back", "type": "customer.subscription.updated",
+            "created": t0 + 5,
+            "data": {"object": {"id": "sub_e2e", "customer": "cus_e2e",
+                                "status": "active",
+                                "metadata": {"plan": "yearly"}}}}).encode()
+        code, body, _ = srv.post("/api/billing/webhook", back,
+                                 headers=_signed(back))
+        assert code == 200 and json.loads(body).get("applied") is True, body
+        assert json.loads(srv.get("/api/billing/status", ck)[1])["entitled"] \
+            is True, "the payment that cleared did not let them back in"
+        step("the payment that clears lets them straight back in")
+
+        late = json.dumps({
+            "id": "evt_e2e_fail_2", "type": "invoice.payment_failed",
+            "created": t0 + 1,
+            "data": {"object": {"customer": "cus_e2e",
+                                "subscription": "sub_e2e"}}}).encode()
+        code, body, _ = srv.post("/api/billing/webhook", late,
+                                 headers=_signed(late))
+        assert code == 200 and json.loads(body).get("applied") is False, body
+        assert json.loads(srv.get("/api/billing/status", ck)[1])["entitled"] \
+            is True, "a failure delivered late walled a customer who had paid"
+        step("a payment failure delivered late cannot wall a paying customer")
+
         # --- and it can be taken away ------------------------------------
         gone = json.dumps({
             "id": "evt_e2e_2", "type": "customer.subscription.deleted",

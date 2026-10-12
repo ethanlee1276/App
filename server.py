@@ -2959,16 +2959,20 @@ class Handler(BaseHTTPRequestHandler):
 
         Deletion is the one account action that can cost somebody money
         after they have stopped using the site. `delete_user` clears our
-        `subscriptions` row, but Paddle never hears about it: the card
+        `subscriptions` row, but Stripe never hears about it: the card
         keeps being charged on schedule, and the row that said whose card
         it was is gone. The person then has a charge they cannot place and
         we have a payment we cannot refund to an account.
 
         So a paying account is asked to cancel first, which is one button
-        away on the same card and happens on Paddle's own portal. Nobody
+        away on the same card and happens on Stripe's own portal. Nobody
         is trapped: cancelling flips the status through the webhook, and
-        `past_due` and `trialing` are refused too because both still have
-        a live subscription behind them.
+        `trialing`, `past_due` and `unpaid` are refused too because all
+        three still have a live subscription behind them — `past_due` is
+        walled since 2026-10-12 but Stripe is still retrying its card, so
+        the test is `open` (billing.OPEN), not just `entitled`. A plan
+        cancelled to run out at its period's end is let through: Stripe
+        will not charge it again.
 
         Returns a string rather than a bool because the whole point is
         telling the person *why* — the old client turned every non-200
@@ -2981,13 +2985,19 @@ class Handler(BaseHTTPRequestHandler):
                 "SELECT name FROM sqlite_master WHERE type='table'")}
             if "subscriptions" not in have:
                 return ""              # billing never ran on this install
+            # The columns status_for reads, added by init on a database
+            # from before them (cancel_at_end, 2026-10-12). Without it the
+            # read throws on an old file, and a throw lets the delete
+            # through — the one direction this check must not fail in.
+            BI.init(conn)
             st = BI.status_for(conn, user_id)
         except Exception:                                    # noqa: BLE001
             # A billing lookup that breaks must not block someone from
             # deleting their account. Erring the other way would mean a
             # bug in code that is switched off holds their data hostage.
             return ""
-        if not st.get("entitled"):
+        if st.get("cancel_at_end") or not (st.get("entitled")
+                                           or st.get("open")):
             return ""
         return ("This account still has a subscription. Cancel it first "
                 "under Manage billing — otherwise your card keeps being "
@@ -3304,6 +3314,15 @@ class Handler(BaseHTTPRequestHandler):
                 # and the plans page should not promise them one.
                 out["trial_eligible"] = not BI.has_subscribed_before(
                     conn, who["id"])
+                # A LAPSE THE WEBHOOK NEVER DELIVERED is heard about here:
+                # a read of Stripe when this row is due one (BI.refresh —
+                # hourly while entitled, each minute while walled, at once
+                # after a visit to Stripe's billing page). Its own try:
+                # this page answers even when Stripe will not.
+                try:
+                    BI.refresh(conn, who["id"])
+                except Exception:                            # noqa: BLE001
+                    pass
                 out.update(BI.status_for(conn, who["id"]))
                 # Codes ride alongside rather than inside the subscription
                 # status: a redeemed code is not a subscription and saying
@@ -3501,6 +3520,23 @@ class Handler(BaseHTTPRequestHandler):
                     # is a trial or how long it runs. A trial length read
                     # off a request body is a free subscription for
                     # anybody who opens the network tab.
+                    # A FAILED CARD IS FIXED, NOT REPLACED. A past-due
+                    # account is walled and sees the plans again, and
+                    # buying one would start a second subscription while
+                    # Stripe keeps retrying the first — billed twice the
+                    # day the retry clears. Stripe's billing page changes
+                    # the card and pays the open invoice, and the account
+                    # opens again when it does.
+                    had = BI.status_for(conn, who["id"])
+                    if had.get("status") in ("past_due", "unpaid") \
+                            and had.get("customer_id"):
+                        return self._send(409, json.dumps({
+                            "error": "Your last payment didn’t go "
+                                     "through, so a new plan would bill you "
+                                     "twice. Go back to the plans and press "
+                                     "Update card — that restarts the plan "
+                                     "you have.",
+                            "portal": True}).encode(), ".json")
                     fresh = not BI.has_subscribed_before(conn, who["id"])
                     trial = BI.trial_days_for(plan, fresh)
                     # ONE PROMO PER ACCOUNT, decided here for the same
@@ -3529,6 +3565,9 @@ class Handler(BaseHTTPRequestHandler):
                             {"error": "No subscription to manage yet."}
                         ).encode(), ".json")
                     url = BI.open_portal(cust, f"{base}/#account")
+                    # Whatever they do there, the page they come back to
+                    # reads Stripe first (BI.recheck_soon).
+                    BI.recheck_soon(conn, who["id"])
             except BI.BillingUnavailable as exc:
                 return self._send(502, json.dumps({"error": str(exc)}).encode(),
                                   ".json")

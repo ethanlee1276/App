@@ -136,7 +136,12 @@ APP_JS_BUDGET_KB = 493
 #: "all of it"): the card's Spot, Milestone and Incentive lines with the
 #: report's link, and the Milestone watch list (607.88 -> 608.20 KB gz).
 #: Told to Ethan.
-BOOT_BUDGET_KB = 609
+#: 609 -> 610 on 2026-10-12 by the lapse lock (Ethan: a failed payment or
+#: a cancellation "should lock them too the paywall screen"): the open
+#: tab's wall recheck and the paywall's lapse banner, after its sentence
+#: moved to the server to pay for part of it (608.80 -> 609.18 KB gz).
+#: Told to Ethan.
+BOOT_BUDGET_KB = 610
 
 
 def _gz_trimmed(rel: str) -> int:

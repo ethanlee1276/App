@@ -4659,6 +4659,37 @@ def _live_scores_refresher() -> None:
         time.sleep(wait)
 
 
+#: How often the billing sweep wakes. Each pass re-reads only the rows
+#: Stripe has not been asked about in billing.SWEEP_EVERY_S (six hours).
+BILLING_SWEEP_S = 30 * 60
+
+
+def _billing_sweeper() -> None:
+    """Re-read every open subscription from Stripe on a slow clock.
+
+    Ethan, 2026-10-12: a failed payment or a cancellation "should lock
+    them too the paywall screen". The webhook says so when it arrives;
+    this is for when it does not — Bot Fight Mode, a restart, a deploy —
+    and nobody loads a page that would ask (`billing.refresh` runs on the
+    status call too). Nothing to do on a server without Stripe keys, and
+    a failure never stops the site.
+    """
+    while True:
+        try:
+            from engine import accounts as _a
+            from engine import billing as _bi
+            if _bi.configured():
+                conn = _a.connect()
+                try:
+                    _bi.init(conn)
+                    _bi.sweep(conn)
+                finally:
+                    conn.close()
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(BILLING_SWEEP_S)
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -10737,6 +10768,9 @@ def main() -> None:
         _kick_chores(force_settle=True)
 
     threading.Thread(target=_startup_chores, daemon=True).start()
+    # A Stripe lapse the webhook never delivered (see _billing_sweeper).
+    threading.Thread(target=_billing_sweeper, daemon=True,
+                     name="billing-sweep").start()
 
     if "--auto-update" in argv:
         # Opt-in, every run: this pulls code and executes it, so it should

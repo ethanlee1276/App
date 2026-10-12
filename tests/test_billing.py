@@ -22,8 +22,10 @@ So the tests here are weighted the way the risk is:
     keeps the whole repo out of PCI scope.
 
 The state machine gets tested too, including the awkward one: `past_due`
-keeps access until the paid period ends, because a failed renewal is
-usually an expiry date rather than a decision.
+is walled at once. It used to keep access "until the paid period ends",
+but the date it read was the new, unpaid period's end; Ethan, 2026-10-12,
+wants a failed payment locked to the paywall (tests/test_a_lapse_locks_
+the_paywall.py has the whole lifecycle).
 """
 
 import hashlib
@@ -198,14 +200,23 @@ def test_who_is_entitled():
     assert B.entitled("something_new_stripe_invented") is False
 
 
-def test_a_failed_renewal_keeps_access_until_the_paid_period_ends():
-    """A card that failed to renew is usually an expiry date, not a
-    decision. Cutting access on the first failed charge turns a payment
-    blip into a refund request."""
+def test_a_failed_payment_locks_the_account_at_once():
+    """Ethan, 2026-10-12: a failed payment "should lock them too the
+    paywall screen".
+
+    THIS TEST USED TO SAY THE OPPOSITE — "a failed renewal keeps access
+    until the paid period ends" — and the grace it pinned never did what
+    it said: Stripe moves the period forward when it opens the renewal
+    invoice, paid or not, so the date it waited for was the end of the
+    month nobody had paid for. Changed on Ethan's word, and reported to
+    him as a changed pin. A failed card is fixed on Stripe's billing page
+    and the payment that clears lets them back in (`active` again)."""
     now = time.time()
-    assert B.entitled("past_due", now + 86400) is True
+    assert B.entitled("past_due", now + 30 * 86400) is False, \
+        "a failed card kept the site for the unpaid month"
     assert B.entitled("past_due", now - 86400) is False
     assert B.entitled("past_due", None) is False
+    assert B.entitled("unpaid", now + 86400) is False
 
 
 def test_the_checkout_event_carries_the_account_it_belongs_to():

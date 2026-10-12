@@ -64,15 +64,35 @@ SIGNATURE_TOLERANCE = 300
 
 #: Statuses that mean "this account has paid and may use paid features".
 #: `trialing` counts — a trial is a deliberate grant, not an accident.
-#: `past_due` counts UNTIL the period ends: a card that failed to renew
-#: is usually an expiry date, not a decision, and locking someone out on
-#: the first failed charge is how you turn a payment blip into a refund
-#: request.
-ENTITLED = ("active", "trialing", "past_due")
+#:
+#: `past_due` DOES NOT, and did until 2026-10-12. Ethan: a failed payment
+#: or a cancellation "should lock them too the paywall screen". The grace
+#: it replaced was meant to run "until the period they last paid for
+#: ends", but the date it read was the NEW period's end — Stripe moves the
+#: period forward when it opens the renewal invoice, paid or not — so a
+#: card that failed on the 1st kept the site until the 1st of the next
+#: month: Stripe's whole retry window, unpaid. A failed card now walls the
+#: account at once. The paywall says why and opens Stripe's billing page,
+#: where the card is changed and the open invoice paid, and the payment
+#: that goes through lets them straight back in.
+ENTITLED = ("active", "trialing")
 #: …and the ones that end it. `incomplete` is a Checkout that was never
 #: finished, which is not a subscription at all.
-NOT_ENTITLED = ("canceled", "unpaid", "incomplete", "incomplete_expired",
-                "paused", "none")
+NOT_ENTITLED = ("past_due", "canceled", "unpaid", "incomplete",
+                "incomplete_expired", "paused", "none")
+#: STILL OPEN AT STRIPE, entitled or not. A walled `past_due` card is still
+#: being retried there and an `unpaid` one still opens an invoice every
+#: period, so deleting the account (server `_live_subscription`) and buying
+#: a second plan (`_billing_post`) are both refused while a row says one of
+#: these: either would leave Stripe billing a card for a subscription this
+#: side has lost track of. The fix for a failed card is Stripe's billing
+#: page, never a second subscription.
+OPEN = ("active", "trialing", "past_due", "unpaid")
+#: Nothing further comes from Stripe about these. A cancelled subscription
+#: is never revived — coming back is a new Checkout, which arrives through
+#: the webhook or the return trip — and `none` is no subscription at all.
+#: `refresh` skips them.
+FINAL = ("canceled", "incomplete_expired", "none")
 
 #: Events we act on. Anything else is acknowledged (200) and ignored —
 #: Stripe retries anything it does not get a 2xx for, so a 500 on an event
@@ -527,24 +547,32 @@ def verify_signature(raw_body: bytes, header: str, secret: str,
 
 # --- what a status means ------------------------------------------------------
 def entitled(status: str, period_end: float | None = None,
-             now: float | None = None) -> bool:
-    """Whether this subscription state grants paid access right now."""
+             now: float | None = None, cancel_at_end: bool = False) -> bool:
+    """Whether this subscription state grants paid access right now.
+
+    `cancel_at_end` is a subscription cancelled from Stripe's portal,
+    which by default runs to the end of the period already paid for. It
+    keeps those days, and the wall goes up on the second the period ends —
+    without waiting for Stripe's closing webhook, which Bot Fight Mode can
+    eat (see `reconcile_session`).
+    """
     st = str(status or "none").lower()
-    if st in NOT_ENTITLED:
+    if st in NOT_ENTITLED or st not in ENTITLED:
         return False
-    if st not in ENTITLED:
-        return False
-    if st == "past_due":
-        # Grace, but not forever: access holds until the period they last
-        # paid for actually ends.
+    if cancel_at_end and period_end:
         now = time.time() if now is None else now
-        return bool(period_end) and float(period_end) > now
+        try:
+            return float(period_end) > now
+        except (TypeError, ValueError):
+            return True
     return True
 
 
-def describe(status: str, period_end: float | None = None) -> str:
+def describe(status: str, period_end: float | None = None,
+             cancel_at_end: bool = False) -> str:
     """A sentence for the page. Says what is true, including the awkward
-    cases — "past due" with a date is more useful than "inactive"."""
+    cases — "payment failed" with what to do is more useful than
+    "inactive"."""
     st = str(status or "none").lower()
     when = ""
     if period_end:
@@ -552,18 +580,25 @@ def describe(status: str, period_end: float | None = None) -> str:
             when = time.strftime("%-d %b %Y", time.localtime(float(period_end)))
         except (TypeError, ValueError):
             when = ""
+    # The paywall shows these too (app.js pwLapseHTML, next to its Update
+    # card button), so they name the fix without naming a page.
+    if cancel_at_end and when and st in ("active", "trialing"):
+        ended = float(period_end) <= time.time()
+        return (f"Cancelled — access {'ended' if ended else 'until'} {when}. "
+                f"Nothing further will be charged.")
     if st == "active":
         return f"Subscribed — renews {when}." if when else "Subscribed."
     if st == "trialing":
         return f"Free trial — ends {when}." if when else "Free trial."
     if st == "past_due":
-        return (f"Payment failed. Access continues until {when}; update the "
-                f"card to keep it." if when else
-                "Payment failed — update the card.")
+        return ("Payment failed — your access is paused. Update your card "
+                "and the site opens again as soon as the payment clears.")
     if st == "canceled":
-        return "Cancelled. Nothing further will be charged."
+        return ("Cancelled. Nothing further will be charged — pick a plan "
+                "to come back any time.")
     if st == "unpaid":
-        return "Unpaid — access has stopped."
+        return ("Unpaid — access has stopped. Update your card and pay the "
+                "open invoice to start it again.")
     # Stripe pauses a subscription too (a trial that ended without a card,
     # or a pause set from the dashboard), and rows stored under the old
     # processor can still say it. "No subscription." would tell somebody
@@ -799,7 +834,18 @@ def read_event(payload: dict) -> dict | None:
     obj = (((payload or {}).get("data") or {}).get("object") or {})
     out = {"event": kind, "customer_id": None, "subscription_id": None,
            "user_id": None, "status": None, "period_end": None,
-           "plan": None}
+           "plan": None, "cancel_at_end": None, "at": None}
+    # WHEN STRIPE MADE THE EVENT, which is not when it reaches us. Stripe
+    # does not deliver in order and retries a failed delivery for days, so
+    # a payment failure first refused at the door (Bot Fight Mode, a
+    # restart) can land AFTER the payment that fixed it. `apply_event`
+    # drops an event older than the one the row already reflects; while a
+    # failed card walled nobody, arriving late cost nothing, and now it
+    # would wall a customer who has paid.
+    try:
+        out["at"] = float(payload.get("created"))
+    except (TypeError, ValueError):
+        out["at"] = None
     # Stamped by `checkout_request` on both the session and the
     # subscription, so it survives past the first renewal. Read here
     # rather than looked up from the price, because a price id we no
@@ -847,6 +893,14 @@ def read_event(payload: dict) -> dict | None:
     out["status"] = ("canceled" if kind.endswith(".deleted")
                      else str(obj.get("status") or "none"))
     out["period_end"] = _period_end(obj)
+    # CANCELLED, BUT PAID THROUGH A DATE. Stripe's portal cancels at the
+    # period's end by default: the subscription stays `active` and carries
+    # `cancel_at_period_end` (newer API versions may set `cancel_at` to
+    # that date instead), and it is deleted when the date comes. Either
+    # one counts; both false — a cancellation undone — is False, not None,
+    # so the stored flag is cleared rather than kept.
+    out["cancel_at_end"] = bool(obj.get("cancel_at_period_end")
+                                or obj.get("cancel_at"))
     return out
 
 
@@ -923,6 +977,14 @@ def init(conn) -> None:
     have = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
     if "plan" not in have:
         conn.execute("ALTER TABLE subscriptions ADD COLUMN plan TEXT")
+    # The lapse lock (2026-10-12), added the same way: whether Stripe will
+    # cancel this at the period's end, when we last read the subscription
+    # from Stripe ourselves (`refresh`), and the creation time of the
+    # newest event the row reflects (`apply_event`'s ordering).
+    for col, kind in (("cancel_at_end", "INTEGER"), ("checked_at", "REAL"),
+                      ("event_at", "REAL")):
+        if col not in have:
+            conn.execute(f"ALTER TABLE subscriptions ADD COLUMN {col} {kind}")
     conn.commit()
 
 
@@ -970,24 +1032,48 @@ def apply_event(conn, event: dict) -> bool:
         uid = user_for_customer(conn, event.get("customer_id"))
     if uid is None:
         return False
-    was = conn.execute("SELECT status, period_end FROM subscriptions WHERE user_id=?",
-                       (int(uid),)).fetchone()
+    was = conn.execute("SELECT status, period_end, event_at FROM subscriptions "
+                       "WHERE user_id=?", (int(uid),)).fetchone()
+    at = event.get("at")
+    if at is not None and was is not None and was[2] is not None \
+            and float(at) < float(was[2]):
+        # OLDER THAN WHAT THE ROW ALREADY SAYS: a late delivery, or a
+        # retry of one (see `read_event`). Dropped — applying it would put
+        # back a state Stripe has already moved past, and a payment
+        # failure put back over the payment that fixed it walls somebody
+        # who has paid.
+        return False
+    cancel = event.get("cancel_at_end")
+    # A NEW SUBSCRIPTION STARTS CLEAN. Somebody who cancelled, lapsed and
+    # bought again keeps their row (one per account), and the Checkout
+    # event carries no date and no cancel flag — so COALESCE would hand
+    # the new plan the old one's "cancelled, paid through last month" and
+    # wall a customer who paid a minute ago. When the subscription id
+    # changes, the date and the flag are the new event's or nothing.
+    fresh = ("excluded.subscription_id IS NOT NULL AND "
+             "excluded.subscription_id IS NOT subscription_id")
     conn.execute(
         "INSERT INTO subscriptions (user_id, customer_id, subscription_id, "
-        "status, period_end, plan, updated_at) VALUES (?,?,?,?,?,?,?) "
+        "status, period_end, plan, cancel_at_end, event_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(user_id) DO UPDATE SET "
         "  customer_id=COALESCE(excluded.customer_id, customer_id), "
         "  subscription_id=COALESCE(excluded.subscription_id, subscription_id), "
         "  status=excluded.status, "
-        "  period_end=COALESCE(excluded.period_end, period_end), "
+        f"  period_end=CASE WHEN {fresh} THEN excluded.period_end "
+        "    ELSE COALESCE(excluded.period_end, period_end) END, "
         # COALESCE, so an event that carries no plan — an
         # invoice.payment_failed, say — leaves the known one alone
         # instead of blanking the term off the account page.
         "  plan=COALESCE(excluded.plan, plan), "
+        f"  cancel_at_end=CASE WHEN {fresh} THEN excluded.cancel_at_end "
+        "    ELSE COALESCE(excluded.cancel_at_end, cancel_at_end) END, "
+        "  event_at=COALESCE(excluded.event_at, event_at), "
         "  updated_at=excluded.updated_at",
         (int(uid), event.get("customer_id"), event.get("subscription_id"),
          str(event.get("status") or "none"), event.get("period_end"),
-         event.get("plan"), time.time()))
+         event.get("plan"), None if cancel is None else int(bool(cancel)),
+         None if at is None else float(at), time.time()))
     conn.commit()
     # A trial, a subscription, a conversion, a cancellation or a renewal,
     # counted (no account attached) when analytics is switched on; a no-op
@@ -1093,6 +1179,12 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
         "period_end": _period_end(sub) if sub else None,
         "plan": ((sub.get("metadata") or {}).get("plan")
                  or (sess.get("metadata") or {}).get("plan")),
+        "cancel_at_end": (bool(sub.get("cancel_at_period_end")
+                               or sub.get("cancel_at")) if sub else None),
+        # A READ OF STRIPE, true as of now — so a webhook made before it
+        # and delivered after (a `customer.subscription.created` that
+        # still said `incomplete`, say) cannot put the row back.
+        "at": time.time(),
     })
     return status_for(conn, user_id)
 
@@ -1110,14 +1202,124 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     """
     say = describe_with or describe
     row = conn.execute(
-        "SELECT customer_id, subscription_id, status, period_end, plan "
-        "FROM subscriptions WHERE user_id=?", (int(user_id),)).fetchone()
+        "SELECT customer_id, subscription_id, status, period_end, plan, "
+        "cancel_at_end FROM subscriptions WHERE user_id=?",
+        (int(user_id),)).fetchone()
     if row is None:
         return {"status": "none", "entitled": False, "plan": None,
-                "plan_name": None, "note": say("none"), "customer_id": None}
+                "plan_name": None, "note": say("none"), "customer_id": None,
+                "open": False, "cancel_at_end": False}
     st, end = row["status"], row["period_end"]
     plan = row["plan"] if "plan" in row.keys() else None
+    cancel = bool(row["cancel_at_end"])
     return {"status": st, "period_end": end, "plan": plan,
             "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
-            "entitled": entitled(st, end), "note": say(st, end),
-            "customer_id": row["customer_id"]}
+            "entitled": entitled(st, end, cancel_at_end=cancel),
+            "note": (say(st, end, cancel) if cancel else say(st, end)),
+            "customer_id": row["customer_id"],
+            # Not `live`: /api/billing/status already says `live` for
+            # Stripe's live mode, and this dict is merged into it.
+            "open": str(st or "").lower() in OPEN,
+            "cancel_at_end": cancel}
+
+
+# --- hearing about a lapse when the webhook does not say -----------------------
+#: A row is re-read from Stripe when its last read is older than this. An
+#: entitled row, hourly, on the page's own status call: a lapse whose
+#: webhook never arrived walls a reader who is using the site within the
+#: hour.
+RECHECK_S = 3600
+#: A walled row that Stripe can still revive (`past_due`, `unpaid`,
+#: `incomplete`), once a minute: somebody back from fixing the card on
+#: Stripe's page is let in on their next page load, webhook or not.
+RECHECK_LOCKED_S = 60
+#: The launcher's sweep re-reads every row that is not final this often,
+#: which covers the account nobody is loading pages for.
+SWEEP_EVERY_S = 6 * 3600
+
+#: A Subscription id as Stripe issues them. The whole shape, for the same
+#: reason as `_SESSION_ID`: it is put into a URL path.
+_SUB_ID = re.compile(r"sub_[A-Za-z0-9]{1,190}")
+
+
+def refresh(conn, user_id: int, now: float | None = None, fetch=None,
+            every: float | None = None) -> bool:
+    """Re-read this account's subscription from Stripe and store what it
+    says. True if a read was applied.
+
+    THE WEBHOOK IS NOT ENOUGH ON ITS OWN, for the reason
+    `reconcile_session` exists: it is a request from Stripe's servers to
+    ours, and anything in front of the site that decides what a robot looks
+    like gets a vote on whether it arrives. A GRANT that never arrived is
+    rescued by the return trip from Checkout. A LAPSE that never arrived
+    had nothing: a failed card or a cancellation from Stripe's dashboard
+    kept the site open until somebody noticed. This is the noticing — a
+    read of Stripe, paced by `every` (RECHECK_S, or RECHECK_LOCKED_S for a
+    walled row), and a no-op for a final status, an unconfigured server or
+    a row with no subscription id.
+
+    `fetch(subscription_id) -> dict` replaces the Stripe call in tests,
+    which never touch the network.
+
+    Never raises for Stripe's sake: a read that fails leaves the row as it
+    was — the webhook may still land, and the next due read tries again.
+    """
+    now = time.time() if now is None else now
+    row = conn.execute(
+        "SELECT status, subscription_id, checked_at FROM subscriptions "
+        "WHERE user_id=?", (int(user_id),)).fetchone()
+    if row is None:
+        return False
+    st, sid, last = str(row[0] or "none").lower(), str(row[1] or ""), row[2]
+    if st in FINAL or not _SUB_ID.fullmatch(sid):
+        return False
+    if every is None:
+        every = RECHECK_S if st in ENTITLED else RECHECK_LOCKED_S
+    if last is not None and now - float(last) < every:
+        return False
+    if fetch is None and not configured():
+        return False
+    # Stamped BEFORE the read, so a Stripe that hangs is asked once per
+    # interval rather than by every request that arrives while it hangs.
+    conn.execute("UPDATE subscriptions SET checked_at=? WHERE user_id=?",
+                 (now, int(user_id)))
+    conn.commit()
+    try:
+        sub = (fetch(sid) if fetch is not None else
+               _get(f"{API}/subscriptions/{sid}", keys()[0], timeout=5))
+    except Exception:                                    # noqa: BLE001
+        return False
+    if not isinstance(sub, dict) or sub.get("id") != sid:
+        return False
+    ev = read_event({"type": "customer.subscription.updated",
+                     "data": {"object": sub}})
+    ev["user_id"] = int(user_id)
+    # True as of the read, so an older event delivered late is dropped.
+    ev["at"] = now
+    return apply_event(conn, ev)
+
+
+def recheck_soon(conn, user_id: int) -> None:
+    """Make the next status call read Stripe, whatever the interval says.
+
+    Called when somebody opens Stripe's billing page. Whatever they do
+    there — a new card, a paid invoice, a cancellation — the page they
+    come back to should already know it, not a minute later.
+    """
+    conn.execute("UPDATE subscriptions SET checked_at=NULL WHERE user_id=?",
+                 (int(user_id),))
+    conn.commit()
+
+
+def sweep(conn, now: float | None = None, fetch=None) -> int:
+    """Refresh every row that is not final and has not been read from
+    Stripe in SWEEP_EVERY_S. The launcher runs it on a timer; returns how
+    many reads were applied."""
+    now = time.time() if now is None else now
+    marks = ",".join("?" * len(FINAL))
+    users = [r[0] for r in conn.execute(
+        f"SELECT user_id FROM subscriptions WHERE status NOT IN ({marks}) "
+        "AND (checked_at IS NULL OR checked_at < ?)",
+        (*FINAL, now - SWEEP_EVERY_S)).fetchall()]
+    return sum(1 for uid in users
+               if refresh(conn, uid, now=now, fetch=fetch, every=SWEEP_EVERY_S))

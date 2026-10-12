@@ -878,6 +878,61 @@ first). Paste back anything that prints an error or looks off.
 
     Nothing to run.
 
+37. **A failed payment or a cancellation locks the account** (2026-10-12,
+    Ethan: "It should lock them too the paywall screen"). What I found,
+    then what changed:
+    * **Cancelling already walled people, but only if Stripe's webhook got
+      through.** If Bot Fight Mode ate it, the account stayed open for good.
+    * **A failed payment never walled anyone.** `past_due` kept access
+      "until the paid period ends". The date it read was the end of the
+      new, unpaid month, so a failed card kept the whole month free.
+    * **The page put the wall up only when it first loaded.** A tab left
+      open kept working.
+
+    Now:
+    * **A failed payment walls at once.** The paywall says "Payment failed
+      — your access is paused" and has an **Update card** button. That
+      opens Stripe's billing page, where the customer changes the card
+      and pays the open invoice. The payment that clears lets them back in.
+    * **Buying a second plan over a failed one is refused.** The customer
+      is told to update the card instead, so nobody is billed twice.
+    * **A plan cancelled from the billing page keeps the days already paid
+      for**, then walls the second its date passes. A plan cancelled
+      straight away walls straight away.
+    * **The site asks Stripe itself** when the webhook doesn't say:
+      hourly for a paying account while it uses the site, each minute
+      for a walled one, and every six hours for everyone.
+    * **An open tab checks again** when you come back to it, and every
+      five minutes.
+    * **A late webhook can't undo a newer state.** A payment failure that
+      arrives after the payment that fixed it is ignored.
+
+    The box picks this up on its own (auto-pull and restart). The first
+    re-read of every subscription runs at the restart. Three things to do:
+    * **Check the webhook gets through:** Stripe → Developers → Webhooks →
+      your endpoint → Send test webhook. It should say `200`. If it's
+      blocked, Bot Fight Mode is on; docs/DEPLOY.md says how to turn it
+      off.
+    * **Check the Stripe settings this depends on:**
+      * Settings → Billing → Customer portal: "Update payment methods" and
+        "Invoice history" switched on. That's how a locked customer pays.
+      * Settings → Billing → Subscriptions and emails: "Send emails when
+        card payments fail" on, so Stripe emails them the fix as well.
+    * **Your call: cancel at the end of the month, or at once?** It's the
+      same portal page: Cancellations → "At the end of the billing period"
+      (the default: they keep what they paid for) or "Immediately" (walled
+      the moment they press it). The site handles either. Nothing to code.
+
+    Read-only check that the re-read is running. It prints only statuses,
+    counts and hours since the last read, no emails:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine import accounts as A, billing as B; c=A.connect(); B.init(c); n=time.time(); print([tuple(r) for r in c.execute('SELECT status, COUNT(*), SUM(checked_at IS NOT NULL), ROUND(MAX(?-checked_at)/3600.0,1) FROM subscriptions GROUP BY status', (n,))])"
+    ```
+    Each tuple is (status, accounts, accounts read from Stripe, hours since
+    the oldest read). Within six hours of the restart, every status except
+    `canceled` and `none` should have the third number equal to the second,
+    and the last number under 6.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
