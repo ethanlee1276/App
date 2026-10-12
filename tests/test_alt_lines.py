@@ -10,8 +10,9 @@ at a price no heavier than -250 has nothing to show. The rungs — the
 same stat at the other numbers the same books hang — are where a 60-70%
 event is actually for sale. Pinned here:
 
-  * the four `_alternate` markets are on the NFL and college event
-    calls, and the per-event price the pacer meters rose with them;
+  * the four shared `_alternate` markets are on the NFL and college event
+    calls (and the NFL's own three since 2026-10-12), and the per-event
+    price the pacer meters rose with them;
   * a rung is parsed with its own map and lands on `Prop.alt_lines`,
     never in `Prop.lines`, so line shopping still shops the main number;
   * the sharp book's rungs ride beside them;
@@ -32,7 +33,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.sources import oddsapi as oa                     # noqa: E402
 from engine import oddsbudget as B                           # noqa: E402
 from engine.models import (Team, DefenseProfile, Weather, Game, Prop, GameLog,  # noqa: E402
-                           SportsbookLine, RUSH_YDS, PASS_YDS, REC_YDS, RECEPTIONS)
+                           SportsbookLine, RUSH_YDS, PASS_YDS, REC_YDS, RECEPTIONS,
+                           PASS_ATT, PASS_CMP, RUSH_REC_YDS)
 from engine.data_loader import Slate                         # noqa: E402
 
 
@@ -64,8 +66,14 @@ EVENT = {"id": "e1", "home_team": "Green Bay Packers", "away_team": "Chicago Bea
 def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     assert set(oa.ALT_ODDS_TO_MARKET.values()) == {PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS}
     assert all(k.endswith("_alternate") for k in oa.ALT_ODDS_TO_MARKET)
-    for sport in ("nfl", "cfb"):
-        assert oa.SPORT_CONFIG[sport]["alternates"] is oa.ALT_ODDS_TO_MARKET, sport
+    # College buys the shared four; the NFL those four and three of its own
+    # since 2026-10-12 (attempts, completions, rush + rec yards — Ethan:
+    # "yes"), and nothing else.
+    assert oa.SPORT_CONFIG["cfb"]["alternates"] is oa.ALT_ODDS_TO_MARKET
+    nfl_alts = oa.SPORT_CONFIG["nfl"]["alternates"]
+    assert nfl_alts is oa.NFL_ALT_ODDS_TO_MARKET
+    assert set(nfl_alts) - set(oa.ALT_ODDS_TO_MARKET) == set(oa.NFL_ALT_ODDS_KEYS)
+    assert set(oa.NFL_ALT_ODDS_KEYS.values()) == {PASS_ATT, PASS_CMP, RUSH_REC_YDS}
     # Baseball bought its own three on 2026-09-15 (tests/test_mlb_ladder.py)
     # and both hoops leagues their five (tests/test_hoops_ladder.py); MMA
     # has no player markets to ladder.

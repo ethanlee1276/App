@@ -100,7 +100,7 @@ def test_the_market_is_bought_again_behind_the_guard():
     assert isinstance(REJECTED_MARKETS, set)
     # AND THE BUDGET COUNTS WHAT IS ACTUALLY ASKED FOR: thirteen again.
     from engine.oddsbudget import credits_per_event
-    assert credits_per_event("nfl") == 22     # sixteen since 2026-09-27 (the volume markets), seventeen since 2026-10-05 (interceptions), twenty-two since 2026-10-10 (the five new markets)
+    assert credits_per_event("nfl") == 25     # sixteen since 2026-09-27 (the volume markets), seventeen since 2026-10-05 (interceptions), twenty-two since 2026-10-10 (the five new markets), twenty-five since 2026-10-12 (three more ladders)
 
 
 def test_one_unusable_market_must_not_be_able_to_empty_the_board():

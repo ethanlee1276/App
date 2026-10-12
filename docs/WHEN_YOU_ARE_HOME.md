@@ -704,10 +704,13 @@ first). Paste back anything that prints an error or looks off.
     cd /srv/qellys && sudo -u qellys python3 matefit.py --back
     ```
 
-    **D. Your call:** report 1's whole card was alternate lines on
-    completions, attempts and rush+rec yards. We buy alternates for yards
-    and catches only. Adding the other three costs three or four more Odds
-    API credits a game. Say yes and I'll add them.
+    **D. Decided 2026-10-12 (Ethan: "yes"):** the NFL now buys the
+    alternate lines for completions, attempts and rush+rec yards too, so
+    those numbers can be ranked on Most Likely and checked against our
+    model. Three more Odds API credits a game (25 an event, from 22); a
+    full Sunday pull goes from about 330 credits to about 375, and the
+    budget pacer spaces pulls to match. College is unchanged. Nothing to
+    run; it arrives with the next pull.
 
 32. **The spread tilt: measured, and gone** (2026-10-12, Ethan: "keep
     going"). Report 1 said Buffalo throws more as the underdog. Measured
@@ -724,12 +727,11 @@ first). Paste back anything that prints an error or looks off.
     Part 1 should read "not applied" for both lines. Part 2 should end
     each line with RETIRE.
 
-    **Your call:** the game-plan page still lists the game's script as a
-    reason for or against a play ("Script: expected to trail and throw —
-    pass volume up"). It's the Fantasy page's description of the game,
-    and the numbers no longer use it, because it measured as adding
-    nothing. Say the word and I'll keep it as the game's description but
-    stop listing it as a reason.
+    **Decided 2026-10-12 (Ethan: "yes" to keeping them):** the game-plan
+    page keeps listing the game's script as a reason ("Script: expected to
+    trail and throw — pass volume up"), as the Fantasy page's description
+    of the game. The numbers don't use it, because it measured as adding
+    nothing.
 
 33. **Kalshi's NFL player props: what's listed** (2026-10-12; report 2
     priced Stafford 250+ yards at "Kalshi 68.5¢"). The site reads Kalshi's

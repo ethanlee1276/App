@@ -83,7 +83,10 @@ CREDITS_PER_EVENT = 8
 #: Twenty-two since 2026-10-10: pass + rush yards, rush + rec yards,
 #: kicking points, field goals and tackles + assists
 #: (`oddsapi.NEW_PROP_ODDS_KEYS`), measured before bought.
-EVENT_CREDITS = {"nfl": 22, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
+#: Twenty-five since 2026-10-12: the alternate ladders for pass attempts,
+#: completions and rush + rec yards (`oddsapi.NFL_ALT_ODDS_KEYS`; Ethan,
+#: asked whether to buy them: "yes").
+EVENT_CREDITS = {"nfl": 25, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
 
 
 def credits_per_event(sport: str | None = None) -> int:

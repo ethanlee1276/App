@@ -44,7 +44,7 @@ DOC = ROOT / "docs" / "MARKET_CENSUS.md"
 #: The Odds API's documented player markets for American football
 #: (americanfootball_nfl / americanfootball_ncaaf), read 2026-10-05. The
 #: alternates (`_alternate`) are documented for most over/under markets;
-#: the four we buy are listed where the config names them.
+#: the ones we buy are listed where each league's config names them.
 API_MARKETS = [
     ("player_pass_yds", "Passing yards"),
     ("player_pass_tds", "Passing touchdowns"),
@@ -214,10 +214,12 @@ def census(t, sport: str) -> list[dict]:
             row["most_likely"] = _most_likely(t, sport, market)
             row["settles"] = "yes" if _settles(t, sport, market) else "NO"
         rows.append(row)
-    # Alternate ladders, as the config names them.
-    for key, market in sorted(t["O"].ALT_ODDS_TO_MARKET.items()):
+    # Alternate ladders, as this league's config names them (the NFL buys
+    # three more than college since 2026-10-12: oddsapi.NFL_ALT_ODDS_KEYS).
+    for key, market in sorted((t["O"].SPORT_CONFIG[sport].get("alternates") or {}).items()):
         rows.append({"key": key, "what": f"{t['MARKET_LABELS'].get(market, market)} ladder", "market": market,
-                     "label": t["MARKET_LABELS"].get(market, market), "bought": "yes",
+                     "label": t["MARKET_LABELS"].get(market, market),
+                     "bought": "yes" + (" (guarded)" if key in t["O"].UNPROVEN_MARKETS else ""),
                      "built": "rungs on the main prop", "priced": "the main prop's distribution at each rung",
                      "edge": "Most Likely rungs only", "most_likely": "with the main market", "settles": "yes",
                      "measured": "with the main market"})
@@ -316,8 +318,9 @@ def findings(t) -> list[str]:
     out = []
     for sport in ("nfl", "cfb"):
         bought, built = _bought(t, sport), _built(t, sport)
+        ladders = t["O"].SPORT_CONFIG[sport].get("alternates") or {}
         for key, market in bought.items():
-            if market and market not in built and key not in t["O"].ALT_ODDS_TO_MARKET:
+            if market and market not in built and key not in ladders:
                 out.append(f"{sport}: `{key}` is bought and no position builds `{market}`")
         for market in built:
             if market not in bought.values():

@@ -54,9 +54,12 @@ always because it was measured and found flat (the module's own notes say which)
 | player_tackles_assists | Tackles + assists | tackles_ast | yes (guarded) | DEF | discrete normal | Tier 1, 2.5% bar | yes — 0.621 (constant, measured) | yes | marketfit.py |
 | player_assists | Assists | — | no | — | — | — | — | — | — |
 | player_defensive_interceptions | Defensive interceptions | — | no | — | — | — | — | — | — |
+| player_pass_attempts_alternate | Pass Attempts ladder | pass_att | yes (guarded) | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
+| player_pass_completions_alternate | Completions ladder | pass_cmp | yes (guarded) | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
 | player_pass_yds_alternate | Passing Yards ladder | pass_yds | yes | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
 | player_reception_yds_alternate | Receiving Yards ladder | rec_yds | yes | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
 | player_receptions_alternate | Receptions ladder | receptions | yes | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
+| player_rush_reception_yds_alternate | Rush + Rec Yards ladder | rush_rec_yds | yes (guarded) | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
 | player_rush_yds_alternate | Rushing Yards ladder | rush_yds | yes | rungs on the main prop | the main prop's distribution at each rung | Most Likely rungs only | with the main market | yes | with the main market |
 
 ### The wiring

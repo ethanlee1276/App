@@ -196,6 +196,25 @@ ALT_ODDS_TO_MARKET = {
     "player_reception_yds_alternate": REC_YDS,
     "player_receptions_alternate": RECEPTIONS,
 }
+#: THREE MORE LADDERS, THE NFL'S ALONE, 2026-10-12 (Ethan, asked whether to
+#: buy them: "yes"). The Bills @ Rams reports' cards were alternate lines
+#: on completions, attempts and rush + rec yards, and we bought ladders for
+#: yards and catches only, so those numbers could be neither ranked nor
+#: checked. All three markets are already measured to rank (likely
+#: RANK_AUC: attempts 0.707, completions 0.696, rush + rec 0.629), so a
+#: rung reaches the Most Likely board the way every other ladder's does.
+#: Three more credits an NFL event (oddsbudget.EVENT_CREDITS). College
+#: keeps the shared four: a college Saturday is sixty games. The spellings
+#: are the API's documented keys, unproven against it from here, so they
+#: ride the drop-and-retry guard with the newest keys.
+NFL_ALT_ODDS_KEYS = {"player_pass_attempts_alternate": PASS_ATT,
+                     "player_pass_completions_alternate": PASS_CMP,
+                     "player_rush_reception_yds_alternate": RUSH_REC_YDS}
+NFL_ALT_ODDS_TO_MARKET = {**ALT_ODDS_TO_MARKET, **NFL_ALT_ODDS_KEYS}
+UNPROVEN_MARKETS = UNPROVEN_MARKETS | frozenset(NFL_ALT_ODDS_KEYS)
+#: The keys an unnamed refusal is presumed to be about: the newest on the
+#: request (see `fetch_event_odds`).
+NEWEST_ODDS_KEYS = frozenset(NEW_PROP_ODDS_KEYS) | frozenset(NFL_ALT_ODDS_KEYS)
 
 # "Does this player score at all" markets. These are Yes/No with no line, so
 # they need their own parser — the over/under one above requires a point and
@@ -582,7 +601,9 @@ SPORT_CONFIG = {
     "nfl": {"sport_key": "americanfootball_nfl",
             "markets": NFL_ODDS_TO_MARKET, "teams": TEAM_ABBR,
             "scorers": SCORER_ODDS_TO_MARKET,
-            "alternates": ALT_ODDS_TO_MARKET},
+            # The shared four ladders and the NFL's own three (see
+            # NFL_ALT_ODDS_KEYS); college's entry keeps the four.
+            "alternates": NFL_ALT_ODDS_TO_MARKET},
     "mlb": {"sport_key": "baseball_mlb",
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR,
             # The three ladders — see MLB_ALT_ODDS_TO_MARKET.
@@ -1226,8 +1247,10 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
             # markets and interceptions have been served since September;
             # an unnamed refusal the day five new keys went on is about the
             # new keys, so they go first, and the older ones only if the
-            # request still fails without them.
-            bad = ([m for m in markets if m in NEW_PROP_ODDS_KEYS]
+            # request still fails without them. The NFL's three new ladders
+            # (2026-10-12) join that group rather than going first on their
+            # own: one refused call, not one per generation of keys.
+            bad = ([m for m in markets if m in NEWEST_ODDS_KEYS]
                    or [m for m in markets if m in UNPROVEN_MARKETS])
         if not bad or len(bad) >= len(markets):
             raise
