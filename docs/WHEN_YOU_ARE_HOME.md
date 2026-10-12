@@ -709,6 +709,52 @@ first). Paste back anything that prints an error or looks off.
     and catches only. Adding the other three costs three or four more Odds
     API credits a game. Say yes and I'll add them.
 
+32. **The spread tilt: measured, and gone** (2026-10-12, Ethan: "keep
+    going"). Report 1 said Buffalo throws more as the underdog. Measured
+    on the board's own base (his form, his last season, the defence step),
+    an underdog quarterback doesn't throw for more. The old tilt (+0.4% a
+    point on an underdog's passing yards, catches and receiving yards)
+    made every season 2022-2025 worse, and 2017-2021 agreed, so the board
+    no longer applies it. The card now says "no script tilt is applied —
+    measured". Nothing to run. To check it on the box (read-only, about a
+    minute):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 qbscriptfit.py
+    ```
+    Part 1 should read "not applied" for both lines. Part 2 should end
+    each line with RETIRE.
+
+    **Your call:** the game-plan page still lists the game's script as a
+    reason for or against a play ("Script: expected to trail and throw —
+    pass volume up"). It's the Fantasy page's description of the game,
+    and the numbers no longer use it, because it measured as adding
+    nothing. Say the word and I'll keep it as the game's description but
+    stop listing it as a reason.
+
+33. **Kalshi's NFL player props: what's listed** (2026-10-12; report 2
+    priced Stafford 250+ yards at "Kalshi 68.5¢"). The site reads Kalshi's
+    NFL game, spread and total markets and no player markets, because none
+    was known, and Kalshi is blocked from where I build. Read-only, about
+    a minute:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 kalshiprops.py
+    ```
+    Paste back what it prints. If it finds NFL player series with open
+    markets, I'll show Kalshi's price beside ours on those picks. It
+    stays out of the number until it's measured, the same way the game
+    lines started.
+
+34. **The calibration replay reads last season now** (2026-10-12). The
+    live board's form leans on last season from week 4, and the
+    calibration fitter's replay didn't, so it was fitting corrections to
+    numbers the board no longer makes. It does now (`propcal` →
+    `backtest_from_stats(carry=True)`). Nothing to run: Wednesday's deep
+    refit picks it up by itself. To run it sooner (about ten minutes; it
+    rewrites the fitted model files and never touches the record):
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.deepfit
+    ```
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

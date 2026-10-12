@@ -135,14 +135,22 @@ def test_no_usage_means_the_old_projection_exactly():
 
 
 # --- item 3: the game-script tilt --------------------------------------------
-def test_the_spread_leans_pass_volume_up_for_underdogs():
+def test_the_spread_no_longer_leans_pass_volume_either():
+    """THIS TEST USED TO ASSERT THE OPPOSITE: a KC receiver projected
+    ×1.028 as a 7-point underdog and ×0.972 as a 7-point favourite.
+    Measured again on 2026-10-12 (qbscriptfit.py), on the base the board
+    has now — his form, his own last season from week 4, and the defence
+    step, which already carries the script — dropping the tilt cut the
+    squared error in every season 2022-2025 for passing yards, catches
+    and receiving yards, and 2017-2021 agreed. The rush side went the same
+    way before it (the next test)."""
     prop = _prop(market=REC_YDS)
     dog = build_projection(prop, _game(spread=7.0), _opp())      # KC +7
     fav = build_projection(prop, _game(spread=-7.0), _opp())     # KC -7
-    assert dog.mean > fav.mean
-    assert abs(dog.mean / fav.mean - 1.028 / 0.972) < 0.005
-    assert any("Game script" in r and "underdog" in r for r in dog.reasons)
-    assert any("Game script" in r and "favorite" in r for r in fav.reasons)
+    assert abs(dog.mean - fav.mean) < 1e-9, "the spread is moving a receiving projection again"
+    assert not any("Game script" in r for r in dog.reasons + fav.reasons)
+    from engine.matchup import SCRIPT_COEF_PASS, SCRIPT_MARKETS
+    assert SCRIPT_COEF_PASS > 0 and not SCRIPT_MARKETS, "kept to be named; applied nowhere"
 
 
 def test_the_spread_no_longer_leans_run_volume_at_all():

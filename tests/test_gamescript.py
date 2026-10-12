@@ -7,9 +7,11 @@ yards. Also we should b showing the game script under the player props
 too."
 
 Detroit −7 at 49.5 is the worked case throughout: implied 28.25 / 21.25,
-the Fantasy page's "Favorite runs, dog throws", a 0.972 tilt on Goff's
-passing volume (0.004 per point, the projection's own constant), +7% TD
-equity for a Lions back.
+the Fantasy page's "Favorite runs, dog throws", +7% TD equity for a Lions
+back — and, since 2026-10-12, NO tilt on Goff's passing volume or his
+receivers' targets: the spread tilt was measured again on the board's
+current base and retired (engine/matchup.SCRIPT_COEF_PASS's note), and the
+card says so.
 """
 
 import os
@@ -54,31 +56,48 @@ def test_each_sideline_reads_its_own_role():
 
 
 def test_the_card_says_what_the_projection_actually_did():
-    """The tilt on the card is the projection's own constant, so the two
-    cannot drift: 1 + 0.004 × (−7) = 0.972 on Goff's passing volume, and
-    the rush market says plainly that no tilt is applied."""
+    """The tilt on the card is the projection's own: since 2026-10-12 the
+    spread moves no passing volume (measured and retired), so Goff's card
+    says no tilt is applied and why, on both sidelines; the rush market
+    still says plainly that none is applied; the touchdown model's own
+    script slopes are untouched."""
     g = _Game("DET", "NO", -7.0, 49.5)
     goff = G.for_prop(g, "DET", "pass_yds", "QB")
-    assert abs(goff["tilt"] - 0.972) < 1e-9
-    assert "already tilts passing volume down ×0.97" in goff["applied"]
+    assert goff["tilt"] == 1.0
+    assert "an underdog quarterback does not throw for more" in goff["applied"]
     assert goff["archetype"] == "Favorite runs, dog throws"
     assert "Favorite runs, dog throws" in goff["summary"] and "DET favorite by 7" in goff["summary"]
+    carr = G.for_prop(g, "NO", "pass_yds", "QB")
+    assert carr["tilt"] == 1.0 and "measured" in carr["applied"]
+    for m in ("pass_att", "pass_cmp"):
+        assert G.for_prop(g, "NO", m, "QB")["tilt"] == 1.0
+    olave = G.for_prop(g, "NO", "receptions", "WR")
+    assert olave["tilt"] == 1.0 and "adds nothing to his targets" in olave["applied"]
     gibbs = G.for_prop(g, "DET", "rush_yds", "RB")
     assert gibbs["tilt"] == 1.0 and "no rush tilt is applied" in gibbs["applied"]
     td = G.for_prop(g, "DET", "anytime_td", "RB")
     assert abs(td["tilt"] - 1.07) < 1e-9 and "+7% TD equity" in td["applied"]
     wr = G.for_prop(g, "DET", "anytime_td", "WR")
     assert abs(wr["tilt"] - 0.972) < 1e-9
-    carr = G.for_prop(g, "NO", "pass_yds", "QB")
-    assert abs(carr["tilt"] - 1.028) < 1e-9 and "up ×1.03" in carr["applied"]
 
 
 def test_the_tilt_matches_the_matchup_module_constant():
-    from engine.matchup import SCRIPT_COEF_PASS, SCRIPT_CLAMP
-    for spread in (-14.0, -7.0, -3.0, 0.0, 3.0, 10.0):
-        mult, _ = G.projection_tilt(spread, "pass_yds")
-        want = max(SCRIPT_CLAMP[0], min(SCRIPT_CLAMP[1], 1.0 + SCRIPT_COEF_PASS * spread))
-        assert abs(mult - want) < 1e-9
+    """The card and the projection read one set (SCRIPT_MARKETS), so they
+    cannot drift: put a market back in it and the card follows the
+    projection's own formula; take it out and both say 1.0."""
+    from engine import matchup as M
+    for m in ("pass_yds", "rec_yds", "receptions"):
+        assert m not in M.SCRIPT_MARKETS
+        assert G.projection_tilt(-7.0, m)[0] == 1.0
+    saved = M.SCRIPT_MARKETS
+    try:
+        M.SCRIPT_MARKETS = frozenset({"receptions"})
+        for spread in (-14.0, -7.0, -3.0, 0.0, 3.0, 10.0):
+            mult, _ = G.projection_tilt(spread, "receptions")
+            want = max(M.SCRIPT_CLAMP[0], min(M.SCRIPT_CLAMP[1], 1.0 + M.SCRIPT_COEF_PASS * spread))
+            assert abs(mult - want) < 1e-9
+    finally:
+        M.SCRIPT_MARKETS = saved
 
 
 def test_no_line_means_no_script_not_a_guess():

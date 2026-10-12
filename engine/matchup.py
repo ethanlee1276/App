@@ -15,29 +15,51 @@ from .models import (
 from .statmath import clamp
 
 
-# Game-script tilt from the spread, per point rather than a cliff. The
-# first version was a step function — nothing until 4 points, then a 5-6%
-# jump — which priced a 5.5-point favorite exactly like a pick'em and a
-# 6-point underdog exactly like a 14-point one. A 7-point underdog now
-# projects to trail and throw (+2.8% pass volume) and to shelve the run
-# (-4.2%); a touchdown favorite leans the other way. Rush moves more per
-# point than pass — trailing teams abandon the run faster than leading
-# teams abandon the pass. Bounded tight because the spread's information
-# mostly already lives in the defensive and context numbers; this is the
-# volume residue, not a second matchup model.
+# Game-script tilt from the spread, per point rather than a cliff: a
+# 7-point underdog projected to trail and throw (+2.8% pass volume) and
+# to shelve the run (-4.2%), a touchdown favourite the other way.
 #: Game script from the spread, per point.
 #:
-#: The PASS side survives measurement: receptions climb from 0.979 for a
-#: big favourite to 1.027 for a big underdog, mostly one direction, +5%
-#: end to end — which is what SCRIPT_CLAMP already permits. It is the
-#: one hand-set constant in this file that the data supports as it
-#: stands.
+#: The RUSH side failed its measurement first (the note in
+#: `evaluate_matchup`). The PASS side passed one, once: receptions against
+#: a player's own prior form climbed from 0.979 for a big favourite to
+#: 1.027 for a big underdog.
 #:
-#: The RUSH side does not, and is no longer applied. See the note in
-#: `evaluate_matchup`.
+#: MEASURED AGAIN 2026-10-12 AND RETIRED (`qbscriptfit.py`), on the base
+#: the board has now: his form, from week 4 pulled toward his own last
+#: season (engine/carry.SEASON_PRIOR_GAMES), times the measured defence
+#: step (engine/defensevs — what this opponent allows, which already
+#: carries the script: a strong offence's opponents trail and throw).
+#: On that base the spread has nothing left to add. Squared error cut by
+#: dropping the tilt, each season scored on its own:
+#:
+#:                  2022   2023   2024   2025 |  2017   2018   2019   2020   2021
+#:   QB pass_yds   +1.57  +0.59  +1.34  +1.34 | +0.54  +0.71  +1.98  +1.25  +0.63
+#:   receptions    +0.19  +0.13  +0.02  +0.14 | +0.66  +0.03  +0.17  +0.70  +0.29
+#:   rec_yds       +0.08  +0.21  +0.04  +0.12 | +0.48  −0.11  +0.24  +0.64  +0.20
+#:
+#: The rule, set before the run: the tilt stays unless dropping it
+#: improves every season 2022-2025, and the five older seasons, never
+#: looked at, must not disagree in three or more.
+#:
+#: THE QUARTERBACK'S SIDE, asked the same day (Ethan's Bills @ Rams
+#: reports: "the market's extra attempts come from Buffalo being an
+#: underdog"). His attempts and completions × (1 + b × spread), b fitted
+#: on three seasons and scored on the fourth. Attempts got worse in 2023
+#: and 2025. Completions passed 2022-2025 at b = −0.002 — a big underdog
+#: completes FEWER — then failed 2018 among the unseen seasons. An
+#: underdog quarterback does not throw for more than his form, his last
+#: season and the defence already say. Nothing is applied.
+#:
+#: SCRIPT_COEF_PASS and SCRIPT_COEF_RUSH are kept so the measurement has
+#: something to name (engine/cfb/defensefit replays them), and putting a
+#: market back in SCRIPT_MARKETS is a one-line change if a season
+#: disagrees.
 SCRIPT_COEF_PASS = 0.004
 SCRIPT_COEF_RUSH = 0.006
 SCRIPT_CLAMP = (0.95, 1.05)
+#: The markets the spread tilt reaches. None since 2026-10-12, above.
+SCRIPT_MARKETS: frozenset = frozenset()
 
 #: The league's mean game total over the five ingested seasons — the
 #: point at which the pace term does nothing.
@@ -218,7 +240,9 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
         # name, and so re-enabling it is a one-line change if a season
         # with cleaner data disagrees.
         script = 1.0
-    elif prop.market in {PASS_YDS, REC_YDS, RECEPTIONS}:
+    elif prop.market in SCRIPT_MARKETS:
+        # Empty since 2026-10-12: the pass side measured and retired too
+        # (the note on SCRIPT_COEF_PASS).
         script = clamp(1.0 + SCRIPT_COEF_PASS * team_spread, *SCRIPT_CLAMP)
     else:
         script = 1.0

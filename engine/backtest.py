@@ -695,7 +695,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                         team_context_mode: str = "level",
                         real_lines: dict | None = None,
                         usage_conn=None,
-                        log=None) -> BacktestReport:
+                        log=None, carry: bool = False) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -712,6 +712,13 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     Without it — which is every call this function had until 2026-08-27 —
     the ROI is measured against that proxy. Projection accuracy and
     calibration are source-independent and stand either way.
+
+    ``carry`` builds each week's slate as the live board does
+    (`launch.py` passes ``--carry`` on every NFL build): from week 4 a
+    player's form leans on his own last season (engine/carry
+    .SEASON_PRIOR_GAMES, 2026-10-12). Opt-in like ``usage_conn``, so a
+    caller that does not ask keeps exactly the replay it had; propcal,
+    which fits the corrections the live board applies, asks.
     """
     from .models import ANYTIME_TD
     from .sources.nflverse import (
@@ -762,7 +769,8 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                 f"{_time.monotonic() - started:.0f}s elapsed, "
                 f"{len(all_settled):,} props settled")
         try:
-            slate = build_slate(season, w, upto_week=w)
+            slate = (build_slate(season, w, upto_week=w, carry=True) if carry
+                     else build_slate(season, w, upto_week=w))
         except Exception:
             continue
         # getattr, because this is BOOKKEEPING and bookkeeping must never

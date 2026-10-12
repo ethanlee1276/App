@@ -28,10 +28,10 @@ total, and every page carries the same one:
   its implied points, and the lean the script gives it.
 * `for_prop(game, team, market, position)` — what the PROJECTION did
   about it for this market, in the constants the projection actually
-  uses (`engine.matchup.SCRIPT_COEF_PASS` for pass-catching volume, the
-  rush tilt measured-and-not-applied, `touchdowns.script_td_multiplier`'s
-  slopes for a touchdown), so the card cannot claim an adjustment the
-  model did not make.
+  uses (`engine.matchup.SCRIPT_MARKETS`, empty since the pass tilt was
+  measured and retired on 2026-10-12 as the rush tilt was before it;
+  `touchdowns.script_td_multiplier`'s slopes for a touchdown), so the card
+  cannot claim an adjustment the model did not make.
 """
 
 from __future__ import annotations
@@ -129,10 +129,10 @@ def for_team(spread: float, total: float, home: str, away: str, team: str) -> di
 def projection_tilt(team_spread: float, market: str, position: str = "") -> tuple[float, str]:
     """``(multiplier, sentence)`` for what the projection did about the
     script on this market. 1.0 with the reason when it did nothing."""
-    from .matchup import SCRIPT_COEF_PASS, SCRIPT_CLAMP
+    from .matchup import SCRIPT_COEF_PASS, SCRIPT_CLAMP, SCRIPT_MARKETS
     m = (market or "").lower()
     pos = (position or "").upper()
-    if m in ("pass_yds", "rec_yds", "receptions"):
+    if m in SCRIPT_MARKETS:
         mult = clamp(1.0 + SCRIPT_COEF_PASS * team_spread, *SCRIPT_CLAMP)
         what = "passing volume" if m == "pass_yds" else "target volume"
         if abs(mult - 1.0) < 0.005:
@@ -140,6 +140,14 @@ def projection_tilt(team_spread: float, market: str, position: str = "") -> tupl
         return mult, (f"the projection already tilts {what} "
                       f"{'down' if mult < 1 else 'up'} ×{mult:.2f} for a "
                       f"{'leading' if team_spread < 0 else 'trailing'} script")
+    # MEASURED AND RETIRED 2026-10-12 (the note on matchup.SCRIPT_COEF_PASS):
+    # on his form, his last season and the defence, the spread adds nothing.
+    if m in ("pass_yds", "pass_att", "pass_cmp"):
+        return 1.0, ("no script tilt is applied — measured: once his form, last season and the "
+                     "defence are counted, an underdog quarterback does not throw for more")
+    if m in ("rec_yds", "receptions"):
+        return 1.0, ("no script tilt is applied — measured: once his form, last season and the "
+                     "defence are counted, the spread adds nothing to his targets")
     if m == "rush_yds":
         return 1.0, ("no rush tilt is applied — five seasons of logs show no "
                      "usable relationship between a team's spread and its "

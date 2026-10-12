@@ -64,9 +64,14 @@ we still differ (below).
 - **Allen's attempts.** We have 29.7 against a 32.5 line; report 1 said 68%
   for 30+, we say 51%. His logs are 29, 31, 26 and 33, and he threw 28.8 a
   game in 2025. Report 1 itself conceded "closer to 62–65%". The market's
-  extra attempts come from Buffalo being an underdog. Our script step moves
-  pass-catchers' volume, not a quarterback's attempts. That hasn't been
-  measured, so it isn't applied. Next on the list.
+  extra attempts come from Buffalo being an underdog. **Measured the same
+  day** (`qbscriptfit.py`), on the board's base of form, last season and
+  the defence step. An underdog quarterback does not throw for more:
+  attempts against the spread got worse in two held-out seasons, and
+  completions failed the older, unseen seasons. The old script tilt
+  (+0.4% a point on an underdog's passing yards, catches and receiving
+  yards) made every season 2022–2025 worse, and 2017–2021 agreed, so it
+  was retired. We stay at our number.
 - **Cook's rushing.** We still have 90.5. Our matchup step reads the Rams'
   run defence and moves him less than the market does.
 - **Adams 60+ (report 4, 67%).** We now say 52%. Reports 1 and 2 cut Adams

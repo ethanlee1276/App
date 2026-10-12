@@ -101,6 +101,30 @@ def test_the_build_hands_it_to_the_prop_and_the_page_says_which_anchor():
     assert 'base.shrink_kind === "season"' in js and "his own per-game number last season" in js
 
 
+def test_the_calibration_replay_reads_last_season_as_the_board_does():
+    """propcal fits the corrections the live board applies, and the live
+    board builds every NFL slate with --carry (launch.py) — so last season
+    is in its form from week 4. The replay asks for the same; every other
+    replay keeps exactly what it had (opt-in, like usage_conn)."""
+    import inspect
+    import engine.pipeline as pl
+    import engine.sources.nflverse as nv
+    from engine import backtest as bt, propcal
+    assert "usage_conn=conn, carry=True" in inspect.getsource(propcal.fit)
+    assert inspect.signature(bt.backtest_from_stats).parameters["carry"].default is False
+    seen = []
+    saved = (nv.load_weekly_stats, nv.build_slate, pl.run_slate)
+    nv.load_weekly_stats = lambda season: []
+    nv.build_slate = lambda season, w, upto_week=None, **kw: seen.append(kw) or object()
+    pl.run_slate = lambda slate, config=None, **kw: {"recommendations": []}
+    try:
+        bt.backtest_from_stats(2024, [6])
+        bt.backtest_from_stats(2024, [6], carry=True)
+    finally:
+        nv.load_weekly_stats, nv.build_slate, pl.run_slate = saved
+    assert seen == [{}, {"carry": True}], seen
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

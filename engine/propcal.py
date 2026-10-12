@@ -238,10 +238,14 @@ def fit(conn, season: int | None = None, weeks=None,
     report = None
     for candidate in _seasons_to_try(season):
         try:
+            # carry=True: the replay builds its slates as the live board
+            # does, his own last season in the form from week 4
+            # (engine/carry.SEASON_PRIOR_GAMES), or the corrections are
+            # fitted to projections the board no longer makes.
             with cal.disabled():
                 report = backtest_from_stats(candidate, weeks,
                                              real_lines=real, log=log,
-                                             usage_conn=conn)
+                                             usage_conn=conn, carry=True)
         except Exception as exc:                          # noqa: BLE001
             log(f"  propcal: {candidate} skipped — {exc}")
             continue

@@ -127,7 +127,11 @@ def test_the_nfl_script_and_total_rules_stand_down_for_college():
     neutral = DefenseProfile(team="espn:1")
     nfl_pass = evaluate_matchup(_prop(PASS_YDS, "QB"), neutral, game).multiplier
     nfl_rush = evaluate_matchup(_prop(RUSH_YDS, "RB"), neutral, game).multiplier
-    assert nfl_pass > 1.0 and nfl_rush < 1.0, "the NFL keeps both (a 14-point dog throws; a high total runs less)"
+    # The NFL keeps its total rule (a high total runs less). Its pass
+    # script was measured again on the board's current base and retired
+    # on 2026-10-12 (engine/matchup.SCRIPT_COEF_PASS's note): a 14-point
+    # dog's passing is 1.0 there too now.
+    assert nfl_pass == 1.0 and nfl_rush < 1.0, "the NFL keeps the total rule; its pass tilt is retired"
     assert evaluate_matchup(_prop(PASS_YDS, "QB"), neutral, game, sport="cfb").multiplier == 1.0
     assert evaluate_matchup(_prop(RUSH_YDS, "RB"), neutral, game, sport="cfb").multiplier == 1.0
     rated = DefenseProfile(team="espn:1", label="Alabama", ratings=_rating(wr_rec_yds=(1.3, 1, 300.0)))
