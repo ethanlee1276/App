@@ -15895,7 +15895,7 @@ function profileHTML(player, opts) {
             ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
     </div>` : "";
   const lg = (rows[0] && rows[0].sport) || state.sport;
-  const vsTail = vsBlockHTML(player, lg, (rows[0] && rows[0].opponent) || "") + carryDoor(player, lg, tabs);
+  const vsTail = vsBlockHTML(player, lg, (rows[0] && rows[0].opponent) || "") + carryDoor(player, lg, tabs, rows[0] && rows[0].headshot);
   return priced.has(mkt)
     ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
@@ -15907,12 +15907,14 @@ function profileHTML(player, opts) {
    (the same day: "We can add route charts for wr and shit too"): every
    pass thrown to him, NFL only — the college play file names the target
    but has no air yards and no side of the field. Both drawn by
-   js/carrychart.js, loaded on the first tap. */
-function carryDoor(player, lg, tabs) {
+   js/carrychart.js, loaded on the first tap. The door carries the face
+   this page is showing, so the chart has one even where its own lookup
+   finds none. */
+function carryDoor(player, lg, tabs, face) {
   const runs = (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t));
   const catches = lg === "nfl" && tabs.some((t) => /recei|recep|target/i.test(t));
   if (!runs && !catches) return "";
-  const door = (kind, label) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}">${label}</button>`;
+  const door = (kind, label) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}>${label}</button>`;
   return `<div class="prof-vs prof-charts">${runs ? door("carries", "Carry chart") : ""}${catches ? door("routes", "Route chart") : ""}</div>`;
 }
 let _ccLoad = null;
@@ -15930,7 +15932,7 @@ document.addEventListener("click", (e) => {
     el.onerror = () => { _ccLoad = null; ok(null); };
     document.head.appendChild(el);
   });
-  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind));
+  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face));
 });
 
 /* HEAD-TO-HEAD. Ethan, 2026-09-01: "Add an option too be able too look

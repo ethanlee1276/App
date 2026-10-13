@@ -36,23 +36,26 @@ zero (step 53; M). The NBA board, a week before opening night, now reads
 the clubs' current rosters and ESPN's injury board (step 54; N), with a
 check of whether a teammate's number should move when a regular sits
 (step 55; O). Every UFC card now says where its line opened and where it
-is now (step 56; P). The whole picture, sport by sport, is in
-`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+is now (step 56; P). The chart's X sits below the phone's status bar
+(step 57), and every carry and route chart shows the player's face — his
+photo, or his initials when no photo loads (step 58; Q). The whole
+picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
 
-Nothing here changes anything except C (only if email isn't on yet) and
-D's Stripe settings. Every command runs on the box (`ssh` in first).
+Nothing here changes anything except C (only if email isn't on yet),
+D's Stripe settings and Q's photo fill (photo addresses only — the same
+thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The chart's
-X sits below the phone's status bar and stays in reach` (or be newer),
-and the second should print `has today's code`. If it prints nothing or
+**A. The box has today's code.** The first line should end `The carry
+and route charts show every player's face` (or be newer), and the
+second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 7ff1e839 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor ff5e7365 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -283,6 +286,22 @@ cd /srv/qellys && sudo -u qellys python3 stakecheck.py --clv --sport ufc --inclu
 And the first question for every sport in one go (a minute; paste it all):
 ```
 cd /srv/qellys && for s in nfl cfb mlb nba wnba nhl; do echo "== $s"; sudo -u qellys python3 stakecheck.py --info --sport $s; done
+```
+
+**Q. Every chart shows the player's face** (step 58; seconds). The daily
+chores fill the charts' missing photos by themselves from tomorrow; this
+does it now (it writes photo addresses only, and is safe to repeat):
+```
+cd /srv/qellys && sudo -u qellys python3 facesfill.py --sport nfl && sudo -u qellys python3 facesfill.py --sport cfb
+```
+Then the check (read-only). Each line should say every chart player, or
+all but a handful, has a face; paste it with any names it lists:
+```
+cd /srv/qellys && sudo -u qellys python3 facesfill.py --check
+```
+From tomorrow the chores' own line says it (`faces: ... cfb ...`):
+```
+journalctl -u qellys --since "today" --no-pager | grep "faces:"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -1848,6 +1867,31 @@ first). Paste back anything that prints an error or looks off.
     scrolling 900px, and one tap closes the chart. A desktop looks as it
     did. The page fetches styles network-first, so the fix arrives on the
     next open after the box pulls.
+
+58. **Every chart shows the player's face** (2026-10-13, Ethan: "Make
+    sure we are showing headshots in this new page"). Q fills and
+    checks it. Two things left the chart's face ring empty. The chart
+    looked a player's photo up by the name its play file uses, and the
+    photos are stored under the roster file's spelling: "Kenny Gainwell"
+    against "Kenneth Gainwell", "D.J. Moore" against "DJ Moore", and
+    anyone on last season's roster but not this one. On a copy of the
+    chart tables here, 637 of 685 NFL chart players had a photo that
+    way. Every row carries the league's own player id, so the daily face
+    pass now gives each chart player without a photo the one the roster
+    file has for his id (this season's file first, then his last
+    season's): 685 of 685. A name two different players share gets none
+    (initials beat somebody else's face). College photos are ESPN's
+    address built from the player's id, for every player whether ESPN
+    has a picture of him or not, so some never load. The page now draws
+    the player's initials, in his team's colour, under every photo. A
+    photo that loads covers them. One that fails is followed by the
+    full-size copy, then the photo the player's page was showing, and
+    when none loads the initials stay. Nothing is left as an empty ring
+    or a broken image. The chart reads a newly filled photo at once
+    rather than after the six-hour face cache. Nothing to run but Q;
+    open any chart. One test pin changed:
+    `tests/test_a_carry_chart_for_every_runner.py` names the chart
+    door's call, which now hands over the face.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

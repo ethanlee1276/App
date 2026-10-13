@@ -434,21 +434,47 @@ def headshot_map(season: int) -> dict[str, str]:
         return out
     for r in rows:
         name = _s(r, "full_name", "player_name", "football_name")
-        url = _s(r, "headshot_url", "headshot")
-        # A ROSTER ROW WITH AN ESPN ID BUT NO PHOTO STILL HAS A FACE. The
-        # roster file ships `headshot_url` for most of the league and an
-        # `espn_id` for nearly all of it, and ESPN serves a headshot by
-        # that id at a stable path — the same path `facesfill.py` already
-        # uses for the hoops leagues. Ethan, 2026-09-14: "We are missing
-        # head shots for a lot of NFL players." Taken second, never over a
-        # real URL, so nothing that had a face changes.
-        if name and not url:
-            pid = _s(r, "espn_id")
-            if pid:
-                url = ESPN_HEADSHOT.format(pid=pid)
+        url = _face_url(r)
         if name and url:
             out.setdefault(name, url)
     return out
+
+
+def headshots_by_id(season: int) -> dict[str, str]:
+    """``{gsis_id: headshot_url}`` — the same faces as ``headshot_map``,
+    keyed by the league's own player id instead of a spelling.
+
+    The carry and route charts name a man the way the weekly stats file
+    does ("Kenny Gainwell") and the roster file spells him its own way
+    ("Kenneth Gainwell"); both carry his gsis id, so the id is the join
+    that cannot miss. Empty when the file cannot be read."""
+    out: dict[str, str] = {}
+    try:
+        rows = load_rosters(season)
+    except DataUnavailable:
+        return out
+    for r in rows:
+        gid, url = _s(r, "gsis_id"), _face_url(r)
+        if gid and url:
+            out.setdefault(gid, url)
+    return out
+
+
+def _face_url(r: dict) -> str:
+    """One roster row's photo: the file's own URL, else ESPN's by its id."""
+    url = _s(r, "headshot_url", "headshot")
+    # A ROSTER ROW WITH AN ESPN ID BUT NO PHOTO STILL HAS A FACE. The
+    # roster file ships `headshot_url` for most of the league and an
+    # `espn_id` for nearly all of it, and ESPN serves a headshot by
+    # that id at a stable path — the same path `facesfill.py` already
+    # uses for the hoops leagues. Ethan, 2026-09-14: "We are missing
+    # head shots for a lot of NFL players." Taken second, never over a
+    # real URL, so nothing that had a face changes.
+    if not url:
+        pid = _s(r, "espn_id")
+        if pid:
+            url = ESPN_HEADSHOT.format(pid=pid)
+    return url
 
 
 #: ESPN's by-id headshot path for the NFL — `facesfill.ESPN_HEADSHOT` with

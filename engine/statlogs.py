@@ -138,6 +138,24 @@ def _face_of(conn, sport: str, player: str) -> str:
         return ""
 
 
+def face(conn, sport: str, player: str) -> str:
+    """His photo: the row stored under this exact spelling first, then the
+    sport's normalised map. Never raises.
+
+    The stored row first because `face_map` is memoised for six hours, and
+    the daily face pass (facesfill.chart_rows) writes a chart player's
+    photo under the chart's own spelling — read only through the memo, a
+    face filled this morning would wait until the afternoon to appear."""
+    try:
+        row = conn.execute("SELECT headshot FROM player_assets WHERE sport=? AND player=?",
+                           (sport, player)).fetchone()
+        if row and row[0]:
+            return row[0]
+    except Exception:                                        # noqa: BLE001
+        pass                         # a database predating the assets table
+    return _face_of(conn, sport, player)
+
+
 def search(sport: str, q: str, limit: int = 12, db_path=None,
            data_dir=None) -> list[dict]:
     """Every player in the league whose name contains ``q``, newest first.

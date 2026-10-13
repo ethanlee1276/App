@@ -612,7 +612,7 @@
     }
     const sport = d.sport;
     const head = `<header class="cc-head">
-        <span class="cc-face">${d.face ? `<img src="${esc(d.face)}" alt="" loading="lazy" decoding="async">` : ""}</span>
+        ${faceHTML(d, S)}
         <div class="cc-who">
           <span class="cc-eyebrow">${R ? "Route chart" : "Carry chart"}</span>
           <h2 class="cc-name">${esc(d.player)}</h2>
@@ -703,6 +703,53 @@
     el.hidden = false;
   }
 
+  /* ---------------- the face ----------------
+     Ethan, 2026-10-13: "Make sure we are showing headshots in this new
+     page." The photo the server found, then the one the page he came from
+     was showing (the door hands it over), each as the site's small copy
+     and then the full one — and under them his initials, which is what
+     shows when every photo fails instead of an empty ring. A headshot is
+     a cut-out on a clear ground, so the initials step aside once a photo
+     has loaded (`on`). Both outcomes are kept in S, so a redraw (a season,
+     a tab, a game) neither flashes the initials back nor asks again for a
+     photo that is not there. */
+  function faces(d, hint) {
+    const out = [];
+    for (const u of [d.face, hint]) {
+      if (u) out.push(typeof facePreview === "function" ? facePreview(u, 58) : u, u);
+    }
+    return [...new Set(out.filter(Boolean))];
+  }
+  function inits(name) {
+    const w = String(name || "").replace(/[.,']/g, "").split(/\s+/)
+      .filter((x) => x && !/^(jr|sr|ii|iii|iv|v)$/i.test(x));
+    return ((w[0] || "?")[0] + (w.length > 1 ? w[w.length - 1][0] : "")).toUpperCase();
+  }
+  function faceHTML(d, st) {
+    const list = faces(d, st.hint);
+    if (st.faceKey !== list.join(" ")) Object.assign(st, { faceKey: list.join(" "), faces: list, fi: 0, faceOk: false });
+    const url = st.faces[st.fi];
+    const t = typeof teamsForSport === "function" && d.team ? (teamsForSport(d.sport) || {})[d.team] : null;
+    const ink = t && t.primary && typeof idealText === "function"
+      ? ` style="background:${esc(t.primary)};color:${esc(idealText(t.primary))}"` : "";
+    return `<span class="cc-face${url && st.faceOk ? " on" : ""}"><span class="cc-init" aria-hidden="true"${ink}>${esc(inits(d.player))}</span>${url
+      ? `<img src="${esc(url)}" alt="" decoding="async">` : ""}</span>`;
+  }
+  /* A photo loaded: the initials step aside. One failed: the next one,
+     and when there is none, the initials alone. */
+  function faceStep(type, img, st) {
+    if (!st || !st.faces || !img || img.tagName !== "IMG" || !img.closest(".cc-face")) return;
+    if (type === "load") {
+      st.faceOk = true;
+      img.parentNode.classList.add("on");
+    } else if (st.faces[++st.fi]) {
+      img.src = st.faces[st.fi];
+    } else {
+      img.remove();
+    }
+  }
+  const faceEvent = (e) => faceStep(e.type, e.target, S);
+
   /* ---------------- loading ---------------- */
   async function load(season) {
     const seq = ++_seq;
@@ -737,7 +784,7 @@
   }
   function onKey(e) { if (e.key === "Escape") close(); }
 
-  function open(player, sport, kind) {
+  function open(player, sport, kind, face) {
     if (!player) return;
     let ov = document.getElementById("cc-overlay");
     if (!ov) {
@@ -763,10 +810,14 @@
         const g = e.target.closest && e.target.closest(".cc-carry");
         if (g && S && S.sel < 0 && e.pointerType === "mouse") tip(-1);
       });
+      // The face's photo: load and error do not bubble, but a listener in
+      // the capture phase sees them — and the CSP allows no inline one.
+      ov.addEventListener("load", faceEvent, true);
+      ov.addEventListener("error", faceEvent, true);
     }
     const routes = kind === "routes";
     S = { sport: String(sport || "nfl").toLowerCase(), kind: routes ? "routes" : "carries", player, data: null,
-          view: "game", gi: 0, sel: -1 };
+          view: "game", gi: 0, sel: -1, hint: face || "" };
     ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${routes ? "Route" : "Carry"} chart — ${player}`)}">
       <button class="cc-x" type="button" aria-label="Close">×</button>
       <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${routes ? "targets" : "carries"}…</div></div></div>`;
@@ -781,5 +832,6 @@
   window.QBCarry = { open, close, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
-                                         routeTiles, routeTables, routeNote, routeLegend } };
+                                         routeTiles, routeTables, routeNote, routeLegend,
+                                         faceHTML, faceStep, inits } };
 })();

@@ -2555,7 +2555,9 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         from . import db as _fdb
         _fconn = _fdb.connect()
         _filled = []
-        for _sport in ("nfl", "mlb", "nba", "wnba"):
+        # College for the carry chart's players (facesfill.chart_rows);
+        # the NFL pass fills the route and carry charts' as well.
+        for _sport in ("nfl", "mlb", "nba", "wnba", "cfb"):
             try:
                 _n, _before, _after = facesfill.fill(_fconn, _sport)
             except Exception as exc:                          # noqa: BLE001

@@ -3231,7 +3231,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 out = carries.chart(conn, sport, player, int(season) if season.isdigit() else None)
                 if out:
-                    out["face"] = statlogs._face_of(conn, sport, out["player"])
+                    out["face"] = statlogs.face(conn, sport, out["player"])
                 elif not carries.stored(conn, sport):
                     # No runner in the league has a carry on file yet:
                     # the charts are being filled (engine/chartfill), and
@@ -3265,7 +3265,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 out = targets.chart(conn, player, int(season) if season.isdigit() else None)
                 if out:
-                    out["face"] = statlogs._face_of(conn, "nfl", out["player"])
+                    out["face"] = statlogs.face(conn, "nfl", out["player"])
                 elif not carries.stored(conn, "nfl", table="targets"):
                     out = {"filling": True}          # being filled, as the carry chart's
             finally:

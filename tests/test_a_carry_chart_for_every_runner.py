@@ -495,11 +495,13 @@ def test_the_chart_loads_on_first_use_and_runs_under_the_pages_csp():
     assert "function carryDoor(" in APP_JS
     assert re.search(r'\(lg === "nfl" \|\| lg === "cfb"\) && tabs\.some\(\(t\) => /rush\|carr/i\.test\(t\)\)', APP_JS), \
         "the door is football's, for a player with a rushing log"
-    assert "+ carryDoor(player, lg, tabs)" in APP_JS, "every profile card variant carries it beside the head-to-head"
+    assert "+ carryDoor(player, lg, tabs, rows[0] && rows[0].headshot)" in APP_JS, \
+        "every profile card variant carries it beside the head-to-head, with the face it shows"
     i = APP_JS.index('e.target.closest(".cc-open")')
     loader = APP_JS[i:i + 900]
     assert 'css.href = "css/carrychart.css";' in loader and 'el.src = "js/carrychart.js";' in loader
-    assert "m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind)" in loader, "the door says which chart"
+    assert "m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face)" in loader, \
+        "the door says which chart, and hands over the face"
     assert "onclick" not in CC_JS and "onerror" not in CC_JS, "no inline handlers under the page's CSP"
     assert "/api/players/carries?sport=" in CC_JS
     for cls in (".cc-run", ".cc-run.loss", ".cc-run.short", ".cc-run.gain", ".cc-td", ".cc-fum", ".cc-los",
