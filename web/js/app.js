@@ -15953,12 +15953,13 @@ function ccLoad() {
    route checker on the most likely bets as well like when you click on
    the player in the most likely bets it will automatically show the
    charts in that area with all the other info"). A football bet the
-   charts speak to — rushing, receiving, an anytime touchdown — leaves a
-   slot; js/carrychart.js decides which chart and draws it there
-   (`mount`, from the settle pass). College has carries only. */
+   charts speak to — rushing, receiving, an anytime touchdown, and since
+   the passing chart a passing bet — leaves a slot; js/carrychart.js
+   decides which chart and draws it there (`mount`, from the settle
+   pass). College has carries only. */
 function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
-  const ok = lg === "nfl" ? /rush|rec|anytime/.test(m) : lg === "cfb" && /rush|anytime/.test(m);
+  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" && /rush|anytime/.test(m);
   return ok && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
 }
 function mountCharts(root) {

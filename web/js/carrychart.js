@@ -36,6 +36,17 @@
    pocket, because a guessed route was measured wrong more often than
    right. The note under each chart says which.
 
+   EVERY CHART SINCE (Ethan, the same evening, on the list of charts the
+   data could carry: "Yes do all of them and don’t stop till they are all
+   done") registers in DRAW below the same parts — a game's drawing, the
+   season's, the numbers beside each, every play in order, the season's
+   splits and a note on how it is drawn — so a quarterback's chart, a
+   hitter's or a goalie's reads exactly like a back's: the same games
+   row, the same By game | season tabs, the same folds. The first is the
+   passing chart (S.kind "passes", engine/passes.py): every throw a
+   passer made, from the pocket to where the ball arrived, and the sacks
+   he took.
+
    Loaded on first use (app.js openCarryChart) and drawn in the page's
    global scope beside app.js, using its helpers by name (escapeHtml,
    teamMarkIn, teamNameIn, lockScroll). No inline handlers: the page's CSP
@@ -86,6 +97,17 @@
   //: The chart a reader switched to on a pick, for the rest of the visit.
   const MEM = new Map();
   let io = null;
+  /* EVERY CHART'S NAMES: the switch's chip, the eyebrow, what it counts,
+     where its rows are read from (for "still being filled"), the season
+     tab and the section's line on a pick page. */
+  const KIND = {
+    carries: { chip: "Carries", title: "Carry chart", noun: "carries", one: "carry", where: "where he runs" },
+    routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where he’s thrown to" },
+    passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where he throws",
+              sec: "every throw he made: how far, which side, complete or not, and the sacks he took" },
+  };
+  //: The charts drawn by registered parts (`plugView`), by kind.
+  const DRAW = {};
 
   /* ---------------- geometry ---------------- */
   function proj(x, y, ymax) {
@@ -305,7 +327,7 @@
 
   function svgWrap(inner, g, sport, n, noun) {
     const what = `${n} ${noun || "carries"} ${g ? gameName(g, sport) : "this season"}`;
-    const kind = noun === "targets" ? "Route chart" : "Carry chart";
+    const kind = (Object.values(KIND).find((k) => k.noun === (noun || "carries")) || KIND.carries).title;
     return `<svg class="cc-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${kind}: ${what}.${g ? " Each one is listed below." : ""}`)}">${inner}</svg>`;
   }
 
@@ -611,22 +633,200 @@
     return `<p class="cc-note">${how} ${where} Separation is the NFL’s Next Gen Stats number, published for receivers with 5+ targets in a game. Screen, play action, contested, drop and catchable are FTN’s charting.</p>`;
   }
 
+  /* ---------------- the passing chart (2026-10-13) ----------------
+     A passer's throws, the route chart turned round: each from the
+     pocket to where the ball arrived — its third of the field and its
+     air yards are the play-by-play's record — the run after the catch in
+     green, and the sacks he took marked behind him. A spiked ball is an
+     incomplete attempt, as in the box score: listed, not drawn. */
+  const PASS_TAG = { "play action": "Play action", "screen": "Screen", "out of pocket": "Out of pocket",
+                     "throwaway": "Throwaway", "should have been picked": "Should’ve been picked",
+                     "drop": "Dropped", "blitz": "Blitzed" };
+  const passBand = (t) => (t.k === "sack" || t.int ? "loss" : t.k === "pass" && t.c ? "gain" : "miss");
+  const passRes = (t) => (t.k === "sack" ? `Sack ${signed(t.y)}` : t.k === "spike" ? "Spike"
+    : t.int ? "INT" : t.c ? signed(t.y) : "Inc");
+  const slash = (a, b) => `${a}/${b}`;
+  const passChip = (g) => `${slash(g.line.cmp, g.line.att)} · ${Math.round(g.line.yds)}`;
+  function passGameChart(g) {
+    const ts = g.throws || [];
+    const thrown = ts.map((t, i) => [t, i]).filter(([t]) => t.k === "pass");
+    const ymax = yMaxFor(thrown.map(([t]) => (t.ay || 0) + Math.max(0, yacOf(t))));
+    const xs = catchXs(thrown.map(([t]) => t));
+    let body = qbMark(ymax);
+    thrown.forEach(([t, i], j) => {
+      body += targetSVG(i, t, xs[j], ymax, outward(xs[j], j));
+      const far = (t.ay || 0) + Math.max(0, yacOf(t));
+      if (far > ymax) body += longTag(xs[j], ymax, far);
+    });
+    /* The sacks in a row behind him, to his left — clear of his label on
+       the right and the thirds' names under the field. */
+    const sacks = ts.map((t, i) => [t, i]).filter(([t]) => t.k === "sack");
+    sacks.forEach(([t, i], j) => {
+      const c = proj(-3.4 - (j % 6) * 3.2, POCKET - 1.4 - Math.floor(j / 6) * 1.6, ymax);
+      const d = `M${(c[0] - 5).toFixed(1)} ${(c[1] - 5).toFixed(1)} l10 10 m0 -10 l-10 10`;
+      body += `<g class="cc-carry" data-i="${i}"><path class="cc-hit" d="${d}"/>
+        <path class="rc-sack cx-mark${S && S.sel === i ? " sel" : ""}" d="${d}"/></g>`;
+    });
+    return svgWrap(fieldSVG(ymax, THIRDS) + body, g, "nfl", thrown.length, "throws");
+  }
+  /* The season, where he throws: the field in thirds and depth bands,
+     each shaded by its share of his attempts and labelled with his
+     completions in it, and every throw a dot where its ball arrived. */
+  function passSeasonChart(d) {
+    const every = [];
+    d.games.forEach((g) => (g.throws || []).forEach((t) => { if (t.k === "pass") every.push(t); }));
+    if (!every.length) return "";
+    const ymax = yMaxFor(every.map((t) => Math.min(t.ay || 0, 38)).concat([22]));
+    const rows = { behind: [-7, 0], short: [0, 10], mid: [10, 20], deep: [20, ymax] };
+    const most = Math.max(1, ...d.by_zone.map((z) => z.att));
+    let cells = "", labels = "";
+    d.by_zone.forEach((z) => {
+      const [y0, y1] = rows[z.depth] || [0, 0], [x0, x1] = THIRD[z.side] || THIRD.M;
+      const yb = Math.max(YMIN + 0.4, y0), yt = Math.min(ymax, y1);
+      if (yt <= yb) return;
+      const poly = [proj(x0, yb, ymax), proj(x1, yb, ymax), proj(x1, yt, ymax), proj(x0, yt, ymax)];
+      const op = z.att ? (0.1 + 0.45 * z.att / most).toFixed(2) : "0";
+      cells += `<polygon class="rc-cell" points="${poly.map(pt).join(" ")}" style="fill-opacity:${op}"/>`;
+      if (!z.att) return;
+      const m = proj((x0 + x1) / 2, (yb + yt) / 2, ymax);
+      labels += `<text class="cc-raylbl rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] - 2).toFixed(1)}" text-anchor="middle">${pct(z.att / every.length)}</text>
+        <text class="cc-raysub rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] + 14).toFixed(1)}" text-anchor="middle">${z.cmp}/${z.att}</text>`;
+    });
+    const xs = catchXs(every);
+    let dots = "";
+    every.forEach((t, i) => {
+      const c = proj(xs[i], Math.max(-8.2, clampY(t.ay == null ? 0 : t.ay, ymax)), ymax);
+      dots += `<circle class="rc-dot ${t.int ? "i" : t.c ? "c" : "m"}" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.8"/>`;
+    });
+    return svgWrap(fieldSVG(ymax, THIRDS) + cells + dots + labels, null, "nfl", every.length, "throws");
+  }
+  /* Time to throw where the league published it (a passer past its
+     minimum in a game); the sacks he took where it did not. */
+  function passTiles(line, ngs) {
+    const t = [tile("Cmp/Att", slash(line.cmp, line.att)), tile("Yards", Math.round(line.yds)),
+               tile("TD–INT", `${line.td}–${line.int}`), tile("Yds/att", num1(line.ypa)), tile("aDOT", num1(line.adot))];
+    if (ngs && ngs.time_to_throw != null) t.push(tile("Throw time", `${Number(ngs.time_to_throw).toFixed(2)}s`, "NGS"));
+    else t.push(tile("Sacked", line.sk ? `${line.sk} (${signed(line.sk_yds)})` : "0"));
+    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+  }
+  function passLegend(season) {
+    if (season) {
+      return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>Complete</span>
+        <span><i class="dt m"></i>Incomplete</span><span><i class="dt i"></i>Intercepted</span>
+        <span><i class="sw cell"></i>Share of his attempts</span></div>`;
+    }
+    return `<div class="cc-legend" aria-hidden="true"><span><i class="sw throw"></i>Throw</span>
+      <span><i class="sw miss"></i>Incomplete</span><span><i class="sw yac"></i>After the catch</span>
+      <span><i class="mk td"></i>Touchdown</span><span><i class="mk int">×</i>Interception · sack</span></div>`;
+  }
+  function passWords(t) {
+    if (t.k === "sack") return "Sacked";
+    if (t.k === "spike") return "Spiked to stop the clock";
+    const air = t.ay == null ? (SIDE_WORD[t.s] || "") : airWords(t);
+    return [air, t.to ? `to ${t.to}` : "nobody targeted"].filter(Boolean).join(" · ");
+  }
+  function passTags(t) {
+    const yac = t.k === "pass" && t.c ? Math.round(yacOf(t)) : 0;
+    return [t.td ? "TD" : "", t.fd && !t.td ? "1st down" : "",
+            yac ? `${yac} yd${Math.abs(yac) === 1 ? "" : "s"} after catch` : "",
+            t.hit && t.k === "pass" ? "Hit" : "", t.fum ? "Fumble lost" : "",
+            ...(t.fl || []).map((w) => PASS_TAG[w] || "")].filter(Boolean);
+  }
+  function passList(g) {
+    return `<div class="cc-list" role="list">${(g.throws || []).map((t, i) => {
+      const band = passBand(t), tags = passTags(t);
+      return `<button type="button" role="listitem" class="cc-row${S && S.sel === i ? " sel" : ""}" data-i="${i}">
+        <i class="dot ${band}"></i>
+        <span class="cc-r-q">${esc(qLabel(t))}</span>
+        <span class="cc-r-dd">${esc([downDist(t), spot(t, g)].filter(Boolean).join(" · "))}</span>
+        <span class="cc-r-h">${esc(passWords(t))}</span>
+        <b class="cc-r-y ${band}">${esc(passRes(t))}</b>
+        ${tags.length ? `<span class="cc-r-tags">${tags.map((x) => `<em>${esc(x)}</em>`).join("")}</span>` : ""}
+      </button>`;
+    }).join("")}</div>`;
+  }
+  //: Sums of engine/passes._line rows — a depth band across its thirds, or a third down its depths.
+  function sumPass(xs) {
+    const o = { att: 0, cmp: 0, yds: 0, td: 0, int: 0, sk: 0 };
+    xs.forEach((x) => { o.att += x.att; o.cmp += x.cmp; o.yds += x.yds; o.td += x.td; o.int += x.int; o.sk += x.sk; });
+    o.pct = o.att ? o.cmp / o.att : null;
+    o.ypa = o.att ? o.yds / o.att : null;
+    return o;
+  }
+  function passTables(d) {
+    const out = [], total = d.season_line.att || 0;
+    const L = (x) => [x.att, pct(total ? x.att / total : null), pct(x.pct), num1(x.ypa), x.td, x.int];
+    const head = (first) => [first, "Att", "Share", "Cmp %", "Yds/att", "TD", "INT"];
+    const depth = DEPTH.map(([k, name]) => [name, sumPass(d.by_zone.filter((z) => z.depth === k))]).filter(([, x]) => x.att);
+    if (depth.length) out.push(tableHTML("How far past the line", head("Air yards"), depth.map(([n, x]) => [n, ...L(x)])));
+    const sides = ["L", "M", "R"].map((k) => [k, sumPass(d.by_zone.filter((z) => z.side === k))]).filter(([, x]) => x.att);
+    if (sides.length) out.push(tableHTML("Which third of the field", head("Third"),
+      sides.map(([k, x]) => [SIDE_WORD[k][0].toUpperCase() + SIDE_WORD[k].slice(1), ...L(x)])));
+    const P = (x) => [x.att, pct(x.pct), num1(x.ypa), x.td, x.int, x.sk];
+    const head2 = (first) => [first, "Att", "Cmp %", "Yds/att", "TD", "INT", "Sacked"];
+    if (d.by_pressure && d.by_pressure.length) {
+      out.push(tableHTML("Kept clean, hit, blitzed, play action", head2("When"),
+        d.by_pressure.filter((x) => x.att || x.sk).map((x) => [x.when, ...P(x)])));
+    }
+    if (d.by_down && d.by_down.length) out.push(tableHTML("By down", head2("Down"), d.by_down.map((x) => [ord(x.down), ...P(x)])));
+    if (d.by_target && d.by_target.length) {
+      out.push(tableHTML("Who he threw to", ["Receiver", "Tgts", "Rec", "Yds", "TD", "INT"],
+        d.by_target.map((x) => [x.to, x.tgt, x.rec, Math.round(x.yds), x.td, x.int])));
+    }
+    return out.join("");
+  }
+  function passNgs(d) {
+    const n = d.ngs || {};
+    if (n.time_to_throw == null) return "";
+    const bits = [`${Number(n.time_to_throw).toFixed(2)}s to throw`];
+    if (n.cpoe != null) bits.push(`${n.cpoe > 0 ? "+" : ""}${num1(n.cpoe)}% completion over expected`);
+    if (n.aggressiveness != null) bits.push(`${num1(n.aggressiveness)}% of throws into a tight window`);
+    if (n.intended_air != null) bits.push(`${num1(n.intended_air)} intended air yards a throw`);
+    return `<p class="cc-ngs"><b>Next Gen Stats, ${esc(d.season)}:</b> ${esc(bits.join(" · "))}.</p>`;
+  }
+  function passNote() {
+    return `<p class="cc-note">Each line is a throw, from the pocket to where the ball arrived. How far past the line it went (air yards) and which third of the field it went to are the NFL play-by-play’s record; where inside that third is spread so no two sit on one another. Green is the run after the catch, as long as the record says. Sacks are marked behind him with the yards lost. A spiked ball counts as an incomplete attempt, as in the box score, and isn’t drawn. Play action, screens, out of the pocket, throwaways, drops, blitzes (5+ rushers) and balls that should have been intercepted are FTN’s charting (2022 on). Time to throw and completion over expected are the NFL’s Next Gen Stats, published for passers past the league’s minimum in a game.</p>`;
+  }
+  DRAW.passes = {
+    one: "dropback", splitsTitle: "Every split · depth, side, pressure, down, receiver",
+    items: (g) => g.throws || [],
+    count: (L) => `${L.att} attempts`,
+    chip: passChip,
+    game: (g) => passGameChart(g),
+    season: (d) => passSeasonChart(d),
+    gameSide: (g) => `${passLegend(false)}${passTiles(g.line, g.ngs)}`,
+    seasonSide: (d) => {
+      const L = d.season_line;
+      return `${passLegend(true)}${passTiles(L, d.ngs)}
+        <div class="cc-tiles cc-tiles-2">${tile("Completion", pct(L.pct))}${tile("Deep (20+)", `${L.deep_cmp} of ${L.deep}`)}${tile("Sacked", `${L.sk} (${signed(L.sk_yds)})`)}${tile("Throwaways", L.away)}</div>
+        ${passNgs(d)}`;
+    },
+    list: (g) => passList(g),
+    splits: (d) => passTables(d),
+    note: () => passNote(),
+    tip: (t, g) => `<b class="${passBand(t)}">${t.k === "sack" ? `Sacked, ${signed(t.y)} yds` : t.k === "spike" ? "Spiked"
+      : t.int ? "Intercepted" : t.c ? `${signed(t.y)} yds` : "Incomplete"}</b>${t.td ? " · TD" : ""}
+      <span>${esc([qLabel(t), downDist(t), spot(t, g), passWords(t)].filter(Boolean).join(" · "))}</span>`,
+  };
+
   function render() {
     const ov = C && C.root;
     if (!ov || !S) return;
     const d = S.data;
     const box = ov.querySelector(".cc-body");
     const R = S.kind === "routes";
+    const K = KIND[S.kind] || KIND.carries, P = DRAW[S.kind];
     if (!d || !d.games || !d.games.length) {
       /* No one in the league has a row yet: the charts are being filled
          (engine/chartfill), which is not the same as none for him. The
          switch stays above it on a pick page, so the other chart is a
          tap away. */
       box.innerHTML = kindBar() + (d && d.filling
-        ? `<div class="cc-empty">${R ? "Route" : "Carry"} charts are still being filled: every ${R ? "target" : "carry"} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play, which takes a few minutes. Check back shortly.</div>`
+        ? `<div class="cc-empty">${esc(K.title)}s are still being filled: every ${esc(K.one)} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play, which takes a few minutes. Check back shortly.</div>`
         : R
           ? `<div class="cc-empty">No targets on file for ${esc(S.player)}.</div>`
-          : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`);
+          : P ? `<div class="cc-empty">No ${esc(K.noun)} on file for ${esc(S.player)}.</div>`
+            : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`);
       return;
     }
     const sport = d.sport;
@@ -641,7 +841,7 @@
     const head = (C.inline ? "" : `<header class="cc-head">
         ${faceHTML(d, S)}
         <div class="cc-who">
-          <span class="cc-eyebrow">${R ? "Route chart" : "Carry chart"}</span>
+          <span class="cc-eyebrow">${esc(K.title)}</span>
           <h2 class="cc-name">${esc(d.player)}</h2>
           <span class="cc-sub">${[d.jersey ? `#${esc(d.jersey)}` : "", esc(d.position || ""), d.team
             ? `${teamMarkIn(sport, d.team, 16)} ${esc(teamNameIn(sport, d.team))}` : ""].filter(Boolean).join(" · ")}</span>
@@ -650,7 +850,7 @@
       </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + `
       <div class="cc-tabs" role="tablist">
         <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">By game</button>
-        <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${d.season} · ${R ? "where he’s thrown to" : "where he runs"}</button>
+        <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${d.season} · ${esc(K.where)}</button>
       </div>`;
     /* Four parts in every view: what sits above the drawing (the games,
        the title), the drawing, what reads it (the legend, the numbers)
@@ -659,7 +859,9 @@
        numbers side by side (.cc-split) so the field is not drawn a
        screen tall across a desktop. */
     let top, fig, side, tail;
-    if (S.view === "season" && R) {
+    if (P) {
+      ({ top, fig, side, tail } = plugView(P, d, sport));
+    } else if (S.view === "season" && R) {
       const L = d.season_line;
       top = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
       fig = `<div class="cc-stage">${routeSeasonChart(d)}</div>`;
@@ -696,7 +898,7 @@
       }
     }
     const main = top + (C.inline ? `<div class="cc-split"><div class="cc-fig">${fig}</div><div class="cc-side">${side}</div></div>` : fig + side) + tail;
-    box.innerHTML = head + main + fold("note", "How it’s drawn", R ? routeNote(d) : noteHTML(d));
+    box.innerHTML = head + main + fold("note", "How it’s drawn", P ? P.note(d) : R ? routeNote(d) : noteHTML(d));
     /* The chosen game's chip is brought to the middle of its row by
        scrolling the ROW. scrollIntoView would also scroll the page to it,
        and a chart drawn halfway down a pick page would pull the reader
@@ -720,6 +922,27 @@
       <summary>${esc(title)}</summary>${html}</details>`;
   }
 
+  /* A REGISTERED CHART'S VIEWS, in the carry and route charts' frame: the
+     season's title, drawing, numbers and splits; or the games row (each
+     chip with the game's own tally), the game's drawing with its tip,
+     its numbers and every play in order. */
+  function plugView(P, d, sport) {
+    if (S.view === "season") {
+      const n = d.games.length;
+      return { top: `<div class="cc-title">${esc(`${d.season} season · ${P.count(d.season_line)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
+               fig: `<div class="cc-stage">${P.season(d)}</div>`,
+               side: P.seasonSide(d),
+               tail: fold("splits", P.splitsTitle, P.splits(d)) };
+    }
+    const g = d.games[Math.min(S.gi, d.games.length - 1)];
+    return { top: `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
+                `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x))}</small></button>`).join("")}</div>
+              <div class="cc-title">${esc(gameTitle(g, sport, d.season))}</div>`,
+             fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
+             side: P.gameSide(g, d),
+             tail: fold("list", `Every ${P.one}, in order · ${P.items(g).length}`, P.list(g, d)) };
+  }
+
   /* ---------------- selection and the tip ---------------- */
   function select(i) {
     const ov = C && C.root;
@@ -727,7 +950,7 @@
     S.sel = S.sel === i ? -1 : i;
     ov.querySelectorAll(".cc-carry").forEach((g) => {
       const on = +g.dataset.i === S.sel;
-      const p = g.querySelector(".cc-run, .rc-route, .rc-throw");
+      const p = g.querySelector(".cc-run, .rc-route, .rc-throw, .cx-mark");
       if (p) p.classList.toggle("sel", on);
       g.classList.toggle("dim", S.sel >= 0 && !on);
     });
@@ -739,6 +962,14 @@
     const el = ov && ov.querySelector(".cc-tip");
     if (!el) return;
     const d = S.data, g = d && d.games[S.gi];
+    const P = DRAW[S.kind];
+    if (P) {
+      const t = g && P.items(g)[i];
+      if (!t || S.view !== "game") { el.hidden = true; return; }
+      el.innerHTML = P.tip(t, g, d);
+      el.hidden = false;
+      return;
+    }
     if (S.kind === "routes") {
       const t = g && (g.targets || [])[i];
       if (!t || S.view !== "game") { el.hidden = true; return; }
@@ -811,7 +1042,8 @@
      opened on one named chart asks every time, as it always has. A chart
      still being filled is never kept. */
   function ask(kind, sport, player, season, cached) {
-    const api = kind === "routes" ? "/api/players/routes?sport=" : "/api/players/carries?sport=";
+    const api = kind === "routes" ? "/api/players/routes?sport="
+      : kind === "carries" ? "/api/players/carries?sport=" : `/api/players/chart?kind=${kind}&sport=`;
     const q = `${api}${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}${season ? `&season=${season}` : ""}`;
     const hit = cached && CACHE.get(q);
     if (hit && Date.now() - hit.t < CACHE_MS) return Promise.resolve(hit.data);
@@ -820,7 +1052,9 @@
       return data;
     });
   }
-  //: How much of his season a chart holds: carries, or passes thrown to him.
+  //: How much of his season a chart holds: carries, or passes thrown to him
+  //: (every other chart's server answer counts its own in `season_line.n`:
+  //: a passer's attempts).
   const vol = (kind, d) => (d && d.games && d.games.length
     ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);
   //: A second chart is offered when he has this many in the same season.
@@ -837,7 +1071,7 @@
     use(c);
     if (data === null) {
       const box = c.root.querySelector(".cc-body");
-      if (box) box.innerHTML = `<div class="cc-empty">The ${S.kind === "routes" ? "route" : "carry"} chart didn’t load. Try again in a moment.</div>`;
+      if (box) box.innerHTML = `<div class="cc-empty">The ${esc((KIND[S.kind] || KIND.carries).title.toLowerCase())} didn’t load. Try again in a moment.</div>`;
       return;
     }
     S.data = data;
@@ -947,14 +1181,14 @@
        checker's legs): both of his charts are asked for and his own
        leads, as on a pick page (probe). */
     const auto = kind === "auto", lg = String(sport || "nfl").toLowerCase();
-    const routes = kind === "routes";
+    const k0 = KIND[kind] ? kind : "carries", K = KIND[k0];
     ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "",
-                   cand: auto ? (lg === "nfl" ? ["carries", "routes"] : ["carries"]) : null,
-                   S: { sport: lg, kind: routes ? "routes" : "carries", player, data: null,
+                   cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes"] : ["carries"]) : null,
+                   S: { sport: lg, kind: k0, player, data: null,
                         view: "game", gi: 0, sel: -1, hint: face || "" } });
-    ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${auto ? "Charts" : routes ? "Route chart" : "Carry chart"} — ${player}`)}">
+    ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${auto ? "Charts" : K.title} — ${player}`)}">
       <button class="cc-x" type="button" aria-label="Close">×</button>
-      <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${routes ? "targets" : "carries"}…</div></div></div>`;
+      <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${esc(K.noun)}…</div></div></div>`;
     ov.classList.add("open");
     if (typeof lockScroll === "function") lockScroll(true);
     document.addEventListener("keydown", onKey);
@@ -988,7 +1222,10 @@
     const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);
     const wide = p === "WR" || p === "TE";
     if (sport !== "nfl") return runs && (!wide || /rush/.test(m)) ? ["carries"] : [];
-    if (p === "QB") return runs ? ["carries"] : [];
+    /* A quarterback's own chart is his throws, whatever the bet; his runs
+       are the other (2026-10-13). A passing bet with no position on the
+       row asks for both too, and the numbers decide. */
+    if (p === "QB" || (!p && /^pass/.test(m))) return ["passes", "carries"];
     if (!runs && !catches) return [];
     const back = p === "RB" || p === "FB" || p === "HB";
     return wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"];
@@ -997,17 +1234,18 @@
     if (!C || !C.kinds || C.kinds.length < 2) return "";
     const n = C.counts || {};
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
-      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${k === "routes" ? "Targets" : "Carries"}${n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${esc((KIND[k] || {}).chip || k)}${n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
   }
   //: The section's own heading, kept short of the page's "why?" fold.
   function secHTML(c) {
-    const R = c.S.kind === "routes";
+    const R = c.S.kind === "routes", K = KIND[c.S.kind];
+    if (K && K.sec) return `${esc(K.title)} <span class="sub">— ${esc(K.sec)}.</span>`;
     return `${R ? "Route chart" : "Carry chart"} <span class="sub">— ${R
       ? "every pass thrown to him: how far, which side, caught or not, and the yards after"
       : c.S.sport === "cfb" ? "every run he made: how far it went, and when in the game"
         : "every run he made: the hole, how far it went, and where on the field"}.</span>`;
   }
-  const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${S.kind === "routes" ? "targets" : "carries"}…</div>`;
+  const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${esc((KIND[S.kind] || KIND.carries).noun)}…</div>`;
   const fresh = (sport, kind, player) => ({ sport, kind, player, data: null, view: "game", gi: 0, sel: -1, hint: "" });
 
   function pick(c, kind) {
@@ -1053,5 +1291,7 @@
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
                                          routeTiles, routeTables, routeNote, routeLegend,
-                                         faceHTML, faceStep, inits, kindsFor, tally } };
+                                         faceHTML, faceStep, inits, kindsFor, tally,
+                                         KIND, DRAW, passGameChart, passSeasonChart, passTiles, passList,
+                                         passTables, passChip } };
 })();

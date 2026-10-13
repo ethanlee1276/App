@@ -38,7 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import carries as CR, chartfill as CF, db as D, maintenance as M, targets as TG  # noqa: E402
+from engine import carries as CR, chartfill as CF, db as D, maintenance as M, passes as PS, targets as TG  # noqa: E402
 
 TODAY = dt.date(2026, 10, 13)
 CC_JS = (ROOT / "web" / "js" / "carrychart.js").read_text(encoding="utf-8")
@@ -79,6 +79,13 @@ def _pass(**kw):
     return row
 
 
+def _one_throw(conn, season=2026):
+    fold = PS.NflPasses(season)
+    fold.add(_pass(season=str(season), passer_player_id=ALLEN, passer_player_name="J.Allen",
+                   passing_yards="12"))
+    D.upsert_passes(conn, fold.rows(NAMES, {}))
+
+
 def _one_carry(conn, season=2026):
     fold = CR.NflCarries(season)
     fold.add(_run(season=str(season)))
@@ -99,13 +106,17 @@ def test_a_season_played_with_no_chart_rows_is_owed_and_nothing_else_is():
     _game(conn, "nfl", 2025, "2025_10_DET_WAS", date="2025-11-09")
     _game(conn, "cfb", 2026, "401752000")
     _game(conn, "cfb", 2025, "401700000", score=None, date="2025-09-01")   # never finished
+    # The passing chart's table (2026-10-13) is owed like the other two.
     assert CF.owed(conn, TODAY) == [("nfl", 2026, "carries"), ("nfl", 2026, "targets"),
-                                    ("cfb", 2026, "carries"), ("nfl", 2025, "carries"),
-                                    ("nfl", 2025, "targets")]
+                                    ("nfl", 2026, "passes"), ("cfb", 2026, "carries"),
+                                    ("nfl", 2025, "carries"), ("nfl", 2025, "targets"),
+                                    ("nfl", 2025, "passes")]
     _one_carry(conn)
     _one_target(conn, 2025)
-    assert CF.owed(conn, TODAY) == [("nfl", 2026, "targets"), ("cfb", 2026, "carries"),
-                                    ("nfl", 2025, "carries")], "a table with rows is never owed"
+    _one_throw(conn, 2025)
+    assert CF.owed(conn, TODAY) == [("nfl", 2026, "targets"), ("nfl", 2026, "passes"),
+                                    ("cfb", 2026, "carries"), ("nfl", 2025, "carries")], \
+        "a table with rows is never owed"
     # January is still last autumn's season: 2026 and 2025, not 2027.
     assert CF.season_of(dt.date(2027, 1, 20)) == 2026 and CF.season_of(dt.date(2026, 7, 31)) == 2025
 
@@ -149,10 +160,11 @@ def test_the_cycle_starts_the_fill_once_and_tries_again_only_after_a_while():
         got = M.fill_charts_if_owed(logs.append, today=TODAY, now=1000.0, conn=conn,
                                     state_path=state, spawn=spawn)
         assert started == ["engine.chartfill"]
-        assert got[0] == ("charts: NFL 2026 carries, NFL 2026 targets empty — filling now, "
+        assert got[0] == ("charts: NFL 2026 carries, NFL 2026 targets, NFL 2026 passes empty — filling now, "
                           "not with tomorrow's chores")
         assert json.loads(state.read_text())["started"] == 1000.0
-        assert json.loads(state.read_text())["owed"] == [["nfl", 2026, "carries"], ["nfl", 2026, "targets"]]
+        assert json.loads(state.read_text())["owed"] == [["nfl", 2026, "carries"], ["nfl", 2026, "targets"],
+                                                         ["nfl", 2026, "passes"]]
         assert any("pid 4242" in ln for ln in logs)
         # The next cycle, a minute on, while the child reads: not again.
         assert M.fill_charts_if_owed(logs.append, today=TODAY, now=1060.0, conn=conn,
@@ -165,6 +177,7 @@ def test_the_cycle_starts_the_fill_once_and_tries_again_only_after_a_while():
         # Filled: nothing starts, nothing is written.
         _one_carry(conn)
         _one_target(conn)
+        _one_throw(conn)
         state.unlink()
         assert M.fill_charts_if_owed(logs.append, today=TODAY, now=10 ** 9, conn=conn,
                                      state_path=state, spawn=spawn) == []
@@ -248,7 +261,8 @@ def test_an_owed_nfl_season_is_read_once_for_both_charts():
         yield _pass(season=str(season))
 
     saved = [(nflpbp, "load_pbp_rows"), (CR, "nfl_names"), (TG, "routes_for"), (TG, "charting_for"),
-             (CR, "fetch_ngs_rushing"), (TG, "fetch_ngs_receiving"), (CR, "backfill_cfb")]
+             (CR, "fetch_ngs_rushing"), (TG, "fetch_ngs_receiving"), (CR, "backfill_cfb"),
+             (PS, "charting_for"), (PS, "fetch_ngs_passing")]
     saved = [(o, n, getattr(o, n)) for o, n in saved]
     nflpbp.load_pbp_rows = load
     CR.nfl_names = lambda season: NAMES
@@ -257,16 +271,20 @@ def test_an_owed_nfl_season_is_read_once_for_both_charts():
     CR.fetch_ngs_rushing = lambda ttl=0: []
     TG.fetch_ngs_receiving = lambda ttl=0: []
     CR.backfill_cfb = lambda conn, season: 7
+    PS.charting_for = lambda season: {}
+    PS.fetch_ngs_passing = lambda ttl=0: []
     try:
         conn = D.connect(":memory:")
         lines = []
         CF.fill(conn, [("nfl", 2026, "carries"), ("nfl", 2026, "targets"), ("cfb", 2026, "carries")],
                 log=lines.append)
-        assert [s for s, _ in reads] == [2026], "one read of the season feeds both charts"
+        assert [s for s, _ in reads] == [2026], "one read of the season feeds every chart"
         cols = reads[0][1]
-        assert set(CR.PBP_COLS) <= set(cols) and set(TG.PBP_COLS) <= set(cols)
-        assert lines == ["NFL 2026: 1 carries, 1 targets, no route charting published for it yet",
-                         "NGS rushing: 0 rows", "NGS receiving: 0 rows", "CFB 2026: 7 carries"]
+        assert set(CR.PBP_COLS) <= set(cols) and set(TG.PBP_COLS) <= set(cols) and set(PS.PBP_COLS) <= set(cols)
+        # The fixture's pass names no passer, so it is a target and no throw.
+        assert lines == ["NFL 2026: 1 carries, 1 targets, 0 throws, no route charting published for it yet",
+                         "NGS rushing: 0 rows", "NGS receiving: 0 rows", "NGS passing: 0 rows",
+                         "CFB 2026: 7 carries"]
         assert CR.chart(conn, "nfl", "Josh Allen")["games"][0]["carries"][0]["y"] == 8.0
         assert TG.chart(conn, "Sam LaPorta")["games"][0]["line"]["yds"] == 12.0
 

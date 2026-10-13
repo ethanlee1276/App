@@ -47,7 +47,9 @@ its page now draws his route chart or carry chart in place, with no
 button; the player page has it too, and the parlay checker's football
 legs carry a chart button (step 61; T). Each player's chart leads with
 what he does, a back's carries and a receiver's or tight end's targets,
-whatever the bet (step 62; T). The whole picture, sport by
+whatever the bet (step 62; T). A quarterback's pick now draws every
+throw he made, where it went and whether it was caught, and the sacks he
+took (step 63; U). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -57,13 +59,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A player's chart leads with what he does: a back's carries, a receiver's targets`
+**A. The box has today's code.** The first line should end `A quarterback's pick draws every throw he made: the passing chart`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor f18de208 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 75448e61 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -357,6 +359,26 @@ scroll past Form. His chart is there, already drawn: a back's Carry chart
 many of each he has this season; a receiver's or tight end's Route chart,
 with the switch only if he has 3+ carries this season. If it says "No
 targets on file", paste K's output.
+
+**U. The passing chart** (step 63; read-only, seconds). Nothing to run
+for it to fill: the box sees the new table empty and reads the
+play-by-play into it within minutes of pulling (the same catch-up as
+step 52). The first line counts the throws stored per season and kind;
+the second is Josh Allen at the Rams in week 5, which should print
+`LA {'att': 19, 'cmp': 12, 'yds': 210.0, 'td': 1, 'int': 1, 'sk': 1}`
+(the box score, to the yard); the third is what the page asks for:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute('SELECT season, kind, COUNT(*) FROM passes GROUP BY season, kind ORDER BY season DESC').fetchall())"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db, passes; c=db.connect(); d=passes.chart(c, 'Josh Allen', 2026); g=[x for x in d['games'] if x['week']==5][0]; print(g['opp'], {k: g['line'][k] for k in ('att','cmp','yds','td','int','sk')})"
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=passes&sport=nfl&player=Josh%20Allen" | head -c 300; echo
+```
+An empty first line or `{"filling": true}` from the third means it is
+still filling: wait ten minutes and run them again. Then on your phone:
+tap any quarterback's pick (passing yards, attempts, completions,
+touchdowns, interceptions, even his rushing). His Passing chart is drawn
+after Form with a `Passes | Carries` switch: every throw from the pocket
+to where it landed, green for the yards after the catch, a red × for an
+interception or a sack.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2026,6 +2048,38 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_the_pick_page_draws_his_chart.py` from step 61: the
     chart-per-market check now checks the charts each player can have,
     and the parlay door check expects the one "His charts" door.
+
+63. **A quarterback's pick draws every throw he made** (2026-10-13, you:
+    "Yes do all of them"; the first of the charts on the list). U checks
+    it. A new table, `passes`, holds every dropback that ended in a throw,
+    a spike or a sack, off the same NFL play-by-play the carry and route
+    charts read (one read feeds all three, nightly and in the catch-up):
+    air yards and the third of the field, complete or not and to whom,
+    the yards after the catch, touchdowns, interceptions, a hit on him,
+    and FTN's charting (play action, screen, out of the pocket, a
+    throwaway, a ball that should have been picked, a drop, a blitz). The
+    league's Next Gen Stats passing file (time to throw, completion over
+    expected) is stored beside it, as published. Checked against the
+    box score before any of it was written: Josh Allen's week 5 at the
+    Rams is 19-12-210, a touchdown, an interception and one sack for 8 in
+    the play-by-play, exactly nflverse's weekly line. A spiked ball counts
+    as an incomplete attempt, as the box score counts it, and isn't drawn.
+    The chart reads like the route chart: each game's throws from the
+    pocket, the season's share of his attempts by depth and third, every
+    dropback listed, and splits (depth, third, kept clean / hit /
+    blitzed / play action, down, who he threw to). A quarterback's own
+    chart is his throws whatever the bet, with his runs on the switch;
+    passing bets now have a chart slot on the pick page and a "His
+    charts" door in the parlay checker. Every chart from here on goes
+    through one door, `/api/players/chart?kind=…` (engine/charts.py); the
+    carry and route charts keep theirs. Pins changed and told to you: the
+    chart filler's test now owes the passing table beside the other two
+    (`tests/test_the_charts_fill_themselves.py`: the owed lists, the fill
+    message and its log line); my own `tests/test_the_pick_page_draws_his_chart.py`
+    now gives a quarterback `Passes | Carries` and a passing bet a slot;
+    `tests/test_maintenance.py` stubs the passing chart's reads beside the
+    route chart's (added, nothing loosened). New:
+    `tests/test_a_passing_chart_for_every_passer.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

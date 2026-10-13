@@ -246,7 +246,7 @@
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
     if (!l.player) return "";
-    const door = lg === "nfl" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
+    const door = lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
       : lg === "cfb" && /rush/.test(m) ? ["carries", "Carry chart"] : null;
     return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
   }

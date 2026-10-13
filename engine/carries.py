@@ -321,6 +321,12 @@ def fetch_ngs_rushing(ttl: int = 6 * 3600) -> list[dict]:
 
 
 # --- keeping it current -------------------------------------------------------
+#: The tables a player's charts are drawn from, keyed (sport, season,
+#: period, game_id, play_id) with a `date`: the only names `nfl_behind`
+#: and `stored` will put in a query.
+CHART_TABLES = ("carries", "targets", "passes")
+
+
 def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
     """Is a finished NFL game newer than the newest carry on file?
 
@@ -329,8 +335,9 @@ def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
     the read also runs while this is true. nflverse refreshes the file
     overnight and the fetch layer caches it for a day, so this costs one
     download a night at most and stops the night the file has the game.
-    ``table="targets"`` asks the same of the route chart's passes."""
-    if table not in ("carries", "targets"):
+    ``table="targets"`` asks the same of the route chart's passes, and
+    ``table="passes"`` of the passing chart's throws."""
+    if table not in CHART_TABLES:
         raise ValueError(f"not a chart table: {table!r}")
     try:
         last = conn.execute(
@@ -347,9 +354,10 @@ def stored(conn, sport: str, table: str = "carries") -> bool:
     """Has this box any chart rows for the league at all? No means the
     charts are still being filled (engine/chartfill) — which the page says,
     rather than "no carries on file" for a player who has hundreds
-    (2026-10-13). ``table="targets"`` asks it of the route chart. A
-    database that cannot answer is taken as filled: nothing is claimed."""
-    if table not in ("carries", "targets"):
+    (2026-10-13). ``table="targets"`` asks it of the route chart, and
+    every other chart table its own (`CHART_TABLES`). A database that
+    cannot answer is taken as filled: nothing is claimed."""
+    if table not in CHART_TABLES:
         raise ValueError(f"not a chart table: {table!r}")
     try:
         return bool(conn.execute(f"SELECT 1 FROM {table} WHERE sport=? LIMIT 1",

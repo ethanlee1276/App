@@ -110,6 +110,8 @@
 .rc-miss { fill: var(--panel); stroke: var(--text-mute); stroke-width: 1.8; }
 .rc-int path { stroke: var(--bad); stroke-width: 2.6; stroke-linecap: round; }
 .rc-qb { fill: var(--text-mute); }
+.rc-sack { fill: none; stroke: var(--bad); stroke-width: 2.6; stroke-linecap: round; }
+.rc-sack.sel { stroke-width: 4; }
 .rc-cell { fill: var(--brand); stroke: var(--border); stroke-width: 1; }
 .rc-dot.c { fill: var(--good); }
 .rc-dot.m { fill: none; stroke: var(--text-mute); stroke-width: 1.4; }

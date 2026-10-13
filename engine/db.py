@@ -341,6 +341,36 @@ CREATE TABLE IF NOT EXISTS targets (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS targets_player ON targets (sport, player, season);
+-- PASSES (2026-10-13, Ethan: "Yes do all of them"): the quarterback's
+-- chart, the route chart turned round. One row per dropback that ended in
+-- a throw, a spike or a sack (`kind`), off the same NFL play-by-play: air
+-- yards and the third of the field, complete or not and to whom, the
+-- yards, the yards after the catch, touchdowns, interceptions, a hit on
+-- him, nflfastR's completion probability for the throw (`cp`), and FTN's
+-- charting words (play action, screen, out of pocket, throwaway, should
+-- have been picked, drop, blitz). engine/passes.py fills it and builds
+-- the chart from it. Keyed like `carries`.
+CREATE TABLE IF NOT EXISTS passes (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, play_id TEXT,
+    date TEXT, player TEXT, player_id TEXT, team TEXT, opponent TEXT, home INTEGER,
+    position TEXT, jersey TEXT, qtr INTEGER, clock TEXT, down INTEGER, distance INTEGER,
+    yardline_100 INTEGER, kind TEXT, air_yards REAL, side TEXT, complete INTEGER, yards REAL,
+    yac REAL, td INTEGER, interception INTEGER, first_down INTEGER, receiver TEXT,
+    receiver_id TEXT, hit INTEGER, fumble_lost INTEGER, cp REAL, charting TEXT,
+    PRIMARY KEY (sport, season, period, game_id, play_id)
+);
+CREATE INDEX IF NOT EXISTS passes_player ON passes (sport, player, season);
+-- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
+-- row per player-week, week 0 the season line, passers past the league's
+-- minimum — time to throw, completion % above expectation, aggressiveness
+-- and air yards, as published. Read by the passing chart; never estimated.
+CREATE TABLE IF NOT EXISTS ngs_passing (
+    season INTEGER, week INTEGER, season_type TEXT, player_id TEXT, player TEXT, team TEXT,
+    attempts INTEGER, completions INTEGER, yards REAL, tds INTEGER, ints INTEGER,
+    time_to_throw REAL, cpoe REAL, aggressiveness REAL, intended_air REAL, completed_air REAL,
+    air_to_sticks REAL, max_air REAL,
+    PRIMARY KEY (season, week, season_type, player_id)
+);
 -- THE LEAGUE'S RECEIVING TRACKING NUMBERS (nextgen_stats/ngs_receiving):
 -- one row per player-week, week 0 the season line, receivers and tight
 -- ends past the league's five-target minimum — separation, cushion,
@@ -959,6 +989,26 @@ def upsert_targets(conn, rows: list[dict]) -> int:
 def upsert_ngs_receiving(conn, rows: list[dict]) -> int:
     """The league's receiving tracking file, row for row (engine/targets.ngs_rows)."""
     return _upsert(conn, "ngs_receiving", NGS_REC_COLS, rows)
+
+
+PASS_COLS = ["sport", "season", "period", "game_id", "play_id", "date", "player", "player_id",
+             "team", "opponent", "home", "position", "jersey", "qtr", "clock", "down", "distance",
+             "yardline_100", "kind", "air_yards", "side", "complete", "yards", "yac", "td",
+             "interception", "first_down", "receiver", "receiver_id", "hit", "fumble_lost", "cp",
+             "charting"]
+NGS_PASS_COLS = ["season", "week", "season_type", "player_id", "player", "team", "attempts",
+                 "completions", "yards", "tds", "ints", "time_to_throw", "cpoe", "aggressiveness",
+                 "intended_air", "completed_air", "air_to_sticks", "max_air"]
+
+
+def upsert_passes(conn, rows: list[dict]) -> int:
+    """Every throw on the passing chart (engine/passes.py)."""
+    return _upsert(conn, "passes", PASS_COLS, rows)
+
+
+def upsert_ngs_passing(conn, rows: list[dict]) -> int:
+    """The league's passing tracking file, row for row (engine/passes.ngs_rows)."""
+    return _upsert(conn, "ngs_passing", NGS_PASS_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

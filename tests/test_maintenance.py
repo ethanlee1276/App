@@ -87,6 +87,13 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(targets, "routes_for", lambda season: {})
     monkeypatch.setattr(targets, "charting_for", lambda season: {})
     monkeypatch.setattr(targets, "nfl_behind", lambda conn, season, today: False)
+    # And the passing chart's (2026-10-13): the NGS passing file, last
+    # season's throws once, and the FTN file its throws are joined to.
+    from engine import passes
+    monkeypatch.setattr(passes, "fetch_ngs_passing", lambda ttl=0: [])
+    monkeypatch.setattr(passes, "backfill_nfl", lambda conn, season: 0)
+    monkeypatch.setattr(passes, "charting_for", lambda season: {})
+    monkeypatch.setattr(passes, "nfl_behind", lambda conn, season, today: False)
     # The charts' every-cycle catch-up (2026-10-13) starts a real child when
     # a chart table is empty; the suite's sandbox already keeps it from
     # starting one, and a direct run of this file must not either.

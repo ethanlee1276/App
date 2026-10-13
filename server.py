@@ -1175,6 +1175,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_carries(parse_qs(parsed.query))
         if parsed.path in ("/api/players/routes", "/api/players/routes/"):
             return self._players_routes(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/chart", "/api/players/chart/"):
+            return self._players_chart(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -3268,6 +3270,32 @@ class Handler(BaseHTTPRequestHandler):
                     out["face"] = statlogs.face(conn, "nfl", out["player"])
                 elif not carries.stored(conn, "nfl", table="targets"):
                     out = {"filling": True}          # being filled, as the carry chart's
+            finally:
+                conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _players_chart(self, q):
+        """Any of a player's charts — every one since the carry and route
+        charts, by kind (engine/charts: the passing chart first).
+
+        Ethan, 2026-10-13: "Yes do all of them ... then make sure they are
+        all routed correctly like nfl." One door, so every chart is asked
+        the same way. UNGATED like the carry and route charts: where a
+        ball was thrown, hit or shot is a fact of the game, not a pick.
+        """
+        import os
+        from engine import charts, db as _hdb
+        kind = (q.get("kind") or [""])[0].lower()[:20]
+        sport = (q.get("sport") or [""])[0].lower()[:8]
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if not charts.known(kind, sport):
+            return self._send(400, b'{"error":"no such chart for that league"}', ".json")
+        out: dict = {}
+        if player and os.path.exists(str(_hdb.DEFAULT_DB)):
+            conn = _hdb.connect(str(_hdb.DEFAULT_DB))
+            try:
+                out = charts.answer(conn, kind, sport, player, int(season) if season.isdigit() else None)
             finally:
                 conn.close()
         return self._send(200, json.dumps(out).encode(), ".json")

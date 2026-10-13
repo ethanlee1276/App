@@ -99,9 +99,10 @@ def test_a_slot_for_every_football_bet_the_charts_speak_to():
     got = _node(prog)
     if got is None:
         return
-    for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "cfbRush", "cfbTd", "board"):
+    # A passing bet has a chart since the passing chart (2026-10-13).
+    for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "pass", "ints", "cfbRush", "cfbTd", "board"):
         assert got[k].startswith('<div class="cc-slot"'), k
-    for k in ("pass", "ints", "kick", "tackles", "cfbRec", "mlb", "nba", "nobody"):
+    for k in ("kick", "tackles", "cfbRec", "mlb", "nba", "nobody"):
         assert got[k] == "", (k, got[k])
     assert 'data-cc="Sam LaPorta" data-lg="nfl" data-mkt="receptions" data-pos="TE"' in got["rec"]
     assert 'data-lg="cfb"' in got["cfbRush"] and 'data-lg="nfl"' in got["board"], "the board's league by default"
@@ -160,6 +161,7 @@ def test_a_bet_asks_for_every_chart_he_could_have():
         wrRec: k("nfl", "receptions", "WR"), teYds: k("nfl", "rec_yds", "TE"), wrRush: k("nfl", "rush_yds", "WR"),
         teTd: k("nfl", "anytime_td", "TE"), wrRr: k("nfl", "rush_rec_yds", "WR"),
         qbRun: k("nfl", "pass_rush_yds", "QB"), qbTd: k("nfl", "anytime_td", "QB"), qbPass: k("nfl", "pass_yds", "QB"),
+        qbRush: k("nfl", "rush_yds", "QB"), noPosPass: k("nfl", "pass_att", ""), noPosInt: k("nfl", "pass_int", ""),
         noPosRec: k("nfl", "receptions", ""), noPosTd: k("nfl", "anytime_td", ""),
         kick: k("nfl", "kick_pts", "K"),
         cfbRbRush: k("cfb", "rush_yds", "RB"), cfbRbTd: k("cfb", "anytime_td", "RB"), cfbQbTd: k("cfb", "anytime_td", "QB"),
@@ -176,7 +178,12 @@ def test_a_bet_asks_for_every_chart_he_could_have():
         assert got[key] == rb, (key, got[key])
     for key in ("wrRec", "teYds", "wrRush", "teTd", "wrRr", "noPosRec"):
         assert got[key] == both, (key, got[key])
-    assert got["qbRun"] == got["qbTd"] == ["carries"] and got["qbPass"] == [] and got["kick"] == []
+    # A quarterback's own chart is his throws, whatever the bet; his runs
+    # are the other (the passing chart, 2026-10-13).
+    qb = ["passes", "carries"]
+    for key in ("qbRun", "qbTd", "qbPass", "qbRush", "noPosPass", "noPosInt"):
+        assert got[key] == qb, (key, got[key])
+    assert got["kick"] == []
     # College has no route chart; its receivers' few carries are not theirs.
     assert got["cfbRbRush"] == got["cfbRbTd"] == got["cfbQbTd"] == ["carries"]
     assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == [], "never a college receiver's carries for a TD"
