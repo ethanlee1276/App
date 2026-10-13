@@ -341,7 +341,9 @@ def test_the_page_draws_every_throw_and_lists_every_dropback():
 
 def test_every_door_reaches_it():
     i = APP_JS.index("function chartSlot(")
-    assert "/rush|rec|anytime|pass/.test(m)" in APP_JS[i:i + 400], "a passing bet's pick page draws his chart"
+    # Since 2026-10-13 every player's bet leaves a slot and the chart
+    # module's kindsFor picks his charts (pinned above for a passer).
+    assert "return r && r.player ?" in APP_JS[i:i + 400], "a passing bet's pick page draws his chart"
     i = SLIP_JS.index("function chartsHTML(")
     assert "/rush|rec|anytime|pass/.test(m)" in SLIP_JS[i:i + 400], "a passing leg carries his charts' door"
     assert '`/api/players/chart?kind=${kind}&sport=`' in CC_JS

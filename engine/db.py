@@ -387,6 +387,21 @@ CREATE TABLE IF NOT EXISTS mlb_pitches (
     PRIMARY KEY (game_pk, at_bat, n)
 );
 CREATE INDEX IF NOT EXISTS mlb_pitches_pitcher ON mlb_pitches (pitcher_id, season);
+-- NBA SHOTS (2026-10-13, the shot chart): one row per field-goal attempt
+-- and per free throw off the league's own play-by-play — where it was
+-- taken (the legacy court coordinates, tenths of a foot from the basket),
+-- made or missed, the kind of shot, its distance, the assist and the
+-- block — named by the same game's box score. engine/nba/shots.py fills
+-- it and draws the shot chart from it.
+CREATE TABLE IF NOT EXISTS nba_shots (
+    game_id TEXT, action INTEGER, season INTEGER, date TEXT, person_id INTEGER,
+    player TEXT, team TEXT, opponent TEXT, home INTEGER, period INTEGER, clock TEXT,
+    kind TEXT, made INTEGER, shot TEXT, descriptor TEXT, distance REAL, x REAL, y REAL,
+    zone TEXT, area TEXT, assist TEXT, blocked INTEGER, quals TEXT,
+    PRIMARY KEY (game_id, action)
+);
+CREATE INDEX IF NOT EXISTS nba_shots_player ON nba_shots (person_id, season);
+CREATE INDEX IF NOT EXISTS nba_shots_league ON nba_shots (season, zone, made);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness
@@ -1048,6 +1063,12 @@ def upsert_mlb_pitches(conn, rows: list[dict]) -> int:
     """Every pitch on the pitch chart (engine/mlb/charts.py)."""
     from .mlb.charts import PITCH_COLS
     return _upsert(conn, "mlb_pitches", PITCH_COLS, rows)
+
+
+def upsert_nba_shots(conn, rows: list[dict]) -> int:
+    """Every shot on the NBA shot chart (engine/nba/shots.py)."""
+    from .nba.shots import SHOT_COLS
+    return _upsert(conn, "nba_shots", SHOT_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

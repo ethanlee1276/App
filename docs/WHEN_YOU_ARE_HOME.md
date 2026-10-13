@@ -53,7 +53,9 @@ took (step 63; U). A college receiver's pick draws every pass thrown his
 way that the play file names, 2025 on (step 64; V). A baseball pick now
 draws the hitter's hit tracker (every ball he put in play, where it
 landed and how hard) or the pitcher's pitch chart (every pitch, where it
-crossed the plate and what came of it) (step 65; W). The whole picture, sport by
+crossed the plate and what came of it) (step 65; W). A basketball pick
+draws his shot chart: every shot he took on the half court, made or
+missed, each zone beside the league's percentage (step 66; X). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -63,13 +65,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A baseball pick draws his hit tracker or his pitch chart`
+**A. The box has today's code.** The first line should end `A basketball pick draws his shot chart`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 3142ee86 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 279e359b HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -428,6 +430,31 @@ strikeouts or outs pick draws the pitcher's Pitch chart instead: every
 pitch from the catcher's view, coloured by called strike, whiff, foul,
 in play or ball, his pitch mix with speed, whiff rate and CSW, and the
 season's share of pitches in each part of the zone.
+
+**X. The shot chart** (step 66; read-only except the first line, which
+reads one game). The sandbox I build in cannot reach the NBA's site, so
+the play-by-play's field names come from the nba_api project's
+documentation of it; the first command reads one real game the way the
+chart does and prints a shot's fields and the first stored row, so we
+both know the shape is what the code expects. Paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.nba import shots as S; p, b = S.read_once('0022501230'); a = [x for x in (p or {}).get('game', {}).get('actions', []) if x.get('actionType') in ('2pt', '3pt')]; print(sorted(a[0]) if a else 'NO SHOTS', {k: a[0].get(k) for k in ('xLegacy', 'yLegacy', 'shotDistance', 'area', 'shotResult', 'subType')} if a else ''); r = S.fold(p, b) if p and b else []; print(len(r), r[0] if r else 'NOTHING FOLDED')"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute('SELECT season, COUNT(DISTINCT game_id), COUNT(*) FROM nba_shots GROUP BY season').fetchall())"
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=shots&sport=nba&player=Nikola%20Jokic" | head -c 300; echo
+sudo -u qellys tail -5 /srv/qellys/data/cache/weekly_chartfill.log
+```
+The first line should list `xLegacy`, `yLegacy` and `shotDistance`
+among the keys and print a stored row with a zone. If it says `NO SHOTS`
+or `NOTHING FOLDED`, paste it: the shot chart waits on that. The box reads
+last season's newest 300 games within minutes of pulling and 300 more a
+night (this season's come first once it tips off on the 20th); `last
+season's files are not on the CDN` in the log means the league no longer
+keeps 2025-26 there, and the charts start on opening night. Then on your
+phone, once the NBA board has picks: NBA, Most Likely, tap any pick. His
+Shot chart is drawn after Form: one game's shots on the court, green in,
+red rings missed, with every shot and free throw listed (the assist, the
+block, fast break); the season tab puts each zone's percentage on the
+floor and the splits put it beside the league's.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2198,6 +2225,41 @@ first). Paste back anything that prints an error or looks off.
     bet a slot (it said only football did), and the chart filler's test
     and the maintenance test learned the baseball tables (added, nothing
     loosened). New: `tests/test_mlb_hit_tracker_and_pitch_chart.py`.
+66. **A basketball pick draws his shot chart** (2026-10-13, you: "Yes do
+    all of them"). X checks it. The NBA's own CDN, which already gives the
+    box every box score, publishes each game's play-by-play beside it:
+    every shot with where it was taken (the league's court coordinates),
+    made or missed, the kind of shot, the distance, the assist, the block.
+    A new table, `nba_shots`, holds one row per shot and free throw, named
+    by the same game's box score (the spelling the logs and boards use).
+    The nightly reads the last few days' finals and 300 older games a
+    night: this season's first, then last season's, which the league's
+    season file no longer lists, so they are asked for by the league's own
+    game numbers (1 to 1,230); five misses in a row there and it stops for
+    the night. No play-by-play file is kept in data/cache once its shots
+    are stored. A basketball pick (any market) draws his Shot chart: a
+    game's shots on the half court with every shot listed, or the season
+    with each zone's percentage on the floor (restricted area, paint,
+    mid-range, each corner three, above the break), and splits by zone
+    beside the league's own percentage there, by kind of shot, by quarter
+    and by distance; his minutes, rebounds, assists, steals, blocks and
+    turnovers that night sit beside the shots. ALSO: steals, blocks and
+    turnovers are now stored in the NBA (and WNBA) logs from both box-score
+    feeds; nothing prices them. Every basketball pick gets the chart slot
+    and the parlay checker's "Shot chart" door. ROUTING, ONE RULE: every
+    player's pick page, in every league, now leaves the chart slot, and
+    the chart module decides which of his charts to draw (and hides the
+    slot when he has none, an NFL tackles bet today), so a new chart is
+    routed everywhere a pick opens without touching the first-paint
+    script. That also kept the first visit under its 611 KB budget, which
+    the basketball rule alone had tipped over by 11 bytes. Pins changed
+    and told to you: my own `tests/test_the_pick_page_draws_his_chart.py`
+    now gives every player's bet a slot (it said kicking and tackles bets
+    had none; their charts are hidden by the module) and a basketball
+    parlay leg a door; my own `tests/test_mlb_hit_tracker_and_pitch_chart.py`
+    and `tests/test_a_passing_chart_for_every_passer.py` read the new slot
+    rule; the maintenance test stubs the shot reads. New:
+    `tests/test_a_shot_chart_for_every_nba_player.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

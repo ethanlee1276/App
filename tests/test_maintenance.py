@@ -102,6 +102,14 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(mlbcharts, "backfill",
                         lambda conn, season, through, budget=0, fetch=None: {"games": 0, "pas": 0, "pitches": 0,
                                                                              "failed": 0, "left": 0})
+    # And the NBA shot chart's (2026-10-13): the last few days' finals and
+    # the backfill read the league's play-by-play.
+    from engine.nba import shots as nbashots
+    monkeypatch.setattr(nbashots, "ingest_recent",
+                        lambda conn, today, days=3, read=None: {"games": 0, "shots": 0, "failed": 0})
+    monkeypatch.setattr(nbashots, "backfill",
+                        lambda conn, today, budget=0, read=None: {"games": 0, "shots": 0, "failed": 0,
+                                                                  "left": 0, "last_season": ""})
     # The charts' every-cycle catch-up (2026-10-13) starts a real child when
     # a chart table is empty; the suite's sandbox already keeps it from
     # starting one, and a direct run of this file must not either.

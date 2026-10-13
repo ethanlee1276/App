@@ -15952,17 +15952,15 @@ function ccLoad() {
 /* THE CHARTS ON THE PICK PAGE (Ethan, 2026-10-13: "We should show the
    route checker on the most likely bets as well like when you click on
    the player in the most likely bets it will automatically show the
-   charts in that area with all the other info"). A football bet the
-   charts speak to — rushing, receiving, an anytime touchdown, and since
-   the passing chart a passing bet — leaves a slot; js/carrychart.js
-   decides which chart and draws it there (`mount`, from the settle
-   pass). College has carries and, from 2025, the targets its play file
-   names. Every baseball bet has one: a hitter's hit tracker or a
-   pitcher's pitch chart. */
+   charts in that area with all the other info", then "make sure they
+   are all routed correctly like nfl"). Every player's bet, in every
+   league, leaves a slot; js/carrychart.js decides which of his charts
+   it draws there (`mount`, from the settle pass, `kindsFor`) and hides
+   the slot when he has none. One rule here, so a league's new chart is
+   routed everywhere a pick opens without touching this file. */
 function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
-  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" ? /rush|rec|anytime/.test(m) : lg === "mlb";
-  return ok && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
+  return r && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
 }
 function mountCharts(root) {
   const els = root.querySelectorAll(".cc-slot:not([data-on])");

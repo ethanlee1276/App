@@ -44,6 +44,11 @@ def _mlb_pitches(conn, sport, player, season):
     return M.pitches_chart(conn, player, season)
 
 
+def _nba_shots(conn, sport, player, season):
+    from .nba import shots as N
+    return N.chart(conn, player, season)
+
+
 def _any_row(table):
     """A league table with no sport column: has it any rows at all?"""
     def stored(conn, sport):
@@ -72,6 +77,9 @@ KINDS = {
     # threw (engine/mlb/charts).
     "spray": (("mlb",), _spray, _any_row("mlb_pa")),
     "pitches": (("mlb",), _mlb_pitches, _any_row("mlb_pitches")),
+    # Basketball's (2026-10-13): every shot he took, where from, made or
+    # missed, off the league's own play-by-play (engine/nba/shots).
+    "shots": (("nba",), _nba_shots, _any_row("nba_shots")),
 }
 
 

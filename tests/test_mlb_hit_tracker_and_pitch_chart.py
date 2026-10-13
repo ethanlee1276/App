@@ -334,10 +334,10 @@ def test_the_page_draws_both():
 
 def test_every_door_and_the_module():
     i = APP_JS.index("function chartSlot(")
-    assert ': lg === "mlb";' in APP_JS[i:i + 500], "every baseball bet leaves a slot"
+    assert "return r && r.player ?" in APP_JS[i:i + 500], "every baseball bet leaves a slot"
     i = SLIP_JS.index("function chartsHTML(")
     assert '["pitches", "Pitch chart"] : ["spray", "Hit tracker"]' in SLIP_JS[i:i + 700]
-    assert 'const PLUG = { spray: "mlb", pitches: "mlb" };' in CC_JS
+    assert 'const PLUG = { spray: "mlb", pitches: "mlb"' in CC_JS
     assert "el.src = `js/chart-${f}.js`;" in CC_JS and 'el.addEventListener("load"' in CC_JS
     assert "window.QBCarry.plug" in MLB_JS and 'Q.draw("spray"' in MLB_JS and 'Q.draw("pitches"' in MLB_JS
     for js in (CC_JS, MLB_JS):

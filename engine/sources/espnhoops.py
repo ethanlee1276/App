@@ -51,7 +51,10 @@ def _base(league: str) -> str:
 # ESPN's box-score column names → our market keys. Anything not listed is
 # ignored rather than guessed at.
 STAT_MAP = {"MIN": "min", "PTS": "pts", "REB": "reb", "AST": "ast",
-            "3PT": "fg3m"}
+            "3PT": "fg3m",
+            # Stored since 2026-10-13 beside the CDN's own (nbadata), for the
+            # charts and the reads; no board prices them.
+            "STL": "stl", "BLK": "blk", "TO": "tov"}
 
 
 def _season_of(date: str, league: str) -> int:

@@ -572,6 +572,9 @@ PRUNABLE_CACHE_PREFIXES = (
     "mlb_pbp_", "mlb_roster_", "mlb_pensched_", "mlb_watchsched_",
     "standings_mlb_", "standings_nhl_",
     "nba_box_", "wnba_box_", "wnba_schedule_",
+    # A game's play-by-play for the shot chart (engine/nba/shots), read and
+    # let go; this catches one a failed read left behind.
+    "nba_pbp_",
     # Hockey (2026-10-03): a final's box score is stored in history the day
     # it lands; a player's name and photo land in player_assets. All three
     # re-fetch on a miss.
@@ -1848,6 +1851,24 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  nba results: {tot_g} game(s), {tot_l:,} log rows")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nba results ingest failed: {exc}")
+
+    # NBA SHOT CHART (2026-10-13): every shot of the last few days' finals
+    # off the league's play-by-play, then older finals a budget a night —
+    # this season's first, then last season's (engine/nba/shots).
+    if today.month >= 10 or today.month <= 6:
+        try:
+            from . import db as _sdb
+            from .nba import shots as _nshots
+            _sc = _sdb.connect()
+            got = _nshots.ingest_recent(_sc, today)
+            back = _nshots.backfill(_sc, today)
+            if got["games"] or back["games"] or back["failed"] or back.get("last_season"):
+                log(f"  nba shots: {got['games'] + back['games']} game(s), "
+                    f"{got['shots'] + back['shots']:,} shots"
+                    + (f", {back['left']:,} older left" if back.get("left") else "")
+                    + (f" (last season's files are {back['last_season']})" if back.get("last_season") else ""))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  nba shots failed: {exc}")
 
     # WNBA results — the block that never existed. Until 2026-08-18 a WNBA
     # day was ingested only when an open bet pointed at it (settle_open's

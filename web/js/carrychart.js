@@ -110,6 +110,8 @@
              sec: "every ball he put in play: how hard, how high, how far and where it landed" },
     pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "how he attacks",
                sec: "every pitch he threw: where it crossed the plate, what it was and what the batter did with it" },
+    shots: { chip: "Shots", title: "Shot chart", noun: "shots", one: "shot", where: "where he shoots",
+             sec: "every shot he took: where from, made or missed, and how" },
   };
   /* A league whose file says less than the NFL's gets its own names for
      the same chart: college targets have no air yards, no side of the
@@ -124,7 +126,7 @@
      is drawn (a football page never downloads baseball's drawing): the
      module registers its parts through `QBCarry.plug`. Listeners, not
      handler properties: the page's CSP forbids inline handlers. */
-  const PLUG = { spray: "mlb", pitches: "mlb" };
+  const PLUG = { spray: "mlb", pitches: "mlb", shots: "hoops" };
   const plugs = {};
   function need(kind) {
     const f = PLUG[kind];
@@ -274,6 +276,8 @@
   //: in read "1--2"; it says "1 for −2".
   const tally = (n, yds) => { const y = Math.round(yds); return y < 0 ? `${n} for −${-y}` : `${n}-${y}`; };
   const num1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
+  //: A season that spans two years is named for both: the NBA's 2025 is "2025-26".
+  const seasonName = (sport, y) => (sport === "nba" ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
 
   /* ---------------- the field ---------------- */
   function fieldSVG(ymax, laneLabels, ticks) {
@@ -939,7 +943,7 @@
     }
     const sport = d.sport;
     const seasons = d.seasons.length > 1 ? `<div class="cc-seasons" role="group" aria-label="Season">${d.seasons.map((y) =>
-      `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${y}</button>`).join("")}</div>` : "";
+      `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${esc(seasonName(sport, y))}</button>`).join("")}</div>` : "";
     /* On a pick page the page above already says who he is, so the chart
        opens on its switches instead of a second header with his face. */
     /* His two charts' switch: on a pick page beside the seasons, in the
@@ -958,7 +962,7 @@
       </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + `
       <div class="cc-tabs" role="tablist">
         <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">By game</button>
-        <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${d.season} · ${esc(K.where)}</button>
+        <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${esc(seasonName(sport, d.season))} · ${esc(K.where)}</button>
       </div>`;
     /* Four parts in every view: what sits above the drawing (the games,
        the title), the drawing, what reads it (the legend, the numbers)
@@ -1051,7 +1055,7 @@
   function plugView(P, d, sport) {
     if (S.view === "season") {
       const n = d.games.length;
-      return { top: `<div class="cc-title">${esc(`${d.season} season · ${P.count(d.season_line)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
+      return { top: `<div class="cc-title">${esc(`${seasonName(sport, d.season)} season · ${P.count(d.season_line)} in ${n} game${n === 1 ? "" : "s"}`)}</div>`,
                fig: `<div class="cc-stage">${P.season(d)}</div>`,
                side: P.seasonSide(d),
                tail: fold("splits", P.splitsTitle, P.splits(d)) };
@@ -1059,7 +1063,7 @@
     const g = d.games[Math.min(S.gi, d.games.length - 1)];
     return { top: `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
                 `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(P.chip(x))}</small></button>`).join("")}</div>
-              <div class="cc-title">${esc(gameTitle(g, sport, d.season))}</div>`,
+              <div class="cc-title">${esc(gameTitle(g, sport, seasonName(sport, d.season)))}</div>`,
              fig: `<div class="cc-stage">${P.game(g, d)}<div class="cc-tip" hidden></div></div>`,
              side: P.gameSide(g, d),
              tail: fold("list", `Every ${P.one}, in order · ${P.items(g).length}`, P.list(g, d)) };
@@ -1353,6 +1357,10 @@
        strikeouts or outs draw every pitch he threw, a hitter's bet every
        ball he put in play (engine/mlb/charts). */
     if (sport === "mlb") return /^(strikeouts|outs)$|pitcher|earned_runs|_allowed/.test(m) ? ["pitches"] : m ? ["spray"] : [];
+    /* A basketball player's chart is his shots, whatever the bet: his
+       points, threes and the combos are made there, and his rebounds and
+       assists ride the same minutes (engine/nba/shots). */
+    if (sport === "nba") return m ? ["shots"] : [];
     if (sport !== "nfl" && sport !== "cfb") return [];
     /* A quarterback's own chart is his throws, whatever the bet; his runs
        are the other (2026-10-13). A passing bet with no position on the

@@ -99,14 +99,14 @@ def test_a_slot_for_every_football_bet_the_charts_speak_to():
     got = _node(prog)
     if got is None:
         return
-    # A passing bet has a chart since the passing chart, and a college
-    # receiving bet since the college target chart (both 2026-10-13).
-    # Every baseball bet has one since the hit tracker and pitch chart.
+    # Every player's bet leaves a slot since 2026-10-13 ("make sure they
+    # are all routed correctly like nfl"): the chart module's kindsFor
+    # picks his charts and hides the slot when he has none (a tackles bet
+    # today; pinned in test_the_slot_asks_for_his_charts_not_the_bets).
     for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "pass", "ints", "cfbRush", "cfbTd", "cfbRec",
-              "board", "mlb"):
+              "board", "mlb", "nba", "kick", "tackles"):
         assert got[k].startswith('<div class="cc-slot"'), k
-    for k in ("kick", "tackles", "nba", "nobody"):
-        assert got[k] == "", (k, got[k])
+    assert got["nobody"] == "", "no player, no chart"
     assert 'data-cc="Sam LaPorta" data-lg="nfl" data-mkt="receptions" data-pos="TE"' in got["rec"]
     assert 'data-lg="cfb"' in got["cfbRush"] and 'data-lg="nfl"' in got["board"], "the board's league by default"
     assert 'data-cc="Ja&quot;Marr &lt;Chase>"' in got["quote"], "a name is escaped into its attribute"
@@ -271,6 +271,7 @@ def test_a_football_leg_in_the_parlay_checker_carries_his_chart_doors():
     doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)">([^<]+)<', html)
     assert doors == [("Puka Nacua", "nfl", "auto", "His charts"), ("Kyren Williams", "nfl", "auto", "His charts"),
                      ("Nate Frazier", "cfb", "auto", "His charts"), ("College Receiver", "cfb", "auto", "His charts"),
+                     ("Josh Hart", "nba", "shots", "Shot chart"),
                      ("&lt;img src=x&gt;", "nfl", "auto", "His charts")], doors
     assert "<img src=x>" not in html
 

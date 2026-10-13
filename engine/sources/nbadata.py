@@ -3,6 +3,8 @@
 Endpoints (cdn.nba.com — the same JSON the league's own site renders):
   * ``staticData/scheduleLeagueV2.json``     → full season schedule
   * ``liveData/boxscore/boxscore_{id}.json`` → per-game player stats
+  * ``liveData/playbyplay/playbyplay_{id}.json`` → every action of a game,
+    every shot with where it was taken (the shot chart, engine/nba/shots)
 
 Parsers are pure and fixture-tested; fetches degrade with DataUnavailable.
 Ingestion stores per-game player logs — minutes (the stat that drives
@@ -18,7 +20,10 @@ import re
 from .fetch import fetch_json, DataUnavailable
 
 CDN = "https://cdn.nba.com/static/json"
-NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m")
+#: Every box-score stat stored per player-game. Steals, blocks and
+#: turnovers since 2026-10-13: stored for the charts and the reads, not
+#: priced — no board asks the odds feed for them.
+NBA_MARKETS = ("min", "pts", "reb", "ast", "fg3m", "stl", "blk", "tov")
 
 #: The league's own headshot for a boxscore personId. CONSTRUCTED, not
 #: taken — the CDN boxscore carries the id and no photo URL, the same
@@ -37,6 +42,17 @@ def fetch_schedule(ttl: int = 21600) -> dict:
 def fetch_boxscore(game_id: str, ttl: int = 21600) -> dict:
     return fetch_json(f"{CDN}/liveData/boxscore/boxscore_{game_id}.json",
                       f"nba_box_{game_id}.json", ttl=ttl)
+
+
+#: A final's actions never change: a day's cache is plenty for the
+#: nightly that reads it once.
+PBP_TTL = 86400
+
+
+def fetch_playbyplay(game_id: str, ttl: int = PBP_TTL) -> dict:
+    """Every action of one game (engine/nba/shots folds its shots)."""
+    return fetch_json(f"{CDN}/liveData/playbyplay/playbyplay_{game_id}.json",
+                      f"nba_pbp_{game_id}.json", ttl=ttl)
 
 
 def parse_minutes(pt: str) -> float:
@@ -123,6 +139,9 @@ def parse_boxscore(box: dict) -> list[dict]:
                 "reb": float(st.get("reboundsTotal", 0) or 0),
                 "ast": float(st.get("assists", 0) or 0),
                 "fg3m": float(st.get("threePointersMade", 0) or 0),
+                "stl": float(st.get("steals", 0) or 0),
+                "blk": float(st.get("blocks", 0) or 0),
+                "tov": float(st.get("turnovers", 0) or 0),
             })
     return rows
 
@@ -142,6 +161,8 @@ def log_rows(players: list[dict], date: str, game_id: str) -> list[dict]:
         if not p["player"]:
             continue
         for market in NBA_MARKETS:
+            if market not in p:
+                continue            # a row from before a stat was kept stores what it has
             out.append({
                 "sport": "nba", "season": season, "period": date,
                 "game_id": f"{p['player']}-{date}", "player": p["player"],

@@ -32,7 +32,10 @@ and `fill` does the reads for what is owed and nothing more:
 * baseball (the hit tracker and the pitch chart, 2026-10-13): the
   season's finals from MLB's Stats API play-by-play, newest first, one
   night's budget of them (engine/mlb/charts.backfill); the nightly chores
-  read the rest a budget a night.
+  read the rest a budget a night;
+* basketball (the shot chart, the same day): this season's finals and
+  then last season's, from the league's own play-by-play, one night's
+  budget of them (engine/nba/shots.backfill), the same way.
 
 EMPTY, NOT BEHIND. A table a game behind is the nightly's job: it reads
 the play-by-play while a finished game has no chart
@@ -52,6 +55,8 @@ TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("cfb", "ca
 #: plate appearance and one per pitch, written together, so the pitches
 #: answer for both.
 MLB_TABLE = "mlb_pitches"
+#: And basketball's shot chart, one row per shot, keyed by season.
+NBA_TABLE = "nba_shots"
 
 
 def season_of(today) -> int:
@@ -102,6 +107,19 @@ def owed(conn, today=None) -> list:
                               "LIMIT 1", (s,)).fetchone()
         if played and not conn.execute(f"SELECT 1 FROM {MLB_TABLE} WHERE season=? LIMIT 1", (s,)).fetchone():
             out.append(("mlb", s, MLB_TABLE))
+    except Exception:                                              # noqa: BLE001
+        pass
+    # Basketball, this season and last: the NBA's own season label (the
+    # year it tipped off), and only a season with a final in the games
+    # table — a box with no NBA history owes nothing.
+    try:
+        from .seasons import season_of as _hoops_season
+        cur = _hoops_season("nba", today.isoformat())
+        for s in (cur, cur - 1):
+            played = conn.execute("SELECT 1 FROM games WHERE sport='nba' AND season=? AND home_score IS NOT NULL "
+                                  "LIMIT 1", (s,)).fetchone()
+            if played and not conn.execute(f"SELECT 1 FROM {NBA_TABLE} WHERE season=? LIMIT 1", (s,)).fetchone():
+                out.append(("nba", s, NBA_TABLE))
     except Exception:                                              # noqa: BLE001
         pass
     return out
@@ -165,6 +183,16 @@ def fill(conn, want, log=print) -> list:
                 + (f"; {got['failed']:,} not read" if got.get("failed") else ""))
         except Exception as exc:                                   # noqa: BLE001
             say(f"MLB {s}: not read — {exc}")
+    if any(sp == "nba" for sp, _s, _t in want):
+        try:
+            from .nba import shots as NS
+            got = NS.backfill(conn, _dt.date.today())
+            say(f"NBA: {_count(got['games'], 'game')}, {_count(got['shots'], 'shot')}"
+                + (f"; {got['left']:,} older games left for the nightly" if got.get("left") else "")
+                + (f"; last season's files are {got['last_season']}" if got.get("last_season") else "")
+                + (f"; {got['failed']:,} not read" if got.get("failed") else ""))
+        except Exception as exc:                                   # noqa: BLE001
+            say(f"NBA: not read — {exc}")
     return out
 
 
