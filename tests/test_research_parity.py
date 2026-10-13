@@ -343,13 +343,13 @@ def test_the_card_says_where_his_targets_come_from_and_how_the_defence_does_ther
                                                                             "targets": 40}},
                       allowed=None, ratings_def=ratings_def, points=None, line_words="", n_teams=32, room=None)
     assert "depth" not in [x["kind"] for x in qb]
-    # Registered for measurement — PENDING, not SIGNALS: every signal in
-    # SIGNALS has its MEASURED line and the page's sentence rests on that;
-    # the run collects both, and the box's paste moves it over.
-    assert "depth" in SF.PENDING and "depth" not in SF.SIGNALS
-    assert not any(k[0] == "depth" for k in SF.MEASURED)
-    assert ("rec_yds", "TE") in SF.PENDING["depth"]["markets"]
-    assert all(m in SF.MARKETS for m in SF.PENDING["depth"]["markets"])
+    # Measured before it moves a number — 2026-10-13, every market: a
+    # SIGNAL now, each market with its MEASURED line, and it did not pass,
+    # so the card shows it and no number reads it.
+    assert "depth" in SF.SIGNALS and "depth" not in SF.PENDING
+    assert ("rec_yds", "TE") in SF.SIGNALS["depth"]["markets"]
+    assert all(m in SF.MARKETS for m in SF.SIGNALS["depth"]["markets"])
+    assert all(("depth", m, g) in SF.MEASURED for m, g in SF.SIGNALS["depth"]["markets"])
     assert "air_yards" in SF.RECV_COLS and "week" in SF.RECV_COLS
     zones = SF.depth_zones([{"receiver_player_name": "C.Lamb", "air_yards": a, "week": w}
                             for w, a in [(1, 3), (1, 5), (1, 12), (2, 2), (2, 4), (2, 6), (2, 7), (2, 25),
@@ -411,9 +411,10 @@ def test_yards_after_contact_allowed_come_free_from_the_pfr_rushing_rows():
                          allowed=None, ratings_def={}, points=None, line_words="", n_teams=32, room=None,
                          contact=c["DAL"])
     assert [x["kind"] for x in facts][:2] == ["role", "contact"]
-    # Measured before it moves a number: the arm is registered and reads
-    # the rows strictly before the week.
-    assert "yac_allowed" in SF.PENDING and SF.PENDING["yac_allowed"]["markets"] == [("rush_yds", "RB")]
+    # Measured before it moves a number (2026-10-13, it did not pass): the
+    # arm reads the rows strictly before the week.
+    assert "yac_allowed" in SF.SIGNALS and SF.SIGNALS["yac_allowed"]["markets"] == [("rush_yds", "RB")]
+    assert ("yac_allowed", "rush_yds", "RB") in SF.MEASURED
     sig = SF.contact_signal(rows + [_pfr_rush(5, "PHI", "NYG", "Saquon Barkley", 30, 60, 90, 0)], 5)
     assert set(sig) == {"DAL", "TB", "NYG"} and abs(sum(sig.values())) < 1e-9 and sig["DAL"] > 0 > sig["TB"]
     assert SF.signal("yac_allowed", {"units": {}, "contact": sig}, "TB", "DAL", {}, {}, {}, 5) == sig["DAL"]
@@ -476,8 +477,10 @@ def test_the_passers_clean_pocket_split_comes_free_from_the_play_by_play():
     assert "pocket" in [x["kind"] for x in facts]
     src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
     assert 'attach_player_map(usage, pocket_split(conn, season, upto_week=week), "pocket")' in src
-    # Measured before it moves a number: his gap × their pressure.
-    assert "pocket_fit" in SF.PENDING and SF.PENDING["pocket_fit"]["markets"] == [("pass_yds", "QB")]
+    # Measured before it moves a number (2026-10-13, it did not pass): his
+    # gap × their pressure.
+    assert "pocket_fit" in SF.SIGNALS and SF.SIGNALS["pocket_fit"]["markets"] == [("pass_yds", "QB")]
+    assert ("pocket_fit", "pass_yds", "QB") in SF.MEASURED
     passes = ([{"passer_player_name": "B.Mayfield", "week": 1, "qb_hit": 0, "complete_pass": 1}] * 40
               + [{"passer_player_name": "B.Mayfield", "week": 2, "qb_hit": 0, "complete_pass": 0}] * 20
               + [{"passer_player_name": "B.Mayfield", "week": 2, "qb_hit": 1, "complete_pass": 1}] * 4

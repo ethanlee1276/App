@@ -100,6 +100,85 @@ def test_the_page_says_what_the_measurement_found():
     assert "moves none of our numbers" in ask
 
 
+def test_the_charts_matchups_are_the_interaction_alone():
+    """2026-10-13: where he goes against where they give ground (the carry
+    and route charts' columns), over their overall — zero for a defence
+    that is the same everywhere and for a player whose mix is the league's."""
+    assert F.run_class("middle", "NA") == "in" and F.run_class("left", "guard") == "in"
+    assert F.run_class("right", "tackle") == "out" and F.run_class("left", "end") == "out"
+    assert F.run_class("left", "NA") == "" and F.run_class(None, None) == ""
+    runs = []
+    for wk in (1, 2, 3):
+        for team, out_yds in (("DAL", 8), ("NYG", 4), ("PHI", 4), ("WAS", 4)):
+            runs += [{"week": wk, "defteam": team, "rusher_player_id": "x", "run_location": "left",
+                      "run_gap": "end", "rushing_yards": out_yds}] * 20
+            runs += [{"week": wk, "defteam": team, "rusher_player_id": "x", "run_location": "middle",
+                      "run_gap": "NA", "rushing_yards": 4}] * 20
+    runs += [{"week": w, "defteam": "NYG", "rusher_player_id": "OUTSIDE", "run_location": "right",
+              "run_gap": "tackle", "rushing_yards": 3} for w in (1, 2, 3) for _ in range(8)]
+    runs += [{"week": w, "defteam": "NYG", "rusher_player_id": "EVEN", "run_location": loc,
+              "run_gap": gap, "rushing_yards": 3}
+             for w in (1, 2, 3) for loc, gap in (("left", "end"), ("middle", "NA")) for _ in range(4)]
+    t = F.direction_table(runs)
+    rel, weights = F.class_rel(t["def"], 4, F.DIR_SHRINK)
+    assert rel["DAL"]["out"] > 1.2 and abs(rel["DAL"]["in"] - 1) < 0.05, \
+        "DAL gives ground outside and is the league inside"
+    out_fit = F.mix_fit(t["mine"]["OUTSIDE"], 4, rel["DAL"], weights, F.DIR_MIN)
+    even_fit = F.mix_fit(t["mine"]["EVEN"], 4, rel["DAL"], weights, F.DIR_MIN)
+    assert out_fit > 0.05, out_fit
+    assert abs(even_fit) < 0.02, "his mix is near the league's: near zero"
+    flat = {"in": 1.3, "out": 1.3}
+    assert abs(F.mix_fit(t["mine"]["OUTSIDE"], 4, flat, weights, F.DIR_MIN)) < 1e-12, \
+        "a defence bad everywhere is the matchup step the board already takes"
+    assert F.mix_fit(t["mine"]["OUTSIDE"], 2, rel["DAL"], weights, F.DIR_MIN) is None, "8 carries is not a mix"
+    assert F.mix_fit(t["mine"]["OUTSIDE"], 4, None, weights, F.DIR_MIN) is None
+
+    plays = []
+    for wk in (1, 2, 3):
+        for team, left in (("DAL", 12), ("NYG", 7), ("PHI", 7)):
+            for side, yds in (("left", left), ("middle", 7), ("right", 7)):
+                plays += [{"week": wk, "defteam": team, "receiver_player_id": "x", "pass_location": side,
+                           "complete_pass": 1, "yards_gained": yds, "yards_after_catch": 2}] * 10
+    plays += [{"week": w, "defteam": "PHI", "receiver_player_id": "LEFTY", "pass_location": "left",
+               "complete_pass": 0, "yards_gained": 0} for w in (1, 2, 3) for _ in range(6)]
+    s = F.side_table(plays)
+    rel, weights = F.class_rel(s["def"], 4, F.SIDE_SHRINK)
+    assert set(weights) == {"L", "M", "R"}
+    assert F.mix_fit(s["mine"]["LEFTY"], 4, rel["DAL"], weights, F.SIDE_MIN) > 0.05, \
+        "a receiver thrown to the left, against the side DAL gives up"
+    assert s["def"]["PHI"][-1] == (3, "L", 0.0), "a miss counts as a target with no yards"
+
+
+def test_yards_after_the_catch_meet_a_defence_that_allows_them():
+    plays = []
+    for wk in (1, 2, 3):
+        for team, yac in (("DAL", 9), ("NYG", 3), ("PHI", 3), ("WAS", 3)):
+            plays += [{"week": wk, "defteam": team, "receiver_player_id": "x", "complete_pass": 1,
+                       "yards_gained": 10, "yards_after_catch": yac}] * 10
+        plays += [{"week": wk, "defteam": "NYG", "receiver_player_id": "SCREEN", "complete_pass": 1,
+                   "yards_gained": 8, "yards_after_catch": 8}] * 3
+        plays += [{"week": wk, "defteam": "NYG", "receiver_player_id": "DEEP", "complete_pass": 1,
+                   "yards_gained": 25, "yards_after_catch": 1}] * 3
+    t = F.yac_table(plays)
+    rel, per_catch, share = F.yac_rel(t, 4)
+    assert rel["DAL"] > 0 > rel["NYG"] and per_catch > 0 and 0 < share < 1
+    screen = F.yac_lean(t["mine"]["SCREEN"], 4, share)
+    deep = F.yac_lean(t["mine"]["DEEP"], 4, share)
+    assert screen > 0 > deep, "a catch-and-run man leans on yards after the catch; a deep man does not"
+    W = {"yac": (rel, per_catch, share)}
+    mats = {"yac": t}
+    x_screen = F.signal("yac_fit", W, "PHI", "DAL", {"player_id": "SCREEN"}, {}, {}, 4, mats=mats)
+    x_deep = F.signal("yac_fit", W, "PHI", "DAL", {"player_id": "DEEP"}, {}, {}, 4, mats=mats)
+    assert x_screen > 0 > x_deep
+    assert F.signal("yac_fit", W, "PHI", "DAL", {"player_id": "SCREEN"}, {}, {}, 2, mats=mats) is None, \
+        "six catches is not a lean"
+    for name in ("run_direction", "side_fit", "yac_fit"):
+        assert (name in F.PENDING) != (name in F.SIGNALS), "pending until measured, then a signal"
+        assert all(m in F.MARKETS for m in (F.PENDING.get(name) or F.SIGNALS[name])["markets"])
+    assert set(F.RUN_COLS) >= {"rusher_player_id", "run_location", "run_gap"}
+    assert {"pass_location", "yards_after_catch", "receiver_player_id"} <= set(F.RECV_COLS)
+
+
 def test_every_signal_names_the_markets_it_claims():
     for name, sig in F.SIGNALS.items():
         assert sig["markets"] and sig["says"], name

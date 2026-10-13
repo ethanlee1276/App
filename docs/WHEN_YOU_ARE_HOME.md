@@ -24,8 +24,10 @@ MLB profit calendar that stopped at September, a Most Likely profit
 calendar beside the edge one (step 46; nothing to run), and bets that
 settle minutes after the final instead of the next day (step 47; J), a
 game line no board prices graded by our own game model (step 48), a
-carry chart for every NFL and college runner (step 49; K), and a route
-chart for every NFL receiver (step 50; K).
+carry chart for every NFL and college runner (step 49; K), a route
+chart for every NFL receiver (step 50; K), and whether the charts' data
+can make better picks — measured, it can't on its own (step 51); L
+re-reads the closing line, where our own record points instead.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -38,7 +40,7 @@ today's code`. If it prints nothing or "Not a valid commit name", the
 box hasn't pulled yet: wait five minutes and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor bcfbac4d HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 523c9917 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -136,6 +138,8 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * **Cancel at the end of the month, or at once?** Stripe's portal
   setting (step 37). The site handles either.
 * **The last-leg alert on the Alerts bell too?**
+* **Pull a Most Likely pick when its line moves a point against it
+  before kickoff?** L's answer first (step 51).
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):
@@ -166,6 +170,24 @@ Any time after, the same checks without filling (read-only):
 ```
 cd /srv/qellys && sudo -u qellys python3 carryfill.py && sudo -u qellys python3 routefill.py
 ```
+
+**L. The closing line, on the repaired closes** (step 51; read-only,
+seconds). On 2026-09-29 the loss audit found Most Likely picks that lost
+the close hit 12–18% where we claimed 62% — but that was two days before
+the NFL closes were repaired (until 2026-09-29 an NFL "close" could be
+an in-game line, and a pick losing during the game moves its own line).
+Since the repair, the same-book check (2026-10-04) has Most Likely losing
+about 2 points to its close and the Edge picks beating theirs by about
+2½. This re-reads the lost-the-close picks on the repaired closes and
+says what each is: a scratch graded as a loss, news the market had
+before us, or a close that is still not one. Paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 closecheck.py --sport nfl 2>&1 | tail -80
+```
+If the lost-the-close picks still hit far under their claim and the
+finals sit near the close, that is news, and the fix is a last look
+before kickoff that pulls (or flags) a pick once its line has moved a
+point against it — your call in H.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -393,6 +415,11 @@ first). Paste back anything that prints an error or looks off.
     `scanfit.MEASURED`; a signal moves a number only where the held-out
     gain is positive on average and in all but one season, and b clears
     MIN_T — the same bar every other scan signal failed.
+    **Done without the box, 2026-10-13 — skip this run.** scanfit reads
+    only nflverse's files, and the sandbox has them: the run took fifteen
+    minutes there, reproduced the old six signals to within noise, and
+    measured these three plus three new ones from the carry and route
+    charts. None passes; all are in `scanfit.MEASURED` (step 51).
 
 14. **The Gamecast** (2026-10-08, your three ESPN screenshots: "I want
     the page to look like ESPN's app"). Nothing to run — the fast loop
@@ -1568,6 +1595,30 @@ first). Paste back anything that prints an error or looks off.
       chart (and the same "a finished game has no chart" check), the
       receiving tracking file every night, last season once.
 
+
+51. **Can the new chart data make better picks? Measured — no, not on
+    its own** (2026-10-13, Ethan: "is there more features or tools we
+    can add to get more accurate data and able to use this data to make
+    better pics"). Nothing to run. Three matchups the charts make were
+    added to the scan's measurement (`engine/scanfit`) and measured on
+    2022-2025 the way every scan reason is — on top of the player's form
+    and the defence-versus-position step the board already takes, each
+    season held out in turn:
+    * **run direction** — a back's inside/outside mix against where the
+      defence gives up yards: t 0.2, held-out gain below zero;
+    * **side of the field** — a receiver's left/middle/right mix against
+      the side a defence gives up: t at most 0.9, below zero every way;
+    * **yards after the catch** — a catch-and-run receiver against a
+      defence that allows yards after the catch: t 0.9, below zero.
+    The three that waited on the box (target depth, yards after contact,
+    the pocket split) failed too, and the six measured on 2026-09-24
+    re-ran to within noise. So the charts stay what they are: the picture
+    of what happened, on the page, with no number reading them. Where our
+    own record points instead is the closing line: since the closes were
+    repaired, Most Likely picks lose about 2 points to their close and
+    the Edge picks beat theirs by about 2½ (same-book check, 2026-10-04).
+    L re-reads the picks that lost the close on the repaired closes; if
+    the market had news we did not, a last look before kickoff is the fix.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

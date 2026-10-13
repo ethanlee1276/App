@@ -34,6 +34,14 @@ NOTHING PASSES. Not one of the six signals predicted a player's line
 beyond his form and the defence-versus-position step. The page and Ask
 say so; the scan is the story of a game, and none of it moves a number.
 
+MEASURED AGAIN 2026-10-13, with six more (Ethan, after the carry and
+route charts: "use this data to make better pics"): where his targets
+go by depth, yards after contact allowed, the pocket split, and three
+the charts made — his run direction against where the defence gives
+ground, the side of the field he is thrown to against the side they
+give up, and his yards after the catch against theirs. NOTHING PASSES,
+and the first six re-ran within noise of their old numbers.
+
     python3 -m engine.scanfit --points /tmp/pts.pkl   # 2022-2025, the report
     python3 -m engine.scanfit --json out.json
 """
@@ -69,14 +77,8 @@ SIGNALS = {
                "says": "starting corners missing from their side (≥70% of snaps before)"},
     "zone_fit": {"markets": [("rec_yds", "WR"), ("receptions", "WR")],
                  "says": "his yards per target vs zone over vs man (last season) × their zone rate over the league's"},
-}
-
-#: Signals written but NOT YET MEASURED: collected and reported by the
-#: same run, kept out of SIGNALS (every signal there has its MEASURED
-#: line, and the page's sentence rests on that) until the box's run puts
-#: theirs in MEASURED. Until then the card shows the fact as "shown, not
-#: in the number", which is exactly what it is.
-PENDING = {
+    # MEASURED 2026-10-13 (below): the three that waited on the box's run,
+    # and the three the carry and route charts made the same day.
     # 2026-10-08 (the Bucs @ Cowboys research): the defence's yards a
     # target in HIS biggest air-yard zone (short / intermediate / deep),
     # against the league's.
@@ -92,7 +94,32 @@ PENDING = {
     "pocket_fit": {"markets": [("pass_yds", "QB")],
                    "says": "his completion rate not hit minus hit (play-by-play) × their hits-and-sacks rate "
                            "over the league's"},
+    # 2026-10-13, Ethan, after the carry and route charts: "is there more
+    # features or tools … to get more accurate data and able to use this
+    # data to make better pics". Three matchups the charts' own columns
+    # make. Each is the INTERACTION alone — where HE goes against where
+    # THEY give ground, over their overall: a defence that is bad
+    # everywhere is the defence-versus-position step the board already
+    # takes, and x is zero for it, as it is for a player whose mix is the
+    # league's.
+    "run_direction": {"markets": [("rush_yds", "RB")],
+                      "says": "his inside/outside run mix (the play-by-play's run gap) × their yards a carry "
+                              "by direction, over their overall"},
+    "side_fit": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE"), ("receptions", "WR"), ("receptions", "TE")],
+                 "says": "his left/middle/right target mix × their yards a target by side of the field, "
+                         "over their overall"},
+    "yac_fit": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE")],
+                "says": "his share of yards after the catch over the league's × their yards after the "
+                        "catch a catch over the league's"},
 }
+
+#: Signals written but NOT YET MEASURED: collected and reported by the
+#: same run, kept out of SIGNALS (every signal there has its MEASURED
+#: line, and the page's sentence rests on that) until a run puts theirs
+#: in MEASURED. Until then the card shows the fact as "shown, not in the
+#: number", which is exactly what it is. Empty since 2026-10-13: the six
+#: that were here were measured and moved into SIGNALS.
+PENDING: dict = {}
 
 #: The run behind the page's sentence, 2026-09-24: (b, SE, held-out gain
 #: per season 2022 / 2023 / 2024 / 2025, mean). Re-run before changing
@@ -114,6 +141,27 @@ MEASURED = {
     # against zone, 6.2 against man"): flat, t 0.1.
     ("zone_fit", "rec_yds", "WR"): (-0.018, 0.376, (-0.01, -0.03, +0.00, -0.06), -0.026),
     ("zone_fit", "receptions", "WR"): (+0.032, 0.301, (-0.07, -0.01, -0.00, -0.18), -0.065),
+    # 2026-10-13, run in the sandbox off the same nflverse files the box
+    # reads (`python3 -m engine.scanfit`, 81,905 samples, 2022-2025). The
+    # six above re-ran within noise of their 2026-09-24 numbers — cb_out
+    # to the digit — so this run is the box's run. Nothing passes again:
+    # where a receiver's targets go by depth (Bucs @ Cowboys research),
+    # yards after contact allowed, the pocket split, and the carry and
+    # route charts' three — run direction, side of the field, yards after
+    # the catch. Each t is under 2 and every mean held-out gain is below 0.
+    ("depth", "rec_yds", "TE"): (+0.070, 0.045, (+0.28, -1.48, +0.17, +0.26), -0.191),
+    ("depth", "rec_yds", "WR"): (+0.006, 0.019, (-0.03, -0.05, -0.01, -0.01), -0.025),
+    ("depth", "receptions", "TE"): (+0.011, 0.038, (+0.00, -0.39, -0.04, +0.01), -0.105),
+    ("depth", "receptions", "WR"): (-0.006, 0.019, (-0.00, -0.00, -0.03, -0.07), -0.026),
+    ("yac_allowed", "rush_yds", "RB"): (-0.001, 0.035, (-0.08, -0.11, -0.11, -0.13), -0.107),
+    ("pocket_fit", "pass_yds", "QB"): (-0.238, 0.251, (-0.12, -0.20, -0.24, -0.07), -0.161),
+    ("run_direction", "rush_yds", "RB"): (+0.158, 0.768, (+0.00, -0.01, -0.12, -0.12), -0.060),
+    ("side_fit", "rec_yds", "WR"): (+0.057, 0.786, (-0.03, -0.18, -0.12, -0.09), -0.104),
+    ("side_fit", "rec_yds", "TE"): (+0.074, 1.191, (+0.00, -0.03, -0.09, -0.02), -0.037),
+    ("side_fit", "receptions", "WR"): (-0.131, 0.651, (-0.09, -0.06, -0.05, -0.03), -0.059),
+    ("side_fit", "receptions", "TE"): (+0.895, 0.964, (+0.09, -0.20, +0.05, -0.09), -0.038),
+    ("yac_fit", "rec_yds", "WR"): (+0.470, 0.529, (+0.03, -0.01, +0.02, -0.43), -0.096),
+    ("yac_fit", "rec_yds", "TE"): (-0.077, 1.404, (-0.21, -0.01, -0.02, -0.15), -0.096),
 }
 
 MIN_PRIOR_GAMES = 3
@@ -348,6 +396,157 @@ def zone_splits(part_prev: list[dict], plays_prev: list[dict]) -> dict:
     return out
 
 
+# ── the charts' matchups (2026-10-13) ─────────────────────────────────────
+#
+# Carries a defence must have faced in a direction (targets to a side,
+# catches for yards after the catch) before its own rate counts at full
+# weight: under that it is pulled toward the league's, by count.
+DIR_SHRINK, SIDE_SHRINK, YAC_SHRINK = 40.0, 30.0, 40.0
+#: His carries / targets / catches before his mix is a signal at all,
+#: and how hard a short history leans on the league's mix.
+DIR_MIN, SIDE_MIN, YAC_MIN = 12, 12, 8
+MIX_SHRINK = 8.0
+
+
+def run_class(location, gap) -> str:
+    """"in" (a guard or the middle) or "out" (a tackle or an end), from
+    the play-by-play's run_location and run_gap; "" when it has neither."""
+    loc = str(location or "").strip().lower()
+    gp = str(gap or "").strip().lower()
+    if loc == "middle" or gp == "guard":
+        return "in"
+    if gp in ("tackle", "end"):
+        return "out"
+    return ""
+
+
+def direction_table(runs: list[dict]) -> dict:
+    """{"def": {defence: [(week, class, yards)]}, "mine": {rusher id: [(week, class)]}}."""
+    out: dict = {"def": {}, "mine": {}}
+    for p in runs:
+        c = run_class(p.get("run_location"), p.get("run_gap"))
+        wk = int(_f(p.get("week")))
+        if not c or not wk:
+            continue
+        y = _f(p.get("rushing_yards"), _f(p.get("yards_gained")))
+        out["def"].setdefault(str(p.get("defteam") or ""), []).append((wk, c, y))
+        out["mine"].setdefault(str(p.get("rusher_player_id") or ""), []).append((wk, c))
+    return out
+
+
+SIDES = {"left": "L", "middle": "M", "right": "R"}
+
+
+def side_table(plays: list[dict]) -> dict:
+    """{"def": {defence: [(week, side, yards)]}, "mine": {receiver id: [(week, side)]}} —
+    a target's yards are the catch's, nothing on a miss."""
+    out: dict = {"def": {}, "mine": {}}
+    for p in plays:
+        sd = SIDES.get(str(p.get("pass_location") or "").strip().lower(), "")
+        wk = int(_f(p.get("week")))
+        if not sd or not wk:
+            continue
+        y = _f(p.get("yards_gained")) if _f(p.get("complete_pass")) == 1 else 0.0
+        out["def"].setdefault(str(p.get("defteam") or ""), []).append((wk, sd, y))
+        out["mine"].setdefault(str(p.get("receiver_player_id") or ""), []).append((wk, sd))
+    return out
+
+
+def yac_table(plays: list[dict]) -> dict:
+    """{"def": {defence: [(week, yac)]}, "mine": {receiver id: [(week, yac, yards)]}}, per catch."""
+    out: dict = {"def": {}, "mine": {}}
+    for p in plays:
+        if _f(p.get("complete_pass")) != 1 or p.get("yards_after_catch") in (None, "", "NA"):
+            continue
+        wk = int(_f(p.get("week")))
+        if not wk:
+            continue
+        yac, y = _f(p.get("yards_after_catch")), _f(p.get("yards_gained"))
+        out["def"].setdefault(str(p.get("defteam") or ""), []).append((wk, yac))
+        out["mine"].setdefault(str(p.get("receiver_player_id") or ""), []).append((wk, yac, y))
+    return out
+
+
+def class_rel(table: dict, wk: int, shrink: float) -> tuple[dict, dict]:
+    """({defence: {class: its rate over the league's}}, {class: the league's share})
+    from the rows strictly before ``wk`` — a defence's rate pulled toward
+    the league's by ``shrink`` rows."""
+    tot: dict = {}
+    per: dict = {}
+    for team, rows in table.items():
+        for w, c, v in rows:
+            if w >= wk:
+                continue
+            t, m = tot.setdefault(c, [0, 0.0]), per.setdefault(team, {}).setdefault(c, [0, 0.0])
+            t[0] += 1
+            t[1] += v
+            m[0] += 1
+            m[1] += v
+    n_all = sum(n for n, _s in tot.values())
+    if not n_all:
+        return {}, {}
+    league = {c: s / n for c, (n, s) in tot.items() if n and s > 0}
+    weights = {c: n / n_all for c, (n, _s) in tot.items() if c in league}
+    rel = {team: {c: ((cs.get(c, [0, 0.0])[1] + shrink * lg) / (cs.get(c, [0, 0.0])[0] + shrink)) / lg
+                  for c, lg in league.items()}
+           for team, cs in per.items()}
+    return rel, weights
+
+
+def mix_fit(mine: list, wk: int, rel: dict | None, weights: dict, min_n: int):
+    """Where he goes against where they give ground: Σ his share of a
+    class × their rate there, over their rate at the league's mix, minus
+    one. Zero when his mix is the league's, or when they are the same in
+    every class. None under ``min_n`` of his rows before ``wk``."""
+    if not rel or not weights:
+        return None
+    counts: dict = {}
+    for w, c in mine or ():
+        if w < wk and c in weights:
+            counts[c] = counts.get(c, 0) + 1
+    n = sum(counts.values())
+    if n < min_n:
+        return None
+    share = {c: (counts.get(c, 0) + MIX_SHRINK * weights[c]) / (n + MIX_SHRINK) for c in weights}
+    overall = sum(weights[c] * rel.get(c, 1.0) for c in weights)
+    his = sum(share[c] * rel.get(c, 1.0) for c in weights)
+    return his / overall - 1.0 if overall > 0 else None
+
+
+def yac_rel(table: dict, wk: int) -> tuple[dict, float | None, float | None]:
+    """({defence: its yards after the catch a catch over the league's,
+    minus one}, the league's per catch, the league's share of receiving
+    yards that came after the catch) before ``wk``."""
+    n = s = 0.0
+    per: dict = {}
+    for team, rows in table["def"].items():
+        for w, yac in rows:
+            if w < wk:
+                c = per.setdefault(team, [0, 0.0])
+                c[0] += 1
+                c[1] += yac
+                n += 1
+                s += yac
+    yds = sum(y for rows in table["mine"].values() for w, _yac, y in rows if w < wk)
+    if not n or s <= 0 or yds <= 0:
+        return {}, None, None
+    lg = s / n
+    rel = {t: (c[1] + YAC_SHRINK * lg) / (c[0] + YAC_SHRINK) / lg - 1.0 for t, c in per.items()}
+    return rel, lg, s / yds
+
+
+def yac_lean(rows: list, wk: int, league_share: float | None):
+    """His share of receiving yards after the catch over the league's, from
+    his catches before ``wk``; None under YAC_MIN of them."""
+    if league_share is None:
+        return None
+    mine = [(yac, y) for w, yac, y in rows or () if w < wk]
+    yds = sum(y for _yac, y in mine)
+    if len(mine) < YAC_MIN or yds <= 0:
+        return None
+    return sum(yac for yac, _y in mine) / yds - league_share
+
+
 # ── the samples ────────────────────────────────────────────────────────────
 
 
@@ -365,6 +564,8 @@ def samples(season: dict, prior: dict | None) -> dict:
     depth = depth_zones(season["plays"])
     passes = season.get("passes") or []
     pfr_rush = season.get("pfr_rush") or []
+    mats = {"dir": direction_table(season.get("runs") or []), "side": side_table(season["plays"]),
+            "yac": yac_table(season["plays"])}
     by_player: dict = {}
     for r in reg:
         g = D.GROUP_OF.get(str(r.get("position") or "").upper())
@@ -381,6 +582,9 @@ def samples(season: dict, prior: dict | None) -> dict:
                 "missed": missed_signal(tackles, tackles_prior, wk),
                 "zone": zr, "zone_league": (sum(zr.values()) / len(zr)) if zr else None,
                 "contact": contact_signal(pfr_rush, wk),
+                "dir": class_rel(mats["dir"]["def"], wk, DIR_SHRINK),
+                "side": class_rel(mats["side"]["def"], wk, SIDE_SHRINK),
+                "yac": yac_rel(mats["yac"], wk),
             }
         return cache[wk]
 
@@ -404,15 +608,25 @@ def samples(season: dict, prior: dict | None) -> dict:
                     if e0 < floor:
                         continue
                     mult, _why, _card = D.effect(opp, (W["dvp"] or {}).get(opp) or {}, g, market)
-                    x = signal(name, W, team, opp, r, cbs, splits, wk, depth, passes)
+                    x = signal(name, W, team, opp, r, cbs, splits, wk, depth, passes, mats)
                     if x is None:
                         continue
                     out.setdefault((name, market, g), []).append((e0 * mult, x, _f(r.get(col)), yr))
     return out
 
 
-def signal(name, W, team, opp, r, cbs, splits, wk, depth=None, passes=None):
-    u = W["units"]
+def signal(name, W, team, opp, r, cbs, splits, wk, depth=None, passes=None, mats=None):
+    u = W.get("units") or {}
+    pid = str(r.get("player_id") or "")
+    if name in ("run_direction", "side_fit"):
+        key, floor = ("dir", DIR_MIN) if name == "run_direction" else ("side", SIDE_MIN)
+        rel, weights = W.get(key) or ({}, {})
+        return mix_fit(((mats or {}).get(key) or {}).get("mine", {}).get(pid), wk, rel.get(opp), weights, floor)
+    if name == "yac_fit":
+        rel, _per_catch, share = W.get("yac") or ({}, None, None)
+        lean = yac_lean(((mats or {}).get("yac") or {}).get("mine", {}).get(pid), wk, share)
+        d = rel.get(opp)
+        return None if lean is None or d is None else lean * d
     if name == "depth":
         zone = main_zone(depth or {}, str(r.get("player_name") or ""), wk)
         return None if zone is None else (u.get(opp) or {}).get(f"def_{zone}")
@@ -546,7 +760,9 @@ def report(res: dict) -> str:
 
 
 RECV_COLS = ("game_id", "play_id", "receiver_player_name", "yards_gained", "complete_pass",
-             "air_yards", "week")
+             "air_yards", "week", "receiver_player_id", "pass_location", "yards_after_catch")
+#: The carry chart's columns (engine/carries), for run_direction.
+RUN_COLS = ("rusher_player_id", "run_location", "run_gap", "rushing_yards", "qb_scramble")
 PASS_COLS = ("passer_player_name", "week", "qb_hit", "complete_pass")
 
 
@@ -555,13 +771,16 @@ def load_season(yr: int) -> dict:
     from engine.sources import nflpbp, nflscheme as N, nflverse as NV
     from engine.sources.nflunits import UNIT_COLS, Units
     units = Units()
-    plays, passes = [], []
-    for r in nflpbp.load_pbp_rows(yr, columns=tuple(UNIT_COLS) + RECV_COLS + PASS_COLS):
+    plays, passes, runs = [], [], []
+    for r in nflpbp.load_pbp_rows(yr, columns=tuple(UNIT_COLS) + RECV_COLS + PASS_COLS + RUN_COLS):
         units.add(r)
         if r.get("season_type", "REG") != "REG":
             continue
         if r.get("receiver_player_name"):
-            plays.append({k: r.get(k) for k in RECV_COLS + ("posteam",)})
+            plays.append({k: r.get(k) for k in RECV_COLS + ("posteam", "defteam")})
+        if r.get("play_type") == "run" and r.get("rusher_player_id") and _f(r.get("qb_scramble")) != 1:
+            runs.append({k: r.get(k) for k in ("week", "defteam", "rusher_player_id", "run_location",
+                                               "run_gap", "rushing_yards", "yards_gained")})
         if r.get("passer_player_name") and r.get("play_type") == "pass" and _f(r.get("sack")) != 1:
             passes.append({k: r.get(k) for k in PASS_COLS})
     keep_part = ("nflverse_game_id", "play_id", "possession_team", "defense_man_zone_type",
@@ -577,8 +796,8 @@ def load_season(yr: int) -> dict:
     snaps = [{k: r.get(k) for k in ("team", "week", "game_type", "player", "position", "defense_pct")}
              for r in NV.load_snap_counts(yr)]
     return {"season": yr, "weekly": NV.load_weekly_stats(yr), "units": units.rows(yr),
-            "plays": plays, "passes": passes, "part": part, "pfr": pfr, "pfr_rush": pfr_rush,
-            "snaps": snaps}
+            "plays": plays, "passes": passes, "runs": runs, "part": part, "pfr": pfr,
+            "pfr_rush": pfr_rush, "snaps": snaps}
 
 
 def run(seasons=(2022, 2023, 2024, 2025), first_prior: int | None = 2021) -> dict:
