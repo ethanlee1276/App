@@ -87,6 +87,10 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(targets, "routes_for", lambda season: {})
     monkeypatch.setattr(targets, "charting_for", lambda season: {})
     monkeypatch.setattr(targets, "nfl_behind", lambda conn, season, today: False)
+    # The charts' every-cycle catch-up (2026-10-13) starts a real child when
+    # a chart table is empty; the suite's sandbox already keeps it from
+    # starting one, and a direct run of this file must not either.
+    monkeypatch.setattr(maintenance, "fill_charts_if_owed", lambda log=print, **kw: [])
 
 
 def _stub_chores(monkeypatch, calls):

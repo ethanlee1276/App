@@ -343,6 +343,21 @@ def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
     return bool(last) and (not have or str(have) < str(last))
 
 
+def stored(conn, sport: str, table: str = "carries") -> bool:
+    """Has this box any chart rows for the league at all? No means the
+    charts are still being filled (engine/chartfill) — which the page says,
+    rather than "no carries on file" for a player who has hundreds
+    (2026-10-13). ``table="targets"`` asks it of the route chart. A
+    database that cannot answer is taken as filled: nothing is claimed."""
+    if table not in ("carries", "targets"):
+        raise ValueError(f"not a chart table: {table!r}")
+    try:
+        return bool(conn.execute(f"SELECT 1 FROM {table} WHERE sport=? LIMIT 1",
+                                 (sport,)).fetchone())
+    except Exception:                                              # noqa: BLE001
+        return True
+
+
 def missing_seasons(conn, sport: str, seasons) -> list[int]:
     """The seasons with no carries stored yet — the one-time backfill."""
     out = []

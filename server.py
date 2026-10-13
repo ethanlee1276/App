@@ -3232,6 +3232,11 @@ class Handler(BaseHTTPRequestHandler):
                 out = carries.chart(conn, sport, player, int(season) if season.isdigit() else None)
                 if out:
                     out["face"] = statlogs._face_of(conn, sport, out["player"])
+                elif not carries.stored(conn, sport):
+                    # No runner in the league has a carry on file yet:
+                    # the charts are being filled (engine/chartfill), and
+                    # the page says so instead of "no carries" for him.
+                    out = {"filling": True}
             finally:
                 conn.close()
         return self._send(200, json.dumps(out).encode(), ".json")
@@ -3248,7 +3253,7 @@ class Handler(BaseHTTPRequestHandler):
         chart.
         """
         import os
-        from engine import db as _rdb, statlogs, targets
+        from engine import carries, db as _rdb, statlogs, targets
         sport = (q.get("sport") or ["nfl"])[0].lower()
         player = (q.get("player") or [""])[0][:60]
         season = (q.get("season") or [""])[0][:4]
@@ -3261,6 +3266,8 @@ class Handler(BaseHTTPRequestHandler):
                 out = targets.chart(conn, player, int(season) if season.isdigit() else None)
                 if out:
                     out["face"] = statlogs._face_of(conn, "nfl", out["player"])
+                elif not carries.stored(conn, "nfl", table="targets"):
+                    out = {"filling": True}          # being filled, as the carry chart's
             finally:
                 conn.close()
         return self._send(200, json.dumps(out).encode(), ".json")

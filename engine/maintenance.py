@@ -1506,6 +1506,79 @@ def _reap_pid_files(now: float) -> list[str]:
     return out
 
 
+# THE CHARTS DO NOT WAIT FOR TOMORROW (Ethan, 2026-10-13: "Also the
+# charts aren't working for any players"). The carry and route charts'
+# tables are filled by reads inside the daily chores, which run once a
+# calendar day; the box had already run that day's when the charts'
+# code landed, so every player's chart was empty until the next day's.
+# Every cycle after the day's chores now asks engine/chartfill whether a
+# chart table is EMPTY for a season the box has played — a few indexed
+# lookups — and when one is, starts the fill as a detached child. Empty,
+# not behind: a table a game behind is the nightly's, which reads the
+# play-by-play while a finished game has no chart.
+#: How long after starting a fill it may start another while a table is
+#: still empty: a failed read (GitHub down, a file not yet published) is
+#: tried again, but not every cycle.
+CHART_FILL_EVERY_S = 2 * 3600
+#: When the last fill started, and what it was for.
+CHART_FILL_STATE = ROOT / "data" / "cache" / "chartfill.json"
+
+
+def fill_charts_if_owed(log=print, today: _dt.date | None = None, now: float | None = None,
+                        conn=None, state_path: Path | None = None, spawn=None) -> list[str]:
+    """Start `engine.chartfill` when a chart table is empty for a season
+    this box has played (`chartfill.owed`), at most once every
+    CHART_FILL_EVERY_S. Returns the lines it logged; never raises.
+
+    ``spawn`` is injectable for tests. Without it, inside a sandbox (the
+    suite sets engine.modelstate's directory, which production never
+    does) nothing is asked and nothing starts — the `_run_board_learning`
+    rule: no test ever starts a real child."""
+    import time as _time
+    from . import modelstate
+    if spawn is None:
+        if os.environ.get(modelstate.ENV_VAR):
+            return []
+        spawn = _spawn_module
+    now = _time.time() if now is None else now
+    state_path = Path(state_path or CHART_FILL_STATE)
+    mine = conn is None
+    try:
+        from . import chartfill
+        if mine:
+            from . import db
+            conn = db.connect()
+        want = chartfill.owed(conn, today or _dt.date.today())
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  chart check skipped: {exc}")
+        return []
+    finally:
+        if mine and conn is not None:
+            try:
+                conn.close()
+            except Exception:                                 # noqa: BLE001
+                pass
+    if not want:
+        return []
+    try:
+        last = float(json.loads(state_path.read_text(encoding="utf-8")).get("started"))
+    except (OSError, ValueError, TypeError, AttributeError):
+        last = None                                           # never started here
+    if last is not None and now - last < CHART_FILL_EVERY_S:
+        return []
+    out = [f"charts: {chartfill.named(want)} empty — filling now, not with tomorrow's chores"]
+    out += spawn("engine.chartfill", log)
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps({"started": now, "owed": [list(w) for w in want]}),
+                              encoding="utf-8")
+    except OSError:
+        pass
+    for line in out:
+        log(f"  {line}")
+    return out
+
+
 #: How often the Most Likely board's own corrections may refit (engine/boardlearn).
 BOARDLEARN_EVERY_S = 3 * 3600
 
@@ -1586,6 +1659,11 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         log(f"  ⚠️  cache prune skipped: {exc}")
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
+        # The day's chores are done, and they read the charts' plays; a
+        # chart table still empty now (a deploy after them, a read that
+        # failed) starts its fill this cycle, not with tomorrow's. Asked
+        # only here, so it never reads a season beside the chores' read.
+        fill_charts_if_owed(log, today=today)
         return False
     # ONE RUNNER AT A TIME (audit 2026-09-30, F-8). The startup thread and
     # the refresher both call this at boot — every autoupdate restart — and

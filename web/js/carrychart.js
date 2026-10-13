@@ -601,9 +601,13 @@
     const box = ov.querySelector(".cc-body");
     const R = S.kind === "routes";
     if (!d || !d.games || !d.games.length) {
-      box.innerHTML = R
-        ? `<div class="cc-empty">No targets on file for ${esc(S.player)}.</div>`
-        : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`;
+      /* No one in the league has a row yet: the charts are being filled
+         (engine/chartfill), which is not the same as none for him. */
+      box.innerHTML = d && d.filling
+        ? `<div class="cc-empty">${R ? "Route" : "Carry"} charts are still being filled: every ${R ? "target" : "carry"} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play, which takes a few minutes. Check back shortly.</div>`
+        : R
+          ? `<div class="cc-empty">No targets on file for ${esc(S.player)}.</div>`
+          : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`;
       return;
     }
     const sport = d.sport;

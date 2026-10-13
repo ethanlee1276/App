@@ -27,7 +27,11 @@ game line no board prices graded by our own game model (step 48), a
 carry chart for every NFL and college runner (step 49; K), a route
 chart for every NFL receiver (step 50; K), and whether the charts' data
 can make better picks — measured, it can't on its own (step 51); L
-re-reads the closing line, where our own record points instead.
+re-reads the closing line, where our own record points instead. The
+charts read empty for every player the afternoon they shipped (the
+box had already run that day's chores, which fill them); the box now
+fills an empty chart table by itself within minutes (step 52; K shows
+it).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -35,12 +39,14 @@ refers to. Paste back what each one prints, with its letter.
 Nothing here changes anything except C (only if email isn't on yet) and
 D's Stripe settings. Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The second line should print `has
-today's code`. If it prints nothing or "Not a valid commit name", the
-box hasn't pulled yet: wait five minutes and run both again.
+**A. The box has today's code.** The first line should end `The carry
+and route charts fill the day they are empty, not the next day` (or be
+newer), and the second should print `has today's code`. If it prints
+nothing or "Not a valid commit name", the box hasn't pulled yet: wait
+five minutes and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 523c9917 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 943d72f9 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -157,18 +163,23 @@ cd /srv/qellys && sudo -u qellys python3 settlecheck.py
 `OWED` should read 0, or only show rows marked "no stat line for him
 yet". `last pass` should be under 6 min.
 
-**K. The carry chart and the route chart** (steps 49 and 50). The
-nightly fills both by itself; this fills them now (a few minutes: each
-reads this season's and last season's play-by-play, and the route chart
-also reads last season's route charting, a ~49 MB file) and then checks
-them. Each one's last line should end "the screenshot's numbers". Paste
-all of it:
+**K. The carry chart and the route chart** (steps 49, 50 and 52;
+read-only). Nothing needs running to fill them any more: since step 52
+the box starts the fill by itself within a cycle of finding a chart
+table empty, and the nightly keeps them current. This shows that it
+did — the first command prints the fill's own log (it should end
+`charts: filled`), the second what is stored, and each one's last
+line should end "the screenshot's numbers". Paste all of it:
+```
+journalctl -u qellys --since "today" --no-pager | grep -E "charts:|engine.chartfill" | tail -8; sudo -u qellys cat /srv/qellys/data/cache/weekly_chartfill.log
+cd /srv/qellys && sudo -u qellys python3 carryfill.py && sudo -u qellys python3 routefill.py
+```
+If the log is empty and the checks say "no carries stored yet", the
+fill hasn't run: fill them by hand (a few minutes; it reads this
+season's and last season's play-by-play and last season's route
+charting, a ~49 MB file) and paste that too:
 ```
 cd /srv/qellys && sudo -u qellys python3 carryfill.py --fill && sudo -u qellys python3 routefill.py --fill
-```
-Any time after, the same checks without filling (read-only):
-```
-cd /srv/qellys && sudo -u qellys python3 carryfill.py && sudo -u qellys python3 routefill.py
 ```
 
 **L. The closing line, on the repaired closes** (step 51; read-only,
@@ -1619,6 +1630,31 @@ first). Paste back anything that prints an error or looks off.
     the Edge picks beat theirs by about 2½ (same-book check, 2026-10-04).
     L re-reads the picks that lost the close on the repaired closes; if
     the market had news we did not, a last look before kickoff is the fix.
+
+52. **The charts fill the day they are empty, not the next day**
+    (2026-10-13, Ethan: "Also the charts aren't working for any
+    players"). Nothing to run; K shows it. The charts themselves were
+    fine — their tables were empty. Every carry and target is read by the
+    daily chores, which run once a calendar day, and the box had already
+    run that day's when the charts landed (16:55 and 17:20 UTC), so every
+    player's chart said "No carries on file" and would have until the
+    next day's. Now:
+    * **Every cycle** the box asks whether a chart table is empty for a
+      season it has played (this one or last, NFL carries and targets,
+      college carries) — a few lookups — and when one is, starts the
+      fill in the background (`engine/chartfill`, its log in
+      `data/cache/weekly_chartfill.log`). A failed read (GitHub down) is
+      tried again two hours later, not every cycle. Measured here on the
+      real files: both NFL seasons in about 6 seconds once downloaded.
+    * **While it fills**, the chart says so — "Carry charts are still
+      being filled… check back shortly" — instead of "No carries on
+      file" for a player who has hundreds. That shows only while nobody
+      in the league has a row yet.
+    * **Lighter on memory:** the play-by-play reader now splits the file
+      into lines instead of holding it in a text buffer; the same rows,
+      checked identical on every season 2021-2026, at 214 MB a season
+      instead of 490 MB. The nightly read uses it too, inside the 1600 MB
+      the service is allowed.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
