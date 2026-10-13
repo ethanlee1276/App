@@ -26,7 +26,7 @@ def _carries(conn, sport, player, season):
 
 def _routes(conn, sport, player, season):
     from . import targets
-    return targets.chart(conn, player, season)
+    return targets.chart(conn, player, season, sport=sport)
 
 
 def _passes(conn, sport, player, season):
@@ -45,7 +45,7 @@ def _rows_in(table):
 #: stored(conn, sport): has the league any rows at all).
 KINDS = {
     "carries": (("nfl", "cfb"), _carries, _rows_in("carries")),
-    "routes": (("nfl",), _routes, _rows_in("targets")),
+    "routes": (("nfl", "cfb"), _routes, _rows_in("targets")),
     "passes": (("nfl",), _passes, _rows_in("passes")),
 }
 

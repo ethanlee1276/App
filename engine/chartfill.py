@@ -26,7 +26,9 @@ and `fill` does the reads for what is owed and nothing more:
   charting;
 * the NGS rushing, receiving and passing files, when an NFL season was
   owed;
-* college: the season's play file, for the games the database has.
+* college: the season's play file, for the games the database has —
+  its carries and, from 2025, the targets it names, both kept to the
+  games the college logs keep.
 
 EMPTY, NOT BEHIND. A table a game behind is the nightly's job: it reads
 the play-by-play while a finished game has no chart
@@ -40,7 +42,8 @@ import sys
 
 #: The chart tables, and the leagues each one draws. The passing chart
 #: (`passes`, 2026-10-13) rides the NFL read the other two make.
-TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("cfb", "carries"))
+TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("cfb", "carries"),
+          ("cfb", "targets"))
 
 
 def season_of(today) -> int:
@@ -120,7 +123,11 @@ def fill(conn, want, log=print) -> list:
                 say(f"NGS {label}: not read — {exc}")
     for s in sorted({s for sp, s, _t in want if sp == "cfb"}, reverse=True):
         try:
-            say(f"CFB {s}: {CR.backfill_cfb(conn, s):,} carries")
+            n_c = CR.backfill_cfb(conn, s)
+            n_t = conn.execute("SELECT COUNT(*) FROM targets WHERE sport='cfb' AND season=?",
+                               (s,)).fetchone()[0]
+            say(f"CFB {s}: {n_c:,} carries, {n_t:,} targets"
+                + ("" if s >= TG.CFB_FROM else " (college targets are drawn from 2025)"))
         except Exception as exc:                                   # noqa: BLE001
             say(f"CFB {s}: not read — {exc}")
     return out

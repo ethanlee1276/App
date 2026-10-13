@@ -3249,26 +3249,27 @@ class Handler(BaseHTTPRequestHandler):
 
         Ethan, 2026-10-13, with the league's route chart for Sam LaPorta
         against the Cardinals: "We can add route charts for wr and shit
-        too." NFL only (engine/targets.chart): the college play file the
-        site reads names the target but has no air yards and no side of
-        the field, so there is nothing to draw. UNGATED like the carry
-        chart.
+        too." NFL and, since the same evening ("Yes do all of them"),
+        college from 2025 (engine/targets.chart): the college play file
+        names who was thrown at — on most incompletions since 2025 — but
+        has no air yards and no side of the field, so a college target
+        is drawn straight upfield. UNGATED like the carry chart.
         """
         import os
         from engine import carries, db as _rdb, statlogs, targets
         sport = (q.get("sport") or ["nfl"])[0].lower()
         player = (q.get("player") or [""])[0][:60]
         season = (q.get("season") or [""])[0][:4]
-        if sport != "nfl":
-            return self._send(400, b'{"error":"route charts are NFL"}', ".json")
+        if sport not in ("nfl", "cfb"):
+            return self._send(400, b'{"error":"route charts are NFL and college football"}', ".json")
         out: dict = {}
         if player and os.path.exists(str(_rdb.DEFAULT_DB)):
             conn = _rdb.connect(str(_rdb.DEFAULT_DB))
             try:
-                out = targets.chart(conn, player, int(season) if season.isdigit() else None)
+                out = targets.chart(conn, player, int(season) if season.isdigit() else None, sport=sport)
                 if out:
-                    out["face"] = statlogs.face(conn, "nfl", out["player"])
-                elif not carries.stored(conn, "nfl", table="targets"):
+                    out["face"] = statlogs.face(conn, sport, out["player"])
+                elif not carries.stored(conn, sport, table="targets"):
                     out = {"filling": True}          # being filled, as the carry chart's
             finally:
                 conn.close()

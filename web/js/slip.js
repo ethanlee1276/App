@@ -241,13 +241,14 @@
      door asks for "his chart" (kind auto): both are fetched and the one
      he does more of leads — a back's carries even on a receptions leg
      (Ethan: "we are showing only receptions for RBs and only carries for
-     WR and TE"). College has carries only, so its door is on a rushing
-     leg, where his runs are the bet. */
+     WR and TE"). A quarterback's throws are his (the passing chart), and
+     college has its carries and, from 2025, the targets its play file
+     names, so its door asks for his chart the same way. */
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
     if (!l.player) return "";
     const door = lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
-      : lg === "cfb" && /rush/.test(m) ? ["carries", "Carry chart"] : null;
+      : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"] : null;
     return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
   }
 

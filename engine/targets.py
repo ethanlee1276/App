@@ -39,6 +39,18 @@ The fold (`NflTargets`) rides the nightly play-by-play read the carry
 chart and the unit ratings already share; `routes_for` and `charting_for`
 read the participation and FTN files the scan already caches. `chart` is
 what the page draws.
+
+COLLEGE (2026-10-13, Ethan: "Yes do all of them"). The college play file
+(engine/sources/cfbstats) names who was thrown at on a catch, and since
+2025 on most incompletions and interceptions too: 78% of 2025's
+incompletions, 92% of 2026's, against 21-45% before. So `CfbTargets`
+keeps every pass the file names for 2025 on — caught or not, the yards,
+a touchdown, the down, the distance and the yards to the goal — and
+nothing before 2025, where most misses are unnamed and a target chart
+would be mostly catches. It records no air yards, no side of the field
+and (its clock being often the drive's) no time, so a college target has
+none of them, and the page draws college targets straight upfield in the
+order they were thrown, as it draws college carries.
 """
 
 from __future__ import annotations
@@ -153,6 +165,104 @@ class NflTargets:
             row.update(player=who.get("name") or t["pbp_name"] or t["player_id"],
                        position=who.get("position") or "", jersey=who.get("jersey") or "",
                        route=rt, coverage=cov, shell=shell, charting=",".join(words))
+            out.append(row)
+        return out
+
+
+#: The first college season a target chart is drawn for: the play file
+#: names the intended receiver on 78% of 2025's incompletions and 92% of
+#: 2026's, against 21-45% before (cfbstats' module note).
+CFB_FROM = 2025
+
+
+class CfbTargets:
+    """A fold over the college play file's rows: every pass thrown to a
+    player the file names — a catch, or an incompletion or interception
+    whose intended receiver it records — from `CFB_FROM` on.
+
+    ``games`` and ``roster`` are what `ingest_cfb_player_history` hands
+    `cfbstats.parse_player_stats`, so a target lands on the same team and
+    under the same name as the player's game logs. Who caught a completion
+    is resolved the way the logs resolve it (`cfbstats.split_pass`: the
+    passer is whichever of the two names has more quarterback evidence in
+    his team's season), so his catches here are his receptions there. A
+    touchdown is the feed's `touchdown_player` naming either man on the
+    play, or the geometry (a gain of exactly the distance to the goal) —
+    the college carries' either-signal rule."""
+
+    def __init__(self, season: int, games: dict, roster: dict | None = None):
+        self.season = int(season)
+        self.games = games or {}
+        self.roster = roster or {}
+        self._scores: dict = {}
+        self._rows: list[dict] = []
+        self._pending: list = []
+
+    def add(self, r: dict) -> None:
+        if self.season < CFB_FROM:
+            return
+        from .sources import cfbstats as CS
+        gid = _clean(r.get("game_id"))
+        game = self.games.get(gid)
+        if not game:
+            return
+        side = CS._side_of(game, _clean(r.get("team")))
+        if not side:
+            return
+        team, opponent, home = side
+        by_team = self._scores.setdefault(team, {})
+        for column in CS.QB_COLUMNS:
+            qb = CS._name(r.get(column))
+            if qb:
+                by_team[qb] = by_team.get(qb, 0) + 1
+        ytg = CS._ytg(r.get("yards_to_goal"))
+        dist = _int(r.get("distance"))
+        base = {"sport": "cfb", "season": self.season, "period": game.get("period") or "",
+                "game_id": gid, "play_id": _clean(r.get("play_id")),
+                "date": str(game.get("period") or "")[:10], "team": team, "opponent": opponent,
+                "home": 1 if home else 0, "qtr": _int(r.get("period")), "clock": "",
+                "down": _int(r.get("down")), "distance": dist,
+                "yardline_100": None if ytg is None else int(round(ytg))}
+        thrown = next((CS._name(r.get(c)) for c in CS.ATTEMPT_COLUMNS if CS._name(r.get(c))), "")
+        if thrown:
+            aimed = CS._name(r.get("target_player"))
+            if aimed and aimed != thrown:
+                self._rows.append(dict(base, feed_name=aimed, player_id=_clean(r.get("target_player_id")),
+                                       complete=0, yards=0.0, td=0, first_down=0,
+                                       interception=1 if CS._name(r.get("interception_thrown_player")) else 0))
+            return
+        comp, recv = CS._name(r.get("completion_player")), CS._name(r.get("reception_player"))
+        if comp and recv:
+            yards = CS._num(r.get("reception_yds")) or CS._num(r.get("completion_yds"))
+            scorer = CS._name(r.get("touchdown_player"))
+            td = (bool(scorer) and scorer in (comp, recv)) or CS.scored_geometrically(ytg, yards)
+            ids = {comp: _clean(r.get("completion_player_id")), recv: _clean(r.get("reception_player_id"))}
+            self._pending.append((team, comp, recv, ids, dict(
+                base, complete=1, interception=0, yards=float(yards), td=1 if td else 0,
+                first_down=1 if (td or (dist and yards >= dist)) else 0)))
+
+    def rows(self, kept=None) -> list[dict]:
+        """The `targets` table's rows, every college one resolved.
+
+        ``kept`` is the games the college logs kept from the same read
+        (`cfbstats.parse_player_stats` drops a week whose scoring plays
+        the file lost, and a game it credited more touchdowns than its
+        score holds): a game missing its plays draws a chart missing its
+        catches, so only those games are kept here too."""
+        from .sources import cfbstats as CS
+        found = list(self._rows)
+        for team, comp, recv, ids, row in self._pending:
+            _passer, receiver = CS.split_pass(self._scores.get(team, {}), comp, recv)
+            found.append(dict(row, feed_name=receiver, player_id=ids.get(receiver, "")))
+        if kept is not None:
+            found = [t for t in found if t["game_id"] in kept]
+        out = []
+        for t in found:
+            who = self.roster.get(t["player_id"]) or {}
+            row = {k: v for k, v in t.items() if k != "feed_name"}
+            row.update(player=who.get("name") or t["feed_name"], position=who.get("position") or "",
+                       jersey="", air_yards=None, side="", yac=None, route="", coverage="",
+                       shell="", charting="")
             out.append(row)
         return out
 
@@ -298,18 +408,18 @@ def backfill_nfl(conn, season: int) -> int:
 
 
 # --- what the page draws ------------------------------------------------------
-def resolve(conn, player: str) -> str:
+def resolve(conn, player: str, sport: str = "nfl") -> str:
     """The stored spelling of a player's name in `targets`, or "" — exact
     first, then the carry chart's loose form (accents, suffixes, case)
     when exactly one stored name matches it."""
     q = (player or "").strip()
     if not q:
         return ""
-    row = conn.execute("SELECT player FROM targets WHERE sport='nfl' AND player=? LIMIT 1", (q,)).fetchone()
+    row = conn.execute("SELECT player FROM targets WHERE sport=? AND player=? LIMIT 1", (sport, q)).fetchone()
     if row:
         return row[0]
     want = _fold(q)
-    hits = [p for (p,) in conn.execute("SELECT DISTINCT player FROM targets WHERE sport='nfl'")
+    hits = [p for (p,) in conn.execute("SELECT DISTINCT player FROM targets WHERE sport=?", (sport,))
             if _fold(p) == want] if want else []
     return hits[0] if len(hits) == 1 else ""
 
@@ -341,24 +451,27 @@ def _line(ts: list[dict]) -> dict:
             "contested": len(contested), "contested_won": sum(1 for t in contested if t["c"])}
 
 
-def chart(conn, player: str, season: int | None = None) -> dict:
+def chart(conn, player: str, season: int | None = None, sport: str = "nfl") -> dict:
     """Everything the route chart draws for one player-season.
 
-    ``{player, sport, seasons, season, routes, team, position, jersey,
+    ``{player, sport, air, seasons, season, routes, team, position, jersey,
     games: [{id, period, week, date, opp, home, team, line, ngs, targets}],
-    season_line, by_zone, by_route, by_cov, by_shell, by_down, ngs}`` —
-    games newest first, each target ``{q, clk, dn, ds, yl, ay, s, c, yac,
-    y, td, int, fd, rt, cov, sh, fl}``; ``routes`` says whether the league
-    charted this season's routes. ``{}`` when the player has no targets."""
-    name = resolve(conn, player)
+    season_line, by_zone, by_route, by_cov, by_shell, by_down, by_field,
+    ngs}`` — games newest first, each target ``{q, clk, dn, ds, yl, ay, s,
+    c, yac, y, td, int, fd, rt, cov, sh, fl}``; ``routes`` says whether the
+    league charted this season's routes; ``air`` whether the league's file
+    records air yards and the side of the field (the NFL's does, the
+    college one does not). ``{}`` when the player has no targets."""
+    sport = (sport or "nfl").lower()
+    name = resolve(conn, player, sport)
     if not name:
         return {}
     seasons = [int(s) for (s,) in conn.execute(
-        "SELECT DISTINCT season FROM targets WHERE sport='nfl' AND player=? ORDER BY season DESC", (name,))]
+        "SELECT DISTINCT season FROM targets WHERE sport=? AND player=? ORDER BY season DESC", (sport, name))]
     if not seasons:
         return {}
     pick = int(season) if season and int(season) in seasons else seasons[0]
-    cur = conn.execute("SELECT * FROM targets WHERE sport='nfl' AND player=? AND season=?", (name, pick))
+    cur = conn.execute("SELECT * FROM targets WHERE sport=? AND player=? AND season=?", (sport, name, pick))
     cols = [d[0] for d in cur.description]
     games: dict = {}
     for r in (dict(zip(cols, x)) for x in cur.fetchall()):
@@ -373,7 +486,8 @@ def chart(conn, player: str, season: int | None = None) -> dict:
             "td": bool(r["td"]), "int": bool(r["interception"]), "fd": bool(r["first_down"]),
             "rt": r["route"] or "", "cov": r["coverage"] or "", "sh": r["shell"] or "",
             "fl": [w for w in (r["charting"] or "").split(",") if w]})
-    ngs = _ngs_receiving(conn, pick, {g["pid"] for g in games.values() if g["pid"]})
+    ngs = (_ngs_receiving(conn, pick, {g["pid"] for g in games.values() if g["pid"]})
+           if sport == "nfl" else {})
     out_games, every = [], []
     for (period, _gid), g in sorted(games.items(), key=lambda kv: (kv[0][0], kv[1]["date"]), reverse=True):
         ts = sorted(g["targets"], key=lambda t: t["_order"])
@@ -403,14 +517,22 @@ def chart(conn, player: str, season: int | None = None) -> dict:
                 for sh in SHELLS.values() if any(t["sh"] == sh for t in charted)]
     by_down = [dict(_line([t for t in every if t["dn"] == d]), down=d)
                for d in (1, 2, 3, 4) if any(t["dn"] == d for t in every)]
+    # Where on the field he was thrown at — the carry chart's zones, by
+    # yards to the goal: what the college file has when it has no depth.
+    from .carries import ZONES
+    by_field = [dict(_line([t for t in every if t["yl"] is not None and lo <= t["yl"] <= hi]),
+                     zone=key, name=label)
+                for key, label, lo, hi in ZONES
+                if any(t["yl"] is not None and lo <= t["yl"] <= hi for t in every)]
     latest = out_games[0] if out_games else {}
-    meta = conn.execute("SELECT position, jersey FROM targets WHERE sport='nfl' AND player=? AND season=? "
-                        "AND position != '' ORDER BY period DESC LIMIT 1", (name, pick)).fetchone()
-    return {"player": name, "sport": "nfl", "seasons": seasons, "season": pick,
+    meta = conn.execute("SELECT position, jersey FROM targets WHERE sport=? AND player=? AND season=? "
+                        "AND position != '' ORDER BY period DESC LIMIT 1", (sport, name, pick)).fetchone()
+    return {"player": name, "sport": sport, "air": sport == "nfl", "seasons": seasons, "season": pick,
             "routes": bool(charted), "team": latest.get("team", ""),
             "position": (meta[0] if meta else "") or "", "jersey": (meta[1] if meta else "") or "",
             "games": out_games, "season_line": _line(every), "by_zone": by_zone, "by_route": by_route,
-            "by_cov": by_cov, "by_shell": by_shell, "by_down": by_down, "ngs": ngs.get(0) or {}}
+            "by_cov": by_cov, "by_shell": by_shell, "by_down": by_down, "by_field": by_field,
+            "ngs": ngs.get(0) or {}}
 
 
 def _ngs_receiving(conn, season: int, ids: set) -> dict:

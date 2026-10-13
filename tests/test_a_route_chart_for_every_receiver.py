@@ -23,7 +23,8 @@ What is pinned, offline, on databases built here:
   * SEPARATION only where the league published it;
   * ONE READ: the targets ride the nightly play-by-play read the carry
     chart and the unit ratings already share;
-  * THE ENDPOINT: NFL only, ungated, nothing for a player with no targets;
+  * THE ENDPOINT: the NFL and, since the college target chart, college;
+    ungated, nothing for a player with no targets;
   * THE PAGE: the same lazy module as the carry chart, every target drawn
     and listed, and the note that says what is the record and what is
     drawn.
@@ -315,7 +316,7 @@ def test_the_box_check_says_what_is_stored_and_reads_the_screenshot_back():
 
 
 # --- the endpoint -----------------------------------------------------------
-def test_the_endpoint_serves_the_nfl_only_and_gates_nothing():
+def test_the_endpoint_serves_both_footballs_and_gates_nothing():
     import server
     tmp = tempfile.mkdtemp()
     keep = D.DEFAULT_DB
@@ -335,7 +336,9 @@ def test_the_endpoint_serves_the_nfl_only_and_gates_nothing():
         shutil.rmtree(tmp, ignore_errors=True)
     code, body = sent[0]
     assert code == 200 and body["games"][0]["line"]["yds"] == 88.0 and "face" in body
-    assert sent[1][0] == 400, "the college play file has no air yards and no side of the field"
+    # College since the college target chart (2026-10-13): no college
+    # target is on file here, so the league's table is still being filled.
+    assert sent[1] == (200, {"filling": True}), sent[1]
     assert sent[2] == (200, {})
     assert sent[3][1]["season"] == 2025 and sent[3][1]["routes"] is True, "the NFL is the default"
     src = (ROOT / "server.py").read_text(encoding="utf-8")

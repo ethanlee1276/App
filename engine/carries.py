@@ -270,9 +270,15 @@ class CfbCarries:
             "first_down": 1 if (td or (dist and gain >= dist)) else 0,
         })
 
-    def rows(self) -> list[dict]:
+    def rows(self, kept=None) -> list[dict]:
+        """The `carries` table's college rows. ``kept`` is the games the
+        college logs kept from the same read (`kept_games`): a week whose
+        scoring plays the file lost is dropped from the logs, and a game
+        missing its plays would draw a carry chart missing its runs."""
         out = []
         for c in self._rows:
+            if kept is not None and c["game_id"] not in kept:
+                continue
             who = self.roster.get(c["player_id"]) or {}
             row = {k: v for k, v in c.items() if k != "feed_name"}
             row.update(player=who.get("name") or c["feed_name"],
@@ -387,12 +393,39 @@ def backfill_nfl(conn, season: int) -> int:
     return db.upsert_carries(conn, fold.rows(nfl_names(int(season))))
 
 
-def backfill_cfb(conn, season: int) -> int:
-    """One past college season's carries, read once. Returns rows written."""
+def kept_games(out: dict):
+    """The game ids the college logs kept from one season's parse
+    (`cfbstats.parse_player_stats`), or None when it kept none — a parse
+    that wrote nothing says nothing about which games are whole."""
+    ids = {r["game_id"] for r in (out or {}).get("rows") or []}
+    return ids or None
+
+
+def store_cfb(conn, season: int, runs, catches, kept) -> tuple:
+    """Write one college season's carries and targets, kept to the games
+    the logs kept, and clear rows an earlier read stored for a game the
+    logs have since dropped. Returns ``(carries, targets)`` written."""
     from . import db
+    n_c = db.upsert_carries(conn, runs.rows(kept))
+    n_t = db.upsert_targets(conn, catches.rows(kept))
+    if kept:
+        marks = ",".join("?" * len(kept))
+        for table in ("carries", "targets"):
+            conn.execute(f"DELETE FROM {table} WHERE sport='cfb' AND season=? AND game_id NOT IN ({marks})",
+                         (int(season), *sorted(kept)))
+        conn.commit()
+    return n_c, n_t
+
+
+def backfill_cfb(conn, season: int) -> int:
+    """One past college season's carries — and, from 2025, the targets
+    the play file names (engine/targets.CfbTargets) — read once, through
+    the college logs' own parse so both keep only the games it keeps.
+    Returns carries written."""
     from .ingest import cfb_games_for
     from .sources import cfbstats
     from .sources.fetch import DataUnavailable
+    from .targets import CfbTargets
     games = cfb_games_for(conn, int(season))
     if not games:
         return 0
@@ -400,11 +433,13 @@ def backfill_cfb(conn, season: int) -> int:
         roster = cfbstats.fetch_rosters(int(season))
     except DataUnavailable:
         roster = {}
-    fold = CfbCarries(int(season), games, roster)
-    for r in cfbstats._stream(cfbstats.STATS_URL.format(season=int(season)),
-                              f"cfb_player_stats_{int(season)}.csv", 86400 * 7):
-        fold.add(r)
-    return db.upsert_carries(conn, fold.rows())
+    runs, catches = CfbCarries(int(season), games, roster), CfbTargets(int(season), games, roster)
+
+    def both(r):
+        runs.add(r)
+        catches.add(r)
+    out = cfbstats.fetch_season(int(season), games, roster=roster, also=both)
+    return store_cfb(conn, int(season), runs, catches, kept_games(out))[0]
 
 
 # --- what the page draws ------------------------------------------------------

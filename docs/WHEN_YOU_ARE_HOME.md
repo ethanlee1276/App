@@ -49,7 +49,8 @@ legs carry a chart button (step 61; T). Each player's chart leads with
 what he does, a back's carries and a receiver's or tight end's targets,
 whatever the bet (step 62; T). A quarterback's pick now draws every
 throw he made, where it went and whether it was caught, and the sacks he
-took (step 63; U). The whole picture, sport by
+took (step 63; U). A college receiver's pick draws every pass thrown his
+way that the play file names, 2025 on (step 64; V). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -59,13 +60,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A quarterback's pick draws every throw he made: the passing chart`
+**A. The box has today's code.** The first line should end `A college receiver's pick draws every pass thrown his way: the target chart`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 75448e61 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 8f11eec1 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -379,6 +380,21 @@ touchdowns, interceptions, even his rushing). His Passing chart is drawn
 after Form with a `Passes | Carries` switch: every throw from the pocket
 to where it landed, green for the yards after the catch, a red × for an
 interception or a sack.
+
+**V. The college target chart** (step 64; read-only, seconds). Nothing
+to run: the box sees the college targets empty and reads the play file
+into them within minutes, as in U. The first line counts the college
+targets stored per season (2025 and 2026 only, by design) and how many
+were caught; the second is what the page asks for:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute(\"SELECT season, COUNT(*), SUM(complete) FROM targets WHERE sport='cfb' GROUP BY season\").fetchall())"
+curl -s "http://127.0.0.1:8000/api/players/routes?sport=cfb&player=Jeremiah%20Smith" | head -c 300; echo
+```
+`{"filling": true}` means it is still reading: wait ten minutes. Then on
+your phone: CFB, Most Likely, tap any college receiver's pick. His Target
+chart is drawn after Form: each catch a line straight up from the line
+as long as the yards it gained, each miss the file names a ring at the
+line, in the order thrown.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2080,6 +2096,38 @@ first). Paste back anything that prints an error or looks off.
     `tests/test_maintenance.py` stubs the passing chart's reads beside the
     route chart's (added, nothing loosened). New:
     `tests/test_a_passing_chart_for_every_passer.py`.
+
+64. **A college receiver's pick draws every pass thrown his way** (2026-10-13,
+    you: "Can we do the route tracker for CFB?"). V checks it. The college
+    play file has no air yards and no side of the field, so there is no
+    route to draw; what it does have since 2025 is the receiver it was
+    thrown at on most incompletions (78% of 2025's, 92% of 2026's, against
+    21-45% before), beside every catch, its yards, the down and the yards
+    to the goal. So college targets are stored from 2025 on, in the same
+    nightly read as the college logs and carries, and drawn as a Target
+    chart: each catch straight upfield as long as its yards, each miss a
+    ring at the line, a game in throw order and the season shortest to
+    longest, with splits by down and field position. A catch lands on the
+    man who caught it even when the file swaps the passer's and the
+    receiver's names (the logs' own rule), so his catches and yards on the
+    chart are his logged receptions and yards exactly; checked on every
+    2025 game the logs keep (6,419 player-games, no difference). The file
+    never names the receiver on an interception, so a pick is not on his
+    chart, and the note under it says so. ALSO FIXED: the college logs drop
+    a week whose scoring plays the file lost (2025 weeks 1 and 10 to 16),
+    but the college carry chart was still drawing those games from the
+    same file with their touchdowns missing. Both college charts now keep
+    only the games the logs keep, and the box clears the rows it stored
+    for the dropped ones on its next read. A college receiver now leads
+    with his targets and a back with his carries, as in the NFL, and the
+    parlay checker's college legs get the "His charts" door. Pins changed
+    and told to you: `tests/test_a_route_chart_for_every_receiver.py` said
+    the route door refuses college; it now says college waits for its own
+    table (and the test is renamed to say both footballs). The chart
+    filler's test owes the college targets table and its log line reads
+    "7 carries, 0 targets". My own `tests/test_the_pick_page_draws_his_chart.py`
+    now gives college players both charts and a college receiving bet a
+    slot and door. New: `tests/test_a_target_chart_for_every_college_receiver.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

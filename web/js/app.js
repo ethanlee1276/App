@@ -15956,10 +15956,11 @@ function ccLoad() {
    charts speak to — rushing, receiving, an anytime touchdown, and since
    the passing chart a passing bet — leaves a slot; js/carrychart.js
    decides which chart and draws it there (`mount`, from the settle
-   pass). College has carries only. */
+   pass). College has carries and, from 2025, the targets its play file
+   names. */
 function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
-  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" && /rush|anytime/.test(m);
+  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" && /rush|rec|anytime/.test(m);
   return ok && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
 }
 function mountCharts(root) {

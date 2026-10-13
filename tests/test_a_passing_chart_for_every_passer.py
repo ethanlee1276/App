@@ -345,7 +345,7 @@ def test_every_door_reaches_it():
     i = SLIP_JS.index("function chartsHTML(")
     assert "/rush|rec|anytime|pass/.test(m)" in SLIP_JS[i:i + 400], "a passing leg carries his charts' door"
     assert '`/api/players/chart?kind=${kind}&sport=`' in CC_JS
-    assert 'cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes"] : ["carries"]) : null' in CC_JS
+    assert 'cand: auto ? (lg === "nfl" ? ["carries", "routes", "passes"] : ["carries", "routes"]) : null' in CC_JS
     for cls in (".rc-sack", ".rc-sack.sel"):
         assert cls in CC_CSS, cls
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"

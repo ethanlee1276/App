@@ -99,10 +99,12 @@ def test_a_slot_for_every_football_bet_the_charts_speak_to():
     got = _node(prog)
     if got is None:
         return
-    # A passing bet has a chart since the passing chart (2026-10-13).
-    for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "pass", "ints", "cfbRush", "cfbTd", "board"):
+    # A passing bet has a chart since the passing chart, and a college
+    # receiving bet since the college target chart (both 2026-10-13).
+    for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "pass", "ints", "cfbRush", "cfbTd", "cfbRec",
+              "board"):
         assert got[k].startswith('<div class="cc-slot"'), k
-    for k in ("kick", "tackles", "cfbRec", "mlb", "nba", "nobody"):
+    for k in ("kick", "tackles", "mlb", "nba", "nobody"):
         assert got[k] == "", (k, got[k])
     assert 'data-cc="Sam LaPorta" data-lg="nfl" data-mkt="receptions" data-pos="TE"' in got["rec"]
     assert 'data-lg="cfb"' in got["cfbRush"] and 'data-lg="nfl"' in got["board"], "the board's league by default"
@@ -185,9 +187,12 @@ def test_a_bet_asks_for_every_chart_he_could_have():
         assert got[key] == qb, (key, got[key])
     assert got["kick"] == []
     # College has no route chart; its receivers' few carries are not theirs.
-    assert got["cfbRbRush"] == got["cfbRbTd"] == got["cfbQbTd"] == ["carries"]
-    assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == [], "never a college receiver's carries for a TD"
-    assert got["cfbWrRush"] == ["carries"], "his rushing bet is about his carries"
+    # College has its targets since 2025 (the college target chart,
+    # 2026-10-13): a college player is asked for both, as an NFL one is;
+    # a college quarterback has no passing chart, so his runs.
+    assert got["cfbRbRush"] == got["cfbRbTd"] == ["carries", "routes"]
+    assert got["cfbQbTd"] == ["carries"]
+    assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == got["cfbWrRush"] == ["routes", "carries"]
     assert got["tally"] == ["5-88", "1 for −2", "3-0"], "a game he lost yards in reads as one"
 
 
@@ -264,7 +269,7 @@ def test_a_football_leg_in_the_parlay_checker_carries_his_chart_doors():
     html = out.stdout
     doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)">([^<]+)<', html)
     assert doors == [("Puka Nacua", "nfl", "auto", "His charts"), ("Kyren Williams", "nfl", "auto", "His charts"),
-                     ("Nate Frazier", "cfb", "carries", "Carry chart"),
+                     ("Nate Frazier", "cfb", "auto", "His charts"), ("College Receiver", "cfb", "auto", "His charts"),
                      ("&lt;img src=x&gt;", "nfl", "auto", "His charts")], doors
     assert "<img src=x>" not in html
 
