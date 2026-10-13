@@ -513,7 +513,11 @@ def price_leg(boards: dict, leg: dict) -> dict:
             else:
                 r = _named(board.get("recommendations"), leg, lambda r: r.get("market") == leg["market"])
                 if r is not None:
-                    p = likely._prob_at(r, leg["market"], leg["side"], leg["line"])
+                    # The board's own derivation at the slip's number, or —
+                    # for the boards that carry a range, an SD or only the
+                    # row's chance (basketball, hockey, baseball) — the
+                    # row's chance carried to it (`prob_at_line`).
+                    p = prob_at_line(r, leg["market"], leg["side"], leg["line"])
                     main = (abs(_num(r.get("line"), 1e9) - leg["line"]) < 0.01
                             and str(r.get("side") or "").lower() == leg["side"])
                     price = r.get("odds") if main else None
@@ -1144,10 +1148,11 @@ def standing(legs: list[dict]) -> dict | None:
     """Where the ticket stands once its games are on (engine/sliplive):
     legs won, lost and pushed off the box score, legs in play, and our
     chance for what is left — the legs still to play at our pre-game
-    numbers, a moneyline in play at the live win probability. A prop in
-    play gets no number (our projection assumes a whole game), so a ticket
-    with one says where each stands instead of guessing. None before any
-    game starts."""
+    numbers, a moneyline in play at the live win probability, a prop in
+    play at its live race (engine/proplive). A leg in play with no live
+    number (overtime, a market the race has no shape for, a box score
+    that has not named him yet) leaves the chance unsaid rather than
+    guessed. None before any game starts."""
     res = [((l.get("live") or {}).get("result"), l) for l in legs]
     won = [l for r, l in res if r == "won"]
     lost = [l for r, l in res if r == "lost"]
@@ -1162,13 +1167,29 @@ def standing(legs: list[dict]) -> dict | None:
     if not rest:
         return dict(out, status="won", left=0, start=0, chance=1.0)
     chance = None
-    if all(l["market"] == "moneyline" and (l.get("live") or {}).get("win_prob") is not None for l in in_play):
+    if all(_live_p(l) is not None for l in in_play):
         before = [l for l in rest if l not in in_play]
         pre = _ticket_chance(before) if before else 1.0
         if pre is not None:
-            chance = pre * math.prod(float(l["live"]["win_prob"]) for l in in_play)
+            # A push keeps the ticket alive (at a shorter price), so the
+            # chance it survives counts it. Legs in one game are taken as
+            # independent here — the live race has no correlation to lean
+            # on, and the card says the number is ours, mid-game.
+            chance = pre * math.prod(_live_p(l) for l in in_play)
     return dict(out, status="open", left=len(rest), start=len(rest) - len(in_play),
                 chance=None if chance is None else round(chance, 4))
+
+
+def _live_p(l: dict) -> float | None:
+    """A leg in play's chance it does not lose: a moneyline's live win
+    probability, a prop's live race (engine/proplive) with its push."""
+    lv = l.get("live") or {}
+    if l["market"] == "moneyline":
+        return None if lv.get("win_prob") is None else float(lv["win_prob"])
+    ch = lv.get("chance") or {}
+    if ch.get("p") is None:
+        return None
+    return min(1.0, float(ch["p"]) + float(ch.get("push") or 0.0))
 
 
 def shop(legs: list[dict], total_odds=None) -> dict | None:
@@ -1257,6 +1278,203 @@ def pairs(legs: list[dict]) -> list[dict]:
     return sorted(out, key=lambda x: -abs(x["rho"]))[:4]
 
 
+# ---- a better number ----------------------------------------------------------
+#: A better number is named only when its expected return beats the slip's
+#: own number by this much a dollar, by our numbers at both.
+BETTER_NUMBER_GAIN = 0.03
+
+
+def prob_at_line(row: dict | None, market: str, side: str, line) -> float | None:
+    """Our chance for (side, line) at ANY number on this player's row.
+
+    The board's own derivation first (`likely._prob_at`: the ladder's
+    priced rungs, the fitted yardage mixture, the Poisson counts, the
+    normal on the projection's spread). A row that carries none of those
+    — the boards that ship a range or an SD under another name — is read
+    through engine/proplive's count distribution, held to the row's own
+    chance at its own number, so a ladder priced this way still agrees
+    with the line the board priced."""
+    from . import likely
+    from . import proplive as PL
+    p = likely._prob_at(row, market, side, line)
+    if p is not None:
+        return p
+    r = row or {}
+    disp = PL.dispersion(r, market)
+    main, main_side = _num(r.get("line"), None), str(r.get("side") or "").lower()
+    p_main = r.get("model_prob") if r.get("model_prob") is not None else r.get("hit_prob")
+    p_main = _num(p_main, None)
+    if disp is None or main is None or p_main is None or main_side not in ("over", "under", "yes", "no"):
+        return None
+    mu = PL.anchor_side(p_main, main_side, main, disp)
+    if mu is None:
+        return None
+    return round(PL.p_win_full(str(side).lower(), float(line), mu, disp), 4)
+
+
+def _main_row(boards: dict | None, leg: dict) -> dict | None:
+    """The player's main-board row for the leg's market — the one carrying
+    the projection and its spread — whichever shelf priced the leg."""
+    if leg.get("found") == "prop":
+        return leg.get("row")
+    board = (boards or {}).get(leg.get("league") or "") or {}
+    return _named(board.get("recommendations"), leg, lambda r: r.get("market") == leg.get("market"))
+
+
+def better_number(leg: dict, index: dict | None, boards: dict | None = None) -> dict | None:
+    """The same bet at another number a book is quoting, when our model
+    rates it better than the slip's: e.g. Over 64.5 at -150 instead of
+    Over 69.5 at -115 — a higher chance for a shorter price, and more
+    expected return a dollar for it.
+
+    LIKE FOR LIKE WITH THE CARD. The slip's number is read at the chance
+    the card already printed for it, and every other number at the chance
+    the card WOULD print had the slip carried that number at that price —
+    `price_leg`'s own path: the Most Likely seat's chance where that number
+    is seated, else the model's chance there (`prob_at_line`) held to the
+    list's record (`_honest`). Every number and price comes off the same
+    private board the live price does (sliplive.quote_index: each book's
+    main line and its alternate ladder, the sharp book a reference only).
+    A side, a total or a scorer has no ladder in our pull, and gets no
+    better number.
+    """
+    market, side = leg.get("market"), str(leg.get("side") or "").lower()
+    if market in GAME_MARKETS or market in SCORER_MARKETS or market == "other" or side not in ("over", "under"):
+        return None
+    from . import sliplive as SL
+    e = (index or {}).get((SL._key(leg.get("player")), market))
+    line = _num(leg.get("line"), None)
+    p_here = _num(leg.get("prob"), None)
+    d_here = to_decimal(leg.get("odds"))
+    if not e or line is None or p_here is None or not d_here:
+        return None
+    main = _main_row(boards, leg)
+    league = leg.get("league") or ""
+    board = (boards or {}).get(league) or {}
+    ev_here = p_here * d_here - 1.0
+    at: dict = {}                      # line -> ("seat" | "model", chance)
+
+    def chance(q_line, odds):
+        if q_line not in at:
+            seat = _likely_row(board, dict(leg, line=q_line))
+            if seat is not None and math.isfinite(_shown(seat)):
+                at[q_line] = ("seat", _shown(seat))
+            else:
+                raw = prob_at_line(main, market, side, q_line) if main else None
+                at[q_line] = ("model", raw)
+        kind, p = at[q_line]
+        if p is None:
+            return None
+        return p if kind == "seat" else _honest(league, p, side, odds)
+
+    best = None
+    for q_line, book, over, under in e.get("quotes") or []:
+        if abs(q_line - line) < 0.01 or SL._sharp(book):
+            continue
+        odds = under if side == "under" else over
+        d = to_decimal(odds)
+        if not d:
+            continue
+        p = chance(q_line, odds)
+        if p is None:
+            continue
+        ev = p * d - 1.0
+        if best is None or ev > best["ev"]:
+            best = {"line": q_line, "odds": int(odds), "book": book, "p": round(p, 4), "ev": round(ev, 4)}
+    if not best or best["ev"] < ev_here + BETTER_NUMBER_GAIN:
+        return None
+    best.update(p_here=round(p_here, 4), ev_here=round(ev_here, 4),
+                side=side, label=f"{side.title()} {best['line']:g}")
+    return best
+
+
+# ---- the hedge ------------------------------------------------------------------
+def _other_name(leg: dict) -> str:
+    """The other side of a leg in words, as a hedge would be placed."""
+    m, side = leg["market"], str(leg.get("side") or "").lower()
+    r = leg.get("row") or {}
+    if m == "moneyline":
+        team = leg.get("team") or ""
+        home, away = r.get("home") or "", r.get("away") or ""
+        other = away if team == home else home if team == away else ""
+        return f"{other} moneyline" if other else "the other side"
+    if m == "spread":
+        team = leg.get("team") or ""
+        home, away = r.get("home") or "", r.get("away") or ""
+        other = away if team == home else home if team == away else "the other side"
+        line = _num(leg.get("line"), None)
+        return f"{other} {-line:+g}" if line is not None else str(other)
+    if m == "total":
+        return f"{'Under' if side == 'over' else 'Over'} {leg['line']:g}"
+    if m in SCORER_MARKETS:
+        return f"{leg.get('player')} not to score"
+    flip = "Under" if side == "over" else "Over"
+    return f"{leg.get('player')} {flip} {leg['line']:g} {MARKET_WORDS.get(m, m)}"
+
+
+def hedge(legs: list[dict], slip: dict, payout) -> dict | None:
+    """The hedge for the leg still to decide the ticket.
+
+    WHEN ONE LEG IS LEFT — every other leg won or pushed — the ticket's
+    whole return rides on it, and betting its other side can lock part of
+    that return either way. This hands the page what the arithmetic needs
+    (slip.js does it as the reader types a price): the stake, the
+    ticket's decimal payout with any pushed leg taken out, the other side
+    in words with the last price we hold for it, and our chance for the
+    last leg (live where it is in play), so the page can say what locking
+    gives up by our numbers.
+
+    BEFORE ANYTHING STARTS it is a plan for the leg that kicks off last —
+    "if the rest hit" — the same arithmetic, said as a plan. Two legs
+    sharing the last start time have no single last leg, and get none.
+    """
+    if len(legs) < 2:
+        return None
+    res = [((l.get("live") or {}).get("result"), l) for l in legs]
+    if any(r == "lost" for r, _ in res):
+        return None
+    open_ = [l for r, l in res if r not in ("won", "push")]
+    started = any((l.get("live") or {}).get("state") in ("live", "final") for l in legs)
+    plan = False
+    if len(open_) == 1:
+        last = open_[0]
+    elif not started and len(open_) == len(legs):
+        kicks = sorted(((l.get("kickoff") or ""), i) for i, l in enumerate(legs))
+        if not all(k for k, _ in kicks) or kicks[-1][0] == kicks[-2][0]:
+            return None
+        last, plan = legs[kicks[-1][1]], True
+    else:
+        return None
+    dec = payout
+    approx = _same_game(legs)
+    pushed = [l for r, l in res if r == "push"]
+    if pushed and dec:
+        ds = [to_decimal(l.get("odds")) for l in pushed]
+        if all(ds):
+            dec = dec / math.prod(ds)
+        else:
+            approx = True
+    other = last.get("other_price") or {}
+    lv = last.get("live") or {}
+    ch = _live_p(last) if lv.get("state") == "live" else None
+    p = ch if ch is not None else (last["prob"] if last.get("prob") is not None else last.get("needs"))
+    stake = _num(slip.get("stake"), 0.0) or 0.0
+    out = {"leg": _name(last), "other": _other_name(last), "plan": plan,
+           "odds": int(other.get("odds") or 0), "book": str(other.get("book") or ""),
+           "stale": bool(other.get("stale")), "stake": round(stake, 2),
+           "payout": round(dec, 4) if dec else None, "approx": bool(approx),
+           "p_leg": None if p is None else round(float(p), 4),
+           "from": "live" if ch is not None else ("ours" if last.get("prob") is not None else "price")}
+    d_h = to_decimal(out["odds"])
+    if stake > 0 and dec and d_h:
+        win = stake * dec                      # the ticket's whole return
+        h = win / d_h                          # the same either way
+        out["lock"] = {"hedge": round(h, 2), "either": round(win - stake - h, 2)}
+        be = stake / (d_h - 1.0)               # the stake back if the leg misses
+        out["back"] = {"hedge": round(be, 2), "if_hits": round(win - stake - be, 2)}
+    return out
+
+
 def alerts(legs: list[dict]) -> list[str]:
     """What to read before anything else: a leg on a player listed on the
     injury report, and a prop no book is pricing right now (taken down, as
@@ -1297,24 +1515,44 @@ def _ticket_chance(legs: list[dict]) -> float | None:
     return ours * math.prod(l["needs"] for l in legs if l["prob"] is None and l["needs"] is not None)
 
 
-def grade(slip: dict, boards: dict, live=None) -> dict:
+def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
     """The card: every leg priced and ranked with the facts behind its
     number, the ticket's chance by our numbers, the ticket replayed 2,000
     nights, what its payout needs, a letter, the pairs worth naming and
     the swap for the weakest leg. With ``live`` (engine/sliplive.Live):
-    each leg's price at every book right now and where its game stands,
-    and for the ticket where it stands, the best book to place it at, the
-    leg it is better without, and the alerts worth reading first."""
+    each leg's price at every book right now and where its game stands —
+    a prop in play with its live chance (engine/proplive) — and for the
+    ticket where it stands, the best book to place it at, the leg it is
+    better without, a better number on any leg, the hedge for the leg
+    still to decide it, and the alerts worth reading first.
+
+    ``brief`` is the tracker's read of a saved slip (server
+    `/api/ask/track`): the live half only — no facts, no replay, no swap
+    — because it runs every minute a Live tab is open, not once."""
+    from . import proplive as PL
     legs = [price_leg(boards, l) for l in slip.get("legs") or []]
     for l in legs:
-        l["why"] = why(boards, l)
+        l["why"] = [] if brief else why(boards, l)
         l["kickoff"] = _kickoff(boards, l)
         if live is not None:
             l["live"] = live.state(l)
             # A started game's pre-game prices are gone from the books; the
-            # leg says where it stands instead (sliplive.live_state).
+            # leg says where it stands instead (sliplive.live_state). The
+            # other side's last price is kept for the hedge, marked old.
             started = (l["live"] or {}).get("state") in ("live", "final")
-            l["price"] = None if started else live.prices(l, boards.get(l.get("league") or ""))
+            pr = live.prices(l, boards.get(l.get("league") or ""))
+            l["price"] = None if started else pr
+            l["other_price"] = dict((pr or {}).get("other") or {}, stale=started) if (pr or {}).get("other") else None
+            lv = l["live"] or {}
+            if lv.get("state") == "live" and lv.get("result") is None:
+                ch = PL.leg_chance(l, boards)
+                if ch:
+                    lv["chance"] = ch
+            if not started and not brief:
+                idx = getattr(live, "indexes", {}).get(l.get("league") or "")
+                bn = better_number(l, idx, boards)
+                if bn:
+                    l["better_number"] = bn
     _, notes = joint(legs)
     payout = to_decimal(slip.get("total_odds"))
     if payout is None and legs and all(_odds(l["odds"]) for l in legs):
@@ -1326,7 +1564,19 @@ def grade(slip: dict, boards: dict, live=None) -> dict:
                                          -(l["edge"] if l["edge"] is not None else (l["prob"] or 0) - 0.5)))
     priced = [l for l in ranked if l["prob"] is not None]
     weakest = priced[-1] if priced else None
-    sim = simulate(legs) if chance else None          # nothing to replay on a ticket that cannot cash
+    for l in legs:
+        bn = l.get("better_number")
+        if bn and chance is not None and payout and l.get("prob") and bn.get("p_here"):
+            # The ticket at the better number: this leg's chance moves by
+            # the model's own ratio between the two numbers and the payout
+            # by the two prices'. Same-game correlation is left as it was.
+            d_old = to_decimal(l.get("odds")) or 0
+            if d_old > 1:
+                c2 = chance * bn["p"] / bn["p_here"]
+                pay2 = payout * (to_decimal(bn["odds"]) or 0) / d_old
+                bn["ticket_ev"] = round(c2 * pay2 - 1.0, 4)
+                bn["ticket_odds"] = from_decimal(pay2)
+    sim = simulate(legs) if (chance and not brief) else None   # nothing to replay on a ticket that cannot cash
     if sim:
         for l, h in zip(legs, sim.pop("hits")):
             l["sim_hits"] = h
@@ -1338,8 +1588,9 @@ def grade(slip: dict, boards: dict, live=None) -> dict:
         "now": now,
         # Where to place it and what to cut are pre-game questions.
         "shop": None if now else shop(legs, slip.get("total_odds")),
-        "better": None if now else without(legs, payout, ev),
-        "pairs": pairs(legs),
+        "better": None if (now or brief) else without(legs, payout, ev),
+        "hedge": hedge(legs, slip, payout),
+        "pairs": [] if brief else pairs(legs),
         "alerts": alerts(legs),
         "first_kickoff": kicks[0] if kicks else "",
         "legs": out_legs,
@@ -1352,7 +1603,7 @@ def grade(slip: dict, boards: dict, live=None) -> dict:
         "grade": letter(ev) if len(priced) == len(legs) else ("?" if ev is None else letter(ev) + "*"),
         "notes": notes,
         "weakest": _name(weakest) if weakest and len(priced) > 1 else "",
-        "swap": _swap(boards, weakest, legs) if weakest and len(priced) > 1 else None,
+        "swap": _swap(boards, weakest, legs) if weakest and len(priced) > 1 and not brief else None,
         "sim": sim,
     }
 
@@ -1392,6 +1643,19 @@ def summary(card: dict) -> str:
     if bt.get("leg"):
         parts.append(f"Better without {bt['leg']}: return {bt['ev']:+.0%} a dollar, chance {bt['chance']:.0%}, "
                      f"pays {bt['odds']:+d}" + (" (about)" if bt.get("approx") else "") + ".")
+    hd = card.get("hedge") or {}
+    if hd.get("lock"):
+        parts.append((f"If the rest hit, the last leg is {hd['leg']}: " if hd.get("plan")
+                      else f"One leg left, {hd['leg']}: ")
+                     + f"{hd['lock']['hedge']:.2f} on {hd['other']} at {hd['odds']:+d} locks "
+                     f"{hd['lock']['either']:+.2f} either way.")
+    for l in card["legs"]:
+        bn = l.get("better_number") or {}
+        if bn:
+            parts.append(f"Better number for {_name(l)}: {bn['label']} at {bn['odds']:+d} ({bn['book']}), "
+                         f"ours {bn['p']:.0%} vs {bn['p_here']:.0%}, return {bn['ev']:+.0%} vs "
+                         f"{bn['ev_here']:+.0%} a dollar.")
+            break
     if card.get("weakest"):
         parts.append(f"Weakest leg: {card['weakest']}.")
     for l in card["legs"]:

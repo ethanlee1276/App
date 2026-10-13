@@ -23919,7 +23919,9 @@ function mbDecimal(american) {
 function mbProfit(bet) {
   const stake = Number(bet.stake) || 0;
   if (bet.result === "win") {
-    const dec = mbDecimal(bet.odds);
+    // A saved slip that won with a leg pushed is paid without that leg
+    // (js/slip.js settleOne writes `paid_odds`; the bet stays as placed).
+    const dec = mbDecimal(bet.paid_odds || bet.odds);
     return dec == null ? 0 : stake * (dec - 1);
   }
   if (bet.result === "loss") return -stake;
@@ -42724,6 +42726,17 @@ function askSlipCard(t) {
   return askBodyHTML(t.text);
 }
 
+/* THE SLIPS YOU SAVED (Ethan, 2026-10-13: "saving uploaded slips too
+   moneys"): a slip graded in Ask and saved to My Bets is followed on the
+   Live tab, every league at once, by js/slip.js — loaded only for a reader
+   with one still open. */
+function liveSlips() {
+  const h = document.getElementById("live-slips");
+  if (h && mbLoad().some((b) => b.src === "slip" && b.result === "pending")) {
+    loadSlip().then((S) => S && S.track(h, { load: mbLoad, save: mbSave, live: () => state.view === "live" }));
+  }
+}
+
 function askSlipSend(file) {
   loadSlip().then((S) => S && S.send({
     state: askState, save: askSave, errorText: askErrorText, thinkMs: ASK_THINK_MS,
@@ -48604,6 +48617,7 @@ async function renderLiveBoard() {
   const host = document.getElementById("live-board");
   if (!host) return;
   renderSweatZone();
+  liveSlips();
   const games = await fetchAllLive();
   /* THE BETS REDRAW THE MOMENT THE SCOREBOARD LANDS. `renderAll` draws
      the tracker (renderLivePicks) BEFORE it reaches this function, so on

@@ -862,8 +862,21 @@ def test_the_ticket_says_where_it_stands():
     mah = _leg(player="Patrick Mahomes", market="pass_yds", side="over", line=255.5, odds=-115)
     live = _live(fast)
     open_ = SG.grade({"legs": [ky, pk]}, BOARDS, live=live)
+    # A PROP IN PLAY GETS ITS LIVE CHANCE. This pinned "a prop in play gets
+    # no number" until 2026-10-12, when Ethan asked for "live chances for
+    # props mid game"; engine/proplive is the race it now runs: Puka on 4
+    # catches over 5.5, with 8:12 left in the third (1,392 of 3,600
+    # seconds), held to the card's own pregame chance at kickoff.
+    from engine import proplive as PL
+    pk_card = next(l for l in open_["legs"] if l["player"] == "Puka Nacua")
+    ch = pk_card["live"]["chance"]
+    disp = PL.dispersion(SG.price_leg(BOARDS, pk)["row"], "receptions")
+    mu = PL.anchor(pk_card["prob"], 5.5, disp)
+    want, push = PL.race("over", 5.5, 4.0, 1392 / 3600, mu, disp)
+    assert abs(ch["p"] - round(want, 4)) < 1e-4 and ch["model"] == "clock" and ch["from"] == "ours", ch
+    assert abs(ch["share_left"] - 1392 / 3600) < 1e-3
     assert open_["now"] == {"won": 1, "lost": 0, "push": 0, "live": 1, "status": "open", "left": 1, "start": 0,
-                            "chance": None}, "a prop in play gets no number"
+                            "chance": round(ch["p"] + ch["push"], 4)}, "the ticket's chance is the live race's"
     assert open_["shop"] is None and open_["better"] is None, "where to place it is a pre-game question"
     assert all(l["price"] is None for l in open_["legs"]), "a started game's pre-game price is gone"
     ml = SG.grade({"legs": [ky, rams]}, BOARDS, live=live)
@@ -878,7 +891,7 @@ def test_the_ticket_says_where_it_stands():
                    BOARDS, live=live)
     assert won["now"]["status"] == "won" and "Live: every leg has won." in SG.summary(won)
     t2 = SG.summary(open_)
-    assert "Live: 1 won, 1 in play." in t2, t2
+    assert f"Live: 1 won, 1 in play; our chance for the rest {open_['now']['chance']:.0%}." in t2, t2
     calm = SG.grade({"legs": [ky, pk]}, BOARDS, live=_live())
     assert calm["now"] is None and all(l["price"] for l in calm["legs"]), "before kickoff: prices, no standing"
 
@@ -1111,7 +1124,10 @@ def test_the_card_renders_and_escapes_what_the_picture_said():
     assert "pgr-now" not in html, "no standing before kickoff"
     # Game day.
     assert '<div class="pgr-now s-open"><b>Live</b> · 1 won · 1 in play · 1 yet to start' in live
-    assert "we don’t put a number on a prop mid-game" in live
+    # Pinned "we don’t put a number on a prop mid-game" until 2026-10-13, when
+    # props in play got their live chance (engine/proplive); a leg in play
+    # with none (this fixture's has no `chance`) still leaves the rest unsaid.
+    assert "no number for the rest — a leg in play has no live chance yet" in live
     assert "Before kickoff our chance was <b>16%</b>" in live and "Our chance it all hits" not in live
     assert '<span class="pgr-res r-won">Won</span>' in live and 'class="pgr-leg v-strong r-won"' in live
     assert '<span class="pgr-live-tag fin">Final</span> BUF 20 – 24 LA' in live and "Has <b>7</b> of 5.5" in live

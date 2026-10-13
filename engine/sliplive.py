@@ -23,10 +23,19 @@ WHAT "LIVE" MEANS HERE, AND WHAT IT COSTS — nothing new is bought.
   over already past its number has won, and an under past it has lost,
   whatever the clock says.
 
-WHAT IT WILL NOT DO is put a number on a prop in the middle of a game. Our
-projection assumes a full game; engine/livepicks refuses the same thing
-for football for the same reason. A moneyline in play reads the live win
-probability the scoreboard already carries (engine/livewp).
+A PROP IN PLAY GETS ITS LIVE CHANCE from engine/proplive (2026-10-12,
+Ethan: "live chances for props mid game ... for all sports"): this module
+hands it the share of regulation left (`share_left`, the scoreboard's own
+clock) and, for baseball, the situation liveprops reads (`situation`).
+A moneyline in play reads the live win probability the scoreboard
+already carries (engine/livewp).
+
+EVERY LEAGUE THE GRADER READS. Football and basketball come off the
+twelve-second loop's scoreboard and deep files; hockey's scores off the
+same loop and its skaters' lines off `live_nhl_box.json`, which the loop
+writes from the league's own box score (ESPN's hockey box has never been
+verified here); baseball off `live_mlb.json` and its deep files, which
+live_build writes on its own clock.
 
 Pure assembly over data the caller hands in or files the live loop
 writes; the paths are module-level so the suite points them at a temp
@@ -45,8 +54,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 #: Where livescore_build writes the scoreboard and the deep files.
 FAST_DIR = ROOT / "web" / "data"
-#: The leagues the twelve-second loop covers (livescore_build).
-FAST_LEAGUES = ("nfl", "cfb", "nba", "wnba")
+#: The leagues the twelve-second loop covers (livescore_build), and
+#: baseball's own fast file (live_build).
+FAST_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl")
+MLB_FILE = "live_mlb.json"
+#: Hockey's skaters, off the league's own box score (livescore_build
+#: `nhl_box_pass`), keyed AWAY@HOME in the board's codes.
+NHL_BOX_FILE = "live_nhl_box.json"
 #: A scoreboard older than this is a stopped loop, not a quiet night — the
 #: launcher rewrites it every three minutes even when nothing is on
 #: (engine/livepicks.FAST_FRESH_S, the same bar).
@@ -66,6 +80,14 @@ BOX_STAT = {
     "anytime_td": ("rush_td", "rec_td"),
     "pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "fg3m": ("fg3m",),
     "pra": ("pts", "reb", "ast"),
+    # Hockey: engine/sources/nhldata.parse_boxscore's keys. A goalie's
+    # saves are his own row's.
+    "sog": ("sog",), "points": ("points",), "goals": ("goals",), "assists": ("assists",),
+    "blocks": ("blocks",), "saves": ("saves",), "anytime_goal": ("goals",),
+    # Baseball: engine/mlb/livestats.box_rows. A pitcher's outs come off
+    # his innings ("6.1" is nineteen), below.
+    "hits": ("hits",), "total_bases": ("total_bases",), "home_runs": ("home_runs",),
+    "strikeouts": ("strikeouts",), "outs": ("outs",),
 }
 
 GAME_MARKETS = ("moneyline", "spread", "total")
@@ -179,9 +201,10 @@ def leg_prices(leg: dict, index: dict | None, board: dict | None = None) -> dict
         return None
     at = [q for q in e["quotes"] if abs(q[0] - line) < 0.01]
     from .odds import devig_two_way
-    bettable, fairs = {}, []
+    bettable, fairs, theirs = {}, [], {}
     for _line, book, over, und in at:
         mine = und if under else over
+        other = over if under else und
         if over and und:
             f_over, f_under = devig_two_way(over, und)
             if 0.0 < f_over < 1.0:
@@ -189,11 +212,19 @@ def leg_prices(leg: dict, index: dict | None, board: dict | None = None) -> dict
         if mine and not _sharp(book):
             if book not in bettable or _better(mine, bettable[book]):
                 bettable[book] = mine
+        if other and not _sharp(book):
+            if book not in theirs or _better(other, theirs[book]):
+                theirs[book] = other
     books = sorted(({"book": b, "odds": o} for b, o in bettable.items()),
                    key=lambda x: (-_decimal(x["odds"]), x["book"]))
     out = {"books": books[:MAX_BOOKS], "n": len(books),
            "fair": round(statistics.median(fairs), 4) if fairs else None,
            "as_of": _board_stamp(board, game=False), "any": bool(e["quotes"])}
+    if theirs:
+        # THE OTHER SIDE AT THE SAME NUMBER, best price first — what a
+        # hedge on this leg would be placed at (slipgrade.hedge).
+        b, o = max(theirs.items(), key=lambda kv: (_decimal(kv[1]), kv[0]))
+        out["other"] = {"book": b, "odds": o}
     if books:
         out["best"], out["book"] = books[0]["odds"], books[0]["book"]
         yours = _odds(leg.get("odds"))
@@ -243,6 +274,9 @@ def _game_prices(leg: dict, board: dict | None) -> dict | None:
     out = {"books": [{"book": str(book or ""), "odds": odds}] if odds else [], "n": 1 if odds else 0,
            "fair": None if fair is None or r.get("has_market") is False else round(fair if same else 1 - fair, 4),
            "as_of": _board_stamp(board, game=True), "any": bool(odds)}
+    other = _game_other(leg, r, same)
+    if other:
+        out["other"] = other
     if odds:
         out["best"], out["book"] = odds, str(book or "")
         yours = _odds(leg.get("odds"))
@@ -251,6 +285,30 @@ def _game_prices(leg: dict, board: dict | None) -> dict | None:
     if r.get("price_stale"):
         out["stale"] = True
     return out
+
+
+def _game_other(leg: dict, r: dict, same: bool) -> dict | None:
+    """The other side of a side or a total off its game card, for a hedge:
+    the other team's moneyline, the other side of the spread, the other
+    side of the total — the card's own best price for it."""
+    market = leg.get("market")
+    if market == "moneyline":
+        home = (leg.get("team") or "") == r.get("home")
+        odds = r.get("away_odds") if home else r.get("home_odds")
+        book = r.get("away_book") if home else r.get("home_book")
+        if not _odds(odds):
+            odds = r.get("other_odds") if same else r.get("odds")
+            book = book or ("" if same else r.get("book"))
+    elif market == "total":
+        odds = r.get("other_odds") if same else r.get("odds")
+        book = (r.get("under_book") if leg.get("side") == "over" else r.get("over_book")) \
+            or ("" if same else r.get("book"))
+    else:
+        odds = r.get("other_odds") if same else r.get("odds")
+        book = (r.get("away_book") if (leg.get("team") or "") == r.get("home") else r.get("home_book")) \
+            or ("" if same else r.get("book"))
+    odds = _odds(odds)
+    return {"book": str(book or ""), "odds": odds} if odds else None
 
 
 # ---- the game ----------------------------------------------------------------
@@ -286,14 +344,22 @@ def _fresh(doc: dict | None, path: Path, now: float) -> bool:
 
 
 def _teams(leg: dict) -> set:
+    """Every name the leg's game might go by on the scoreboard: its row's
+    two teams, else the leg's team and opponent, and the card's game label
+    ("BUF @ LA", the board's codes) beside them — the label is what a slip
+    saved to My Bets still carries a day later, when the board that priced
+    it has moved on to the next slate."""
     r = leg.get("row") or {}
     got = {r.get("home"), r.get("away")} - {None, ""}
     if not got:
         got = {leg.get("team") or r.get("team"), leg.get("opponent") or r.get("opponent")} - {None, ""}
+        away, at, home = str(leg.get("game") or "").partition(" @ ")
+        if at and away.strip() and home.strip():
+            got |= {away.strip(), home.strip()}
     return {str(t) for t in got}
 
 
-def _clock(live: dict) -> str:
+def _clock(live: dict, league: str = "") -> str:
     st = live.get("state")
     if st == "final":
         return "Final"
@@ -303,7 +369,15 @@ def _clock(live: dict) -> str:
     if detail:
         return detail
     period, clock = live.get("period"), str(live.get("clock") or "").strip()
-    return " ".join(x for x in (f"Q{period}" if period else "", clock) if x)
+    if league == "mlb":
+        # Baseball's period is already the words ("Top 5th"); the outs
+        # are the clock it has.
+        outs = live.get("outs")
+        return " · ".join(x for x in (str(period or ""),
+                                      f"{outs} out" if outs is not None else "") if x)
+    mark = "P" if league == "nhl" else "Q"
+    label = (str(period) if str(period or "")[:1].isalpha() else f"{mark}{period}") if period else ""
+    return " ".join(x for x in (label, clock) if x)
 
 
 def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | None:
@@ -314,11 +388,11 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     the league has no fast loop, the loop has stopped, or the game is not
     on it."""
     league = leg.get("league") or leg.get("sport") or ""
-    if league not in FAST_LEAGUES:
+    if league not in FAST_LEAGUES and league != "mlb":
         return None
     now = time.time() if now is None else now
     base = Path(fast_dir or FAST_DIR)
-    path = base / f"live_{league}.json"
+    path = base / (MLB_FILE if league == "mlb" else f"live_{league}.json")
     doc = _read(path)
     if not _fresh(doc, path, now):
         return None
@@ -328,18 +402,31 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     game = None
     for g in doc.get("games") or []:
         sides = {str(g.get("home") or ""), str(g.get("away") or "")}
-        if teams <= sides or (len(teams) == 1 and teams & sides):
-            game = g
-            break
+        # Both teams where the leg names two or more, its one team where it
+        # names one — a name the scoreboard does not use (the slip's own
+        # "Rams") is one of several, never the only one asked for.
+        if len(teams & sides) >= min(2, len(teams)):
+            # A doubleheader names the same pair twice: the one being
+            # played (or the later final) is the leg's.
+            if game is None or (g.get("live") or {}).get("state") == "live":
+                game = g
     if game is None:
         return None
     live = game.get("live") or {}
     state = str(live.get("state") or "")
     out = {"state": state, "home": game.get("home"), "away": game.get("away"),
            "home_score": live.get("home_score"), "away_score": live.get("away_score"),
-           "clock": _clock(live), "start": live.get("start_time")}
+           "clock": _clock(live, league), "start": live.get("start_time")}
     if state not in ("live", "final"):
         return out
+    if state == "live":
+        # What the live chance divides (engine/proplive): the clock's
+        # share of regulation, or baseball's inning and outs.
+        out["period"], out["clock_raw"] = live.get("period"), live.get("clock")
+        from .proplive import share_left
+        f = share_left(league, live)
+        if f is not None:
+            out["share_left"] = round(f, 4)
     market = leg.get("market")
     if market in GAME_MARKETS:
         out.update(_game_result(leg, game, live))
@@ -347,11 +434,19 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     keys = BOX_STAT.get(market)
     if not keys:
         return out
-    deep = _read(base / "pbp" / f"{league}_{game.get('event_id')}.json")
-    stats = _player_stats(deep, leg.get("player"))
+    if league == "nhl":
+        stats = _player_stats(_nhl_box(base, game, now), leg.get("player"))
+    else:
+        key = game.get("game_pk") if league == "mlb" else game.get("event_id")
+        deep = _read(base / "pbp" / f"{league}_{key}.json")
+        stats = _player_stats(deep, leg.get("player"))
+        if league == "mlb" and stats is not None:
+            out["situation"] = _mlb_situation(deep, leg, game, live)
     if stats is None:
         out["note"] = "not in the box score yet" if state == "live" else "not in the box score"
         return out
+    if "outs" in keys and "outs" not in stats:
+        stats = dict(stats, outs=_ip_outs(stats.get("ip")))
     cur = sum(_num(stats.get(k), 0.0) for k in keys)
     out["current"] = round(cur, 1)
     line = 0.5 if market in SCORER_MARKETS else _num(leg.get("line"))
@@ -360,17 +455,97 @@ def live_state(leg: dict, fast_dir=None, now: float | None = None) -> dict | Non
     return out
 
 
+def _nhl_box(base: Path, game: dict, now: float | None = None) -> dict | None:
+    """The hockey game's skater rows from the loop's own box file, in the
+    shape `_player_stats` reads (a `players` list). A file the loop has
+    stopped writing is no box at all."""
+    path = Path(base) / NHL_BOX_FILE
+    doc = _read(path)
+    if not _fresh(doc, path, time.time() if now is None else now):
+        return None
+    key = f"{game.get('away')}@{game.get('home')}"
+    for g in doc.get("games") or []:
+        if isinstance(g, dict) and f"{g.get('away')}@{g.get('home')}" == key:
+            return g
+    return None
+
+
+def _ip_outs(ip) -> float:
+    """Outs recorded off innings pitched as the box writes them: "6.1" is
+    six innings and one out, nineteen outs — not 6.1 of anything."""
+    txt = str(ip or "").strip()
+    if not txt:
+        return 0.0
+    whole, _, part = txt.partition(".")
+    try:
+        return float(int(whole or 0) * 3 + int(part or 0))
+    except ValueError:
+        return 0.0
+
+
+def _mlb_situation(deep, leg: dict, game: dict, live: dict) -> dict:
+    """What engine/mlb/liveprops needs for this leg: his lineup spot, the
+    spot of the man at the plate, outs, which side he is on, and for a
+    pitcher whether he is still on the mound and how many he has faced.
+    Every field is optional; proplive refuses what it cannot price."""
+    from .sources.oddsapi import normalize_name
+    rows = (deep or {}).get("players") or []
+    want = normalize_name(leg.get("player") or "")
+    me = next((p for p in rows if isinstance(p, dict)
+               and normalize_name(p.get("player") or "") == want), {}) or {}
+    batter = normalize_name(((deep or {}).get("current") or {}).get("batter") or "")
+    up = next((p for p in rows if isinstance(p, dict) and batter
+               and normalize_name(p.get("player") or "") == batter), {}) or {}
+    team = str(me.get("team") or "")
+    out = {"outs": live.get("outs"), "is_home": team == str(game.get("home") or "")}
+    if me.get("spot"):
+        out["spot"] = me["spot"]
+    if up.get("spot") and str(up.get("team") or "") == team:
+        out["batter_spot"] = up["spot"]
+    elif team:
+        # HIS TEAM IS IN THE FIELD, so the man at the plate is the other
+        # side's and his spot says nothing about when this hitter is up.
+        # His own side is due the spot after its last completed trip: the
+        # team's plate appearances so far, round the nine (a pinch hitter
+        # bats in the spot he took, so his trips count in it too).
+        pas = [(p.get("stats") or {}).get("pa") for p in rows
+               if isinstance(p, dict) and str(p.get("team") or "") == team and p.get("spot")]
+        if pas and all(isinstance(v, (int, float)) for v in pas):
+            out["batter_spot"] = int(sum(pas)) % 9 + 1
+    if "on_mound" in me:
+        out["on_mound"] = bool(me.get("on_mound"))
+    bf = (me.get("stats") or {}).get("bf")
+    if bf is not None:
+        out["bf"] = bf
+    return out
+
+
 def _player_stats(deep, player) -> dict | None:
     """His row of the deep file's box score, by name as the odds feed
-    writes names (oddsapi.normalize_name: accents, suffixes, punctuation)."""
+    writes names (oddsapi.normalize_name: accents, suffixes, punctuation).
+
+    A box that writes the short form ("C. McDavid" — the league's own
+    hockey box, when the roster file that names him in full is missing)
+    is matched on the first initial and the surname, and only when exactly
+    one player in the box fits: two Smiths with one initial is a guess."""
     if not isinstance(deep, dict) or not player:
         return None
     from .sources.oddsapi import normalize_name
     want = normalize_name(player)
-    for p in deep.get("players") or []:
-        if isinstance(p, dict) and normalize_name(p.get("player") or "") == want:
+    rows = [p for p in deep.get("players") or [] if isinstance(p, dict)]
+    for p in rows:
+        if normalize_name(p.get("player") or "") == want:
             return p.get("stats") or {}
-    return None
+    parts = want.split()
+    if len(parts) < 2:
+        return None
+    first, last = parts[0][:1], parts[-1]
+    fits = []
+    for p in rows:
+        got = normalize_name(p.get("player") or "").split()
+        if len(got) >= 2 and got[-1] == last and got[0][:1] == first:
+            fits.append(p)
+    return (fits[0].get("stats") or {}) if len(fits) == 1 else None
 
 
 def _prop_result(side, line: float, cur: float, state: str) -> str | None:

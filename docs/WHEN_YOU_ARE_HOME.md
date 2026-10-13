@@ -861,7 +861,8 @@ first). Paste back anything that prints an error or looks off.
       finals settle. The card says where the ticket stands (won, in play,
       yet to start). A moneyline in play reads its live win chance. A
       prop in play gets no number, because our projection assumes a whole
-      game.
+      game. *(Changed 2026-10-13: props in play now get a live chance —
+      step 38.)*
     * **Before kickoff the card also shows:**
       * where to place it: the parlay priced at each book that quotes
         every leg, against the slip;
@@ -932,6 +933,87 @@ first). Paste back anything that prints an error or looks off.
     the oldest read). Within six hours of the restart, every status except
     `canceled` and `none` should have the third number equal to the second,
     and the last number under 6.
+
+38. **The parlay checker: live chances, the hedge, a better number, and
+    saved slips on the Live tab** (2026-10-13, Ethan: "the hedge
+    calculator and better number and saving uploaded slips too moneys and
+    live chances for props mid game ... for all sports"). All of it is in
+    the graded card in Ask. It covers every league the checker grades:
+    NFL, college, NBA, WNBA, NHL and MLB. UFC isn't in the checker,
+    because its board stores only picks.
+    * **A prop in play gets its live chance.** It's what he has so far
+      against the share of the game left, starting at kickoff from the
+      card's own number. Football, basketball and hockey use the
+      scoreboard's clock. Baseball uses the existing live-prop model:
+      inning, outs, his lineup spot, who is due up, and whether a pitcher
+      is still in. Overtime gets no number. The ticket's "our chance for
+      the rest" now counts props in play too.
+    * **Hockey's live box score is new.** During NHL games the live loop
+      now writes skaters' and goalies' lines to `live_nhl_box.json` from
+      the league's own box score, the same parser settlement uses. It's
+      cached as `nhl_live_*`, never as `nhl_box_*` (the name settlement
+      reads), so a mid-game snapshot can't be graded as a final.
+    * **Baseball's live box** now carries each hitter's lineup spot and
+      whether each pitcher is on the mound.
+    * **The hedge.** When one leg is left, the card shows the other side
+      of that leg with our last price for it. Type the price your book
+      shows and it works out:
+      * the bet that locks a profit either way;
+      * the bet that wins your stake back if the leg misses;
+      * by our chance for the leg, what locking costs or adds.
+      Before anything starts, it shows the same as a plan for the leg
+      that kicks off last.
+    * **A better number.** Where a book quotes the same bet at another
+      number that our model rates better (e.g. Over 59.5 at +150 instead
+      of 69.5 at −115), the leg says so, with what it does to the ticket.
+      It compares numbers the way the card would print them, and the
+      sharp book is never the price to take.
+    * **Save to My Bets.** Saves the slip with its legs. The Live tab's
+      new **Your saved slips** panel follows every saved slip in every
+      league, leg by leg, once a minute while the tab is open. When the
+      box score settles a slip, it's settled in My Bets (won, lost, or
+      every leg pushed). If it won with a leg pushed, it's paid at the
+      price without that leg, or left for you when we don't know that
+      leg's price. The follow-up call (`/api/ask/track`) reads no picture,
+      calls no AI and doesn't count as a question.
+    * **Fixed on the way:** basketball, hockey and baseball props that
+      aren't on Most Likely got no chance from the checker. Their boards
+      write a range or an SD the checker couldn't read. They're priced
+      now, at the board's own chance on its own number.
+
+    Nothing to set; the box picks it up on its own. Two read-only checks:
+    * **The measurement** (a few minutes). It replays the live chance on
+      the 2023–2025 NFL seasons from the cached play-by-play. It stops at
+      the end of Q1, halftime and the end of Q3, and scores the shipping
+      model against the kickoff number. It also scores two other ideas,
+      this game's pace and a half-and-half blend. It changes nothing.
+      Paste back the tables:
+      ```
+      cd /srv/qellys && sudo -u qellys python3 -m engine.proplivefit
+      ```
+      Hockey shots on goal too, if the shots table is filled (it is if
+      `ingest.py nhl --shots` ever ran):
+      ```
+      cd /srv/qellys && sudo -u qellys python3 -m engine.proplivefit --sport nhl
+      ```
+      If "blend" beats "ours" by much, the first half tells us something
+      the model ignores. That's your call to change, not mine.
+    * **During a hockey game, the new box file** (prints when it was
+      written, each game, and how many player lines it has):
+      ```
+      cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/data/live_nhl_box.json')); print(d['generated_at'], [(g['away']+'@'+g['home'], g['state'], len(g['players'])) for g in d['games']])"
+      ```
+
+38b. **Your calls from step 38.**
+    * **UFC in the checker?** Its board stores only our picks, not every
+      fighter's line, so a fight leg reads "not on our board". Say if you
+      want it added.
+    * **The Live tab's own tracked picks** use the same baseball live
+      model, and they have a bug I fixed in the checker. When the other
+      team is batting, they count the batter at the plate as the next man
+      up for our hitter's side. The checker now works out his side's next
+      spot from its own plate appearances. Say yes and I'll fix it in
+      engine/livepicks the same way.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

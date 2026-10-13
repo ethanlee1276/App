@@ -50,6 +50,9 @@ def box_rows(boxscore: dict, home: str = "home", away: str = "away") -> list[dic
     ``away`` so the page's own abbreviations ride along.
     """
     out: list[dict] = []
+    # WHO IS ON THE MOUND, for the parlay checker's live strikeout chance
+    # (engine/proplive): a starter who has left cannot add to his line.
+    mound = current_pitchers(boxscore)
     for side, team in (("home", home), ("away", away)):
         players = ((boxscore.get("teams") or {}).get(side) or {}).get("players") or {}
         for p in players.values():
@@ -76,9 +79,20 @@ def box_rows(boxscore: dict, home: str = "home", away: str = "away") -> list[dic
                 if pit.get("battersFaced") is not None:
                     row["bf"] = float(pit.get("battersFaced") or 0)
             if row:
-                out.append({"player": name, "team": team,
-                            "position": str(((p.get("position") or {}).get("abbreviation")) or ""),
-                            "stats": row})
+                entry = {"player": name, "team": team,
+                         "position": str(((p.get("position") or {}).get("abbreviation")) or ""),
+                         "stats": row}
+                # BESIDE THE STATS, NOT IN THEM: the lineup spot and the
+                # mound are what engine/mlb/liveprops needs for a live
+                # chance (the same two `parse_live_stats` reads for the
+                # Live tab), and neither is a stat — the game page's box
+                # table draws every key in `stats`.
+                order = str(p.get("battingOrder") or "")
+                if order.isdigit():
+                    entry["spot"] = int(order) // 100
+                if pit.get("strikeOuts") is not None or pit.get("inningsPitched"):
+                    entry["on_mound"] = normalize_name(name) in mound
+                out.append(entry)
     return out
 
 

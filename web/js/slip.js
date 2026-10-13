@@ -22,6 +22,16 @@
    it is settled. The ticket says where it stands, where to place it, the
    leg it is better without and the pairs that move together.
 
+   AND WHAT TO DO WITH IT (Ethan, 2026-10-13: "the hedge calculator and
+   better number and saving uploaded slips too moneys and live chances for
+   props mid game ... for all sports"): a prop in play carries its live
+   chance (engine/proplive); a leg a book quotes at a better number says
+   so (slipgrade.better_number); the leg left to decide the ticket gets a
+   hedge calculator that redoes its arithmetic as the reader types a price
+   (slipgrade.hedge); and Save puts the slip in My Bets, where the Live tab
+   follows it leg by leg (`track`, /api/ask/track) and settles it in My
+   Bets when the box score does.
+
    The file is chosen in app.js (a real file input inside the attach
    sheet's row, so a phone's picker opens on the tap itself), which then
    hands it here with what it owns as `ctx` — the conversation, saving it,
@@ -55,6 +65,12 @@
     const h = +m[4];
     return `${day} ${((h + 11) % 12) + 1}:${m[5]} ${h < 12 ? "AM" : "PM"} ET`;
   };
+
+  const money = (x) => `$${(Math.round(Number(x) * 100) / 100).toFixed(2)}`;
+  const signed = (x) => `${x >= 0 ? "+" : "−"}${Math.abs(Math.round(x * 100))}%`;
+  /* American odds to the decimal multiplier on the stake; null for none. */
+  const dec = (o) => { const a = Number(o); return !a || !Number.isFinite(a) ? null : a > 0 ? 1 + a / 100 : 1 + 100 / Math.abs(a); };
+  const american = (d) => (!(d > 1) ? 0 : d >= 2 ? Math.round((d - 1) * 100) : -Math.round(100 / (d - 1)));
 
   const MARKET = {
     pass_yds: "Pass Yds", pass_td: "Pass TDs", pass_att: "Pass Attempts", pass_cmp: "Completions",
@@ -196,7 +212,7 @@
         ${res ? `<span class="pgr-res r-${esc(res)}">${esc(RESULT[res] || res)}</span>` : ""}
         <span class="pgr-pill v-${esc(v)}">${esc(label)}</span></div>
       ${meta.length ? `<div class="pgr-leg-m">${meta.join(" · ")}</div>` : ""}${bar}
-      ${liveHTML(l)}${priceHTML(l)}
+      ${liveHTML(l)}${priceHTML(l)}${betterNumHTML(l)}
       ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${whyHTML(l)}
     </li>`;
   }
@@ -246,7 +262,71 @@
       bits.push(`<b>${pct(g.win_prob)}</b> to win now`);
     }
     if (g.note) bits.push(esc(g.note));
-    return `<div class="pgr-live">${tag} ${bits.join(" · ")}</div>${prog}`;
+    return `<div class="pgr-live">${tag} ${bits.join(" · ")}</div>${prog}${g.state === "live" ? chanceHTML(g.chance) : ""}`;
+  }
+
+  /* A prop in play, as a race between what he has banked and the game
+     left (engine/proplive): our chance the bet wins now, and what it rests
+     on — the final he is on course for at his pregame rate, or in baseball
+     the plate appearances or batters he has left. */
+  function chanceHTML(c) {
+    if (!c || c.p == null) return "";
+    const on = c.model === "mlb" && c.left != null ? `about ${num(c.left)} ${c.left_unit} left`
+      : c.expected != null ? `on course for about ${num(c.expected)}` : "";
+    return `<div class="pgr-chance">Our chance now <b>${pct(c.p)}</b>${on ? ` · ${esc(on)}` : ""}${
+      c.push ? ` · ${pct(c.push)} to push` : ""}${c.from === "price" ? " · started from its price, not ours" : ""}</div>`;
+  }
+
+  /* The same bet at another number a book quotes, when it is the better
+     bet by our numbers (slipgrade.better_number), with what it does to the
+     ticket. */
+  function betterNumHTML(l) {
+    const b = l.better_number;
+    if (!b) return "";
+    return `<div class="pgr-bn"><b>Better number:</b> ${esc(b.label)} at ${esc(price(b.odds))}${b.book ? ` (${esc(b.book)})` : ""} — ours ${
+      pct(b.p)} vs ${pct(b.p_here)} at your number, return <b class="pos">${signed(b.ev)}</b> vs ${signed(b.ev_here)} a dollar${
+      b.ticket_odds ? `. The ticket would pay ${esc(price(b.ticket_odds))}${b.ticket_ev != null ? `, return ${signed(b.ticket_ev)}` : ""}` : ""}.</div>`;
+  }
+
+  /* THE HEDGE. W is what the ticket returns if the last leg wins (stake ×
+     its decimal payout, a pushed leg taken out by the server). A bet of H
+     at decimal d on the other side returns H·d, so H = W/d returns the
+     same either way, and B = S/(d − 1) wins the stake back if the leg
+     misses. By our chance p for the leg, the hedge bet itself is worth
+     H·((1 − p)·d − 1) — what locking costs, or adds, in expected value. */
+  function hedgeOut(stake, pay, odds, p, leg) {
+    const S = Number(stake), d = dec(odds), P = Number(pay);
+    if (!(S > 0) || !(P > 1) || !d) return `<p class="pgr-hedge-none">Type your stake and the hedge’s price to see the numbers.</p>`;
+    const W = S * P, H = W / d, either = W - S - H, B = S / (d - 1), ifHits = W - S - B;
+    const rows = [`No hedge: <b class="pos">+${money(W - S)}</b> if it hits, <b class="neg">−${money(S)}</b> if it misses.`];
+    rows.push(either > 0
+      ? `Lock it: bet <b>${money(H)}</b> and you’re up <b class="pos">${money(either)}</b> whichever way it goes.`
+      : "At this price no hedge locks a profit — it would cost more than the ticket can win.");
+    if (ifHits > 0) rows.push(`Stake back: bet <b>${money(B)}</b> — <b class="pos">+${money(ifHits)}</b> if it hits, $0.00 if it misses.`);
+    const pp = p === "" || p == null ? null : Number(p);
+    if (pp != null && Number.isFinite(pp) && either > 0) {
+      const ev = H * ((1 - pp) * d - 1);
+      rows.push(`By our ${pct(pp)} for ${esc(leg)}, locking ${ev < 0 ? `costs about <b>${money(-ev)}</b>` : `adds about <b>${money(ev)}</b>`} in expected value.`);
+    }
+    return rows.map((r) => `<p>${r}</p>`).join("");
+  }
+
+  function hedgeHTML(h) {
+    if (!h || !(h.payout > 1)) return "";
+    const head = h.plan ? `<b>Hedge plan</b> — if the rest hit, <b>${esc(h.leg)}</b> decides the ticket.`
+      : `<b>One leg left</b> — <b>${esc(h.leg)}</b> decides the ticket.`;
+    const src = h.odds ? `${h.book ? `${esc(h.book)} ` : ""}${esc(price(h.odds))}` : "";
+    return `<div class="pgr-hedge" data-pay="${esc(h.payout)}" data-p="${h.p_leg == null ? "" : esc(h.p_leg)}" data-leg="${esc(h.leg)}">
+      <div>${head} The hedge is <b>${esc(h.other)}</b>.</div>
+      <div class="pgr-hedge-in">
+        <label>Your stake $<input data-hedge="stake" inputmode="decimal" value="${h.stake ? esc(h.stake) : ""}" placeholder="10"></label>
+        <label>Hedge price <input data-hedge="odds" inputmode="numeric" value="${h.odds ? esc(h.odds) : ""}" placeholder="-150"></label>
+      </div>
+      <div class="pgr-hedge-out">${hedgeOut(h.stake, h.payout, h.odds, h.p_leg, h.leg)}</div>
+      <small>${src ? `The price filled in is our last pull: ${src}${h.stale ? ", from before the game started — books move it, so type the one you see now" : ""}.`
+        : "We have no price for the other side — type the one your book shows."}${
+        h.approx ? " Same-game parlays pay their own way, so the payout here is close, not exact." : ""}</small>
+    </div>`;
   }
 
   /* The facts behind the leg's number, from the board itself
@@ -288,7 +368,7 @@
     const bits = [["won", "won"], ["push", "pushed"], ["live", "in play"], ["start", "yet to start"]]
       .filter(([k]) => n[k]).map(([k, w]) => `${n[k]} ${w}`);
     return `<div class="pgr-now s-open"><b>Live</b> · ${bits.join(" · ")}${n.chance != null
-      ? ` · our chance for the rest <b>${pct(n.chance)}</b>` : n.live ? " · we don’t put a number on a prop mid-game" : ""}</div>`;
+      ? ` · our chance for the rest <b>${pct(n.chance)}</b>` : n.live ? " · no number for the rest — a leg in play has no live chance yet" : ""}</div>`;
   }
 
   function alertsHTML(a) {
@@ -362,15 +442,230 @@
       <div class="pgr-top"><div class="pgr-grade g-${letterCls}" aria-label="Grade ${esc(g)}">${esc(g.replace("*", ""))}${
         g.indexOf("*") >= 0 ? "<sup>*</sup>" : ""}</div>
         <div class="pgr-sum"><b>${head}</b>${lines.map((x) => `<span>${x}</span>`).join("")}</div></div>
-      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${shopHTML(s.shop)}${betterHTML(s.better)}
+      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${shopHTML(s.shop)}${betterHTML(s.better)}${hedgeHTML(s.hedge)}
       ${simHTML(s.sim, s.n_legs)}
       <ol class="pgr-legs">${s.legs.map(legHTML).join("")}</ol>
       ${pairsHTML(s.pairs)}${notes}${swap}
-      ${foot.map((f) => `<p class="pgr-foot">${esc(f)}</p>`).join("")}
+      ${foot.map((f) => `<p class="pgr-foot">${esc(f)}</p>`).join("")}${saveHTML(s)}
       <p class="pgr-fine">Read from your screenshot by AI and priced by our models. Not betting advice.
         <span>21+ · 1-800-GAMBLER</span></p>
     </div>`;
   }
 
-  window.QBSlip = { send, card, shrink };
+  /* ---- My Bets ------------------------------------------------------------- */
+  /* My Bets lives in app.js (mbLoad / mbSave: this browser, and the account
+     copy when signed in). Read where it is; a page without it saves nothing. */
+  const book = () => (typeof mbLoad === "function" && typeof mbSave === "function" ? { load: mbLoad, save: mbSave } : null);
+  const SLIPS = new Map();            // the cards drawn, by their slip's key, for Save
+  const hash = (t) => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); };
+  /* The same ticket read twice is the same key: its legs, its price. */
+  function slipKey(s) {
+    return `s${hash((s.legs || []).map((l) => [l.player || l.team || l.game, l.market, l.side, l.line, l.odds].join(":"))
+      .sort().join("|") + `|${s.total_odds || ""}`)}`;
+  }
+  /* The slip's own price, else its legs' multiplied (books price a
+     same-game parlay their own way, which is why the slip's comes first). */
+  function ticketOdds(s) {
+    if (Number(s.total_odds)) return Number(s.total_odds);
+    const ds = (s.legs || []).map((l) => dec(l.odds));
+    return ds.length && ds.every(Boolean) ? american(ds.reduce((a, b) => a * b, 1)) : 0;
+  }
+  function today() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  /* A My Bets entry, with the legs as the card resolved them — the
+     board's player names and team codes and the game ("BUF @ LA"), which
+     is what finds the game on the scoreboard after the board moves on. */
+  function entryOf(s, stake, odds, key) {
+    const legs = s.legs || [];
+    const sports = [...new Set(legs.map((l) => String(l.league || l.sport || "").toUpperCase()).filter(Boolean))];
+    const desc = `${legs.length}-leg parlay: ${legs.map(legName).join(" + ")}`;
+    return {
+      id: Date.now() + "" + Math.floor(Math.random() * 1e4),
+      book: s.book || "Other", sport: sports.length === 1 ? sports[0] : "Other",
+      date: String(s.first_kickoff || "").slice(0, 10) || today(),
+      desc: desc.length > 160 ? `${desc.slice(0, 159)}…` : desc,
+      stake, odds, result: "pending", src: "slip", slip_key: key,
+      legs: legs.map((l) => ({ sport: l.league || l.sport, player: l.player, team: l.team, game: l.game,
+        market: l.market, side: l.side, line: l.line, odds: l.odds, text: l.text })),
+    };
+  }
+  function saveHTML(s) {
+    const b = book();
+    if (!b || !Array.isArray(s.legs) || !s.legs.length) return "";
+    const key = slipKey(s);
+    SLIPS.set(key, s);
+    const have = b.load().find((x) => x && x.slip_key === key);
+    if (have) return `<div class="pgr-save done">Saved to My Bets${have.result === "pending" ? " · followed on the Live tab" : ""}.</div>`;
+    return `<div class="pgr-save" data-save-key="${esc(key)}">
+      <label>Stake $<input data-save-stake inputmode="decimal" value="${s.stake ? esc(s.stake) : ""}" placeholder="10"></label>
+      <button type="button" class="pgr-save-btn" data-save-slip>Save to My Bets</button>
+      <span class="pgr-save-note">We follow it on the Live tab and settle it in My Bets when the box score does.</span>
+    </div>`;
+  }
+  function save(btn) {
+    const box = btn.closest("[data-save-key]");
+    const s = box && SLIPS.get(box.dataset.saveKey);
+    const b = book();
+    if (!s || !b) return;
+    const note = box.querySelector(".pgr-save-note");
+    const stake = Number(String((box.querySelector("[data-save-stake]") || {}).value || "").replace(/[$,\s]/g, ""));
+    const odds = ticketOdds(s);
+    if (!(stake > 0)) { note.textContent = "Type the stake you placed it for."; return; }
+    if (!odds) { note.textContent = "The slip shows no price, so there is no payout to save — log it by hand in My Bets."; return; }
+    const bets = b.load();
+    if (!bets.some((x) => x && x.slip_key === box.dataset.saveKey)) {
+      bets.push(entryOf(s, stake, odds, box.dataset.saveKey));
+      b.save(bets);
+    }
+    box.outerHTML = `<div class="pgr-save done">Saved to My Bets · followed on the Live tab.</div>`;
+  }
+
+  /* ---- the Live tab ------------------------------------------------------- */
+  /* Every slip saved from the checker and still pending, read again once a
+     minute while the Live tab is open (server `_ask_track`: the legs, no
+     picture, no model call). A ticket the box score settles is settled in
+     My Bets — won, lost, or every leg pushed — and says so here; one that
+     won with a leg pushed is paid at its price without that leg where
+     every pushed leg's price is known (`paid_odds`, which My Bets' profit
+     reads, the bet itself unchanged), and left for the reader otherwise. */
+  const TRACK_MS = 60000;
+  const SETTLED_SHOWN_MS = 12 * 3600 * 1000;
+  const T = { host: null, ctx: null, timer: 0, busy: false, last: 0, cards: {}, err: "" };
+
+  function tracked(bets) {
+    return bets.filter((b) => b && b.src === "slip" && Array.isArray(b.legs) && b.legs.length);
+  }
+  function settleOne(b, c) {
+    const n = c && c.now;
+    if (!n || b.result !== "pending") return false;
+    if (n.status === "lost") b.result = "loss";
+    else if (n.status !== "won") return false;
+    else if (!n.push) b.result = "win";
+    else if (!n.won) b.result = "push";
+    else {
+      const pushed = (c.legs || []).filter((l) => (l.live || {}).result === "push").map((l) => dec(l.odds));
+      const whole = dec(b.odds);
+      if (!whole || !pushed.length || !pushed.every(Boolean)) { b.settle_note = "won with a leg pushed — set the price your book paid"; return true; }
+      b.result = "win";
+      b.paid_odds = american(whole / pushed.reduce((x, y) => x * y, 1));
+    }
+    b.settled_by = "box";
+    b.settled_at = new Date().toISOString();
+    return true;
+  }
+  function settle(got) {
+    const bets = T.ctx.load();
+    let moved = false;
+    got.forEach((x) => {
+      const b = bets.find((y) => y && y.id === x.id);
+      if (b && x.slip && settleOne(b, x.slip)) moved = true;
+    });
+    if (moved) T.ctx.save(bets);
+  }
+  async function refresh() {
+    if (T.busy || !T.ctx) return;
+    const open = tracked(T.ctx.load()).filter((b) => b.result === "pending")
+      .sort((a, b) => String(b.id).localeCompare(String(a.id))).slice(0, 10);
+    if (!open.length) { draw(); return; }
+    T.busy = true;
+    try {
+      const res = await fetch("/api/ask/track", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slips: open.map((b) => ({ id: b.id, legs: b.legs, stake: b.stake, total_odds: b.odds, book: b.book })) }),
+      });
+      let body = {};
+      try { body = await res.json(); } catch (e) { body = {}; }
+      if (res.ok && Array.isArray(body.slips)) {
+        T.err = "";
+        body.slips.forEach((x) => { if (x && x.id) T.cards[x.id] = x; });
+        settle(body.slips);
+      } else {
+        T.err = res.status === 401 || res.status === 402 ? "locked" : "down";
+      }
+    } catch (e) {
+      T.err = "down";
+    }
+    T.busy = false;
+    T.last = Date.now();
+    draw();
+  }
+  function trackLegHTML(l) {
+    const res = l.live && l.live.result;
+    const st = (l.live && l.live.state) || "";
+    const when = !st || st === "scheduled" ? (l.kickoff && kick(l.kickoff) ? `<div class="pgr-leg-m">${esc(kick(l.kickoff))}</div>`
+      : `<div class="pgr-leg-m">Not on the scoreboard yet</div>`) : "";
+    return `<li class="pgr-leg${res ? ` r-${esc(res)}` : ""}">
+      <div class="pgr-leg-h"><b>${esc(legName(l))}</b>${res ? `<span class="pgr-res r-${esc(res)}">${esc(RESULT[res] || res)}</span>` : ""}</div>
+      ${liveHTML(l)}${when}</li>`;
+  }
+  function trackCardHTML(b, got) {
+    const pay = dec(b.paid_odds || b.odds);
+    const head = `<div class="pgr-track-h"><b>${esc(b.desc)}</b><span>${esc(b.book || "")} · ${money(b.stake)} at ${esc(price(b.odds))}${
+      pay && b.result === "pending" ? ` · returns ${money(b.stake * pay)}` : ""}</span></div>`;
+    const c = got && got.slip;
+    const done = b.result !== "pending" && b.settled_by === "box"
+      ? `<div class="pgr-now s-${b.result === "win" ? "won" : b.result === "loss" ? "lost" : "open"}">Settled in My Bets from the box score: <b>${
+        b.result === "win" ? "Won" : b.result === "loss" ? "Lost" : "Push"}</b>${b.paid_odds ? ` at ${esc(price(b.paid_odds))} (a leg pushed)` : ""}. If your book graded it differently, change it on My Bets.</div>`
+      : b.settle_note ? `<div class="pgr-now s-open">${esc(b.settle_note)} on My Bets.</div>` : "";
+    if (!c) {
+      return `<div class="pgr-card pgr-track-card">${head}${done}<p class="pgr-foot">${got && got.error ? esc(got.error) : "Reading the live line…"}</p></div>`;
+    }
+    const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
+      ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
+    return `<div class="pgr-card pgr-track-card">${head}${done || nowHTML(c.now) || first}${b.result === "pending" ? hedgeHTML(c.hedge) : ""}
+      <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol></div>`;
+  }
+  function draw() {
+    const host = T.host;
+    if (!host || !T.ctx) return;
+    const now = Date.now();
+    const show = tracked(T.ctx.load()).filter((b) => b.result === "pending"
+      || (b.settled_by === "box" && now - Date.parse(b.settled_at || "") < SETTLED_SHOWN_MS))
+      .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+    if (!show.length) { host.innerHTML = ""; return; }
+    // Typing a hedge price is not interrupted by the minute's redraw.
+    const typing = document.activeElement && host.contains(document.activeElement) && document.activeElement.matches("[data-hedge]");
+    if (typing) return;
+    const note = T.err === "locked" ? "Following saved slips is part of the membership."
+      : T.err === "down" ? "Couldn’t reach the live line — trying again in a minute." : "";
+    host.innerHTML = `<div class="section-title">Your saved slips
+        <span class="sub">— from the parlay checker in Ask, followed leg by leg while the games run</span></div>
+      ${note ? `<p class="pgr-foot">${esc(note)}</p>` : ""}
+      <div class="pgr-track">${show.map((b) => trackCardHTML(b, T.cards[b.id])).join("")}</div>`;
+  }
+  function track(host, ctx) {
+    T.host = host;
+    T.ctx = ctx;
+    draw();
+    if (Date.now() - T.last > TRACK_MS - 10000) refresh();
+    if (!T.timer) {
+      T.timer = setInterval(() => {
+        if (!T.ctx || (T.ctx.live && !T.ctx.live()) || document.hidden || !document.body.contains(T.host)) return;
+        refresh();
+      }, TRACK_MS);
+    }
+  }
+
+  /* One listener each for the whole page: the hedge redoes its numbers as
+     the reader types, and Save saves. The cards are redrawn wholesale, so
+     nothing is bound to an element that a redraw would orphan. */
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!t || !t.matches || !t.matches("[data-hedge]")) return;
+      const box = t.closest(".pgr-hedge");
+      const out = box && box.querySelector(".pgr-hedge-out");
+      if (!out) return;
+      const v = (k) => String((box.querySelector(`[data-hedge="${k}"]`) || {}).value || "").replace(/[$,\s]/g, "").replace("−", "-");
+      out.innerHTML = hedgeOut(v("stake"), box.dataset.pay, v("odds"), box.dataset.p, box.dataset.leg);
+    });
+    document.addEventListener("click", (e) => {
+      const btn = e.target && e.target.closest && e.target.closest("[data-save-slip]");
+      if (btn) save(btn);
+    });
+  }
+
+  window.QBSlip = { send, card, shrink, track, hedgeOut, slipKey, entryOf, settleOne };
 })();

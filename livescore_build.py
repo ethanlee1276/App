@@ -625,7 +625,123 @@ def write(league: str, out_dir: Path = OUT) -> dict:
     tmp = out.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=1))
     os.replace(tmp, out)
+    if league == "nhl":
+        # The skaters' lines for the parlay checker (nhl_box_pass). After
+        # the scoreboard, and its own try: a box that will not load costs
+        # the live props their numbers and nothing else.
+        try:
+            note = nhl_box_pass(payload.get("games") or [], Path(out_dir))
+            if note:
+                payload["box_note"] = note
+        except Exception:                                    # noqa: BLE001
+            pass
     return payload
+
+
+#: HOCKEY'S SKATER LINES, for the parlay checker's live props
+#: (engine/sliplive). ESPN's hockey box score has never been verified from
+#: this box (engine/sources/espnplays says so), so the lines come from the
+#: league's own box score through the parser settlement already trusts,
+#: `nhldata.parse_boxscore` — fetched under their OWN cache names, because
+#: the settlement ingest reads `nhl_box_{id}` for a month and a mid-game
+#: snapshot written under that name would be graded as the final.
+NHL_BOX_FILE = "live_nhl_box.json"
+#: A game in progress is re-read at most this often; a final, this often.
+NHL_BOX_TTL = 30
+NHL_FINAL_TTL = 600
+#: The most games one pass reads a box for — in progress first. A full
+#: hockey night is sixteen; they start over three hours.
+NHL_BOX_MAX_GAMES = 8
+
+
+def _et_today() -> _dt.date:
+    try:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.now(ZoneInfo("America/New_York")).date()
+    except Exception:                                        # noqa: BLE001
+        return _dt.date.today()
+
+
+def _nhl_names(path: Path | None = None) -> dict:
+    """{player id: full name} off the nightly roster file (H5) — the box
+    score names a skater "C. McDavid", the board "Connor McDavid"."""
+    p = Path(path) if path else Path(__file__).resolve().parent / "data" / "nhl_rosters.json"
+    try:
+        doc = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return {}
+    return {str(pl.get("pid")): str(pl.get("name") or "")
+            for players in (doc.get("teams") or {}).values() for pl in players or []
+            if isinstance(pl, dict) and pl.get("pid") and pl.get("name")}
+
+
+def nhl_box_pass(games: list[dict], out_dir: Path, fetch_day=None,
+                 fetch_box=None, names: dict | None = None,
+                 today: _dt.date | None = None) -> str:
+    """Write `live_nhl_box.json`: every hockey game on the scoreboard that
+    is in progress or over, with each skater's and goalie's line. Returns
+    a line for the log, or "" when no game is on.
+
+    The scoreboard's pairs are already the league's own codes
+    (`livescores._side_key`), which are the score feed's, so a game joins
+    on AWAY@HOME. The score feed is read for today and yesterday on the
+    Eastern clock — a late game runs past midnight."""
+    on = [g for g in games or [] if (g.get("live") or {}).get("state") in ("live", "final")]
+    if not on:
+        return ""
+    from engine.sources import nhldata
+    from engine.sources.fetch import fetch_json
+    if fetch_day is None:
+        def fetch_day(d):
+            return fetch_json(f"{nhldata.API}/score/{d}", f"nhl_live_score_{d}.json", ttl=NHL_BOX_TTL)
+    if fetch_box is None:
+        def fetch_box(gid, final=False):
+            return fetch_json(f"{nhldata.API}/gamecenter/{gid}/boxscore",
+                              f"nhl_live_box_{gid}.json",
+                              ttl=NHL_FINAL_TTL if final else NHL_BOX_TTL)
+    names = _nhl_names() if names is None else names
+    day = today or _et_today()
+    feed: dict = {}
+    for d in (day, day - _dt.timedelta(days=1)):
+        try:
+            rows = nhldata.parse_score_day(fetch_day(d.isoformat()))
+        except Exception:                                    # noqa: BLE001
+            continue
+        for r in rows:
+            feed.setdefault((r.get("away"), r.get("home")), r)
+    on.sort(key=lambda g: 0 if (g.get("live") or {}).get("state") == "live" else 1)
+    out_games, failed, missing = [], 0, 0
+    for g in on[:NHL_BOX_MAX_GAMES]:
+        r = feed.get((g.get("away"), g.get("home")))
+        if not r or not r.get("game_id"):
+            missing += 1
+            continue
+        final = bool(r.get("final"))
+        try:
+            rows = nhldata.parse_boxscore(fetch_box(r["game_id"], final=final))
+        except Exception:                                    # noqa: BLE001
+            failed += 1
+            continue
+        players = []
+        for p in rows:
+            keys = nhldata.GOALIE_MARKETS if p.get("goalie") else nhldata.SKATER_MARKETS
+            players.append({"player": names.get(str(p.get("pid"))) or p.get("short") or "",
+                            "team": p.get("team") or "", "position": p.get("position") or "",
+                            "stats": {k: p[k] for k in keys if isinstance(p.get(k), (int, float))}})
+        out_games.append({"away": g.get("away"), "home": g.get("home"), "nhl_id": r["game_id"],
+                          "state": "final" if final else "live", "players": players})
+    doc = {"generated_at": utc_stamp(), "games": out_games}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / NHL_BOX_FILE
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, out)
+    note = f"nhl box: {len(out_games)} of {len(on)} game(s)"
+    if failed:
+        note += f", {failed} unreachable"
+    if missing:
+        note += f", {missing} not on the league's score feed"
+    return note
 
 
 def main() -> None:

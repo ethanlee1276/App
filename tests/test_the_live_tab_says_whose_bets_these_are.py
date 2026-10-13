@@ -85,6 +85,7 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     async function fetchAllLive() {{ return GAMES; }}
     async function pressureWarm() {{}}
     function renderSweatZone() {{}}
+    function liveSlips() {{}}
     const betsDrawnFor = [];
     function renderLivePicks() {{ betsDrawnFor.push(state.sport); }}
 

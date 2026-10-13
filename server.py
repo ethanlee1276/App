@@ -221,6 +221,14 @@ MAX_ASK_BYTES = 32_000
 #: base64, in a small JSON body. Caddy refuses anything over 1MB before it
 #: reaches here; this is the same ceiling for `python3 server.py`.
 MAX_SLIP_BYTES = 1_000_000
+#: The Live tab's saved slips (`_ask_track`): the legs My Bets kept for a
+#: graded slip, no picture — ten slips of twelve legs fit many times over.
+MAX_TRACK_BYTES = 64_000
+#: How many saved slips one call reads: the ones still pending in My Bets.
+MAX_TRACK_SLIPS = 10
+#: The Live tab asks once a minute while it is open; a reload or a second
+#: tab is a few more. Its own bucket, so it never spends a question's.
+RATE_TRACK_PER_MIN = 6
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -1358,6 +1366,20 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                                # noqa: BLE001
                 return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
             return self._ask_slip(body)
+        if parsed.path in ("/api/ask/track", "/api/ask/track/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_TRACK_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"too many slips"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length))
+                assert isinstance(body, dict)
+            except Exception:                                # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+            return self._ask_track(body)
         if parsed.path in ("/api/ask", "/api/ask/"):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -4395,6 +4417,71 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             pass                     # a counting failure never costs the answer
         out = {"slip": card, "text": text, "sig": AB.sign_turn(text)}
         return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _ask_track(self, body):
+        """The Live tab's read of the slips a member saved to My Bets from
+        the parlay checker.
+
+        Ethan, 2026-10-13: "the hedge calculator and better number and
+        saving uploaded slips too moneys and live chances for props mid
+        game ... for all sports".
+
+        NO PICTURE AND NO MODEL CALL. The legs were read once, when the
+        slip was graded; the page sends them back as My Bets kept them, and
+        each slip is held to `slipgrade.clean_slip` again — the page is not
+        trusted to send what the reader wrote. Each is graded `brief`
+        against the boards and the live loop's files: where every leg
+        stands, a prop's live chance, the ticket's standing and its hedge.
+        Nothing is spent and nothing counts against the day's questions;
+        it is gated as Ask is (the card is the member's) and limited on its
+        own bucket, before a board is read.
+        """
+        if self._rate_limited(RATE_TRACK_PER_MIN, "track"):
+            return
+        from engine import askbot as AB
+        from engine import gate as GATE_
+        from engine import slipgrade as SG
+        from engine import sliplive as SL
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "Tracking saved slips needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        raw = body.get("slips")
+        if not isinstance(raw, list) or not raw or len(raw) > MAX_TRACK_SLIPS:
+            return self._send(400, json.dumps(
+                {"error": f"send 1 to {MAX_TRACK_SLIPS} slips"}).encode(), ".json")
+        boards, prices = {}, {}
+        for league, name in AB.BOARD_FILES.items():
+            path = GATE_.full_board_file(name)
+            got = AB.board_at(path) if path else None
+            if got:
+                boards[league] = got
+                prices[league] = AB.prices_at(path)
+        live = SL.Live(prices)
+        out = []
+        for s in raw:
+            if not isinstance(s, dict):
+                continue
+            sid = str(s.get("id") or "")[:40]
+            slip = SG.clean_slip(dict(s, is_bet_slip=True))
+            if not slip["legs"]:
+                out.append({"id": sid, "error": "no legs to track"})
+                continue
+            try:
+                card = SG.grade(slip, boards, live=live, brief=True)
+            except Exception as exc:                            # noqa: BLE001
+                sys.stderr.write(f"  ask track: {type(exc).__name__}: {exc}\n")
+                out.append({"id": sid, "error": "this slip could not be read"})
+                continue
+            out.append({"id": sid, "slip": card})
+        return self._send(200, json.dumps({"slips": out}).encode(), ".json")
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.
