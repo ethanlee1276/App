@@ -33,6 +33,11 @@
 .pgr-leg-m { margin-top: 3px; color: var(--text-dim); font-size: var(--fs-sm); }
 .pgr-leg-m b { color: var(--text); font-family: var(--font-mono); }
 .pgr-leg-w { margin-top: 3px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* His chart doors under a football leg (js/carrychart.js opens them). */
+.pgr-charts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pgr-chart { padding: 4px 10px; border-radius: 999px; border: var(--hairline) solid var(--border); background: var(--panel-2);
+  color: var(--text-dim); font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+.pgr-chart:hover { color: var(--text); border-color: var(--brand); }
 /* Our chance as the fill, what the price needs as the tick: a fill past
    the tick is a leg that clears its price. */
 .pgr-bar { position: relative; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); }

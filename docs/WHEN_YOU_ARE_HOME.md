@@ -42,8 +42,11 @@ photo, or his initials when no photo loads (step 58; Q). Your two calls
 from H are built: a college receiving bet now waits for the play file and
 is graded at zero when it shows he was thrown at (step 59; R), and the NBA
 board prices points + rebounds, points + assists and rebounds + assists
-(step 60; S). The whole picture, sport by sport, is in
-`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+(step 60; S). Tap any football pick, on Most Likely or anywhere else, and
+its page now draws his route chart or carry chart in place, with no
+button; the player page has it too, and the parlay checker's football
+legs carry the chart buttons (step 61; T). The whole picture, sport by
+sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -52,13 +55,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `College receivers thrown at are graded; the NBA prices points + rebounds, points + assists, rebounds + assists`
+**A. The box has today's code.** The first line should end `Every football pick's page draws his route or carry chart in place`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 3accdacc HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor ded11f13 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -337,6 +340,19 @@ count (each line on the board names its market, so this counts them):
 ```
 cd /srv/qellys && python3 -c "import json,collections; d=json.load(open('web/data/nba.json')); print(collections.Counter(r.get('market') for r in (d.get('recommendations') or []) + (d.get('near_misses') or [])))"
 ```
+
+**T. The charts on every football pick** (step 61; read-only, seconds).
+Nothing to run for it to work. The first line should print `1` (the site
+serves the chart that draws itself on a page), the second a few hundred
+characters of a receiver's targets:
+```
+curl -s http://127.0.0.1:8000/js/carrychart.js | grep -c "function mount(el)"
+curl -s "http://127.0.0.1:8000/api/players/routes?sport=nfl&player=Amon-Ra%20St.%20Brown" | head -c 300; echo
+```
+Then on your phone: Most Likely, tap any NFL receiver's or back's pick and
+scroll past Form. The Route chart (or Carry chart) is there, already
+drawn; an anytime touchdown has a Routes | Carries switch. If it says
+"No targets on file", paste K's output.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -1964,6 +1980,28 @@ first). Paste back anything that prints an error or looks off.
     three NBA-only combos. `tests/test_alt_lines.py` said both leagues
     cost 13 credits an event; it now says NBA 16, WNBA 13, and still
     checks each price equals what the league's request asks for.
+
+61. **Every football pick's page draws his chart in place** (2026-10-13,
+    you: "We should show the route checker on the most likely bets as
+    well like when you click on the player in the most likely bets it
+    will automatically show the charts in that area with all the other
+    info"). T checks it. Every door to a football pick (a Most Likely row
+    or card, an Edge pick, a Live bet, a read on the game page) lands on
+    the pick page, and the chart is drawn there after Form, with no tap:
+    his targets for receptions and receiving yards, his runs for rushing
+    yards, carries and a quarterback's passing plus rushing yards, and a
+    Routes | Carries switch for rush + rec yards and anytime touchdowns,
+    his own first. College draws carries only; the college play file has
+    no air yards or side of the field. The player page's searched card
+    draws it first under the card, and every football leg in Ask's
+    parlay checker has Route chart / Carry chart buttons. On a pick page
+    the long lists (every target, the season's splits, how it's drawn)
+    fold under the chart, and on a wide screen the field sits beside its
+    numbers. The chart is asked for as it nears the screen, kept ten
+    minutes, and the page's refresh every minute leaves it as you left
+    it (the game you picked, what you opened). app.js grew 0.37 KB, inside
+    its 495 KB budget. No test was changed;
+    `tests/test_the_pick_page_draws_his_chart.py` is new.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

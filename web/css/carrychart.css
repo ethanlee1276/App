@@ -210,3 +210,39 @@
   .cc { min-height: 100%; border-radius: 0; border: 0; padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
   .cc-x { margin: -4px -6px -30px auto; }
 }
+
+/* THE CHART ON A PICK PAGE (2026-10-13, Ethan: "when you click on the
+   player in the most likely bets it will automatically show the charts in
+   that area with all the other info"). The same drawing in the page's own
+   flow: a section heading and a card, no dialog. The slot opens the
+   section gap itself, because the heading inside it is its first child
+   and the site's first-child rule would otherwise take the gap away. */
+.cc-slot { margin-top: 34px; }
+.cc-slot[hidden] { display: none; }
+.cc-slot > .section-title { margin-top: 0; }
+.cc-inline { padding: 14px 14px 16px; }
+.cc-inline:hover { transform: none; }
+.cc-inline .cc-empty { padding: 18px 6px; }
+.cc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.cc-kinds { display: flex; gap: 6px; }
+.cc-kinds + .cc-seasons { margin-left: auto; }
+.cc-inline .cc-tabs { margin-top: 10px; }
+.cc-inline .cc-body > .cc-tabs:first-child { margin-top: 0; }
+/* A WIDE CARD SETS THE FIELD BESIDE ITS NUMBERS. Stacked, a desktop's
+   card drew the field a screen tall with the legend and the tiles under
+   it; measured on the card's own width (a container query), so the pick
+   page and the player page split alike and a phone stacks as before. */
+.cc-inline { container-type: inline-size; }
+@container (min-width: 760px) {
+  .cc-split { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, 1fr); gap: 18px; align-items: start; }
+  .cc-split .cc-side > .cc-legend:first-child { margin-top: 2px; }
+  .cc-split .cc-tiles, .cc-split .cc-tiles-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cc-split .cc-tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.cc-more { margin-top: 12px; border-top: var(--hairline) solid var(--border-soft); }
+.cc-more > summary { display: flex; align-items: center; gap: 8px; padding: 10px 2px 2px; cursor: pointer; list-style: none;
+  font-size: var(--fs-xs); letter-spacing: .09em; text-transform: uppercase; font-weight: 700; color: var(--text-mute); }
+.cc-more > summary::-webkit-details-marker { display: none; }
+.cc-more > summary::after { content: "+"; margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.cc-more[open] > summary::after { content: "−"; }
+.cc-more > summary:hover { color: var(--text); }

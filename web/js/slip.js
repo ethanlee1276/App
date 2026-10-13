@@ -229,8 +229,24 @@
         <span class="pgr-pill v-${esc(v)}">${esc(label)}</span></div>
       ${meta.length ? `<div class="pgr-leg-m">${meta.join(" · ")}</div>` : ""}${bar}
       ${liveHTML(l)}${priceHTML(l)}${betterNumHTML(l)}
-      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${readHTML(l)}${whyHTML(l)}${swapsHTML(l)}
+      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${readHTML(l)}${whyHTML(l)}${chartsHTML(l)}${swapsHTML(l)}
     </li>`;
+  }
+
+  /* HIS CHARTS, ONE TAP FROM THE LEG (Ethan, 2026-10-13: "I feel like
+     there is more then one place we can route the route checker on"). A
+     football leg the charts speak to — rushing, receiving, an anytime
+     touchdown — carries the chart doors the player page has; app.js
+     opens them (.cc-open) wherever they are drawn. Routes are the NFL's:
+     the college play file has no air yards or side of the field. */
+  function chartsHTML(l) {
+    const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
+    if (!l.player || (lg !== "nfl" && lg !== "cfb")) return "";
+    const doors = [];
+    if (lg === "nfl" && /rec|anytime/.test(m)) doors.push(["routes", "Route chart"]);
+    if (/rush|anytime/.test(m)) doors.push(["carries", "Carry chart"]);
+    return doors.length ? `<div class="pgr-charts">${doors.map(([k, t]) =>
+      `<button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${k}">${t}</button>`).join("")}</div>` : "";
   }
 
   /* AN OFF-BOARD READ (engine/slipread, Ethan 2026-10-13: "We can't just not

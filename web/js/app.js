@@ -13234,6 +13234,7 @@ function renderPropPage() {
      INSIDE the card, under the pick's identity — where an action on a
      thing belongs. Every data-attribute survives; only the furniture
      moved. */
+  const keep = ccKeep(host);
   host.innerHTML = `
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="pp-back">${escapeHtml(detailBackLabel())}</button>
@@ -13318,6 +13319,8 @@ function renderPropPage() {
       against the same number.</span></div>
     <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
 
+    ${chartSlot(r)}
+
     ${scriptCardHTML(r)}
     ${rippleCardHTML(r)}
 
@@ -13354,6 +13357,7 @@ function renderPropPage() {
     ${lk ? "" : checksHTML(r)}
     ${compsHTML(r)}
     ${simLabHTML(r)}`;
+  keep(host);
   const b = document.getElementById("pp-back");
   if (b) b.addEventListener("click", detailBack);
   if (typeof fillMeters === "function") fillMeters(host);
@@ -15482,6 +15486,7 @@ async function renderPlayers() {
   // SAY WHEN THIS IS A GUESS, the way the league search does: a corrected
   // spelling presented as what was asked for is its own kind of lying.
   const lgWord = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  const keep = ccKeep(host);
   host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
       of ${players.length} players with a prop on tonight’s board —
       type a name to find anyone else.</p>` : "")
@@ -15495,6 +15500,7 @@ async function renderPlayers() {
        undefined, which is the shallow card. It would have looked like
        the flag simply did not work. */
     + shown.map((p) => profileHTML(p, { deep: !!q })).join("");
+  keep(host);
   fillMeters(host);
   revealChildren(host);
 }
@@ -15921,20 +15927,57 @@ function carryDoor(player, lg, tabs, face) {
 let _ccLoad = null;
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest(".cc-open");
-  if (!b) return;
-  _ccLoad = _ccLoad || new Promise((ok) => {
+  if (b) ccLoad().then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face));
+});
+/* The module and its styles, once, for a door and a pick page alike. It
+   answers when BOTH have arrived: a chart drawn before its stylesheet is
+   a field the width of the screen for a frame. */
+function ccLoad() {
+  return _ccLoad = _ccLoad || new Promise((ok) => {
+    let n = 2;
+    const done = () => --n || ok(window.QBCarry || null);
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = "css/carrychart.css";
+    css.onload = css.onerror = done;
     document.head.appendChild(css);
     const el = document.createElement("script");
     el.src = "js/carrychart.js";
-    el.onload = () => ok(window.QBCarry || null);
+    el.onload = done;
     el.onerror = () => { _ccLoad = null; ok(null); };
     document.head.appendChild(el);
   });
-  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind, b.dataset.face));
-});
+}
+
+/* THE CHARTS ON THE PICK PAGE (Ethan, 2026-10-13: "We should show the
+   route checker on the most likely bets as well like when you click on
+   the player in the most likely bets it will automatically show the
+   charts in that area with all the other info"). A football bet the
+   charts speak to — rushing, receiving, an anytime touchdown — leaves a
+   slot; js/carrychart.js decides which chart and draws it there
+   (`mount`, from the settle pass). College has carries only. */
+function chartSlot(r) {
+  const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
+  const ok = lg === "nfl" ? /rush|rec|anytime/.test(m) : lg === "cfb" && /rush|anytime/.test(m);
+  return ok && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
+}
+function mountCharts(root) {
+  const els = root.querySelectorAll(".cc-slot:not([data-on])");
+  if (els.length) ccLoad().then((m) => m && m.mount && els.forEach((el) => el.isConnected && m.mount(el)));
+}
+/* A PAGE REDRAWN AROUND A CHART KEEPS IT. The pick page and the player
+   page redraw every minute with the board; a chart drawn again each time
+   would lose the game the reader picked and flash as it came back. So
+   the drawn slot is lifted out before the redraw and put back in place
+   of its fresh twin. */
+const ccKey = (el) => `${el.dataset.lg}|${el.dataset.cc}|${el.dataset.mkt}`;
+function ccKeep(host) {
+  const kept = [...host.querySelectorAll(".cc-slot[data-on]")];
+  return (root) => root.querySelectorAll(".cc-slot:not([data-on])").forEach((el) => {
+    const o = kept.find((k) => ccKey(k) === ccKey(el));
+    if (o) el.replaceWith(o);
+  });
+}
 
 /* HEAD-TO-HEAD. Ethan, 2026-09-01: "Add an option too be able too look
    up past game data for player for nfl and CFB. For example, the rams
@@ -16259,6 +16302,7 @@ function propDepthHTML(r) {
   const reasons = (r.reasons || []).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   return `<div class="prof-depth">
+    ${chartSlot(r)}
     ${booksTableHTML(r)}
     ${lineMoveHTML(r)}
     ${scriptCardHTML(r)}
@@ -41287,6 +41331,7 @@ function settleNow() {
     enhanceSectionSubs(root);
     armSortable(root);
     watchWideTables(root);
+    mountCharts(root);
     const v = root.closest(".view");
     if (v) views.add(v);
   }

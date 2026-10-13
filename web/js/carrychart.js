@@ -70,8 +70,22 @@
   //: Where a throw leaves from, and where a back's route starts: behind the line.
   const POCKET = -5;
 
-  let S = null;            // {sport, kind, player, data, view, gi, sel}
-  let _seq = 0;
+  /* ONE DRAWING, MORE THAN ONE CHART. The overlay is one chart; since
+     2026-10-13 a pick page carries its own (`mount`, below), and a page
+     can hold several. Each is a {root, S, seq, inline, kinds, key} hung
+     on its root element; `use` points the drawing at one, so the
+     functions that draw read S as they always have. */
+  let S = null;            // the state being drawn: {sport, kind, player, data, view, gi, sel}
+  let C = null;            // the chart being drawn
+  const use = (c) => { C = c || null; S = c ? c.S : null; return C; };
+  //: Answers already fetched, by address, for ten minutes: a pick page
+  //: is redrawn every minute and opened again and again, and a chart
+  //: changes once a night.
+  const CACHE = new Map();
+  const CACHE_MS = 10 * 60 * 1000;
+  //: The chart a reader switched to on a pick, for the rest of the visit.
+  const MEM = new Map();
+  let io = null;
 
   /* ---------------- geometry ---------------- */
   function proj(x, y, ymax) {
@@ -204,6 +218,9 @@
     return `${season} ${gameName(g, sport)}` + [when, day].filter(Boolean).map((t) => ` · ${t}`).join("");
   }
   const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+  //: A game's chip: "5-88" for five for 88 yards. A game he lost yards
+  //: in read "1--2"; it says "1 for −2".
+  const tally = (n, yds) => { const y = Math.round(yds); return y < 0 ? `${n} for −${-y}` : `${n}-${y}`; };
   const num1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
 
   /* ---------------- the field ---------------- */
@@ -595,23 +612,30 @@
   }
 
   function render() {
-    const ov = document.getElementById("cc-overlay");
+    const ov = C && C.root;
     if (!ov || !S) return;
     const d = S.data;
     const box = ov.querySelector(".cc-body");
     const R = S.kind === "routes";
     if (!d || !d.games || !d.games.length) {
       /* No one in the league has a row yet: the charts are being filled
-         (engine/chartfill), which is not the same as none for him. */
-      box.innerHTML = d && d.filling
+         (engine/chartfill), which is not the same as none for him. The
+         switch stays above it on a pick page, so the other chart is a
+         tap away. */
+      box.innerHTML = kindBar() + (d && d.filling
         ? `<div class="cc-empty">${R ? "Route" : "Carry"} charts are still being filled: every ${R ? "target" : "carry"} is read from the ${S.sport === "cfb" ? "college" : "league’s"} play-by-play, which takes a few minutes. Check back shortly.</div>`
         : R
           ? `<div class="cc-empty">No targets on file for ${esc(S.player)}.</div>`
-          : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`;
+          : `<div class="cc-empty">No carries on file for ${esc(S.player)}${S.sport === "cfb" ? " in the college play-by-play" : ""}.</div>`);
       return;
     }
     const sport = d.sport;
-    const head = `<header class="cc-head">
+    const seasons = d.seasons.length > 1 ? `<div class="cc-seasons" role="group" aria-label="Season">${d.seasons.map((y) =>
+      `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${y}</button>`).join("")}</div>` : "";
+    /* On a pick page the page above already says who he is, so the chart
+       opens on its switches instead of a second header with his face. */
+    const bar = C.inline ? kindBar() + seasons : "";
+    const head = (C.inline ? (bar ? `<div class="cc-bar">${bar}</div>` : "") : `<header class="cc-head">
         ${faceHTML(d, S)}
         <div class="cc-who">
           <span class="cc-eyebrow">${R ? "Route chart" : "Carry chart"}</span>
@@ -619,58 +643,83 @@
           <span class="cc-sub">${[d.jersey ? `#${esc(d.jersey)}` : "", esc(d.position || ""), d.team
             ? `${teamMarkIn(sport, d.team, 16)} ${esc(teamNameIn(sport, d.team))}` : ""].filter(Boolean).join(" · ")}</span>
         </div>
-        ${d.seasons.length > 1 ? `<div class="cc-seasons" role="group" aria-label="Season">${d.seasons.map((y) =>
-          `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${y}</button>`).join("")}</div>` : ""}
-      </header>
+        ${seasons}
+      </header>`) + `
       <div class="cc-tabs" role="tablist">
         <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">By game</button>
         <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${d.season} · ${R ? "where he’s thrown to" : "where he runs"}</button>
       </div>`;
-    let main;
+    /* Four parts in every view: what sits above the drawing (the games,
+       the title), the drawing, what reads it (the legend, the numbers)
+       and the long tail. The overlay stacks them as it always has; a
+       pick page's card, when it is wide, sets the drawing and its
+       numbers side by side (.cc-split) so the field is not drawn a
+       screen tall across a desktop. */
+    let top, fig, side, tail;
     if (S.view === "season" && R) {
       const L = d.season_line;
-      main = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>
-        <div class="cc-stage">${routeSeasonChart(d)}</div>
-        ${routeLegend(d.routes, true)}
+      top = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
+      fig = `<div class="cc-stage">${routeSeasonChart(d)}</div>`;
+      side = `${routeLegend(d.routes, true)}
         ${routeTiles(L, d.ngs)}
         <div class="cc-tiles cc-tiles-2">${tile("Catch rate", pct(L.catch))}${tile("Yds/target", num1(L.ypt))}${tile("Contested won", `${L.contested_won}/${L.contested}`)}${tile("Drops", L.drops)}</div>
-        ${routeNgs(d)}${routeTables(d)}`;
+        ${routeNgs(d)}`;
+      tail = fold("splits", "Every split · depth, side, route, coverage, down", routeTables(d));
     } else if (S.view === "season") {
       const any = d.games.some((g) => g.carries.some((c) => !c.h)) && d.holes;
-      main = `<div class="cc-title">${esc(`${d.season} season · ${d.season_line.n} carries in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>
-        <div class="cc-stage">${seasonChart(d)}</div>
-        ${legendHTML(sport, any)}
+      top = `<div class="cc-title">${esc(`${d.season} season · ${d.season_line.n} carries in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
+      fig = `<div class="cc-stage">${seasonChart(d)}</div>`;
+      side = `${legendHTML(sport, any)}
         ${tilesFor(d.season_line, (d.ngs || {}).ryoe)}
         <div class="cc-tiles cc-tiles-2">${tile("Success", pct(d.season_line.success))}${tile("Stuffed (0 or less)", pct(d.season_line.stuffed))}${tile("10+ yd runs", d.season_line.explosive)}${tile("Long", d.season_line.long == null ? "—" : Math.round(d.season_line.long))}</div>
-        ${ngsLine(d)}${seasonTables(d)}`;
+        ${ngsLine(d)}`;
+      tail = fold("splits", `Every split · ${d.holes ? "hole, " : ""}down, field position`, seasonTables(d));
     } else {
       const g = d.games[Math.min(S.gi, d.games.length - 1)];
-      const chips = `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
-          `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${R ? x.line.rec : x.line.n}-${Math.round(x.line.yds)}</small></button>`).join("")}</div>
+      top = `<div class="cc-games" role="tablist" aria-label="Games">${d.games.map((x, i) =>
+          `<button type="button" role="tab" class="cc-chip${i === S.gi ? " on" : ""}" data-gi="${i}" aria-selected="${i === S.gi}">${esc(chipLabel(x, sport))}<small>${esc(tally(R ? x.line.rec : x.line.n, x.line.yds))}</small></button>`).join("")}</div>
         <div class="cc-title">${esc(gameTitle(g, sport, d.season))}</div>`;
       if (R) {
-        main = `${chips}
-          <div class="cc-stage">${routeGameChart(g)}<div class="cc-tip" hidden></div></div>
-          ${routeLegend(g.targets.some((t) => t.rt), false)}
-          ${routeTiles(g.line, g.ngs)}
-          ${routeList(g)}`;
+        fig = `<div class="cc-stage">${routeGameChart(g)}<div class="cc-tip" hidden></div></div>`;
+        side = `${routeLegend(g.targets.some((t) => t.rt), false)}
+          ${routeTiles(g.line, g.ngs)}`;
+        tail = fold("list", `Every target, in order · ${g.targets.length}`, routeList(g));
       } else {
         const any = d.holes && g.carries.some((c) => !c.h);
-        main = `${chips}
-          <div class="cc-stage">${gameChart(g, sport, d.holes)}<div class="cc-tip" hidden></div></div>
-          ${legendHTML(sport, any)}
-          ${tilesFor(g.line, g.ryoe)}
-          ${listHTML(g, sport)}`;
+        fig = `<div class="cc-stage">${gameChart(g, sport, d.holes)}<div class="cc-tip" hidden></div></div>`;
+        side = `${legendHTML(sport, any)}
+          ${tilesFor(g.line, g.ryoe)}`;
+        tail = fold("list", `Every carry, in order · ${g.carries.length}`, listHTML(g, sport));
       }
     }
-    box.innerHTML = head + main + (R ? routeNote(d) : noteHTML(d));
+    const main = top + (C.inline ? `<div class="cc-split"><div class="cc-fig">${fig}</div><div class="cc-side">${side}</div></div>` : fig + side) + tail;
+    box.innerHTML = head + main + fold("note", "How it’s drawn", R ? routeNote(d) : noteHTML(d));
+    /* The chosen game's chip is brought to the middle of its row by
+       scrolling the ROW. scrollIntoView would also scroll the page to it,
+       and a chart drawn halfway down a pick page would pull the reader
+       down to it the moment it loaded. */
     const chip = box.querySelector(".cc-games .cc-chip.on");
-    if (chip && chip.scrollIntoView) chip.scrollIntoView({ block: "nearest", inline: "center" });
+    const row = chip && chip.parentElement;
+    if (row && chip.getBoundingClientRect) {
+      const a = chip.getBoundingClientRect(), b = row.getBoundingClientRect();
+      row.scrollLeft += a.left + a.width / 2 - (b.left + b.width / 2);
+    }
+  }
+
+  /* ON A PICK PAGE THE LONG TAIL FOLDS: every carry or target in order,
+     and the season's split tables, one tap away under the chart and its
+     numbers, so the page around them stays readable. The overlay is the
+     chart and nothing else, so it shows them open, as before. A fold
+     the reader opened stays open while he moves between games. */
+  function fold(key, title, html) {
+    if (!C.inline || !html) return html;
+    return `<details class="cc-more" data-fold="${key}"${S.open && S.open[key] ? " open" : ""}>
+      <summary>${esc(title)}</summary>${html}</details>`;
   }
 
   /* ---------------- selection and the tip ---------------- */
   function select(i) {
-    const ov = document.getElementById("cc-overlay");
+    const ov = C && C.root;
     if (!ov || !S) return;
     S.sel = S.sel === i ? -1 : i;
     ov.querySelectorAll(".cc-carry").forEach((g) => {
@@ -683,7 +732,7 @@
     tip(S.sel);
   }
   function tip(i) {
-    const ov = document.getElementById("cc-overlay");
+    const ov = C && C.root;
     const el = ov && ov.querySelector(".cc-tip");
     if (!el) return;
     const d = S.data, g = d && d.games[S.gi];
@@ -748,24 +797,33 @@
       img.remove();
     }
   }
-  const faceEvent = (e) => faceStep(e.type, e.target, S);
+  const faceEvent = (e) => faceStep(e.type, e.target, (e.currentTarget._cc || {}).S);
 
   /* ---------------- loading ---------------- */
-  async function load(season) {
-    const seq = ++_seq;
+  /* One chart's data. A pick page's chart reads the answer kept from the
+     last ten minutes first, so the page's redraw every minute, or a
+     reader going back and forth between picks, costs nothing; the
+     overlay asks every time, as it always has. Only the newest request a
+     chart made is drawn, and none once the chart is gone. */
+  function load(c, season) {
+    use(c);
+    const seq = ++c.seq;
     const api = S.kind === "routes" ? "/api/players/routes?sport=" : "/api/players/carries?sport=";
     const q = `${api}${encodeURIComponent(S.sport)}&player=${encodeURIComponent(S.player)}${season ? `&season=${season}` : ""}`;
-    let data = null;
-    try {
-      const r = await fetch(q);
-      if (r.ok) data = await r.json();
-    } catch (e) { data = null; }
-    if (seq !== _seq || !S) return;
+    const hit = c.inline && CACHE.get(q);
+    if (hit && Date.now() - hit.t < CACHE_MS) return land(c, seq, hit.data, "");
+    fetch(q).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((data) => land(c, seq, data, q));
+  }
+  function land(c, seq, data, q) {
+    if (seq !== c.seq || c.root._cc !== c) return;
+    use(c);
     if (data === null) {
-      const box = document.querySelector("#cc-overlay .cc-body");
+      const box = c.root.querySelector(".cc-body");
       if (box) box.innerHTML = `<div class="cc-empty">The ${S.kind === "routes" ? "route" : "carry"} chart didn’t load. Try again in a moment.</div>`;
       return;
     }
+    if (q && !data.filling) CACHE.set(q, { t: Date.now(), data });
     S.data = data;
     S.gi = 0;
     S.sel = -1;
@@ -777,12 +835,55 @@
     if (!ov) return;
     ov.classList.remove("open");
     ov.innerHTML = "";
-    S = null;
-    _seq++;
+    ov._cc = null;
+    use(null);
     if (typeof lockScroll === "function") lockScroll(false);
     document.removeEventListener("keydown", onKey);
   }
   function onKey(e) { if (e.key === "Escape") close(); }
+
+  /* Every chart's taps, bound once to its root and read off the chart
+     hung on it. A match has to be INSIDE the chart: on a pick page the
+     chart sits in the site's own markup, and an ancestor carrying one of
+     these attributes would otherwise answer a tap on the field. */
+  function bind(ov) {
+    const hit = (e, sel) => {
+      const x = e.target.closest && e.target.closest(sel);
+      return x && ov.contains(x) ? x : null;
+    };
+    ov.addEventListener("click", (e) => {
+      const c = use(ov._cc);
+      if (!c) return;
+      if (!c.inline && (e.target === ov || hit(e, ".cc-x"))) return close();
+      const k = hit(e, "[data-ck]");
+      if (k) return pick(c, k.dataset.ck);
+      const s = hit(e, "[data-season]");
+      if (s) return load(c, +s.dataset.season);
+      const v = hit(e, "[data-view]");
+      if (v) { S.view = v.dataset.view; S.sel = -1; return render(); }
+      const gi = hit(e, "[data-gi]");
+      if (gi) { S.gi = +gi.dataset.gi; S.sel = -1; return render(); }
+      const row = hit(e, ".cc-row, .cc-carry");
+      if (row && S.view === "game") return select(+row.dataset.i);
+    });
+    ov.addEventListener("pointerover", (e) => {
+      const g = hit(e, ".cc-carry");
+      if (g && use(ov._cc) && S.sel < 0 && e.pointerType === "mouse") tip(+g.dataset.i);
+    });
+    ov.addEventListener("pointerout", (e) => {
+      const g = hit(e, ".cc-carry");
+      if (g && use(ov._cc) && S.sel < 0 && e.pointerType === "mouse") tip(-1);
+    });
+    // A fold opened stays open across a redraw. `toggle` does not bubble.
+    ov.addEventListener("toggle", (e) => {
+      const c = ov._cc, k = e.target.dataset && e.target.dataset.fold;
+      if (c && k) c.S.open = Object.assign({}, c.S.open, { [k]: e.target.open });
+    }, true);
+    // The face's photo: load and error do not bubble, but a listener in
+    // the capture phase sees them — and the CSP allows no inline one.
+    ov.addEventListener("load", faceEvent, true);
+    ov.addEventListener("error", faceEvent, true);
+  }
 
   function open(player, sport, kind, face) {
     if (!player) return;
@@ -791,33 +892,12 @@
       ov = document.createElement("div");
       ov.id = "cc-overlay";
       document.body.appendChild(ov);
-      ov.addEventListener("click", (e) => {
-        if (e.target === ov || e.target.closest(".cc-x")) return close();
-        const s = e.target.closest("[data-season]");
-        if (s && S) return load(+s.dataset.season);
-        const v = e.target.closest("[data-view]");
-        if (v && S) { S.view = v.dataset.view; S.sel = -1; return render(); }
-        const gi = e.target.closest("[data-gi]");
-        if (gi && S) { S.gi = +gi.dataset.gi; S.sel = -1; return render(); }
-        const row = e.target.closest(".cc-row, .cc-carry");
-        if (row && S && S.view === "game") return select(+row.dataset.i);
-      });
-      ov.addEventListener("pointerover", (e) => {
-        const g = e.target.closest && e.target.closest(".cc-carry");
-        if (g && S && S.sel < 0 && e.pointerType === "mouse") tip(+g.dataset.i);
-      });
-      ov.addEventListener("pointerout", (e) => {
-        const g = e.target.closest && e.target.closest(".cc-carry");
-        if (g && S && S.sel < 0 && e.pointerType === "mouse") tip(-1);
-      });
-      // The face's photo: load and error do not bubble, but a listener in
-      // the capture phase sees them — and the CSP allows no inline one.
-      ov.addEventListener("load", faceEvent, true);
-      ov.addEventListener("error", faceEvent, true);
+      bind(ov);
     }
     const routes = kind === "routes";
-    S = { sport: String(sport || "nfl").toLowerCase(), kind: routes ? "routes" : "carries", player, data: null,
-          view: "game", gi: 0, sel: -1, hint: face || "" };
+    ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "",
+                   S: { sport: String(sport || "nfl").toLowerCase(), kind: routes ? "routes" : "carries", player, data: null,
+                        view: "game", gi: 0, sel: -1, hint: face || "" } });
     ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${routes ? "Route" : "Carry"} chart — ${player}`)}">
       <button class="cc-x" type="button" aria-label="Close">×</button>
       <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${routes ? "targets" : "carries"}…</div></div></div>`;
@@ -826,12 +906,91 @@
     document.addEventListener("keydown", onKey);
     const x = ov.querySelector(".cc-x");
     if (x) x.focus({ preventScroll: true });
-    load(null);
+    load(ov._cc, null);
   }
 
-  window.QBCarry = { open, close, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
+  /* ---------------- the chart on a pick page ----------------
+     Ethan, 2026-10-13: "We should show the route checker on the most
+     likely bets as well like when you click on the player in the most
+     likely bets it will automatically show the charts in that area with
+     all the other info." Every door to a football pick — a Most Likely
+     row or card, an Edge pick, a bet on the Live tab, a read on the game
+     page — lands on the pick page, and the player page carries the same
+     sections; app.js leaves a `.cc-slot` there and this draws the chart
+     into it, with no tap.
+
+     WHICH CHART is the bet's: receptions and receiving yards draw where
+     he is thrown to (the NFL's — the college file has no air yards or
+     side); rushing yards, carries and a quarterback's passing plus
+     rushing yards draw where he runs; rushing plus receiving yards and an
+     anytime touchdown draw both, a switch between them, his own first (a
+     wide receiver's or tight end's targets, anyone else's carries). */
+  function kindsFor(sport, mkt, pos) {
+    const m = String(mkt || ""), out = [];
+    if (/rush|anytime/.test(m)) out.push("carries");
+    if (sport === "nfl" && /rec|anytime/.test(m)) out.push("routes");
+    if (out.length > 1 && /^(WR|TE)$/i.test(String(pos || ""))) out.reverse();
+    return out;
+  }
+  function kindBar() {
+    if (!C || !C.inline || !C.kinds || C.kinds.length < 2) return "";
+    return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${k === "routes" ? "Routes" : "Carries"}</button>`).join("")}</div>`;
+  }
+  //: The section's own heading, kept short of the page's "why?" fold.
+  function secHTML(c) {
+    const R = c.S.kind === "routes";
+    return `${R ? "Route chart" : "Carry chart"} <span class="sub">— ${R
+      ? "every pass thrown to him: how far, which side, caught or not, and the yards after"
+      : c.S.sport === "cfb" ? "every run he made: how far it went, and when in the game"
+        : "every run he made: the hole, how far it went, and where on the field"}.</span>`;
+  }
+  const waitHTML = () => `<div class="cc-empty">Loading ${esc(S.player)}’s ${S.kind === "routes" ? "targets" : "carries"}…</div>`;
+  const fresh = (sport, kind, player) => ({ sport, kind, player, data: null, view: "game", gi: 0, sel: -1, hint: "" });
+
+  function pick(c, kind) {
+    if (!c.kinds || !c.kinds.includes(kind) || kind === c.S.kind) return;
+    MEM.set(c.key, kind);
+    c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view });
+    use(c);
+    const sec = c.root.querySelector(".cc-sec");
+    if (sec) sec.innerHTML = secHTML(c);
+    c.root.querySelector(".cc-body").innerHTML = kindBar() + waitHTML();
+    load(c, null);
+  }
+
+  /* The slot names the player, the league, the market and his position.
+     Drawn once per slot: a page redrawn around it hands the same element
+     back (app.js keeps it), so the game he picked and the folds he opened
+     survive the minute's refresh. The data is asked for as the chart
+     comes within a screen or so of view — a pick page read only at its
+     top costs the server nothing. */
+  function mount(el) {
+    if (!el || !el.dataset || el.dataset.on) return;
+    el.dataset.on = "1";
+    const d = el.dataset, sport = String(d.lg || "nfl").toLowerCase();
+    const kinds = kindsFor(sport, d.mkt, d.pos);
+    if (!kinds.length || !d.cc) { el.hidden = true; return; }
+    const key = [sport, d.cc, d.mkt].join("|");
+    const kind = kinds.includes(MEM.get(key)) ? MEM.get(key) : kinds[0];
+    const c = { root: el, inline: true, seq: 0, kinds, key, S: fresh(sport, kind, d.cc) };
+    el._cc = use(c);
+    el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>
+      <div class="card cc-inline"><div class="cc-body">${kindBar()}${waitHTML()}</div></div>`;
+    bind(el);
+    if (typeof IntersectionObserver !== "function") return load(c, null);
+    io = io || new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      io.unobserve(e.target);
+      const k = e.target._cc;
+      if (k && k.root === e.target && !k.seq) load(k, null);
+    }), { rootMargin: "800px 0px" });
+    io.observe(el);
+  }
+
+  window.QBCarry = { open, close, mount, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
                                          routeTiles, routeTables, routeNote, routeLegend,
-                                         faceHTML, faceStep, inits } };
+                                         faceHTML, faceStep, inits, kindsFor, tally } };
 })();
