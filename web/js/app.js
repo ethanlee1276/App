@@ -15903,11 +15903,17 @@ function profileHTML(player, opts) {
 
 /* THE CARRY CHART (Ethan, 2026-10-13: "a carry chart exactly in the
    screenshot for every player"): every run, by game and for the season,
-   NFL and college, for anyone with a rushing log. Drawn by
+   NFL and college, for anyone with a rushing log. AND THE ROUTE CHART
+   (the same day: "We can add route charts for wr and shit too"): every
+   pass thrown to him, NFL only — the college play file names the target
+   but has no air yards and no side of the field. Both drawn by
    js/carrychart.js, loaded on the first tap. */
 function carryDoor(player, lg, tabs) {
-  return (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t))
-    ? `<div class="prof-vs"><button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}">Carry chart</button></div>` : "";
+  const runs = (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t));
+  const catches = lg === "nfl" && tabs.some((t) => /recei|recep|target/i.test(t));
+  if (!runs && !catches) return "";
+  const door = (kind, label) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}">${label}</button>`;
+  return `<div class="prof-vs prof-charts">${runs ? door("carries", "Carry chart") : ""}${catches ? door("routes", "Route chart") : ""}</div>`;
 }
 let _ccLoad = null;
 document.addEventListener("click", (e) => {
@@ -15924,7 +15930,7 @@ document.addEventListener("click", (e) => {
     el.onerror = () => { _ccLoad = null; ok(null); };
     document.head.appendChild(el);
   });
-  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg));
+  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind));
 });
 
 /* HEAD-TO-HEAD. Ethan, 2026-09-01: "Add an option too be able too look

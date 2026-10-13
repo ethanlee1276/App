@@ -1173,6 +1173,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_versus(parse_qs(parsed.query))
         if parsed.path in ("/api/players/carries", "/api/players/carries/"):
             return self._players_carries(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/routes", "/api/players/routes/"):
+            return self._players_routes(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -3230,6 +3232,35 @@ class Handler(BaseHTTPRequestHandler):
                 out = carries.chart(conn, sport, player, int(season) if season.isdigit() else None)
                 if out:
                     out["face"] = statlogs._face_of(conn, sport, out["player"])
+            finally:
+                conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _players_routes(self, q):
+        """One player's route chart — every pass thrown to him, by game,
+        and where on the field they go over the season.
+
+        Ethan, 2026-10-13, with the league's route chart for Sam LaPorta
+        against the Cardinals: "We can add route charts for wr and shit
+        too." NFL only (engine/targets.chart): the college play file the
+        site reads names the target but has no air yards and no side of
+        the field, so there is nothing to draw. UNGATED like the carry
+        chart.
+        """
+        import os
+        from engine import db as _rdb, statlogs, targets
+        sport = (q.get("sport") or ["nfl"])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if sport != "nfl":
+            return self._send(400, b'{"error":"route charts are NFL"}', ".json")
+        out: dict = {}
+        if player and os.path.exists(str(_rdb.DEFAULT_DB)):
+            conn = _rdb.connect(str(_rdb.DEFAULT_DB))
+            try:
+                out = targets.chart(conn, player, int(season) if season.isdigit() else None)
+                if out:
+                    out["face"] = statlogs._face_of(conn, "nfl", out["player"])
             finally:
                 conn.close()
         return self._send(200, json.dumps(out).encode(), ".json")

@@ -1,4 +1,4 @@
-/* Qellys Book — Carry chart (js/carrychart.js). Loaded with the module on
+/* Qellys Book — Carry chart and route chart (js/carrychart.js). Loaded with the module on
    first use, so a first visit carries none of it. Tokens only: the field,
    the three gain colours and the marks are the site's own, and re-tint in
    light mode with the rest. */
@@ -73,9 +73,28 @@
 .cc-raylbl { fill: var(--text); font: 700 16px var(--font-mono); }
 .cc-raysub { fill: var(--text-mute); font: 600 14px var(--font-mono); }
 .cc-avg { stroke: var(--text); stroke-width: 1.4; stroke-dasharray: 5 5; opacity: .7; }
+/* the route chart (2026-10-13): the league's charted route or the throw,
+   then the run after the catch in the league's green */
+.rc-route, .rc-throw { fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1; animation: cc-draw .6s var(--ease-out) forwards; }
+.rc-throw { stroke-width: 1.7; opacity: .9; }
+.rc-route.miss, .rc-throw.miss { stroke: var(--text-mute); stroke-dasharray: .035 .025; stroke-dashoffset: 0; animation: none; }
+.rc-route.int, .rc-throw.int { stroke: var(--bad); }
+.rc-route.sel, .rc-throw.sel { stroke-width: 4.2; }
+.rc-yac { fill: none; stroke: var(--good); stroke-width: 3.2; stroke-linecap: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1; animation: cc-draw .45s var(--ease-out) forwards; }
+.rc-catch { fill: var(--text); }
+.rc-miss { fill: var(--panel); stroke: var(--text-mute); stroke-width: 1.8; }
+.rc-int path { stroke: var(--bad); stroke-width: 2.6; stroke-linecap: round; }
+.rc-qb { fill: var(--text-mute); }
+.rc-cell { fill: var(--brand); stroke: var(--border); stroke-width: 1; }
+.rc-dot.c { fill: var(--good); }
+.rc-dot.m { fill: none; stroke: var(--text-mute); stroke-width: 1.4; }
+.rc-dot.i { fill: var(--bad); }
+.rc-lbl { paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; }
 @keyframes cc-draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .cc-run { animation: none; stroke-dashoffset: 0; }
+  .cc-run, .rc-route, .rc-throw, .rc-yac { animation: none; stroke-dashoffset: 0; }
 }
 .cc-tip { position: absolute; left: 10px; top: 10px; max-width: min(80%, 340px); padding: 7px 10px; border-radius: var(--radius-sm);
   border: var(--hairline) solid var(--border); background: var(--panel); font-size: var(--fs-sm); pointer-events: none; }
@@ -84,6 +103,7 @@
 .cc-tip .loss, .cc-r-y.loss { color: var(--bad); }
 .cc-tip .short, .cc-r-y.short { color: var(--warn); }
 .cc-tip .gain, .cc-r-y.gain { color: var(--good); }
+.cc-tip .miss, .cc-r-y.miss { color: var(--text-mute); }
 
 /* the legend, the league's three colours and two marks */
 .cc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 2px 4px; font-size: var(--fs-xs);
@@ -96,10 +116,21 @@
 .cc-legend .sw.nohole { background: repeating-linear-gradient(90deg, var(--text-mute) 0 5px, transparent 5px 8px); }
 .cc-legend .mk { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--brand); }
 .cc-legend .mk.fum { border-color: var(--bad); }
+.cc-legend .sw.route { background: var(--text); }
+.cc-legend .sw.throw { height: 2px; background: var(--text); opacity: .9; }
+.cc-legend .sw.miss { background: repeating-linear-gradient(90deg, var(--text-mute) 0 5px, transparent 5px 8px); }
+.cc-legend .sw.yac { background: var(--good); }
+.cc-legend .sw.cell { height: 11px; width: 16px; background: color-mix(in srgb, var(--brand) 45%, transparent); }
+.cc-legend .mk.int { border: 0; width: auto; height: auto; color: var(--bad); font-size: 15px; line-height: 1; }
+.cc-legend .dt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.cc-legend .dt.c { background: var(--good); }
+.cc-legend .dt.m { border: 1.5px solid var(--text-mute); }
+.cc-legend .dt.i { background: var(--bad); }
 
 /* the numbers under it */
 .cc-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .cc-tiles-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cc-tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .cc-tile { padding: 9px 8px; border-radius: var(--radius); border: var(--hairline) solid var(--border); background: var(--panel-2);
   text-align: center; min-width: 0; }
 .cc-k { display: block; font-size: var(--fs-xs); letter-spacing: .07em; text-transform: uppercase; color: var(--text-mute);
@@ -107,7 +138,7 @@
 .cc-tile b { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: clamp(17px, 3.6vw, 22px); }
 .cc-tile i { display: block; font-style: normal; font-size: 10px; color: var(--text-faint); letter-spacing: .06em; }
 @media (max-width: 520px) {
-  .cc-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cc-tiles, .cc-tiles-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cc-tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -122,6 +153,7 @@
 .cc-row .dot.loss { background: var(--bad); }
 .cc-row .dot.short { background: var(--warn); }
 .cc-row .dot.gain { background: var(--good); }
+.cc-row .dot.miss { border: 2px solid var(--text-mute); }
 .cc-r-q { font-family: var(--font-mono); color: var(--text-mute); white-space: nowrap; }
 .cc-r-dd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-r-h { color: var(--text); white-space: nowrap; }
@@ -144,6 +176,9 @@
 .cc-tbl th[scope="row"], .cc-tbl thead th:first-child { text-align: left; }
 .cc-tbl thead th { font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .cc-tbl td { font-family: var(--font-mono); color: var(--text-dim); }
+@media (max-width: 520px) {
+  .cc-tbl th, .cc-tbl td { padding: 6px 5px; }
+}
 .cc-ngs { margin: 12px 2px 0; font-size: var(--fs-sm); color: var(--text-dim); }
 .cc-note { margin: 14px 2px 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
 

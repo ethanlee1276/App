@@ -77,7 +77,16 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(carries, "fetch_ngs_rushing", lambda ttl=0: [])
     monkeypatch.setattr(carries, "backfill_nfl", lambda conn, season: 0)
     monkeypatch.setattr(carries, "backfill_cfb", lambda conn, season: 0)
-    monkeypatch.setattr(carries, "nfl_behind", lambda conn, season, today: False)
+    monkeypatch.setattr(carries, "nfl_behind", lambda conn, season, today, table="carries": False)
+    # And the route chart's (2026-10-13): the NGS receiving file, last
+    # season's targets once, and the participation and FTN files the
+    # play-by-play read joins its targets to.
+    from engine import targets
+    monkeypatch.setattr(targets, "fetch_ngs_receiving", lambda ttl=0: [])
+    monkeypatch.setattr(targets, "backfill_nfl", lambda conn, season: 0)
+    monkeypatch.setattr(targets, "routes_for", lambda season: {})
+    monkeypatch.setattr(targets, "charting_for", lambda season: {})
+    monkeypatch.setattr(targets, "nfl_behind", lambda conn, season, today: False)
 
 
 def _stub_chores(monkeypatch, calls):

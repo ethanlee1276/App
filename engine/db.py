@@ -321,6 +321,38 @@ CREATE TABLE IF NOT EXISTS ngs_rushing (
     ryoe_per_att REAL, eight_box REAL, time_to_los REAL, efficiency REAL,
     PRIMARY KEY (season, week, season_type, player_id)
 );
+-- TARGETS (2026-10-13, Ethan, with the NFL's route chart for Sam LaPorta
+-- against the Cardinals: "We can add route charts for wr and shit too").
+-- One row per pass thrown to a player, off the NFL play-by-play: how far
+-- past the line it was thrown (air yards) and to which third of the field,
+-- caught or not, the yards after the catch, touchdowns and interceptions.
+-- `route`, `coverage` and `shell` are the league's own charting from the
+-- participation file where nflverse publishes it (through 2025; '' after);
+-- `charting` is FTN's per-play words (screen, play action, contested,
+-- drop, created, not catchable). engine/targets.py fills it and builds the
+-- route chart from it. Keyed like `carries`.
+CREATE TABLE IF NOT EXISTS targets (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, play_id TEXT,
+    date TEXT, player TEXT, player_id TEXT, team TEXT, opponent TEXT, home INTEGER,
+    position TEXT, jersey TEXT, qtr INTEGER, clock TEXT, down INTEGER, distance INTEGER,
+    yardline_100 INTEGER, air_yards REAL, side TEXT, complete INTEGER, yac REAL, yards REAL,
+    td INTEGER, interception INTEGER, first_down INTEGER, route TEXT, coverage TEXT,
+    shell TEXT, charting TEXT,
+    PRIMARY KEY (sport, season, period, game_id, play_id)
+);
+CREATE INDEX IF NOT EXISTS targets_player ON targets (sport, player, season);
+-- THE LEAGUE'S RECEIVING TRACKING NUMBERS (nextgen_stats/ngs_receiving):
+-- one row per player-week, week 0 the season line, receivers and tight
+-- ends past the league's five-target minimum — separation, cushion,
+-- intended air yards and yards after the catch over expected, as
+-- published. Read by the route chart; never estimated.
+CREATE TABLE IF NOT EXISTS ngs_receiving (
+    season INTEGER, week INTEGER, season_type TEXT, player_id TEXT, player TEXT, team TEXT,
+    targets INTEGER, receptions INTEGER, yards REAL, tds INTEGER, separation REAL,
+    cushion REAL, intended_air REAL, air_share REAL, yac REAL, expected_yac REAL,
+    yac_over REAL, catch_pct REAL,
+    PRIMARY KEY (season, week, season_type, player_id)
+);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
@@ -908,6 +940,25 @@ def upsert_carries(conn, rows: list[dict]) -> int:
 def upsert_ngs_rushing(conn, rows: list[dict]) -> int:
     """The league's rushing tracking file, row for row (engine/carries.ngs_rows)."""
     return _upsert(conn, "ngs_rushing", NGS_RUSH_COLS, rows)
+
+
+TARGET_COLS = ["sport", "season", "period", "game_id", "play_id", "date", "player", "player_id",
+               "team", "opponent", "home", "position", "jersey", "qtr", "clock", "down", "distance",
+               "yardline_100", "air_yards", "side", "complete", "yac", "yards", "td",
+               "interception", "first_down", "route", "coverage", "shell", "charting"]
+NGS_REC_COLS = ["season", "week", "season_type", "player_id", "player", "team", "targets",
+                "receptions", "yards", "tds", "separation", "cushion", "intended_air",
+                "air_share", "yac", "expected_yac", "yac_over", "catch_pct"]
+
+
+def upsert_targets(conn, rows: list[dict]) -> int:
+    """Every pass on the route chart (engine/targets.py)."""
+    return _upsert(conn, "targets", TARGET_COLS, rows)
+
+
+def upsert_ngs_receiving(conn, rows: list[dict]) -> int:
+    """The league's receiving tracking file, row for row (engine/targets.ngs_rows)."""
+    return _upsert(conn, "ngs_receiving", NGS_REC_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

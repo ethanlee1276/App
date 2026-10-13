@@ -23,8 +23,9 @@ check, the last-leg alert), the subscription check on every open, the
 MLB profit calendar that stopped at September, a Most Likely profit
 calendar beside the edge one (step 46; nothing to run), and bets that
 settle minutes after the final instead of the next day (step 47; J), a
-game line no board prices graded by our own game model (step 48), and a
-carry chart for every NFL and college runner (step 49; K).
+game line no board prices graded by our own game model (step 48), a
+carry chart for every NFL and college runner (step 49; K), and a route
+chart for every NFL receiver (step 50; K).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -152,16 +153,18 @@ cd /srv/qellys && sudo -u qellys python3 settlecheck.py
 `OWED` should read 0, or only show rows marked "no stat line for him
 yet". `last pass` should be under 6 min.
 
-**K. The carry chart** (step 49). The nightly fills it by itself; this
-fills it now (a minute or two: it reads this season's and last season's
-play-by-play) and then checks it. The last line should end "the
-screenshot's numbers". Paste all of it:
+**K. The carry chart and the route chart** (steps 49 and 50). The
+nightly fills both by itself; this fills them now (a few minutes: each
+reads this season's and last season's play-by-play, and the route chart
+also reads last season's route charting, a ~49 MB file) and then checks
+them. Each one's last line should end "the screenshot's numbers". Paste
+all of it:
 ```
-cd /srv/qellys && sudo -u qellys python3 carryfill.py --fill
+cd /srv/qellys && sudo -u qellys python3 carryfill.py --fill && sudo -u qellys python3 routefill.py --fill
 ```
-Any time after, the same check without filling (read-only):
+Any time after, the same checks without filling (read-only):
 ```
-cd /srv/qellys && sudo -u qellys python3 carryfill.py
+cd /srv/qellys && sudo -u qellys python3 carryfill.py && sudo -u qellys python3 routefill.py
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -1514,6 +1517,56 @@ first). Paste back anything that prints an error or looks off.
       publishes it — the nightly now also reads the play-by-play while a
       finished game has no chart, so Thursday and Monday games don't
       wait for Tuesday. College every night in season. Last season once.
+
+50. **A route chart for every NFL receiver** (2026-10-13, Ethan, with the
+    NFL's Next Gen Stats route chart for Sam LaPorta against the
+    Cardinals: "We can add route charts for wr and shit too. And if we
+    don't have access too this info then we should be able too make it").
+    K fills it now; otherwise the nightly fills it.
+    * **Where:** any NFL player's page, the **Route chart** button beside
+      the carry chart's. It shows for anyone with a receiving log, backs
+      and tight ends included. Not college: the college play file names
+      the target but has no air yards and no side of the field.
+    * **By game:** every pass thrown to him, this season or last. How far
+      past the line it went (air yards) and which third of the field
+      (left, middle, right) are the play-by-play's record; the run after
+      the catch is green, as long as the record says; a ring on a
+      touchdown, a dashed line on an incompletion, a red cross on an
+      interception. Under it: targets-catches, yards, TDs, yards after
+      the catch, average depth of target, and separation where the NFL
+      publishes it (5+ targets in a game; first downs otherwise), then
+      every target listed with the quarter, clock, down and distance,
+      field position, depth and side, and FTN's charting words (screen,
+      play action, contested, drop, not catchable, a catch he made on his
+      own). Checked against the screenshot: LaPorta's week 5 reads 5-5,
+      88 yards, 44 after the catch, a touchdown.
+    * **The routes:** for last season and before, each target is drawn in
+      the shape of the route the league charted for it (go, slant, out,
+      curl, dig, post, corner, drag, screen, swing, wheel, angle — from
+      nflverse's participation file), ending where the ball arrived, with
+      man or zone and the coverage shell on the row. **This season
+      nflverse hasn't published the route charting** (it comes out a
+      season behind), so 2026 targets are drawn as the throw, from the
+      pocket. We measured guessing the route from the public 2026 data:
+      the likeliest route for a target's depth and side matched the
+      league's charting 43% of the time, so we don't guess. When nflverse
+      publishes 2026's file, the nightly picks the routes up by itself.
+    * **Season, "where he's thrown to":** the field in thirds and depth
+      bands (behind the line, 0-9, 10-19, 20+), each shaded by his share
+      of targets and labelled with catches/targets, every target a dot.
+      Tables by depth, by third, by route, against man and zone, by
+      coverage shell (charted seasons) and by down; catch rate, yards a
+      target, contested catches won and drops; the NGS season line
+      (separation, cushion, intended air yards, share of the team's air
+      yards, yards after the catch over expected).
+    * **What it can't show, and says so on the page:** the league's
+      tracked paths aren't published, so a route's stem and break are
+      drawn, not tracked, and where inside a third a ball arrived is
+      spread so no two overlap; the run after the catch is drawn straight
+      upfield.
+    * **Kept current:** the same nightly play-by-play read as the carry
+      chart (and the same "a finished game has no chart" check), the
+      receiving tracking file every night, last season once.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

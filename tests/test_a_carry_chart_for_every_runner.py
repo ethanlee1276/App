@@ -355,7 +355,8 @@ def test_the_nightly_reads_the_runs_with_the_units_and_fills_last_season_once():
         "a Thursday or Monday game's chart does not wait for Tuesday"
     assert "runs = _carries.NflCarries(season)" in block and "units.add(r)" in block and "runs.add(r)" in block, \
         "one read of the file, both folds"
-    assert "_carries.PBP_COLS" in block and "upsert_carries(_pc, runs.rows(_carries.nfl_names(season)))" in block
+    assert "_carries.PBP_COLS" in block and "names = _carries.nfl_names(season)" in block
+    assert "upsert_carries(_pc, runs.rows(names))" in block
     assert "fetch_ngs_rushing()" in block and "missing_seasons(_cc, \"nfl\", (season - 1,))" in block
     assert "backfill_nfl(_cc, past)" in block and "backfill_cfb(_cc, past)" in block
 
@@ -498,7 +499,7 @@ def test_the_chart_loads_on_first_use_and_runs_under_the_pages_csp():
     i = APP_JS.index('e.target.closest(".cc-open")')
     loader = APP_JS[i:i + 900]
     assert 'css.href = "css/carrychart.css";' in loader and 'el.src = "js/carrychart.js";' in loader
-    assert "m.open(b.dataset.carry, b.dataset.lg)" in loader
+    assert "m.open(b.dataset.carry, b.dataset.lg, b.dataset.kind)" in loader, "the door says which chart"
     assert "onclick" not in CC_JS and "onerror" not in CC_JS, "no inline handlers under the page's CSP"
     assert "/api/players/carries?sport=" in CC_JS
     for cls in (".cc-run", ".cc-run.loss", ".cc-run.short", ".cc-run.gain", ".cc-td", ".cc-fum", ".cc-los",

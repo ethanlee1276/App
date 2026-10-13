@@ -1496,6 +1496,7 @@ svg[data-scrub] { touch-action: pan-y; }
 /* Head-to-head (2026-09-01): the "History vs a team" picker at the foot
    of every profile card, and the per-game table it opens. */
 .prof-vs { padding: 10px 18px 14px; border-top: var(--hairline) solid var(--border-soft); }
+.prof-charts { display: flex; flex-wrap: wrap; gap: 8px; }
 .prof-vs .vs-select { width: 100%; font: inherit; font-size: var(--fs-md);
   padding: 8px 10px; background: var(--bg-2); color: var(--text);
   border: var(--hairline) solid var(--border); }

@@ -321,19 +321,22 @@ def fetch_ngs_rushing(ttl: int = 6 * 3600) -> list[dict]:
 
 
 # --- keeping it current -------------------------------------------------------
-def nfl_behind(conn, season: int, today) -> bool:
+def nfl_behind(conn, season: int, today, table: str = "carries") -> bool:
     """Is a finished NFL game newer than the newest carry on file?
 
     The nightly reads the play-by-play on Tuesdays for the unit ratings;
     a Thursday or Monday game's chart should not wait a week for that, so
     the read also runs while this is true. nflverse refreshes the file
     overnight and the fetch layer caches it for a day, so this costs one
-    download a night at most and stops the night the file has the game."""
+    download a night at most and stops the night the file has the game.
+    ``table="targets"`` asks the same of the route chart's passes."""
+    if table not in ("carries", "targets"):
+        raise ValueError(f"not a chart table: {table!r}")
     try:
         last = conn.execute(
             "SELECT MAX(date) FROM games WHERE sport='nfl' AND season=? AND home_score IS NOT NULL "
             "AND date < ?", (int(season), today.isoformat())).fetchone()[0]
-        have = conn.execute("SELECT MAX(date) FROM carries WHERE sport='nfl' AND season=?",
+        have = conn.execute(f"SELECT MAX(date) FROM {table} WHERE sport='nfl' AND season=?",
                             (int(season),)).fetchone()[0]
     except Exception:                                              # noqa: BLE001
         return False

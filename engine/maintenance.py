@@ -2039,44 +2039,55 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             _units_behind = "unit ratings" in _fresh.football_weeks(_fdb.connect(), "nfl", today)["behind"]
         except Exception:                                       # noqa: BLE001
             _units_behind = False
-        # …AND WHILE A FINISHED GAME HAS NO CARRY CHART (Ethan, 2026-10-13:
-        # "a Carry chart for past games"). A Thursday or Monday game's
-        # chart should not wait for Tuesday; the fetch layer caches the
-        # file for a day, so this is one download a night at most, and it
-        # stops the night nflverse has the game (engine/carries.nfl_behind).
+        # …AND WHILE A FINISHED GAME HAS NO CARRY CHART OR ROUTE CHART
+        # (Ethan, 2026-10-13: "a Carry chart for past games", then "route
+        # charts for wr"). A Thursday or Monday game's charts should not
+        # wait for Tuesday; the fetch layer caches the file for a day, so
+        # this is one download a night at most, and it stops the night
+        # nflverse has the game (engine/carries.nfl_behind, on each table).
         _carries_behind = False
         try:
-            from . import carries as _cr, db as _cdb
-            _carries_behind = _cr.nfl_behind(
-                _cdb.connect(), today.year if today.month >= 8 else today.year - 1, today)
+            from . import carries as _cr, db as _cdb, targets as _tg
+            _cconn = _cdb.connect()
+            _cseason = today.year if today.month >= 8 else today.year - 1
+            _carries_behind = (_cr.nfl_behind(_cconn, _cseason, today)
+                               or _tg.nfl_behind(_cconn, _cseason, today))
         except Exception:                                       # noqa: BLE001
             _carries_behind = False
         if today.weekday() == 1 or _units_behind or _carries_behind:
             try:
                 from . import db as _pdb
-                from . import carries as _carries
+                from . import carries as _carries, targets as _targets
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
                                              xfp_player_rows)
                 from .sources.nflunits import Units, UNIT_COLS
                 season = today.year if today.month >= 8 else today.year - 1
-                # The unit ratings the matchup scan ranks (engine/gamescan)
-                # and every run for the carry chart ride the same read of
-                # the file.
+                # The unit ratings the matchup scan ranks (engine/gamescan),
+                # every run for the carry chart and every target for the
+                # route chart ride the same read of the file.
                 units = Units()
                 runs = _carries.NflCarries(season)
+                catches = _targets.NflTargets(season)
 
-                def _both(r):
+                def _each(r):
                     units.add(r)
                     runs.add(r)
-                agg = aggregate_pbp(load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS),
-                                    also=_both)
+                    catches.add(r)
+                agg = aggregate_pbp(load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS
+                                                  + _targets.PBP_COLS), also=_each)
                 _pc = _pdb.connect()
                 n = _pdb.upsert_player_logs(_pc, xfp_player_rows(agg, season))
                 n_u = _pdb.upsert_team_units(_pc, units.rows(season))
-                n_c = _pdb.upsert_carries(_pc, runs.rows(_carries.nfl_names(season)))
-                if n or n_u or n_c:
+                names = _carries.nfl_names(season)
+                n_c = _pdb.upsert_carries(_pc, runs.rows(names))
+                # The league's charted routes where nflverse has the
+                # season's participation file (none for a season still
+                # being played, so far), and FTN's charting, which it has.
+                n_t = _pdb.upsert_targets(_pc, catches.rows(names, _targets.routes_for(season),
+                                                            _targets.charting_for(season)))
+                if n or n_u or n_c or n_t:
                     log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows, "
-                        f"{n_c:,} carries refreshed")
+                        f"{n_c:,} carries, {n_t:,} targets refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
 
@@ -2098,6 +2109,21 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  cfb carries {past}: {_cr2.backfill_cfb(_cc, past):,} rows (once)")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  carry chart refresh failed: {exc}")
+        # …AND THE ROUTE CHART'S: the league's receiving tracking file
+        # (separation, cushion, yards after the catch over expected), and
+        # LAST SEASON's targets once, with the routes the league charted.
+        try:
+            from . import db as _rdb, targets as _tg2
+            _rc = _rdb.connect()
+            n_ngr = _rdb.upsert_ngs_receiving(_rc, _tg2.ngs_rows(_tg2.fetch_ngs_receiving()))
+            if n_ngr:
+                log(f"  nfl receiving tracking: {n_ngr:,} NGS rows")
+            season = today.year if today.month >= 8 else today.year - 1
+            for past in _tg2.missing_seasons(_rc, (season - 1,)):
+                log(f"  nfl targets {past}: {_tg2.backfill_nfl(_rc, past):,} rows with the "
+                    f"league's routes (once)")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  route chart refresh failed: {exc}")
 
     # The DEEP fitters, weekly. `engine.journalfit` already refits every
     # sport off the journal on every settle pass — that is the universal
