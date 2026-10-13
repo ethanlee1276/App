@@ -914,17 +914,21 @@ def ingest_cfb_player_history(conn, seasons: list[int],
             # are the point. Losing the roster costs a label, not a row.
             roster = {}
             result["skipped"].append(f"cfb rosters {season}: {exc}")
+        # Every run for the carry chart (engine/carries), off the same read.
+        from .carries import CfbCarries
+        runs = CfbCarries(int(season), games, roster)
         try:
             # ``fresh`` names the season still being played, whose file
             # gains rows every week; everything else is finished and
             # keeps the long cache.
             out = cfbstats.fetch_season(
-                int(season), games, roster=roster,
+                int(season), games, roster=roster, also=runs.add,
                 **({"ttl": CFB_LIVE_SEASON_TTL}
                    if fresh is not None and int(season) == int(fresh) else {}))
         except DataUnavailable as exc:
             result["skipped"].append(f"cfb players {season}: {exc}")
             continue
+        db.upsert_carries(conn, runs.rows())
         n = db.upsert_player_logs(conn, out["rows"]) if out["rows"] else 0
         if out["assets"]:
             result["assets"] += db.upsert_player_assets(conn, out["assets"])

@@ -1171,6 +1171,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_fantasy(parse_qs(parsed.query))
         if parsed.path in ("/api/players/versus", "/api/players/versus/"):
             return self._players_versus(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/carries", "/api/players/carries/"):
+            return self._players_carries(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -3202,6 +3204,35 @@ class Handler(BaseHTTPRequestHandler):
         out = (statlogs.versus(sport, player, vs) if vs
                else statlogs.opponents_of(sport, player))
         return self._send(200, json.dumps(out or {}).encode(), ".json")
+
+    def _players_carries(self, q):
+        """One player's carry chart — every run, by game and by hole.
+
+        Ethan, 2026-10-13, with the league's carry chart for Josh Allen
+        at the Rams: "a carry chart exactly in the screenshot for every
+        player ... a Carry chart for past games and also just a kinda
+        'average' carry chart showing where they run." NFL and college
+        (engine/carries.chart). UNGATED like the other log endpoints:
+        where a back ran and how far is a fact of the game, not a pick.
+        """
+        import os
+        from engine import carries, db as _cdb, statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if sport not in ("nfl", "cfb"):
+            return self._send(400, b'{"error":"carry charts are NFL and college football"}',
+                              ".json")
+        out: dict = {}
+        if player and os.path.exists(str(_cdb.DEFAULT_DB)):
+            conn = _cdb.connect(str(_cdb.DEFAULT_DB))
+            try:
+                out = carries.chart(conn, sport, player, int(season) if season.isdigit() else None)
+                if out:
+                    out["face"] = statlogs._face_of(conn, sport, out["player"])
+            finally:
+                conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _players_fantasy(self, q):
         """The full fantasy dossier — engine/ffprofile.py's page, served.

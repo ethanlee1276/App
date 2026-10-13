@@ -15894,12 +15894,38 @@ function profileHTML(player, opts) {
           ${escapeHtml(t)}${priced.has(t)
             ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
     </div>` : "";
-  const vsTail = vsBlockHTML(player, (rows[0] && rows[0].sport) || state.sport,
-                             (rows[0] && rows[0].opponent) || "");
+  const lg = (rows[0] && rows[0].sport) || state.sport;
+  const vsTail = vsBlockHTML(player, lg, (rows[0] && rows[0].opponent) || "") + carryDoor(player, lg, tabs);
   return priced.has(mkt)
     ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
 }
+
+/* THE CARRY CHART (Ethan, 2026-10-13: "a carry chart exactly in the
+   screenshot for every player"): every run, by game and for the season,
+   NFL and college, for anyone with a rushing log. Drawn by
+   js/carrychart.js, loaded on the first tap. */
+function carryDoor(player, lg, tabs) {
+  return (lg === "nfl" || lg === "cfb") && tabs.some((t) => /rush|carr/i.test(t))
+    ? `<div class="prof-vs"><button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}">Carry chart</button></div>` : "";
+}
+let _ccLoad = null;
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".cc-open");
+  if (!b) return;
+  _ccLoad = _ccLoad || new Promise((ok) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "css/carrychart.css";
+    document.head.appendChild(css);
+    const el = document.createElement("script");
+    el.src = "js/carrychart.js";
+    el.onload = () => ok(window.QBCarry || null);
+    el.onerror = () => { _ccLoad = null; ok(null); };
+    document.head.appendChild(el);
+  });
+  _ccLoad.then((m) => m && m.open(b.dataset.carry, b.dataset.lg));
+});
 
 /* HEAD-TO-HEAD. Ethan, 2026-09-01: "Add an option too be able too look
    up past game data for player for nfl and CFB. For example, the rams

@@ -68,6 +68,16 @@ def _no_feeds(monkeypatch):
                         lambda conn, day, **kw: {"games": 0, "player_logs": 0,
                                                  "skipped": []})
     monkeypatch.setattr(facesfill, "fill", lambda conn, sport: (0, 0, 0))
+    # The carry chart's feeds (2026-10-13): the NGS rushing file and the
+    # one-time reads of last season's play-by-play and college play file,
+    # all on github.com — and the "a finished game has no chart yet" check,
+    # which starts the play-by-play read on any in-season date. Read at
+    # call time inside `_run_chores`, so the module patch is seen.
+    from engine import carries
+    monkeypatch.setattr(carries, "fetch_ngs_rushing", lambda ttl=0: [])
+    monkeypatch.setattr(carries, "backfill_nfl", lambda conn, season: 0)
+    monkeypatch.setattr(carries, "backfill_cfb", lambda conn, season: 0)
+    monkeypatch.setattr(carries, "nfl_behind", lambda conn, season, today: False)
 
 
 def _stub_chores(monkeypatch, calls):

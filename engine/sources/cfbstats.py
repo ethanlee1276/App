@@ -678,12 +678,17 @@ def fetch_rosters(season: int, ttl: int = 86400 * 30) -> dict:
 
 
 def fetch_season(season: int, games: dict, ttl: int = 86400 * 7,
-                 roster: dict | None = None) -> dict:
-    """One season of player production, straight off the mirror."""
-    return parse_player_stats(
-        _stream(STATS_URL.format(season=int(season)),
-                f"cfb_player_stats_{int(season)}.csv", ttl),
-        season, games, roster)
+                 roster: dict | None = None, also=None) -> dict:
+    """One season of player production, straight off the mirror.
+
+    ``also`` sees every play row on its way to the parser — the carry
+    chart's fold (engine/carries.CfbCarries) rides this one read."""
+    rows = _stream(STATS_URL.format(season=int(season)),
+                   f"cfb_player_stats_{int(season)}.csv", ttl)
+    if also is not None:
+        from ..carries import tap
+        rows = tap(rows, also)
+    return parse_player_stats(rows, season, games, roster)
 
 
 def load_season(path, season: int, games: dict,

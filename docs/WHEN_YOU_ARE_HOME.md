@@ -22,8 +22,9 @@ tab, our read on a leg no board carries, better legs, the cash-out
 check, the last-leg alert), the subscription check on every open, the
 MLB profit calendar that stopped at September, a Most Likely profit
 calendar beside the edge one (step 46; nothing to run), and bets that
-settle minutes after the final instead of the next day (step 47; J), and
-a game line no board prices graded by our own game model (step 48).
+settle minutes after the final instead of the next day (step 47; J), a
+game line no board prices graded by our own game model (step 48), and a
+carry chart for every NFL and college runner (step 49; K).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -150,6 +151,18 @@ cd /srv/qellys && sudo -u qellys python3 settlecheck.py
 ```
 `OWED` should read 0, or only show rows marked "no stat line for him
 yet". `last pass` should be under 6 min.
+
+**K. The carry chart** (step 49). The nightly fills it by itself; this
+fills it now (a minute or two: it reads this season's and last season's
+play-by-play) and then checks it. The last line should end "the
+screenshot's numbers". Paste all of it:
+```
+cd /srv/qellys && sudo -u qellys python3 carryfill.py --fill
+```
+Any time after, the same check without filling (read-only):
+```
+cd /srv/qellys && sudo -u qellys python3 carryfill.py
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -1464,6 +1477,43 @@ first). Paste back anything that prints an error or looks off.
     To see it: Ask, the paperclip, **Grade a parlay screenshot**, any slip
     with a game line from tomorrow's slate or a total off the posted
     number. The leg reads "Our read — not on our board".
+
+49. **A carry chart for every NFL and college runner** (2026-10-13,
+    Ethan, with the NFL's Next Gen Stats carry chart for Josh Allen at
+    the Rams: "a carry chart exactly in the screenshot for every player
+    ... for past games and ... an 'average' carry chart showing where
+    they run"). K fills it now; otherwise the nightly fills it.
+    * **Where:** any NFL or college player's page (search him on the
+      Players tab), the **Carry chart** button beside "History vs a
+      team". It shows for anyone with a rushing log.
+    * **By game:** any game this season or last. Each carry is a line
+      from the backfield through the hole the NFL's play-by-play records
+      (left end to right end) to where it ended: red for a loss, orange
+      for 0-4 yards, green for 5+ or a touchdown, a ring on a touchdown
+      or a lost fumble. Under it: carries, yards, yards a carry, TDs, and
+      RYOE where the NFL publishes it (running backs with 10+ carries in
+      a game; first downs otherwise), then every carry listed with the
+      quarter, clock, down and distance, field position and hole. Tap a
+      line or a row to pick one out.
+    * **Season, "where he runs":** every carry faint, plus one bold ray
+      per hole, as thick as his share of carries there and as long as
+      his average gain there, labelled with both. Tables for the holes,
+      designed runs vs scrambles (quarterbacks), downs and field
+      position, and the NGS season line for backs (RYOE, 8+ in the box,
+      time to the line).
+    * **What it can't show, and says so on the page:** the league's
+      tracked running paths aren't published, so the bend into the hole
+      is drawn, not tracked; the hole and the yards are the record.
+      College play-by-play records no hole at all, so a college game's
+      carries are spread across the field in the order they happened and
+      the season view runs shortest to longest. A college fumble reads
+      "fumbled" (the file doesn't say who recovered it), and college
+      shows the quarter but not the clock (the file's clock is often the
+      drive's, not the play's).
+    * **Kept current:** an NFL game lands the morning after nflverse
+      publishes it — the nightly now also reads the play-by-play while a
+      finished game has no chart, so Thursday and Monday games don't
+      wait for Tuesday. College every night in season. Last season once.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

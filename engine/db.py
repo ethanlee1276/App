@@ -295,6 +295,32 @@ CREATE TABLE IF NOT EXISTS nhl_shots (
     PRIMARY KEY (game_id, event_id)
 );
 CREATE INDEX IF NOT EXISTS nhl_shots_date ON nhl_shots (date);
+-- CARRIES (2026-10-13, Ethan, with the NFL's carry chart for Josh Allen at
+-- the Rams: "a carry chart exactly in the screenshot for every player").
+-- One row per run: the hole it hit (NFL play-by-play's run_location and
+-- run_gap; college plays carry none, so ''), how far it went, where it
+-- started and how it ended. engine/carries.py fills it and builds the
+-- chart from it. Keyed like `games` (a season's period and game) plus the
+-- league's play id.
+CREATE TABLE IF NOT EXISTS carries (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, play_id TEXT,
+    date TEXT, player TEXT, player_id TEXT, team TEXT, opponent TEXT, home INTEGER,
+    position TEXT, jersey TEXT, qtr INTEGER, clock TEXT, down INTEGER, distance INTEGER,
+    yardline_100 INTEGER, yards REAL, hole TEXT, scramble INTEGER, td INTEGER,
+    fumble INTEGER, fumble_lost INTEGER, first_down INTEGER,
+    PRIMARY KEY (sport, season, period, game_id, play_id)
+);
+CREATE INDEX IF NOT EXISTS carries_player ON carries (sport, player, season);
+-- THE LEAGUE'S RUSHING TRACKING NUMBERS as nflverse publishes them
+-- (nextgen_stats/ngs_rushing): one row per player-week, week 0 the season
+-- line, running backs past the league's ten-carry minimum. Read by the
+-- carry chart for rushing yards over expected; never estimated.
+CREATE TABLE IF NOT EXISTS ngs_rushing (
+    season INTEGER, week INTEGER, season_type TEXT, player_id TEXT, player TEXT, team TEXT,
+    attempts INTEGER, yards REAL, tds INTEGER, expected_yards REAL, ryoe REAL,
+    ryoe_per_att REAL, eight_box REAL, time_to_los REAL, efficiency REAL,
+    PRIMARY KEY (season, week, season_type, player_id)
+);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
@@ -863,6 +889,25 @@ def upsert_nhl_shots(conn, rows: list[dict]) -> int:
 
 def upsert_team_units(conn, rows: list[dict]) -> int:
     return _upsert(conn, "team_units", TEAM_UNIT_COLS, rows)
+
+
+CARRY_COLS = ["sport", "season", "period", "game_id", "play_id", "date", "player", "player_id",
+              "team", "opponent", "home", "position", "jersey", "qtr", "clock", "down", "distance",
+              "yardline_100", "yards", "hole", "scramble", "td", "fumble", "fumble_lost",
+              "first_down"]
+NGS_RUSH_COLS = ["season", "week", "season_type", "player_id", "player", "team", "attempts",
+                 "yards", "tds", "expected_yards", "ryoe", "ryoe_per_att", "eight_box",
+                 "time_to_los", "efficiency"]
+
+
+def upsert_carries(conn, rows: list[dict]) -> int:
+    """Every run on the carry chart (engine/carries.py)."""
+    return _upsert(conn, "carries", CARRY_COLS, rows)
+
+
+def upsert_ngs_rushing(conn, rows: list[dict]) -> int:
+    """The league's rushing tracking file, row for row (engine/carries.ngs_rows)."""
+    return _upsert(conn, "ngs_rushing", NGS_RUSH_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

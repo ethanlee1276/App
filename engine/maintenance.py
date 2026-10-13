@@ -2039,25 +2039,65 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             _units_behind = "unit ratings" in _fresh.football_weeks(_fdb.connect(), "nfl", today)["behind"]
         except Exception:                                       # noqa: BLE001
             _units_behind = False
-        if today.weekday() == 1 or _units_behind:
+        # …AND WHILE A FINISHED GAME HAS NO CARRY CHART (Ethan, 2026-10-13:
+        # "a Carry chart for past games"). A Thursday or Monday game's
+        # chart should not wait for Tuesday; the fetch layer caches the
+        # file for a day, so this is one download a night at most, and it
+        # stops the night nflverse has the game (engine/carries.nfl_behind).
+        _carries_behind = False
+        try:
+            from . import carries as _cr, db as _cdb
+            _carries_behind = _cr.nfl_behind(
+                _cdb.connect(), today.year if today.month >= 8 else today.year - 1, today)
+        except Exception:                                       # noqa: BLE001
+            _carries_behind = False
+        if today.weekday() == 1 or _units_behind or _carries_behind:
             try:
                 from . import db as _pdb
+                from . import carries as _carries
                 from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
                                              xfp_player_rows)
                 from .sources.nflunits import Units, UNIT_COLS
                 season = today.year if today.month >= 8 else today.year - 1
                 # The unit ratings the matchup scan ranks (engine/gamescan)
-                # ride the same read of the file.
+                # and every run for the carry chart ride the same read of
+                # the file.
                 units = Units()
-                agg = aggregate_pbp(load_pbp_rows(season, columns=UNIT_COLS),
-                                    also=units.add)
+                runs = _carries.NflCarries(season)
+
+                def _both(r):
+                    units.add(r)
+                    runs.add(r)
+                agg = aggregate_pbp(load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS),
+                                    also=_both)
                 _pc = _pdb.connect()
                 n = _pdb.upsert_player_logs(_pc, xfp_player_rows(agg, season))
                 n_u = _pdb.upsert_team_units(_pc, units.rows(season))
-                if n or n_u:
-                    log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows refreshed")
+                n_c = _pdb.upsert_carries(_pc, runs.rows(_carries.nfl_names(season)))
+                if n or n_u or n_c:
+                    log(f"  nfl pbp: {n:,} xFP/red-zone rows, {n_u:,} unit rows, "
+                        f"{n_c:,} carries refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
+
+        # THE CARRY CHART'S OTHER HALVES: the league's rushing tracking
+        # file (rushing yards over expected), every night with the fetch
+        # layer's six-hour cache, and LAST SEASON's carries once — the
+        # nightly above reads the season being played, and a chart for
+        # "past games" starts with last year's.
+        try:
+            from . import carries as _cr2, db as _cdb2
+            _cc = _cdb2.connect()
+            n_ngs = _cdb2.upsert_ngs_rushing(_cc, _cr2.ngs_rows(_cr2.fetch_ngs_rushing()))
+            if n_ngs:
+                log(f"  nfl rushing tracking: {n_ngs:,} NGS rows")
+            season = today.year if today.month >= 8 else today.year - 1
+            for past in _cr2.missing_seasons(_cc, "nfl", (season - 1,)):
+                log(f"  nfl carries {past}: {_cr2.backfill_nfl(_cc, past):,} rows (once)")
+            for past in _cr2.missing_seasons(_cc, "cfb", (season - 1,)):
+                log(f"  cfb carries {past}: {_cr2.backfill_cfb(_cc, past):,} rows (once)")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  carry chart refresh failed: {exc}")
 
     # The DEEP fitters, weekly. `engine.journalfit` already refits every
     # sport off the journal on every settle pass — that is the universal

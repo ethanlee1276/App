@@ -94,8 +94,13 @@ def test_ranks_run_one_best_on_each_side():
 def test_the_ingest_and_the_tuesday_refresh_store_the_units():
     ing = open(os.path.join(ROOT, "engine", "ingest.py"), encoding="utf-8").read()
     mnt = open(os.path.join(ROOT, "engine", "maintenance.py"), encoding="utf-8").read()
+    assert "load_pbp_rows(season, columns=UNIT_COLS)" in ing and "also=units.add" in ing
+    # The nightly's read also carries every run for the carry chart since
+    # 2026-10-13 (engine/carries): the unit columns plus the carry columns,
+    # one fold feeding both — the units still ride the same single read.
+    assert "load_pbp_rows(season, columns=tuple(UNIT_COLS) + _carries.PBP_COLS)" in mnt
+    assert "units.add(r)" in mnt and "also=_both" in mnt
     for src in (ing, mnt):
-        assert "load_pbp_rows(season, columns=UNIT_COLS)" in src and "also=units.add" in src
         assert "upsert_team_units(" in src
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
