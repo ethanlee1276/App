@@ -19,7 +19,8 @@ answered or finished block moved there, word for word.
 Everything from 2026-10-12 and 10-13, in order: the parlay checker in
 Ask (live chances, the hedge, a better number, saved slips on the Live
 tab, our read on a leg no board carries, better legs, the cash-out
-check, the last-leg alert) and the subscription check on every open.
+check, the last-leg alert), the subscription check on every open, and
+the MLB profit calendar that stopped at September.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -130,6 +131,12 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * **Cancel at the end of the month, or at once?** Stripe's portal
   setting (step 37). The site handles either.
 * **The last-leg alert on the Alerts bell too?**
+
+**I. Why the MLB profit calendar stops at September** (step 45 says how
+to read it; read-only, paste all of it):
+```
+cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
+```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -1323,6 +1330,38 @@ first). Paste back anything that prints an error or looks off.
     slip(s) down to the last leg, 1 emailed"; a failed send says so with
     the error's kind); the second lists every alert noted (`mailed` 1 =
     the email went). Nothing to set.
+
+45. **The MLB profit calendar stops at September** (2026-10-13, Ethan:
+    "the mlb profit calander isn't updating, it's stuck on September").
+    The calendar draws MLB edge bets once they settle, and it opened on
+    the latest month that had one. September was that month, so no MLB
+    edge bet has settled since September 30. The page itself was drawing
+    what the record holds; the question is which step stopped after that
+    day, and I can't see the box's journal from here. Two changes:
+    * **The calendar opens on this month now**, every league, and a month
+      with nothing settled says why. "No edge bet has settled in October
+      yet. 3 are still waiting on a result, the oldest from Oct 1" means
+      bets are being placed and not graded. "The last one was placed
+      Sep 30" means the board stopped placing them. Your phone shows
+      which one as soon as the box pulls this.
+    * **A box check that names the step** (read-only, paste all of it):
+      ```
+      cd /srv/qellys && sudo -u qellys python3 mlbprobe.py
+      ```
+      Its JOURNAL lines give each of the last three weeks: the MLB edge
+      bets journaled that day and how they stand, beside the finals and
+      stat lines on file to settle them. Then the last edge bet, what
+      the record file says, and the last MLB build's lines about its odds
+      and its journal.
+      * Edge rows stop on a day: the board stopped journaling. The BUILD
+        lines say why. "matched 0 props" means it had no real prices,
+        "Bet journal skipped" means the journal failed, and a header
+        reading `exit -9` means the build was cut off.
+      * Edge rows keep coming but stay open: settling stopped. "finals"
+        and "stat lines" say whether the playoff results ever reached the
+        database.
+      * Edge rows settle but the calendar still stops: the record file
+        isn't being written. The RECORD line says when it last was.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

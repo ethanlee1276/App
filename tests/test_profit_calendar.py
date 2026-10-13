@@ -8,9 +8,12 @@ Pinned: the day's rows come from the same book and the same stake rule
 the curve draws (main + paper, staked), never the Most Likely book; the
 endpoint is ungated and validates its date; the grid is Sunday-first
 with the right number of blanks; the cell says its units with a true
-minus; the month in view defaults to the latest with a bet; an arrow
-exists only where there is a month to go to; the day panel is scoped the
-way the page is and falls back to the rows the page holds.
+minus; the month in view defaults to the latest with a bet when that is
+this month, and to this month when nothing in it has settled yet, with a
+line saying why (Ethan, 2026-10-13: "the mlb profit calander isn't
+updating, it's stuck on September"); an arrow exists only where there is
+a month to go to; the day panel is scoped the way the page is and falls
+back to the rows the page holds.
 """
 
 import json
@@ -205,12 +208,15 @@ def test_units_read_with_a_true_minus_and_whole_numbers_past_ten():
 
 
 def test_the_month_in_view_defaults_to_the_latest_and_arrows_only_where_there_is_somewhere_to_go():
+    # Read in September 2026, the curve's own last month (the clock is
+    # handed in: the page passes none and reads the real one).
     got = _node(f"""
+      const sept = new Date(2026, 8, 20);
       const months = recCalMonths({CURVE});
-      const latest = recCalendarHTML({CURVE});
-      _recCalMonth = "2026-08"; const aug = recCalendarHTML({CURVE});
-      _recCalMonth = "2025-01"; const unknown = recCalendarHTML({CURVE});
-      const one = recCalendarHTML([{{date: "2026-09-05", day_u: 1, n: 1, w: 1, l: 0}}]);
+      const latest = recCalendarHTML({CURVE}, null, sept);
+      _recCalMonth = "2026-08"; const aug = recCalendarHTML({CURVE}, null, sept);
+      _recCalMonth = "2025-01"; const unknown = recCalendarHTML({CURVE}, null, sept);
+      const one = recCalendarHTML([{{date: "2026-09-05", day_u: 1, n: 1, w: 1, l: 0}}], null, sept);
       return {{
         months, none: recCalendarHTML([]), noneNull: recCalendarHTML(null),
         latestMonth: (latest.match(/data-month="([^"]+)"/) || [])[1],
@@ -232,6 +238,74 @@ def test_the_month_in_view_defaults_to_the_latest_and_arrows_only_where_there_is
     assert got["sub"] and got["panel"]
 
 
+def test_this_month_opens_even_with_nothing_settled_and_says_why():
+    """Ethan, 2026-10-13, on the MLB Record page: "the mlb profit calander
+    isn't updating, it's stuck on September". The calendar opened on the
+    latest month with a settled bet; it opens on this month now, and an
+    empty month says whether bets are waiting on results or none was placed."""
+    got = _node(f"""
+      const oct = new Date(2026, 9, 13);
+      const month = (h) => (h.match(/data-month="([^"]+)"/) || [])[1];
+      const arrows = (h) => (h.match(/aria-label="(Earlier|Later) month"/g) || []);
+      const to = (h) => (h.match(/data-act="recCalSetMonth" data-arg="([^"]+)"/g) || []);
+      const foot = (h) => (h.match(/<p class="rc-foot">([\\s\\S]*?)<\\/p>/) || [])[1].replace(/\\s+/g, " ");
+      const waiting = recCalendarHTML({CURVE}, {{open: 3, oldest_open: "2026-10-01", last_placed: "2026-10-12"}}, oct);
+      const one = recCalendarHTML({CURVE}, {{open: 1, oldest_open: "2026-10-03", last_placed: "2026-10-03"}}, oct);
+      const stopped = recCalendarHTML({CURVE}, {{open: 0, oldest_open: null, last_placed: "2026-09-30"}}, oct);
+      const unknown = recCalendarHTML({CURVE}, null, oct);
+      _recCalMonth = "2026-09"; const back = recCalendarHTML({CURVE}, {{open: 3}}, oct); _recCalMonth = null;
+      const ahead = recCalendarHTML({CURVE}, null, new Date(2026, 6, 4));
+      return {{
+        month: month(waiting), arrows: arrows(waiting), to: to(waiting),
+        waiting: foot(waiting), one: foot(one), stopped: foot(stopped), unknown: foot(unknown),
+        cells: (waiting.match(/class="rc-day off"/g) || []).length, doors: (waiting.match(/data-date=/g) || []).length,
+        backMonth: month(back), backArrows: arrows(back), backFoot: foot(back),
+        aheadMonth: month(ahead), none: recCalendarHTML([], {{open: 3}}, oct),
+      }};""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["month"] == "2026-10", "this month, not the last month with a settled bet"
+    assert got["arrows"] == ['aria-label="Earlier month"'] and got["to"] == ['data-act="recCalSetMonth" data-arg="2026-09"']
+    assert got["waiting"] == ("<b>October 2026</b> · No edge bet has settled in October yet. 3 are still waiting "
+                              "on a result, the oldest from Oct 1."), got["waiting"]
+    assert got["one"].endswith("1 is still waiting on a result, the oldest from Oct 3."), got["one"]
+    assert got["stopped"] == ("<b>October 2026</b> · No edge bet has settled in October yet. "
+                              "The last one was placed Sep 30."), got["stopped"]
+    assert got["unknown"] == "<b>October 2026</b> · No edge bet has settled in October yet.", got["unknown"]
+    assert got["cells"] == 31 and got["doors"] == 0, "every October day drawn, none a button"
+    assert got["backMonth"] == "2026-09" and got["backArrows"] == ['aria-label="Earlier month"', 'aria-label="Later month"']
+    assert "4 days bet" in got["backFoot"] and "No edge bet" not in got["backFoot"], "a month with bets keeps its own line"
+    assert got["aheadMonth"] == "2026-09", "a clock behind the curve never hides its last month"
+    assert got["none"] == "", "no settled day at all: no calendar, as before"
+
+
+def test_edge_state_is_the_curves_own_book_and_rides_the_record():
+    conn = _ledger()
+    for r in (("2026-09-30T20:00:00", "cfb", "2026-10-01", "J", "rec_yds", "OVER", 20.5, -110, "open", "paper", 0.5, None),
+              ("2026-09-30T20:00:00", "cfb", "2026-10-02", "K", "rec_yds", "OVER", 20.5, -110, "open", "likely", 1.0, None),
+              ("2026-09-30T20:00:00", "cfb", "2026-10-03", "M", "rec_yds", "OVER", 20.5, -110, "open", "main", 0.0, None),
+              ("2026-09-30T20:00:00", "nfl", "2026-W9", "N", "rec_yds", "OVER", 20.5, -110, "open", "main", 1.0, None),
+              ("2026-09-30T20:00:00", "wnba", "2026-10-04", "P", "pts", "OVER", 20.5, -110, "open", "main", 1.0, None)):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,odds,status,category,"
+            "stake_units,pnl_units) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", r)
+    conn.commit()
+    cfb = L.edge_state(conn, "cfb")
+    assert cfb == {"open": 2, "oldest_open": "2026-09-05", "last_placed": "2026-10-01"}, cfb
+    # The Most Likely book (K), an unstaked row (M) and a week label (N) are no part of it.
+    assert L.edge_state(conn, "nfl") == {"open": 0, "oldest_open": None, "last_placed": "2026-09-05"}
+    pooled = L.edge_state(conn)
+    assert pooled["last_placed"] == "2026-10-01", "a benched league stays out of the pooled scope, as in the curve"
+    assert L.edge_state(conn, "cfb", since="2026-09-06") == {"open": 1, "oldest_open": "2026-10-01",
+                                                             "last_placed": "2026-10-01"}
+    assert L.sport_report(conn, "cfb")["edge_state"] == cfb
+    src = (ROOT / "engine" / "ledger.py").read_text()
+    i = src.index("def export_json(")
+    end = src.find("\ndef ", i + 10)
+    body = src[i:end if end != -1 else len(src)]
+    assert '"edge_state": edge_state(conn, since=since),' in body
+
+
 def test_the_record_page_draws_it_first_and_scopes_the_tap():
     """Under the curve when it shipped (09-05); at the top of the room since
     2026-09-08 — Ethan: "Maybe we put the profit calendars at the top of
@@ -239,7 +313,7 @@ def test_the_record_page_draws_it_first_and_scopes_the_tap():
     i = APP.index("async function renderRecord()")
     body = APP[i:APP.index("\nfunction _recordRooms(", i)]
     assert "_recCalScope = scope;" in body
-    assert "const calendar = recCalendarHTML(src.curve);" in body
+    assert "const calendar = recCalendarHTML(src.curve, src.edge_state);" in body
     assert "const receipts = calendar\n" in body, "the calendar no longer leads the room"
     assert 'host.querySelectorAll(".rc-day[data-date]")' in body
     assert "recCalDayOpen(el.dataset.date, src.curve, src.recent || [])" in body

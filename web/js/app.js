@@ -17271,7 +17271,7 @@ function recAnalytics(curve, o, eras) {
    the cells are the curve's own days (`pnl_curve`: main + paper, with a
    stake), and the Most Likely book keeps its own record above. The two
    never share a cell, for the reason they never share a headline. */
-let _recCalMonth = null;     // "YYYY-MM" in view; null = the latest month with a bet
+let _recCalMonth = null;     // "YYYY-MM" in view; null = this month (recCalendarHTML)
 let _recCalDay = null;       // the day whose bets are open, or null
 let _recCalScope = "all";    // the sport the page is scoped to, for the day's fetch
 window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
@@ -17291,8 +17291,9 @@ function recCalU(v) {
   return `${n > 0 ? "+" : n < 0 ? "−" : ""}${m >= 10 ? m.toFixed(0) : m.toFixed(1)}`;
 }
 
-/* One month: a Sunday-first grid, a cell per day, the month's line under it. */
-function recCalMonthHTML(curve, ym) {
+/* One month: a Sunday-first grid, a cell per day, the month's line under it.
+   `empty` is the line a month with nothing settled says instead. */
+function recCalMonthHTML(curve, ym, empty) {
   const [y, m] = String(ym).split("-").map(Number);
   const byDay = new Map((curve || []).filter((p) => String(p.date || "").startsWith(ym + "-"))
     .map((p) => [p.date, p]));
@@ -17316,20 +17317,43 @@ function recCalMonthHTML(curve, ym) {
   const w = rows.reduce((a, p) => a + (p.w || 0), 0);
   const l = rows.reduce((a, p) => a + (p.l || 0), 0);
   const label = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const foot = !rows.length && empty ? escapeHtml(empty)
+    : `${rows.length} day${rows.length === 1 ? "" : "s"} bet
+      · <b>${w}-${l}</b> · net <b class="${toneOf(net)}">${recCalU(net)}u</b>`;
   return `<div class="rc-month" data-month="${ym}">
     <div class="rc-grid">${["S", "M", "T", "W", "T", "F", "S"].map((h) =>
       `<span class="rc-h">${h}</span>`).join("")}${cells.join("")}</div>
-    <p class="rc-foot"><b>${escapeHtml(label)}</b> · ${rows.length} day${rows.length === 1 ? "" : "s"} bet
-      · <b>${w}-${l}</b> · net <b class="${toneOf(net)}">${recCalU(net)}u</b></p></div>`;
+    <p class="rc-foot"><b>${escapeHtml(label)}</b> · ${foot}</p></div>`;
 }
 
-/* The section: the month in view (the latest with a bet unless one was
-   chosen), an arrow only where there is a month to go to, and the day
-   panel the tap fills. Nothing when the curve has no settled day. */
-function recCalendarHTML(curve) {
+/* The section: the month in view (this month unless one was chosen), an
+   arrow only where there is a month to go to, and the day panel the tap
+   fills. Nothing when the curve has no settled day.
+
+   THIS MONTH, EVEN BEFORE ANYTHING IN IT HAS SETTLED. Ethan, 2026-10-13:
+   "the mlb profit calander isn't updating, it's stuck on September". It
+   opened on the latest month with a settled bet, so a league whose bets
+   stopped settling (or stopped being placed) looked like a calendar that
+   had frozen. It opens on the month we are in now, and a month with
+   nothing settled says why, from `state` (ledger.edge_state): how many
+   bets are still waiting on a result and since when, or the day the last
+   one was placed. `now` is for the tests; the page passes nothing. */
+function recCalendarHTML(curve, state, now) {
   const months = recCalMonths(curve);
   if (!months.length) return "";
+  const at = now || new Date();
+  const cur = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
+  const settledHere = months.includes(cur);
+  if (cur > months[months.length - 1]) months.push(cur);
   const ym = months.includes(_recCalMonth) ? _recCalMonth : months[months.length - 1];
+  const short = (iso) => new Date(`${iso}T12:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const st = state || {};
+  const open = Number(st.open) || 0;
+  const empty = ym === cur && !settledHere
+    ? `No edge bet has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
+      ? ` ${open} ${open === 1 ? "is" : "are"} still waiting on a result${st.oldest_open ? `, the oldest from ${short(st.oldest_open)}` : ""}.`
+      : st.last_placed ? ` The last one was placed ${short(st.last_placed)}.` : ""}`
+    : "";
   const i = months.indexOf(ym);
   const arrow = (to, glyph, label) => to == null ? "" :
     `<button class="ra-range" data-act="recCalSetMonth" data-arg="${to}" aria-label="${label}">${glyph}</button>`;
@@ -17339,7 +17363,7 @@ function recCalendarHTML(curve) {
   return `
     <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
       <span class="sub">— units by day, edge book only; tap a day for its bets</span>${nav}</div>
-    <div class="card rc-card">${recCalMonthHTML(curve, ym)}<div id="rc-day"></div></div>`;
+    <div class="card rc-card">${recCalMonthHTML(curve, ym, empty)}<div id="rc-day"></div></div>`;
 }
 
 /* A tapped day: its line from the curve at once, its rows from the
@@ -21341,7 +21365,7 @@ async function renderRecord() {
      and last the working (is there an edge at all). The book sections
      still lead a sport's numbers (09-01, 09-05) — they sit under the
      verdict on every scope, pooled on "All bets". */
-  const calendar = recCalendarHTML(src.curve);
+  const calendar = recCalendarHTML(src.curve, src.edge_state);
   /* Open / Settled, the way every book's My Bets splits it (research in
      docs/VISUAL_REDESIGN.md). This page is the settled half; the open
      half lives on the Live tab with its progress, and the count here is

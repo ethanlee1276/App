@@ -6754,6 +6754,45 @@ def pnl_curve(conn, sport: str | None = None,
     return out
 
 
+def edge_state(conn, sport: str | None = None,
+               since: str | None = None) -> dict:
+    """Where the edge book stands past its last settled day: the bets still
+    ``open`` (waiting on a result), the day of the ``oldest_open``, and the
+    day the ``last_placed`` bet belongs to, whatever became of it.
+
+    Ethan, 2026-10-13, on the Record page: "the mlb profit calander isn't
+    updating, it's stuck on September". The calendar draws `pnl_curve`'s
+    settled days, so a month with nothing settled was simply not there, and
+    the page could not say whether the bets were waiting on results or the
+    board had stopped placing them. These three facts say which.
+
+    The curve's own book and stake rule (BOOK, staked), its benched-league
+    rule for the pooled scope and its window, so the two can never
+    disagree. Only rows whose day is a calendar date count: an old NFL row
+    keyed by a week label sorts after every date and is no day at all."""
+    day = day_expr()
+    books, bargs = books_sql(BOOK)
+    where = (f"{books} AND stake_units > 0 "
+             f"AND {day} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'")
+    args: list = list(bargs)
+    if sport:
+        where += " AND sport=?"
+        args.append(sport)
+    else:
+        _b, _ba = off_record_sql()
+        where += _b
+        args += list(_ba)
+    if since:
+        where += f" AND {day} >= ?"
+        args.append(since)
+    r = conn.execute(
+        f"SELECT SUM(status='open'), MIN(CASE WHEN status='open' THEN {day} END), "
+        f"MAX({day}) FROM bets WHERE {where}", args).fetchone()
+    return {"open": int(r[0] or 0),
+            "oldest_open": (str(r[1])[:10] if r[1] else None),
+            "last_placed": (str(r[2])[:10] if r[2] else None)}
+
+
 def drawdown_factor(conn, sport: str | None = None,
                     drawdown_u: float = 10.0) -> float:
     """§10 drawdown circuit-breaker (docs/NFL_MODEL.md).
@@ -9381,6 +9420,8 @@ def sport_report(conn, sport: str,
             "hidden_settled": max(0, everything["settled"] - perf["settled"]),
         },
         "curve": pnl_curve(conn, sport, since=since),
+        # What the calendar says past its last settled day (edge_state).
+        "edge_state": edge_state(conn, sport, since=since),
         "recent": recent_settled(conn, RECENT_LIMIT, sport=sport, since=since),
         "calibration": calibration(conn, sport=sport),
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"],
@@ -9834,6 +9875,7 @@ def export_json(conn, path) -> None:
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
+        "edge_state": edge_state(conn, since=since),
         "recent": recent_settled(conn, RECENT_LIMIT, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),

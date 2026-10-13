@@ -95,7 +95,12 @@ HTML = (WEB / "index.html").read_text()
 #: upload row, the loader and the graded turn — +0.41 KB gz (491.996 ->
 #: 492.407). The upload and the card load on first use (js/slip.js,
 #: css/slip.css). Told to Ethan.
-APP_JS_BUDGET_KB = 493
+#: 493 -> 494 on 2026-10-13 by the profit calendar opening on this month
+#: (Ethan: "the mlb profit calander isn't updating, it's stuck on
+#: September"): the month we are in drawn even with nothing settled, and
+#: the line saying whether its bets are waiting on results or none was
+#: placed — +0.28 KB gz (492.892 -> 493.175). Told to Ethan.
+APP_JS_BUDGET_KB = 494
 #: 590 -> 591 on 2026-10-04 by the NHL play-by-play rows and the Live tab's
 #: NHL chip fix (+0.17 KB gz; the boot path sat 43 bytes under 590).
 #: 591 -> 592 on 2026-10-04 by the same four (+0.27 KB gz on the boot path).
