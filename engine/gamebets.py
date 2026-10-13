@@ -170,10 +170,12 @@ def cfb_win_prob(home_rating: float, away_rating: float) -> float:
                  0.005, 0.995)
 
 
-def mlb_win_prob(home_rating: float, away_rating: float,
-                 home_xera: float = LEAGUE_AVG_XERA,
-                 away_xera: float = LEAGUE_AVG_XERA) -> float:
-    """P(home win) from run-diff ratings plus a starting-pitcher edge.
+def mlb_margin(home_rating: float, away_rating: float,
+               home_xera: float = LEAGUE_AVG_XERA,
+               away_xera: float = LEAGUE_AVG_XERA) -> float:
+    """The projected home run margin `mlb_win_prob` reads: the run-diff
+    ratings, home field and a starting-pitcher edge. One function so the
+    slip read's run line (engine/slipgame) and the moneyline agree.
 
     A starter better than league average (lower xERA) suppresses the opponent's
     runs, so the *away* starter's quality helps the away side and vice versa.
@@ -181,7 +183,15 @@ def mlb_win_prob(home_rating: float, away_rating: float,
     home_sp = (LEAGUE_AVG_XERA - home_xera)     # +ve = better than average
     away_sp = (LEAGUE_AVG_XERA - away_xera)
     sp_edge = (home_sp - away_sp) * 0.25        # runs, dampened
-    margin = (home_rating - away_rating) + MLB_HOME_FIELD + sp_edge
+    return (home_rating - away_rating) + MLB_HOME_FIELD + sp_edge
+
+
+def mlb_win_prob(home_rating: float, away_rating: float,
+                 home_xera: float = LEAGUE_AVG_XERA,
+                 away_xera: float = LEAGUE_AVG_XERA) -> float:
+    """P(home win) from run-diff ratings plus a starting-pitcher edge
+    (`mlb_margin`)."""
+    margin = mlb_margin(home_rating, away_rating, home_xera, away_xera)
     return clamp(normal_cdf(margin / MLB_MARGIN_SD), 0.03, 0.97)
 
 

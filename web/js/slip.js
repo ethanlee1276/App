@@ -98,7 +98,7 @@
   };
   const VERDICT = { strong: "Strong", fair: "Fair", weak: "Weak", against: "Against", unpriced: "Not on our board" };
   const FOUND = { likely: "On our Most Likely board", prop: "Our projection", scorer: "Our scorer model",
-    game: "Our game line", read: "Our read — not on our board" };
+    game: "Our game line", read: "Our read — not on our board", game_read: "Our read — not on our board" };
 
   /* ---- the picture ------------------------------------------------------ */
   /* createImageBitmap reads the file without an <img>; where it is missing,
@@ -238,6 +238,9 @@
      checks the Most Likely board runs — said as the tier it would earn. */
   function readTag(l) {
     const r = l.read;
+    /* A side or a total read off the board (engine/slipgame): our game
+       model's own number before the market held it. */
+    if (l.found === "game_read" && r) return r.raw != null ? ` · our model alone ${pct(r.raw)}, held to the market` : "";
     if (l.found !== "read" || !r) return "";
     const n = (r.passed || []).length;
     return `${r.would_be && r.makes_board ? ` · would be <b>${esc(r.would_be)}</b> on Most Likely`
@@ -248,6 +251,10 @@
      of his games — still says what we know. */
   function readHTML(l) {
     const r = l.read;
+    if (l.found === "game_read" && r && l.prob == null) {
+      return `<div class="pgr-leg-w">Not on our board${r.why_off ? ` — ${esc(r.why_off)}` : ""}. ${
+        r.refused ? `Our game model won’t price it: ${esc(r.refused)}.` : ""} What our data says is below.</div>`;
+    }
     if (l.found !== "read" || !r || l.prob != null) return "";
     return `<div class="pgr-leg-w">Not on our board${r.why_off ? ` — ${esc(r.why_off)}` : ""}. ${
       r.refused ? `Our model won’t price it: ${esc(r.refused)}` : "We keep too few of his games to price it."}</div>`;

@@ -535,6 +535,24 @@ def _off_board(boards: dict, leg: dict):
     return p, row, league
 
 
+def _off_board_game(boards: dict, leg: dict):
+    """(our chance, the read's row, its league) for a side or a total no
+    board prices — the league's own game model run on it (engine/slipgame),
+    held to the market as the boards hold theirs — or None where the slip's
+    words name no game we can find. The chance is None, with the row and
+    its facts, where the model will not price the bet."""
+    try:
+        from . import slipgame as SG
+        row = SG.read(boards, leg)
+    except Exception as exc:                                       # noqa: BLE001
+        print(f"slip game read failed on {leg.get('game') or leg.get('team')} {leg.get('market')} "
+              f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        return None
+    if not row:
+        return None
+    return row.get("prob"), row, row.get("league") or ""
+
+
 def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
     """One leg against tonight's boards: our chance, what its price needs,
     the verdict, and where on the board it was found. A player prop no
@@ -587,6 +605,14 @@ def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
         if got is not None:
             prob, row, league = got
             out.update(prob=prob, league=league, found="read", row=row)
+    if read and not out["found"] and leg["market"] in GAME_MARKETS:
+        # A SIDE OR A TOTAL NO BOARD PRICES (Ethan, 2026-10-13: "where if
+        # there's a pick [not] in the board we use our data to explain if
+        # it's a good pick or not"): the league's own game model on it.
+        got = _off_board_game(boards, leg)
+        if got is not None:
+            prob, row, league = got
+            out.update(prob=prob, league=league, found="game_read", row=row)
     r = out["row"] or {}
     if r.get("player") and out["market"] not in GAME_MARKETS:
         out["player"] = r["player"]      # the board's spelling: "J. Allen" was Josh Allen
@@ -594,12 +620,19 @@ def price_leg(boards: dict, leg: dict, read: bool = True) -> dict:
     # The board's word for the seat ("Top pick"), not its key ("top").
     out["tier"] = str(r.get("tier_label") or r.get("tier") or "") if out["found"] == "likely" else ""
     out["game"] = _game_label(r, boards.get(out["league"])) or out["game"]
-    out["team"] = out["team"] if out["market"] in GAME_MARKETS else (str(r.get("team") or "") or out["team"])
+    if out["found"] == "game_read":
+        out["team"] = str(r.get("team") or "") or out["team"]
+    else:
+        out["team"] = out["team"] if out["market"] in GAME_MARKETS else (str(r.get("team") or "") or out["team"])
     out["opponent"] = str(r.get("opponent") or "")
     out["edge"] = (out["prob"] - out["needs"]) if (out["prob"] is not None and out["needs"] is not None) else None
     out["verdict"] = verdict(out["prob"], out["edge"])
     if out["found"] == "read":
         out["read"] = _read_summary(r)
+    elif out["found"] == "game_read":
+        out["read"] = {"why_off": str(r.get("why_off") or ""), "refused": str(r.get("refused") or ""),
+                       "fair_from": str(r.get("fair_from") or ""), "credible": bool(r.get("credible", True)),
+                       "raw": r.get("raw_prob"), "game_model": True}
     return out
 
 
@@ -960,6 +993,18 @@ def why(boards: dict, leg: dict) -> list[dict]:
             out.append({"k": k, "t": t[:260]})
 
     is_read = leg.get("found") == "read"
+    if leg.get("found") == "game_read":
+        row = leg.get("row") or {}
+        for k, t in row.get("facts") or []:
+            add(k, t)
+        board = boards.get(leg.get("league") or "") or {}
+        if _board_game(board, row.get("home"), row.get("away")):
+            # The game is on the board at another number: what the site
+            # knows about it all the same — the exchanges, the line's move,
+            # where the money sits (never a book's price at another line).
+            for k, t in _game_facts(board, leg, row):
+                add(k, t)
+        return _keep(out)
     if leg.get("prob") is None and not is_read:
         return out
     board = boards.get(leg.get("league") or "") or {}
@@ -1114,7 +1159,10 @@ WHY_RANK = {"Our read": 0, "Would be": 0, "Projection": 0, "Game": 0, "Red zone"
             "Recent games": 1, "Our record": 1, "Goal line": 1, "Prediction markets": 1, "Status": 2,
             "Game script": 2, "Matchup read": 2, "Around him": 2, "Line move": 2, "Money": 2,
             "The case": 3, "Checks": 3, "Lineup": 3, "Watch": 3, "Scout": 4, "Milestone": 4,
-            "Incentive": 4}
+            "Incentive": 4,
+            # A side or a total read off the board (engine/slipgame).
+            "Ratings": 1, "Starters": 1, "The market": 0, "Held to the market": 1, "Form": 1,
+            "Head to head": 2, "Totals": 1, "Conditions": 2}
 
 
 def _keep(facts: list[dict]) -> list[dict]:
@@ -1923,7 +1971,7 @@ def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
         "first_kickoff": kicks[0] if kicks else "",
         "legs": out_legs,
         "n_legs": len(legs), "n_priced": len(priced), "dropped": int(slip.get("dropped") or 0),
-        "n_read": sum(1 for l in priced if l.get("found") == "read"),
+        "n_read": sum(1 for l in priced if l.get("found") in ("read", "game_read")),
         "book": slip.get("book") or "", "stake": slip.get("stake") or 0,
         "total_odds": slip.get("total_odds") or 0,
         "ours": None if chance is None else round(chance, 4),
@@ -2005,12 +2053,18 @@ def summary(card: dict) -> str:
                  + (f"; it would be {rd['would_be']} on Most Likely" if rd.get("would_be") and rd.get("makes_board")
                     else "; under our Most Likely floor") + ")"
                  if l["prob"] is not None else "not on our board, and our model won't price it")
+        elif l.get("found") == "game_read":
+            p = (f"ours {l['prob']:.0%} (our read: not on our board, so we ran our game model on it"
+                 + (f", raw {rd['raw']:.0%} before the market" if rd.get("raw") is not None else "") + ")"
+                 if l["prob"] is not None
+                 else f"not on our board, and our game model won't price it ({rd.get('refused') or 'no number'})")
         else:
             p = (("no number of ours at that line" if l.get("found") else "not on our board")
                  if l["prob"] is None else f"ours {l['prob']:.0%}")
         n = "" if l.get("needs") is None else f", needs {l['needs']:.0%}"
         lead = next((w["t"] for w in l.get("why") or []
-                     if w.get("k") in ("Defense", "Matchup read", "Prediction markets")), "")
+                     if w.get("k") in ("Defense", "Matchup read", "Prediction markets", "Our model")
+                     and (w.get("k") != "Our model" or l.get("found") == "game_read")), "")
         if len(lead) > 140:
             lead = lead[:139].rsplit(" ", 1)[0].rstrip(",;—- ") + "…"   # a whole word, never "our nu"
         parts.append(f"{_name(l)}: {p}{n} ({l['verdict']})" + (f"; {lead}" if lead else "") + ".")

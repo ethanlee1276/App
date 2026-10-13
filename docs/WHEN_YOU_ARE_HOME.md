@@ -22,7 +22,8 @@ tab, our read on a leg no board carries, better legs, the cash-out
 check, the last-leg alert), the subscription check on every open, the
 MLB profit calendar that stopped at September, a Most Likely profit
 calendar beside the edge one (step 46; nothing to run), and bets that
-settle minutes after the final instead of the next day (step 47; J).
+settle minutes after the final instead of the next day (step 47; J), and
+a game line no board prices graded by our own game model (step 48).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -1435,6 +1436,34 @@ first). Paste back anything that prints an error or looks off.
       the same official box scores this pulls, so the answer is the same
       one, minutes after the final.
     To check it, run J at the top of this file.
+
+48. **A side or a total no board prices gets our number and our data**
+    (2026-10-13, Ethan, on a slip whose Brewers moneyline and Brewers @
+    Dodgers under 7.5 both read "NOT ON OUR BOARD": "we use our data to
+    explain if it's a good pick or not"). Nothing to run; it arrives with
+    the next pull. A moneyline, spread or total the boards don't price
+    (a game on another day's slate, a total at a different number, a
+    game priced before any book posted) now runs that league's own game
+    model:
+    * **Baseball, NFL, college:** team ratings from this season's finals.
+      Baseball adds the two starters off the board's game card when it
+      has the game, and says "league-average arms" when it doesn't.
+    * **Hockey:** the goals model the NHL board uses. It prices the puck
+      line at 1.5 goals only and says so for any other number.
+    * **NBA/WNBA:** moneylines and spreads use the futures simulation's
+      game curve. Nothing of ours projects a basketball total, so a total
+      gets the data and no number.
+    * **Held to the market** like every game line on the boards. The
+      card shows our model's own number, the market's, and what's left
+      after the measured haircut. A big gap is flagged as more likely our
+      rating's error than an edge.
+    * **The data under "Why we say":** each team's last 10, their
+      meetings this season, how often each side's games went over or
+      under the leg's number, and the board's own line when it prices a
+      different one.
+    To see it: Ask, the paperclip, **Grade a parlay screenshot**, any slip
+    with a game line from tomorrow's slate or a total off the posted
+    number. The leg reads "Our read — not on our board".
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

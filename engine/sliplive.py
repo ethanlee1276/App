@@ -247,7 +247,9 @@ def _game_prices(leg: dict, board: dict | None) -> dict | None:
     out. A card only carries each side's best book (gamebets.attach_books),
     so it lists one."""
     r = leg.get("row") or {}
-    if not r:
+    if not r or leg.get("found") == "game_read":
+        # A side or a total read off the board (engine/slipgame) carries no
+        # card of a book's prices — its row is our model's, not a quote.
         return None
     market, team = leg.get("market"), leg.get("team") or ""
     picked = r.get("team") or r.get("pick") or ""
