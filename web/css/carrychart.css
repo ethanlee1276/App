@@ -225,6 +225,9 @@
 .cc-inline .cc-empty { padding: 18px 6px; }
 .cc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .cc-kinds { display: flex; gap: 6px; }
+/* In the overlay a door opened on "his chart" (the parlay checker), the
+   switch sits under his name. */
+.cc-head + .cc-bar { margin-top: 12px; }
 .cc-kinds + .cc-seasons { margin-left: auto; }
 .cc-inline .cc-tabs { margin-top: 10px; }
 .cc-inline .cc-body > .cc-tabs:first-child { margin-top: 0; }

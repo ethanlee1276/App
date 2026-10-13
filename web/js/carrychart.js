@@ -634,8 +634,11 @@
       `<button type="button" class="cc-chip${y === d.season ? " on" : ""}" data-season="${y}" aria-pressed="${y === d.season}">${y}</button>`).join("")}</div>` : "";
     /* On a pick page the page above already says who he is, so the chart
        opens on its switches instead of a second header with his face. */
-    const bar = C.inline ? kindBar() + seasons : "";
-    const head = (C.inline ? (bar ? `<div class="cc-bar">${bar}</div>` : "") : `<header class="cc-head">
+    /* His two charts' switch: on a pick page beside the seasons, in the
+       overlay (a door that asked for his chart) under his name. */
+    const kb = kindBar();
+    const bar = C.inline ? kb + seasons : kb;
+    const head = (C.inline ? "" : `<header class="cc-head">
         ${faceHTML(d, S)}
         <div class="cc-who">
           <span class="cc-eyebrow">${R ? "Route chart" : "Carry chart"}</span>
@@ -644,7 +647,7 @@
             ? `${teamMarkIn(sport, d.team, 16)} ${esc(teamNameIn(sport, d.team))}` : ""].filter(Boolean).join(" · ")}</span>
         </div>
         ${seasons}
-      </header>`) + `
+      </header>`) + (bar ? `<div class="cc-bar">${bar}</div>` : "") + `
       <div class="cc-tabs" role="tablist">
         <button type="button" role="tab" class="cc-tab${S.view === "game" ? " on" : ""}" data-view="game" aria-selected="${S.view === "game"}">By game</button>
         <button type="button" role="tab" class="cc-tab${S.view === "season" ? " on" : ""}" data-view="season" aria-selected="${S.view === "season"}">${d.season} · ${R ? "where he’s thrown to" : "where he runs"}</button>
@@ -800,22 +803,36 @@
   const faceEvent = (e) => faceStep(e.type, e.target, (e.currentTarget._cc || {}).S);
 
   /* ---------------- loading ---------------- */
-  /* One chart's data. A pick page's chart reads the answer kept from the
-     last ten minutes first, so the page's redraw every minute, or a
-     reader going back and forth between picks, costs nothing; the
-     overlay asks every time, as it always has. Only the newest request a
-     chart made is drawn, and none once the chart is gone. */
+  /* One of his charts, as the server answers it. A chart that chose
+     among his charts (a pick page's, or an overlay a door opened on
+     "his chart") reads the answer kept from the last ten minutes first,
+     so the page's redraw every minute, a switch between his charts or a
+     reader going back and forth between picks costs nothing; an overlay
+     opened on one named chart asks every time, as it always has. A chart
+     still being filled is never kept. */
+  function ask(kind, sport, player, season, cached) {
+    const api = kind === "routes" ? "/api/players/routes?sport=" : "/api/players/carries?sport=";
+    const q = `${api}${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}${season ? `&season=${season}` : ""}`;
+    const hit = cached && CACHE.get(q);
+    if (hit && Date.now() - hit.t < CACHE_MS) return Promise.resolve(hit.data);
+    return fetch(q).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((data) => {
+      if (data && !data.filling) CACHE.set(q, { t: Date.now(), data });
+      return data;
+    });
+  }
+  //: How much of his season a chart holds: carries, or passes thrown to him.
+  const vol = (kind, d) => (d && d.games && d.games.length
+    ? Number((d.season_line || {})[kind === "routes" ? "tgt" : "n"]) || 0 : 0);
+  //: A second chart is offered when he has this many in the same season.
+  const SECOND_MIN = 3;
+  /* Only the newest request a chart made is drawn, and none once the
+     chart is gone. */
   function load(c, season) {
     use(c);
     const seq = ++c.seq;
-    const api = S.kind === "routes" ? "/api/players/routes?sport=" : "/api/players/carries?sport=";
-    const q = `${api}${encodeURIComponent(S.sport)}&player=${encodeURIComponent(S.player)}${season ? `&season=${season}` : ""}`;
-    const hit = c.inline && CACHE.get(q);
-    if (hit && Date.now() - hit.t < CACHE_MS) return land(c, seq, hit.data, "");
-    fetch(q).then((r) => (r.ok ? r.json() : null)).catch(() => null)
-      .then((data) => land(c, seq, data, q));
+    ask(S.kind, S.sport, S.player, season, !!c.cand).then((data) => land(c, seq, data));
   }
-  function land(c, seq, data, q) {
+  function land(c, seq, data) {
     if (seq !== c.seq || c.root._cc !== c) return;
     use(c);
     if (data === null) {
@@ -823,11 +840,43 @@
       if (box) box.innerHTML = `<div class="cc-empty">The ${S.kind === "routes" ? "route" : "carry"} chart didn’t load. Try again in a moment.</div>`;
       return;
     }
-    if (q && !data.filling) CACHE.set(q, { t: Date.now(), data });
     S.data = data;
     S.gi = 0;
     S.sel = -1;
+    if (c.counts && vol(S.kind, data)) c.counts[S.kind] = vol(S.kind, data);
     render();
+  }
+  /* HIS OWN CHART FIRST, MEASURED ON HIS OWN SEASON (Ethan, 2026-10-13,
+     the same day: "we are showing only receptions for RBs and only
+     carries for WR and TE"). The chart had been picked from the bet: a
+     back's receptions over drew only where he is thrown to, and a pick
+     page could open a receiver on his carries. Both of his charts are
+     asked for at once, and the one he does more of leads — a back's
+     carries, a receiver's or a tight end's targets, read off the numbers
+     rather than a position label that can be missing. The other is a tap
+     away whenever he has a real share of it (SECOND_MIN in the same
+     season); one he barely has is not offered. With neither on file, the
+     bet's own chart says so. */
+  function probe(c) {
+    use(c);
+    const seq = ++c.seq;
+    Promise.all(c.cand.map((k) => ask(k, S.sport, S.player, null, true))).then((ds) => {
+      if (seq !== c.seq || c.root._cc !== c) return;
+      const got = c.cand.map((k, i) => ({ k, d: ds[i], v: vol(k, ds[i]) })).filter((x) => x.v > 0)
+        .sort((a, b) => b.v - a.v);
+      const lead = got[0];
+      const shown = got.filter((x) => x === lead || (x.v >= SECOND_MIN && x.d.season === lead.d.season));
+      c.kinds = shown.length ? shown.map((x) => x.k) : [c.cand[0]];
+      c.counts = {};
+      shown.forEach((x) => { c.counts[x.k] = x.v; });
+      const want = MEM.get(c.key);
+      const kind = c.kinds.includes(want) ? want : c.kinds[0];
+      c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view, hint: c.S.hint });
+      use(c);
+      const sec = c.root.querySelector(".cc-sec");
+      if (sec) sec.innerHTML = secHTML(c);
+      land(c, seq, ds[c.cand.indexOf(kind)]);
+    });
   }
 
   function close() {
@@ -894,11 +943,16 @@
       document.body.appendChild(ov);
       bind(ov);
     }
+    /* "auto" is a door that does not know his position (the parlay
+       checker's legs): both of his charts are asked for and his own
+       leads, as on a pick page (probe). */
+    const auto = kind === "auto", lg = String(sport || "nfl").toLowerCase();
     const routes = kind === "routes";
     ov._cc = use({ root: ov, inline: false, seq: 0, kinds: null, key: "",
-                   S: { sport: String(sport || "nfl").toLowerCase(), kind: routes ? "routes" : "carries", player, data: null,
+                   cand: auto ? (lg === "nfl" ? ["carries", "routes"] : ["carries"]) : null,
+                   S: { sport: lg, kind: routes ? "routes" : "carries", player, data: null,
                         view: "game", gi: 0, sel: -1, hint: face || "" } });
-    ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${routes ? "Route" : "Carry"} chart — ${player}`)}">
+    ov.innerHTML = `<div class="cc" role="dialog" aria-modal="true" aria-label="${esc(`${auto ? "Charts" : routes ? "Route chart" : "Carry chart"} — ${player}`)}">
       <button class="cc-x" type="button" aria-label="Close">×</button>
       <div class="cc-body"><div class="cc-empty">Loading ${esc(player)}’s ${routes ? "targets" : "carries"}…</div></div></div>`;
     ov.classList.add("open");
@@ -906,7 +960,7 @@
     document.addEventListener("keydown", onKey);
     const x = ov.querySelector(".cc-x");
     if (x) x.focus({ preventScroll: true });
-    load(ov._cc, null);
+    if (auto) probe(ov._cc); else load(ov._cc, null);
   }
 
   /* ---------------- the chart on a pick page ----------------
@@ -919,23 +973,31 @@
      sections; app.js leaves a `.cc-slot` there and this draws the chart
      into it, with no tap.
 
-     WHICH CHART is the bet's: receptions and receiving yards draw where
-     he is thrown to (the NFL's — the college file has no air yards or
-     side); rushing yards, carries and a quarterback's passing plus
-     rushing yards draw where he runs; rushing plus receiving yards and an
-     anytime touchdown draw both, a switch between them, his own first (a
-     wide receiver's or tight end's targets, anyone else's carries). */
+     WHICH CHARTS are his, not the bet's (Ethan, the same day: "we are
+     showing only receptions for RBs and only carries for WR and TE").
+     A bet the charts speak to (rushing, receiving, rush + rec yards, an
+     anytime touchdown, a quarterback's passing plus rushing yards) asks
+     for every chart he could have, and probe() leads with the one he
+     does more of. A quarterback has his runs. College has carries only
+     (its play file has no air yards or side of the field), so a college
+     receiver or tight end gets a chart only on a rushing bet: his few
+     carries are not his story. The order here only breaks a tie and
+     names the chart when he has neither. */
   function kindsFor(sport, mkt, pos) {
-    const m = String(mkt || ""), out = [];
-    if (/rush|anytime/.test(m)) out.push("carries");
-    if (sport === "nfl" && /rec|anytime/.test(m)) out.push("routes");
-    if (out.length > 1 && /^(WR|TE)$/i.test(String(pos || ""))) out.reverse();
-    return out;
+    const m = String(mkt || ""), p = String(pos || "").toUpperCase();
+    const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);
+    const wide = p === "WR" || p === "TE";
+    if (sport !== "nfl") return runs && (!wide || /rush/.test(m)) ? ["carries"] : [];
+    if (p === "QB") return runs ? ["carries"] : [];
+    if (!runs && !catches) return [];
+    const back = p === "RB" || p === "FB" || p === "HB";
+    return wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"];
   }
   function kindBar() {
-    if (!C || !C.inline || !C.kinds || C.kinds.length < 2) return "";
+    if (!C || !C.kinds || C.kinds.length < 2) return "";
+    const n = C.counts || {};
     return `<div class="cc-kinds" role="group" aria-label="Which chart">${C.kinds.map((k) =>
-      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${k === "routes" ? "Routes" : "Carries"}</button>`).join("")}</div>`;
+      `<button type="button" class="cc-chip${k === S.kind ? " on" : ""}" data-ck="${k}" aria-pressed="${k === S.kind}">${k === "routes" ? "Targets" : "Carries"}${n[k] ? `<small>${n[k]}</small>` : ""}</button>`).join("")}</div>`;
   }
   //: The section's own heading, kept short of the page's "why?" fold.
   function secHTML(c) {
@@ -950,8 +1012,8 @@
 
   function pick(c, kind) {
     if (!c.kinds || !c.kinds.includes(kind) || kind === c.S.kind) return;
-    MEM.set(c.key, kind);
-    c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view });
+    if (c.key) MEM.set(c.key, kind);
+    c.S = Object.assign(fresh(c.S.sport, kind, c.S.player), { view: c.S.view, hint: c.S.hint });
     use(c);
     const sec = c.root.querySelector(".cc-sec");
     if (sec) sec.innerHTML = secHTML(c);
@@ -972,18 +1034,17 @@
     const kinds = kindsFor(sport, d.mkt, d.pos);
     if (!kinds.length || !d.cc) { el.hidden = true; return; }
     const key = [sport, d.cc, d.mkt].join("|");
-    const kind = kinds.includes(MEM.get(key)) ? MEM.get(key) : kinds[0];
-    const c = { root: el, inline: true, seq: 0, kinds, key, S: fresh(sport, kind, d.cc) };
+    const c = { root: el, inline: true, seq: 0, cand: kinds, kinds: null, key, S: fresh(sport, kinds[0], d.cc) };
     el._cc = use(c);
     el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>
       <div class="card cc-inline"><div class="cc-body">${kindBar()}${waitHTML()}</div></div>`;
     bind(el);
-    if (typeof IntersectionObserver !== "function") return load(c, null);
+    if (typeof IntersectionObserver !== "function") return probe(c);
     io = io || new IntersectionObserver((es) => es.forEach((e) => {
       if (!e.isIntersecting) return;
       io.unobserve(e.target);
       const k = e.target._cc;
-      if (k && k.root === e.target && !k.seq) load(k, null);
+      if (k && k.root === e.target && !k.seq) probe(k);
     }), { rootMargin: "800px 0px" });
     io.observe(el);
   }

@@ -45,7 +45,9 @@ board prices points + rebounds, points + assists and rebounds + assists
 (step 60; S). Tap any football pick, on Most Likely or anywhere else, and
 its page now draws his route chart or carry chart in place, with no
 button; the player page has it too, and the parlay checker's football
-legs carry the chart buttons (step 61; T). The whole picture, sport by
+legs carry a chart button (step 61; T). Each player's chart leads with
+what he does, a back's carries and a receiver's or tight end's targets,
+whatever the bet (step 62; T). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -55,13 +57,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `Every football pick's page draws his route or carry chart in place`
+**A. The box has today's code.** The first line should end `A player's chart leads with what he does: a back's carries, a receiver's targets`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor ded11f13 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor f18de208 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -350,9 +352,11 @@ curl -s http://127.0.0.1:8000/js/carrychart.js | grep -c "function mount(el)"
 curl -s "http://127.0.0.1:8000/api/players/routes?sport=nfl&player=Amon-Ra%20St.%20Brown" | head -c 300; echo
 ```
 Then on your phone: Most Likely, tap any NFL receiver's or back's pick and
-scroll past Form. The Route chart (or Carry chart) is there, already
-drawn; an anytime touchdown has a Routes | Carries switch. If it says
-"No targets on file", paste K's output.
+scroll past Form. His chart is there, already drawn: a back's Carry chart
+(even on a receptions pick) with a `Carries | Targets` switch showing how
+many of each he has this season; a receiver's or tight end's Route chart,
+with the switch only if he has 3+ carries this season. If it says "No
+targets on file", paste K's output.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2002,6 +2006,26 @@ first). Paste back anything that prints an error or looks off.
     it (the game you picked, what you opened). app.js grew 0.37 KB, inside
     its 495 KB budget. No test was changed;
     `tests/test_the_pick_page_draws_his_chart.py` is new.
+
+62. **A player's chart leads with what he does** (2026-10-13, you: "we
+    are showing only receptions for RBs and only carries for WR and TE").
+    T checks it. Step 61 picked the chart from the bet, so a back's
+    receptions pick drew only where he is thrown to. Now both of his
+    charts are asked for at once and the one he does more of this season
+    leads (his carries against the passes thrown to him, read off the
+    numbers, so a missing position can't flip it). The other is a tap away
+    on a `Carries | Targets` switch that shows both counts, but only when
+    he has 3+ of it in the same season: a receiver's two jet sweeps are
+    not offered. A quarterback has his runs. College has no route chart,
+    so a college receiver or tight end gets a chart only on a rushing bet.
+    The parlay checker's football legs now have one "His charts" button
+    that opens the same way. Checked in Chromium on real players: Saquon
+    Barkley's receptions pick opens on his carries (36, Targets 7); Gibbs
+    on carries (105 to 34); St. Brown and LaPorta on routes with no
+    switch; Hurts on his runs. Two pins changed in my own
+    `tests/test_the_pick_page_draws_his_chart.py` from step 61: the
+    chart-per-market check now checks the charts each player can have,
+    and the parlay door check expects the one "His charts" door.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

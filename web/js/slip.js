@@ -236,17 +236,19 @@
   /* HIS CHARTS, ONE TAP FROM THE LEG (Ethan, 2026-10-13: "I feel like
      there is more then one place we can route the route checker on"). A
      football leg the charts speak to — rushing, receiving, an anytime
-     touchdown — carries the chart doors the player page has; app.js
-     opens them (.cc-open) wherever they are drawn. Routes are the NFL's:
-     the college play file has no air yards or side of the field. */
+     touchdown — carries a door to his charts; app.js opens it (.cc-open)
+     wherever it is drawn. A leg does not know his position, so an NFL
+     door asks for "his chart" (kind auto): both are fetched and the one
+     he does more of leads — a back's carries even on a receptions leg
+     (Ethan: "we are showing only receptions for RBs and only carries for
+     WR and TE"). College has carries only, so its door is on a rushing
+     leg, where his runs are the bet. */
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
-    if (!l.player || (lg !== "nfl" && lg !== "cfb")) return "";
-    const doors = [];
-    if (lg === "nfl" && /rec|anytime/.test(m)) doors.push(["routes", "Route chart"]);
-    if (/rush|anytime/.test(m)) doors.push(["carries", "Carry chart"]);
-    return doors.length ? `<div class="pgr-charts">${doors.map(([k, t]) =>
-      `<button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${k}">${t}</button>`).join("")}</div>` : "";
+    if (!l.player) return "";
+    const door = lg === "nfl" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
+      : lg === "cfb" && /rush/.test(m) ? ["carries", "Carry chart"] : null;
+    return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
   }
 
   /* AN OFF-BOARD READ (engine/slipread, Ethan 2026-10-13: "We can't just not
