@@ -32,6 +32,14 @@
    follows it leg by leg (`track`, /api/ask/track) and settles it in My
    Bets when the box score does.
 
+   AND NOTHING LEFT BLANK (Ethan, 2026-10-13, on "Josh Allen Over 5.5
+   Carries — NOT ON OUR BOARD": "We can't just not give the user
+   information on a prop since it's not on our board ... we need too offer
+   better legs too replace legs with if needed"): a leg no board carries
+   shows our own read of it (engine/slipread) with the tier the Most Likely
+   board's checks would give it, and a weak, against or unpriced leg lists
+   better legs to swap in (slipgrade.replacements).
+
    The file is chosen in app.js (a real file input inside the attach
    sheet's row, so a phone's picker opens on the tap itself), which then
    hands it here with what it owns as `ctx` — the conversation, saving it,
@@ -84,7 +92,7 @@
   };
   const VERDICT = { strong: "Strong", fair: "Fair", weak: "Weak", against: "Against", unpriced: "Not on our board" };
   const FOUND = { likely: "On our Most Likely board", prop: "Our projection", scorer: "Our scorer model",
-    game: "Our game line" };
+    game: "Our game line", read: "Our read — not on our board" };
 
   /* ---- the picture ------------------------------------------------------ */
   /* createImageBitmap reads the file without an <img>; where it is missing,
@@ -201,6 +209,7 @@
     const st = (l.live && l.live.state) || "";
     if (l.kickoff && st !== "live" && st !== "final" && kick(l.kickoff)) meta.push(esc(kick(l.kickoff)));
     const where = l.found && l.prob != null ? `${FOUND[l.found] || ""}${l.tier ? ` · ${esc(l.tier)}` : ""}${
+      readTag(l)}${
       l.sim_hits != null && simN ? ` · hit in ${Number(l.sim_hits).toLocaleString()} of ${simN.toLocaleString()} simulated nights` : ""}` : "";
     const label = v === "unpriced" && l.found ? "No number of ours" : (VERDICT[v] || v);
     const bar = l.prob != null
@@ -213,8 +222,44 @@
         <span class="pgr-pill v-${esc(v)}">${esc(label)}</span></div>
       ${meta.length ? `<div class="pgr-leg-m">${meta.join(" · ")}</div>` : ""}${bar}
       ${liveHTML(l)}${priceHTML(l)}${betterNumHTML(l)}
-      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${whyHTML(l)}
+      ${where ? `<div class="pgr-leg-w">${where}</div>` : ""}${readHTML(l)}${whyHTML(l)}${swapsHTML(l)}
     </li>`;
+  }
+
+  /* AN OFF-BOARD READ (engine/slipread, Ethan 2026-10-13: "We can't just not
+     give the user information on a prop since it's not on our board"): the
+     board's own model run on a leg the board never built, held to the four
+     checks the Most Likely board runs — said as the tier it would earn. */
+  function readTag(l) {
+    const r = l.read;
+    if (l.found !== "read" || !r) return "";
+    const n = (r.passed || []).length;
+    return `${r.would_be && r.makes_board ? ` · would be <b>${esc(r.would_be)}</b> on Most Likely`
+      : " · under our Most Likely floor"} · passes ${n} of 4 checks`;
+  }
+
+  /* A read with no number — the model refused the role, or we keep too few
+     of his games — still says what we know. */
+  function readHTML(l) {
+    const r = l.read;
+    if (l.found !== "read" || !r || l.prob != null) return "";
+    return `<div class="pgr-leg-w">Not on our board${r.why_off ? ` — ${esc(r.why_off)}` : ""}. ${
+      r.refused ? `Our model won’t price it: ${esc(r.refused)}` : "We keep too few of his games to price it."}</div>`;
+  }
+
+  /* BETTER LEGS FOR THIS SPOT (slipgrade.replacements, Ethan 2026-10-13: "we
+     need too offer better legs too replace legs with if needed"): the same
+     bet at a better number, then the board's own picks in the game, each
+     with what the swap does to the ticket by our numbers. */
+  function swapsHTML(l) {
+    const sw = Array.isArray(l.swaps) ? l.swaps : [];
+    if (!sw.length) return "";
+    const tag = (x) => x.kind === "number" ? "Better number" : x.same_player ? "His other bet"
+      : x.tier ? x.tier : x.found === "game" ? "Our game line" : "Our projection";
+    return `<div class="pgr-swaps"><b>Better legs for this spot</b><ul>${sw.map((x) => `<li><span class="pgr-swap-k">${
+      esc(tag(x))}</span> <b>${esc(x.label)}</b>${x.odds ? ` at ${esc(price(x.odds))}` : ""}${x.book ? ` (${esc(x.book)})` : ""} — ours ${
+      pct(x.prob)}${x.ticket_odds ? ` · the ticket pays ${esc(price(x.ticket_odds))}${x.approx ? " (about)" : ""}` : ""}${
+      x.ticket_ev != null ? `, return <b class="${x.ticket_ev >= 0 ? "pos" : "neg"}">${signed(x.ticket_ev)}</b>` : ""}</li>`).join("")}</ul></div>`;
   }
 
   const RESULT = { won: "Won", lost: "Lost", push: "Push" };
@@ -337,7 +382,7 @@
   function whyHTML(l) {
     const facts = Array.isArray(l.why) ? l.why : [];
     if (!facts.length) return "";
-    return `<details class="pgr-why"><summary>Why we say ${esc(pct(l.prob))}</summary><dl>${
+    return `<details class="pgr-why"><summary>${l.prob != null ? `Why we say ${esc(pct(l.prob))}` : "What we found"}</summary><dl>${
       facts.map((f) => `<dt>${esc(f.k)}</dt><dd>${esc(f.t)}</dd>`).join("")}</dl></details>`;
   }
 
@@ -432,10 +477,13 @@
       foot.push(`${s.dropped} leg${s.dropped > 1 ? "s" : ""} on the picture couldn’t be read and ${s.dropped > 1 ? "are" : "is"} left out.`);
     }
     const notes = (s.notes || []).map((n) => `<div class="pgr-note${n.kind === "kill" ? " kill" : ""}"><b>${
-      n.kind === "kill" ? "These can’t both win" : "One bet sold twice"}:</b> ${esc((n.legs || []).join(" + "))}${
+      n.kind === "kill" ? (n.exclusive === false ? "Our parlay engine never pairs these" : "These can’t both win")
+        : "One bet sold twice"}:</b> ${esc((n.legs || []).join(" + "))}${
       n.why ? ` — ${esc(n.why)}` : ""}</div>`).join("");
     const sw = s.swap;
-    const swap = s.weakest ? `<div class="pgr-swap"><b>Weakest leg:</b> ${esc(s.weakest)}.${sw ? ` Our likeliest pick in that game: <b>${
+    const swapped = s.legs.some((l) => l.is_weakest && Array.isArray(l.swaps) && l.swaps.length);
+    const swap = s.weakest ? `<div class="pgr-swap"><b>Weakest leg:</b> ${esc(s.weakest)}.${swapped ? " Better legs for it are listed under it."
+      : sw ? ` Our likeliest pick in that game: <b>${
       esc(sw.player)} ${esc(String(sw.side || "").toLowerCase())} ${esc(num(sw.line))} ${esc(MARKET[sw.market] || sw.market)}</b> — ${
       pct(sw.prob)}${sw.odds ? ` at ${esc(price(sw.odds))}` : ""}.` : ""}</div>` : "";
     return `<div class="pgr-card">

@@ -1015,6 +1015,67 @@ first). Paste back anything that prints an error or looks off.
       spot from its own plate appearances. Say yes and I'll fix it in
       engine/livepicks the same way.
 
+39. **A leg that isn't on our board gets our own read, and a weak leg
+    gets better legs** (2026-10-13, Ethan on "Josh Allen Over 5.5 Carries
+    — NOT ON OUR BOARD": "We can't just not give the user information on
+    a prop since it's not on our board" and "we need too offer better
+    legs too replace legs with if needed"). Both are in the graded card
+    in Ask, for NFL, college, NBA, WNBA, NHL and MLB.
+    * **Our read.** For a player prop no board carries, the checker runs
+      the board's own model for that sport on it, from the history
+      database:
+      * football: the same engine as the board, with his games, last
+        season as the anchor, the defence rated from the database, and
+        the game card's spread, total and weather;
+      * basketball: the minutes model;
+      * hockey: ice time × his rate;
+      * baseball: the park and the opposing starter.
+      Then it asks the four Most Likely checks (model, matchup, market,
+      record) and says the tier the pick would earn. It also reads the
+      game script for that side and says why the board didn't carry it
+      (for Josh Allen: the board doesn't build carries for quarterbacks).
+      It's never journaled, posted or put on a board. A player with fewer
+      than three games in that market still says "not on our board".
+      A player the board's injury lists name as out, or whose props every
+      book took down, gets no number. A questionable one keeps his number,
+      and the card says he's listed. What the read can't see: the build's
+      lineup step (a teammate or his QB out), team pace and pass rate, and
+      his measured usage role. It prices without those, as the board does
+      before those feeds land.
+    * **Better legs.** A leg we call weak or against, or can't price,
+      gets up to three swaps. First comes the same bet at a better
+      number, then the board's own picks in that game. Each is priced
+      exactly as a leg, and the ticket is re-run with it in. A swap is
+      only named when it leaves the ticket better. It's never a bet
+      already on the ticket, never a pair the parlay engine wouldn't
+      build, and never for a game that's started.
+    * **Two small wording fixes.** The summary now says how many legs
+      were read off the board. A pair the parlay engine never builds now
+      says "Our parlay engine never pairs these" instead of "These can't
+      both win", unless they really can't both win.
+
+    Nothing to set. One read-only check: our read on a prop against the
+    live boards and the box's history, as the card would show it. It
+    writes nothing; paste back the output:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.slipread nfl "Josh Allen" rush_att over 5.5 -130
+    ```
+    `"found": "read"` with a projection and the checks means it works.
+    `"found": ""` means the database has under three of his games in that
+    market, or two players fit the name.
+
+39b. **Your calls from step 39.**
+    * **Quarterback carries on the board itself?** The read prices them
+      from his own games, but the board doesn't build a carries line for
+      quarterbacks, so they never reach Most Likely. Adding them would
+      need the market measured first (marketfit), as the other five were.
+      Say if you want that run.
+    * **The football matchup check.** It follows the board's rule: only
+      the scan's lean on him counts. A quarterback's runs and most backup
+      roles have no lean, so their tier tops out at "Strong". The defence
+      card is still shown. Say if you want the model's own matchup step
+      to count when the scan has nothing.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -36,10 +36,18 @@ def _rate_per_min(minutes: list[float], values: list[float]) -> float | None:
     return (sum(v for _, v in pairs) / tm) if tm > 0 else None
 
 
-def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
-    """One prop → a pick card, a near-miss, or a skip (with the reason)."""
+def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
+    """The projection half of `evaluate_prop` — minutes × the per-minute
+    rate × tonight's context, before any price is read: ``{"projection",
+    "proj_min", "base", "grade", "stability", "context", "early_exits",
+    "minutes", "spread"}``, or ``{"skip": why}`` for a role the model will
+    not price (a thin sample, minutes that swing).
+
+    Split out 2026-10-13 so a slip leg this board never priced
+    (engine/slipread) is projected by exactly this arithmetic — the
+    humility clamp and the gate below are betting decisions about a
+    price, and a slip's leg has its own."""
     stat = prop["market"]
-    label = MARKET_LABELS.get(stat, stat)
     minutes = prop.get("minutes") or []
     values = prop.get("values") or []
     # His ROLE's minutes: an older game he left early is out of the base
@@ -50,7 +58,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     base = base_minutes(role, tune)
     rate = _rate_per_min(minutes, values)
     if base is None or rate is None:
-        return {"kind": "skip", "why": "thin sample — under 3 usable games"}
+        return {"skip": "thin sample — under 3 usable games"}
 
     # §5 — a volatile role is unbettable at any modeled edge. This comes
     # before the pricing on purpose: the whole projection is minutes × a
@@ -60,8 +68,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     stability = usage_stability(role)
     volatile = stability_blocks(role, tune)
     if volatile:
-        return {"kind": "skip", "why": volatile, "player": prop["player"],
-                "market": label}
+        return {"skip": volatile, "named": True}
 
     spread = float(prop.get("spread", 0.0))
     grade = minutes_grade(prop.get("is_starter", False), spread,
@@ -111,6 +118,26 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
             f"({minutes[recent[0]]:.0f} min) — kept: a recent early exit predicts a "
             f"quieter game (measured)" if recent else
             "Early exits kept in his minutes")
+
+    return {"projection": proj, "proj_min": proj_min, "base": base, "grade": grade,
+            "stability": stability, "context": context_notes, "early_exits": early_exits,
+            "minutes": minutes, "spread": spread}
+
+
+def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
+    """One prop → a pick card, a near-miss, or a skip (with the reason)."""
+    stat = prop["market"]
+    label = MARKET_LABELS.get(stat, stat)
+    pj = project(prop, tune)
+    if "skip" in pj:
+        out = {"kind": "skip", "why": pj["skip"]}
+        if pj.get("named"):
+            out.update(player=prop["player"], market=label)
+        return out
+    minutes, spread, grade = pj["minutes"], pj["spread"], pj["grade"]
+    stability, proj, context_notes = pj["stability"], pj["projection"], pj["context"]
+    proj_min, base, early_exits = pj["proj_min"], pj["base"], pj["early_exits"]
+    from .context import star_tax
 
     over_odds, under_odds = int(prop["over_odds"]), int(prop["under_odds"])
     line = float(prop["line"])

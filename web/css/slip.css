@@ -129,6 +129,17 @@
   border: var(--hairline) dashed var(--good); overflow-wrap: break-word; }
 .pgr-bn > b:first-child { color: var(--text); }
 .pgr-bn b.pos { color: var(--good); font-family: var(--font-mono); }
+/* Better legs for a weak spot (slipgrade.replacements): a short list under
+   the leg, each with its own tag and what it does to the ticket. */
+.pgr-swaps { margin-top: 6px; padding: 7px 9px; border-radius: var(--radius-sm); font-size: var(--fs-xs);
+  color: var(--text-dim); background: var(--panel); border: var(--hairline) solid var(--border); overflow-wrap: break-word; }
+.pgr-swaps > b { color: var(--text); }
+.pgr-swaps ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.pgr-swaps li b { color: var(--text); }
+.pgr-swaps li b.pos { color: var(--good); font-family: var(--font-mono); }
+.pgr-swaps li b.neg { color: var(--bad); font-family: var(--font-mono); }
+.pgr-swap-k { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 999px; font-size: 10px;
+  font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--gold); border: var(--hairline) solid var(--gold); }
 .pgr-hedge { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
   color: var(--text-dim); background: var(--panel); border: var(--hairline) solid var(--gold); overflow-wrap: break-word; }
 .pgr-hedge b { color: var(--text); }
