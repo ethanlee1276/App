@@ -1136,6 +1136,18 @@ first). Paste back anything that prints an error or looks off.
     market, before touching anything. Basketball, hockey and baseball
     reads aren't replayed yet; their models keep their own records.
 
+42. **The cash-out check** (2026-10-13, Ethan: "add all of them"). On a
+    graded parlay in Ask, and on every saved slip the Live tab follows,
+    a box under the hedge: type the cash-out your book is offering and
+    it's held to what the ticket is worth by our numbers — the ticket's
+    return if the rest win (stake × payout, a pushed leg taken out)
+    times our chance for the rest (live once the games are on, pre-game
+    before). It says take, hold or about even (within 3% of fair), what
+    the book keeps, and what holding risks ("48% to collect $36.00 and
+    52% to collect nothing"). No box on a lost or won ticket, or while
+    a leg in play has no live number yet — never a guess. Nothing to
+    set, nothing to run; it's in the card.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

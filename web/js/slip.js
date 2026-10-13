@@ -356,6 +356,48 @@
     return rows.map((r) => `<p>${r}</p>`).join("");
   }
 
+  /* THE CASH-OUT. A book buys the ticket back for less than it is worth
+     to the book; the only question is how much less. By our numbers the
+     ticket is worth p × W right now — W its return if the rest win (stake
+     × the decimal payout, a pushed leg taken out by the server), p our
+     chance for the rest. Against that an offer is a take, a hold, or a
+     coin flip (within CASH_EVEN of fair). Never advice: the numbers, and
+     what holding risks, said plainly. */
+  const CASH_EVEN = 0.03;
+  function cashOut(stake, pay, p, offer) {
+    const S = Number(stake), P = Number(pay), pp = Number(p);
+    if (!(S > 0) || !(P > 1) || !Number.isFinite(pp)) return `<p class="pgr-hedge-none">Type your stake to see what the ticket is worth by our numbers.</p>`;
+    const W = S * P, fair = W * pp;
+    const rows = [`By our ${pct(pp)} for the rest, the ticket is worth <b>${money(fair)}</b> right now — ${pct(pp)} of the <b>${money(W)}</b> it returns if the rest win.`];
+    const raw = String(offer == null ? "" : offer).replace(/[$,\s]/g, "");
+    const C = Number(raw);
+    if (raw === "" || !Number.isFinite(C) || C < 0) {
+      rows.push("Type the cash-out your book is offering and we’ll hold it to that.");
+    } else if (!(fair > 0)) {
+      rows.push("Any offer beats a ticket we give no chance.");
+    } else {
+      const ratio = C / fair;
+      if (ratio >= 1 + CASH_EVEN) rows.push(`<b class="pos">Take it</b>, by our numbers: ${money(C)} is <b>${money(C - fair)}</b> over what the ticket is worth.`);
+      else if (ratio <= 1 - CASH_EVEN) rows.push(`<b class="neg">Hold</b>, by our numbers: the offer is ${pct(ratio)} of fair — the book keeps about <b>${money(fair - C)}</b>. Holding is ${pct(pp)} to collect ${money(W)} and ${pct(1 - pp)} to collect nothing.`);
+      else rows.push(`<b>About even</b> — the offer is within ${pct(CASH_EVEN)} of fair. Your call: ${money(C)} now, or ${pct(pp)} at ${money(W)}.`);
+    }
+    return rows.map((r) => `<p>${r}</p>`).join("");
+  }
+
+  function cashoutHTML(c) {
+    if (!c || !(c.payout > 1) || c.p == null) return "";
+    return `<div class="pgr-hedge pgr-cash" data-pay="${esc(c.payout)}" data-p="${esc(c.p)}">
+      <div><b>Cash-out check</b> — what the ticket is worth right now by our numbers, against what your book offers.</div>
+      <div class="pgr-hedge-in">
+        <label>Your stake $<input data-cash="stake" inputmode="decimal" value="${c.stake ? esc(c.stake) : ""}" placeholder="10"></label>
+        <label>Book offers $<input data-cash="offer" inputmode="decimal" value="" placeholder="45"></label>
+      </div>
+      <div class="pgr-hedge-out">${cashOut(c.stake, c.payout, c.p, "")}</div>
+      <small>${c.from === "live" ? "Our chance for the rest is as the games stand now — it moves as they do." : "Nothing has started: our chance for the rest is the pre-game one."}${
+        c.approx ? " Legs in one game are priced about, not exactly." : ""}</small>
+    </div>`;
+  }
+
   function hedgeHTML(h) {
     if (!h || !(h.payout > 1)) return "";
     const head = h.plan ? `<b>Hedge plan</b> — if the rest hit, <b>${esc(h.leg)}</b> decides the ticket.`
@@ -490,7 +532,7 @@
       <div class="pgr-top"><div class="pgr-grade g-${letterCls}" aria-label="Grade ${esc(g)}">${esc(g.replace("*", ""))}${
         g.indexOf("*") >= 0 ? "<sup>*</sup>" : ""}</div>
         <div class="pgr-sum"><b>${head}</b>${lines.map((x) => `<span>${x}</span>`).join("")}</div></div>
-      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${shopHTML(s.shop)}${betterHTML(s.better)}${hedgeHTML(s.hedge)}
+      ${nowHTML(s.now)}${alertsHTML(s.alerts)}${shopHTML(s.shop)}${betterHTML(s.better)}${hedgeHTML(s.hedge)}${cashoutHTML(s.cashout)}
       ${simHTML(s.sim, s.n_legs)}
       <ol class="pgr-legs">${s.legs.map(legHTML).join("")}</ol>
       ${pairsHTML(s.pairs)}${notes}${swap}
@@ -662,7 +704,7 @@
     }
     const first = !c.now && c.first_kickoff && kick(c.first_kickoff)
       ? `<div class="pgr-now">Nothing has started · first game ${esc(kick(c.first_kickoff))}</div>` : "";
-    return `<div class="pgr-card pgr-track-card">${head}${done || nowHTML(c.now) || first}${b.result === "pending" ? hedgeHTML(c.hedge) : ""}
+    return `<div class="pgr-card pgr-track-card">${head}${done || nowHTML(c.now) || first}${b.result === "pending" ? hedgeHTML(c.hedge) + cashoutHTML(c.cashout) : ""}
       <ol class="pgr-legs">${(c.legs || []).map(trackLegHTML).join("")}</ol></div>`;
   }
   function draw() {
@@ -674,7 +716,7 @@
       .sort((a, b) => String(b.id).localeCompare(String(a.id)));
     if (!show.length) { host.innerHTML = ""; return; }
     // Typing a hedge price is not interrupted by the minute's redraw.
-    const typing = document.activeElement && host.contains(document.activeElement) && document.activeElement.matches("[data-hedge]");
+    const typing = document.activeElement && host.contains(document.activeElement) && document.activeElement.matches("[data-hedge],[data-cash]");
     if (typing) return;
     const note = T.err === "locked" ? "Following saved slips is part of the membership."
       : T.err === "down" ? "Couldn’t reach the live line — trying again in a minute." : "";
@@ -696,13 +738,22 @@
     }
   }
 
-  /* One listener each for the whole page: the hedge redoes its numbers as
-     the reader types, and Save saves. The cards are redrawn wholesale, so
+  /* One listener each for the whole page: the hedge and the cash-out check
+     redo their numbers as the reader types, and Save saves. The cards are redrawn wholesale, so
      nothing is bound to an element that a redraw would orphan. */
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("input", (e) => {
       const t = e.target;
-      if (!t || !t.matches || !t.matches("[data-hedge]")) return;
+      if (!t || !t.matches) return;
+      if (t.matches("[data-cash]")) {
+        const cbox = t.closest(".pgr-cash");
+        const cout = cbox && cbox.querySelector(".pgr-hedge-out");
+        if (!cout) return;
+        const cv = (k) => String((cbox.querySelector(`[data-cash="${k}"]`) || {}).value || "").replace(/[$,\s]/g, "");
+        cout.innerHTML = cashOut(cv("stake"), cbox.dataset.pay, cbox.dataset.p, cv("offer"));
+        return;
+      }
+      if (!t.matches("[data-hedge]")) return;
       const box = t.closest(".pgr-hedge");
       const out = box && box.querySelector(".pgr-hedge-out");
       if (!out) return;
@@ -715,5 +766,5 @@
     });
   }
 
-  window.QBSlip = { send, card, shrink, track, hedgeOut, slipKey, entryOf, settleOne };
+  window.QBSlip = { send, card, shrink, track, hedgeOut, cashOut, slipKey, entryOf, settleOne };
 })();

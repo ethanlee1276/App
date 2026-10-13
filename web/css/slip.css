@@ -143,6 +143,7 @@
 .pgr-hedge { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
   color: var(--text-dim); background: var(--panel); border: var(--hairline) solid var(--gold); overflow-wrap: break-word; }
 .pgr-hedge b { color: var(--text); }
+.pgr-hedge.pgr-cash { border-color: var(--border); }
 .pgr-hedge-in { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .pgr-hedge-in label, .pgr-save label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs);
   color: var(--text-mute); font-weight: 600; }

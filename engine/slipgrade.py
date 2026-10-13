@@ -1741,6 +1741,62 @@ def hedge(legs: list[dict], slip: dict, payout) -> dict | None:
     return out
 
 
+# ---- the cash-out ---------------------------------------------------------------
+#: An offer within this share of the ticket's value is a coin-flip call.
+CASH_EVEN = 0.03
+
+
+def cashout(legs: list[dict], slip: dict, payout, now: dict | None, chance) -> dict | None:
+    """What the ticket is worth right now by our numbers, for the page to
+    hold a book's cash-out offer against as the reader types it.
+
+    A book's cash-out buys the ticket back for less than it is worth to
+    the book — that is the whole product — and the only honest question
+    is how much less. The ticket's value is its return if every leg left
+    wins (stake × the decimal payout, a pushed leg taken out) times our
+    chance for the rest: as the ticket stands once its games are on (the
+    standing's chance — a prop's live race, a moneyline's live win
+    probability, the legs yet to start at our pre-game numbers), the
+    pre-game ticket chance before anything starts. A lost ticket is worth
+    nothing and a won one is paid in full; neither has an offer to weigh.
+
+    The page does the comparison (slip.js cashOut): the offer against the
+    value, and what the book keeps. A standing that cannot give a number
+    (a leg in play with no live chance yet) gives no box — a cash-out
+    held to a guess is worse than none.
+    """
+    if not legs:
+        return None
+    if now:
+        if now.get("status") != "open" or now.get("chance") is None:
+            return None
+        p, src = float(now["chance"]), "live"
+    else:
+        if chance is None:
+            return None
+        p, src = float(chance), "ours"
+    dec = payout
+    approx = _same_game(legs)
+    pushed = [l for l in legs if (l.get("live") or {}).get("result") == "push"]
+    if pushed and dec:
+        ds = [to_decimal(l.get("odds")) for l in pushed]
+        if all(ds):
+            dec = dec / math.prod(ds)
+        else:
+            approx = True
+    if not dec or dec <= 1:
+        return None
+    stake = _num(slip.get("stake"), 0.0) or 0.0
+    out = {"p": round(p, 4), "from": src, "payout": round(dec, 4), "approx": bool(approx),
+           "stake": round(stake, 2), "left": int((now or {}).get("left") or len(legs)),
+           "won": int((now or {}).get("won") or 0)}
+    if stake > 0:
+        win = stake * dec
+        out["win"] = round(win, 2)
+        out["fair"] = round(win * p, 2)
+    return out
+
+
 def alerts(legs: list[dict]) -> list[str]:
     """What to read before anything else: a leg on a player listed on the
     injury report, and a prop no book is pricing right now (taken down, as
@@ -1789,7 +1845,7 @@ def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
     each leg's price at every book right now and where its game stands —
     a prop in play with its live chance (engine/proplive) — and for the
     ticket where it stands, the best book to place it at, the leg it is
-    better without, a better number on any leg, the hedge for the leg
+    better without, a better number on any leg, the cash-out check, the hedge for the leg
     still to decide it, and the alerts worth reading first.
 
     ``brief`` is the tracker's read of a saved slip (server
@@ -1861,6 +1917,7 @@ def grade(slip: dict, boards: dict, live=None, brief: bool = False) -> dict:
         "shop": None if now else shop(legs, slip.get("total_odds")),
         "better": None if (now or brief) else without(legs, payout, ev),
         "hedge": hedge(legs, slip, payout),
+        "cashout": cashout(legs, slip, payout, now, chance),
         "pairs": [] if brief else pairs(legs),
         "alerts": alerts(legs),
         "first_kickoff": kicks[0] if kicks else "",
