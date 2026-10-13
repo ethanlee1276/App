@@ -14,6 +14,126 @@ file is only what is outstanding right now, and lines get deleted from it
 as they are done. Pruned to that on 2026-10-02 (audit #13): every
 answered or finished block moved there, word for word.
 
+### Start here — 2026-10-13 (Ethan: "save all code for when I'm home")
+
+Everything from 2026-10-12 and 10-13, in order: the parlay checker in
+Ask (live chances, the hedge, a better number, saved slips on the Live
+tab, our read on a leg no board carries, better legs, the cash-out
+check, the last-leg alert) and the subscription check on every open.
+All of it is on the box already; it pulls every five minutes. Lettered,
+so it never clashes with the numbered steps further down that every note
+refers to. Paste back what each one prints, with its letter.
+
+Nothing here changes anything except C (only if email isn't on yet) and
+D's Stripe settings. Every command runs on the box (`ssh` in first).
+
+**A. The box has today's code.** The second line should print `has
+today's code`. If it prints nothing or "Not a valid commit name", the
+box hasn't pulled yet: wait five minutes and run both again.
+```
+git -C /srv/qellys log --oneline -1
+git -C /srv/qellys merge-base --is-ancestor bcfbac4d HEAD && echo "has today's code"
+```
+
+**B. Health check** (paste all of it):
+```
+uptime; free -m
+ps -eo pid,ni,pcpu,pmem,etime,args --sort=-pcpu | head -8
+for p in / /js/app.js /data/recommendations.json /data/record.json; do curl -s -o /dev/null -w "$p %{http_code} %{size_download}B %{time_total}s\n" http://127.0.0.1:8000$p; done
+journalctl -u qellys --since "2 hours ago" --no-pager | grep -iE "refresh|cycle|took|build|slip watch" | tail -15
+```
+
+**C. Is email on?** "Forgot password?" and the new last-leg email both
+need it:
+```
+curl -s http://127.0.0.1:8000/api/account/me; echo
+```
+`"reset_by_email": true` means it's on; go to D. `false` means step 26
+below isn't done yet. It takes about ten minutes: a Resend account, its
+key put on the box with `sudo ./deploy/setenv.sh QB_RESEND_KEY`, a
+restart, then the test email in 26 D. Until then the Forgot page sends
+people to qellysbook@gmail.com, and the Live tab says email isn't
+switched on instead of offering the last-leg switch.
+
+**D. Stripe** (step 37 says why). Three settings in Stripe's dashboard,
+nothing to type on the box:
+* Developers → Webhooks → your endpoint → **Send test webhook**. It
+  should say `200`. If it's blocked, Bot Fight Mode is on; docs/DEPLOY.md
+  says how to turn it off.
+* Settings → Billing → **Customer portal**: "Update payment methods" and
+  "Invoice history" switched on. That's how a locked customer pays.
+* Settings → Billing → **Subscriptions and emails**: "Send emails when
+  card payments fail" switched on.
+
+Then two read-only checks. They print statuses, counts and times, never
+an email. Open the site on a subscribed account first; the second line
+should then print under 60 (seconds since Stripe was last asked):
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine import accounts as A, billing as B; c=A.connect(); B.init(c); n=time.time(); print([tuple(r) for r in c.execute('SELECT status, COUNT(*), SUM(checked_at IS NOT NULL), ROUND(MAX(?-checked_at)/3600.0,1) FROM subscriptions GROUP BY status', (n,))])"
+cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine import accounts as A, billing as B; c=A.connect(); B.init(c); print(c.execute('SELECT ROUND(?-MAX(checked_at)) FROM subscriptions', (time.time(),)).fetchone()[0])"
+```
+In the first, each tuple is (status, accounts, read from Stripe, hours
+since the oldest read). Every status except `canceled` and `none` should
+have the third number equal to the second, and the last under 6.
+
+**E. The parlay checker's measurements** (read-only, a few minutes each;
+paste back the tables). Steps 38, 39 and 41 say how to read them:
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.proplivefit
+cd /srv/qellys && sudo -u qellys python3 -m engine.slipread nfl "Josh Allen" rush_att over 5.5 -130
+cd /srv/qellys && sudo -u qellys python3 -m engine.slipreadfit --sport nfl --seasons 2023 2024 2025
+cd /srv/qellys && sudo -u qellys python3 -m engine.slipreadfit --sport cfb --seasons 2024 2025 --limit 3000
+```
+* The first replays the live chance on three NFL seasons. If "blend"
+  beats "ours" by much, say so; changing the model is your call.
+* The second is our read on a prop no board carries. `"found": "read"`
+  with a projection means it works.
+* The last two replay that read on seasons already played. "ours" should
+  beat "last8" on Brier (lower is better) in every market, and each
+  calibration band should land near what it said.
+
+**F. Walk it on your phone.**
+1. In Ask, tap the paperclip, then **Grade a parlay screenshot**, with any
+   slip.
+2. On the card, check the grade, "Why we say X%" under a leg, any leg our
+   model reads off the board, the better legs, the hedge and the
+   cash-out box.
+3. Type a stake and tap **Save to My Bets**.
+4. Open the Live tab. The slip is under **Your saved slips**, and the
+   email switch sits above it. Tick it if C said email is on.
+
+**G. After a game night with a saved slip open** (step 44). The first
+prints a line for each minute a slip reached its last leg; the second
+lists every alert noted, and `mailed` 1 means the email went:
+```
+journalctl -u qellys --since "12 hours ago" --no-pager | grep "slip watch"
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import accounts as A; c = A.connect(); print([tuple(r) for r in c.execute('SELECT user_id, bet_id, fired_at, mailed FROM slip_alerts')])"
+```
+During an NHL game, the new hockey box file (step 38). It prints when it
+was written, each game, and how many player lines it has:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/data/live_nhl_box.json')); print(d['generated_at'], [(g['away']+'@'+g['home'], g['state'], len(g['players'])) for g in d['games']])"
+```
+
+**H. Your calls.** Answer any time; nothing breaks while they wait.
+* **UFC in the parlay checker?** A fight leg reads "not on our board"
+  today (step 38b).
+* **Quarterback carries on the board itself?** The market gets measured
+  first, as the other five were (step 39b).
+* **The football matchup check.** Should the model's own matchup step
+  count when the scan has no lean on him (step 39b)?
+* **College in the off-board read's lineup and usage steps** (step 43).
+* **A fresh odds pull of a slip's own markets** when our price is old.
+  A 4-leg ticket over two games costs about 3–4 credits, from the same
+  daily budget the board uses, so you'd pick a daily cap (step 36,
+  round three).
+* **Cancel at the end of the month, or at once?** Stripe's portal
+  setting (step 37). The site handles either.
+* **The last-leg alert on the Alerts bell too?**
+
+The numbered steps below, from 2026-10-07 to 10-13, are the full list;
+anything there not marked Done still applies, in order.
+
 ### Tonight — 2026-10-07 evening, in order (Ethan: "i am home so give me all the code needed to run")
 
 Seven steps, top to bottom. Every command runs on the box (`ssh` in
