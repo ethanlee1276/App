@@ -50,7 +50,10 @@ what he does, a back's carries and a receiver's or tight end's targets,
 whatever the bet (step 62; T). A quarterback's pick now draws every
 throw he made, where it went and whether it was caught, and the sacks he
 took (step 63; U). A college receiver's pick draws every pass thrown his
-way that the play file names, 2025 on (step 64; V). The whole picture, sport by
+way that the play file names, 2025 on (step 64; V). A baseball pick now
+draws the hitter's hit tracker (every ball he put in play, where it
+landed and how hard) or the pitcher's pitch chart (every pitch, where it
+crossed the plate and what came of it) (step 65; W). The whole picture, sport by
 sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
@@ -60,13 +63,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `A college receiver's pick draws every pass thrown his way: the target chart`
+**A. The box has today's code.** The first line should end `A baseball pick draws his hit tracker or his pitch chart`
 (or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 8f11eec1 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 3142ee86 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -395,6 +398,36 @@ your phone: CFB, Most Likely, tap any college receiver's pick. His Target
 chart is drawn after Form: each catch a line straight up from the line
 as long as the yards it gained, each miss the file names a ring at the
 line, in the order thrown.
+
+**W. The hit tracker and the pitch chart** (step 65; read-only, seconds).
+Nothing to run: the box sees the two new baseball tables empty and reads
+this season's newest 400 finals from MLB's play-by-play within minutes
+of pulling, then 400 more every night until the season is in (about a
+week; the newest games come first, so this postseason and September are
+on the charts from the first read). The fill's own log (the last
+command) says `charts: empty — MLB 2026 mlb_pitches; reading them now`,
+then `MLB 2026: 400 games, … plate appearances, … pitches; … older games
+left for the nightly`. The first command counts what is stored per
+season; the second and third are what the page asks for (any hitter and
+any starter who played this month will do):
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import db; c=db.connect(); print(c.execute('SELECT season, COUNT(DISTINCT game_pk), COUNT(*) FROM mlb_pa GROUP BY season').fetchall(), c.execute('SELECT season, COUNT(*) FROM mlb_pitches GROUP BY season').fetchall())"
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=spray&sport=mlb&player=Aaron%20Judge" | head -c 300; echo
+curl -s "http://127.0.0.1:8000/api/players/chart?kind=pitches&sport=mlb&player=Tarik%20Skubal" | head -c 300; echo
+sudo -u qellys tail -5 /srv/qellys/data/cache/weekly_chartfill.log
+```
+Empty lists or `{"filling": true}` mean it is still reading: wait ten
+minutes. `MLB 2026: not read — …` in the log means MLB's Stats API
+refused the box; paste it (the box tries again on its own a while later). Then on your phone: MLB, Most Likely, tap any
+hitter's pick (hits, total bases, home runs, RBIs, runs, walks). His Hit
+tracker is drawn after Form: every ball he put in play where it landed,
+gold for a home run, green for a hit, grey for an out, with the exit
+velocity, launch angle and distance in the list under it; the season tab
+splits the field into pulled, up the middle and opposite field. A
+strikeouts or outs pick draws the pitcher's Pitch chart instead: every
+pitch from the catcher's view, coloured by called strike, whiff, foul,
+in play or ball, his pitch mix with speed, whiff rate and CSW, and the
+season's share of pitches in each part of the zone.
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
 anything there not marked Done still applies, in order.
@@ -2128,6 +2161,43 @@ first). Paste back anything that prints an error or looks off.
     "7 carries, 0 targets". My own `tests/test_the_pick_page_draws_his_chart.py`
     now gives college players both charts and a college receiving bet a
     slot and door. New: `tests/test_a_target_chart_for_every_college_receiver.py`.
+65. **A baseball pick draws his hit tracker or his pitch chart** (2026-10-13,
+    you: "Can we do a hit tracker for mlb?" ... "Yes do all of them"). W
+    checks it. MLB's free play-by-play, the same feed the nightly already
+    reads for velocity and CSW, carries every plate appearance (batter,
+    his side, pitcher, his hand, the result, the runs driven in) and, on a
+    ball in play, the league's own exit velocity, launch angle, distance,
+    batted-ball type and where it landed; and every pitch (type, speed,
+    where it crossed the plate, the umpire's call). Two new tables hold it:
+    `mlb_pa`, one row per plate appearance, and `mlb_pitches`, one row per
+    pitch (ids only, so a season stays near 60 MB). The nightly reads
+    yesterday's finals and 400 older ones a night, newest first, until
+    the season is in; the chart filler (step 52) reads the first 400 the
+    moment it sees the tables empty. The backfill keeps no copy of an
+    older game's play-by-play in data/cache (a season of them would be
+    about 1.5 GB sitting there for a month); yesterday's games keep theirs,
+    as before, for the nightly's velocity reads. A hitter's pick draws his Hit
+    tracker: one game's balls in play on the field with every plate
+    appearance listed (a walk or a strikeout has no ball in play: listed,
+    not drawn), or the season with the share he pulled, hit up the middle
+    and went the other way, his hard-hit rate (95+ mph, the league's
+    line), sweet-spot rate (8-32 degrees), and splits by batted-ball type,
+    direction and pitcher's hand. A strikeouts or outs pick draws the
+    pitcher's Pitch chart: one start's pitches from the catcher's view in
+    his average strike zone, every batter he faced, the start's pitch mix;
+    or the season's share of pitches in each of the zone's nine boxes and
+    the four corners outside it, his whiff rate, zone rate, top speed and
+    his fastball's speed start by start. Nothing on either chart is a
+    model: no expected stats and no barrels (the league's barrel table is
+    not in the feed, and a guessed one would be printed as if it were the
+    league's). The drawings load as their own small file (js/chart-mlb.js)
+    the first time a baseball chart is drawn, so the first paint does not
+    grow. Every baseball pick gets the chart slot and the parlay checker's
+    "His charts" door. Pins changed and told to you: my own
+    `tests/test_the_pick_page_draws_his_chart.py` now gives every baseball
+    bet a slot (it said only football did), and the chart filler's test
+    and the maintenance test learned the baseball tables (added, nothing
+    loosened). New: `tests/test_mlb_hit_tracker_and_pitch_chart.py`.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

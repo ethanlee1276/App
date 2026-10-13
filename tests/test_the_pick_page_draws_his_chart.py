@@ -101,10 +101,11 @@ def test_a_slot_for_every_football_bet_the_charts_speak_to():
         return
     # A passing bet has a chart since the passing chart, and a college
     # receiving bet since the college target chart (both 2026-10-13).
+    # Every baseball bet has one since the hit tracker and pitch chart.
     for k in ("rec", "yds", "rush", "att", "both", "td", "qbrun", "pass", "ints", "cfbRush", "cfbTd", "cfbRec",
-              "board"):
+              "board", "mlb"):
         assert got[k].startswith('<div class="cc-slot"'), k
-    for k in ("kick", "tackles", "mlb", "nba", "nobody"):
+    for k in ("kick", "tackles", "nba", "nobody"):
         assert got[k] == "", (k, got[k])
     assert 'data-cc="Sam LaPorta" data-lg="nfl" data-mkt="receptions" data-pos="TE"' in got["rec"]
     assert 'data-lg="cfb"' in got["cfbRush"] and 'data-lg="nfl"' in got["board"], "the board's league by default"

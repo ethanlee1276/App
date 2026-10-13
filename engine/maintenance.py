@@ -1770,6 +1770,27 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             ingest_ok = False
             log(f"  ⚠️  results ingest failed: {exc}")
 
+    # THE HIT TRACKER AND THE PITCH CHART (engine/mlb/charts, 2026-10-13,
+    # Ethan: "Can we do a hit tracker for mlb?"): every final in the same
+    # range, each read once, and this season's finals not yet read, a
+    # night's budget at a time (charts.BACKFILL_PER_NIGHT) until none are
+    # left. A failed read is a line, never the end of the chores.
+    if today.month >= 3:
+        try:
+            from . import db as _mdb
+            from .mlb import charts as _mlbc
+            _mc = _mdb.connect()
+            if start <= yesterday:
+                got = _mlbc.ingest_range(_mc, start.isoformat(), yesterday.isoformat())
+                if got["games"] or got["failed"]:
+                    log(f"  mlb charts: {got['games']} game(s), {got['pas']:,} plate appearances, "
+                        f"{got['pitches']:,} pitches" + (f", {got['failed']} unread" if got["failed"] else ""))
+            back = _mlbc.backfill(_mc, today.year, yesterday.isoformat())
+            if back["games"] or back["failed"]:
+                log(f"  mlb charts {today.year}: {back['games']} more game(s) read, {back['left']} left")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  mlb charts failed: {exc}")
+
     try:
         from . import db, ledger
         lconn = ledger.connect()

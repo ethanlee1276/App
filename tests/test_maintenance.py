@@ -94,6 +94,14 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(passes, "backfill_nfl", lambda conn, season: 0)
     monkeypatch.setattr(passes, "charting_for", lambda season: {})
     monkeypatch.setattr(passes, "nfl_behind", lambda conn, season, today: False)
+    # And the MLB hit tracker's and pitch chart's (2026-10-13): the night's
+    # finals and the season backfill read statsapi play-by-play.
+    from engine.mlb import charts as mlbcharts
+    monkeypatch.setattr(mlbcharts, "ingest_range",
+                        lambda conn, start, end, fetch=None: {"games": 0, "pas": 0, "pitches": 0, "failed": 0})
+    monkeypatch.setattr(mlbcharts, "backfill",
+                        lambda conn, season, through, budget=0, fetch=None: {"games": 0, "pas": 0, "pitches": 0,
+                                                                             "failed": 0, "left": 0})
     # The charts' every-cycle catch-up (2026-10-13) starts a real child when
     # a chart table is empty; the suite's sandbox already keeps it from
     # starting one, and a direct run of this file must not either.

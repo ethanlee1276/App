@@ -251,3 +251,49 @@
 .cc-more > summary::after { content: "+"; margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .cc-more[open] > summary::after { content: "−"; }
 .cc-more > summary:hover { color: var(--text); }
+
+/* baseball (2026-10-13, js/chart-mlb.js): the hit tracker's field, top
+   down, every ball where it landed; the pitch chart's strike zone from
+   behind the catcher, every pitch where it crossed the plate. */
+/* a square drawing on a desktop's wide column: capped, centred by the
+   drawing's own aspect */
+.mb-svg, .mp-svg { max-height: 460px; }
+.mb-ray { stroke: var(--text-faint); stroke-width: 1.2; stroke-dasharray: 5 6; }
+.mb-grass { fill: color-mix(in oklab, var(--panel-3) 70%, var(--bg)); }
+.mb-dirt { fill: color-mix(in oklab, var(--warn) 14%, var(--panel-2)); }
+.mb-base { fill: none; stroke: var(--border); stroke-width: 1.2; }
+.mb-foul, .mb-wall { fill: none; stroke: var(--border); stroke-width: 1.4; }
+.mb-wall { stroke: var(--text-mute); stroke-width: 2; }
+.mb-arc { stroke-width: 1.3; opacity: .5; }
+.mb-arc.hr { stroke: var(--brand); }
+.mb-arc.h { stroke: var(--good); }
+.mb-arc.o { stroke: var(--text-mute); opacity: .3; }
+.mb-arc.sel { stroke-width: 2.6; opacity: .95; }
+.mb-ball { stroke: var(--panel); stroke-width: 1.2; }
+.mb-ball.hr { fill: var(--brand); }
+.mb-ball.h { fill: var(--good); }
+.mb-ball.o { fill: var(--text-mute); }
+.mb-ball.faint { opacity: .55; stroke-width: .6; }
+.mb-ball.sel { stroke: var(--text); stroke-width: 2.4; }
+.cc-legend .dt.mb-hr { background: var(--brand); }
+.mp-zone { fill: none; stroke: var(--text); stroke-width: 2; }
+.mp-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+.mp-plate { fill: var(--panel-2); stroke: var(--text-mute); stroke-width: 1.4; }
+.mp { stroke: var(--panel); stroke-width: 1; opacity: .9; }
+.mp.c { fill: var(--warn); }
+.mp.w { fill: var(--bad); }
+.mp.x { fill: var(--good); }
+.mp.f { fill: var(--text-mute); }
+.mp.b { fill: none; stroke: var(--text-mute); stroke-width: 1.6; }
+.mp.sel { stroke: var(--text); stroke-width: 2.4; opacity: 1; }
+.cc-legend .dt.mp-c { background: var(--warn); }
+.cc-legend .dt.mp-w { background: var(--bad); }
+.cc-legend .dt.mp-x { background: var(--good); }
+.cc-legend .dt.mp-f { background: var(--text-mute); }
+.cc-legend .dt.mp-b { border: 1.5px solid var(--text-mute); }
+.mp-cell { fill: var(--brand); stroke: var(--border); stroke-width: 1; }
+.mp-lbl { font-size: 13px; }
+.mp-velo { margin-top: 12px; }
+.mp-velo-h { font: 600 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
+.mp-line { fill: none; stroke: var(--brand); stroke-width: 2; }
+.mp-pt { fill: var(--brand); }

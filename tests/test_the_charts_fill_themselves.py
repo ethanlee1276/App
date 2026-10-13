@@ -129,6 +129,48 @@ def test_a_season_played_with_no_chart_rows_is_owed_and_nothing_else_is():
     assert CF.owed(Broken(), TODAY) == [], "a database that cannot answer owes nothing"
 
 
+def test_a_baseball_season_with_no_pitches_is_owed_and_one_nights_finals_are_read():
+    """The hit tracker and the pitch chart (2026-10-13) fill the same way:
+    owed when this season has a final and no pitch is stored, read one
+    night's budget of finals (newest first, engine/mlb/charts.backfill),
+    and never owed again once a pitch is stored. Football's answer never
+    depends on baseball's tables."""
+    from engine.mlb.sources import mlbstats, pbp
+    conn = D.connect(":memory:")
+    assert CF.owed(conn, TODAY) == []
+    D.upsert_games(conn, [{"sport": "mlb", "season": 2026, "period": "2026-10-11", "game_id": "776001",
+                           "home": "NYY", "away": "DET", "home_score": 4.0, "away_score": 2.0,
+                           "date": "2026-10-11"}])
+    assert CF.owed(conn, TODAY) == [("mlb", 2026, "mlb_pitches")]
+    # Baseball's season is the calendar year; February is still last year's.
+    assert CF.mlb_season_of(dt.date(2027, 2, 20)) == 2026 and CF.mlb_season_of(dt.date(2026, 3, 1)) == 2026
+    side = lambda tid, ab: {"team": {"id": tid, "abbreviation": ab}}  # noqa: E731
+    schedule = {"dates": [{"games": [{"gamePk": 776001, "officialDate": "2026-10-11", "gameType": "D",
+                                      "status": {"abstractGameState": "Final", "codedGameState": "F"},
+                                      "teams": {"home": side(147, "NYY"), "away": side(116, "DET")}}]}]}
+    play = {"result": {"event": "Single", "eventType": "single", "rbi": 0},
+            "about": {"atBatIndex": 0, "halfInning": "bottom", "inning": 1},
+            "matchup": {"batter": {"id": 592450, "fullName": "Aaron Judge"}, "batSide": {"code": "R"},
+                        "pitcher": {"id": 669373, "fullName": "Tarik Skubal"}, "pitchHand": {"code": "L"}},
+            "playEvents": [{"isPitch": True, "pitchNumber": 1, "details": {"call": {"code": "D"},
+                                                                         "type": {"code": "FF"}},
+                            "count": {"balls": 0, "strikes": 0},
+                            "pitchData": {"startSpeed": 97.0, "zone": 5, "coordinates": {"pX": 0.1, "pZ": 2.4}},
+                            "hitData": {"launchSpeed": 101.0, "launchAngle": 12, "totalDistance": 240,
+                                        "trajectory": "line_drive", "coordinates": {"coordX": 150.0, "coordY": 110.0}}}]}
+    asked = []
+    old = (mlbstats.fetch_schedule, pbp.fetch_playbyplay)
+    mlbstats.fetch_schedule = lambda start, end: asked.append((start, end)) or schedule
+    pbp.fetch_playbyplay = lambda pk: {"allPlays": [play]}
+    try:
+        lines = CF.fill(conn, CF.owed(conn, TODAY), log=lambda *_: None)
+    finally:
+        mlbstats.fetch_schedule, pbp.fetch_playbyplay = old
+    assert lines == ["MLB 2026: 1 game, 1 plate appearance, 1 pitch"], lines
+    assert asked and asked[0][0] == "2026-03-01", "the whole season's finals are asked for"
+    assert CF.owed(conn, TODAY) == [], "a season with a stored pitch is the nightly's from here"
+
+
 def test_stored_says_whether_anyone_in_the_league_has_a_row():
     conn = D.connect(":memory:")
     assert not CR.stored(conn, "nfl") and not CR.stored(conn, "nfl", table="targets")

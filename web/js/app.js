@@ -15957,10 +15957,11 @@ function ccLoad() {
    the passing chart a passing bet — leaves a slot; js/carrychart.js
    decides which chart and draws it there (`mount`, from the settle
    pass). College has carries and, from 2025, the targets its play file
-   names. */
+   names. Every baseball bet has one: a hitter's hit tracker or a
+   pitcher's pitch chart. */
 function chartSlot(r) {
   const lg = (r && r.sport) || state.sport, m = String((r && r.market) || "");
-  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" && /rush|rec|anytime/.test(m);
+  const ok = lg === "nfl" ? /rush|rec|anytime|pass/.test(m) : lg === "cfb" ? /rush|rec|anytime/.test(m) : lg === "mlb";
   return ok && r.player ? `<div class="cc-slot" data-cc="${escapeAttr(r.player)}" data-lg="${lg}" data-mkt="${escapeAttr(m)}" data-pos="${escapeAttr(r.position || "")}"></div>` : "";
 }
 function mountCharts(root) {

@@ -34,6 +34,26 @@ def _passes(conn, sport, player, season):
     return passes.chart(conn, player, season)
 
 
+def _spray(conn, sport, player, season):
+    from .mlb import charts as M
+    return M.hits_chart(conn, player, season)
+
+
+def _mlb_pitches(conn, sport, player, season):
+    from .mlb import charts as M
+    return M.pitches_chart(conn, player, season)
+
+
+def _any_row(table):
+    """A league table with no sport column: has it any rows at all?"""
+    def stored(conn, sport):
+        try:
+            return bool(conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone())
+        except Exception:                                          # noqa: BLE001
+            return True
+    return stored
+
+
 def _rows_in(table):
     def stored(conn, sport):
         from .carries import stored as _stored
@@ -47,6 +67,11 @@ KINDS = {
     "carries": (("nfl", "cfb"), _carries, _rows_in("carries")),
     "routes": (("nfl", "cfb"), _routes, _rows_in("targets")),
     "passes": (("nfl",), _passes, _rows_in("passes")),
+    # Baseball's pair (2026-10-13, Ethan: "Can we do a hit tracker for
+    # mlb?"): every ball a hitter put in play, and every pitch a pitcher
+    # threw (engine/mlb/charts).
+    "spray": (("mlb",), _spray, _any_row("mlb_pa")),
+    "pitches": (("mlb",), _mlb_pitches, _any_row("mlb_pitches")),
 }
 
 

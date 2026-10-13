@@ -243,12 +243,15 @@
      (Ethan: "we are showing only receptions for RBs and only carries for
      WR and TE"). A quarterback's throws are his (the passing chart), and
      college has its carries and, from 2025, the targets its play file
-     names, so its door asks for his chart the same way. */
+     names, so its door asks for his chart the same way. A baseball leg
+     opens the bet's side of the ball: a pitcher's pitch chart on his
+     strikeouts or outs, a hitter's hit tracker on anything else. */
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase(), m = String(l.market || "");
     if (!l.player) return "";
     const door = lg === "nfl" && /rush|rec|anytime|pass/.test(m) ? ["auto", "His charts"]
-      : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"] : null;
+      : lg === "cfb" && /rush|rec|anytime/.test(m) ? ["auto", "His charts"]
+        : lg === "mlb" ? (/^(strikeouts|outs)$/.test(m) ? ["pitches", "Pitch chart"] : ["spray", "Hit tracker"]) : null;
     return door ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="${door[0]}">${door[1]}</button></div>` : "";
   }
 

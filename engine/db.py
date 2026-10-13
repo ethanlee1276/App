@@ -360,6 +360,33 @@ CREATE TABLE IF NOT EXISTS passes (
     PRIMARY KEY (sport, season, period, game_id, play_id)
 );
 CREATE INDEX IF NOT EXISTS passes_player ON passes (sport, player, season);
+-- MLB PLATE APPEARANCES AND PITCHES (2026-10-13, Ethan: "Can we do a hit
+-- tracker for mlb?"). One row per completed plate appearance off the
+-- Stats API play-by-play, with the ball in play where there was one (exit
+-- velocity, launch angle, distance, trajectory, where it landed), and one
+-- row per pitch (type, speed, spin, where it crossed the plate, the zone,
+-- the call). engine/mlb/charts.py fills both and draws the hit tracker
+-- and the pitch chart from them. A pitch carries ids only; the names live
+-- on the plate appearance.
+CREATE TABLE IF NOT EXISTS mlb_pa (
+    game_pk INTEGER, at_bat INTEGER, season INTEGER, date TEXT,
+    batter_id INTEGER, batter TEXT, bat_side TEXT, pitcher_id INTEGER, pitcher TEXT,
+    pitch_hand TEXT, team TEXT, opponent TEXT, home INTEGER, inning INTEGER, half TEXT,
+    event TEXT, event_type TEXT, rbi INTEGER, pitches INTEGER, launch_speed REAL,
+    launch_angle REAL, distance REAL, trajectory TEXT, hardness TEXT, location TEXT,
+    coord_x REAL, coord_y REAL,
+    PRIMARY KEY (game_pk, at_bat)
+);
+CREATE INDEX IF NOT EXISTS mlb_pa_batter ON mlb_pa (batter_id, season);
+CREATE INDEX IF NOT EXISTS mlb_pa_pitcher ON mlb_pa (pitcher_id, season);
+CREATE TABLE IF NOT EXISTS mlb_pitches (
+    game_pk INTEGER, at_bat INTEGER, n INTEGER, season INTEGER, date TEXT,
+    pitcher_id INTEGER, batter_id INTEGER, bat_side TEXT, inning INTEGER,
+    pitch_type TEXT, speed REAL, spin REAL, px REAL, pz REAL, sz_top REAL, sz_bot REAL,
+    zone INTEGER, code TEXT, balls INTEGER, strikes INTEGER,
+    PRIMARY KEY (game_pk, at_bat, n)
+);
+CREATE INDEX IF NOT EXISTS mlb_pitches_pitcher ON mlb_pitches (pitcher_id, season);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness
@@ -1009,6 +1036,18 @@ def upsert_passes(conn, rows: list[dict]) -> int:
 def upsert_ngs_passing(conn, rows: list[dict]) -> int:
     """The league's passing tracking file, row for row (engine/passes.ngs_rows)."""
     return _upsert(conn, "ngs_passing", NGS_PASS_COLS, rows)
+
+
+def upsert_mlb_pa(conn, rows: list[dict]) -> int:
+    """Every plate appearance on the hit tracker (engine/mlb/charts.py)."""
+    from .mlb.charts import PA_COLS
+    return _upsert(conn, "mlb_pa", PA_COLS, rows)
+
+
+def upsert_mlb_pitches(conn, rows: list[dict]) -> int:
+    """Every pitch on the pitch chart (engine/mlb/charts.py)."""
+    from .mlb.charts import PITCH_COLS
+    return _upsert(conn, "mlb_pitches", PITCH_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

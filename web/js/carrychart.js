@@ -105,6 +105,11 @@
     routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where he’s thrown to" },
     passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where he throws",
               sec: "every throw he made: how far, which side, complete or not, and the sacks he took" },
+    spray: { chip: "Hits", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
+             where: "where he hits it",
+             sec: "every ball he put in play: how hard, how high, how far and where it landed" },
+    pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "how he attacks",
+               sec: "every pitch he threw: where it crossed the plate, what it was and what the batter did with it" },
   };
   /* A league whose file says less than the NFL's gets its own names for
      the same chart: college targets have no air yards, no side of the
@@ -115,6 +120,24 @@
   const kindOf = (kind, sport) => KIND[`${kind}@${sport}`] || KIND[kind] || KIND.carries;
   //: The charts drawn by registered parts (`plugView`), by kind.
   const DRAW = {};
+  /* A LEAGUE'S CHARTS IN A MODULE OF THEIR OWN, loaded the first time one
+     is drawn (a football page never downloads baseball's drawing): the
+     module registers its parts through `QBCarry.plug`. Listeners, not
+     handler properties: the page's CSP forbids inline handlers. */
+  const PLUG = { spray: "mlb", pitches: "mlb" };
+  const plugs = {};
+  function need(kind) {
+    const f = PLUG[kind];
+    if (!f || DRAW[kind]) return Promise.resolve(true);
+    plugs[f] = plugs[f] || new Promise((ok) => {
+      const el = document.createElement("script");
+      el.src = `js/chart-${f}.js`;
+      el.addEventListener("load", () => ok(true));
+      el.addEventListener("error", () => { plugs[f] = null; ok(false); });
+      document.head.appendChild(el);
+    });
+    return plugs[f];
+  }
 
   /* ---------------- geometry ---------------- */
   function proj(x, y, ymax) {
@@ -1177,7 +1200,12 @@
     S.gi = 0;
     S.sel = -1;
     if (c.counts && vol(S.kind, data)) c.counts[S.kind] = vol(S.kind, data);
-    render();
+    if (!PLUG[S.kind] || DRAW[S.kind]) return render();
+    need(S.kind).then(() => {
+      if (seq !== c.seq || c.root._cc !== c) return;
+      use(c);
+      render();
+    });
   }
   /* HIS OWN CHART FIRST, MEASURED ON HIS OWN SEASON (Ethan, 2026-10-13,
      the same day: "we are showing only receptions for RBs and only
@@ -1321,6 +1349,10 @@
     const m = String(mkt || ""), p = String(pos || "").toUpperCase();
     const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);
     const wide = p === "WR" || p === "TE";
+    /* Baseball's chart is the bet's side of the ball: a pitcher's
+       strikeouts or outs draw every pitch he threw, a hitter's bet every
+       ball he put in play (engine/mlb/charts). */
+    if (sport === "mlb") return /^(strikeouts|outs)$|pitcher|earned_runs|_allowed/.test(m) ? ["pitches"] : m ? ["spray"] : [];
     if (sport !== "nfl" && sport !== "cfb") return [];
     /* A quarterback's own chart is his throws, whatever the bet; his runs
        are the other (2026-10-13). A passing bet with no position on the
@@ -1389,7 +1421,11 @@
     io.observe(el);
   }
 
-  window.QBCarry = { open, close, mount, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
+  /* What a league's own module draws with: the page's helpers and the
+     chart being drawn (its selection), and the call that registers it. */
+  const plug = { draw: (kind, spec) => { DRAW[kind] = spec; },
+                 h: { esc, tile, tableHTML, pct, num1, signed, ord, state: () => S } };
+  window.QBCarry = { open, close, mount, plug, _t: { proj, runPoints, yMaxFor, fan, chipLabel, gameTitle, spot, downDist,
                                          gameChart, seasonChart, listHTML, noteHTML, tilesFor,
                                          catchXs, routePoints, routeGameChart, routeSeasonChart, routeList,
                                          routeTiles, routeTables, routeNote, routeLegend,

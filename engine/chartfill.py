@@ -28,7 +28,11 @@ and `fill` does the reads for what is owed and nothing more:
   owed;
 * college: the season's play file, for the games the database has —
   its carries and, from 2025, the targets it names, both kept to the
-  games the college logs keep.
+  games the college logs keep;
+* baseball (the hit tracker and the pitch chart, 2026-10-13): the
+  season's finals from MLB's Stats API play-by-play, newest first, one
+  night's budget of them (engine/mlb/charts.backfill); the nightly chores
+  read the rest a budget a night.
 
 EMPTY, NOT BEHIND. A table a game behind is the nightly's job: it reads
 the play-by-play while a finished game has no chart
@@ -44,12 +48,22 @@ import sys
 #: (`passes`, 2026-10-13) rides the NFL read the other two make.
 TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("cfb", "carries"),
           ("cfb", "targets"))
+#: Baseball's chart tables are keyed by game, not by league: one row per
+#: plate appearance and one per pitch, written together, so the pitches
+#: answer for both.
+MLB_TABLE = "mlb_pitches"
 
 
 def season_of(today) -> int:
     """The football season a day belongs to: August onward is that
     year's; January to July the year before's."""
     return today.year if today.month >= 8 else today.year - 1
+
+
+def mlb_season_of(today) -> int:
+    """Baseball's season is the calendar year; January and February still
+    belong to last year's."""
+    return today.year if today.month >= 3 else today.year - 1
 
 
 def owed(conn, today=None) -> list:
@@ -80,6 +94,16 @@ def owed(conn, today=None) -> list:
                         out.append((sport, s, table))
     except Exception:                                              # noqa: BLE001
         return []
+    # Baseball on its own: a box whose database predates the baseball
+    # tables still answers for football.
+    try:
+        s = mlb_season_of(today)
+        played = conn.execute("SELECT 1 FROM games WHERE sport='mlb' AND season=? AND home_score IS NOT NULL "
+                              "LIMIT 1", (s,)).fetchone()
+        if played and not conn.execute(f"SELECT 1 FROM {MLB_TABLE} WHERE season=? LIMIT 1", (s,)).fetchone():
+            out.append(("mlb", s, MLB_TABLE))
+    except Exception:                                              # noqa: BLE001
+        pass
     return out
 
 
@@ -130,7 +154,22 @@ def fill(conn, want, log=print) -> list:
                 + ("" if s >= TG.CFB_FROM else " (college targets are drawn from 2025)"))
         except Exception as exc:                                   # noqa: BLE001
             say(f"CFB {s}: not read — {exc}")
+    for s in sorted({s for sp, s, _t in want if sp == "mlb"}, reverse=True):
+        try:
+            from .mlb import charts as MC
+            through = min(_dt.date.today() - _dt.timedelta(days=1), _dt.date(s, 12, 31))
+            got = MC.backfill(conn, s, through.isoformat())
+            say(f"MLB {s}: {_count(got['games'], 'game')}, {_count(got['pas'], 'plate appearance')}, "
+                f"{_count(got['pitches'], 'pitch', 'pitches')}"
+                + (f"; {got['left']:,} older games left for the nightly" if got.get("left") else "")
+                + (f"; {got['failed']:,} not read" if got.get("failed") else ""))
+        except Exception as exc:                                   # noqa: BLE001
+            say(f"MLB {s}: not read — {exc}")
     return out
+
+
+def _count(n: int, one: str, many: str = "") -> str:
+    return f"{n:,} {one if n == 1 else (many or one + 's')}"
 
 
 def named(want) -> str:
