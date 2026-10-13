@@ -45,8 +45,14 @@ class _Game:
 
 
 class _Prop:
-    def __init__(self, player, market):
-        self.player, self.market = player, market
+    def __init__(self, player, market, team=""):
+        # THE TEAM RIDES ON THE PROP (2026-10-13). The odds index is keyed
+        # by name and market across every game on the pull, and
+        # `oddsapi._wrong_game` refuses a price from a game the prop's
+        # team is not in — but only when the prop names a team, and this
+        # one never did, so a man filed under last season's club took
+        # whatever game priced his name.
+        self.player, self.market, self.team = player, market, team
         self.lines = []
 
 
@@ -56,7 +62,9 @@ class _Slate:
 
 
 def player_history(conn, teams: set[str], sport: str = "nba",
-                   seasons: list[int] | None = None) -> dict:
+                   seasons: list[int] | None = None,
+                   roster: dict | None = None,
+                   moved: set | None = None) -> dict:
     """{player: {"team", "starter", "minutes": [...], stat: [...]}} newest
     first, last 20 games, for players on tonight's teams.
 
@@ -65,7 +73,21 @@ def player_history(conn, teams: set[str], sport: str = "nba",
     sorts several seasons of rows to throw nearly all of them away — and
     for a player who has not appeared this year it would hand back last
     year's form as if it were current.
+
+    ``roster`` is ``{normalized name: team}`` from the clubs' current
+    rosters (`current_teams`). WHERE HE PLAYS NOW (2026-10-13): the logs
+    file a man under the club he played for, so on opening night every
+    summer move is still under his old team — projected for a game he is
+    not in, and priced off whichever game named him. A man the roster
+    places keeps only his games FOR THAT CLUB (the spec's reset rule: a
+    trade resets the sample), so a new arrival has no prop until he has
+    played three games for it — the floor every prop already has. A man
+    the roster does not name keeps his history's team: a spelling the two
+    feeds disagree on must never cost a player his board. ``moved``
+    collects the names whose games for another club were set aside.
     """
+    from engine import divisions
+    from engine.sources.oddsapi import normalize_name
     hist: dict = {}
     q = ("SELECT player, team, position, period, market, value "
          "FROM player_game_logs WHERE sport=? AND team IN (%s)"
@@ -75,7 +97,16 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
     rows = conn.execute(q + " ORDER BY period DESC", args).fetchall()
+    now_at: dict = {}
     for r in rows:
+        if roster:
+            if r["player"] not in now_at:
+                now_at[r["player"]] = roster.get(normalize_name(r["player"]))
+            club = now_at[r["player"]]
+            if club and divisions.canonical(sport, r["team"]) != club:
+                if moved is not None:
+                    moved.add(r["player"])
+                continue
         p = hist.setdefault(r["player"], {"team": r["team"], "starter": None,
                                           "by_week": {}})
         wk = p["by_week"].setdefault(r["period"], {})
@@ -95,6 +126,156 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         p["pra"] = [round(p["pts"][i] + p["reb"][i] + p["ast"][i], 1)
                     for i in range(len(weeks))]
     return hist
+
+
+def current_teams(league: str, fetch=None) -> tuple[dict, list]:
+    """``({normalized name: team}, [clubs that would not load])`` from ESPN's
+    current rosters (`espnrosters.fetch_league`, the same six-hour cache the
+    Rosters page reads), teams in this league's own abbreviations.
+
+    A name on two rosters is left out — two men, or one caught mid-trade —
+    so it can never move anybody; so is a club code the league's own map
+    (`divisions.MAPS`) does not hold, because one alias the two feeds
+    disagree on would otherwise set aside every game a whole club played.
+    ``({}, [])`` when the feed cannot be read: every player then keeps the
+    team of his newest game, which is what the board did before it asked."""
+    from engine import divisions
+    from engine.sources import espnrosters
+    from engine.sources.oddsapi import normalize_name
+    try:
+        feed, missed = (fetch or (lambda: espnrosters.fetch_league(league)))()
+    except Exception:                                       # noqa: BLE001
+        return {}, []
+    known = set(divisions.MAPS.get(league) or {})
+    seen: dict = {}
+    out: dict = {}
+    for team, people in (feed or {}).items():
+        club = divisions.canonical(league, team)
+        for p in people or []:
+            k = normalize_name(str(p.get("player") or ""))
+            if k:
+                seen[k] = seen.get(k, 0) + 1
+                out[k] = club
+    return ({k: t for k, t in out.items() if seen[k] == 1 and (not known or t in known)},
+            list(missed or []))
+
+
+#: ESPN designations that mean he is not playing tonight — the hoops twin of
+#: `nhl_build.OUT_STATUSES`, with the NFL's DOUBTFUL (`rules.RULED_OUT`).
+#: Anything else listed (Day-To-Day, Questionable, Probable, GTD) is a man
+#: who may play: his number stands, and his picks wait for the lineup.
+OUT_STATUSES = ("out", "doubtful", "suspension", "suspended", "injured reserve",
+                "ir", "out for season", "inactive", "not with team")
+
+
+def hoops_injuries(league: str, fetch=None) -> dict:
+    """``{normalized name: {"player", "status", "injury"}}`` from ESPN's injury
+    board for this league — the newest filing per player, no cleared-to-play
+    notices; {} when the board cannot be read (a gap on our side, never a
+    claim that everybody is healthy).
+
+    THE ONE GAP WORTH MONEY (docs/WNBA_MODEL.md): "There is no availability
+    feed for this league ... the model currently cannot see it." The feed
+    existed all along — `espninjuries` carries both leagues for the
+    Injuries page — and the build never read it. Two names alike keep the
+    worse status: holding a healthy namesake costs a pick, missing a hurt
+    one costs a bet."""
+    from engine.sources import espninjuries as E
+    from engine.sources.oddsapi import normalize_name
+    try:
+        rows = E.parse_injuries((fetch or (lambda: E.fetch_injuries(league)))())
+    except Exception:                                       # noqa: BLE001
+        return {}
+    out: dict = {}
+    for r in E.drop_stale_returns(E.current_rows(rows)):
+        if E.is_return(r):
+            continue
+        k = normalize_name(str(r.get("player") or ""))
+        status = str(r.get("status") or "").strip()
+        if not k or not status:
+            continue
+        prev = out.get(k)
+        if prev and prev["status"].lower() in OUT_STATUSES:
+            continue
+        out[k] = {"player": r["player"], "status": status, "injury": r.get("injury") or ""}
+    return out
+
+
+#: How recently an absent man must have played for his absence to be news:
+#: within his club's last few games. One out since February is already in
+#: every teammate's recent games, and saying "out tonight" on their cards
+#: night after night would be noise dressed as a read.
+NEW_ABSENCE_GAMES = 3
+
+
+def absences(hist: dict, injuries: dict) -> dict:
+    """``{team: [(player, minutes a game), ...]}`` — tonight's ruled-out men on
+    each club who played in one of its last `NEW_ABSENCE_GAMES` games, the
+    biggest role first."""
+    from engine.sources.oddsapi import normalize_name
+    recent: dict = {}
+    for h in hist.values():
+        recent.setdefault(h["team"], set()).update((h.get("by_week") or {}).keys())
+    recent = {t: set(sorted(d, reverse=True)[:NEW_ABSENCE_GAMES]) for t, d in recent.items()}
+    out: dict = {}
+    for name, h in hist.items():
+        inj = injuries.get(normalize_name(name))
+        if not inj or inj["status"].strip().lower() not in OUT_STATUSES:
+            continue
+        if not recent.get(h["team"], set()) & set((h.get("by_week") or {}).keys()):
+            continue
+        mins = [float(m) for m in (h.get("minutes") or [])[:10]]
+        if mins:
+            out.setdefault(h["team"], []).append((name, sum(mins) / len(mins)))
+    for team in out:
+        out[team].sort(key=lambda t: -t[1])
+    return out
+
+
+def _team_rows(hist: dict, team: str, since: str) -> list[dict]:
+    """The logs' rows for one club from ``since`` on, rebuilt from the history
+    already read — `engine.nba.onoff`'s input, with no second query."""
+    return [{"team": team, "period": d, "player": name, "market": m, "value": v}
+            for name, h in hist.items() if h.get("team") == team
+            for d, stats in (h.get("by_week") or {}).items() if d >= since
+            for m, v in stats.items()]
+
+
+def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
+                cache: dict | None = None) -> str:
+    """What a teammate's absence means for this prop, said on its card.
+
+    EVIDENCE ONLY. The minutes model has a slot for the minutes a vacancy
+    opens (`project_minutes(vacancy_minutes=...)`) and nothing fills it:
+    moving the number is a pricing change, and redistribution measured by
+    `engine/nba/onoff` has not passed the edge test. So the card says who
+    is out and what the logs show when he sat — counted only from his first
+    game for this club, so the games before he arrived are not "sat"."""
+    from engine.nba import onoff
+    away = [(n, m) for n, m in (gone or {}).get(team, []) if n != player]
+    if not away:
+        return ""
+    names = ", ".join(f"{n} ({m:.0f} min a game)" for n, m in away[:3])
+    note = (f"Out tonight: {names}. Those minutes go to the rest of the rotation; "
+            f"our minutes model does not move for it, and the book's line may already have.")
+    stat = market if market in onoff.STATS else None
+    if stat is None:
+        return note
+    big = away[0][0]
+    key = (team, big, stat)
+    cache = {} if cache is None else cache
+    if key not in cache:
+        first = min((hist.get(big) or {}).get("by_week") or {"": None})
+        cache[key] = onoff.inheritance(_team_rows(hist, team, first), team, big, stat)
+    res = cache[key]
+    b = (res.get("beneficiaries") or {}).get(player)
+    if res.get("enough") and b:
+        label = {"pts": "points", "min": "minutes", "reb": "rebounds", "ast": "assists",
+                 "fg3m": "threes"}[stat]
+        note += (f" In the {res['n_out']} games {big} missed, {player} took "
+                 f"{b['without']:.0%} of the team's {label}, against {b['with']:.0%} "
+                 f"with {big} on the floor ({b['n_without']} and {b['n_with']} games).")
+    return note
 
 
 def _ctx_layoff(dates, game_date: str):
@@ -543,8 +724,39 @@ def main() -> None:
         # games run back into the previous season, so one is too few — and
         # six is a different player.
         from engine.seasons import recent_seasons
+        # WHO PLAYS WHERE, AND WHO IS HURT (2026-10-13). The clubs' current
+        # rosters place each man before his logs are read (`player_history`),
+        # and ESPN's injury board — fetched for the Injuries page all along,
+        # read by no build — says who sits tonight.
+        roster, roster_missed = current_teams(args.league)
+        injuries = hoops_injuries(args.league)
+        moved: set = set()
         hist = player_history(conn, teams, sport=args.league,
-                              seasons=recent_seasons(args.league, args.date))
+                              seasons=recent_seasons(args.league, args.date),
+                              roster=roster, moved=moved)
+        from engine.sources.oddsapi import normalize_name as _nn
+        listed = {p: injuries[_nn(p)] for p in hist if _nn(p) in injuries}
+        gone = absences(hist, injuries)
+        out["availability"] = {
+            "rosters_read": bool(roster), "roster_clubs_missed": sorted(roster_missed),
+            "moved": sorted(moved),
+            "injuries_read": bool(injuries),
+            "listed": len(listed),
+            "out": sum(1 for i in listed.values() if i["status"].strip().lower() in OUT_STATUSES),
+        }
+        # An unreadable feed prints as a warning (⚠️), so the journal hears
+        # about it once (launch._keep_build_log) instead of never.
+        print((f"Rosters: {len(roster)} player(s) placed by the clubs' current rosters"
+               + (f" (⚠️ {len(roster_missed)} club(s) would not load)" if roster_missed else ""))
+              if roster else
+              "⚠️  Rosters unreadable — each player keeps the team of his newest game")
+        if moved:
+            print(f"  {len(moved)} player(s) in tonight's teams' logs play for another club now; "
+                  f"their games for the old one are set aside: {', '.join(sorted(moved)[:8])}"
+                  + (" …" if len(moved) > 8 else ""))
+        print(f"Injuries: {len(listed)} designation(s) on tonight's players "
+              f"({out['availability']['out']} out)" if injuries else
+              "⚠️  Injury board unreadable — nobody is held for it, and that is a gap")
 
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
@@ -552,7 +764,7 @@ def main() -> None:
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
                 for stat in SLATE_MARKETS:
-                    slate.props.append(_Prop(player, stat))
+                    slate.props.append(_Prop(player, stat, h["team"]))
 
         # Every prop on this board is projected from stored game logs, so an
         # empty history produces an empty board that looks exactly like a
@@ -620,6 +832,12 @@ def main() -> None:
                                  if d.get("mapped_to") else ""))
                     print(f"    Every prop in those games is counted under "
                           f"'no real book price'.")
+                # A price from a game the player's team is not in, refused
+                # (`_Prop.team`) — counted, because a refusal nobody can see
+                # looks exactly like a book that never priced him.
+                if getattr(res, "wrong_game", 0):
+                    odds_note += (f"; {res.wrong_game} price(s) from a game the "
+                                  f"player's team is not in, refused")
             except oddsapi.OddsAPIError as exc:
                 odds_note = f"odds unavailable: {exc}"
 
@@ -692,6 +910,7 @@ def main() -> None:
             _dvp0, _dvp_rating = None, {}
         census = {"no_real_price": 0, "no_history": 0}
         props = []
+        _onoff_cache: dict = {}
         for prop in slate.props:
             two = best_two_way(prop.lines)
             h = hist.get(prop.player)
@@ -707,8 +926,20 @@ def main() -> None:
                          for g in games if h["team"] in (g["home"], g["away"])), "")
             _dm, _dn = (_dvp0.projection_mult(args.league, _dvp_rating, _opp, prop.market)
                         if _dvp0 else (1.0, ""))
+            _inj = listed.get(prop.player) or {}
+            _status = str(_inj.get("status") or "").strip()
             props.append({
                 "dvp_mult": _dm, "dvp_note": _dn,
+                # THE INJURY BOARD ON THE PROP: ruled out is a grade-D
+                # restriction (no bet, the card says why); listed and
+                # playable is held until the lineup confirms, on the Edge
+                # board (`evaluate_prop`) and on Most Likely
+                # (`likely.admissible` reads `injury_status`). The number
+                # itself does not move.
+                "injury_status": _status,
+                "restriction": _status.lower() in OUT_STATUSES,
+                "lineup_note": lineup_note(prop.player, prop.market, h["team"], gone,
+                                           hist, _onoff_cache),
                 "player": prop.player, "team": h["team"],
                 "opponent": next((g["away"] if g["home"] == h["team"]
                                   else g["home"] for g in games

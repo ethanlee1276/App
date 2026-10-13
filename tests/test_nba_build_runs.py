@@ -99,6 +99,11 @@ def _run_main(boards, out_path):
         (_ledger, "connect", _lmem),
         (_ledger, "export_json", lambda *a, **k: None),
         (_gate, "publish", plain_publish),
+        # The clubs' rosters and the injury board (2026-10-13) are ESPN
+        # reads too; unread, every player keeps his logs' team and nobody
+        # is held — the board these scenarios were written against.
+        (nba_build, "current_teams", lambda league, fetch=None: ({}, [])),
+        (nba_build, "hoops_injuries", lambda league, fetch=None: {}),
     ]
     saved = [(m, n, getattr(m, n)) for m, n, _ in patches]
     argv = sys.argv

@@ -100,7 +100,8 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # that reaches one player. 1.0 when no rating reached this prop.
     dvp_m = float(prop.get("dvp_mult") or 1.0)
     proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m, 2)
-    context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note")) if n]
+    context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
+                                 prop.get("lineup_note")) if n]
     from ..exitfit import exits as _exits, RECENT as _RECENT
     from .minutes import EXIT_ROLE_MINUTES
     _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)
@@ -202,6 +203,15 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                      lead_min=_lead)
     if _block:
         fails = fails + [_block]
+    # THE INJURY BOARD (nba_build.hoops_injuries, 2026-10-13). Ruled out
+    # is also a grade-D restriction above; this line is the card saying
+    # why in words. Listed and playable is the NFL's and the NHL's hold:
+    # the number stands, the bet waits for the lineup.
+    _status = str(prop.get("injury_status") or "").strip()
+    if _status:
+        fails = fails + ([f"listed {_status} — not expected to play"]
+                         if prop.get("restriction") else
+                         [f"listed {_status} — held until the lineup confirms"])
     need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")
     # §7 — the star tax. Marquee overs must clear an extra point of
     # required edge (the public's shade is already in the price); a
@@ -563,10 +573,17 @@ def shared_recommendations(props: list[dict],
                    f"{r['blowout_prob']:.0%}"]
         if r.get("clamp_note"):
             reasons.append(r["clamp_note"])
+        # A teammate ruled out tonight, and what the logs show when he sat
+        # (nba_build.lineup_note) — evidence on the card the page draws.
+        if prop.get("lineup_note"):
+            reasons.append(prop["lineup_note"])
         out.append({
             "player": r["player"], "team": r.get("team", ""),
             "opponent": r.get("opponent", ""),
             "market": r["market"], "market_label": r["market_label"],
+            # The designation rides to Most Likely, whose hold reads it
+            # (`likely.admissible`); "" for a man nobody listed.
+            "injury_status": str(prop.get("injury_status") or ""),
             "position": "", "usage_role": f"minutes {r['minutes_grade']}",
             # Was hardcoded "". The field has been on this record all along
             # and nothing ever filled it, so every NBA and WNBA prop drew

@@ -32,7 +32,8 @@ charts read empty for every player the afternoon they shipped (the
 box had already run that day's chores, which fill them); the box now
 fills an empty chart table by itself within minutes (step 52; K shows
 it). College now counts a receiver thrown at who caught nothing as a
-zero (step 53; M).
+zero (step 53; M). The NBA board, a week before opening night, now reads
+the clubs' current rosters and ESPN's injury board (step 54; N).
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -40,14 +41,14 @@ refers to. Paste back what each one prints, with its letter.
 Nothing here changes anything except C (only if email isn't on yet) and
 D's Stripe settings. Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `College
-receivers thrown at who caught nothing count as zeros` (or be newer),
-and the second should print `has today's code`. If it prints nothing or
-"Not a valid commit name", the box hasn't pulled yet: wait five minutes
-and run both again.
+**A. The box has today's code.** The first line should end `The NBA
+board knows who plays where and who is hurt` (or be newer), and the
+second should print `has today's code`. If it prints nothing or "Not a
+valid commit name", the box hasn't pulled yet: wait five minutes and run
+both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor 63a5fa82 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 197d5be2 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -225,6 +226,27 @@ And the measurement, if you want to see it for yourself (read-only,
 about a minute):
 ```
 cd /srv/qellys && sudo -u qellys python3 cfbtargetfit.py
+```
+
+**N. The NBA board knows who plays where, and who is hurt** (step 54;
+read-only, seconds). Opening night is a week out, so check both feeds
+read on the box now. The first line should say roughly 450 to 550
+players and no clubs missing; the second counts ESPN's injury words —
+paste it, so every word that means "not playing" is checked against the
+list the board holds as out:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import collections, nba_build
+t, missed = nba_build.current_teams('nba')
+print(len(t), 'players placed by the club rosters; clubs missing:', missed or 'none')
+i = nba_build.hoops_injuries('nba')
+print(len(i), 'on the injury board:', dict(collections.Counter(v['status'] for v in i.values())))
+"
+```
+From opening night on, every NBA build prints what it read (paste it the
+first night):
+```
+grep -E "Rosters|Injuries|another club now" /srv/qellys/data/logs/nba_build.log
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -1710,6 +1732,43 @@ first). Paste back anything that prints an error or looks off.
       what they would have paid. Your call in H.
     * **Lighter:** the college file reader now splits lines like the
       NFL one (same rows, checked on 2024-2026).
+
+54. **The NBA board knows who plays where, and who is hurt** (2026-10-13,
+    same ask). N checks both reads on the box. Two things the NFL board
+    has had for weeks that the basketball build never did:
+    * **Where he plays now.** The logs file a man under the club he
+      played for, so on opening night every summer move was still under
+      his old team — projected for a game he is not in, and, because the
+      prop named no team, priced off whichever game the books named him
+      in. The build now reads the clubs' current rosters (the Rosters
+      page's own ESPN feed, cached six hours). A man the roster places
+      keeps only his games for that club — the model doc's own reset
+      rule, "a trade resets the sample" — so a new arrival has no prop
+      until he has played three games for his new club, the floor every
+      prop already has. A name the roster does not carry keeps his old
+      team (a spelling the two feeds disagree on never costs a man his
+      board), a club code the league map does not know moves nobody, and
+      if the roster cannot be read the board is exactly what it was.
+      Every prop now names its team, so the odds attach refuses a price
+      from a game his team is not in, and counts it in the odds note.
+    * **Who is hurt.** ESPN's injury board — fetched for the Injuries page
+      all along, read by no build; the model doc calls it "the one gap
+      worth money". Out, doubtful or suspended: grade D, no bet, and the
+      card says "listed Out — not expected to play"; a posted Most Likely
+      pick comes down. Day-to-day, questionable or probable: the number
+      stands and the bet waits — "held until the lineup confirms" on the
+      Edge board, and Most Likely holds it, as it does for the NFL and
+      the NHL.
+    * **A teammate's card says who is out** (a fresh absence: he played
+      in one of the club's last three games — one out since February is
+      already in every teammate's recent games), his minutes, and — from
+      our own logs (`engine/nba/onoff`) — this player's share of the team's
+      points, rebounds, assists or threes in the games he sat, counted
+      only from his first game for the club and only with three or more
+      such games. Evidence only: the minutes model has a slot for the
+      minutes a vacancy opens and nothing fills it yet, because moving
+      the number is a pricing change that has to be measured first.
+    * The WNBA board runs the same code; its season is over.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
