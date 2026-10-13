@@ -45,14 +45,14 @@ refers to. Paste back what each one prints, with its letter.
 Nothing here changes anything except C (only if email isn't on yet) and
 D's Stripe settings. Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `UFC cards
-show where each line opened; NBA vacancy check for the box` (or be
-newer), and the second should print `has today's code`. If it prints
-nothing or "Not a valid commit name", the box hasn't pulled yet: wait
-five minutes and run both again.
+**A. The box has today's code.** The first line should end `The chart's
+X sits below the phone's status bar and stays in reach` (or be newer),
+and the second should print `has today's code`. If it prints nothing or
+"Not a valid commit name", the box hasn't pulled yet: wait five minutes
+and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor c77134fe HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 7ff1e839 HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -1834,6 +1834,20 @@ first). Paste back anything that prints an error or looks off.
     empty until P's reads say a move carries something the close does
     not. The page code grew 0.05 KB gzipped, which took the first-visit
     budget for `app.js` from 494 to 495 KB (the test file records why).
+
+57. **The chart's X is below the status bar, and stays in reach**
+    (2026-10-13, Ethan, a screenshot of McCaffrey's route chart: "fix
+    this issue where the X button is stuck up top in the bar so I can't
+    even click it"). Nothing to run — open any carry or route chart on
+    your phone. The chart sheet started at the very top of the screen,
+    under the clock and battery, where iOS keeps the taps; it now starts
+    below the status bar, its last rows clear the home bar, and the X
+    stays pinned top-right while the chart scrolls under it. Checked in
+    Chromium with an iPhone's 59px status bar emulated: before, the X sat
+    at 10px (under the bar); after, at 69px, still on screen after
+    scrolling 900px, and one tap closes the chart. A desktop looks as it
+    did. The page fetches styles network-first, so the fix arrives on the
+    next open after the box pulls.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

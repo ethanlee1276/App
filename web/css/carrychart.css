@@ -2,13 +2,31 @@
    first use, so a first visit carries none of it. Tokens only: the field,
    the three gain colours and the marks are the site's own, and re-tint in
    light mode with the rest. */
+/* THE STATUS BAR. Ethan, 2026-10-13, from his phone: "the X button is stuck
+   up top in the bar so I can't even click it." The site runs edge to edge
+   under the iPhone's status bar (viewport-fit=cover, black-translucent), and
+   this overlay started at the very top of the screen with nothing taking the
+   inset off, so its header and its X sat under the clock and the battery,
+   where iOS keeps the taps for itself. The inset comes off the top (and the
+   home bar's off the bottom), and the X stays pinned just under the status
+   bar while a long chart scrolls beneath it. env() is 0 off an iPhone, so a
+   desktop is exactly as it was. */
 #cc-overlay { position: fixed; inset: 0; z-index: 90; display: none; align-items: flex-start; justify-content: center;
-  padding: 24px 16px; overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; overscroll-behavior: contain;
   background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px); }
 #cc-overlay.open { display: flex; }
 .cc { position: relative; width: 100%; max-width: 760px; padding: 18px 18px 20px; border-radius: var(--radius-lg);
   border: var(--hairline) solid var(--border); background: var(--panel); color: var(--text); }
-.cc-x { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%;
+/* Sticky, not absolute: in the flow at the card's top right (the negative
+   margins put it 10px in from the corner and take back the room it would
+   push the header down by), and held near the top once the chart scrolls,
+   so it never leaves reach. `top` is 8px and no more: a sticky box keeps
+   its distance from the scroller's PADDING edge, and the overlay's padding
+   already carries the status bar's inset — adding it here as well left the
+   X a whole status bar too low (measured: 126px under a 59px bar). */
+.cc-x { position: sticky; top: 8px; z-index: 3; display: block;
+  margin: -8px -8px -26px auto; width: 34px; height: 34px; border-radius: 50%;
   border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text-dim);
   font-size: 20px; line-height: 1; cursor: pointer; }
 .cc-x:hover { color: var(--text); }
@@ -183,6 +201,7 @@
 .cc-note { margin: 14px 2px 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-mute); }
 
 @media (max-width: 600px) {
-  #cc-overlay { padding: 0; }
-  .cc { min-height: 100%; border-radius: 0; border: 0; padding: 14px 16px 24px; }
+  #cc-overlay { padding: env(safe-area-inset-top, 0px) 0 0; }
+  .cc { min-height: 100%; border-radius: 0; border: 0; padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .cc-x { margin: -4px -6px -30px auto; }
 }
