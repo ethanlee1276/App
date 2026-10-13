@@ -615,6 +615,16 @@ while walled, at once after a visit to the billing page), and from the
 launcher's `_billing_sweeper` every six hours for every row that is not
 final. A failed read changes nothing.
 
+**Every open of the site reads Stripe** (Ethan, 2026-10-13: "every time a
+user opens the site or launches the site it should check too see if they
+are still subscribed"). The page's boot call, its call after a sign-in and
+its call on coming back to the tab ask `/api/billing/status?fresh=1`, and
+for those the read is due once `RECHECK_OPEN_S` (a minute) has passed, so
+a reload loop asks Stripe once a minute, not once a reload. Coming back
+counts because a phone brings an installed app back by showing the page it
+suspended, not by loading it. The five-minute timer on an open tab still
+answers from the row.
+
 **Late events are dropped.** Stripe does not deliver in order and retries
 a refused delivery for days, so a payment failure refused at the door can
 land after the payment that fixed it. Each row keeps the creation time of
@@ -622,8 +632,11 @@ the newest event it reflects (`event_at`; a read of Stripe counts as now),
 and an older event is acknowledged and not applied.
 
 **The page walls an open tab too.** The wall used to go up at boot only.
-`wallRecheck` asks again when the tab comes back and every five minutes,
-and a wall that comes up reloads onto the paywall.
+`wallRecheck` asks again when the tab comes back (fresh, at most once a
+minute) and every five minutes (from the row), and a wall that comes up
+reloads onto the paywall. It works the other way as well: a walled tab
+that comes back entitled — a card fixed, a plan bought on another device —
+reloads into the site, to the first stop a sign-in lands on.
 
 Cancelling happens on **Stripe's portal**, reached from Manage billing. A
 company that builds its own cancel flow is deciding how hard it is to

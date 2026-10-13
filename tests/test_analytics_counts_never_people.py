@@ -277,7 +277,7 @@ def test_the_views_the_ask_and_the_plan_button_are_counted_where_they_happen():
     assert APP.index("COUNTS, NEVER PEOPLE") < APP.index("ACCOUNTS — one name, every device"), \
         "outside the block that holds personal data, which talks only to our account endpoints"
     assert "discord.gg" not in APP
-    check = APP[APP.index("async function paywallCheck()"):]
+    check = APP[APP.index("async function paywallCheck("):]
     assert "_pwStatus = await r.json();\n    anFlush();" in check[:check.index("\n}\n")]
 
 

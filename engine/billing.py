@@ -1233,6 +1233,13 @@ RECHECK_S = 3600
 #: `incomplete`), once a minute: somebody back from fixing the card on
 #: Stripe's page is let in on their next page load, webhook or not.
 RECHECK_LOCKED_S = 60
+#: AN OPEN OF THE SITE READS STRIPE. Ethan, 2026-10-13: "every time a user
+#: opens the site or launches the site it should check too see if they are
+#: still subscribed". The page's boot call, its call after a sign-in and
+#: its call on coming back to the tab say `fresh=1`, and the read is then
+#: due once this much has passed since the last one: a reload loop asks
+#: Stripe once a minute, not once a reload.
+RECHECK_OPEN_S = 60
 #: The launcher's sweep re-reads every row that is not final this often,
 #: which covers the account nobody is loading pages for.
 SWEEP_EVERY_S = 6 * 3600

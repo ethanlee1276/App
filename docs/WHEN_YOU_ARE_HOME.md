@@ -1076,6 +1076,32 @@ first). Paste back anything that prints an error or looks off.
       card is still shown. Say if you want the model's own matchup step
       to count when the scan has nothing.
 
+40. **Every open of the site checks with Stripe** (2026-10-13, Ethan:
+    "every time a user opens the site or launches the site it should
+    check too see if they are still subscribed"). Before this, opening
+    the site asked our server, and the server only went to Stripe itself
+    if its last read was over an hour old. A cancellation whose webhook
+    got lost could keep someone in for up to an hour.
+    * **Now an open goes to Stripe.** That covers loading the site,
+      launching the installed app, signing in, and coming back to an open
+      tab or app (a phone usually resumes the app rather than reloading
+      it). At most once a minute per account, so a reload loop can't
+      hammer Stripe.
+    * **The five-minute check on an open tab** still answers from our
+      stored copy. Six-hourly sweep unchanged.
+    * **It works both ways.** A tab that lapsed while you were away
+      reloads onto the paywall. A walled tab whose owner paid or fixed
+      their card somewhere else reloads into the site.
+
+    Nothing to set; the box picks it up on its own. Read-only check. It
+    prints one number, the seconds since the newest Stripe read of any
+    subscription, and no emails:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -c "import time; from engine import accounts as A, billing as B; c=A.connect(); B.init(c); print(c.execute('SELECT ROUND(?-MAX(checked_at)) FROM subscriptions', (time.time(),)).fetchone()[0])"
+    ```
+    Open the site on a subscribed account, then run it. It should print
+    under 60. `None` means no subscription has been read from Stripe yet.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

@@ -2418,17 +2418,28 @@ window.addEventListener("focus", refreshOnReturn);
    and every five minutes; a wall that comes up reloads onto the paywall,
    as acctLandAfterAuth does, so the boot path draws it and installs its
    hash guard. A request that fails locks nobody — paywallCheck answers
-   with the wall as it stands. */
+   with the wall as it stands.
+
+   COMING BACK IS AN OPEN (Ethan, 2026-10-13: "every time a user opens the
+   site or launches the site it should check"): a phone brings an
+   installed app back by showing the page it suspended, not by loading it,
+   so the return asks with `fresh` — Stripe read, not the stored row —
+   once a minute at most; the five-minute timer passes `slow` and reads
+   the row. Either way it goes both ways: a walled tab that comes back
+   entitled (a card fixed, a plan bought on another device) reloads into
+   the site, to the same first stop a sign-in lands on. */
 let _wallAsked = Date.now();
-async function wallRecheck() {
-  if (state.static || document.body.classList.contains("walled")
-      || Date.now() - _wallAsked < 3e5) return;
+async function wallRecheck(slow) {
+  if (state.static || Date.now() - _wallAsked < (slow ? 3e5 : 6e4)) return;
   _wallAsked = Date.now();
-  if (!(await paywallCheck())) return;
-  if (!WALL_OPEN.includes(state.view)) location.hash = "#paywall";
+  const was = document.body.classList.contains("walled");
+  const walled = await (slow ? paywallCheck() : paywallCheck(1));
+  if (walled === was) return;
+  if (!walled) location.hash = dcFirstStop();
+  else if (!WALL_OPEN.includes(state.view)) location.hash = "#paywall";
   location.reload();
 }
-setInterval(wallRecheck, 3e5);
+setInterval(wallRecheck, 3e5, 1);
 
 /* Poll for live updates every 30s while any game is in progress. */
 function manageAutoRefresh() {
@@ -28050,7 +28061,7 @@ async function acctLandAfterAuth(say = () => {}) {
   // and false means "come in" — which is the wrong way to fail.
   const prev = _pwStatus;
   _pwStatus = null;
-  const walled = await paywallCheck();
+  const walled = await paywallCheck(1);
   if (!_pwStatus) {
     _pwStatus = prev;
     return say("Signed in, but the server did not answer when asked which "
@@ -29517,10 +29528,18 @@ let _pwStatus = null;
 
 /* Should the wall be up for this visitor? Asked of the SERVER, never
    decided here — the client cannot be trusted with the answer and does
-   not have to be, because the data it can reach is already redacted. */
-async function paywallCheck() {
+   not have to be, because the data it can reach is already redacted.
+
+   `fresh` IS AN OPEN OF THE SITE. Ethan, 2026-10-13: "every time a user
+   opens the site or launches the site it should check too see if they
+   are still subscribed". The boot call, the call after a sign-in and the
+   call on coming back to the tab pass it, and the server then reads the
+   subscription from Stripe itself — once a minute at most per account
+   (billing.RECHECK_OPEN_S) — rather than answering from a row it last
+   checked up to an hour ago. */
+async function paywallCheck(fresh) {
   try {
-    const r = await fetch("/api/billing/status", { credentials: "same-origin" });
+    const r = await fetch("/api/billing/status" + (fresh ? "?fresh=1" : ""), { credentials: "same-origin" });
     // A 429 IS NOT AN ANSWER. The rate limiter replies with JSON — an
     // {error} object — so `r.json()` succeeds, `_pwStatus.paywall` is
     // undefined, and the line below used to conclude "not walled". A
@@ -50222,7 +50241,7 @@ function buzzOnSettle(rows) {
      webhook to land. That wait is the difference between "you are in"
      and "please subscribe" for somebody whose card cleared four seconds
      ago, and it grants nothing on its own — see the function. */
-  paidReturnWait().then((paid) => paywallCheck().then((walled) => {
+  paidReturnWait().then((paid) => paywallCheck(1).then((walled) => {
     // JUST PAID, AND IN. Stripe sends them back to /?paid=1#account,
     // which is the receipt page and not a welcome. This is the moment
     // Ethan asked for — the account exists, the money has cleared, and

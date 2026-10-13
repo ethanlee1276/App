@@ -1190,7 +1190,8 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/alerts/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
-                parsed.path[len("/api/billing/"):].strip("/"))
+                parsed.path[len("/api/billing/"):].strip("/"),
+                parse_qs(parsed.query))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path in ("/api/record/receipts.csv",):
@@ -3279,7 +3280,7 @@ class Handler(BaseHTTPRequestHandler):
                           headers=([("ETag", etag)] if etag else [])
                           + stale_headers(name, mtime))
 
-    def _billing_get(self, path: str):
+    def _billing_get(self, path: str, qs: dict | None = None):
         from engine import billing as BI
         A = _acct()
         if path != "status":
@@ -3341,8 +3342,19 @@ class Handler(BaseHTTPRequestHandler):
                 # hourly while entitled, each minute while walled, at once
                 # after a visit to Stripe's billing page). Its own try:
                 # this page answers even when Stripe will not.
+                #
+                # AND ON EVERY OPEN OF THE SITE: the page's boot call, its
+                # call after a sign-in and its call on coming back to the
+                # tab say `fresh=1`, and the read is then due once a minute
+                # has passed (BI.RECHECK_OPEN_S). Ethan, 2026-10-13: "every
+                # time a user opens the site or launches the site it should
+                # check too see if they are still subscribed".
+                fresh = (qs or {}).get("fresh") == ["1"]
                 try:
-                    BI.refresh(conn, who["id"])
+                    if fresh:
+                        BI.refresh(conn, who["id"], every=BI.RECHECK_OPEN_S)
+                    else:
+                        BI.refresh(conn, who["id"])
                 except Exception:                            # noqa: BLE001
                     pass
                 out.update(BI.status_for(conn, who["id"]))
