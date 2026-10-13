@@ -52,11 +52,16 @@ tape, baseball's injured list) or whose props every book took down gets no
 number for a game he is not playing; a questionable one keeps his and the
 card says so.
 
-WHAT A READ CANNOT SEE, said here so nobody takes it for more: the build's
-lineup step (a teammate or his quarterback ruled out moving his role), the
-measured team tendency (pace, pass rate) and his measured usage role are
-inputs the builds compute from feeds this reader does not refetch; the read
-prices without them, as the board prices a prop before those feeds land.
+WHO PLAYS AROUND HIM AND HOW MUCH HE IS USED (NFL, 2026-10-13): the read
+runs the build's own lineup steps — a teammate at his position ruled out
+(engine/teammates: the depth order off the database, the absences off the
+board's injury lists), his quarterback out or benched (engine/qbchange,
+off the card the board published) — and his measured volume role
+(engine/nflusage), three inputs it priced without before. What it still
+cannot see, said so nobody takes it for more: the role-based injury
+effects the build reads off the weekly report (an elite corner out) and
+the depth chart's starter-or-backup flag. The live board prices no team
+tendency (pace, pass rate); that layer is the backtest's.
 
 NOTHING HERE IS A PICK. A read is not journaled, posted, staked or put on
 any board; it is our number for a ticket someone else built, with what it
@@ -528,6 +533,138 @@ def _qb_real_games(conn, sport: str, player: str, seasons: list[int], before=Non
         if float(r[2] or 0.0) >= QB_START_ATTEMPTS and (cut is None or _pkey(r[0], r[1]) < cut)}
 
 
+# ---- who plays around him, and how much he is used (NFL) ---------------------------
+def _nfl_week(conn, season: int, asof=None) -> int:
+    """The week the read is made for: a replay's own, else the one after
+    the last week stored — tonight's."""
+    if asof and str(asof[1]).isdigit():
+        return int(asof[1])
+    row = conn.execute("SELECT MAX(CAST(period AS INTEGER)) FROM player_game_logs WHERE sport='nfl' AND season=?",
+                       (int(season),)).fetchone()
+    return int((row and row[0]) or 0) + 1
+
+
+def _nfl_stat_rows(conn, season: int, teams) -> list[dict]:
+    """This season's box-score rows for these teams in the shape
+    engine/teammates.depth_table ranks a depth order on — nflverse's
+    columns (week, recent_team, position, player_display_name, targets,
+    carries) off the stored markets. No snap file here, so the order is
+    on targets and carries, as it was first measured."""
+    marks = ",".join("?" * len(teams))
+    rows: dict = {}
+    for r in conn.execute(
+            f"SELECT period, player, team, position, market, value FROM player_game_logs "
+            f"WHERE sport='nfl' AND season=? AND team IN ({marks}) AND market IN ('targets', 'carries', 'rush_att')",
+            (int(season), *teams)):
+        p = str(r[0] or "")
+        if not p.isdigit():
+            continue
+        row = rows.setdefault((int(p), str(r[1])), {"week": int(p), "season_type": "REG",
+                                                     "recent_team": str(r[2] or ""),
+                                                     "position": str(r[3] or "").upper(),
+                                                     "player_display_name": str(r[1])})
+        row[str(r[4])] = float(r[5] or 0.0)
+    out = []
+    for row in rows.values():
+        if "carries" not in row and "rush_att" in row:
+            row["carries"] = row["rush_att"]
+        out.append(row)
+    return out
+
+
+def _depth(conn, season: int, teams: tuple, week: int) -> dict:
+    """engine/teammates.depth_table for these teams as of ``week`` — the
+    order the teammate-out multipliers were measured on. Cached per
+    database version."""
+    from . import teammates as TM
+    return _cached(("depth", "nfl", int(season), tuple(sorted(teams)), int(week), _stamp(conn)),
+                   lambda: TM.depth_table(_nfl_stat_rows(conn, season, teams), set(teams), int(week)))
+
+
+def _team_outs(board: dict | None, card: dict | None, team: str) -> tuple[set, set]:
+    """(ruled out, questionable) on this team tonight, as the lineup step
+    keys names: the card's injury list, the books' pulled list, the
+    board's rows with a status."""
+    from .injuries import RULED_OUT
+    from .teammates import MAYBE, _norm
+    out: set = set()
+    maybe: set = set()
+
+    def take(name, status):
+        st = str(status or "").strip().upper()
+        if not name:
+            return
+        if st in RULED_OUT or st == "PULLED":
+            out.add(_norm(name))
+        elif st in MAYBE:
+            maybe.add(_norm(name))
+    scan = (card or {}).get("scan") or {}
+    for i in scan.get("injuries") or []:
+        if isinstance(i, dict) and str(i.get("team") or team).upper() == str(team).upper():
+            take(i.get("player"), i.get("status"))
+    for name in scan.get("pulled") or []:
+        take(name if isinstance(name, str) else (name or {}).get("player"), "PULLED")
+    b = board or {}
+    for r in list(b.get("recommendations") or []) + list((b.get("likely_board") or {}).get("rows") or []):
+        if isinstance(r, dict) and str(r.get("team") or "").upper() == str(team).upper() and r.get("injury_status"):
+            take(r.get("player"), r.get("injury_status"))
+    return out, maybe
+
+
+def _lineup(conn, board: dict | None, card: dict | None, season: int, team: str, opponent: str, asof=None) -> dict:
+    """Each side's depth order and who is out tonight, as engine/teammates
+    .stamp puts them on a game for the build: the order off the database,
+    the absences off the board's injury lists. A replay (``asof``) sees the
+    order as of its week and no report — none is kept for past games."""
+    from .teammates import GROUPS
+    teams = tuple(t for t in (team, opponent) if t)
+    if not teams:
+        return {}
+    depth = _depth(conn, season, teams, _nfl_week(conn, season, asof))
+    order = depth.get("order") or {}
+    last = depth.get("last") or {}
+    seen = depth.get("seen") or {}
+    weeks = depth.get("weeks") or {}
+    lu = {}
+    for t in teams:
+        out, maybe = _team_outs(board, card, t) if not asof else (set(), set())
+        lu[t] = {"order": {pos: order.get(f"{t}|{pos}") or [] for pos in GROUPS},
+                 "out": sorted(out), "maybe": sorted(maybe), "last": last.get(t, 0),
+                 "basis": depth.get("basis") or "targets",
+                 "seen": {pos: seen.get(f"{t}|{pos}") or [] for pos in GROUPS},
+                 "weeks": weeks.get(t) or []}
+    return lu
+
+
+def _qb_changes(card: dict | None, team: str, opponent: str) -> dict:
+    """{team: change} off the card's QB-change cards (engine/qbchange.card,
+    published on every game whose starter is out or benched) — what
+    qbchange.effect reads: the tier, the replacement, the starter."""
+    out = {}
+    for c in (card or {}).get("qb_cards") or []:
+        if isinstance(c, dict) and c.get("team") in (team, opponent) and c.get("tier") and c.get("starter") \
+                and c.get("status"):
+            out[c["team"]] = dict(c)
+    return out
+
+
+def _usage_role(conn, season: int, player: str, team: str, market: str, asof=None) -> dict | None:
+    """His measured volume role for this market (engine/nflusage
+    .volume_roles), as nfl_build hands the pipeline — the maps built once
+    per database version, as of a week for a replay. None where he has no
+    role, and none when the maps cannot be built (said on the log)."""
+    from .nflusage import build_usage_maps, from_maps, usage_keys
+    week = int(asof[1]) if asof and str(asof[1]).isdigit() else None
+    try:
+        maps = _cached(("usage", "nfl", int(season), week, _stamp(conn)),
+                       lambda: build_usage_maps(conn, int(season), week))
+    except Exception as exc:                                       # noqa: BLE001
+        print(f"slip read: usage maps not built ({type(exc).__name__}: {exc})", file=sys.stderr)
+        return None
+    role = from_maps(maps.get("volume") or {}, usage_keys(player, team, maps.get("team_of")))
+    return (role or {}).get(market) if isinstance(role, dict) else None
+
+
 def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=None) -> dict | None:
     """The generic engine on one prop the board did not build. ``asof``,
     a (season, period), makes it a replay's read: his games before it and
@@ -594,6 +731,21 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=N
     opp_team = Team(abbr=opponent or "OPP", name=opponent or "OPP",
                     defense=DefenseProfile(team=opponent or "OPP", ratings=(ratings or {}).get(opponent) or {}))
     game = _football_game(card, team, opponent)
+    usage = None
+    if league == "nfl":
+        # WHO PLAYS AROUND HIM AND HOW MUCH HE IS USED, as the board prices
+        # them: the depth order with the board's injury lists on it
+        # (engine/teammates), the card's QB change (engine/qbchange), his
+        # measured volume role (engine/nflusage) — the same steps
+        # build_projection runs for a board prop. A failure here leaves
+        # the read as it was before these landed, and says so.
+        try:
+            game.lineup = _lineup(conn, board, card, season, team, opponent, asof)
+            game.qb_changes = _qb_changes(card, team, opponent)
+            usage = _usage_role(conn, season, who["player"], team, market, asof)
+        except Exception as exc:                                   # noqa: BLE001
+            print(f"slip read: lineup and usage skipped for {who['player']} "
+                  f"({type(exc).__name__}: {exc})", file=sys.stderr)
     odds = int(leg.get("odds") or -110)
     side = str(leg.get("side") or "over").lower()
     line = float(leg["line"])
@@ -618,11 +770,16 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=N
     if market == "anytime_td":
         return _scorer(conn, board, league, leg, who, prop, game, opp_team, card, rows, used, season, pos,
                        ratings, opponent, team)
-    proj = build_projection(prop, game, opp_team, sport=league)
+    proj = build_projection(prop, game, opp_team, sport=league, usage=usage)
     rec = evaluate_prop(prop, proj, allow_synthetic_line=True, game=game, sport=league)
     decision = apply_rules(rec, prop, game)
     from .pipeline import _rec_to_dict
     row = _rec_to_dict(rec, prop, decision, proj, league)
+    # The published card's own detail (the replacement's sample, which only
+    # the build measured) where the read's copy of the card has none.
+    pub = (getattr(game, "qb_changes", None) or {}).get(team)
+    if pub and isinstance(row.get("qb_card"), dict) and pub.get("detail"):
+        row["qb_card"]["detail"] = pub["detail"]
     # THE SLIP'S BET, not the side the model would have taken: the row
     # speaks for what was bet; the model's own pick rides beside it.
     row["model_side"], row["model_line"] = row.get("side"), row.get("line")

@@ -1042,10 +1042,13 @@ first). Paste back anything that prints an error or looks off.
       than three games in that market still says "not on our board".
       A player the board's injury lists name as out, or whose props every
       book took down, gets no number. A questionable one keeps his number,
-      and the card says he's listed. What the read can't see: the build's
-      lineup step (a teammate or his QB out), team pace and pass rate, and
-      his measured usage role. It prices without those, as the board does
-      before those feeds land.
+      and the card says he's listed. Since step 43 the NFL read also runs
+      the build's lineup steps (a teammate at his position out, his QB
+      out or benched) and his measured usage role. What it still can't
+      see: the role-based injury effects off the weekly report (an elite
+      corner out) and the depth chart's starter/backup flag. (I said
+      earlier it was missing team pace and pass rate; the live board
+      doesn't price those either — that layer only runs in the backtest.)
     * **Better legs.** A leg we call weak or against, or can't price,
       gets up to three swaps. First comes the same bet at a better
       number, then the board's own picks in that game. Each is priced
@@ -1147,6 +1150,29 @@ first). Paste back anything that prints an error or looks off.
     52% to collect nothing"). No box on a lost or won ticket, or while
     a leg in play has no live number yet — never a guess. Nothing to
     set, nothing to run; it's in the card.
+
+43. **The NFL off-board read sees who plays around him and how much he's
+    used** (2026-10-13, Ethan: "add all of them"). The read in step 39
+    priced a leg without three things the board's own number has. Now
+    it runs them, the same way the build does:
+    * **A teammate at his position ruled out** — the depth order is
+      built from our database (targets and carries, as it was first
+      measured) and the board's injury lists mark who's out tonight; the
+      measured step moves his number and the card says "Around him:
+      RB BUF out at RB". A questionable teammate moves nothing and the
+      card says what happens if he sits.
+    * **His quarterback out or benched** — read off the QB-change card
+      the board already publishes on the game; receivers take the
+      measured step (×0.90 receiving yards behind a downgrade).
+    * **His measured usage role** — the usage bridge (recent
+      opportunities × season efficiency) weighs against a thin log the
+      same as on the board.
+    The replay in step 41 sees the depth order and the role as of each
+    week; no injury report is kept for past games, so nobody is ever out
+    in a replay. College isn't wired yet (its lineup step is measured
+    separately); say if you want it next. Nothing to set, nothing to run.
+    If the box check in step 39 prints `"mate_card"` or `"qb_card"` on a
+    read whose teammate or QB is out that day, it's working.
 
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none

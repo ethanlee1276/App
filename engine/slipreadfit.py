@@ -15,8 +15,10 @@ asked AS OF that game: his games before it, the defence rated on the weeks
 before it, last season as the anchor, the game's own spread, total and
 weather off the games table. What the replay leaves out that the checker
 does: resolving the slip's spelling of his name (the stored name is used),
-the injury list (none is kept for past games), and holding the number to
-the Most Likely list's record (slipgrade._honest is the journal's live
+the injury list (none is kept for past games, so no teammate or
+quarterback is ever out in a replay; the depth order and his measured
+volume role are read as of the week), and holding the number to the
+Most Likely list's record (slipgrade._honest is the journal's live
 correction; this measures the raw model).
 
 THE LINES. No book's prop lines are kept for past games, so each
