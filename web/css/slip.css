@@ -80,7 +80,7 @@
 .pgr-sim-note { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .pgr-sim-note b { color: var(--text); }
 @media (prefers-reduced-motion: no-preference) {
-  .pgr-sim-col i { animation: pgrGrow .7s var(--ease-out, ease-out) both; }
+  .pgr-sim-col i { animation: pgrGrow .7s var(--ease-out) both; }
   @keyframes pgrGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 }
 /* The live line (engine/sliplive): each leg's price now, its game, the ticket. */
@@ -148,7 +148,7 @@
 .pgr-hedge-in label, .pgr-save label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs);
   color: var(--text-mute); font-weight: 600; }
 .pgr-hedge-in input, .pgr-save input { width: 7.5ch; min-height: 32px; padding: 4px 8px; border-radius: var(--radius-sm);
-  border: var(--hairline) solid var(--border); background: var(--panel-2, var(--panel)); color: var(--text);
+  border: var(--hairline) solid var(--border); background: var(--panel-2); color: var(--text);
   font-family: var(--font-mono); font-size: var(--fs-sm); }
 .pgr-hedge-out { display: grid; gap: 3px; }
 .pgr-hedge-out p { margin: 0; }
@@ -165,7 +165,7 @@
 .pgr-save-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .pgr-save-note { flex: 1 1 100%; color: var(--text-mute); font-size: var(--fs-xs); }
 .pgr-track { display: grid; gap: 12px; margin-bottom: 14px; }
-.pgr-track-card { padding: 12px; border-radius: var(--radius); background: var(--panel-2, var(--panel)); }
+.pgr-track-card { padding: 12px; border-radius: var(--radius); background: var(--panel-2); }
 .pgr-track-h { display: grid; gap: 2px; min-width: 0; }
 .pgr-track-h b { color: var(--text); overflow-wrap: break-word; }
 .pgr-track-h span { color: var(--text-mute); font-size: var(--fs-xs); }
