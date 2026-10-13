@@ -208,11 +208,26 @@ def _ord(n: int) -> str:
     return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 
+def _pkey(season, period) -> tuple:
+    """A game's place in time, comparable across the ways a period is
+    kept: a zero-padded week, a bare week number, an ISO date."""
+    p = str(period or "")
+    return (int(season or 0), (0, int(p)) if p.isdigit() else (1, p))
+
+
 # ---- who he is -----------------------------------------------------------------
-def _seasons(conn, sport: str) -> list[int]:
-    """The two newest seasons this sport has games stored for, newest first."""
-    rows = conn.execute("SELECT DISTINCT season FROM player_game_logs WHERE sport=? "
-                        "ORDER BY season DESC LIMIT 2", (sport,)).fetchall()
+def _seasons(conn, sport: str, asof=None) -> list[int]:
+    """The two newest seasons this sport has games stored for, newest
+    first — as of ``asof``'s season when a replay asks (``asof`` is a
+    (season, period) a read is made AS OF, engine/slipreadfit: his games
+    before it, the defence rated on the weeks before it. None, the live
+    case, is tonight)."""
+    if asof:
+        rows = conn.execute("SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND season<=? "
+                            "ORDER BY season DESC LIMIT 2", (sport, int(asof[0]))).fetchall()
+    else:
+        rows = conn.execute("SELECT DISTINCT season FROM player_game_logs WHERE sport=? "
+                            "ORDER BY season DESC LIMIT 2", (sport,)).fetchall()
     return [int(r[0]) for r in rows if r[0] is not None]
 
 
@@ -266,11 +281,14 @@ def resolve(conn, sport: str, leg: dict, markets) -> dict | None:
     return {"player": n, "team": latest[n][1], "position": latest[n][2]}
 
 
-def games(conn, sport: str, player: str, alternatives, seasons: list[int]) -> tuple[list[dict], tuple]:
+def games(conn, sport: str, player: str, alternatives, seasons: list[int],
+          before=None) -> tuple[list[dict], tuple]:
     """His games in the market, newest first: [{"season", "period", "team",
     "opponent", "home", "value"}], and the stored markets they were read
     from. The first alternative he has rows for wins; a sum adds what each
-    game stored."""
+    game stored. ``before`` (a (season, period)) keeps only the games
+    played before it — a replay's view of him."""
+    cut = _pkey(*before) if before else None
     for alt in alternatives:
         marks = ",".join("?" * len(alt))
         sm = ",".join("?" * len(seasons))
@@ -278,6 +296,8 @@ def games(conn, sport: str, player: str, alternatives, seasons: list[int]) -> tu
             f"SELECT season, period, game_id, team, opponent, home, market, value FROM player_game_logs "
             f"WHERE sport=? AND player=? AND market IN ({marks}) AND season IN ({sm}) "
             f"ORDER BY season DESC, period DESC", (sport, player, *alt, *seasons)).fetchall()
+        if cut:
+            rows = [r for r in rows if _pkey(r[0], r[1]) < cut]
         if not rows:
             continue
         by: dict = {}
@@ -410,10 +430,11 @@ _COLUMN = {"pass_yds": "passing_yards", "pass_td": "passing_tds", "rush_yds": "r
            "rush_td": "rushing_tds", "rec_td": "receiving_tds"}
 
 
-def _nfl_wide(conn, season: int) -> list[dict]:
+def _nfl_wide(conn, season: int, before: int | None = None) -> list[dict]:
     """One row per player-game, NFL, in the shape engine/defensevs reads:
     what each stored market was, under nflverse's column, with his position
-    and the defence he faced. Regular season only, as the builds rate."""
+    and the defence he faced. Regular season only, as the builds rate;
+    the weeks before ``before`` only when a replay asks."""
     marks = ",".join("?" * len(_COLUMN))
     rows: dict = {}
     for r in conn.execute(f"SELECT period, game_id, player, opponent, position, market, value "
@@ -423,7 +444,7 @@ def _nfl_wide(conn, season: int) -> list[dict]:
             wk = int(str(r[0]))
         except ValueError:
             continue
-        if wk <= 0 or wk > 18 or not r[3]:
+        if wk <= 0 or wk > 18 or not r[3] or (before is not None and wk >= before):
             continue
         row = rows.setdefault((r[1], r[2]), {"week": wk, "opponent_team": str(r[3]),
                                              "position": str(r[4] or "").upper(), "season_type": "REG"})
@@ -431,17 +452,23 @@ def _nfl_wide(conn, season: int) -> list[dict]:
     return list(rows.values())
 
 
-def defence_ratings(conn, sport: str, season: int, date: str = "") -> dict:
+def defence_ratings(conn, sport: str, season: int, date: str = "", asof=None) -> dict:
     """{defence: {stat: rating}} for tonight, rebuilt from the history
     database the way the builds rate: this season's games shrunk toward
     last season's whole (engine/defensevs; college through
-    engine/cfb/defense, FBS against FBS). Cached per database version."""
+    engine/cfb/defense, FBS against FBS). Cached per database version.
+    As of a past week when a replay asks (``asof``; college cuts at the
+    card's date already)."""
+    week = None
+    if asof and str(asof[1]).isdigit() and int(asof[0]) == int(season):
+        week = int(asof[1])
+
     def build():
         from . import defensevs as D
         if sport == "cfb":
             from .cfb import defense as CD
             return CD.ratings(conn, int(season), before=(date or None))
-        now = _nfl_wide(conn, season)
+        now = _nfl_wide(conn, season, before=week)
         last = _nfl_wide(conn, season - 1)
         prior = D.ratings(last, 99) if last else None
         if not now:
@@ -449,7 +476,8 @@ def defence_ratings(conn, sport: str, season: int, date: str = "") -> dict:
                      for t, r in prior.items()} if prior else {})
         return D.ratings(now, 99, prior=prior, week_one_prior=True)
     try:
-        return _cached(("def", sport, int(season), str(date)[:10] if sport == "cfb" else "", _stamp(conn)), build)
+        return _cached(("def", sport, int(season), str(date)[:10] if sport == "cfb" else "", week, _stamp(conn)),
+                       build)
     except Exception:                                              # noqa: BLE001
         return {}
 
@@ -487,33 +515,36 @@ def _position(sport: str, stored: str, market: str) -> str:
             "pass_rush_yds": "QB", "rush_yds": "RB", "rush_att": "RB", "rush_rec_yds": "RB"}.get(market, "WR")
 
 
-def _qb_real_games(conn, sport: str, player: str, seasons: list[int]) -> set:
+def _qb_real_games(conn, sport: str, player: str, seasons: list[int], before=None) -> set:
     """The games he really played as a passer (QB_START_ATTEMPTS throws or
     more) — the quarterback games the football board reads his passing
     from (nflverse.quarterbacked)."""
     from .sources.nflverse import QB_START_ATTEMPTS
     sm = ",".join("?" * len(seasons))
+    cut = _pkey(*before) if before else None
     return {(int(r[0] or 0), str(r[1] or "")) for r in conn.execute(
         f"SELECT season, period, value FROM player_game_logs WHERE sport=? AND player=? "
         f"AND market='pass_att' AND season IN ({sm})", (sport, player, *seasons))
-        if float(r[2] or 0.0) >= QB_START_ATTEMPTS}
+        if float(r[2] or 0.0) >= QB_START_ATTEMPTS and (cut is None or _pkey(r[0], r[1]) < cut)}
 
 
-def football(conn, board: dict | None, league: str, leg: dict, who: dict) -> dict | None:
-    """The generic engine on one prop the board did not build."""
+def football(conn, board: dict | None, league: str, leg: dict, who: dict, asof=None) -> dict | None:
+    """The generic engine on one prop the board did not build. ``asof``,
+    a (season, period), makes it a replay's read: his games before it and
+    the defence rated on the weeks before it (engine/slipreadfit)."""
     from .models import GameLog, Prop, SportsbookLine, Team, DefenseProfile
     from .projection import build_projection
     from .betting import evaluate_prop
     from .rules import apply_rules
     from . import defensevs as D
     market = leg["market"]
-    seasons = _seasons(conn, league)
-    rows, used = games(conn, league, who["player"], FOOTBALL_LOGS[market], seasons)
+    seasons = _seasons(conn, league, asof)
+    rows, used = games(conn, league, who["player"], FOOTBALL_LOGS[market], seasons, before=asof)
     if not rows:
         return None
     pos = _position(league, who.get("position"), market)
     if pos == "QB" and market in ("pass_yds", "pass_td", "pass_att", "pass_cmp", "pass_int", "pass_rush_yds"):
-        real = _qb_real_games(conn, league, who["player"], seasons)
+        real = _qb_real_games(conn, league, who["player"], seasons, before=asof)
         if real:
             rows = [g for g in rows if (g["season"], g["period"]) in real]
     season = seasons[0]
@@ -559,7 +590,7 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict) -> dic
         named = {card.get("home"), card.get("away")}
         team = next((t for t in named if t and str(t).upper() == str(leg.get("team") or "").upper()), team)
     opponent = _opponent(card, team, leg)
-    ratings = defence_ratings(conn, league, season, str((card or {}).get("date") or ""))
+    ratings = defence_ratings(conn, league, season, str((card or {}).get("date") or ""), asof=asof)
     opp_team = Team(abbr=opponent or "OPP", name=opponent or "OPP",
                     defense=DefenseProfile(team=opponent or "OPP", ratings=(ratings or {}).get(opponent) or {}))
     game = _football_game(card, team, opponent)
@@ -576,7 +607,7 @@ def football(conn, board: dict | None, league: str, leg: dict, who: dict) -> dic
                 form_prior=(prior if kind else None), form_prior_n=prior_n,
                 form_prior_games=prior_games, form_prior_kind=kind)
     if market == "pass_int":
-        att, _ = games(conn, league, who["player"], (("pass_att",),), seasons)
+        att, _ = games(conn, league, who["player"], (("pass_att",),), seasons, before=asof)
         by = {(g["season"], g["period"]): g for g in att}
         paired = [(lg, by.get((g["season"], g["period"]))) for lg, g in zip(logs, use)]
         paired = [(lg, a) for lg, a in paired if a]

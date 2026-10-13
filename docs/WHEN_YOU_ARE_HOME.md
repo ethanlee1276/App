@@ -1106,6 +1106,36 @@ first). Paste back anything that prints an error or looks off.
     Open the site on a subscribed account, then run it. It should print
     under 60. `None` means no subscription has been read from Stripe yet.
 
+41. **Is the off-board read honest? A replay on past seasons**
+    (2026-10-13, Ethan: "add all of them"). The parlay checker's "ours
+    88%" on a leg no board carries (step 39) has only been checked on
+    made-up data. This replays the same arithmetic on seasons already
+    played, as of each game (his games before it, the defence rated on
+    the weeks before it, last season as the anchor, the game's own
+    spread, total and weather), prices every prop-sized role at a
+    book-like line (his trailing average to the half below) and at four
+    numbers around the read's projection, and reports what landed. It's
+    a report only: nothing is tuned, saved or changed, and it writes
+    nothing to the database.
+
+    Run it on the box (a few minutes for three NFL seasons; it prints
+    "N reads…" as it goes) and paste back the tables:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.slipreadfit --sport nfl --seasons 2023 2024 2025
+    ```
+    College, the last two seasons, capped so it finishes in minutes:
+    ```
+    cd /srv/qellys && sudo -u qellys python3 -m engine.slipreadfit --sport cfb --seasons 2024 2025 --limit 3000
+    ```
+    How to read it: "ours" is the read; "last8" is a stand-in anyone
+    could make (his last eight games as a bell curve). Ours should beat
+    last8 on Brier (lower is better) in every market. The calibration
+    line is the real test: "60%-70%: said 65%, landed 64% of 812" is
+    honest; "said 75%, landed 58%" means the read overstates that band.
+    If a market reads like that, say so and I'll look at why, in that
+    market, before touching anything. Basketball, hockey and baseball
+    reads aren't replayed yet; their models keep their own records.
+
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.
