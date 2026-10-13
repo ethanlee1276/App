@@ -92,6 +92,7 @@
     receptions: "Receptions", rush_rec_yds: "Rush + Rec Yds", pass_rush_yds: "Pass + Rush Yds",
     kick_pts: "Kicking Pts", fg_made: "FGs Made", tackles_ast: "Tackles + Ast",
     pts: "Points", reb: "Rebounds", ast: "Assists", pra: "Pts + Reb + Ast", fg3m: "Threes",
+    pts_reb: "Pts + Reb", pts_ast: "Pts + Ast", reb_ast: "Reb + Ast",
     hits: "Hits", total_bases: "Total Bases", home_runs: "Home Runs", strikeouts: "Strikeouts",
     outs: "Outs", sog: "Shots on Goal", points: "Points", goals: "Goals", assists: "Assists",
     blocks: "Blocks", saves: "Saves",

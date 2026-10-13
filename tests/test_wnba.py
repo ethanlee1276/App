@@ -124,8 +124,12 @@ def test_the_odds_adapter_knows_the_league():
     assert SPORT_CONFIG["wnba"]["sport_key"] == "basketball_wnba"
     # Expanded to 15 for 2026 (Golden State 2025, Toronto + Portland 2026).
     assert len(set(WNBA_TEAM_ABBR.values())) == 15
-    # Same markets as the NBA — points/rebounds/assists/threes.
-    assert SPORT_CONFIG["wnba"]["markets"] == SPORT_CONFIG["nba"]["markets"]
+    # The NBA's markets — points/rebounds/assists/threes/PRA — without the
+    # NBA's two-stat combos (2026-10-13: the call that bought them was the
+    # NBA's, and each is a credit on every event pulled).
+    nba, wnba = SPORT_CONFIG["nba"]["markets"], SPORT_CONFIG["wnba"]["markets"]
+    assert {k: v for k, v in nba.items() if k in wnba} == wnba
+    assert set(nba.values()) - set(wnba.values()) == {"pts_reb", "pts_ast", "reb_ast"}
 
 
 def test_the_server_serves_the_league():

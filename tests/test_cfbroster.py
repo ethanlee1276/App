@@ -85,7 +85,7 @@ def test_a_first_appearance_settles_through_the_roster():
     L.commit()
     _game(H, D(-1), "COLG@CMU", "CMU", "COLG", "Central Michigan", "Colgate")
     db.upsert_player_logs(H, [{"sport": "cfb", "season": SEASON, "period": D(-1),
-                               "game_id": "COLG@CMU-box", "player": "Some Chippewa",
+                               "game_id": "COLG@CMU", "player": "Some Chippewa",   # the play file's
                                "team": "CMU", "opponent": "COLG", "position": "WR",
                                "home": 1, "market": "rec_yds", "value": 40.0}])
     H.commit()

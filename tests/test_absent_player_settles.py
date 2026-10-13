@@ -176,7 +176,10 @@ def test_a_college_player_absent_from_his_teams_final_box_is_voided():
     bid = _bet(L, "cfb", BET_DAY, "Gabe Burkle", line=19.5, category="likely")
     _log(H, "cfb", 2026, D(-9), "401500", "Gabe Burkle", "IOWA", "rec_yds", 22)   # last week: his team
     _game(H, "cfb", 2026, D(-1), "401555", "IOWA", "ISU")                         # this week, UTC next day
-    _log(H, "cfb", 2026, D(-1), "401555-box", "Some Hawkeye", "IOWA", "rec_yds", 40)
+    # The play file's rows (no `-box`): a receiving bet waits for them —
+    # they are what would show him thrown at (test_a_college_receiver_
+    # thrown_at_is_graded) — and is voided once they are in without him.
+    _log(H, "cfb", 2026, D(-1), "401555", "Some Hawkeye", "IOWA", "rec_yds", 40)
     assert ledger.settle_from_history(L, H) == 1
     assert _status(L, bid)[0] == "void"
 
@@ -191,7 +194,7 @@ def test_a_college_game_filed_twice_is_still_one_game():
     _log(H, "cfb", 2026, D(-9), "401500", "Garrett Oakley", "KSU", "rec_yds", 40)
     _game(H, "cfb", 2026, D(-2), "WSU@KSU", "KSU", "WSU")          # Eastern day
     _game(H, "cfb", 2026, D(-1), "401856700", "KSU", "WSU")        # UTC day, ESPN id
-    _log(H, "cfb", 2026, D(-1), "401856700-box", "Some Wildcat", "KSU", "rec_yds", 40)
+    _log(H, "cfb", 2026, D(-1), "401856700", "Some Wildcat", "KSU", "rec_yds", 40)   # the play file's
     assert ledger.settle_from_history(L, H) == 1
     assert _status(L, bid)[0] == "void"
 
@@ -220,7 +223,7 @@ def test_a_college_bet_that_carries_its_team_needs_no_history():
                category="likely")
     L.execute("UPDATE bets SET team='CMU' WHERE id=?", (bid,)); L.commit()
     _game(H, "cfb", 2026, D(-1), "COLG@CMU", "CMU", "COLG")
-    _log(H, "cfb", 2026, D(-1), "COLG@CMU-box", "Some Chippewa", "CMU", "rec_yds", 40)
+    _log(H, "cfb", 2026, D(-1), "COLG@CMU", "Some Chippewa", "CMU", "rec_yds", 40)   # the play file's
     assert ledger.settle_from_history(L, H) == 1
     assert _status(L, bid)[0] == "void"
 

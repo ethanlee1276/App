@@ -4500,6 +4500,10 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
             else:
                 reason = ("no results ingested" if not n_games
                           else "game not found")
+        elif _waits_for_play_file(hist_conn, b):
+            # Not stuck: the box score is in and the play file that may
+            # show him thrown at is not yet (PLAY_FILE_MARKETS).
+            reason = "waiting on the college play file"
         elif not n_logs:
             reason = "no results ingested"
         else:
@@ -4892,10 +4896,29 @@ ABSENT_ZERO_NOTE = ("Played, no line: the game is final and the stat file has sn
 #: that had not finished landing.
 ABSENT_RULE_SPORTS = ("nfl", "cfb")
 
+#: A COLLEGE RECEIVER WAITS FOR THE PLAY FILE. Ethan's call, 2026-10-13
+#: (runbook H, step 53): "Also add both from my calls, the CFB and nba
+#: things." A college box score lists only a player with a stat, so a
+#: receiver thrown at who caught nothing is not in it, and the book grades
+#: him at zero — he played. The college play file names the man every pass
+#: was thrown at, and the nightly writes that game as a 0 in these markets
+#: (engine/sources/cfbstats, ZERO_WHEN; anytime_td is written for every man
+#: the file has), which the settle loop grades like any row. So a bet in
+#: one of these markets is not voided off the box score alone: it waits
+#: until the play file has read his team's game, and only a man still
+#: absent then is voided. A game the file has not reached in
+#: `PLAY_FILE_DAYS` falls back to the old rule. Nothing settled before is
+#: touched: a void is never re-graded (`resettle_mismatches` reads won,
+#: lost and push only).
+PLAY_FILE_MARKETS = ("receptions", "rec_yds", "rec_td", "anytime_td")
+PLAY_FILE_DAYS = 5
+
 
 def _absent_player_verdict(hist_conn, b):
-    """``"void"``, ``"zero"`` or ``None`` for a prop whose player has no
-    stat row on any day the settler looked.
+    """``"void"``, ``"zero"``, ``"wait"`` or ``None`` for a prop whose
+    player has no stat row on any day the settler looked. ``"wait"`` is a
+    college bet waiting for the play file (`PLAY_FILE_MARKETS`); it and
+    ``None`` both leave the bet open.
 
     THE RULE, Ethan's call on 2026-09-14, after sixteen Sunday NFL rows
     and eight college rows stayed open beside complete stat files: a
@@ -5020,7 +5043,38 @@ def _absent_player_verdict(hist_conn, b):
     filed = hist_conn.execute(
         f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
         f"AND team=? LIMIT 1", (*periods, team)).fetchone()
-    return "void" if filed else None
+    if not filed:
+        return None
+    if b["market"] in PLAY_FILE_MARKETS and (datetime.date.today() - d0).days < PLAY_FILE_DAYS:
+        # The box score is in; the play file, which would show him thrown
+        # at, may not be (see PLAY_FILE_MARKETS). Its rows carry no `-box`.
+        read = hist_conn.execute(
+            f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
+            f"AND team=? AND game_id NOT LIKE '%-box' LIMIT 1", (*periods, team)).fetchone()
+        if not read:
+            return "wait"
+    return "void"
+
+
+def _waits_for_play_file(hist_conn, b) -> bool:
+    """True for a college bet the absent-player rule is holding for the
+    play file: a `PLAY_FILE_MARKETS` bet whose man has no row a day either
+    side of its date. The stuck report asks it, so a bet waiting a few days
+    for the file is not called stuck."""
+    if b["sport"] != "cfb" or b["market"] not in PLAY_FILE_MARKETS:
+        return False
+    from .sources.oddsapi import normalize_name
+    try:
+        d0 = datetime.date.fromisoformat(str(b["date"] or "")[:10])
+    except ValueError:
+        return False
+    want = normalize_name(b["player"] or "")
+    lo, hi = ((d0 + datetime.timedelta(days=n)).isoformat() for n in (-1, 1))
+    if any(normalize_name(r[0]) == want for r in hist_conn.execute(
+            "SELECT DISTINCT player FROM player_game_logs WHERE sport='cfb' "
+            "AND period BETWEEN ? AND ?", (lo, hi))):
+        return False
+    return _absent_player_verdict(hist_conn, b) == "wait"
 
 
 def _neighbour_game_evidence(hist_conn, b, where, wargs):
@@ -5133,7 +5187,11 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
 #: rows and left him to "the normal settle path". It stayed open for good.
 #: Ethan, 2026-10-13: "It should not take a day for all bets to settle."
 DERIVED_MARKETS = {("nba", "pra"): ("pts", "reb", "ast"),
-                   ("wnba", "pra"): ("pts", "reb", "ast")}
+                   ("wnba", "pra"): ("pts", "reb", "ast"),
+                   # The NBA's two-stat combos (2026-10-13, hoops.COMBOS).
+                   ("nba", "pts_reb"): ("pts", "reb"),
+                   ("nba", "pts_ast"): ("pts", "ast"),
+                   ("nba", "reb_ast"): ("reb", "ast")}
 
 
 def _derived_rows(hist_conn, b, where: str, wargs: list) -> list:

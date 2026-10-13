@@ -90,7 +90,8 @@ FOOTBALL_LOGS = {
     "anytime_td": (("anytime_td",), ("rush_td", "rec_td")),
 }
 HOOPS_LOGS = {"pts": (("pts",),), "reb": (("reb",),), "ast": (("ast",),), "fg3m": (("fg3m",),),
-              "pra": (("pts", "reb", "ast"),)}
+              "pra": (("pts", "reb", "ast"),), "pts_reb": (("pts", "reb"),),
+              "pts_ast": (("pts", "ast"),), "reb_ast": (("reb", "ast"),)}
 HOCKEY_MARKETS = ("sog", "points", "goals", "assists", "blocks", "saves", "anytime_goal")
 BASEBALL_LOGS = {"hits": (("hits",),), "total_bases": (("total_bases",),), "home_runs": (("home_runs",),),
                  "strikeouts": (("strikeouts",),), "outs": (("outs",),)}

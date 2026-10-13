@@ -56,6 +56,12 @@ class LeagueTuning:
         "b2b_road_30plus": 0.88, "3in4": 0.94, "4in6_road": 0.92})
     sd_cv: dict = field(default_factory=lambda: {
         "pts": 0.30, "reb": 0.40, "ast": 0.43, "pra": 0.24,
+        # The two-stat combos (2026-10-13, see COMBOS): starting values
+        # only — `hoops_fit` measures every one from the league's own logs
+        # at build time. Worked the way PRA's 0.24 works out: a 15-6-4 line
+        # at the single-stat CVs above, parts correlated 0.2, gives PRA
+        # 0.247, P+R 0.26, P+A 0.27 and R+A 0.32.
+        "pts_reb": 0.26, "pts_ast": 0.27, "reb_ast": 0.32,
         "fg3m": 0.55, "stl": 0.70, "blk": 0.80})
     max_picks_per_slate: int = 4
     max_picks_per_game: int = 2
@@ -113,6 +119,15 @@ class LeagueTuning:
             # Unreadable state withholds risk rather than taking it.
             return True
 
+
+#: THE TWO-STAT COMBOS, and the columns each adds up (Ethan's call,
+#: 2026-10-13, runbook H: "Also add both from my calls, the CFB and nba
+#: things"). Like PRA they need no new feed: every part is a column the
+#: NBA ingest already stores, so the history, the price and the grade all
+#: read the same numbers. The NBA only — each one is another market on
+#: every event the odds pull buys (`oddsbudget.EVENT_CREDITS`), and the
+#: call was for the NBA's.
+COMBOS = {"pts_reb": ("pts", "reb"), "pts_ast": ("pts", "ast"), "reb_ast": ("reb", "ast")}
 
 NBA = LeagueTuning(
     key="nba", name="NBA",

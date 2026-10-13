@@ -38,8 +38,12 @@ check of whether a teammate's number should move when a regular sits
 (step 55; O). Every UFC card now says where its line opened and where it
 is now (step 56; P). The chart's X sits below the phone's status bar
 (step 57), and every carry and route chart shows the player's face — his
-photo, or his initials when no photo loads (step 58; Q). The whole
-picture, sport by sport, is in `docs/ALL_SPORTS_GAPS_2026-10-13.md`.
+photo, or his initials when no photo loads (step 58; Q). Your two calls
+from H are built: a college receiving bet now waits for the play file and
+is graded at zero when it shows he was thrown at (step 59; R), and the NBA
+board prices points + rebounds, points + assists and rebounds + assists
+(step 60; S). The whole picture, sport by sport, is in
+`docs/ALL_SPORTS_GAPS_2026-10-13.md`.
 All of it is on the box already; it pulls every five minutes. Lettered,
 so it never clashes with the numbered steps further down that every note
 refers to. Paste back what each one prints, with its letter.
@@ -48,14 +52,13 @@ Nothing here changes anything except C (only if email isn't on yet),
 D's Stripe settings and Q's photo fill (photo addresses only — the same
 thing tomorrow's chores would write). Every command runs on the box (`ssh` in first).
 
-**A. The box has today's code.** The first line should end `The carry
-and route charts show every player's face` (or be newer), and the
-second should print `has today's code`. If it prints nothing or
+**A. The box has today's code.** The first line should end `College receivers thrown at are graded; the NBA prices points + rebounds, points + assists, rebounds + assists`
+(or be newer), and the second should print `has today's code`. If it prints nothing or
 "Not a valid commit name", the box hasn't pulled yet: wait five minutes
 and run both again.
 ```
 git -C /srv/qellys log --oneline -1
-git -C /srv/qellys merge-base --is-ancestor ff5e7365 HEAD && echo "has today's code"
+git -C /srv/qellys merge-base --is-ancestor 3accdacc HEAD && echo "has today's code"
 ```
 
 **B. Health check** (paste all of it):
@@ -155,17 +158,21 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('web/
 * **The last-leg alert on the Alerts bell too?**
 * **Pull a Most Likely pick when its line moves a point against it
   before kickoff?** L's answer first (step 51).
-* **Grade a college receiving bet the way the book does when the play
-  file shows he was thrown at** (step 53)? Today a college receiver with
-  no line in the box score is voided — your 2026-09-14 rule, because a
-  scratch and a receiver who caught nothing looked the same. The play
-  file now tells some of them apart. M prints how many voids were thrown
-  at, and what they would have paid; past grades stay as they are
-  whichever way you choose.
-* **NBA points + rebounds, points + assists, rebounds + assists?** They
-  come from columns we already store, like PRA, but the odds API bills
-  per market on every game pulled, so each one adds a credit per game
-  per pull (step 54).
+* ~~**Grade a college receiving bet the way the book does when the play
+  file shows he was thrown at** (step 53)?~~ **Answered 2026-10-13: yes**
+  ("Also add both from my calls, the CFB and nba things"). Built: step 59,
+  R. Past grades stay as they were.
+* ~~**NBA points + rebounds, points + assists, rebounds + assists?**~~
+  **Answered 2026-10-13: yes.** Built: step 60, S — three more credits on
+  every NBA game pulled; the WNBA's request is unchanged.
+* **Let the measurement read summed markets** (step 60)? The weekly walk
+  that earns a market its Most Likely shelf reads stored stat rows, and no
+  row is stored for a sum, so PRA has never been measured — and neither
+  can the three new combos be. They are on the Edge board and in the
+  parlay checker, not Most Likely. Teaching the walk to add the parts up
+  would let all four be measured (and shelved only if they clear the
+  floor), but it also lets the weekly calibration fit PRA, which moves
+  PRA's numbers on the Edge board — so it is yours to say.
 
 **I. Why the MLB profit calendar stops at September** (step 45 says how
 to read it; read-only, paste all of it):
@@ -302,6 +309,33 @@ cd /srv/qellys && sudo -u qellys python3 facesfill.py --check
 From tomorrow the chores' own line says it (`faces: ... cfb ...`):
 ```
 journalctl -u qellys --since "today" --no-pager | grep "faces:"
+```
+
+**R. College receivers thrown at are graded** (step 59; read-only,
+seconds). Nothing to run for it to work. After Saturday's games, a
+receiving bet on a man with no line in the box score waits for the play
+file (it lands within about three days); the grading check calls those
+`waiting on the college play file`, not stuck. Paste it on Sunday or
+Monday:
+```
+cd /srv/qellys && sudo -u qellys python3 homecheck.py grading
+```
+And from next week, M's VOIDS line should stop growing for new games
+(every void after today is a man the play file never had):
+```
+cd /srv/qellys && sudo -u qellys python3 cfbzeros.py
+```
+
+**S. The NBA prices points + rebounds, points + assists and rebounds +
+assists** (step 60; read-only, seconds). The first line should list eight
+markets, the second print `16 13`:
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.sources.oddsapi import SPORT_CONFIG as C; from engine.oddsbudget import EVENT_CREDITS as E; print(sorted(C['nba']['markets'].values())); print(E['nba'], E['wnba'])"
+```
+From opening night, every NBA build prices them; paste the first night's
+count (each line on the board names its market, so this counts them):
+```
+cd /srv/qellys && python3 -c "import json,collections; d=json.load(open('web/data/nba.json')); print(collections.Counter(r.get('market') for r in (d.get('recommendations') or []) + (d.get('near_misses') or [])))"
 ```
 
 The numbered steps below, from 2026-10-07 to 10-13, are the full list;
@@ -1892,6 +1926,44 @@ first). Paste back anything that prints an error or looks off.
     open any chart. One test pin changed:
     `tests/test_a_carry_chart_for_every_runner.py` names the chart
     door's call, which now hands over the face.
+
+59. **College receivers thrown at are graded, not voided** (2026-10-13,
+    your call in H: "Also add both from my calls, the CFB and nba things").
+    R checks it. Since 2026-09-14 a college player with no line in a final
+    box score has had his prop voided, because the box lists only players
+    with a stat. Now a bet in receptions, receiving yards, receiving
+    touchdowns or anytime touchdown waits for the play file. If the file
+    names him as thrown at, he played, and the bet is graded at zero, the
+    way the book grades it: an over lost, an under won. If the file has
+    his game and not him, the bet is voided as before. If the file has not
+    reached his game in five days, the old rule stands. Every other
+    college market still voids off the box score. Nothing settled before
+    is touched: a void is never re-graded. Four test fixtures changed in
+    `tests/test_absent_player_settles.py` (three) and
+    `tests/test_cfbroster.py` (one). Each filed its team's rows as
+    box-score rows and expected a receiving bet voided off them. They now
+    file the play file's rows, so the void they test still happens. The
+    wait itself is tested in
+    `tests/test_a_college_receiver_thrown_at_is_graded.py`.
+
+60. **The NBA prices points + rebounds, points + assists and rebounds +
+    assists** (2026-10-13, your call in H). S checks it. All three are
+    built like PRA: from columns the NBA ingest already stores, priced by
+    the same pipeline, graded by adding up the parts, and named on the
+    card, the shelves, the live tracker and the parlay checker. Each
+    one's spread starts from a stated value (worked out the way PRA's
+    0.24 works out) and is measured from the league's own logs at every
+    build, as every other stat's is. The NBA's odds pull buys them: 16
+    credits an event instead of 13. The WNBA's request is unchanged, and
+    no alternate ladders were bought for them. Like PRA they are on the
+    Edge board, not Most Likely: the weekly walk that earns a market its
+    shelf cannot read a summed market yet (the new call in H). Three test
+    pins changed: `tests/test_wnba.py` said the WNBA buys the NBA's exact
+    markets, and `tests/test_hoops_ladder.py` said every NBA market has a
+    ladder. Both now say so for the five shared markets and name the
+    three NBA-only combos. `tests/test_alt_lines.py` said both leagues
+    cost 13 credits an event; it now says NBA 16, WNBA 13, and still
+    checks each price equals what the league's request asks for.
 Everything older and lower priority (the measurements, the Discord feed,
 Kalshi + Pikkit) is in "Everything to run, in order" further down; none
 of it blocks tonight.

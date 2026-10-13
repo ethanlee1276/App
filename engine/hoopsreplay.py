@@ -33,7 +33,7 @@ from __future__ import annotations
 from .backtest import SettledProp, evaluate, BacktestReport
 
 #: The markets the basketball boards price.
-MARKETS = ("pts", "reb", "ast", "fg3m", "pra")
+MARKETS = ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast")
 
 #: The live build keeps a player's last twenty games; so does the replay.
 WINDOW = 20
@@ -78,6 +78,9 @@ def histories(conn, sport: str, seasons: list | None = None) -> dict:
             g = by_day[day]
             if "pts" in g and "reb" in g and "ast" in g:
                 g["pra"] = round(g["pts"] + g["reb"] + g["ast"], 1)
+                for combo, (a, b) in (("pts_reb", ("pts", "reb")), ("pts_ast", ("pts", "ast")),
+                                      ("reb_ast", ("reb", "ast"))):
+                    g[combo] = round(g[a] + g[b], 1)
             rows.append((day, bool(g.pop("_s")), g))
         out[player] = rows
     return out

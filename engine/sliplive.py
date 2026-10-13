@@ -79,7 +79,8 @@ BOX_STAT = {
     "rush_rec_yds": ("rush_yds", "rec_yds"), "pass_rush_yds": ("pass_yds", "rush_yds"),
     "anytime_td": ("rush_td", "rec_td"),
     "pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "fg3m": ("fg3m",),
-    "pra": ("pts", "reb", "ast"),
+    "pra": ("pts", "reb", "ast"), "pts_reb": ("pts", "reb"), "pts_ast": ("pts", "ast"),
+    "reb_ast": ("reb", "ast"),
     # Hockey: engine/sources/nhldata.parse_boxscore's keys. A goalie's
     # saves are his own row's.
     "sog": ("sog",), "points": ("points",), "goals": ("goals",), "assists": ("assists",),

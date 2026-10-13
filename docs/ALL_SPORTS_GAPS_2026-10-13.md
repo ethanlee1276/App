@@ -30,7 +30,7 @@ and what is still open.
 |---|---|
 | A receiver thrown at who caught nothing is a 0, not a missing game | **Built today** (step 53, M). The college play file names the target on 78% of 2025's incompletions and 92% of 2026's. Measured on the board's own players before it shipped: the error falls in both seasons for catches and yards |
 | How many past voids the play file now shows were thrown at | **Box run** (M, `cfbzeros.py`) |
-| Grade a college receiving bet when the play file shows he was thrown at | **Your call** (H). Today a college receiver with no box-score line is voided, by your 2026-09-14 rule |
+| Grade a college receiving bet when the play file shows he was thrown at | **Built today** (step 59, R), your call answered. A receiving bet on a man with no box-score line waits for the play file: thrown at is graded at zero, absent from it is voided as before, and past grades stay as they were |
 | The college fits that are built and waiting for data: lineup step, new-QB step, touchdowns-follow-the-total, scout flags, position widths | **Box run**, weekly by themselves; each prints x1.00 (no change) until college's own games pass the NFL's bar. Read-only checks in `CFB_PARITY.md` |
 | A college target COUNT | **Not possible** honestly: the feed leaves some incompletions unnamed, so a count would be short |
 | Next Gen Stats, FTN charting, PFR advanced, air yards per target | **Not possible**: NFL-only data |
@@ -44,7 +44,8 @@ and what is still open.
 | The injury board in the build | **Built today**: out or doubtful means no bet and the card says so; day-to-day or questionable is held on the Edge board and on Most Likely, as the NFL and NHL hold. The model doc called this "the one gap worth money" |
 | A teammate's card says who is out, and his share of the team's stat in the games that player sat | **Built today**: evidence only, from our own logs (`engine/nba/onoff`) |
 | Should a teammate's NUMBER move when a regular sits? | **Box run** (O, `nbavacancy.py`). The minutes model has an empty slot for the minutes a vacancy opens; the books raise teammates' lines when a star sits; if our number runs low in those games, our card leans under on exactly those lines. The bar is written in the script before the first run |
-| Points + rebounds, points + assists, rebounds + assists markets | **Your call**. Built from columns we already store, like PRA, but each market costs credits on every game pulled (the API bills per market) |
+| Points + rebounds, points + assists, rebounds + assists markets | **Built today** (step 60, S), your call answered. Priced, graded and named like PRA; 16 credits an NBA event instead of 13; the WNBA's request is unchanged |
+| Most Likely for PRA and the three combos | **Your call** (H). The walk that earns a market its shelf reads stored rows, and none is stored for a sum, so none of the four has ever been measured. Teaching it to add the parts up also lets the weekly calibration fit PRA, which moves PRA's Edge numbers |
 | Steals, blocks, turnovers | **Parked**: the box scores we ingest do not carry them yet (minutes, points, rebounds, assists, threes); the ingest would need the columns first |
 | The grade's "freshness" piece tops out at 0.9 because "there is no availability feed" | **Parked**: there is one now. Leave the cap until the injury board has a few weeks of record behind it |
 | Confirmed starting lineups, referee assignments | **Not possible**: no feed we can reach publishes them |

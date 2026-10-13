@@ -41,7 +41,12 @@ MIN_GAMES = 200
 MIN_STAT_ROWS = 400
 
 # The stats whose spread the prop model reads.
-STATS = ("pts", "reb", "ast", "pra", "fg3m", "stl", "blk")
+STATS = ("pts", "reb", "ast", "pra", "pts_reb", "pts_ast", "reb_ast", "fg3m", "stl", "blk")
+
+#: The summed markets and their parts: PRA, and the NBA's two-stat combos
+#: (`hoops.COMBOS`). A league with no line in one simply measures it unused.
+SUMS = {"pra": ("pts", "reb", "ast"),
+        "pts_reb": ("pts", "reb"), "pts_ast": ("pts", "ast"), "reb_ast": ("reb", "ast")}
 
 
 def _sd(values: list[float]) -> float | None:
@@ -104,19 +109,14 @@ def fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
         by_player.setdefault((r["player"], r["market"]), []).append(
             float(r["value"]))
 
-    # PRA is the sum of three columns we already store; deriving it here
-    # keeps the history and the line referring to the same three numbers.
-    pra: dict[str, list] = {}
-    for (player, market), vals in list(by_player.items()):
-        if market in ("pts", "reb", "ast"):
-            pra.setdefault(player, [])
-    for player in pra:
-        parts = [by_player.get((player, m)) for m in ("pts", "reb", "ast")]
-        if all(parts) and len({len(p) for p in parts}) == 1:
-            pra[player] = [a + b + c for a, b, c in zip(*parts)]
-    for player, vals in pra.items():
-        if vals:
-            by_player[(player, "pra")] = vals
+    # PRA and the combos are sums of columns we already store; deriving
+    # them here keeps the history and the line referring to the same numbers.
+    players = {player for (player, market) in by_player if market in ("pts", "reb", "ast")}
+    for summed, names in SUMS.items():
+        for player in players:
+            parts = [by_player.get((player, m)) for m in names]
+            if all(parts) and len({len(p) for p in parts}) == 1:
+                by_player[(player, summed)] = [sum(v) for v in zip(*parts)]
 
     cvs: dict[str, float] = {}
     counts: dict[str, int] = {}

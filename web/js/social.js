@@ -245,7 +245,8 @@
   const SHORT = { anytime_td: "ATD", player_anytime_td: "ATD", rec: "rec", receptions: "rec", rec_yds: "rec yds",
                   rush_yds: "rush yds", pass_yds: "pass yds", pass_tds: "pass TD", rush_att: "carries",
                   pass_att: "att", pass_comp: "comp", interceptions: "INT", points: "pts", rebounds: "reb",
-                  assists: "ast", threes: "3PM", pra: "PRA", hits: "hits", total_bases: "TB", home_runs: "HR",
+                  assists: "ast", threes: "3PM", pra: "PRA", pts_reb: "P+R", pts_ast: "P+A", reb_ast: "R+A",
+                  hits: "hits", total_bases: "TB", home_runs: "HR",
                   strikeouts: "K", rbis: "RBI", runs: "runs", goals: "goals", shots: "SOG", saves: "saves" };
   function shortLeg(l) {
     if (l.locked) return `${l.player || l.matchup || "Members’ pick"}`;

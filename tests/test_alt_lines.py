@@ -103,10 +103,13 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     mlb = oa.SPORT_CONFIG["mlb"]
     assert (len(mlb["markets"]) + len(mlb["alternates"]) + 3
             == B.credits_per_event("mlb") == B.EVENT_CREDITS["mlb"] == 11)
-    for sport in ("nba", "wnba"):
+    # Thirteen for both hoops leagues until 2026-10-13, when the NBA bought
+    # points + rebounds, points + assists and rebounds + assists (Ethan:
+    # "add both from my calls"); the WNBA kept its five.
+    for sport, price in (("nba", 16), ("wnba", 13)):
         hoops = oa.SPORT_CONFIG[sport]
         assert (len(hoops["markets"]) + len(hoops["alternates"]) + 3
-                == B.credits_per_event(sport) == B.EVENT_CREDITS[sport] == 13), sport
+                == B.credits_per_event(sport) == B.EVENT_CREDITS[sport] == price), sport
     assert B.CREDITS_PER_EVENT == 8        # the generic price, for leagues without an entry
     # The lines lane spends the SPORT'S money (`budget_sport`), so it
     # answers the sport's own event price — not a price of its own.

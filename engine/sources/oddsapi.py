@@ -547,19 +547,29 @@ MLB_TEAM_ABBR = {
     "Washington Nationals": "WSH",
 }
 
-# NBA market keys (engine.nba stat names) and team-name map.
-NBA_ODDS_TO_MARKET = {
+# Hoops market keys (engine.nba stat names) and team-name map.
+WNBA_ODDS_TO_MARKET = {
     "player_points": "pts",
     "player_rebounds": "reb",
     "player_assists": "ast",
     "player_threes": "fg3m",
     # PRA is the WNBA spec's headline tier-1 market — it aggregates away
     # single-category noise, which is exactly what you want from a 44-game
-    # season where one cold shooting night distorts a season average. It
-    # costs nothing extra to request: player props are billed per event,
-    # not per market.
+    # season where one cold shooting night distorts a season average.
+    # (Each market IS a credit on every event pulled — see SPORT_CONFIG's
+    # billing note and `oddsbudget.EVENT_CREDITS`.)
     "player_points_rebounds_assists": "pra",
 }
+#: THE NBA'S, the same five and the three two-stat combos (Ethan's call,
+#: 2026-10-13, runbook H: "Also add both from my calls, the CFB and nba
+#: things" — answering "NBA points + rebounds, points + assists,
+#: rebounds + assists?"). Three more credits on every NBA event pulled;
+#: the WNBA's request is unchanged. Main lines only: their alternate
+#: ladders were not part of the call.
+NBA_ODDS_TO_MARKET = {**WNBA_ODDS_TO_MARKET,
+                      "player_points_rebounds": "pts_reb",
+                      "player_points_assists": "pts_ast",
+                      "player_rebounds_assists": "reb_ast"}
 NBA_TEAM_ABBR = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
     "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI",
@@ -615,7 +625,7 @@ SPORT_CONFIG = {
     # names differ. The WNBA expanded twice in two years, so this map is
     # the 2026 field.
     "wnba": {"sport_key": "basketball_wnba",
-             "markets": NBA_ODDS_TO_MARKET, "teams": WNBA_TEAM_ABBR,
+             "markets": WNBA_ODDS_TO_MARKET, "teams": WNBA_TEAM_ABBR,
              "alternates": HOOPS_ALT_ODDS_TO_MARKET},
     # MMA events are one bout each; "teams" are fighter names, so the map is
     # identity (ufc_build reads the h2h payload directly).

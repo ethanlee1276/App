@@ -25,7 +25,8 @@ THIN_SAMPLE = 10
 CLAMP_W_THIN = 0.15
 
 MARKET_LABELS = {"pts": "Points", "reb": "Rebounds", "ast": "Assists",
-                 "fg3m": "3-Pointers Made", "pra": "Pts+Reb+Ast"}
+                 "fg3m": "3-Pointers Made", "pra": "Pts+Reb+Ast",
+                 "pts_reb": "Pts+Reb", "pts_ast": "Pts+Ast", "reb_ast": "Reb+Ast"}
 
 
 def _rate_per_min(minutes: list[float], values: list[float]) -> float | None:

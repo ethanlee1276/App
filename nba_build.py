@@ -31,6 +31,15 @@ from engine import gate
 SLATE_MARKETS = ("pts", "reb", "ast", "fg3m", "pra")
 
 
+def slate_markets(league: str) -> tuple:
+    """The markets this league's board prices: the five above, and for the
+    NBA the three two-stat combos (`hoops.COMBOS`; Ethan's call,
+    2026-10-13). The WNBA keeps its five — its odds request is its own
+    (`oddsapi.SPORT_CONFIG`), and the call was the NBA's."""
+    from engine.hoops import COMBOS
+    return SLATE_MARKETS + (tuple(COMBOS) if league == "nba" else ())
+
+
 class _Game:
     def __init__(self, home, away, kickoff, home_name="", away_name=""):
         self.home, self.away, self.kickoff = home, away, kickoff
@@ -125,6 +134,10 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         # the line refer to the same three numbers.
         p["pra"] = [round(p["pts"][i] + p["reb"][i] + p["ast"][i], 1)
                     for i in range(len(weeks))]
+        # The two-stat combos, the same way and for the same reason.
+        from engine.hoops import COMBOS
+        for combo, (a, b) in COMBOS.items():
+            p[combo] = [round(p[a][i] + p[b][i], 1) for i in range(len(weeks))]
     return hist
 
 
@@ -453,7 +466,7 @@ def diagnose(league: str, date: str) -> None:
     ready = [p for p, h in hist.items() if len(h["minutes"]) >= 3]
     print(f"  Players found       {len(hist)}")
     print(f"  With 3+ games       {len(ready)}")
-    print(f"  Props buildable     {len(ready) * len(SLATE_MARKETS)}")
+    print(f"  Props buildable     {len(ready) * len(slate_markets(league))}")
     if not ready and hist:
         print(f"  ✗ Players are in the logs but none has three games in "
               f"{seasons} — too early in the season to project anyone.")
@@ -763,7 +776,7 @@ def main() -> None:
                         for g in games], [])
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
-                for stat in SLATE_MARKETS:
+                for stat in slate_markets(args.league):
                     slate.props.append(_Prop(player, stat, h["team"]))
 
         # Every prop on this board is projected from stored game logs, so an

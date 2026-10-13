@@ -52,7 +52,10 @@ LAYOFF_DAYS = 10
 #: The first-game-back haircut: threes are the noisiest shooting stat
 #: and dip hardest; points dip mildly; rebounds/assists ride minutes
 #: and legs, not stroke, and keep their number.
-LAYOFF_EFF = {"fg3m": 0.95, "pts": 0.98, "pra": 0.985}
+LAYOFF_EFF = {"fg3m": 0.95, "pts": 0.98, "pra": 0.985,
+              # Points carry most of either combo, as of PRA; rebounds +
+              # assists has no shooting in it and keeps its number.
+              "pts_reb": 0.985, "pts_ast": 0.985}
 
 #: §7 — the marquee gauge and the extra point of required edge.
 MARQUEE_PROJ_PTS = 20.0

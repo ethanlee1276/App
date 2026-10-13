@@ -335,10 +335,10 @@ BASEBALL_SHELVES = (
 #: _shelf_auc asks likely.rank_auc with the sport, so a WNBA shelf shows
 #: the WNBA's own fitted figure and an NBA one the NBA's, or nothing.
 HOOPS_SHELVES = (
-    ("scoring", "Points", ("pts", "pra"),
-     "Scoring volume — points alone and the PRA combo the books "
-     "headline."),
-    ("glass", "Rebounds & assists", ("reb", "ast"),
+    ("scoring", "Points", ("pts", "pra", "pts_reb", "pts_ast"),
+     "Scoring volume — points alone and the combos with points in them, "
+     "PRA the one the books headline."),
+    ("glass", "Rebounds & assists", ("reb", "ast", "reb_ast"),
      "The possession game: boards and playmaking, shelved together "
      "because the same role players carry both."),
     ("threes", "Three-pointers", ("fg3m",),

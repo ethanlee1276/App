@@ -75,7 +75,9 @@ CREDITS_PER_EVENT = 8
 #: Baseball: five player markets, three ladders (2026-09-15, see
 #: `oddsapi.MLB_ALT_ODDS_TO_MARKET`) and the three game markets.
 #: Hoops: five player markets, five ladders (`oddsapi.HOOPS_ALT_ODDS_TO_MARKET`)
-#: and the three game markets; both leagues buy the same request.
+#: and the three game markets. The NBA's is sixteen since 2026-10-13: points
+#: + rebounds, points + assists and rebounds + assists (`oddsapi.
+#: NBA_ODDS_TO_MARKET`; Ethan's call in runbook H). The WNBA's stays thirteen.
 #: Sixteen since 2026-09-27: pass attempts, completions and carries joined
 #: the request (`oddsapi.VOLUME_ODDS_KEYS`), measured before bought.
 #: Seventeen since 2026-10-05: interceptions thrown
@@ -86,7 +88,7 @@ CREDITS_PER_EVENT = 8
 #: Twenty-five since 2026-10-12: the alternate ladders for pass attempts,
 #: completions and rush + rec yards (`oddsapi.NFL_ALT_ODDS_KEYS`; Ethan,
 #: asked whether to buy them: "yes").
-EVENT_CREDITS = {"nfl": 25, "mlb": 11, "nba": 13, "wnba": 13, "nhl": 12}
+EVENT_CREDITS = {"nfl": 25, "mlb": 11, "nba": 16, "wnba": 13, "nhl": 12}
 
 
 def credits_per_event(sport: str | None = None) -> int:

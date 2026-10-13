@@ -33,6 +33,7 @@ import math
 from ..hoops import NBA, LeagueTuning
 
 SD_CV = {"pts": 0.30, "reb": 0.40, "ast": 0.43, "pra": 0.24,
+         "pts_reb": 0.26, "pts_ast": 0.27, "reb_ast": 0.32,    # hoops.COMBOS
          "fg3m": 0.50, "stl": 0.90, "blk": 0.90}
 DISCRETE = {"reb", "ast", "fg3m", "stl", "blk"}
 

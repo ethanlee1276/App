@@ -4789,7 +4789,8 @@ function haircutLine(sh) {
 const MARKET_ORDER = ["moneyline", "spread", "total", "team_total",
                       "pass_yds", "rush_yds", "rec_yds", "receptions",
                       "anytime_td", "home_runs", "hits", "total_bases",
-                      "strikeouts", "pts", "reb", "ast", "fg3m", "pra"];
+                      "strikeouts", "pts", "reb", "ast", "fg3m", "pra",
+                      "pts_reb", "pts_ast", "reb_ast"];
 
 function marketRank(m) {
   const i = MARKET_ORDER.indexOf(String(m || ""));
@@ -13671,7 +13672,7 @@ const GS_TD = /(anytime_td|first_td|anytime_scorer)/;
 const GS_K = /^(strikeouts|pitcher_strikeouts)$/;
 const GS_OUTS = /^(outs|pitching_outs)$/;
 const GS_BAT = /^(hits|total_bases|home_runs|runs|rbi|rbis|hits_runs_rbis|singles|doubles)$/;
-const GS_HOOP = /^(pts|points|reb|rebounds|ast|assists|fg3m|threes|pra|pts_reb_ast)$/;
+const GS_HOOP = /^(pts|points|reb|rebounds|ast|assists|fg3m|threes|pra|pts_reb_ast|pts_reb|pts_ast|reb_ast)$/;
 
 /* The board game a row belongs to, by its two clubs. */
 function scriptGameOf(r) {
@@ -24094,7 +24095,10 @@ const MB_HEALTH_BLIND = [
 /* Player-prop stat words, most specific first, each to the market label
    the card prints. */
 const MB_PROP_WORDS = [
-  [/\b(pts\s*\+\s*reb\s*\+\s*ast|pra)\b/i, "points + rebounds + assists"],
+  [/\b(pts\s*\+\s*reb\s*\+\s*ast|points\s*\+\s*rebounds\s*\+\s*assists|pra)\b/i, "points + rebounds + assists"],
+  [/\b(pts|points)\s*\+\s*(reb|rebounds)\b/i, "points + rebounds"],
+  [/\b(pts|points)\s*\+\s*(ast|assists)\b/i, "points + assists"],
+  [/\b(reb|rebounds)\s*\+\s*(ast|assists)\b/i, "rebounds + assists"],
   [/\bpass(ing)?\s+(yds|yards)\b/i, "passing yards"],
   [/\brush(ing)?\s+(yds|yards)\b/i, "rushing yards"],
   [/\b(rec(eiving)?)\s+(yds|yards)\b/i, "receiving yards"],

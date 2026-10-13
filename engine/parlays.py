@@ -422,6 +422,7 @@ FAMILY = {
     "strikeouts": "pitch", "outs": "pitch",
     "total_bases": "bat", "hits": "bat", "home_runs": "bat",
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
+    "pts_reb": "score", "pts_ast": "score", "reb_ast": "board",
     "fg3m": "three", "stl": "stops", "blk": "stops",
     # Hockey: shots, the scoring chain (a goal is a point for up to three
     # skaters), blocks and the goalie's saves.
@@ -441,6 +442,7 @@ TIER = {
     "pass_rush_yds": 2, "rush_rec_yds": 2, "kick_pts": 1, "tackles_ast": 1, "fg_made": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
+    "pts_reb": 1, "pts_ast": 1, "reb_ast": 1,
     "sog": 1, "saves": 1, "blocks": 2, "points": 2, "assists": 2, "goals": 3, "anytime_goal": 3,
     # Sides and totals are the most modelable markets on the board and the
     # least variance-contaminated — tier tracks beatability, and these are

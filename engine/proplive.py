@@ -82,6 +82,7 @@ FALLBACK_D = {
     "kick_pts": 1.2, "fg_made": 1.0, "tackles_ast": 1.3,
     # basketball
     "pts": 2.1, "reb": 1.1, "ast": 1.15, "fg3m": 1.0, "pra": 2.0,
+    "pts_reb": 1.9, "pts_ast": 1.9, "reb_ast": 1.2,
     # hockey
     "sog": 1.0, "points": 1.0, "goals": 1.0, "assists": 1.0, "blocks": 1.1,
     "saves": 1.4, "anytime_goal": 1.0,
